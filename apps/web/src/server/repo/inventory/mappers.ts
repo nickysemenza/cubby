@@ -46,6 +46,11 @@ export const dbInventoryEntryToAPI: (
   inventoryentry: InventoryEntryDeepDB,
 ) => z.infer<typeof inventoryWithLocationAndProductOut> = (inventoryentry) => {
   const { product, location } = inventoryentry;
+  const amount = parseInventoryAmount(inventoryentry.amount, inventoryentry.id);
+  const effectivePrice =
+    inventoryentry.valuation !== null && amount.value !== 0
+      ? inventoryentry.valuation / amount.value
+      : product.price;
 
   return {
     ...inventoryEntryBaseShape(inventoryentry),
@@ -65,7 +70,18 @@ export const dbInventoryEntryToAPI: (
       updatedAt: location.updatedAt,
     },
     product: {
-      ...dbProductToInventoryEmbedShape(product),
+      ...dbProductToInventoryEmbedShape({
+        ...product,
+        pricing: {
+          derivedPrice: null,
+          effectivePrice,
+          source: product.price !== null ? "explicit" : "derived",
+          knownExpenseCount: 0,
+          unknownExpenseCount: 0,
+          knownUnitCount: 0,
+          partial: false,
+        },
+      }),
       images: mapImages(product.images),
       externalIds: mapProductExternalIds(product.externalIds),
       unitMappings: mapProductUnitMappings(
@@ -80,6 +96,11 @@ export const dbInventoryEntryToListAPI: (
   inventoryentry: InventoryEntryListDB,
 ) => z.infer<typeof inventoryListItemOut> = (inventoryentry) => {
   const { product, location } = inventoryentry;
+  const amount = parseInventoryAmount(inventoryentry.amount, inventoryentry.id);
+  const effectivePrice =
+    inventoryentry.valuation !== null && amount.value !== 0
+      ? inventoryentry.valuation / amount.value
+      : product.price;
 
   return {
     ...inventoryEntryBaseShape(inventoryentry),
@@ -91,6 +112,17 @@ export const dbInventoryEntryToListAPI: (
         identifier: { id: location.id, name: location.name },
       }),
     },
-    product: dbProductToInventoryListShape(product),
+    product: dbProductToInventoryListShape({
+      ...product,
+      pricing: {
+        derivedPrice: null,
+        effectivePrice,
+        source: product.price !== null ? "explicit" : "derived",
+        knownExpenseCount: 0,
+        unknownExpenseCount: 0,
+        knownUnitCount: 0,
+        partial: false,
+      },
+    }),
   };
 };

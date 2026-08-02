@@ -24,6 +24,7 @@ import {
   expenseCostTypeColumn,
   expenseDateColumn,
   expenseFutureColumn,
+  expenseProductQuantityColumn,
   expenseTradeColumn,
 } from "~/app/projects/shared";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -92,6 +93,12 @@ export function PurchaseExpensesTable({
           },
         },
       }),
+      expenseProductQuantityColumn(helper, async (productQuantity, row) => {
+        await update.mutateAsync({
+          id: row.id,
+          data: { productQuantity },
+        });
+      }),
       createProjectLinkColumn(helper, {
         className: "w-48",
         editable: {
@@ -116,6 +123,7 @@ export function PurchaseExpensesTable({
     bulkActions: bulkActions.config,
     initialColumnVisibility: {
       product: true,
+      productQuantity: true,
       project: false,
       createdAt: false,
     },

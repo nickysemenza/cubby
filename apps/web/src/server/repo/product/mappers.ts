@@ -37,6 +37,7 @@ import {
   type RowWithOptionalAliases,
 } from "~/server/repo/database-helpers";
 import type { MappableProductExternalId } from "./external-id-types";
+import { type ProductPricing, resolveProductPricing } from "./pricing";
 import type { ProductDeepDB, ProductListDB } from "./types";
 
 type ProductImageRow =
@@ -50,6 +51,7 @@ type ProductTopLevelDB = RowWithOptionalAliases<typeof product.$inferSelect> & {
   images?: ProductImageRow[] | null;
   externalIds?: MappableProductExternalId[] | null;
   dataQuality?: ProductTopLevelOut["dataQuality"];
+  pricing?: ProductPricing;
 };
 
 export const mapProductExternalIds = (
@@ -105,6 +107,7 @@ export const dbProductToTopLevelShape = (
   expectedQuantity: productData.expectedQuantity,
   category: productData.category,
   price: productData.price,
+  pricing: productData.pricing ?? resolveProductPricing(productData.price),
   usdaUnavailable: productData.usdaUnavailable,
   dataQuality: productData.dataQuality ?? {
     status: "complete",
@@ -168,7 +171,9 @@ export const dbProductToPickerItemAPI = (
 };
 
 export const dbProductToInventoryEmbedShape = (
-  productData: RowWithOptionalAliases<typeof product.$inferSelect>,
+  productData: RowWithOptionalAliases<typeof product.$inferSelect> & {
+    pricing?: ProductPricing;
+  },
 ): ProductInventoryEmbedOut => ({
   id: unsafeProductShortcode(productData.shortcode),
   name: productData.name,
@@ -179,14 +184,18 @@ export const dbProductToInventoryEmbedShape = (
   notes: productData.notes,
   expectedQuantity: productData.expectedQuantity,
   category: productData.category,
-  price: productData.price,
+  price:
+    productData.pricing?.effectivePrice ??
+    resolveProductPricing(productData.price).effectivePrice,
   usdaUnavailable: productData.usdaUnavailable,
   createdAt: productData.createdAt,
   updatedAt: productData.updatedAt,
 });
 
 export const dbProductToInventoryListShape = (
-  productData: RowWithOptionalAliases<typeof product.$inferSelect>,
+  productData: RowWithOptionalAliases<typeof product.$inferSelect> & {
+    pricing?: ProductPricing;
+  },
 ): InventoryListProductOut => ({
   id: unsafeProductShortcode(productData.shortcode),
   name: productData.name,
@@ -196,7 +205,9 @@ export const dbProductToInventoryListShape = (
   category: productData.category,
   expectedQuantity: productData.expectedQuantity,
   model: productData.model,
-  price: productData.price,
+  price:
+    productData.pricing?.effectivePrice ??
+    resolveProductPricing(productData.price).effectivePrice,
   usdaUnavailable: productData.usdaUnavailable,
 });
 
@@ -286,6 +297,7 @@ export const dbProductToAPI = (
     expectedQuantity: productData.expectedQuantity,
     category: productData.category,
     price: productData.price,
+    pricing: productData.pricing ?? resolveProductPricing(productData.price),
     usdaUnavailable: productData.usdaUnavailable,
     dataQuality,
     createdAt: productData.createdAt,

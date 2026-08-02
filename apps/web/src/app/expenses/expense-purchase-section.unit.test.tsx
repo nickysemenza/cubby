@@ -65,6 +65,7 @@ const expense: ExpenseOut = {
   future: false,
   projectId: null,
   productId: null,
+  productQuantity: null,
   vendor: "Tool Nirvana",
   orderId: "#11325",
   purchaseId: unsafePurchaseShortcode("PUR-2345"),

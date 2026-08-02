@@ -1846,6 +1846,7 @@ describe("purchase restructuring tools (split/link/merge)", () => {
           trade: "other",
           projectId: null,
           productId: null,
+          productQuantity: null,
         },
         {
           name: "Blade",
@@ -1854,6 +1855,7 @@ describe("purchase restructuring tools (split/link/merge)", () => {
           trade: "other",
           projectId: null,
           productId: null,
+          productQuantity: null,
         },
       ],
     };

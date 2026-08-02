@@ -48,6 +48,7 @@ import { TRPCError } from "@trpc/server";
 import { omitBy } from "es-toolkit";
 import { z } from "zod";
 import type { DomainCaller } from "~/server/api/domain";
+import { resolveProductPricing } from "~/server/repo/product/pricing";
 
 /**
  * Shared MCP tool-handler scaffolding.
@@ -485,6 +486,7 @@ type ProductRow = ProductTopLevelOut & {
 export const slimProduct = defineSlim(productMcpOut, (pRow: Row) => {
   const p = pRow as ProductRow;
   const displayImages = (p.images ?? []).filter(isDisplayableImageFile);
+  const pricing = p.pricing ?? resolveProductPricing(p.price);
   return {
     id: p.id,
     name: p.name,
@@ -494,7 +496,9 @@ export const slimProduct = defineSlim(productMcpOut, (pRow: Row) => {
     upc: p.upc,
     category: p.category,
     tags: p.tags ?? [],
-    price: p.price,
+    price: pricing.effectivePrice,
+    priceOverride: p.price,
+    pricing,
     expectedQuantity: p.expectedQuantity,
     imageCount: displayImages.length,
     coverImageUrl: displayImages[0]?.url ?? null,

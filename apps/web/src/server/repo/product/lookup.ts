@@ -13,6 +13,7 @@ import type { Database } from "~/server/db";
 import { product } from "~/server/db/schema";
 import { getDb, imageOrder, notDeleted } from "~/server/repo/database-helpers";
 import { dbProductToTopLevelAPI } from "./mappers";
+import { enrichProductRowsWithPricing } from "./pricing";
 
 /**
  * Find products by UPC or NDB number - used for food items in usda.ts
@@ -51,7 +52,9 @@ export const findProductsByFoodIdentifier = async (
     },
   });
 
-  return res.map(dbProductToTopLevelAPI);
+  return (await enrichProductRowsWithPricing(db, res)).map(
+    dbProductToTopLevelAPI,
+  );
 };
 
 export const getFoodLookupsForLinkedProducts = async (
@@ -102,7 +105,8 @@ const findProductToAPI = async (
     return null;
   }
 
-  return dbProductToTopLevelAPI(res);
+  const priced = (await enrichProductRowsWithPricing(db, [res]))[0];
+  return priced ? dbProductToTopLevelAPI(priced) : null;
 };
 
 // Find a product by UPC code (excludes soft-deleted)

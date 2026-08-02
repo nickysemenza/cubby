@@ -50,6 +50,7 @@ import {
   present,
   sideEffect,
 } from "~/server/repo/impact";
+import { loadEffectiveProductPrice } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { assertLiveTargets } from "./helpers";
@@ -73,9 +74,12 @@ const computeValuationForEntry = async (
   const client = unwrapDb(db);
   const productData = await client.query.product.findFirst({
     where: eq(product.id, productId),
-    columns: { price: true },
+    columns: { id: true, price: true },
   });
-  return computeInventoryValuation(amountValue, productData?.price ?? null);
+  const effectivePrice = productData
+    ? await loadEffectiveProductPrice(db, productData)
+    : null;
+  return computeInventoryValuation(amountValue, effectivePrice);
 };
 
 /**
@@ -92,9 +96,11 @@ export const syncInventoryValuationsForProduct = async (
   // Get the product's current price
   const productData = await client.query.product.findFirst({
     where: eq(product.id, productId),
-    columns: { price: true },
+    columns: { id: true, price: true },
   });
-  const productPrice = productData?.price ?? null;
+  const productPrice = productData
+    ? await loadEffectiveProductPrice(db, productData)
+    : null;
 
   // Get all non-deleted inventory entries for this product
   const entries = await client.query.inventoryEntry.findMany({

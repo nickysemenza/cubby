@@ -361,7 +361,7 @@ export function ProductPreviewContent({ productId }: { productId: string }) {
                   .filter(Boolean)
                   .join(" · ") || undefined,
               nutrients: data.food?.nutritionInfo.nutrientsPer100,
-              price: data.price ?? undefined,
+              price: data.pricing.effectivePrice ?? undefined,
               upc: data.upc ?? undefined,
               thumbUrl: data.images.find(isDisplayableImageFile)?.url,
               usdaFdcId: data.food?.fdc_id ?? data.fdc_id ?? undefined,

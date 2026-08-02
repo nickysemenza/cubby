@@ -217,6 +217,15 @@ describe("ingredient product mappers", () => {
       mapIngredientProductsLean([
         {
           ...baseProduct,
+          pricing: {
+            derivedPrice: null,
+            effectivePrice: baseProduct.price,
+            source: "explicit",
+            knownExpenseCount: 0,
+            unknownExpenseCount: 0,
+            knownUnitCount: 0,
+            partial: false,
+          },
           unitMappings: [activeUnitMapping],
         },
       ]),
@@ -239,6 +248,15 @@ describe("ingredient product mappers", () => {
       product: [
         {
           ...baseProduct,
+          pricing: {
+            derivedPrice: null,
+            effectivePrice: baseProduct.price,
+            source: "explicit",
+            knownExpenseCount: 0,
+            unknownExpenseCount: 0,
+            knownUnitCount: 0,
+            partial: false,
+          },
           unitMappings: [activeUnitMapping],
           externalIds: [],
           images: [],

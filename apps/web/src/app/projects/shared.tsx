@@ -39,6 +39,7 @@ import {
   WithVendorSearch,
 } from "~/app/_components/combobox/with-vendor-search";
 import {
+  numberCellData,
   selectCellData,
   specFromCellData,
   textCellData,
@@ -610,6 +611,53 @@ export function expenseCostColumn(
   });
 }
 
+/** Whole Product units represented by an Expense. Unknown stays null; a row
+ * without a linked Product is deliberately read-only. */
+export function expenseProductQuantityColumn(
+  helper: ColumnHelper<ExpenseOut>,
+  save: (quantity: number | null, expense: ExpenseOut) => Promise<void>,
+  opts?: { mobile?: MobileColumnMeta },
+) {
+  const saveValid = async (row: ExpenseOut, quantity: number | null) => {
+    if (!row.productId) {
+      throw new Error("Link a product before recording its quantity");
+    }
+    if (quantity !== null && (!Number.isInteger(quantity) || quantity <= 0)) {
+      throw new Error("Product quantity must be a positive whole number");
+    }
+    await save(quantity, row);
+  };
+  const cellData = numberCellData<ExpenseOut>(
+    "number",
+    (row) => row.productQuantity,
+    saveValid,
+  );
+  return helper.accessor("productQuantity", {
+    id: "productQuantity",
+    header: "Quantity",
+    enableSorting: false,
+    meta: {
+      numeric: true,
+      className: "w-24",
+      mobile: opts?.mobile,
+      cellData,
+    },
+    cell: (info) => {
+      const row = info.row.original;
+      if (!row.productId) return <NoneValue />;
+      return (
+        <EditableCell
+          value={info.getValue()}
+          config={{ type: "number", step: "1", placeholder: "Unknown" }}
+          onSave={(quantity) => saveValid(row, quantity)}
+          clipboard={specFromCellData(cellData, row)}
+          renderValue={(quantity) => quantity ?? <NoneValue />}
+        />
+      );
+    },
+  });
+}
+
 /** Date column — inline date-picker + `date` write. */
 export function expenseDateColumn(
   helper: ColumnHelper<ExpenseOut>,
@@ -897,6 +945,7 @@ const EMBEDDED_EXPENSE_COLUMNS: VisibilityState = {
   vendor: false,
   orderId: false,
   product: false,
+  productQuantity: false,
   createdAt: false,
 };
 
@@ -1120,6 +1169,15 @@ export function ExpenseList({
         className: "w-40",
         filterConfig: manifestFilterConfig("expense", "product"),
       }),
+      expenseProductQuantityColumn(
+        expenseHelper,
+        async (productQuantity, expense) => {
+          await updateExpenseMutation.mutateAsync({
+            id: expense.id,
+            data: { productQuantity },
+          });
+        },
+      ),
       expenseVendorColumn(
         expenseHelper,
         async (vendor, expense) => {

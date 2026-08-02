@@ -29,6 +29,7 @@ import {
   productMutationInvalidateKeys,
 } from "~/lib/query-keys";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
+import { formatCurrency } from "~/lib/utils";
 import { WithLocationSearch } from "../_components/combobox/with-search-hook";
 import {
   createCurrencyColumn,
@@ -38,6 +39,7 @@ import {
   createSingleEntityInlineLinkColumn,
   createTextColumn,
 } from "../_components/data-table/columnHelpers";
+import { EditableCell } from "../_components/data-table/editable-cell";
 import {
   ShelfTableToggle,
   type ShelfView,
@@ -284,16 +286,45 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           },
         },
       }),
-      createCurrencyColumn(columnHelper, "price", {
+      columnHelper.accessor((product) => product.pricing.effectivePrice, {
+        id: "price",
         header: "Price",
-        mobile: { slot: "trailing", priority: 10, interactive: true },
-        editable: {
-          onSave: async (newPrice, product) => {
-            await updateProductMutation.mutateAsync({
-              id: product.id,
-              data: { price: newPrice },
-            });
-          },
+        meta: {
+          numeric: true,
+          className: "w-20",
+          mobile: { slot: "trailing", priority: 10, interactive: true },
+        },
+        footer: (info) => {
+          const total = info.table.options.meta?.serverTotals?.sums?.price;
+          return total ? (
+            <span className="font-mono text-positive tabular-nums">
+              {formatCurrency(total)}
+            </span>
+          ) : null;
+        },
+        cell: (info) => {
+          const product = info.row.original;
+          return (
+            <EditableCell
+              value={product.price}
+              onSave={async (price) => {
+                await updateProductMutation.mutateAsync({
+                  id: product.id,
+                  data: { price },
+                });
+              }}
+              config={{ type: "currency" }}
+              renderValue={() =>
+                product.pricing.effectivePrice === null ? (
+                  <NoneValue />
+                ) : (
+                  <span className="text-positive">
+                    {formatCurrency(product.pricing.effectivePrice)}
+                  </span>
+                )
+              }
+            />
+          );
         },
       }),
       // Net cost basis — SUM(cost) over this product's live expenses, so an

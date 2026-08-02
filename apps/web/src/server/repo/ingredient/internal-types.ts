@@ -42,6 +42,10 @@ import {
   dbProductToTopLevelShape,
   mapProductUnitMappings,
 } from "~/server/repo/product/mappers";
+import {
+  enrichProductRowsWithPricing,
+  type ProductPricing,
+} from "~/server/repo/product/pricing";
 import { computeRecipeUsages, dbRecipeToTopLevelShape } from "../recipe";
 
 type IngredientSelect = typeof ingredient.$inferSelect;
@@ -50,6 +54,7 @@ type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect>;
 export type IngredientDeepDB = typeof ingredient.$inferSelect & {
   product: Array<
     ProductSelect & {
+      pricing?: ProductPricing;
       unitMappings: Array<typeof productUnitMappings.$inferSelect>;
       externalIds: MappableProductExternalId[];
       images: Array<{
@@ -89,6 +94,7 @@ export const mapIngredientProducts = (
 type IngredientLeanDB = typeof ingredient.$inferSelect & {
   product: Array<
     ProductSelect & {
+      pricing?: ProductPricing;
       unitMappings: Array<typeof productUnitMappings.$inferSelect>;
     }
   >;
@@ -147,7 +153,7 @@ export const mapIngredientProductsLean = (
   });
 
 export const dbIngredientToAPI = async (
-  _db: Database | DrizzleTransaction,
+  db: Database | DrizzleTransaction,
   ingredientData: IngredientDeepDB,
 ): Promise<IngredientWithRecipesAndProductOut> => {
   const {
@@ -156,7 +162,12 @@ export const dbIngredientToAPI = async (
     recipeSectionIngredient: recipeSectionIngredientRel,
   } = ingredientData;
 
-  const productWithMappings = mapIngredientProducts(productRel);
+  const pricedProductRel = productRel.every(
+    (product) => product.pricing !== undefined,
+  )
+    ? productRel
+    : await enrichProductRowsWithPricing(db, productRel);
+  const productWithMappings = mapIngredientProducts(pricedProductRel);
 
   // One row per usage (a recipe repeats when it uses this ingredient in multiple
   // sections); the deduped `appearsInRecipes` is derived from these. Shared with

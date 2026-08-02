@@ -214,7 +214,7 @@ export const toWProductInput = (
   p: ProductWithMappingsAndFoodOut,
 ): WProductInput => ({
   id: p.id,
-  price: p.price,
+  price: p.pricing.effectivePrice,
   unit_mappings: p.unitMappings,
   food: p.food ? toWFoodInput(p.food) : null,
 });

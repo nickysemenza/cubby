@@ -35,9 +35,11 @@ import {
   arrayOverlaps,
   asc,
   eq,
+  gt,
   inArray,
   isNotNull,
   isNull,
+  notInArray,
   or,
   sql,
   sum,
@@ -107,6 +109,12 @@ import {
   dbProductToPickerItemAPI,
   dbProductToTopLevelAPI,
 } from "./mappers";
+import {
+  effectiveProductPriceSql,
+  enrichProductRowsWithPricing,
+  loadProductPricing,
+  resolveProductPricing,
+} from "./pricing";
 import type { ProductDeepDB, ProductListDB } from "./types";
 import {
   assertNoCanonicalPriceMapping,
@@ -152,6 +160,10 @@ const resolveProductSort = (sort: SortParams) => {
     ];
   }
 
+  if (sort.orderBy === "price") {
+    return [sql.raw(`${effectiveProductPriceSql()} ${dirSql}`)];
+  }
+
   if (sort.orderBy === "identity_strength") {
     return [
       sql.raw(`CASE
@@ -181,7 +193,8 @@ const fetchProductById = async (
     where: and(eq(product.id, id), notDeleted(product)),
     ...relations.product.full,
   });
-  return row;
+  if (!row) return undefined;
+  return (await enrichProductRowsWithPricing(db, [row]))[0];
 };
 
 // Read path through the shared reader (fetch-with-relations → 404 → map). The
@@ -306,7 +319,8 @@ export const getProductsByShortcodes = async (
     db,
     results.map((row) => row.id),
   );
-  return results.map((row) => dbProductToAPI(row, qualities.get(row.id)!));
+  const priced = await enrichProductRowsWithPricing(db, results);
+  return priced.map((row) => dbProductToAPI(row, qualities.get(row.id)!));
 };
 
 export const productList = async (
@@ -361,6 +375,23 @@ export const productList = async (
     .select({ productId: expense.productId })
     .from(expense)
     .where(and(notDeleted(expense), isNotNull(expense.productId)));
+
+  // Effective price exists when either Product carries an explicit override or
+  // at least one actual, positive Expense has a known product quantity. Keep
+  // this uncorrelated for the shared RQB/count/aggregate where clause below.
+  const productIdsWithDerivedPrice = dbClient
+    .select({ productId: expense.productId })
+    .from(expense)
+    .where(
+      and(
+        notDeleted(expense),
+        eq(expense.future, false),
+        gt(expense.cost, 0),
+        isNotNull(expense.productId),
+        isNotNull(expense.productQuantity),
+      ),
+    )
+    .groupBy(expense.productId);
 
   // Joins Image so this matches what the thumbnail cell actually renders — it
   // drops PDF manuals, and Image is separately soft-deletable from ProductImage.
@@ -475,9 +506,17 @@ export const productList = async (
         filters.usdaPresenceFilter,
         NO_USDA_KEY,
       ),
-      // `product.price` is a nullable root column, not a cross-entity id-set
-      // subquery — presenceCondition alone covers it.
-      presenceCondition(product.price, filters.pricePresenceFilter),
+      filters.pricePresenceFilter === "none"
+        ? and(
+            isNull(product.price),
+            notInArray(product.id, productIdsWithDerivedPrice),
+          )
+        : filters.pricePresenceFilter === "has"
+          ? or(
+              isNotNull(product.price),
+              inArray(product.id, productIdsWithDerivedPrice),
+            )
+          : undefined,
       // OR-ed with the tag column's presence sentinel so "M18 or untagged" is
       // one filter, same shape as recipe/crud.ts. `product.tags` is notNull
       // with a `'{}'` default, so untagged is only ever zero-length — no
@@ -515,7 +554,11 @@ export const productList = async (
         countWhere(db, product, whereClause),
       ),
       getDb(db)
-        .select({ priceSum: sum(product.price) })
+        .select({
+          priceSum: sql<number>`sum(${sql.raw(
+            effectiveProductPriceSql('"Product"'),
+          )})`,
+        })
         .from(product)
         .where(whereClause),
       // Net-basis total for the Net basis column's footer, over the FULL filtered
@@ -549,7 +592,8 @@ export const productList = async (
     db,
     results.map((row) => row.id),
   );
-  const products = results.map((prod: ProductListDB) =>
+  const pricedResults = await enrichProductRowsWithPricing(db, results);
+  const products = pricedResults.map((prod: ProductListDB) =>
     dbProductToListAPI({
       ...prod,
       dataQuality: qualities.get(prod.id),
@@ -869,6 +913,7 @@ export const createProduct = async (
 
       return dbProductToTopLevelAPI({
         ...newProduct,
+        pricing: resolveProductPricing(newProduct.price),
         images,
         externalIds: createdExternalIds,
       });
@@ -1011,8 +1056,10 @@ export const updateProduct = async (
       ),
     });
 
+    const pricing = await loadProductPricing(tx, [updated]);
     return dbProductToTopLevelAPI({
       ...updated,
+      pricing: pricing.get(updated.id) ?? resolveProductPricing(updated.price),
       images: productImages,
       externalIds: currentExternalIds,
     });
@@ -1135,8 +1182,10 @@ export const patchProductExternalIds = async (
         changes,
       });
     }
+    const pricing = await loadProductPricing(tx, [before]);
     return dbProductToTopLevelAPI({
       ...before,
+      pricing: pricing.get(before.id) ?? resolveProductPricing(before.price),
       updatedAt,
       externalIds,
       images: [],
@@ -1200,6 +1249,7 @@ export const quickCreateProduct = async (
 
   return dbProductToTopLevelAPI({
     ...newProduct,
+    pricing: resolveProductPricing(newProduct.price),
     images: [],
     externalIds: [],
   });

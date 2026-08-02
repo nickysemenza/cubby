@@ -399,6 +399,26 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
         />
       ),
     },
+    ...(expense.productId
+      ? [
+          {
+            label: "Product quantity",
+            value: (
+              <EditableCell
+                value={expense.productQuantity}
+                config={{ type: "number", step: "1", placeholder: "Unknown" }}
+                onSave={async (productQuantity) => {
+                  await updateMutation.mutateAsync({
+                    id: expense.id,
+                    data: { productQuantity },
+                  });
+                }}
+                renderValue={(value) => value ?? <NoneValue />}
+              />
+            ),
+          },
+        ]
+      : []),
   ];
 
   const sections: DetailSection[] = [

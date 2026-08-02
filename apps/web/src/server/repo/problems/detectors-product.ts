@@ -59,6 +59,10 @@ import {
   PRODUCT_EDGE_ROLES,
   type ProductRetainingEdgeKey,
 } from "~/server/repo/product/edge-roles";
+import {
+  effectiveProductPriceSql,
+  loadProductPricing,
+} from "~/server/repo/product/pricing";
 
 // ProductWithBetterUpcData is re-exported from the package barrel for the
 // Problems-page components that import it from there.
@@ -240,9 +244,9 @@ export const findOrphanedProducts = async (
 
 // Find stocked products with no `price`.
 //
-// `inventoryEntry.valuation` is precomputed as `amount.value * product.price`,
+// `inventoryEntry.valuation` is precomputed from Product effective price,
 // so a null price yields a null valuation and the location rollup silently
-// omits the item. Keyed off `product.price` (the cause) rather than
+// omits the item. Keyed off effective price (the cause) rather than
 // `inventoryEntry.valuation` (the symptom, which can lag a recompute).
 //
 // Returned partitioned, not as one list: a `misc:` bucket is a heterogeneous
@@ -258,7 +262,10 @@ export const findProductsMissingPrice = async (
   const dbClient = getDb(db);
 
   const stockedWithoutPrice = await dbClient.query.product.findMany({
-    where: and(notDeleted(product), isNull(product.price)),
+    where: and(
+      notDeleted(product),
+      sql.raw(`${effectiveProductPriceSql()} IS NULL`),
+    ),
     columns: { id: true, name: true, manufacturer: true, shortcode: true },
     with: {
       inventoryEntry: {
@@ -338,7 +345,7 @@ export const findProductsWithoutMappings = async (
     .where(
       and(
         notDeleted(product),
-        isNull(product.price),
+        sql.raw(`${effectiveProductPriceSql('"Product"')} IS NULL`),
         isNull(product.fdc_id),
         isNull(product.upc),
         notExists(
@@ -525,8 +532,8 @@ export const recipeUsageCountsByProduct = async (
 // `ingredientShortcode` and `ProductWithIslandedMappings.shortcode` (see
 // problems.service.ts's `findProductCoverageProblems`, which owns assembling
 // those rows and currently omits both fields from its push()es).
-export const loadProductsForCoverage = async (db: Database) =>
-  getDb(db).query.product.findMany({
+export const loadProductsForCoverage = async (db: Database) => {
+  const rows = await getDb(db).query.product.findMany({
     where: notDeleted(product),
     columns: {
       id: true,
@@ -550,6 +557,12 @@ export const loadProductsForCoverage = async (db: Database) =>
       ingredient: { columns: { naKinds: true, shortcode: true } },
     },
   });
+  const pricing = await loadProductPricing(db, rows);
+  return rows.map((row) => ({
+    ...row,
+    price: pricing.get(row.id)?.effectivePrice ?? null,
+  }));
+};
 
 // Ids of an ingredient's non-deleted, linked products. Used by the
 // deleteUnusedIngredients orchestrator to delete those products first so the

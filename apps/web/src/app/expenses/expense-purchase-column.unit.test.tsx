@@ -53,6 +53,7 @@ const LINKED: ExpenseOut = {
   projectId: null,
   projectName: null,
   productId: null,
+  productQuantity: null,
   productName: null,
   purchaseId: unsafePurchaseShortcode("PUR-4K7M"),
   purchaseDate: "2026-07-19",

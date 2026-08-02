@@ -36,7 +36,9 @@ export const IngredientProductShelf: FC<{
             extraCount={images.length - 1}
             title={product.name}
             subtitle={[
-              product.price != null ? formatCurrency(product.price) : null,
+              product.pricing.effectivePrice != null
+                ? formatCurrency(product.pricing.effectivePrice)
+                : null,
               isUnspecifiedManufacturer(product.manufacturer)
                 ? null
                 : product.manufacturer,

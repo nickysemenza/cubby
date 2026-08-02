@@ -539,7 +539,11 @@ export const product = pgTable(
     // `cardinality(tags) = 0`. No GIN index: ~380 products, and every extra GIN
     // index widens the standing `db:push` drift for no measurable gain.
     tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
-    price: real("price"), // Unit price in dollars, null if no price mapping
+    // Manual per-item valuation/replacement-price override. The effective price
+    // falls back to the live Expense-derived unit cost when this is null; that
+    // aggregate remains read-time so Expense stays the only historical-money
+    // authority.
+    price: real("price"),
     // Operator confirmed there's no USDA food for this product, so the coverage
     // fix stops suggesting a (futile) USDA link and expects manual entry of
     // weight/volume/calories instead. Does not suppress the problem — the card
@@ -745,7 +749,7 @@ export const inventoryEntry = pgTable(
       .notNull()
       .$type<LocationId>()
       .references(() => location.id),
-    valuation: real("valuation"), // Precomputed: amount.value * product.price
+    valuation: real("valuation"), // Precomputed: amount.value * Product effective price
     // Durable record of when this entry was last verified in an audit session
     // (set on session "Done"). Nullable: null = never verified.
     verifiedAt: timestamp("verifiedAt", { mode: "date" }),
@@ -1259,6 +1263,11 @@ export const expense = pgTable(
     productId: uuid("productId")
       .$type<ProductId>()
       .references(() => product.id),
+    // Number of units of `productId` covered by this ledger line. Nullable is
+    // intentional: old receipts frequently prove the cost but not the count,
+    // and unknown must never be silently treated as one. Whole product units
+    // only; measured package conversions belong on Product unit mappings.
+    productQuantity: integer("productQuantity"),
     // The charge this line belongs to. Nullable: the 193 rows with no vendor
     // recorded have nothing to attach to, and forcing a synthetic charge on them
     // would invent a transaction that never happened. `vendor` and `orderId`
@@ -1284,6 +1293,10 @@ export const expense = pgTable(
     check(
       "Expense_cost_whole_cent_check",
       sql`${table.cost} IS NULL OR abs(${table.cost} * 100 - round(${table.cost} * 100)) < 0.0000001`,
+    ),
+    check(
+      "Expense_productQuantity_check",
+      sql`${table.productQuantity} IS NULL OR (${table.productId} IS NOT NULL AND ${table.productQuantity} > 0)`,
     ),
   ],
 );

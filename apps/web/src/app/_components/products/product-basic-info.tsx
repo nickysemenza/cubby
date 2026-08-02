@@ -21,7 +21,6 @@ import { EntityInlineLink } from "../EntityInlineLink";
 import { useEntityDelete } from "../hooks/useEntityDelete";
 import { PrintLabelButton } from "../print-label-button";
 import { CategoryLabel } from "./CategoryLabel";
-import { PriceSuggestion } from "./price-suggestion";
 import { productCategoryOptionsWithTheme } from "./product-category-icons";
 import { ProductNotesMarkdown } from "./product-notes-markdown";
 
@@ -78,19 +77,34 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     { label: "Manufacturer", value: product.manufacturer },
     { label: "Model", value: product.model },
     {
-      label: "Price",
+      label: "Valuation price",
       value: (
-        <EditableCell
-          value={product.price}
-          onSave={async (newPrice) => {
-            await updateProductMutation.mutateAsync({
-              id: product.id,
-              data: { price: newPrice },
-            });
-          }}
-          config={{ type: "currency" }}
-          renderValue={(v) => (v !== null ? formatCurrency(v) : <NoneValue />)}
-        />
+        <Stack gap="xs">
+          <EditableCell
+            value={product.price}
+            onSave={async (newPrice) => {
+              await updateProductMutation.mutateAsync({
+                id: product.id,
+                data: { price: newPrice },
+              });
+            }}
+            config={{ type: "currency" }}
+            renderValue={() =>
+              product.pricing.effectivePrice !== null ? (
+                formatCurrency(product.pricing.effectivePrice)
+              ) : (
+                <NoneValue />
+              )
+            }
+          />
+          <span className="text-muted-foreground text-xs">
+            {product.pricing.source === "explicit"
+              ? "Manual override"
+              : product.pricing.source === "derived"
+                ? `Derived from ${product.pricing.knownExpenseCount} expense${product.pricing.knownExpenseCount === 1 ? "" : "s"}${product.pricing.partial ? " · partial history" : ""}`
+                : "No override or quantified purchase history"}
+          </span>
+        </Stack>
       ),
     },
     {
@@ -221,16 +235,6 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
                 />
               </Stack>
             ) : null}
-            <PriceSuggestion
-              product={product}
-              isPending={updateProductMutation.isPending}
-              onAccept={async (price) => {
-                await updateProductMutation.mutateAsync({
-                  id: product.id,
-                  data: { price },
-                });
-              }}
-            />
           </Stack>
         }
         actions={

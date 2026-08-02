@@ -78,6 +78,7 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
             <TableHead>Expense</TableHead>
             <TableHead>Vendor</TableHead>
             <TableHead>Order #</TableHead>
+            <TableHead className="text-right">Quantity</TableHead>
             <TableHead className="text-right">Cost</TableHead>
           </TableRow>
         </TableHeader>
@@ -108,6 +109,9 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
                 {expense.orderId ?? <NoneValue />}
               </TableCell>
               <TableCell className="text-right font-mono tabular-nums">
+                {expense.productQuantity ?? <NoneValue />}
+              </TableCell>
+              <TableCell className="text-right font-mono tabular-nums">
                 {expense.cost != null ? formatCurrency(expense.cost) : "—"}
               </TableCell>
             </TableRow>
@@ -124,6 +128,20 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
           </>
         )}
       </p>
+      {product.pricing.derivedPrice !== null ? (
+        <p className="text-muted-foreground text-sm">
+          Historical unit cost: {formatCurrency(product.pricing.derivedPrice)}
+          {product.pricing.partial
+            ? ` from ${product.pricing.knownExpenseCount} quantified expense${product.pricing.knownExpenseCount === 1 ? "" : "s"}; ${product.pricing.unknownExpenseCount} still missing quantity`
+            : ` across ${product.pricing.knownUnitCount} unit${product.pricing.knownUnitCount === 1 ? "" : "s"}`}
+        </p>
+      ) : product.pricing.unknownExpenseCount > 0 ? (
+        <p className="text-sm text-warning">
+          Add quantities to {product.pricing.unknownExpenseCount} acquisition
+          {product.pricing.unknownExpenseCount === 1 ? "" : "s"} to derive a
+          unit cost.
+        </p>
+      ) : null}
       <Link
         to="/expenses"
         search={{ productId: product.id }}
