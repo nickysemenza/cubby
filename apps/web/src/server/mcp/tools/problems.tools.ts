@@ -2,7 +2,6 @@ import {
   problemsCountSchema,
   problemsTypeSliceOut,
   problemsUnknownTypeOut,
-  reparseStaleSyncOut,
 } from "@cubby/schemas/mcp";
 import {
   allProblemsSchema,
@@ -11,12 +10,7 @@ import {
 } from "@cubby/schemas/problems";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import {
-  getCaller,
-  READ_ONLY_CLOSED,
-  registerMcpTool,
-  WRITE_CLOSED,
-} from "./_shared";
+import { getCaller, READ_ONLY_CLOSED, registerMcpTool } from "./_shared";
 
 export function registerProblemsTools(server: McpServer) {
   registerMcpTool(server, {
@@ -72,19 +66,6 @@ export function registerProblemsTools(server: McpServer) {
         return { type: params.type, items: slice };
       }
       return all;
-    },
-  });
-
-  registerMcpTool(server, {
-    name: "reparse_stale_parses",
-    description:
-      "Re-parse every recipe line whose stored parse has drifted from the current parser.",
-    inputSchema: {},
-    outputSchema: reparseStaleSyncOut,
-    annotations: WRITE_CLOSED,
-    handler: async (_params, extra) => {
-      const caller = getCaller(extra);
-      return caller.problems.reparseStaleSync();
     },
   });
 }

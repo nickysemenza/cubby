@@ -11,7 +11,6 @@ import {
   recipeCostingExplainMcpOut,
   recipeDetailMcpOut,
   recipeMcpListOut,
-  recipeRecomputeMcpOut,
   recipesUsingIngredientOut,
   recipeTagsListOut,
   scrapeRecipeMcpOut,
@@ -193,15 +192,6 @@ export function registerRecipeTools(server: McpServer) {
       const result = await caller.recipe.getAllTags();
       return { items: result };
     },
-  });
-
-  registerRouterTool(server, {
-    name: "recompute_recipe_totals",
-    description:
-      "Recompute every recipe's persisted cost/calorie totals (one-shot backfill / recovery).",
-    outputSchema: recipeRecomputeMcpOut,
-    annotations: WRITE_CLOSED,
-    call: (caller) => caller.recipe.recomputeAll(),
   });
 
   registerRouterTool(server, {

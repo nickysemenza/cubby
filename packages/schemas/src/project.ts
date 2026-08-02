@@ -1004,7 +1004,7 @@ export const expenseFilterFields = {
    * No dedicated presence field: `vendorPresenceFilter` already means
    * `purchaseId IS NULL`, since `purchase.vendorId` is NOT NULL (see above).
    */
-  purchaseId: purchaseShortcode.optional(),
+  purchaseId: oneOrMany(purchaseShortcode).optional(),
 };
 export const expenseFiltersSchema = z.object(expenseFilterFields);
 export type ExpenseFilters = z.infer<typeof expenseFiltersSchema>;

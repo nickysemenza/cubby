@@ -197,7 +197,7 @@ export const buildExpenseWhereClause = async (
   );
   const purchaseUuids = await toUuids(
     db,
-    filters.purchaseId ? [filters.purchaseId] : [],
+    filters.purchaseId ? [filters.purchaseId].flat() : [],
     "purchase",
   );
   const productUuids = await toUuids(

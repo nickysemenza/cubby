@@ -452,7 +452,7 @@ export const invalidFinancialJsonSchema = z.discriminatedUnion("entity", [
 // recipe line and blew the CPU/memory budget on the request path, so they live as
 // manual dry-run/fix-all actions in Settings → Maintenance instead.
 const problemsFastShape = {
-  duplicateUniqueProducts: z.array(duplicateUniqueProductSchema),
+  duplicateInventory: z.array(duplicateUniqueProductSchema),
   orphanedProducts: z.array(orphanedProductSchema),
   productsMissingPrice: z.array(productMissingPriceSchema),
   unvaluedBucketProducts: z.array(productMissingPriceSchema),
@@ -589,7 +589,7 @@ export type ProblemKey = keyof typeof allProblemArrayFields;
  */
 export const PROBLEM_CLASS = {
   // --- defects: wrong data, converges to zero ---
-  duplicateUniqueProducts: "defect",
+  duplicateInventory: "defect",
   orphanedProducts: "defect",
   productsMissingPrice: "defect",
   productsWithoutMappings: "defect",

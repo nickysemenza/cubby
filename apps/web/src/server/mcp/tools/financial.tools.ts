@@ -78,6 +78,7 @@ export function registerFinancialTools(server: McpServer) {
     sort: { orderBy: "postedDate", direction: "desc" },
     get: (caller, id) => caller.financialTransaction.getByID({ id }),
     create: (caller, params) => caller.financialTransaction.create(params),
+    batch: { create: true, update: true },
     descriptions: {
       list: "List Financial Transactions. IDs are FTX- shortcodes. Filter by account, Purchase or presence, kind, status, source/reference, merchant/search, amount, and transaction or posted dates. Amounts are settlement evidence and never enter spend.",
       get: "Get one Financial Transaction by FTX- shortcode.",
@@ -93,7 +94,7 @@ export function registerFinancialTools(server: McpServer) {
   registerRouterTool(server, {
     name: "preview_financial_statement_import",
     description:
-      "Preview client-parsed Monarch statement rows before recording settlement evidence. Cubby accepts normalized rows only — never a CSV path, upload, or file contents. Pass at most 200 rows. Monarch charges are negative in the export and are normalized to positive Cubby outflows; credits become negative. The preview derives a stable source reference from account/date/amount/original statement, resolves an existing Financial Account only when unambiguous, and returns already_recorded, ready_to_create, possible_existing, unresolved_account, or indistinguishable_duplicate for each row. Unresolved rows include a non-persisted provisional Account suggestion. This tool is read-only: it never creates Accounts, Financial Transactions, Purchases, or links. Create only user-approved ready_to_create rows afterwards with create_financial_transaction using the returned proposed fields and accountId.",
+      "Preview client-parsed Monarch statement rows before recording settlement evidence. Cubby accepts normalized rows only — never a CSV path, upload, or file contents. Pass at most 200 rows. Monarch charges are negative in the export and are normalized to positive Cubby outflows; credits become negative. The preview derives a stable source reference from account/date/amount/original statement, resolves an existing Financial Account only when unambiguous, and returns already_recorded, ready_to_create, possible_existing, unresolved_account, or indistinguishable_duplicate for each row. Unresolved rows include a non-persisted provisional Account suggestion. This tool is read-only: it never creates Accounts, Financial Transactions, Purchases, or links. Create only user-approved ready_to_create rows afterwards with create_financial_transactions using the returned proposed fields and accountId, then review every per-item result.",
     inputSchema: financialStatementImportPreviewInput.shape,
     outputSchema: financialStatementImportPreviewOut,
     annotations: READ_ONLY_CLOSED,

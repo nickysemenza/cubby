@@ -3,7 +3,6 @@ import {
   mealCreateInput,
   mealDate,
   mealFilterFields,
-  mealMcpItemsOut,
   mealMcpListOut,
   mealMcpOut,
   mealScale,
@@ -20,7 +19,6 @@ import {
   registerMcpTool,
   registerRouterTool,
   respond,
-  respondList,
   slimMeal,
   WRITE_CLOSED,
 } from "./_shared";
@@ -46,25 +44,6 @@ export function registerMealTools(server: McpServer) {
         "Soft-delete meals by IDs. Cascades to the meal's planned recipes.",
     },
     create: (caller, params) => caller.meal.create(params),
-  });
-
-  registerRouterTool(server, {
-    name: "get_meals_by_date_range",
-    description:
-      "Get all meals between two days (inclusive) — the calendar view for a week/range.",
-    inputSchema: {
-      from: mealDate.describe("Start day (inclusive)"),
-      to: mealDate.describe("End day (inclusive)"),
-    },
-    outputSchema: mealMcpItemsOut,
-    annotations: READ_ONLY_CLOSED,
-    call: async (caller, params) => {
-      const result = await caller.meal.getByDateRange({
-        from: params.from,
-        to: params.to,
-      });
-      return respondList(result, slimMeal);
-    },
   });
 
   registerMcpTool(server, {

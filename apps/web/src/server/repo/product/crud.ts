@@ -455,7 +455,8 @@ export const productList = async (
       ),
       idSetPresence(
         product.id,
-        filters.externalIdPresenceFilter,
+        filters.externalIdPresenceFilter ??
+          (externalSources && externalSources.length > 0 ? "has" : undefined),
         productIdsWithExternalIds,
       ),
       presenceCondition(product.model, filters.modelPresenceFilter),
@@ -1029,7 +1030,11 @@ export const patchProductExternalIds = async (
       externalId: string;
       url?: string | null;
     }>;
-    remove: Array<{ source: string; kind: ExternalIdKind }>;
+    remove: Array<{
+      source: string;
+      kind: ExternalIdKind;
+      expectedExternalId: string;
+    }>;
   },
   actor: ActorContext,
 ): Promise<ProductTopLevelOut> =>
@@ -1049,6 +1054,22 @@ export const patchProductExternalIds = async (
         notDeleted(productExternalId),
       ),
     });
+
+    for (const entry of input.remove) {
+      const source = entry.source.trim().toLowerCase();
+      const current = beforeIds.find(
+        (externalId) =>
+          externalId.source === source && externalId.kind === entry.kind,
+      );
+      if (!current || current.externalId !== entry.expectedExternalId) {
+        throw createAppError(
+          "PRODUCT_EXTERNAL_ID_PRECONDITION_FAILED",
+          current
+            ? `Product external ID ${source}/${entry.kind} is ${current.externalId}, not the expected ${entry.expectedExternalId}.`
+            : `Product has no live external ID in slot ${source}/${entry.kind}.`,
+        );
+      }
+    }
 
     await assertExternalIdsAvailable(tx, input.upsert, id);
 

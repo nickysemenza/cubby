@@ -82,7 +82,7 @@ export function ProblemsOverview() {
       problems
         ? uniq(
             [
-              ...problems.duplicateUniqueProducts,
+              ...problems.duplicateInventory,
               ...problems.orphanedProducts,
               ...problems.productsMissingPrice,
               ...problems.unvaluedBucketProducts,
