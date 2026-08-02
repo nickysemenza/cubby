@@ -56,7 +56,10 @@ const sameIds = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((id, index) => id === b[index]);
 
 /** Stable hook config (see apps/web/CLAUDE.md on inline objects). */
-const EMBEDDED_TABLE_STATE = { urlSync: false } as const;
+const EMBEDDED_TABLE_STATE = {
+  urlSync: false,
+  readUrlState: false,
+} as const;
 const NO_TABLE_FILTERS = () => ({}) as Record<string, never>;
 
 export function LocationInventoryTable({

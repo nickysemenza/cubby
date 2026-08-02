@@ -20,6 +20,7 @@ import { formatCurrency } from "~/lib/utils";
 const EMBEDDED_TABLE_STATE = {
   initialSort: "date",
   urlSync: false,
+  readUrlState: false,
   syncPaginationToUrl: false,
 } as const;
 

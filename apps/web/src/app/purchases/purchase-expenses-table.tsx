@@ -33,6 +33,7 @@ import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
 const EMBEDDED_TABLE_STATE = {
   initialSort: "date",
   urlSync: false,
+  readUrlState: false,
   syncPaginationToUrl: false,
 } as const;
 

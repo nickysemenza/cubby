@@ -162,16 +162,49 @@ export function useTableVirtualizer({
     return () => ro.disconnect();
   }, [isMobile]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: toolbarHeight is an intentional re-measure trigger — the toolbar sits above the body, so a height change shifts the body's document offset.
+  const measureScrollMargin = useCallback(() => {
+    const el = tableContainerRef.current;
+    if (!el || isMobile) return;
+    // Round away sub-pixel noise from browser zoom. The table's document
+    // offset is stable while scrolling, so a fractional wobble must not drive
+    // a render on every scroll frame.
+    const next = Math.round(el.getBoundingClientRect().top + window.scrollY);
+    setScrollMargin((current) => (current === next ? current : next));
+  }, [isMobile]);
+
+  // A lower table can be pushed down after it has mounted when an async table
+  // above it replaces a loading row with its real virtualized height. Watching
+  // only this element (or window resize) misses that position-only layout
+  // shift, so observe the document body and remeasure on the next frame. The
+  // scroll listener is a fallback for offset changes that preserve the body's
+  // total height (for example, one preceding section grows while another
+  // shrinks).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rowCount and toolbarHeight deliberately retrigger the document-offset measurement after this table's own async layout changes.
   useEffect(() => {
     const el = tableContainerRef.current;
     if (!el || isMobile) return;
-    const measure = () =>
-      setScrollMargin(el.getBoundingClientRect().top + window.scrollY);
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [isMobile, toolbarHeight]);
+    let frame: number | null = null;
+    const scheduleMeasure = () => {
+      if (frame !== null) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        measureScrollMargin();
+      });
+    };
+
+    measureScrollMargin();
+    window.addEventListener("resize", scheduleMeasure);
+    window.addEventListener("scroll", scheduleMeasure, { passive: true });
+    const bodyObserver = new ResizeObserver(scheduleMeasure);
+    bodyObserver.observe(document.body);
+
+    return () => {
+      window.removeEventListener("resize", scheduleMeasure);
+      window.removeEventListener("scroll", scheduleMeasure);
+      bodyObserver.disconnect();
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, [isMobile, measureScrollMargin, rowCount, toolbarHeight]);
 
   // Always virtualize for consistent rendering
   const baseCount = groupedItems ? groupedItems.length : rowCount;
