@@ -8,6 +8,7 @@ The **[Tenets](README.md#tenets)** there are binding on design proposals: invent
 - Prefer subagents for codebase exploration, test execution, log analysis, documentation research, and independent review. Keep architecture decisions, implementation coordination, and final verification with the main agent.
 - Do not delegate small or inherently sequential tasks. Do not let multiple agents edit overlapping files concurrently; use isolated worktrees and disjoint ownership for parallel write-heavy work.
 - For change, build, and fix requests, make the requested in-scope changes and validate them proportionally. Run targeted checks first; run `pnpm run check` plus relevant tests for broad or cross-layer changes.
+- Open pull requests ready for review by default. Use a draft PR only when the user explicitly requests one or the published work is intentionally incomplete.
 
 ## Production database migrations
 
