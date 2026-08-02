@@ -506,7 +506,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
     {
       label: "Project",
       value:
-        task.projectId && task.projectName && task.projectId ? (
+        task.projectId && task.projectName ? (
           <EntityInlineLink
             entity="project"
             data={{
