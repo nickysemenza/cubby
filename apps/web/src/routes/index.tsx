@@ -35,7 +35,7 @@ export const Route = createFileRoute("/")({
   },
   // Warm the count-card query during route load so it's already in flight when
   // EntityCount mounts (most useful on client-side navigation). One call covers
-  // all seven totals (dashboard.counts). Non-blocking `void prefetch` (not
+  // every homepage total (dashboard.counts). Non-blocking `void prefetch` (not
   // awaited ensure): the SSR tRPC client targets localhost, which is unreachable
   // on CF Workers — so awaiting here would break prod. EntityCount's own gate +
   // skeleton covers cold loads.

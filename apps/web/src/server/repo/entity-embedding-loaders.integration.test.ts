@@ -1,3 +1,4 @@
+import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import {
   expenseCreateInput,
   projectCreateInput,
@@ -17,9 +18,20 @@ import {
   findOrphanedEntityEmbeddings,
   getEmbeddingTextForEntity,
   getEmbeddingTextsForEntityTypes,
+  getEntityEmbeddingDeletedAtForRef,
+  upsertEntityEmbedding,
 } from "./entity-embedding";
 import { createExpense } from "./expense";
+import {
+  createFinancialAccount,
+  deleteFinancialAccounts,
+} from "./financial-account";
+import {
+  createFinancialTransaction,
+  deleteFinancialTransactions,
+} from "./financial-transaction";
 import { createProject } from "./project";
+import { createPurchase, deletePurchases, mergePurchases } from "./purchase";
 import {
   createIngredientFixture as createIngredient,
   createInventoryFixture as createInventoryEntry,
@@ -32,6 +44,7 @@ import {
   makeRecipeInput,
 } from "./repo.fixtures";
 import { createTask } from "./task";
+import { createVendor, deleteVendors, mergeVendors } from "./vendor";
 
 describe("searchable entity loader maps", () => {
   const ctx = withTestDb();
@@ -108,6 +121,45 @@ describe("searchable entity loader maps", () => {
       },
       ctx.actor,
     );
+    const vendor = await createVendor(
+      ctx.db,
+      { name: "Loader vendor", website: null, notes: null },
+      ctx.actor,
+    );
+    const purchase = await createPurchase(
+      ctx.db,
+      {
+        vendorId: vendor.output.id,
+        orderId: "Loader order",
+        date: "2026-01-15",
+        statedTotal: null,
+        notes: null,
+      },
+      ctx.actor,
+    );
+    const account = await createFinancialAccount(
+      ctx.db,
+      {
+        name: "Loader account",
+        identity: { kind: "cash" },
+        provisional: false,
+        sourceAliases: [],
+        notes: null,
+      },
+      ctx.actor,
+    );
+    const transaction = await createFinancialTransaction(
+      ctx.db,
+      financialTransactionCreateInput.parse({
+        accountId: account.output.id,
+        purchaseId: purchase.output.id,
+        kind: "purchase",
+        status: "pending",
+        amount: 25,
+        merchant: "Loader merchant",
+      }),
+      ctx.actor,
+    );
     const ids = {
       product: product.entityId,
       recipe: recipe.entityId,
@@ -118,6 +170,10 @@ describe("searchable entity loader maps", () => {
       meal: meal.entityId,
       project: projectUuid,
       task: taskUuid,
+      vendor: vendor.entityId,
+      purchase: purchase.entityId,
+      financialAccount: account.entityId,
+      financialTransaction: transaction.entityId,
       expense: expenseUuid,
     } satisfies Record<SearchableEntity, string>;
 
@@ -162,5 +218,144 @@ describe("searchable entity loader maps", () => {
     expect(orphaned.map(({ entityType }) => entityType).sort()).toEqual(
       [...searchableEntities].sort(),
     );
+  });
+
+  it("retires finance embeddings on delete and merge removal paths", async () => {
+    const config = {
+      provider: "openai",
+      model: "text-embedding-3-small",
+      dimensions: 3,
+    } as const;
+    const seed = (entityType: SearchableEntity, entityId: string) =>
+      upsertEntityEmbedding(ctx.db, {
+        entityType,
+        entityId,
+        embeddingText: `${entityType} removal fixture`,
+        config,
+        embedding: [0, 0, 0],
+      });
+
+    const doomedVendor = await createVendor(
+      ctx.db,
+      { name: "Embedding delete vendor", website: null, notes: null },
+      ctx.actor,
+    );
+    const purchaseVendor = await createVendor(
+      ctx.db,
+      { name: "Embedding purchase vendor", website: null, notes: null },
+      ctx.actor,
+    );
+    const doomedPurchase = await createPurchase(
+      ctx.db,
+      {
+        vendorId: purchaseVendor.output.id,
+        orderId: "embedding-delete-order",
+        date: "2026-01-15",
+        statedTotal: null,
+        notes: null,
+      },
+      ctx.actor,
+    );
+    const account = await createFinancialAccount(
+      ctx.db,
+      {
+        name: "Embedding delete account",
+        identity: { kind: "cash" },
+        provisional: false,
+        sourceAliases: [],
+        notes: null,
+      },
+      ctx.actor,
+    );
+    const transaction = await createFinancialTransaction(
+      ctx.db,
+      financialTransactionCreateInput.parse({
+        accountId: account.output.id,
+        kind: "fee",
+        status: "pending",
+        amount: 5,
+      }),
+      ctx.actor,
+    );
+    const deleteRefs = [
+      { entityType: "vendor", entityId: doomedVendor.entityId },
+      { entityType: "purchase", entityId: doomedPurchase.entityId },
+      { entityType: "financialAccount", entityId: account.entityId },
+      {
+        entityType: "financialTransaction",
+        entityId: transaction.entityId,
+      },
+    ] as const;
+    await Promise.all(
+      deleteRefs.map((ref) => seed(ref.entityType, ref.entityId)),
+    );
+    await deleteVendors(ctx.db, [doomedVendor.output.id], ctx.actor);
+    await deletePurchases(ctx.db, [doomedPurchase.output.id], ctx.actor);
+    await deleteFinancialTransactions(
+      ctx.db,
+      [transaction.output.id],
+      ctx.actor,
+    );
+    await deleteFinancialAccounts(ctx.db, [account.output.id], ctx.actor);
+    for (const ref of deleteRefs) {
+      expect(
+        await getEntityEmbeddingDeletedAtForRef(ctx.db, ref),
+      ).toBeInstanceOf(Date);
+    }
+
+    const vendorKeep = await createVendor(
+      ctx.db,
+      { name: "Embedding vendor keeper", website: null, notes: null },
+      ctx.actor,
+    );
+    const vendorDrop = await createVendor(
+      ctx.db,
+      { name: "Embedding vendor loser", website: null, notes: null },
+      ctx.actor,
+    );
+    const purchaseKeep = await createPurchase(
+      ctx.db,
+      {
+        vendorId: vendorKeep.output.id,
+        orderId: null,
+        date: "2026-01-16",
+        statedTotal: null,
+        notes: null,
+      },
+      ctx.actor,
+    );
+    const purchaseDrop = await createPurchase(
+      ctx.db,
+      {
+        vendorId: vendorKeep.output.id,
+        orderId: null,
+        date: "2026-01-17",
+        statedTotal: null,
+        notes: null,
+      },
+      ctx.actor,
+    );
+    await Promise.all([
+      seed("vendor", vendorDrop.entityId),
+      seed("purchase", purchaseDrop.entityId),
+    ]);
+    await mergeVendors(
+      ctx.db,
+      { keepId: vendorKeep.output.id, mergeIds: [vendorDrop.output.id] },
+      ctx.actor,
+    );
+    await mergePurchases(
+      ctx.db,
+      { keepId: purchaseKeep.output.id, mergeIds: [purchaseDrop.output.id] },
+      ctx.actor,
+    );
+    for (const ref of [
+      { entityType: "vendor" as const, entityId: vendorDrop.entityId },
+      { entityType: "purchase" as const, entityId: purchaseDrop.entityId },
+    ]) {
+      expect(
+        await getEntityEmbeddingDeletedAtForRef(ctx.db, ref),
+      ).toBeInstanceOf(Date);
+    }
   });
 });

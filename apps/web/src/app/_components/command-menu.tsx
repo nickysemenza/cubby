@@ -158,9 +158,9 @@ export function GlobalCommandMenu({
 
   const navigateToShortcode = (target: ParsedShortcode, name?: string) => {
     // Recents needs a name, so it only gets an entry once the preview query has
-    // landed — navigation itself never waits on it. `entityType` is narrowed to
-    // the SEARCHABLE entities: vendor and purchase have shortcodes but aren't in
-    // that union, and they have no preview query here either.
+    // landed — navigation itself never waits on it. Only the three legacy
+    // shortcode preview queries above can contribute a name on this fast path;
+    // ordinary text search covers every searchable entity.
     if (name && isSearchableEntity(target.type)) {
       pushRecent({
         entityType: target.type,

@@ -149,9 +149,6 @@ export function EntityPreviewPanel({
           .with("vendor", () =>
             data ? <VendorDetail vendor={data as never} /> : null,
           )
-          // Neither is searchable in v1 (entity-manifest.ts), so no search result
-          // resolves to either — but both rosters open this panel on row click,
-          // which is why both arms are real rather than null.
           .with("purchase", () =>
             data ? <PurchaseDetail purchase={data as never} /> : null,
           )

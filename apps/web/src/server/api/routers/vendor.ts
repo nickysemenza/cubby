@@ -1,11 +1,9 @@
 /**
  * Vendor Router — the roster of places money goes.
  *
- * `list` comes from the shared factory; the rest is hand-rolled rather than
- * going through the full crud factory for two reasons: `vendorOut` carries two
- * correlated rollups (`purchaseCount`, `spend`) the factory's plain column
- * reader can't produce, and vendor is NOT searchable in v1, so the
- * searchable-crud factory's embedding side-effects would be wrong here.
+ * `list` comes from the shared factory; the rest is hand-rolled because
+ * `vendorOut` carries correlated rollups (`purchaseCount`, `spend`) the
+ * factory's plain column reader can't produce.
  */
 
 import { unsafeVendorId, vendorShortcode } from "@cubby/schemas/identifiers";
@@ -31,6 +29,7 @@ import {
   vendorList,
   vendorOptions,
 } from "~/server/repo/vendor";
+import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import {
   createEntityListProcedure,
   createGetByShortcodeProcedure,
@@ -81,18 +80,28 @@ const options = protectedProcedure
 const create = protectedProcedure
   .input(vendorCreateInput)
   .output(strictOutput(vendorOut))
-  .mutation(
-    async ({ ctx, input }) =>
-      (await createVendor(ctx.db, input, ctx.actorContext)).output,
-  );
+  .mutation(async ({ ctx, input }) => {
+    const result = await createVendor(ctx.db, input, ctx.actorContext);
+    await runMutationSideEffects(ctx.db, {
+      action: "created",
+      entity: { entityType: "vendor", entityId: result.entityId },
+      source: "vendor.create",
+    });
+    return result.output;
+  });
 
 const update = protectedProcedure
   .input(vendorUpdateInput)
   .output(strictOutput(vendorOut))
-  .mutation(
-    async ({ ctx, input }) =>
-      (await updateVendor(ctx.db, input, ctx.actorContext)).output,
-  );
+  .mutation(async ({ ctx, input }) => {
+    const result = await updateVendor(ctx.db, input, ctx.actorContext);
+    await runMutationSideEffects(ctx.db, {
+      action: "updated",
+      entity: { entityType: "vendor", entityId: result.entityId },
+      source: "vendor.update",
+    });
+    return result.output;
+  });
 
 /**
  * Fold duplicate roster rows into one. Charges follow the keeper; any two charges
@@ -103,7 +112,18 @@ const update = protectedProcedure
 const merge = protectedProcedure
   .input(mergeVendorsInput)
   .output(strictOutput(vendorOut))
-  .mutation(({ ctx, input }) => mergeVendors(ctx.db, input, ctx.actorContext));
+  .mutation(async ({ ctx, input }) => {
+    const output = await mergeVendors(ctx.db, input, ctx.actorContext);
+    const entityId = await resolveLiveShortcode(ctx.db, output.id, "vendor");
+    if (entityId) {
+      await runMutationSideEffects(ctx.db, {
+        action: "updated",
+        entity: { entityType: "vendor", entityId: unsafeVendorId(entityId) },
+        source: "vendor.merge",
+      });
+    }
+    return output;
+  });
 
 const deleteItem = protectedProcedure
   .input(z.object({ ids: z.array(vendorShortcode).min(1) }))

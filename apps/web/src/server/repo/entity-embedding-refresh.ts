@@ -1,14 +1,18 @@
 import {
   unsafeCookbookId,
   unsafeExpenseId,
+  unsafeFinancialAccountId,
+  unsafeFinancialTransactionId,
   unsafeIngredientId,
   unsafeInventoryId,
   unsafeLocationId,
   unsafeMealId,
   unsafeProductId,
   unsafeProjectId,
+  unsafePurchaseId,
   unsafeRecipeId,
   unsafeTaskId,
+  unsafeVendorId,
 } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -18,6 +22,8 @@ import {
   cookbook,
   entityEmbedding,
   expense,
+  financialAccount,
+  financialTransaction,
   ingredient,
   inventoryEntry,
   location,
@@ -25,10 +31,12 @@ import {
   mealRecipe,
   product,
   project,
+  purchase,
   recipe,
   recipeSection,
   recipeSectionIngredient,
   task,
+  vendor,
 } from "~/server/db/schema";
 import {
   getDb,
@@ -41,14 +49,18 @@ import { embeddingTextHash } from "~/server/semantic/hash";
 import {
   buildCookbookEmbeddingText,
   buildExpenseEmbeddingText,
+  buildFinancialAccountEmbeddingText,
+  buildFinancialTransactionEmbeddingText,
   buildIngredientEmbeddingText,
   buildInventoryEmbeddingText,
   buildLocationEmbeddingText,
   buildMealEmbeddingText,
   buildProductEmbeddingText,
   buildProjectEmbeddingText,
+  buildPurchaseEmbeddingText,
   buildRecipeEmbeddingText,
   buildTaskEmbeddingText,
+  buildVendorEmbeddingText,
   normalizeSearchText,
 } from "~/server/semantic/text";
 
@@ -447,9 +459,16 @@ async function getExpenseEmbeddingTexts(
       trade: expense.trade,
       notes: expense.notes,
       projectName: project.name,
+      vendorName: vendor.name,
+      orderId: purchase.orderId,
     })
     .from(expense)
     .leftJoin(project, eq(expense.projectId, project.id))
+    .leftJoin(
+      purchase,
+      and(eq(expense.purchaseId, purchase.id), notDeleted(purchase)),
+    )
+    .leftJoin(vendor, and(eq(purchase.vendorId, vendor.id), notDeleted(vendor)))
     .where(
       and(
         notDeleted(expense),
@@ -467,6 +486,167 @@ async function getExpenseEmbeddingTexts(
   }));
 }
 
+async function getVendorEmbeddingTexts(
+  db: Database,
+  options: EmbeddingLoadOptions = {},
+): Promise<SearchableEntityText[]> {
+  const rows = await getDb(db).query.vendor.findMany({
+    where: and(
+      notDeleted(vendor),
+      options.ids?.length
+        ? inArray(vendor.id, options.ids.map(unsafeVendorId))
+        : undefined,
+    ),
+    columns: { id: true, name: true, website: true, notes: true },
+    ...(options.limit == null ? {} : { limit: options.limit }),
+  });
+  return rows.map((row) => ({
+    entityType: "vendor",
+    entityId: row.id,
+    embeddingText: buildVendorEmbeddingText(row),
+  }));
+}
+
+async function getPurchaseEmbeddingTexts(
+  db: Database,
+  options: EmbeddingLoadOptions = {},
+): Promise<SearchableEntityText[]> {
+  const query = getDb(db)
+    .select({
+      id: purchase.id,
+      vendorName: vendor.name,
+      orderId: purchase.orderId,
+      date: purchase.date,
+      notes: purchase.notes,
+    })
+    .from(purchase)
+    .innerJoin(
+      vendor,
+      and(eq(purchase.vendorId, vendor.id), notDeleted(vendor)),
+    )
+    .where(
+      and(
+        notDeleted(purchase),
+        options.ids?.length
+          ? inArray(purchase.id, options.ids.map(unsafePurchaseId))
+          : undefined,
+      ),
+    );
+  const rows =
+    options.limit == null ? await query : await query.limit(options.limit);
+  return rows.map((row) => ({
+    entityType: "purchase",
+    entityId: row.id,
+    embeddingText: buildPurchaseEmbeddingText(row),
+  }));
+}
+
+const identityTerms = (identity: Record<string, unknown>): string[] =>
+  Object.values(identity).flatMap((value) =>
+    typeof value === "string" && value.length > 0 ? [value] : [],
+  );
+
+async function getFinancialAccountEmbeddingTexts(
+  db: Database,
+  options: EmbeddingLoadOptions = {},
+): Promise<SearchableEntityText[]> {
+  const rows = await getDb(db).query.financialAccount.findMany({
+    where: and(
+      notDeleted(financialAccount),
+      options.ids?.length
+        ? inArray(
+            financialAccount.id,
+            options.ids.map(unsafeFinancialAccountId),
+          )
+        : undefined,
+    ),
+    columns: {
+      id: true,
+      name: true,
+      identity: true,
+      sourceAliases: true,
+      notes: true,
+    },
+    ...(options.limit == null ? {} : { limit: options.limit }),
+  });
+  return rows.map((row) => ({
+    entityType: "financialAccount",
+    entityId: row.id,
+    embeddingText: buildFinancialAccountEmbeddingText({
+      name: row.name,
+      identityTerms: identityTerms(row.identity),
+      sourceAliasTerms: row.sourceAliases.flatMap((alias) => [
+        alias.source,
+        alias.alias,
+        alias.externalAccountId,
+      ]),
+      notes: row.notes,
+    }),
+  }));
+}
+
+async function getFinancialTransactionEmbeddingTexts(
+  db: Database,
+  options: EmbeddingLoadOptions = {},
+): Promise<SearchableEntityText[]> {
+  const query = getDb(db)
+    .select({
+      id: financialTransaction.id,
+      merchant: financialTransaction.merchant,
+      rawDescription: financialTransaction.rawDescription,
+      sourceCategory: financialTransaction.sourceCategory,
+      sourceRefs: financialTransaction.sourceRefs,
+      notes: financialTransaction.notes,
+      accountName: financialAccount.name,
+      vendorName: vendor.name,
+      orderId: purchase.orderId,
+      kind: financialTransaction.kind,
+      status: financialTransaction.status,
+      transactionDate: financialTransaction.transactionDate,
+      postedDate: financialTransaction.postedDate,
+    })
+    .from(financialTransaction)
+    .innerJoin(
+      financialAccount,
+      and(
+        eq(financialTransaction.accountId, financialAccount.id),
+        notDeleted(financialAccount),
+      ),
+    )
+    .leftJoin(
+      purchase,
+      and(
+        eq(financialTransaction.purchaseId, purchase.id),
+        notDeleted(purchase),
+      ),
+    )
+    .leftJoin(vendor, and(eq(purchase.vendorId, vendor.id), notDeleted(vendor)))
+    .where(
+      and(
+        notDeleted(financialTransaction),
+        options.ids?.length
+          ? inArray(
+              financialTransaction.id,
+              options.ids.map(unsafeFinancialTransactionId),
+            )
+          : undefined,
+      ),
+    );
+  const rows =
+    options.limit == null ? await query : await query.limit(options.limit);
+  return rows.map((row) => ({
+    entityType: "financialTransaction",
+    entityId: row.id,
+    embeddingText: buildFinancialTransactionEmbeddingText({
+      ...row,
+      sourceRefTerms: row.sourceRefs.flatMap((ref) => [
+        ref.source,
+        ref.externalId,
+      ]),
+    }),
+  }));
+}
+
 const embeddingTextLoaders = {
   product: getProductEmbeddingTexts,
   recipe: getRecipeEmbeddingTexts,
@@ -477,6 +657,10 @@ const embeddingTextLoaders = {
   meal: getMealEmbeddingTexts,
   project: getProjectEmbeddingTexts,
   task: getTaskEmbeddingTexts,
+  vendor: getVendorEmbeddingTexts,
+  purchase: getPurchaseEmbeddingTexts,
+  financialAccount: getFinancialAccountEmbeddingTexts,
+  financialTransaction: getFinancialTransactionEmbeddingTexts,
   expense: getExpenseEmbeddingTexts,
 } satisfies Record<SearchableEntity, EmbeddingTextLoader>;
 

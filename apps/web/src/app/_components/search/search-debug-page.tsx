@@ -24,6 +24,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { useTRPC } from "~/integrations/trpc/react";
+import { getSearchResultRoute } from "./search-utils";
 
 function SearchResultEntityLink({ item }: { item: SearchResultItem }) {
   return match(item)
@@ -110,6 +111,18 @@ function SearchResultEntityLink({ item }: { item: SearchResultItem }) {
         }}
         compact
       />
+    ))
+    .with({ entityType: "vendor" }, (i) => (
+      <Link {...getSearchResultRoute(i)}>{i.name}</Link>
+    ))
+    .with({ entityType: "purchase" }, (i) => (
+      <Link {...getSearchResultRoute(i)}>{i.name}</Link>
+    ))
+    .with({ entityType: "financialAccount" }, (i) => (
+      <Link {...getSearchResultRoute(i)}>{i.name}</Link>
+    ))
+    .with({ entityType: "financialTransaction" }, (i) => (
+      <Link {...getSearchResultRoute(i)}>{i.name}</Link>
     ))
     .with({ entityType: "expense" }, (i) => (
       <EntityInlineLink

@@ -19,10 +19,10 @@ import {
   listFinancialTransactions,
   updateFinancialTransaction,
 } from "~/server/repo/financial-transaction";
-import { createNonSearchableEntityCrudProcedures } from "../crud-factory";
+import { createSearchableEntityCrudProcedures } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
-const procedures = createNonSearchableEntityCrudProcedures({
+const procedures = createSearchableEntityCrudProcedures({
   schemas: {
     createInput: financialTransactionCreateInput,
     updateInput: financialTransactionUpdateData,
@@ -42,23 +42,15 @@ const procedures = createNonSearchableEntityCrudProcedures({
     },
     getByShortcode: (services, id) =>
       getFinancialTransactionByShortcode(services.db, id),
-    create: async (services, data) =>
-      (
-        await createFinancialTransaction(
-          services.db,
-          data,
-          services.actorContext,
-        )
-      ).output,
+    create: (services, data) =>
+      createFinancialTransaction(services.db, data, services.actorContext),
     update: async (services, id, data) =>
-      (
-        await updateFinancialTransaction(
-          services.db,
-          unsafeFinancialTransactionShortcode(id),
-          data,
-          services.actorContext,
-        )
-      ).output,
+      updateFinancialTransaction(
+        services.db,
+        unsafeFinancialTransactionShortcode(id),
+        data,
+        services.actorContext,
+      ),
     list: (services, filters, sorts, pagination) =>
       listFinancialTransactions(services.db, filters, sorts, pagination),
     delete: async (services, ids) => {

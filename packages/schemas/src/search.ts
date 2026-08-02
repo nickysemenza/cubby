@@ -5,14 +5,18 @@ import {
   anyShortcodeSchema,
   cookbookShortcode,
   expenseShortcode,
+  financialAccountShortcode,
+  financialTransactionShortcode,
   ingredientShortcode,
   inventoryShortcode,
   locationShortcode,
   mealShortcode,
   productShortcode,
   projectShortcode,
+  purchaseShortcode,
   recipeShortcode,
   taskShortcode,
+  vendorShortcode,
 } from "./identifiers";
 
 export { searchableEntities } from "./entity-manifest";
@@ -195,6 +199,44 @@ const expenseResult = z.object({
   projectName: z.string().nullable(),
 });
 
+const vendorResult = z.object({
+  ...searchResultBaseFields,
+  id: vendorShortcode,
+  entityType: z.literal("vendor"),
+  purchaseCount: z.number().nullable(),
+  spend: z.number().nullable(),
+});
+
+const purchaseResult = z.object({
+  ...searchResultBaseFields,
+  id: purchaseShortcode,
+  entityType: z.literal("purchase"),
+  orderId: z.string().nullable(),
+  date: z.string().nullable(),
+  expenseCount: z.number().nullable(),
+  expenseTotal: z.number().nullable(),
+});
+
+const financialAccountResult = z.object({
+  ...searchResultBaseFields,
+  id: financialAccountShortcode,
+  entityType: z.literal("financialAccount"),
+  identityKind: z.string().nullable(),
+  provisional: z.boolean(),
+  transactionCount: z.number().nullable(),
+});
+
+const financialTransactionResult = z.object({
+  ...searchResultBaseFields,
+  id: financialTransactionShortcode,
+  entityType: z.literal("financialTransaction"),
+  amount: z.number().nullable(),
+  status: z.string().nullable(),
+  kind: z.string().nullable(),
+  accountName: z.string().nullable(),
+  transactionDate: z.string().nullable(),
+});
+
 export const searchResultItemSchema = z.discriminatedUnion("entityType", [
   productResult,
   locationResult,
@@ -205,6 +247,10 @@ export const searchResultItemSchema = z.discriminatedUnion("entityType", [
   mealResult,
   projectResult,
   taskResult,
+  vendorResult,
+  purchaseResult,
+  financialAccountResult,
+  financialTransactionResult,
   expenseResult,
 ]);
 export type SearchResultItem = z.infer<typeof searchResultItemSchema>;
@@ -258,4 +304,12 @@ export type CookbookSearchResult = z.infer<typeof cookbookResult>;
 export type MealSearchResult = z.infer<typeof mealResult>;
 export type ProjectSearchResult = z.infer<typeof projectResult>;
 export type TaskSearchResult = z.infer<typeof taskResult>;
+export type VendorSearchResult = z.infer<typeof vendorResult>;
+export type PurchaseSearchResult = z.infer<typeof purchaseResult>;
+export type FinancialAccountSearchResult = z.infer<
+  typeof financialAccountResult
+>;
+export type FinancialTransactionSearchResult = z.infer<
+  typeof financialTransactionResult
+>;
 export type ExpenseSearchResult = z.infer<typeof expenseResult>;

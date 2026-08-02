@@ -2,17 +2,21 @@ import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import {
   type CookbookSearchResult,
   type ExpenseSearchResult,
+  type FinancialAccountSearchResult,
+  type FinancialTransactionSearchResult,
   type IngredientSearchResult,
   type InventorySearchResult,
   type LocationSearchResult,
   type MealSearchResult,
   type ProductSearchResult,
   type ProjectSearchResult,
+  type PurchaseSearchResult,
   type RecipeSearchResult,
   type SearchableEntity,
   type SearchResultItem,
   searchableEntities,
   type TaskSearchResult,
+  type VendorSearchResult,
 } from "@cubby/schemas/search";
 import {
   type AnyColumn,
@@ -27,6 +31,8 @@ import type { Database } from "~/server/db";
 import {
   cookbook,
   expense,
+  financialAccount,
+  financialTransaction,
   ingredient,
   inventoryEntry,
   location,
@@ -417,6 +423,200 @@ const searchQueries = {
         .where(and(notDeleted(task), condition))
         .limit(limit) as unknown as Promise<
         (TaskSearchResult & { entityId: string })[]
+      >,
+  },
+  vendor: {
+    lexicalCondition: (query) =>
+      or(
+        formatSearchTerm(vendor.name, query),
+        formatSearchTerm(vendor.website, query),
+        formatSearchTerm(vendor.notes, query),
+      ),
+    idCondition: (ids) => idIn(vendor.id, ids),
+    load: (client, condition, limit) =>
+      client
+        .select({
+          entityId: vendor.id,
+          id: vendor.shortcode,
+          name: vendor.name,
+          subtitle: vendor.website,
+          entityType: sql<"vendor">`'vendor'`.as("entityType"),
+          typeHint: sql<string | null>`null`.as("typeHint"),
+          imageUrl: sql<string | null>`null`.as("imageUrl"),
+          createdAt: vendor.createdAt,
+          purchaseCount: sql<number>`(
+            SELECT COUNT(*)::int FROM "Purchase" pu
+            WHERE pu."vendorId" = "Vendor"."id" AND pu."deletedAt" IS NULL
+          )`.as("purchaseCount"),
+          // Spend is always the sum of Expense.cost. Purchase.statedTotal is
+          // deliberately absent from this rollup.
+          spend: sql<number>`(
+            SELECT COALESCE(SUM(e."cost"), 0)::float
+            FROM "Purchase" pu
+            JOIN "Expense" e ON e."purchaseId" = pu."id" AND e."deletedAt" IS NULL
+            WHERE pu."vendorId" = "Vendor"."id" AND pu."deletedAt" IS NULL
+          )`.as("spend"),
+        })
+        .from(vendor)
+        .where(and(notDeleted(vendor), condition))
+        .limit(limit) as unknown as Promise<
+        (VendorSearchResult & { entityId: string })[]
+      >,
+  },
+  purchase: {
+    lexicalCondition: (query) =>
+      or(
+        formatSearchTerm(purchase.orderId, query),
+        formatSearchTerm(purchase.notes, query),
+        formatSearchTerm(vendor.name, query),
+        formatSearchTerm(vendor.website, query),
+        sql`${purchase.date}::text ILIKE ${`%${query}%`}`,
+      ),
+    idCondition: (ids) => idIn(purchase.id, ids),
+    load: (client, condition, limit) =>
+      client
+        .select({
+          entityId: purchase.id,
+          id: purchase.shortcode,
+          name: sql<string>`COALESCE(
+            NULLIF(${purchase.orderId}, ''),
+            ${vendor.name} || ' · ' || ${purchase.date}::text
+          )`.as("name"),
+          subtitle: vendor.name,
+          entityType: sql<"purchase">`'purchase'`.as("entityType"),
+          typeHint: sql<string | null>`null`.as("typeHint"),
+          imageUrl: sql<string | null>`null`.as("imageUrl"),
+          createdAt: purchase.createdAt,
+          orderId: purchase.orderId,
+          date: sql<string | null>`${purchase.date}::text`.as("date"),
+          expenseCount: sql<number>`(
+            SELECT COUNT(*)::int FROM "Expense" e
+            WHERE e."purchaseId" = "Purchase"."id" AND e."deletedAt" IS NULL
+          )`.as("expenseCount"),
+          expenseTotal: sql<number>`(
+            SELECT COALESCE(SUM(e."cost"), 0)::float FROM "Expense" e
+            WHERE e."purchaseId" = "Purchase"."id" AND e."deletedAt" IS NULL
+          )`.as("expenseTotal"),
+        })
+        .from(purchase)
+        .innerJoin(
+          vendor,
+          and(eq(purchase.vendorId, vendor.id), notDeleted(vendor)),
+        )
+        .where(and(notDeleted(purchase), condition))
+        .limit(limit) as unknown as Promise<
+        (PurchaseSearchResult & { entityId: string })[]
+      >,
+  },
+  financialAccount: {
+    lexicalCondition: (query) => {
+      const term = `%${query}%`;
+      return or(
+        formatSearchTerm(financialAccount.name, query),
+        formatSearchTerm(financialAccount.notes, query),
+        sql`${financialAccount.identity}::text ILIKE ${term}`,
+        sql`${financialAccount.sourceAliases}::text ILIKE ${term}`,
+      );
+    },
+    idCondition: (ids) => idIn(financialAccount.id, ids),
+    load: (client, condition, limit) =>
+      client
+        .select({
+          entityId: financialAccount.id,
+          id: financialAccount.shortcode,
+          name: financialAccount.name,
+          subtitle: sql<
+            string | null
+          >`${financialAccount.identity}->>'kind'`.as("subtitle"),
+          entityType: sql<"financialAccount">`'financialAccount'`.as(
+            "entityType",
+          ),
+          typeHint: sql<
+            string | null
+          >`${financialAccount.identity}->>'kind'`.as("typeHint"),
+          imageUrl: sql<string | null>`null`.as("imageUrl"),
+          createdAt: financialAccount.createdAt,
+          identityKind: sql<
+            string | null
+          >`${financialAccount.identity}->>'kind'`.as("identityKind"),
+          provisional: financialAccount.provisional,
+          transactionCount: sql<number>`(
+            SELECT COUNT(*)::int FROM "FinancialTransaction" ft
+            WHERE ft."accountId" = "FinancialAccount"."id" AND ft."deletedAt" IS NULL
+          )`.as("transactionCount"),
+        })
+        .from(financialAccount)
+        .where(and(notDeleted(financialAccount), condition))
+        .limit(limit) as unknown as Promise<
+        (FinancialAccountSearchResult & { entityId: string })[]
+      >,
+  },
+  financialTransaction: {
+    lexicalCondition: (query) => {
+      const term = `%${query}%`;
+      return or(
+        formatSearchTerm(financialTransaction.merchant, query),
+        formatSearchTerm(financialTransaction.rawDescription, query),
+        formatSearchTerm(financialTransaction.sourceCategory, query),
+        formatSearchTerm(financialTransaction.notes, query),
+        formatSearchTerm(financialAccount.name, query),
+        formatSearchTerm(purchase.orderId, query),
+        formatSearchTerm(vendor.name, query),
+        sql`${financialTransaction.sourceRefs}::text ILIKE ${term}`,
+        sql`${financialTransaction.transactionDate}::text ILIKE ${term}`,
+        sql`${financialTransaction.postedDate}::text ILIKE ${term}`,
+      );
+    },
+    idCondition: (ids) => idIn(financialTransaction.id, ids),
+    load: (client, condition, limit) =>
+      client
+        .select({
+          entityId: financialTransaction.id,
+          id: financialTransaction.shortcode,
+          name: sql<string>`COALESCE(
+            NULLIF(${financialTransaction.merchant}, ''),
+            NULLIF(${financialTransaction.rawDescription}, ''),
+            ${financialTransaction.kind}
+          )`.as("name"),
+          subtitle: financialAccount.name,
+          entityType: sql<"financialTransaction">`'financialTransaction'`.as(
+            "entityType",
+          ),
+          typeHint: financialTransaction.status,
+          imageUrl: sql<string | null>`null`.as("imageUrl"),
+          createdAt: financialTransaction.createdAt,
+          amount: financialTransaction.amount,
+          status: financialTransaction.status,
+          kind: financialTransaction.kind,
+          accountName: financialAccount.name,
+          transactionDate: sql<
+            string | null
+          >`${financialTransaction.transactionDate}::text`.as(
+            "transactionDate",
+          ),
+        })
+        .from(financialTransaction)
+        .innerJoin(
+          financialAccount,
+          and(
+            eq(financialTransaction.accountId, financialAccount.id),
+            notDeleted(financialAccount),
+          ),
+        )
+        .leftJoin(
+          purchase,
+          and(
+            eq(financialTransaction.purchaseId, purchase.id),
+            notDeleted(purchase),
+          ),
+        )
+        .leftJoin(
+          vendor,
+          and(eq(purchase.vendorId, vendor.id), notDeleted(vendor)),
+        )
+        .where(and(notDeleted(financialTransaction), condition))
+        .limit(limit) as unknown as Promise<
+        (FinancialTransactionSearchResult & { entityId: string })[]
       >,
   },
   expense: {

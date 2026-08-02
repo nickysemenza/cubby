@@ -2,14 +2,18 @@ import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import {
   cookbookId,
   expenseId,
+  financialAccountId,
+  financialTransactionId,
   ingredientId,
   inventoryId,
   locationId,
   mealId,
   productId,
   projectId,
+  purchaseId,
   recipeId,
   taskId,
+  vendorId,
 } from "@cubby/schemas/identifiers";
 import type {
   SearchableEntity,
@@ -23,12 +27,16 @@ import {
 } from "~/server/background-dispatch";
 import type { Database } from "~/server/db";
 import {
+  findCommercialEmbeddingRefsForExpenses,
+  findEmbeddingRefsForPurchases,
+  findEmbeddingRefsForVendors,
   findInventoryEmbeddingRefsForLocations,
   findInventoryEmbeddingRefsForProducts,
   findMealEmbeddingRefsForRecipes,
   findRecipeEmbeddingRefsForIngredients,
   findTaskEmbeddingRefsForProducts,
   findTrackerEmbeddingRefsForProjects,
+  findTransactionEmbeddingRefsForAccounts,
 } from "~/server/repo/entity-embedding";
 
 const mutationEntityRefSchema = z.discriminatedUnion("entityType", [
@@ -41,6 +49,16 @@ const mutationEntityRefSchema = z.discriminatedUnion("entityType", [
   z.object({ entityType: z.literal("meal"), entityId: mealId }),
   z.object({ entityType: z.literal("project"), entityId: projectId }),
   z.object({ entityType: z.literal("task"), entityId: taskId }),
+  z.object({ entityType: z.literal("vendor"), entityId: vendorId }),
+  z.object({ entityType: z.literal("purchase"), entityId: purchaseId }),
+  z.object({
+    entityType: z.literal("financialAccount"),
+    entityId: financialAccountId,
+  }),
+  z.object({
+    entityType: z.literal("financialTransaction"),
+    entityId: financialTransactionId,
+  }),
   z.object({ entityType: z.literal("expense"), entityId: expenseId }),
   z.object({ entityType: z.literal("image"), entityId: z.uuid() }),
 ]);
@@ -185,6 +203,34 @@ const collectTrackerEmbeddingRefsForProject: EmbeddingRefCollector = async (
   ]);
 };
 
+const collectEmbeddingRefsForVendor: EmbeddingRefCollector = async (ctx) => {
+  if (ctx.event.entity.entityType !== "vendor") return [];
+  return findEmbeddingRefsForVendors(ctx.db, [ctx.event.entity.entityId]);
+};
+
+const collectEmbeddingRefsForPurchase: EmbeddingRefCollector = async (ctx) => {
+  if (ctx.event.entity.entityType !== "purchase") return [];
+  return findEmbeddingRefsForPurchases(ctx.db, [ctx.event.entity.entityId]);
+};
+
+const collectTransactionEmbeddingRefsForAccount: EmbeddingRefCollector = async (
+  ctx,
+) => {
+  if (ctx.event.entity.entityType !== "financialAccount") return [];
+  return findTransactionEmbeddingRefsForAccounts(ctx.db, [
+    ctx.event.entity.entityId,
+  ]);
+};
+
+const collectCommercialEmbeddingRefsForExpense: EmbeddingRefCollector = async (
+  ctx,
+) => {
+  if (ctx.event.entity.entityType !== "expense") return [];
+  return findCommercialEmbeddingRefsForExpenses(ctx.db, [
+    ctx.event.entity.entityId,
+  ]);
+};
+
 async function refreshOwnEmbedding(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
@@ -243,6 +289,34 @@ async function refreshTrackerEmbeddingsForProject(
   return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
 }
 
+async function refreshEmbeddingsForVendor(
+  ctx: HandlerContext,
+): Promise<BackgroundBatchRef[]> {
+  const refs = await collectEmbeddingRefsForVendor(ctx);
+  return enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
+}
+
+async function refreshEmbeddingsForPurchase(
+  ctx: HandlerContext,
+): Promise<BackgroundBatchRef[]> {
+  const refs = await collectEmbeddingRefsForPurchase(ctx);
+  return enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
+}
+
+async function refreshTransactionEmbeddingsForAccount(
+  ctx: HandlerContext,
+): Promise<BackgroundBatchRef[]> {
+  const refs = await collectTransactionEmbeddingRefsForAccount(ctx);
+  return enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
+}
+
+async function refreshCommercialEmbeddingsForExpense(
+  ctx: HandlerContext,
+): Promise<BackgroundBatchRef[]> {
+  const refs = await collectCommercialEmbeddingRefsForExpense(ctx);
+  return enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
+}
+
 // Maps each embedding-refresh handler to its ref-only collector, so the bulk
 // path (runMutationSideEffectsForEntities) can bypass the handler's own
 // per-event dispatch and instead accumulate refs for one wave-wide dispatch.
@@ -266,6 +340,16 @@ const embeddingRefCollectorByHandler = new Map<
   ],
   [refreshMealEmbeddingsForRecipe, collectMealEmbeddingRefsForRecipe],
   [refreshTrackerEmbeddingsForProject, collectTrackerEmbeddingRefsForProject],
+  [refreshEmbeddingsForVendor, collectEmbeddingRefsForVendor],
+  [refreshEmbeddingsForPurchase, collectEmbeddingRefsForPurchase],
+  [
+    refreshTransactionEmbeddingsForAccount,
+    collectTransactionEmbeddingRefsForAccount,
+  ],
+  [
+    refreshCommercialEmbeddingsForExpense,
+    collectCommercialEmbeddingRefsForExpense,
+  ],
 ]);
 
 async function enqueueLocationAiRefresh(
@@ -371,9 +455,29 @@ export const mutationSideEffectManifest = {
     onUpdate: [refreshOwnEmbedding],
     onDelete: [],
   },
-  expense: {
+  vendor: {
+    onCreate: [refreshOwnEmbedding],
+    onUpdate: [refreshOwnEmbedding, refreshEmbeddingsForVendor],
+    onDelete: [],
+  },
+  purchase: {
+    onCreate: [refreshOwnEmbedding],
+    onUpdate: [refreshOwnEmbedding, refreshEmbeddingsForPurchase],
+    onDelete: [],
+  },
+  financialAccount: {
+    onCreate: [refreshOwnEmbedding],
+    onUpdate: [refreshOwnEmbedding, refreshTransactionEmbeddingsForAccount],
+    onDelete: [],
+  },
+  financialTransaction: {
     onCreate: [refreshOwnEmbedding],
     onUpdate: [refreshOwnEmbedding],
+    onDelete: [],
+  },
+  expense: {
+    onCreate: [refreshOwnEmbedding, refreshCommercialEmbeddingsForExpense],
+    onUpdate: [refreshOwnEmbedding, refreshCommercialEmbeddingsForExpense],
     onDelete: [],
   },
   image: {

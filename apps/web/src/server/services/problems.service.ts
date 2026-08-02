@@ -114,7 +114,7 @@ import { traceAll, traceAllSeq } from "~/server/tracing";
 // repo stays pure data access and the env read stays in the service layer.
 //
 // The gate itself is load-bearing: with no AI_GATEWAY_API_KEY every live row in
-// all ten searchable tables reads as "missing an embedding", and nothing can
+// every searchable table reads as "missing an embedding", and nothing can
 // ever clear it — `enqueueEntityEmbeddingBackfill` doesn't check configuration
 // either, so it would cheerfully enqueue thousands of jobs that all throw at
 // `embedTexts`. Report nothing rather than an unfixable wall. Mirrors the

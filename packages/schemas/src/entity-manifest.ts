@@ -393,9 +393,7 @@ export const entityManifest = {
     softDelete: true,
     auditable: true,
     hasImages: false,
-    // Out of the embedding pipeline in v1: a vendor is a name, and the ledger
-    // rows that mention it are already indexed.
-    searchable: false,
+    searchable: true,
     countable: true,
     relationships: [],
     // Deletable in the app (blocked while live purchases reference it), and
@@ -416,7 +414,7 @@ export const entityManifest = {
     softDelete: true,
     auditable: true,
     hasImages: true,
-    searchable: false,
+    searchable: true,
     countable: true,
     relationships: [
       path("vendor", "Vendor", "vendor", out("Purchase.vendorId")),
@@ -445,7 +443,7 @@ export const entityManifest = {
     softDelete: true,
     auditable: true,
     hasImages: false,
-    searchable: false,
+    searchable: true,
     countable: true,
     relationships: [],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
@@ -459,7 +457,7 @@ export const entityManifest = {
     softDelete: true,
     auditable: true,
     hasImages: false,
-    searchable: false,
+    searchable: true,
     countable: true,
     relationships: [
       path(

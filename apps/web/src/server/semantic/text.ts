@@ -218,6 +218,8 @@ const expenseSearchTextInputSchema = z.object({
   trade: nullableText,
   notes: nullableText,
   projectName: nullableText,
+  vendorName: nullableText,
+  orderId: nullableText,
 });
 type ExpenseSearchTextInput = z.infer<typeof expenseSearchTextInputSchema>;
 
@@ -228,6 +230,98 @@ export function buildExpenseEmbeddingText(expense: ExpenseSearchTextInput) {
     field("cost type", parsed.costType),
     field("trade", parsed.trade),
     field("project", parsed.projectName),
+    field("vendor", parsed.vendorName),
+    field("order", parsed.orderId),
+    field("notes", parsed.notes),
+  ]);
+}
+
+const vendorSearchTextInputSchema = z.object({
+  name: z.string(),
+  website: nullableText,
+  notes: nullableText,
+});
+
+export function buildVendorEmbeddingText(
+  vendor: z.infer<typeof vendorSearchTextInputSchema>,
+) {
+  const parsed = vendorSearchTextInputSchema.parse(vendor);
+  return joinFields([
+    field("vendor", parsed.name),
+    field("website", parsed.website),
+    field("notes", parsed.notes),
+  ]);
+}
+
+const purchaseSearchTextInputSchema = z.object({
+  vendorName: z.string(),
+  orderId: nullableText,
+  date: nullableText,
+  notes: nullableText,
+});
+
+export function buildPurchaseEmbeddingText(
+  purchase: z.infer<typeof purchaseSearchTextInputSchema>,
+) {
+  const parsed = purchaseSearchTextInputSchema.parse(purchase);
+  return joinFields([
+    field("purchase vendor", parsed.vendorName),
+    field("order", parsed.orderId),
+    field("date", parsed.date),
+    field("notes", parsed.notes),
+  ]);
+}
+
+const financialAccountSearchTextInputSchema = z.object({
+  name: z.string(),
+  identityTerms: nullableTextList,
+  sourceAliasTerms: nullableTextList,
+  notes: nullableText,
+});
+
+export function buildFinancialAccountEmbeddingText(
+  account: z.infer<typeof financialAccountSearchTextInputSchema>,
+) {
+  const parsed = financialAccountSearchTextInputSchema.parse(account);
+  return joinFields([
+    field("financial account", parsed.name),
+    listField("identity", parsed.identityTerms),
+    listField("source aliases", parsed.sourceAliasTerms),
+    field("notes", parsed.notes),
+  ]);
+}
+
+const financialTransactionSearchTextInputSchema = z.object({
+  merchant: nullableText,
+  rawDescription: nullableText,
+  sourceCategory: nullableText,
+  sourceRefTerms: nullableTextList,
+  notes: nullableText,
+  accountName: z.string(),
+  vendorName: nullableText,
+  orderId: nullableText,
+  kind: z.string(),
+  status: z.string(),
+  transactionDate: nullableText,
+  postedDate: nullableText,
+});
+
+export function buildFinancialTransactionEmbeddingText(
+  transaction: z.infer<typeof financialTransactionSearchTextInputSchema>,
+) {
+  const parsed = financialTransactionSearchTextInputSchema.parse(transaction);
+  return joinFields([
+    field("financial transaction", parsed.merchant),
+    field("description", parsed.rawDescription),
+    field("category", parsed.sourceCategory),
+    listField("source references", parsed.sourceRefTerms),
+    field("account", parsed.accountName),
+    field("vendor", parsed.vendorName),
+    field("order", parsed.orderId),
+    field("kind", parsed.kind),
+    field("status", parsed.status),
+    field("transaction date", parsed.transactionDate),
+    field("posted date", parsed.postedDate),
     field("notes", parsed.notes),
   ]);
 }
