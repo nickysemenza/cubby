@@ -88,7 +88,7 @@ type InventoryValuationResult = {
 
 /**
  * Calculate the total inventory valuation for a list of inventory items.
- * Uses the precomputed `valuation` column from each item (amount × product.price).
+ * Uses the precomputed `valuation` column from each item (amount × effective price).
  * Groups a simple breakdown by product manufacturer (as a proxy for category).
  * Categorizes items by pricing status: priced, missingPricing, or miscNoPrice.
  *
@@ -107,7 +107,7 @@ export function calculateInventoryValuation(
     const valuation = item.valuation;
 
     // Priced means "somebody set a price", not "worth something". A valuation
-    // is null exactly when `product.price` is null (see
+    // is null exactly when the Product has no effective price (see
     // computeInventoryValuation), so `!= null` is the faithful test — and an
     // explicit $0 (bundled freebies) is a real answer that shouldn't keep
     // nagging as unpriced. Adding 0 to the total is a no-op either way.

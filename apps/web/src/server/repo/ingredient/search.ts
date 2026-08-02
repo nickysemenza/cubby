@@ -53,6 +53,7 @@ import {
   notDeleted,
   relations,
 } from "~/server/repo/database-helpers";
+import { enrichProductRowsWithPricing } from "~/server/repo/product/pricing";
 import { lookupShortcodes, refKey } from "~/server/repo/shortcode-resolver";
 import {
   appearsInRecipesRefsForIngredientSql,
@@ -302,11 +303,23 @@ export const getIngredientsByIDsLean = async (
     // object-building per call (worker CPU that starved the recompute isolate).
     with: { product: { with: { unitMappings: true } } },
   });
+  const pricedProducts = await enrichProductRowsWithPricing(
+    db,
+    rows.flatMap((row) => row.product),
+  );
+  const pricingById = new Map(
+    pricedProducts.map((product) => [product.id, product.pricing]),
+  );
   return rows.map((row) => {
     const { product: productRel } = row;
     return {
       ...dbIngredientToTopLevelShape(row),
-      product: mapIngredientProductsLean(productRel),
+      product: mapIngredientProductsLean(
+        productRel.map((product) => ({
+          ...product,
+          pricing: pricingById.get(product.id),
+        })),
+      ),
     };
   });
 };
@@ -364,11 +377,23 @@ export const enrichmentWorkbenchIngredients = async (
     },
     orderBy: [sql.raw(`${recipeCountSql} desc nulls last`)],
   });
+  const pricedProducts = await enrichProductRowsWithPricing(
+    db,
+    rows.flatMap((row) => row.product),
+  );
+  const pricingById = new Map(
+    pricedProducts.map((product) => [product.id, product.pricing]),
+  );
   return rows.map((row) => {
     const { product: productRel, recipeCount, cookbookOnly } = row;
     return {
       ...dbIngredientToTopLevelShape(row),
-      product: mapIngredientProducts(productRel),
+      product: mapIngredientProducts(
+        productRel.map((product) => ({
+          ...product,
+          pricing: pricingById.get(product.id),
+        })),
+      ),
       // count() returns bigint (string over the wire), so coerce; the boolean comes
       // back native — `=== true` avoids the Boolean("false") === true trap if a
       // future driver ever stringifies it.
@@ -558,5 +583,23 @@ export const ingredientList = async (
     countWhere(db, ingredient, whereClause),
   );
 
-  return { data: results.map(dbIngredientToListAPI), count: totalCount };
+  const pricedProducts = await enrichProductRowsWithPricing(
+    db,
+    results.flatMap((row) => row.product),
+  );
+  const pricingById = new Map(
+    pricedProducts.map((product) => [product.id, product.pricing]),
+  );
+  return {
+    data: results.map((row) =>
+      dbIngredientToListAPI({
+        ...row,
+        product: row.product.map((product) => ({
+          ...product,
+          pricing: pricingById.get(product.id),
+        })),
+      }),
+    ),
+    count: totalCount,
+  };
 };

@@ -271,6 +271,12 @@ export const expenseMutationInvalidateKeys = [
   // An expense can link to a product (cost basis / disposition) — recording
   // one from the product page should refresh that product's hero/stamp too.
   queryKeys.product.all,
+  queryKeys.inventory.all,
+  queryKeys.location.all,
+  queryKeys.recipe.all,
+  queryKeys.meal.all,
+  queryKeys.problems.all,
+  queryKeys.search.all,
   // Writing an expense's `vendor`/`orderId` resolves a Vendor and a Purchase into
   // existence, and EVERY expense write moves a charge's `expenseTotal` and its
   // vendor's `spend`/`purchaseCount` — all three are rollups over this table.
@@ -297,6 +303,15 @@ export const purchaseMutationInvalidateKeys = [
   queryKeys.vendor.all,
   queryKeys.expense.all,
   queryKeys.project.all,
+  // Splitting a purchase-owned Expense can change Product quantity/cost basis,
+  // which changes effective price and every cached valuation/cost consumer.
+  queryKeys.product.all,
+  queryKeys.inventory.all,
+  queryKeys.location.all,
+  queryKeys.recipe.all,
+  queryKeys.meal.all,
+  queryKeys.problems.all,
+  queryKeys.search.all,
   queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 

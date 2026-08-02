@@ -68,6 +68,7 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -114,6 +115,8 @@ import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cle
 import { dbExpenseToAPI } from "~/server/repo/expense/helpers";
 import { calculateFinancialReconciliation } from "~/server/repo/financial-reconciliation";
 import { countByTarget, impact, present } from "~/server/repo/impact";
+import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
+import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
 import {
   emptyPurchaseFinancialAggregate,
   loadPurchaseFinancialAggregates,
@@ -1124,6 +1127,21 @@ export const splitExpense = async (
       );
     }
 
+    const pricingCandidates = uniq(
+      [
+        original.productId,
+        ...parts.map((part) =>
+          part.productId
+            ? unsafeProductId(productIds.get(part.productId) ?? "")
+            : null,
+        ),
+      ].filter((value): value is ProductId => value !== null),
+    );
+    const pricesBefore = await loadEffectiveProductPricesById(
+      tx,
+      pricingCandidates,
+    );
+
     if (original.cost !== null) {
       await tx
         .update(purchase)
@@ -1157,6 +1175,12 @@ export const splitExpense = async (
       const productId = part.productId
         ? unsafeProductId(productIds.get(part.productId) ?? "")
         : null;
+      if (part.productQuantity !== null && productId === null) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Product quantity requires a linked product.",
+        );
+      }
       const row = await insertWithShortcode(tx, "expense", {
         name: part.name,
         cost: part.cost,
@@ -1168,6 +1192,7 @@ export const splitExpense = async (
         future: original.future,
         projectId,
         productId,
+        productQuantity: part.productQuantity,
         purchaseId: chargeId,
       });
       inserted.push(row.id);
@@ -1210,6 +1235,16 @@ export const splitExpense = async (
         action: "delete" as const,
       },
     ]);
+
+    const pricesAfter = await loadEffectiveProductPricesById(
+      tx,
+      pricingCandidates,
+    );
+    for (const productId of pricingCandidates) {
+      if (pricesBefore.get(productId) !== pricesAfter.get(productId)) {
+        await syncInventoryValuationsForProduct(tx, productId);
+      }
+    }
 
     return inserted;
   });

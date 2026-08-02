@@ -29,8 +29,8 @@ export function ProductShelf({
       renderCard={(product) => {
         const images = (product.images ?? []).filter(isDisplayableImageFile);
         const subtitle =
-          product.price != null
-            ? formatCurrency(product.price)
+          product.pricing.effectivePrice != null
+            ? formatCurrency(product.pricing.effectivePrice)
             : (product.category ?? undefined);
         return (
           <ShelfCard

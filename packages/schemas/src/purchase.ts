@@ -329,6 +329,7 @@ export const splitExpenseInput = z.object({
         trade: tradeSchema,
         projectId: projectShortcode.nullable().default(null),
         productId: productShortcode.nullable().default(null),
+        productQuantity: z.number().int().positive().nullable().default(null),
       }),
     )
     .min(2),

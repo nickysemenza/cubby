@@ -32,6 +32,7 @@ import type {
   ExpenseUpdateInput,
 } from "@cubby/schemas/project";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { entityEmbedding, expense } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -54,6 +55,8 @@ import {
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { countByTarget, impact, present } from "~/server/repo/impact";
+import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
+import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
 import {
   findOrCreatePurchase,
   foldChargeInto,
@@ -69,6 +72,29 @@ import { dbExpenseToAPI, type ExpenseRow } from "./helpers";
 
 /** `expenseUpdateData` has no standalone type export — derive it from the input. */
 type ExpenseUpdateData = ExpenseUpdateInput["data"];
+
+const pricingProductIds = (
+  values: ReadonlyArray<ProductId | null | undefined>,
+) =>
+  uniq(
+    values.filter(
+      (value): value is ProductId => value !== null && value !== undefined,
+    ),
+  );
+
+const syncChangedEffectivePrices = async (
+  tx: DrizzleTransaction,
+  before: Map<ProductId, number | null>,
+): Promise<ProductId[]> => {
+  const ids = [...before.keys()];
+  if (ids.length === 0) return [];
+  const after = await loadEffectiveProductPricesById(tx, ids);
+  const changed = ids.filter((id) => before.get(id) !== after.get(id));
+  for (const id of changed) {
+    await syncInventoryValuationsForProduct(tx, id);
+  }
+  return changed;
+};
 
 /**
  * The DB-column shape `expenseCrud`'s `toUpdate` writes — `ExpenseUpdateData`
@@ -184,6 +210,7 @@ const expenseCrud = createEntityCrud({
       future: data.future,
       projectId: data.projectId,
       productId: data.productId,
+      productQuantity: data.productQuantity,
       purchaseId: data.purchaseId,
     }),
   auditUpdateFields: [
@@ -197,6 +224,7 @@ const expenseCrud = createEntityCrud({
     "future",
     "projectId",
     "productId",
+    "productQuantity",
     // `purchaseId` is the audited column now; `vendor`/`orderId` are resolved
     // into it by `resolveCharge` and are no longer columns on this table.
     "purchaseId",
@@ -372,7 +400,11 @@ export const updateExpense = async (
   shortcode: ExpenseShortcode,
   data: ExpenseUpdateData,
   actor: ActorContext,
-): Promise<{ output: ExpenseOut; entityId: ExpenseId }> => {
+): Promise<{
+  output: ExpenseOut;
+  entityId: ExpenseId;
+  priceAffectedProductIds: ProductId[];
+}> => {
   const {
     vendor: _vendor,
     orderId: _orderId,
@@ -397,7 +429,7 @@ export const updateExpense = async (
     const id = unsafeExpenseId(resolvedId);
     const beforeQualityTargets = await tx.query.expense.findFirst({
       where: and(eq(expense.id, id), notDeleted(expense)),
-      columns: { productId: true, purchaseId: true },
+      columns: { productId: true, productQuantity: true, purchaseId: true },
     });
 
     const resolvedProjectId =
@@ -414,6 +446,17 @@ export const updateExpense = async (
           ? null
           : await resolveLiveProductId(tx, productId);
 
+    const resultingProductId =
+      resolvedProductId === undefined
+        ? (beforeQualityTargets?.productId ?? null)
+        : resolvedProductId;
+    if (data.productQuantity != null && resultingProductId === null) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "Product quantity requires a linked product.",
+      );
+    }
+
     // An explicit `purchaseId` short-circuits `resolveCharge` entirely (see the
     // field's doc): an id is never a guess, so there's nothing to resolve.
     // Resolving THROUGH `resolveLivePurchaseId` (live-only) folds in what
@@ -427,6 +470,9 @@ export const updateExpense = async (
 
     const rest: ResolvedExpenseUpdate = {
       ...restColumns,
+      ...(resolvedProductId === null && data.productQuantity === undefined
+        ? { productQuantity: null }
+        : {}),
       ...(resolvedProjectId !== undefined
         ? { projectId: resolvedProjectId }
         : {}),
@@ -434,6 +480,19 @@ export const updateExpense = async (
         ? { productId: resolvedProductId }
         : {}),
     };
+
+    const priceCanChange =
+      data.cost !== undefined ||
+      data.future !== undefined ||
+      data.productId !== undefined ||
+      data.productQuantity !== undefined;
+    const priceCandidates = priceCanChange
+      ? pricingProductIds([beforeQualityTargets?.productId, resultingProductId])
+      : [];
+    const pricesBefore = await loadEffectiveProductPricesById(
+      tx,
+      priceCandidates,
+    );
 
     if (!needsResolve) {
       const output = await expenseCrud.update(
@@ -469,7 +528,14 @@ export const updateExpense = async (
           ),
         });
       }
-      return { output, entityId: id };
+      return {
+        output,
+        entityId: id,
+        priceAffectedProductIds: await syncChangedEffectivePrices(
+          tx,
+          pricesBefore,
+        ),
+      };
     }
 
     // The row's CURRENT charge, so an unchanged `{vendor}` write doesn't mint a
@@ -544,7 +610,14 @@ export const updateExpense = async (
         (value): value is PurchaseId => value !== null && value !== undefined,
       ),
     });
-    return { output, entityId: id };
+    return {
+      output,
+      entityId: id,
+      priceAffectedProductIds: await syncChangedEffectivePrices(
+        tx,
+        pricesBefore,
+      ),
+    };
   });
 };
 
@@ -570,8 +643,12 @@ export const createExpense = async (
   db: Database,
   data: ExpenseCreateInput,
   actor: ActorContext,
-): Promise<{ output: ExpenseOut; entityId: ExpenseId }> => {
-  const id = await withTransaction(db, async (tx) => {
+): Promise<{
+  output: ExpenseOut;
+  entityId: ExpenseId;
+  priceAffectedProductIds: ProductId[];
+}> => {
+  const result = await withTransaction(db, async (tx) => {
     // Same transaction as the insert: a vendor or charge created here must not
     // outlive a failed expense write.
     // A caller-supplied `purchaseId` skips `resolveCharge` entirely, so this is
@@ -591,6 +668,16 @@ export const createExpense = async (
     const productId = data.productId
       ? await resolveLiveProductId(tx, data.productId)
       : null;
+    if (data.productQuantity !== null && productId === null) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "Product quantity requires a linked product.",
+      );
+    }
+    const pricesBefore = await loadEffectiveProductPricesById(
+      tx,
+      pricingProductIds([productId]),
+    );
 
     const created = await insertWithShortcode(tx, "expense", {
       name: data.name,
@@ -603,6 +690,7 @@ export const createExpense = async (
       future: data.future,
       projectId,
       productId,
+      productQuantity: data.productQuantity,
       purchaseId,
     });
     await logAuditEntry(tx, actor, {
@@ -614,9 +702,19 @@ export const createExpense = async (
       productIds: productId ? [productId] : [],
       purchaseIds: purchaseId ? [purchaseId] : [],
     });
-    return created.id;
+    return {
+      id: created.id,
+      priceAffectedProductIds: await syncChangedEffectivePrices(
+        tx,
+        pricesBefore,
+      ),
+    };
   });
-  return { output: await getExpenseByID(db, id), entityId: id };
+  return {
+    output: await getExpenseByID(db, result.id),
+    entityId: result.id,
+    priceAffectedProductIds: result.priceAffectedProductIds,
+  };
 };
 
 /**
@@ -768,10 +866,10 @@ export const deleteExpenses = async (
   db: Database,
   shortcodes: ExpenseShortcode[],
   actor: ActorContext,
-): Promise<void> => {
-  if (shortcodes.length === 0) return;
+): Promise<ProductId[]> => {
+  if (shortcodes.length === 0) return [];
 
-  await withTransaction(db, async (tx) => {
+  return await withTransaction(db, async (tx) => {
     const ids = await resolveLiveExpenseIds(tx, shortcodes);
     await lockAndValidateForDelete(tx, expense, ids, "Expense");
 
@@ -779,6 +877,10 @@ export const deleteExpenses = async (
       where: and(inArray(expense.id, ids), notDeleted(expense)),
       columns: { productId: true, purchaseId: true },
     });
+    const pricesBefore = await loadEffectiveProductPricesById(
+      tx,
+      pricingProductIds(qualityTargets.map((row) => row.productId)),
+    );
 
     const now = new Date();
     await tx
@@ -807,6 +909,7 @@ export const deleteExpenses = async (
         action: "delete" as const,
       })),
     );
+    return await syncChangedEffectivePrices(tx, pricesBefore);
   });
 };
 

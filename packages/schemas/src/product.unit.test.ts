@@ -13,6 +13,16 @@ describe("productMcpOut", () => {
       category: "tools",
       tags: ["M18"],
       price: 329,
+      priceOverride: 329,
+      pricing: {
+        derivedPrice: 300,
+        effectivePrice: 329,
+        source: "explicit",
+        knownExpenseCount: 1,
+        unknownExpenseCount: 0,
+        knownUnitCount: 1,
+        partial: false,
+      },
       expectedQuantity: 1,
       imageCount: 2,
       coverImageUrl: "https://images.example.test/2744-20.webp",
@@ -37,6 +47,9 @@ describe("productMcpOut", () => {
       notes: "Bare tool",
       imageCount: 2,
       coverImageUrl: "https://images.example.test/2744-20.webp",
+      price: 329,
+      priceOverride: 329,
+      pricing: { source: "explicit", effectivePrice: 329 },
     });
   });
 });

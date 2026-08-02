@@ -42,6 +42,7 @@ const quickAddExpenseSchema = z.object({
   costType: costTypeSchema,
   trade: tradeSchema,
   future: z.boolean(),
+  productQuantity: z.number().int().positive().nullable(),
   vendor: z.string(),
   orderId: z.string(),
 });
@@ -100,6 +101,7 @@ export function CreateExpenseDialog({
       costType: isDisposition ? "tools" : "materials",
       trade: "other",
       future: presetFuture ?? false,
+      productQuantity: null,
       vendor: "",
       orderId: "",
     }),
@@ -129,6 +131,7 @@ export function CreateExpenseDialog({
           ? unsafeProjectShortcode(values.projectId)
           : null,
         productId: presetProductId ?? null,
+        productQuantity: presetProductId ? values.productQuantity : null,
         vendor: values.vendor.trim() || null,
         orderId: values.orderId.trim() || null,
         costType: values.costType,
@@ -155,6 +158,15 @@ export function CreateExpenseDialog({
             step="0.01"
             prefix="$"
           />
+          {presetProductId ? (
+            <NullableNumericField
+              form={form}
+              name="productQuantity"
+              label="Product quantity"
+              placeholder="Unknown"
+              step="1"
+            />
+          ) : null}
           <Controller
             control={form.control}
             name="future"

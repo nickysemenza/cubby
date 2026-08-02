@@ -15,6 +15,7 @@ import type {
   RowWithOptionalAliases,
 } from "~/server/repo/database-helpers";
 import type { MappableProductExternalId } from "./external-id-types";
+import type { ProductPricing } from "./pricing";
 
 type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect>;
 type LocationSelect = RowWithOptionalAliases<typeof location.$inferSelect>;
@@ -24,6 +25,7 @@ type LocationSelect = RowWithOptionalAliases<typeof location.$inferSelect>;
  * Used when fetching products with full relations.
  */
 export type ProductDeepDB = ProductSelect & {
+  pricing?: ProductPricing;
   ingredient: typeof ingredient.$inferSelect | null;
   unitMappings: Array<typeof productUnitMappings.$inferSelect>;
   externalIds: MappableProductExternalId[];
@@ -44,6 +46,7 @@ export type ProductDeepDB = ProductSelect & {
 };
 
 export type ProductListDB = ProductSelect & {
+  pricing?: ProductPricing;
   dataQuality?: DataQuality;
   ingredient: typeof ingredient.$inferSelect | null;
   unitMappings: Array<typeof productUnitMappings.$inferSelect>;

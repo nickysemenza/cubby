@@ -47,6 +47,7 @@ interface PartDraft {
   trade: Trade;
   projectId: string | null;
   keepProduct: boolean;
+  productQuantity: string;
 }
 
 /** Dollars of slack before the parts read as disagreeing with the original. */
@@ -103,6 +104,8 @@ export function SplitExpenseDialog({
       trade: expense.trade,
       projectId: expense.projectId,
       keepProduct: false,
+      productQuantity:
+        expense.productQuantity != null ? String(expense.productQuantity) : "",
     },
     {
       key: `part-${keyCounter.current++}`,
@@ -112,6 +115,7 @@ export function SplitExpenseDialog({
       trade: expense.trade,
       projectId: expense.projectId,
       keepProduct: false,
+      productQuantity: "",
     },
   ];
 
@@ -125,7 +129,11 @@ export function SplitExpenseDialog({
   // At most one part inherits the product link, so setting it clears the others.
   const setProductPart = (key: string, keep: boolean) =>
     setParts((prev) =>
-      prev.map((part) => ({ ...part, keepProduct: keep && part.key === key })),
+      prev.map((part) => ({
+        ...part,
+        keepProduct: keep && part.key === key,
+        productQuantity: keep && part.key === key ? part.productQuantity : "",
+      })),
     );
 
   const addPart = () =>
@@ -139,6 +147,7 @@ export function SplitExpenseDialog({
         trade: expense.trade,
         projectId: expense.projectId,
         keepProduct: false,
+        productQuantity: "",
       },
     ]);
 
@@ -293,23 +302,39 @@ export function SplitExpenseDialog({
                   </WithProjectSearch>
                 </div>
                 {expense.productId && (
-                  <Row
-                    as="label"
-                    align="center"
-                    gap="xs"
-                    className="text-xs"
-                    title={`Give this part the ${productLabel} link`}
-                  >
-                    <Checkbox
-                      checked={part.keepProduct}
-                      onCheckedChange={(checked) =>
-                        setProductPart(part.key, checked === true)
-                      }
-                      // The wrapping <label> toggles it but doesn't NAME it —
-                      // Base UI renders a button, which a label can't label.
-                      aria-label={`Give part ${index + 1} the ${productLabel} link`}
-                    />
-                    Product
+                  <Row align="center" gap="xs">
+                    <Row
+                      as="label"
+                      align="center"
+                      gap="xs"
+                      className="text-xs"
+                      title={`Give this part the ${productLabel} link`}
+                    >
+                      <Checkbox
+                        checked={part.keepProduct}
+                        onCheckedChange={(checked) =>
+                          setProductPart(part.key, checked === true)
+                        }
+                        aria-label={`Give part ${index + 1} the ${productLabel} link`}
+                      />
+                      Product
+                    </Row>
+                    {part.keepProduct ? (
+                      <Input
+                        value={part.productQuantity}
+                        onChange={(event) =>
+                          updatePart(part.key, {
+                            productQuantity: event.target.value,
+                          })
+                        }
+                        type="number"
+                        min="1"
+                        step="1"
+                        placeholder="Qty unknown"
+                        className="w-28"
+                        aria-label={`Part ${index + 1} product quantity`}
+                      />
+                    ) : null}
                   </Row>
                 )}
               </Row>
@@ -381,6 +406,10 @@ export function SplitExpenseDialog({
                     ? unsafeProjectShortcode(part.projectId)
                     : null,
                   productId: part.keepProduct ? expense.productId : null,
+                  productQuantity:
+                    part.keepProduct && part.productQuantity !== ""
+                      ? Number(part.productQuantity)
+                      : null,
                 })),
               })
             }

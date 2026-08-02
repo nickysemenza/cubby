@@ -324,7 +324,7 @@ export function SessionCaptureActions({
         id: product.id,
         name: product.name,
         needsName,
-        needsPrice: product.price == null,
+        needsPrice: product.pricing.effectivePrice == null,
       });
     }
   };

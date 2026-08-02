@@ -211,6 +211,7 @@ export const makeExpenseInput = (
   future: false,
   projectId: null,
   productId: null,
+  productQuantity: null,
   purchaseId: null,
   vendor: null,
   orderId: null,

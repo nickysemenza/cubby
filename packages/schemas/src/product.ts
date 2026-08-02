@@ -341,6 +341,17 @@ export const productSortableFields = [
 
 export type ProductSortField = (typeof productSortableFields)[number];
 
+export const productPricingOut = z.object({
+  derivedPrice: z.number().nullable(),
+  effectivePrice: z.number().nullable(),
+  source: z.enum(["explicit", "derived", "none"]),
+  knownExpenseCount: z.number().int().nonnegative(),
+  unknownExpenseCount: z.number().int().nonnegative(),
+  knownUnitCount: z.number().int().nonnegative(),
+  partial: z.boolean(),
+});
+export type ProductPricingOut = z.infer<typeof productPricingOut>;
+
 const productTopLevelFields = {
   id: productShortcode,
   name: z
@@ -383,7 +394,13 @@ const productTopLevelFields = {
     .describe("product category for filtering"),
   images: z.array(imageOut),
   externalIds: z.array(externalIdOut),
-  price: z.number().nullable(), // Current chosen per-each costing/replacement price; the 1 each -> $X costing edge is synthesized from this at compute time.
+  price: z
+    .number()
+    .nullable()
+    .describe(
+      "Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.",
+    ),
+  pricing: productPricingOut,
   usdaUnavailable: z.boolean().nullable(),
   dataQuality,
   ...timestampedFields,
@@ -739,7 +756,9 @@ const productMcpFields = {
   upc: upc.nullable(),
   category: productCategory.nullable(),
   tags: z.array(z.string()),
-  price: z.number().nullable(),
+  price: z.number().nullable().describe("Effective valuation/costing price"),
+  priceOverride: z.number().nullable(),
+  pricing: productPricingOut,
   expectedQuantity: z.number().int().positive().nullable(),
   imageCount: z.number().int().nonnegative(),
   coverImageUrl: z.url().nullable(),

@@ -45,6 +45,7 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { formatSearchTerm, getDb, notDeleted } from "./database-helpers";
+import { effectiveProductPriceSql } from "./product/pricing";
 import { liveRecipeCountForIngredientSql } from "./recipe";
 
 const formatArraySearchTerm = (column: AnyColumn, query: string): SQL =>
@@ -121,7 +122,9 @@ const searchQueries = {
           typeHint: product.category,
           imageUrl: imageUrl("ProductImage", "productId").as("imageUrl"),
           createdAt: product.createdAt,
-          price: product.price,
+          price: sql<number | null>`${sql.raw(
+            effectiveProductPriceSql('"Product"'),
+          )}`.as("price"),
           stockCount: sql<number>`(
             SELECT COUNT(*)::int FROM "InventoryEntry" ie
             WHERE ie."productId" = "Product"."id" AND ie."deletedAt" IS NULL

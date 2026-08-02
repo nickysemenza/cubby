@@ -27,6 +27,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
+import { loadProductPricing } from "~/server/repo/product/pricing";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { assertLiveTargets } from "./helpers";
 import { dbInventoryEntryToAPI } from "./mappers";
@@ -175,8 +176,9 @@ export const bulkProcessInventoryEntries = async (
           .select({ id: product.id, price: product.price })
           .from(product)
           .where(inArray(product.id, allProductIds));
+        const pricing = await loadProductPricing(tx, products);
         for (const p of products) {
-          priceMap.set(p.id, p.price);
+          priceMap.set(p.id, pricing.get(p.id)?.effectivePrice ?? null);
         }
       }
 
@@ -420,8 +422,9 @@ export const bulkMoveInventoryEntries = async (
           .select({ id: product.id, price: product.price })
           .from(product)
           .where(inArray(product.id, sourceProductIds));
+        const pricing = await loadProductPricing(tx, products);
         for (const p of products) {
-          priceMap.set(p.id, p.price);
+          priceMap.set(p.id, pricing.get(p.id)?.effectivePrice ?? null);
         }
       }
 
@@ -753,7 +756,10 @@ export const reconcileLocationSession = async (
           .select({ id: product.id, price: product.price })
           .from(product)
           .where(inArray(product.id, changedProductIds));
-        for (const p of products) priceMap.set(p.id, p.price);
+        const pricing = await loadProductPricing(tx, products);
+        for (const p of products) {
+          priceMap.set(p.id, pricing.get(p.id)?.effectivePrice ?? null);
+        }
       }
 
       const relocationProductIds = uniq(

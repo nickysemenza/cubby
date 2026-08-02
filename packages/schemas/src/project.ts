@@ -789,6 +789,14 @@ const expenseFields = {
     .describe(
       "Optional link to the product this expense bought. A negative-cost expense on the same product records an exit (sale, return, or a 0-cost disposal).",
     ),
+  productQuantity: z
+    .number()
+    .int()
+    .positive()
+    .nullable()
+    .describe(
+      "Whole product units covered by this expense; null means the receipt does not establish quantity.",
+    ),
   /**
    * Where it was bought. **No longer a column** — resolved through
    * `expense.purchaseId → Purchase → Vendor` (see `dbExpenseToAPI`). Still
@@ -823,6 +831,7 @@ const expenseCreateShape = {
   future: z.boolean().default(false),
   projectId: projectShortcode.nullable().default(null),
   productId: productShortcode.nullable().default(null),
+  productQuantity: z.number().int().positive().nullable().default(null),
   vendor: z.string().nullable().default(null),
   orderId: z.string().nullable().default(null),
 };

@@ -285,7 +285,7 @@ export const buildPriceAndMappings = ({
 export const hasPriceEntry = (row: EnrichmentRow): boolean =>
   row.product.some(
     (p) =>
-      p.price != null ||
+      p.pricing.effectivePrice != null ||
       p.unitMappings.some(
         (m) => isMoneyUnit(m.a.unit) || isMoneyUnit(m.b.unit),
       ),

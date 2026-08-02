@@ -353,8 +353,8 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
                   form={form}
                   step="0.01"
                   name={"price" as Path<TFieldValues>}
-                  label="Price per Item"
-                  placeholder="e.g. 12.99"
+                  label="Price Override per Item"
+                  placeholder="Leave empty to derive from expenses"
                   prefix="$"
                 />
               </SideBySideFields>

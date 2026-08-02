@@ -10,6 +10,7 @@ import {
   expenseDateColumn,
   expenseFutureColumn,
   expenseOrderIdColumn,
+  expenseProductQuantityColumn,
   expenseTradeColumn,
   expenseVendorColumn,
 } from "~/app/projects/shared";
@@ -228,6 +229,16 @@ export function ExpenseList() {
           },
         },
       }),
+      expenseProductQuantityColumn(
+        columnHelper,
+        async (productQuantity, expense) => {
+          await updateExpenseMutation.mutateAsync({
+            id: expense.id,
+            data: { productQuantity },
+          });
+        },
+        { mobile: { slot: "meta", priority: 47, interactive: true } },
+      ),
       expenseFutureColumn(
         columnHelper,
         async (future, expense) => {

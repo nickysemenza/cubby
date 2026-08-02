@@ -53,6 +53,7 @@ import {
   resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
 import { vendorOptions as loadVendorOptions } from "~/server/repo/vendor";
+import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import { createSearchableEntityCrudProcedures } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
@@ -96,13 +97,47 @@ const {
       expenseList(services.db, filters, sort, pagination),
     // The repo hands back the uuid alongside the output, so neither of these
     // re-resolves a code it just had.
-    create: async (services, data) =>
-      await createExpense(services.db, data, services.actorContext),
-    update: async (services, shortcode: ExpenseShortcode, data) =>
-      await updateExpense(services.db, shortcode, data, services.actorContext),
+    create: async (services, data) => {
+      const result = await createExpense(
+        services.db,
+        data,
+        services.actorContext,
+      );
+      await recomputeRecipesForPriceAffectedProducts(
+        services.db,
+        services.services.recipeCosting,
+        result.priceAffectedProductIds,
+        "expense.create",
+      );
+      return result;
+    },
+    update: async (services, shortcode: ExpenseShortcode, data) => {
+      const result = await updateExpense(
+        services.db,
+        shortcode,
+        data,
+        services.actorContext,
+      );
+      await recomputeRecipesForPriceAffectedProducts(
+        services.db,
+        services.services.recipeCosting,
+        result.priceAffectedProductIds,
+        "expense.update",
+      );
+      return result;
+    },
     delete: async (services, ids: ExpenseShortcode[]) => {
-      await deleteExpenses(services.db, ids, services.actorContext);
-      return undefined;
+      const affected = await deleteExpenses(
+        services.db,
+        ids,
+        services.actorContext,
+      );
+      return await recomputeRecipesForPriceAffectedProducts(
+        services.db,
+        services.services.recipeCosting,
+        affected,
+        "expense.delete",
+      );
     },
   },
   entityName: "expense",

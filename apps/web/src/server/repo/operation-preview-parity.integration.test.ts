@@ -1081,7 +1081,7 @@ describe("operation preview / mutation parity", () => {
 
       await expect(
         deleteExpenses(ctx.db, [line.id], ctx.actor),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual([]);
     });
 
     it("inventory has zero incoming edges: blockers/changes stay empty but the valuation-recompute sideEffect always surfaces", async () => {

@@ -5,6 +5,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import {
   image,
+  inventoryEntry,
   location,
   productExternalId,
   productImage,
@@ -1232,12 +1233,147 @@ describe("product repository", () => {
         // The footer total must cover the FILTERED set, not the whole table —
         // the 999 of the excluded product must not be in it.
         expect(has.sums.price).toEqual(
-          has.data.reduce((acc, p) => acc + (p.price ?? 0), 0),
+          has.data.reduce((acc, p) => acc + (p.pricing.effectivePrice ?? 0), 0),
         );
       });
     });
 
     describe("pricePresenceFilter", () => {
+      it("derives a weighted price from known quantities and flags incomplete history", async () => {
+        const derived = await createProduct(
+          ctx.db,
+          makeProductInput({
+            name: "Derived Price Product",
+            upc: "710000000009",
+            price: null,
+          }),
+          ctx.actor,
+        );
+        const shelf = await createLocation(
+          ctx.db,
+          makeLocationInput({ name: "Derived Price Shelf" }),
+          ctx.actor,
+        );
+        const stocked = await createInventoryEntry(
+          ctx.db,
+          {
+            productId: derived.id,
+            locationId: shelf.id,
+            amount: { value: 2, unit: "each" },
+          },
+          ctx.actor,
+        );
+
+        await createExpense(
+          ctx.db,
+          makeExpenseInput({
+            name: "Three pack",
+            productId: derived.id,
+            productQuantity: 3,
+            cost: 12,
+          }),
+          ctx.actor,
+        );
+        await createExpense(
+          ctx.db,
+          makeExpenseInput({
+            name: "Two pack",
+            productId: derived.id,
+            productQuantity: 2,
+            cost: 10,
+          }),
+          ctx.actor,
+        );
+        await createExpense(
+          ctx.db,
+          makeExpenseInput({
+            name: "Old receipt without a count",
+            productId: derived.id,
+            productQuantity: null,
+            cost: 99,
+          }),
+          ctx.actor,
+        );
+        await createExpense(
+          ctx.db,
+          makeExpenseInput({
+            name: "Planned purchase",
+            productId: derived.id,
+            productQuantity: 1,
+            cost: 500,
+            future: true,
+          }),
+          ctx.actor,
+        );
+        await createExpense(
+          ctx.db,
+          makeExpenseInput({
+            name: "Return",
+            productId: derived.id,
+            productQuantity: 1,
+            cost: -100,
+          }),
+          ctx.actor,
+        );
+
+        const loaded = await getProductByID(ctx.db, derived.entityId);
+        expect(loaded.pricing).toEqual({
+          derivedPrice: 4.4,
+          effectivePrice: 4.4,
+          source: "derived",
+          knownExpenseCount: 2,
+          unknownExpenseCount: 1,
+          knownUnitCount: 5,
+          partial: true,
+        });
+        const valued = await getDb(ctx.db).query.inventoryEntry.findFirst({
+          where: eq(inventoryEntry.id, stocked.entityId),
+          columns: { valuation: true },
+        });
+        expect(valued?.valuation).toBeCloseTo(8.8);
+
+        const has = await listWith({ pricePresenceFilter: "has" });
+        expect(has.data.map((p) => p.id)).toContain(derived.id);
+
+        const overridden = await updateProduct(
+          ctx.db,
+          derived.entityId,
+          { price: 8 },
+          ctx.actor,
+        );
+        expect(overridden.pricing).toMatchObject({
+          derivedPrice: 4.4,
+          effectivePrice: 8,
+          source: "explicit",
+        });
+        const overrideValuation = await getDb(
+          ctx.db,
+        ).query.inventoryEntry.findFirst({
+          where: eq(inventoryEntry.id, stocked.entityId),
+          columns: { valuation: true },
+        });
+        expect(overrideValuation?.valuation).toBeCloseTo(16);
+
+        const resumed = await updateProduct(
+          ctx.db,
+          derived.entityId,
+          { price: null },
+          ctx.actor,
+        );
+        expect(resumed.pricing).toMatchObject({
+          derivedPrice: 4.4,
+          effectivePrice: 4.4,
+          source: "derived",
+        });
+        const resumedValuation = await getDb(
+          ctx.db,
+        ).query.inventoryEntry.findFirst({
+          where: eq(inventoryEntry.id, stocked.entityId),
+          columns: { valuation: true },
+        });
+        expect(resumedValuation?.valuation).toBeCloseTo(8.8);
+      });
+
       it("partitions on whether price is set", async () => {
         const priced = await createProduct(
           ctx.db,
