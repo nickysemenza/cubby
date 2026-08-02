@@ -68,6 +68,8 @@ type ScalingRow = IngredientDataItem & {
   isScalingBase: boolean;
 };
 
+const getScalingRowId = (row: ScalingRow) => row.id;
+
 export const RecipeIngredientList: React.FC<{
   ingredients: CostingRow[];
   ingMap: Record<string, IngredientWithFoodLeanOut> | undefined;
@@ -462,6 +464,7 @@ export const RecipeIngredientList: React.FC<{
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getRowId: getScalingRowId,
     rowCount: ingredients.length,
     state: {
       pagination: {

@@ -24,7 +24,7 @@ import { describe, expect, it } from "vitest";
 import { expenseRouter } from "~/server/api/routers/expense";
 import { createTestCaller } from "~/server/api/trpc";
 import type { Database } from "~/server/db";
-import { product } from "~/server/db/schema";
+import { expense as expenseTable, product } from "~/server/db/schema";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { getDb } from "~/server/repo/database-helpers";
 import { findOrphanedEntityEmbeddings } from "~/server/repo/entity-embedding";
@@ -720,6 +720,54 @@ describe("expense repository — sorting/pagination", () => {
     });
     expect(page).toHaveLength(2);
     expect(count).toBe(3);
+  });
+
+  it("keeps tied sort values disjoint and exhaustive across the 100-row boundary", async () => {
+    const alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+    const shortcode = (value: number) => {
+      let remaining = value;
+      let body = "";
+      for (let position = 0; position < 4; position += 1) {
+        body = alphabet[remaining % alphabet.length]! + body;
+        remaining = Math.floor(remaining / alphabet.length);
+      }
+      return `EXP-${body}`;
+    };
+
+    await getDb(ctx.db)
+      .insert(expenseTable)
+      .values(
+        Array.from({ length: 105 }, (_, index) => ({
+          shortcode: shortcode(index),
+          name: `boundary expense ${index}`,
+          date: "2026-03-24",
+          costType: "materials" as const,
+          trade: "other" as const,
+        })),
+      );
+
+    const sort = [{ orderBy: "date", direction: "desc" as const }];
+    const first = await expenseList(ctx.db, {}, sort, {
+      pageIndex: 0,
+      pageSize: 100,
+    });
+    const second = await expenseList(ctx.db, {}, sort, {
+      pageIndex: 1,
+      pageSize: 100,
+    });
+    const repeatedFirst = await expenseList(ctx.db, {}, sort, {
+      pageIndex: 0,
+      pageSize: 100,
+    });
+
+    const ids = [...first.data, ...second.data].map((row) => row.id);
+    expect(first.count).toBe(105);
+    expect(first.data).toHaveLength(100);
+    expect(second.data).toHaveLength(5);
+    expect(new Set(ids).size).toBe(105);
+    expect(repeatedFirst.data.map((row) => row.id)).toEqual(
+      first.data.map((row) => row.id),
+    );
   });
 });
 

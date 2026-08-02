@@ -1,13 +1,20 @@
+import { asc } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { product } from "~/server/db/schema";
 import {
+  buildOrderBy,
   buildPartialUpdateValues,
   eqAnyOrPresence,
   formatSearchTerm,
   isTransaction,
   withTransactionOn,
 } from "~/server/repo/database-helpers";
+
+const dialect = new PgDialect();
+const renderSql = (clauses: ReturnType<typeof buildOrderBy>) =>
+  clauses.map((clause) => dialect.sqlToQuery(clause).sql);
 
 /**
  * `Database` is opaque (declares no members), so the only structural signal that
@@ -93,6 +100,44 @@ describe("formatSearchTerm", () => {
     const result = formatSearchTerm(product.name, "  trimmed  ");
     expect(result).toBeDefined();
     expect(result).toBeTruthy();
+  });
+});
+
+describe("buildOrderBy", () => {
+  it("always appends the unique id after the visible sort stack", () => {
+    const sql = renderSql(
+      buildOrderBy(
+        product,
+        [
+          { orderBy: "name", direction: "asc" },
+          { orderBy: "createdAt", direction: "desc" },
+        ],
+        ["name", "createdAt"],
+      ),
+    );
+
+    expect(sql).toHaveLength(3);
+    expect(sql.at(-1)).toContain('"Product"."id" asc');
+  });
+
+  it("puts group, resolver, and cosmetic tie-breakers before the unique id", () => {
+    const sql = renderSql(
+      buildOrderBy(
+        product,
+        [{ orderBy: "name", direction: "asc" }],
+        ["category", "name"],
+        {
+          groupBy: "category",
+          resolve: (sort) =>
+            sort.orderBy === "name" ? [asc(product.manufacturer)] : null,
+          tieBreaker: asc(product.shortcode),
+        },
+      ),
+    );
+
+    expect(sql).toHaveLength(4);
+    expect(sql[0]).toContain('"Product"."category" asc nulls last');
+    expect(sql.at(-1)).toContain('"Product"."id" asc');
   });
 });
 

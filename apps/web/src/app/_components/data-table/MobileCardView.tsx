@@ -68,6 +68,7 @@ interface MobileCardViewProps<TItem> {
   groupConfig?: GroupConfig<TItem>;
   /** Whether grouping is currently active */
   grouped?: boolean;
+  isTransitioning?: boolean;
 }
 
 export function MobileCardView<TItem>({
@@ -76,6 +77,7 @@ export function MobileCardView<TItem>({
   infiniteScroll,
   groupConfig,
   grouped = false,
+  isTransitioning = false,
 }: MobileCardViewProps<TItem>) {
   const { isDebugEnabled } = useDebug();
   const navigate = useNavigate();
@@ -121,9 +123,24 @@ export function MobileCardView<TItem>({
   // Ref for scrollMargin offset calculation
   const listRef = useRef<HTMLDivElement>(null);
 
+  const getItemKey = useCallback(
+    (index: number) => {
+      if (groupedItems) {
+        const item = groupedItems[index];
+        if (!item) return `missing:${index}`;
+        return item.kind === "header"
+          ? `group:${item.title}`
+          : `row:${item.item.row.id}`;
+      }
+      return `row:${mobileRows[index]?.row.id ?? index}`;
+    },
+    [groupedItems, mobileRows],
+  );
+
   // Window virtualizer — scrolls against the window, not a container
   const virtualizer = useWindowVirtualizer({
     count: itemCount,
+    getItemKey,
     estimateSize,
     // A count, not a pixel budget — and rows got ~2.5x taller, each carrying
     // several edit-triggers. 8 would now hold far more (and heavier) DOM than
@@ -263,7 +280,11 @@ export function MobileCardView<TItem>({
   };
 
   return (
-    <div className="block overflow-x-hidden lg:hidden">
+    <div
+      className="block overflow-x-hidden lg:hidden"
+      aria-busy={isTransitioning}
+      inert={isTransitioning ? true : undefined}
+    >
       {itemCount > 0 ? (
         <div ref={listRef}>
           <div

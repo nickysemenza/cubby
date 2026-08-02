@@ -1,7 +1,11 @@
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import type { QueryTiming } from "~/lib/query-timing";
 import type { TableStateReturn } from "../data-table/useTableState";
+import {
+  flattenUniquePageItems,
+  type IdentifiedListRow,
+} from "./infinite-page-utils";
 import {
   type ListQueryResponse,
   type TRPCQueryOptionsFn,
@@ -17,10 +21,14 @@ interface UseInfiniteTableListOptions<TFilters> {
   groupBy?: string;
 }
 
-export interface InfiniteScrollControls<TData = unknown> {
+export interface InfiniteScrollControls<
+  TData extends IdentifiedListRow = IdentifiedListRow,
+> {
   fetchNextPage: () => void;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
+  /** Previous query rows are visible while a new filter/sort first page loads. */
+  isTransitioning: boolean;
   /**
    * Fetch every remaining page (up to `cap` accumulated rows) so all matching
    * rows are in memory, resolving with the full flattened set. Used by "select
@@ -30,7 +38,7 @@ export interface InfiniteScrollControls<TData = unknown> {
   loadAllPages: (cap?: number) => Promise<TData[]>;
 }
 
-interface UseInfiniteTableListReturn<TData = unknown> {
+interface UseInfiniteTableListReturn<TData extends IdentifiedListRow> {
   data: TData[];
   totalCount: number;
   /** Server-computed full-filtered-set column sums (footer totals). */
@@ -52,7 +60,10 @@ interface UseInfiniteTableListReturn<TData = unknown> {
  * Uses useInfiniteQuery to accumulate pages client-side.
  * This is the sole server-backed entity-list data path.
  */
-export function useInfiniteTableList<TFilters, TData = unknown>({
+export function useInfiniteTableList<
+  TFilters,
+  TData extends IdentifiedListRow,
+>({
   queryOptions,
   buildFilters,
   tableState,
@@ -96,6 +107,7 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    isPlaceholderData,
     isRefetching,
     refetch,
   } = useInfiniteQuery({
@@ -127,19 +139,21 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
     error: Error | null;
     // useInfiniteQuery's fetchNextPage resolves with the updated observer
     // result (has .hasNextPage / .data) — awaited by loadAllPages below.
-    fetchNextPage: () => Promise<{
+    fetchNextPage: (options?: { cancelRefetch?: boolean }) => Promise<{
       hasNextPage?: boolean;
       data?: { pages: ListQueryResponse<TData>[] };
     }>;
     hasNextPage: boolean;
     isFetchingNextPage: boolean;
+    isPlaceholderData: boolean;
     isRefetching: boolean;
     refetch: () => Promise<unknown>;
   };
 
-  // Flatten all pages into a single array
+  // Flatten all pages into a single array, with a row-identity backstop for an
+  // overlapping or refetched page.
   const data = useMemo(
-    () => infiniteData?.pages.flatMap((p) => p.items) ?? [],
+    () => flattenUniquePageItems(infiniteData?.pages),
     [infiniteData],
   );
 
@@ -148,22 +162,96 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
   const totalCount = infiniteData?.pages[0]?.meta?.totalCount ?? 0;
   const sums = infiniteData?.pages.at(-1)?.meta?.sums;
 
+  type FetchResult = Awaited<ReturnType<typeof fetchNextPage>>;
+  const nextPageInFlightRef = useRef<Promise<FetchResult> | null>(null);
+  const queryScope = JSON.stringify(infiniteQueryKey);
+  const activeQueryScopeRef = useRef(queryScope);
+  if (activeQueryScopeRef.current !== queryScope) {
+    activeQueryScopeRef.current = queryScope;
+    nextPageInFlightRef.current = null;
+  }
+  const latestStateRef = useRef({
+    hasNextPage: hasNextPage ?? false,
+    isTransitioning: isPlaceholderData,
+    pages: infiniteData?.pages,
+  });
+  latestStateRef.current = {
+    hasNextPage: hasNextPage ?? false,
+    isTransitioning: isPlaceholderData,
+    pages: infiniteData?.pages,
+  };
+
+  // IntersectionObserver can deliver more than once before React publishes
+  // isFetchingNextPage. Serialize at the callback boundary as well as asking
+  // TanStack Query not to cancel/restart an in-flight next-page request.
+  const requestNextPage = useCallback((): Promise<FetchResult | null> => {
+    if (
+      latestStateRef.current.isTransitioning ||
+      !latestStateRef.current.hasNextPage
+    ) {
+      return Promise.resolve(null);
+    }
+    if (nextPageInFlightRef.current) return nextPageInFlightRef.current;
+
+    const request = fetchNextPage({ cancelRefetch: false }).finally(() => {
+      if (nextPageInFlightRef.current === request) {
+        nextPageInFlightRef.current = null;
+      }
+    });
+    nextPageInFlightRef.current = request;
+    return request;
+  }, [fetchNextPage]);
+
+  const guardedFetchNextPage = useCallback(() => {
+    void requestNextPage();
+  }, [requestNextPage]);
+
   // Pull every remaining page into memory (bounded), awaiting each fetch's
   // resolved result so we know when the set is complete.
   const loadAllPages = useCallback(
     async (cap = 3000): Promise<TData[]> => {
-      let result = await fetchNextPage();
-      const flat = (r: typeof result) =>
-        r.data?.pages.flatMap((p) => p.items) ?? [];
+      let items = flattenUniquePageItems(latestStateRef.current.pages);
+      if (latestStateRef.current.isTransitioning) return items;
+
       // Guard against an unbounded loop if the server keeps claiming more.
       let guard = 0;
-      while (result.hasNextPage && flat(result).length < cap && guard < 100) {
+      while (
+        latestStateRef.current.hasNextPage &&
+        items.length < cap &&
+        guard < 100
+      ) {
         guard += 1;
-        result = await fetchNextPage();
+        const result = await requestNextPage();
+        if (!result) break;
+        items = flattenUniquePageItems(result.data?.pages);
+        latestStateRef.current = {
+          ...latestStateRef.current,
+          hasNextPage: result.hasNextPage ?? false,
+          pages: result.data?.pages,
+        };
       }
-      return flat(result);
+      return items;
     },
-    [fetchNextPage],
+    [requestNextPage],
+  );
+
+  const infiniteScroll = useMemo<InfiniteScrollControls<TData>>(
+    () => ({
+      fetchNextPage: guardedFetchNextPage,
+      // Placeholder rows belong to the previous query. Never use their page
+      // metadata to fetch into the new query while its first page is pending.
+      hasNextPage: !isPlaceholderData && (hasNextPage ?? false),
+      isFetchingNextPage,
+      isTransitioning: isPlaceholderData,
+      loadAllPages,
+    }),
+    [
+      guardedFetchNextPage,
+      hasNextPage,
+      isFetchingNextPage,
+      isPlaceholderData,
+      loadAllPages,
+    ],
   );
 
   return {
@@ -175,12 +263,7 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
     tableState,
     // Infinite scroll doesn't track per-query timing
     timing: { durationMs: null, isFresh: false },
-    infiniteScroll: {
-      fetchNextPage,
-      hasNextPage: hasNextPage ?? false,
-      isFetchingNextPage,
-      loadAllPages,
-    },
+    infiniteScroll,
     refreshControls: {
       onRefresh: async () => {
         await refetch();

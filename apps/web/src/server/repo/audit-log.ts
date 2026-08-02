@@ -1,6 +1,6 @@
 import type { AuditEntityType, AuditLogListOut } from "@cubby/schemas/audit";
 import type { ActorContext, AuditSource } from "@cubby/schemas/context";
-import { and, desc, eq, gte, lt, lte, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, lt, lte, or, type SQL } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { auditLog } from "~/server/db/schema";
 import { eqAny, unwrapDb } from "~/server/repo/database-helpers";
@@ -35,6 +35,62 @@ type AuditLogRow = Omit<
   source: AuditSource;
   user: AuditLogUser;
 };
+
+const AUDIT_CURSOR_PREFIX = "v1.";
+
+type DecodedAuditCursor = {
+  createdAt: Date;
+  id?: string;
+};
+
+/** Encode the timestamp + private PK without exposing either as cursor fields. */
+export function encodeAuditCursor(entry: {
+  createdAt: Date;
+  id: string;
+}): string {
+  const payload = JSON.stringify({
+    createdAt: entry.createdAt.toISOString(),
+    id: entry.id,
+  });
+  return `${AUDIT_CURSOR_PREFIX}${btoa(payload)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/u, "")}`;
+}
+
+/** Decode v1 cursors while retaining the former ISO timestamp wire format. */
+export function decodeAuditCursor(cursor: string): DecodedAuditCursor {
+  if (!cursor.startsWith(AUDIT_CURSOR_PREFIX)) {
+    const createdAt = new Date(cursor);
+    if (Number.isNaN(createdAt.getTime())) {
+      throw new Error("Invalid audit log cursor");
+    }
+    return { createdAt };
+  }
+
+  try {
+    const encoded = cursor.slice(AUDIT_CURSOR_PREFIX.length);
+    const base64 = encoded.replaceAll("-", "+").replaceAll("_", "/");
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+    const payload = JSON.parse(atob(padded)) as {
+      createdAt?: unknown;
+      id?: unknown;
+    };
+    if (
+      typeof payload.createdAt !== "string" ||
+      typeof payload.id !== "string"
+    ) {
+      throw new Error("Malformed audit log cursor");
+    }
+    const createdAt = new Date(payload.createdAt);
+    if (Number.isNaN(createdAt.getTime()) || payload.id.length === 0) {
+      throw new Error("Malformed audit log cursor");
+    }
+    return { createdAt, id: payload.id };
+  } catch {
+    throw new Error("Invalid audit log cursor");
+  }
+}
 
 /**
  * Compute changes between before and after objects for specific fields.
@@ -164,7 +220,7 @@ export async function getAuditLog(
     createdAtFrom?: string;
     createdAtTo?: string;
     limit: number;
-    cursor?: string; // ISO date string for cursor-based pagination
+    cursor?: string; // Opaque composite cursor; legacy ISO timestamps accepted
   },
 ): Promise<AuditLogListOut> {
   const conditions: SQL[] = [];
@@ -195,12 +251,23 @@ export async function getAuditLog(
   // bounds on the same indexed column, so the extra predicate is index-served
   // and simply narrows the window further.
   if (params.cursor) {
-    conditions.push(lt(auditLog.createdAt, new Date(params.cursor)));
+    const cursor = decodeAuditCursor(params.cursor);
+    conditions.push(
+      cursor.id
+        ? (or(
+            lt(auditLog.createdAt, cursor.createdAt),
+            and(
+              eq(auditLog.createdAt, cursor.createdAt),
+              lt(auditLog.id, cursor.id),
+            ),
+          ) as SQL)
+        : lt(auditLog.createdAt, cursor.createdAt),
+    );
   }
 
   const entries = await unwrapDb(db).query.auditLog.findMany({
     where: conditions.length > 0 ? and(...conditions) : undefined,
-    orderBy: desc(auditLog.createdAt),
+    orderBy: [desc(auditLog.createdAt), desc(auditLog.id)],
     limit: params.limit + 1, // Fetch one extra to determine if there's more
     with: {
       user: {
@@ -225,7 +292,9 @@ export async function getAuditLog(
     changes: entry.changes ?? null,
   }));
   const nextCursor = hasMore
-    ? returnEntries[returnEntries.length - 1]?.createdAt.toISOString()
+    ? returnEntries[returnEntries.length - 1]
+      ? encodeAuditCursor(returnEntries[returnEntries.length - 1]!)
+      : undefined
     : undefined;
 
   const shortcodeByRef = await lookupShortcodes(
@@ -237,8 +306,9 @@ export async function getAuditLog(
   );
 
   return {
-    entries: returnEntries.map(({ id: _id, entityId, ...entry }) => ({
+    entries: returnEntries.map(({ id, entityId, ...entry }) => ({
       ...entry,
+      entryKey: encodeAuditCursor({ id, createdAt: entry.createdAt }),
       entityId: shortcodeByRef.get(refKey(entry.entityType, entityId)) ?? null,
     })),
     nextCursor,
