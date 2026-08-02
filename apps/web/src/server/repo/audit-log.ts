@@ -43,7 +43,7 @@ type DecodedAuditCursor = {
   id?: string;
 };
 
-/** Encode the timestamp + private PK without exposing either as cursor fields. */
+/** Base64-pack the timestamp and private PK into one opaque cursor field. */
 export function encodeAuditCursor(entry: {
   createdAt: Date;
   id: string;
