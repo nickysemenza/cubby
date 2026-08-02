@@ -624,7 +624,7 @@ describe("purchase repository — splitExpense", () => {
     // to seed.
     expect((await getPurchaseByID(ctx.db, chargeUuid)).statedTotal).toBeNull();
 
-    const parts = await splitExpense(
+    const { items: parts, priceAffectedProductIds } = await splitExpense(
       ctx.db,
       splitExpenseInput.parse({
         expenseId: combo.id,
@@ -649,6 +649,7 @@ describe("purchase repository — splitExpense", () => {
     );
 
     expect(parts).toHaveLength(2);
+    expect(priceAffectedProductIds).toEqual([]);
     // Every part lands on the SAME charge — parts of one purchase must share one
     // parent.
     for (const part of parts) {
@@ -740,6 +741,61 @@ describe("purchase repository — splitExpense", () => {
     ).toBe(431.24);
   });
 
+  it("returns only products whose effective price changed", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Split-priced product" }),
+      ctx.actor,
+    );
+    const { output: original } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "two-pack",
+          cost: 20,
+          productId: product.id,
+          productQuantity: 2,
+          vendor: "Split Price Vendor",
+          orderId: "SPLIT-PRICE-1",
+        }),
+      ),
+      ctx.actor,
+    );
+    const productUuid = await resolveLiveShortcode(
+      ctx.db,
+      product.id,
+      "product",
+    );
+    if (!productUuid) throw new Error("test setup: product did not resolve");
+
+    const result = await splitExpense(
+      ctx.db,
+      splitExpenseInput.parse({
+        expenseId: original.id,
+        parts: [
+          {
+            name: "priced unit",
+            cost: 15,
+            costType: "materials",
+            trade: "other",
+            productId: product.id,
+            productQuantity: 1,
+          },
+          {
+            name: "unlinked remainder",
+            cost: 5,
+            costType: "materials",
+            trade: "other",
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+
+    expect(result.priceAffectedProductIds).toEqual([productUuid]);
+    expect(result.items).toHaveLength(2);
+  });
+
   it("ACCEPTS a deliberately mismatched sum and merely reports it", async () => {
     const { output: combo } = await createExpense(
       ctx.db,
@@ -759,7 +815,7 @@ describe("purchase repository — splitExpense", () => {
     // 60 + 25 = 85 against a $100 charge. Nothing validates that the parts add
     // up, so this write must SUCCEED — a partial refund reduces a line without
     // changing what the charge stated, so a mismatch is frequently correct.
-    const parts = await splitExpense(
+    const { items: parts } = await splitExpense(
       ctx.db,
       splitExpenseInput.parse({
         expenseId: combo.id,

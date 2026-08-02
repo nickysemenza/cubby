@@ -616,7 +616,7 @@ export function expenseCostColumn(
 export function expenseProductQuantityColumn(
   helper: ColumnHelper<ExpenseOut>,
   save: (quantity: number | null, expense: ExpenseOut) => Promise<void>,
-  opts?: { mobile?: MobileColumnMeta },
+  opts?: { mobile?: MobileColumnMeta; filterConfig?: FilterConfig },
 ) {
   const saveValid = async (row: ExpenseOut, quantity: number | null) => {
     if (!row.productId) {
@@ -635,11 +635,12 @@ export function expenseProductQuantityColumn(
   return helper.accessor("productQuantity", {
     id: "productQuantity",
     header: "Quantity",
-    enableSorting: false,
+    enableSorting: true,
     meta: {
       numeric: true,
       className: "w-24",
       mobile: opts?.mobile,
+      filterConfig: opts?.filterConfig,
       cellData,
     },
     cell: (info) => {
@@ -1177,6 +1178,7 @@ export function ExpenseList({
             data: { productQuantity },
           });
         },
+        { filterConfig: manifestFilterConfig("expense", "productQuantity") },
       ),
       expenseVendorColumn(
         expenseHelper,

@@ -99,6 +99,61 @@ export const loadProductPricing = async (
   );
 };
 
+/**
+ * Load pricing for every live Product attached to a set of Ingredients.
+ *
+ * The costing path knows Ingredient ids before it has materialized their
+ * Product relations, so this join-shaped loader can run concurrently with that
+ * relational fetch. Keep the Expense predicates identical to
+ * {@link loadProductPricing}: only live, actual, positive acquisition rows
+ * participate, while unknown quantities still contribute to partial coverage.
+ */
+export const loadProductPricingForIngredientIds = async (
+  db: Database | DrizzleTransaction,
+  ingredientIds: readonly IngredientId[],
+): Promise<Map<ProductId, ProductPricing>> => {
+  if (ingredientIds.length === 0) return new Map();
+
+  const rows = await unwrapDb(db)
+    .select({
+      id: product.id,
+      price: product.price,
+      knownCost: sql<number>`COALESCE(sum(${expense.cost}) FILTER (WHERE ${expense.id} IS NOT NULL AND ${expense.productQuantity} IS NOT NULL), 0)::double precision`,
+      knownExpenseCount: sql<number>`count(${expense.id}) FILTER (WHERE ${expense.productQuantity} IS NOT NULL)::int`,
+      unknownExpenseCount: sql<number>`count(${expense.id}) FILTER (WHERE ${expense.productQuantity} IS NULL)::int`,
+      knownUnitCount: sql<number>`COALESCE(sum(${expense.productQuantity}), 0)::int`,
+    })
+    .from(product)
+    .leftJoin(
+      expense,
+      and(
+        eq(expense.productId, product.id),
+        notDeleted(expense),
+        eq(expense.future, false),
+        gt(expense.cost, 0),
+      ),
+    )
+    .where(
+      and(
+        notDeleted(product),
+        inArray(product.ingredientId, [...ingredientIds]),
+      ),
+    )
+    .groupBy(product.id, product.price);
+
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      resolveProductPricing(row.price, {
+        knownCost: Number(row.knownCost),
+        knownExpenseCount: Number(row.knownExpenseCount),
+        unknownExpenseCount: Number(row.unknownExpenseCount),
+        knownUnitCount: Number(row.knownUnitCount),
+      }),
+    ]),
+  );
+};
+
 export const enrichProductRowsWithPricing = async <
   T extends { id: ProductId; price: number | null },
 >(

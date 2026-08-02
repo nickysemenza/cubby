@@ -106,9 +106,13 @@ authoritative for that field:
   category.
 - Use an exact retailer page for UPC, retailer SKU, image, and a current offer.
 - Do not replace a concise correct name with a retailer SEO title.
-- Replace `price` only with a currently visible exact-variant offer sold
-  directly by the manufacturer or retailer. Ignore marketplace third-party
-  offers, crossed-out list prices, aggregators, and inferred averages.
+- Treat `price` as an explicit current/replacement-price override: setting it
+  intentionally takes precedence over the Expense-derived average, while
+  clearing it resumes that fallback. Replace it only with a currently visible
+  exact-variant offer sold directly by the manufacturer or retailer. Ignore
+  marketplace third-party offers, crossed-out list prices, aggregators, and
+  inferred averages. Historical receipt quantities belong on the linked
+  Expense's `productQuantity`, not in a manual Product price.
 - Never blanket-apply a provider response. Compare and write fields
   deliberately.
 

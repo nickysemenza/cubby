@@ -126,6 +126,36 @@ export function resolveCostFilter(preset: string | undefined): {
   );
 }
 
+/** Fixed preset values for the Quantity column's receipt-unit filter. */
+const productQuantityRangeValues = ["exactly1", "gte2", "gte5"] as const;
+type ProductQuantityRangePreset = (typeof productQuantityRangeValues)[number];
+
+const productQuantityRangeLabels: Record<ProductQuantityRangePreset, string> = {
+  exactly1: "Exactly 1",
+  gte2: "2+ units",
+  gte5: "5+ units",
+};
+
+export const productQuantityRangeOptions = buildSelectOptions(
+  productQuantityRangeValues,
+  productQuantityRangeLabels,
+);
+
+/** Resolve the Quantity header's presence and useful whole-unit buckets. */
+export function resolveProductQuantityFilter(preset: string | undefined): {
+  productQuantityPresenceFilter?: "has" | "none";
+  productQuantityMin?: number;
+  productQuantityMax?: number;
+} {
+  return match(preset)
+    .with("has", () => ({ productQuantityPresenceFilter: "has" as const }))
+    .with("none", () => ({ productQuantityPresenceFilter: "none" as const }))
+    .with("exactly1", () => ({ productQuantityMin: 1, productQuantityMax: 1 }))
+    .with("gte2", () => ({ productQuantityMin: 2 }))
+    .with("gte5", () => ({ productQuantityMin: 5 }))
+    .otherwise(() => ({}));
+}
+
 /**
  * Resolves a date-range preset (as read off the "date" column filter) into
  * inclusive "YYYY-MM-DD" bounds anchored on today's local date. An

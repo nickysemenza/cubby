@@ -14,7 +14,6 @@
 import {
   purchaseShortcode,
   unsafeExpenseId,
-  unsafeProductId,
   unsafePurchaseId,
 } from "@cubby/schemas/identifiers";
 import { expenseOut } from "@cubby/schemas/project";
@@ -31,7 +30,6 @@ import {
 } from "@cubby/schemas/purchase";
 import { z } from "zod";
 import { createAppError } from "~/server/errors/app-error";
-import { getExpenseByShortcode } from "~/server/repo/expense";
 import {
   createPurchase,
   deletePurchases,
@@ -183,8 +181,11 @@ const split = protectedProcedure
   .input(splitExpenseInput)
   .output(strictOutput(z.array(expenseOut)))
   .mutation(async ({ ctx, input }) => {
-    const original = await getExpenseByShortcode(ctx.db, input.expenseId);
-    const items = await splitExpense(ctx.db, input, ctx.actorContext);
+    const { items, priceAffectedProductIds } = await splitExpense(
+      ctx.db,
+      input,
+      ctx.actorContext,
+    );
     // The original is already soft-deleted by the time we get here —
     // `resolveShortcode` (not the live-only variant) is what still names it.
     const originalRef = await resolveShortcode(ctx.db, input.expenseId);
@@ -223,25 +224,11 @@ const split = protectedProcedure
           : [];
       }),
     ]);
-    const productIds = [
-      original?.productId,
-      ...items.map((item) => item.productId),
-    ].filter(
-      (id): id is NonNullable<typeof id> => id !== null && id !== undefined,
-    );
-    if (productIds.length > 0) {
-      const resolvedProducts = await resolveLiveShortcodes(
-        ctx.db,
-        productIds,
-        "product",
-      );
+    if (priceAffectedProductIds.length > 0) {
       await recomputeRecipesForPriceAffectedProducts(
         ctx.db,
         ctx.services.recipeCosting,
-        productIds.flatMap((code) => {
-          const id = resolvedProducts.get(code);
-          return id ? [unsafeProductId(id)] : [];
-        }),
+        priceAffectedProductIds,
         "purchase.split",
       );
     }

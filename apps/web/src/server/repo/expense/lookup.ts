@@ -265,6 +265,19 @@ export const buildExpenseWhereClause = async (
         ? lte(expense.cost, filters.costMax)
         : undefined,
       presenceCondition(expense.cost, filters.costPresenceFilter),
+      // Quantity is nullable evidence, never an inferred one-unit default.
+      // Bounds naturally exclude unknown rows; the presence filter is the
+      // explicit worklist for those receipts.
+      filters.productQuantityMin !== undefined
+        ? gte(expense.productQuantity, filters.productQuantityMin)
+        : undefined,
+      filters.productQuantityMax !== undefined
+        ? lte(expense.productQuantity, filters.productQuantityMax)
+        : undefined,
+      presenceCondition(
+        expense.productQuantity,
+        filters.productQuantityPresenceFilter,
+      ),
       // `orderId` presence can't be a column-null check any more: it's a column
       // on the CHARGE, and a row with a charge that has no order id is a
       // different state from a row with no charge at all. Both read as "no order

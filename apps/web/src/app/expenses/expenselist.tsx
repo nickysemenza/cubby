@@ -20,6 +20,7 @@ import { usePageCount } from "~/components/page/Page";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { StatTile } from "~/components/ui/stat-tile";
+import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
@@ -237,7 +238,10 @@ export function ExpenseList() {
             data: { productQuantity },
           });
         },
-        { mobile: { slot: "meta", priority: 47, interactive: true } },
+        {
+          mobile: { slot: "meta", priority: 47, interactive: true },
+          filterConfig: manifestFilterConfig("expense", "productQuantity"),
+        },
       ),
       expenseFutureColumn(
         columnHelper,
