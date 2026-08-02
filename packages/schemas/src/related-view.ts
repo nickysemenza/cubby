@@ -510,6 +510,7 @@ export type RelatedSummaryInput = z.infer<typeof relatedSummaryInput>;
 
 const relatedSummaryImage = z
   .object({
+    id: z.string(),
     url: z.string(),
     filename: z.string(),
     contentType: z.string(),
