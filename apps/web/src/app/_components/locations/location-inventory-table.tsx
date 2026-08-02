@@ -235,6 +235,7 @@ export function LocationInventoryTable({
           isLoading={isLoading}
           error={error}
           entity="inventory"
+          sizingKey="inventory:location-detail"
           bulkActionBar={bulkActionBar}
           embedded
         />

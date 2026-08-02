@@ -53,6 +53,12 @@ interface UseTableConfigOptions<TData> {
    */
   serverTotals?: ServerTotals;
   /**
+   * Changes when cells read render-time state that does not live on
+   * `row.original` (for example asynchronously fetched relation previews).
+   * RTable forwards it to its memoized desktop and mobile row renderers.
+   */
+  rowContentVersion?: unknown;
+  /**
    * Opt-in expandable tree support. Return a row's children to render nested
    * sub-rows. Expansion is enabled purely by the PRESENCE of `getSubRows` —
    * `getExpandedRowModel` is wired only then, so callers that don't pass it get
@@ -90,6 +96,8 @@ declare module "@tanstack/react-table" {
      * "you have no expenses at all". See `isNarrowed`.
      */
     urlScopeCount?: number;
+    /** See `UseTableConfigOptions.rowContentVersion`. */
+    rowContentVersion?: unknown;
     _tData?: TData;
   }
 }
@@ -111,6 +119,7 @@ export function useTableConfig<TData>({
   columnVisibility: controlledVisibility,
   onColumnVisibilityChange: controlledOnVisibilityChange,
   serverTotals,
+  rowContentVersion,
   getSubRows,
   filterFromLeafRows,
   paginateExpandedRows,
@@ -183,6 +192,7 @@ export function useTableConfig<TData>({
       meta: {
         ...(serverTotals ? { serverTotals } : {}),
         ...(urlScopeCount > 0 ? { urlScopeCount } : {}),
+        ...(rowContentVersion !== undefined ? { rowContentVersion } : {}),
       },
       // Row selection
       ...(getRowId ? { getRowId } : {}),
@@ -228,6 +238,7 @@ export function useTableConfig<TData>({
       totalCount,
       serverTotals,
       urlScopeCount,
+      rowContentVersion,
       getRowId,
       enableRowSelection,
       rowSelection,

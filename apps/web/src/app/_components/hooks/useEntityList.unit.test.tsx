@@ -148,6 +148,22 @@ describe("useEntityList", () => {
     expect(options?.getRowId?.({ id: "EXP-TEST" })).toBe("EXP-TEST");
   });
 
+  it("passes a related-preview render version into the table contract", () => {
+    renderHook(() =>
+      useEntityList<TestRow, Record<string, never>>({
+        entity: "product",
+        queryOptions: vi.fn(),
+        buildFilters: () => ({}),
+        columns: [],
+      }),
+    );
+
+    const options = mocks.useTableConfig.mock.calls[0]?.[0];
+    expect(options?.rowContentVersion).toEqual(
+      expect.objectContaining({ loading: false }),
+    );
+  });
+
   it("clears bulk selection when the filter scope changes, but not initially", () => {
     const { rerender } = renderHook(
       ({ scope }) =>

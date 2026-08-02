@@ -142,9 +142,12 @@ function getPriority(
 export function useMobileListModel<TItem>({
   table,
   entity,
+  rowContentVersion,
 }: {
   table: ITable<TItem>;
   entity?: Entity;
+  /** External cell-render state snapshot; see useTableConfig. */
+  rowContentVersion?: unknown;
 }): MobileListRowModel<TItem>[] {
   const rows = table.getRowModel().rows;
   const basePath = entity ? entities[entity].basePath : undefined;
@@ -282,6 +285,10 @@ export function useMobileListModel<TItem>({
 
         return {
           row,
+          // Keep the external render dependency in the memoized model itself:
+          // mobile cards store ReactNodes, so they must be rebuilt even when
+          // TanStack keeps the same rows reference.
+          rowContentVersion,
           title,
           subtitle,
           imageSlot,
@@ -292,7 +299,7 @@ export function useMobileListModel<TItem>({
           detailsHref,
         };
       }),
-    [basePath, entity, rows],
+    [basePath, entity, rowContentVersion, rows],
   );
 }
 
