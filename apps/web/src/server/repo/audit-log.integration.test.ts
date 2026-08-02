@@ -110,4 +110,29 @@ describe("getAuditLog — source + time window", () => {
       true,
     );
   });
+
+  it("paginates identical timestamps without repeating or skipping entries", async () => {
+    const timestamp = new Date("2026-07-20T12:00:00.000Z");
+    const source = "script:audit-cursor-boundary";
+    await Promise.all(
+      Array.from({ length: 7 }, () =>
+        makeEntry({ createdAt: timestamp, source }),
+      ),
+    );
+
+    const entryKeys: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await getAuditLog(ctx.db, {
+        limit: 2,
+        source,
+        cursor,
+      });
+      entryKeys.push(...page.entries.map((entry) => entry.entryKey));
+      cursor = page.nextCursor;
+    } while (cursor);
+
+    expect(entryKeys).toHaveLength(7);
+    expect(new Set(entryKeys).size).toBe(7);
+  });
 });

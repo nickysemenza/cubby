@@ -28,8 +28,8 @@ export const auditLogListInput = z.object({
    * `eqAny` in the repo.
    */
   source: oneOrMany(auditSourceSchema).optional(),
-  // Same ISO-string encoding as `cursor` below (not `z.date()`): both are
-  // plain strings over the wire, parsed to a `Date` in the repo.
+  // Date bounds stay ISO strings over the wire. `cursor` below is opaque (and
+  // the repo continues accepting the former ISO cursor for compatibility).
   createdAtFrom: z
     .string()
     .optional()
@@ -60,6 +60,8 @@ export const auditLogUserOut = z
   .nullable();
 
 export const auditLogEntryOut = z.object({
+  /** Opaque stable identity for rendering and page deduplication. */
+  entryKey: z.string(),
   entityType: auditEntitySchema,
   entityId: auditableEntityIdSchema.nullable(),
   action: auditLogActionSchema,

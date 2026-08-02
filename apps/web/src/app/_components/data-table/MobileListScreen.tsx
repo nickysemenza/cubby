@@ -33,6 +33,7 @@ interface MobileListScreenProps<TItem> {
   grouped?: boolean;
   /** Toggle grouping on/off (controlled from parent) */
   onGroupedChange?: (value: boolean) => void;
+  isTransitioning?: boolean;
 }
 
 export function MobileListScreen<TItem>({
@@ -48,6 +49,7 @@ export function MobileListScreen<TItem>({
   groupConfig,
   grouped = false,
   onGroupedChange,
+  isTransitioning = false,
 }: MobileListScreenProps<TItem>) {
   const groupToggle =
     groupConfig && onGroupedChange ? (
@@ -84,6 +86,7 @@ export function MobileListScreen<TItem>({
         bulkActionBar={bulkActionBar}
         showViewOptions={false}
         className="mb-2 flex-wrap overflow-x-hidden"
+        isTransitioning={isTransitioning}
       />
 
       {isLoading ? (
@@ -101,12 +104,13 @@ export function MobileListScreen<TItem>({
               infiniteScroll={infiniteScroll}
               groupConfig={groupConfig}
               grouped={grouped}
+              isTransitioning={isTransitioning}
             />
           );
           return refreshControls ? (
             <PullToRefresh
               onRefresh={refreshControls.onRefresh}
-              disabled={refreshControls.isRefreshing}
+              disabled={refreshControls.isRefreshing || isTransitioning}
               getScrollTop={() => window.scrollY}
             >
               {cardView}

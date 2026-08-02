@@ -38,6 +38,8 @@ export interface BulkActionBarProps<TData> {
     onSelectAll: () => Promise<void>;
     isSelectingAll: boolean;
   };
+  /** Stale placeholder rows are visible but must not be acted on. */
+  disabled?: boolean;
 }
 
 /**
@@ -53,6 +55,7 @@ export function BulkActionBar<TData>({
   isExecuting,
   currentAction,
   selectAllMatching,
+  disabled = false,
 }: BulkActionBarProps<TData>) {
   const [confirmAction, setConfirmAction] = useState<BulkAction<TData> | null>(
     null,
@@ -68,6 +71,7 @@ export function BulkActionBar<TData>({
     selectAllMatching.loadedCount < selectAllMatching.totalCount;
 
   const handleActionClick = (action: BulkAction<TData>) => {
+    if (disabled) return;
     if (action.requiresConfirmation) {
       setConfirmAction(action);
     } else {
@@ -109,7 +113,9 @@ export function BulkActionBar<TData>({
             size="sm"
             className="text-primary"
             onClick={() => void selectAllMatching.onSelectAll()}
-            disabled={isExecuting || selectAllMatching.isSelectingAll}
+            disabled={
+              disabled || isExecuting || selectAllMatching.isSelectingAll
+            }
           >
             {selectAllMatching.isSelectingAll && (
               <Spinner className="mr-1 size-3" />
@@ -125,7 +131,7 @@ export function BulkActionBar<TData>({
               variant="ghost"
               size="sm"
               onClick={() => handleActionClick(action)}
-              disabled={isExecuting}
+              disabled={disabled || isExecuting}
             >
               {isExecuting && currentAction?.id === action.id ? (
                 <Spinner className="mr-1 size-3" />
@@ -141,7 +147,7 @@ export function BulkActionBar<TData>({
           variant="ghost"
           size="sm"
           onClick={onClearSelection}
-          disabled={isExecuting}
+          disabled={disabled || isExecuting}
           className="ml-auto"
         >
           <X className="size-3" />
@@ -163,7 +169,7 @@ export function BulkActionBar<TData>({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirm}>
+            <AlertDialogAction onClick={handleConfirm} disabled={disabled}>
               {confirmAction?.label}
             </AlertDialogAction>
           </AlertDialogFooter>

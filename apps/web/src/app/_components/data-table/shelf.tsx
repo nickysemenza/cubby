@@ -6,6 +6,7 @@ import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Button } from "~/components/ui/button";
 import { Image } from "~/components/ui/image";
 import { Skeleton } from "~/components/ui/skeleton";
+import { Spinner } from "~/components/ui/spinner";
 import { EntityIcon } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 import { useInfiniteScrollSentinel } from "../hooks/useInfiniteScrollSentinel";
@@ -185,8 +186,22 @@ export function ShelfGrid<T>({
   if (items.length === 0) return <>{emptyState}</>;
 
   return (
-    <div>
-      <div className={SHELF_GRID_CLASS}>{items.map(renderCard)}</div>
+    <div aria-busy={infiniteScroll?.isTransitioning ?? false}>
+      <div
+        className={SHELF_GRID_CLASS}
+        inert={infiniteScroll?.isTransitioning ? true : undefined}
+      >
+        {items.map(renderCard)}
+      </div>
+      {infiniteScroll?.isTransitioning && (
+        <div
+          role="status"
+          className="flex items-center justify-center gap-1 py-2 text-muted-foreground text-xs"
+        >
+          <Spinner size="sm" />
+          Updating…
+        </div>
+      )}
       {infiniteScroll && <div ref={sentinelRef} className="h-10" aria-hidden />}
     </div>
   );

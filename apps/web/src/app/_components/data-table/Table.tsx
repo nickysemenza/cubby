@@ -179,6 +179,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     hydrated,
     isDebugEnabled,
     isFetchingNextPage,
+    isTransitioning,
     isMobile,
     resolveIndex,
     rows,
@@ -200,7 +201,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   });
 
   // Desktop tables get spreadsheet-style cell selection; mobile does not.
-  const cellSelectionEnabled = !isMobile;
+  const cellSelectionEnabled = !isMobile && !isTransitioning;
 
   // Embedded tables drop chrome that would carry no information: a toolbar
   // holding only the View menu + page-size control, and a pager for a list that
@@ -457,6 +458,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                   }
                   actions={actions}
                   bulkActionBar={bulkActionBar}
+                  isTransitioning={isTransitioning}
                   className="px-4 py-1"
                 />
               </div>
@@ -475,6 +477,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
             >
               <Table
                 aria-label={ariaLabel}
+                aria-busy={isTransitioning}
                 className={cn(styles.table)}
                 containerClassName="overflow-visible"
               >
@@ -689,7 +692,12 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                     );
                   })}
                 </TableHeader>
-                <TableBody>{renderTableBody()}</TableBody>
+                <TableBody
+                  inert={isTransitioning ? true : undefined}
+                  aria-disabled={isTransitioning || undefined}
+                >
+                  {renderTableBody()}
+                </TableBody>
                 {/* Footer aggregation row — only when data is loaded. Renders in
                   infinite mode too: footers read server totals from table meta
                   (see serverTotals), so they no longer depend on having every
@@ -752,6 +760,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           groupConfig={groupConfig}
           grouped={grouped}
           onGroupedChange={onGroupedChange}
+          isTransitioning={isTransitioning}
         />
       )}
 

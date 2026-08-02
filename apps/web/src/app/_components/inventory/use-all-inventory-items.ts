@@ -4,6 +4,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 import type { z } from "zod";
 import { useTRPC } from "~/integrations/trpc/react";
+import { flattenUniquePageItems } from "../hooks/infinite-page-utils";
 
 type InventoryItem = z.infer<typeof inventoryListItemOut>;
 
@@ -44,12 +45,12 @@ export function useAllInventoryItems() {
 
   useEffect(() => {
     if (query.hasNextPage && !query.isFetchingNextPage) {
-      void query.fetchNextPage();
+      void query.fetchNextPage({ cancelRefetch: false });
     }
   }, [query.hasNextPage, query.isFetchingNextPage, query.fetchNextPage]);
 
   const items = useMemo(
-    () => query.data?.pages.flatMap((page) => page.items) ?? [],
+    () => flattenUniquePageItems(query.data?.pages),
     [query.data],
   );
 

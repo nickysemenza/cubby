@@ -30,12 +30,19 @@ export function ParsedIngredientTable({
   matchReady: boolean;
   onCreate?: (name: string) => void;
 }) {
-  const rows = useMemo(() => parseIngredientLines(lines), [lines]);
+  const rows = useMemo(() => {
+    const occurrences = new Map<string, number>();
+    return parseIngredientLines(lines).map((row) => {
+      const occurrence = occurrences.get(row.raw) ?? 0;
+      occurrences.set(row.raw, occurrence + 1);
+      return { ...row, rowKey: `${row.raw}\u0000${occurrence}` };
+    });
+  }, [lines]);
   if (rows.length === 0) return null;
   return (
     <Table className="table-auto">
       <TableBody>
-        {rows.map(({ raw, parsed }, i) => {
+        {rows.map(({ raw, parsed, rowKey }) => {
           const name = parsed.name || raw;
           const match = parsed.name
             ? matchMap.get(parsed.name.toLowerCase())
@@ -43,8 +50,7 @@ export function ParsedIngredientTable({
           const isNew = matchReady && !match;
           const tint = cn(match && "bg-positive/10", isNew && "bg-warning/10");
           return (
-            // biome-ignore lint/suspicious/noArrayIndexKey: fixed ordered list
-            <Fragment key={i}>
+            <Fragment key={rowKey}>
               {/* Name/amount/modifier row pairs with its raw-line row below; suppress
                   the border here so the divider only falls between items. */}
               <TableRow className={cn("border-b-0", tint)}>
