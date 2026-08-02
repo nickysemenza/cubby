@@ -8,7 +8,7 @@ import { cn } from "~/lib/utils";
 import { TableLink } from "../table/TableLink";
 
 /** The maximum number of entity rows an Expand all request may reveal. */
-export const RELATIONSHIP_EXPAND_LIMIT = 500;
+const RELATIONSHIP_EXPAND_LIMIT = 500;
 
 /** A compact, routeable record returned by the relationship explorer API. */
 export interface RelationshipEntity {
@@ -33,17 +33,13 @@ export interface RelationshipGroup {
   hasMore?: boolean;
 }
 
-export interface RelationshipBranch extends RelationshipEntity {
-  groups?: readonly RelationshipGroup[];
-}
-
 export interface RelationshipPreset {
   key: string;
   label: string;
   groups: readonly RelationshipGroup[];
 }
 
-export interface RelationshipChildrenPage {
+interface RelationshipChildrenPage {
   items: readonly RelationshipEntity[];
   hasMore: boolean;
 }

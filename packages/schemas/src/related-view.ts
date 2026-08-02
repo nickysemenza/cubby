@@ -77,6 +77,7 @@ export const relatedViewRegistry = [
     defaultVisible: false,
     order: "newest",
     path: [inc("InventoryEntry.productId")],
+    filterPrefix: "relatedInventory",
   },
   {
     key: "product.tasks",
@@ -475,7 +476,7 @@ const trio = <Prefix extends string, IdSchema extends z.ZodType>(
 export const productRelatedFilterFields = {
   ...trio("vendor", vendorShortcode),
   ...trio("expense", expenseShortcode),
-  ...trio("inventory", inventoryShortcode),
+  ...trio("relatedInventory", inventoryShortcode),
   ...trio("task", taskShortcode),
 };
 export const recipeRelatedFilterFields = {

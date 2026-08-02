@@ -6,6 +6,7 @@ import { imageFilterFields } from "@cubby/schemas/image";
 import { ingredientFilterFields } from "@cubby/schemas/ingredient";
 import { inventoryFilterFields } from "@cubby/schemas/inventory";
 import { locationFilterFields } from "@cubby/schemas/location";
+import { mealFilterFields } from "@cubby/schemas/meal";
 import { productFilterFields } from "@cubby/schemas/product";
 import {
   expenseFilterFields,
@@ -820,6 +821,7 @@ describe("manifest fields exist on the server schema", () => {
       project: projectFilterFields,
       product: productFilterFields,
       inventory: inventoryFilterFields,
+      meal: mealFilterFields,
       purchase: purchaseFilterFields,
       vendor: vendorFilterFields,
       location: locationFilterFields,
