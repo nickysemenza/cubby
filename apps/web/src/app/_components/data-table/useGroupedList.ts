@@ -11,7 +11,7 @@ export interface GroupConfig<TItem> {
 
 type GroupedVirtualItem<TItem> =
   | { kind: "header"; title: string; count: number; color: string }
-  | { kind: "row"; item: TItem; index: number };
+  | { kind: "row"; item: TItem };
 
 /**
  * Groups flat data into sections and flattens into a virtualizer-compatible list
@@ -49,7 +49,6 @@ export function useGroupedList<TItem>(
     });
 
     const result: GroupedVirtualItem<TItem>[] = [];
-    let rowIndex = 0;
     for (const [title, items] of sections) {
       result.push({
         kind: "header",
@@ -58,7 +57,7 @@ export function useGroupedList<TItem>(
         color: groupConfig.colorFn(title),
       });
       for (const item of items) {
-        result.push({ kind: "row", item, index: rowIndex++ });
+        result.push({ kind: "row", item });
       }
     }
 

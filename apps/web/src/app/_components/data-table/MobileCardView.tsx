@@ -81,22 +81,24 @@ export function MobileCardView<TItem>({
   const navigate = useNavigate();
   const mobileRows = useMobileListModel({ table, entity });
 
-  // Build a lookup from table row index to mobileRow model
-  const rowIndexToModel = useMemo(() => {
-    const map = new Map<number, (typeof mobileRows)[number]>();
-    for (const model of mobileRows) {
-      // row.index is the index within the table row model
-      map.set(model.row.index, model);
-    }
-    return map;
-  }, [mobileRows]);
-
-  // Build grouped items when grouping is active
-  const allData = useMemo(
-    () => table.getRowModel().rows.map((r) => r.original),
-    [table],
+  // Group the live mobile models themselves. `useReactTable` keeps its table
+  // instance stable while replacing the row model as infinite pages arrive,
+  // so deriving from `table` would leave grouped mobile lists on stale data.
+  // Keeping each model as the grouped item also prevents a sorted section from
+  // being resolved back through an index belonging to the pre-grouped order.
+  const mobileGroupConfig = useMemo(
+    () =>
+      groupConfig
+        ? {
+            field: groupConfig.field,
+            keyFn: (model: (typeof mobileRows)[number]) =>
+              groupConfig.keyFn(model.row.original),
+            colorFn: groupConfig.colorFn,
+          }
+        : undefined,
+    [groupConfig],
   );
-  const groupedItems = useGroupedList(allData, groupConfig, grouped);
+  const groupedItems = useGroupedList(mobileRows, mobileGroupConfig, grouped);
 
   // Determine virtualizer item count and estimate sizes
   const itemCount = groupedItems ? groupedItems.length : mobileRows.length;
@@ -109,11 +111,11 @@ export function MobileCardView<TItem>({
         const item = groupedItems[index];
         if (!item) return 56;
         if (item.kind === "header") return 36;
-        return estimateMobileRowHeight(rowIndexToModel.get(item.index));
+        return estimateMobileRowHeight(item.item);
       }
       return estimateMobileRowHeight(mobileRows[index]);
     },
-    [groupedItems, mobileRows, rowIndexToModel],
+    [groupedItems, mobileRows],
   );
 
   // Ref for scrollMargin offset calculation
@@ -174,10 +176,7 @@ export function MobileCardView<TItem>({
         );
       }
 
-      // gItem.kind === "row" — find matching mobile row model
-      const model = rowIndexToModel.get(gItem.index);
-      if (!model) return null;
-      return renderRowItem(vi, model);
+      return renderRowItem(vi, gItem.item);
     }
 
     // --- Flat mode ---
