@@ -123,7 +123,7 @@ function EntityRow({
             }
             aria-expanded={expanded}
             onClick={onToggle}
-            className="shrink-0 rounded p-0.5 hover:bg-muted"
+            className="shrink-0 rounded p-1 hover:bg-muted"
           >
             <ChevronRight
               className={cn(
