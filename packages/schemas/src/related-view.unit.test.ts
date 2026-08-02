@@ -4,6 +4,7 @@ import { financialAccountFilterFields } from "./financial-account";
 import { financialTransactionFilterFields } from "./financial-transaction";
 import { inventoryFilterFields } from "./inventory";
 import { locationFilterFields } from "./location";
+import { mealFilterFields } from "./meal";
 import { productFilterFields } from "./product";
 import {
   expenseFilterFields,
@@ -48,6 +49,18 @@ describe("relatedViewRegistry", () => {
     }
   });
 
+  it("keeps declared inverse paths directional and reciprocal", () => {
+    const byKey = new Map(relatedViewRegistry.map((view) => [view.key, view]));
+    for (const view of relatedViewRegistry) {
+      if (!view.inverseKey) continue;
+      const inverse = byKey.get(view.inverseKey);
+      expect(inverse, `${view.key}: ${view.inverseKey}`).toBeDefined();
+      expect(inverse?.source).toBe(view.target);
+      expect(inverse?.target).toBe(view.source);
+      expect(inverse?.inverseKey).toBe(view.key);
+    }
+  });
+
   it("keeps the finance acceptance columns visible by default", () => {
     const visible = new Set(
       relatedViewRegistry
@@ -66,6 +79,7 @@ describe("relatedViewRegistry", () => {
       recipe: recipeFilterFields,
       location: locationFilterFields,
       inventory: inventoryFilterFields,
+      meal: mealFilterFields,
       project: projectFilterFields,
       task: taskFilterFields,
       vendor: vendorFilterFields,

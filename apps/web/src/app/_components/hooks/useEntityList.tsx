@@ -13,7 +13,10 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { entities } from "~/entities/entities";
-import { getEntityFilters } from "~/entities/filter-manifest";
+import {
+  getEntityFilters,
+  manifestFilterConfig,
+} from "~/entities/filter-manifest";
 import {
   buildFiltersFromManifest,
   filterGetterFromColumnFilters,
@@ -399,14 +402,20 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   // Build columns array with standard columns
   const relatedColumns = useMemo<AnyColumnDef<TData>[]>(
     () =>
-      relatedViews.map((view) =>
-        columnHelper.display({
+      relatedViews.map((view) => {
+        const filterConfig = manifestFilterConfig(
+          entity,
+          `related:${view.key}`,
+          filterOptions,
+        );
+        return columnHelper.display({
           id: `related:${view.key}`,
           header: view.label,
           enableSorting: false,
           meta: {
             className: "w-64",
             mobile: { slot: "meta", priority: 80 },
+            ...(filterConfig ? { filterConfig } : {}),
           },
           cell: (info) => (
             <RelatedPreviewCell
@@ -416,9 +425,9 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
               loading={relatedStateRef.current.loading}
             />
           ),
-        }),
-      ),
-    [columnHelper, relatedViews],
+        });
+      }),
+    [columnHelper, entity, filterOptions, relatedViews],
   );
   const combinedCustomColumns = useMemo(
     () => [...customColumns, ...relatedColumns],

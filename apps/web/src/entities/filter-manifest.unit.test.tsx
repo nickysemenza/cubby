@@ -109,6 +109,19 @@ describe("manifestFilterConfig", () => {
     expect(options?.some((o) => o.meta)).toBe(false);
   });
 
+  it("puts the Product Vendors roster on its related preview column", () => {
+    const vendors = [{ value: "VEN-4K7M", label: "Hardware Store" }];
+    expect(
+      manifestFilterConfig("product", "related:product.vendors", {
+        productVendors: vendors,
+      }),
+    ).toEqual({
+      placeholder: "Filter by vendor...",
+      filterType: "multiselect",
+      options: vendors,
+    });
+  });
+
   it.each([
     ["recipe", "source", "cookbook"],
     ["location", "parent", "parent"],

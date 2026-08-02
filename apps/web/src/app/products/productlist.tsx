@@ -1,5 +1,6 @@
 import type { ProductListItem } from "@cubby/schemas/product";
 import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { uniq } from "es-toolkit";
@@ -14,6 +15,7 @@ import {
 import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
+import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { NoneValue } from "~/components/ui/none-value";
 import {
@@ -64,6 +66,11 @@ interface ProductListProps {
   actions?: ReactNode;
 }
 
+// A module-level fallback keeps the runtime options reference stable while the
+// roster query is loading (and avoids turning every table render into a new
+// filter configuration).
+const NO_VENDOR_OPTIONS: FilterableComboboxItem[] = [];
+
 function renderNotesValue(notes: string | null): ReactNode {
   if (!notes) return <NoneValue />;
   return (
@@ -95,7 +102,29 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("product");
   // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
   const { options: tagOptions } = useProductTagOptions();
-  const filterOptions = useFilterOptions({ tags: tagOptions });
+  // The graph owns this picklist too: its count is distinct matching Products,
+  // not the Vendor roster's purchase-count hint. Keeping the query keyed by
+  // `product.vendors` also ensures only Vendors that can match a Product are
+  // offered here.
+  const vendorOptionsQuery = useQuery(
+    api.relatedData.options.queryOptions({
+      relationKey: "product.vendors",
+      limit: 100,
+    }),
+  );
+  const vendorOptions = useMemo<FilterableComboboxItem[]>(
+    () =>
+      vendorOptionsQuery.data?.map(({ id, label, count }) => ({
+        value: id,
+        label,
+        hint: String(count),
+      })) ?? NO_VENDOR_OPTIONS,
+    [vendorOptionsQuery.data],
+  );
+  const filterOptions = useFilterOptions({
+    tags: tagOptions,
+    productVendors: vendorOptions,
+  });
   const [foodHydrationIds, setFoodHydrationIds] = useState<readonly string[]>(
     [],
   );

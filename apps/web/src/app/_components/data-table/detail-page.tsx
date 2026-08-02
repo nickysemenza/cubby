@@ -1,4 +1,5 @@
 import type { FC, ReactNode } from "react";
+import { usePageDetailContext } from "~/components/page/Page";
 import {
   Card,
   CardAction,
@@ -11,6 +12,8 @@ import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
 import { EntityHero } from "../EntityHero";
 import JsonRenderer from "../json-renderer";
+import { RelationshipExplorer } from "../relationships/relationship-explorer";
+import { relationshipsSectionIcon } from "../relationships/relationship-tree";
 
 type DetailZone = "main" | "aside" | "full";
 
@@ -296,10 +299,35 @@ export const DetailSections: FC<DetailSectionsProps> = ({
 }) => {
   const { isDebugEnabled } = useDebug();
   const isMobile = useIsMobile();
+  const pageDetail = usePageDetailContext();
+  const sourceId =
+    pageDetail?.rawData &&
+    typeof pageDetail.rawData === "object" &&
+    "id" in pageDetail.rawData &&
+    typeof pageDetail.rawData.id === "string"
+      ? pageDetail.rawData.id
+      : undefined;
+  const relationshipSection: DetailSection | undefined =
+    pageDetail && sourceId
+      ? {
+          title: "Relationships",
+          icon: relationshipsSectionIcon,
+          zone: "full",
+          content: (
+            <RelationshipExplorer
+              entity={pageDetail.entity}
+              sourceId={sourceId}
+            />
+          ),
+        }
+      : undefined;
+  const allSections = relationshipSection
+    ? [...sections, relationshipSection]
+    : sections;
 
   return (
     <div className="space-y-2 sm:space-y-4">
-      {renderSectionLayout({ sections, isMobile, heroImages })}
+      {renderSectionLayout({ sections: allSections, isMobile, heroImages })}
 
       {/* Debug raw details section - full width */}
       {isDebugEnabled && (

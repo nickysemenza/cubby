@@ -10,6 +10,8 @@ import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { WithRecipeSearch } from "~/app/_components/combobox/with-search-hook";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
+import { RelationshipExplorer } from "~/app/_components/relationships/relationship-explorer";
+import { relationshipsSectionIcon as RelationshipsIcon } from "~/app/_components/relationships/relationship-tree";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -148,6 +150,17 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
       }
     >
       {deleteDialog}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle>
+            <RelationshipsIcon className="size-3.5 shrink-0 text-slate" />
+            Relationships
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RelationshipExplorer entity="meal" sourceId={meal.id} />
+        </CardContent>
+      </Card>
       <Stack>
         <Row align="end" wrap gap="md">
           <Stack gap="sm">
