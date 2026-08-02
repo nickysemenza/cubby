@@ -6,9 +6,9 @@ description: Reconcile vendor orders, receipts, and financial statements against
 # Import vendor purchases
 
 Reconcile source evidence into Cubby without inventing identity, spend, or
-settlement. Keep the work interactive: an explicit request to ingest authorizes
-unambiguous matched creates and updates; pause for ambiguity, destructive
-cleanup, Product promotion, or inventory receiving.
+settlement. An explicit request to ingest authorizes unambiguous matched
+creates and updates plus high-confidence Product promotion. Pause for ambiguous
+identity or cost allocation, destructive cleanup, and inventory receiving.
 
 ## Read this model first
 
@@ -54,10 +54,12 @@ Expense → Purchase ← FinancialTransaction → FinancialAccount
 3. Run `match_expenses` before proposing new Expense rows. It ranks candidates;
    it never verifies or writes. Read candidate descriptions, vendor, order ID,
    date, and amount rather than accepting a score.
-4. Present a decision table separating confirmed writes, ambiguous matches,
-   conflicts, unsupported rows, and Product-promotion candidates. An explicit
-   ingest request approves the confirmed writes across technical batch
-   boundaries; obtain a separate decision for the other categories.
+4. Present a decision table separating confirmed writes, automatic
+   high-confidence Product promotions, ambiguous Product candidates, ambiguous
+   matches, conflicts, and unsupported rows. An explicit ingest request
+   approves confirmed writes and automatic promotions across technical batch
+   boundaries. Obtain a separate decision for every other category; never
+   silently omit an eligible Product candidate.
 5. Execute homogeneous work with `create_purchases`, `update_purchases`,
    `create_expenses`, `update_expenses`, `create_products`, `update_products`,
    or `create_financial_transactions`. Batches contain at most 50 items and are
@@ -101,9 +103,24 @@ Expense → Purchase ← FinancialTransaction → FinancialAccount
 
 ## Product promotion rules
 
-Promote an exact, receipt-identified durable or repeatable material only when
-the source supplies stable identity and trustworthy cost evidence. A retailer
-SKU, ASIN, UPC, or maker model is evidence; a name-only fuzzy match is not.
+Automatically promote an exact, receipt-identified durable or repeatable
+material when the source supplies stable identity and trustworthy cost
+evidence. Do not ask for separate approval for these high-confidence lines. A
+retailer SKU, ASIN, UPC, maker model, or an exact vendor-issued product name
+plus distinguishing variant, size, finish, or profile is sufficient evidence;
+a fuzzy or generic name is not.
+
+- When an aggregate Expense contains exact merchandise subtotals plus separately
+  stated shipping, tax, or fees, split it into Product-linked merchandise lines
+  and productless shared-charge lines automatically. Ask before proceeding only
+  when line identity is ambiguous or shared charges require an unevidenced
+  allocation.
+- Treat a user's standing preference to promote qualifying lines as durable
+  authorization for future imports. A user may still opt out for a source or
+  batch.
+- Do not finish an import while Product candidates are silently deferred. Every
+  candidate must be promoted, explicitly skipped, conflicted, or presented for
+  a decision.
 
 - Use the rich `create_product`/`create_products` surface in one call. Include
   category, manufacturer, maker model, tags, price/mappings, and typed external
@@ -163,6 +180,8 @@ as notes/evidence; do not infer a Financial Account from them.
   date when posted, source reference, and Purchase link when known.
 - Touched Purchase `statedTotal` remains literal paperwork; reconciliation gaps
   are explained rather than hidden.
+- Every eligible Product candidate was promoted, explicitly skipped,
+  conflicted, or left pending with a direct user question.
 - Product creation, document filing, and inventory receiving were reported as
   distinct actions. Report coverage separately for the Purchase, acknowledgment,
   final invoice/receipt, credit memo, charge, and refund, including unresolved
