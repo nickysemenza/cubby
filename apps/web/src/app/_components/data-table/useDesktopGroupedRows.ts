@@ -9,11 +9,14 @@ type DesktopGroupItem =
   | { kind: "row"; rowIndex: number; groupRowIndex: number };
 
 /**
- * Detects group boundaries in server-ordered rows and returns an interleaved
- * array of section headers and row indices for the desktop virtualizer.
+ * Groups rows and returns an interleaved array of section headers and row
+ * indices for the desktop virtualizer.
  *
- * Trusts server-side ordering (groupBy param ensures group members are contiguous).
- * Returns null when grouping is disabled so the caller can fall back to flat rendering.
+ * The grouped server query normally makes members contiguous, but React Query
+ * keeps the previous ungrouped rows visible while that request starts. Group by
+ * key here as well so the placeholder frame cannot duplicate section headers.
+ * Returns null when grouping is disabled so the caller can fall back to flat
+ * rendering.
  */
 export function useDesktopGroupedRows<TItem>(
   rows: Row<TItem>[],
@@ -23,36 +26,27 @@ export function useDesktopGroupedRows<TItem>(
   return useMemo(() => {
     if (!groupConfig || !enabled || rows.length === 0) return null;
 
-    // First pass: count members per group (preserving server order)
-    const groups: Array<{ key: string; startIndex: number; count: number }> =
-      [];
-    let currentKey: string | null = null;
-
-    for (let i = 0; i < rows.length; i++) {
-      const key = groupConfig.keyFn(rows[i]!.original) ?? "(unspecified)";
-      if (key !== currentKey) {
-        groups.push({ key, startIndex: i, count: 1 });
-        currentKey = key;
-      } else {
-        // else branch only runs after at least one push, so the last group exists
-        groups[groups.length - 1]!.count++;
-      }
+    const groups = new Map<string, number[]>();
+    for (const [rowIndex, row] of rows.entries()) {
+      const key = groupConfig.keyFn(row.original) ?? "(unspecified)";
+      const indexes = groups.get(key);
+      if (indexes) indexes.push(rowIndex);
+      else groups.set(key, [rowIndex]);
     }
 
-    // Second pass: build interleaved items
     const items: DesktopGroupItem[] = [];
-    for (const group of groups) {
+    for (const [key, rowIndexes] of groups) {
       items.push({
         kind: "header",
-        title: group.key,
-        count: group.count,
-        color: groupConfig.colorFn(group.key),
+        title: key,
+        count: rowIndexes.length,
+        color: groupConfig.colorFn(key),
       });
-      for (let i = group.startIndex; i < group.startIndex + group.count; i++) {
+      for (const [groupRowIndex, rowIndex] of rowIndexes.entries()) {
         items.push({
           kind: "row",
-          rowIndex: i,
-          groupRowIndex: i - group.startIndex,
+          rowIndex,
+          groupRowIndex,
         });
       }
     }

@@ -459,7 +459,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     columns: allColumns,
     tableState,
     totalCount: data.length,
-    manualPagination: false,
+    manualPagination: true,
     getRowId,
     enableRowSelection: listBulkActions.enableRowSelection,
     rowSelection: listBulkActions.rowSelection,
