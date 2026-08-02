@@ -87,7 +87,7 @@ function AttachedToolRow({
       align="center"
       justify="between"
       gap="md"
-      className="border border-[var(--border)] p-3"
+      className="border border-[var(--border)] p-4"
     >
       <Stack gap="xs" className="min-w-0">
         <ToolIdentity
@@ -132,7 +132,7 @@ function SuggestionRow({
       as="label"
       align="start"
       gap="sm"
-      className="cursor-pointer border border-[var(--border)] p-3"
+      className="cursor-pointer border border-[var(--border)] p-4"
     >
       <Checkbox checked={checked} onCheckedChange={onCheckedChange} />
       <Stack gap="xs" className="min-w-0 flex-1">
@@ -328,7 +328,7 @@ function ToolPickerDialog({
                       key={item.id}
                       align="center"
                       gap="sm"
-                      className="cursor-pointer border border-[var(--border)] p-3"
+                      className="cursor-pointer border border-[var(--border)] p-4"
                     >
                       <Checkbox
                         checked={selected.has(item.id)}
@@ -400,7 +400,7 @@ export function ProjectToolsSection({ projectId }: { projectId: string }) {
       </Row>
 
       {unlinked && unlinked.count > 0 && (
-        <div className="border border-[var(--border)] bg-muted p-3">
+        <div className="border border-[var(--border)] bg-muted p-4">
           <Description size="xs">
             {unlinked.count} tool purchase{unlinked.count === 1 ? "" : "s"} of
             $100+ ({formatCurrency(unlinked.grossCost)} total) cannot be

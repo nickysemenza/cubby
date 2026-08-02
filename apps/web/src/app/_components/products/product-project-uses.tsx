@@ -60,7 +60,7 @@ export function ProductProjectUses({ productId }: { productId: string }) {
             align="center"
             justify="between"
             gap="md"
-            className="border border-[var(--border)] p-3"
+            className="border border-[var(--border)] p-4"
           >
             <Stack gap="xs" className="min-w-0">
               <EntityInlineLink
