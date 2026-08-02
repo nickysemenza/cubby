@@ -30,7 +30,7 @@ import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { loadProductPricing } from "~/server/repo/product/pricing";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { assertLiveTargets } from "./helpers";
-import { dbInventoryEntryToAPI } from "./mappers";
+import { dbInventoryEntryToAPI, requireLoadedProductPricing } from "./mappers";
 import type { InventoryEntryDeepDB } from "./types";
 
 type ResolvedInventoryBulkOperationItem = Omit<
@@ -91,6 +91,18 @@ async function batchFetchResults(
     .map((id) => fetchedById.get(id))
     .filter((r) => r != null) as InventoryEntryDeepDB[];
 }
+
+const loadInventoryEntryPricing = async (
+  db: Database,
+  entries: ReadonlyArray<InventoryEntryDeepDB>,
+) =>
+  loadProductPricing(
+    db,
+    entries.map((entry) => ({
+      id: entry.product.id,
+      price: entry.product.price,
+    })),
+  );
 
 export const bulkProcessInventoryEntries = async (
   db: Database,
@@ -351,7 +363,13 @@ export const bulkProcessInventoryEntries = async (
     },
   );
 
-  return processedItems.map(dbInventoryEntryToAPI);
+  const pricing = await loadInventoryEntryPricing(db, processedItems);
+  return processedItems.map((entry) =>
+    dbInventoryEntryToAPI(
+      entry,
+      requireLoadedProductPricing(pricing, entry.product.id),
+    ),
+  );
 };
 
 /**
@@ -648,7 +666,13 @@ export const bulkMoveInventoryEntries = async (
     },
   );
 
-  return processedItems.map(dbInventoryEntryToAPI);
+  const pricing = await loadInventoryEntryPricing(db, processedItems);
+  return processedItems.map((entry) =>
+    dbInventoryEntryToAPI(
+      entry,
+      requireLoadedProductPricing(pricing, entry.product.id),
+    ),
+  );
 };
 
 /**
@@ -951,8 +975,14 @@ export const reconcileLocationSession = async (
     },
   );
 
+  const pricing = await loadInventoryEntryPricing(db, processed);
   return {
-    items: processed.map(dbInventoryEntryToAPI),
+    items: processed.map((entry) =>
+      dbInventoryEntryToAPI(
+        entry,
+        requireLoadedProductPricing(pricing, entry.product.id),
+      ),
+    ),
     removedIds,
     recomputeNeeded,
   };

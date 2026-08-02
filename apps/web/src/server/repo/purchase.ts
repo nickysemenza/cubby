@@ -1072,7 +1072,10 @@ export const splitExpense = async (
   db: Database,
   input: SplitExpenseInput,
   actor: ActorContext,
-): Promise<ExpenseOut[]> => {
+): Promise<{
+  items: ExpenseOut[];
+  priceAffectedProductIds: ProductId[];
+}> => {
   const { parts } = input;
   const resolvedExpenseId = await resolveLiveShortcode(
     db,
@@ -1087,173 +1090,178 @@ export const splitExpense = async (
   }
   const expenseId = unsafeExpenseId(resolvedExpenseId);
 
-  const createdIds = await withTransaction(db, async (tx) => {
-    const original = await tx.query.expense.findFirst({
-      where: and(eq(expense.id, expenseId), notDeleted(expense)),
-    });
-    if (!original) {
-      throw createAppError(
-        "EXPENSE_NOT_FOUND",
-        `Expense not found: ${expenseId}`,
+  const { createdIds, priceAffectedProductIds } = await withTransaction(
+    db,
+    async (tx) => {
+      const original = await tx.query.expense.findFirst({
+        where: and(eq(expense.id, expenseId), notDeleted(expense)),
+      });
+      if (!original) {
+        throw createAppError(
+          "EXPENSE_NOT_FOUND",
+          `Expense not found: ${expenseId}`,
+        );
+      }
+
+      // Ensure the row HAS a Purchase before splitting: parts of one vendor event must
+      // share one parent, and a vendorless row has none yet. Nothing to invent a
+      // vendor from, so this is the one case a split can't proceed.
+      const chargeId = original.purchaseId;
+      if (!chargeId) {
+        throw createAppError(
+          "PURCHASE_NOT_FOUND",
+          `Cannot split an expense with no purchase attached (${expenseId}) — record its vendor first.`,
+        );
+      }
+
+      const productShortcodes = parts
+        .map((part) => part.productId)
+        .filter((code): code is NonNullable<typeof code> => code !== null);
+      const productIds = await resolveLiveShortcodes(
+        tx,
+        productShortcodes,
+        "product",
       );
-    }
-
-    // Ensure the row HAS a Purchase before splitting: parts of one vendor event must
-    // share one parent, and a vendorless row has none yet. Nothing to invent a
-    // vendor from, so this is the one case a split can't proceed.
-    const chargeId = original.purchaseId;
-    if (!chargeId) {
-      throw createAppError(
-        "PURCHASE_NOT_FOUND",
-        `Cannot split an expense with no purchase attached (${expenseId}) — record its vendor first.`,
+      const missingProducts = productShortcodes.filter(
+        (code) => !productIds.has(code),
       );
-    }
+      if (missingProducts.length > 0) {
+        throw createAppError(
+          "PRODUCT_NOT_FOUND",
+          `Product(s) not found: ${missingProducts.join(", ")}`,
+        );
+      }
 
-    const productShortcodes = parts
-      .map((part) => part.productId)
-      .filter((code): code is NonNullable<typeof code> => code !== null);
-    const productIds = await resolveLiveShortcodes(
-      tx,
-      productShortcodes,
-      "product",
-    );
-    const missingProducts = productShortcodes.filter(
-      (code) => !productIds.has(code),
-    );
-    if (missingProducts.length > 0) {
-      throw createAppError(
-        "PRODUCT_NOT_FOUND",
-        `Product(s) not found: ${missingProducts.join(", ")}`,
-      );
-    }
-
-    const pricingCandidates = uniq(
-      [
-        original.productId,
-        ...parts.map((part) =>
-          part.productId
-            ? unsafeProductId(productIds.get(part.productId) ?? "")
-            : null,
-        ),
-      ].filter((value): value is ProductId => value !== null),
-    );
-    const pricesBefore = await loadEffectiveProductPricesById(
-      tx,
-      pricingCandidates,
-    );
-
-    if (original.cost !== null) {
-      await tx
-        .update(purchase)
-        .set({ statedTotal: original.cost })
-        .where(
-          and(
-            eq(purchase.id, chargeId),
-            isNull(purchase.statedTotal),
-            notDeleted(purchase),
+      const pricingCandidates = uniq(
+        [
+          original.productId,
+          ...parts.map((part) =>
+            part.productId
+              ? unsafeProductId(productIds.get(part.productId) ?? "")
+              : null,
           ),
-        );
-    }
+        ].filter((value): value is ProductId => value !== null),
+      );
+      const pricesBefore = await loadEffectiveProductPricesById(
+        tx,
+        pricingCandidates,
+      );
 
-    const inserted: ExpenseId[] = [];
-    for (const part of parts) {
-      let projectId = null;
-      if (part.projectId) {
-        const projectUuid = await resolveLiveShortcode(
-          tx,
-          part.projectId,
-          "project",
-        );
-        if (!projectUuid) {
+      if (original.cost !== null) {
+        await tx
+          .update(purchase)
+          .set({ statedTotal: original.cost })
+          .where(
+            and(
+              eq(purchase.id, chargeId),
+              isNull(purchase.statedTotal),
+              notDeleted(purchase),
+            ),
+          );
+      }
+
+      const inserted: ExpenseId[] = [];
+      for (const part of parts) {
+        let projectId = null;
+        if (part.projectId) {
+          const projectUuid = await resolveLiveShortcode(
+            tx,
+            part.projectId,
+            "project",
+          );
+          if (!projectUuid) {
+            throw createAppError(
+              "PROJECT_NOT_FOUND",
+              `Project not found: ${part.projectId}`,
+            );
+          }
+          projectId = unsafeProjectId(projectUuid);
+        }
+        const productId = part.productId
+          ? unsafeProductId(productIds.get(part.productId) ?? "")
+          : null;
+        if (part.productQuantity !== null && productId === null) {
           throw createAppError(
-            "PROJECT_NOT_FOUND",
-            `Project not found: ${part.projectId}`,
+            "CONSTRAINT_VIOLATION",
+            "Product quantity requires a linked product.",
           );
         }
-        projectId = unsafeProjectId(projectUuid);
+        const row = await insertWithShortcode(tx, "expense", {
+          name: part.name,
+          cost: part.cost,
+          date: original.date,
+          costType: part.costType,
+          trade: part.trade,
+          url: original.url,
+          notes: null,
+          future: original.future,
+          projectId,
+          productId,
+          productQuantity: part.productQuantity,
+          purchaseId: chargeId,
+        });
+        inserted.push(row.id);
       }
-      const productId = part.productId
-        ? unsafeProductId(productIds.get(part.productId) ?? "")
-        : null;
-      if (part.productQuantity !== null && productId === null) {
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          "Product quantity requires a linked product.",
-        );
-      }
-      const row = await insertWithShortcode(tx, "expense", {
-        name: part.name,
-        cost: part.cost,
-        date: original.date,
-        costType: part.costType,
-        trade: part.trade,
-        url: original.url,
-        notes: null,
-        future: original.future,
-        projectId,
-        productId,
-        productQuantity: part.productQuantity,
-        purchaseId: chargeId,
+
+      await tx
+        .update(expense)
+        .set({ deletedAt: new Date() })
+        .where(eq(expense.id, expenseId));
+
+      // Removal-path invariant (root CLAUDE.md, guard-enforced): this is a delete
+      // path like any other, so the original's embedding goes in the SAME
+      // transaction. `expense` is `searchable: true`, so skipping this leaves a live
+      // `EntityEmbedding` row pointing at a dead id — semantic search keeps
+      // returning a result that renders blank, `findOrphanedEntityEmbeddings` flags
+      // it, and soft deletes aren't restorable so there's no clean recovery.
+      await softDeleteEntityEmbeddingsTx(tx, "expense", [expenseId]);
+
+      await touchDataQualityTargets(tx, {
+        productIds: [
+          original.productId,
+          ...parts.map((part) =>
+            part.productId
+              ? unsafeProductId(productIds.get(part.productId) ?? "")
+              : null,
+          ),
+        ].filter((value): value is ProductId => value !== null),
+        purchaseIds: [chargeId],
       });
-      inserted.push(row.id);
-    }
 
-    await tx
-      .update(expense)
-      .set({ deletedAt: new Date() })
-      .where(eq(expense.id, expenseId));
+      await logAuditEntries(tx, actor, [
+        ...inserted.map((id) => ({
+          entityType: "expense" as const,
+          entityId: id,
+          action: "create" as const,
+        })),
+        {
+          entityType: "expense" as const,
+          entityId: expenseId,
+          action: "delete" as const,
+        },
+      ]);
 
-    // Removal-path invariant (root CLAUDE.md, guard-enforced): this is a delete
-    // path like any other, so the original's embedding goes in the SAME
-    // transaction. `expense` is `searchable: true`, so skipping this leaves a live
-    // `EntityEmbedding` row pointing at a dead id — semantic search keeps
-    // returning a result that renders blank, `findOrphanedEntityEmbeddings` flags
-    // it, and soft deletes aren't restorable so there's no clean recovery.
-    await softDeleteEntityEmbeddingsTx(tx, "expense", [expenseId]);
-
-    await touchDataQualityTargets(tx, {
-      productIds: [
-        original.productId,
-        ...parts.map((part) =>
-          part.productId
-            ? unsafeProductId(productIds.get(part.productId) ?? "")
-            : null,
-        ),
-      ].filter((value): value is ProductId => value !== null),
-      purchaseIds: [chargeId],
-    });
-
-    await logAuditEntries(tx, actor, [
-      ...inserted.map((id) => ({
-        entityType: "expense" as const,
-        entityId: id,
-        action: "create" as const,
-      })),
-      {
-        entityType: "expense" as const,
-        entityId: expenseId,
-        action: "delete" as const,
-      },
-    ]);
-
-    const pricesAfter = await loadEffectiveProductPricesById(
-      tx,
-      pricingCandidates,
-    );
-    for (const productId of pricingCandidates) {
-      if (pricesBefore.get(productId) !== pricesAfter.get(productId)) {
+      const pricesAfter = await loadEffectiveProductPricesById(
+        tx,
+        pricingCandidates,
+      );
+      const priceAffectedProductIds = pricingCandidates.filter(
+        (productId) =>
+          pricesBefore.get(productId) !== pricesAfter.get(productId),
+      );
+      for (const productId of priceAffectedProductIds) {
         await syncInventoryValuationsForProduct(tx, productId);
       }
-    }
 
-    return inserted;
-  });
+      return { createdIds: inserted, priceAffectedProductIds };
+    },
+  );
 
   const rows = await getDb(db).query.expense.findMany({
     where: and(inArray(expense.id, createdIds), notDeleted(expense)),
     ...relations.expense.withProject,
   });
-  return rows.map(dbExpenseToAPI);
+  return { items: rows.map(dbExpenseToAPI), priceAffectedProductIds };
 };
 
 /**

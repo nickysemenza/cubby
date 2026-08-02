@@ -991,6 +991,24 @@ export const expenseFilterFields = {
    */
   costPresenceFilter: presenceFilter,
   /**
+   * Whole-unit receipt quantity is deliberately nullable: null means the
+   * source paperwork did not establish a count. Bounds are inclusive and only
+   * match rows with a recorded quantity, as ordinary SQL comparisons do.
+   */
+  productQuantityPresenceFilter: presenceFilter,
+  productQuantityMin: z.coerce
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("Inclusive lower bound on recorded product quantity"),
+  productQuantityMax: z.coerce
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("Inclusive upper bound on recorded product quantity"),
+  /**
    * `"none"` matches expenses with a null `orderId`; `"has"` matches
    * expenses that carry one. Same shape as `costPresenceFilter` — there's no
    * bounded order-id picklist (free text, one per retailer's format), so this
@@ -1030,6 +1048,7 @@ export type ExpenseFilters = z.infer<typeof expenseFiltersSchema>;
 export const expenseSortableFields = [
   "name",
   "cost",
+  "productQuantity",
   "date",
   "costType",
   // `trade` is a plain text column (alphabetical). `project`/`product` are

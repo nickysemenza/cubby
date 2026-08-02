@@ -20,8 +20,10 @@ import {
   costTypeOptions,
   dateRangeOptions,
   futureFilterOptions,
+  productQuantityRangeOptions,
   resolveCostFilter,
   resolveDateRange,
+  resolveProductQuantityFilter,
 } from "~/app/expenses/expense-options";
 import { tradeOptions } from "~/app/projects/trade-options";
 import {
@@ -511,6 +513,30 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       urlOnly: true,
       kind: "text",
       placeholder: "Maximum cost...",
+    },
+    {
+      // Like Cost, the header owns one slot and combines presence with the
+      // useful fixed whole-unit buckets. Exact bounds remain URL/MCP inputs.
+      columnId: "productQuantity",
+      kind: "range",
+      placeholder: "Filter by quantity...",
+      options: [
+        ...presenceFilterOptions("quantity"),
+        ...productQuantityRangeOptions,
+      ],
+      expand: resolveProductQuantityFilter,
+    },
+    {
+      columnId: "productQuantityMin",
+      urlOnly: true,
+      kind: "text",
+      placeholder: "Minimum product quantity...",
+    },
+    {
+      columnId: "productQuantityMax",
+      urlOnly: true,
+      kind: "text",
+      placeholder: "Maximum product quantity...",
     },
     {
       // `notes` and `url` aren't rendered columns, so these are URL/MCP-only —

@@ -81,6 +81,16 @@ Expense → Purchase ← FinancialTransaction → FinancialAccount
   Purchase, and `merge_purchases` only after explicit approval.
 - Keep trustworthy coarse Expenses unlinked rather than inventing a line-level
   allocation. A Product link is a claim about that Product's cost basis.
+- Keep `Expense.cost` as the extended line total. When a linked Product's
+  receipt, PDF, or notes establish a whole-unit count, also write
+  `productQuantity`; the derived per-unit price comes from cost divided by that
+  quantity. Never replace the extended cost with a unit price.
+- Leave `productQuantity` null when the count is unknown, and never assume one.
+  For an evidenced return, keep the returned-unit count positive on the
+  negative Expense; negative costs do not participate in acquisition pricing.
+- Keep quantity evidence in the Purchase paperwork or existing notes and cite
+  it in the approval table. Do not invent `productQuantitySource` or separate
+  evidence fields.
 
 ## Product promotion rules
 

@@ -8,6 +8,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory";
 import { describe, expect, it } from "vitest";
+import { resolveProductPricing } from "../product/pricing";
 import { dbInventoryEntryToAPI } from "./mappers";
 import type { InventoryEntryDeepDB } from "./types";
 
@@ -71,6 +72,36 @@ const baseInventoryEntry = {
 };
 
 describe("inventory mappers", () => {
+  it("uses authoritative product pricing instead of reversing rounded valuation", () => {
+    const row = {
+      ...baseInventoryEntry,
+      amount: { value: 1.3, unit: "each" },
+      valuation: 8.87,
+      product: {
+        ...baseProduct,
+        price: null,
+        unitMappings: [],
+        externalIds: [],
+        images: [],
+      },
+      location: { ...baseLocation, images: [] },
+    } satisfies InventoryEntryDeepDB;
+
+    const result = dbInventoryEntryToAPI(
+      row,
+      resolveProductPricing(null, {
+        knownCost: 6.83,
+        knownExpenseCount: 1,
+        unknownExpenseCount: 0,
+        knownUnitCount: 1,
+      }),
+    );
+
+    // 8.87 / 1.3 rounds to 6.82; the product's authoritative effective
+    // price is $6.83 and must survive the inventory valuation's cent rounding.
+    expect(result.product.price).toEqual(6.83);
+  });
+
   it("maps detail rows to exact response objects and filters soft-deleted relations", () => {
     const row = {
       ...baseInventoryEntry,
@@ -143,7 +174,7 @@ describe("inventory mappers", () => {
       },
     } satisfies InventoryEntryDeepDB;
 
-    const result = dbInventoryEntryToAPI(row);
+    const result = dbInventoryEntryToAPI(row, resolveProductPricing(4.5));
 
     expect(result).toEqual({
       id: unsafeInventoryShortcode("INV-TEST"),

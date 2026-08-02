@@ -75,6 +75,7 @@ describe("manifestFilterConfig", () => {
     ["expense", "future"],
     ["expense", "date"],
     ["expense", "cost"],
+    ["expense", "productQuantity"],
     ["purchase", "date"],
   ] as const)("%s.%s stays single-select", (entity, columnId) => {
     expect(manifestFilterConfig(entity, columnId)?.filterType).toBe("select");
@@ -687,6 +688,8 @@ describe("expense URL-only scopes", () => {
     expect(urlOnly.map((spec) => spec.columnId)).toEqual([
       "costMin",
       "costMax",
+      "productQuantityMin",
+      "productQuantityMax",
       "notesSearch",
       "urlSearch",
       "productId",
@@ -726,6 +729,25 @@ describe("expense URL-only scopes", () => {
         filterGetterFromSearch(specs, { costMin: "500", costMax: "1000" }),
       ),
     ).toEqual({ costMin: "500", costMax: "1000" });
+  });
+
+  it("routes Quantity presets and passes exact bounds through for server coercion", () => {
+    const specs = getEntityFilters("expense");
+    expect(
+      buildFiltersFromManifest(
+        specs,
+        filterGetterFromSearch(specs, { productQuantity: "exactly1" }),
+      ),
+    ).toEqual({ productQuantityMin: 1, productQuantityMax: 1 });
+    expect(
+      buildFiltersFromManifest(
+        specs,
+        filterGetterFromSearch(specs, {
+          productQuantityMin: "2",
+          productQuantityMax: "5",
+        }),
+      ),
+    ).toEqual({ productQuantityMin: "2", productQuantityMax: "5" });
   });
 
   it("still routes ?productId= to the server filter", () => {

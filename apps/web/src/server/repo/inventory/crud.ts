@@ -51,16 +51,37 @@ import {
   present,
   sideEffect,
 } from "~/server/repo/impact";
-import { loadEffectiveProductPrice } from "~/server/repo/product/pricing";
+import {
+  loadEffectiveProductPrice,
+  loadProductPricing,
+} from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { assertLiveTargets } from "./helpers";
-import { dbInventoryEntryToAPI, dbInventoryEntryToListAPI } from "./mappers";
+import {
+  dbInventoryEntryToAPI,
+  dbInventoryEntryToListAPI,
+  requireLoadedProductPricing,
+} from "./mappers";
 import type {
   CreateInventoryEntryData,
   InventoryEntryDeepDB,
   UpdateInventoryEntryData,
 } from "./types";
+
+const loadInventoryEntryPricing = async (
+  db: Database,
+  entries: ReadonlyArray<{
+    product: { id: ProductId; price: number | null };
+  }>,
+) =>
+  loadProductPricing(
+    db,
+    entries.map((entry) => ({
+      id: entry.product.id,
+      price: entry.product.price,
+    })),
+  );
 
 /**
  * Compute valuation for an inventory entry based on amount and product price.
@@ -192,7 +213,13 @@ const fetchInventoryById = async (
 const inventoryReader = createEntityReader({
   entity: "inventory",
   fetchById: fetchInventoryById,
-  fromDB: (_db, row: InventoryEntryDeepDB) => dbInventoryEntryToAPI(row),
+  fromDB: async (db, row: InventoryEntryDeepDB) => {
+    const pricing = await loadInventoryEntryPricing(db, [row]);
+    return dbInventoryEntryToAPI(
+      row,
+      requireLoadedProductPricing(pricing, row.product.id),
+    );
+  },
   notFoundReason: "INVENTORY_NOT_FOUND",
 });
 
@@ -374,10 +401,16 @@ export const inventoryentryList = async (
 
   // Preserve original order from the paged query.
   const resultsById = new Map(listResults.map((r) => [r.id, r]));
-  const inventoryEntries = ids
+  const orderedResults = ids
     .map((id) => resultsById.get(id))
-    .filter((r) => r !== undefined)
-    .map((r) => dbInventoryEntryToListAPI(r));
+    .filter((r): r is NonNullable<typeof r> => r !== undefined);
+  const pricing = await loadInventoryEntryPricing(db, orderedResults);
+  const inventoryEntries = orderedResults.map((entry) =>
+    dbInventoryEntryToListAPI(
+      entry,
+      requireLoadedProductPricing(pricing, entry.product.id),
+    ),
+  );
   const valuationSum = Number(countResult?.valuationSum ?? 0);
   return {
     data: inventoryEntries,
@@ -469,7 +502,11 @@ export const updateInventoryEntry = async (
     );
   }
 
-  return dbInventoryEntryToAPI(result);
+  const pricing = await loadInventoryEntryPricing(db, [result]);
+  return dbInventoryEntryToAPI(
+    result,
+    requireLoadedProductPricing(pricing, result.product.id),
+  );
 };
 
 export const createInventoryEntry = async (
@@ -521,7 +558,11 @@ export const createInventoryEntry = async (
     );
   }
 
-  return dbInventoryEntryToAPI(result);
+  const pricing = await loadInventoryEntryPricing(db, [result]);
+  return dbInventoryEntryToAPI(
+    result,
+    requireLoadedProductPricing(pricing, result.product.id),
+  );
 };
 
 /**
@@ -543,7 +584,13 @@ export const getInventoryByLocationIds = async (
     ...relations.inventory.full,
   });
 
-  return results.map(dbInventoryEntryToAPI);
+  const pricing = await loadInventoryEntryPricing(db, results);
+  return results.map((entry) =>
+    dbInventoryEntryToAPI(
+      entry,
+      requireLoadedProductPricing(pricing, entry.product.id),
+    ),
+  );
 };
 
 /**

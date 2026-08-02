@@ -53,7 +53,10 @@ import {
   notDeleted,
   relations,
 } from "~/server/repo/database-helpers";
-import { enrichProductRowsWithPricing } from "~/server/repo/product/pricing";
+import {
+  enrichProductRowsWithPricing,
+  loadProductPricingForIngredientIds,
+} from "~/server/repo/product/pricing";
 import { lookupShortcodes, refKey } from "~/server/repo/shortcode-resolver";
 import {
   appearsInRecipesRefsForIngredientSql,
@@ -296,20 +299,19 @@ export const getIngredientsByIDsLean = async (
   ids: IngredientId[],
 ) => {
   if (ids.length === 0) return [];
-  const rows = await getDb(db).query.ingredient.findMany({
-    where: and(inArray(ingredient.id, ids), notDeleted(ingredient)),
-    // Unit mappings only — NOT images/externalIds. Costing + getManyByIDs never
-    // read them, and pulling full Image records here was ~4MB + ~11s of drizzle
-    // object-building per call (worker CPU that starved the recompute isolate).
-    with: { product: { with: { unitMappings: true } } },
-  });
-  const pricedProducts = await enrichProductRowsWithPricing(
-    db,
-    rows.flatMap((row) => row.product),
-  );
-  const pricingById = new Map(
-    pricedProducts.map((product) => [product.id, product.pricing]),
-  );
+  const [rows, pricingById] = await Promise.all([
+    getDb(db).query.ingredient.findMany({
+      where: and(inArray(ingredient.id, ids), notDeleted(ingredient)),
+      // Unit mappings only — NOT images/externalIds. Costing + getManyByIDs never
+      // read them, and pulling full Image records here was ~4MB + ~11s of drizzle
+      // object-building per call (worker CPU that starved the recompute isolate).
+      with: { product: { with: { unitMappings: true } } },
+    }),
+    // This is still one batched GROUP BY, but it no longer serializes behind
+    // drizzle's Product relation object-building. Product_ingredientId_idx and
+    // Expense_productId_idx cover the two join keys.
+    loadProductPricingForIngredientIds(db, ids),
+  ]);
   return rows.map((row) => {
     const { product: productRel } = row;
     return {

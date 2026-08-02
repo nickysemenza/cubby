@@ -1,4 +1,5 @@
 import {
+  type ProductId,
   unsafeInventoryShortcode,
   unsafeLocationShortcode,
   unsafeProductShortcode,
@@ -20,6 +21,7 @@ import {
   mapProductExternalIds,
   mapProductUnitMappings,
 } from "~/server/repo/product/mappers";
+import type { ProductPricing } from "~/server/repo/product/pricing";
 import type { InventoryEntryDeepDB, InventoryEntryListDB } from "./types";
 
 type InventoryEntryBaseDB = Pick<
@@ -42,15 +44,27 @@ const inventoryEntryBaseShape = (entry: InventoryEntryBaseDB) => ({
   updatedAt: entry.updatedAt,
 });
 
+/** `loadProductPricing` returns one row per requested Product; fail loudly if
+ * an inventory relation and that batch ever fall out of sync. */
+export const requireLoadedProductPricing = (
+  pricing: ReadonlyMap<ProductId, ProductPricing>,
+  productId: ProductId,
+): ProductPricing => {
+  const value = pricing.get(productId);
+  if (!value) {
+    throw new Error(`Missing pricing for inventory product ${productId}`);
+  }
+  return value;
+};
+
 export const dbInventoryEntryToAPI: (
   inventoryentry: InventoryEntryDeepDB,
-) => z.infer<typeof inventoryWithLocationAndProductOut> = (inventoryentry) => {
+  pricing: ProductPricing,
+) => z.infer<typeof inventoryWithLocationAndProductOut> = (
+  inventoryentry,
+  pricing,
+) => {
   const { product, location } = inventoryentry;
-  const amount = parseInventoryAmount(inventoryentry.amount, inventoryentry.id);
-  const effectivePrice =
-    inventoryentry.valuation !== null && amount.value !== 0
-      ? inventoryentry.valuation / amount.value
-      : product.price;
 
   return {
     ...inventoryEntryBaseShape(inventoryentry),
@@ -72,15 +86,7 @@ export const dbInventoryEntryToAPI: (
     product: {
       ...dbProductToInventoryEmbedShape({
         ...product,
-        pricing: {
-          derivedPrice: null,
-          effectivePrice,
-          source: product.price !== null ? "explicit" : "derived",
-          knownExpenseCount: 0,
-          unknownExpenseCount: 0,
-          knownUnitCount: 0,
-          partial: false,
-        },
+        pricing,
       }),
       images: mapImages(product.images),
       externalIds: mapProductExternalIds(product.externalIds),
@@ -94,13 +100,9 @@ export const dbInventoryEntryToAPI: (
 
 export const dbInventoryEntryToListAPI: (
   inventoryentry: InventoryEntryListDB,
-) => z.infer<typeof inventoryListItemOut> = (inventoryentry) => {
+  pricing: ProductPricing,
+) => z.infer<typeof inventoryListItemOut> = (inventoryentry, pricing) => {
   const { product, location } = inventoryentry;
-  const amount = parseInventoryAmount(inventoryentry.amount, inventoryentry.id);
-  const effectivePrice =
-    inventoryentry.valuation !== null && amount.value !== 0
-      ? inventoryentry.valuation / amount.value
-      : product.price;
 
   return {
     ...inventoryEntryBaseShape(inventoryentry),
@@ -114,15 +116,7 @@ export const dbInventoryEntryToListAPI: (
     },
     product: dbProductToInventoryListShape({
       ...product,
-      pricing: {
-        derivedPrice: null,
-        effectivePrice,
-        source: product.price !== null ? "explicit" : "derived",
-        knownExpenseCount: 0,
-        unknownExpenseCount: 0,
-        knownUnitCount: 0,
-        partial: false,
-      },
+      pricing,
     }),
   };
 };

@@ -2,8 +2,10 @@ import { format, startOfYear, subDays, subMonths } from "date-fns";
 import { describe, expect, it } from "vitest";
 import {
   costRangeOptions,
+  productQuantityRangeOptions,
   resolveCostFilter,
   resolveDateRange,
+  resolveProductQuantityFilter,
 } from "./expense-options";
 
 describe("resolveCostFilter", () => {
@@ -41,6 +43,38 @@ describe("resolveCostFilter", () => {
   it("resolves every declared option, so no preset can render without a bound", () => {
     for (const option of costRangeOptions) {
       expect(resolveCostFilter(option.value)).not.toEqual({});
+    }
+  });
+});
+
+describe("resolveProductQuantityFilter", () => {
+  it("keeps presence sentinels and unknown presets distinct from quantity bounds", () => {
+    expect(resolveProductQuantityFilter("has")).toEqual({
+      productQuantityPresenceFilter: "has",
+    });
+    expect(resolveProductQuantityFilter("none")).toEqual({
+      productQuantityPresenceFilter: "none",
+    });
+    expect(resolveProductQuantityFilter(undefined)).toEqual({});
+    expect(resolveProductQuantityFilter("bogus")).toEqual({});
+  });
+
+  it("expands each whole-unit preset into inclusive quantity bounds", () => {
+    expect(resolveProductQuantityFilter("exactly1")).toEqual({
+      productQuantityMin: 1,
+      productQuantityMax: 1,
+    });
+    expect(resolveProductQuantityFilter("gte2")).toEqual({
+      productQuantityMin: 2,
+    });
+    expect(resolveProductQuantityFilter("gte5")).toEqual({
+      productQuantityMin: 5,
+    });
+  });
+
+  it("resolves every declared option", () => {
+    for (const option of productQuantityRangeOptions) {
+      expect(resolveProductQuantityFilter(option.value)).not.toEqual({});
     }
   });
 });

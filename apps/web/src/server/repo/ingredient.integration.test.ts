@@ -1,5 +1,6 @@
 import { unsafeIngredientId } from "@cubby/schemas/identifiers";
 import type { IngredientFilters } from "@cubby/schemas/ingredient";
+import { expenseCreateInput } from "@cubby/schemas/project";
 import { count, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -8,11 +9,13 @@ import { getAuditLog } from "~/server/repo/audit-log";
 import { upsertImportRecipe } from "~/server/repo/import-recipe-convert";
 import { deleteRecipes } from "~/server/repo/recipe";
 import { getDb, withTransaction } from "./database-helpers";
+import { createExpense } from "./expense";
 import {
   createIngredient,
   enrichmentWorkbenchIngredients,
   findOrCreateIngredient,
   getIngredientByID,
+  getIngredientsByIDsLean,
   ingredientList,
   mergeIngredients,
   resolveOrCreateIngredients,
@@ -23,6 +26,7 @@ import {
   createProductFixture as createProduct,
   createRecipeFixture as createRecipe,
   ingredientRef,
+  makeExpenseInput,
   makeImportRecipe,
   makeProductInput,
   makeRecipeInput,
@@ -430,6 +434,85 @@ describe("ingredient", () => {
     // Every returned row is recipe-used; the orphan is absent.
     expect(rows.every((r) => r.recipeCount > 0)).toBe(true);
     expect(rows.some((r) => r.name === "orphan")).toBe(false);
+  });
+
+  it("getIngredientsByIDsLean loads complete Expense-derived pricing", async () => {
+    const ingredient = await createIngredient(
+      ctx.db,
+      { name: "priced ingredient", aliases: [] },
+      ctx.actor,
+    );
+    const priced = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "priced package",
+        ingredientId: ingredient.id,
+      }),
+      ctx.actor,
+    );
+    const unpriced = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "unpriced package",
+        ingredientId: ingredient.id,
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "two priced packages",
+          cost: 20,
+          productId: priced.id,
+          productQuantity: 2,
+        }),
+      ),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "unknown package count",
+          cost: 5,
+          productId: priced.id,
+        }),
+      ),
+      ctx.actor,
+    );
+    const ingredientUuid = await resolveLiveShortcode(
+      ctx.db,
+      ingredient.id,
+      "ingredient",
+    );
+    if (!ingredientUuid)
+      throw new Error("test setup: ingredient did not resolve");
+
+    const [row] = await getIngredientsByIDsLean(ctx.db, [
+      unsafeIngredientId(ingredientUuid),
+    ]);
+    const pricedResult = row?.product.find(
+      (product) => product.id === priced.id,
+    );
+    const unpricedResult = row?.product.find(
+      (product) => product.id === unpriced.id,
+    );
+
+    expect(pricedResult?.pricing).toEqual({
+      derivedPrice: 10,
+      effectivePrice: 10,
+      source: "derived",
+      knownExpenseCount: 1,
+      unknownExpenseCount: 1,
+      knownUnitCount: 2,
+      partial: true,
+    });
+    expect(unpricedResult?.pricing).toMatchObject({
+      derivedPrice: null,
+      effectivePrice: null,
+      source: "none",
+    });
   });
 
   // Regression: the ingredient list is lean — `appearsInRecipes` is {id,name}

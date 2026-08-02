@@ -1284,6 +1284,34 @@ describe("unknown filter keys are rejected", () => {
     );
   });
 
+  it("passes exact whole-unit quantity bounds through the Expense MCP list", async () => {
+    const list = vi.fn().mockResolvedValue({
+      meta: { pageIndex: 0, pageSize: 25, totalCount: 0 },
+      items: [],
+    });
+    const result = await callTool(
+      createMcpServer(),
+      "list_expenses",
+      {
+        productQuantityPresenceFilter: "has",
+        productQuantityMin: 2,
+        productQuantityMax: 5,
+      },
+      { expense: { list } },
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filters: {
+          productQuantityPresenceFilter: "has",
+          productQuantityMin: 2,
+          productQuantityMax: 5,
+        },
+      }),
+    );
+  });
+
   it("guards get_expense_analytics too, which bypasses the list plumbing", async () => {
     // It takes expenseFilterFields directly via registerRouterTool, so it needs
     // its own strict input rather than inheriting registerEntityListTool's.

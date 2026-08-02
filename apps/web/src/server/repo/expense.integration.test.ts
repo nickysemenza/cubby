@@ -492,6 +492,86 @@ describe("expense repository — expenseList filters", () => {
     expect(toOnly.data.map((p) => p.id)).not.toContain(inWindow.id);
   });
 
+  it("filters and sorts by recorded product quantity with nulls last", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "quantity filter product" }),
+      ctx.actor,
+    );
+    const mk = (name: string, productQuantity: number | null) =>
+      unwrap(
+        createExpense(
+          ctx.db,
+          expenseCreateInput.parse({
+            date: "2024-01-15",
+            trade: "other",
+            costType: "materials",
+            name,
+            productId: product.id,
+            productQuantity,
+          }),
+          ctx.actor,
+        ),
+      );
+
+    const unknown = await mk("quantity unknown", null);
+    const one = await mk("quantity one", 1);
+    const two = await mk("quantity two", 2);
+    const five = await mk("quantity five", 5);
+
+    const exact = await expenseList(
+      ctx.db,
+      { productQuantityMin: 1, productQuantityMax: 1 },
+      [],
+      pagination,
+    );
+    expect(exact.data.map((row) => row.id)).toEqual([one.id]);
+
+    const has = await expenseList(
+      ctx.db,
+      { productQuantityPresenceFilter: "has", productQuantityMin: 2 },
+      [],
+      pagination,
+    );
+    expect(new Set(has.data.map((row) => row.id))).toEqual(
+      new Set([two.id, five.id]),
+    );
+
+    const missing = await expenseList(
+      ctx.db,
+      { productQuantityPresenceFilter: "none" },
+      [],
+      pagination,
+    );
+    expect(missing.data.map((row) => row.id)).toEqual([unknown.id]);
+
+    const asc = await expenseList(
+      ctx.db,
+      {},
+      [{ orderBy: "productQuantity", direction: "asc" }],
+      pagination,
+    );
+    expect(asc.data.map((row) => row.id)).toEqual([
+      one.id,
+      two.id,
+      five.id,
+      unknown.id,
+    ]);
+
+    const desc = await expenseList(
+      ctx.db,
+      {},
+      [{ orderBy: "productQuantity", direction: "desc" }],
+      pagination,
+    );
+    expect(desc.data.map((row) => row.id)).toEqual([
+      five.id,
+      two.id,
+      one.id,
+      unknown.id,
+    ]);
+  });
+
   it("ORs several `search` terms over the name, and ANDs notesSearch/urlSearch", async () => {
     const { output: extractor } = await createExpense(
       ctx.db,

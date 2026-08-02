@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { projectCreateInput, projectOut, projectUpdateData } from "./project";
+import {
+  expenseFiltersSchema,
+  expenseSortableFields,
+  projectCreateInput,
+  projectOut,
+  projectUpdateData,
+} from "./project";
 
 describe("project resource URLs", () => {
   it("accepts and preserves complete Google Drive folder URLs", () => {
@@ -89,5 +95,34 @@ describe("project resource URLs", () => {
     });
     expect(projectOut.shape.googleDriveFolderUrl).toBeDefined();
     expect(projectOut.shape.notionPageUrl).toBeDefined();
+  });
+});
+
+describe("expense quantity filters", () => {
+  it("coerces positive whole-unit URL/MCP bounds and accepts presence", () => {
+    expect(
+      expenseFiltersSchema.parse({
+        productQuantityPresenceFilter: "has",
+        productQuantityMin: "2",
+        productQuantityMax: "5",
+      }),
+    ).toMatchObject({
+      productQuantityPresenceFilter: "has",
+      productQuantityMin: 2,
+      productQuantityMax: 5,
+    });
+  });
+
+  it.each([0, -1, 1.5, "not-a-number"])(
+    "rejects an invalid productQuantityMin of %s",
+    (productQuantityMin) => {
+      expect(
+        expenseFiltersSchema.safeParse({ productQuantityMin }).success,
+      ).toBe(false);
+    },
+  );
+
+  it("allows direct sorting on the physical quantity column", () => {
+    expect(expenseSortableFields).toContain("productQuantity");
   });
 });
