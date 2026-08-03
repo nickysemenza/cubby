@@ -362,6 +362,17 @@ export const findProductsMissingPrice = async (
 //     forever, so without comparing the last exit against the last
 //     acquisition the fresh shelf entry reads as the stale one.
 //
+// The window's acquisition side is deliberately loose: any positive
+// product-linked line reopens it, so a positive price adjustment dated after a
+// real disposal would suppress a detection. That is the mirror of the cost-0
+// gap below and errs the same safe way (under-report on a list a human
+// reviews). Tightening it symmetrically — requiring the acquisition to sit on
+// a net-positive Purchase — is *worse*, not better: two live acquisitions
+// carry no purchase at all, so they would stop reopening the window and turn a
+// rare false negative into a false positive. Excluding only the positive lines
+// that sit inside a disposal Purchase is sound but changes nothing: zero of
+// them postdate their product's last exit.
+//
 // Known blind spot, and it is a modelling limit rather than a missing check:
 // the same doc note records a broken or gifted item as a **cost-0** exit, and
 // a cost-0 line is exactly how a free promotional *acquisition* is recorded
