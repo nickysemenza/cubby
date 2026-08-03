@@ -28,6 +28,7 @@ export const ENTITY_ACCENTS: Record<Entity, string> = {
   expense: "var(--primary)",
   financialAccount: "var(--slate)",
   financialTransaction: "var(--primary)",
+  wish: "var(--plum)",
   image: "var(--slate)",
   "usda-food": "var(--positive)",
 };

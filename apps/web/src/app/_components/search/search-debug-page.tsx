@@ -136,6 +136,9 @@ function SearchResultEntityLink({ item }: { item: SearchResultItem }) {
         compact
       />
     ))
+    .with({ entityType: "wish" }, (i) => (
+      <Link {...getSearchResultRoute(i)}>{i.name}</Link>
+    ))
     .exhaustive();
 }
 

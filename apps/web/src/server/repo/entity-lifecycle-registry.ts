@@ -57,6 +57,7 @@ import {
   VENDOR_DELETE_EDGE_POLICY,
   VENDOR_MERGE_EDGE_POLICY,
 } from "~/server/repo/vendor";
+import { WISH_DELETE_EDGE_POLICY } from "~/server/repo/wish";
 
 /**
  * One `(entity, operation)` pair's declared edge dispositions, keyed by edge.
@@ -137,6 +138,7 @@ export const ENTITY_LIFECYCLE_REGISTRY: EntityLifecycleRegistryEntry[] = [
   // Financial transactions have no incoming edges, but are soft-deletable
   // evidence records and so need their lifecycle operation declared explicitly.
   { entity: "financialTransaction", operation: "delete", policy: {} },
+  { entity: "wish", operation: "delete", policy: WISH_DELETE_EDGE_POLICY },
   { entity: "image", operation: "delete", policy: IMAGE_HARD_DELETE },
   // No entry for "usda-food": no local table, and no delete or merge
   // operation at all (entityManifest["usda-food"].lifecycle is

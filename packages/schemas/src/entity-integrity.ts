@@ -15,6 +15,7 @@ import {
   recipeShortcode,
   taskShortcode,
   vendorShortcode,
+  wishShortcode,
 } from "./identifiers";
 
 /**
@@ -301,6 +302,7 @@ export const previewDeleteEntitySchema = z.enum([
   "financialAccount",
   "financialTransaction",
   "inventory",
+  "wish",
   "image",
 ]);
 export type PreviewDeleteEntity = z.infer<typeof previewDeleteEntitySchema>;
@@ -358,6 +360,7 @@ export const previewOperationInputSchema = z.union([
   previewDeleteInput("expense", expenseShortcode),
   previewDeleteInput("financialAccount", financialAccountShortcode),
   previewDeleteInput("financialTransaction", financialTransactionShortcode),
+  previewDeleteInput("wish", wishShortcode),
   previewDeleteInput("inventory", inventoryShortcode),
   // Image has no shortcode and is the intentional hard-delete UUID exception.
   previewDeleteInput("image", z.uuid()),

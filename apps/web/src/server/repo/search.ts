@@ -17,6 +17,7 @@ import {
   searchableEntities,
   type TaskSearchResult,
   type VendorSearchResult,
+  type WishSearchResult,
 } from "@cubby/schemas/search";
 import {
   type AnyColumn,
@@ -43,6 +44,7 @@ import {
   recipe,
   task,
   vendor,
+  wish,
 } from "~/server/db/schema";
 import { formatSearchTerm, getDb, notDeleted } from "./database-helpers";
 import { effectiveProductPriceSql } from "./product/pricing";
@@ -72,6 +74,11 @@ const idIn = (column: AnyColumn, ids: string[]): SQL =>
     ids.map((id) => sql`${id}`),
     sql`, `,
   )})`;
+
+const wishCandidateProductMatch = (query: string): SQL => {
+  const term = `%${query}%`;
+  return sql`(p."name" ILIKE ${term} OR p."manufacturer" ILIKE ${term} OR p."model" ILIKE ${term})`;
+};
 
 type SearchClient = ReturnType<typeof getDb>;
 export type InternalSearchResult = SearchResultItem & { entityId: string };
@@ -672,6 +679,43 @@ const searchQueries = {
         .where(and(notDeleted(expense), condition))
         .limit(limit) as unknown as Promise<
         (ExpenseSearchResult & { entityId: string })[]
+      >,
+  },
+  wish: {
+    lexicalCondition: (query) =>
+      or(
+        formatSearchTerm(wish.name, query),
+        formatSearchTerm(wish.notes, query),
+        sql`EXISTS (
+          SELECT 1 FROM "WishCandidate" wc
+          JOIN "Product" p ON p."id" = wc."productId" AND p."deletedAt" IS NULL
+          WHERE wc."wishId" = "Wish"."id"
+            AND wc."deletedAt" IS NULL
+            AND ${wishCandidateProductMatch(query)}
+        )`,
+      ),
+    idCondition: (ids) => idIn(wish.id, ids),
+    load: (client, condition, limit) =>
+      client
+        .select({
+          entityId: wish.id,
+          id: wish.shortcode,
+          name: wish.name,
+          subtitle: wish.notes,
+          entityType: sql<"wish">`'wish'`.as("entityType"),
+          typeHint: sql<string>`'tool wishlist'`.as("typeHint"),
+          imageUrl: sql<string | null>`null`.as("imageUrl"),
+          createdAt: wish.createdAt,
+          acquiredAt: wish.acquiredAt,
+          candidateCount: sql<number>`(
+            SELECT count(*)::int FROM "WishCandidate" wc
+            WHERE wc."wishId" = "Wish"."id" AND wc."deletedAt" IS NULL
+          )`.as("candidateCount"),
+        })
+        .from(wish)
+        .where(and(notDeleted(wish), condition))
+        .limit(limit) as unknown as Promise<
+        (WishSearchResult & { entityId: string })[]
       >,
   },
 } satisfies Record<SearchableEntity, EntitySearchQuery>;

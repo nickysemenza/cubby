@@ -37,6 +37,7 @@ import {
   recipe,
   task,
   vendor,
+  wish,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import type { SemanticEmbeddingConfig } from "~/server/semantic/config";
@@ -201,6 +202,12 @@ const embeddingSources = {
     idColumn: expense.id,
     shortcodeColumn: expense.shortcode,
     deletedAtColumn: expense.deletedAt,
+  },
+  wish: {
+    table: wish,
+    idColumn: wish.id,
+    shortcodeColumn: wish.shortcode,
+    deletedAtColumn: wish.deletedAt,
   },
 } satisfies Record<SearchableEntity, EmbeddingSource>;
 

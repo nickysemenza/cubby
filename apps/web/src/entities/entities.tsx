@@ -17,6 +17,7 @@ import { purchaseSortableFields } from "@cubby/schemas/purchase";
 import { recipeSortableFields } from "@cubby/schemas/recipe";
 import { usdaFoodSortableFields } from "@cubby/schemas/usda";
 import { vendorSortableFields } from "@cubby/schemas/vendor";
+import { wishSortableFields } from "@cubby/schemas/wish";
 import {
   Apple,
   Barcode,
@@ -26,6 +27,7 @@ import {
   ChefHat,
   CreditCard,
   Hammer,
+  Heart,
   Image,
   ListChecks,
   type LucideProps,
@@ -348,6 +350,27 @@ const entityDefinitions = {
       defaultSort: "transactionDate",
       standardColumns: [],
       sortableFields: financialTransactionSortableFields,
+    },
+  },
+  wish: {
+    label: "Wish",
+    pluralLabel: "Wishlist",
+    basePath: "wishes",
+    lucideIcon: Heart,
+    color: entityColor("wish", {
+      bg: "bg-plum/15",
+      text: "text-plum",
+      border: "border-l-plum",
+    }),
+    routes: {
+      detail: "/wishes/$shortcode",
+      list: "/wishes",
+    },
+    detail: { commonSections: ["history"] },
+    list: {
+      defaultSort: "createdAt",
+      standardColumns: ["name"],
+      sortableFields: wishSortableFields,
     },
   },
   "usda-food": {

@@ -104,6 +104,12 @@ const entityEmptyConfig: Record<Entity, EntityEmptyConfig> = {
       "Record settlement evidence without changing the expense ledger.",
     actionLabel: "New Transaction",
   },
+  wish: {
+    title: "No tool wishes yet",
+    description:
+      "Keep a tool idea open-ended or compare a few Products before deciding.",
+    actionLabel: "Add Wish",
+  },
   image: {
     title: "No photos yet",
     description: "Add photos to attach them to recipes, products, and places.",

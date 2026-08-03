@@ -3,13 +3,14 @@
  * edge semantics — replacing the "must agree on both" prose comment that used
  * to sit next to `deleteProducts` in `crud.ts`.
  *
- * `product` has six incoming edges (`INCOMING_EDGES.product` in
+ * `product` has seven incoming edges (`INCOMING_EDGES.product` in
  * `entity-incoming-edges.ts`). Their *stable roles* now live in
  * `ENTITY_EDGE_SEMANTICS.product` (`~/server/db/entity-edge-semantics`)
  * alongside every other entity's, because a role describes what an edge means
  * and not what deleting does about it. Two are **acquisition** evidence —
  * proof the thing was actually owned at some point — one is durable
- * **history**, two are **metadata**, and one is **media**:
+ * **history**, one is a retained Wishlist **association**, two are
+ * **metadata**, and one is **media**:
  *
  *  - acquisition: `InventoryEntry.productId` (it's on a shelf right now) and
  *    `Expense.productId` (it was bought — the ledger's net cost and
@@ -17,6 +18,8 @@
  *    silently corrupt that derivation with no restore path).
  *  - history: `Task.subjectProductId` (work performed on the product; deleting
  *    the subject would leave that durable task history nameless).
+ *  - association: `WishCandidate.productId` (a Tool alternative remains
+ *    meaningful until removed from its Wishlist entries).
  *  - metadata / media: `ProductExternalId.productId`,
  *    `ProductUnitMappings.productId`, `ProductImage.productId` — none of which
  *    say anything about ownership on their own.
@@ -73,7 +76,7 @@ export const PRODUCT_EDGE_ROLES = ENTITY_EDGE_SEMANTICS.product;
  * The roles that make a product worth keeping: acquisition evidence, or
  * durable work history. An allowlist on purpose — see the file doc.
  */
-const RETAINING_ROLES = ["acquisition", "history"] as const;
+const RETAINING_ROLES = ["acquisition", "history", "association"] as const;
 type RetainingRole = (typeof RETAINING_ROLES)[number];
 
 /**
@@ -142,6 +145,14 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
       "A reusable resource with project-use history can't be deleted — detach that history first.",
     reason: "PRODUCT_HAS_PROJECT_USES",
     label: "project uses",
+  },
+  "WishCandidate.productId": {
+    code: "block-live-wishlist-candidate",
+    effect: "block",
+    description:
+      "A tool on the Wishlist remains a live alternative until it is removed from every Wish.",
+    reason: "PRODUCT_HAS_WISH_CANDIDATES",
+    label: "wishlist candidates",
   },
   "ProductExternalId.productId": {
     code: "soft-delete-metadata",

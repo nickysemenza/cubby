@@ -19,6 +19,7 @@ export const dashboardCountsOut = z.object({
   financialAccount: z.number().int(),
   financialTransaction: z.number().int(),
   image: z.number().int(),
+  wish: z.number().int(),
   usdaFoods: z.number().int(),
 });
 

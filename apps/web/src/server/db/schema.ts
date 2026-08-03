@@ -35,6 +35,7 @@ import type {
   TaskId,
   UserId,
   VendorId,
+  WishId,
 } from "@cubby/schemas/identifiers";
 import { imageStatusValues } from "@cubby/schemas/image";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
@@ -995,6 +996,53 @@ export const projectToolUsage = pgTable(
   ],
 );
 
+// A tool purchase intention. Products are alternatives for one desired outcome;
+// inventory remains the proof of current ownership and is never changed here.
+export const wish = pgTable(
+  "Wish",
+  {
+    id: pkUuid<WishId>(),
+    shortcode: shortcodeColumn(),
+    name: text("name").notNull(),
+    notes: text("notes"),
+    acquiredAt: timestamp("acquiredAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    shortcodeUnique("Wish", table.shortcode),
+    index("Wish_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
+    index("Wish_createdAt_idx").on(table.createdAt),
+    index("Wish_acquiredAt_idx").on(table.acquiredAt),
+  ],
+);
+
+// No option-specific data belongs here in v1: this edge says a live Tool
+// Product is one alternative for a Wish. One Product can serve many Wishes.
+export const wishCandidate = pgTable(
+  "WishCandidate",
+  {
+    id: pkUuid(),
+    wishId: uuid("wishId")
+      .notNull()
+      .$type<WishId>()
+      .references(() => wish.id),
+    productId: uuid("productId")
+      .notNull()
+      .$type<ProductId>()
+      .references(() => product.id),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    uniqueIndex("WishCandidate_wishId_productId_key")
+      .on(table.wishId, table.productId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("WishCandidate_wishId_idx").on(table.wishId),
+    index("WishCandidate_productId_idx").on(table.productId),
+  ],
+);
+
 export const task = pgTable(
   "Task",
   {
@@ -1469,6 +1517,7 @@ export const productRelations = relations(product, ({ one, many }) => ({
   images: many(productImage),
   expenses: many(expense),
   projectToolUsages: many(projectToolUsage),
+  wishCandidates: many(wishCandidate),
 }));
 
 export const productExternalIdRelations = relations(
@@ -1553,6 +1602,21 @@ export const projectToolUsageRelations = relations(
     }),
   }),
 );
+
+export const wishRelations = relations(wish, ({ many }) => ({
+  candidates: many(wishCandidate),
+}));
+
+export const wishCandidateRelations = relations(wishCandidate, ({ one }) => ({
+  wish: one(wish, {
+    fields: [wishCandidate.wishId],
+    references: [wish.id],
+  }),
+  product: one(product, {
+    fields: [wishCandidate.productId],
+    references: [product.id],
+  }),
+}));
 
 export const projectDependencyRelations = relations(
   projectDependency,

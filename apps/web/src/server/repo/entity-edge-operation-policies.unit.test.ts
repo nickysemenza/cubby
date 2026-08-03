@@ -25,6 +25,7 @@ import {
   VENDOR_DELETE_EDGE_POLICY,
   VENDOR_MERGE_EDGE_POLICY,
 } from "~/server/repo/vendor";
+import { WISH_DELETE_EDGE_POLICY } from "~/server/repo/wish";
 
 interface PolicyCase {
   entity: Entity;
@@ -74,6 +75,7 @@ const POLICY_CASES = {
     entity: "purchase",
     policy: PURCHASE_MERGE_EDGE_POLICY,
   },
+  "wish delete": { entity: "wish", policy: WISH_DELETE_EDGE_POLICY },
 } as const satisfies Record<string, PolicyCase>;
 
 describe("incoming-edge operation policies", () => {
@@ -100,6 +102,7 @@ describe("product retaining edges", () => {
     "InventoryEntry.productId",
     "ProjectToolUsage.productId",
     "Task.subjectProductId",
+    "WishCandidate.productId",
   ];
 
   it("retains exactly the acquisition and history edges", () => {

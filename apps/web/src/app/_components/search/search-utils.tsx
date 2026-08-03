@@ -31,6 +31,7 @@ export const entityTypeMap: Record<SearchableEntity, Entity> = {
   financialAccount: "financialAccount",
   financialTransaction: "financialTransaction",
   expense: "expense",
+  wish: "wish",
 };
 
 type SearchResultGroup = {
@@ -242,6 +243,15 @@ export function getEnrichmentText(item: SearchResultItem): string | null {
       const parts: string[] = [];
       if (item.cost != null) parts.push(formatCurrency(item.cost));
       if (item.projectName) parts.push(item.projectName);
+      return parts.length > 0 ? parts.join(" · ") : null;
+    })
+    .with({ entityType: "wish" }, (item) => {
+      const parts: string[] = [];
+      if (item.candidateCount > 0)
+        parts.push(
+          `${item.candidateCount} candidate${item.candidateCount === 1 ? "" : "s"}`,
+        );
+      if (item.acquiredAt) parts.push("acquired");
       return parts.length > 0 ? parts.join(" · ") : null;
     })
     .exhaustive();

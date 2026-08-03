@@ -62,6 +62,7 @@ import {
   recipeSectionIngredient,
   task,
   taskDependency,
+  wishCandidate,
 } from "./schema";
 
 /** `${pgTable name}.${column name}` — e.g. `"PurchaseImage.imageId"`. */
@@ -136,6 +137,7 @@ export const INCOMING_EDGES = {
     "Expense.productId": { column: expense.productId },
     "Task.subjectProductId": { column: task.subjectProductId },
     "ProjectToolUsage.productId": { column: projectToolUsage.productId },
+    "WishCandidate.productId": { column: wishCandidate.productId },
   }),
   location: edges({
     "InventoryEntry.locationId": { column: inventoryEntry.locationId },
@@ -183,6 +185,9 @@ export const INCOMING_EDGES = {
     },
   }),
   financialTransaction: edges({}),
+  wish: edges({
+    "WishCandidate.wishId": { column: wishCandidate.wishId },
+  }),
   // No table carries a live FK at these three: `expense`/`inventory` are leaf
   // ledger/stock rows nothing else points back at, and `usda-food` has no
   // local table at all (it's resolved at query time via `product.fdc_id`, a

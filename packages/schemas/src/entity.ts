@@ -37,6 +37,7 @@ export const entitySchema = z.enum([
   "expense",
   "financialAccount",
   "financialTransaction",
+  "wish",
   "usda-food",
   "image",
 ]);

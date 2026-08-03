@@ -45,6 +45,7 @@ import {
 } from "./repo.fixtures";
 import { createTask } from "./task";
 import { createVendor, deleteVendors, mergeVendors } from "./vendor";
+import { createWish } from "./wish";
 
 describe("searchable entity loader maps", () => {
   const ctx = withTestDb();
@@ -160,6 +161,15 @@ describe("searchable entity loader maps", () => {
       }),
       ctx.actor,
     );
+    const wish = await createWish(
+      ctx.db,
+      {
+        name: "Loader wish",
+        notes: "Loader notes",
+        candidateProductIds: [product.id],
+      },
+      ctx.actor,
+    );
     const ids = {
       product: product.entityId,
       recipe: recipe.entityId,
@@ -175,6 +185,7 @@ describe("searchable entity loader maps", () => {
       financialAccount: account.entityId,
       financialTransaction: transaction.entityId,
       expense: expenseUuid,
+      wish: wish.entityId,
     } satisfies Record<SearchableEntity, string>;
 
     const batch = await getEmbeddingTextsForEntityTypes(ctx.db, [

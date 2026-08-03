@@ -125,6 +125,10 @@ export const queryKeys = {
     all: entityKey("financialTransaction"),
     list: procedureKey("financialTransaction", "list"),
   },
+  wish: {
+    list: procedureKey("wish", "list"),
+    all: entityKey("wish"),
+  },
   relatedData: {
     // Relationship previews and aggregate summaries are derived from several
     // entity families. Mutations invalidate this shared root rather than
@@ -148,6 +152,13 @@ export const productMutationInvalidateKeys = [
   // Task rows embed their subject product's display name. A product rename
   // must not leave the task list/detail cache showing the old name.
   queryKeys.task.all,
+  queryKeys.dashboard.counts,
+  queryKeys.wish.all,
+] as const satisfies readonly QueryKey[];
+
+export const wishMutationInvalidateKeys = [
+  queryKeys.wish.all,
+  queryKeys.search.all,
   queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
