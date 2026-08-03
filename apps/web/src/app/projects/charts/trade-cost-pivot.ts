@@ -1,3 +1,4 @@
+import { isPrincipalExpense } from "@cubby/schemas/expense-line-kind";
 import {
   type CostType,
   costTypeValues,
@@ -33,6 +34,7 @@ export function buildTradeCostPivot(expenses: ExpenseOut[]): TradeCostPivot {
   const grouped = new Map<Trade, Record<PivotCostKey, number>>();
 
   for (const p of expenses) {
+    if (!isPrincipalExpense(p)) continue;
     const trade = p.trade;
     const costType = p.costType;
     const cost = p.cost ?? 0;

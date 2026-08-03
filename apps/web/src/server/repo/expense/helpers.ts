@@ -37,6 +37,7 @@ export type ExpenseRow = {
   name: string;
   cost: number | null;
   date: string;
+  lineKind: ExpenseOut["lineKind"];
   costType: ExpenseOut["costType"];
   trade: ExpenseOut["trade"];
   url: string | null;
@@ -73,6 +74,7 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
     name: row.name,
     cost: row.cost,
     date: row.date,
+    lineKind: row.lineKind,
     costType: row.costType,
     trade: row.trade,
     url: row.url,

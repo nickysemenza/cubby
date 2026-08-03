@@ -181,6 +181,129 @@ describe("expense repository — CRUD", () => {
     expect(data.map((p) => p.id)).not.toContain(created.id);
   });
 
+  it("infers line roles once, honors explicit roles, audits changes, and protects product links", async () => {
+    const { output: inferredTax, entityId: inferredTaxId } =
+      await createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({ name: "Sales tax", cost: 26.81 }),
+        ),
+        ctx.actor,
+      );
+    expect(inferredTax.lineKind).toBe("tax");
+
+    const explicitPrincipal = await unwrap(
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({ name: "Sales tax", lineKind: "principal" }),
+        ),
+        ctx.actor,
+      ),
+    );
+    expect(explicitPrincipal.lineKind).toBe("principal");
+
+    const renamed = await unwrap(
+      updateExpense(
+        ctx.db,
+        explicitPrincipal.id,
+        { name: "Shipping" },
+        ctx.actor,
+      ),
+    );
+    expect(renamed.lineKind).toBe("principal");
+
+    const productRow = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "line role product" }),
+      ctx.actor,
+    );
+    const productExpense = await unwrap(
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({ name: "Tax", productId: productRow.id }),
+        ),
+        ctx.actor,
+      ),
+    );
+    expect(productExpense.lineKind).toBe("principal");
+
+    await expect(
+      updateExpense(ctx.db, productExpense.id, { lineKind: "tax" }, ctx.actor),
+    ).rejects.toMatchObject({
+      cause: { reason: "CONSTRAINT_VIOLATION" },
+    });
+    expect(
+      (await getExpenseByShortcode(ctx.db, productExpense.id))?.productId,
+    ).toBe(productRow.id);
+
+    await expect(
+      updateExpense(
+        ctx.db,
+        inferredTax.id,
+        { productId: productRow.id },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      cause: { reason: "CONSTRAINT_VIOLATION" },
+    });
+    expect(
+      (await getExpenseByShortcode(ctx.db, inferredTax.id))?.productId,
+    ).toBeNull();
+
+    const changedKind = await unwrap(
+      updateExpense(ctx.db, inferredTax.id, { lineKind: "fee" }, ctx.actor),
+    );
+    expect(changedKind.lineKind).toBe("fee");
+    const audit = await getAuditLog(ctx.db, {
+      entityType: "expense",
+      entityId: inferredTaxId,
+      limit: 20,
+    });
+    expect(
+      audit.entries.some(
+        (entry) =>
+          entry.action === "update" &&
+          (
+            entry.changes as {
+              lineKind?: { from: unknown; to: unknown };
+            } | null
+          )?.lineKind?.from === "tax" &&
+          (
+            entry.changes as {
+              lineKind?: { from: unknown; to: unknown };
+            } | null
+          )?.lineKind?.to === "fee",
+      ),
+    ).toBe(true);
+
+    const discount = await unwrap(
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({ name: "Order discount", cost: -60 }),
+        ),
+        ctx.actor,
+      ),
+    );
+    const taxRefund = await unwrap(
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({
+            name: "Tax refund",
+            cost: -8.5,
+            lineKind: "tax",
+          }),
+        ),
+        ctx.actor,
+      ),
+    );
+    expect(discount.lineKind).toBe("discount");
+    expect(taxRefund).toMatchObject({ lineKind: "tax", cost: -8.5 });
+  });
+
   it("reports affected and newly empty Purchases while retaining sibling lines", async () => {
     const { output: retained } = await createExpense(
       ctx.db,
@@ -319,6 +442,44 @@ describe("expense repository — expenseList filters", () => {
     expect(new Set(notFuture.data.map((p) => p.name))).toEqual(
       new Set(["copper pipe", "plumber visit"]),
     );
+  });
+
+  it("filters and sorts by line kind", async () => {
+    for (const [name, lineKind] of [
+      ["role principal", "principal"],
+      ["role shipping", "shipping"],
+      ["role tax", "tax"],
+    ] as const) {
+      await createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({ name, lineKind, date: "2026-02-01" }),
+        ),
+        ctx.actor,
+      );
+    }
+
+    const filtered = await expenseList(
+      ctx.db,
+      { search: "role", lineKind: ["tax", "shipping"] },
+      [],
+      pagination,
+    );
+    expect(new Set(filtered.data.map((row) => row.lineKind))).toEqual(
+      new Set(["tax", "shipping"]),
+    );
+
+    const sorted = await expenseList(
+      ctx.db,
+      { search: "role" },
+      [{ orderBy: "lineKind", direction: "asc" }],
+      pagination,
+    );
+    expect(sorted.data.map((row) => row.lineKind)).toEqual([
+      "principal",
+      "shipping",
+      "tax",
+    ]);
   });
 
   it("filters by projectId, and projectId + includeSubProjects over a 3-level chain", async () => {
@@ -1163,6 +1324,18 @@ describe("expense router", () => {
       }),
       ctx.actor,
     );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2024-01-15",
+        trade: "drywall",
+        costType: "materials",
+        lineKind: "tax",
+        name: "affinity tax adjustment",
+        projectId: proj.id,
+      }),
+      ctx.actor,
+    );
 
     const matrix = await caller.tradeAffinity();
     const forProject = matrix.filter((row) => row.projectId === proj.id);
@@ -1593,22 +1766,59 @@ describe("expense repository — expenseAnalytics", () => {
       }),
       ctx.actor,
     );
+    const { output: p5 } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        trade: "other",
+        costType: "services",
+        lineKind: "tax",
+        name: "analytics p5 tax",
+        projectId: projectA.id,
+        cost: 23,
+        date: "2026-01-10",
+        future: false,
+      }),
+      ctx.actor,
+    );
+    const { output: p6 } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        trade: "other",
+        costType: "tools",
+        lineKind: "discount",
+        name: "analytics p6 discount",
+        projectId: projectA.id,
+        cost: -5,
+        date: "2026-01-10",
+        future: false,
+      }),
+      ctx.actor,
+    );
 
     const filters = { search: "analytics p" };
     const result = await expenseAnalytics(ctx.db, filters);
 
-    // --- summary: actual=100+30, committed=50, credits=20, net=160 ---
+    // Summary/monthly/project totals retain every dollar, including adjustments.
     expect(result.summary).toEqual({
-      actual: 130,
+      actual: 153,
       committed: 50,
-      credits: 20,
-      net: 160,
-      count: 4,
-      actualCount: 3, // p1, p3, p4 (future: false)
+      credits: 25,
+      net: 178,
+      count: 6,
+      actualCount: 5,
       plannedCount: 1, // p2
     });
+    expect(result.adjustments).toEqual({
+      actual: 23,
+      committed: 0,
+      credits: 5,
+      net: 18,
+      count: 2,
+    });
 
-    // --- byCostType: only materials/services appear (no other costType seeded) ---
+    // Dimensional analytics classify principal purchases only. The adjustment
+    // rows deliberately carry different historical costType/trade values to
+    // prove those values do not leak into the category matrices.
     expect(result.byCostType).toEqual(
       expect.arrayContaining([
         {
@@ -1688,15 +1898,15 @@ describe("expense repository — expenseAnalytics", () => {
       ]),
     );
 
-    // --- monthly: Jan (p1, p2, p3) and Feb (p4) ---
+    // --- monthly: Jan (p1, p2, p3, p5, p6) and Feb (p4) ---
     expect(result.monthly).toEqual([
       {
         month: "2026-01",
-        actual: 100,
+        actual: 123,
         committed: 50,
-        credits: 20,
-        net: 130,
-        count: 3,
+        credits: 25,
+        net: 148,
+        count: 5,
       },
       {
         month: "2026-02",
@@ -1710,8 +1920,8 @@ describe("expense repository — expenseAnalytics", () => {
 
     // --- cumulative: running sum of monthly.net, ascending ---
     expect(result.cumulative).toEqual([
-      { month: "2026-01", cumulativeNet: 130 },
-      { month: "2026-02", cumulativeNet: 160 },
+      { month: "2026-01", cumulativeNet: 148 },
+      { month: "2026-02", cumulativeNet: 178 },
     ]);
 
     // --- byProject: p3 (no project) excluded ---
@@ -1720,11 +1930,11 @@ describe("expense repository — expenseAnalytics", () => {
         {
           projectId: projectA.id,
           projectName: projectA.name,
-          actual: 100,
+          actual: 123,
           committed: 50,
-          credits: 0,
-          net: 150,
-          count: 2,
+          credits: 5,
+          net: 168,
+          count: 4,
         },
         {
           projectId: projectB.id,
@@ -1741,13 +1951,13 @@ describe("expense repository — expenseAnalytics", () => {
 
     // --- core invariant: analytics totals agree with expenseList's visible
     // rows under the SAME filter — sum expenseList's `cost` column and
-    // compare against summary.net (both should equal 160). ---
+    // compare against summary.net (both should equal 178). ---
     const { data: listedRows } = await expenseList(ctx.db, filters, [], {
       pageIndex: 0,
       pageSize: 100,
     });
     expect(listedRows.map((p) => p.id).sort()).toEqual(
-      [p1.id, p2.id, p3.id, p4.id].sort(),
+      [p1.id, p2.id, p3.id, p4.id, p5.id, p6.id].sort(),
     );
     const summedCost = listedRows.reduce((sum, p) => sum + (p.cost ?? 0), 0);
     expect(summedCost).toBe(result.summary.net);

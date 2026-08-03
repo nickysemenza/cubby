@@ -1,3 +1,4 @@
+import { isPrincipalExpense } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseOut, Trade } from "@cubby/schemas/project";
 import { sumBy } from "es-toolkit";
 import { ShoppingBag } from "lucide-react";
@@ -85,6 +86,7 @@ export function TradeCostMatrix({
       else map.set(key, [p]);
     };
     for (const p of expenses) {
+      if (!isPrincipalExpense(p)) continue;
       push(`${p.trade}|${p.costType}`, p);
       push(`${p.trade}|total`, p);
     }

@@ -9,6 +9,7 @@ import {
   expenseCostTypeColumn,
   expenseDateColumn,
   expenseFutureColumn,
+  expenseLineKindColumn,
   expenseOrderIdColumn,
   expenseProductQuantityColumn,
   expenseTradeColumn,
@@ -185,6 +186,16 @@ export function ExpenseList() {
         {
           mobile: { slot: "subtitle", priority: 15 },
         },
+      ),
+      expenseLineKindColumn(
+        columnHelper,
+        async (lineKind, expense) => {
+          await updateExpenseMutation.mutateAsync({
+            id: expense.id,
+            data: { lineKind },
+          });
+        },
+        { mobile: { slot: "meta", priority: 18 } },
       ),
       expenseCostTypeColumn(
         columnHelper,
@@ -468,6 +479,9 @@ export function ExpenseList() {
           {formatCurrency(summary?.credits ?? 0, 0)}
         </StatTile>
         <StatTile label="Net">{formatCurrency(summary?.net ?? 0, 0)}</StatTile>
+        <StatTile label="Purchase adjustments">
+          {formatCurrency(analyticsQuery.data?.adjustments.net ?? 0, 0)}
+        </StatTile>
         <StatTile label="Count">{summary?.count ?? 0}</StatTile>
       </Grid>
       <ExpenseProductImages rows={data}>
@@ -484,6 +498,11 @@ export function ExpenseList() {
           bulkActionBar={bulkActionBar}
           infiniteScroll={infiniteScroll}
           refreshControls={refreshControls}
+          getRowClassName={(row) =>
+            row.original.lineKind === "principal"
+              ? undefined
+              : "bg-muted/20 text-muted-foreground"
+          }
         />
       </ExpenseProductImages>
       <PreviewSheet />

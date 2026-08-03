@@ -25,6 +25,7 @@ const EXPENSE: ExpenseOut = {
   name: "Box of fasteners",
   cost: 20,
   date: "2026-07-20",
+  lineKind: "principal",
   costType: "materials",
   trade: "other",
   url: null,

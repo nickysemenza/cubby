@@ -1,3 +1,7 @@
+import {
+  type ExpenseLineKind,
+  expenseLineKindValues,
+} from "@cubby/schemas/expense-line-kind";
 import type { CostType } from "@cubby/schemas/project";
 import { costTypeValues } from "@cubby/schemas/project";
 import { format, startOfYear, subDays, subMonths } from "date-fns";
@@ -40,6 +44,35 @@ export const costTypeOptions: FilterableComboboxItem[] = costTypeValues.map(
     color: getCostTypeColor(value),
   }),
 );
+
+export const expenseLineKindLabels: Record<ExpenseLineKind, string> = {
+  principal: "Item or service",
+  tax: "Tax",
+  shipping: "Shipping or delivery",
+  discount: "Discount",
+  fee: "Fee",
+  tip: "Tip",
+  other_adjustment: "Other adjustment",
+};
+
+export const expenseLineKindBadgeVariant: Record<
+  ExpenseLineKind,
+  BadgeVariant
+> = {
+  principal: "outline",
+  tax: "secondary",
+  shipping: "slate",
+  discount: "positive",
+  fee: "warning",
+  tip: "plum",
+  other_adjustment: "secondary",
+};
+
+export const expenseLineKindOptions: FilterableComboboxItem[] =
+  expenseLineKindValues.map((value) => ({
+    value,
+    label: expenseLineKindLabels[value],
+  }));
 
 /** `{value,label}` options for the "future" (planned vs. made) filter. */
 export const futureFilterOptions: FilterableComboboxItem[] = [

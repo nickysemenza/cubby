@@ -30,7 +30,8 @@ source.
 - A deposit and balance on one documented vendor order are one Purchase with
   multiple Expenses/Financial Transactions. Progress payments without one
   fixed-scope order remain separate Purchases.
-- For line-item splits, allocate tax, shipping, and fees only across the lines
-  they actually apply to. Round to cents last and explain any residual cent.
+- For line-item splits, preserve explicitly itemized tax, shipping, discounts,
+  and fees as typed productless Expenses. Leave embedded amounts embedded; do
+  not allocate or estimate them across merchandise lines.
 - Never infer that a missing email proves no event without first establishing
   the mailbox/source coverage window.

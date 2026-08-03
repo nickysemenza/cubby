@@ -698,6 +698,98 @@ describe("purchase repository — splitExpense", () => {
     expect(reconcilePurchase(charge)).toBe("match");
   });
 
+  it("keeps itemized receipt adjustments as typed productless spend", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Typed split merchandise" }),
+      ctx.actor,
+    );
+    const { output: original } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "typed receipt total",
+          cost: 100,
+          vendor: "Typed Split Vendor",
+          orderId: "TYPED-SPLIT-1",
+        }),
+      ),
+      ctx.actor,
+    );
+
+    const { items } = await splitExpense(
+      ctx.db,
+      splitExpenseInput.parse({
+        expenseId: original.id,
+        parts: [
+          {
+            name: "Typed split merchandise",
+            cost: 90,
+            costType: "tools",
+            trade: "other",
+            productId: product.id,
+          },
+          {
+            name: "Sales tax",
+            cost: 8,
+            costType: "materials",
+            trade: "other",
+          },
+          {
+            name: "Shipping and handling",
+            cost: 4,
+            costType: "materials",
+            trade: "other",
+          },
+          {
+            name: "Order discount",
+            cost: -2,
+            costType: "materials",
+            trade: "other",
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+
+    expect(
+      Object.fromEntries(
+        items.map((item) => [
+          item.name,
+          {
+            lineKind: item.lineKind,
+            productId: item.productId,
+            cost: item.cost,
+          },
+        ]),
+      ),
+    ).toEqual({
+      "Typed split merchandise": {
+        lineKind: "principal",
+        productId: product.id,
+        cost: 90,
+      },
+      "Sales tax": { lineKind: "tax", productId: null, cost: 8 },
+      "Shipping and handling": {
+        lineKind: "shipping",
+        productId: null,
+        cost: 4,
+      },
+      "Order discount": {
+        lineKind: "discount",
+        productId: null,
+        cost: -2,
+      },
+    });
+
+    const charge = await getPurchaseByID(
+      ctx.db,
+      await purchaseUuid(ctx.db, original.purchaseId!),
+    );
+    expect(charge).toMatchObject({ statedTotal: 100, expenseTotal: 100 });
+    expect(reconcilePurchase(charge)).toBe("match");
+  });
+
   it("does not overwrite a statedTotal the charge already had", async () => {
     const vendorId = await vendorShortcodeByName(ctx.db, "Stated Total Vendor");
     const { output: charge } = await createPurchase(

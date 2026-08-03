@@ -562,7 +562,10 @@ function AnalyticsView({
           title="Spend by Trade"
           description="Actual + committed spend per trade"
         >
-          <TradeActivity data={data.tradeActivity} />
+          <TradeActivity
+            data={data.tradeActivity}
+            adjustments={data.adjustments.net}
+          />
         </Section>
 
         <Section

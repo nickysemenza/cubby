@@ -101,6 +101,7 @@ export function ExpenseAnalyticsView() {
 
   const {
     summary,
+    adjustments,
     byCostType,
     tradeCostMatrix,
     monthly,
@@ -120,13 +121,16 @@ export function ExpenseAnalyticsView() {
           {formatCurrency(summary.credits, 0)}
         </StatTile>
         <StatTile label="Net">{formatCurrency(summary.net, 0)}</StatTile>
+        <StatTile label="Purchase adjustments">
+          {formatCurrency(adjustments.net, 0)}
+        </StatTile>
         <StatTile label="Count">{summary.count}</StatTile>
       </Grid>
 
       <Grid cols="pair">
         <Section
           title="Spending by Category"
-          description="Click a slice to scope the trade breakdown"
+          description={`Principal spend only; ${formatCurrency(adjustments.net, 0)} in purchase adjustments is included in Net above.`}
         >
           <CostTypeDonut
             byCostType={byCostType}
@@ -147,7 +151,9 @@ export function ExpenseAnalyticsView() {
               >
                 Clear selection
               </button>
-            ) : undefined
+            ) : (
+              `Principal spend only; ${formatCurrency(adjustments.net, 0)} in purchase adjustments is included in Net above.`
+            )
           }
         >
           <TradeBarsAggregate
@@ -164,7 +170,7 @@ export function ExpenseAnalyticsView() {
 
       <Section
         title="Trade × Cost Type"
-        description="Click a cell to filter the Ledger view; click it again to clear"
+        description={`Principal spend only; ${formatCurrency(adjustments.net, 0)} in purchase adjustments is included in Net. Click a cell to filter the Ledger view.`}
       >
         <TradeCostMatrixAggregate
           tradeCostMatrix={tradeCostMatrix}

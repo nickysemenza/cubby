@@ -174,6 +174,7 @@ export async function computeAttentionItems(
         and(
           notDeleted(expense),
           eq(expense.trade, "other"),
+          eq(expense.lineKind, "principal"),
           isNull(expense.cost),
           scopedOrInbox(expense.projectId),
         ),

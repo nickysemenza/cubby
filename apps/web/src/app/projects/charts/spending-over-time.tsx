@@ -1,3 +1,4 @@
+import { isPrincipalExpense } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseOut, Trade } from "@cubby/schemas/project";
 import { ResponsiveLine } from "@nivo/line";
 import { TrendingUp } from "lucide-react";
@@ -68,13 +69,26 @@ export function SpendingOverTime({
   costEstimate: number | null;
 }) {
   const [mode, setMode] = useState<SpendMode>("total");
+  const principalExpenses = useMemo(
+    () => expenses.filter(isPrincipalExpense),
+    [expenses],
+  );
+  const adjustmentTotal = useMemo(
+    () =>
+      expenses.reduce(
+        (total, expense) =>
+          isPrincipalExpense(expense) ? total : total + (expense.cost ?? 0),
+        0,
+      ),
+    [expenses],
+  );
 
   const categorySeries = useMemo(
     () =>
-      buildStackedCumulativeSpend(expenses, (p) =>
+      buildStackedCumulativeSpend(principalExpenses, (p) =>
         normalizeCostTypeKey(p.costType),
       ),
-    [expenses],
+    [principalExpenses],
   );
 
   // Trade lens: rank trades by absolute total, keep the top 6 on the ramp,
@@ -82,7 +96,7 @@ export function SpendingOverTime({
   // series labels (TRADE_LABELS / "Other") to their tokens.
   const { tradeSeries, tradeColorById } = useMemo(() => {
     const totals = new Map<Trade, number>();
-    for (const p of expenses) {
+    for (const p of principalExpenses) {
       if (!p.date || p.cost == null) continue;
       totals.set(p.trade, (totals.get(p.trade) ?? 0) + Math.abs(p.cost));
     }
@@ -97,11 +111,11 @@ export function SpendingOverTime({
     });
     if (ranked.length > TRADE_RAMP.length) colorById[OTHER_LABEL] = OTHER_COLOR;
 
-    const series = buildStackedCumulativeSpend(expenses, (p) =>
+    const series = buildStackedCumulativeSpend(principalExpenses, (p) =>
       topTrades.has(p.trade) ? TRADE_LABELS[p.trade] : OTHER_LABEL,
     );
     return { tradeSeries: series, tradeColorById: colorById };
-  }, [expenses]);
+  }, [principalExpenses]);
 
   return (
     <Stack gap="sm">
@@ -128,6 +142,12 @@ export function SpendingOverTime({
           costEstimate={costEstimate}
         />
       )}
+      {mode !== "total" && adjustmentTotal !== 0 ? (
+        <p className="text-center text-muted-foreground text-xs">
+          Total spend also includes {formatCurrency(adjustmentTotal, 0)} in
+          purchase adjustments not assigned to this breakdown.
+        </p>
+      ) : null}
     </Stack>
   );
 }

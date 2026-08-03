@@ -1,3 +1,4 @@
+import { isPrincipalExpense } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseOut, Trade } from "@cubby/schemas/project";
 import { useMemo, useState } from "react";
 import { Grid, Section, Stack } from "~/components/layout";
@@ -31,7 +32,10 @@ export function CategoryBreakdown({
   // (e.g. a /expenses filter removes the cost type) — derive, don't effect.
   const effectiveSelected =
     selected != null &&
-    expenses.some((p) => normalizeCostTypeKey(p.costType) === selected)
+    expenses.some(
+      (p) =>
+        isPrincipalExpense(p) && normalizeCostTypeKey(p.costType) === selected,
+    )
       ? selected
       : null;
 
@@ -39,9 +43,11 @@ export function CategoryBreakdown({
     () =>
       effectiveSelected
         ? expenses.filter(
-            (p) => normalizeCostTypeKey(p.costType) === effectiveSelected,
+            (p) =>
+              isPrincipalExpense(p) &&
+              normalizeCostTypeKey(p.costType) === effectiveSelected,
           )
-        : expenses,
+        : expenses.filter(isPrincipalExpense),
     [expenses, effectiveSelected],
   );
 

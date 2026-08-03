@@ -228,6 +228,7 @@ export const buildExpenseWhereClause = async (
       ...auditDateWhereConditions(expense, filters),
       ...relatedWhereConditions("expense", filters, expense.id),
       nameSearch,
+      eqAny(expense.lineKind, filters.lineKind),
       eqAny(expense.costType, filters.costType),
       eqAny(expense.trade, filters.trade),
       projectCondition,

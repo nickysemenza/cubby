@@ -24,6 +24,7 @@
     "db:rebuild": "pnpm run db:push",
     "db:studio": "drizzle-kit studio",
     "db:report-product-quantities": "tsx scripts/report-product-quantity-backfill.ts",
+    "db:backfill-expense-line-kind": "tsx scripts/backfill-expense-line-kind.ts",
     "regenerate": "pnpm run db:rebuild",
     "knip": "knip",
     "knip:production": "knip --production",

@@ -34,7 +34,7 @@ Expense notes when `notes` is omitted; provide a specific note to replace them o
 Seek the final invoice, receipt, or credit memo before classifying a mismatch.
 Keep a retained-goods price correction on the retained Purchase; keep a returned
 item and its refund on the original Purchase; keep a general account credit as
-settlement evidence until its use is known. When a real variance remains
-unexplained, record a clearly labeled productless Expense rather than silently
-spreading it across lines. Never rewrite `statedTotal` or allocation merely to
-make reconciliation appear clean.
+settlement evidence until its use is known. Record a typed productless Expense
+only for a source-evidenced adjustment amount. Never derive one from an
+unexplained reconciliation difference, spread the difference across lines, or
+rewrite `statedTotal` merely to make reconciliation appear clean.

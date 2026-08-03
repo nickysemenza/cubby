@@ -1,3 +1,4 @@
+import { expenseLineKindValues } from "@cubby/schemas/expense-line-kind";
 import type { PurchaseShortcode } from "@cubby/schemas/identifiers";
 import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -24,6 +25,7 @@ import {
   expenseCostTypeColumn,
   expenseDateColumn,
   expenseFutureColumn,
+  expenseLineKindColumn,
   expenseProductQuantityColumn,
   expenseTradeColumn,
 } from "~/app/projects/shared";
@@ -43,11 +45,41 @@ export function PurchaseExpensesTable({
 }: {
   purchaseId: PurchaseShortcode;
 }) {
+  return (
+    <div className="space-y-6">
+      <PurchaseExpenseRows purchaseId={purchaseId} kind="principal" />
+      <div className="space-y-2">
+        <div>
+          <h3 className="font-medium text-sm">Receipt adjustments</h3>
+          <p className="text-muted-foreground text-xs">
+            Tax, shipping, discounts, fees, and tips remain spend but are not
+            assigned to cost-type or trade analytics.
+          </p>
+        </div>
+        <PurchaseExpenseRows purchaseId={purchaseId} kind="adjustment" />
+      </div>
+    </div>
+  );
+}
+
+function PurchaseExpenseRows({
+  purchaseId,
+  kind,
+}: {
+  purchaseId: PurchaseShortcode;
+  kind: "principal" | "adjustment";
+}) {
   const api = useTRPC();
   const helper = useMemo(() => createColumnHelper<ExpenseOut>(), []);
   const scope = useMemo<Partial<ExpenseFilters>>(
-    () => ({ purchaseId }),
-    [purchaseId],
+    () => ({
+      purchaseId,
+      lineKind:
+        kind === "principal"
+          ? "principal"
+          : expenseLineKindValues.filter((value) => value !== "principal"),
+    }),
+    [purchaseId, kind],
   );
   const update = useUpdateMutation({
     mutationFn: api.expense.update.mutationOptions,
@@ -63,9 +95,8 @@ export function PurchaseExpensesTable({
   });
   const bulkActions = useExpenseBulkActions();
   // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrappers are functionally stable
-  const columns = useMemo(
-    () => [
-      createExpenseProductImageColumn(helper),
+  const columns = useMemo(() => {
+    const shared = [
       expenseCostColumn(
         helper,
         async (cost, row) => {
@@ -77,14 +108,30 @@ export function PurchaseExpensesTable({
         if (date === null) return;
         await update.mutateAsync({ id: row.id, data: { date } });
       }),
+      expenseLineKindColumn(helper, async (lineKind, row) => {
+        await update.mutateAsync({ id: row.id, data: { lineKind } });
+      }),
+      expenseFutureColumn(helper, async (future, row) => {
+        await update.mutateAsync({ id: row.id, data: { future } });
+      }),
+      createProjectLinkColumn(helper, {
+        className: "w-48",
+        editable: {
+          onSave: async (projectId, row) => {
+            await update.mutateAsync({ id: row.id, data: { projectId } });
+          },
+        },
+      }),
+    ];
+    if (kind === "adjustment") return shared;
+    return [
+      createExpenseProductImageColumn(helper),
+      ...shared,
       expenseCostTypeColumn(helper, async (costType, row) => {
         await update.mutateAsync({ id: row.id, data: { costType } });
       }),
       expenseTradeColumn(helper, async (trade, row) => {
         await update.mutateAsync({ id: row.id, data: { trade } });
-      }),
-      expenseFutureColumn(helper, async (future, row) => {
-        await update.mutateAsync({ id: row.id, data: { future } });
       }),
       createProductLinkColumn(helper, {
         className: "w-48",
@@ -100,46 +147,42 @@ export function PurchaseExpensesTable({
           data: { productQuantity },
         });
       }),
-      createProjectLinkColumn(helper, {
-        className: "w-48",
-        editable: {
-          onSave: async (projectId, row) => {
-            await update.mutateAsync({ id: row.id, data: { projectId } });
-          },
-        },
-      }),
-    ],
-    [helper],
-  );
+    ];
+  }, [helper, kind]);
   const list = useEntityList<ExpenseOut, ExpenseFilters>({
     entity: "expense",
     queryOptions: api.expense.list.queryOptions,
     scopeFilters: scope,
     columns,
     tableStateOptions: EMBEDDED_TABLE_STATE,
-    columnVisibilityScope: "purchase-detail",
+    columnVisibilityScope: `purchase-detail-${kind}`,
     hiddenFilterColumns: ["vendor", "orderId"],
     deletable,
     nameEditable,
     bulkActions: bulkActions.config,
     initialColumnVisibility: {
-      product: true,
-      productQuantity: true,
+      product: kind === "principal",
+      productQuantity: kind === "principal",
       // A purchase can fund more than one project; keep the editable allocation
       // visible rather than hiding it behind the column menu.
       project: true,
+      lineKind: kind === "adjustment",
       createdAt: false,
     },
   });
-  return (
-    <ExpenseProductImages rows={list.data}>
+  const table = (
+    <>
       <RTable
         table={list.table}
         isLoading={list.isLoading}
         error={list.error}
         timing={list.timing}
-        sizingKey="expense:purchase-detail"
-        ariaLabel="Purchase expenses"
+        sizingKey={`expense:purchase-detail:${kind}`}
+        ariaLabel={
+          kind === "principal"
+            ? "Purchase principal expenses"
+            : "Purchase receipt adjustments"
+        }
         embedded
         showColumnMenu
         bulkActionBar={list.bulkActionBar}
@@ -151,6 +194,11 @@ export function PurchaseExpensesTable({
         controller={bulkActions}
         onComplete={() => list.table.resetRowSelection()}
       />
-    </ExpenseProductImages>
+    </>
+  );
+  return kind === "principal" ? (
+    <ExpenseProductImages rows={list.data}>{table}</ExpenseProductImages>
+  ) : (
+    table
   );
 }

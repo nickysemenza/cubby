@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { expenseLineKindSchema } from "./expense-line-kind";
 import { financialReconciliationSummary } from "./financial-reconciliation";
 import { wholeCentAmount } from "./money";
 import {
@@ -813,6 +814,9 @@ const expenseFields = {
   name: z.string().min(1),
   cost: wholeCentAmount.nullable().describe("Dollars"),
   date: plainDate,
+  lineKind: expenseLineKindSchema.describe(
+    "Receipt role. Principal lines are the purchased item/service; every other value is a purchase-level adjustment.",
+  ),
   costType: costTypeSchema,
   trade: tradeSchema,
   url: z.string().nullable(),
@@ -851,6 +855,8 @@ const expenseFields = {
 
 const expenseCreateShape = {
   ...expenseFields,
+  // Omitted means infer conservatively from the Expense name in the repo.
+  lineKind: expenseLineKindSchema.optional(),
   /**
    * Attach directly to a known Purchase, bypassing the `{vendor, orderId}`
    * name-resolution path. The precise form, for callers that already hold a
@@ -915,6 +921,7 @@ export const expenseFilterFields = {
   // `oneOrMany`: the header filters are multi-select, but scalar MCP callers
   // stay valid. Resolved with `eqAny` in the repo.
   costType: oneOrMany(costTypeSchema).optional(),
+  lineKind: oneOrMany(expenseLineKindSchema).optional(),
   trade: oneOrMany(tradeSchema).optional(),
   projectId: oneOrMany(projectShortcode).optional(),
   // Only meaningful alongside `projectId`: expands the filter to the project
@@ -1084,6 +1091,7 @@ export type ExpenseFilters = z.infer<typeof expenseFiltersSchema>;
 export const expenseSortableFields = [
   "name",
   "cost",
+  "lineKind",
   "productQuantity",
   "date",
   "costType",
@@ -1199,6 +1207,14 @@ export const expenseAnalyticsSummary = z.object({
 });
 export type ExpenseAnalyticsSummary = z.infer<typeof expenseAnalyticsSummary>;
 
+/** Signed aggregate for every non-principal receipt adjustment. */
+export const expenseAdjustmentsAggregate = z.object({
+  ...expenseAggregateFields,
+});
+export type ExpenseAdjustmentsAggregate = z.infer<
+  typeof expenseAdjustmentsAggregate
+>;
+
 export const expenseCostTypeAggregate = z.object({
   costType: costTypeSchema,
   ...expenseAggregateFields,
@@ -1266,6 +1282,7 @@ export type ExpenseVendorAggregate = z.infer<typeof expenseVendorAggregate>;
  */
 export const expenseAnalyticsOut = z.object({
   summary: expenseAnalyticsSummary,
+  adjustments: expenseAdjustmentsAggregate,
   byCostType: z.array(expenseCostTypeAggregate),
   byTrade: z.array(expenseTradeAggregate),
   tradeCostMatrix: z.array(expenseTradeCostAggregate),
@@ -1738,6 +1755,7 @@ export const projectPortfolioAnalyticsOut = z.object({
     z.object({ month: z.string(), planned: z.number(), actual: z.number() }),
   ),
   tradeActivity: z.array(expenseTradeAggregate),
+  adjustments: expenseAdjustmentsAggregate,
   taskHeatmap: z.array(
     z.object({
       projectId: projectShortcode,

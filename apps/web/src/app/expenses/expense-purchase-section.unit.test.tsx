@@ -58,6 +58,7 @@ const expense: ExpenseOut = {
   name: "Router bits",
   cost: 24.99,
   date: "2026-07-31",
+  lineKind: "principal",
   costType: "materials",
   trade: "other",
   url: null,

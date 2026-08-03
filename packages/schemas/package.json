@@ -45,6 +45,7 @@
     "./telemetry": "./src/telemetry.ts",
     "./calendar": "./src/calendar.ts",
     "./dashboard": "./src/dashboard.ts",
+    "./expense-line-kind": "./src/expense-line-kind.ts",
     "./project": "./src/project.ts",
     "./vendor": "./src/vendor.ts",
     "./purchase": "./src/purchase.ts",

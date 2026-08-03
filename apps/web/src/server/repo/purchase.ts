@@ -20,6 +20,7 @@ import type {
   ImpactItem,
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
+import { inferExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
   type ExpenseId,
   type FinancialTransactionId,
@@ -1201,6 +1202,14 @@ export const splitExpense = async (
         const productId = part.productId
           ? unsafeProductId(productIds.get(part.productId) ?? "")
           : null;
+        const lineKind =
+          part.lineKind ?? inferExpenseLineKind({ name: part.name, productId });
+        if (lineKind !== "principal" && productId !== null) {
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "Only principal Expenses may link a Product.",
+          );
+        }
         if (part.productQuantity !== null && productId === null) {
           throw createAppError(
             "CONSTRAINT_VIOLATION",
@@ -1211,6 +1220,7 @@ export const splitExpense = async (
           name: part.name,
           cost: part.cost,
           date: original.date,
+          lineKind,
           costType: part.costType,
           trade: part.trade,
           url: original.url,

@@ -1,3 +1,4 @@
+import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import type {
   ProductShortcode,
   ProjectShortcode,
@@ -24,7 +25,7 @@ import {
 } from "../_components/form-utils";
 import { VendorField } from "../_components/form-utils/vendor-field";
 import { FormFieldGroup } from "../_components/forms/form-field-group";
-import { costTypeOptions } from "./expense-options";
+import { costTypeOptions, expenseLineKindOptions } from "./expense-options";
 
 const today = () => format(new Date(), "yyyy-MM-dd");
 
@@ -36,6 +37,7 @@ const today = () => format(new Date(), "yyyy-MM-dd");
 // (see `defaultValues` below) rather than forcing a choice via `.refine()`.
 const quickAddExpenseSchema = z.object({
   name: z.string().min(1, "Name is required"),
+  lineKind: z.union([z.literal("auto"), expenseLineKindSchema]),
   cost: z.number().nullable(),
   date: plainDate,
   projectId: z.string().nullable(),
@@ -89,6 +91,7 @@ export function CreateExpenseDialog({
   const defaultValues = useMemo<QuickAddExpenseValues>(
     () => ({
       name: "",
+      lineKind: "auto",
       cost: null,
       date: presetDate ?? today(),
       // A disposition deliberately defaults to no project: a negative cost
@@ -125,6 +128,7 @@ export function CreateExpenseDialog({
       invalidateKeys={expenseMutationInvalidateKeys}
       buildPayload={(values) => ({
         name: values.name,
+        lineKind: values.lineKind === "auto" ? undefined : values.lineKind,
         cost: values.cost,
         date: values.date,
         projectId: values.projectId
@@ -150,6 +154,17 @@ export function CreateExpenseDialog({
             placeholder="What did you buy?"
             autoFocus
           />
+          {!presetProductId ? (
+            <SelectField
+              form={form}
+              name="lineKind"
+              label="Line kind"
+              options={[
+                { value: "auto", label: "Auto-detect from name" },
+                ...expenseLineKindOptions,
+              ]}
+            />
+          ) : null}
           <NullableNumericField
             form={form}
             name="cost"

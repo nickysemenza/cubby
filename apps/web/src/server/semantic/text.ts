@@ -214,6 +214,7 @@ export function buildTaskEmbeddingText(task: TaskSearchTextInput) {
 
 const expenseSearchTextInputSchema = z.object({
   name: z.string(),
+  lineKind: nullableText,
   costType: nullableText,
   trade: nullableText,
   notes: nullableText,
@@ -227,6 +228,7 @@ export function buildExpenseEmbeddingText(expense: ExpenseSearchTextInput) {
   const parsed = expenseSearchTextInputSchema.parse(expense);
   return joinFields([
     field("expense", parsed.name),
+    field("line kind", parsed.lineKind),
     field("cost type", parsed.costType),
     field("trade", parsed.trade),
     field("project", parsed.projectName),

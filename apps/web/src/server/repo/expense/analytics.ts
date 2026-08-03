@@ -28,7 +28,7 @@ import type {
   ExpenseFilters,
   Trade,
 } from "@cubby/schemas/project";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Database } from "~/server/db";
 import { expense, project, purchase, vendor } from "~/server/db/schema";
@@ -53,6 +53,14 @@ export async function expenseAnalytics(
   filters: ExpenseFilters,
 ): Promise<ExpenseAnalyticsOut> {
   const whereClause = await buildExpenseWhereClause(db, filters);
+  const principalWhereClause = and(
+    whereClause,
+    eq(expense.lineKind, "principal"),
+  );
+  const adjustmentsWhereClause = and(
+    whereClause,
+    ne(expense.lineKind, "principal"),
+  );
   // `expense.date` is nullable (a `future` expense commonly has none yet) —
   // exclude null-date rows from the month-bucketed breakdowns only (can't
   // bucket what has no date); summary/byCostType/byTrade/byProject still
@@ -61,6 +69,7 @@ export async function expenseAnalytics(
 
   const [
     summaryRows,
+    adjustmentRows,
     byCostType,
     byTrade,
     tradeCostMatrix,
@@ -77,14 +86,18 @@ export async function expenseAnalytics(
       .from(expense)
       .where(whereClause),
     getDb(db)
+      .select({ ...aggregateSelect() })
+      .from(expense)
+      .where(adjustmentsWhereClause),
+    getDb(db)
       .select({ costType: expense.costType, ...aggregateSelect() })
       .from(expense)
-      .where(whereClause)
+      .where(principalWhereClause)
       .groupBy(expense.costType),
     getDb(db)
       .select({ trade: expense.trade, ...aggregateSelect() })
       .from(expense)
-      .where(whereClause)
+      .where(principalWhereClause)
       .groupBy(expense.trade),
     getDb(db)
       .select({
@@ -93,7 +106,7 @@ export async function expenseAnalytics(
         ...aggregateSelect(),
       })
       .from(expense)
-      .where(whereClause)
+      .where(principalWhereClause)
       .groupBy(expense.trade, expense.costType),
     getDb(db)
       .select({ month: MONTH_BUCKET, ...aggregateSelect() })
@@ -173,6 +186,7 @@ export async function expenseAnalytics(
 
   return {
     summary,
+    adjustments: adjustmentRows[0]!,
     byCostType,
     byTrade,
     tradeCostMatrix,
@@ -217,7 +231,13 @@ export async function expenseTradeAffinity(
       project,
       and(eq(expense.projectId, project.id), notDeleted(project)),
     )
-    .where(and(notDeleted(expense), isNotNull(expense.projectId)))
+    .where(
+      and(
+        notDeleted(expense),
+        isNotNull(expense.projectId),
+        eq(expense.lineKind, "principal"),
+      ),
+    )
     .groupBy(project.shortcode, expense.trade);
 
   return rows.map((row) => ({
