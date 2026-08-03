@@ -23,6 +23,7 @@ import type {
   ProductMissingPrice,
   ProductWithBetterUpcData,
   ProductWithoutMappings,
+  SoldButStillStocked,
 } from "@cubby/schemas/problems";
 import { isMiscProduct, isNonFoodCategory } from "@cubby/shared";
 import {
@@ -32,6 +33,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  lt,
   notExists,
   type SQL,
   sql,
@@ -321,6 +323,129 @@ export const findProductsMissingPrice = async (
   }
 
   return { real, buckets };
+};
+
+// Find products that were sold off but are still sitting on a shelf.
+//
+// The exact mirror of `findProductsMissingPrice`, and it exists for the same
+// reason: `inventoryEntry.valuation` is precomputed from the product's
+// effective price, so a stale entry keeps contributing its full value to the
+// location rollup. An unpriced product makes the rollup silently *omit* value;
+// this one makes it silently *invent* value.
+//
+// Nothing else can catch this. Inventory never auto-decrements (a binding
+// tenet), so no write path walks the shelf back when a disposal is recorded —
+// the divergence is invisible by construction, and detection is the only
+// mechanism left. `findOrphanedProducts` deliberately cannot help: it treats
+// `expense` as a *retaining* edge precisely so a bought-then-sold tool is not
+// reported as an orphan (see the note above it), which is exactly what blinds
+// it here.
+//
+// Two predicate choices carry the correctness, both learned from live data:
+//
+//  1. *Disposal Purchases, not negative lines.* A disposal is modelled as a
+//     Purchase whose Expenses are negative — the shape documented on
+//     `purchaseSettlementKinds`. Negative Expense lines on their own are
+//     common and mostly innocent (refunds, price adjustments, family
+//     contributions), and the looser predicate was wrong about half the time
+//     on production: 43 products matched, only 20 were genuine disposals.
+//
+//  2. *Fully disposed, not merely touched.* Selling 4 of 14 parts bins leaves
+//     10 legitimately stocked, so a row is reported only when the sold
+//     quantity accounts for everything still on the shelf. Both quantities
+//     ride along on the row so a partial sale reads as deliberate.
+export const findSoldButStillStocked = async (
+  db: Database,
+): Promise<SoldButStillStocked[]> => {
+  const dbClient = getDb(db);
+
+  const disposalPurchaseIds = dbClient
+    .select({ id: expense.purchaseId })
+    .from(expense)
+    .where(
+      and(
+        notDeleted(expense),
+        eq(expense.future, false),
+        isNotNull(expense.purchaseId),
+      ),
+    )
+    .groupBy(expense.purchaseId)
+    .having(sql`sum(${expense.cost}) < 0`);
+
+  const disposals = await dbClient
+    .select({
+      productId: expense.productId,
+      // A bare sale row carries no `productQuantity`; read it as one unit, the
+      // same way the ledger itself reads it.
+      soldQuantity: sql<number>`sum(coalesce(${expense.productQuantity}, 1))::double precision`,
+      proceeds: sql<number>`sum(${expense.cost})::double precision`,
+    })
+    .from(expense)
+    .where(
+      and(
+        notDeleted(expense),
+        eq(expense.future, false),
+        lt(expense.cost, 0),
+        isNotNull(expense.productId),
+        inArray(expense.purchaseId, disposalPurchaseIds),
+      ),
+    )
+    .groupBy(expense.productId);
+
+  const byProduct = new Map(
+    disposals.flatMap((row) =>
+      row.productId ? ([[row.productId, row]] as const) : [],
+    ),
+  );
+  if (byProduct.size === 0) return [];
+
+  const candidates = await dbClient.query.product.findMany({
+    where: and(notDeleted(product), inArray(product.id, [...byProduct.keys()])),
+    columns: { id: true, name: true, manufacturer: true, shortcode: true },
+    with: {
+      inventoryEntry: {
+        where: notDeleted(inventoryEntry),
+        columns: { id: true, amount: true },
+        with: {
+          location: { columns: { id: true, name: true, shortcode: true } },
+        },
+      },
+    },
+  });
+
+  const rows: SoldButStillStocked[] = [];
+
+  for (const prod of candidates) {
+    const disposal = byProduct.get(prod.id);
+    if (!disposal) continue;
+
+    const liveQuantity = prod.inventoryEntry.reduce(
+      (sum, entry) => sum + entry.amount.value,
+      0,
+    );
+
+    // Nothing on a shelf — the ledger and the inventory already agree, which is
+    // the normal end state after a sale.
+    if (liveQuantity <= 0) continue;
+    // A partial sale leaves real stock behind; only a fully-accounted-for
+    // disposal means the remaining entry is stale.
+    if (disposal.soldQuantity < liveQuantity) continue;
+
+    rows.push({
+      id: unsafeProductShortcode(prod.shortcode),
+      name: prod.name,
+      manufacturer: prod.manufacturer,
+      soldQuantity: disposal.soldQuantity,
+      liveQuantity,
+      proceeds: disposal.proceeds,
+      locations: prod.inventoryEntry.map((entry) => ({
+        id: unsafeLocationShortcode(entry.location.shortcode),
+        name: entry.location.name,
+      })),
+    });
+  }
+
+  return rows;
 };
 
 // Find products with invalid or duplicate UPC codes

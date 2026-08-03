@@ -34,6 +34,7 @@ const PROBLEM_LABELS: Record<
   orphanedProducts: (n) => `${n} orphaned`,
   productsMissingPrice: (n) => `${n} stocked without a price`,
   unvaluedBucketProducts: (n) => pl(n, "unvalued bucket"),
+  soldButStillStocked: (n) => `${n} sold but still stocked`,
   productsWithoutMappings: (n) => `${n} without pricing`,
   ingredientsWithPartialCoverage: (n) => `${n} partial coverage`,
   ingredientsWithoutProduct: (n) => `${n} without a product`,

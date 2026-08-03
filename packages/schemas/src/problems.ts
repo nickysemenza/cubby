@@ -82,6 +82,37 @@ export const productMissingPriceSchema = z.object({
   ),
 });
 
+// A product still sitting on a shelf after it was sold off. The disposal is
+// already in the ledger — a Purchase whose Expenses are negative, the shape
+// `purchaseSettlementKinds` documents — but inventory never auto-decrements
+// (a binding tenet), so nothing walks the shelf back and the entry keeps
+// valuing at the product's price. That is the exact mirror of
+// `productsMissingPrice`: same location rollup, opposite failure. An unpriced
+// product silently omits value; this one silently invents it.
+//
+// Keyed on a *disposal Purchase*, not merely a negative Expense line. Negative
+// lines are common and mostly innocent — refunds, price adjustments, family
+// contributions — and on live data that looser predicate is wrong about half
+// the time (43 flagged, 20 real). Reported with both quantities so a partial
+// sale reads as deliberate rather than as a bug.
+export const soldButStillStockedSchema = z.object({
+  ...productProblemFields,
+  // Units accounted for by disposal lines. A line with no `productQuantity`
+  // counts as one, matching how the ledger reads a bare sale row.
+  soldQuantity: z.number(),
+  // Units still on a shelf. Only reported when `soldQuantity >= liveQuantity`;
+  // selling 4 of 14 parts bins leaves 10 legitimately stocked.
+  liveQuantity: z.number(),
+  // Net proceeds across those disposal lines (negative, as stored).
+  proceeds: z.number(),
+  locations: z.array(
+    z.object({
+      id: locationShortcode,
+      name: z.string(),
+    }),
+  ),
+});
+
 export const productWithoutMappingsSchema = z.object({
   ...productProblemFields,
   createdAt: z.date(),
@@ -456,6 +487,7 @@ const problemsFastShape = {
   orphanedProducts: z.array(orphanedProductSchema),
   productsMissingPrice: z.array(productMissingPriceSchema),
   unvaluedBucketProducts: z.array(productMissingPriceSchema),
+  soldButStillStocked: z.array(soldButStillStockedSchema),
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
   ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
   unusedIngredientsWithProduct: z.array(unusedIngredientSchema),
@@ -592,6 +624,13 @@ export const PROBLEM_CLASS = {
   duplicateInventory: "defect",
   orphanedProducts: "defect",
   productsMissingPrice: "defect",
+  // Unambiguously wrong and converges to zero: the item was sold, so the shelf
+  // is stale and the location total is overstated by its full value. Not
+  // `coverage` — there is no denominator and no reported row is legitimately
+  // correct as it stands. No auto-fix: the entry is usually stale but may
+  // instead mean the disposal was mis-recorded, and deleting inventory has no
+  // restore path.
+  soldButStillStocked: "defect",
   productsWithoutMappings: "defect",
   unusedIngredientsWithProduct: "defect",
   unusedIngredientsWithoutProduct: "defect",
@@ -767,6 +806,7 @@ export type DuplicateUniqueProduct = z.infer<
 >;
 export type OrphanedProduct = z.infer<typeof orphanedProductSchema>;
 export type ProductMissingPrice = z.infer<typeof productMissingPriceSchema>;
+export type SoldButStillStocked = z.infer<typeof soldButStillStockedSchema>;
 export type ProductWithoutMappings = z.infer<
   typeof productWithoutMappingsSchema
 >;

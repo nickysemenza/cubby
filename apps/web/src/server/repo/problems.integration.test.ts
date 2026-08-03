@@ -470,6 +470,173 @@ describe("problems repo", () => {
     });
   });
 
+  describe("findSoldButStillStocked", () => {
+    // Seed through the real door: `createExpense` resolves vendor + orderId into
+    // a Purchase, and it is that Purchase's net sign — not the sign of any one
+    // line — that makes a disposal.
+    const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
+      unwrap(
+        createExpense(
+          ctx.db,
+          expenseCreateInput.parse(makeExpenseInput(overrides)),
+          ctx.actor,
+        ),
+      );
+
+    it("flags a fully-disposed stocked product, sparing partial sales and refunds on ordinary purchases", async () => {
+      const loc = await createLocation(
+        ctx.db,
+        makeLocationInput({ name: "Disposal shelf" }),
+        ctx.actor,
+      );
+      const sold = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Sold Off Track Saw", price: 400 }),
+        ctx.actor,
+      );
+      // Sold 4 of 14 — the remaining 10 are legitimately stocked.
+      const partial = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Parts Bin Case", price: 10 }),
+        ctx.actor,
+      );
+      // A negative line on a net-POSITIVE purchase: a partial refund, not a
+      // disposal. This is the case the naive "any negative line" predicate got
+      // wrong about half the time on production data.
+      const refunded = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Partly Refunded Sander", price: 100 }),
+        ctx.actor,
+      );
+
+      const soldEntry = await createInventoryEntry(
+        ctx.db,
+        {
+          productId: sold.id,
+          locationId: loc.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+      await createInventoryEntry(
+        ctx.db,
+        {
+          productId: partial.id,
+          locationId: loc.id,
+          amount: { value: 10, unit: "each" },
+        },
+        ctx.actor,
+      );
+      await createInventoryEntry(
+        ctx.db,
+        {
+          productId: refunded.id,
+          locationId: loc.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+
+      await seedLine({
+        name: "track saw sold",
+        cost: -320,
+        vendor: "eBay",
+        orderId: "SALE-1",
+        productId: sold.id,
+        productQuantity: 1,
+      });
+      await seedLine({
+        name: "four bins sold",
+        cost: -8.93,
+        vendor: "eBay",
+        orderId: "SALE-2",
+        productId: partial.id,
+        productQuantity: 4,
+      });
+      await seedLine({
+        name: "sander",
+        cost: 260,
+        vendor: "Festool",
+        orderId: "BUY-1",
+        productId: refunded.id,
+        productQuantity: 1,
+      });
+      await seedLine({
+        name: "sander partial refund",
+        cost: -60,
+        vendor: "Festool",
+        orderId: "BUY-1",
+        productId: refunded.id,
+      });
+
+      const found = await findFastProblems(ctx.db);
+
+      const flagged = found.soldButStillStocked.find((p) => p.id === sold.id);
+      expect(flagged).toBeDefined();
+      expect(flagged?.soldQuantity).toBe(1);
+      expect(flagged?.liveQuantity).toBe(1);
+      // Stored as the ledger stores it — negative, because it is a disposal.
+      expect(flagged?.proceeds).toBe(-320);
+      expect(flagged?.locations.map((l) => l.id)).toEqual([loc.id]);
+
+      // Rule 2: a partial sale leaves real stock behind.
+      expect(found.soldButStillStocked.some((p) => p.id === partial.id)).toBe(
+        false,
+      );
+      // Rule 1: the refund sits on a purchase that nets +$200, so it is not a
+      // disposal at all.
+      expect(found.soldButStillStocked.some((p) => p.id === refunded.id)).toBe(
+        false,
+      );
+
+      // Clearing the stale shelf is the fix, and it resolves the row.
+      await deleteInventoryEntries(ctx.db, [soldEntry.entityId], ctx.actor);
+      const after = await findFastProblems(ctx.db);
+      expect(after.soldButStillStocked.some((p) => p.id === sold.id)).toBe(
+        false,
+      );
+    });
+
+    it("counts a disposal line with no quantity as one unit", async () => {
+      const loc = await createLocation(
+        ctx.db,
+        makeLocationInput({ name: "Bare-sale shelf" }),
+        ctx.actor,
+      );
+      const bare = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Bare Sale Pallet Jack", price: 200 }),
+        ctx.actor,
+      );
+      await createInventoryEntry(
+        ctx.db,
+        {
+          productId: bare.id,
+          locationId: loc.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+      // No productQuantity — the common shape for a hand-entered sale row.
+      await seedLine({
+        name: "pallet jack sold",
+        cost: -120,
+        vendor: "Craigslist",
+        orderId: "SALE-BARE",
+        productId: bare.id,
+      });
+
+      const { soldButStillStocked } = await findFastProblems(ctx.db);
+      const flagged = soldButStillStocked.find((p) => p.id === bare.id);
+      expect(flagged).toBeDefined();
+      expect(flagged?.soldQuantity).toBe(1);
+    });
+
+    it("is a defect, not a coverage backlog", () => {
+      expect(PROBLEM_CLASS.soldButStillStocked).toBe("defect");
+    });
+  });
+
   describe("findProductsWithIslandedMappings", () => {
     it("flags a product whose mappings form 2+ islands but not a connected one", async () => {
       // widget↔gadget are custom units unreachable from the standard unit graph,
