@@ -75,7 +75,7 @@ import {
   projectSubtreeExpensesFilters,
   projectSubtreeTasksFilters,
 } from "./project-query-params";
-import { ProjectToolsSection } from "./project-tools-section";
+import { ProjectResourcesSection } from "./project-tools-section";
 import {
   capitalize,
   ExpenseList,
@@ -928,11 +928,11 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     content: <BasicInfo fields={fields} />,
   };
 
-  const toolsSection: DetailSection = {
-    title: "Tools used",
+  const reusableResourcesSection: DetailSection = {
+    title: "Reusable resources",
     icon: Wrench,
     zone: "main",
-    content: <ProjectToolsSection projectId={project.id} />,
+    content: <ProjectResourcesSection projectId={project.id} />,
   };
 
   const resourcesSection: DetailSection = {
@@ -1147,7 +1147,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     ...(hasNotesContent ? [notesSection] : []),
     ...(showBudget ? [budgetSection] : []),
     tasksSection,
-    toolsSection,
+    reusableResourcesSection,
     ...(hasSubtree ? [] : [expensesSection]),
     ...(hasSubtree ? [] : [purchasedProductsSection]),
     // Aside rail: metadata + (when empty) the slim Notes card.

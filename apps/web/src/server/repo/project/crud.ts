@@ -647,7 +647,7 @@ export const previewDeleteProjects = async (
     impact({
       disposition: PROJECT_DELETE_EDGE_POLICY["ProjectToolUsage.projectId"],
       edgeKey: "ProjectToolUsage.projectId",
-      label: "tool uses",
+      label: "reusable-resource uses",
       byTargetId: await countByTarget(
         dbClient,
         projectToolUsage,

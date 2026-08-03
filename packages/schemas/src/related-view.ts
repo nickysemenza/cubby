@@ -231,7 +231,7 @@ export const relatedViewRegistry = [
     key: "project.usedTools",
     source: "project",
     target: "product",
-    label: "Used tools",
+    label: "Reusable resources",
     defaultVisible: true,
     order: "alphabetical",
     path: [

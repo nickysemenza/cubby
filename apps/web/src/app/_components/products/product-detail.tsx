@@ -192,7 +192,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         />
       ),
     },
-    ...(product.category === "tools"
+    ...(product.category === "tools" || product.category === "software"
       ? [
           {
             title: "Used on projects",

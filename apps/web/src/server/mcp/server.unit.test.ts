@@ -662,6 +662,30 @@ describe("createMcpServer registration", () => {
 });
 
 describe("listMcpToolCatalog", () => {
+  it("exposes reusable-resource operations and retires tool-only aliases", async () => {
+    const names = new Set(
+      (await listMcpToolCatalog()).tools.map((tool) => tool.name),
+    );
+    for (const name of [
+      "list_project_resources",
+      "attach_project_resources",
+      "detach_project_resources",
+      "list_product_project_uses",
+      "suggest_project_tools",
+    ]) {
+      expect(names.has(name), `${name} missing from catalog`).toBe(true);
+    }
+    for (const name of [
+      "list_project_tools",
+      "attach_project_tools",
+      "detach_project_tools",
+    ]) {
+      expect(names.has(name), `${name} unexpectedly remains in catalog`).toBe(
+        false,
+      );
+    }
+  });
+
   it("exposes generic batches and retires redundant MCP wrappers", async () => {
     const names = new Set(
       (await listMcpToolCatalog()).tools.map((tool) => tool.name),

@@ -49,9 +49,9 @@ export { projectDashboardSummary } from "./dashboard-summary";
 export { projectList, projectNameOptions } from "./lookup";
 export { projectPortfolioAnalytics } from "./portfolio-analytics";
 export {
-  attachProjectTools,
-  detachProjectTools,
+  attachProjectResources,
+  detachProjectResources,
   listProductProjectUses,
-  listProjectTools,
+  listProjectResources,
   suggestProjectTools,
 } from "./tools";

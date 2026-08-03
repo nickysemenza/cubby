@@ -30,12 +30,12 @@ import {
   projectMcpListOut,
   projectOut,
   projectPortfolioAnalyticsOut,
+  projectResourceMutationInput,
+  projectResourceMutationOut,
+  projectResourceProjectInput,
+  projectResourcesOut,
   projectTaskStatusBreakdown,
-  projectToolMutationInput,
-  projectToolMutationOut,
-  projectToolProjectInput,
   projectToolSuggestionsOut,
-  projectToolsOut,
   projectUpdateData,
   taskCreateInput,
   taskFilterFields,
@@ -199,49 +199,49 @@ export function registerProjectTools(server: McpServer) {
   });
 
   registerRouterTool(server, {
-    name: "list_project_tools",
+    name: "list_project_resources",
     description:
-      "List the durable tools explicitly used on one exact project, including each tool's net lifetime cost, distinct project-use count, cost per use, and whether it was purchased for this project. Sub-project uses remain separate and count independently.",
-    inputSchema: projectToolProjectInput.shape,
-    outputSchema: projectToolsOut,
+      "List the reusable tools and software explicitly used on one exact project. Tools include lifetime acquisition/use economics; software includes non-additive household spend charged during the project's effective window. Sub-project uses remain separate and count independently.",
+    inputSchema: projectResourceProjectInput.shape,
+    outputSchema: projectResourcesOut,
     annotations: READ_ONLY_CLOSED,
-    call: (caller, params) => caller.project.tools(params),
+    call: (caller, params) => caller.project.resources(params),
   });
 
   registerRouterTool(server, {
     name: "suggest_project_tools",
     description:
       "Suggest inventoried Cubby tools to attach to one exact project. Suggestions include tools purchased for the project at $100+ and trade-matched tools whose purchase history supports the project's task/expense trades; cheaper trade matches require at least two explicit prior project uses. This is a review queue only and never attaches tools automatically.",
-    inputSchema: projectToolProjectInput.shape,
+    inputSchema: projectResourceProjectInput.shape,
     outputSchema: projectToolSuggestionsOut,
     annotations: READ_ONLY_CLOSED,
     call: (caller, params) => caller.project.toolSuggestions(params),
   });
 
   registerRouterTool(server, {
-    name: "attach_project_tools",
+    name: "attach_project_resources",
     description:
-      "Record that one or more existing Cubby tool products were used on one exact project. Repeating an existing live association is idempotent. This does not alter project spend or the product's expense history.",
-    inputSchema: projectToolMutationInput.shape,
-    outputSchema: projectToolMutationOut,
+      "Record that one or more existing Cubby tool or software Products were used on one exact project. Repeating an existing live association is idempotent. This does not alter project spend, inventory, or expense history.",
+    inputSchema: projectResourceMutationInput.shape,
+    outputSchema: projectResourceMutationOut,
     annotations: WRITE_CLOSED,
-    call: (caller, params) => caller.project.attachTools(params),
+    call: (caller, params) => caller.project.attachResources(params),
   });
 
   registerRouterTool(server, {
-    name: "detach_project_tools",
+    name: "detach_project_resources",
     description:
-      "Soft-delete one or more explicit tool-use associations from one exact project. This leaves the Product, Expenses, inventory, and any uses on other projects unchanged.",
-    inputSchema: projectToolMutationInput.shape,
-    outputSchema: projectToolMutationOut,
+      "Soft-delete one or more explicit reusable-resource associations from one exact project. This leaves the Product, Expenses, inventory, and uses on other projects unchanged.",
+    inputSchema: projectResourceMutationInput.shape,
+    outputSchema: projectResourceMutationOut,
     annotations: WRITE_DESTRUCTIVE_CLOSED,
-    call: (caller, params) => caller.project.detachTools(params),
+    call: (caller, params) => caller.project.detachResources(params),
   });
 
   registerRouterTool(server, {
     name: "list_product_project_uses",
     description:
-      "Show every exact project on which a Cubby tool product is explicitly recorded as used, plus its net lifetime cost, distinct project-use count, cost per use, and whether the tool was purchased for each project.",
+      "Show every exact project on which a reusable Cubby tool or software Product is explicitly recorded as used. Tool rows include purchase/use economics; software rows include non-additive spend charged during each project's effective window.",
     inputSchema: productProjectUsesInput.shape,
     outputSchema: productProjectUsesOut,
     annotations: READ_ONLY_CLOSED,
