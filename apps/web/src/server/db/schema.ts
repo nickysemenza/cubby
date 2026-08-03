@@ -965,9 +965,9 @@ export const projectDependency = pgTable(
   ],
 );
 
-// Durable, deliberately coarse history that a reusable tool Product was used
-// on a Project. One live pair is one project-use; no quantities/hours/trades
-// live here because those would turn the relation into a usage ledger.
+// Durable, deliberately coarse history that a reusable tool or software Product
+// was used on a Project. One live pair is one project-use; no quantities/hours/
+// trades live here because those would turn the relation into a usage ledger.
 export const projectToolUsage = pgTable(
   "ProjectToolUsage",
   {

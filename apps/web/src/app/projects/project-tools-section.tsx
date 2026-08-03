@@ -1,5 +1,5 @@
 import type {
-  ProjectToolOut,
+  ProjectResourceOut,
   ProjectToolSuggestionOut,
 } from "@cubby/schemas/project";
 import { TRADE_LABELS } from "@cubby/schemas/project";
@@ -31,10 +31,13 @@ import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useTRPC } from "~/integrations/trpc/react";
-import { projectToolMutationInvalidateKeys } from "~/lib/query-keys";
+import { projectResourceMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 
-function economicsLabel(tool: {
+const EMPTY_RESOURCES: ProjectResourceOut[] = [];
+const EMPTY_SUGGESTIONS: ProjectToolSuggestionOut[] = [];
+
+function toolEconomicsLabel(tool: {
   projectUseCount: number;
   netLifetimeCost: number;
   costPerProjectUse: number | null;
@@ -48,7 +51,7 @@ function economicsLabel(tool: {
   return `${uses} · ${lifetime} · ${perUse}`;
 }
 
-function ToolIdentity({
+function ResourceIdentity({
   id,
   name,
   manufacturer,
@@ -68,18 +71,18 @@ function ToolIdentity({
   );
 }
 
-function AttachedToolRow({
+function AttachedResourceRow({
   projectId,
-  tool,
+  resource,
 }: {
   projectId: string;
-  tool: ProjectToolOut;
+  resource: ProjectResourceOut;
 }) {
   const api = useTRPC();
   const detach = useActionMutation({
-    mutationFn: api.project.detachTools.mutationOptions,
-    success: `Removed ${tool.productName} from this project`,
-    invalidateKeys: projectToolMutationInvalidateKeys,
+    mutationFn: api.project.detachResources.mutationOptions,
+    success: `Removed ${resource.productName} from this project`,
+    invalidateKeys: projectResourceMutationInvalidateKeys,
   });
 
   return (
@@ -90,26 +93,45 @@ function AttachedToolRow({
       className="border border-[var(--border)] p-4"
     >
       <Stack gap="xs" className="min-w-0">
-        <ToolIdentity
-          id={tool.productId}
-          name={tool.productName}
-          manufacturer={tool.manufacturer}
+        <ResourceIdentity
+          id={resource.productId}
+          name={resource.productName}
+          manufacturer={resource.manufacturer}
         />
-        <Description size="xs">{economicsLabel(tool)}</Description>
-        {tool.projectPurchaseCost > 0 && (
-          <Badge variant="outline" className="w-fit">
-            {formatCurrency(tool.projectPurchaseCost)} bought here
-          </Badge>
+        <Description size="xs">
+          {resource.category === "tools"
+            ? toolEconomicsLabel(resource)
+            : `${resource.projectUseCount} project use${resource.projectUseCount === 1 ? "" : "s"} · ${formatCurrency(resource.netLifetimeCost)} lifetime household spend`}
+        </Description>
+        {resource.category === "tools" &&
+          resource.projectPurchaseCost !== null &&
+          resource.projectPurchaseCost > 0 && (
+            <Badge variant="outline" className="w-fit">
+              {formatCurrency(resource.projectPurchaseCost)} bought here
+            </Badge>
+          )}
+        {resource.category === "software" && resource.sharedWindow && (
+          <Description size="xs">
+            {formatCurrency(resource.sharedWindow.netCost)} shared spend during
+            project ({resource.sharedWindow.startDate}–
+            {resource.sharedWindow.endDate}); contextual and non-additive
+          </Description>
+        )}
+        {resource.category === "software" && !resource.sharedWindow && (
+          <Description size="xs">
+            Shared project-window spend is unavailable until the project has a
+            valid date window.
+          </Description>
         )}
       </Stack>
       <Button
         type="button"
         variant="ghost"
         size="icon-sm"
-        aria-label={`Remove ${tool.productName} from this project`}
+        aria-label={`Remove ${resource.productName} from this project`}
         disabled={detach.isPending}
         onClick={() =>
-          detach.mutate({ projectId, productIds: [tool.productId] })
+          detach.mutate({ projectId, productIds: [resource.productId] })
         }
       >
         <Trash2 />
@@ -136,7 +158,7 @@ function SuggestionRow({
     >
       <Checkbox checked={checked} onCheckedChange={onCheckedChange} />
       <Stack gap="xs" className="min-w-0 flex-1">
-        <ToolIdentity
+        <ResourceIdentity
           id={suggestion.productId}
           name={suggestion.productName}
           manufacturer={suggestion.manufacturer}
@@ -148,13 +170,13 @@ function SuggestionRow({
             </Badge>
           ))}
         </Row>
-        <Description size="xs">{economicsLabel(suggestion)}</Description>
+        <Description size="xs">{toolEconomicsLabel(suggestion)}</Description>
       </Stack>
     </Row>
   );
 }
 
-function ToolPickerDialog({
+function ResourcePickerDialog({
   open,
   onOpenChange,
   projectId,
@@ -171,7 +193,7 @@ function ToolPickerDialog({
   const suggestionsQuery = useQuery(
     api.project.toolSuggestions.queryOptions({ projectId }, { enabled: open }),
   );
-  const searchQuery = useQuery({
+  const toolSearchQuery = useQuery({
     ...api.product.search.queryOptions({
       filters: { nameFilter: search, categoryFilter: "tools" },
       pagination: { pageIndex: 0, pageSize: 50 },
@@ -179,22 +201,30 @@ function ToolPickerDialog({
     }),
     enabled: open,
   });
-  const suggestions = suggestionsQuery.data?.items ?? [];
+  const softwareSearchQuery = useQuery({
+    ...api.product.search.queryOptions({
+      filters: { nameFilter: search, categoryFilter: "software" },
+      pagination: { pageIndex: 0, pageSize: 50 },
+      sort: [{ orderBy: "name", direction: "asc" }],
+    }),
+    enabled: open,
+  });
+  const suggestions = suggestionsQuery.data?.items ?? EMPTY_SUGGESTIONS;
   const purchasedHere = suggestions.filter(
     (suggestion) => suggestion.lane === "purchased_here",
   );
-  const tradeMatches = suggestions.filter(
-    (suggestion) => suggestion.lane === "trade_match",
+  const browseTools = (toolSearchQuery.data?.items ?? []).filter(
+    (item) => !attachedIds.has(item.id),
   );
-  const browseItems = (searchQuery.data?.items ?? []).filter(
+  const browseSoftware = (softwareSearchQuery.data?.items ?? []).filter(
     (item) => !attachedIds.has(item.id),
   );
 
   const attach = useActionMutation({
-    mutationFn: api.project.attachTools.mutationOptions,
+    mutationFn: api.project.attachResources.mutationOptions,
     success: (result) =>
-      `Attached ${result.changed} tool${result.changed === 1 ? "" : "s"}`,
-    invalidateKeys: projectToolMutationInvalidateKeys,
+      `Attached ${result.changed} resource${result.changed === 1 ? "" : "s"}`,
+    invalidateKeys: projectResourceMutationInvalidateKeys,
     onSuccess: () => {
       setSelected(new Set());
       onOpenChange(false);
@@ -212,12 +242,13 @@ function ToolPickerDialog({
 
   const tradeGroups = useMemo(() => {
     const groups = new Map<string, ProjectToolSuggestionOut[]>();
-    for (const suggestion of tradeMatches) {
+    for (const suggestion of suggestions) {
+      if (suggestion.lane !== "trade_match") continue;
       const key = suggestion.matchedTrade ?? "other";
       groups.set(key, [...(groups.get(key) ?? []), suggestion]);
     }
     return [...groups.entries()];
-  }, [tradeMatches]);
+  }, [suggestions]);
 
   const resetAndClose = (next: boolean) => {
     if (!next) {
@@ -231,22 +262,24 @@ function ToolPickerDialog({
     <Dialog open={open} onOpenChange={resetAndClose}>
       <DialogContent size="lg">
         <DialogHeader>
-          <DialogTitle>Add tools used on this project</DialogTitle>
+          <DialogTitle>Add reusable resources</DialogTitle>
           <DialogDescription>
-            Review suggestions or browse all Cubby tool products. Attaching a
-            tool records reuse; it does not change project spend or inventory.
+            Review physical-tool suggestions or browse tool and software
+            Products. Attaching a resource records use; it does not change
+            project spend, budgets, or inventory.
           </DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="suggested">
           <TabsList>
             <TabsTrigger value="suggested">
-              Suggested
+              Suggested tools
               {suggestions.length > 0 && (
                 <Badge variant="outline">{suggestions.length}</Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="browse">Browse tools</TabsTrigger>
+            <TabsTrigger value="tools">Browse tools</TabsTrigger>
+            <TabsTrigger value="software">Browse software</TabsTrigger>
           </TabsList>
 
           <TabsContent value="suggested">
@@ -304,7 +337,7 @@ function ToolPickerDialog({
             )}
           </TabsContent>
 
-          <TabsContent value="browse">
+          <TabsContent value="tools">
             <Stack gap="sm">
               <Row align="center" gap="sm">
                 <Search className="size-4 shrink-0 text-muted-foreground" />
@@ -314,15 +347,15 @@ function ToolPickerDialog({
                   placeholder="Search tool products…"
                 />
               </Row>
-              {searchQuery.isPending ? (
+              {toolSearchQuery.isPending ? (
                 <Description>Loading tools…</Description>
-              ) : browseItems.length === 0 ? (
+              ) : browseTools.length === 0 ? (
                 <Description>
                   No unattached tools match this search.
                 </Description>
               ) : (
                 <Stack gap="xs" className="max-h-96 overflow-y-auto">
-                  {browseItems.map((item) => (
+                  {browseTools.map((item) => (
                     <Row
                       as="label"
                       key={item.id}
@@ -334,7 +367,49 @@ function ToolPickerDialog({
                         checked={selected.has(item.id)}
                         onCheckedChange={(checked) => toggle(item.id, checked)}
                       />
-                      <ToolIdentity
+                      <ResourceIdentity
+                        id={item.id}
+                        name={item.name}
+                        manufacturer={item.manufacturer}
+                      />
+                    </Row>
+                  ))}
+                </Stack>
+              )}
+            </Stack>
+          </TabsContent>
+
+          <TabsContent value="software">
+            <Stack gap="sm">
+              <Row align="center" gap="sm">
+                <Search className="size-4 shrink-0 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search software products…"
+                />
+              </Row>
+              {softwareSearchQuery.isPending ? (
+                <Description>Loading software…</Description>
+              ) : browseSoftware.length === 0 ? (
+                <Description>
+                  No unattached software matches this search.
+                </Description>
+              ) : (
+                <Stack gap="xs" className="max-h-96 overflow-y-auto">
+                  {browseSoftware.map((item) => (
+                    <Row
+                      as="label"
+                      key={item.id}
+                      align="center"
+                      gap="sm"
+                      className="cursor-pointer border border-[var(--border)] p-4"
+                    >
+                      <Checkbox
+                        checked={selected.has(item.id)}
+                        onCheckedChange={(checked) => toggle(item.id, checked)}
+                      />
+                      <ResourceIdentity
                         id={item.id}
                         name={item.name}
                         manufacturer={item.manufacturer}
@@ -364,26 +439,28 @@ function ToolPickerDialog({
   );
 }
 
-export function ProjectToolsSection({ projectId }: { projectId: string }) {
+export function ProjectResourcesSection({ projectId }: { projectId: string }) {
   const api = useTRPC();
   const [pickerOpen, setPickerOpen] = useState(false);
-  const toolsQuery = useQuery(api.project.tools.queryOptions({ projectId }));
+  const resourcesQuery = useQuery(
+    api.project.resources.queryOptions({ projectId }),
+  );
   const suggestionsQuery = useQuery(
     api.project.toolSuggestions.queryOptions({ projectId }),
   );
-  const tools = toolsQuery.data ?? [];
+  const resources = resourcesQuery.data ?? EMPTY_RESOURCES;
   const suggestionCount = suggestionsQuery.data?.items.length ?? 0;
   const unlinked = suggestionsQuery.data?.unlinkedExpensivePurchases;
   const attachedIds = useMemo(
-    () => new Set(tools.map((tool) => tool.productId)),
-    [tools],
+    () => new Set(resources.map((resource) => resource.productId)),
+    [resources],
   );
 
   return (
     <Stack gap="sm">
       <Row align="center" justify="between" gap="sm">
         <Description size="xs">
-          Explicit uses only; each exact project counts once per tool.
+          Explicit uses only; each exact project counts once per resource.
         </Description>
         <Button
           type="button"
@@ -392,7 +469,7 @@ export function ProjectToolsSection({ projectId }: { projectId: string }) {
           onClick={() => setPickerOpen(true)}
         >
           <Wrench />
-          Add tools
+          Add resources
           {suggestionCount > 0 && (
             <Badge variant="outline">{suggestionCount}</Badge>
           )}
@@ -415,31 +492,31 @@ export function ProjectToolsSection({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      {toolsQuery.isPending ? (
-        <Description>Loading tools…</Description>
-      ) : tools.length === 0 ? (
+      {resourcesQuery.isPending ? (
+        <Description>Loading reusable resources…</Description>
+      ) : resources.length === 0 ? (
         <Empty variant="minimal" className="py-6">
           <EmptyHeader>
-            <EmptyTitle>No tools recorded</EmptyTitle>
+            <EmptyTitle>No reusable resources recorded</EmptyTitle>
             <EmptyDescription>
-              Add only the meaningful durable tools. Small consumables do not
-              need to become project-use records.
+              Add meaningful durable tools and shared software. Small
+              consumables do not need to become project-use records.
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
         <Stack gap="xs">
-          {tools.map((tool) => (
-            <AttachedToolRow
-              key={tool.productId}
+          {resources.map((resource) => (
+            <AttachedResourceRow
+              key={resource.productId}
               projectId={projectId}
-              tool={tool}
+              resource={resource}
             />
           ))}
         </Stack>
       )}
 
-      <ToolPickerDialog
+      <ResourcePickerDialog
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         projectId={projectId}

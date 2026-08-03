@@ -1472,10 +1472,10 @@ export const expenseTradeAffinityOut = z.object({
 export type ExpenseTradeAffinityOut = z.infer<typeof expenseTradeAffinityOut>;
 
 // ---------------------------------------------------------------------------
-// Project tool usage and recommendation projections
+// Project reusable-resource usage and tool recommendation projections
 // ---------------------------------------------------------------------------
 
-export const projectToolProjectInput = z.object({
+export const projectResourceProjectInput = z.object({
   projectId: projectShortcode,
 });
 
@@ -1483,15 +1483,18 @@ export const productProjectUsesInput = z.object({
   productId: productShortcode,
 });
 
-export const projectToolMutationInput = z.object({
+export const projectResourceMutationInput = z.object({
   projectId: projectShortcode,
   productIds: z.array(productShortcode).min(1).max(100),
 });
 
-export const projectToolMutationOut = z.object({
+export const projectResourceMutationOut = z.object({
   changed: z.number().int().nonnegative(),
   attached: z.number().int().nonnegative(),
 });
+
+export const reusableResourceCategory = z.enum(["tools", "software"]);
+export type ReusableResourceCategory = z.infer<typeof reusableResourceCategory>;
 
 const projectToolEconomicsFields = {
   projectUseCount: z.number().int().nonnegative(),
@@ -1500,16 +1503,32 @@ const projectToolEconomicsFields = {
   grossLifetimeAcquisitionCost: z.number().nonnegative(),
 };
 
-export const projectToolOut = z.object({
+export const projectSharedWindowOut = z.object({
+  startDate: plainDate,
+  endDate: plainDate,
+  netCost: z.number(),
+});
+export type ProjectSharedWindowOut = z.infer<typeof projectSharedWindowOut>;
+
+const projectResourceEconomicsFields = {
+  projectUseCount: z.number().int().nonnegative(),
+  netLifetimeCost: z.number(),
+  costPerProjectUse: z.number().nullable(),
+  grossLifetimeAcquisitionCost: z.number().nonnegative().nullable(),
+};
+
+export const projectResourceOut = z.object({
   productId: productShortcode,
   productName: z.string(),
   manufacturer: z.string(),
+  category: reusableResourceCategory,
   attachedAt: z.date(),
-  projectPurchaseCost: z.number().nonnegative(),
-  ...projectToolEconomicsFields,
+  projectPurchaseCost: z.number().nonnegative().nullable(),
+  sharedWindow: projectSharedWindowOut.nullable(),
+  ...projectResourceEconomicsFields,
 });
-export type ProjectToolOut = z.infer<typeof projectToolOut>;
-export const projectToolsOut = z.array(projectToolOut);
+export type ProjectResourceOut = z.infer<typeof projectResourceOut>;
+export const projectResourcesOut = z.array(projectResourceOut);
 
 export const projectToolSuggestionOut = z.object({
   productId: productShortcode,
@@ -1540,14 +1559,18 @@ export type ProjectToolSuggestionsOut = z.infer<
 
 export const productProjectUsesOut = z.object({
   productId: productShortcode,
-  ...projectToolEconomicsFields,
+  productName: z.string(),
+  manufacturer: z.string(),
+  category: reusableResourceCategory,
+  ...projectResourceEconomicsFields,
   projects: z.array(
     z.object({
       projectId: projectShortcode,
       projectName: z.string(),
       status: projectStatusSchema,
       kind: projectKindSchema.nullable(),
-      projectPurchaseCost: z.number().nonnegative(),
+      projectPurchaseCost: z.number().nonnegative().nullable(),
+      sharedWindow: projectSharedWindowOut.nullable(),
       attachedAt: z.date(),
     }),
   ),

@@ -28,8 +28,8 @@ export function ProductProjectUses({ productId }: { productId: string }) {
         <EmptyHeader>
           <EmptyTitle>No project uses recorded</EmptyTitle>
           <EmptyDescription>
-            Attach this tool from a project when it is used. Each exact project
-            counts once.
+            Attach this reusable resource from a project when it is used. Each
+            exact project counts once.
           </EmptyDescription>
         </EmptyHeader>
       </Empty>
@@ -44,13 +44,18 @@ export function ProductProjectUses({ productId }: { productId: string }) {
           {data.projectUseCount === 1 ? "" : "s"}
         </Badge>
         <Badge variant="outline">
-          {formatCurrency(data.netLifetimeCost)} net lifetime cost
+          {formatCurrency(data.netLifetimeCost)}{" "}
+          {data.category === "software"
+            ? "lifetime household spend"
+            : "net lifetime cost"}
         </Badge>
-        <Badge variant="outline">
-          {data.costPerProjectUse === null
-            ? "Cost/use pending"
-            : `${formatCurrency(data.costPerProjectUse)} per use`}
-        </Badge>
+        {data.category === "tools" && (
+          <Badge variant="outline">
+            {data.costPerProjectUse === null
+              ? "Cost/use pending"
+              : `${formatCurrency(data.costPerProjectUse)} per use`}
+          </Badge>
+        )}
       </Row>
 
       <Stack gap="xs">
@@ -77,10 +82,28 @@ export function ProductProjectUses({ productId }: { productId: string }) {
                 {PROJECT_STATUS_LABELS[project.status]}
               </Description>
             </Stack>
-            {project.projectPurchaseCost > 0 && (
-              <Badge variant="outline" className="shrink-0">
-                {formatCurrency(project.projectPurchaseCost)} bought here
-              </Badge>
+            {data.category === "tools" &&
+              project.projectPurchaseCost !== null &&
+              project.projectPurchaseCost > 0 && (
+                <Badge variant="outline" className="shrink-0">
+                  {formatCurrency(project.projectPurchaseCost)} bought here
+                </Badge>
+              )}
+            {data.category === "software" && project.sharedWindow && (
+              <Stack gap="xs" className="shrink-0 text-right">
+                <Badge variant="outline">
+                  {formatCurrency(project.sharedWindow.netCost)} shared spend
+                </Badge>
+                <Description size="xs">
+                  {project.sharedWindow.startDate}–
+                  {project.sharedWindow.endDate} · non-additive
+                </Description>
+              </Stack>
+            )}
+            {data.category === "software" && !project.sharedWindow && (
+              <Description size="xs" className="shrink-0 text-right">
+                Shared spend unavailable
+              </Description>
             )}
           </Row>
         ))}

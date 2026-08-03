@@ -355,7 +355,7 @@ export const entityManifest = {
       ),
       path(
         "tools-used",
-        "Tools used",
+        "Reusable resources",
         "product",
         inc("ProjectToolUsage.projectId"),
         out("ProjectToolUsage.productId"),

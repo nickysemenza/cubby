@@ -6,11 +6,15 @@ import {
 } from "@cubby/schemas/identifiers";
 import type {
   ProductProjectUsesOut,
-  ProjectToolOut,
+  ProjectResourceOut,
+  ProjectSharedWindowOut,
   ProjectToolSuggestionOut,
   ProjectToolSuggestionsOut,
+  ReusableResourceCategory,
   Trade,
 } from "@cubby/schemas/project";
+import { isLiveProjectStatus } from "@cubby/schemas/project";
+import { format } from "date-fns";
 import {
   and,
   asc,
@@ -19,9 +23,14 @@ import {
   desc,
   eq,
   gt,
+  gte,
   inArray,
+  isNotNull,
   isNull,
+  lte,
   ne,
+  notInArray,
+  or,
   sql,
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
@@ -41,31 +50,33 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { maxPlainDate } from "./helpers";
+import { collectDescendantIds, loadProjectDateWindows } from "./subtree";
 
 const EXPENSIVE_TOOL_THRESHOLD = 100;
 const REUSED_CHEAP_TOOL_PROJECTS = 2;
 const MAX_TRADE_SUGGESTIONS = 20;
 const MAX_SUGGESTIONS_PER_TRADE = 5;
 
-type ToolMetrics = {
+type ResourceMetrics = {
   projectUseCount: number;
   netLifetimeCost: number;
   costPerProjectUse: number | null;
   grossLifetimeAcquisitionCost: number;
 };
 
-const EMPTY_METRICS: ToolMetrics = {
+const EMPTY_METRICS: ResourceMetrics = {
   projectUseCount: 0,
   netLifetimeCost: 0,
   costPerProjectUse: null,
   grossLifetimeAcquisitionCost: 0,
 };
 
-async function loadToolMetrics(
+async function loadResourceMetrics(
   dbc: DrizzleClient,
   productIds: ProductId[],
-): Promise<Map<ProductId, ToolMetrics>> {
-  const result = new Map<ProductId, ToolMetrics>();
+): Promise<Map<ProductId, ResourceMetrics>> {
+  const result = new Map<ProductId, ResourceMetrics>();
   if (productIds.length === 0) return result;
 
   const [usageRows, costRows] = await Promise.all([
@@ -124,6 +135,105 @@ async function loadToolMetrics(
       metrics.projectUseCount === 0
         ? null
         : metrics.netLifetimeCost / metrics.projectUseCount;
+  }
+  return result;
+}
+
+type ResourceReadOptions = {
+  /** Plain date override for deterministic live-project window tests. */
+  today?: string;
+};
+
+type ResourceWindowContext = {
+  sharedWindow: Omit<ProjectSharedWindowOut, "netCost">;
+  excludedProjectIds: Set<ProjectId>;
+};
+
+type LoadedProjectDateWindows = Awaited<
+  ReturnType<typeof loadProjectDateWindows>
+>;
+
+function buildResourceWindowContexts(
+  loaded: LoadedProjectDateWindows,
+  projectIds: ProjectId[],
+  today: string,
+): Map<ProjectId, ResourceWindowContext | null> {
+  const projectById = new Map(loaded.tree.allRows.map((row) => [row.id, row]));
+  const result = new Map<ProjectId, ResourceWindowContext | null>();
+
+  for (const projectId of projectIds) {
+    const row = projectById.get(projectId);
+    const window = loaded.dateWindows.get(projectId);
+    const startDate = window?.effectiveStart ?? null;
+    const endDate = row
+      ? isLiveProjectStatus(row.status)
+        ? maxPlainDate(window?.effectiveEnd ?? null, today)
+        : (window?.effectiveEnd ?? null)
+      : null;
+
+    if (startDate === null || endDate === null || startDate > endDate) {
+      result.set(projectId, null);
+      continue;
+    }
+
+    result.set(projectId, {
+      sharedWindow: { startDate, endDate },
+      excludedProjectIds: new Set([
+        projectId,
+        ...collectDescendantIds(loaded.tree.childrenByParent, projectId),
+      ]),
+    });
+  }
+
+  return result;
+}
+
+function publicResourceMetrics(
+  category: ReusableResourceCategory,
+  metrics: ResourceMetrics,
+) {
+  return {
+    projectUseCount: metrics.projectUseCount,
+    netLifetimeCost: metrics.netLifetimeCost,
+    costPerProjectUse: category === "tools" ? metrics.costPerProjectUse : null,
+    grossLifetimeAcquisitionCost:
+      category === "tools" ? metrics.grossLifetimeAcquisitionCost : null,
+  };
+}
+
+async function loadProjectSoftwareWindowCosts(
+  dbc: DrizzleClient,
+  productIds: ProductId[],
+  context: ResourceWindowContext | null,
+): Promise<Map<ProductId, number>> {
+  const result = new Map<ProductId, number>();
+  if (productIds.length === 0 || context === null) return result;
+
+  const rows = await dbc
+    .select({
+      productId: expense.productId,
+      netCost: sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(Number),
+    })
+    .from(expense)
+    .where(
+      and(
+        inArray(expense.productId, productIds),
+        eq(expense.lineKind, "principal"),
+        eq(expense.future, false),
+        isNotNull(expense.cost),
+        gte(expense.date, context.sharedWindow.startDate),
+        lte(expense.date, context.sharedWindow.endDate),
+        or(
+          isNull(expense.projectId),
+          notInArray(expense.projectId, [...context.excludedProjectIds]),
+        ),
+        notDeleted(expense),
+      ),
+    )
+    .groupBy(expense.productId);
+
+  for (const row of rows) {
+    if (row.productId) result.set(row.productId, row.netCost);
   }
   return result;
 }
@@ -190,10 +300,11 @@ async function loadProductPurchaseCostsByProject(
   return result;
 }
 
-export async function listProjectTools(
+export async function listProjectResources(
   db: Database,
   projectId: ProjectId,
-): Promise<ProjectToolOut[]> {
+  options: ResourceReadOptions = {},
+): Promise<ProjectResourceOut[]> {
   const dbc = getDb(db);
   const rows = await dbc
     .select({
@@ -201,6 +312,7 @@ export async function listProjectTools(
       productCode: product.shortcode,
       productName: product.name,
       manufacturer: product.manufacturer,
+      category: product.category,
       attachedAt: projectToolUsage.createdAt,
     })
     .from(projectToolUsage)
@@ -217,22 +329,62 @@ export async function listProjectTools(
     .orderBy(asc(product.name));
 
   const productIds = rows.map((row) => row.productId);
-  const [metrics, purchaseCosts] = await Promise.all([
-    loadToolMetrics(dbc, productIds),
-    loadProjectPurchaseCosts(dbc, projectId, productIds),
+  const toolIds = rows
+    .filter((row) => row.category === "tools")
+    .map((row) => row.productId);
+  const softwareIds = rows
+    .filter((row) => row.category === "software")
+    .map((row) => row.productId);
+  const [metrics, purchaseCosts, loadedWindows] = await Promise.all([
+    loadResourceMetrics(dbc, productIds),
+    loadProjectPurchaseCosts(dbc, projectId, toolIds),
+    softwareIds.length > 0 ? loadProjectDateWindows(db) : null,
   ]);
+  const windowContext = loadedWindows
+    ? (buildResourceWindowContexts(
+        loadedWindows,
+        [projectId],
+        options.today ?? format(new Date(), "yyyy-MM-dd"),
+      ).get(projectId) ?? null)
+    : null;
+  const softwareWindowCosts = await loadProjectSoftwareWindowCosts(
+    dbc,
+    softwareIds,
+    windowContext,
+  );
 
-  return rows.map((row) => ({
-    productId: unsafeProductShortcode(row.productCode),
-    productName: row.productName,
-    manufacturer: row.manufacturer,
-    attachedAt: row.attachedAt,
-    projectPurchaseCost: purchaseCosts.get(row.productId) ?? 0,
-    ...(metrics.get(row.productId) ?? EMPTY_METRICS),
-  }));
+  return rows.map((row) => {
+    if (row.category !== "tools" && row.category !== "software") {
+      throw createAppError(
+        "PRODUCT_NOT_FOUND",
+        `${row.productName} is no longer categorized as a reusable resource`,
+      );
+    }
+    const category = row.category;
+    return {
+      productId: unsafeProductShortcode(row.productCode),
+      productName: row.productName,
+      manufacturer: row.manufacturer,
+      category,
+      attachedAt: row.attachedAt,
+      projectPurchaseCost:
+        category === "tools" ? (purchaseCosts.get(row.productId) ?? 0) : null,
+      sharedWindow:
+        category === "software" && windowContext !== null
+          ? {
+              ...windowContext.sharedWindow,
+              netCost: softwareWindowCosts.get(row.productId) ?? 0,
+            }
+          : null,
+      ...publicResourceMetrics(
+        category,
+        metrics.get(row.productId) ?? EMPTY_METRICS,
+      ),
+    };
+  });
 }
 
-async function liveToolCodes(
+async function liveResourceCodes(
   dbc: DrizzleClient,
   projectId: ProjectId,
 ): Promise<string[]> {
@@ -251,7 +403,7 @@ async function liveToolCodes(
   return rows.map((row) => row.shortcode);
 }
 
-export async function attachProjectTools(
+export async function attachProjectResources(
   db: Database,
   projectId: ProjectId,
   productIds: ProductId[],
@@ -270,42 +422,42 @@ export async function attachProjectTools(
       );
     }
 
-    const liveTools = await tx.query.product.findMany({
+    const liveResources = await tx.query.product.findMany({
       where: and(
         inArray(product.id, uniqueProductIds),
-        eq(product.category, "tools"),
+        inArray(product.category, ["tools", "software"]),
         notDeleted(product),
       ),
       columns: { id: true },
     });
-    if (liveTools.length !== uniqueProductIds.length) {
+    if (liveResources.length !== uniqueProductIds.length) {
       throw createAppError(
         "PRODUCT_NOT_FOUND",
-        "Every attached Product must exist, be live, and have category tools.",
+        "Every attached Product must exist, be live, and have category tools or software.",
       );
     }
 
-    const before = await liveToolCodes(tx, projectId);
+    const before = await liveResourceCodes(tx, projectId);
     const inserted = await tx
       .insert(projectToolUsage)
       .values(uniqueProductIds.map((productId) => ({ projectId, productId })))
       .onConflictDoNothing()
       .returning({ id: projectToolUsage.id });
-    const after = await liveToolCodes(tx, projectId);
+    const after = await liveResourceCodes(tx, projectId);
 
     if (inserted.length > 0) {
       await logAuditEntry(tx, actor, {
         entityType: "project",
         entityId: projectId,
         action: "update",
-        changes: { usedToolIds: { from: before, to: after } },
+        changes: { usedResourceIds: { from: before, to: after } },
       });
     }
     return { changed: inserted.length, attached: after.length };
   });
 }
 
-export async function detachProjectTools(
+export async function detachProjectResources(
   db: Database,
   projectId: ProjectId,
   productIds: ProductId[],
@@ -313,7 +465,7 @@ export async function detachProjectTools(
 ): Promise<{ changed: number; attached: number }> {
   const uniqueProductIds = uniq(productIds);
   return withTransaction(db, async (tx) => {
-    const before = await liveToolCodes(tx, projectId);
+    const before = await liveResourceCodes(tx, projectId);
     const removed = await tx
       .update(projectToolUsage)
       .set({ deletedAt: new Date() })
@@ -325,14 +477,14 @@ export async function detachProjectTools(
         ),
       )
       .returning({ id: projectToolUsage.id });
-    const after = await liveToolCodes(tx, projectId);
+    const after = await liveResourceCodes(tx, projectId);
 
     if (removed.length > 0) {
       await logAuditEntry(tx, actor, {
         entityType: "project",
         entityId: projectId,
         action: "update",
-        changes: { usedToolIds: { from: before, to: after } },
+        changes: { usedResourceIds: { from: before, to: after } },
       });
     }
     return { changed: removed.length, attached: after.length };
@@ -513,7 +665,7 @@ export async function suggestProjectTools(
     ...directRows.map((row) => row.productId),
     ...tradeRows.map((row) => row.productId),
   ]);
-  const metrics = await loadToolMetrics(dbc, candidateProductIds);
+  const metrics = await loadResourceMetrics(dbc, candidateProductIds);
 
   const directSuggestions: ProjectToolSuggestionOut[] = directRows
     .filter(
@@ -636,18 +788,102 @@ export async function suggestProjectTools(
   };
 }
 
+type SoftwareExpenseRow = {
+  projectId: ProjectId | null;
+  date: string;
+  cost: number;
+};
+
+async function loadSoftwareExpenseRows(
+  dbc: DrizzleClient,
+  productId: ProductId,
+  contexts: Map<ProjectId, ResourceWindowContext | null>,
+): Promise<SoftwareExpenseRow[]> {
+  const validContexts = [...contexts.values()].filter(
+    (context): context is ResourceWindowContext => context !== null,
+  );
+  if (validContexts.length === 0) return [];
+
+  const startDate = validContexts.reduce(
+    (earliest, context) =>
+      context.sharedWindow.startDate < earliest
+        ? context.sharedWindow.startDate
+        : earliest,
+    validContexts[0]!.sharedWindow.startDate,
+  );
+  const endDate = validContexts.reduce(
+    (latest, context) =>
+      context.sharedWindow.endDate > latest
+        ? context.sharedWindow.endDate
+        : latest,
+    validContexts[0]!.sharedWindow.endDate,
+  );
+
+  const rows = await dbc
+    .select({
+      projectId: expense.projectId,
+      date: expense.date,
+      cost: expense.cost,
+    })
+    .from(expense)
+    .where(
+      and(
+        eq(expense.productId, productId),
+        eq(expense.lineKind, "principal"),
+        eq(expense.future, false),
+        isNotNull(expense.cost),
+        gte(expense.date, startDate),
+        lte(expense.date, endDate),
+        notDeleted(expense),
+      ),
+    );
+
+  return rows.flatMap((row) =>
+    row.cost === null ? [] : [{ ...row, cost: row.cost }],
+  );
+}
+
+function softwareSharedWindow(
+  context: ResourceWindowContext | null | undefined,
+  expenses: SoftwareExpenseRow[],
+): ProjectSharedWindowOut | null {
+  if (!context) return null;
+  const netCost = expenses.reduce((total, row) => {
+    const insideWindow =
+      row.date >= context.sharedWindow.startDate &&
+      row.date <= context.sharedWindow.endDate;
+    const alreadyDirect =
+      row.projectId !== null && context.excludedProjectIds.has(row.projectId);
+    return insideWindow && !alreadyDirect ? total + row.cost : total;
+  }, 0);
+  return { ...context.sharedWindow, netCost };
+}
+
 export async function listProductProjectUses(
   db: Database,
   productId: ProductId,
+  options: ResourceReadOptions = {},
 ): Promise<ProductProjectUsesOut> {
   const dbc = getDb(db);
   const productRow = await dbc.query.product.findFirst({
     where: and(eq(product.id, productId), notDeleted(product)),
-    columns: { shortcode: true },
+    columns: {
+      shortcode: true,
+      category: true,
+      name: true,
+      manufacturer: true,
+    },
   });
   if (!productRow) {
     throw createAppError("PRODUCT_NOT_FOUND", `Product ${productId} not found`);
   }
+  if (productRow.category !== "tools" && productRow.category !== "software") {
+    throw createAppError(
+      "PRODUCT_NOT_FOUND",
+      `${productRow.name} is not a reusable tool or software Product`,
+    );
+  }
+  const category = productRow.category;
 
   const rows = await dbc
     .select({
@@ -671,23 +907,50 @@ export async function listProductProjectUses(
     )
     .orderBy(desc(projectToolUsage.createdAt), asc(project.name));
 
-  const metrics =
-    (await loadToolMetrics(dbc, [productId])).get(productId) ?? EMPTY_METRICS;
-  const purchaseCostByProject = await loadProductPurchaseCostsByProject(
-    dbc,
-    productId,
-    rows.map((row) => row.projectId),
-  );
+  const projectIds = rows.map((row) => row.projectId);
+  const [metricsByProduct, purchaseCostByProject, loadedWindows] =
+    await Promise.all([
+      loadResourceMetrics(dbc, [productId]),
+      category === "tools"
+        ? loadProductPurchaseCostsByProject(dbc, productId, projectIds)
+        : new Map<ProjectId, number>(),
+      category === "software" ? loadProjectDateWindows(db) : null,
+    ]);
+  const metrics = metricsByProduct.get(productId) ?? EMPTY_METRICS;
+  const windowContexts = loadedWindows
+    ? buildResourceWindowContexts(
+        loadedWindows,
+        projectIds,
+        options.today ?? format(new Date(), "yyyy-MM-dd"),
+      )
+    : new Map<ProjectId, ResourceWindowContext | null>();
+  const softwareExpenses =
+    category === "software"
+      ? await loadSoftwareExpenseRows(dbc, productId, windowContexts)
+      : [];
 
   return {
     productId: unsafeProductShortcode(productRow.shortcode),
-    ...metrics,
+    productName: productRow.name,
+    manufacturer: productRow.manufacturer,
+    category,
+    ...publicResourceMetrics(category, metrics),
     projects: rows.map((row) => ({
       projectId: unsafeProjectShortcode(row.projectCode),
       projectName: row.projectName,
       status: row.status,
       kind: row.kind,
-      projectPurchaseCost: purchaseCostByProject.get(row.projectId) ?? 0,
+      projectPurchaseCost:
+        category === "tools"
+          ? (purchaseCostByProject.get(row.projectId) ?? 0)
+          : null,
+      sharedWindow:
+        category === "software"
+          ? softwareSharedWindow(
+              windowContexts.get(row.projectId),
+              softwareExpenses,
+            )
+          : null,
       attachedAt: row.attachedAt,
     })),
   };

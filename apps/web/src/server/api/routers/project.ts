@@ -31,24 +31,24 @@ import {
   projectOptionsOut,
   projectOut,
   projectPortfolioAnalyticsOut,
+  projectResourceMutationInput,
+  projectResourceMutationOut,
+  projectResourceProjectInput,
+  projectResourcesOut,
   projectSortableFields,
-  projectToolMutationInput,
-  projectToolMutationOut,
-  projectToolProjectInput,
   projectToolSuggestionsOut,
-  projectToolsOut,
   projectUpdateData,
 } from "@cubby/schemas/project";
 import { z } from "zod";
 import { createAppError } from "~/server/errors/app-error";
 import {
-  attachProjectTools,
+  attachProjectResources,
   createProject,
   deleteProjects,
-  detachProjectTools,
+  detachProjectResources,
   getProjectByID,
   getProjectByShortcode,
-  listProjectTools,
+  listProjectResources,
   projectDashboardSummary,
   projectList,
   projectNameOptions,
@@ -161,7 +161,7 @@ const createFromTasks = protectedProcedure
     return output;
   });
 
-async function resolveProjectToolIds(
+async function resolveProjectResourceIds(
   db: Parameters<typeof resolveLiveShortcode>[0],
   input: { projectId: ProjectShortcode; productIds?: ProductShortcode[] },
 ) {
@@ -188,28 +188,28 @@ async function resolveProjectToolIds(
   };
 }
 
-const tools = protectedProcedure
-  .input(projectToolProjectInput)
-  .output(strictOutput(projectToolsOut))
+const resources = protectedProcedure
+  .input(projectResourceProjectInput)
+  .output(strictOutput(projectResourcesOut))
   .query(async ({ ctx, input }) => {
-    const ids = await resolveProjectToolIds(ctx.db, input);
-    return listProjectTools(ctx.db, ids.projectId);
+    const ids = await resolveProjectResourceIds(ctx.db, input);
+    return listProjectResources(ctx.db, ids.projectId);
   });
 
 const toolSuggestions = protectedProcedure
-  .input(projectToolProjectInput)
+  .input(projectResourceProjectInput)
   .output(strictOutput(projectToolSuggestionsOut))
   .query(async ({ ctx, input }) => {
-    const ids = await resolveProjectToolIds(ctx.db, input);
+    const ids = await resolveProjectResourceIds(ctx.db, input);
     return suggestProjectTools(ctx.db, ids.projectId);
   });
 
-const attachTools = protectedProcedure
-  .input(projectToolMutationInput)
-  .output(strictOutput(projectToolMutationOut))
+const attachResources = protectedProcedure
+  .input(projectResourceMutationInput)
+  .output(strictOutput(projectResourceMutationOut))
   .mutation(async ({ ctx, input }) => {
-    const ids = await resolveProjectToolIds(ctx.db, input);
-    return attachProjectTools(
+    const ids = await resolveProjectResourceIds(ctx.db, input);
+    return attachProjectResources(
       ctx.db,
       ids.projectId,
       ids.productIds,
@@ -217,12 +217,12 @@ const attachTools = protectedProcedure
     );
   });
 
-const detachTools = protectedProcedure
-  .input(projectToolMutationInput)
-  .output(strictOutput(projectToolMutationOut))
+const detachResources = protectedProcedure
+  .input(projectResourceMutationInput)
+  .output(strictOutput(projectResourceMutationOut))
   .mutation(async ({ ctx, input }) => {
-    const ids = await resolveProjectToolIds(ctx.db, input);
-    return detachProjectTools(
+    const ids = await resolveProjectResourceIds(ctx.db, input);
+    return detachProjectResources(
       ctx.db,
       ids.projectId,
       ids.productIds,
@@ -241,8 +241,8 @@ export const projectRouter = createTRPCRouter({
   portfolioAnalytics,
   options,
   createFromTasks,
-  tools,
+  resources,
   toolSuggestions,
-  attachTools,
-  detachTools,
+  attachResources,
+  detachResources,
 });

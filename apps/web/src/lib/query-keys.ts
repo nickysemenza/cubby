@@ -264,9 +264,9 @@ export const projectMutationInvalidateKeys = [
   queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
-/** A tool-use edge is visible from both ends, but it does not change project
+/** A reusable-resource edge is visible from both ends, but it does not change project
  * spend, inventory quantity, or calendar state. */
-export const projectToolMutationInvalidateKeys = [
+export const projectResourceMutationInvalidateKeys = [
   queryKeys.project.all,
   queryKeys.product.all,
   queryKeys.relatedData.all,
