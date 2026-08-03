@@ -3,6 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Check, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -67,7 +68,7 @@ export function WishDetail({ wish }: { wish: WishOut }) {
         </>
       }
     >
-      <div className="space-y-3">
+      <Stack gap="sm">
         {wish.notes && (
           <Card>
             <CardHeader>
@@ -94,32 +95,34 @@ export function WishDetail({ wish }: { wish: WishOut }) {
                     key={candidate.id}
                     to="/products/$shortcode"
                     params={{ shortcode: candidate.id }}
-                    className="flex items-center justify-between gap-3 p-2 hover:bg-muted"
+                    className="block p-2 hover:bg-muted"
                   >
-                    <span>
-                      <span className="block font-medium">
-                        {candidate.name}
+                    <Row align="center" justify="between" gap="sm">
+                      <span>
+                        <span className="block font-medium">
+                          {candidate.name}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {candidate.manufacturer}
+                          {candidate.model ? ` · ${candidate.model}` : ""}
+                        </span>
                       </span>
-                      <span className="text-muted-foreground">
-                        {candidate.manufacturer}
-                        {candidate.model ? ` · ${candidate.model}` : ""}
-                      </span>
-                    </span>
-                    <span className="flex items-center gap-2">
-                      {candidate.inventoried && (
-                        <Badge variant="positive">In inventory</Badge>
-                      )}
-                      {candidate.price !== null && (
-                        <span>{formatCurrency(candidate.price)}</span>
-                      )}
-                    </span>
+                      <Row as="span" align="center" gap="sm">
+                        {candidate.inventoried && (
+                          <Badge variant="positive">In inventory</Badge>
+                        )}
+                        {candidate.price !== null && (
+                          <span>{formatCurrency(candidate.price)}</span>
+                        )}
+                      </Row>
+                    </Row>
                   </Link>
                 ))}
               </div>
             )}
           </CardContent>
         </Card>
-      </div>
+      </Stack>
       <WishFormDialog open={editing} onOpenChange={setEditing} wish={wish} />
     </Page>
   );

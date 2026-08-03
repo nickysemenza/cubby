@@ -180,6 +180,7 @@ rows, so a retired code is a permanent tombstone), and case-insensitive on input
 | ingredient | `ING-` | | meal | `MEL-` | | task | `TSK-` |
 | product | `PRD-` | | project | `PRJ-` | | vendor | `VEN-` |
 | financial account | `FAC-` | | financial transaction | `FTX-` | | — | — |
+| wishlist | `WSH-` | | — | — | | — | — |
 
 `Image` is the one entity with no shortcode — it has no MCP surface and is only
 ever reached through the entity that owns it.

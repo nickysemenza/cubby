@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Heart, Plus } from "lucide-react";
 import { useState } from "react";
+import { Row, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -35,8 +36,8 @@ export function WishList() {
   const wishes = wishesQuery.data?.items ?? [];
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
+    <Stack gap="sm">
+      <Row wrap gap="sm">
         <Input
           className="max-w-sm"
           value={search}
@@ -52,7 +53,7 @@ export function WishList() {
         <Button onClick={() => setOpen(true)}>
           <Plus /> New wish
         </Button>
-      </div>
+      </Row>
       {wishes.length === 0 && !wishesQuery.isLoading ? (
         <Empty>
           <EmptyMedia variant="icon">
@@ -71,16 +72,16 @@ export function WishList() {
               key={wish.id}
               to="/wishes/$shortcode"
               params={{ shortcode: wish.id }}
-              className="block p-3 transition-colors hover:bg-muted"
+              className="block p-2 transition-colors hover:bg-muted"
             >
-              <div className="flex items-start justify-between gap-3">
+              <Row align="start" justify="between" gap="sm">
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
+                  <Row align="center" wrap gap="sm">
                     <span className="font-medium">{wish.name}</span>
                     {wish.acquiredAt && (
                       <Badge variant="positive">Acquired</Badge>
                     )}
-                  </div>
+                  </Row>
                   {wish.notes && (
                     <p className="mt-1 line-clamp-2 text-muted-foreground">
                       {wish.notes}
@@ -91,7 +92,7 @@ export function WishList() {
                   {wish.candidates.length} option
                   {wish.candidates.length === 1 ? "" : "s"}
                 </span>
-              </div>
+              </Row>
               {wish.candidates.length > 0 && (
                 <p className="mt-2 truncate text-muted-foreground">
                   {wish.candidates
@@ -107,6 +108,6 @@ export function WishList() {
         </div>
       )}
       <WishFormDialog open={open} onOpenChange={setOpen} />
-    </div>
+    </Stack>
   );
 }

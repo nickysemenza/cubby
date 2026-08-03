@@ -1,7 +1,9 @@
 import type { WishOut } from "@cubby/schemas/wish";
+import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useId, useState } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
@@ -25,6 +27,12 @@ type WishFormDialogProps = {
   onSaved?: (wish: WishOut) => void;
 };
 
+type CandidateOption = {
+  id: string;
+  name: string;
+  manufacturer: string;
+};
+
 /** The compact MVP editor: a wish describes the outcome, with optional Tool alternatives. */
 export function WishFormDialog({
   open,
@@ -36,24 +44,41 @@ export function WishFormDialog({
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
   const [candidateIds, setCandidateIds] = useState<string[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<CandidateOption[]>(
+    [],
+  );
   const [productSearch, setProductSearch] = useState("");
+  const [debouncedProductSearch] = useDebouncedValue(productSearch, {
+    wait: 300,
+  });
   const idPrefix = useId();
   const nameInputId = `${idPrefix}-name`;
   const notesInputId = `${idPrefix}-notes`;
   const productSearchInputId = `${idPrefix}-product-search`;
-  const productsQuery = useQuery(
-    api.product.list.queryOptions({
-      filters: { categoryFilter: "tools" },
-      sort: { orderBy: "name", direction: "asc" },
-      pagination: { pageIndex: 0, pageSize: 500 },
+  const productsQuery = useQuery({
+    ...api.product.search.queryOptions({
+      filters: {
+        nameFilter: debouncedProductSearch.trim() || undefined,
+        categoryFilter: "tools",
+      },
+      sort: [{ orderBy: "name", direction: "asc" }],
+      pagination: { pageIndex: 0, pageSize: 50 },
     }),
-  );
+    enabled: open,
+  });
 
   useEffect(() => {
     if (!open) return;
     setName(wish?.name ?? "");
     setNotes(wish?.notes ?? "");
     setCandidateIds(wish?.candidates.map((candidate) => candidate.id) ?? []);
+    setSelectedProducts(
+      wish?.candidates.map(({ id, name, manufacturer }) => ({
+        id,
+        name,
+        manufacturer,
+      })) ?? [],
+    );
     setProductSearch("");
   }, [open, wish]);
 
@@ -75,17 +100,24 @@ export function WishFormDialog({
   });
 
   const isPending = create.isPending || update.isPending;
-  const visibleProducts = (productsQuery.data?.items ?? []).filter(
-    (product) => {
-      const searchable = `${product.name} ${product.manufacturer} ${product.model ?? ""}`;
-      return searchable.toLowerCase().includes(productSearch.toLowerCase());
-    },
-  );
-  const toggleCandidate = (id: string, checked: boolean) => {
+  const productOptions = [
+    ...selectedProducts,
+    ...(productsQuery.data?.items ?? []).filter(
+      (product) => !candidateIds.includes(product.id),
+    ),
+  ];
+  const toggleCandidate = (product: CandidateOption, checked: boolean) => {
     setCandidateIds((current) =>
       checked
-        ? [...current, id]
-        : current.filter((candidateId) => candidateId !== id),
+        ? [...current, product.id]
+        : current.filter((id) => id !== product.id),
+    );
+    setSelectedProducts((current) =>
+      checked
+        ? current.some(({ id }) => id === product.id)
+          ? current
+          : [...current, product]
+        : current.filter(({ id }) => id !== product.id),
     );
   };
   const submit = (event: React.FormEvent) => {
@@ -115,8 +147,8 @@ export function WishFormDialog({
             would consider.
           </DialogDescription>
         </DialogHeader>
-        <form className="space-y-4" onSubmit={submit}>
-          <div className="space-y-1.5">
+        <Stack as="form" gap="md" onSubmit={submit}>
+          <Stack gap="snug">
             <Label htmlFor={nameInputId}>What do you want?</Label>
             <Input
               id={nameInputId}
@@ -125,8 +157,8 @@ export function WishFormDialog({
               placeholder="e.g. Metal milling machine"
               autoFocus
             />
-          </div>
-          <div className="space-y-1.5">
+          </Stack>
+          <Stack gap="snug">
             <Label htmlFor={notesInputId}>Notes</Label>
             <Textarea
               id={notesInputId}
@@ -134,8 +166,8 @@ export function WishFormDialog({
               onChange={(event) => setNotes(event.target.value)}
               placeholder="Why it would be useful or fun, constraints, future project ideas…"
             />
-          </div>
-          <div className="space-y-2">
+          </Stack>
+          <Stack gap="sm">
             <Label htmlFor={productSearchInputId}>Tool alternatives</Label>
             <Input
               id={productSearchInputId}
@@ -143,20 +175,22 @@ export function WishFormDialog({
               onChange={(event) => setProductSearch(event.target.value)}
               placeholder="Filter your Tool products…"
             />
-            <div className="max-h-48 space-y-1 overflow-y-auto border p-2">
-              {visibleProducts.map((product) => {
+            <Stack className="max-h-48 overflow-y-auto border p-2" gap="xs">
+              {productOptions.map((product) => {
                 const checked = candidateIds.includes(product.id);
                 const candidateInputId = `${idPrefix}-${product.id}`;
                 return (
-                  <div
+                  <Row
                     key={product.id}
-                    className="flex items-center gap-2 p-1 hover:bg-muted"
+                    align="center"
+                    gap="sm"
+                    className="p-1 hover:bg-muted"
                   >
                     <Checkbox
                       id={candidateInputId}
                       checked={checked}
                       onCheckedChange={(value) =>
-                        toggleCandidate(product.id, value === true)
+                        toggleCandidate(product, value === true)
                       }
                     />
                     <Label
@@ -168,23 +202,22 @@ export function WishFormDialog({
                       </span>
                       <span className="block truncate text-muted-foreground">
                         {product.manufacturer}
-                        {product.model ? ` · ${product.model}` : ""}
                       </span>
                     </Label>
-                  </div>
+                  </Row>
                 );
               })}
-              {!productsQuery.isLoading && visibleProducts.length === 0 && (
+              {!productsQuery.isLoading && productOptions.length === 0 && (
                 <p className="p-1 text-muted-foreground">
                   No matching Tool products yet.
                 </p>
               )}
-            </div>
+            </Stack>
             <p className="text-muted-foreground">
               Choose any number of alternatives. They mean “pick one,” not a
               shopping cart.
             </p>
-          </div>
+          </Stack>
           <DialogFooter>
             <Button
               type="button"
@@ -197,7 +230,7 @@ export function WishFormDialog({
               {wish ? "Save changes" : "Create wish"}
             </Button>
           </DialogFooter>
-        </form>
+        </Stack>
       </DialogContent>
     </Dialog>
   );
