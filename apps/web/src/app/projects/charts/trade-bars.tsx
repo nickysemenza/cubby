@@ -1,3 +1,4 @@
+import { isPrincipalExpense } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseOut, Trade } from "@cubby/schemas/project";
 import { ResponsiveBar } from "@nivo/bar";
 import { ShoppingBag } from "lucide-react";
@@ -44,6 +45,7 @@ export function TradeBars({ expenses }: { expenses: ExpenseOut[] }) {
     // Expenses behind each `trade|costType` segment, for the tooltip.
     const expensesByCell = new Map<string, ExpenseOut[]>();
     for (const p of expenses) {
+      if (!isPrincipalExpense(p)) continue;
       const key = `${p.trade}|${p.costType}`;
       const list = expensesByCell.get(key);
       if (list) list.push(p);

@@ -97,6 +97,7 @@ async function loadToolMetrics(
       .where(
         and(
           inArray(expense.productId, productIds),
+          eq(expense.lineKind, "principal"),
           eq(expense.future, false),
           notDeleted(expense),
         ),
@@ -145,6 +146,7 @@ async function loadProjectPurchaseCosts(
         eq(expense.projectId, projectId),
         inArray(expense.productId, productIds),
         eq(expense.future, false),
+        eq(expense.lineKind, "principal"),
         eq(expense.costType, "tools"),
         gt(expense.cost, 0),
         notDeleted(expense),
@@ -175,6 +177,7 @@ async function loadProductPurchaseCostsByProject(
         eq(expense.productId, productId),
         inArray(expense.projectId, projectIds),
         eq(expense.future, false),
+        eq(expense.lineKind, "principal"),
         eq(expense.costType, "tools"),
         gt(expense.cost, 0),
         notDeleted(expense),
@@ -383,6 +386,7 @@ export async function suggestProjectTools(
         .where(
           and(
             eq(expense.projectId, projectId),
+            eq(expense.lineKind, "principal"),
             eq(expense.future, false),
             gt(expense.cost, 0),
             ne(expense.trade, "planning"),
@@ -408,6 +412,7 @@ export async function suggestProjectTools(
         .where(
           and(
             eq(expense.projectId, projectId),
+            eq(expense.lineKind, "principal"),
             eq(expense.future, false),
             eq(expense.costType, "tools"),
             gt(expense.cost, 0),
@@ -489,6 +494,7 @@ export async function suggestProjectTools(
                 trades.map((signal) => signal.trade),
               ),
               eq(expense.future, false),
+              eq(expense.lineKind, "principal"),
               eq(expense.costType, "tools"),
               gt(expense.cost, 0),
               eq(product.category, "tools"),
@@ -611,6 +617,7 @@ export async function suggestProjectTools(
       and(
         eq(expense.projectId, projectId),
         isNull(expense.productId),
+        eq(expense.lineKind, "principal"),
         eq(expense.future, false),
         eq(expense.costType, "tools"),
         sql`${expense.cost} >= ${EXPENSIVE_TOOL_THRESHOLD}`,

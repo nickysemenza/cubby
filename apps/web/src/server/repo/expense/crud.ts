@@ -7,6 +7,7 @@
  */
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ImpactItem } from "@cubby/schemas/entity-integrity";
+import { inferExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import type {
   ExpenseId,
   ExpenseShortcode,
@@ -206,6 +207,7 @@ const expenseCrud = createEntityCrud({
       name: data.name,
       cost: data.cost,
       date: data.date,
+      lineKind: data.lineKind,
       costType: data.costType,
       trade: data.trade,
       url: data.url,
@@ -220,6 +222,7 @@ const expenseCrud = createEntityCrud({
     "name",
     "cost",
     "date",
+    "lineKind",
     "costType",
     "trade",
     "url",
@@ -432,7 +435,12 @@ export const updateExpense = async (
     const id = unsafeExpenseId(resolvedId);
     const beforeQualityTargets = await tx.query.expense.findFirst({
       where: and(eq(expense.id, id), notDeleted(expense)),
-      columns: { productId: true, productQuantity: true, purchaseId: true },
+      columns: {
+        productId: true,
+        productQuantity: true,
+        purchaseId: true,
+        lineKind: true,
+      },
     });
 
     const resolvedProjectId =
@@ -453,6 +461,14 @@ export const updateExpense = async (
       resolvedProductId === undefined
         ? (beforeQualityTargets?.productId ?? null)
         : resolvedProductId;
+    const resultingLineKind =
+      data.lineKind ?? beforeQualityTargets?.lineKind ?? "principal";
+    if (resultingLineKind !== "principal" && resultingProductId !== null) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "Only principal Expenses may link a Product.",
+      );
+    }
     if (data.productQuantity != null && resultingProductId === null) {
       throw createAppError(
         "CONSTRAINT_VIOLATION",
@@ -671,6 +687,14 @@ export const createExpense = async (
     const productId = data.productId
       ? await resolveLiveProductId(tx, data.productId)
       : null;
+    const lineKind =
+      data.lineKind ?? inferExpenseLineKind({ name: data.name, productId });
+    if (lineKind !== "principal" && productId !== null) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "Only principal Expenses may link a Product.",
+      );
+    }
     if (data.productQuantity !== null && productId === null) {
       throw createAppError(
         "CONSTRAINT_VIOLATION",
@@ -686,6 +710,7 @@ export const createExpense = async (
       name: data.name,
       cost: data.cost,
       date: data.date,
+      lineKind,
       costType: data.costType,
       trade: data.trade,
       url: data.url,

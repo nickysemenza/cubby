@@ -634,6 +634,7 @@ const searchQueries = {
     lexicalCondition: (query) =>
       or(
         formatSearchTerm(expense.name, query),
+        formatSearchTerm(expense.lineKind, query),
         formatSearchTerm(expense.trade, query),
         formatSearchTerm(expense.notes, query),
         // Vendor name and order id live on the charge now, so they're reached
@@ -657,7 +658,7 @@ const searchQueries = {
           name: expense.name,
           subtitle: project.name,
           entityType: sql<"expense">`'expense'`.as("entityType"),
-          typeHint: expense.costType,
+          typeHint: sql<string>`case when ${expense.lineKind} = 'principal' then ${expense.costType} else ${expense.lineKind} end`,
           imageUrl: sql<string | null>`null`.as("imageUrl"),
           createdAt: expense.createdAt,
           cost: expense.cost,

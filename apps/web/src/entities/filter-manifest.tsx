@@ -20,6 +20,7 @@ import {
   costRangeOptions,
   costTypeOptions,
   dateRangeOptions,
+  expenseLineKindOptions,
   futureFilterOptions,
   productQuantityRangeOptions,
   resolveCostFilter,
@@ -474,6 +475,12 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       kind: "multiselect",
       placeholder: "Filter by cost type...",
       options: costTypeOptions,
+    },
+    {
+      columnId: "lineKind",
+      kind: "multiselect",
+      placeholder: "Filter by line kind...",
+      options: expenseLineKindOptions,
     },
     {
       columnId: "trade",

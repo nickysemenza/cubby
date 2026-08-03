@@ -16,9 +16,10 @@ present those candidates for a decision instead of silently skipping them.
 - Keep exact-SKU durable Expenses as product candidates even when currently
   unlinked. Conversely, do not force an aggregate Expense onto a Product when
   its individual cost is unknowable.
-- Split exact merchandise subtotals automatically and keep separately stated
-  shipping, tax, and fees as productless Expenses. Ask before inventing an
-  allocation that the source does not establish.
+- Split exact merchandise subtotals automatically as `principal` Expenses and
+  keep separately stated shipping, tax, discounts, fees, and tips as typed,
+  productless adjustment Expenses. Preserve the literal signed amounts; never
+  estimate embedded tax or allocate an ancillary total across Products.
 - `misc:` inventory buckets remain product-link ineligible for Expenses.
 - Product creation and Expense linking never changes inventory. Always ask
   explicitly before creating or moving Inventory Entries, even when Product

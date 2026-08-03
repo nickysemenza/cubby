@@ -13,6 +13,7 @@ import {
   vendorShortcode,
 } from "./identifiers";
 import { financialReconciliationSummary } from "./financial-reconciliation";
+import { expenseLineKindSchema } from "./expense-line-kind";
 import { purchaseRelatedFilterFields } from "./related-view";
 import {
   createPaginatedResponseSchema,
@@ -340,6 +341,7 @@ export const splitExpenseInput = z.object({
       z.object({
         name: z.string().min(1),
         cost: z.number(),
+        lineKind: expenseLineKindSchema.optional(),
         costType: costTypeSchema,
         trade: tradeSchema,
         projectId: projectShortcode.nullable().default(null),

@@ -21,6 +21,9 @@ sometimes wears three different names across layers.
   place money lives. “Expense line” or, after that relationship has been made
   explicit, “line” is acceptable shorthand; a bare “line” must not introduce
   the entity on its own.
+- An Expense's **line kind** is its receipt role. `principal` means merchandise
+  or a service; tax, shipping, discount, fee, tip, and `other_adjustment` remain
+  real productless spend lines rather than categories of merchandise.
 - A **FinancialTransaction** is settlement evidence (a statement charge, refund,
   payment, or adjustment), never a spend-ledger row. It may link to one Purchase;
   one Purchase may have many settlement entries.
@@ -138,7 +141,8 @@ The household project tracker (migrated from Notion) is a self-contained module:
 - **Expense** — the spend ledger (route `/expenses`). `future = true` marks
   planned (not yet actual) spend. Free-text `name` + `cost`, with an optional
   `productId` link (bridge v1) and an optional `purchaseId` naming the Purchase it
-  came from.
+  came from. `lineKind = principal` identifies merchandise/services; ancillary
+  receipt roles are productless adjustments.
 
 ---
 
@@ -189,6 +193,16 @@ FinancialAccount ──< FinancialTransaction >──o Purchase
   money lives**. Every `SUM(cost)` in the codebase reads `Expense` alone.
   `purchaseId` is nullable: a row with no Purchase attached is exactly "no vendor
   recorded", since `purchase.vendorId` is NOT NULL.
+  - `lineKind` is `principal | tax | shipping | discount | fee | tip |
+    other_adjustment`. Every kind participates in total, monthly, project,
+    Purchase-reconciliation, and vendor spend. Cost-type, trade, tool, and
+    affinity analytics use only `principal` and expose the signed adjustment
+    remainder separately.
+  - Non-principal rows cannot link `productId` or `productQuantity`. Historical
+    `costType`, trade, and project values remain valid allocation context.
+  - A principal amount may already include tax. Only an explicitly itemized
+    ancillary amount earns its own typed Expense; no tax rate or reconciliation
+    difference is used to estimate one.
 
 **API shape vs. columns.** `expense.vendor` and `expense.orderId` are no longer
 columns, but `expenseOut` still exposes both (resolved through

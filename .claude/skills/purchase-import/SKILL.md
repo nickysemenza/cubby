@@ -20,6 +20,9 @@ Expense → Purchase ← FinancialTransaction → FinancialAccount
 
 - `Expense.cost` is the only spend ledger. Never derive spend from a Purchase or
   Financial Transaction.
+- `Expense.lineKind` records the receipt role: `principal` for merchandise or a
+  service, otherwise `tax`, `shipping`, `discount`, `fee`, `tip`, or
+  `other_adjustment`. Every kind remains spend in `SUM(Expense.cost)`.
 - A `Purchase` is one vendor order, receipt, or deliberately separate purchase
   event. `statedTotal` is the literal vendor-printed amount, never a rollup.
 - A `FinancialTransaction` is settlement evidence: a charge, refund,
@@ -100,6 +103,16 @@ Expense → Purchase ← FinancialTransaction → FinancialAccount
   them with the snapshot before continuing.
 - Keep trustworthy coarse Expenses unlinked rather than inventing a line-level
   allocation. A Product link is a claim about that Product's cost basis.
+- Create a typed, productless adjustment Expense only when the source explicitly
+  itemizes that exact amount. Use the evidenced kind; use `other_adjustment`
+  when one stated amount combines multiple roles. Embedded or tax-inclusive
+  pricing stays in the principal Expense and is never estimated or allocated.
+- Never manufacture an adjustment from a tax rate, order-total difference, or
+  reconciliation gap. A Product refund stays negative `principal`; separately
+  evidenced refunded tax may be a negative `tax` Expense.
+- Non-principal Expenses cannot link a Product or product quantity. Preserve
+  `costType`, trade, and project as historical context, but do not use those
+  fields to pretend an adjustment is merchandise.
 - Keep `Expense.cost` as the extended line total. When a linked Product's
   receipt, PDF, or notes establish a whole-unit count, also write
   `productQuantity`; the derived per-unit price comes from cost divided by that
@@ -121,10 +134,10 @@ plus distinguishing variant, size, finish, or profile is sufficient evidence;
 a fuzzy or generic name is not.
 
 - When an aggregate Expense contains exact merchandise subtotals plus separately
-  stated shipping, tax, or fees, split it into Product-linked merchandise lines
-  and productless shared-charge lines automatically. Ask before proceeding only
-  when line identity is ambiguous or shared charges require an unevidenced
-  allocation.
+  stated shipping, tax, discounts, fees, or tips, split it into Product-linked
+  `principal` lines and typed productless adjustment Expenses automatically.
+  Preserve each explicitly stated ancillary amount as its own row; do not spread
+  it across merchandise. Ask before proceeding when line identity is ambiguous.
 - Treat a user's standing preference to promote qualifying lines as durable
   authorization for future imports. A user may still opt out for a source or
   batch.

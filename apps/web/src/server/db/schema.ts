@@ -9,6 +9,7 @@ import type {
 } from "@cubby/schemas/background-jobs";
 import type { Amount } from "@cubby/schemas/codec";
 import type { DataException } from "@cubby/schemas/data-quality";
+import { expenseLineKindValues } from "@cubby/schemas/expense-line-kind";
 import type {
   FinancialAccountIdentity,
   FinancialAccountSourceAlias,
@@ -1282,6 +1283,9 @@ export const expense = pgTable(
     // See project.costEstimate — dollars need double precision, not float4.
     cost: doublePrecision("cost"),
     date: date("date", { mode: "string" }).notNull(),
+    lineKind: text("lineKind", { enum: expenseLineKindValues })
+      .notNull()
+      .default("principal"),
     costType: text("costType", { enum: costTypeValues }).notNull(),
     trade: text("trade", { enum: tradeValues }).notNull(),
     url: text("url"),
@@ -1326,6 +1330,7 @@ export const expense = pgTable(
     index("Expense_productId_idx").on(table.productId),
     index("Expense_date_idx").on(table.date),
     index("Expense_costType_idx").on(table.costType),
+    index("Expense_lineKind_idx").on(table.lineKind),
     index("Expense_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
     index("Expense_purchaseId_idx").on(table.purchaseId),
     check(

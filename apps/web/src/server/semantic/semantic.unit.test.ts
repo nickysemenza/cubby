@@ -5,6 +5,7 @@ import { embeddingTextHash } from "./hash";
 import { mergeHybridSearchResults } from "./ranking";
 import { SEMANTIC_SEARCH_EVALS } from "./search-evals";
 import {
+  buildExpenseEmbeddingText,
   buildLocationEmbeddingText,
   buildProductEmbeddingText,
   buildTaskEmbeddingText,
@@ -49,6 +50,21 @@ describe("semantic search text builders", () => {
 
     expect(text).toContain("task: Replace filter");
     expect(text).toContain("product: Basement furnace");
+  });
+
+  it("includes the receipt role in expense embedding text", () => {
+    const text = buildExpenseEmbeddingText({
+      name: "Sales tax",
+      lineKind: "tax",
+      costType: "materials",
+      trade: "other",
+      projectName: "Workshop",
+      vendorName: "Tool Store",
+      orderId: "ORDER-1",
+    });
+
+    expect(text).toContain("expense: Sales tax");
+    expect(text).toContain("line kind: tax");
   });
 });
 

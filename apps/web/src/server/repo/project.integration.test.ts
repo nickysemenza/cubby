@@ -2,7 +2,10 @@ import {
   unsafeProjectId,
   unsafeProjectShortcode,
 } from "@cubby/schemas/identifiers";
-import type { ProjectCreateInput } from "@cubby/schemas/project";
+import type {
+  ExpenseCreateInput,
+  ProjectCreateInput,
+} from "@cubby/schemas/project";
 import {
   expenseCreateInput,
   LIVE_PROJECT_STATUSES,
@@ -2212,6 +2215,7 @@ describe("project dashboard — portfolio analytics", () => {
       future?: boolean;
       date?: string;
       trade?: "other" | "plumbing";
+      lineKind?: ExpenseCreateInput["lineKind"];
     } = {},
   ) =>
     createExpense(
@@ -2219,6 +2223,7 @@ describe("project dashboard — portfolio analytics", () => {
       expenseCreateInput.parse({
         trade: extra.trade ?? "other",
         costType: "materials",
+        lineKind: extra.lineKind,
         name,
         projectId,
         cost,
@@ -2375,6 +2380,42 @@ describe("project dashboard — portfolio analytics", () => {
     ]);
   });
 
+  it("keeps adjustments in totals while excluding them from trade activity", async () => {
+    const project = await mkProject({
+      name: "analytics adjustment project",
+      status: "in_progress",
+    });
+    await mkExpense("adjustment principal", project.id, 100);
+    await mkExpense("Sales tax", project.id, 10, { lineKind: "tax" });
+    await mkExpense("Order discount", project.id, -5, {
+      lineKind: "discount",
+    });
+
+    const analytics = await projectPortfolioAnalytics(ctx.db, {
+      search: "analytics adjustment project",
+    });
+    expect(analytics.spendingByProject[0]?.spend).toBe(105);
+    expect(analytics.monthlySpend[0]?.net).toBe(105);
+    expect(analytics.plannedVsActual[0]?.actual).toBe(105);
+    expect(analytics.tradeActivity).toEqual([
+      {
+        trade: "other",
+        actual: 100,
+        committed: 0,
+        credits: 0,
+        net: 100,
+        count: 1,
+      },
+    ]);
+    expect(analytics.adjustments).toEqual({
+      actual: 10,
+      committed: 0,
+      credits: 5,
+      net: 5,
+      count: 2,
+    });
+  });
+
   it("scopes the whole result by statusScope, and returns empty when nothing matches", async () => {
     const { solo } = await seedPortfolio();
 
@@ -2395,6 +2436,13 @@ describe("project dashboard — portfolio analytics", () => {
       monthlySpend: [],
       plannedVsActual: [],
       tradeActivity: [],
+      adjustments: {
+        actual: 0,
+        committed: 0,
+        credits: 0,
+        net: 0,
+        count: 0,
+      },
       taskHeatmap: [],
     });
   });

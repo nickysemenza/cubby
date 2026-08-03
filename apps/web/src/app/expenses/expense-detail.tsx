@@ -1,3 +1,4 @@
+import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import type { CostType, ExpenseOut, Trade } from "@cubby/schemas/project";
 import { ExternalLink, Info, PackagePlus, Receipt, Split } from "lucide-react";
 import { type FC, useState } from "react";
@@ -34,6 +35,9 @@ import {
   costTypeBadgeVariant,
   costTypeLabels,
   costTypeOptions,
+  expenseLineKindBadgeVariant,
+  expenseLineKindLabels,
+  expenseLineKindOptions,
   futureFilterOptions,
 } from "./expense-options";
 import { ExpensePurchaseSection } from "./expense-purchase-section";
@@ -128,6 +132,35 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
             });
           }}
           renderValue={(v) => v ?? <NoneValue />}
+        />
+      ),
+    },
+    {
+      label: "Line kind",
+      value: (
+        <EditableCell
+          value={expense.lineKind}
+          config={{ type: "select", options: expenseLineKindOptions }}
+          onSave={async (lineKind) => {
+            if (!lineKind) return;
+            await updateMutation.mutateAsync({
+              id: expense.id,
+              data: { lineKind: lineKind as ExpenseLineKind },
+            });
+          }}
+          renderValue={(lineKind) =>
+            lineKind ? (
+              <Badge
+                variant={
+                  expenseLineKindBadgeVariant[lineKind as ExpenseLineKind]
+                }
+              >
+                {expenseLineKindLabels[lineKind as ExpenseLineKind]}
+              </Badge>
+            ) : (
+              <NoneValue />
+            )
+          }
         />
       ),
     },
@@ -350,73 +383,81 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
         />
       ),
     },
-    {
-      label: "Product",
-      value: (
-        <EditableEntityCell
-          value={
-            expense.productId && expense.productName
-              ? { id: expense.productId, name: expense.productName }
-              : null
-          }
-          label="product"
-          clearable
-          trigger="pencil"
-          onSave={async (newProductId) => {
-            await updateMutation.mutateAsync({
-              id: expense.id,
-              data: { productId: newProductId },
-            });
-          }}
-          clipboard={entityCellClipboard(
-            "product",
-            expense.productId && expense.productName
-              ? { id: expense.productId, name: expense.productName }
-              : null,
-            async (newProductId) => {
-              await updateMutation.mutateAsync({
-                id: expense.id,
-                data: { productId: newProductId },
-              });
-            },
-          )}
-          SearchProvider={WithProductSearch}
-          renderValue={(v) =>
-            v && expense.productId && v.id === expense.productId ? (
-              <EntityInlineLink
-                entity="product"
-                data={{
-                  id: expense.productId,
-                  name: v.name,
-                }}
-              />
-            ) : v ? (
-              <span>{v.name}</span>
-            ) : (
-              <NoneValue />
-            )
-          }
-        />
-      ),
-    },
-    ...(expense.productId
+    ...(expense.lineKind === "principal"
       ? [
           {
-            label: "Product quantity",
+            label: "Product",
             value: (
-              <EditableCell
-                value={expense.productQuantity}
-                config={{ type: "number", step: "1", placeholder: "Unknown" }}
-                onSave={async (productQuantity) => {
+              <EditableEntityCell
+                value={
+                  expense.productId && expense.productName
+                    ? { id: expense.productId, name: expense.productName }
+                    : null
+                }
+                label="product"
+                clearable
+                trigger="pencil"
+                onSave={async (newProductId) => {
                   await updateMutation.mutateAsync({
                     id: expense.id,
-                    data: { productQuantity },
+                    data: { productId: newProductId },
                   });
                 }}
-                renderValue={(value) => value ?? <NoneValue />}
+                clipboard={entityCellClipboard(
+                  "product",
+                  expense.productId && expense.productName
+                    ? { id: expense.productId, name: expense.productName }
+                    : null,
+                  async (newProductId) => {
+                    await updateMutation.mutateAsync({
+                      id: expense.id,
+                      data: { productId: newProductId },
+                    });
+                  },
+                )}
+                SearchProvider={WithProductSearch}
+                renderValue={(v) =>
+                  v && expense.productId && v.id === expense.productId ? (
+                    <EntityInlineLink
+                      entity="product"
+                      data={{
+                        id: expense.productId,
+                        name: v.name,
+                      }}
+                    />
+                  ) : v ? (
+                    <span>{v.name}</span>
+                  ) : (
+                    <NoneValue />
+                  )
+                }
               />
             ),
           },
+          ...(expense.productId
+            ? [
+                {
+                  label: "Product quantity",
+                  value: (
+                    <EditableCell
+                      value={expense.productQuantity}
+                      config={{
+                        type: "number",
+                        step: "1",
+                        placeholder: "Unknown",
+                      }}
+                      onSave={async (productQuantity) => {
+                        await updateMutation.mutateAsync({
+                          id: expense.id,
+                          data: { productQuantity },
+                        });
+                      }}
+                      renderValue={(value) => value ?? <NoneValue />}
+                    />
+                  ),
+                },
+              ]
+            : []),
         ]
       : []),
   ];
@@ -480,10 +521,10 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
     },
     { label: "Date", value: expense.date ?? "—" },
     {
-      label: "Cost Type",
-      value: expense.costType ? (
-        <Badge variant={costTypeBadgeVariant[expense.costType]}>
-          {costTypeLabels[expense.costType]}
+      label: "Line kind",
+      value: expense.lineKind ? (
+        <Badge variant={expenseLineKindBadgeVariant[expense.lineKind]}>
+          {expenseLineKindLabels[expense.lineKind]}
         </Badge>
       ) : (
         "—"

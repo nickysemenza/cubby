@@ -455,6 +455,7 @@ async function getExpenseEmbeddingTexts(
     .select({
       id: expense.id,
       name: expense.name,
+      lineKind: expense.lineKind,
       costType: expense.costType,
       trade: expense.trade,
       notes: expense.notes,

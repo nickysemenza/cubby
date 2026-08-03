@@ -29,8 +29,10 @@ type Datum = {
  */
 export function TradeActivity({
   data: rows,
+  adjustments,
 }: {
   data: ProjectPortfolioAnalyticsOut["tradeActivity"];
+  adjustments: number;
 }) {
   const data = useMemo(
     () =>
@@ -48,60 +50,78 @@ export function TradeActivity({
   );
 
   if (data.length === 0) {
-    return <ChartEmpty icon={Hammer} title="No trade spend yet." />;
+    return (
+      <div>
+        <ChartEmpty icon={Hammer} title="No principal trade spend yet." />
+        {adjustments !== 0 ? (
+          <p className="mt-2 text-center text-muted-foreground text-xs">
+            Total spend is {formatCurrency(adjustments, 0)} in purchase
+            adjustments, with no principal trade bars.
+          </p>
+        ) : null}
+      </div>
+    );
   }
 
   const chartHeight = Math.max(220, data.length * 40 + 60);
 
   return (
-    <div style={{ height: chartHeight }}>
-      <ResponsiveBar
-        data={data}
-        keys={["actual", "committed"]}
-        indexBy="trade"
-        layout="horizontal"
-        groupMode="stacked"
-        margin={{ top: 10, right: 30, bottom: 40, left: 140 }}
-        padding={0.3}
-        colors={({ id }) =>
-          id === "actual" ? "var(--chart-1)" : "var(--chart-7)"
-        }
-        {...nivoBarChrome}
-        axisBottom={nivoCurrencyAxis}
-        axisLeft={{
-          tickSize: 0,
-          tickPadding: 8,
-        }}
-        label={(d) =>
-          d.value && d.value > 0 ? formatCurrency(d.value, 0) : ""
-        }
-        labelSkipWidth={40}
-        labelTextColor="var(--background)"
-        enableGridX
-        enableGridY={false}
-        legendLabel={(d) => (d.id === "actual" ? "Actual" : "Committed")}
-        legends={[
-          {
-            dataFrom: "keys",
-            anchor: "bottom",
-            direction: "row",
-            translateY: 40,
-            itemWidth: 90,
-            itemHeight: 20,
-            symbolSize: 12,
-            symbolShape: "circle",
-            itemTextColor: "var(--muted-foreground)",
-          },
-        ]}
-        tooltip={({ id, value, indexValue, color }) => (
-          <ChartTooltip>
-            <strong>{indexValue}</strong> —{" "}
-            {id === "actual" ? "Actual" : "Committed"}:{" "}
-            <span style={{ color }}>{formatCurrency(value, 0)}</span>
-          </ChartTooltip>
-        )}
-        theme={nivoChartTheme}
-      />
+    <div>
+      <div style={{ height: chartHeight }}>
+        <ResponsiveBar
+          data={data}
+          keys={["actual", "committed"]}
+          indexBy="trade"
+          layout="horizontal"
+          groupMode="stacked"
+          margin={{ top: 10, right: 30, bottom: 40, left: 140 }}
+          padding={0.3}
+          colors={({ id }) =>
+            id === "actual" ? "var(--chart-1)" : "var(--chart-7)"
+          }
+          {...nivoBarChrome}
+          axisBottom={nivoCurrencyAxis}
+          axisLeft={{
+            tickSize: 0,
+            tickPadding: 8,
+          }}
+          label={(d) =>
+            d.value && d.value > 0 ? formatCurrency(d.value, 0) : ""
+          }
+          labelSkipWidth={40}
+          labelTextColor="var(--background)"
+          enableGridX
+          enableGridY={false}
+          legendLabel={(d) => (d.id === "actual" ? "Actual" : "Committed")}
+          legends={[
+            {
+              dataFrom: "keys",
+              anchor: "bottom",
+              direction: "row",
+              translateY: 40,
+              itemWidth: 90,
+              itemHeight: 20,
+              symbolSize: 12,
+              symbolShape: "circle",
+              itemTextColor: "var(--muted-foreground)",
+            },
+          ]}
+          tooltip={({ id, value, indexValue, color }) => (
+            <ChartTooltip>
+              <strong>{indexValue}</strong> —{" "}
+              {id === "actual" ? "Actual" : "Committed"}:{" "}
+              <span style={{ color }}>{formatCurrency(value, 0)}</span>
+            </ChartTooltip>
+          )}
+          theme={nivoChartTheme}
+        />
+      </div>
+      {adjustments !== 0 ? (
+        <p className="mt-2 text-center text-muted-foreground text-xs">
+          Total spend also includes {formatCurrency(adjustments, 0)} in purchase
+          adjustments not assigned to a trade.
+        </p>
+      ) : null}
     </div>
   );
 }

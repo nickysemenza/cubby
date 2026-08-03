@@ -30,6 +30,7 @@ import type {
 import {
   and,
   asc,
+  eq,
   gte,
   inArray,
   isNotNull,
@@ -55,6 +56,7 @@ const EMPTY_OUT: ProjectPortfolioAnalyticsOut = {
   monthlySpend: [],
   plannedVsActual: [],
   tradeActivity: [],
+  adjustments: { actual: 0, committed: 0, credits: 0, net: 0, count: 0 },
   taskHeatmap: [],
 };
 
@@ -124,48 +126,57 @@ export async function projectPortfolioAnalytics(
   );
   const expenseScopeWithDate = and(expenseScope, isNotNull(expense.date));
 
-  const [monthlyRows, plannedVsActualRows, tradeRows, taskHeatmapRows] =
-    await Promise.all([
-      getDb(db)
-        .select({
-          month: sql<string>`${EXPENSE_MONTH_BUCKET}`,
-          ...expenseAggregateFields(),
-        })
-        .from(expense)
-        .where(expenseScopeWithDate)
-        .groupBy(EXPENSE_MONTH_BUCKET)
-        .orderBy(EXPENSE_MONTH_BUCKET),
-      getDb(db)
-        .select({
-          month: sql<string>`${EXPENSE_MONTH_BUCKET}`,
-          planned: sql<number>`coalesce(sum(${expense.cost}) filter (where ${expense.future} = true), 0)::float`,
-          actual: sql<number>`coalesce(sum(${expense.cost}) filter (where ${expense.future} = false), 0)::float`,
-        })
-        .from(expense)
-        .where(expenseScopeWithDate)
-        .groupBy(EXPENSE_MONTH_BUCKET)
-        .orderBy(EXPENSE_MONTH_BUCKET),
-      getDb(db)
-        .select({ trade: expense.trade, ...expenseAggregateFields() })
-        .from(expense)
-        .where(expenseScope)
-        .groupBy(expense.trade),
-      getDb(db)
-        .select({
-          projectId: task.projectId,
-          openTaskCount: sql<number>`count(*)::int`,
-        })
-        .from(task)
-        .where(
-          and(
-            inArray(task.projectId, ids),
-            notDeleted(task),
-            ne(task.status, "done"),
-            isNull(task.parentTaskId),
-          ),
-        )
-        .groupBy(task.projectId),
-    ]);
+  const [
+    monthlyRows,
+    plannedVsActualRows,
+    tradeRows,
+    adjustmentRows,
+    taskHeatmapRows,
+  ] = await Promise.all([
+    getDb(db)
+      .select({
+        month: sql<string>`${EXPENSE_MONTH_BUCKET}`,
+        ...expenseAggregateFields(),
+      })
+      .from(expense)
+      .where(expenseScopeWithDate)
+      .groupBy(EXPENSE_MONTH_BUCKET)
+      .orderBy(EXPENSE_MONTH_BUCKET),
+    getDb(db)
+      .select({
+        month: sql<string>`${EXPENSE_MONTH_BUCKET}`,
+        planned: sql<number>`coalesce(sum(${expense.cost}) filter (where ${expense.future} = true), 0)::float`,
+        actual: sql<number>`coalesce(sum(${expense.cost}) filter (where ${expense.future} = false), 0)::float`,
+      })
+      .from(expense)
+      .where(expenseScopeWithDate)
+      .groupBy(EXPENSE_MONTH_BUCKET)
+      .orderBy(EXPENSE_MONTH_BUCKET),
+    getDb(db)
+      .select({ trade: expense.trade, ...expenseAggregateFields() })
+      .from(expense)
+      .where(and(expenseScope, eq(expense.lineKind, "principal")))
+      .groupBy(expense.trade),
+    getDb(db)
+      .select({ ...expenseAggregateFields() })
+      .from(expense)
+      .where(and(expenseScope, ne(expense.lineKind, "principal"))),
+    getDb(db)
+      .select({
+        projectId: task.projectId,
+        openTaskCount: sql<number>`count(*)::int`,
+      })
+      .from(task)
+      .where(
+        and(
+          inArray(task.projectId, ids),
+          notDeleted(task),
+          ne(task.status, "done"),
+          isNull(task.parentTaskId),
+        ),
+      )
+      .groupBy(task.projectId),
+  ]);
 
   const openTaskCountByProject = new Map<ProjectId, number>();
   for (const row of taskHeatmapRows) {
@@ -184,6 +195,7 @@ export async function projectPortfolioAnalytics(
     monthlySpend: monthlyRows,
     plannedVsActual: plannedVsActualRows,
     tradeActivity: tradeRows,
+    adjustments: adjustmentRows[0]!,
     taskHeatmap,
   };
 }

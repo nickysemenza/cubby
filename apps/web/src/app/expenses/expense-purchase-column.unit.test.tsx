@@ -45,6 +45,7 @@ const LINKED: ExpenseOut = {
   name: "Dust extractor",
   cost: 500,
   date: "2026-07-20",
+  lineKind: "principal",
   costType: "tools",
   trade: "other",
   url: null,

@@ -1,3 +1,4 @@
+import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import type {
   CostType,
   ExpenseOut,
@@ -79,6 +80,9 @@ import {
   costTypeBadgeVariant,
   costTypeLabels,
   costTypeOptions,
+  expenseLineKindBadgeVariant,
+  expenseLineKindLabels,
+  expenseLineKindOptions,
 } from "~/app/expenses/expense-options";
 import {
   createExpenseProductImageColumn,
@@ -534,6 +538,32 @@ const futureEditOptions: FilterableComboboxItem[] = [
 ];
 
 // --- Shared expense column factories (see the task factories above) ---
+
+export function expenseLineKindColumn(
+  helper: ColumnHelper<ExpenseOut>,
+  save: (lineKind: ExpenseLineKind, expense: ExpenseOut) => Promise<void>,
+  opts?: { mobile?: MobileColumnMeta },
+) {
+  return createFilterableSelectColumn(helper, "lineKind", {
+    header: "Line Kind",
+    className: "w-36",
+    placeholder: "Filter by line kind...",
+    selectOptions: expenseLineKindOptions,
+    filterConfig: manifestFilterConfig("expense", "lineKind"),
+    renderCell: (lineKind: ExpenseLineKind) => (
+      <Badge variant={expenseLineKindBadgeVariant[lineKind]}>
+        {expenseLineKindLabels[lineKind]}
+      </Badge>
+    ),
+    mobile: opts?.mobile,
+    editable: {
+      onSave: async (newLineKind, expense) => {
+        if (!newLineKind) return;
+        await save(newLineKind, expense);
+      },
+    },
+  });
+}
 
 /** Cost-type column — label render + required `costType` write. */
 export function expenseCostTypeColumn(
