@@ -181,6 +181,15 @@ const HW_PAIR_RE =
 // `sql` tag.
 const HAND_ROLLED_ARRAY_OVERLAP_RE = /&&\s*\$\{/;
 
+// The same row-constructor trap through `= ANY(${arr})`. Here it doesn't
+// silently mismatch — postgres rejects `ANY(($1, $2))` outright ("op ANY/ALL
+// requires array"), so every list call carrying the filter 500s, including the
+// single-value form (`ANY(($1))`). This shipped on the financial-transaction
+// `kind`/`status` filters, the financial-account `identityKind` filter, and the
+// product picker's semantic-fallback id lookup. Use `eqAny`/`inArray` for a
+// column, `matchesStringValues` for a SQL expression such as a jsonb field.
+const HAND_ROLLED_ANY_ARRAY_RE = /\bANY\s*\(\s*\$\{/;
+
 // An explicit router output without the parsed-output type narrowing. The empty
 // `.output()` spelling in prose is excluded so comments do not false-positive.
 const LOOSE_ROUTER_OUTPUT_RE = /\.output\((?!\s*(?:\)|strictOutput\())/g;
@@ -697,6 +706,21 @@ function scan(files) {
           line: i + 1,
           snippet: line.trim(),
           rule: "hand-rolled-array-overlap",
+        });
+      }
+
+      // Rule (hand-rolled-any-array): raw `= ANY(${arr})` SQL — the same
+      // row-constructor trap, but a hard 500 rather than a silent mismatch.
+      if (
+        !isTestOrFixture(file) &&
+        !isCommentLine(line) &&
+        HAND_ROLLED_ANY_ARRAY_RE.test(line)
+      ) {
+        violations.push({
+          file,
+          line: i + 1,
+          snippet: line.trim(),
+          rule: "hand-rolled-any-array",
         });
       }
     }

@@ -1,4 +1,6 @@
+import type { FinancialAccountFilters } from "@cubby/schemas/financial-account";
 import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
+import type { FinancialTransactionFilters } from "@cubby/schemas/financial-transaction";
 import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import {
   unsafeFinancialAccountShortcode,
@@ -128,6 +130,102 @@ describe("financial repositories — critical invariants", () => {
         cause: { reason: "FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT" },
       },
     });
+  });
+
+  // Regression: these enum filters were built as sql`col = ANY(${array})`.
+  // Drizzle expands a JS array in a template into a row constructor, so the
+  // query went out as `= ANY(($1))` and postgres rejected it — every filtered
+  // list 500'd, in both the single-value and the multi-value form.
+  it("filters transactions and accounts by enum sets in single and array form", async () => {
+    const createdAccount = (
+      await createFinancialAccount(
+        ctx.db,
+        account("Enum filter Visa"),
+        ctx.actor,
+      )
+    ).output;
+    const page = { pageIndex: 0, pageSize: 100 };
+    for (const [kind, amount] of [
+      ["purchase", 42],
+      ["refund", -7],
+    ] as const) {
+      await createFinancialTransaction(
+        ctx.db,
+        financialTransactionCreateInput.parse({
+          accountId: createdAccount.id,
+          kind,
+          status: "pending",
+          amount,
+        }),
+        ctx.actor,
+      );
+    }
+
+    const kindForms: FinancialTransactionFilters["kind"][] = [
+      "purchase",
+      ["purchase"],
+    ];
+    for (const kind of kindForms) {
+      const filtered = await listFinancialTransactions(
+        ctx.db,
+        { accountId: createdAccount.id, kind },
+        [],
+        page,
+      );
+      expect(filtered.count).toBe(1);
+      expect(filtered.data.map((row) => row.kind)).toEqual(["purchase"]);
+    }
+
+    const bothKinds = await listFinancialTransactions(
+      ctx.db,
+      { accountId: createdAccount.id, kind: ["purchase", "refund"] },
+      [],
+      page,
+    );
+    expect(bothKinds.count).toBe(2);
+
+    const statusForms: FinancialTransactionFilters["status"][] = [
+      "pending",
+      ["pending", "posted"],
+    ];
+    for (const status of statusForms) {
+      const filtered = await listFinancialTransactions(
+        ctx.db,
+        { accountId: createdAccount.id, status },
+        [],
+        page,
+      );
+      expect(filtered.count).toBe(2);
+    }
+    const posted = await listFinancialTransactions(
+      ctx.db,
+      { accountId: createdAccount.id, status: "posted" },
+      [],
+      page,
+    );
+    expect(posted).toMatchObject({ data: [], count: 0 });
+
+    // Same trap on the account list, where the filter is a jsonb expression.
+    const identityKindForms: FinancialAccountFilters["identityKind"][] = [
+      "credit_card",
+      ["credit_card", "bank_account"],
+    ];
+    for (const identityKind of identityKindForms) {
+      const accounts = await listFinancialAccounts(
+        ctx.db,
+        { identityKind, search: "Enum filter Visa" },
+        [],
+        page,
+      );
+      expect(accounts.data.map((row) => row.id)).toEqual([createdAccount.id]);
+    }
+    const otherKind = await listFinancialAccounts(
+      ctx.db,
+      { identityKind: ["bank_account"], search: "Enum filter Visa" },
+      [],
+      page,
+    );
+    expect(otherKind).toMatchObject({ data: [], count: 0 });
   });
 
   it("previews client-parsed Monarch snapshots idempotently without writing", async () => {

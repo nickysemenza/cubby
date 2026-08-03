@@ -131,8 +131,14 @@ const whereFor = (filters: FinancialAccountFilters) =>
         filters,
         financialAccount.id,
       ),
+      // `matchesStringValues`, NOT sql`expr = ANY(${arr})`: drizzle expands a
+      // JS array in a template into a row constructor (`ANY(($1, $2))`), which
+      // postgres rejects.
       filters.identityKind
-        ? sql`"FinancialAccount"."identity"->>'kind' = ANY(${[filters.identityKind].flat()})`
+        ? matchesStringValues(
+            sql`"FinancialAccount"."identity"->>'kind'`,
+            [filters.identityKind].flat(),
+          )
         : undefined,
       filters.provisional === undefined
         ? undefined
