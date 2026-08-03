@@ -90,3 +90,39 @@ is an investigation cue, not a reason to rewrite spend or paperwork.
 For a posted transaction, retain a truthful source reference whenever available.
 Without one, the Purchase may remain flagged for missing `settlement_reference`;
 do not manufacture a reference to clear that gap.
+
+## Sale proceeds
+
+A disposal is a Purchase whose Expenses are negative. Book it at the
+marketplace's own **order earnings** figure — not the item price. Earnings are
+what actually reached the account; item price, buyer-paid shipping, transaction
+fee, shipping label and ad fee belong in the note, not in separate rows.
+Marketplace-collected sales tax is excluded entirely: the marketplace remits it,
+so it was never seller money. Set `statedTotal` to the same earnings figure.
+
+The payout is `kind: "income"` and links to the sale Purchase; linked income
+must be negative. It is **not** a `refund` — that means "the vendor gave money
+back for goods I returned", it feeds `postedRefundTotal`, and a sale Purchase
+separately needs `refund` for real refunds issued to *buyers*.
+
+**Never derive a payout from the item price.** Two mechanisms make it
+unfalsifiable, and both are invisible in bank rows and payout emails:
+
+- *Promoted-listing ad fees* are charged per item, on some listings and not
+  others, and are not implied by anything else on the order.
+- *Shipping labels cross payout boundaries.* A label is deducted from whichever
+  payout is open when it is bought, which is often not the payout carrying its
+  order — so a single-order payout may still not equal that order's earnings.
+
+Fee arithmetic with an unknown label and an unknown ad fee has two free
+parameters per order, so any target value can be made to "close exactly". Two
+independent fee models were built this way and both were wrong while appearing
+precise. Take earnings from the marketplace, never from a calculation.
+
+**Payout emails do not itemize their orders** — they carry only a total and a
+payout id. The Seller Hub payout-detail page does itemize, and Payments →
+Earnings lists per-order earnings directly; prefer those over reconstructing
+composition from dates and ratios.
+
+A payout that settles several Purchases stays unlinked (see above) with its
+verified per-order arithmetic in the note.
