@@ -7,8 +7,13 @@
  * but `findOrCreateVendor` matches its name EXACTLY, which has the same effect —
  * the cost either way is that the same name can be entered two ways, which an
  * exact-match filter then splits into two picklist rows (or, for vendors, two
- * roster rows splitting one vendor's spend). This catches that drift rather than
- * preventing it.
+ * roster rows splitting one vendor's spend).
+ *
+ * Manufacturer creates now snap to the established spelling
+ * (`resolveEstablishedManufacturer`, sharing this file's key), so these
+ * detectors are the backstop rather than the only line of defence: they still
+ * catch what a deliberate UI edit splits, what predates the snap, and — for
+ * vendors, which have no snap — everything.
  *
  * **Why a canonical key and not fuzzy matching.** Trigram similarity is
  * unusable here: at `similarity > 0.3` it flags 13 pairs on the live ledger and
@@ -20,9 +25,10 @@
  * (`Festool`/`Festool Recon` at 0.571). A detector that cries wolf on its first
  * run teaches you to ignore the page.
  *
- * The key below is exact instead: two spellings collide only if they are the
- * same name typed differently. It found 2 real manufacturer bugs
- * (`Ryobi`/`RYOBI`, `Bob's Red Mill`/`Bob s Red Mill`) on the live DB. It
+ * `canonicalLabelKey` is exact instead: two spellings collide only if they are
+ * the same name typed differently. It found 2 real manufacturer bugs
+ * (`Ryobi`/`RYOBI`, `Bob's Red Mill`/`Bob s Red Mill`) on the live DB, and
+ * later the 19-variant / 60-product casing split the snap now prevents. It
  * cannot catch a hand typo (`Harbor Frieght`) — that needs an edit distance,
  * which needs `fuzzystrmatch`.
  */
@@ -33,29 +39,11 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { DuplicateVendor, LabelVariant } from "@cubby/schemas/problems";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { type Column, type SQL, type SQLWrapper, sql } from "drizzle-orm";
+import { type Column, type SQL, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { product, purchase, vendor } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
-
-/**
- * Canonical form of a brand label: lowercase, without a leading "The", without
- * a trailing `.com` / `Inc` / `LLC` / `Co`, and with every non-alphanumeric
- * character dropped.
- *
- * That last step is what collapses `Lowe's`→`lowes`, `Bob s Red Mill`→
- * `bobsredmill` and `Home  Depot`→`homedepot` in one rule, rather than needing
- * a case for apostrophes, one for double spaces and one for hyphens.
- *
- * Takes any SQL expression, not just a column, so a constant can be run through
- * the same normalization it's being compared against.
- */
-const canonicalKey = (value: SQLWrapper) => sql`
-  regexp_replace(
-    regexp_replace(
-      regexp_replace(lower(btrim(${value})), '^the\\s+', ''),
-      '(\\.com|,?\\s+(inc|llc|co)\\.?)$', ''),
-    '[^a-z0-9]', '', 'g')`;
+import { canonicalLabelKey } from "~/server/repo/label-canonical";
 
 type SpellingVariantRow = {
   value: string;
@@ -110,7 +98,7 @@ const findSpellingVariants = async (
       SELECT ${column} AS value,
              ${weight}::int AS count,
              (array_agg(shortcode ORDER BY id::text))[1] AS "sampleId",
-             ${canonicalKey(column)} AS key
+             ${canonicalLabelKey(column)} AS key
       FROM ${table}
       WHERE "deletedAt" IS NULL
         AND ${column} IS NOT NULL
@@ -150,7 +138,7 @@ const findSpellingVariants = async (
  *
  * The comparison is on the CANONICAL key, not the raw string. A plain `<>` is
  * case-sensitive, so a `(Unspecified)` from a CSV import would survive the
- * exclusion — and then `canonicalKey` would fold it onto the same `unspecified`
+ * exclusion — and then `canonicalLabelKey` would fold it onto the same `unspecified`
  * key as the 159 correctly-cased rows and report the sentinel as a spelling
  * variant. Comparing after normalization is immune to that by construction, and
  * covers spacing drift too; it's the same case-insensitive intent as
@@ -161,7 +149,7 @@ export const findManufacturerSpellingVariants = (
   db: Database,
 ): Promise<LabelVariant[]> =>
   findSpellingVariants(db, product, product.manufacturer, {
-    extraWhere: sql`${canonicalKey(product.manufacturer)} <> ${canonicalKey(sql`${UNSPECIFIED_MANUFACTURER}`)}`,
+    extraWhere: sql`${canonicalLabelKey(product.manufacturer)} <> ${canonicalLabelKey(sql`${UNSPECIFIED_MANUFACTURER}`)}`,
   }).then((rows) =>
     rows.map(({ canonicalSampleId: _canonicalSampleId, ...row }) => ({
       ...row,

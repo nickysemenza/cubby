@@ -49,7 +49,7 @@ import { createIngredient, getIngredientByName } from "./ingredient";
 import { deleteInventoryEntries } from "./inventory";
 import { ensureGlobalUnknownLocation } from "./location";
 import { findCoverageTotals, findStaleIngredientParses } from "./problems";
-import { deleteProducts } from "./product";
+import { deleteProducts, updateProduct } from "./product";
 import { createProject, deleteProjects } from "./project";
 import { updatePurchase } from "./purchase";
 import {
@@ -1198,10 +1198,26 @@ describe("problems — brand-label spelling variants", () => {
   const seedProduct = (name: string, manufacturer: string) =>
     createProduct(ctx.db, makeProductInput({ name, manufacturer }), ctx.actor);
 
+  /**
+   * A product carrying a spelling that drifts from an established one.
+   *
+   * It has to go in through the EDIT path, because the create path no longer
+   * lets drift in: `resolveEstablishedManufacturer` snaps a new product onto
+   * the spelling already in use. That's not a test workaround — it's the only
+   * remaining door, and therefore the case these detectors now exist for.
+   * Seeding a throwaway brand first keeps the create from snapping onto the
+   * very spelling the test is trying to drift away from.
+   */
+  const seedVariantSpelling = async (name: string, manufacturer: string) => {
+    const created = await seedProduct(name, `pending ${name}`);
+    await updateProduct(ctx.db, created.entityId, { manufacturer }, ctx.actor);
+    return created;
+  };
+
   it("flags the minority spelling of a manufacturer, pointing at the majority", async () => {
     await seedProduct("Ryobi drill", "Ryobi");
     await seedProduct("Ryobi saw", "Ryobi");
-    const odd = await seedProduct("Ryobi sander", "RYOBI");
+    const odd = await seedVariantSpelling("Ryobi sander", "RYOBI");
 
     const { manufacturerSpellingVariants } = await findFastProblems(ctx.db);
     expect(manufacturerSpellingVariants).toEqual([
@@ -1233,9 +1249,11 @@ describe("problems — brand-label spelling variants", () => {
     // exclusion compares canonical keys, so casing and spacing can't matter.
     await seedProduct("mystery a", UNSPECIFIED_MANUFACTURER);
     await seedProduct("mystery b", UNSPECIFIED_MANUFACTURER);
-    await seedProduct("mystery c", "(Unspecified)");
-    await seedProduct("mystery d", "(UNSPECIFIED)");
-    await seedProduct("mystery e", " (unspecified) ");
+    // Through the edit path — a create would snap all three onto the correctly
+    // cased sentinel and the exclusion would never be exercised.
+    await seedVariantSpelling("mystery c", "(Unspecified)");
+    await seedVariantSpelling("mystery d", "(UNSPECIFIED)");
+    await seedVariantSpelling("mystery e", " (unspecified) ");
 
     const { manufacturerSpellingVariants } = await findFastProblems(ctx.db);
     expect(manufacturerSpellingVariants).toEqual([]);
@@ -1243,7 +1261,7 @@ describe("problems — brand-label spelling variants", () => {
 
   it("clears once the odd spelling is soft-deleted", async () => {
     await seedProduct("Milwaukee drill", "Milwaukee");
-    const odd = await seedProduct("Milwaukee saw", "MILWAUKEE");
+    const odd = await seedVariantSpelling("Milwaukee saw", "MILWAUKEE");
 
     const before = await findFastProblems(ctx.db);
     expect(before.manufacturerSpellingVariants).toHaveLength(1);

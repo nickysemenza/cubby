@@ -105,6 +105,7 @@ import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
+import { resolveEstablishedManufacturer } from "~/server/repo/label-canonical";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -1040,6 +1041,10 @@ export const createProduct = async (
       // Create the product first (price flows in via ...productData)
       const newProduct = await insertWithShortcode(tx, "product", {
         ...productData,
+        manufacturer: await resolveEstablishedManufacturer(
+          tx,
+          productData.manufacturer,
+        ),
         category,
         ingredientId: ingredientId ?? null,
       });
@@ -1408,7 +1413,10 @@ export const quickCreateProduct = async (
 
   const values = {
     name: data.name,
-    manufacturer: data.manufacturer ?? UNSPECIFIED_MANUFACTURER,
+    manufacturer: await resolveEstablishedManufacturer(
+      db,
+      data.manufacturer ?? UNSPECIFIED_MANUFACTURER,
+    ),
     upc: data.upc ?? null,
     fdc_id: data.fdc_id ?? null,
     model: data.model ?? null,
