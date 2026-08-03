@@ -10,8 +10,10 @@ import {
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { relatedViewRegistry } from "@cubby/schemas/related-view";
+import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { getDb } from "./database-helpers";
 import { createExpense } from "./expense";
 import {
   createFinancialAccount,
@@ -1067,5 +1069,109 @@ describe("financial repositories — critical invariants", () => {
       delta: 2,
     });
     expect(voided.status).toBe("void");
+  });
+
+  it("settles a disposal with an income payout and holds the sign rule on every path", async () => {
+    const a = (
+      await createFinancialAccount(
+        ctx.db,
+        account("Payout Checking"),
+        ctx.actor,
+      )
+    ).output;
+    const vendorId = await findOrCreateVendor(ctx.db, "Payout Marketplace");
+    const vendor = await getVendorByID(ctx.db, vendorId);
+
+    // A disposal: a Purchase whose Expense is negative, settled net of fees.
+    const sale = (
+      await createPurchase(
+        ctx.db,
+        purchaseCreateInput.parse({
+          date: "2026-07-13",
+          vendorId: vendor.id,
+          orderId: "payout-sale-1",
+          statedTotal: -140.22,
+        }),
+        ctx.actor,
+      )
+    ).output;
+    const proceeds = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2026-07-13",
+        name: "nailer selling",
+        trade: "other",
+        costType: "tools",
+        cost: -140.22,
+        vendor: vendor.name,
+        orderId: "payout-sale-1",
+        future: false,
+      }),
+      ctx.actor,
+    );
+    await linkExpensesToPurchase(
+      ctx.db,
+      { purchaseId: sale.id, expenseIds: [proceeds.output.id] },
+      ctx.actor,
+    );
+    const saleUuid = unsafePurchaseId(
+      (await resolveLiveShortcode(ctx.db, sale.id, "purchase"))!,
+    );
+
+    // The payout is an inflow recorded as income, and it may link.
+    const payout = (
+      await createFinancialTransaction(
+        ctx.db,
+        financialTransactionCreateInput.parse({
+          accountId: a.id,
+          purchaseId: sale.id,
+          kind: "income",
+          status: "posted",
+          postedDate: "2026-07-16",
+          amount: -140.22,
+          sourceRefs: [{ source: "statement", externalId: "payout-1" }],
+        }),
+        ctx.actor,
+      )
+    ).output;
+    expect(payout.purchaseId).toBe(sale.id);
+
+    const settled = await getPurchaseByID(ctx.db, saleUuid);
+    expect(settled.financialReconciliation).toMatchObject({
+      status: "match",
+      delta: 0,
+      postedTotal: -140.22,
+      transactionCount: 1,
+      // income is settlement evidence but never a refund — keeping these apart
+      // is why the payout is not filed as kind "refund".
+      postedRefundTotal: 0,
+    });
+    expect(settled.reconciliation).toBe("match");
+
+    // Update path: a linked payout may not flip to an outflow. This path is
+    // guarded only by the repo check — the update schema carries no refinement.
+    await expect(
+      updateFinancialTransaction(
+        ctx.db,
+        payout.id,
+        { amount: 140.22 },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
+
+    // Update path: a kind outside the allowlist may not stay linked.
+    await expect(
+      updateFinancialTransaction(ctx.db, payout.id, { kind: "fee" }, ctx.actor),
+    ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
+
+    // The DB CHECK is the last line of defence when app validation is bypassed.
+    // Drizzle wraps the driver error, so the constraint name is on the cause.
+    await expect(
+      getDb(ctx.db).execute(
+        sql`UPDATE "FinancialTransaction" SET "amount" = 140.22 WHERE "shortcode" = ${payout.id}`,
+      ),
+    ).rejects.toMatchObject({
+      cause: { constraint: "FinancialTransaction_purchase_settlement_check" },
+    });
   });
 });

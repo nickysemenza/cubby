@@ -3,7 +3,10 @@ import {
   financialAccountCreateInput,
   financialAccountUpdateData,
 } from "./financial-account";
-import { financialTransactionCreateInput } from "./financial-transaction";
+import {
+  financialTransactionCreateInput,
+  purchaseSettlementCheckExpression,
+} from "./financial-transaction";
 
 const account = {
   name: "Visa ····3692",
@@ -129,5 +132,49 @@ describe("financial transaction contracts", () => {
         kind: "fee",
       }).success,
     ).toBe(false);
+  });
+
+  it("accepts income as sale-proceeds settlement, inflow only", () => {
+    // A marketplace payout settling a disposal: linked, and an inflow.
+    expect(
+      financialTransactionCreateInput.parse({
+        ...transaction,
+        kind: "income",
+        amount: -152.57,
+      }).amount,
+    ).toBe(-152.57);
+    // Linked income must be negative — a payout is never an outflow.
+    expect(
+      financialTransactionCreateInput.safeParse({
+        ...transaction,
+        kind: "income",
+        amount: 152.57,
+      }).success,
+    ).toBe(false);
+    // Unlinked income (salary, interest) carries no settlement semantics and
+    // keeps an unconstrained sign.
+    expect(
+      financialTransactionCreateInput.safeParse({
+        ...transaction,
+        purchaseId: null,
+        kind: "income",
+        amount: 152.57,
+      }).success,
+    ).toBe(true);
+  });
+
+  // Pinned deliberately. `drizzle-kit push` does NOT diff CHECK constraints, so
+  // a change here will never reach a live database on its own — this test is the
+  // tripwire telling whoever changes the sign rules to apply the ALTER by hand.
+  it("generates a settlement CHECK matching the TypeScript sign rules", () => {
+    expect(
+      purchaseSettlementCheckExpression({
+        purchaseId: `"purchaseId"`,
+        kind: `"kind"`,
+        amount: `"amount"`,
+      }),
+    ).toBe(
+      `"purchaseId" IS NULL OR ("kind" IN ('purchase', 'refund', 'adjustment', 'income') AND (("kind" IN ('purchase') AND "amount" > 0) OR ("kind" IN ('refund', 'income') AND "amount" < 0) OR "kind" IN ('adjustment')))`,
+    );
   });
 });

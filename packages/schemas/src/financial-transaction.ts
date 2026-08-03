@@ -43,38 +43,129 @@ export const financialTransactionKind = z.enum([
 ]);
 export type FinancialTransactionKind = z.infer<typeof financialTransactionKind>;
 
+/**
+ * Kinds that may carry a `purchaseId`, i.e. that can act as settlement evidence
+ * for a Purchase.
+ *
+ * `income` is here for sale proceeds. A disposal is modelled as a Purchase whose
+ * Expenses are negative, and the marketplace payout that settles it is an
+ * inflow — not a `refund` (which means "the vendor gave money back for goods I
+ * returned", and is separately needed on sale Purchases for real refunds to
+ * buyers) and not a `purchase` (which is validated positive).
+ *
+ * The DB CHECK `FinancialTransaction_purchase_settlement_check` in
+ * apps/web/src/server/db/schema.ts is generated from this constant and the sign
+ * table below, via `purchaseSettlementCheckExpression` — nothing about the rule
+ * is written twice.
+ */
 export const purchaseSettlementKinds = [
   "purchase",
   "refund",
   "adjustment",
+  "income",
 ] as const satisfies readonly FinancialTransactionKind[];
+
+export type PurchaseSettlementKind = (typeof purchaseSettlementKinds)[number];
+
+/**
+ * Sign rule per settlement kind, and whether it binds only while the row is
+ * linked to a Purchase.
+ *
+ * `satisfies Record<PurchaseSettlementKind, ...>` is the point: adding a kind to
+ * `purchaseSettlementKinds` without giving it a sign rule is a **compile error**.
+ * Membership and signs therefore cannot drift apart, and the SQL CHECK below is
+ * generated from this same table rather than hand-mirrored.
+ */
+const purchaseSettlementSignRules = {
+  purchase: { sign: "positive", binds: "always" },
+  refund: { sign: "negative", binds: "always" },
+  adjustment: { sign: "any", binds: "always" },
+  // Sale proceeds. Unlinked income (salary, interest) carries no settlement
+  // semantics; income attached to a Purchase is a payout, and payouts are inflows.
+  income: { sign: "negative", binds: "linked" },
+} as const satisfies Record<
+  PurchaseSettlementKind,
+  { sign: "positive" | "negative" | "any"; binds: "always" | "linked" }
+>;
+
+const purchaseSettlementKindList = purchaseSettlementKinds.join(", ");
 
 export const isPurchaseSettlementKind = (
   kind: FinancialTransactionKind,
-): kind is (typeof purchaseSettlementKinds)[number] =>
-  purchaseSettlementKinds.includes(
-    kind as (typeof purchaseSettlementKinds)[number],
-  );
+): kind is PurchaseSettlementKind =>
+  purchaseSettlementKinds.includes(kind as PurchaseSettlementKind);
 
 export const financialTransactionSettlementViolation = (value: {
   purchaseId: unknown | null;
   kind: FinancialTransactionKind;
   amount: number;
 }): { path: "kind" | "amount"; message: string } | null => {
-  if (value.purchaseId !== null && !isPurchaseSettlementKind(value.kind)) {
+  const linked = value.purchaseId !== null;
+  if (linked && !isPurchaseSettlementKind(value.kind)) {
     return {
       path: "kind",
-      message:
-        "only purchase, refund, or adjustment transactions may link to a Purchase",
+      message: `only ${purchaseSettlementKindList} transactions may link to a Purchase`,
     };
   }
-  if (value.kind === "purchase" && value.amount <= 0) {
-    return { path: "amount", message: "purchase amounts must be positive" };
+  if (!isPurchaseSettlementKind(value.kind)) return null;
+
+  // Finite-key Record, so this stays defined under noUncheckedIndexedAccess.
+  const rule = purchaseSettlementSignRules[value.kind];
+  if (rule.binds === "linked" && !linked) return null;
+  if (rule.sign === "positive" && value.amount <= 0) {
+    return {
+      path: "amount",
+      message: `${value.kind} amounts must be positive`,
+    };
   }
-  if (value.kind === "refund" && value.amount >= 0) {
-    return { path: "amount", message: "refund amounts must be negative" };
+  if (rule.sign === "negative" && value.amount >= 0) {
+    return {
+      path: "amount",
+      message:
+        rule.binds === "linked"
+          ? `${value.kind} linked to a Purchase must be negative`
+          : `${value.kind} amounts must be negative`,
+    };
   }
   return null;
+};
+
+const quoteKinds = (kinds: readonly string[]) =>
+  kinds.map((kind) => `'${kind}'`).join(", ");
+
+/**
+ * The SQL body of `FinancialTransaction_purchase_settlement_check`, generated
+ * from `purchaseSettlementSignRules` so the DB constraint cannot drift from the
+ * TypeScript rule above. The CHECK is scoped to linked rows, so `binds` is not
+ * consulted here — every rule applies.
+ */
+export const purchaseSettlementCheckExpression = (columns: {
+  purchaseId: string;
+  kind: string;
+  amount: string;
+}): string => {
+  const withSign = (sign: "positive" | "negative" | "any") =>
+    purchaseSettlementKinds.filter(
+      (kind) => purchaseSettlementSignRules[kind].sign === sign,
+    );
+  const clauses = [
+    ...(withSign("positive").length
+      ? [
+          `(${columns.kind} IN (${quoteKinds(withSign("positive"))}) AND ${columns.amount} > 0)`,
+        ]
+      : []),
+    ...(withSign("negative").length
+      ? [
+          `(${columns.kind} IN (${quoteKinds(withSign("negative"))}) AND ${columns.amount} < 0)`,
+        ]
+      : []),
+    ...(withSign("any").length
+      ? [`${columns.kind} IN (${quoteKinds(withSign("any"))})`]
+      : []),
+  ];
+  return `${columns.purchaseId} IS NULL OR (${columns.kind} IN (${quoteKinds(
+    purchaseSettlementKinds,
+  )}) AND (${clauses.join(" OR ")}))`;
 };
 
 export const financialTransactionStatus = z.enum([

@@ -14,7 +14,10 @@ import type {
   FinancialAccountIdentity,
   FinancialAccountSourceAlias,
 } from "@cubby/schemas/financial-account";
-import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction";
+import {
+  type FinancialTransactionSourceRef,
+  purchaseSettlementCheckExpression,
+} from "@cubby/schemas/financial-transaction";
 import type {
   CookbookId,
   ExpenseId,
@@ -1267,9 +1270,23 @@ export const financialTransaction = pgTable(
       "FinancialTransaction_posted_date_check",
       sql`${table.status} <> 'posted' OR ${table.postedDate} IS NOT NULL`,
     ),
+    // Generated from purchaseSettlementSignRules in
+    // packages/schemas/src/financial-transaction.ts — both the allowlist and the
+    // per-kind sign clauses come from that one table, so this cannot drift from
+    // financialTransactionSettlementViolation.
+    //
+    // NOTE: `drizzle-kit push` does not diff CHECK constraints. Editing this
+    // requires applying the ALTER by hand; push will report "Changes applied"
+    // without touching it.
     check(
       "FinancialTransaction_purchase_settlement_check",
-      sql`${table.purchaseId} IS NULL OR (${table.kind} IN ('purchase', 'refund', 'adjustment') AND ((${table.kind} = 'purchase' AND ${table.amount} > 0) OR (${table.kind} = 'refund' AND ${table.amount} < 0) OR ${table.kind} = 'adjustment'))`,
+      sql.raw(
+        purchaseSettlementCheckExpression({
+          purchaseId: `"purchaseId"`,
+          kind: `"kind"`,
+          amount: `"amount"`,
+        }),
+      ),
     ),
   ],
 );
