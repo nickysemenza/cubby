@@ -13,6 +13,7 @@ import {
   unsafeRecipeId,
   unsafeTaskId,
   unsafeVendorId,
+  unsafeWishId,
 } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -35,6 +36,7 @@ import {
   recipeSection,
   recipeSectionIngredient,
   taskDependency,
+  wishCandidate,
 } from "~/server/db/schema";
 import { getDb, insertAndReturn } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -43,7 +45,7 @@ import { findReferentialLivenessViolations } from "./detectors-integrity";
 /**
  * Regression suite for `findReferentialLivenessViolations` (detectors-integrity.ts)
  * — the audit that finds every LIVE row whose FK points at a SOFT-DELETED target,
- * across the 38 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
+ * across the 40 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
  *
  * The matrix below is driven from `INCOMING_EDGES` × `ENTITY_EDGE_SEMANTICS`
  * themselves (not a hand-copied edge list), so a newly-added `must-target-live`
@@ -147,6 +149,9 @@ const mkFinancialAccount = (db: Database) =>
     identity: { kind: "cash" },
   });
 
+const mkWish = (db: Database) =>
+  insertWithShortcode(db, "wish", { name: uniq("Wish") });
+
 const mkRecipeSection = async (db: Database) => {
   const r = await mkRecipe(db);
   return insertAndReturn(db, recipeSection, {
@@ -156,7 +161,7 @@ const mkRecipeSection = async (db: Database) => {
 };
 
 /** One live-row factory per entity that appears as a `targetEntity` among the
- * 34 must-target-live edges below. */
+ * 40 must-target-live edges below. */
 const TARGET_FACTORIES: Partial<
   Record<Entity, (db: Database) => Promise<{ id: string }>>
 > = {
@@ -172,6 +177,7 @@ const TARGET_FACTORIES: Partial<
   vendor: mkVendor,
   purchase: mkPurchase,
   financialAccount: mkFinancialAccount,
+  wish: mkWish,
 };
 
 /** One factory per must-target-live edge: insert a live SOURCE row whose FK
@@ -181,6 +187,22 @@ const SOURCE_FACTORIES: Record<
   string,
   (db: Database, targetId: string) => Promise<{ id: string }>
 > = {
+  "WishCandidate.wishId": async (db, targetId) => {
+    const p = await mkProduct(db);
+    return insertAndReturn(db, wishCandidate, {
+      wishId: unsafeWishId(targetId),
+      productId: p.id,
+    });
+  },
+
+  "WishCandidate.productId": async (db, targetId) => {
+    const w = await mkWish(db);
+    return insertAndReturn(db, wishCandidate, {
+      wishId: w.id,
+      productId: unsafeProductId(targetId),
+    });
+  },
+
   "Recipe.cookbookId": (db, targetId) =>
     insertWithShortcode(db, "recipe", {
       name: uniq("Recipe"),
@@ -545,11 +567,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 38 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 40 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(38);
+    expect(derivedMustTargetLiveEdges).toHaveLength(40);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {

@@ -64,6 +64,14 @@ describe("searchable entity loader maps", () => {
       }),
       ctx.actor,
     );
+    const wishProduct = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Loader wish product",
+        category: "tools",
+      }),
+      ctx.actor,
+    );
     const location = await createLocation(
       ctx.db,
       makeLocationInput({ name: "Loader pantry" }),
@@ -166,7 +174,7 @@ describe("searchable entity loader maps", () => {
       {
         name: "Loader wish",
         notes: "Loader notes",
-        candidateProductIds: [product.id],
+        candidateProductIds: [wishProduct.id],
       },
       ctx.actor,
     );
