@@ -2,7 +2,7 @@ import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { createExpense, deleteExpenses } from "./expense";
-import { deleteProducts } from "./product";
+import { deleteProducts, updateProduct } from "./product";
 import { createProject, deleteProjects, getProjectByID } from "./project";
 import {
   attachProjectResources,
@@ -136,6 +136,11 @@ describe("project reusable resources", () => {
       makeProductInput({ name: "Cleaning supplies", category: "supplies" }),
       ctx.actor,
     );
+    const tool = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Design scale", category: "tools" }),
+      ctx.actor,
+    );
 
     await expect(
       attachProjectResources(ctx.db, projectId, [software.entityId], ctx.actor),
@@ -146,6 +151,17 @@ describe("project reusable resources", () => {
     await expect(
       attachProjectResources(ctx.db, projectId, [material.entityId], ctx.actor),
     ).rejects.toThrow(/tools or software/i);
+    await attachProjectResources(ctx.db, projectId, [tool.entityId], ctx.actor);
+    await updateProduct(
+      ctx.db,
+      tool.entityId,
+      { category: "supplies" },
+      ctx.actor,
+    );
+
+    await expect(listProjectResources(ctx.db, projectId)).resolves.toEqual([
+      expect.objectContaining({ productId: software.id }),
+    ]);
   });
 
   it("derives inclusive non-additive software spend and excludes direct subtree spend", async () => {

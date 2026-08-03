@@ -323,16 +323,24 @@ export async function listProjectResources(
     .where(
       and(
         eq(projectToolUsage.projectId, projectId),
+        inArray(product.category, ["tools", "software"]),
         notDeleted(projectToolUsage),
       ),
     )
     .orderBy(asc(product.name));
 
-  const productIds = rows.map((row) => row.productId);
-  const toolIds = rows
+  const reusableRows = rows.filter(
+    (
+      row,
+    ): row is (typeof rows)[number] & {
+      category: ReusableResourceCategory;
+    } => row.category === "tools" || row.category === "software",
+  );
+  const productIds = reusableRows.map((row) => row.productId);
+  const toolIds = reusableRows
     .filter((row) => row.category === "tools")
     .map((row) => row.productId);
-  const softwareIds = rows
+  const softwareIds = reusableRows
     .filter((row) => row.category === "software")
     .map((row) => row.productId);
   const [metrics, purchaseCosts, loadedWindows] = await Promise.all([
@@ -353,13 +361,7 @@ export async function listProjectResources(
     windowContext,
   );
 
-  return rows.map((row) => {
-    if (row.category !== "tools" && row.category !== "software") {
-      throw createAppError(
-        "PRODUCT_NOT_FOUND",
-        `${row.productName} is no longer categorized as a reusable resource`,
-      );
-    }
+  return reusableRows.map((row) => {
     const category = row.category;
     return {
       productId: unsafeProductShortcode(row.productCode),
