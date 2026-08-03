@@ -29,6 +29,7 @@ import {
   expenseProductQuantityColumn,
   expenseTradeColumn,
 } from "~/app/projects/shared";
+import { Stack } from "~/components/layout";
 import { useTRPC } from "~/integrations/trpc/react";
 import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
 
@@ -46,9 +47,9 @@ export function PurchaseExpensesTable({
   purchaseId: PurchaseShortcode;
 }) {
   return (
-    <div className="space-y-6">
+    <Stack gap="lg">
       <PurchaseExpenseRows purchaseId={purchaseId} kind="principal" />
-      <div className="space-y-2">
+      <Stack gap="sm">
         <div>
           <h3 className="font-medium text-sm">Receipt adjustments</h3>
           <p className="text-muted-foreground text-xs">
@@ -57,8 +58,8 @@ export function PurchaseExpensesTable({
           </p>
         </div>
         <PurchaseExpenseRows purchaseId={purchaseId} kind="adjustment" />
-      </div>
-    </div>
+      </Stack>
+    </Stack>
   );
 }
 

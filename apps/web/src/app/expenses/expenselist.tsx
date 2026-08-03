@@ -501,7 +501,7 @@ export function ExpenseList() {
           getRowClassName={(row) =>
             row.original.lineKind === "principal"
               ? undefined
-              : "bg-muted/20 text-muted-foreground"
+              : "bg-[var(--row-zebra)] text-muted-foreground"
           }
         />
       </ExpenseProductImages>

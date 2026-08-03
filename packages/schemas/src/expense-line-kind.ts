@@ -37,11 +37,16 @@ export function inspectExpenseLineKind(input: {
     return { lineKind: "principal", hintedKinds: [], confidence: "none" };
   }
 
+  // Split on one whitespace code point at a time instead of using a repeated
+  // whitespace regexp. Besides keeping normalization linear for untrusted
+  // names, this still collapses every run to the single separator below.
   const normalized = input.name
     .trim()
     .toLocaleLowerCase("en-US")
-    .replace(/\s+/g, " ");
-  const head = normalized.split(/\s+[—–]\s+/, 1)[0]?.trim() ?? normalized;
+    .split(/\s/u)
+    .filter(Boolean)
+    .join(" ");
+  const head = normalized.split(/ [—–] /u, 1)[0]?.trim() ?? normalized;
 
   const markers = new Set<Exclude<ExpenseLineKind, "principal">>();
   if (/\b(?:sales tax|estimated tax|tax)\b/.test(normalized))

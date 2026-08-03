@@ -51,4 +51,10 @@ describe("inferExpenseLineKind", () => {
       confidence: "ambiguous",
     });
   });
+
+  it("normalizes long whitespace runs without changing classification", () => {
+    expect(
+      inferExpenseLineKind({ name: `Sales${" ".repeat(10_000)}tax` }),
+    ).toBe("tax");
+  });
 });
