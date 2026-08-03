@@ -25,7 +25,16 @@ Before pushing:
 - Run `db:push` interactively. If Drizzle asks whether a change is a rename, create, or drop, cancel the push; never choose an option or accept a default until the intent is made unambiguous and its data impact is verified.
 - Use expand → backfill/migrate → deploy → cleanup for incompatible changes.
 
-If migration safety cannot be established from available evidence, stop and ask rather than guessing. After applying a production migration, verify the expected schema and data state and report what changed.
+**`drizzle-kit push` does not diff CHECK constraints.** Editing a `check(...)` in
+`schema.ts` and pushing reports `Changes applied` and changes nothing — the
+verbose plan contains only the usual trgm GIN-index drift, never an
+`ALTER ... CONSTRAINT`. CI cannot catch this either, because the integration-test
+template is built from `schema.ts` via `pushSchema`, so tests exercise a
+constraint production does not have. A constraint edit must be applied by hand,
+and `pg_constraint` re-read afterwards to confirm — `Changes applied` is not
+evidence. (Found on #580, adding `income` to the settlement allowlist.)
+
+If migration safety cannot be established from available evidence, stop and ask rather than guessing. After applying a production migration, verify the expected schema and data state and report what changed — read the constraint or column back, rather than trusting the push's summary line.
 
 ## Where logic lives (layering)
 
