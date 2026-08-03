@@ -181,6 +181,19 @@ const HW_PAIR_RE =
 // `sql` tag.
 const HAND_ROLLED_ARRAY_OVERLAP_RE = /&&\s*\$\{/;
 
+// The same row-constructor trap through `= ANY(${arr})`. Here it doesn't
+// silently mismatch — postgres rejects `ANY(($1, $2))` outright ("op ANY/ALL
+// requires array"), so every list call carrying the filter 500s, including the
+// single-value form (`ANY(($1))`). This shipped on the financial-transaction
+// `kind`/`status` filters, the financial-account `identityKind` filter, and the
+// product picker's semantic-fallback id lookup. Use `eqAny`/`inArray` for a
+// column, `matchesStringValues` for a SQL expression such as a jsonb field.
+//
+// Content-level (not per-line), like `unstable-hook-default`: a long `sql`
+// template can be wrapped so `ANY(` and `${...}` land on different lines, and a
+// per-line scan would wave that through.
+const HAND_ROLLED_ANY_ARRAY_RE = /\bANY\s*\(\s*\$\{/g;
+
 // An explicit router output without the parsed-output type narrowing. The empty
 // `.output()` spelling in prose is excluded so comments do not false-positive.
 const LOOSE_ROUTER_OUTPUT_RE = /\.output\((?!\s*(?:\)|strictOutput\())/g;
@@ -448,6 +461,23 @@ function scan(files) {
           line,
           snippet: match[0].replaceAll(/\s+/g, " ").slice(0, 120),
           rule: "unstable-hook-default",
+        });
+      }
+    }
+
+    // Rule (hand-rolled-any-array): raw `= ANY(${arr})` SQL — the
+    // row-constructor trap, as a hard 500 rather than a silent mismatch.
+    // Content-level so a wrapped `sql` template can't hide it; comment-only
+    // references (this repo documents the trap in prose) are filtered out.
+    if (!isTestOrFixture(file)) {
+      for (const match of content.matchAll(HAND_ROLLED_ANY_ARRAY_RE)) {
+        const line = content.slice(0, match.index).split("\n").length;
+        if (isCommentLine(lines[line - 1] ?? "")) continue;
+        violations.push({
+          file,
+          line,
+          snippet: (lines[line - 1] ?? "").trim(),
+          rule: "hand-rolled-any-array",
         });
       }
     }

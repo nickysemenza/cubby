@@ -866,7 +866,9 @@ export const getProductPickerItemsByIds = async (
 ): Promise<ProductPickerItemOut[]> => {
   if (ids.length === 0) return [];
   const rows = await getDb(db).query.product.findMany({
-    where: and(sql`${product.id} = ANY(${ids})`, notDeleted(product)),
+    // `inArray`, NOT sql`col = ANY(${arr})`: drizzle expands a JS array in a
+    // template into a row constructor (`ANY(($1, $2))`), which postgres rejects.
+    where: and(inArray(product.id, ids), notDeleted(product)),
     columns: {
       id: true,
       shortcode: true,

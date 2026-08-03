@@ -198,12 +198,11 @@ async function whereFor(
         : filters.purchasePresenceFilter === "none"
           ? isNull(financialTransaction.purchaseId)
           : undefined,
-      filters.kind
-        ? sql`${financialTransaction.kind} = ANY(${[filters.kind].flat()})`
-        : undefined,
-      filters.status
-        ? sql`${financialTransaction.status} = ANY(${[filters.status].flat()})`
-        : undefined,
+      // `eqAny`, NOT sql`col = ANY(${arr})`: drizzle expands a JS array in a
+      // template into a row constructor (`ANY(($1, $2))`), which postgres
+      // rejects — `ANY` wants an array, so the whole query 500s.
+      eqAny(financialTransaction.kind, filters.kind),
+      eqAny(financialTransaction.status, filters.status),
       refsCondition(
         filters.source ? [filters.source].flat() : undefined,
         filters.externalId ? [filters.externalId].flat() : undefined,

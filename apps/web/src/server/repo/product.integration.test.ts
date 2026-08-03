@@ -19,6 +19,7 @@ import {
   deleteProducts,
   findProductByNameFuzzyManufacturer,
   getProductByID,
+  getProductPickerItemsByIds,
   patchProductExternalIds,
   productList,
   updateProduct,
@@ -63,6 +64,32 @@ describe("product repository", () => {
     expect(retrievedProduct.manufacturer).toEqual(productData.manufacturer);
     expect(retrievedProduct.unitMappings).toEqual([]);
     expect(retrievedProduct.ingredient).toBeNull();
+  });
+
+  // Regression: this lookup was built as sql`id = ANY(${ids})`. Drizzle expands
+  // a JS array in a template into a row constructor, so the query went out as
+  // `= ANY(($1))` and postgres rejected it — the product combobox's semantic
+  // fallback 500'd at every id count, one included.
+  it("hydrates picker items by id in both single and multi-id form", async () => {
+    const first = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Picker hydrate A" }),
+      ctx.actor,
+    );
+    const second = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Picker hydrate B" }),
+      ctx.actor,
+    );
+
+    const one = await getProductPickerItemsByIds(ctx.db, [first.entityId]);
+    expect(one.map((item) => item.id)).toEqual([first.id]);
+
+    const both = await getProductPickerItemsByIds(ctx.db, [
+      first.entityId,
+      second.entityId,
+    ]);
+    expect(both.map((item) => item.id)).toEqual([first.id, second.id]);
   });
 
   it("supports typed identifier replacement and slot-level patches", async () => {
