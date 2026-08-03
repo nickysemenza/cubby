@@ -22,6 +22,7 @@ import {
   getProductPickerItemsByIds,
   patchProductExternalIds,
   productList,
+  quickCreateProduct,
   updateProduct,
 } from "./product";
 import { createProject } from "./project";
@@ -1694,6 +1695,120 @@ describe("product repository", () => {
           expect(found.sums?.expenseTotal).toEqual(40);
         });
       });
+    });
+  });
+
+  // Home Depot renders brand names in caps, so an HD import used to mint
+  // `RYOBI` beside Amazon's `Ryobi` and split one brand across two picklist
+  // rows — 19 variants over 60 products before the 2026-08 backfill. Creates
+  // now snap to the established spelling (`resolveEstablishedManufacturer`);
+  // these lock in that behavior AND its deliberate limit at the edit path.
+  describe("manufacturer spelling normalization", () => {
+    it("snaps a create onto the spelling already in use", async () => {
+      await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Circular Saw", manufacturer: "Ryobi" }),
+        ctx.actor,
+      );
+
+      const imported = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Impact Driver", manufacturer: "RYOBI" }),
+        ctx.actor,
+      );
+
+      expect(imported.manufacturer).toEqual("Ryobi");
+    });
+
+    it("collapses punctuation and spacing drift, not just case", async () => {
+      await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Wood Glue", manufacturer: "Elmer's" }),
+        ctx.actor,
+      );
+
+      const imported = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Wood Filler", manufacturer: "ELMERS" }),
+        ctx.actor,
+      );
+
+      expect(imported.manufacturer).toEqual("Elmer's");
+    });
+
+    it("follows the majority spelling, not creation order", async () => {
+      // `DEWALT` is the brand's own stylization and holds two products; a
+      // later title-case import must not drag the brand off it.
+      for (const name of ["Drill", "Sander"]) {
+        await createProduct(
+          ctx.db,
+          makeProductInput({ name, manufacturer: "DEWALT" }),
+          ctx.actor,
+        );
+      }
+      await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Jigsaw", manufacturer: "Dewalt" }),
+        ctx.actor,
+      );
+
+      const imported = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Miter Saw", manufacturer: "DeWalt" }),
+        ctx.actor,
+      );
+
+      expect(imported.manufacturer).toEqual("DEWALT");
+    });
+
+    it("keeps the caller's spelling for a brand new to the ledger", async () => {
+      const created = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Track Saw", manufacturer: "FestoolX" }),
+        ctx.actor,
+      );
+
+      expect(created.manufacturer).toEqual("FestoolX");
+    });
+
+    it("normalizes quickCreateProduct too", async () => {
+      await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Scaffold Frame", manufacturer: "MetalTech" }),
+        ctx.actor,
+      );
+
+      const quick = await quickCreateProduct(
+        ctx.db,
+        { name: "Guardrail", manufacturer: "METALTECH" },
+        ctx.actor,
+      );
+
+      expect(quick.manufacturer).toEqual("MetalTech");
+    });
+
+    it("leaves a deliberate edit alone", async () => {
+      // The escape hatch: renaming a brand has to be possible, so the snap is
+      // create-only and the Problems detector is the backstop for edits.
+      await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Orbital Sander", manufacturer: "Bosch" }),
+        ctx.actor,
+      );
+      const other = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Hammer Drill", manufacturer: "Bosch" }),
+        ctx.actor,
+      );
+
+      const renamed = await updateProduct(
+        ctx.db,
+        other.entityId,
+        { manufacturer: "BOSCH" },
+        ctx.actor,
+      );
+
+      expect(renamed.manufacturer).toEqual("BOSCH");
     });
   });
 
