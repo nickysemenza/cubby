@@ -131,6 +131,19 @@ facts, record the supported image exception in the report, and leave the gallery
 unchanged. A manufacturer family image is allowed only when disclosed as such
 and useful to the user.
 
+The checkpoint also runs in reverse. When the Product *is* a kit-packed
+component, the only listing is usually the standalone retail SKU of the same
+item — a bare-tool variant (RYOBI kit `PCL206` vs. retail `PCL206B`), a
+single-unit page for something bought in a multipack, or a boxed version of a
+loose part. That listing is acceptable evidence for the cover image and for
+retailer `externalIds`, disclosed in notes as sourced from the standalone SKU.
+It is not evidence for `upc`: a barcode identifies the package, and the
+kit-packed unit never came in that package. Keep the model the kit's own
+includes list uses, and record the retail variant in notes rather than
+overwriting identity with it. Confirm the split actually exists before applying
+this — a component with no separate retail variant (a battery sold under one
+model whether kitted or not) takes the listing's UPC normally.
+
 Read `get_product` immediately before attachment and snapshot its images,
 cover, display order, count, and metadata. Call `attach_file` once with the
 product's `PRD-` shortcode, `expectedImageCount`, and a deterministic retry

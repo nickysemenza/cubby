@@ -22,7 +22,21 @@ Expense → Purchase ← FinancialTransaction → FinancialAccount
   Financial Transaction.
 - `Expense.lineKind` records the receipt role: `principal` for merchandise or a
   service, otherwise `tax`, `shipping`, `discount`, `fee`, `tip`, or
-  `other_adjustment`. Every kind remains spend in `SUM(Expense.cost)`.
+  `other_adjustment`. Every kind remains spend in `SUM(Expense.cost)`. Pass
+  `lineKind` explicitly on every adjustment row. Inference is a narrow fallback,
+  not the mechanism: it fires only for an adjustment-like name on a Product-less
+  Expense and never re-runs on rename. Read the kind back off the write response
+  instead of assuming it.
+  **The published MCP schemas omit `lineKind`, but every write tool accepts it** —
+  `create_expense(s)`, `update_expense(s)`, and `split_expense` (per part) all
+  store it and echo it back. `splitExpenseInput.parts` carries an optional
+  `lineKind`, and `splitExpense` resolves `part.lineKind ?? infer(...)`, so an
+  explicit kind on a part wins over inference: splitting a receipt with an
+  `Outside Delivery` part typed `shipping` stores `shipping`, even though that
+  name does not match the inference regex and would otherwise land as
+  `principal`. Do not conclude from the schema that typed rows are unreachable
+  and fall back to allocating tax across merchandise; that is the superseded
+  pattern that older Golden State Lumber and Bay Metals rows still show.
 - A `Purchase` is one vendor order, receipt, or deliberately separate purchase
   event. `statedTotal` is the literal vendor-printed amount, never a rollup.
 - A `FinancialTransaction` is settlement evidence: a charge, refund,
@@ -87,6 +101,17 @@ Expense → Purchase ← FinancialTransaction → FinancialAccount
 - Use `split_expense` for a real aggregate Expense that needs per-product cost
   basis. Use `link_expenses_to_purchase` for several existing Expenses on one
   Purchase, and `merge_purchases` only after explicit approval.
+- Reconcile every proposed split against the vendor's own stated order total
+  before writing it, and refuse the order when it does not agree. `split_expense`
+  does not validate that parts sum to anything, so this assertion is the only
+  thing standing between a bad source row and the ledger. It is what catches a
+  cancelled line still present in an export, a unit price masquerading as an
+  extended one, and a tax-inclusive export column. Report refusals; never widen
+  the tolerance to make an order pass.
+- Never rewrite the `productId` of an already-linked Expense during a bulk link
+  or split pass. Select work by what is unlinked, not by comparing counts, and
+  route a partially-linked Purchase to review — its existing links usually encode
+  a human decision that a bulk matcher will silently overwrite.
 - For duplicate cleanup, call `preview_entity_operation`, delete only the bogus
   Expenses, re-read to verify the Purchase is empty, then use
   `delete_empty_purchases`. Deleting a Purchase never removes spend; do not use
@@ -168,11 +193,17 @@ or raw file contents to Cubby.
    batches of at most 200.
 2. Create Financial Accounts only when approved; use a truthful provisional
    Account when evidence identifies only something like `Visa ····3692`.
-3. Submit only approved `ready_to_create` rows through
-   `create_financial_transactions`.
-4. Leave `already_recorded` untouched. Review `possible_existing`,
+3. Before submitting, read each proposed row back and confirm `kind` is
+   `purchase` for charges and `refund` for credits. A wrong-signed row previews
+   as a clean `ready_to_create` with tying amounts, so a totals check will not
+   catch it.
+4. Submit only approved `ready_to_create` rows through
+   `create_financial_transactions`, then backfill `sourceRefs` (plural, an
+   array) with `update_financial_transactions` — the create path does not accept
+   one, and the singular `sourceRef` is silently discarded.
+5. Leave `already_recorded` untouched. Review `possible_existing`,
    `unresolved_account`, and `indistinguishable_duplicate` manually.
-5. Read the generic batch result and then inspect the Purchase's settlement
+6. Read the generic batch result and then inspect the Purchase's settlement
    reconciliation. A source-reference conflict is a failed item, not permission
    to change another row.
 
@@ -189,9 +220,19 @@ as notes/evidence; do not infer a Financial Account from them.
   not an attached primary document.
 - File a Purchase document with `attach_file` and a truthful `documentKind`.
   Use `reclassify_purchase_document` only to correct an existing attachment.
+- Attach by `url`, never by base64 `data`: `data` truncates silently above a few
+  KB and returns success. Verify every attachment by fetching the stored URL back
+  and comparing bytes to the source. An unverified attachment is not filed — a
+  corrupt one is worse than none, because it clears `primary_document` and makes
+  the Purchase read as documented.
 - Use `set_data_exception` and `clear_data_exception` only for source-backed
   negative knowledge after checking available sources. They are not substitutes
-  for research.
+  for research. Two constraints worth knowing: `primary_document` rejects
+  `not_applicable` (use `not_issued` — a return or a deposit against an unnumbered
+  contract genuinely had no invoice issued), and **an exception goes `stale` when
+  the entity is written again afterwards**, which re-opens the gap. Set exceptions
+  last, and re-read the Purchase after any later write to confirm they are still
+  `active`.
 
 ## Final checklist
 

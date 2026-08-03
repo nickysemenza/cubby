@@ -40,6 +40,20 @@ external ID, call `find_product_external_id_collisions` with the exact source,
 kind, and value. A collision is a stop-and-review condition. Same-name items
 from different manufacturers are usually separate Products.
 
+Exact identifiers only prove a duplicate when both records carry the *same kind*
+of identifier. One retailer routinely issues several — Home Depot has both a
+store `retailer_sku` and an `internet_number` — and a Product holding one will
+not be found by a lookup on the other, so an id-only search reports "no match"
+on an item you already own. When the incoming id kind is absent from the
+catalog, fall back to a name search that returns **several** candidates and
+treat a near-exact hit as a duplicate to resolve, not a new Product: a
+single-best-match search silently hides the real duplicate behind a
+similarly-named different size. Prefer consolidating onto the record that
+already carries images, model, price, or expenses, then add the missing id kind
+to it. A retailer may also reuse one SKU for unrelated things — Home Depot files
+delivery and fee lines under a SKU it also uses for merchandise — so never infer
+identity from a SKU attached to an adjustment line.
+
 For a bogus duplicate Purchase, preview the operation, delete its bogus
 Expenses, and re-read it. Delete the Purchase only once it is empty, through
 `delete_empty_purchases`; that guarded operation must refuse live Expenses and
