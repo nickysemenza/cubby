@@ -43,11 +43,28 @@ export const financialTransactionKind = z.enum([
 ]);
 export type FinancialTransactionKind = z.infer<typeof financialTransactionKind>;
 
+/**
+ * Kinds that may carry a `purchaseId`, i.e. that can act as settlement evidence
+ * for a Purchase.
+ *
+ * `income` is here for sale proceeds. A disposal is modelled as a Purchase whose
+ * Expenses are negative, and the marketplace payout that settles it is an
+ * inflow — not a `refund` (which means "the vendor gave money back for goods I
+ * returned", and is separately needed on sale Purchases for real refunds to
+ * buyers) and not a `purchase` (which is validated positive).
+ *
+ * The DB CHECK `FinancialTransaction_purchase_settlement_check` in
+ * apps/web/src/server/db/schema.ts derives its IN-list from this constant; the
+ * per-kind sign rules below are mirrored there by hand and must be kept in step.
+ */
 export const purchaseSettlementKinds = [
   "purchase",
   "refund",
   "adjustment",
+  "income",
 ] as const satisfies readonly FinancialTransactionKind[];
+
+const purchaseSettlementKindList = purchaseSettlementKinds.join(", ");
 
 export const isPurchaseSettlementKind = (
   kind: FinancialTransactionKind,
@@ -64,8 +81,7 @@ export const financialTransactionSettlementViolation = (value: {
   if (value.purchaseId !== null && !isPurchaseSettlementKind(value.kind)) {
     return {
       path: "kind",
-      message:
-        "only purchase, refund, or adjustment transactions may link to a Purchase",
+      message: `only ${purchaseSettlementKindList} transactions may link to a Purchase`,
     };
   }
   if (value.kind === "purchase" && value.amount <= 0) {
@@ -73,6 +89,19 @@ export const financialTransactionSettlementViolation = (value: {
   }
   if (value.kind === "refund" && value.amount >= 0) {
     return { path: "amount", message: "refund amounts must be negative" };
+  }
+  // Sale proceeds only. Unlinked income (salary, interest) carries no settlement
+  // semantics and keeps an unconstrained sign; income attached to a Purchase is
+  // a payout, and payouts are inflows.
+  if (
+    value.purchaseId !== null &&
+    value.kind === "income" &&
+    value.amount >= 0
+  ) {
+    return {
+      path: "amount",
+      message: "income linked to a Purchase must be negative",
+    };
   }
   return null;
 };

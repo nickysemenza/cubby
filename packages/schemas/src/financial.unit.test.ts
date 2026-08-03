@@ -130,4 +130,33 @@ describe("financial transaction contracts", () => {
       }).success,
     ).toBe(false);
   });
+
+  it("accepts income as sale-proceeds settlement, inflow only", () => {
+    // A marketplace payout settling a disposal: linked, and an inflow.
+    expect(
+      financialTransactionCreateInput.parse({
+        ...transaction,
+        kind: "income",
+        amount: -152.57,
+      }).amount,
+    ).toBe(-152.57);
+    // Linked income must be negative — a payout is never an outflow.
+    expect(
+      financialTransactionCreateInput.safeParse({
+        ...transaction,
+        kind: "income",
+        amount: 152.57,
+      }).success,
+    ).toBe(false);
+    // Unlinked income (salary, interest) carries no settlement semantics and
+    // keeps an unconstrained sign.
+    expect(
+      financialTransactionCreateInput.safeParse({
+        ...transaction,
+        purchaseId: null,
+        kind: "income",
+        amount: 152.57,
+      }).success,
+    ).toBe(true);
+  });
 });

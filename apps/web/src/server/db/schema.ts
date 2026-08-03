@@ -14,7 +14,10 @@ import type {
   FinancialAccountIdentity,
   FinancialAccountSourceAlias,
 } from "@cubby/schemas/financial-account";
-import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction";
+import {
+  type FinancialTransactionSourceRef,
+  purchaseSettlementKinds,
+} from "@cubby/schemas/financial-transaction";
 import type {
   CookbookId,
   ExpenseId,
@@ -1267,9 +1270,15 @@ export const financialTransaction = pgTable(
       "FinancialTransaction_posted_date_check",
       sql`${table.status} <> 'posted' OR ${table.postedDate} IS NOT NULL`,
     ),
+    // Mirrors financialTransactionSettlementViolation in
+    // packages/schemas/src/financial-transaction.ts. The IN-list derives from
+    // purchaseSettlementKinds so it cannot drift; the per-kind sign rules are
+    // hand-written and must be updated alongside that helper.
     check(
       "FinancialTransaction_purchase_settlement_check",
-      sql`${table.purchaseId} IS NULL OR (${table.kind} IN ('purchase', 'refund', 'adjustment') AND ((${table.kind} = 'purchase' AND ${table.amount} > 0) OR (${table.kind} = 'refund' AND ${table.amount} < 0) OR ${table.kind} = 'adjustment'))`,
+      sql`${table.purchaseId} IS NULL OR (${table.kind} IN (${sql.raw(
+        purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", "),
+      )}) AND ((${table.kind} = 'purchase' AND ${table.amount} > 0) OR (${table.kind} IN ('refund', 'income') AND ${table.amount} < 0) OR ${table.kind} = 'adjustment'))`,
     ),
   ],
 );
