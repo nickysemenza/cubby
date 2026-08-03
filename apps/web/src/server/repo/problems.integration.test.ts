@@ -632,6 +632,70 @@ describe("problems repo", () => {
       expect(flagged?.soldQuantity).toBe(1);
     });
 
+    it("spares a product re-acquired after its last exit", async () => {
+      const loc = await createLocation(
+        ctx.db,
+        makeLocationInput({ name: "Rebought shelf" }),
+        ctx.actor,
+      );
+      const rebought = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Sold Then Rebought Grinder", price: 90 }),
+        ctx.actor,
+      );
+      await createInventoryEntry(
+        ctx.db,
+        {
+          productId: rebought.id,
+          locationId: loc.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+
+      await seedLine({
+        name: "grinder bought",
+        cost: 90,
+        date: "2024-01-10",
+        vendor: "eBay",
+        orderId: "REBUY-BUY-1",
+        productId: rebought.id,
+        productQuantity: 1,
+      });
+      await seedLine({
+        name: "grinder sold",
+        cost: -50,
+        date: "2024-06-01",
+        vendor: "eBay",
+        orderId: "REBUY-SALE",
+        productId: rebought.id,
+        productQuantity: 1,
+      });
+
+      // Sold and nothing since — the shelf entry is stale, so it reports.
+      const during = await findFastProblems(ctx.db);
+      expect(during.soldButStillStocked.some((p) => p.id === rebought.id)).toBe(
+        true,
+      );
+
+      // Bought again afterwards: ownership reopened, so the entry on the shelf
+      // is this acquisition rather than the leftover.
+      await seedLine({
+        name: "grinder bought again",
+        cost: 95,
+        date: "2024-09-15",
+        vendor: "eBay",
+        orderId: "REBUY-BUY-2",
+        productId: rebought.id,
+        productQuantity: 1,
+      });
+
+      const after = await findFastProblems(ctx.db);
+      expect(after.soldButStillStocked.some((p) => p.id === rebought.id)).toBe(
+        false,
+      );
+    });
+
     it("is a defect, not a coverage backlog", () => {
       expect(PROBLEM_CLASS.soldButStillStocked).toBe("defect");
     });

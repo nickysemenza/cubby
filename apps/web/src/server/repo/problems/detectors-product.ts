@@ -30,6 +30,7 @@ import {
   and,
   eq,
   exists,
+  gt,
   inArray,
   isNotNull,
   isNull,
@@ -354,6 +355,21 @@ export const findProductsMissingPrice = async (
 //     10 legitimately stocked, so a row is reported only when the sold
 //     quantity accounts for everything still on the shelf. Both quantities
 //     ride along on the row so a partial sale reads as deliberate.
+//
+//  3. *The exit has to be the last word.* `Expense.productId`'s doc note puts
+//     it plainly: ownership is an *interval* derived from these rows plus
+//     inventory. A tool sold and later re-bought keeps its disposal row
+//     forever, so without comparing the last exit against the last
+//     acquisition the fresh shelf entry reads as the stale one.
+//
+// Known blind spot, and it is a modelling limit rather than a missing check:
+// the same doc note records a broken or gifted item as a **cost-0** exit, and
+// a cost-0 line is exactly how a free promotional *acquisition* is recorded
+// too (the Harbor Freight bucket, the M12 promo pack). The two are
+// indistinguishable, and a net-zero purchase never nets negative, so cost-0
+// exits are not detected. Widening the predicate to `cost <= 0` would flag
+// every freebie as sold — strictly worse. Separating them needs a real signal
+// on the row, not a cleverer query.
 export const findSoldButStillStocked = async (
   db: Database,
 ): Promise<SoldButStillStocked[]> => {
@@ -379,6 +395,9 @@ export const findSoldButStillStocked = async (
       // same way the ledger itself reads it.
       soldQuantity: sql<number>`sum(coalesce(${expense.productQuantity}, 1))::double precision`,
       proceeds: sql<number>`sum(${expense.cost})::double precision`,
+      // Closes the ownership window (see below). `date` is a `mode: "string"`
+      // column, so ISO strings order correctly without parsing.
+      lastExitAt: sql<string>`max(${expense.date})`,
     })
     .from(expense)
     .where(
@@ -398,6 +417,34 @@ export const findSoldButStillStocked = async (
     ),
   );
   if (byProduct.size === 0) return [];
+
+  // Close the ownership window. `Expense.productId`'s own doc note is explicit
+  // that "net cost, ownership window and owned/sold status are derived from
+  // these rows plus inventory; nothing is stored" — so an exit only means the
+  // shelf is stale if nothing was acquired *after* it. Sell a tool and re-buy
+  // it later and the disposal row never goes away, so without this the fresh
+  // shelf entry reads as the stale one.
+  const acquisitions = await dbClient
+    .select({
+      productId: expense.productId,
+      lastAcquiredAt: sql<string>`max(${expense.date})`,
+    })
+    .from(expense)
+    .where(
+      and(
+        notDeleted(expense),
+        eq(expense.future, false),
+        gt(expense.cost, 0),
+        inArray(expense.productId, [...byProduct.keys()]),
+      ),
+    )
+    .groupBy(expense.productId);
+
+  const lastAcquiredAt = new Map(
+    acquisitions.flatMap((row) =>
+      row.productId ? ([[row.productId, row.lastAcquiredAt]] as const) : [],
+    ),
+  );
 
   const candidates = await dbClient.query.product.findMany({
     where: and(notDeleted(product), inArray(product.id, [...byProduct.keys()])),
@@ -430,6 +477,12 @@ export const findSoldButStillStocked = async (
     // A partial sale leaves real stock behind; only a fully-accounted-for
     // disposal means the remaining entry is stale.
     if (disposal.soldQuantity < liveQuantity) continue;
+    // Re-acquired after the last exit, so the shelf entry is a fresh purchase
+    // rather than a leftover. Ties keep the row: a same-day sell-and-rebuy is
+    // not distinguishable at date granularity, and reporting it is the safer
+    // side of an ambiguity a human resolves anyway.
+    const acquiredAt = lastAcquiredAt.get(prod.id);
+    if (acquiredAt && acquiredAt > disposal.lastExitAt) continue;
 
     rows.push({
       id: unsafeProductShortcode(prod.shortcode),
