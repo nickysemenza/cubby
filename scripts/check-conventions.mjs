@@ -188,7 +188,11 @@ const HAND_ROLLED_ARRAY_OVERLAP_RE = /&&\s*\$\{/;
 // `kind`/`status` filters, the financial-account `identityKind` filter, and the
 // product picker's semantic-fallback id lookup. Use `eqAny`/`inArray` for a
 // column, `matchesStringValues` for a SQL expression such as a jsonb field.
-const HAND_ROLLED_ANY_ARRAY_RE = /\bANY\s*\(\s*\$\{/;
+//
+// Content-level (not per-line), like `unstable-hook-default`: a long `sql`
+// template can be wrapped so `ANY(` and `${...}` land on different lines, and a
+// per-line scan would wave that through.
+const HAND_ROLLED_ANY_ARRAY_RE = /\bANY\s*\(\s*\$\{/g;
 
 // An explicit router output without the parsed-output type narrowing. The empty
 // `.output()` spelling in prose is excluded so comments do not false-positive.
@@ -461,6 +465,23 @@ function scan(files) {
       }
     }
 
+    // Rule (hand-rolled-any-array): raw `= ANY(${arr})` SQL — the
+    // row-constructor trap, as a hard 500 rather than a silent mismatch.
+    // Content-level so a wrapped `sql` template can't hide it; comment-only
+    // references (this repo documents the trap in prose) are filtered out.
+    if (!isTestOrFixture(file)) {
+      for (const match of content.matchAll(HAND_ROLLED_ANY_ARRAY_RE)) {
+        const line = content.slice(0, match.index).split("\n").length;
+        if (isCommentLine(lines[line - 1] ?? "")) continue;
+        violations.push({
+          file,
+          line,
+          snippet: (lines[line - 1] ?? "").trim(),
+          rule: "hand-rolled-any-array",
+        });
+      }
+    }
+
     // Explicit router outputs must type-check resolvers against z.output, not
     // z.input (whose plain strings also accept branded private UUIDs).
     if (isRouterFile(file) && !isTestOrFixture(file)) {
@@ -706,21 +727,6 @@ function scan(files) {
           line: i + 1,
           snippet: line.trim(),
           rule: "hand-rolled-array-overlap",
-        });
-      }
-
-      // Rule (hand-rolled-any-array): raw `= ANY(${arr})` SQL — the same
-      // row-constructor trap, but a hard 500 rather than a silent mismatch.
-      if (
-        !isTestOrFixture(file) &&
-        !isCommentLine(line) &&
-        HAND_ROLLED_ANY_ARRAY_RE.test(line)
-      ) {
-        violations.push({
-          file,
-          line: i + 1,
-          snippet: line.trim(),
-          rule: "hand-rolled-any-array",
         });
       }
     }
