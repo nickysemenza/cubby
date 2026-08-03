@@ -197,6 +197,13 @@ export const ENTITY_EDGE_SEMANTICS = {
         "Durable history that this reusable tool or software Product was used on a household project; deleting the Product would leave that history nameless.",
       liveness: { kind: "must-target-live" },
     },
+    "WishCandidate.productId": {
+      role: "association",
+      label: "wishlist candidates",
+      description:
+        "A tool Product considered as an alternative for a household Wishlist entry; it is planning data, not inventory or spend.",
+      liveness: { kind: "must-target-live" },
+    },
   },
   location: {
     "InventoryEntry.locationId": {
@@ -333,6 +340,15 @@ export const ENTITY_EDGE_SEMANTICS = {
     },
   },
   financialTransaction: {},
+  wish: {
+    "WishCandidate.wishId": {
+      role: "owned-child",
+      label: "tool candidates",
+      description:
+        "An alternative tool Product belonging to this Wishlist entry; the pairing has no independent meaning once the Wish is removed.",
+      liveness: { kind: "must-target-live" },
+    },
+  },
   expense: {},
   inventory: {},
   "usda-food": {},

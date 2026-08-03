@@ -52,6 +52,7 @@ import {
   recipeSection,
   recipeSectionIngredient,
   task,
+  wishCandidate,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
@@ -188,6 +189,18 @@ const PRODUCT_RETAINING_NOT_EXISTS: Record<
           and(
             eq(projectToolUsage.productId, product.id),
             notDeleted(projectToolUsage),
+          ),
+        ),
+    ),
+  "WishCandidate.productId": (dbClient) =>
+    notExists(
+      dbClient
+        .select({ id: sql`1` })
+        .from(wishCandidate)
+        .where(
+          and(
+            eq(wishCandidate.productId, product.id),
+            notDeleted(wishCandidate),
           ),
         ),
     ),

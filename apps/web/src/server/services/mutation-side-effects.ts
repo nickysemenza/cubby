@@ -14,6 +14,7 @@ import {
   recipeId,
   taskId,
   vendorId,
+  wishId,
 } from "@cubby/schemas/identifiers";
 import type {
   SearchableEntity,
@@ -37,6 +38,7 @@ import {
   findTaskEmbeddingRefsForProducts,
   findTrackerEmbeddingRefsForProjects,
   findTransactionEmbeddingRefsForAccounts,
+  findWishEmbeddingRefsForProducts,
 } from "~/server/repo/entity-embedding";
 
 const mutationEntityRefSchema = z.discriminatedUnion("entityType", [
@@ -60,6 +62,7 @@ const mutationEntityRefSchema = z.discriminatedUnion("entityType", [
     entityId: financialTransactionId,
   }),
   z.object({ entityType: z.literal("expense"), entityId: expenseId }),
+  z.object({ entityType: z.literal("wish"), entityId: wishId }),
   z.object({ entityType: z.literal("image"), entityId: z.uuid() }),
 ]);
 
@@ -167,6 +170,15 @@ const collectTaskEmbeddingRefsForProduct: EmbeddingRefCollector = async (
   ]);
 };
 
+const collectWishEmbeddingRefsForProduct: EmbeddingRefCollector = async (
+  ctx,
+) => {
+  if (ctx.event.entity.entityType !== "product") return [];
+  return await findWishEmbeddingRefsForProducts(ctx.db, [
+    ctx.event.entity.entityId,
+  ]);
+};
+
 const collectInventoryEmbeddingRefsForLocation: EmbeddingRefCollector = async (
   ctx,
 ) => {
@@ -259,6 +271,13 @@ async function refreshTaskEmbeddingsForProduct(
   return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
 }
 
+async function refreshWishEmbeddingsForProduct(
+  ctx: HandlerContext,
+): Promise<BackgroundBatchRef[]> {
+  const refs = await collectWishEmbeddingRefsForProduct(ctx);
+  return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
+}
+
 async function refreshInventoryEmbeddingsForLocation(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
@@ -330,6 +349,7 @@ const embeddingRefCollectorByHandler = new Map<
     collectInventoryEmbeddingRefsForProduct,
   ],
   [refreshTaskEmbeddingsForProduct, collectTaskEmbeddingRefsForProduct],
+  [refreshWishEmbeddingsForProduct, collectWishEmbeddingRefsForProduct],
   [
     refreshInventoryEmbeddingsForLocation,
     collectInventoryEmbeddingRefsForLocation,
@@ -403,6 +423,7 @@ export const mutationSideEffectManifest = {
       refreshOwnEmbedding,
       refreshInventoryEmbeddingsForProduct,
       refreshTaskEmbeddingsForProduct,
+      refreshWishEmbeddingsForProduct,
     ],
     onDelete: [],
   },
@@ -478,6 +499,11 @@ export const mutationSideEffectManifest = {
   expense: {
     onCreate: [refreshOwnEmbedding, refreshCommercialEmbeddingsForExpense],
     onUpdate: [refreshOwnEmbedding, refreshCommercialEmbeddingsForExpense],
+    onDelete: [],
+  },
+  wish: {
+    onCreate: [refreshOwnEmbedding],
+    onUpdate: [refreshOwnEmbedding],
     onDelete: [],
   },
   image: {

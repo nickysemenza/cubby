@@ -24,6 +24,7 @@ import {
   unsafeRecipeId,
   unsafeTaskId,
   unsafeVendorId,
+  unsafeWishId,
 } from "@cubby/schemas/identifiers";
 import type {
   SearchableEntity,
@@ -52,6 +53,8 @@ import {
   recipeSectionIngredient,
   task,
   vendor,
+  wish,
+  wishCandidate,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
@@ -146,6 +149,26 @@ export async function findTaskEmbeddingRefsForProducts(
     columns: { id: true },
   });
   return rows.map((row) => ({ entityType: "task", entityId: row.id }));
+}
+
+/** Wishes embed candidate product identity, so Product identity edits fan out. */
+export async function findWishEmbeddingRefsForProducts(
+  db: Database,
+  productIds: ProductId[],
+): Promise<SearchableEntityRef[]> {
+  if (productIds.length === 0) return [];
+  const rows = await getDb(db)
+    .selectDistinct({ wishId: wishCandidate.wishId })
+    .from(wishCandidate)
+    .innerJoin(wish, eq(wish.id, wishCandidate.wishId))
+    .where(
+      and(
+        inArray(wishCandidate.productId, productIds),
+        notDeleted(wishCandidate),
+        notDeleted(wish),
+      ),
+    );
+  return rows.map((row) => ({ entityType: "wish", entityId: row.wishId }));
 }
 
 export async function findInventoryEmbeddingRefsForLocations(
@@ -438,6 +461,7 @@ const liveIdLoaders = {
     expense.deletedAt,
     unsafeExpenseId,
   ),
+  wish: createLiveIdLoader(wish, wish.id, wish.deletedAt, unsafeWishId),
 } satisfies Record<SearchableEntity, LiveIdLoader>;
 
 export async function findOrphanedEntityEmbeddings(

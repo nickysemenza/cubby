@@ -21,6 +21,7 @@ import {
   recipe,
   task,
   vendor,
+  wish,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
@@ -58,6 +59,7 @@ const COUNT_SOURCES = {
     where: notDeleted(financialTransaction),
   },
   image: { table: image, where: notDeleted(image) },
+  wish: { table: wish, where: notDeleted(wish) },
 } satisfies Record<CountableEntity, { table: PgTable; where: SQL | undefined }>;
 
 type EntityCounts = Record<CountableEntity, number>;

@@ -13,6 +13,7 @@ const findInventoryEmbeddingRefsForProductsMock = vi.hoisted(() => vi.fn());
 const findInventoryEmbeddingRefsForLocationsMock = vi.hoisted(() => vi.fn());
 const findRecipeEmbeddingRefsForIngredientsMock = vi.hoisted(() => vi.fn());
 const findTaskEmbeddingRefsForProductsMock = vi.hoisted(() => vi.fn());
+const findWishEmbeddingRefsForProductsMock = vi.hoisted(() => vi.fn());
 const findMealEmbeddingRefsForRecipesMock = vi.hoisted(() => vi.fn());
 const findTrackerEmbeddingRefsForProjectsMock = vi.hoisted(() => vi.fn());
 const findEmbeddingRefsForVendorsMock = vi.hoisted(() => vi.fn());
@@ -33,6 +34,7 @@ vi.mock("~/server/repo/entity-embedding", () => ({
   findRecipeEmbeddingRefsForIngredients:
     findRecipeEmbeddingRefsForIngredientsMock,
   findTaskEmbeddingRefsForProducts: findTaskEmbeddingRefsForProductsMock,
+  findWishEmbeddingRefsForProducts: findWishEmbeddingRefsForProductsMock,
   findMealEmbeddingRefsForRecipes: findMealEmbeddingRefsForRecipesMock,
   findTrackerEmbeddingRefsForProjects: findTrackerEmbeddingRefsForProjectsMock,
   findEmbeddingRefsForVendors: findEmbeddingRefsForVendorsMock,
@@ -63,6 +65,7 @@ describe("runMutationSideEffectsForEntities batching", () => {
     findInventoryEmbeddingRefsForLocationsMock.mockResolvedValue([]);
     findRecipeEmbeddingRefsForIngredientsMock.mockResolvedValue([]);
     findTaskEmbeddingRefsForProductsMock.mockResolvedValue([]);
+    findWishEmbeddingRefsForProductsMock.mockResolvedValue([]);
     findMealEmbeddingRefsForRecipesMock.mockResolvedValue([]);
     findTrackerEmbeddingRefsForProjectsMock.mockResolvedValue([]);
     findEmbeddingRefsForVendorsMock.mockResolvedValue([]);
@@ -78,6 +81,7 @@ describe("runMutationSideEffectsForEntities batching", () => {
     findInventoryEmbeddingRefsForLocationsMock.mockReset();
     findRecipeEmbeddingRefsForIngredientsMock.mockReset();
     findTaskEmbeddingRefsForProductsMock.mockReset();
+    findWishEmbeddingRefsForProductsMock.mockReset();
     findMealEmbeddingRefsForRecipesMock.mockReset();
     findTrackerEmbeddingRefsForProjectsMock.mockReset();
     findEmbeddingRefsForVendorsMock.mockReset();
@@ -236,6 +240,7 @@ describe("mutation side effects manifest", () => {
       "recipe",
       "task",
       "vendor",
+      "wish",
     ]);
     for (const handlers of Object.values(mutationSideEffectManifest)) {
       expect(handlers).toHaveProperty("onCreate");

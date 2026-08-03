@@ -162,6 +162,13 @@ export const entityManifest = {
         inc("ProjectToolUsage.productId"),
         out("ProjectToolUsage.projectId"),
       ),
+      path(
+        "wishes",
+        "Wishlist candidates",
+        "wish",
+        inc("WishCandidate.productId"),
+        out("WishCandidate.wishId"),
+      ),
       imageGallery("ProductImage", "productId"),
       // Not one column: the USDA link resolves UPC-first and falls back to an
       // explicit fdc_id (see usda-link-resolved-at-query-time), so declaring
@@ -489,6 +496,28 @@ export const entityManifest = {
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
     routerStyle: "crud-factory",
+  },
+  wish: {
+    dbTable: "Wish",
+    idBrand: "WishId",
+    shortcodePrefix: SHORTCODE_PREFIX.wish,
+    softDelete: true,
+    auditable: true,
+    hasImages: false,
+    searchable: true,
+    countable: true,
+    relationships: [
+      path(
+        "candidates",
+        "Tool candidates",
+        "product",
+        inc("WishCandidate.wishId"),
+        out("WishCandidate.productId"),
+      ),
+    ],
+    lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
+    mcp: ALL_MCP,
+    routerStyle: "custom",
   },
   expense: {
     dbTable: "Expense",

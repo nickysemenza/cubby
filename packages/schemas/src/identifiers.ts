@@ -13,6 +13,7 @@ import type {
   RecipeShortcode,
   TaskShortcode,
   VendorShortcode,
+  WishShortcode,
 } from "@cubby/shared";
 import { z } from "zod";
 
@@ -103,6 +104,9 @@ export type VendorId = z.infer<typeof vendorId>;
 export const [purchaseId, unsafePurchaseId] = brandedId("PurchaseId");
 export type PurchaseId = z.infer<typeof purchaseId>;
 
+export const [wishId, unsafeWishId] = brandedId("WishId");
+export type WishId = z.infer<typeof wishId>;
+
 // Shortcode schemas re-exported from the shared package (single source of
 // truth). Each one already trims, uppercases, validates its prefix, and brands —
 // there is deliberately no second "normalized" variant to choose between.
@@ -123,6 +127,7 @@ export {
   shortcodeSchema,
   taskShortcode,
   vendorShortcode,
+  wishShortcode,
 } from "@cubby/shared";
 export type {
   CookbookShortcode,
@@ -139,6 +144,7 @@ export type {
   RecipeShortcode,
   TaskShortcode,
   VendorShortcode,
+  WishShortcode,
 };
 
 export const unsafeCookbookShortcode = makeUnsafeId<CookbookShortcode>();
@@ -157,3 +163,4 @@ export const unsafePurchaseShortcode = makeUnsafeId<PurchaseShortcode>();
 export const unsafeRecipeShortcode = makeUnsafeId<RecipeShortcode>();
 export const unsafeTaskShortcode = makeUnsafeId<TaskShortcode>();
 export const unsafeVendorShortcode = makeUnsafeId<VendorShortcode>();
+export const unsafeWishShortcode = makeUnsafeId<WishShortcode>();

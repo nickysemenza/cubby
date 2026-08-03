@@ -17,6 +17,7 @@ import {
   recipeAllMutationInvalidateKeys,
   taskMutationInvalidateKeys,
   vendorMutationInvalidateKeys,
+  wishMutationInvalidateKeys,
 } from "~/lib/query-keys";
 
 type Api = ReturnType<typeof useTRPC>;
@@ -78,6 +79,7 @@ export const standardEntities = [
   "purchase",
   "financialAccount",
   "financialTransaction",
+  "wish",
 ] as const;
 type StandardEntity = (typeof standardEntities)[number];
 
@@ -220,6 +222,9 @@ const entityContracts = {
     "financialTransaction",
     financialTransactionMutationInvalidateKeys,
   ),
+  wish: standardContract("wish", wishMutationInvalidateKeys, {
+    detailId: "scalar",
+  }),
 } satisfies Record<Entity, EntityContract>;
 
 export function getEntityContract(entity: Entity): EntityContract {

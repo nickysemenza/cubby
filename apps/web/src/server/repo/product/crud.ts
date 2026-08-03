@@ -64,6 +64,7 @@ import {
   projectToolUsage,
   purchase,
   task,
+  wishCandidate,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -1183,6 +1184,22 @@ export const updateProduct = async (
       updateData.category = "food";
     }
 
+    // Wishlist candidates are tools by domain definition. Check the final
+    // category after the food-indicator correction too, so a linked ingredient
+    // cannot silently reclassify a live candidate out of Tools.
+    if (updateData.category !== undefined && updateData.category !== "tools") {
+      const candidate = await tx.query.wishCandidate.findFirst({
+        where: and(eq(wishCandidate.productId, id), notDeleted(wishCandidate)),
+        columns: { id: true },
+      });
+      if (candidate) {
+        throw createAppError(
+          "PRODUCT_HAS_WISH_CANDIDATES",
+          "Remove this Product from the Wishlist before changing it out of the Tools category.",
+        );
+      }
+    }
+
     // Update the product (updateAndReturn handles empty values gracefully)
     const updated = await updateLiveAndReturn(tx, product, updateData, id);
 
@@ -1498,6 +1515,14 @@ const PRODUCT_RETAINING_DEPENDENTS: Record<
       where: and(
         inArray(projectToolUsage.productId, ids),
         notDeleted(projectToolUsage),
+      ),
+      columns: { productId: true },
+    }),
+  "WishCandidate.productId": (tx, ids) =>
+    tx.query.wishCandidate.findMany({
+      where: and(
+        inArray(wishCandidate.productId, ids),
+        notDeleted(wishCandidate),
       ),
       columns: { productId: true },
     }),

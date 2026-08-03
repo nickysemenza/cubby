@@ -36,6 +36,7 @@ export const SHORTCODE_PREFIX = {
   recipe: "RCP-",
   task: "TSK-",
   vendor: "VEN-",
+  wish: "WSH-",
 } as const;
 export type ShortcodeType = keyof typeof SHORTCODE_PREFIX;
 
@@ -167,6 +168,7 @@ export const purchaseShortcode = makeShortcodeSchema(
 export const recipeShortcode = makeShortcodeSchema("recipe", "RecipeShortcode");
 export const taskShortcode = makeShortcodeSchema("task", "TaskShortcode");
 export const vendorShortcode = makeShortcodeSchema("vendor", "VendorShortcode");
+export const wishShortcode = makeShortcodeSchema("wish", "WishShortcode");
 
 /** Every shortcode schema, keyed by entity — the lookup behind `shortcodeSchema`. */
 const SHORTCODE_SCHEMA = {
@@ -184,6 +186,7 @@ const SHORTCODE_SCHEMA = {
   recipe: recipeShortcode,
   task: taskShortcode,
   vendor: vendorShortcode,
+  wish: wishShortcode,
 } as const satisfies Record<ShortcodeType, unknown>;
 
 /**
@@ -213,6 +216,7 @@ export type PurchaseShortcode = z.infer<typeof purchaseShortcode>;
 export type RecipeShortcode = z.infer<typeof recipeShortcode>;
 export type TaskShortcode = z.infer<typeof taskShortcode>;
 export type VendorShortcode = z.infer<typeof vendorShortcode>;
+export type WishShortcode = z.infer<typeof wishShortcode>;
 
 /** Any entity's shortcode, for surfaces that hold a code before resolving it. */
 export type AnyShortcode = z.infer<(typeof SHORTCODE_SCHEMA)[ShortcodeType]>;

@@ -58,6 +58,23 @@ export function buildProductEmbeddingText(product: ProductSearchTextInput) {
   ]);
 }
 
+const wishSearchTextInputSchema = z.object({
+  name: z.string(),
+  notes: nullableText,
+  candidateTerms: nullableTextList,
+});
+
+export function buildWishEmbeddingText(
+  wish: z.infer<typeof wishSearchTextInputSchema>,
+) {
+  const parsed = wishSearchTextInputSchema.parse(wish);
+  return joinFields([
+    field("tool wish", parsed.name),
+    listField("tool candidates", parsed.candidateTerms),
+    field("notes", parsed.notes),
+  ]);
+}
+
 const locationSearchTextInputSchema = z.object({
   name: z.string(),
   type: nullableText,

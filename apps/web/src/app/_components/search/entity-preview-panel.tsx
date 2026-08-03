@@ -160,6 +160,7 @@ export function EntityPreviewPanel({
               <FinancialTransactionDetail transaction={data as never} />
             ) : null,
           )
+          .with("wish", () => null)
           .exhaustive()}
       </div>
     </div>

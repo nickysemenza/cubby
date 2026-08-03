@@ -43,6 +43,7 @@ import {
   recipe,
   task,
   vendor,
+  wish,
 } from "~/server/db/schema";
 
 import {
@@ -87,6 +88,7 @@ export const SHORTCODE_TABLE = {
   recipe,
   task,
   vendor,
+  wish,
 } as const satisfies Record<ShortcodeType, ShortcodeTable>;
 
 export type ShortcodeTableFor<T extends ShortcodeType> =

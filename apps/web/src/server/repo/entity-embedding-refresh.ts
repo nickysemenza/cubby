@@ -13,6 +13,7 @@ import {
   unsafeRecipeId,
   unsafeTaskId,
   unsafeVendorId,
+  unsafeWishId,
 } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -37,6 +38,8 @@ import {
   recipeSectionIngredient,
   task,
   vendor,
+  wish,
+  wishCandidate,
 } from "~/server/db/schema";
 import {
   getDb,
@@ -61,6 +64,7 @@ import {
   buildRecipeEmbeddingText,
   buildTaskEmbeddingText,
   buildVendorEmbeddingText,
+  buildWishEmbeddingText,
   normalizeSearchText,
 } from "~/server/semantic/text";
 
@@ -161,6 +165,47 @@ async function getProductEmbeddingTexts(
     entityType: "product",
     entityId: row.id,
     embeddingText: buildProductEmbeddingText(row),
+  }));
+}
+
+async function getWishEmbeddingTexts(
+  db: Database,
+  options: EmbeddingLoadOptions = {},
+): Promise<SearchableEntityText[]> {
+  const rows = await getDb(db).query.wish.findMany({
+    where: and(
+      notDeleted(wish),
+      options.ids?.length
+        ? inArray(wish.id, options.ids.map(unsafeWishId))
+        : undefined,
+    ),
+    columns: { id: true, name: true, notes: true },
+    with: {
+      candidates: {
+        where: notDeleted(wishCandidate),
+        with: {
+          product: { columns: { name: true, manufacturer: true, model: true } },
+        },
+      },
+    },
+    ...(options.limit == null ? {} : { limit: options.limit }),
+  });
+  return rows.map((row) => ({
+    entityType: "wish",
+    entityId: row.id,
+    embeddingText: buildWishEmbeddingText({
+      name: row.name,
+      notes: row.notes,
+      candidateTerms: row.candidates.flatMap((candidate) =>
+        candidate.product
+          ? [
+              candidate.product.name,
+              candidate.product.manufacturer,
+              candidate.product.model,
+            ]
+          : [],
+      ),
+    }),
   }));
 }
 
@@ -664,6 +709,7 @@ const embeddingTextLoaders = {
   financialAccount: getFinancialAccountEmbeddingTexts,
   financialTransaction: getFinancialTransactionEmbeddingTexts,
   expense: getExpenseEmbeddingTexts,
+  wish: getWishEmbeddingTexts,
 } satisfies Record<SearchableEntity, EmbeddingTextLoader>;
 
 export async function getEmbeddingTextsForEntityTypes(

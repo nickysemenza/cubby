@@ -29,6 +29,7 @@ import { registerPurchaseTools } from "./tools/purchase.tools";
 import { registerRecipeTools } from "./tools/recipe.tools";
 import { registerSearchTools } from "./tools/search.tools";
 import { registerUsdaTools } from "./tools/usda.tools";
+import { registerWishTools } from "./tools/wish.tools";
 import { createMcpClientValidator } from "./validation";
 
 /**
@@ -56,6 +57,7 @@ Entity ids are public shortcodes, not uuids. Every top-level entity id you recei
 - FAC- financial account
 - FTX- financial transaction
 - CKB- cookbook
+- WSH- wishlist item
 A code with the wrong prefix for the field it's passed to (a LOC- code where a tool wants a product) is rejected by input validation before the tool runs, so a mismatched or unresolvable code never reaches a write.
 
 Declared exceptions — these stay raw uuids because no public entity shortcode exists for them: image ids; the mealRecipe \`id\` inside a meal's recipes[]; recipe section and section-line ids; unit-mapping ids; background job/batch ids; and orphan/liveness diagnostics whose row may no longer resolve. USDA \`fdc_id\` is also retained as an external USDA identifier rather than a Cubby id.
@@ -103,6 +105,7 @@ function registerTools(server: McpServer) {
   registerAuditTools(server);
   registerDataQualityTools(server);
   registerEntityIntegrityTools(server);
+  registerWishTools(server);
   // The `ui://` resources those tools' `_meta.ui.resourceUri` pointers resolve
   // to. Adds the `resources` capability, which is otherwise unused — cubby's
   // MCP surface is tools-only.

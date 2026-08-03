@@ -85,6 +85,8 @@ import { Route as AuthenticatedUsdaIndexRouteImport } from './routes/_authentica
 import { Route as AuthenticatedUsdaIdRouteImport } from './routes/_authenticated/usda.$id'
 import { Route as AuthenticatedVendorsIndexRouteImport } from './routes/_authenticated/vendors.index'
 import { Route as AuthenticatedVendorsShortcodeRouteImport } from './routes/_authenticated/vendors.$shortcode'
+import { Route as AuthenticatedWishesIndexRouteImport } from './routes/_authenticated/wishes.index'
+import { Route as AuthenticatedWishesShortcodeRouteImport } from './routes/_authenticated/wishes.$shortcode'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
 import { Route as ApiTrpcSplatRouteImport } from './routes/api/trpc/$'
@@ -523,6 +525,18 @@ const AuthenticatedVendorsShortcodeRoute =
     path: '/vendors/$shortcode',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedWishesIndexRoute =
+  AuthenticatedWishesIndexRouteImport.update({
+    id: '/wishes/',
+    path: '/wishes/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedWishesShortcodeRoute =
+  AuthenticatedWishesShortcodeRouteImport.update({
+    id: '/wishes/$shortcode',
+    path: '/wishes/$shortcode',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -628,6 +642,7 @@ export interface FileRoutesByFullPath {
   '/tasks/$shortcode': typeof AuthenticatedTasksShortcodeRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/vendors/$shortcode': typeof AuthenticatedVendorsShortcodeRoute
+  '/wishes/$shortcode': typeof AuthenticatedWishesShortcodeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
@@ -648,6 +663,7 @@ export interface FileRoutesByFullPath {
   '/tasks/': typeof AuthenticatedTasksIndexRoute
   '/usda/': typeof AuthenticatedUsdaIndexRoute
   '/vendors/': typeof AuthenticatedVendorsIndexRoute
+  '/wishes/': typeof AuthenticatedWishesIndexRoute
   '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
   '/.well-known/oauth-protected-resource/api/mcp': typeof DotwellKnownOauthProtectedResourceApiMcpRoute
   '/recipes/$shortcode/export': typeof AuthenticatedRecipesShortcodeExportRoute
@@ -712,6 +728,7 @@ export interface FileRoutesByTo {
   '/tasks/$shortcode': typeof AuthenticatedTasksShortcodeRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/vendors/$shortcode': typeof AuthenticatedVendorsShortcodeRoute
+  '/wishes/$shortcode': typeof AuthenticatedWishesShortcodeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
@@ -732,6 +749,7 @@ export interface FileRoutesByTo {
   '/tasks': typeof AuthenticatedTasksIndexRoute
   '/usda': typeof AuthenticatedUsdaIndexRoute
   '/vendors': typeof AuthenticatedVendorsIndexRoute
+  '/wishes': typeof AuthenticatedWishesIndexRoute
   '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
   '/.well-known/oauth-protected-resource/api/mcp': typeof DotwellKnownOauthProtectedResourceApiMcpRoute
   '/recipes/$shortcode/export': typeof AuthenticatedRecipesShortcodeExportRoute
@@ -799,6 +817,7 @@ export interface FileRoutesById {
   '/_authenticated/tasks/$shortcode': typeof AuthenticatedTasksShortcodeRoute
   '/_authenticated/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/_authenticated/vendors/$shortcode': typeof AuthenticatedVendorsShortcodeRoute
+  '/_authenticated/wishes/$shortcode': typeof AuthenticatedWishesShortcodeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
@@ -819,6 +838,7 @@ export interface FileRoutesById {
   '/_authenticated/tasks/': typeof AuthenticatedTasksIndexRoute
   '/_authenticated/usda/': typeof AuthenticatedUsdaIndexRoute
   '/_authenticated/vendors/': typeof AuthenticatedVendorsIndexRoute
+  '/_authenticated/wishes/': typeof AuthenticatedWishesIndexRoute
   '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
   '/.well-known/oauth-protected-resource/api/mcp': typeof DotwellKnownOauthProtectedResourceApiMcpRoute
   '/_authenticated/recipes/$shortcode_/export': typeof AuthenticatedRecipesShortcodeExportRoute
@@ -886,6 +906,7 @@ export interface FileRouteTypes {
     | '/tasks/$shortcode'
     | '/usda/$id'
     | '/vendors/$shortcode'
+    | '/wishes/$shortcode'
     | '/api/auth/$'
     | '/api/debug/timing'
     | '/api/trpc/$'
@@ -906,6 +927,7 @@ export interface FileRouteTypes {
     | '/tasks/'
     | '/usda/'
     | '/vendors/'
+    | '/wishes/'
     | '/.well-known/oauth-authorization-server/api/auth'
     | '/.well-known/oauth-protected-resource/api/mcp'
     | '/recipes/$shortcode/export'
@@ -970,6 +992,7 @@ export interface FileRouteTypes {
     | '/tasks/$shortcode'
     | '/usda/$id'
     | '/vendors/$shortcode'
+    | '/wishes/$shortcode'
     | '/api/auth/$'
     | '/api/debug/timing'
     | '/api/trpc/$'
@@ -990,6 +1013,7 @@ export interface FileRouteTypes {
     | '/tasks'
     | '/usda'
     | '/vendors'
+    | '/wishes'
     | '/.well-known/oauth-authorization-server/api/auth'
     | '/.well-known/oauth-protected-resource/api/mcp'
     | '/recipes/$shortcode/export'
@@ -1056,6 +1080,7 @@ export interface FileRouteTypes {
     | '/_authenticated/tasks/$shortcode'
     | '/_authenticated/usda/$id'
     | '/_authenticated/vendors/$shortcode'
+    | '/_authenticated/wishes/$shortcode'
     | '/api/auth/$'
     | '/api/debug/timing'
     | '/api/trpc/$'
@@ -1076,6 +1101,7 @@ export interface FileRouteTypes {
     | '/_authenticated/tasks/'
     | '/_authenticated/usda/'
     | '/_authenticated/vendors/'
+    | '/_authenticated/wishes/'
     | '/.well-known/oauth-authorization-server/api/auth'
     | '/.well-known/oauth-protected-resource/api/mcp'
     | '/_authenticated/recipes/$shortcode_/export'
@@ -1633,6 +1659,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedVendorsShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/wishes/': {
+      id: '/_authenticated/wishes/'
+      path: '/wishes'
+      fullPath: '/wishes/'
+      preLoaderRoute: typeof AuthenticatedWishesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/wishes/$shortcode': {
+      id: '/_authenticated/wishes/$shortcode'
+      path: '/wishes/$shortcode'
+      fullPath: '/wishes/$shortcode'
+      preLoaderRoute: typeof AuthenticatedWishesShortcodeRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -1740,6 +1780,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedTasksShortcodeRoute: typeof AuthenticatedTasksShortcodeRoute
   AuthenticatedUsdaIdRoute: typeof AuthenticatedUsdaIdRoute
   AuthenticatedVendorsShortcodeRoute: typeof AuthenticatedVendorsShortcodeRoute
+  AuthenticatedWishesShortcodeRoute: typeof AuthenticatedWishesShortcodeRoute
   AuthenticatedCookbooksIndexRoute: typeof AuthenticatedCookbooksIndexRoute
   AuthenticatedExpensesIndexRoute: typeof AuthenticatedExpensesIndexRoute
   AuthenticatedFinancialAccountsIndexRoute: typeof AuthenticatedFinancialAccountsIndexRoute
@@ -1757,6 +1798,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedTasksIndexRoute: typeof AuthenticatedTasksIndexRoute
   AuthenticatedUsdaIndexRoute: typeof AuthenticatedUsdaIndexRoute
   AuthenticatedVendorsIndexRoute: typeof AuthenticatedVendorsIndexRoute
+  AuthenticatedWishesIndexRoute: typeof AuthenticatedWishesIndexRoute
   AuthenticatedRecipesShortcodeExportRoute: typeof AuthenticatedRecipesShortcodeExportRoute
   AuthenticatedUsdaNdbCodeRoute: typeof AuthenticatedUsdaNdbCodeRoute
   AuthenticatedUsdaUpcCodeRoute: typeof AuthenticatedUsdaUpcCodeRoute
@@ -1816,6 +1858,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedTasksShortcodeRoute: AuthenticatedTasksShortcodeRoute,
   AuthenticatedUsdaIdRoute: AuthenticatedUsdaIdRoute,
   AuthenticatedVendorsShortcodeRoute: AuthenticatedVendorsShortcodeRoute,
+  AuthenticatedWishesShortcodeRoute: AuthenticatedWishesShortcodeRoute,
   AuthenticatedCookbooksIndexRoute: AuthenticatedCookbooksIndexRoute,
   AuthenticatedExpensesIndexRoute: AuthenticatedExpensesIndexRoute,
   AuthenticatedFinancialAccountsIndexRoute:
@@ -1835,6 +1878,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedTasksIndexRoute: AuthenticatedTasksIndexRoute,
   AuthenticatedUsdaIndexRoute: AuthenticatedUsdaIndexRoute,
   AuthenticatedVendorsIndexRoute: AuthenticatedVendorsIndexRoute,
+  AuthenticatedWishesIndexRoute: AuthenticatedWishesIndexRoute,
   AuthenticatedRecipesShortcodeExportRoute:
     AuthenticatedRecipesShortcodeExportRoute,
   AuthenticatedUsdaNdbCodeRoute: AuthenticatedUsdaNdbCodeRoute,

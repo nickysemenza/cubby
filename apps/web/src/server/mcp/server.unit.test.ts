@@ -885,6 +885,7 @@ describe("listMcpToolCatalog", () => {
       expense: ["expense", "expenses"],
       financialAccount: ["financial_account", "financial_accounts"],
       financialTransaction: ["financial_transaction", "financial_transactions"],
+      wish: ["wish", "wishes"],
       // vendor/purchase expose get/list/create/update but NOT delete, so the
       // loop below never asks for delete_vendors / delete_purchases. Note that
       // `purchase` here is the vendor transaction, not the old flat ledger row —

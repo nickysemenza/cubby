@@ -20,6 +20,7 @@ import {
   unsafeRecipeId,
   unsafeTaskId,
   unsafeVendorId,
+  unsafeWishId,
 } from "@cubby/schemas/identifiers";
 import { match } from "ts-pattern";
 import type { Database } from "~/server/db";
@@ -53,6 +54,7 @@ import {
   previewDeleteVendors,
   previewMergeVendors,
 } from "~/server/repo/vendor";
+import { previewDeleteWishes } from "~/server/repo/wish";
 
 /**
  * Dispatch for `entityIntegrity.previewOperation`.
@@ -143,6 +145,9 @@ const plan = async (
     )
     .with({ operation: "delete", entity: "inventory" }, ({ ids }) =>
       previewDeleteInventoryEntries(db, entityIds(ids).map(unsafeInventoryId)),
+    )
+    .with({ operation: "delete", entity: "wish" }, ({ ids }) =>
+      previewDeleteWishes(db, entityIds(ids).map(unsafeWishId)),
     )
     .with({ operation: "delete", entity: "image" }, ({ ids }) =>
       previewDeleteImages(db, ids),

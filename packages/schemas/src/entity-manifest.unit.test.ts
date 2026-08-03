@@ -117,6 +117,7 @@ describe("entity manifest", () => {
       "purchase",
       "financialAccount",
       "financialTransaction",
+      "wish",
       "expense",
     ]);
     expect(sorted(auditEntitySchema.options)).toEqual(
@@ -139,6 +140,7 @@ describe("entity manifest", () => {
       "purchase",
       "financialAccount",
       "financialTransaction",
+      "wish",
       "expense",
       "image",
     ]);
@@ -173,6 +175,7 @@ describe("entity manifest", () => {
       "purchase",
       "financialAccount",
       "financialTransaction",
+      "wish",
       "expense",
     ]);
   });

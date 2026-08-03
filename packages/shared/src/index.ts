@@ -18,6 +18,7 @@ export {
   shortcodeSchema,
   taskShortcode,
   vendorShortcode,
+  wishShortcode,
   generateShortcode,
   parseShortcode,
   extractShortcodeFromScan,
@@ -41,6 +42,7 @@ export type {
   ShortcodeType,
   TaskShortcode,
   VendorShortcode,
+  WishShortcode,
 } from "./shortcode";
 
 export {

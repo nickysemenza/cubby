@@ -17,6 +17,7 @@ import {
   recipeShortcode,
   taskShortcode,
   vendorShortcode,
+  wishShortcode,
 } from "./identifiers";
 
 export { searchableEntities } from "./entity-manifest";
@@ -237,6 +238,14 @@ const financialTransactionResult = z.object({
   transactionDate: z.string().nullable(),
 });
 
+const wishResult = z.object({
+  ...searchResultBaseFields,
+  id: wishShortcode,
+  entityType: z.literal("wish"),
+  acquiredAt: z.date().nullable(),
+  candidateCount: z.number().int().nonnegative(),
+});
+
 export const searchResultItemSchema = z.discriminatedUnion("entityType", [
   productResult,
   locationResult,
@@ -252,6 +261,7 @@ export const searchResultItemSchema = z.discriminatedUnion("entityType", [
   financialAccountResult,
   financialTransactionResult,
   expenseResult,
+  wishResult,
 ]);
 export type SearchResultItem = z.infer<typeof searchResultItemSchema>;
 
@@ -313,3 +323,4 @@ export type FinancialTransactionSearchResult = z.infer<
   typeof financialTransactionResult
 >;
 export type ExpenseSearchResult = z.infer<typeof expenseResult>;
+export type WishSearchResult = z.infer<typeof wishResult>;

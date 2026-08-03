@@ -132,6 +132,7 @@ export const desktopNav: NavNode[] = [
         label: "Shopping list",
         icon: ShoppingCart,
       },
+      { to: "/wishes", label: "Wishlist", icon: entities.wish.lucideIcon },
     ],
   },
   {
