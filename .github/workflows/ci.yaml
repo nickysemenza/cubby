@@ -121,8 +121,8 @@ jobs:
           # workspace-root ./target, which this build never writes to — so the
           # cache saved ~0 bytes and every cold WASM build recompiled all deps.
           cache-workspaces: "recipebridge -> target"
-          # Distinct bucket from test-rust/coverage-rust: same manifest,
-          # different target triple (wasm32 vs native).
+          # Distinct bucket from test-rust: same manifest, different target
+          # triple (wasm32 vs native).
           cache-key: wasm32
       - name: Setup pnpm
         if: steps.wasm-cache.outputs.cache-hit != 'true'
@@ -150,16 +150,32 @@ jobs:
           retention-days: 1
 
   test-rust:
-    name: Rust Tests - recipebridge
-    runs-on: ubuntu-latest
+    name: Rust - recipebridge
+    # ARM64 standard runners are free and unlimited on public repos (GA
+    # 2025-08-07); published benchmarks put Rust builds ~40% faster than
+    # ubuntu-latest on Cobalt 100. This is the only job worth moving: it is
+    # compute-bound and pure Rust, with no Playwright container, no node
+    # toolchain, and no cross-compilation. Its rust-cache bucket keys on the
+    # host triple, so the switch invalidates it once and rewarms.
+    # If the measured time doesn't beat ubuntu-latest, revert this line alone.
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 25
-    # Gating job on the deploy critical path: fmt + clippy + a plain `cargo test`.
+    # Deploy gate for the Rust crate: fmt + clippy + tests, the tests run under
+    # `cargo llvm-cov` so the same execution also produces the coverage report.
     # It owns its PR path classifier so it can acquire a runner at t=0 instead
     # of waiting for change-scope. Only enumerated, known-non-Rust paths skip it;
     # a novel path fails safe toward running the suite.
-    # Coverage instrumentation (cargo llvm-cov) is a *separate* job (coverage-rust)
-    # because it forces a second, instrumented rebuild (~2m) that used to sit on
-    # this critical path for no gating benefit — codecov is a soft gate.
+    #
+    # Coverage used to live in a separate `coverage-rust` job, split off back
+    # when the instrumented rebuild took ~2m and sat on the deploy critical path.
+    # It is now ~43s warm, the pole is test-e2e either way, and `cargo llvm-cov`
+    # runs the suite itself — so the split was paying for a second runner and a
+    # duplicate `cargo test` (32s) to produce the same pass/fail signal twice.
+    outputs:
+      # Whether the steps below actually ran. report-coverage needs this: on a
+      # Rust-inert PR this job is 'success' having produced no lcov, and the
+      # coverage artifact is legitimately absent rather than missing.
+      ran: ${{ github.event_name != 'pull_request' || steps.scope.outputs.rust == 'true' }}
     steps:
       - name: Detect Rust impact
         id: scope
@@ -220,11 +236,17 @@ jobs:
         if: github.event_name != 'pull_request' || steps.scope.outputs.rust == 'true'
         with:
           cache: true
+          components: llvm-tools-preview
           # recipebridge builds via `--manifest-path recipebridge/Cargo.toml`, so
           # artifacts land in recipebridge/target — NOT the workspace-root ./target
           # that rust-cache caches by default. Without this the cache saved ~0 bytes
           # and clippy recompiled every dep cold (~1:47) on every run.
           cache-workspaces: "recipebridge -> target"
+      - name: Install cargo-llvm-cov
+        if: github.event_name != 'pull_request' || steps.scope.outputs.rust == 'true'
+        uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145 # v2
+        with:
+          tool: cargo-llvm-cov
       - name: Format check
         if: github.event_name != 'pull_request' || steps.scope.outputs.rust == 'true'
         run: cargo fmt --manifest-path recipebridge/Cargo.toml --check
@@ -233,39 +255,16 @@ jobs:
         run: cargo clippy --manifest-path recipebridge/Cargo.toml --all-targets -- -D warnings
       # Native-target tests: the costing + food-mapping modules are pure
       # serde/ingredient code, so the parity suite runs without a wasm runtime.
-      # A test failure fails this step (and thus the deploy gate). NOTE: lib.rs
-      # reads as mostly uncovered by design: it's the #[wasm_bindgen] shim layer,
-      # executable only inside a wasm runtime; the logic lives in the
-      # costing/food_mappings modules (see coverage-rust).
-      - name: Run recipebridge tests
-        if: github.event_name != 'pull_request' || steps.scope.outputs.rust == 'true'
-        run: cargo test --manifest-path recipebridge/Cargo.toml
-
-  coverage-rust:
-    name: Rust Coverage - recipebridge
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    # Soft deploy gate: report-coverage waits for this artifact, but
-    # deploy-cf-gate does not. Keep this unconditional so the combined Codecov
-    # upload always contains recipebridge; cargo llvm-cov uses a separate,
-    # instrumented build.
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
-        with:
-          cache: true
-          components: llvm-tools-preview
-          # See test-rust: cache recipebridge/target, not the empty ./target. The
-          # instrumented llvm-cov RUSTFLAGS give this its own cache bucket (distinct
-          # from test-rust), warmed across runs.
-          cache-workspaces: "recipebridge -> target"
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145 # v2
-        with:
-          tool: cargo-llvm-cov
+      # `cargo llvm-cov` wraps `cargo test`, so this is the gate AND the coverage
+      # producer — a test failure fails this step and thus the deploy gate.
+      # NOTE: lib.rs reads as mostly uncovered by design: it's the
+      # #[wasm_bindgen] shim layer, executable only inside a wasm runtime; the
+      # logic lives in the costing/food_mappings modules.
       - name: Run recipebridge tests (with coverage)
+        if: github.event_name != 'pull_request' || steps.scope.outputs.rust == 'true'
         run: cargo llvm-cov --manifest-path recipebridge/Cargo.toml --lcov --output-path recipebridge/lcov.info
       - name: Save Rust coverage
+        if: github.event_name != 'pull_request' || steps.scope.outputs.rust == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-rust
@@ -729,7 +728,7 @@ jobs:
   report-coverage:
     name: Report complete coverage
     needs:
-      [test-unit-web, test-integration-web, test-unit-aux, coverage-rust]
+      [test-unit-web, test-integration-web, test-unit-aux, test-rust]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: always()
@@ -749,21 +748,30 @@ jobs:
       - name: Verify expected coverage artifacts
         shell: bash
         env:
-          ALL_PRODUCERS_SUCCEEDED: ${{ needs.test-unit-web.result == 'success' && needs.test-integration-web.result == 'success' && needs.test-unit-aux.result == 'success' && needs.coverage-rust.result == 'success' }}
+          ALL_PRODUCERS_SUCCEEDED: ${{ needs.test-unit-web.result == 'success' && needs.test-integration-web.result == 'success' && needs.test-unit-aux.result == 'success' && needs.test-rust.result == 'success' }}
           # Derived from test-integration-web's matrix, not restated here — a
           # hardcoded shard list silently stops checking the shards it forgot.
           # Falls back to the current matrix size when the job did not report
           # (it only failed to report if it failed, and then the check below
           # warns rather than errors anyway).
           INTEGRATION_SHARDS: ${{ needs.test-integration-web.outputs.shard-total || '2' }}
+          # False when test-rust's classifier decided the PR is Rust-inert, so
+          # the job succeeded without producing an lcov.
+          RUST_COVERAGE_EXPECTED: ${{ needs.test-rust.outputs.ran }}
         run: |
           set -euo pipefail
           artifacts=(
-            coverage-rust
             coverage-web-unit
             coverage-aux
           )
-          minimum_reports=(1 1 8)
+          minimum_reports=(1 8)
+          # test-rust skips its steps (and so produces no lcov) on a PR whose
+          # every changed path is Rust-inert. That absence is correct, not a
+          # missing report — only demand the artifact when the job actually ran.
+          if [[ "$RUST_COVERAGE_EXPECTED" == "true" ]]; then
+            artifacts+=(coverage-rust)
+            minimum_reports+=(1)
+          fi
           for shard in $(seq 1 "$INTEGRATION_SHARDS"); do
             artifacts+=("coverage-web-integration-$shard")
             minimum_reports+=(1)
