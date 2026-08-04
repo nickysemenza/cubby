@@ -1,4 +1,5 @@
 import type { ExpenseOut } from "@cubby/schemas/project";
+import { sumBy } from "es-toolkit";
 import { monthKey, monthLabel } from "../shared";
 
 export interface ExpenseSeries {
@@ -17,7 +18,7 @@ export function buildExpenseCalendar(expenses: ExpenseOut[]) {
   }
   const data = Array.from(itemsByDay, ([day, items]) => ({
     day,
-    value: items.reduce((total, expense) => total + (expense.cost ?? 0), 0),
+    value: sumBy(items, (expense) => expense.cost ?? 0),
   }));
   const dates = data.map(({ day }) => day).sort();
   return {

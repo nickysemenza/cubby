@@ -10,9 +10,9 @@ import {
   type IngredientId,
   type IngredientShortcode,
   ingredientShortcode,
-  type RecipeId,
   recipeShortcode,
   unsafeIngredientId,
+  unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
 import {
   enrichmentRowsOut,
@@ -313,7 +313,7 @@ const enrichmentWorkbench = protectedProcedure
       );
     }
     return await enrichmentWorkbenchService(ctx.db, ctx.usdaClient, {
-      recipeId: recipeId ? (recipeId as RecipeId) : undefined,
+      recipeId: recipeId ? unsafeRecipeId(recipeId) : undefined,
     });
   });
 

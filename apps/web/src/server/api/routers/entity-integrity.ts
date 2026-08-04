@@ -8,6 +8,7 @@ import {
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
+import { sumBy } from "es-toolkit";
 import {
   createTRPCRouter,
   protectedProcedure,
@@ -101,7 +102,7 @@ export function buildIntegrityCatalog(): IntegrityCatalog {
     entities,
     operations,
     coverage: {
-      relationships: entities.reduce((n, e) => n + e.relationships.length, 0),
+      relationships: sumBy(entities, (e) => e.relationships.length),
       incomingEdges: allEdges.length,
       auditedEdges: allEdges.filter(
         (e) => e.semantics.liveness.kind === "must-target-live",

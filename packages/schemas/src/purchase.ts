@@ -3,6 +3,7 @@ import {
   auditDateFilterFields,
   deriveUpdateData,
   timestampedFields,
+  uniqueBy,
 } from "./base-entity";
 import { dataCheck, dataQuality, dataQualityStatus } from "./data-quality";
 import {
@@ -366,10 +367,7 @@ export const deleteEmptyPurchasesInput = z.strictObject({
     .array(purchaseShortcode)
     .min(1)
     .max(200)
-    .refine(
-      (ids) => new Set(ids).size === ids.length,
-      "ids must not contain duplicates",
-    ),
+    .refine(...uniqueBy((id) => id, "ids must not contain duplicates")),
 });
 export type DeleteEmptyPurchasesInput = z.infer<
   typeof deleteEmptyPurchasesInput

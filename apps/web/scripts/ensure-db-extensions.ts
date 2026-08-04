@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { getErrorMessage } from "@cubby/shared";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { ensureDbExtensions } from "../tooling/db-extensions";
@@ -17,7 +18,7 @@ try {
   await ensureDbExtensions(db);
   console.log("Database extensions ready: pg_trgm, vector");
 } catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = getErrorMessage(error);
   console.error(`Could not create required database extensions: ${message}`);
   console.error(
     "Make sure the target Postgres instance supports pgvector. For local dev, recreate the db container with pgvector/pgvector:pg17.",

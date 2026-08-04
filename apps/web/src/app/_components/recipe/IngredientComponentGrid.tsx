@@ -1,3 +1,4 @@
+import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
 import { cn, formatCurrency } from "~/lib/utils";
 import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
@@ -51,7 +52,7 @@ export function IngredientComponentGrid({
       components: cols,
       rows: matrix,
       columnTotals: colTotals,
-      grandTotal: matrix.reduce((sum, r) => sum + r.total, 0),
+      grandTotal: sumBy(matrix, (r) => r.total),
       costByComponent: byComponent,
       costTotal: total,
     };

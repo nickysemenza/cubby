@@ -1,6 +1,7 @@
 import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/purchase";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
+import { sumBy } from "es-toolkit";
 import { FileText } from "lucide-react";
 import { useMemo } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
@@ -272,11 +273,11 @@ export function PurchaseList() {
   // live on `expense.analytics`), so these summarize what's on screen rather
   // than claiming to be the whole result.
   const loadedTotal = useMemo(
-    () => data.reduce((sum, row) => sum + row.expenseTotal, 0),
+    () => sumBy(data, (row) => row.expenseTotal),
     [data],
   );
   const loadedExpenses = useMemo(
-    () => data.reduce((sum, row) => sum + row.expenseCount, 0),
+    () => sumBy(data, (row) => row.expenseCount),
     [data],
   );
 

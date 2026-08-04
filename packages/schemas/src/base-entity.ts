@@ -18,10 +18,20 @@ export const timestampedFields = {
   updatedAt: z.date(),
 } as const;
 
-/** Inclusive calendar-day bounds for the audit timestamps every entity carries. */
-const auditDate = z
+/**
+ * A calendar day as a plain "YYYY-MM-DD" string, timezone-free.
+ *
+ * The one canonical definition — `mealDate` (meal-shared.ts) and `auditDate`
+ * (below) alias this rather than re-declaring the same regex.
+ */
+export const plainDate = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD");
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD")
+  .meta({ mockValue: "2024-01-15" })
+  .describe('Calendar day as "YYYY-MM-DD"');
+
+/** Inclusive calendar-day bounds for the audit timestamps every entity carries. */
+const auditDate = plainDate;
 
 export const auditDateFilterFields = {
   createdFrom: auditDate.optional(),
@@ -91,4 +101,17 @@ export function deriveUpdateData<
   return z.object(deriveUpdateFields(createShape, opts)) as z.ZodObject<
     UpdateShape<T, OmitK, E>
   >;
+}
+
+/**
+ * `.refine()` args for an array that must not contain duplicate `keyFn(item)`
+ * values — spread into `.refine(...uniqueBy(keyFn, message))`. `keyFn` is the
+ * identity function for a raw array of comparable values, or a field accessor
+ * (e.g. `(row) => row.key`) for an array of objects deduped by one field.
+ */
+export function uniqueBy<T>(
+  keyFn: (item: T) => unknown,
+  message: string,
+): [(items: T[]) => boolean, string] {
+  return [(items) => new Set(items.map(keyFn)).size === items.length, message];
 }

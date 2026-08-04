@@ -3,7 +3,7 @@ import type {
   McpUsageDashboardOut,
   McpUsageWindow,
 } from "@cubby/schemas/telemetry";
-import { groupBy } from "es-toolkit";
+import { groupBy, sumBy } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { listMcpToolCatalog } from "~/server/mcp/server";
 import {
@@ -93,8 +93,8 @@ export async function getMcpUsageDashboard(
     inactive: tools.filter((tool) => tool.status === "inactive").length,
     never: tools.filter((tool) => tool.status === "never").length,
     retired: tools.filter((tool) => tool.status === "retired").length,
-    calls: usage.periodTools.reduce((sum, row) => sum + row.calls, 0),
-    errors: usage.periodTools.reduce((sum, row) => sum + row.errors, 0),
+    calls: sumBy(usage.periodTools, (row) => row.calls),
+    errors: sumBy(usage.periodTools, (row) => row.errors),
   };
   const since = mcpUsageSince(window);
   const dailyByDay = groupBy(usage.daily, (row) => row.day);
@@ -110,9 +110,9 @@ export async function getMcpUsageDashboard(
     totals,
     daily: Object.entries(dailyByDay).map(([day, rows]) => ({
       day,
-      success: rows.reduce((sum, row) => sum + row.success, 0),
-      error: rows.reduce((sum, row) => sum + row.error, 0),
-      total: rows.reduce((sum, row) => sum + row.total, 0),
+      success: sumBy(rows, (row) => row.success),
+      error: sumBy(rows, (row) => row.error),
+      total: sumBy(rows, (row) => row.total),
     })),
     tools,
     users: usage.userBreakdown,

@@ -1,8 +1,8 @@
-import { desc, isNull, sql } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
 import { estimateAiUsageCostUsd } from "~/server/ai/models";
 import type { Database } from "~/server/db";
 import { aiUsage } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
 export async function listRecentAiUsage(db: Database, limit: number) {
   const rows = await getDb(db)
@@ -23,7 +23,7 @@ export async function listRecentAiUsage(db: Database, limit: number) {
       createdAt: aiUsage.createdAt,
     })
     .from(aiUsage)
-    .where(isNull(aiUsage.deletedAt))
+    .where(notDeleted(aiUsage))
     .orderBy(desc(aiUsage.createdAt))
     .limit(limit);
 

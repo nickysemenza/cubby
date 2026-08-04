@@ -5,6 +5,7 @@ import type {
 } from "@cubby/schemas/entity-integrity";
 import { type AnyColumn, and, count, inArray, type SQL } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
+import { sum } from "es-toolkit";
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { notDeleted } from "./database-helpers";
 
@@ -80,7 +81,7 @@ export function impact(args: {
   label: string;
   byTargetId: Record<string, number>;
 }): ImpactItem | null {
-  const total = Object.values(args.byTargetId).reduce((a, b) => a + b, 0);
+  const total = sum(Object.values(args.byTargetId));
   if (total === 0) return null;
   return {
     code: args.disposition.code,

@@ -12,6 +12,7 @@ import {
   type ProductId,
   type ProductShortcode,
   productShortcode,
+  unsafeIngredientId,
   unsafeProductId,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
@@ -528,7 +529,8 @@ const createMany = protectedProcedure
             product.ingredient.id,
             "ingredient",
           );
-          if (ingredientId) ingredientIds.push(ingredientId as IngredientId);
+          if (ingredientId)
+            ingredientIds.push(unsafeIngredientId(ingredientId));
         }
       },
       {

@@ -8,10 +8,12 @@
 
 import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
-import type {
-  IngredientId,
-  IngredientShortcode,
-  ProductId,
+import {
+  type IngredientId,
+  type IngredientShortcode,
+  type ProductId,
+  unsafeIngredientId,
+  unsafeProductId,
 } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type {
@@ -53,7 +55,7 @@ const resolveIngredientEntityId = async (
 ): Promise<IngredientId> => {
   const id = await resolveLiveShortcode(db, shortcode, "ingredient");
   if (!id) throw new Error(`Ingredient ${shortcode} could not be resolved`);
-  return id as IngredientId;
+  return unsafeIngredientId(id);
 };
 
 export async function createProductWithSideEffects(
@@ -256,7 +258,7 @@ export async function findOrCreateByUPC(
     if (!resolved) {
       throw new Error(`Created product ${product.id} could not be resolved`);
     }
-    const entityId = resolved as ProductId;
+    const entityId = unsafeProductId(resolved);
     await runMutationSideEffects(db, {
       action: "created",
       entity: { entityType: "product", entityId },
@@ -335,7 +337,7 @@ export async function findOrCreateByUPC(
               db,
               upcLookupClient,
               upc,
-              resolved as ProductId,
+              unsafeProductId(resolved),
             );
           } catch (error) {
             console.error(`[findOrCreateByUPC] Image import failed:`, error);
