@@ -820,16 +820,25 @@ const byRule = {
     "Dead package.json script — the tsx/node target file doesn't exist; delete the script or fix the path.",
   "unstable-hook-default":
     "Unstable hook-destructure default — an inline `= []`/`= {}`/`= new …` default on a hook result mints a new reference every render while the value is undefined, destabilizing memo/effect deps (render-loop hazard). Default to a module-level constant instead (see CLAUDE.md React Hooks).",
+  "ts-calculateTotals":
+    "TS costing engine — recipe totals live in the Rust/WASM crate (recipebridge); call the WASM instead of reimplementing calculateTotals in TS (CLAUDE.md Where logic lives).",
+  "hand-rolled-any-array":
+    "Hand-rolled `= ANY(${arr})` — drizzle interpolates a JS array into raw SQL as a row constructor, so this is a hard 500 rather than a silent mismatch. Use `eqAny(col, arr)` / `inArray(col, arr)`.",
+  "raw-control-byte":
+    'Raw C0 control byte in source — a literal 0x00/0x1b/… makes the WHOLE FILE binary to the grep family (`file` reports "data", ripgrep skips it, `grep -c` returns nothing for a symbol `git grep` finds). Write it as an escape (`\\0`, `\\u001b`, …).',
 };
 
 console.error(
   `check-conventions: ${violations.length} violation(s) found.\n`,
 );
 
-for (const rule of Object.keys(byRule)) {
+// Iterate the rules that actually fired, not the description map — a rule
+// missing from `byRule` used to exit 1 with a bare count and no file, line, or
+// snippet, which is worst for exactly the rules whose violations are hard to
+// see unaided. Three rules had silently been in that state.
+for (const rule of [...new Set(violations.map((v) => v.rule))].sort()) {
   const hits = violations.filter((v) => v.rule === rule);
-  if (hits.length === 0) continue;
-  console.error(`▸ ${byRule[rule]}`);
+  console.error(`▸ ${byRule[rule] ?? `${rule} (no description registered)`}`);
   for (const v of hits) {
     console.error(`    ${relative(repoRoot, v.file)}:${v.line}: ${v.snippet}`);
   }
