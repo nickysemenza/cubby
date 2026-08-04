@@ -542,34 +542,38 @@ impl<'a> Engine<'a> {
         };
 
         let yield_measure = recipe_yield.to_measure();
-        // A zero total must NOT become an edge. `make_graph` divides by a
-        // mapping's value, so "1 batch = $0" yields a forward factor of 0 (every
-        // parent amount then costs exactly $0, silently) and a reverse factor of
-        // inf. Dropping the pair leaves the parent unable to reach money through
-        // this sub-recipe, which reports as missing instead of as free.
-        let mut pairs: Vec<(Measure, Measure)> = [
-            ("dollar", totals.price, totals.price_upper),
-            ("g", totals.weight, totals.weight_upper),
-        ]
-        .into_iter()
-        .filter(|&(_, value, _)| value > 0.0)
-        .map(|(unit, value, upper)| {
-            (
+        // Money and nutrient totals of zero are meaningful — a water sub-recipe
+        // really does cost $0 and carry 0 kcal — so those edges are emitted as
+        // written and the parent reads 0 rather than "missing". Their reverse
+        // direction is never traversed either, because no recipe row is written
+        // in dollars or kcal.
+        //
+        // A zero WEIGHT is different on both counts. Nothing weighs 0 g, so the
+        // value only ever means "none of the rows could be weighed" — and the
+        // reverse direction IS traversed, by a parent that references the
+        // sub-recipe by weight ("200 g of the sauce"). `make_graph` divides by
+        // the mapping's value, so "1 batch = 0 g" gives that lookup a g→batch
+        // factor of 1/0. It doesn't even surface as inf: the rational conversion
+        // saturates, so the parent silently reports a ~9.2e16 price that `finite`
+        // can't reject and `missing_by_type` calls covered. Drop the edge and the
+        // parent correctly reports missing instead.
+        let mut pairs: Vec<(Measure, Measure)> = vec![(
+            yield_measure.clone(),
+            measure_with_optional_upper("dollar", totals.price, totals.price_upper),
+        )];
+        if totals.weight > 0.0 {
+            pairs.push((
                 yield_measure.clone(),
-                measure_with_optional_upper(unit, value, upper),
-            )
-        })
-        .collect();
+                measure_with_optional_upper("g", totals.weight, totals.weight_upper),
+            ));
+        }
         // One mapping per nutrient present in the sub totals, in target order
         // (the kcal target's unit is "kcal", matching the calories path). A
         // ranged sub total makes the edge a range, which the parent conversion
         // scales and propagates.
         for t in &self.targets {
-            if let Some((_, value, upper)) = totals
-                .nutrients
-                .iter()
-                .find(|(code, ..)| *code == t.code)
-                .filter(|(_, value, _)| *value > 0.0)
+            if let Some((_, value, upper)) =
+                totals.nutrients.iter().find(|(code, ..)| *code == t.code)
             {
                 pairs.push((
                     yield_measure.clone(),

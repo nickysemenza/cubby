@@ -1519,3 +1519,64 @@ fn ranged_sub_recipe_rolls_up_scaled() {
         "parent price upper 2×3",
     );
 }
+
+/// A sub-recipe that genuinely costs $0 and carries 0 kcal (water) must report
+/// those zeros, not "missing". The yield edges are emitted at face value: money
+/// and nutrient mappings are only ever traversed yield→measure, where a zero
+/// factor is the correct answer.
+#[test]
+fn legitimately_zero_sub_recipe_totals_are_reported_not_missing() {
+    let water = ingredient(
+        "water",
+        vec![
+            mapping((1.0, "ml"), (0.0, "dollar")),
+            mapping((1.0, "ml"), (0.0, "kcal")),
+            mapping((1.0, "ml"), (1.0, "g")),
+        ],
+    );
+    let sub = WCostingRecipe {
+        id: "sub".to_string(),
+        recipe_yield: Some(amount(1.0, "batch")),
+        rows: vec![row("water", "water", Some((100.0, "g")), None, None)],
+    };
+    let r = cost(
+        vec![sub_recipe_row("sub", (1.0, "batch"))],
+        vec![water],
+        vec![sub],
+    );
+
+    assert_close(r.price, 0.0, 1e-9, "price");
+    assert_close(nutrient(&r, "208"), 0.0, 1e-9, "kcal");
+    assert!(
+        r.missing_by_type.price.is_empty(),
+        "$0 is a price, not a gap"
+    );
+    assert!(
+        r.missing_by_type.nutrients.is_empty(),
+        "0 kcal is a value, not a gap"
+    );
+}
+
+/// A zero WEIGHT total is the one that must not become an edge. Nothing weighs
+/// 0 g, so it only ever means "no row could be weighed" — and unlike money, the
+/// weight edge IS traversed in reverse, by a parent referencing the sub-recipe
+/// by weight. `make_graph` divides by the mapping value, so "1 batch = 0 g"
+/// hands that lookup 1/0; the rational conversion saturates instead of going
+/// infinite, so without the guard the parent reports a ~9.2e16 price that
+/// `finite` cannot reject and `missing_by_type` calls covered.
+#[test]
+fn zero_weight_sub_recipe_referenced_by_weight_is_missing_not_astronomical() {
+    // Only a money edge, so the sub-recipe's weight total stays 0.
+    let priced_only = ingredient("po", vec![mapping((1.0, "cup"), (2.0, "dollar"))]);
+    let sub = WCostingRecipe {
+        id: "sub".to_string(),
+        recipe_yield: Some(amount(1.0, "batch")),
+        rows: vec![row("po", "priced only", Some((1.0, "cup")), None, None)],
+    };
+    let mut link = sub_recipe_row("sub", (200.0, "g"));
+    link.name = "sub".to_string();
+    let r = cost(vec![link], vec![priced_only], vec![sub]);
+
+    assert_close(r.price, 0.0, 1e-9, "price");
+    assert_eq!(r.missing_by_type.price, vec!["sub"]);
+}
