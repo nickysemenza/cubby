@@ -181,15 +181,16 @@ export const dbIngredientToAPI = async (
   )
     ? productRel
     : await enrichProductRowsWithPricing(db, productRel);
-  const qualifiedProductRel = pricedProductRel.every(
-    (product) => product.dataQuality !== undefined,
-  )
-    ? // `.every` above is the runtime guarantee; the cast just tells the
-      // compiler what it already proved (same pattern as `pricedProductRel`
-      // being reused untyped above — dataQuality has no safe fallback, so
-      // unlike pricing this one MUST already be real, not just present).
-      (pricedProductRel as Array<Qualified<(typeof pricedProductRel)[number]>>)
-    : await enrichProductRowsWithDataQuality(db, pricedProductRel);
+  // Unconditional, unlike the `pricing` fast-path above: nothing upstream ever
+  // pre-populates `dataQuality` (the raw relation doesn't select it, and
+  // `enrichProductRowsWithPricing` only adds `pricing`), so an `.every(...)`
+  // guard here would be true only for an empty array — and would carry a cast
+  // that looks load-bearing while never actually proving anything. The enrich
+  // call already no-ops on an empty list.
+  const qualifiedProductRel = await enrichProductRowsWithDataQuality(
+    db,
+    pricedProductRel,
+  );
   const productWithMappings = mapIngredientProducts(qualifiedProductRel);
 
   // One row per usage (a recipe repeats when it uses this ingredient in multiple
