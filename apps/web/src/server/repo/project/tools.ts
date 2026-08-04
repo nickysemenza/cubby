@@ -53,26 +53,30 @@ import {
 import { maxPlainDate } from "./helpers";
 import { collectDescendantIds, loadProjectDateWindows } from "./subtree";
 
-const EXPENSIVE_TOOL_THRESHOLD = 100;
-const REUSED_CHEAP_TOOL_PROJECTS = 2;
-const MAX_TRADE_SUGGESTIONS = 20;
-const MAX_SUGGESTIONS_PER_TRADE = 5;
+// Exported for `./tool-matrix`, which runs both suggestion lanes across many
+// projects at once. It must rank with the SAME thresholds and the SAME
+// economics this file uses, or the grid and the project-detail suggestion list
+// disagree about the same tool — restating either is how that drift starts.
+export const EXPENSIVE_TOOL_THRESHOLD = 100;
+export const REUSED_CHEAP_TOOL_PROJECTS = 2;
+export const MAX_TRADE_SUGGESTIONS = 20;
+export const MAX_SUGGESTIONS_PER_TRADE = 5;
 
-type ResourceMetrics = {
+export type ResourceMetrics = {
   projectUseCount: number;
   netLifetimeCost: number;
   costPerProjectUse: number | null;
   grossLifetimeAcquisitionCost: number;
 };
 
-const EMPTY_METRICS: ResourceMetrics = {
+export const EMPTY_METRICS: ResourceMetrics = {
   projectUseCount: 0,
   netLifetimeCost: 0,
   costPerProjectUse: null,
   grossLifetimeAcquisitionCost: 0,
 };
 
-async function loadResourceMetrics(
+export async function loadResourceMetrics(
   dbc: DrizzleClient,
   productIds: ProductId[],
 ): Promise<Map<ProductId, ResourceMetrics>> {
@@ -490,6 +494,237 @@ export async function detachProjectResources(
       });
     }
     return { changed: removed.length, attached: after.length };
+  });
+}
+
+/**
+ * Assert a `(project, product)` pair is a legal usage edge, in BOTH directions.
+ *
+ * `detachProjectResources` above deliberately skips this — a bulk detach of a
+ * stale id list should no-op rather than throw. A single declarative setter
+ * must not: without the check, `used: false` against a soft-deleted project
+ * silently reports success and the UI shows a cleared checkbox that never
+ * cleared anything.
+ */
+async function assertUsagePair(
+  tx: DrizzleClient,
+  projectId: ProjectId,
+  productId: ProductId,
+): Promise<{ productCode: string }> {
+  const [liveProject, liveProduct] = await Promise.all([
+    tx.query.project.findFirst({
+      where: and(eq(project.id, projectId), notDeleted(project)),
+      columns: { id: true },
+    }),
+    tx.query.product.findFirst({
+      where: and(
+        eq(product.id, productId),
+        inArray(product.category, ["tools", "software"]),
+        notDeleted(product),
+      ),
+      columns: { shortcode: true },
+    }),
+  ]);
+  if (!liveProject) {
+    throw createAppError("PROJECT_NOT_FOUND", `Project ${projectId} not found`);
+  }
+  if (!liveProduct) {
+    throw createAppError(
+      "PRODUCT_NOT_FOUND",
+      "A used Product must exist, be live, and have category tools or software.",
+    );
+  }
+  return { productCode: liveProduct.shortcode };
+}
+
+/**
+ * Set one `(project, product)` usage edge to `used`. Idempotent: re-issuing the
+ * current state writes nothing and logs nothing, which is what makes it safe
+ * behind a grid of checkboxes where optimistic mutations can land out of order.
+ *
+ * The audit entry names the pair (`usedResource`) rather than diffing the
+ * project's whole shortcode array the way the bulk paths do — that payload
+ * grows with the project and forces a reader to diff two lists to learn which
+ * one cell moved.
+ *
+ * Click-then-click-back is genuinely two state changes and honestly produces
+ * two entries. Do not suppress that here; settle the cell on the client before
+ * firing so a click-and-revert never reaches the server.
+ */
+export async function setProjectToolUsage(
+  db: Database,
+  projectId: ProjectId,
+  productId: ProductId,
+  used: boolean,
+  actor: ActorContext,
+): Promise<{ changed: boolean }> {
+  return withTransaction(db, async (tx) => {
+    const { productCode } = await assertUsagePair(tx, projectId, productId);
+
+    const existing = await tx.query.projectToolUsage.findFirst({
+      where: and(
+        eq(projectToolUsage.projectId, projectId),
+        eq(projectToolUsage.productId, productId),
+        notDeleted(projectToolUsage),
+      ),
+      columns: { id: true },
+    });
+
+    let changed = false;
+    if (used && !existing) {
+      // `onConflictDoNothing` against the PARTIAL unique index (live rows only):
+      // re-attaching after a soft delete inserts a NEW physical row rather than
+      // conflicting, which is intended — `attachedAt` should reflect the current
+      // attachment. Making that index unconditional would break this insert.
+      await tx
+        .insert(projectToolUsage)
+        .values({ projectId, productId })
+        .onConflictDoNothing();
+      changed = true;
+    } else if (!used && existing) {
+      await tx
+        .update(projectToolUsage)
+        .set({ deletedAt: new Date() })
+        .where(eq(projectToolUsage.id, existing.id));
+      changed = true;
+    }
+
+    if (changed) {
+      await logAuditEntry(tx, actor, {
+        entityType: "project",
+        entityId: projectId,
+        action: "update",
+        changes: {
+          usedResource: used
+            ? { from: null, to: productCode }
+            : { from: productCode, to: null },
+        },
+      });
+    }
+
+    // No metrics recomputed here on purpose: every caller refetches the grid
+    // (see `projectToolUsageSetOut`), so loading them would be two extra
+    // statements per checkbox for a payload nobody reads.
+    return { changed };
+  });
+}
+
+/**
+ * Replace the whole set of projects one tool was used on — the product-keyed
+ * mirror of the project-keyed bulk attach, for editing a tool's history from
+ * its own detail page. `projectIds: []` clears it.
+ *
+ * One transaction and one audit entry, keyed to the **product** whose set
+ * changed. N calls to {@link attachProjectResources} could leave the tool
+ * attached to three of five projects on a partial failure, and would write N
+ * project-keyed entries for a single user action.
+ *
+ * Projects already in the set are left strictly alone — same row id, same
+ * `attachedAt` — so re-saving an unchanged list is a no-op.
+ */
+export async function setProductProjectUses(
+  db: Database,
+  productId: ProductId,
+  projectIds: ProjectId[],
+  actor: ActorContext,
+): Promise<{ changed: number }> {
+  const desired = uniq(projectIds);
+  return withTransaction(db, async (tx) => {
+    const liveProduct = await tx.query.product.findFirst({
+      where: and(
+        eq(product.id, productId),
+        inArray(product.category, ["tools", "software"]),
+        notDeleted(product),
+      ),
+      columns: { id: true },
+    });
+    if (!liveProduct) {
+      throw createAppError(
+        "PRODUCT_NOT_FOUND",
+        "A used Product must exist, be live, and have category tools or software.",
+      );
+    }
+
+    const liveProjects =
+      desired.length === 0
+        ? []
+        : await tx.query.project.findMany({
+            where: and(inArray(project.id, desired), notDeleted(project)),
+            columns: { id: true, shortcode: true },
+          });
+    if (liveProjects.length !== desired.length) {
+      throw createAppError(
+        "PROJECT_NOT_FOUND",
+        "Every Project a tool is used on must exist and be live.",
+      );
+    }
+    const codeByProject = new Map(
+      liveProjects.map((row) => [row.id, row.shortcode]),
+    );
+
+    const currentRows = await tx
+      .select({
+        projectId: projectToolUsage.projectId,
+        shortcode: project.shortcode,
+      })
+      .from(projectToolUsage)
+      .innerJoin(
+        project,
+        and(eq(project.id, projectToolUsage.projectId), notDeleted(project)),
+      )
+      .where(
+        and(
+          eq(projectToolUsage.productId, productId),
+          notDeleted(projectToolUsage),
+        ),
+      );
+    const current = new Set(currentRows.map((row) => row.projectId));
+    const desiredSet = new Set(desired);
+
+    const additions = desired.filter((id) => !current.has(id));
+    const removals = currentRows
+      .filter((row) => !desiredSet.has(row.projectId))
+      .map((row) => row.projectId);
+
+    if (removals.length > 0) {
+      await tx
+        .update(projectToolUsage)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(
+            eq(projectToolUsage.productId, productId),
+            inArray(projectToolUsage.projectId, removals),
+            notDeleted(projectToolUsage),
+          ),
+        );
+    }
+    if (additions.length > 0) {
+      await tx
+        .insert(projectToolUsage)
+        .values(additions.map((projectId) => ({ projectId, productId })))
+        .onConflictDoNothing();
+    }
+
+    const changed = additions.length + removals.length;
+    if (changed > 0) {
+      await logAuditEntry(tx, actor, {
+        entityType: "product",
+        entityId: productId,
+        action: "update",
+        changes: {
+          usedOnProjectIds: {
+            from: currentRows.map((row) => row.shortcode).sort(),
+            to: desired
+              .flatMap((id) => {
+                const code = codeByProject.get(id);
+                return code ? [code] : [];
+              })
+              .sort(),
+          },
+        },
+      });
+    }
+    return { changed };
   });
 }
 

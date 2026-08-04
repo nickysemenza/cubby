@@ -226,6 +226,15 @@ export const TRADE_LABELS: Record<Trade, string> = {
   other: "Other",
 };
 
+/**
+ * Group labels for the rows a grouping key can't place — a tool with no
+ * qualifying Expense to derive a trade from, or an empty `manufacturer`. Both
+ * groups sort last. Beside {@link TRADE_LABELS} for the same reason: the
+ * display string lives in one place, never inlined at a render site.
+ */
+export const UNASSIGNED_TRADE_LABEL = "No trade signal";
+export const UNKNOWN_MANUFACTURER_LABEL = "Unknown manufacturer";
+
 // ---------------------------------------------------------------------------
 // Project
 // ---------------------------------------------------------------------------
@@ -1543,11 +1552,25 @@ export const projectResourceOut = z.object({
 export type ProjectResourceOut = z.infer<typeof projectResourceOut>;
 export const projectResourcesOut = z.array(projectResourceOut);
 
+/**
+ * Why a tool was suggested. `purchased_here` is exact — the tool's own purchase
+ * Expense is charged to that project. `trade_match` is inferred — the project
+ * signals a trade the tool has historically been bought under, and the tool is
+ * still inventoried.
+ */
+export const projectToolSuggestionLane = z.enum([
+  "purchased_here",
+  "trade_match",
+]);
+export type ProjectToolSuggestionLane = z.infer<
+  typeof projectToolSuggestionLane
+>;
+
 export const projectToolSuggestionOut = z.object({
   productId: productShortcode,
   productName: z.string(),
   manufacturer: z.string(),
-  lane: z.enum(["purchased_here", "trade_match"]),
+  lane: projectToolSuggestionLane,
   matchedTrade: tradeSchema.nullable(),
   reasons: z.array(z.string()).min(1),
   isInventoried: z.boolean(),
@@ -1590,6 +1613,69 @@ export const productProjectUsesOut = z.object({
 });
 export type ProductProjectUsesOut = z.infer<typeof productProjectUsesOut>;
 
+/**
+ * Declarative single-pair setter behind every checkbox in the tools matrix and
+ * on the product-detail project list. Deliberately NOT `attach`/`detach`: those
+ * are verbs, and two racing optimistic toggles resolve to whichever request
+ * landed last with no way for the client to converge. `used` is idempotent, so
+ * re-issuing the current intent is a guaranteed no-op and a retry or a stale
+ * mutation is self-healing.
+ *
+ * `attachResources`/`detachResources` remain the right shape for bulk set
+ * replacement (the project-detail multi-select), which is why both survive.
+ */
+export const projectToolUsageSetInput = z.object({
+  projectId: projectShortcode,
+  productId: productShortcode,
+  used: z.boolean(),
+});
+export type ProjectToolUsageSetInput = z.infer<typeof projectToolUsageSetInput>;
+
+/**
+ * Deliberately just the echoed pair plus `changed` — no recomputed economics.
+ * A toggle can't be reconciled with a one-row patch anyway: attaching a tool
+ * removes it from that column's suggestion pool and moves its lifetime use
+ * count, which re-ranks trade matches in every other column, so callers refetch
+ * the grid regardless and any returned metrics would be dead payload.
+ *
+ * `changed` is false when the state already matched — no write, no audit entry.
+ */
+export const projectToolUsageSetOut = z.object({
+  projectId: projectShortcode,
+  productId: productShortcode,
+  used: z.boolean(),
+  changed: z.boolean(),
+});
+export type ProjectToolUsageSetOut = z.infer<typeof projectToolUsageSetOut>;
+
+/**
+ * Full replacement of the project set for one tool — `[]` clears it. The
+ * product-keyed mirror of the project-keyed bulk attach, for editing a tool's
+ * history from the tool's own page. N calls to `attachResources` can't be
+ * atomic and would write N project-keyed audit entries.
+ */
+export const productProjectUsesSetInput = z.object({
+  productId: productShortcode,
+  projectIds: z.array(projectShortcode).max(200),
+});
+export type ProductProjectUsesSetInput = z.infer<
+  typeof productProjectUsesSetInput
+>;
+
+/**
+ * Just the edge count that moved — same reasoning as
+ * {@link projectToolUsageSetOut}. Returning the refreshed panel would be dead
+ * payload: a save has to invalidate the project-side resource lists and the
+ * related-view sections too, and that same invalidation refetches this panel,
+ * so any returned copy is overwritten before it can be read. Rebuilding it here
+ * would mean running `listProductProjectUses` (metrics + shared-window
+ * rollups) twice per save.
+ */
+export const productProjectUsesSetOut = z.object({
+  changed: z.number().int().nonnegative(),
+});
+export type ProductProjectUsesSetOut = z.infer<typeof productProjectUsesSetOut>;
+
 // ---------------------------------------------------------------------------
 // MCP / dashboard projections
 // ---------------------------------------------------------------------------
@@ -1618,7 +1704,7 @@ export const expenseMcpListOut = createPaginatedResponseSchema(expenseOut);
  * `hiddenByDate.projects`. Non-recursive: a parent matches on its own content,
  * not its children's (see repo/project/dashboard-shared.ts).
  */
-const projectDashboardFilterFields = {
+export const projectDashboardFilterFields = {
   statusScope: z.array(projectStatusSchema).optional(),
   kinds: z.array(projectKindSchema).optional(),
   locations: z.array(z.string()).optional(),
@@ -1648,6 +1734,128 @@ export type ProjectDashboardSummaryInput = ProjectDashboardFilters;
  * no separate value alias, matching `ProjectDashboardSummaryInput` above.
  */
 export type ProjectPortfolioAnalyticsInput = ProjectDashboardFilters;
+
+// ---------------------------------------------------------------------------
+// Project x tool matrix (repo/project/tool-matrix.ts)
+//
+// Lives here rather than in the reusable-resource block above only because it
+// composes `projectDashboardFilterFields`, which is declared below that block.
+// The column scope IS the dashboard scope — same fields, same
+// `buildDashboardProjectWhere` — so the matrix page reuses the Projects filter
+// vocabulary instead of inventing a parallel one.
+// ---------------------------------------------------------------------------
+
+export const projectToolMatrixGroupBy = z.enum(["trade", "manufacturer"]);
+export type ProjectToolMatrixGroupBy = z.infer<typeof projectToolMatrixGroupBy>;
+
+/** Row membership floor. Matches the suggestion engine's own threshold. */
+export const DEFAULT_TOOL_MATRIX_COST_FLOOR = 100;
+/** Hard caps. Both axes are quadratic in the cell count; see `truncated`. */
+export const MAX_TOOL_MATRIX_COLUMNS = 40;
+export const DEFAULT_TOOL_MATRIX_COLUMNS = 24;
+
+export const projectToolMatrixInput = z.object({
+  ...projectDashboardFilterFields,
+  /** Row filter — matches product name or manufacturer. */
+  toolSearch: z.string().optional(),
+  minNetLifetimeCost: z
+    .number()
+    .nonnegative()
+    .default(DEFAULT_TOOL_MATRIX_COST_FLOOR),
+  groupBy: projectToolMatrixGroupBy.default("trade"),
+  /** Omit for both lanes. `["purchased_here"]` drops the inferred lane. */
+  suggestionLanes: z.array(projectToolSuggestionLane).optional(),
+  maxColumns: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_TOOL_MATRIX_COLUMNS)
+    .default(DEFAULT_TOOL_MATRIX_COLUMNS),
+});
+export type ProjectToolMatrixInput = z.input<typeof projectToolMatrixInput>;
+export type ProjectToolMatrixFilters = z.infer<typeof projectToolMatrixInput>;
+
+export const projectToolMatrixColumnOut = z.object({
+  projectId: projectShortcode,
+  projectName: z.string(),
+  status: projectStatusSchema,
+  kind: projectKindSchema.nullable(),
+  /** Recursive effective window — the chronological sort key, not the override. */
+  startDate: plainDate.nullable(),
+  endDate: plainDate.nullable(),
+  attachedCount: z.number().int().nonnegative(),
+  suggestedCount: z.number().int().nonnegative(),
+});
+export type ProjectToolMatrixColumnOut = z.infer<
+  typeof projectToolMatrixColumnOut
+>;
+
+export const projectToolMatrixRowOut = z.object({
+  productId: productShortcode,
+  productName: z.string(),
+  manufacturer: z.string(),
+  /** Trade slug or manufacturer; `""` is the unassigned bucket. */
+  groupKey: z.string(),
+  /** Derived from the ledger; null means no qualifying Expense at all. */
+  trade: tradeSchema.nullable(),
+  isInventoried: z.boolean(),
+  /**
+   * Attached cells **in this grid** — distinct from `projectUseCount`, which is
+   * the lifetime count across every project. Showing only the latter next to a
+   * dozen columns of checkmarks reads as a bug.
+   */
+  visibleUseCount: z.number().int().nonnegative(),
+  ...projectToolEconomicsFields,
+});
+export type ProjectToolMatrixRowOut = z.infer<typeof projectToolMatrixRowOut>;
+
+/**
+ * Emitted **sparsely** — an absent cell is empty. Dense would be rows x columns
+ * objects for a grid that is ~96% empty today.
+ */
+export const projectToolMatrixCellOut = z.object({
+  projectId: projectShortcode,
+  productId: productShortcode,
+  state: z.enum(["attached", "suggested"]),
+  lane: projectToolSuggestionLane.nullable(),
+  matchedTrade: tradeSchema.nullable(),
+  /** Populated on attached cells too, including below the suggestion floor. */
+  projectPurchaseCost: z.number().nonnegative(),
+});
+export type ProjectToolMatrixCellOut = z.infer<typeof projectToolMatrixCellOut>;
+
+export const projectToolMatrixGroupOut = z.object({
+  key: z.string(),
+  label: z.string(),
+  rowCount: z.number().int().positive(),
+});
+export type ProjectToolMatrixGroupOut = z.infer<
+  typeof projectToolMatrixGroupOut
+>;
+
+/**
+ * `groups`, `columns`, and `rows` arrive in final display order and `cells` is
+ * sparse — the client does no membership, sorting, or filtering work.
+ */
+export const projectToolMatrixOut = z.object({
+  groupBy: projectToolMatrixGroupBy,
+  groups: z.array(projectToolMatrixGroupOut),
+  columns: z.array(projectToolMatrixColumnOut),
+  rows: z.array(projectToolMatrixRowOut),
+  cells: z.array(projectToolMatrixCellOut),
+  totals: z.object({
+    /** Before `maxColumns` / the row cap — what the filters actually matched. */
+    matchingProjects: z.number().int().nonnegative(),
+    matchingTools: z.number().int().nonnegative(),
+    attachedCells: z.number().int().nonnegative(),
+    suggestedCells: z.number().int().nonnegative(),
+  }),
+  truncated: z.object({
+    columns: z.boolean(),
+    rows: z.boolean(),
+  }),
+});
+export type ProjectToolMatrixOut = z.infer<typeof projectToolMatrixOut>;
 
 export const projectAttentionTypeValues = [
   "overdue_task",

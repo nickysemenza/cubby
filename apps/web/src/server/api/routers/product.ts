@@ -15,6 +15,7 @@ import {
   unsafeIngredientId,
   unsafeProductId,
   unsafeProductShortcode,
+  unsafeProjectId,
 } from "@cubby/schemas/identifiers";
 import {
   mergeProductsInput,
@@ -50,6 +51,8 @@ import {
 import {
   productProjectUsesInput,
   productProjectUsesOut,
+  productProjectUsesSetInput,
+  productProjectUsesSetOut,
 } from "@cubby/schemas/project";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { streamItems, streamProgress } from "~/lib/bulk-progress";
@@ -70,7 +73,10 @@ import {
   productSearch,
   quickCreateProduct,
 } from "~/server/repo/product";
-import { listProductProjectUses } from "~/server/repo/project";
+import {
+  listProductProjectUses,
+  setProductProjectUses,
+} from "~/server/repo/project";
 import {
   resolveLiveShortcode,
   resolveLiveShortcodes,
@@ -651,6 +657,33 @@ const projectUses = protectedProcedure
     return listProductProjectUses(ctx.db, id);
   });
 
+/**
+ * Replace the set of projects this tool was used on, from the tool's own page.
+ * Returns only the count that moved — see `productProjectUsesSetOut` for why
+ * handing back the refreshed panel would be dead payload.
+ */
+const setProjectUses = protectedProcedure
+  .input(productProjectUsesSetInput)
+  .output(strictOutput(productProjectUsesSetOut))
+  .mutation(async ({ ctx, input }) => {
+    const id = await resolveProductId(ctx.db, input.productId);
+    const resolved = await resolveLiveShortcodes(
+      ctx.db,
+      input.projectIds,
+      "project",
+    );
+    const missing = input.projectIds.find((code) => !resolved.has(code));
+    if (missing) {
+      throw createAppError("PROJECT_NOT_FOUND", `Project ${missing} not found`);
+    }
+    return setProductProjectUses(
+      ctx.db,
+      id,
+      input.projectIds.map((code) => unsafeProjectId(resolved.get(code)!)),
+      ctx.actorContext,
+    );
+  });
+
 export const productRouter = createTRPCRouter({
   getByID,
   getByShortcode,
@@ -676,4 +709,5 @@ export const productRouter = createTRPCRouter({
   verifyImages,
   projectUses,
   merge,
+  setProjectUses,
 });

@@ -70,6 +70,7 @@ import { Route as AuthenticatedProductsShortcodeRouteImport } from './routes/_au
 import { Route as AuthenticatedProductsNewRouteImport } from './routes/_authenticated/products.new'
 import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects.index'
 import { Route as AuthenticatedProjectsShortcodeRouteImport } from './routes/_authenticated/projects.$shortcode'
+import { Route as AuthenticatedProjectsToolsRouteImport } from './routes/_authenticated/projects.tools'
 import { Route as AuthenticatedPurchasesIndexRouteImport } from './routes/_authenticated/purchases.index'
 import { Route as AuthenticatedPurchasesShortcodeRouteImport } from './routes/_authenticated/purchases.$shortcode'
 import { Route as AuthenticatedRecipesIndexRouteImport } from './routes/_authenticated/recipes.index'
@@ -439,6 +440,12 @@ const AuthenticatedProjectsShortcodeRoute =
     path: '/projects/$shortcode',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedProjectsToolsRoute =
+  AuthenticatedProjectsToolsRouteImport.update({
+    id: '/projects/tools',
+    path: '/projects/tools',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedPurchasesIndexRoute =
   AuthenticatedPurchasesIndexRouteImport.update({
     id: '/purchases/',
@@ -633,6 +640,7 @@ export interface FileRoutesByFullPath {
   '/products/$shortcode': typeof AuthenticatedProductsShortcodeRoute
   '/products/new': typeof AuthenticatedProductsNewRoute
   '/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
+  '/projects/tools': typeof AuthenticatedProjectsToolsRoute
   '/purchases/$shortcode': typeof AuthenticatedPurchasesShortcodeRoute
   '/recipes/$shortcode': typeof AuthenticatedRecipesShortcodeRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
@@ -719,6 +727,7 @@ export interface FileRoutesByTo {
   '/products/$shortcode': typeof AuthenticatedProductsShortcodeRoute
   '/products/new': typeof AuthenticatedProductsNewRoute
   '/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
+  '/projects/tools': typeof AuthenticatedProjectsToolsRoute
   '/purchases/$shortcode': typeof AuthenticatedPurchasesShortcodeRoute
   '/recipes/$shortcode': typeof AuthenticatedRecipesShortcodeRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
@@ -808,6 +817,7 @@ export interface FileRoutesById {
   '/_authenticated/products/$shortcode': typeof AuthenticatedProductsShortcodeRoute
   '/_authenticated/products/new': typeof AuthenticatedProductsNewRoute
   '/_authenticated/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
+  '/_authenticated/projects/tools': typeof AuthenticatedProjectsToolsRoute
   '/_authenticated/purchases/$shortcode': typeof AuthenticatedPurchasesShortcodeRoute
   '/_authenticated/recipes/$shortcode': typeof AuthenticatedRecipesShortcodeRoute
   '/_authenticated/recipes/compare': typeof AuthenticatedRecipesCompareRoute
@@ -897,6 +907,7 @@ export interface FileRouteTypes {
     | '/products/$shortcode'
     | '/products/new'
     | '/projects/$shortcode'
+    | '/projects/tools'
     | '/purchases/$shortcode'
     | '/recipes/$shortcode'
     | '/recipes/compare'
@@ -983,6 +994,7 @@ export interface FileRouteTypes {
     | '/products/$shortcode'
     | '/products/new'
     | '/projects/$shortcode'
+    | '/projects/tools'
     | '/purchases/$shortcode'
     | '/recipes/$shortcode'
     | '/recipes/compare'
@@ -1071,6 +1083,7 @@ export interface FileRouteTypes {
     | '/_authenticated/products/$shortcode'
     | '/_authenticated/products/new'
     | '/_authenticated/projects/$shortcode'
+    | '/_authenticated/projects/tools'
     | '/_authenticated/purchases/$shortcode'
     | '/_authenticated/recipes/$shortcode'
     | '/_authenticated/recipes/compare'
@@ -1554,6 +1567,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProjectsShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/projects/tools': {
+      id: '/_authenticated/projects/tools'
+      path: '/projects/tools'
+      fullPath: '/projects/tools'
+      preLoaderRoute: typeof AuthenticatedProjectsToolsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/purchases/': {
       id: '/_authenticated/purchases/'
       path: '/purchases'
@@ -1771,6 +1791,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedProductsShortcodeRoute: typeof AuthenticatedProductsShortcodeRoute
   AuthenticatedProductsNewRoute: typeof AuthenticatedProductsNewRoute
   AuthenticatedProjectsShortcodeRoute: typeof AuthenticatedProjectsShortcodeRoute
+  AuthenticatedProjectsToolsRoute: typeof AuthenticatedProjectsToolsRoute
   AuthenticatedPurchasesShortcodeRoute: typeof AuthenticatedPurchasesShortcodeRoute
   AuthenticatedRecipesShortcodeRoute: typeof AuthenticatedRecipesShortcodeRoute
   AuthenticatedRecipesCompareRoute: typeof AuthenticatedRecipesCompareRoute
@@ -1849,6 +1870,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedProductsShortcodeRoute: AuthenticatedProductsShortcodeRoute,
   AuthenticatedProductsNewRoute: AuthenticatedProductsNewRoute,
   AuthenticatedProjectsShortcodeRoute: AuthenticatedProjectsShortcodeRoute,
+  AuthenticatedProjectsToolsRoute: AuthenticatedProjectsToolsRoute,
   AuthenticatedPurchasesShortcodeRoute: AuthenticatedPurchasesShortcodeRoute,
   AuthenticatedRecipesShortcodeRoute: AuthenticatedRecipesShortcodeRoute,
   AuthenticatedRecipesCompareRoute: AuthenticatedRecipesCompareRoute,
