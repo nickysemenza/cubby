@@ -122,6 +122,49 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       // vendor URLs, sorting, and mixed vendor-or-none filters keep working.
       filters: [{ id: "vendor", value: [FILTER_NONE] }],
     },
+    {
+      id: "goods-no-product",
+      label: "Goods without a product",
+      description: "Purchased items and tools not yet linked to a Product",
+      // Narrowed to `principal` goods on purpose: services are labor and carry
+      // no product by design, and tax/shipping/discount/fee lines structurally
+      // can't hold one. Without both filters this reads as a far larger backlog
+      // than it is, because correctly product-free rows dominate the count.
+      filters: [
+        { id: "lineKind", value: ["principal"] },
+        { id: "costType", value: ["materials", "tools"] },
+        { id: "product", value: "none" },
+      ],
+      sort: [{ id: "cost", desc: true }],
+    },
+    {
+      id: "legacy-goods",
+      label: "Legacy goods lines",
+      description: "Hand-entered goods with no product and no purchase",
+      // `goods-no-product` plus the no-purchase sentinel: rows typed straight
+      // into the ledger before the vendor roster existed, so there is no
+      // receipt to promote a Product from. Worth triaging by hand rather than
+      // batch-importing.
+      filters: [
+        { id: "lineKind", value: ["principal"] },
+        { id: "costType", value: ["materials", "tools"] },
+        { id: "product", value: "none" },
+        { id: "vendor", value: [FILTER_NONE] },
+      ],
+      sort: [{ id: "cost", desc: true }],
+    },
+  ],
+  purchase: [
+    {
+      id: "needs-review",
+      label: "Needs review",
+      description: "Stated total the expense lines don't explain",
+      // `mismatch` is already the narrow signal: a purchase whose stated total
+      // differs from its expense total by more than tolerance AND whose posted
+      // refunds don't account for the gap. `refund_adjusted` is the explained
+      // case and stays out — this view is the money that doesn't add up.
+      filters: [{ id: "reconciliation", value: ["mismatch"] }],
+    },
   ],
   wish: [
     {
