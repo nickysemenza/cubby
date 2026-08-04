@@ -218,7 +218,7 @@ describe("calculateTotals", () => {
 
     expect(result.totalIngredients).toBe(2);
     expect(result.price).toBeCloseTo(10.99, 2); // 5.99 + 5.00
-    expect(result.weight).toBeCloseTo(854, 1); // WASM rounds: ~454 + 400
+    expect(result.weight).toBeCloseTo(853.592, 1); // 1 lb = 453.592 g, + 400
     expect(result.missingByType).toEqual({
       price: [],
       weight: [],
@@ -259,7 +259,7 @@ describe("calculateTotals", () => {
 
     expect(result.totalIngredients).toBe(2);
     expect(result.price).toBeCloseTo(5.99, 2); // Only chicken has price
-    expect(result.weight).toBeCloseTo(454, 1); // WASM rounds: ~454
+    expect(result.weight).toBeCloseTo(453.592, 1); // 1 lb = 453.592 g
     expect(result.missingByType).toEqual({
       price: ["unknown spice"],
       weight: ["unknown spice"],

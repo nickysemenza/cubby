@@ -46,6 +46,23 @@ fn ingredient(id: &str, mappings: Vec<WUnitMapping>) -> WCostingIngredient {
     }
 }
 
+/// An ingredient backed by one product carrying a **scalar** price (the
+/// `Product.price` column) rather than a stored `… = $x` mapping. That is a
+/// wholly separate costing route — it resolves the amount to `each` and
+/// multiplies — and every other fixture here leaves `price: None`, which is
+/// exactly why the route below went unexercised.
+fn priced_ingredient(id: &str, price: f64, mappings: Vec<WUnitMapping>) -> WCostingIngredient {
+    WCostingIngredient {
+        id: id.to_string(),
+        products: vec![WProductInput {
+            id: format!("prod-{id}"),
+            price: Some(price),
+            unit_mappings: mappings,
+            food: None,
+        }],
+    }
+}
+
 /// An ingredient with no product at all (forces missing price/weight/nutrients).
 fn empty_ingredient(id: &str) -> WCostingIngredient {
     WCostingIngredient {
@@ -224,7 +241,7 @@ fn calculates_totals_with_all_data_available() {
 
     assert_eq!(r.total_ingredients, 2);
     assert_close(r.price, 10.99, 0.005, "price"); // 5.99 + 5.00
-    assert_close(r.weight, 854.0, 0.05, "weight"); // rounds: ~454 + 400
+    assert_close(r.weight, 853.592, 0.05, "weight"); // 1 lb = 453.592 g, + 400
     assert!(r.missing_by_type.price.is_empty());
     assert!(r.missing_by_type.weight.is_empty());
     assert!(r.missing_by_type.nutrients.is_empty());
@@ -267,7 +284,7 @@ fn handles_partially_missing_data() {
 
     assert_eq!(r.total_ingredients, 2);
     assert_close(r.price, 5.99, 0.005, "price");
-    assert_close(r.weight, 454.0, 0.05, "weight");
+    assert_close(r.weight, 453.592, 0.05, "weight");
     assert_eq!(r.missing_by_type.price, vec!["unknown spice"]);
     assert_eq!(r.missing_by_type.weight, vec!["unknown spice"]);
     assert_eq!(r.missing_by_type.nutrients, vec!["unknown spice"]);
@@ -762,8 +779,92 @@ fn seasoning_salt_to_taste_one_percent_of_basis() {
     // 1 g salt (0.01 × 100 g flour) → ~387.6 mg sodium, ~$0.001
     assert_close(r.weight, 101.0, 0.5, "weight");
     assert_close(nutrient(&r, "307"), 387.6, 0.5, "sodium");
-    assert_close(r.price, 1.001, 0.005, "price");
+    // Tight on purpose: the salt's $0.001 is a tenth of a cent, so a conversion
+    // that rounds to whole cents drops it entirely and leaves the flour's $1.00
+    // alone. At 0.005 that passed while the seasoning cost nothing.
+    assert_close(r.price, 1.001, 1e-9, "price");
     assert!(r.missing_by_type.nutrients.is_empty());
+}
+
+/// RCP-57WV: 825 g of bread flour out of a 5 lb bag priced at $8 reported $0.00,
+/// because resolving the amount to `each` rounded 0.363763 bags down to zero
+/// whole bags. The recipe still claimed full cost coverage, so nothing surfaced
+/// it — a focaccia costed 95¢.
+#[test]
+fn scalar_priced_product_costs_a_fraction_of_a_package() {
+    let bread_flour = priced_ingredient(
+        "bread-flour",
+        8.0,
+        vec![
+            mapping((1.0, "each"), (5.0, "lb")),
+            mapping((1.0, "cup"), (120.0, "g")),
+        ],
+    );
+    let r = cost(
+        vec![row(
+            "bread-flour",
+            "bread flour",
+            Some((825.0, "g")),
+            None,
+            None,
+        )],
+        vec![bread_flour],
+        vec![],
+    );
+
+    // 825 / (5 × 453.59237) = 0.363763 bags × $8
+    assert_close(r.price, 2.910104, 1e-5, "price");
+    assert!(r.missing_by_type.price.is_empty());
+}
+
+/// A whole-package amount must still cost one package — the fix restores
+/// fractions without disturbing the integral case.
+#[test]
+fn scalar_priced_product_still_costs_whole_packages_exactly() {
+    let bags = priced_ingredient("bags", 8.0, vec![mapping((1.0, "each"), (5.0, "lb"))]);
+    let r = cost(
+        vec![row("bags", "bags", Some((2.0, "each")), None, None)],
+        vec![bags],
+        vec![],
+    );
+    assert_close(r.price, 16.0, 1e-9, "price");
+}
+
+/// A scalar price must not mask a stored money edge that is cheaper and more
+/// precise. Olive oil carries both: one product priced per bottle, another with
+/// a real per-ml edge. Selecting the scalar unconditionally ignored the latter.
+#[test]
+fn stored_money_edge_wins_when_cheaper_than_the_scalar_price() {
+    let olive_oil = WCostingIngredient {
+        id: "olive-oil".to_string(),
+        products: vec![
+            // 750 ml bottle @ $15.29 → $0.0204/ml
+            WProductInput {
+                id: "prod-bottle".to_string(),
+                price: Some(15.29),
+                unit_mappings: vec![
+                    mapping((1.0, "each"), (750.0, "ml")),
+                    mapping((1.0, "ml"), (0.92, "g")),
+                ],
+                food: None,
+            },
+            // 499.79 ml @ $7.79 → $0.0156/ml, the cheaper per-ml price
+            WProductInput {
+                id: "prod-per-ml".to_string(),
+                price: None,
+                unit_mappings: vec![mapping((499.79, "ml"), (7.79, "dollar"))],
+                food: None,
+            },
+        ],
+    };
+    let r = cost(
+        vec![row("olive-oil", "olive oil", Some((30.0, "g")), None, None)],
+        vec![olive_oil],
+        vec![],
+    );
+
+    // 30 g ÷ 0.92 g/ml = 32.6087 ml × $0.0155864/ml = $0.5083
+    assert_close(r.price, 0.5083, 1e-3, "price");
 }
 
 #[test]
@@ -819,7 +920,9 @@ fn garnish_parsley_flat_five_grams_unmapped_measures_missing() {
     );
 
     assert_close(r.weight, 105.0, 0.5, "weight");
-    assert_close(nutrient(&r, "208"), 364.0 + 1.8, 0.5, "kcal");
+    // Tight on purpose: 5 g of parsley is 1.8 kcal, which a whole-kcal round
+    // inflated to 2. At 0.5 the assertion couldn't tell the two apart.
+    assert_close(nutrient(&r, "208"), 364.0 + 1.8, 1e-9, "kcal");
     assert_eq!(r.missing_by_type.price, vec!["parsley"]);
 }
 

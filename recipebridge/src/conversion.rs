@@ -477,6 +477,20 @@ mod tests {
         assert!(conv_to_kind_core(&pairs, "money", &Measure::new("cup", 2.0)).is_err());
     }
 
+    /// A count target must keep its fraction. `MeasureKind::Other(_)` normalizes to
+    /// a whole count, so while the engine rounded results to an integer this
+    /// returned 0 — and every caller guarding on `value > 0` read "no path" from
+    /// what was really a perfectly good conversion. That's how the equivalence
+    /// report (`existingRatioFor` in routers/recipe/analysis.ts) reported
+    /// "1 bunch kale = 5 cups" as a novel equivalence the graph already covered.
+    #[test]
+    fn conv_to_kind_core_keeps_a_fractional_count() {
+        let pairs = WUnitMappings(vec![mapping(1.0, "bunch", 5.0, "cup")]).to_pairs();
+        let r =
+            conv_to_kind_core(&pairs, "other:bunch", &Measure::new("cup", 1.0)).expect("cup→bunch");
+        assert_eq!(r.value, 0.2);
+    }
+
     /// `conv_amount_explain`'s happy path: the engine it wraps converts 2 cup → g
     /// and returns a non-empty step path.
     #[test]

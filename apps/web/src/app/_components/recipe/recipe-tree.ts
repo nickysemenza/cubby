@@ -97,20 +97,19 @@ const numericGrams = (
 // here, so those fall back to the ingredient-weight sum + a `batchEstimated` flag.
 //
 // These factors duplicate the parser's own normalization table, which is a
-// layering smell — but the duplication CANNOT be removed by calling
-// `conv_amount_to_kind` today, because that export integer-rounds its result
-// (`convert_measure_with_graph_explained` in ingredient-parser's conversion.rs
-// rounds both bounds). Asking it for 1 lb returns **454 g**, whereas the factor
-// the costing engine itself multiplies by inside `sub_recipe_pairs` is the
-// unrounded 453.592 — so consuming the export would shift every imperial-mass
-// yield's denominator by ~0.09% and quietly move prep-sheet numbers. Removing
-// this table needs an unrounded conversion on the WASM boundary (upstream
-// `Measure::normalize` is `pub(crate)`), i.e. an ingredient-parser change.
-// Until then the "MASS_TO_GRAMS matches the engine" suite in
-// recipe-tree.unit.test.ts pins these factors against the engine (probing at
-// 1e6× so the rounding washes out), so a real upstream factor change fails there
-// instead of silently desyncing. It also pins the cost of not calling the
-// engine: fixed spellings, so a "kgs"/"ozs" yield falls through to null here.
+// layering smell. The precision objection is gone — `conv_amount_to_kind` used
+// to integer-round, answering 454 g for 1 lb against the 453.592 the costing
+// engine multiplies by, but it now keeps 6 significant figures and agrees
+// exactly. Two reasons to keep the table anyway:
+//   - This module is deliberately wasm-free (see the header) so it runs in the
+//     node "unit" vitest project; calling the export would bind it to wasm.
+//   - The parser has no milligram unit, so `mg` has no path to weight. The
+//     engine cannot answer for it, and this table can.
+// The "MASS_TO_GRAMS matches the engine" suite in recipe-tree.unit.test.ts pins
+// every other entry against the engine directly, so a real upstream factor
+// change fails there instead of silently desyncing. It also pins the cost of not
+// calling the engine: fixed spellings, so a "kgs"/"ozs" yield falls through to
+// null here.
 const MASS_TO_GRAMS: Record<string, number> = {
   mg: 0.001,
   g: 1,

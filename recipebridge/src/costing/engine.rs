@@ -3,9 +3,9 @@
 //!
 //! Parity notes (the TS engine's observable behavior, preserved deliberately):
 //! - All unit *conversions* run through the same `ingredient` graph code the TS
-//!   engine called via WASM (including its integer rounding at the normalized
-//!   unit); fraction scaling, basis accumulation, and totals sum in f64, in the
-//!   same order (pass-1 rows in input order, then pass-2 rows).
+//!   engine called via WASM (which rounds a result to 6 significant figures at
+//!   the normalized unit); fraction scaling, basis accumulation, and totals sum
+//!   in f64, in the same order (pass-1 rows in input order, then pass-2 rows).
 //! - Error strings are verbatim ("ingredient {id} has no amounts",
 //!   "no basis for estimate", …) — diagnostics consumers match on them.
 //! - Sub-recipe totals are memoized per engine (per `cost_recipes` call) —
@@ -18,6 +18,12 @@
 //!   converts an amount to `each`: when several linked products are priced, the
 //!   cheapest valid product price wins deterministically. Do not isolate whole
 //!   graphs per product — that breaks cross-product completion.
+//!
+//!   That `each` is fractional — 825 g of a 5 lb bag is 0.363763 bags. It relies
+//!   on `ingredient` NOT rounding a conversion to a whole count; when it did, every
+//!   sub-package amount priced at exactly $0 while still reporting as covered.
+//!   `fractional_count_target_keeps_its_fraction` upstream pins that, and
+//!   `scalar_priced_product_costs_a_fraction_of_a_package` below pins this end.
 
 use std::cell::{OnceCell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -375,7 +381,22 @@ impl<'a> Engine<'a> {
         // density. Only fall back to another amount for a measure the canonical
         // one genuinely can't reach.
         let conv = |kind: MeasureKind| convert_with_fallback(amounts, graph, kind);
-        let money = price.or_else(|| conv(MeasureKind::Money));
+        // Two independent ways to reach a cost: a linked product's scalar price
+        // (resolved via `each`) and a stored money edge in the graph
+        // ("499.79 ml = $7.79"). Take the cheaper, extending the same
+        // cheapest-wins rule that already picks between priced products — an
+        // `or_else` here let a scalar price mask a stored edge that was both
+        // cheaper and more precise, which is how olive oil ignored a real
+        // per-ml price in favor of a whole-bottle one. Both sides denormalize
+        // to `Unit::Dollar`, so the bare value comparison is sound.
+        let money = match (price, conv(MeasureKind::Money)) {
+            (Some(scalar), Some(edge)) => Some(if edge.value() < scalar.value() {
+                edge
+            } else {
+                scalar
+            }),
+            (scalar, edge) => scalar.or(edge),
+        };
         let weight = conv(MeasureKind::Weight);
         let calories = conv(MeasureKind::Calories);
 
@@ -521,23 +542,34 @@ impl<'a> Engine<'a> {
         };
 
         let yield_measure = recipe_yield.to_measure();
-        let mut pairs = vec![
+        // A zero total must NOT become an edge. `make_graph` divides by a
+        // mapping's value, so "1 batch = $0" yields a forward factor of 0 (every
+        // parent amount then costs exactly $0, silently) and a reverse factor of
+        // inf. Dropping the pair leaves the parent unable to reach money through
+        // this sub-recipe, which reports as missing instead of as free.
+        let mut pairs: Vec<(Measure, Measure)> = [
+            ("dollar", totals.price, totals.price_upper),
+            ("g", totals.weight, totals.weight_upper),
+        ]
+        .into_iter()
+        .filter(|&(_, value, _)| value > 0.0)
+        .map(|(unit, value, upper)| {
             (
                 yield_measure.clone(),
-                measure_with_optional_upper("dollar", totals.price, totals.price_upper),
-            ),
-            (
-                yield_measure.clone(),
-                measure_with_optional_upper("g", totals.weight, totals.weight_upper),
-            ),
-        ];
+                measure_with_optional_upper(unit, value, upper),
+            )
+        })
+        .collect();
         // One mapping per nutrient present in the sub totals, in target order
         // (the kcal target's unit is "kcal", matching the calories path). A
         // ranged sub total makes the edge a range, which the parent conversion
         // scales and propagates.
         for t in &self.targets {
-            if let Some((_, value, upper)) =
-                totals.nutrients.iter().find(|(code, ..)| *code == t.code)
+            if let Some((_, value, upper)) = totals
+                .nutrients
+                .iter()
+                .find(|(code, ..)| *code == t.code)
+                .filter(|(_, value, _)| *value > 0.0)
             {
                 pairs.push((
                     yield_measure.clone(),

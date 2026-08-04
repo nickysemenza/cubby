@@ -227,7 +227,10 @@ describe("batchYieldGrams", () => {
   // upstream factor change (or an edit to the table) fails HERE rather than
   // silently desyncing the prep sheet from the costing engine.
   describe("MASS_TO_GRAMS matches the engine", () => {
-    const PROBE = 1e6;
+    // Probed at 1: the engine keeps 6 significant figures, so its answer matches
+    // the table's factor outright. This used to probe at 1e6 so that the engine's
+    // integer rounding washed out as a relative error.
+    const PROBE = 1;
     const engineGrams = (unit: string): number | null => {
       try {
         return wasm.conv_amount_to_kind([], "weight", { value: PROBE, unit })
@@ -257,8 +260,6 @@ describe("batchYieldGrams", () => {
         const engine = engineGrams(unit);
         expect(engine).not.toBeNull();
         expect(table).not.toBeNull();
-        // Relative comparison: the engine still rounds to whole grams, which at
-        // this probe size is ~1e-9 of the value.
         expect(table).toBeCloseTo(engine ?? Number.NaN, 3);
       });
     }
