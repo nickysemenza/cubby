@@ -1081,7 +1081,7 @@ type EntityListToolConfig = {
   buildFilters?: BuildListFilters;
 };
 
-export function registerEntityListTool(
+function registerEntityListTool(
   server: McpServer,
   config: EntityListToolConfig,
 ) {
@@ -1113,7 +1113,7 @@ export function registerEntityListTool(
   });
 }
 
-export function registerEntityGetTool(
+function registerEntityGetTool(
   server: McpServer,
   config: {
     name: string;
@@ -1137,7 +1137,7 @@ export function registerEntityGetTool(
   });
 }
 
-export function registerEntityDeleteTool(
+function registerEntityDeleteTool(
   server: McpServer,
   config: {
     name: string;
