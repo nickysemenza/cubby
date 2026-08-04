@@ -303,6 +303,19 @@ export const financialTransactionFilterFields = {
 export const financialTransactionFiltersSchema = z.object(
   financialTransactionFilterFields,
 );
+
+/**
+ * The distinct `sourceRefs[].source` values in use — feeds the transactions
+ * table's Source filter. A static option list would rot: sources are minted by
+ * whatever importer wrote the row (`monarch`, `zoro`, `amazon-order-export`,
+ * `cb2-order-detail`), so the roster has to come from the data.
+ */
+export const financialTransactionSourceOptionsOut = z.array(
+  z.object({ source: z.string(), count: z.number().int() }),
+);
+export type FinancialTransactionSourceOptionsOut = z.infer<
+  typeof financialTransactionSourceOptionsOut
+>;
 export type FinancialTransactionFilters = z.infer<
   typeof financialTransactionFiltersSchema
 >;

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { getEntityFilters } from "./filter-manifest";
-import { buildFiltersFromManifest, FILTER_NONE } from "./filters";
+import {
+  buildFiltersFromManifest,
+  FILTER_NONE,
+  partitionFilterSpecs,
+} from "./filters";
 import { isViewActive, viewManifest, viewsForEntity } from "./view-manifest";
 
 // A `.tsx` test, so it runs under the `ui` vitest project: cross-checking a
@@ -24,6 +28,29 @@ describe("view manifest", () => {
             specIds.has(filter.id),
             `view "${view.id}" on "${entity}" pins unknown filter "${filter.id}"`,
           ).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("never pins a urlOnly spec", () => {
+    // The subtler half of the check above: a urlOnly id passes it (the spec
+    // does exist) but does nothing at runtime, because applying a view writes
+    // `columnFilters` and `partitionFilterSpecs` keeps urlOnly specs out of
+    // that state entirely. The view would light up its checkmark and select
+    // every row. `financialTransaction/unlinked` is only correct because
+    // `purchasePresence` was promoted to column-backed first.
+    for (const [entity, views] of Object.entries(viewManifest)) {
+      const [, urlOnly] = partitionFilterSpecs(
+        getEntityFilters(entity as never),
+      );
+      const urlOnlyIds = new Set(urlOnly.map((spec) => spec.columnId));
+      for (const view of views ?? []) {
+        for (const filter of view.filters) {
+          expect(
+            urlOnlyIds.has(filter.id),
+            `view "${view.id}" on "${entity}" pins urlOnly filter "${filter.id}"`,
+          ).toBe(false);
         }
       }
     }
@@ -116,6 +143,46 @@ describe("project and task saved views use ordinary server filters", () => {
 
   it("Completed tasks is exactly status done", () => {
     expect(build("task", "completed")).toEqual({ status: ["done"] });
+  });
+});
+
+describe("settlement worklist views", () => {
+  const build = (
+    entity: "purchase" | "financialTransaction",
+    viewId: string,
+  ) => {
+    const view = viewsForEntity(entity).find(
+      (candidate) => candidate.id === viewId,
+    );
+    if (!view) throw new Error(`no such view: ${entity}/${viewId}`);
+    const values = new Map(
+      view.filters.map((filter) => [filter.id, filter.value]),
+    );
+    return buildFiltersFromManifest(getEntityFilters(entity), (columnId) =>
+      values.get(columnId),
+    );
+  };
+
+  it("unsettled purchases is exactly the settlement_reference gap", () => {
+    // NOT `financialTransactionPresenceFilter: none`. The gap is narrower: it
+    // wants a POSTED transaction of a settlement kind that carries a sourceRef
+    // or sits on a cash account, so a purchase with an expected refund or an
+    // evidence-free row still shows up here.
+    expect(build("purchase", "unsettled")).toEqual({
+      dataGap: ["settlement_reference"],
+    });
+  });
+
+  it("outstanding transactions are the two pre-posted statuses", () => {
+    expect(build("financialTransaction", "outstanding")).toEqual({
+      status: ["expected", "pending"],
+    });
+  });
+
+  it("unlinked transactions pin the purchase presence sentinel", () => {
+    expect(build("financialTransaction", "unlinked")).toEqual({
+      purchasePresenceFilter: "none",
+    });
   });
 });
 

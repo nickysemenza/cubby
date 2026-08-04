@@ -3,6 +3,7 @@ import { financialAccountFilterFields } from "@cubby/schemas/financial-account";
 import { financialTransactionFilterFields } from "@cubby/schemas/financial-transaction";
 import {
   unsafeCookbookId,
+  unsafeFinancialAccountShortcode,
   unsafeIngredientId,
   unsafeLocationId,
   unsafeProductId,
@@ -44,6 +45,10 @@ import {
   resolveDateRange,
   resolveProductQuantityFilter,
 } from "~/app/expenses/expense-options";
+import {
+  amountRangeOptions,
+  resolveAmountFilter,
+} from "~/app/finance/financial-transaction-options";
 import {
   PROJECT_STATUS_OPTIONS,
   projectKindOptions,
@@ -418,11 +423,15 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     },
     {
       columnId: "accountId",
-      urlOnly: true,
-      kind: "multiselect",
+      kind: "idMulti",
+      brand: unsafeFinancialAccountShortcode,
       placeholder: "Filter by account...",
+      optionsKey: "account",
     },
     {
+      // Stays URL-only: the purchase universe is unbounded, so this is a deep
+      // link's scope (from a purchase's detail page), not a picklist. The
+      // `purchasePresence` spec below is the filterable half.
       columnId: "purchaseId",
       urlOnly: true,
       kind: "multiselect",
@@ -431,17 +440,19 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     {
       columnId: "purchasePresence",
       field: "purchasePresenceFilter",
-      urlOnly: true,
       kind: "presence",
       placeholder: "Filter purchase links...",
+      options: presenceFilterOptions("purchase"),
     },
     {
       columnId: "source",
-      urlOnly: true,
       kind: "multiselect",
       placeholder: "Filter by source...",
+      optionsKey: "source",
     },
     {
+      // Stays URL-only for the same reason as `purchaseId` — an external id is
+      // one row's provider reference, not a category.
       columnId: "externalId",
       urlOnly: true,
       kind: "multiselect",
@@ -449,9 +460,18 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     },
     {
       columnId: "merchant",
-      urlOnly: true,
       kind: "text",
       placeholder: "Filter by merchant...",
+    },
+    {
+      // One control for the whole Amount column, resolving to the `amountMin` /
+      // `amountMax` pair below — which stay URL-only as its expansion targets,
+      // the same split `postedDate` has with `postedDateFrom`/`To`.
+      columnId: "amount",
+      kind: "range",
+      placeholder: "Filter by amount...",
+      options: amountRangeOptions,
+      expand: resolveAmountFilter,
     },
     {
       columnId: "amountMin",
@@ -863,6 +883,54 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       options: presenceFilterOptions("documents"),
     },
     {
+      // Deliberately distinct from the `settlement_reference` data gap: this is
+      // "no FinancialTransaction at all", that one is "no POSTED transaction of
+      // a settlement kind carrying statement or cash evidence". A purchase can
+      // have three transactions and still fail the gap.
+      //
+      // Shares its server field with the related-view registry's own
+      // `financialTransactionPresenceFilter` spec (urlOnly, keyed by field
+      // name). Both are entry points to one server filter, and an absent value
+      // emits no patch, so they only interact if a URL sets both by hand.
+      columnId: "transactionCount",
+      field: "financialTransactionPresenceFilter",
+      urlKey: "transactions",
+      kind: "presence",
+      placeholder: "Filter by transactions...",
+      options: presenceFilterOptions("transactions"),
+    },
+    {
+      columnId: "dataQuality",
+      field: "dataStatus",
+      kind: "select",
+      placeholder: "Filter data quality...",
+      options: [
+        { value: "complete", label: "Complete" },
+        { value: "needs_data", label: "Needs data" },
+        { value: "defect", label: "Defect" },
+      ],
+    },
+    {
+      // `primary_document` is deliberately absent. The check is unscoped and
+      // fires on almost every purchase, so offering it here would just enshrine
+      // a signal that can't discriminate — the same call #599 made when it
+      // declined to give it a saved view. The server still accepts it from a
+      // URL or over MCP; this is only what the picklist advertises.
+      columnId: "dataGaps",
+      field: "dataGap",
+      kind: "multiselect",
+      placeholder: "Filter data gaps...",
+      options: [
+        { value: "settlement_reference", label: "No settlement evidence" },
+        { value: "purchase_date", label: "Missing date" },
+        { value: "order_id", label: "Missing order ID" },
+        { value: "stated_total", label: "Missing stated total" },
+        { value: "empty_expenses", label: "No expense lines" },
+        { value: "unpriced_expense", label: "Unpriced expense line" },
+        { value: "paperwork_mismatch", label: "Paperwork mismatch" },
+      ],
+    },
+    {
       columnId: "expenseTotalMin",
       urlKey: "lineTotalMin",
       urlOnly: true,
@@ -991,12 +1059,14 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       field: "modelPresenceFilter",
       kind: "presence",
       placeholder: "Filter model presence...",
+      options: presenceFilterOptions("model"),
     },
     {
       columnId: "upcPresence",
       field: "upcPresenceFilter",
       kind: "presence",
       placeholder: "Filter UPC presence...",
+      options: presenceFilterOptions("UPC"),
     },
     {
       columnId: "category",
@@ -1049,6 +1119,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       field: "notesPresenceFilter",
       kind: "presence",
       placeholder: "Filter notes presence...",
+      options: presenceFilterOptions("notes"),
     },
     {
       columnId: "dataQuality",
@@ -1596,6 +1667,14 @@ export function manifestFilterConfig(
 ): FilterConfig | undefined {
   const spec = getEntityFilters(entity).find((s) => s.columnId === columnId);
   if (!spec) return undefined;
+  // A urlOnly spec has no column state to bind to: `partitionFilterSpecs` keeps
+  // it out of `columnFilters`, so a header control for one can neither read its
+  // current value nor write a new one. Handing back a config anyway renders an
+  // inert combobox over an empty option list — which is exactly what the
+  // transactions table's Account and Purchase headers did, silently, because
+  // those two specs happen to share a columnId with a rendered column. Every
+  // other urlOnly spec escaped only by not colliding with one.
+  if (spec.urlOnly) return undefined;
   // A runtime picklist (project roster, tag universe) can't be static module
   // data, so the caller injects it by key.
   const resolvedOptions = spec.optionsKey

@@ -5,6 +5,7 @@ import {
   financialTransactionFiltersSchema,
   financialTransactionOut,
   financialTransactionSortableFields,
+  financialTransactionSourceOptionsOut,
   financialTransactionUpdateData,
 } from "@cubby/schemas/financial-transaction";
 import {
@@ -15,6 +16,7 @@ import { previewFinancialStatementImport } from "~/server/repo/financial-stateme
 import {
   createFinancialTransaction,
   deleteFinancialTransactions,
+  financialTransactionSourceOptions,
   getFinancialTransactionByShortcode,
   listFinancialTransactions,
   updateFinancialTransaction,
@@ -71,7 +73,13 @@ const previewStatementImport = protectedProcedure
   .output(strictOutput(financialStatementImportPreviewOut))
   .query(({ ctx, input }) => previewFinancialStatementImport(ctx.db, input));
 
+/** The Source picklist, derived from the sourceRefs actually stored. */
+const sourceOptions = protectedProcedure
+  .output(strictOutput(financialTransactionSourceOptionsOut))
+  .query(({ ctx }) => financialTransactionSourceOptions(ctx.db));
+
 export const financialTransactionRouter = createTRPCRouter({
   ...procedures,
   previewStatementImport,
+  sourceOptions,
 });
