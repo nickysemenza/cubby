@@ -188,6 +188,14 @@ export const dbIngredientToAPI = async (
       // compiler what it already proved (same pattern as `pricedProductRel`
       // being reused untyped above — dataQuality has no safe fallback, so
       // unlike pricing this one MUST already be real, not just present).
+      //
+      // Do NOT "simplify" this to an unconditional enrich because no
+      // production caller pre-populates `dataQuality`. This branch is
+      // load-bearing for TESTS: `mappers.unit.test.ts` builds fixtures with
+      // `dataQuality` already attached so `dbIngredientToAPI` can be exercised
+      // with no database. Dropping it makes the enrich unconditional, which
+      // reaches `unwrapDb(db).select` and fails those DB-less fixtures. (Tried
+      // on #631, reverted in e2089ead6.)
       (pricedProductRel as Array<Qualified<(typeof pricedProductRel)[number]>>)
     : await enrichProductRowsWithDataQuality(db, pricedProductRel);
   const productWithMappings = mapIngredientProducts(qualifiedProductRel);
