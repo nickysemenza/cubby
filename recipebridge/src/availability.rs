@@ -396,6 +396,28 @@ mod tests {
         assert_eq!(g.status, WAvailabilityStatus::Ok);
     }
 
+    /// A sub-gram need must survive the conversion to the weight basis. When the
+    /// unit engine rounded to whole grams, a 1 pinch need became 0 g — and
+    /// `have_total + EPSILON >= 0` reported `Ok` no matter how little was on hand,
+    /// so an empty shelf read as "you have enough".
+    #[test]
+    fn sub_gram_need_keeps_its_weight() {
+        // 1 cup = 120 g ⇒ 1 tsp = 2.5 g ⇒ 1 pinch (1/16 tsp) = 0.15625 g.
+        let g = eval(WAvailabilityGroup {
+            key: "k".into(),
+            needs: vec![need(1.0, "pinch", 0)],
+            products: vec![product(
+                "p",
+                vec![mapping(1.0, "cup", 120.0, "g")],
+                vec![amt(0.05, "g")],
+            )],
+        });
+        assert_eq!(g.basis_unit, "g");
+        assert_eq!(g.need_value, 0.15625);
+        // 0.05 g on hand against a 0.15625 g need is short, not satisfied.
+        assert_eq!(g.status, WAvailabilityStatus::Short);
+    }
+
     #[test]
     fn short_when_some_but_not_enough() {
         let g = eval(WAvailabilityGroup {
