@@ -1,3 +1,4 @@
+import type { Entity } from "@cubby/schemas/entity";
 import { type LinkProps, useLocation } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
 import {
@@ -261,16 +262,27 @@ export const publicNavItems: NavItem[] = [
 ];
 
 /**
- * The landing route for a top-level nav group label (e.g. "Cook", "Pantry"),
- * looked up from {@link desktopNav} — the single source of truth for the IA.
- * `undefined` when the group has no route of its own (true of every group
- * today; they're dropdown triggers only), which callers treat as "not
- * linkable".
+ * The top-level nav group an entity's list page lives under, derived from
+ * {@link desktopNav} — the single source of truth for the IA. Matches the
+ * entity's `routes.list` against each group's children so the group label
+ * can never drift from the real nav (see the hand-kept map this replaced,
+ * `ENTITY_NAV_GROUP` in page-hero.tsx, which fell out of sync with the Data/
+ * Cook reorg noted above).
+ *
+ * Every entity's list route appears exactly once across {@link desktopNav}
+ * (verified by `nav-items.unit.test.ts`), so this is unambiguous and needs no
+ * fallback — an entity added to `entities.tsx` without a nav home is a bug the
+ * test catches, not a case for `undefined` here to paper over silently.
+ * Deliberately walks {@link desktopNav} directly rather than
+ * {@link desktopLeaves}, which flattens groups away and drops the parent
+ * reference this needs.
  */
-export function getGroupRoute(label: string): LinkProps["to"] | undefined {
+export function getEntityNavGroup(entity: Entity): NavGroup | undefined {
+  const listRoute = entities[entity].routes.list;
   return desktopNav.find(
-    (node): node is NavGroup => isNavGroup(node) && node.label === label,
-  )?.to;
+    (node): node is NavGroup =>
+      isNavGroup(node) && node.children.some((child) => child.to === listRoute),
+  );
 }
 
 // --- Derived active state ---------------------------------------------------
