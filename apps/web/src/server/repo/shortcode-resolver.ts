@@ -14,9 +14,16 @@
 
 import type { Entity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import {
+  type BrandForEntity,
+  ENTITY_LABEL,
+  ENTITY_NOT_FOUND_REASON,
+  unsafeIdForEntity,
+} from "@cubby/schemas/identifiers";
 import { type ParsedShortcode, parseShortcode } from "@cubby/shared";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { createAppError } from "~/server/errors/app-error";
 
 import { notDeleted, unwrapDb } from "./database-helpers";
 import { SHORTCODE_TABLE, type ShortcodeTable } from "./shortcode-utils";
@@ -111,6 +118,98 @@ export async function resolveLiveShortcodes<E extends ShortcodeEntity>(
     if (originalCode !== undefined) resolved.set(originalCode, row.id);
   }
   return resolved;
+}
+
+/**
+ * Resolve one shortcode to a LIVE branded id, or throw that entity's
+ * not-found error.
+ *
+ * The throwing counterpart to {@link resolveLiveShortcode}, and what the large
+ * majority of callers actually wanted: before this existed, ~37 sites spelled
+ * out the same three steps by hand — resolve, `throw createAppError(<ENTITY>_
+ * NOT_FOUND, …)`, then `unsafeXxxId(...)` the result. Both halves that made
+ * those hand-rolled (the reason and the brand) are now derivable from the
+ * entity, so the whole shape collapses to one call.
+ *
+ * Use {@link resolveLiveShortcode} directly where a miss is *not* a 404: a
+ * nullable getter that returns `null`, a validation failure on caller-supplied
+ * input (`REFERENCED_RECORD_MISSING`), or an invariant violation on a row the
+ * same function just created (those throw a plain `Error` on purpose — turning
+ * them into a client-facing 404 would be a regression).
+ */
+export async function resolveOrThrow<E extends ShortcodeEntity>(
+  db: Database | DrizzleTransaction,
+  entity: E,
+  code: string,
+): Promise<BrandForEntity<E>> {
+  const id = await resolveLiveShortcode(db, code, entity);
+  if (id === null) {
+    throw createAppError(
+      ENTITY_NOT_FOUND_REASON[entity],
+      `${ENTITY_LABEL[entity]} not found: ${code}`,
+    );
+  }
+  return unsafeIdForEntity[entity](id);
+}
+
+/**
+ * Resolve many shortcodes to LIVE branded ids, throwing if ANY is missing —
+ * and naming every one that was, not just the first.
+ *
+ * This replaced two separate hand-rolled behaviors. The throw-listing-all shape
+ * (which {@link resolveMergeTargets} already had) is kept; the throw-on-first
+ * shape is deliberately *not*, because no caller benefited from learning only
+ * the first bad code — a bulk delete of five codes with three typos took three
+ * round trips to diagnose.
+ *
+ * Returns ids **positionally**, one per input code, with duplicates preserved,
+ * so a caller can zip the result against its input. Callers for which repeats
+ * are meaningless (`resolveMergeTargets`) dedupe on the way in.
+ */
+export async function resolveAllOrThrow<E extends ShortcodeEntity>(
+  db: Database | DrizzleTransaction,
+  entity: E,
+  codes: readonly string[],
+): Promise<BrandForEntity<E>[]> {
+  if (codes.length === 0) return [];
+  const resolved = await resolveLiveShortcodes(db, codes, entity);
+  const missing = codes.filter((code) => !resolved.has(code));
+  if (missing.length > 0) {
+    throw createAppError(
+      ENTITY_NOT_FOUND_REASON[entity],
+      `${ENTITY_LABEL[entity]} not found: ${[...new Set(missing)].join(", ")}`,
+    );
+  }
+  // Non-null by construction: `missing` is empty, so every code is a key. The
+  // `!` is the sanctioned form for an access right after a membership check
+  // (see the `noUncheckedIndexedAccess` note in CLAUDE.md).
+  return codes.map((code) => unsafeIdForEntity[entity](resolved.get(code)!));
+}
+
+/**
+ * Resolve many shortcodes to LIVE branded ids, silently dropping any that
+ * don't resolve.
+ *
+ * The third hand-rolled plural shape, and a genuine one: a filter built from
+ * user-supplied codes narrows to what exists rather than 404-ing the whole
+ * request. Named so the choice is visible at the call site — previously the
+ * only way to tell "drops missing" from "throws" was to read the `.flatMap`
+ * versus the `.filter` that followed.
+ *
+ * Order is preserved; the result is therefore shorter than the input when
+ * something was dropped, so don't zip it against the input codes.
+ */
+export async function resolveAllPresent<E extends ShortcodeEntity>(
+  db: Database | DrizzleTransaction,
+  entity: E,
+  codes: readonly string[],
+): Promise<BrandForEntity<E>[]> {
+  if (codes.length === 0) return [];
+  const resolved = await resolveLiveShortcodes(db, codes, entity);
+  return codes.flatMap((code) => {
+    const id = resolved.get(code);
+    return id === undefined ? [] : [unsafeIdForEntity[entity](id)];
+  });
 }
 
 /**
