@@ -10,69 +10,30 @@ import { z } from "zod";
 import {
   getCaller,
   idParam,
-  READ_ONLY_CLOSED,
-  registerEntityDeleteTool,
-  registerEntityGetTool,
-  registerEntityListTool,
+  registerEntityCrudToolset,
   registerMcpTool,
-  respond,
   respondList,
   slimInventory,
-  WRITE_CLOSED,
   WRITE_DESTRUCTIVE_CLOSED,
 } from "./_shared";
 
 export function registerInventoryTools(server: McpServer) {
-  registerEntityListTool(server, {
-    name: "list_inventory",
-    description: "List inventory entries with optional filters.",
-    router: "inventory",
-    filterFields: inventoryFilterFields,
-    outputSchema: inventoryMcpListOut,
-    slim: slimInventory,
-    sort: { orderBy: "createdAt", direction: "desc" },
-    annotations: READ_ONLY_CLOSED,
-  });
-
-  registerEntityGetTool(server, {
-    name: "get_inventory_entry",
-    description: "Get a single inventory entry by ID.",
-    router: "inventory",
+  registerEntityCrudToolset(server, {
     entity: "inventory",
-    outputSchema: inventoryMcpOut,
-    slim: slimInventory,
-    annotations: READ_ONLY_CLOSED,
-  });
-
-  registerMcpTool(server, {
-    name: "create_inventory_entry",
-    description:
-      "Add a product to a location. Use search_products and list_locations first to get IDs.",
-    inputSchema: {
+    names: {
+      list: "list_inventory",
+      get: "get_inventory_entry",
+      create: "create_inventory_entry",
+      update: "update_inventory_entry",
+      delete: "delete_inventory_entries",
+    },
+    createInput: {
       productId: idParam("product"),
       locationId: idParam("location"),
       value: z.number().positive().describe("Quantity value (must be > 0)"),
       unit: z.string().describe("Unit (e.g. 'each', 'lb', 'oz', 'cup')"),
     },
-    outputSchema: inventoryMcpOut,
-    annotations: WRITE_CLOSED,
-    handler: async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.inventory.create({
-        productId: params.productId,
-        locationId: params.locationId,
-        amount: { value: params.value, unit: params.unit },
-      });
-      return respond(result, slimInventory);
-    },
-  });
-
-  registerMcpTool(server, {
-    name: "update_inventory_entry",
-    description:
-      "Update an inventory entry's amount, product, or location. When updating amount, both value and unit must be provided together.",
-    inputSchema: {
-      id: idParam("inventory"),
+    updateShape: {
       value: z
         .number()
         .positive()
@@ -86,38 +47,42 @@ export function registerInventoryTools(server: McpServer) {
         .optional()
         .describe("Move the entry to this location"),
     },
-    outputSchema: inventoryMcpOut,
-    annotations: WRITE_CLOSED,
-    handler: async (params, extra) => {
-      const caller = getCaller(extra);
-      const data: Record<string, unknown> = {};
-      if (params.value !== undefined && params.unit !== undefined) {
-        data.amount = { value: params.value, unit: params.unit };
-      } else if (params.value !== undefined || params.unit !== undefined) {
+    filterFields: inventoryFilterFields,
+    mcpListOut: inventoryMcpListOut,
+    out: inventoryMcpOut,
+    slim: slimInventory,
+    sort: { orderBy: "createdAt", direction: "desc" },
+    descriptions: {
+      list: "List inventory entries with optional filters.",
+      get: "Get a single inventory entry by ID.",
+      create:
+        "Add a product to a location. Use search_products and list_locations first to get IDs.",
+      update:
+        "Update an inventory entry's amount, product, or location. When updating amount, both value and unit must be provided together.",
+      delete: "Soft-delete inventory entries by IDs.",
+    },
+    create: (caller, params) =>
+      caller.inventory.create({
+        productId: params.productId,
+        locationId: params.locationId,
+        amount: { value: params.value, unit: params.unit },
+      }),
+    // The generic update handler hands `data` everything but `id`; fold the
+    // flat `value`/`unit` pair the tool advertises into the `amount` object
+    // the router expects, and require both together — matching create_*'s
+    // combined amount shape rather than allowing a partial, ambiguous edit.
+    resolveUpdateData: (_caller, data) => {
+      const { value, unit, ...rest } = data;
+      if (value !== undefined && unit !== undefined) {
+        return { ...rest, amount: { value, unit } };
+      }
+      if (value !== undefined || unit !== undefined) {
         throw new Error(
           "Both value and unit must be provided together when updating amount.",
         );
       }
-      if (params.productId !== undefined) {
-        data.productId = params.productId;
-      }
-      if (params.locationId !== undefined) {
-        data.locationId = params.locationId;
-      }
-      const result = await caller.inventory.update({
-        id: params.id,
-        data,
-      });
-      return respond(result, slimInventory);
+      return rest;
     },
-  });
-
-  registerEntityDeleteTool(server, {
-    name: "delete_inventory_entries",
-    description: "Soft-delete inventory entries by IDs.",
-    router: "inventory",
-    entity: "inventory",
-    annotations: WRITE_DESTRUCTIVE_CLOSED,
   });
 
   registerMcpTool(server, {
