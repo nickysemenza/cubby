@@ -62,3 +62,18 @@ export function useHydratedProductImages(productId: string) {
   const imageByProductId = useContext(ProductImageSummariesContext);
   return imageByProductId[productId] ?? [];
 }
+
+/**
+ * Every hydrated image across several products, in the order the ids are given.
+ * For rows that stand for a set of products rather than one (a wish and its
+ * candidate alternatives), so the thumbnail's `+N` badge counts the whole set.
+ */
+export function useHydratedProductImagesForAll(
+  productIds: readonly string[],
+): ImageOut[] {
+  const imageByProductId = useContext(ProductImageSummariesContext);
+  return useMemo(
+    () => productIds.flatMap((id) => imageByProductId[id] ?? []),
+    [productIds, imageByProductId],
+  );
+}
