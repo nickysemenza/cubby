@@ -307,6 +307,84 @@ describe("product repository", () => {
     expect(tombstoned[0]).toMatchObject({ externalId: "SKU-100", url: null });
   });
 
+  it("skips an unchanged slot patch but still honors a remove of that same slot", async () => {
+    const created = await createProduct(
+      ctx.db,
+      makeProductInput({
+        externalIds: [
+          {
+            source: "home-depot",
+            kind: "retailer_sku",
+            externalId: "SKU-200",
+            url: null,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    const slotRows = () =>
+      getDb(ctx.db).query.productExternalId.findMany({
+        where: eq(productExternalId.productId, created.entityId),
+      });
+    const before = await slotRows();
+    expect(before).toHaveLength(1);
+
+    // Re-patching the identical value must leave the row completely untouched —
+    // not even an `updatedAt` bump, which the unconditional onConflictDoUpdate
+    // used to produce on every call.
+    await patchProductExternalIds(
+      ctx.db,
+      created.entityId,
+      {
+        upsert: [
+          {
+            source: "home-depot",
+            kind: "retailer_sku",
+            externalId: "SKU-200",
+            url: null,
+          },
+        ],
+        remove: [],
+      },
+      ctx.actor,
+    );
+    const afterNoop = await slotRows();
+    expect(afterNoop).toHaveLength(1);
+    expect(afterNoop[0]).toMatchObject({ deletedAt: null });
+    expect(afterNoop[0]?.updatedAt).toEqual(before[0]?.updatedAt);
+
+    // A remove and an upsert naming the SAME slot in one call: the removal must
+    // win. Without the removedSlots guard the unchanged-value check would
+    // short-circuit the upsert and leave the row soft-deleted-then-untouched,
+    // silently dropping the identifier the caller asked to re-add.
+    await patchProductExternalIds(
+      ctx.db,
+      created.entityId,
+      {
+        upsert: [
+          {
+            source: "home-depot",
+            kind: "retailer_sku",
+            externalId: "SKU-200",
+            url: null,
+          },
+        ],
+        remove: [
+          {
+            source: "home-depot",
+            kind: "retailer_sku",
+            expectedExternalId: "SKU-200",
+          },
+        ],
+      },
+      ctx.actor,
+    );
+    const afterRemovePlusUpsert = await slotRows();
+    const live = afterRemovePlusUpsert.filter((row) => row.deletedAt === null);
+    expect(live).toHaveLength(1);
+    expect(live[0]).toMatchObject({ externalId: "SKU-200" });
+  });
+
   it("orders identity-strength worklists deterministically", async () => {
     const weak = await createProduct(
       ctx.db,
