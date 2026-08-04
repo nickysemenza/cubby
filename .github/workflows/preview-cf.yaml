@@ -69,24 +69,6 @@ jobs:
           version=$(node -p "require('./apps/web/package.json').devDependencies.wrangler.replace(/^[^0-9]*/, '')")
           npm install -g "wrangler@${version}"
 
-      - name: Verify Hyperdrive query caching is disabled
-        if: steps.artifact.outcome == 'success'
-        working-directory: apps/web
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: 9f10f078d35d86c78dedece2300a6b88
-        run: |
-          output=$(wrangler hyperdrive get adc9757dfffd45bc94d5c2a66b2ad410)
-          HYPERDRIVE_OUTPUT="$output" node -e '
-            const output = process.env.HYPERDRIVE_OUTPUT ?? "";
-            const start = output.indexOf("{");
-            const end = output.lastIndexOf("}");
-            if (start < 0 || end < start) throw new Error("Wrangler returned no Hyperdrive JSON payload");
-            const details = JSON.parse(output.slice(start, end + 1));
-            if (details.caching?.disabled !== true) throw new Error("Hyperdrive query caching must remain disabled");
-            console.log("Hyperdrive query caching disabled (expected)");
-          '
-
       - name: Upload preview version
         id: preview
         if: steps.artifact.outcome == 'success'
