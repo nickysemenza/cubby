@@ -1025,7 +1025,7 @@ describe("project tool matrix", () => {
     });
   });
 
-  it("sets one usage pair idempotently and reports the row's economics", async () => {
+  it("sets one usage pair idempotently", async () => {
     const { entityId: projectId } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "Toggle target" }),
@@ -1044,34 +1044,29 @@ describe("project tool matrix", () => {
 
     await expect(
       setProjectToolUsage(ctx.db, projectId, tool.entityId, true, ctx.actor),
-    ).resolves.toEqual({
-      changed: true,
-      metrics: {
+    ).resolves.toEqual({ changed: true });
+    await expect(
+      setProjectToolUsage(ctx.db, projectId, tool.entityId, true, ctx.actor),
+    ).resolves.toEqual({ changed: false });
+    // The economics the toggle moves are asserted through the grid, which is
+    // what actually renders them — the setter itself returns no metrics.
+    await expect(listProjectResources(ctx.db, projectId)).resolves.toEqual([
+      expect.objectContaining({
         projectUseCount: 1,
         netLifetimeCost: 250,
         costPerProjectUse: 250,
-      },
-    });
-    await expect(
-      setProjectToolUsage(ctx.db, projectId, tool.entityId, true, ctx.actor),
-    ).resolves.toMatchObject({ changed: false });
+      }),
+    ]);
     await expect(
       setProjectToolUsage(ctx.db, projectId, tool.entityId, false, ctx.actor),
-    ).resolves.toEqual({
-      changed: true,
-      metrics: {
-        projectUseCount: 0,
-        netLifetimeCost: 250,
-        costPerProjectUse: null,
-      },
-    });
+    ).resolves.toEqual({ changed: true });
     await expect(
       setProjectToolUsage(ctx.db, projectId, tool.entityId, false, ctx.actor),
-    ).resolves.toMatchObject({ changed: false });
+    ).resolves.toEqual({ changed: false });
     // Re-attaching after a soft delete inserts a fresh row, not a conflict.
     await expect(
       setProjectToolUsage(ctx.db, projectId, tool.entityId, true, ctx.actor),
-    ).resolves.toMatchObject({ changed: true });
+    ).resolves.toEqual({ changed: true });
     await expect(listProjectResources(ctx.db, projectId)).resolves.toHaveLength(
       1,
     );

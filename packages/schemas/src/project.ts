@@ -1632,9 +1632,12 @@ export const projectToolUsageSetInput = z.object({
 export type ProjectToolUsageSetInput = z.infer<typeof projectToolUsageSetInput>;
 
 /**
- * Carries the affected **row's** recomputed economics so one cell click patches
- * one row in cache. `projectResourceMutationOut.attached` is a project-level
- * count a row-oriented grid can't use without refetching the whole matrix.
+ * Deliberately just the echoed pair plus `changed` — no recomputed economics.
+ * A toggle can't be reconciled with a one-row patch anyway: attaching a tool
+ * removes it from that column's suggestion pool and moves its lifetime use
+ * count, which re-ranks trade matches in every other column, so callers refetch
+ * the grid regardless and any returned metrics would be dead payload.
+ *
  * `changed` is false when the state already matched — no write, no audit entry.
  */
 export const projectToolUsageSetOut = z.object({
@@ -1642,9 +1645,6 @@ export const projectToolUsageSetOut = z.object({
   productId: productShortcode,
   used: z.boolean(),
   changed: z.boolean(),
-  projectUseCount: z.number().int().nonnegative(),
-  netLifetimeCost: z.number(),
-  costPerProjectUse: z.number().nullable(),
 });
 export type ProjectToolUsageSetOut = z.infer<typeof projectToolUsageSetOut>;
 

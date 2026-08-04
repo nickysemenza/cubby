@@ -290,7 +290,7 @@ const setToolUsage = protectedProcedure
         `Product ${input.productId} not found`,
       );
     }
-    const result = await setProjectToolUsage(
+    const { changed } = await setProjectToolUsage(
       ctx.db,
       ids.projectId,
       productId,
@@ -301,8 +301,7 @@ const setToolUsage = protectedProcedure
       projectId: input.projectId,
       productId: input.productId,
       used: input.used,
-      changed: result.changed,
-      ...result.metrics,
+      changed,
     };
   });
 

@@ -557,13 +557,7 @@ export async function setProjectToolUsage(
   productId: ProductId,
   used: boolean,
   actor: ActorContext,
-): Promise<{
-  changed: boolean;
-  metrics: Pick<
-    ResourceMetrics,
-    "projectUseCount" | "netLifetimeCost" | "costPerProjectUse"
-  >;
-}> {
+): Promise<{ changed: boolean }> {
   return withTransaction(db, async (tx) => {
     const { productCode } = await assertUsagePair(tx, projectId, productId);
 
@@ -608,13 +602,10 @@ export async function setProjectToolUsage(
       });
     }
 
-    const metrics = await loadResourceMetrics(tx, [productId]);
-    const { projectUseCount, netLifetimeCost, costPerProjectUse } =
-      metrics.get(productId) ?? EMPTY_METRICS;
-    return {
-      changed,
-      metrics: { projectUseCount, netLifetimeCost, costPerProjectUse },
-    };
+    // No metrics recomputed here on purpose: every caller refetches the grid
+    // (see `projectToolUsageSetOut`), so loading them would be two extra
+    // statements per checkbox for a payload nobody reads.
+    return { changed };
   });
 }
 

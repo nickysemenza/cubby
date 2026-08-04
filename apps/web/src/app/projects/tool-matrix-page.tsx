@@ -23,6 +23,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Search, Wrench } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -35,6 +36,7 @@ import {
 import { Input } from "~/components/ui/input";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useTRPC } from "~/integrations/trpc/react";
+import { getErrorMessage } from "~/lib/error-utils";
 import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
 import { cn, formatCurrency } from "~/lib/utils";
 import type { ToolMatrixSearch } from "~/routes/_authenticated/projects.tools";
@@ -207,15 +209,23 @@ export function ToolMatrixPage({
           setUsage.mutate(
             { projectId, productId, used: nextUsed },
             {
+              // A raw useMutation rather than useActionMutation because the
+              // overlay has to be cleared on BOTH outcomes, and that hook owns
+              // its own onError.
+              onError: (error) => toast.error(getErrorMessage(error)),
               onSettled: () => {
                 setPending((prev) => {
                   const next = new Map(prev);
                   next.delete(key);
                   return next;
                 });
+                // Whole-matrix refetch, not a row patch: attaching one tool
+                // removes it from that column's suggestion pool and moves its
+                // lifetime use count, which re-ranks trade matches in every
+                // other column too. Only `project.*` — nothing on this page
+                // reads a product query.
                 void invalidateTRPCQueries(queryClient, [
                   queryKeys.project.all,
-                  queryKeys.product.all,
                 ]);
               },
             },
