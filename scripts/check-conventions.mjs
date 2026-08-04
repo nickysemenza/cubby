@@ -61,6 +61,15 @@
  *     silently matches nothing at every input size. Use `arrayOverlaps(col,
  *     arr)` instead (see CLAUDE.md / dashboard-shared.ts).
  *
+ * raw-control-byte: a literal C0 control character in tracked source (tab, LF
+ *     and CR excepted). Written as a raw byte rather than an escape, it makes
+ *     the whole file BINARY to the grep family — `file` reports "data", ripgrep
+ *     skips it, and `grep -c` returns nothing for a symbol `git grep` finds 16
+ *     times. Two `\0` composite-key separators did that to a 1,776-line repo
+ *     file; nothing caught it, because this script and its siblings read via
+ *     `git ls-files` + `readFileSync` and are unaffected, and in a diff a raw
+ *     NUL renders as a space.
+ *
  * strict-router-output: explicit tRPC router output schemas must be wrapped in
  *     `strictOutput(...)`. tRPC otherwise checks the resolver against the Zod
  *     schema's input type; shortcode brands exist only in its parsed output, so
@@ -463,6 +472,25 @@ function scan(files) {
           rule: "unstable-hook-default",
         });
       }
+    }
+
+    // Rule (raw-control-byte): a literal C0 control character in source.
+    // Written as a raw byte rather than an escape (`\0`), it makes the whole
+    // file BINARY to the grep family: `file` reports "data", ripgrep skips it,
+    // and `grep -c` returns nothing for a symbol `git grep` finds 16 times.
+    // Two composite-key separators did exactly that to a 1,776-line repo file,
+    // and nothing caught it — this script and its siblings read via
+    // `git ls-files` + `readFileSync`, so they were unaffected, and in a diff a
+    // raw NUL renders as a space. Tabs/newlines/CR are excluded, obviously.
+    for (const match of content.matchAll(
+      /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,
+    )) {
+      violations.push({
+        file,
+        line: content.slice(0, match.index).split("\n").length,
+        snippet: `raw \\u${match[0].charCodeAt(0).toString(16).padStart(4, "0")} — write it as an escape (\\0, \\u001b, …)`,
+        rule: "raw-control-byte",
+      });
     }
 
     // Rule (hand-rolled-any-array): raw `= ANY(${arr})` SQL — the
