@@ -328,7 +328,6 @@ export function SplitExpenseDialog({
                           })
                         }
                         type="number"
-                        min="1"
                         step="1"
                         placeholder="Qty unknown"
                         className="w-28"

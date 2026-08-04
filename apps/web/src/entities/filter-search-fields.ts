@@ -23,6 +23,8 @@ const filterSearchKeys = {
     "ingredient",
     "expenses",
     "expenseTotal",
+    "expectedQuantity",
+    "quantityVariance",
     "notes",
     "notesPresence",
     "dataQuality",

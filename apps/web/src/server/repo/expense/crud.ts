@@ -55,7 +55,10 @@ import {
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { countByTarget, impact, present } from "~/server/repo/impact";
-import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
+import {
+  pricingProductIds,
+  syncChangedEffectivePrices,
+} from "~/server/repo/product/price-sync";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
 import {
   findOrCreatePurchase,
@@ -68,33 +71,14 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { findOrCreateVendor } from "~/server/repo/vendor";
-import { dbExpenseToAPI, type ExpenseRow } from "./helpers";
+import {
+  assertQuantitySignMatchesCost,
+  dbExpenseToAPI,
+  type ExpenseRow,
+} from "./helpers";
 
 /** `expenseUpdateData` has no standalone type export — derive it from the input. */
 type ExpenseUpdateData = ExpenseUpdateInput["data"];
-
-const pricingProductIds = (
-  values: ReadonlyArray<ProductId | null | undefined>,
-) =>
-  uniq(
-    values.filter(
-      (value): value is ProductId => value !== null && value !== undefined,
-    ),
-  );
-
-const syncChangedEffectivePrices = async (
-  tx: DrizzleTransaction,
-  before: Map<ProductId, number | null>,
-): Promise<ProductId[]> => {
-  const ids = [...before.keys()];
-  if (ids.length === 0) return [];
-  const after = await loadEffectiveProductPricesById(tx, ids);
-  const changed = ids.filter((id) => before.get(id) !== after.get(id));
-  for (const id of changed) {
-    await syncInventoryValuationsForProduct(tx, id);
-  }
-  return changed;
-};
 
 /**
  * The DB-column shape `expenseCrud`'s `toUpdate` writes — `ExpenseUpdateData`
@@ -390,6 +374,7 @@ export const updateExpense = async (
     const beforeQualityTargets = await tx.query.expense.findFirst({
       where: and(eq(expense.id, id), notDeleted(expense)),
       columns: {
+        cost: true,
         productId: true,
         productQuantity: true,
         purchaseId: true,
@@ -429,6 +414,17 @@ export const updateExpense = async (
         "Product quantity requires a linked product.",
       );
     }
+    // Both sides resolve to the *resulting* row: a partial update that only
+    // flips the cost still has to be checked against the stored quantity, and
+    // vice versa.
+    assertQuantitySignMatchesCost(
+      data.cost === undefined
+        ? (beforeQualityTargets?.cost ?? null)
+        : data.cost,
+      data.productQuantity === undefined
+        ? (beforeQualityTargets?.productQuantity ?? null)
+        : data.productQuantity,
+    );
 
     // An explicit `purchaseId` short-circuits `resolveCharge` entirely (see the
     // field's doc): an id is never a guess, so there's nothing to resolve.
@@ -655,6 +651,7 @@ export const createExpense = async (
         "Product quantity requires a linked product.",
       );
     }
+    assertQuantitySignMatchesCost(data.cost, data.productQuantity);
     const pricesBefore = await loadEffectiveProductPricesById(
       tx,
       pricingProductIds([productId]),

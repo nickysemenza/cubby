@@ -16,6 +16,7 @@ import {
   ListChecks,
   MapPin,
   Package,
+  PackageX,
   Plus,
   Receipt,
   Scale,
@@ -24,7 +25,7 @@ import {
 import { type FC, useCallback, useState } from "react";
 import { CreateExpenseDialog } from "~/app/expenses/create-expense-dialog";
 import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
-import { Stack } from "~/components/layout";
+import { Row, Stack } from "~/components/layout";
 import { MutedBox } from "~/components/layout/muted-box";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
@@ -49,6 +50,7 @@ import { UnitCoveragePanel } from "../units/UnitCoveragePanel";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { ProductAddToInventoryDialog } from "./product-add-to-inventory-dialog";
 import { ProductBasicInfo } from "./product-basic-info";
+import { ProductDiscardDialog } from "./product-discard-dialog";
 import { ProductExpenseHistory } from "./product-expense-history";
 import { ProductForm } from "./product-form";
 import { ProductProjectUses } from "./product-project-uses";
@@ -110,6 +112,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
 
   const [addToInventoryOpen, setAddToInventoryOpen] = useState(false);
   const [recordSaleOpen, setRecordSaleOpen] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
 
   const sections: DetailSection[] = [
@@ -154,15 +157,27 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       title: "Expense History",
       icon: Receipt,
       zone: "main" as const,
+      // Sale and discard are siblings: both record a unit leaving, and they
+      // differ only in whether money came back.
       headerAction: (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setRecordSaleOpen(true)}
-        >
-          <HandCoins />
-          Record sale
-        </Button>
+        <Row gap="sm">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setRecordSaleOpen(true)}
+          >
+            <HandCoins />
+            Record sale
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setDiscardOpen(true)}
+          >
+            <PackageX />
+            Discard
+          </Button>
+        </Row>
       ),
       content: <ProductExpenseHistory product={product} />,
     },
@@ -395,6 +410,11 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         onOpenChange={setRecordSaleOpen}
         presetProductId={product.id}
         intent="disposition"
+      />
+      <ProductDiscardDialog
+        open={discardOpen}
+        onOpenChange={setDiscardOpen}
+        product={product}
       />
       <CreateTaskDialog
         open={createTaskOpen}

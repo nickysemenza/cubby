@@ -111,7 +111,10 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
-import { dbExpenseToAPI } from "~/server/repo/expense/helpers";
+import {
+  assertQuantitySignMatchesCost,
+  dbExpenseToAPI,
+} from "~/server/repo/expense/helpers";
 import { calculateFinancialReconciliation } from "~/server/repo/financial-reconciliation";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
@@ -1156,6 +1159,7 @@ export const splitExpense = async (
             "Product quantity requires a linked product.",
           );
         }
+        assertQuantitySignMatchesCost(part.cost, part.productQuantity);
         const row = await insertWithShortcode(tx, "expense", {
           name: part.name,
           cost: part.cost,

@@ -3,13 +3,33 @@ name: Preview Deploy
 # Preview deployment is deliberately separate from CI. A Cloudflare deployment
 # job can take several minutes to acknowledge cancellation; keeping it here
 # prevents that platform delay from holding a replacement CI run in pending.
+#
+# CI's `build-cf` job dispatches this workflow as soon as the bundle is built,
+# rather than this waiting on CI's overall conclusion. Two reasons: the preview
+# is producible ~45s into a run but CI's pole (E2E) lands at ~190s, and none of
+# those tests exercise the uploaded version anyway — E2E runs its own local
+# build. Because `build-cf` has no `needs`, this also means a PR with failing
+# lint or tests still gets a preview, which is often exactly when you want one.
+#
+# A preview is a non-routed `wrangler versions upload`, so shipping one from
+# unverified code cannot affect what prod serves. It does inherit prod bindings
+# (Hyperdrive + secrets) — writes from a preview hit prod data, which was true
+# under the old test-gated trigger too.
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Pull request number to attach the preview to"
+        required: true
+      head_sha:
+        description: "PR head commit the preview represents"
+        required: true
+      run_id:
+        description: "CI run id holding the cf-build artifact"
+        required: true
 
 concurrency:
-  group: preview-pr-${{ github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.id }}
+  group: preview-pr-${{ inputs.pr_number }}
   cancel-in-progress: true
 
 permissions:
@@ -20,31 +40,37 @@ permissions:
 jobs:
   preview-cf:
     name: Preview Deploy (Cloudflare)
-    if: |
-      github.event.workflow_run.event == 'pull_request' &&
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_repository.full_name == github.repository &&
-      github.event.workflow_run.pull_requests[0].number != null
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ inputs.head_sha }}
 
+      # Tolerated rather than fatal: `build-cf` uploads with
+      # `if-no-files-found: ignore`, so a build that produces no dist leaves no
+      # artifact. That is a CI failure to read in CI, not a red X to duplicate here.
       - name: Download CF build artifact
+        id: artifact
+        continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: cf-build
           path: apps/web/dist
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ inputs.run_id }}
           github-token: ${{ github.token }}
 
+      - name: Skip when no bundle was produced
+        if: steps.artifact.outcome != 'success'
+        run: echo "::warning::No cf-build artifact on run ${{ inputs.run_id }} — skipping preview upload."
+
       - name: Install wrangler
+        if: steps.artifact.outcome == 'success'
         run: |
           version=$(node -p "require('./apps/web/package.json').devDependencies.wrangler.replace(/^[^0-9]*/, '')")
           npm install -g "wrangler@${version}"
 
       - name: Verify Hyperdrive query caching is disabled
+        if: steps.artifact.outcome == 'success'
         working-directory: apps/web
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -63,12 +89,13 @@ jobs:
 
       - name: Upload preview version
         id: preview
+        if: steps.artifact.outcome == 'success'
         working-directory: apps/web
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 9f10f078d35d86c78dedece2300a6b88
-          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
-          PR_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          PR_HEAD_SHA: ${{ inputs.head_sha }}
         run: |
           set -o pipefail
           pr_url="https://github.com/${{ github.repository }}/pull/${PR_NUMBER}"
@@ -80,16 +107,17 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           [ -n "$url" ] || echo "::warning::No preview URL — enable Preview URLs (workers.dev) for the cubby worker."
 
-      # workflow_run's GITHUB_SHA points at the default branch. Creating the
-      # deployment explicitly records it against the PR head so GitHub can show
-      # the preview on the pull request rather than on an unrelated main commit.
+      # This workflow is dispatched against main, so GITHUB_SHA points at the
+      # default branch. Creating the deployment explicitly records it against the
+      # PR head so GitHub can show the preview on the pull request rather than on
+      # an unrelated main commit.
       - name: Record preview deployment on the PR head
         if: steps.preview.outputs.url != ''
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           PREVIEW_URL: ${{ steps.preview.outputs.url }}
-          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
-          PR_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          PR_HEAD_SHA: ${{ inputs.head_sha }}
         with:
           script: |
             const { data: deployment } = await github.rest.repos.createDeployment({

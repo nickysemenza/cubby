@@ -88,7 +88,7 @@ const loadInventoryEntryPricing = async (
  * Returns the valuation value to store.
  * Accepts both Database and DrizzleTransaction for use within transactions.
  */
-const computeValuationForEntry = async (
+export const computeValuationForEntry = async (
   db: Database | DrizzleTransaction,
   productId: ProductId,
   amountValue: number,

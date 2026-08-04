@@ -200,6 +200,20 @@ FinancialAccount ──< FinancialTransaction >──o Purchase
     remainder separately.
   - Non-principal rows cannot link `productId` or `productQuantity`. Historical
     `costType`, trade, and project values remain valid allocation context.
+  - `productQuantity` is **signed and never zero**. Money direction wins, and
+    the quantity's own sign is consulted only when there is no money:
+
+    | `cost` | reads as | example |
+    | --- | --- | --- |
+    | `> 0` | acquisition of `+\|qty\|` | bought 8 outlet boxes |
+    | `< 0` | exit of `−\|qty\|` | returned 8, sold one tool |
+    | `= 0`, `qty > 0` | free acquisition | promo battery, bundled accessory |
+    | `= 0`, `qty < 0` | discard / write-off | thrown away, given away |
+    | `NULL` | unknown; contributes nothing, reported as uncertainty | old receipt with no count |
+
+    A discard carries **no Purchase** — there is no vendor charge behind
+    throwing something away, so `purchaseId` stays null rather than attaching
+    to whichever order originally bought it.
   - A principal amount may already include tax. Only an explicitly itemized
     ancillary amount earns its own typed Expense; no tax rate or reconciliation
     difference is used to estimate one.

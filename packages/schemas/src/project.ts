@@ -840,6 +840,23 @@ export type TaskTimelineOut = z.infer<typeof taskTimelineOut>;
 // Expense
 // ---------------------------------------------------------------------------
 
+/**
+ * The one place the signed-quantity rule is spelled out for callers. MCP
+ * advertises this string verbatim, so an agent has no other way to learn that a
+ * $0 line carries its direction in the sign — keep it explicit.
+ */
+export const PRODUCT_QUANTITY_DESCRIPTION =
+  "Whole product units covered by this expense; null means the receipt does not establish quantity. Signed, never zero: money direction wins, so a positive-cost line is an acquisition of |qty| and a negative-cost line is an exit of |qty|. On a $0 line the sign IS the fact — a positive quantity is a free acquisition (promo pack, bundled accessory), a negative quantity is a discard/write-off.";
+
+/**
+ * Whole product units — signed and never zero. See `Expense.productQuantity` in
+ * schema.ts for the full ledger rule; the DB CHECK enforces the same `<> 0`.
+ */
+const signedProductQuantity = z
+  .number()
+  .int()
+  .refine((value) => value !== 0, "Quantity cannot be zero");
+
 const expenseFields = {
   name: z.string().min(1),
   cost: wholeCentAmount.nullable().describe("Dollars"),
@@ -858,14 +875,9 @@ const expenseFields = {
     .describe(
       "Optional link to the product this expense bought. A negative-cost expense on the same product records an exit (sale, return, or a 0-cost disposal).",
     ),
-  productQuantity: z
-    .number()
-    .int()
-    .positive()
+  productQuantity: signedProductQuantity
     .nullable()
-    .describe(
-      "Whole product units covered by this expense; null means the receipt does not establish quantity.",
-    ),
+    .describe(PRODUCT_QUANTITY_DESCRIPTION),
   /**
    * Where it was bought. **No longer a column** — resolved through
    * `expense.purchaseId → Purchase → Vendor` (see `dbExpenseToAPI`). Still
@@ -902,7 +914,10 @@ const expenseCreateShape = {
   future: z.boolean().default(false),
   projectId: projectShortcode.nullable().default(null),
   productId: productShortcode.nullable().default(null),
-  productQuantity: z.number().int().positive().nullable().default(null),
+  productQuantity: signedProductQuantity
+    .nullable()
+    .default(null)
+    .describe(PRODUCT_QUANTITY_DESCRIPTION),
   vendor: z.string().nullable().default(null),
   orderId: z.string().nullable().default(null),
 };
@@ -1066,18 +1081,20 @@ export const expenseFilterFields = {
    * Whole-unit receipt quantity is deliberately nullable: null means the
    * source paperwork did not establish a count. Bounds are inclusive and only
    * match rows with a recorded quantity, as ordinary SQL comparisons do.
+   *
+   * Signed, like `costMin`/`costMax` above and for the same reason — a negative
+   * quantity is a real $0 discard, and `productQuantityMax: -1` is exactly the
+   * "everything written off" worklist.
    */
   productQuantityPresenceFilter: presenceFilter,
   productQuantityMin: z.coerce
     .number()
     .int()
-    .positive()
     .optional()
     .describe("Inclusive lower bound on recorded product quantity"),
   productQuantityMax: z.coerce
     .number()
     .int()
-    .positive()
     .optional()
     .describe("Inclusive upper bound on recorded product quantity"),
   /**

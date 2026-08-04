@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { uniq } from "es-toolkit";
-import { Package, Pencil, Printer } from "lucide-react";
+import { Package, PackageX, Pencil, Printer } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -18,6 +18,7 @@ import { Badge } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { NoneValue } from "~/components/ui/none-value";
+import { StatusText } from "~/components/ui/status-text";
 import {
   Tooltip,
   TooltipContent,
@@ -61,6 +62,7 @@ import { useCreateInventoryMutation } from "../_components/inventory/hooks";
 import { InventoryEntriesQuickEditDialog } from "../_components/inventory/inventory-entries-quick-edit-dialog";
 import { CategoryLabel } from "../_components/products/CategoryLabel";
 import { productCategoryOptionsWithTheme } from "../_components/products/product-category-icons";
+import { ProductDiscardDialog } from "../_components/products/product-discard-dialog";
 import { ProductShelf } from "../_components/products/product-shelf";
 import { TruncatedList } from "../_components/TruncatedList";
 
@@ -88,6 +90,57 @@ function renderNotesValue(notes: string | null): ReactNode {
       <TooltipContent side="top" className="max-w-xs">
         {notes}
       </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * Units bought minus units gone, with its own uncertainty attached.
+ *
+ * The `+N?` / `−N?` suffixes are load-bearing rather than decorative: an
+ * expense line with no recorded quantity contributes nothing to the number, so
+ * a product with six unquantified receipts would otherwise read as a confident
+ * 0. Same shape as `knownAcquiredUnits` in relationship-summary-table, and both
+ * directions are disclosed — an unknown acquisition means the real count could
+ * be higher, an unknown exit that it could be lower.
+ */
+function ExpectedQuantityCell({
+  ledger,
+}: {
+  ledger: ProductListItem["quantityLedger"];
+}) {
+  const detail = [
+    `${ledger.acquiredUnits} acquired − ${ledger.exitedUnits} gone`,
+    ledger.unknownAcquisitionLines > 0
+      ? `${ledger.unknownAcquisitionLines} acquisition line(s) carry no quantity`
+      : null,
+    ledger.unknownExitLines > 0
+      ? `${ledger.unknownExitLines} exit line(s) carry no quantity`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="tabular-nums" />}>
+        <StatusText
+          tone={ledger.expectedQuantity < 0 ? "destructive" : undefined}
+        >
+          {ledger.expectedQuantity}
+        </StatusText>
+        {ledger.unknownAcquisitionLines > 0 ? (
+          <StatusText tone="warning">
+            {` +${ledger.unknownAcquisitionLines}?`}
+          </StatusText>
+        ) : null}
+        {ledger.unknownExitLines > 0 ? (
+          <StatusText tone="warning">
+            {` −${ledger.unknownExitLines}?`}
+          </StatusText>
+        ) : null}
+      </TooltipTrigger>
+      <TooltipContent side="top">{detail}</TooltipContent>
     </Tooltip>
   );
 }
@@ -225,6 +278,9 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   const [quickEditProductId, setQuickEditProductId] = useState<string | null>(
     null,
   );
+  // Same live-data lookup as quickEdit above: the dialog reads the row out of
+  // list data, so post-discard invalidation refreshes what it is showing.
+  const [discardProductId, setDiscardProductId] = useState<string | null>(null);
 
   const tableStateOptions = useSeededFilter("category", initialCategory);
 
@@ -482,6 +538,65 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         signedTone: true,
         mobile: { slot: "trailing", priority: 5 },
       }),
+      // Units bought minus units gone. Hidden by default — the table is
+      // already wide — but a real column, so the number can be sorted and
+      // filtered rather than only inferred from the expense history.
+      //
+      // The `+N?` / `-N?` suffix is the honesty half of the cell and is not
+      // decoration: an expense line with no recorded quantity contributes
+      // nothing to the number, so without the cue a product with six
+      // unquantified receipts reads as a confident 0. Same shape as
+      // `knownAcquiredUnits` in relationship-summary-table.
+      columnHelper.accessor((row) => row.quantityLedger.expectedQuantity, {
+        id: "expectedQuantity",
+        header: "Expected",
+        meta: {
+          numeric: true,
+          className: "w-24",
+          mobile: { slot: "meta", priority: 45 },
+        },
+        cell: (info) => (
+          <ExpectedQuantityCell ledger={info.row.original.quantityLedger} />
+        ),
+      }),
+      // Shelf minus ledger. Dashes when the product isn't stocked, and when its
+      // entries carry more than one unit (see `deriveOnHandUnits`).
+      columnHelper.accessor((row) => row.quantityVariance, {
+        id: "quantityVariance",
+        header: "Variance",
+        meta: {
+          numeric: true,
+          className: "w-24",
+          mobile: { slot: "meta", priority: 44 },
+        },
+        cell: (info) => {
+          const { quantityVariance, onHandUnits, quantityLedger } =
+            info.row.original;
+          if (quantityVariance === null || onHandUnits === null) {
+            return <NoneValue />;
+          }
+          return (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <StatusText
+                    as="span"
+                    tone={quantityVariance === 0 ? undefined : "warning"}
+                    className="tabular-nums"
+                  />
+                }
+              >
+                {quantityVariance > 0
+                  ? `+${quantityVariance}`
+                  : quantityVariance}
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                {`${onHandUnits} on hand vs. ${quantityLedger.expectedQuantity} expected`}
+              </TooltipContent>
+            </Tooltip>
+          );
+        },
+      }),
       createPlainDateColumn(columnHelper, "purchaseDate", {
         header: "Purchase date",
         className: "w-32",
@@ -610,6 +725,10 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           <Pencil className="mr-2 size-4" />
           Edit locations
         </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setDiscardProductId(row.id)}>
+          <PackageX className="mr-2 size-4" />
+          Discard
+        </DropdownMenuItem>
         <DropdownMenuItem render={<Link to="/inventory/session" />}>
           <Package className="mr-2 size-4" />
           Add to Inventory
@@ -685,6 +804,8 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       createdAt: false,
       notes: false,
       expenseTotal: false,
+      expectedQuantity: false,
+      quantityVariance: false,
       dataQuality: false,
       dataGaps: false,
       externalIds: false,
@@ -698,6 +819,9 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
 
   const [view, setView] = useState<ShelfView>("table");
   const items = table.getRowModel().rows.map((r) => r.original);
+  const discardProduct = discardProductId
+    ? (data.find((p) => p.id === discardProductId) ?? null)
+    : null;
   const quickEditProduct = quickEditProductId
     ? (data.find((p) => p.id === quickEditProductId) ?? null)
     : null;
@@ -754,6 +878,15 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       )}
       <PreviewSheet />
       {deleteDialog}
+      {discardProduct && (
+        <ProductDiscardDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setDiscardProductId(null);
+          }}
+          product={discardProduct}
+        />
+      )}
       {quickEditProduct && (
         <InventoryEntriesQuickEditDialog
           open

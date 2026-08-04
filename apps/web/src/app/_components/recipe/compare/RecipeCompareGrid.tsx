@@ -2,6 +2,7 @@ import type { RecipeOut } from "@cubby/schemas/recipe";
 import { Link } from "@tanstack/react-router";
 import { ChefHat, Equal, X } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
+import { Image } from "~/components/ui/image";
 import {
   formatCurrencyRange,
   formatNumberRange,
@@ -335,9 +336,10 @@ export const RecipeCompareGrid: React.FC<{
                 >
                   <div className="relative mb-2">
                     {hero ? (
-                      <img
+                      <Image
                         src={hero}
                         alt={c.recipe.name}
+                        displayWidth={200}
                         className="h-10 w-full rounded-md object-cover"
                       />
                     ) : (
