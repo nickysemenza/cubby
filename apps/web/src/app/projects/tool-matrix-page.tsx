@@ -5,11 +5,12 @@
  * useful once tools carry several edges, and attaching one project at a time
  * through a dialog is what kept the ledger ~96% empty. Here you scan for holes.
  *
- * Cells are three-state. `attached` is recorded history, `suggested` is the
- * server's two suggestion lanes projected onto the grid, and empty is the
- * absence of a cell. Ghosts exist so the common motion is confirming rather
- * than authoring — a blank checkbox grid invites completionism, and a hammer
- * marked on forty projects makes cost-per-use meaningless.
+ * Cells render four states, not the server's three: `attached` is recorded
+ * history, `empty` is the absence of a cell, and the server's single
+ * `suggested` splits by lane into `purchased` and `trade` because those carry
+ * very different confidence. Ghosts exist so the common motion is confirming
+ * rather than authoring — a blank checkbox grid invites completionism, and a
+ * hammer marked on forty projects makes cost-per-use meaningless.
  *
  * Every membership decision (which rows, which columns, group order, cell
  * state) is made by `project.toolMatrix`. Nothing here filters or sorts.
@@ -24,6 +25,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Search, Wrench } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { match } from "ts-pattern";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -102,29 +104,37 @@ function SegmentedControl<T extends string | number>({
   );
 }
 
+/**
+ * `suggested` is split by lane rather than rendered once, because the two mean
+ * different things to whoever is scanning the grid — see the class list below.
+ */
+type CellState = "attached" | "purchased" | "trade" | "empty";
+
 function MatrixCell({
   state,
-  lane,
   purchaseCost,
   title,
   onToggle,
 }: {
-  state: "attached" | "suggested" | "empty";
-  lane: ProjectToolMatrixCellOut["lane"];
+  state: CellState;
   purchaseCost: number;
   title: string;
   onToggle: () => void;
 }) {
-  const hint =
-    state === "attached"
-      ? purchaseCost > 0
+  const hint = match(state)
+    .with("attached", () =>
+      purchaseCost > 0
         ? `${title} · ${formatCurrency(purchaseCost, 0)} bought here`
-        : title
-      : state === "suggested"
-        ? lane === "purchased_here"
-          ? `${title} · suggested, ${formatCurrency(purchaseCost, 0)} bought here`
-          : `${title} · suggested by trade`
-        : title;
+        : title,
+    )
+    .with(
+      "purchased",
+      () =>
+        `${title} · suggested, ${formatCurrency(purchaseCost, 0)} bought here`,
+    )
+    .with("trade", () => `${title} · suggested by trade`)
+    .with("empty", () => title)
+    .exhaustive();
 
   return (
     <td className="border-[var(--border)] border-b border-l p-0">
@@ -140,11 +150,22 @@ function MatrixCell({
           className={cn(
             "flex size-3.5 items-center justify-center rounded-[3px]",
             state === "attached" && "bg-primary text-primary-foreground",
-            state === "suggested" &&
-              "border border-primary border-dashed text-primary/75",
+            // The two suggestion lanes carry very different confidence, so they
+            // get different weights rather than one shared ghost. `bought here`
+            // is a ledger fact — the tool's own purchase is charged to this
+            // project — so it keeps the accent and the check, one step from
+            // confirmed. A trade match is an inference from "this project does
+            // this kind of work", so it drops to a dotted neutral outline with
+            // no check: visible when you scan a column, never mistaken for a
+            // record. Keeps ultramarine meaning "this is real".
+            state === "purchased" &&
+              "border border-primary border-dashed text-primary",
+            state === "trade" && "border border-muted-foreground border-dotted",
           )}
         >
-          {state !== "empty" && <Check className="size-3" aria-hidden />}
+          {(state === "attached" || state === "purchased") && (
+            <Check className="size-3" aria-hidden />
+          )}
         </span>
       </button>
     </td>
@@ -356,7 +377,14 @@ export function ToolMatrixPage({
             className="size-3 rounded-[3px] border border-primary border-dashed"
             aria-hidden
           />
-          suggested — click to confirm
+          bought here — the purchase is on this project
+        </Row>
+        <Row align="center" gap="sm">
+          <span
+            className="size-3 rounded-[3px] border border-muted-foreground border-dotted"
+            aria-hidden
+          />
+          trade match — this project does that kind of work
         </Row>
         <span>
           {data.totals.matchingTools} tools · {data.totals.matchingProjects}{" "}
@@ -476,9 +504,20 @@ function MatrixTable({
                 const key = cellKey(column.projectId, row.productId);
                 const cell = cellIndex.get(key);
                 const optimistic = pending.get(key);
-                const state =
+                const serverState: CellState =
+                  cell === undefined
+                    ? "empty"
+                    : cell.state === "attached"
+                      ? "attached"
+                      : cell.lane === "purchased_here"
+                        ? "purchased"
+                        : "trade";
+                // An optimistic toggle-off drops straight to empty rather than
+                // back to its ghost: the suggestion that produced the ghost is
+                // recomputed server-side, so guessing it here would flicker.
+                const state: CellState =
                   optimistic === undefined
-                    ? (cell?.state ?? "empty")
+                    ? serverState
                     : optimistic
                       ? "attached"
                       : "empty";
@@ -486,7 +525,6 @@ function MatrixTable({
                   <MatrixCell
                     key={key}
                     state={state}
-                    lane={cell?.lane ?? null}
                     purchaseCost={cell?.projectPurchaseCost ?? 0}
                     title={`${row.productName} on ${column.projectName}`}
                     onToggle={() =>
