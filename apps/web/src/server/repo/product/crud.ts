@@ -9,12 +9,7 @@ import {
   type ExternalIdKind,
   storedExternalIdUrl,
 } from "@cubby/schemas/external-id";
-import {
-  type IngredientId,
-  type ProductId,
-  unsafeIngredientId,
-  unsafeLocationId,
-} from "@cubby/schemas/identifiers";
+import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import {
   buildTakeSkip,
@@ -109,7 +104,7 @@ import { countByTarget, impact, present } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { resolveEstablishedManufacturer } from "~/server/repo/label-canonical";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
+import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   PRODUCT_DELETE_EDGE_POLICY,
@@ -401,14 +396,10 @@ export const productList = async (
   const requestedIngredientCodes = filters.ingredientIdFilter
     ? [filters.ingredientIdFilter].flat()
     : [];
-  const [locationIdMap, ingredientIdMap] = await Promise.all([
-    resolveLiveShortcodes(db, requestedLocationCodes, "location"),
-    resolveLiveShortcodes(db, requestedIngredientCodes, "ingredient"),
+  const [selectedLocationIds, selectedIngredientIds] = await Promise.all([
+    resolveAllPresent(db, "location", requestedLocationCodes),
+    resolveAllPresent(db, "ingredient", requestedIngredientCodes),
   ]);
-  const selectedLocationIds = [...locationIdMap.values()].map(unsafeLocationId);
-  const selectedIngredientIds = [...ingredientIdMap.values()].map(
-    unsafeIngredientId,
-  );
 
   // Every cross-entity filter below is an UNCORRELATED subquery (it references
   // only the child table, never back at product.id), applied with

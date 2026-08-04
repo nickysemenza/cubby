@@ -16,11 +16,8 @@ import {
   type FinancialTransactionId,
   type FinancialTransactionShortcode,
   type PurchaseId,
-  unsafeFinancialAccountId,
   unsafeFinancialAccountShortcode,
-  unsafeFinancialTransactionId,
   unsafeFinancialTransactionShortcode,
-  unsafePurchaseId,
   unsafePurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import {
@@ -69,8 +66,8 @@ import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cle
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import {
-  resolveLiveShortcode,
-  resolveLiveShortcodes,
+  resolveAllOrThrow,
+  resolveOrThrow,
   resolveShortcodes,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -324,28 +321,15 @@ async function resolveForeignKeys(
   db: Database | DrizzleTransaction,
   data: Pick<FinancialTransactionCreateInput, "accountId" | "purchaseId">,
 ) {
-  const accountUuid = await resolveLiveShortcode(
+  const accountId = await resolveOrThrow(
     db,
-    data.accountId,
     "financialAccount",
+    data.accountId,
   );
-  if (!accountUuid)
-    throw createAppError(
-      "FINANCIAL_ACCOUNT_NOT_FOUND",
-      `Financial account not found: ${data.accountId}`,
-    );
-  const purchaseUuid = data.purchaseId
-    ? await resolveLiveShortcode(db, data.purchaseId, "purchase")
+  const purchaseId = data.purchaseId
+    ? await resolveOrThrow(db, "purchase", data.purchaseId)
     : null;
-  if (data.purchaseId && !purchaseUuid)
-    throw createAppError(
-      "PURCHASE_NOT_FOUND",
-      `Purchase not found: ${data.purchaseId}`,
-    );
-  return {
-    accountId: unsafeFinancialAccountId(accountUuid),
-    purchaseId: purchaseUuid ? unsafePurchaseId(purchaseUuid) : null,
-  };
+  return { accountId, purchaseId };
 }
 
 export async function createFinancialTransaction(
@@ -384,17 +368,7 @@ export async function updateFinancialTransaction(
   data: FinancialTransactionUpdateData,
   actor: ActorContext,
 ) {
-  const resolved = await resolveLiveShortcode(
-    db,
-    shortcode,
-    "financialTransaction",
-  );
-  if (!resolved)
-    throw createAppError(
-      "FINANCIAL_TRANSACTION_NOT_FOUND",
-      `Financial transaction not found: ${shortcode}`,
-    );
-  const id = unsafeFinancialTransactionId(resolved);
+  const id = await resolveOrThrow(db, "financialTransaction", shortcode);
   await withTransaction(db, async (tx) => {
     const before = await tx.query.financialTransaction.findFirst({
       where: and(
@@ -410,33 +384,13 @@ export async function updateFinancialTransaction(
     const accountId =
       data.accountId === undefined
         ? before.accountId
-        : unsafeFinancialAccountId(
-            (await resolveLiveShortcode(
-              tx,
-              data.accountId,
-              "financialAccount",
-            )) ??
-              (() => {
-                throw createAppError(
-                  "FINANCIAL_ACCOUNT_NOT_FOUND",
-                  `Financial account not found: ${data.accountId}`,
-                );
-              })(),
-          );
+        : await resolveOrThrow(tx, "financialAccount", data.accountId);
     const purchaseId =
       data.purchaseId === undefined
         ? before.purchaseId
         : data.purchaseId === null
           ? null
-          : unsafePurchaseId(
-              (await resolveLiveShortcode(tx, data.purchaseId, "purchase")) ??
-                (() => {
-                  throw createAppError(
-                    "PURCHASE_NOT_FOUND",
-                    `Purchase not found: ${data.purchaseId}`,
-                  );
-                })(),
-            );
+          : await resolveOrThrow(tx, "purchase", data.purchaseId);
     const sourceRefs = data.sourceRefs ?? before.sourceRefs;
     await lockFinancialEvidenceKeys(
       tx,
@@ -505,21 +459,8 @@ export async function deleteFinancialTransactions(
   shortcodes: FinancialTransactionShortcode[],
   actor: ActorContext,
 ) {
-  const resolved = await resolveLiveShortcodes(
-    db,
-    shortcodes,
-    "financialTransaction",
-  );
   const ids = uniq(
-    shortcodes.map((code) => {
-      const id = resolved.get(code);
-      if (!id)
-        throw createAppError(
-          "FINANCIAL_TRANSACTION_NOT_FOUND",
-          `Financial transaction not found: ${code}`,
-        );
-      return unsafeFinancialTransactionId(id);
-    }),
+    await resolveAllOrThrow(db, "financialTransaction", shortcodes),
   );
   await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(

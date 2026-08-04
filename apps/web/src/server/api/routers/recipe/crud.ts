@@ -13,8 +13,6 @@ import {
   type RecipeId,
   type RecipeShortcode,
   recipeShortcode,
-  unsafeCookbookId,
-  unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
 import {
   recipeCreateInput,
@@ -42,8 +40,8 @@ import {
 } from "~/server/repo/recipe";
 import { findParentRecipeIdsBatch } from "~/server/repo/recipe/totals";
 import {
-  resolveLiveShortcode,
-  resolveLiveShortcodes,
+  resolveAllOrThrow,
+  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import {
   runMutationSideEffects,
@@ -57,47 +55,26 @@ import {
 import { protectedProcedure, strictOutput } from "../../trpc";
 
 const resolveRecipeEntityId = async (
-  db: Parameters<typeof resolveLiveShortcode>[0],
+  db: Parameters<typeof resolveOrThrow>[0],
   shortcode: RecipeShortcode,
 ): Promise<RecipeId> => {
-  const id = await resolveLiveShortcode(db, shortcode, "recipe");
-  if (!id) {
-    throw createAppError("RECIPE_NOT_FOUND", `Recipe ${shortcode} not found`);
-  }
-  return unsafeRecipeId(id);
+  return resolveOrThrow(db, "recipe", shortcode);
 };
 
 const resolveRecipeEntityIds = async (
-  db: Parameters<typeof resolveLiveShortcodes>[0],
+  db: Parameters<typeof resolveAllOrThrow>[0],
   shortcodes: RecipeShortcode[],
 ): Promise<RecipeId[]> => {
-  const resolved = await resolveLiveShortcodes(db, shortcodes, "recipe");
-  return shortcodes.map((shortcode) => {
-    const id = resolved.get(shortcode);
-    if (!id) {
-      throw createAppError("RECIPE_NOT_FOUND", `Recipe ${shortcode} not found`);
-    }
-    return unsafeRecipeId(id);
-  });
+  return resolveAllOrThrow(db, "recipe", shortcodes);
 };
 
 const resolveCookbookFilter = async (
-  db: Parameters<typeof resolveLiveShortcodes>[0],
+  db: Parameters<typeof resolveAllOrThrow>[0],
   value: CookbookShortcode | CookbookShortcode[] | undefined,
 ): Promise<CookbookId | CookbookId[] | undefined> => {
   if (value === undefined) return undefined;
   const shortcodes = Array.isArray(value) ? value : [value];
-  const resolved = await resolveLiveShortcodes(db, shortcodes, "cookbook");
-  const ids = shortcodes.map((shortcode) => {
-    const id = resolved.get(shortcode);
-    if (!id) {
-      throw createAppError(
-        "COOKBOOK_NOT_FOUND",
-        `Cookbook ${shortcode} not found`,
-      );
-    }
-    return unsafeCookbookId(id);
-  });
+  const ids = await resolveAllOrThrow(db, "cookbook", shortcodes);
   return Array.isArray(value) ? ids : ids[0];
 };
 

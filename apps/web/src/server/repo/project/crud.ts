@@ -12,11 +12,7 @@ import type {
   ImpactItem,
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
-import {
-  type ProjectId,
-  type ProjectShortcode,
-  unsafeProjectId,
-} from "@cubby/schemas/identifiers";
+import type { ProjectId, ProjectShortcode } from "@cubby/schemas/identifiers";
 import {
   MAX_PROJECT_TREE_DEPTH,
   type ProjectCreateInput,
@@ -57,8 +53,8 @@ import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import {
-  resolveLiveShortcode,
-  resolveLiveShortcodes,
+  resolveAllOrThrow,
+  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { projectDependencyIds } from "./analytics";
@@ -181,18 +177,11 @@ export const createProject = async (
     // itself — an FK proves the parent row exists, not that it's live.
     let parentProjectId: ProjectId | null = null;
     if (data.parentProjectId) {
-      const resolved = await resolveLiveShortcode(
+      parentProjectId = await resolveOrThrow(
         tx,
-        data.parentProjectId,
         "project",
+        data.parentProjectId,
       );
-      if (!resolved) {
-        throw createAppError(
-          "PROJECT_NOT_FOUND",
-          `Project ${data.parentProjectId} does not exist or has been deleted`,
-        );
-      }
-      parentProjectId = unsafeProjectId(resolved);
     }
 
     const created = await insertWithShortcode(tx, "project", {
@@ -240,11 +229,7 @@ export const updateProject = async (
   data: ProjectUpdateData,
   actor: ActorContext,
 ): Promise<{ output: ProjectOut; entityId: ProjectId }> => {
-  const resolvedId = await resolveLiveShortcode(db, shortcode, "project");
-  if (!resolvedId) {
-    throw createAppError("PROJECT_NOT_FOUND", `Project ${shortcode} not found`);
-  }
-  const id = unsafeProjectId(resolvedId);
+  const id = await resolveOrThrow(db, "project", shortcode);
 
   const before = await fetchProjectById(db, id);
   if (!before) {
@@ -258,18 +243,11 @@ export const updateProject = async (
   await withTransaction(db, async (tx) => {
     let parentProjectId: ProjectId | null | undefined;
     if (data.parentProjectId !== undefined && data.parentProjectId !== null) {
-      const resolvedParent = await resolveLiveShortcode(
+      parentProjectId = await resolveOrThrow(
         tx,
-        data.parentProjectId,
         "project",
+        data.parentProjectId,
       );
-      if (!resolvedParent) {
-        throw createAppError(
-          "PROJECT_NOT_FOUND",
-          `Project ${data.parentProjectId} does not exist or has been deleted`,
-        );
-      }
-      parentProjectId = unsafeProjectId(resolvedParent);
       if (parentProjectId === id) {
         throw createAppError(
           "SELF_DEPENDENCY",
@@ -291,20 +269,10 @@ export const updateProject = async (
     // the FK column, so it can't be handed a shortcode.
     let resolvedBlockedByIds: ProjectId[] | undefined;
     if (data.blockedByIds !== undefined) {
-      const resolved = await resolveLiveShortcodes(
+      resolvedBlockedByIds = await resolveAllOrThrow(
         tx,
-        data.blockedByIds,
         "project",
-      );
-      const missing = data.blockedByIds.filter((code) => !resolved.has(code));
-      if (missing.length > 0) {
-        throw createAppError(
-          "PROJECT_NOT_FOUND",
-          `Project(s) not found: ${missing.join(", ")}`,
-        );
-      }
-      resolvedBlockedByIds = data.blockedByIds.map((code) =>
-        unsafeProjectId(resolved.get(code) ?? ""),
+        data.blockedByIds,
       );
     }
 
@@ -422,17 +390,7 @@ export const deleteProjects = async (
 ): Promise<void> => {
   if (shortcodes.length === 0) return;
 
-  const resolved = await resolveLiveShortcodes(db, shortcodes, "project");
-  const missing = shortcodes.filter((code) => !resolved.has(code));
-  if (missing.length > 0) {
-    throw createAppError(
-      "PROJECT_NOT_FOUND",
-      `Projects not found or already deleted: ${missing.join(", ")}`,
-    );
-  }
-  const ids = shortcodes.map((code) =>
-    unsafeProjectId(resolved.get(code) ?? ""),
-  );
+  const ids = await resolveAllOrThrow(db, "project", shortcodes);
 
   await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, project, ids, "Project");

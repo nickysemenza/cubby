@@ -10,7 +10,6 @@ import { searchableEntities, similarEntityPairs } from "@cubby/schemas/search";
 import { getErrorMessage } from "~/lib/error-utils";
 import { dispatchBackgroundJobs } from "~/server/background-dispatch";
 import type { Database } from "~/server/db";
-import { createAppError } from "~/server/errors/app-error";
 import {
   findSemanticEntityCandidates,
   findSimilarEntities,
@@ -21,7 +20,7 @@ import {
   hydrateSearchResultsByRefs,
   type InternalSearchResult,
 } from "~/server/repo/search";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { SEMANTIC_MIN_QUERY_LENGTH } from "~/server/semantic/constants";
 import {
@@ -36,12 +35,6 @@ import {
 import { TraceNames, withTrace } from "~/server/tracing";
 
 const ALL_SEARCHABLE_ENTITIES: SearchableEntity[] = [...searchableEntities];
-const SIMILAR_SOURCE_NOT_FOUND = {
-  expense: "EXPENSE_NOT_FOUND",
-  product: "PRODUCT_NOT_FOUND",
-  ingredient: "INGREDIENT_NOT_FOUND",
-  recipe: "RECIPE_NOT_FOUND",
-} as const;
 
 async function semanticSearchCandidates(
   db: Database,
@@ -237,13 +230,7 @@ export async function findSimilarEntitiesForPair(
   input: SimilarEntitiesInput,
 ): Promise<SimilarEntitiesOut> {
   const { source, target } = similarEntityPairs[input.pair];
-  const sourceEntityId = await resolveLiveShortcode(db, input.sourceId, source);
-  if (!sourceEntityId) {
-    throw createAppError(
-      SIMILAR_SOURCE_NOT_FOUND[source],
-      `${source} ${input.sourceId} not found`,
-    );
-  }
+  const sourceEntityId = await resolveOrThrow(db, source, input.sourceId);
   const sourceRef = { entityType: source, entityId: sourceEntityId };
   const publicSource = { entityType: source, entityId: input.sourceId };
   const empty: SimilarEntitiesOut = { source: publicSource, results: [] };

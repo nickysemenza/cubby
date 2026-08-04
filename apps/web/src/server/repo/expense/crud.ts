@@ -19,11 +19,7 @@ import type {
   PurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import {
-  unsafeExpenseId,
   unsafeExpenseShortcode,
-  unsafeProductId,
-  unsafeProjectId,
-  unsafePurchaseId,
   unsafePurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
@@ -67,8 +63,8 @@ import {
   renameChargeOrderId,
 } from "~/server/repo/purchase";
 import {
-  resolveLiveShortcode,
-  resolveLiveShortcodes,
+  resolveAllPresent,
+  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { findOrCreateVendor } from "~/server/repo/vendor";
@@ -118,51 +114,23 @@ type ResolvedExpenseUpdate = Omit<
 };
 
 /** Resolve a project shortcode to a live uuid, or throw. */
-const resolveLiveProjectId = async (
+const resolveLiveProjectId = (
   tx: DrizzleTransaction,
   shortcode: ProjectShortcode,
-): Promise<ProjectId> => {
-  const id = await resolveLiveShortcode(tx, shortcode, "project");
-  if (!id) {
-    throw createAppError(
-      "PROJECT_NOT_FOUND",
-      `Project not found: ${shortcode}`,
-    );
-  }
-  return unsafeProjectId(id);
-};
+): Promise<ProjectId> => resolveOrThrow(tx, "project", shortcode);
 
 /** Resolve a product shortcode to the live uuid stored in the expense FK. */
-const resolveLiveProductId = async (
+const resolveLiveProductId = (
   tx: DrizzleTransaction,
   shortcode: ProductShortcode,
-): Promise<ProductId> => {
-  const id = await resolveLiveShortcode(tx, shortcode, "product");
-  if (!id) {
-    throw createAppError(
-      "PRODUCT_NOT_FOUND",
-      `Product not found: ${shortcode}`,
-    );
-  }
-  return unsafeProductId(id);
-};
+): Promise<ProductId> => resolveOrThrow(tx, "product", shortcode);
 
 /** Resolve a Purchase shortcode to a live uuid, or throw. */
-const resolveLivePurchaseId = async (
+const resolveLivePurchaseId = (
   tx: DrizzleTransaction,
   shortcode: PurchaseShortcode,
-): Promise<PurchaseId> => {
-  const id = await resolveLiveShortcode(tx, shortcode, "purchase");
-  if (!id) {
-    throw createAppError(
-      "PURCHASE_NOT_FOUND",
-      `Purchase not found: ${shortcode}`,
-    );
-  }
-  return unsafePurchaseId(id);
-};
+): Promise<PurchaseId> => resolveOrThrow(tx, "purchase", shortcode);
 
-/** Batch-resolve expense shortcodes to live uuids, or throw naming the misses. */
 /**
  * Resolve a bulk selection to live uuids, DROPPING codes that name nothing
  * live. Bulk writes here are documented to skip a soft-deleted or unknown id
@@ -171,16 +139,10 @@ const resolveLivePurchaseId = async (
  * individually verify. A throwing variant would belong on single-row paths,
  * where "not found" is the caller's own mistake.
  */
-const resolveLiveExpenseIds = async (
+const resolveLiveExpenseIds = (
   tx: DrizzleTransaction,
   shortcodes: ExpenseShortcode[],
-): Promise<ExpenseId[]> => {
-  const resolved = await resolveLiveShortcodes(tx, shortcodes, "expense");
-  return shortcodes
-    .map((code) => resolved.get(code))
-    .filter((id): id is string => id !== undefined)
-    .map(unsafeExpenseId);
-};
+): Promise<ExpenseId[]> => resolveAllPresent(tx, "expense", shortcodes);
 
 // The union, not `Database`: the factory's `update` runs on a transaction and
 // reads the before-state through this. The return type is annotated explicitly
@@ -425,14 +387,7 @@ export const updateExpense = async (
     (data.vendor !== undefined || data.orderId !== undefined);
 
   return withTransaction(db, async (tx) => {
-    const resolvedId = await resolveLiveShortcode(tx, shortcode, "expense");
-    if (!resolvedId) {
-      throw createAppError(
-        "EXPENSE_NOT_FOUND",
-        `Expense not found: ${shortcode}`,
-      );
-    }
-    const id = unsafeExpenseId(resolvedId);
+    const id = await resolveOrThrow(tx, "expense", shortcode);
     const beforeQualityTargets = await tx.query.expense.findFirst({
       where: and(eq(expense.id, id), notDeleted(expense)),
       columns: {

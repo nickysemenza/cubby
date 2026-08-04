@@ -72,7 +72,6 @@ import {
   type InventoryId,
   type ProductId,
   type ProductShortcode,
-  unsafeProductId,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import type { MergeProductsInput } from "@cubby/schemas/product";
@@ -278,9 +277,6 @@ export const mergeProducts = async (
     entity: "product",
     keepId: input.keepId,
     mergeIds: input.mergeIds,
-    notFound: "PRODUCT_NOT_FOUND",
-    label: "Product",
-    brand: (id) => unsafeProductId(id),
   });
 
   return await withTransaction(db, async (tx) => {

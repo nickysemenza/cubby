@@ -13,7 +13,6 @@ import {
   type CookbookShortcode,
   type RecipeId,
   type RecipeShortcode,
-  unsafeCookbookId,
   unsafeRecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import {
@@ -68,7 +67,7 @@ import {
   getNotionRecipesForDiff,
 } from "~/server/repo/recipe";
 import { findParentRecipeIdsBatch } from "~/server/repo/recipe/totals";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { importRecipeImageFromUrl } from "~/server/services/image-import";
 import {
   runMutationSideEffects,
@@ -86,17 +85,10 @@ import {
 import { protectedProcedure, strictOutput } from "../../trpc";
 
 const resolveCookbookEntityId = async (
-  db: Parameters<typeof resolveLiveShortcode>[0],
+  db: Parameters<typeof resolveOrThrow>[0],
   shortcode: CookbookShortcode,
 ): Promise<CookbookId> => {
-  const id = await resolveLiveShortcode(db, shortcode, "cookbook");
-  if (!id) {
-    throw createAppError(
-      "COOKBOOK_NOT_FOUND",
-      `Cookbook ${shortcode} not found`,
-    );
-  }
-  return unsafeCookbookId(id);
+  return resolveOrThrow(db, "cookbook", shortcode);
 };
 
 const scrape = protectedProcedure

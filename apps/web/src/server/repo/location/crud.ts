@@ -70,8 +70,8 @@ import {
 } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import {
+  resolveAllPresent,
   resolveLiveShortcode,
-  resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -574,15 +574,7 @@ export const locationList = async (
   groupBy?: string,
 ) => {
   const parentCodes = filters.parentId ? [filters.parentId].flat() : [];
-  const resolvedParents = await resolveLiveShortcodes(
-    db,
-    parentCodes,
-    "location",
-  );
-  const parentIds = parentCodes.flatMap((code) => {
-    const id = resolvedParents.get(code);
-    return id ? [unsafeLocationId(id)] : [];
-  });
+  const parentIds = await resolveAllPresent(db, "location", parentCodes);
   const parentCondition =
     parentCodes.length > 0 && parentIds.length === 0
       ? filters.parentPresenceFilter

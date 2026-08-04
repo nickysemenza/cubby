@@ -53,8 +53,10 @@ import {
 } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import {
+  resolveAllOrThrow,
   resolveLiveShortcode,
   resolveLiveShortcodes,
+  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -397,10 +399,7 @@ export const updateWish = async (
   input: WishUpdateInput,
   actor: ActorContext,
 ): Promise<{ output: WishOut; entityId: WishId }> => {
-  const resolved = await resolveLiveShortcode(db, input.id, "wish");
-  if (!resolved)
-    throw createAppError("WISH_NOT_FOUND", `Wish not found: ${input.id}`);
-  const id = unsafeWishId(resolved);
+  const id = await resolveOrThrow(db, "wish", input.id);
   await withTransaction(db, async (tx) => {
     const before = await tx.query.wish.findFirst({
       where: and(eq(wish.id, id), notDeleted(wish)),
@@ -488,14 +487,7 @@ export const deleteWishes = async (
   shortcodes: WishShortcode[],
   actor: ActorContext,
 ): Promise<void> => {
-  const ids = await Promise.all(
-    shortcodes.map(async (shortcode) => {
-      const id = await resolveLiveShortcode(db, shortcode, "wish");
-      if (!id)
-        throw createAppError("WISH_NOT_FOUND", `Wish not found: ${shortcode}`);
-      return unsafeWishId(id);
-    }),
-  );
+  const ids = await resolveAllOrThrow(db, "wish", shortcodes);
   await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, wish, ids, "Wish");
     const now = new Date();

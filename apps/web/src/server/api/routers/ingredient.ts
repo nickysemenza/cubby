@@ -12,7 +12,6 @@ import {
   ingredientShortcode,
   recipeShortcode,
   unsafeIngredientId,
-  unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
 import {
   enrichmentRowsOut,
@@ -37,7 +36,6 @@ import {
   ingredientWithFoodOut,
 } from "@cubby/schemas/ingredient";
 import { z } from "zod";
-import { createAppError } from "~/server/errors/app-error";
 import {
   deleteIngredients,
   getIngredientMatches,
@@ -46,8 +44,9 @@ import {
   resolveOrCreateIngredients,
 } from "~/server/repo/ingredient";
 import {
+  resolveAllOrThrow,
   resolveLiveShortcode,
-  resolveLiveShortcodes,
+  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import {
   createIngredient as createIngredientService,
@@ -70,34 +69,17 @@ import {
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const resolveIngredientEntityId = async (
-  db: Parameters<typeof resolveLiveShortcode>[0],
+  db: Parameters<typeof resolveOrThrow>[0],
   shortcode: IngredientShortcode,
 ): Promise<IngredientId> => {
-  const id = await resolveLiveShortcode(db, shortcode, "ingredient");
-  if (!id) {
-    throw createAppError(
-      "INGREDIENT_NOT_FOUND",
-      `Ingredient ${shortcode} not found`,
-    );
-  }
-  return unsafeIngredientId(id);
+  return resolveOrThrow(db, "ingredient", shortcode);
 };
 
 const resolveIngredientEntityIds = async (
-  db: Parameters<typeof resolveLiveShortcodes>[0],
+  db: Parameters<typeof resolveAllOrThrow>[0],
   shortcodes: IngredientShortcode[],
 ): Promise<IngredientId[]> => {
-  const resolved = await resolveLiveShortcodes(db, shortcodes, "ingredient");
-  return shortcodes.map((shortcode) => {
-    const id = resolved.get(shortcode);
-    if (!id) {
-      throw createAppError(
-        "INGREDIENT_NOT_FOUND",
-        `Ingredient ${shortcode} not found`,
-      );
-    }
-    return unsafeIngredientId(id);
-  });
+  return resolveAllOrThrow(db, "ingredient", shortcodes);
 };
 
 /**
@@ -312,16 +294,10 @@ const enrichmentWorkbench = protectedProcedure
   .output(strictOutput(enrichmentRowsOut))
   .query(async ({ ctx, input }) => {
     const recipeId = input?.recipeId
-      ? await resolveLiveShortcode(ctx.db, input.recipeId, "recipe")
+      ? await resolveOrThrow(ctx.db, "recipe", input.recipeId)
       : undefined;
-    if (input?.recipeId && !recipeId) {
-      throw createAppError(
-        "RECIPE_NOT_FOUND",
-        `Recipe ${input.recipeId} not found`,
-      );
-    }
     return await enrichmentWorkbenchService(ctx.db, ctx.usdaClient, {
-      recipeId: recipeId ? unsafeRecipeId(recipeId) : undefined,
+      recipeId,
     });
   });
 

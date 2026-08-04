@@ -52,7 +52,10 @@ import {
   getProductByID,
   quickCreateProduct,
 } from "~/server/repo/product";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import {
+  resolveLiveShortcode,
+  resolveOrThrow,
+} from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import { semanticProductCandidates } from "~/server/services/semantic-search.service";
 
@@ -514,14 +517,7 @@ export async function approveDetectedInventoryItem(
       input.item.manufacturer,
     );
     if (matched) {
-      const resolved = await resolveLiveShortcode(db, matched.id, "product");
-      if (!resolved) {
-        throw createAppError(
-          "PRODUCT_NOT_FOUND",
-          `Product ${matched.id} not found`,
-        );
-      }
-      productId = resolved;
+      productId = await resolveOrThrow(db, "product", matched.id);
       productShortcode = matched.id;
       productNameForToast = matched.name;
     } else {

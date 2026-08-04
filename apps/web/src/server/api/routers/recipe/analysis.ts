@@ -13,13 +13,11 @@ import {
   type EquivalenceReport,
   equivalenceReportSchema,
 } from "@cubby/schemas/equivalences";
-import {
-  type CookbookId,
-  type CookbookShortcode,
-  type RecipeId,
-  type RecipeShortcode,
-  unsafeCookbookId,
-  unsafeRecipeId,
+import type {
+  CookbookId,
+  CookbookShortcode,
+  RecipeId,
+  RecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import {
   type IngredientCooccurrence,
@@ -46,40 +44,29 @@ import { streamProgress } from "~/lib/bulk-progress";
 import { harvestEquivalences } from "~/lib/harvest-equivalences";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
-import { createAppError } from "~/server/errors/app-error";
 import { getMultiMeasureRecipeIngredients } from "~/server/repo/equivalences";
 import {
   getIngredientCooccurrence,
   getIngredientUsage,
   getRecipeDependencyGraph,
 } from "~/server/repo/recipe";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { getIngredientsByIDs } from "~/server/services/ingredient.service";
 import { protectedProcedure, strictOutput } from "../../trpc";
 
 const resolveRecipeId = async (
-  db: Parameters<typeof resolveLiveShortcode>[0],
+  db: Parameters<typeof resolveOrThrow>[0],
   shortcode: RecipeShortcode,
 ): Promise<RecipeId> => {
-  const id = await resolveLiveShortcode(db, shortcode, "recipe");
-  if (!id)
-    throw createAppError("RECIPE_NOT_FOUND", `Recipe ${shortcode} not found`);
-  return unsafeRecipeId(id);
+  return resolveOrThrow(db, "recipe", shortcode);
 };
 
 const resolveCookbookId = async (
-  db: Parameters<typeof resolveLiveShortcode>[0],
+  db: Parameters<typeof resolveOrThrow>[0],
   shortcode: CookbookShortcode | undefined,
 ): Promise<CookbookId | undefined> => {
   if (!shortcode) return undefined;
-  const id = await resolveLiveShortcode(db, shortcode, "cookbook");
-  if (!id) {
-    throw createAppError(
-      "COOKBOOK_NOT_FOUND",
-      `Cookbook ${shortcode} not found`,
-    );
-  }
-  return unsafeCookbookId(id);
+  return resolveOrThrow(db, "cookbook", shortcode);
 };
 
 const getIngredientCooccurrenceEndpoint = protectedProcedure

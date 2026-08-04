@@ -56,8 +56,9 @@ import {
 } from "~/server/repo/inventory";
 import { findDuplicateUniqueProducts } from "~/server/repo/product";
 import {
-  resolveLiveShortcode,
+  resolveAllOrThrow,
   resolveLiveShortcodes,
+  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import {
   runMutationSideEffects,
@@ -72,45 +73,24 @@ import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 /** Resolve the public product id once before entering UUID-only repo code. */
 async function resolveProductId(
-  db: Parameters<typeof resolveLiveShortcode>[0],
+  db: Parameters<typeof resolveOrThrow>[0],
   shortcode: ProductShortcode,
 ): Promise<ProductId> {
-  const resolved = await resolveLiveShortcode(db, shortcode, "product");
-  if (!resolved) {
-    throw createAppError(
-      "PRODUCT_NOT_FOUND",
-      `Product not found: ${shortcode}`,
-    );
-  }
-  return unsafeProductId(resolved);
+  return resolveOrThrow(db, "product", shortcode);
 }
 
 async function resolveLocationId(
-  db: Parameters<typeof resolveLiveShortcode>[0],
+  db: Parameters<typeof resolveOrThrow>[0],
   shortcode: LocationShortcode,
 ): Promise<LocationId> {
-  const resolved = await resolveLiveShortcode(db, shortcode, "location");
-  if (!resolved) {
-    throw createAppError(
-      "LOCATION_NOT_FOUND",
-      `Location not found: ${shortcode}`,
-    );
-  }
-  return unsafeLocationId(resolved);
+  return resolveOrThrow(db, "location", shortcode);
 }
 
 async function resolveInventoryId(
-  db: Parameters<typeof resolveLiveShortcode>[0],
+  db: Parameters<typeof resolveOrThrow>[0],
   shortcode: InventoryShortcode,
 ): Promise<InventoryId> {
-  const resolved = await resolveLiveShortcode(db, shortcode, "inventory");
-  if (!resolved) {
-    throw createAppError(
-      "INVENTORY_NOT_FOUND",
-      `Inventory entry not found: ${shortcode}`,
-    );
-  }
-  return unsafeInventoryId(resolved);
+  return resolveOrThrow(db, "inventory", shortcode);
 }
 
 async function resolveEntityIds<T extends string>(
@@ -130,13 +110,10 @@ async function resolveEntityIds<T extends string>(
 }
 
 async function inventoryEntityIds(
-  db: Parameters<typeof resolveLiveShortcodes>[0],
+  db: Parameters<typeof resolveAllOrThrow>[0],
   shortcodes: InventoryShortcode[],
 ): Promise<InventoryId[]> {
-  const resolved = await resolveEntityIds(db, shortcodes, "inventory");
-  return shortcodes.map((shortcode) =>
-    unsafeInventoryId(resolved.get(shortcode)!),
-  );
+  return resolveAllOrThrow(db, "inventory", shortcodes);
 }
 
 // Create standardized CRUD procedures using factory

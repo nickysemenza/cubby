@@ -19,12 +19,7 @@ import type {
   TaskId,
   TaskShortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  unsafeProductId,
-  unsafeProjectId,
-  unsafeTaskId,
-  unsafeTaskShortcode,
-} from "@cubby/schemas/identifiers";
+import { unsafeTaskShortcode } from "@cubby/schemas/identifiers";
 import type {
   TaskBulkDueDateInput,
   TaskBulkMoveInput,
@@ -67,8 +62,9 @@ import {
   type EntityRef,
   lookupShortcodes,
   refKey,
-  resolveLiveShortcode,
-  resolveLiveShortcodes,
+  resolveAllOrThrow,
+  resolveAllPresent,
+  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { dbTaskToAPI } from "./helpers";
@@ -239,15 +235,11 @@ async function assertSubjectProductLive(
 }
 
 /** Resolve a public product shortcode to the live uuid stored in the task FK. */
-async function resolveSubjectProductId(
+function resolveSubjectProductId(
   tx: DrizzleTransaction,
   shortcode: ProductShortcode,
 ): Promise<ProductId> {
-  const resolved = await resolveLiveShortcode(tx, shortcode, "product");
-  if (!resolved) {
-    throw createAppError("PRODUCT_NOT_FOUND", `Product ${shortcode} not found`);
-  }
-  return unsafeProductId(resolved);
+  return resolveOrThrow(tx, "product", shortcode);
 }
 
 /** Reject giving a parent to a task that already has live subtasks of its own. */
@@ -339,34 +331,12 @@ export const createTask = async (
     // resolving THROUGH a live-only lookup is the existence+liveness check.
     let parentTaskId: TaskId | null = null;
     if (data.parentTaskId) {
-      const resolved = await resolveLiveShortcode(
-        tx,
-        data.parentTaskId,
-        "task",
-      );
-      if (!resolved) {
-        throw createAppError(
-          "TASK_NOT_FOUND",
-          `Parent task ${data.parentTaskId} not found`,
-        );
-      }
-      parentTaskId = unsafeTaskId(resolved);
+      parentTaskId = await resolveOrThrow(tx, "task", data.parentTaskId);
     }
 
     let projectId: ProjectId | null = null;
     if (data.projectId) {
-      const resolved = await resolveLiveShortcode(
-        tx,
-        data.projectId,
-        "project",
-      );
-      if (!resolved) {
-        throw createAppError(
-          "PROJECT_NOT_FOUND",
-          `Project ${data.projectId} not found`,
-        );
-      }
-      projectId = unsafeProjectId(resolved);
+      projectId = await resolveOrThrow(tx, "project", data.projectId);
     }
     let subjectProductId = data.subjectProductId
       ? await resolveSubjectProductId(tx, data.subjectProductId)
@@ -422,11 +392,7 @@ export const updateTask = async (
   data: TaskUpdateData,
   actor: ActorContext,
 ): Promise<{ output: TaskOut; entityId: TaskId }> => {
-  const resolvedId = await resolveLiveShortcode(db, shortcode, "task");
-  if (!resolvedId) {
-    throw createAppError("TASK_NOT_FOUND", `Task ${shortcode} not found`);
-  }
-  const id = unsafeTaskId(resolvedId);
+  const id = await resolveOrThrow(db, "task", shortcode);
 
   const before = await fetchTaskRow(db, id);
   if (!before) {
@@ -446,18 +412,7 @@ export const updateTask = async (
           "A task cannot be its own parent.",
         );
       }
-      const resolvedParent = await resolveLiveShortcode(
-        tx,
-        data.parentTaskId,
-        "task",
-      );
-      if (!resolvedParent) {
-        throw createAppError(
-          "TASK_NOT_FOUND",
-          `Parent task ${data.parentTaskId} not found`,
-        );
-      }
-      parentTaskId = unsafeTaskId(resolvedParent);
+      parentTaskId = await resolveOrThrow(tx, "task", data.parentTaskId);
       await validateParentTask(tx, parentTaskId);
       await assertNoLiveSubtasks(tx, id);
     } else if (data.parentTaskId === null) {
@@ -466,18 +421,7 @@ export const updateTask = async (
 
     let projectId: ProjectId | null | undefined;
     if (data.projectId !== undefined && data.projectId !== null) {
-      const resolvedProject = await resolveLiveShortcode(
-        tx,
-        data.projectId,
-        "project",
-      );
-      if (!resolvedProject) {
-        throw createAppError(
-          "PROJECT_NOT_FOUND",
-          `Project ${data.projectId} not found`,
-        );
-      }
-      projectId = unsafeProjectId(resolvedProject);
+      projectId = await resolveOrThrow(tx, "project", data.projectId);
     } else if (data.projectId === null) {
       projectId = null;
     }
@@ -494,20 +438,10 @@ export const updateTask = async (
     // the FK column, so it can't be handed a shortcode.
     let resolvedBlockedByIds: TaskId[] | undefined;
     if (data.blockedByIds !== undefined) {
-      const resolved = await resolveLiveShortcodes(
+      resolvedBlockedByIds = await resolveAllOrThrow(
         tx,
-        data.blockedByIds,
         "task",
-      );
-      const missing = data.blockedByIds.filter((code) => !resolved.has(code));
-      if (missing.length > 0) {
-        throw createAppError(
-          "TASK_NOT_FOUND",
-          `Task(s) not found: ${missing.join(", ")}`,
-        );
-      }
-      resolvedBlockedByIds = data.blockedByIds.map((code) =>
-        unsafeTaskId(resolved.get(code) ?? ""),
+        data.blockedByIds,
       );
     }
 
@@ -585,43 +519,21 @@ export const updateTask = async (
  * than reject the batch; use {@link resolveLiveTaskIdsOrThrow} where a specific
  * id is a precondition (the reorder anchor), not part of a set.
  */
-const resolveLiveTaskIds = async (
+const resolveLiveTaskIds = (
   tx: DrizzleTransaction,
   shortcodes: TaskShortcode[],
-): Promise<TaskId[]> => {
-  const resolved = await resolveLiveShortcodes(tx, shortcodes, "task");
-  return shortcodes
-    .map((code) => resolved.get(code))
-    .filter((id): id is string => id !== undefined)
-    .map(unsafeTaskId);
-};
+): Promise<TaskId[]> => resolveAllPresent(tx, "task", shortcodes);
 
-const resolveLiveTaskIdsOrThrow = async (
+const resolveLiveTaskIdsOrThrow = (
   tx: DrizzleTransaction,
   shortcodes: TaskShortcode[],
-): Promise<TaskId[]> => {
-  const resolved = await resolveLiveShortcodes(tx, shortcodes, "task");
-  const missing = shortcodes.filter((code) => !resolved.has(code));
-  if (missing.length > 0) {
-    throw createAppError(
-      "TASK_NOT_FOUND",
-      `Task(s) not found: ${missing.join(", ")}`,
-    );
-  }
-  return shortcodes.map((code) => unsafeTaskId(resolved.get(code) ?? ""));
-};
+): Promise<TaskId[]> => resolveAllOrThrow(tx, "task", shortcodes);
 
 /** Resolve a project shortcode to a live uuid, or throw. */
-const resolveLiveTaskProjectId = async (
+const resolveLiveTaskProjectId = (
   tx: DrizzleTransaction,
   shortcode: ProjectShortcode,
-): Promise<ProjectId> => {
-  const resolved = await resolveLiveShortcode(tx, shortcode, "project");
-  if (!resolved) {
-    throw createAppError("PROJECT_NOT_FOUND", `Project ${shortcode} not found`);
-  }
-  return unsafeProjectId(resolved);
-};
+): Promise<ProjectId> => resolveOrThrow(tx, "project", shortcode);
 
 export const moveTasks = async (
   db: Database,

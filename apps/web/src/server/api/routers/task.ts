@@ -4,11 +4,7 @@
  * `blockedByIds` replacement set.
  */
 
-import {
-  type TaskShortcode,
-  taskShortcode,
-  unsafeTaskId,
-} from "@cubby/schemas/identifiers";
+import { type TaskShortcode, taskShortcode } from "@cubby/schemas/identifiers";
 import {
   actionableTasksOut,
   taskBoardOut,
@@ -27,10 +23,9 @@ import {
   taskUpdateData,
 } from "@cubby/schemas/project";
 import { z } from "zod";
-import { createAppError } from "~/server/errors/app-error";
 import {
-  resolveLiveShortcode,
-  resolveLiveShortcodes,
+  resolveAllPresent,
+  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import {
   createTask,
@@ -75,11 +70,8 @@ const {
   },
   repository: {
     getByID: async (services, shortcode: TaskShortcode) => {
-      const id = await resolveLiveShortcode(services.db, shortcode, "task");
-      if (!id) {
-        throw createAppError("TASK_NOT_FOUND", `Task not found: ${shortcode}`);
-      }
-      return getTaskByID(services.db, unsafeTaskId(id));
+      const id = await resolveOrThrow(services.db, "task", shortcode);
+      return getTaskByID(services.db, id);
     },
     getByShortcode: (services, shortcode) =>
       getTaskByShortcode(services.db, shortcode),
@@ -103,14 +95,10 @@ const {
  * whole batch, not one per row.
  */
 async function taskEntityIds(
-  db: Parameters<typeof resolveLiveShortcodes>[0],
+  db: Parameters<typeof resolveAllPresent>[0],
   ids: TaskShortcode[],
 ) {
-  const resolved = await resolveLiveShortcodes(db, ids, "task");
-  return ids.flatMap((code) => {
-    const uuid = resolved.get(code);
-    return uuid ? [unsafeTaskId(uuid)] : [];
-  });
+  return resolveAllPresent(db, "task", ids);
 }
 
 /**

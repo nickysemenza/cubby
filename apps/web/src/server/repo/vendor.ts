@@ -70,8 +70,9 @@ import {
 import { foldChargeInto } from "~/server/repo/purchase";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import {
+  resolveAllOrThrow,
   resolveLiveShortcode,
-  resolveLiveShortcodes,
+  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import {
   findOrCreateWithShortcode,
@@ -404,11 +405,7 @@ export const updateVendor = async (
   actor: ActorContext,
 ): Promise<{ output: VendorOut; entityId: VendorId }> => {
   const { data } = input;
-  const resolvedId = await resolveLiveShortcode(db, input.id, "vendor");
-  if (!resolvedId) {
-    throw createAppError("VENDOR_NOT_FOUND", `Vendor not found: ${input.id}`);
-  }
-  const id = unsafeVendorId(resolvedId);
+  const id = await resolveOrThrow(db, "vendor", input.id);
 
   await withTransaction(db, async (tx) => {
     const before = await tx.query.vendor.findFirst({
@@ -580,9 +577,6 @@ export const mergeVendors = async (
     entity: "vendor",
     keepId: input.keepId,
     mergeIds: input.mergeIds,
-    notFound: "VENDOR_NOT_FOUND",
-    label: "Vendor",
-    brand: (id) => unsafeVendorId(id),
   });
   if (losers.length === 0) return getVendorByID(db, keepId);
 
@@ -656,17 +650,7 @@ export const deleteVendors = async (
 ): Promise<void> => {
   if (shortcodes.length === 0) return;
 
-  const resolved = await resolveLiveShortcodes(db, shortcodes, "vendor");
-  const missing = shortcodes.filter((code) => !resolved.has(code));
-  if (missing.length > 0) {
-    throw createAppError(
-      "VENDOR_NOT_FOUND",
-      `Vendors not found or already deleted: ${missing.join(", ")}`,
-    );
-  }
-  const ids = shortcodes.map((code) =>
-    unsafeVendorId(resolved.get(code) ?? ""),
-  );
+  const ids = await resolveAllOrThrow(db, "vendor", shortcodes);
 
   await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, vendor, ids, "Vendor");

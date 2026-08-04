@@ -10,7 +10,6 @@ import {
   type LocationId,
   type LocationShortcode,
   locationShortcode,
-  unsafeLocationId,
 } from "@cubby/schemas/identifiers";
 import {
   infLocation,
@@ -46,8 +45,8 @@ import {
   updateLocationAiDescription,
 } from "~/server/repo/location";
 import {
-  resolveLiveShortcode,
-  resolveLiveShortcodes,
+  resolveAllOrThrow,
+  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import {
   runMutationSideEffects,
@@ -61,31 +60,17 @@ import {
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 async function resolveLocationId(
-  db: Parameters<typeof resolveLiveShortcode>[0],
+  db: Parameters<typeof resolveOrThrow>[0],
   shortcode: LocationShortcode,
 ): Promise<LocationId> {
-  const id = await resolveLiveShortcode(db, shortcode, "location");
-  if (!id) {
-    throw createAppError(
-      "LOCATION_NOT_FOUND",
-      `Location ${shortcode} not found`,
-    );
-  }
-  return unsafeLocationId(id);
+  return resolveOrThrow(db, "location", shortcode);
 }
 
 async function resolveLocationIds(
-  db: Parameters<typeof resolveLiveShortcodes>[0],
+  db: Parameters<typeof resolveAllOrThrow>[0],
   shortcodes: LocationShortcode[],
 ): Promise<LocationId[]> {
-  const resolved = await resolveLiveShortcodes(db, shortcodes, "location");
-  const missing = shortcodes.find((shortcode) => !resolved.has(shortcode));
-  if (missing) {
-    throw createAppError("LOCATION_NOT_FOUND", `Location ${missing} not found`);
-  }
-  return uniq(
-    shortcodes.map((shortcode) => unsafeLocationId(resolved.get(shortcode)!)),
-  );
+  return uniq(await resolveAllOrThrow(db, "location", shortcodes));
 }
 
 // Create standardized list procedure using factory

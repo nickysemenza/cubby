@@ -25,22 +25,17 @@ import {
   usdaFoodSuggestionInput,
   usdaFoodSuggestionOut,
 } from "@cubby/schemas/ai";
-import {
-  unsafeIngredientId,
-  unsafeLocationId,
-} from "@cubby/schemas/identifiers";
 import { streamProgress } from "~/lib/bulk-progress";
 import {
   CATEGORY_DESCRIPTIONS,
   getAnthropicClient,
 } from "~/server/clients/anthropic";
-import { createAppError } from "~/server/errors/app-error";
 import { listRecentAiUsage, summarizeAiUsage } from "~/server/repo/ai-usage";
 import { getLocationNames } from "~/server/repo/location/crud";
 import { getProductSummaryForAudit } from "~/server/repo/product";
 import {
-  resolveLiveShortcode,
-  resolveLiveShortcodes,
+  resolveAllOrThrow,
+  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { suggestIngredientMergeBatch } from "~/server/services/ai-enrichment/ingredient-merge";
 import {
@@ -89,17 +84,10 @@ const suggestLocationType = protectedProcedure
   });
 
 const resolveLocationEntityId = async (
-  db: Parameters<typeof resolveLiveShortcode>[0],
+  db: Parameters<typeof resolveOrThrow>[0],
   shortcode: string,
 ) => {
-  const id = await resolveLiveShortcode(db, shortcode, "location");
-  if (!id) {
-    throw createAppError(
-      "LOCATION_NOT_FOUND",
-      `Location ${shortcode} not found`,
-    );
-  }
-  return unsafeLocationId(id);
+  return resolveOrThrow(db, "location", shortcode);
 };
 
 export const aiRouter = createTRPCRouter({
@@ -179,27 +167,18 @@ export const aiRouter = createTRPCRouter({
     .input(ingredientMergeSuggestionBatchInput)
     .output(strictOutput(ingredientMergeSuggestionBatchOut))
     .mutation(async ({ ctx, input }) => {
-      const resolved = await resolveLiveShortcodes(
+      const entityIds = await resolveAllOrThrow(
         ctx.db,
-        input.ingredients.map((ingredient) => ingredient.id),
         "ingredient",
+        input.ingredients.map((ingredient) => ingredient.id),
       );
       const result = await suggestIngredientMergeBatch(
         ctx.db,
-        input.ingredients.map((ingredient) => {
-          const entityId = resolved.get(ingredient.id);
-          if (!entityId) {
-            throw createAppError(
-              "INGREDIENT_NOT_FOUND",
-              `Ingredient ${ingredient.id} not found`,
-            );
-          }
-          return {
-            id: unsafeIngredientId(entityId),
-            shortcode: ingredient.id,
-            name: ingredient.name,
-          };
-        }),
+        input.ingredients.map((ingredient, i) => ({
+          id: entityIds[i]!,
+          shortcode: ingredient.id,
+          name: ingredient.name,
+        })),
       );
       return result.map(({ source, target, ...suggestion }) => ({
         ...suggestion,

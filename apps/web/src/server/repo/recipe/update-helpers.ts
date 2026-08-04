@@ -4,12 +4,7 @@
  */
 
 import type { amount } from "@cubby/schemas/codec";
-import {
-  type IngredientId,
-  type RecipeId,
-  unsafeIngredientId,
-  unsafeRecipeId,
-} from "@cubby/schemas/identifiers";
+import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import type {
   RecipeCreateInput,
   RecipeUpdateInput,
@@ -35,7 +30,7 @@ import {
   notDeleted,
   unwrapDb,
 } from "~/server/repo/database-helpers";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
 
 import type { ExistingRecipeWithSections } from "./internal-types";
@@ -104,41 +99,22 @@ const processIngredient = async (
 
   // For ingredient types, just use the ingredient ID directly
   if (ingredientInput.type === "ingredient") {
-    const ingredientId = await resolveLiveShortcode(
+    const ingredientId = await resolveOrThrow(
       tx,
-      ingredientInput.ingredientId,
       "ingredient",
+      ingredientInput.ingredientId,
     );
-    if (!ingredientId) {
-      throw createAppError(
-        "INGREDIENT_NOT_FOUND",
-        `Ingredient ${ingredientInput.ingredientId} not found`,
-      );
-    }
     return {
-      ingredientId: unsafeIngredientId(ingredientId),
+      ingredientId,
       amounts: ingredientInput.amounts,
       ...provenance,
     };
   }
 
   // For recipe types, find or create an ingredient that points to the recipe
-  const recipeId = await resolveLiveShortcode(
-    tx,
-    ingredientInput.recipeId,
-    "recipe",
-  );
-  if (!recipeId) {
-    throw createAppError(
-      "RECIPE_NOT_FOUND",
-      `Recipe ${ingredientInput.recipeId} not found`,
-    );
-  }
+  const recipeId = await resolveOrThrow(tx, "recipe", ingredientInput.recipeId);
   return {
-    ingredientId: await findOrCreateRecipeLinkIngredient(
-      tx,
-      unsafeRecipeId(recipeId),
-    ),
+    ingredientId: await findOrCreateRecipeLinkIngredient(tx, recipeId),
     amounts: ingredientInput.amounts,
     ...provenance,
   };
