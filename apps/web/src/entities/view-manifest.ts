@@ -47,6 +47,20 @@ export interface ViewDefinition {
   filters: ViewFilter[];
   /** TanStack `SortingState`; omitted means "leave the current sort alone". */
   sort?: Array<{ id: string; desc: boolean }>;
+  /**
+   * Columns to force on (or off) when the view is applied, by `columnId`.
+   *
+   * A view that selects rows on a signal the table hides by default lands the
+   * operator on a filtered list with no column explaining *why* those rows are
+   * there — which is how a worklist becomes a mystery. Omitted keys are left
+   * at whatever the user already had, so this reveals what the view is about
+   * without resetting their layout.
+   *
+   * Not persisted: `useTableColumnVisibility` keeps writing the user's own
+   * choices to `table-columns:{entity}`, and applying a view is a temporary
+   * override on top. Turning a column back off afterwards sticks.
+   */
+  columnVisibility?: Record<string, boolean>;
 }
 
 /** Saved views select records; renderer tabs never do. */
@@ -152,6 +166,37 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         { id: "vendor", value: [FILTER_NONE] },
       ],
       sort: [{ id: "cost", desc: true }],
+    },
+  ],
+  product: [
+    {
+      id: "shelf-disagrees",
+      label: "Shelf disagrees",
+      description: "Stocked products whose count differs from the ledger",
+      // Server-scoped to products that are BOTH stocked and in the ledger —
+      // see `quantityVarianceFilter` in the product repo. Neither half is
+      // optional: without "stocked" this is dominated by things correctly sold
+      // off, and without "in the ledger" by stocked products that have no
+      // product-linked Expense at all (a provenance gap, not a counting one).
+      //
+      // A worklist, not a defect list: it never converges to zero, which is why
+      // it lives here rather than as a Problems section. The genuine defect —
+      // more units gone than ever arrived — IS a Problems section
+      // (`negativeExpectedQuantity`), and that one does converge.
+      filters: [{ id: "quantityVariance", value: "mismatched" }],
+      // Both hidden by default on a table this wide, so the view has to reveal
+      // them — otherwise it selects rows on a signal nothing on screen explains.
+      columnVisibility: { expectedQuantity: true, quantityVariance: true },
+    },
+    {
+      id: "unknown-quantities",
+      label: "Missing quantities",
+      description: "Products whose expense lines don't establish a count",
+      // The data-entry backlog behind the `+N?` cue: a receipt that proves the
+      // cost but not the count leaves the expected quantity understated, and
+      // nothing infers one (a nullable quantity is never read as 1).
+      filters: [{ id: "expectedQuantity", value: "unknown" }],
+      columnVisibility: { expectedQuantity: true },
     },
   ],
   purchase: [

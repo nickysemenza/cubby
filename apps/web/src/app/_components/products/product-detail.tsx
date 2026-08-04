@@ -5,7 +5,7 @@ import type {
 } from "@cubby/schemas/product";
 import { isNonFoodCategory } from "@cubby/shared";
 import { getNutrientUnitString } from "@cubby/usda-schemas";
-import { sumBy, uniq } from "es-toolkit";
+import { uniq } from "es-toolkit";
 import {
   Apple,
   ChefHat,
@@ -31,6 +31,7 @@ import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
+import { StatusText } from "~/components/ui/status-text";
 import { useTRPC } from "~/integrations/trpc/react";
 import { safeConvertAmount } from "~/lib/recipe-costing";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
@@ -357,26 +358,65 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
 
   const entries = product.inventoryEntry ?? [];
   const locationCount = uniq(entries.map((e) => e.location.id)).length;
-  // Entries only sum into a real on-hand quantity when they share one unit —
-  // "3 lb + 2 each" has no total, so those fall back to a labelled row count.
-  const entryUnits = uniq(entries.map((e) => e.amount.unit));
-  const onHandUnit = entryUnits.length === 1 ? entryUnits[0] : undefined;
-  const onHandStat: DetailHeroStat = onHandUnit
-    ? {
-        label: "On hand",
-        value: tryFormatAmount({
-          value: sumBy(entries, (e) => e.amount.value),
-          unit: onHandUnit,
-        }),
-      }
-    : {
-        label: entries.length === 0 ? "On hand" : "Entries",
-        value: entries.length,
-      };
+  const { quantityLedger, onHandUnits, quantityVariance } = product;
+  // `onHandUnits` is the SERVER's answer to "do these entries have a
+  // meaningful total?" — null when they carry more than one unit ("3 lb + 2
+  // each" has no sum) or when nothing is stocked. Read rather than recomputed:
+  // this page deriving its own on-hand is what let the list's filters and the
+  // rendered cells disagree twice. Only the formatting is local, and the unit
+  // is safe to take from the first entry because a non-null total means they
+  // all share one.
+  const onHandStat: DetailHeroStat =
+    onHandUnits !== null && entries[0]
+      ? {
+          label: "On hand",
+          value: (
+            <StatusText tone={quantityVariance ? "warning" : undefined}>
+              {tryFormatAmount({
+                value: onHandUnits,
+                unit: entries[0].amount.unit,
+              })}
+            </StatusText>
+          ),
+        }
+      : {
+          label: entries.length === 0 ? "On hand" : "Entries",
+          value: entries.length,
+        };
+  // Bought minus gone, from the Expense ledger below. Sits beside On hand
+  // because the comparison is the whole point — the two disagreeing is the
+  // signal, so the shelf figure takes the warning tone rather than adding a
+  // third number stat nobody scans.
+  const expectedStat: DetailHeroStat = {
+    label: "Expected",
+    value: (
+      <span className="tabular-nums">
+        <StatusText
+          tone={quantityLedger.expectedQuantity < 0 ? "destructive" : undefined}
+        >
+          {quantityLedger.expectedQuantity}
+        </StatusText>
+        {/* Same honesty cue as the products table: an expense line with no
+            recorded quantity contributes nothing, so without this a product
+            with six unquantified receipts reads as a confident number. */}
+        {quantityLedger.unknownAcquisitionLines > 0 ? (
+          <StatusText tone="warning">
+            {` +${quantityLedger.unknownAcquisitionLines}?`}
+          </StatusText>
+        ) : null}
+        {quantityLedger.unknownExitLines > 0 ? (
+          <StatusText tone="warning">
+            {` −${quantityLedger.unknownExitLines}?`}
+          </StatusText>
+        ) : null}
+      </span>
+    ),
+  };
   // No Price stat here — the editable price field in Basic Information is
   // the source of truth and sits right in the aside rail.
   const heroStats: DetailHeroStat[] = [
     onHandStat,
+    expectedStat,
     { label: "Locations", value: locationCount },
   ];
 

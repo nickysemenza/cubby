@@ -29,6 +29,14 @@ interface SavedViewsMenuProps {
   onApplyFilters: (filters: ViewDefinition["filters"]) => void;
   onApplySort: (sort: NonNullable<ViewDefinition["sort"]>) => void;
   onResetPage?: () => void;
+  /**
+   * Reveal the columns a view selects on. Optional because the decoupled
+   * consumers (the projects dashboard) render cards, not columns — a view with
+   * a `columnVisibility` block simply has nothing to reveal there.
+   */
+  onApplyColumnVisibility?: (
+    visibility: NonNullable<ViewDefinition["columnVisibility"]>,
+  ) => void;
 }
 
 /**
@@ -55,6 +63,11 @@ export function DataTableViews<TData>({
       sorting={sorting}
       onApplyFilters={(filters) => table.setColumnFilters(filters)}
       onApplySort={(sort) => table.setSorting(sort)}
+      onApplyColumnVisibility={(visibility) =>
+        // Merged, not replaced: a view names only the columns it needs to
+        // reveal, and everything else stays as the user left it.
+        table.setColumnVisibility((current) => ({ ...current, ...visibility }))
+      }
       onResetPage={() => table.setPageIndex(0)}
     />
   );
@@ -68,6 +81,7 @@ export function SavedViewsMenu({
   onApplyFilters,
   onApplySort,
   onResetPage,
+  onApplyColumnVisibility,
 }: SavedViewsMenuProps) {
   const views = viewsForEntity(entity);
   if (views.length === 0) return null;
@@ -75,6 +89,9 @@ export function SavedViewsMenu({
   const applyView = (view: ViewDefinition) => {
     onApplyFilters(view.filters);
     if (view.sort) onApplySort(view.sort);
+    // Before the page reset, so the revealed columns are already on when the
+    // first page renders.
+    if (view.columnVisibility) onApplyColumnVisibility?.(view.columnVisibility);
     onResetPage?.();
   };
 

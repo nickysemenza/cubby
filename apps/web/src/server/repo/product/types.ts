@@ -44,6 +44,8 @@ export type ProductDeepDB = ProductSelect & {
     image: MappableImageRecord;
     deletedAt?: Date | null;
   }>;
+  /** Attached by `enrichProductRowsWithQuantityLedger`, same as the list shape. */
+  quantityLedger: QuantityLedger;
 };
 
 export type ProductListDB = ProductSelect & {

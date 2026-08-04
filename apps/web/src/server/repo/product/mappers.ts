@@ -38,6 +38,7 @@ import {
 } from "~/server/repo/database-helpers";
 import type { MappableProductExternalId } from "./external-id-types";
 import { type ProductPricing, resolveProductPricing } from "./pricing";
+import type { QuantityLedger } from "./quantity-ledger";
 import type { ProductDeepDB, ProductListDB } from "./types";
 
 type ProductImageRow =
@@ -214,31 +215,49 @@ const dbLocationToProductListInventoryShape = (
 });
 
 /**
- * Live units on the shelf, and how far they sit from the ledger.
+ * The ledger, live units on the shelf, and the gap between them — the block
+ * shared by the list row and the detail response.
+ *
+ * One function on purpose. The list used to own this and the detail page
+ * computed its own on-hand inline, which is exactly how the SQL and the render
+ * drifted twice: a filter can decide "mismatched" on a number the cell never
+ * shows. Both surfaces now read the same three fields.
  *
  * Computed from the already-loaded `inventoryEntry` relation rather than a
- * fifth correlated subquery — the list joins those rows for the Locations
- * column regardless.
+ * correlated subquery — both shapes join those rows anyway.
  *
- * Both go null when the entries carry more than one unit. Summing `each`
- * against `can` produces a number that means nothing, and a Variance column
- * that quietly adds them would manufacture a discrepancy out of a unit
- * mismatch. (In practice this is rare — live inventory is essentially all
- * `each` — which is exactly why an unguarded sum would have looked correct
- * right up until it wasn't.)
+ * `onHandUnits`/`quantityVariance` go null when the entries carry more than one
+ * unit. Summing `each` against `can` produces a number that means nothing, and
+ * quietly adding them would manufacture a discrepancy out of a unit mismatch.
+ * (In practice this is rare — live inventory is essentially all `each` — which
+ * is exactly why an unguarded sum would have looked correct right up until it
+ * wasn't.) `quantityLedger` is always present: it is ledger-only, so no unit
+ * ambiguity can reach it.
  */
-const deriveOnHandUnits = (
+const deriveProductQuantityShape = (
   entries: ReadonlyArray<{ amount: { value: number; unit: string } }>,
-  expectedQuantity: number,
-): { onHandUnits: number | null; quantityVariance: number | null } => {
-  if (entries.length === 0)
-    return { onHandUnits: null, quantityVariance: null };
+  quantityLedger: QuantityLedger,
+): {
+  quantityLedger: QuantityLedger;
+  onHandUnits: number | null;
+  quantityVariance: number | null;
+} => {
+  const empty = {
+    quantityLedger,
+    onHandUnits: null,
+    quantityVariance: null,
+  };
+  if (entries.length === 0) return empty;
 
   const units = uniq(entries.map((entry) => entry.amount.unit));
-  if (units.length > 1) return { onHandUnits: null, quantityVariance: null };
+  if (units.length > 1) return empty;
 
   const onHandUnits = sumBy(entries, (entry) => entry.amount.value);
-  return { onHandUnits, quantityVariance: onHandUnits - expectedQuantity };
+  return {
+    quantityLedger,
+    onHandUnits,
+    quantityVariance: onHandUnits - quantityLedger.expectedQuantity,
+  };
 };
 
 export const dbProductToListAPI = (
@@ -274,11 +293,7 @@ export const dbProductToListAPI = (
     // null) — mirrors `purchaseExpenseTotal`'s dbPurchaseToAPI coercion.
     expenseTotal: Number(productData.expenseTotal),
     purchaseDate: productData.purchaseDate,
-    quantityLedger: productData.quantityLedger,
-    ...deriveOnHandUnits(
-      inventoryEntry,
-      productData.quantityLedger.expectedQuantity,
-    ),
+    ...deriveProductQuantityShape(inventoryEntry, productData.quantityLedger),
   };
 
   return parseWithContext(productListItemOut, result, {
@@ -296,6 +311,30 @@ export const dbProductToAPI = (
   dataQuality: ProductTopLevelOut["dataQuality"],
 ): z.infer<typeof productWithIngredientAndInventoryAndMappingsOut> => {
   const { ingredient, unitMappings, inventoryEntry, images } = productData;
+
+  const mappedInventoryEntry = mapRelation(inventoryEntry, (entry) => ({
+    id: unsafeInventoryShortcode(entry.shortcode),
+    amount: parseInventoryAmount(entry.amount, entry.id),
+    valuation: entry.valuation,
+    verifiedAt: entry.verifiedAt,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+    location: {
+      id: unsafeLocationShortcode(entry.location.shortcode),
+      name: entry.location.name,
+      aliases: entry.location.aliases,
+      type: parseWithContext(locationType, entry.location.type, {
+        entityType: "Location",
+        identifier: { id: entry.location.id, name: entry.location.name },
+      }),
+      lastBulkInventory: entry.location.lastBulkInventory,
+      aiDescription: entry.location.aiDescription,
+      images: mapImages(entry.location.images),
+      valuation: entry.location.valuation,
+      createdAt: entry.location.createdAt,
+      updatedAt: entry.location.updatedAt,
+    },
+  }));
 
   const result = {
     id: unsafeProductShortcode(productData.shortcode),
@@ -322,34 +361,11 @@ export const dbProductToAPI = (
     ),
     externalIds: mapProductExternalIds(productData.externalIds),
     images: mapImages(images),
-    inventoryEntry: mapRelation(inventoryEntry, (entry) => {
-      return {
-        id: unsafeInventoryShortcode(entry.shortcode),
-        amount: parseInventoryAmount(entry.amount, entry.id),
-        valuation: entry.valuation,
-        verifiedAt: entry.verifiedAt,
-        createdAt: entry.createdAt,
-        updatedAt: entry.updatedAt,
-        location: {
-          id: unsafeLocationShortcode(entry.location.shortcode),
-          name: entry.location.name,
-          aliases: entry.location.aliases,
-          type: parseWithContext(locationType, entry.location.type, {
-            entityType: "Location",
-            identifier: {
-              id: entry.location.id,
-              name: entry.location.name,
-            },
-          }),
-          lastBulkInventory: entry.location.lastBulkInventory,
-          aiDescription: entry.location.aiDescription,
-          images: mapImages(entry.location.images),
-          valuation: entry.location.valuation,
-          createdAt: entry.location.createdAt,
-          updatedAt: entry.location.updatedAt,
-        },
-      };
-    }),
+    inventoryEntry: mappedInventoryEntry,
+    ...deriveProductQuantityShape(
+      mappedInventoryEntry,
+      productData.quantityLedger,
+    ),
   };
 
   return parseWithContext(

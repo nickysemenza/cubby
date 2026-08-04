@@ -1,11 +1,15 @@
+import type { Entity } from "@cubby/schemas/entity";
 import { describe, expect, it } from "vitest";
 import { getEntityFilters } from "./filter-manifest";
 import {
   buildFiltersFromManifest,
   FILTER_NONE,
+  isMultiFilterKind,
   partitionFilterSpecs,
 } from "./filters";
 import { isViewActive, viewManifest, viewsForEntity } from "./view-manifest";
+
+type ViewFilterish = { id: string; value: string | string[] };
 
 // A `.tsx` test, so it runs under the `ui` vitest project: cross-checking a
 // view's filter ids against the manifest means importing `filter-manifest.tsx`,
@@ -249,5 +253,61 @@ describe("isViewActive", () => {
         [{ id: "name", desc: true }],
       ),
     ).toBe(true);
+  });
+});
+
+/**
+ * A view's filter value has to be shaped the way `decodeFilters` shapes the
+ * same filter from a URL — array for a multi kind, bare string otherwise.
+ *
+ * Get it wrong and the view still *applies* (the expanders normalize via
+ * `single()`), but `isViewActive` compares by identity, so the checkmark never
+ * lights and the view looks broken while working. That asymmetry is exactly
+ * why this is asserted rather than eyeballed.
+ */
+describe("view filter values match the shape decodeFilters produces", () => {
+  it.each(
+    Object.entries(viewManifest).flatMap(([entity, views]) =>
+      (views ?? []).flatMap((view) =>
+        view.filters.map(
+          (filter) =>
+            [entity, view.id, filter] as [string, string, ViewFilterish],
+        ),
+      ),
+    ),
+  )("%s / %s — %o", (entity, _viewId, filter) => {
+    const spec = getEntityFilters(entity as Entity).find(
+      (candidate) => candidate.columnId === filter.id,
+    );
+    expect(spec, `no filter spec for ${filter.id}`).toBeDefined();
+    if (!spec) return;
+    expect(Array.isArray(filter.value)).toBe(isMultiFilterKind(spec.kind));
+  });
+});
+
+/**
+ * A view that selects on a column the table hides by default must reveal it —
+ * otherwise it lands the operator on a filtered list with nothing on screen
+ * explaining why those rows are there.
+ */
+describe("views reveal the columns they select on", () => {
+  it("turns on Expected and Variance for the products worklists", () => {
+    const productViews = viewManifest.product ?? [];
+    const shelfDisagrees = productViews.find((v) => v.id === "shelf-disagrees");
+    expect(shelfDisagrees?.columnVisibility).toEqual({
+      expectedQuantity: true,
+      quantityVariance: true,
+    });
+
+    // Every product view filters on a column hidden by `initialColumnVisibility`,
+    // so each one has to name it.
+    for (const view of productViews) {
+      for (const filter of view.filters) {
+        expect(
+          view.columnVisibility?.[filter.id],
+          `${view.id} filters on ${filter.id} without revealing it`,
+        ).toBe(true);
+      }
+    }
   });
 });

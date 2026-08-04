@@ -280,3 +280,72 @@ describe("product.list quantity ledger", () => {
     expect(agreeingOnly.items.map((item) => item.id)).not.toContain(mixed.id);
   });
 });
+
+/**
+ * The detail page shows Expected beside On hand, so the detail response has to
+ * carry the same three fields the list row does — from the same derivation.
+ *
+ * Asserted through the router because the failure mode is a shape that
+ * typechecks: the page reads `product.quantityLedger`, and a detail path that
+ * forgot to enrich would surface a zero ledger rather than an error.
+ */
+describe("product.getByID quantity ledger", () => {
+  const ctx = withTestDb();
+
+  it("carries the ledger, on-hand and variance, agreeing with the list row", async () => {
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Detail ledger shelf" }),
+      ctx.actor,
+    );
+    const prod = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Detail Ledger Clamp" }),
+      ctx.actor,
+    );
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: prod.entityId,
+        locationId: shelf.entityId,
+        amount: { value: 1, unit: "each" },
+      },
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "clamps",
+          cost: 30,
+          productId: prod.id,
+          productQuantity: 3,
+        }),
+      ),
+      ctx.actor,
+    );
+
+    const caller = createTestCaller(productRouter, ctx.db);
+    const detail = await caller.getByID({ id: prod.id });
+
+    expect(detail.quantityLedger).toMatchObject({
+      acquiredUnits: 3,
+      exitedUnits: 0,
+      expectedQuantity: 3,
+    });
+    expect(detail.onHandUnits).toBe(1);
+    expect(detail.quantityVariance).toBe(-2);
+
+    // The two surfaces must not be able to disagree — same derivation, so the
+    // same numbers for the same product.
+    const list = await caller.list({
+      filters: {},
+      sort: { orderBy: "name", direction: "asc" },
+      pagination: { pageIndex: 0, pageSize: 50 },
+    });
+    const row = list.items.find((item) => item.id === prod.id);
+    expect(row?.quantityLedger).toEqual(detail.quantityLedger);
+    expect(row?.onHandUnits).toBe(detail.onHandUnits);
+    expect(row?.quantityVariance).toBe(detail.quantityVariance);
+  });
+});
