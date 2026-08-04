@@ -3,7 +3,7 @@ import { Link, type LinkProps } from "@tanstack/react-router";
 import { cva, type VariantProps } from "class-variance-authority";
 import type { LucideIcon } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
-import { getGroupRoute } from "~/app/_components/navigation/nav-items";
+import { getEntityNavGroup } from "~/app/_components/navigation/nav-items";
 import { ImageGallery } from "~/components/media/image-gallery";
 import { Card, CardContent } from "~/components/ui/card";
 import { EYEBROW_CLASS, Eyebrow } from "~/components/ui/eyebrow";
@@ -54,29 +54,9 @@ export interface DetailHeroStat {
   value: ReactNode;
 }
 
-// Each entity's top-level nav group (see navigation/nav-items.ts) — eyebrows
-// read as a path ("Cook / Recipes", "Pantry / Products") to match the
-// ledger-style breadcrumb labels and the dropdown the entity lives under.
-const ENTITY_NAV_GROUP: Partial<Record<Entity, string>> = {
-  recipe: "Cook",
-  cookbook: "Cook",
-  meal: "Plan",
-  product: "Pantry",
-  inventory: "Pantry",
-  location: "Pantry",
-  ingredient: "Dev",
-  "usda-food": "Dev",
-  image: "Dev",
-  project: "House",
-  task: "House",
-  expense: "House",
-  financialAccount: "Finance",
-  financialTransaction: "Finance",
-};
-
 /** One eyebrow path segment. `to` is set only for the leading nav-group
- * segment, and only when {@link getGroupRoute} resolves an actual landing
- * route for it — most groups are dropdown-only and stay plain text. */
+ * segment, and only when {@link getEntityNavGroup} resolves a group with an
+ * actual landing route — most groups are dropdown-only and stay plain text. */
 interface EyebrowSegment {
   label: string;
   to?: LinkProps["to"];
@@ -94,14 +74,13 @@ function deriveEyebrowSegments(
   title: ReactNode,
 ): EyebrowSegment[] {
   const def = entities[entity];
-  const group = ENTITY_NAV_GROUP[entity];
-  const raw = group ? [group, def.pluralLabel] : [def.pluralLabel];
-  return raw
-    .filter((label) => label !== title)
-    .map((label) => ({
-      label,
-      to: label === group ? getGroupRoute(group) : undefined,
-    }));
+  const group = getEntityNavGroup(entity);
+  // The group's own `to` (a landing route, when it has one) rides along with
+  // its label — no separate getGroupRoute(label) re-lookup needed.
+  const raw: EyebrowSegment[] = group
+    ? [{ label: group.label, to: group.to }, { label: def.pluralLabel }]
+    : [{ label: def.pluralLabel }];
+  return raw.filter((segment) => segment.label !== title);
 }
 
 /** Hairline `/` separator shared by the list eyebrow and detail breadcrumb. */
@@ -172,7 +151,7 @@ function DetailBreadcrumb({
   heroNo?: string;
 }) {
   const def = entities[entity];
-  const group = ENTITY_NAV_GROUP[entity];
+  const group = getEntityNavGroup(entity);
 
   return (
     <nav
@@ -184,7 +163,7 @@ function DetailBreadcrumb({
     >
       {group && (
         <>
-          <span className="text-muted-foreground">{group}</span>
+          <span className="text-muted-foreground">{group.label}</span>
           <EyebrowSeparator />
         </>
       )}

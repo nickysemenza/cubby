@@ -61,6 +61,15 @@
  *     silently matches nothing at every input size. Use `arrayOverlaps(col,
  *     arr)` instead (see CLAUDE.md / dashboard-shared.ts).
  *
+ * raw-control-byte: a literal C0 control character in tracked source (tab, LF
+ *     and CR excepted). Written as a raw byte rather than an escape, it makes
+ *     the whole file BINARY to the grep family — `file` reports "data", ripgrep
+ *     skips it, and `grep -c` returns nothing for a symbol `git grep` finds 16
+ *     times. Two `\0` composite-key separators did that to a 1,776-line repo
+ *     file; nothing caught it, because this script and its siblings read via
+ *     `git ls-files` + `readFileSync` and are unaffected, and in a diff a raw
+ *     NUL renders as a space.
+ *
  * strict-router-output: explicit tRPC router output schemas must be wrapped in
  *     `strictOutput(...)`. tRPC otherwise checks the resolver against the Zod
  *     schema's input type; shortcode brands exist only in its parsed output, so
@@ -432,6 +441,42 @@ function checkPackageScriptTargets() {
 const UNSTABLE_HOOK_DEFAULT_RE =
   /const\s*\{[^{}]*?=\s*(?:\[\]|\{\}|new\s+[A-Z][\w.]*\s*\([^)]*\))[^{}]*?\}\s*=\s*use[A-Z]\w*\s*\(/g;
 
+// Rule 13b: the same hazard one position over — a fresh-object default on a
+// DESTRUCTURED PARAMETER of a component or hook (`function C({ edges = [] })`,
+// `useTableState({ initialFilter = [] })`). Every caller that omits the prop
+// gets a new reference per render, so any memo/effect keyed on it re-runs
+// unconditionally. That is usually just wasted work — but in `useTableState`
+// it re-ran the URL-reconciliation effect on every render, which then read a
+// stale search mid-write and reverted the filters a saved view had just set.
+//
+// Flagged ONLY when the identifier also appears inside a dependency array in
+// the same file. Without that filter this fires on every server helper and
+// render-only prop with a defaulted array, which is genuinely fine — the
+// hazard is the dependency, not the default.
+// `new Set<string>()` — the generic argument sits between the name and the
+// call, so it has to be optional here or the `new …` arm misses every typed
+// collection (which is most of them).
+const UNSTABLE_PARAM_DEFAULT_RE =
+  /([A-Za-z_$][\w$]*)\s*=\s*(?:\[\]|\{\}|new\s+[A-Z][\w.]*\s*(?:<[^<>()]*>)?\s*\([^)]*\))\s*,/g;
+
+/**
+ * `}, [a, b, c])` / `], [a, b])` — a hook dependency array's contents. The
+ * trailing comma is optional because the formatter adds one on a wrapped call.
+ */
+const DEPENDENCY_ARRAY_RE = /[}\])]\s*,\s*\[([^\]]*)\]\s*,?\s*\)/g;
+
+/** Identifiers named in any dependency array in this file. */
+function dependencyIdentifiers(content) {
+  const names = new Set();
+  for (const match of content.matchAll(DEPENDENCY_ARRAY_RE)) {
+    for (const part of (match[1] ?? "").split(",")) {
+      const name = part.trim().split(/[.?[]/)[0]?.trim();
+      if (name) names.add(name);
+    }
+  }
+  return names;
+}
+
 /** @typedef {{ file: string, line: number, snippet: string, rule: string }} Violation */
 
 /** @param {string[]} files @returns {Violation[]} */
@@ -463,6 +508,43 @@ function scan(files) {
           rule: "unstable-hook-default",
         });
       }
+
+      // Rule 13b: the parameter-position form, narrowed to identifiers this
+      // file actually feeds to a dependency array.
+      const deps = dependencyIdentifiers(content);
+      if (deps.size > 0) {
+        for (const match of content.matchAll(UNSTABLE_PARAM_DEFAULT_RE)) {
+          const name = match[1];
+          if (!name || !deps.has(name)) continue;
+          const line = content.slice(0, match.index).split("\n").length;
+          if (isCommentLine(lines[line - 1] ?? "")) continue;
+          violations.push({
+            file,
+            line,
+            snippet: (lines[line - 1] ?? "").trim(),
+            rule: "unstable-param-default",
+          });
+        }
+      }
+    }
+
+    // Rule (raw-control-byte): a literal C0 control character in source.
+    // Written as a raw byte rather than an escape (`\0`), it makes the whole
+    // file BINARY to the grep family: `file` reports "data", ripgrep skips it,
+    // and `grep -c` returns nothing for a symbol `git grep` finds 16 times.
+    // Two composite-key separators did exactly that to a 1,776-line repo file,
+    // and nothing caught it — this script and its siblings read via
+    // `git ls-files` + `readFileSync`, so they were unaffected, and in a diff a
+    // raw NUL renders as a space. Tabs/newlines/CR are excluded, obviously.
+    for (const match of content.matchAll(
+      /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,
+    )) {
+      violations.push({
+        file,
+        line: content.slice(0, match.index).split("\n").length,
+        snippet: `raw \\u${match[0].charCodeAt(0).toString(16).padStart(4, "0")} — write it as an escape (\\0, \\u001b, …)`,
+        rule: "raw-control-byte",
+      });
     }
 
     // Rule (hand-rolled-any-array): raw `= ANY(${arr})` SQL — the
@@ -792,16 +874,27 @@ const byRule = {
     "Dead package.json script — the tsx/node target file doesn't exist; delete the script or fix the path.",
   "unstable-hook-default":
     "Unstable hook-destructure default — an inline `= []`/`= {}`/`= new …` default on a hook result mints a new reference every render while the value is undefined, destabilizing memo/effect deps (render-loop hazard). Default to a module-level constant instead (see CLAUDE.md React Hooks).",
+  "unstable-param-default":
+    "Unstable parameter default — an inline `= []`/`= {}`/`= new …` default on a destructured component/hook parameter mints a new reference every render for every caller that omits it, and this identifier is named in a dependency array. Default to a module-level constant instead (see CLAUDE.md React Hooks).",
+  "ts-calculateTotals":
+    "TS costing engine — recipe totals live in the Rust/WASM crate (recipebridge); call the WASM instead of reimplementing calculateTotals in TS (CLAUDE.md Where logic lives).",
+  "hand-rolled-any-array":
+    "Hand-rolled `= ANY(${arr})` — drizzle interpolates a JS array into raw SQL as a row constructor, so this is a hard 500 rather than a silent mismatch. Use `eqAny(col, arr)` / `inArray(col, arr)`.",
+  "raw-control-byte":
+    'Raw C0 control byte in source — a literal 0x00/0x1b/… makes the WHOLE FILE binary to the grep family (`file` reports "data", ripgrep skips it, `grep -c` returns nothing for a symbol `git grep` finds). Write it as an escape (`\\0`, `\\u001b`, …).',
 };
 
 console.error(
   `check-conventions: ${violations.length} violation(s) found.\n`,
 );
 
-for (const rule of Object.keys(byRule)) {
+// Iterate the rules that actually fired, not the description map — a rule
+// missing from `byRule` used to exit 1 with a bare count and no file, line, or
+// snippet, which is worst for exactly the rules whose violations are hard to
+// see unaided. Three rules had silently been in that state.
+for (const rule of [...new Set(violations.map((v) => v.rule))].sort()) {
   const hits = violations.filter((v) => v.rule === rule);
-  if (hits.length === 0) continue;
-  console.error(`▸ ${byRule[rule]}`);
+  console.error(`▸ ${byRule[rule] ?? `${rule} (no description registered)`}`);
   for (const v of hits) {
     console.error(`    ${relative(repoRoot, v.file)}:${v.line}: ${v.snippet}`);
   }

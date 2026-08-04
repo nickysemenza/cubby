@@ -163,8 +163,56 @@ const { list } = createEntityListProcedure({
   entityName: "product",
 });
 
-// Create standardized detail/create/update procedures using the enriched schema
-// (create + update are overridden below for side effects).
+/**
+ * Every product this router ships changes a costing input — `price`,
+ * `ingredientId`, and the `productUnitMappings` costing reads conversions from —
+ * so each write path has to recompute the recipes that depend on the product's
+ * linked ingredient. This resolves that link for a set of products.
+ *
+ * Read this BEFORE the mutation runs. `deleteProducts` and `mergeProducts` both
+ * soft-delete rows (the deleted products; the merged-away losers), and every
+ * repo reader filters `notDeleted`, so afterwards the link is unreadable. For a
+ * merge the pre-merge set is also a superset of the post-merge one: the keeper
+ * can only ADOPT an `ingredientId` from a loser (CARRIED_COLUMNS, and only when
+ * its own is null), never gain an id no input product had.
+ */
+async function linkedIngredientIds(
+  db: Parameters<typeof getProductsByShortcodes>[0],
+  shortcodes: ProductShortcode[],
+): Promise<IngredientId[]> {
+  // `getProductsByShortcodes` is the one batch reader that carries the
+  // ingredient relation. Product delete/merge are rare interactive operations,
+  // so its extra joins are not worth a second reader.
+  const products = await getProductsByShortcodes(db, shortcodes);
+  const resolved = await resolveLiveShortcodes(
+    db,
+    products.flatMap((row) => (row.ingredient ? [row.ingredient.id] : [])),
+    "ingredient",
+  );
+  // Map values are unique per ingredient, so this is already deduped — several
+  // products commonly share one ingredient.
+  return [...resolved.values()].map((id) => unsafeIngredientId(id));
+}
+
+/**
+ * The factory builds a `create` and an `update` procedure from these callbacks,
+ * and this router DISCARDS both — only `getByID`/`getByShortcode` are
+ * destructured, because the shipped `create`/`update` are hand-rolled below
+ * (they dispatch the dependent-recipe recompute the factory's contract can't
+ * express). The factory's `repository` type still requires both keys, so these
+ * are unreachable placeholders.
+ *
+ * Never put behavior here. A previous version of this file supplied two
+ * plausible-looking callbacks that no request could ever reach — a fix applied
+ * to one of them would have silently not shipped.
+ */
+const discardedByFactory = (): never => {
+  throw new Error(
+    "unreachable: product.create/update are the hand-rolled procedures below",
+  );
+};
+
+// Create standardized detail procedures using the enriched schema.
 const { getByID, getByShortcode } = createEntityCrudWithoutListProcedures({
   entityName: "product",
   schemas: {
@@ -195,26 +243,8 @@ const { getByID, getByShortcode } = createEntityCrudWithoutListProcedures({
           )
         : null;
     },
-    create: async (services, data) => {
-      const result = await createProductWithFood(
-        services.db,
-        services.usdaClient,
-        data,
-        services.actorContext,
-      );
-      return result.output;
-    },
-    update: async (services, shortcode: ProductShortcode, data) => {
-      const id = await resolveProductId(services.db, shortcode);
-      const result = await updateProductWithFood(
-        services.db,
-        services.usdaClient,
-        id,
-        data,
-        services.actorContext,
-      );
-      return result.output;
-    },
+    create: discardedByFactory,
+    update: discardedByFactory,
   },
 });
 
@@ -594,11 +624,23 @@ const markUsdaUnavailableMany = protectedProcedure
     );
   });
 
+/**
+ * Deleting a product changes recipe cost: `deleteProducts` soft-deletes the
+ * product's `productUnitMappings` (the conversion source costing reads) and
+ * removes its price from the linked ingredient. `runMutationSideEffectsForEntities`
+ * does NOT cover this — `needsValuationRecompute` is true only for
+ * product + `updated`, and only for the location valuation rollup. Nothing else
+ * recomputes recipe totals on a schedule, so without this dispatch a stale
+ * `Recipe.totals` persists until someone runs the maintenance card by hand.
+ */
 const deleteItem = createDeleteProcedure<ProductShortcode>(
   async (services, shortcodes) => {
+    // Before the delete: the products (and their ingredient links) are
+    // unreadable once soft-deleted.
+    const ingredientIds = await linkedIngredientIds(services.db, shortcodes);
     const ids = await resolveProductIds(services.db, shortcodes);
     await deleteProducts(services.db, ids, services.actorContext);
-    return await runMutationSideEffectsForEntities(
+    const backgroundBatches = await runMutationSideEffectsForEntities(
       services.db,
       ids.map((id) => ({
         action: "deleted" as const,
@@ -606,6 +648,14 @@ const deleteItem = createDeleteProcedure<ProductShortcode>(
         source: "product.delete",
       })),
     );
+    // One deduped recompute over every affected recipe, the same shape
+    // `createMany` uses — not one dispatch per deleted product.
+    const recipeBatches =
+      await services.services.recipeCosting.recomputeForIngredients(
+        ingredientIds,
+        { source: "product.delete" },
+      );
+    return [...(backgroundBatches ?? []), ...recipeBatches];
   },
   productShortcode,
 );
@@ -621,11 +671,24 @@ const deleteItem = createDeleteProcedure<ProductShortcode>(
  * absorbed names, aliases, and identifiers (so its embedding is stale), and the
  * losers are gone (so theirs must be cleaned up beyond the in-transaction
  * cascade `finalizeMerge` already did).
+ *
+ * Recipe totals need their own dispatch on top of that, for the same reason
+ * `mergeProducts` ends with `syncInventoryValuationsForProduct`: the merge moves
+ * costing inputs (`price` and `ingredientId` are in `CARRIED_COLUMNS`, and
+ * `ProductUnitMappings.productId` is re-pointed), and nothing recomputes
+ * `Recipe.totals` on a schedule, so a stale cost would persist indefinitely.
  */
 const merge = protectedProcedure
   .input(mergeProductsInput)
   .output(strictOutput(mergeProductsOut))
   .mutation(async ({ ctx, input }) => {
+    // Before the merge: the losers are soft-deleted by the time it returns, and
+    // the keeper's post-merge ingredient can only be one it already had or one
+    // adopted from a loser — so the pre-merge set covers every affected link.
+    const ingredientIds = await linkedIngredientIds(ctx.db, [
+      input.keepId,
+      ...input.mergeIds,
+    ]);
     // Destructured, not stripped later: the internal uuids are the repo's
     // channel to this dispatch and must never reach the wire (the merged-away
     // rows are already soft-deleted, so their codes can't be re-resolved here).
@@ -643,6 +706,12 @@ const merge = protectedProcedure
         source: "product.merge",
       })),
     ]);
+    // `mergeProductsOut` carries no side-effects field, so the batches aren't
+    // surfaced — the dispatch itself is what keeps the totals honest.
+    await ctx.services.recipeCosting.recomputeForIngredients(ingredientIds, {
+      source: "product.merge",
+      entity: { entityType: "product", entityId: keepEntityId },
+    });
     return {
       product: await getProductWithFood(ctx.db, ctx.usdaClient, keepEntityId),
       mergeSummary,
