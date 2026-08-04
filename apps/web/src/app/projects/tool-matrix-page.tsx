@@ -21,20 +21,29 @@
  * rejects with, so this is re-running a shared function, not re-deciding
  * membership — and a cell that slips through is still refused by the server.
  */
-import type { ProjectKind } from "@cubby/schemas/project";
+import type { ProjectKind, ProjectStatus } from "@cubby/schemas/project";
 import {
   isLiveProjectStatus,
   type ProjectToolMatrixCellOut,
   type ProjectToolMatrixOut,
   projectKindValues,
+  projectStatusValues,
 } from "@cubby/schemas/project";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Check, Search, Slash, Wrench } from "lucide-react";
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  Slash,
+  Wrench,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { EntityPreviewLink } from "~/app/_components/EntityPreviewLink";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import {
@@ -51,6 +60,7 @@ import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
 import { toolTimelineConflict } from "~/lib/tool-timeline";
 import { cn, formatCurrency } from "~/lib/utils";
 import type { ToolMatrixSearch } from "~/routes/_authenticated/projects.tools";
+import { PROJECT_STATUS_LABELS } from "./project-formatting";
 
 /**
  * How long a cell waits before it commits. A click-and-revert inside this
@@ -70,12 +80,17 @@ const KIND_LABELS: Record<ProjectKind, string> = {
   garden: "Garden",
 };
 
+const MATRIX_PAGE_SIZE = 24;
+
 const cellKey = (projectId: string, productId: string) =>
   `${projectId}:${productId}`;
 
 /** Sticky row-header column; the header corner has to outrank it. */
 const STICKY = "sticky left-0 z-10 bg-background";
 const NUMERIC = "px-2 py-1 text-right font-mono text-2xs tabular-nums";
+const STICKY_USES = "sticky right-40 z-20 bg-background";
+const STICKY_NET = "sticky right-20 z-20 bg-background";
+const STICKY_COST_PER_USE = "sticky right-0 z-20 bg-background";
 
 function SegmentedControl<T extends string | number>({
   label,
@@ -106,6 +121,65 @@ function SegmentedControl<T extends string | number>({
             )}
           >
             {option.label}
+          </button>
+        ))}
+      </Row>
+    </Row>
+  );
+}
+
+function MultiFilter<T extends string>({
+  label,
+  options,
+  selected,
+  formatLabel,
+  onChange,
+}: {
+  label: string;
+  options: readonly T[];
+  selected: readonly T[];
+  formatLabel: (value: T) => string;
+  onChange: (value: T[] | undefined) => void;
+}) {
+  const selectedSet = new Set(selected);
+  const toggle = (value: T) => {
+    const next = new Set(selected);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    onChange(next.size > 0 ? [...next] : undefined);
+  };
+
+  return (
+    <Row align="center" gap="sm">
+      <span className="eyebrow">{label}</span>
+      <Row gap="xs" wrap>
+        <button
+          type="button"
+          aria-pressed={selected.length === 0}
+          onClick={() => onChange(undefined)}
+          className={cn(
+            "rounded border border-[var(--border)] px-2 py-1 font-mono text-2xs",
+            selected.length === 0
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:bg-muted",
+          )}
+        >
+          All
+        </button>
+        {options.map((option) => (
+          <button
+            key={option}
+            type="button"
+            aria-pressed={selectedSet.has(option)}
+            onClick={() => toggle(option)}
+            className={cn(
+              "rounded border border-[var(--border)] px-2 py-1 font-mono text-2xs",
+              selectedSet.has(option)
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted",
+            )}
+          >
+            {formatLabel(option)}
           </button>
         ))}
       </Row>
@@ -228,7 +302,12 @@ export function ToolMatrixPage({
 }) {
   const api = useTRPC();
   const queryClient = useQueryClient();
+  const [projectDraft, setProjectDraft] = useState(search.project ?? "");
   const [toolDraft, setToolDraft] = useState(search.tool ?? "");
+
+  useEffect(() => {
+    setProjectDraft(search.project ?? "");
+  }, [search.project]);
 
   useEffect(() => {
     setToolDraft(search.tool ?? "");
@@ -236,18 +315,40 @@ export function ToolMatrixPage({
 
   const input = useMemo(
     () => ({
+      statusScope: search.statuses,
       kinds: search.kinds,
+      completionYear: search.completed,
+      search: search.project,
       toolSearch: search.tool,
       minNetLifetimeCost: search.floor ?? 100,
       groupBy: search.group ?? ("trade" as const),
-      maxColumns: 24,
+      maxColumns: MATRIX_PAGE_SIZE,
+      columnPage: search.page ?? 1,
     }),
-    [search.kinds, search.tool, search.floor, search.group],
+    [
+      search.statuses,
+      search.kinds,
+      search.completed,
+      search.project,
+      search.tool,
+      search.floor,
+      search.group,
+      search.page,
+    ],
   );
 
   const { data, isLoading } = useQuery(
     api.project.toolMatrix.queryOptions(input),
   );
+
+  // A hand-edited or stale URL can point past the last page after filtering.
+  // The server clamps authoritatively; mirror that answer back into the URL.
+  useEffect(() => {
+    const resolvedPage = data?.columnPagination.page;
+    const requestedPage = search.page ?? 1;
+    if (resolvedPage === undefined || resolvedPage === requestedPage) return;
+    onSearchChange({ page: resolvedPage === 1 ? undefined : resolvedPage });
+  }, [data?.columnPagination.page, onSearchChange, search.page]);
 
   // Optimistic overlay. Keyed by cell so two cells can be in flight at once,
   // and so a revert inside the settle window just deletes the entry.
@@ -315,17 +416,116 @@ export function ToolMatrixPage({
   if (isLoading) return <Skeleton className="h-96 w-full" />;
   if (!data) return null;
 
+  const statusFilter = search.statuses ?? [];
   const kindFilter = search.kinds ?? [];
-  const toggleKind = (kind: ProjectKind) => {
-    const next = kindFilter.includes(kind)
-      ? kindFilter.filter((value) => value !== kind)
-      : [...kindFilter, kind];
-    onSearchChange({ kinds: next.length > 0 ? next : undefined });
-  };
+  const { page, pageSize, pageCount } = data.columnPagination;
+  const firstProject =
+    data.totals.matchingProjects === 0 ? 0 : (page - 1) * pageSize + 1;
+  const lastProject = Math.min(page * pageSize, data.totals.matchingProjects);
 
   return (
     <Stack gap="md">
       <div className="rounded border border-[var(--border)] bg-card">
+        <Row
+          align="center"
+          gap="lg"
+          wrap
+          className="border-[var(--border)] border-b px-2 py-2"
+        >
+          <Row align="center" gap="sm">
+            <span className="eyebrow">Projects</span>
+            <Search className="size-3.5 text-muted-foreground" aria-hidden />
+            <Input
+              value={projectDraft}
+              aria-label="Filter projects"
+              placeholder="Filter projects"
+              className="h-7 w-40"
+              onChange={(event) => setProjectDraft(event.target.value)}
+              onBlur={() =>
+                onSearchChange({
+                  project: projectDraft.trim() || undefined,
+                  page: undefined,
+                })
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  onSearchChange({
+                    project: projectDraft.trim() || undefined,
+                    page: undefined,
+                  });
+                }
+              }}
+            />
+          </Row>
+          <MultiFilter
+            label="Status"
+            options={projectStatusValues}
+            selected={statusFilter}
+            formatLabel={(status: ProjectStatus) =>
+              PROJECT_STATUS_LABELS[status]
+            }
+            onChange={(statuses) =>
+              onSearchChange({ statuses, page: undefined })
+            }
+          />
+          <MultiFilter
+            label="Kind"
+            options={projectKindValues}
+            selected={kindFilter}
+            formatLabel={(kind: ProjectKind) => KIND_LABELS[kind]}
+            onChange={(kinds) => onSearchChange({ kinds, page: undefined })}
+          />
+          <Row align="center" gap="sm">
+            <span className="eyebrow">Completed</span>
+            <select
+              aria-label="Filter projects by completion year"
+              value={search.completed ?? ""}
+              onChange={(event) =>
+                onSearchChange({
+                  completed: event.target.value || undefined,
+                  page: undefined,
+                })
+              }
+              className="h-7 rounded border border-[var(--border)] bg-background px-2 font-mono text-2xs"
+            >
+              <option value="">All</option>
+              {data.filterOptions.completionYears.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </Row>
+          <Row align="center" gap="xs" className="ml-auto">
+            <button
+              type="button"
+              aria-label="Previous project page"
+              title="Previous project page"
+              disabled={page <= 1}
+              onClick={() => onSearchChange({ page: page - 1 })}
+              className="flex size-7 items-center justify-center rounded border border-[var(--border)] text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <ChevronLeft className="size-3.5" aria-hidden />
+            </button>
+            <span
+              className="whitespace-nowrap font-mono text-2xs text-slate"
+              title="Pages prioritize projects with tool activity, then recent projects; each page reads chronologically."
+            >
+              {firstProject}–{lastProject} of {data.totals.matchingProjects} ·
+              page {page}/{Math.max(pageCount, 1)}
+            </span>
+            <button
+              type="button"
+              aria-label="Next project page"
+              title="Next project page"
+              disabled={pageCount === 0 || page >= pageCount}
+              onClick={() => onSearchChange({ page: page + 1 })}
+              className="flex size-7 items-center justify-center rounded border border-[var(--border)] text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <ChevronRight className="size-3.5" aria-hidden />
+            </button>
+          </Row>
+        </Row>
         <Row
           align="center"
           gap="lg"
@@ -350,31 +550,12 @@ export function ToolMatrixPage({
               label: floor === 0 ? "All" : `$${floor}`,
             }))}
           />
-          <Row align="center" gap="sm">
-            <span className="eyebrow">Kind</span>
-            <Row gap="xs" wrap>
-              {projectKindValues.map((kind) => (
-                <button
-                  key={kind}
-                  type="button"
-                  aria-pressed={kindFilter.includes(kind)}
-                  onClick={() => toggleKind(kind)}
-                  className={cn(
-                    "rounded border border-[var(--border)] px-2 py-1 font-mono text-2xs",
-                    kindFilter.includes(kind)
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-muted",
-                  )}
-                >
-                  {KIND_LABELS[kind]}
-                </button>
-              ))}
-            </Row>
-          </Row>
           <Row align="center" gap="sm" className="ml-auto">
+            <span className="eyebrow">Tools</span>
             <Search className="size-3.5 text-muted-foreground" aria-hidden />
             <Input
               value={toolDraft}
+              aria-label="Filter tools"
               placeholder="Filter tools"
               className="h-7 w-44"
               onChange={(event) => setToolDraft(event.target.value)}
@@ -399,11 +580,11 @@ export function ToolMatrixPage({
             <EmptyDescription>
               {data.rows.length === 0
                 ? "No tools clear this cost floor. Lower it to include cheaper tools."
-                : "No projects match this scope. Clear the kind filter to widen it."}
+                : "No projects match this scope. Clear the project filters to widen it."}
             </EmptyDescription>
           </Empty>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-visible">
             <MatrixTable
               data={data}
               cellIndex={cellIndex}
@@ -412,45 +593,48 @@ export function ToolMatrixPage({
             />
           </div>
         )}
-      </div>
-
-      <Row gap="lg" wrap className="text-2xs text-muted-foreground">
-        <Row align="center" gap="sm">
-          <span className="size-3 rounded-[3px] bg-primary" aria-hidden />
-          attached — a recorded project use
-        </Row>
-        <Row align="center" gap="sm">
-          <span
-            className="size-3 rounded-[3px] border border-primary border-dashed"
-            aria-hidden
-          />
-          bought here — the purchase is on this project
-        </Row>
-        <Row align="center" gap="sm">
-          <span
-            className="size-3 rounded-[3px] border border-muted-foreground border-dotted"
-            aria-hidden
-          />
-          trade match — this project does that kind of work
-        </Row>
-        <Row align="center" gap="sm">
-          <span
-            className="flex size-3 items-center justify-center rounded-[3px] bg-muted/50 text-muted-foreground/60"
-            aria-hidden
-          >
-            <Slash className="size-3" />
+        <Row
+          align="center"
+          gap="lg"
+          wrap
+          className="border-[var(--border)] border-t px-2 py-2 text-2xs text-muted-foreground"
+        >
+          <Row align="center" gap="sm">
+            <span className="size-3 rounded-[3px] bg-primary" aria-hidden />
+            Attached
+          </Row>
+          <Row align="center" gap="sm">
+            <span
+              className="size-3 rounded-[3px] border border-primary border-dashed"
+              aria-hidden
+            />
+            Bought here
+          </Row>
+          <Row align="center" gap="sm">
+            <span
+              className="size-3 rounded-[3px] border border-muted-foreground border-dotted"
+              aria-hidden
+            />
+            Trade match
+          </Row>
+          <Row align="center" gap="sm">
+            <span
+              className="flex size-3 items-center justify-center rounded-[3px] bg-muted/50 text-muted-foreground"
+              aria-hidden
+            >
+              <Slash className="size-3" />
+            </span>
+            Not owned then
+          </Row>
+          <span className="ml-auto font-mono text-slate">
+            {data.columns.length} of {data.totals.matchingProjects} projects ·{" "}
+            {data.rows.length} of {data.totals.matchingTools} tools
+            {data.totals.timelineConflictCells > 0 &&
+              ` · ${data.totals.timelineConflictCells} locked`}
+            {data.truncated.rows && " · row cap reached"}
           </span>
-          not owned then — bought after, or sold before
         </Row>
-        <span>
-          {data.totals.matchingTools} tools · {data.totals.matchingProjects}{" "}
-          projects matched
-          {data.totals.timelineConflictCells > 0 &&
-            ` · ${data.totals.timelineConflictCells} cells locked by the ownership timeline`}
-          {data.truncated.columns && " (columns capped)"}
-          {data.truncated.rows && " (rows capped)"}
-        </span>
-      </Row>
+      </div>
     </Stack>
   );
 }
@@ -508,12 +692,21 @@ function MatrixTable({
   }, [data.columns, data.rows]);
 
   const columnSpan = data.columns.length + 4;
+  const tableWidth = 256 + data.columns.length * 32 + 56 + 80 + 80;
 
   return (
-    <table className="border-collapse text-left">
-      <thead>
+    <table
+      className="table-fixed border-collapse text-left"
+      style={{ width: tableWidth }}
+    >
+      <thead className="sticky top-[51px] z-30 bg-card shadow-[0_1px_0_var(--foreground)]">
         <tr className="border-[var(--foreground)] border-b-[3px]">
-          <th className={cn(STICKY, "z-20 bg-card px-2 pb-1 align-bottom")}>
+          <th
+            className={cn(
+              STICKY,
+              "z-40 w-64 min-w-64 max-w-64 bg-card px-2 pb-1 align-bottom",
+            )}
+          >
             <div className="w-64">
               <span className="eyebrow">Tool</span>
             </div>
@@ -521,30 +714,41 @@ function MatrixTable({
           {data.columns.map((column) => (
             <th
               key={column.projectId}
-              className="w-8 min-w-8 border-[var(--border)] border-l bg-card align-bottom"
-              title={`${column.projectName} · ${column.attachedCount} attached, ${column.suggestedCount} suggested`}
+              className="relative h-28 w-8 min-w-8 overflow-visible border-[var(--border)] border-l bg-card align-bottom"
             >
-              <div
-                className="mx-auto h-36 overflow-hidden text-ellipsis whitespace-nowrap py-2 text-2xs"
-                style={{
-                  writingMode: "vertical-rl",
-                  transform: "rotate(180deg)",
-                }}
-              >
-                {column.projectName}
+              <div className="relative h-24 w-8 overflow-visible">
+                <EntityPreviewLink
+                  entity="project"
+                  id={column.projectId}
+                  className="absolute bottom-2 left-1/2 z-10 block w-32 origin-bottom-left rotate-[-55deg] truncate text-2xs text-foreground underline decoration-border/70 decoration-dotted underline-offset-2 transition-colors hover:text-primary hover:decoration-primary hover:decoration-solid"
+                >
+                  {column.projectName}
+                </EntityPreviewLink>
               </div>
               <div className="pb-1 text-center text-2xs text-slate">
-                {column.startDate ? column.startDate.slice(2, 4) : "—"}
+                {column.startDate ? `’${column.startDate.slice(2, 4)}` : "—"}
               </div>
             </th>
           ))}
-          <th className={cn(NUMERIC, "w-14 bg-card align-bottom")}>
+          <th
+            className={cn(
+              NUMERIC,
+              STICKY_USES,
+              "w-14 border-[var(--border)] border-l bg-card align-bottom",
+            )}
+          >
             <span className="eyebrow">Uses</span>
           </th>
-          <th className={cn(NUMERIC, "w-20 bg-card align-bottom")}>
+          <th className={cn(NUMERIC, STICKY_NET, "w-20 bg-card align-bottom")}>
             <span className="eyebrow">Net</span>
           </th>
-          <th className={cn(NUMERIC, "w-20 bg-card align-bottom")}>
+          <th
+            className={cn(
+              NUMERIC,
+              STICKY_COST_PER_USE,
+              "w-20 bg-card align-bottom",
+            )}
+          >
             <span className="eyebrow">$/use</span>
           </th>
         </tr>
@@ -566,11 +770,11 @@ function MatrixTable({
             </td>
           </tr>,
           ...(rowsByGroup.get(group.key) ?? []).map((row) => (
-            <tr key={row.productId} className="hover:bg-muted/20">
+            <tr key={row.productId} className="group/row hover:bg-muted/20">
               <td
                 className={cn(
                   STICKY,
-                  "border-[var(--border)] border-r border-b px-2 py-1",
+                  "w-64 min-w-64 max-w-64 border-[var(--border)] border-r border-b px-2 py-1 group-hover/row:bg-muted",
                 )}
               >
                 <div className="w-64 min-w-0">
@@ -579,7 +783,6 @@ function MatrixTable({
                     data={{
                       id: row.productId,
                       name: row.productName,
-                      manufacturer: row.manufacturer,
                     }}
                     truncate
                   />
@@ -636,7 +839,13 @@ function MatrixTable({
                   />
                 );
               })}
-              <td className={cn(NUMERIC, "border-[var(--border)] border-b")}>
+              <td
+                className={cn(
+                  NUMERIC,
+                  STICKY_USES,
+                  "border-[var(--border)] border-b border-l group-hover/row:bg-muted",
+                )}
+              >
                 {row.visibleUseCount > 0 ? (
                   row.visibleUseCount
                 ) : (
@@ -649,10 +858,22 @@ function MatrixTable({
                   </span>
                 )}
               </td>
-              <td className={cn(NUMERIC, "border-[var(--border)] border-b")}>
+              <td
+                className={cn(
+                  NUMERIC,
+                  STICKY_NET,
+                  "border-[var(--border)] border-b group-hover/row:bg-muted",
+                )}
+              >
                 {formatCurrency(row.netLifetimeCost, 0)}
               </td>
-              <td className={cn(NUMERIC, "border-[var(--border)] border-b")}>
+              <td
+                className={cn(
+                  NUMERIC,
+                  STICKY_COST_PER_USE,
+                  "border-[var(--border)] border-b group-hover/row:bg-muted",
+                )}
+              >
                 {row.costPerProjectUse === null ? (
                   <span className="text-muted-foreground">—</span>
                 ) : (
@@ -680,10 +901,13 @@ function MatrixTable({
               )}
             </td>
           ))}
-          <td className={cn(NUMERIC, "bg-card")}>
+          <td className={cn(NUMERIC, STICKY_USES, "border-l bg-card")}>
             {data.totals.attachedCells}
           </td>
-          <td className={cn(NUMERIC, "bg-card")} colSpan={2}>
+          <td
+            className={cn(NUMERIC, STICKY_COST_PER_USE, "bg-card")}
+            colSpan={2}
+          >
             {data.totals.suggestedCells} suggested
           </td>
         </tr>

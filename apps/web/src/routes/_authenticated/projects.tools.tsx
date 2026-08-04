@@ -1,4 +1,4 @@
-import { projectKindSchema } from "@cubby/schemas/project";
+import { projectKindSchema, projectStatusSchema } from "@cubby/schemas/project";
 import {
   createFileRoute,
   stripSearchParams,
@@ -18,6 +18,11 @@ const commaSeparatedArray = <T extends z.ZodType>(itemSchema: T) =>
     z.array(itemSchema).optional(),
   );
 
+const completionYearParam = urlStringParam.refine(
+  (value) => value === undefined || /^\d{4}$/.test(value),
+  "Invalid completion year",
+);
+
 /**
  * Everything here except a future `focus`/`collapsed` is a server input and
  * therefore part of the tRPC query key. Keep it that way: pure presentation
@@ -29,6 +34,10 @@ const commaSeparatedArray = <T extends z.ZodType>(itemSchema: T) =>
 const toolMatrixSearchSchema = z
   .object({
     kinds: commaSeparatedArray(projectKindSchema),
+    statuses: commaSeparatedArray(projectStatusSchema),
+    completed: completionYearParam,
+    project: urlStringParam,
+    page: z.coerce.number().int().positive().optional().catch(undefined),
     tool: urlStringParam,
     floor: z.coerce.number().nonnegative().optional().catch(undefined),
     group: z.enum(["trade", "manufacturer"]).optional().catch(undefined),
@@ -40,7 +49,9 @@ export type ToolMatrixSearch = z.infer<typeof toolMatrixSearchSchema>;
 export const Route = createFileRoute("/_authenticated/projects/tools")({
   component: ProjectToolMatrixRoute,
   validateSearch: toolMatrixSearchSchema,
-  search: { middlewares: [stripSearchParams({ floor: 100, group: "trade" })] },
+  search: {
+    middlewares: [stripSearchParams({ floor: 100, group: "trade", page: 1 })],
+  },
   head: () => ({ meta: [{ title: "Tool usage matrix | cubby" }] }),
 });
 
@@ -53,7 +64,10 @@ function ProjectToolMatrixRoute() {
       <ToolMatrixPage
         search={search}
         onSearchChange={(next) =>
-          navigate({ search: (prev) => ({ ...prev, ...next }) })
+          navigate({
+            search: (prev) => ({ ...prev, ...next }),
+            replace: true,
+          })
         }
       />
     </Page>

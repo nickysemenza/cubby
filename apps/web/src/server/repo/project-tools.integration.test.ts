@@ -759,8 +759,48 @@ describe("project tool matrix", () => {
       matrixInput({ maxColumns: 1 }),
     );
     expect(capped.columns).toHaveLength(1);
+    expect(capped.columns[0]?.projectName).toBe("Beta shop");
     expect(capped.totals.matchingProjects).toBe(3);
-    expect(capped.truncated.columns).toBe(true);
+    expect(capped.columnPagination).toEqual({
+      page: 1,
+      pageSize: 1,
+      pageCount: 3,
+    });
+
+    const secondPage = await projectToolMatrix(
+      ctx.db,
+      matrixInput({ maxColumns: 1, columnPage: 2 }),
+    );
+    expect(secondPage.columns[0]?.projectName).toBe("Alpha reno");
+    expect(secondPage.columnPagination.page).toBe(2);
+
+    const clamped = await projectToolMatrix(
+      ctx.db,
+      matrixInput({ maxColumns: 1, columnPage: 99 }),
+    );
+    expect(clamped.columns[0]?.projectName).toBe("Gamma garden");
+    expect(clamped.columnPagination.page).toBe(3);
+
+    const searched = await projectToolMatrix(
+      ctx.db,
+      matrixInput({ search: "Alpha" }),
+    );
+    expect(searched.columns.map((column) => column.projectName)).toEqual([
+      "Alpha reno",
+    ]);
+
+    const completedIn2024 = await projectToolMatrix(
+      ctx.db,
+      matrixInput({ completionYear: "2024" }),
+    );
+    expect(completedIn2024.columns.map((column) => column.projectName)).toEqual(
+      ["Alpha reno"],
+    );
+    expect(completedIn2024.filterOptions.completionYears).toEqual([
+      "2025",
+      "2024",
+      "2023",
+    ]);
   });
 
   it("marks purchased-here cells across every column in one read", async () => {
