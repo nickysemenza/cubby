@@ -151,7 +151,14 @@ jobs:
 
   test-rust:
     name: Rust - recipebridge
-    runs-on: ubuntu-latest
+    # ARM64 standard runners are free and unlimited on public repos (GA
+    # 2025-08-07); published benchmarks put Rust builds ~40% faster than
+    # ubuntu-latest on Cobalt 100. This is the only job worth moving: it is
+    # compute-bound and pure Rust, with no Playwright container, no node
+    # toolchain, and no cross-compilation. Its rust-cache bucket keys on the
+    # host triple, so the switch invalidates it once and rewarms.
+    # If the measured time doesn't beat ubuntu-latest, revert this line alone.
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 25
     # Deploy gate for the Rust crate: fmt + clippy + tests, the tests run under
     # `cargo llvm-cov` so the same execution also produces the coverage report.
