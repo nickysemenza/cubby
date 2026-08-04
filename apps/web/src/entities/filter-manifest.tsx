@@ -1342,6 +1342,13 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
 
   location: [
     {
+      columnId: "image",
+      field: "imagePresenceFilter",
+      kind: "presence",
+      placeholder: "Filter images...",
+      options: presenceFilterOptions("image"),
+    },
+    {
       columnId: "name",
       field: "nameFilter",
       kind: "text",
@@ -1398,6 +1405,13 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
   ],
 
   project: [
+    {
+      columnId: "image",
+      field: "imagePresenceFilter",
+      kind: "presence",
+      placeholder: "Filter images...",
+      options: presenceFilterOptions("image"),
+    },
     {
       columnId: "name",
       // `columnId` is what the client-side filter matches (the Name column);

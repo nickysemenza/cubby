@@ -1,9 +1,10 @@
 import { unsafeLocationId, unsafeProductId } from "@cubby/schemas/identifiers";
+import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { count, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { location, product } from "~/server/db/schema";
-import { getDb } from "./database-helpers";
+import { image, location, locationImage, product } from "~/server/db/schema";
+import { getDb, insertAndReturn } from "./database-helpers";
 import { createInventoryEntry } from "./inventory";
 import {
   createLocation,
@@ -267,5 +268,94 @@ describe("locationList parentPresenceFilter", () => {
       const zeroItems = await listWith({ directItemCountMax: 0 });
       expect(zeroItems.data.map((l) => l.id)).toContain(shelf.id);
     });
+  });
+});
+
+describe("locationList imagePresenceFilter", () => {
+  const ctx = withTestDb();
+
+  const listWith = (filters: Parameters<typeof locationList>[1]) =>
+    locationList(ctx.db, filters, [{ orderBy: "name", direction: "asc" }], {
+      pageIndex: 0,
+      pageSize: 50,
+    });
+
+  /** Create a location and attach one image to it, returning the shortcode id. */
+  const locationWithImage = async (
+    name: string,
+    overrides: {
+      contentType?: string;
+      imageDeleted?: boolean;
+      joinDeleted?: boolean;
+    } = {},
+  ) => {
+    const created = await createLocation(
+      ctx.db,
+      makeLocationInput({ name }),
+      ctx.actor,
+    );
+    const entityId = unsafeLocationId(
+      (await resolveLiveShortcode(ctx.db, created.id, "location"))!,
+    );
+    const img = await insertAndReturn(ctx.db, image, {
+      key: `location-presence-${name}`,
+      url: "https://example.com/location-presence.png",
+      filename: "location-presence.png",
+      contentType: overrides.contentType ?? "image/png",
+      size: 100,
+      status: "UPLOADED",
+      ...(overrides.imageDeleted ? { deletedAt: new Date() } : {}),
+    });
+    await insertAndReturn(ctx.db, locationImage, {
+      locationId: entityId,
+      imageId: img.id,
+      ...(overrides.joinDeleted ? { deletedAt: new Date() } : {}),
+    });
+    return created.id;
+  };
+
+  it("partitions locations with a displayable image from those without", async () => {
+    const withImage = await locationWithImage("Photographed Shelf");
+    const withoutImage = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Unphotographed Shelf" }),
+      ctx.actor,
+    );
+
+    const has = await listWith({ imagePresenceFilter: "has" });
+    expect(has.data.map((l) => l.id)).toEqual([withImage]);
+    expect(has.count).toBe(has.data.length);
+
+    // "none" must return the complement — every other live location — not zero
+    // rows, which is the NOT IN / NULL trap `idSetPresence` warns about.
+    const none = await listWith({ imagePresenceFilter: "none" });
+    expect(none.data.map((l) => l.id)).toContain(withoutImage.id);
+    expect(none.data.map((l) => l.id)).not.toContain(withImage);
+  });
+
+  it("counts a PDF-only, soft-deleted-image, or detached-association location as having no image", async () => {
+    const pdfOnly = await locationWithImage("Manual Only Shelf", {
+      contentType: PDF_CONTENT_TYPE,
+    });
+    const imageDeleted = await locationWithImage("Deleted Image Shelf", {
+      imageDeleted: true,
+    });
+    const joinDeleted = await locationWithImage("Detached Image Shelf", {
+      joinDeleted: true,
+    });
+
+    const has = await listWith({ imagePresenceFilter: "has" });
+    expect(has.data).toHaveLength(0);
+
+    const none = await listWith({ imagePresenceFilter: "none" });
+    const noneIds = none.data.map((l) => l.id);
+    expect(noneIds).toContain(pdfOnly);
+    expect(noneIds).toContain(imageDeleted);
+    expect(noneIds).toContain(joinDeleted);
+
+    // The filter and the rendered cell must agree: a soft-deleted ASSOCIATION
+    // must not still hand the thumbnail column an image to draw.
+    const detachedRow = none.data.find((l) => l.id === joinDeleted);
+    expect(detachedRow?.images).toEqual([]);
   });
 });

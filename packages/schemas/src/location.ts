@@ -50,6 +50,9 @@ export const locationFilterFields = {
   inventoryPresenceFilter: presenceFilter.describe(
     "Filter to locations that do / don't hold at least one live inventory entry",
   ),
+  imagePresenceFilter: presenceFilter.describe(
+    "Filter to locations that do / don't have at least one image (PDF attachments don't count).",
+  ),
   directItemCountMin: z.coerce.number().int().nonnegative().optional(),
   directItemCountMax: z.coerce.number().int().nonnegative().optional(),
   valuationMin: z.coerce.number().optional(),

@@ -577,9 +577,19 @@ export function createImageColumn<T extends BaseRow>(
       className: cn("h-px w-16 overflow-hidden px-0 py-0", options?.className),
       mobile: options?.mobile ?? { slot: "image", priority: -10 },
     },
+    // Reads `row.original` rather than `info.getValue()` — deliberately, and it
+    // is load-bearing whenever `getImages` closes over separately-fetched data
+    // (projects hydrate theirs from `image.imagesByProjectIds`, not from the
+    // list row). TanStack memoizes each accessor result into `row._valuesCache`
+    // and only rebuilds the core row model when `data` changes, NOT when
+    // `columns` change — so a rebuilt column def carrying a fresh closure still
+    // reads the value cached on the very first render. That froze every project
+    // thumbnail at the empty placeholder: the accessor returned the right image
+    // when called directly, while `getValue()` kept handing back the `[]` from
+    // before the images query resolved.
     cell: (info) => (
       <ImageThumbnail
-        images={info.getValue() ?? []}
+        images={getImages(info.row.original)}
         alt="Image"
         lazyPreview={true}
         entity={entity}

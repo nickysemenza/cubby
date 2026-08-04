@@ -25,7 +25,7 @@ import { countBy } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
-  type image,
+  image,
   inventoryEntry,
   location,
   locationImage,
@@ -62,6 +62,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
+import { displayableImageWhere } from "~/server/repo/image-displayability";
 import {
   countByTarget,
   impact,
@@ -599,6 +600,17 @@ export const locationList = async (
       and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
     )
     .where(notDeleted(inventoryEntry));
+  // Joins Image so this matches what the thumbnail cell actually renders — it
+  // drops PDF attachments, and Image is separately soft-deletable from
+  // LocationImage.
+  const locationIdsWithImages = getDb(db)
+    .select({ locationId: locationImage.locationId })
+    .from(locationImage)
+    .innerJoin(
+      image,
+      and(eq(image.id, locationImage.imageId), notDeleted(image)),
+    )
+    .where(and(notDeleted(locationImage), displayableImageWhere));
   const locationIdsMeetingInventoryMinimum = getDb(db)
     .select({ locationId: inventoryEntry.locationId })
     .from(inventoryEntry)
@@ -645,6 +657,11 @@ export const locationList = async (
         location.id,
         filters.inventoryPresenceFilter,
         locationIdsWithLiveInventory,
+      ),
+      idSetPresence(
+        location.id,
+        filters.imagePresenceFilter,
+        locationIdsWithImages,
       ),
       filters.directItemCountMin !== undefined
         ? inArray(location.id, locationIdsMeetingInventoryMinimum)
