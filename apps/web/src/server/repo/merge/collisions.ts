@@ -26,8 +26,19 @@
 interface SlotCollisionPlan<Row> {
   /** Loser rows whose slot is free — safe to re-point onto the survivor. */
   repoint: Row[];
-  /** Loser rows whose slot is taken. The caller decides how to fold each. */
-  absorb: Array<{ row: Row; into: Row }>;
+  /**
+   * Loser rows whose slot is taken, GROUPED BY the row they fold into. The
+   * caller decides how to fold each group.
+   *
+   * Grouped rather than flat (`{row, into}[]`) on purpose. A slot can take more
+   * than one loser — keeper + two losers at one shelf — and a flat list hands
+   * the same `into` object back twice. A caller folding DATA then reads the
+   * never-mutated `into` on each pass and the last write wins instead of
+   * accumulating: `2 + 3 + 4` persisted as `6`, silently losing a quantity in a
+   * destructive operation. The group makes the many-to-one case impossible to
+   * miss, so the caller sums `rows` once.
+   */
+  absorb: Array<{ into: Row; rows: Row[] }>;
 }
 
 /**
@@ -57,6 +68,7 @@ export const planSlotCollisions = <Row>(args: {
   }
 
   const plan: SlotCollisionPlan<Row> = { repoint: [], absorb: [] };
+  const groupByTarget = new Map<Row, { into: Row; rows: Row[] }>();
   for (const row of args.loserRows) {
     const key = args.slotKey(row);
     if (key === null) {
@@ -67,8 +79,15 @@ export const planSlotCollisions = <Row>(args: {
     if (held === undefined) {
       occupant.set(key, row);
       plan.repoint.push(row);
+      continue;
+    }
+    const group = groupByTarget.get(held);
+    if (group) {
+      group.rows.push(row);
     } else {
-      plan.absorb.push({ row, into: held });
+      const created = { into: held, rows: [row] };
+      groupByTarget.set(held, created);
+      plan.absorb.push(created);
     }
   }
   return plan;

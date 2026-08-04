@@ -21,7 +21,7 @@ describe("planSlotCollisions", () => {
     const result = plan([{ id: "k1", slot: "a" }], [{ id: "l1", slot: "a" }]);
     expect(result.repoint).toEqual([]);
     expect(result.absorb).toEqual([
-      { row: { id: "l1", slot: "a" }, into: { id: "k1", slot: "a" } },
+      { into: { id: "k1", slot: "a" }, rows: [{ id: "l1", slot: "a" }] },
     ]);
   });
 
@@ -38,10 +38,12 @@ describe("planSlotCollisions", () => {
       ],
     );
     expect(result.repoint.map((r) => r.id)).toEqual(["l1"]);
-    expect(result.absorb.map(({ row, into }) => [row.id, into.id])).toEqual([
-      ["l2", "l1"],
-      ["l3", "l1"],
-    ]);
+    // ONE group, both rows in it — not two entries pointing at the same `into`.
+    // That shape is what stops a caller folding data from reading the unmutated
+    // target twice and overwriting instead of accumulating.
+    expect(
+      result.absorb.map(({ into, rows }) => [into.id, rows.map((r) => r.id)]),
+    ).toEqual([["l1", ["l2", "l3"]]]);
   });
 
   // A partial unique index doesn't constrain rows whose key is null, so two of

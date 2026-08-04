@@ -241,6 +241,49 @@ describe("mergeProducts", () => {
     expect(await liveEntries(loser.id)).toHaveLength(0);
   });
 
+  // Two losers on ONE shelf. Folding per-row reads the unmutated target each
+  // pass, so the second write overwrites the first: 2 + 3 + 4 persists as 6 and
+  // a quantity vanishes inside a destructive operation. `planSlotCollisions`
+  // groups by target so the sum happens once.
+  it("sums every absorbed entry when two losers share the keeper's location", async () => {
+    const shelf = await seedLocation("Triple Shelf");
+    const keeper = await seedProduct("Keeper Clamp", { model: "CLAMP-1" });
+    const loserA = await seedProduct("Loser Clamp A", { model: "CLAMP-1" });
+    const loserB = await seedProduct("Loser Clamp B", { model: "CLAMP-1" });
+
+    for (const [product, value] of [
+      [keeper, 2],
+      [loserA, 3],
+      [loserB, 4],
+    ] as const) {
+      await createInventoryEntry(
+        ctx.db,
+        {
+          productId: product.id,
+          locationId: shelf,
+          amount: { value, unit: "each" },
+        },
+        TEST_ACTOR,
+      );
+    }
+
+    const summary = await mergeProducts(
+      ctx.db,
+      {
+        keepId: keeper.shortcode,
+        mergeIds: [loserA.shortcode, loserB.shortcode],
+      },
+      TEST_ACTOR,
+    );
+
+    expect(summary.inventoryMerged).toBe(2);
+    const entries = await liveEntries(keeper.id);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.amount.value).toBe(9);
+    expect(await liveEntries(loserA.id)).toHaveLength(0);
+    expect(await liveEntries(loserB.id)).toHaveLength(0);
+  });
+
   it("refuses — and previews a blocker — when shared-location units disagree", async () => {
     const shelf = await seedLocation("Mismatch Shelf");
     const keeper = await seedProduct("Keeper Screws", { model: "SCREW-1" });

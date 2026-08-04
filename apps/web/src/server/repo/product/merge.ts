@@ -77,7 +77,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { MergeProductsInput } from "@cubby/schemas/product";
 import { and, eq, inArray } from "drizzle-orm";
-import { uniq } from "es-toolkit";
+import { sumBy, uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -253,8 +253,10 @@ const planInventoryFold = (args: {
     loserRows: args.loserRows,
     slotKey: (row) => row.locationId,
   });
-  const mismatches = plan.absorb.filter(
-    ({ row, into }) => row.amount.unit !== into.amount.unit,
+  const mismatches = plan.absorb.flatMap(({ into, rows }) =>
+    rows
+      .filter((row) => row.amount.unit !== into.amount.unit)
+      .map((row) => ({ row, into })),
   );
   return { ...plan, mismatches };
 };
@@ -384,23 +386,35 @@ export const mergeProducts = async (
       summary.externalIdsMoved = externalIdPlan.repoint.length;
     }
     const discardedExternalIds: string[] = [];
-    for (const { row, into } of externalIdPlan.absorb) {
-      // Fill-never-overwrite: a link the survivor's row lacks is worth keeping.
-      if (into.url == null && row.url != null) {
+    let externalIdsDiscarded = 0;
+    for (const { into, rows } of externalIdPlan.absorb) {
+      // Fill-never-overwrite, resolved across the WHOLE group: with two losers
+      // on one slot, checking `into.url` per row would let the last one win.
+      const filledUrl =
+        into.url ?? rows.find((row) => row.url != null)?.url ?? null;
+      if (into.url == null && filledUrl != null) {
         await tx
           .update(productExternalId)
-          .set({ url: row.url })
+          .set({ url: filledUrl })
           .where(eq(productExternalId.id, into.id));
       }
       await tx
         .update(productExternalId)
         .set({ deletedAt: now })
-        .where(eq(productExternalId.id, row.id));
-      discardedExternalIds.push(
-        `${row.source}/${row.kind}=${row.externalId} (kept ${into.externalId})`,
-      );
+        .where(
+          inArray(
+            productExternalId.id,
+            rows.map((row) => row.id),
+          ),
+        );
+      for (const row of rows) {
+        discardedExternalIds.push(
+          `${row.source}/${row.kind}=${row.externalId} (kept ${into.externalId})`,
+        );
+      }
+      externalIdsDiscarded += rows.length;
     }
-    summary.externalIdsDiscarded = externalIdPlan.absorb.length;
+    summary.externalIdsDiscarded = externalIdsDiscarded;
 
     // ---- InventoryEntry: apply --------------------------------------------
     if (inventoryPlan.repoint.length > 0) {
@@ -415,42 +429,41 @@ export const mergeProducts = async (
         );
       summary.inventoryMoved = inventoryPlan.repoint.length;
     }
-    for (const { row, into } of inventoryPlan.absorb) {
+    let inventoryMerged = 0;
+    for (const { into, rows } of inventoryPlan.absorb) {
+      // Sum the WHOLE group in one write. Per-row updates would each read the
+      // unmutated `into.amount` and overwrite rather than accumulate, quietly
+      // dropping stock when a shelf takes more than one absorbed entry.
+      const absorbed = sumBy(rows, (row) => row.amount.value);
+      const to = { ...into.amount, value: into.amount.value + absorbed };
       await tx
         .update(inventoryEntry)
-        .set({
-          amount: {
-            ...into.amount,
-            value: into.amount.value + row.amount.value,
-          },
-        })
+        .set({ amount: to })
         .where(eq(inventoryEntry.id, into.id));
+      const absorbedIds = rows.map((row) => row.id);
       await tx
         .update(inventoryEntry)
         .set({ deletedAt: now })
-        .where(eq(inventoryEntry.id, row.id));
-      // Removal-path invariant: the absorbed stock row is a removal like any
-      // other, so its embedding cascades with it (`inventory` is searchable).
-      await softDeleteEntityEmbeddingsTx(tx, "inventory", [row.id]);
+        .where(inArray(inventoryEntry.id, absorbedIds));
+      // Removal-path invariant: the absorbed stock rows are removals like any
+      // other, so their embeddings cascade with them (`inventory` is searchable).
+      await softDeleteEntityEmbeddingsTx(tx, "inventory", absorbedIds);
       await logAuditEntries(tx, actor, [
         {
           entityType: "inventory",
           entityId: into.id,
           action: "update",
-          changes: {
-            amount: {
-              from: into.amount,
-              to: {
-                ...into.amount,
-                value: into.amount.value + row.amount.value,
-              },
-            },
-          },
+          changes: { amount: { from: into.amount, to } },
         },
-        { entityType: "inventory", entityId: row.id, action: "delete" },
+        ...absorbedIds.map((entityId) => ({
+          entityType: "inventory" as const,
+          entityId,
+          action: "delete" as const,
+        })),
       ]);
+      inventoryMerged += rows.length;
     }
-    summary.inventoryMerged = inventoryPlan.absorb.length;
+    summary.inventoryMerged = inventoryMerged;
 
     // ---- ProductImage / ProjectToolUsage / WishCandidate -------------------
     // Three edges, one shape: re-point what fits, soft-delete the duplicate.
@@ -673,7 +686,7 @@ const foldAssociation = async <
       .where(
         inArray(
           args.table.id,
-          plan.absorb.map(({ row }) => row.id),
+          plan.absorb.flatMap(({ rows }) => rows.map((row) => row.id)),
         ),
       );
   }
@@ -754,7 +767,7 @@ export const previewMergeProducts = async (
       },
       edgeKey: "InventoryEntry.productId",
       label: "stock entries summed into the survivor",
-      byTargetId: byProduct(inventoryPlan.absorb.map(({ row }) => row)),
+      byTargetId: byProduct(inventoryPlan.absorb.flatMap(({ rows }) => rows)),
     }),
     impact({
       disposition: PRODUCT_MERGE_EDGE_POLICY["ProductExternalId.productId"],

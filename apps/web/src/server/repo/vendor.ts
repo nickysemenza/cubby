@@ -529,12 +529,13 @@ const planVendorMerge = async (
     slotKey: (p) => p.orderId,
   });
 
-  const folded: VendorMergePlan["folded"] = slotted.absorb.map(
-    ({ row, into }) => ({
-      deadId: row.id,
-      survivorId: into.id,
-      vendorId: row.vendorId,
-    }),
+  const folded: VendorMergePlan["folded"] = slotted.absorb.flatMap(
+    ({ into, rows }) =>
+      rows.map((row) => ({
+        deadId: row.id,
+        survivorId: into.id,
+        vendorId: row.vendorId,
+      })),
   );
   const repointed = slotted.repoint.map((p) => ({
     id: p.id,
