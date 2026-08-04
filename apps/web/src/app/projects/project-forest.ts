@@ -105,10 +105,16 @@ interface FoldForestOptions<T extends ForestNode> {
  *
  * Three guarantees the callers depend on:
  *
- * - **Every node is folded at most once per call.** A root already emitted (as
- *   itself or as somebody's descendant) is skipped, which is what lets a caller
- *   pass `[...roots, ...cyclicRoots]` — or even every node, as the Gantt's
- *   extent pass does — without duplicating rows.
+ * - **Every node is folded at most once per call**, enforced at both ends: the
+ *   root loop skips a node already produced, and a node re-reached during
+ *   recursion returns its memoized fold. Both are load-bearing when `roots`
+ *   contains descendants — as the Gantt's extent pass does, passing every node
+ *   so nodes inside a cycle still get one. Without the memo, a `roots` array
+ *   that happens to list a child before its parent re-folds that whole subtree
+ *   when the parent's walk reaches it: quadratic on a deep chain in leaf-first
+ *   order, which server-sorted rows can trivially produce. The memo also keeps
+ *   the parent's `childResults` complete — skipping an already-emitted child
+ *   instead would silently drop it from its parent's fold.
  * - **A cycle-closing edge is dropped, not followed.** A child already on the
  *   current recursion stack is its own ancestor; descending again is the cycle.
  *   Dropping the edge (rather than the node) keeps every reachable node present.
@@ -128,9 +134,16 @@ export function foldForest<T extends ForestNode, R>(
   const { childrenByParent } = forest;
   const emitted = new Set<string>();
   const onStack = new Set<string>();
+  const memo = new Map<string, R>();
 
   function visit(node: T, depth: number): R {
+    // `has` then `get` (not a `!= null` test): `R` may legitimately be
+    // undefined, and a memoized undefined still means "already folded".
+    if (memo.has(node.id)) return memo.get(node.id) as R;
     emitted.add(node.id);
+    // The two truncating exits are deliberately NOT memoized: both fold a
+    // partial view of the node (no children), and the same node reached later
+    // by a shallower or expanded path deserves its full fold.
     if (depth >= MAX_PROJECT_TREE_DEPTH) return fold(node, [], depth);
     if (options?.descend && !options.descend(node, depth)) {
       return fold(node, [], depth);
@@ -142,7 +155,9 @@ export function foldForest<T extends ForestNode, R>(
       childResults.push(visit(child, depth + 1));
     }
     onStack.delete(node.id);
-    return fold(node, childResults, depth);
+    const result = fold(node, childResults, depth);
+    memo.set(node.id, result);
+    return result;
   }
 
   const results: R[] = [];

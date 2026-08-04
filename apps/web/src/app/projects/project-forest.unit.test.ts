@@ -92,6 +92,44 @@ describe("foldForest", () => {
     ]);
   });
 
+  it("folds each node once even when a root is listed before its own parent", () => {
+    // Leaf-first: every node is a starting root, and each one is also a
+    // descendant of a LATER root. Without the recursion-level memo, walking
+    // `a` re-folds `b` and `c` from scratch — quadratic on a deep chain, and
+    // a `roots` array in this order is what server-sorted rows produce.
+    const items = [node("c", "b"), node("b", "a"), node("a")];
+    const forest = buildForest(items);
+    const folded: string[] = [];
+    const depths = foldForest<ForestNode, number>(
+      forest,
+      (n, _children, depth) => {
+        folded.push(n.id);
+        return depth;
+      },
+      { roots: items },
+    );
+
+    expect(folded).toEqual(["c", "b", "a"]);
+    // `c` and `b` were folded as their own roots (depth 0), and `a`'s walk
+    // reused those results rather than re-folding them at depth 1/2.
+    expect(depths).toEqual([0, 0, 0]);
+  });
+
+  it("gives a parent its child's result even when the child was folded first", () => {
+    // The memo must RETURN the cached fold, not skip the child: a parent that
+    // aggregates over its descendants (the Gantt's extent pass) would
+    // otherwise silently lose them.
+    const items = [node("child", "parent"), node("parent")];
+    const forest = buildForest(items);
+    const subtreeIds = foldForest<ForestNode, string[]>(
+      forest,
+      (n, childIds) => [n.id, ...childIds.flat()],
+      { roots: items },
+    );
+
+    expect(subtreeIds).toEqual([["child"], ["parent", "child"]]);
+  });
+
   it("skips a node's children when `descend` says no", () => {
     const forest = buildForest([
       node("a"),
