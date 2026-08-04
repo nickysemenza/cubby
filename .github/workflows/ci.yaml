@@ -74,6 +74,16 @@ jobs:
 
             core.setOutput("e2e", e2e);
 
+  # NOTHING `needs` this job any more, and that is the point. Every consumer used
+  # to block on it for a directory the cache can hand over in ~2s, paying a
+  # second runner acquisition (~23s median, ~90s p95) for the privilege.
+  # Consumers now restore packages/wasm themselves via setup-node-with-deps
+  # (`wasm: "restore"`), which builds in place on a miss.
+  #
+  # This job survives for exactly one reason: test-e2e runs in the Playwright
+  # container, which has no compiler, so it cannot build on a miss. It waits for
+  # and downloads the artifact this job uploads. On the far more common cache-hit
+  # path nothing consumes the artifact at all — it is a 2s insurance premium.
   build-wasm:
     name: Build WASM
     runs-on: ubuntu-latest
@@ -84,6 +94,9 @@ jobs:
       # resolve its live HEAD SHA and fold it into the cache key below. The key
       # then changes the instant upstream main moves, forcing a rebuild — without
       # this, a moving branch would serve a stale cached WASM pkg indefinitely.
+      # (If upstream main moves *mid-run*, jobs can resolve different SHAs and so
+      # different keys. The loser falls back to this job's artifact, which is
+      # self-consistent; a re-run converges. Rare enough to accept.)
       - name: Resolve ingredient-parser HEAD
         id: parser
         run: echo "sha=$(git ls-remote https://github.com/nickysemenza/ingredient-parser refs/heads/main | cut -f1)" >> "$GITHUB_OUTPUT"
@@ -92,16 +105,25 @@ jobs:
         name: Restore cached WASM pkg
         with:
           path: packages/wasm
+          # Exact key, no restore-keys. The old prefix fallback restored a pkg
+          # built from some other revision, which the build below then
+          # overwrote (cache-hit is false on a prefix match) — so it only ever
+          # cost download time, and risked shipping if the build were skipped.
           key: wasm-pkg-${{ runner.os }}-${{ hashFiles('recipebridge/Cargo.toml') }}-${{ hashFiles('recipebridge/src/**') }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.parser.outputs.sha }}
-          restore-keys: |
-            wasm-pkg-${{ runner.os }}-
       # On a cache hit we only re-upload the restored pkg, so skip the Rust
       # toolchain + pnpm setup (nothing to compile). The artifact upload below
-      # stays unconditional — downstream jobs need it on a hit too.
+      # stays unconditional — test-e2e may miss the cache when this job hit it.
       - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
         if: steps.wasm-cache.outputs.cache-hit != 'true'
         with:
           cache: true
+          # Must match CARGO_TARGET_DIR below. rust-cache defaults to the
+          # workspace-root ./target, which this build never writes to — so the
+          # cache saved ~0 bytes and every cold WASM build recompiled all deps.
+          cache-workspaces: "recipebridge -> target"
+          # Distinct bucket from test-rust/coverage-rust: same manifest,
+          # different target triple (wasm32 vs native).
+          cache-key: wasm32
       - name: Setup pnpm
         if: steps.wasm-cache.outputs.cache-hit != 'true'
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
@@ -117,6 +139,9 @@ jobs:
         run: pnpm wasm
         env:
           RUSTFLAGS: '--cfg getrandom_backend="wasm_js"'
+          # The root `wasm` script honours ${CARGO_TARGET_DIR:-…}; pin it so
+          # cache-workspaces above actually covers the build output.
+          CARGO_TARGET_DIR: ${{ github.workspace }}/recipebridge/target
       - name: Upload WASM pkg artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -251,20 +276,18 @@ jobs:
     name: Lint and Format
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [build-wasm]
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          download-wasm: "true"
+          wasm: "restore"
       - run: pnpm run check
         name: "run repository quality gates"
 
   test-unit-web:
     name: Unit Tests - web
-    needs: [build-wasm]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Pure `unit` + `ui` vitest projects only — NO service containers, so this
@@ -278,7 +301,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          download-wasm: "true"
+          wasm: "restore"
 
       - name: Setup web environment
         uses: ./.github/actions/setup-web-env
@@ -317,7 +340,6 @@ jobs:
 
   test-integration-web:
     name: Integration Tests - web (shard ${{ matrix.shard }})
-    needs: [build-wasm]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # The DB-backed `integration` vitest project — isolated here so the flaky
@@ -373,7 +395,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          download-wasm: "true"
+          wasm: "restore"
 
       - name: Setup web environment
         uses: ./.github/actions/setup-web-env
@@ -417,7 +439,7 @@ jobs:
   test-unit-aux:
     name: Unit Tests - auxiliary packages
     # No `needs` on purpose: none of these packages import @cubby/wasm (this job
-    # passes download-wasm: "false"), so waiting on build-wasm bought nothing but
+    # passes wasm: "false"), so waiting on build-wasm bought nothing but
     # a second runner acquisition. Starting at t=0 also pulls deploy-worker in.
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -429,7 +451,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          download-wasm: "false"
+          wasm: "false"
 
       - name: Run auxiliary tests in parallel
         id: test
@@ -524,7 +546,7 @@ jobs:
     if: |
       needs.change-scope.outputs.e2e == 'true' &&
       !(github.event_name == 'workflow_dispatch' && inputs.bypass_e2e)
-    needs: [build-wasm, change-scope]
+    needs: [change-scope]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # Pin the image to the exact @playwright/test version in pnpm-lock.yaml.
@@ -587,7 +609,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          download-wasm: "true"
+          # NOT wasm: "restore" — that mode builds on a cache miss, and this
+          # image has no compiler (see below), so a miss would die at the host
+          # proc-macro link step. WASM is fetched separately, further down.
+          wasm: "false"
           # The Playwright image intentionally omits a compiler toolchain.
           # Restrict the install to web + its workspace dependencies so the
           # unrelated USDA API's better-sqlite3 native build is never invoked.
@@ -612,6 +637,59 @@ jobs:
       # nothing reads it. e2e-global-setup.ts provisions its own IntegreSQL
       # template entirely in-process (CREATE EXTENSION pg_trgm + drizzle-kit
       # pushSchema), exactly like test-integration-web above.
+
+      # ------------------------------------------------------------------
+      # WASM arrives here, late and WITHOUT a `needs: [build-wasm]` edge —
+      # that edge was the last hop in front of the critical path's long pole,
+      # worth ~23s median and ~100s p95 for a directory this job does not touch
+      # until `build:cf`, ~95s in (container init ~45s + install ~46s).
+      # build-wasm publishes at ~23s, so the ordering is supplied by the head
+      # start rather than by the dependency graph. Artifacts are run-scoped, so
+      # `needs` was never required to download one from a sibling job.
+      #
+      # The cache is the common path. The artifact is the fallback for a genuine
+      # miss (recipebridge/src changed, or upstream parser main moved), where
+      # build-wasm is still compiling and the head start is negative — hence the
+      # wait. Both are JS actions running on the runner's own node, so neither
+      # needs curl/unzip/a compiler inside this container.
+      # ------------------------------------------------------------------
+      - name: Restore cached WASM pkg
+        id: parser
+        shell: bash
+        run: echo "sha=$(git ls-remote https://github.com/nickysemenza/ingredient-parser refs/heads/main | cut -f1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        id: wasm-cache
+        with:
+          path: packages/wasm
+          # Exact key, no restore-keys — same reasoning as setup-node-with-deps.
+          key: wasm-pkg-${{ runner.os }}-${{ hashFiles('recipebridge/Cargo.toml') }}-${{ hashFiles('recipebridge/src/**') }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.parser.outputs.sha }}
+      - name: Wait for the WASM artifact
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const deadlineMs = Date.now() + 5 * 60 * 1000;
+            for (;;) {
+              const { data } = await github.rest.actions.listWorkflowRunArtifacts({
+                ...context.repo,
+                run_id: context.runId,
+                name: "wasm-pkg",
+              });
+              if (data.artifacts.length > 0) return;
+              if (Date.now() >= deadlineMs) {
+                core.setFailed("build-wasm did not publish wasm-pkg within 5 minutes");
+                return;
+              }
+              core.info("wasm-pkg not published yet; retrying in 10s");
+              await new Promise((resolve) => setTimeout(resolve, 10_000));
+            }
+      - name: Download WASM pkg artifact
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: wasm-pkg
+          path: packages/wasm
+
       - name: Build web app for E2E
         run: pnpm --filter @cubby/web run build:cf
       - name: Run Playwright tests
@@ -734,7 +812,6 @@ jobs:
     # deploy critical path (test-e2e is the pole). The real deploy still
     # gates on lint-format (deploy-cf-gate `needs`), so a lint failure never ships —
     # build-cf just may run on a lint-broken PR (cheap on the public repo).
-    needs: [build-wasm]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -743,7 +820,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          download-wasm: "true"
+          wasm: "restore"
       - name: Build all Cloudflare Workers
         run: pnpm build
       - name: Upload CF build artifact
@@ -931,7 +1008,7 @@ jobs:
         with:
           # workspace deps must be installed so wrangler's esbuild can resolve the
           # workspace imports each worker bundles (no prebuilt artifact).
-          download-wasm: "false"
+          wasm: "false"
       - name: Deploy ${{ matrix.pkg }}
         if: steps.current_main.outputs.current == 'true'
         run: pnpm --filter @cubby/${{ matrix.pkg }} run deploy
