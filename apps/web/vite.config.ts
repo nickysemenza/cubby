@@ -211,7 +211,15 @@ export default defineConfig(async () => {
       }),
       tailwindcss(),
       // tanstackStart must come BEFORE viteReact per TanStack Router plugin
-      tanstackStart(),
+      tanstackStart({
+        router: {
+          // Colocated unit tests (e.g. projects.index.unit.test.ts, which imports
+          // the route's search schema) are not routes. Without this the generator
+          // warns "does not export a Route" on every build/HMR pass. Matched
+          // against the file's basename.
+          routeFileIgnorePattern: "\\.(test|spec)\\.[jt]sx?$",
+        },
+      }),
       viteReact(),
     ],
   };
