@@ -235,6 +235,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
             alt="Product from UPC lookup"
             width={64}
             height={64}
+            displayWidth={64}
             className="rounded border object-contain"
           />
           <span>Image will be imported on save</span>

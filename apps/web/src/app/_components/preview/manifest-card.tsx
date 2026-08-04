@@ -6,6 +6,7 @@ import { match } from "ts-pattern";
 import { Row } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { Eyebrow } from "~/components/ui/eyebrow";
+import { Image } from "~/components/ui/image";
 import { Spinner } from "~/components/ui/spinner";
 import {
   type EntityDetailRoute,
@@ -163,9 +164,10 @@ function SectionLabel({ children }: { children: ReactNode }) {
 function BodyBlockView({ block }: { block: BodyBlock }) {
   return match(block)
     .with({ kind: "thumb" }, (b) => (
-      <img
+      <Image
         src={b.url}
         alt=""
+        displayWidth={300}
         className="h-24 w-full rounded-md border border-border bg-card object-contain"
       />
     ))
