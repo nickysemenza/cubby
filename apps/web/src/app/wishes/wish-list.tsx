@@ -1,113 +1,102 @@
-import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { Heart, Plus } from "lucide-react";
-import { useState } from "react";
-import { Row, Stack } from "~/components/layout";
+import type { WishFilters, WishOut } from "@cubby/schemas/wish";
+import { createColumnHelper } from "@tanstack/react-table";
+import { Plus } from "lucide-react";
+import { useMemo, useState } from "react";
+import RTable from "~/app/_components/data-table/Table";
+import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
+import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyMedia,
-  EmptyTitle,
-} from "~/components/ui/empty";
-import { Input } from "~/components/ui/input";
 import { useTRPC } from "~/integrations/trpc/react";
-import { formatCurrency } from "~/lib/utils";
+import { wishMutationInvalidateKeys } from "~/lib/query-keys";
 import { WishFormDialog } from "./wish-form-dialog";
 
 export function WishList() {
   const api = useTRPC();
+  const columnHelper = useMemo(() => createColumnHelper<WishOut>(), []);
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [showAcquired, setShowAcquired] = useState(true);
-  const wishesQuery = useQuery(
-    api.wish.list.queryOptions({
-      filters: {
-        search: search.trim() || undefined,
-        acquired: showAcquired ? undefined : false,
-      },
-      sort: { orderBy: "createdAt", direction: "desc" },
-      pagination: { pageIndex: 0, pageSize: 100 },
-    }),
+
+  const deletableConfig = useDeletableConfig({
+    mutationFn: api.wish.delete.mutationOptions,
+    entityLabel: "Wish",
+    invalidateKeys: wishMutationInvalidateKeys,
+    entity: "wish",
+  });
+
+  const columns = useMemo(
+    () => [
+      // `id: "acquired"` matches the `wish` filter manifest's boolean spec, so
+      // the header filter control is picked up automatically — see
+      // `useStandardColumns`' `withManifestFilter`.
+      columnHelper.accessor((row) => row.acquiredAt, {
+        id: "acquired",
+        header: "Status",
+        meta: { className: "w-28", mobile: { slot: "trailing", priority: 10 } },
+        cell: (info) =>
+          info.getValue() ? (
+            <Badge variant="positive">Acquired</Badge>
+          ) : (
+            <Badge variant="slate">Wanted</Badge>
+          ),
+      }),
+      columnHelper.accessor((row) => row.candidates.length, {
+        id: "candidateCount",
+        header: "Options",
+        meta: {
+          numeric: true,
+          className: "w-24",
+          mobile: { slot: "meta", priority: 20 },
+        },
+        cell: (info) => (
+          <span className="font-mono tabular-nums">{info.getValue()}</span>
+        ),
+      }),
+    ],
+    [columnHelper],
   );
-  usePageCount(wishesQuery.data?.meta.totalCount);
-  const wishes = wishesQuery.data?.items ?? [];
+
+  // Neither `buildFilters` nor `filters` is passed: the `wish` entry in
+  // `entities/filter-manifest.tsx` drives the Name search box, the server
+  // `WishFilters` object, and the `?q=` URL round-trip.
+  const {
+    table,
+    isLoading,
+    error,
+    timing,
+    bulkActionBar,
+    deleteDialog,
+    infiniteScroll,
+    refreshControls,
+    totalCount,
+  } = useEntityList<WishOut, WishFilters>({
+    entity: "wish",
+    queryOptions: api.wish.list.queryOptions,
+    columns,
+    deletable: deletableConfig,
+  });
+  usePageCount(totalCount);
 
   return (
-    <Stack gap="sm">
-      <Row wrap gap="sm">
-        <Input
-          className="max-w-sm"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search wishlist"
-        />
-        <Button
-          variant="outline"
-          onClick={() => setShowAcquired((current) => !current)}
-        >
-          {showAcquired ? "Hide acquired" : "Show acquired"}
-        </Button>
-        <Button onClick={() => setOpen(true)}>
-          <Plus /> New wish
-        </Button>
-      </Row>
-      {wishes.length === 0 && !wishesQuery.isLoading ? (
-        <Empty>
-          <EmptyMedia variant="icon">
-            <Heart />
-          </EmptyMedia>
-          <EmptyTitle>Your wishlist is empty</EmptyTitle>
-          <EmptyDescription>
-            Keep a future tool, a fun idea, or a set of alternatives here until
-            the moment is right.
-          </EmptyDescription>
-        </Empty>
-      ) : (
-        <div className="divide-y border">
-          {wishes.map((wish) => (
-            <Link
-              key={wish.id}
-              to="/wishes/$shortcode"
-              params={{ shortcode: wish.id }}
-              className="block p-2 transition-colors hover:bg-muted"
-            >
-              <Row align="start" justify="between" gap="sm">
-                <div className="min-w-0">
-                  <Row align="center" wrap gap="sm">
-                    <span className="font-medium">{wish.name}</span>
-                    {wish.acquiredAt && (
-                      <Badge variant="positive">Acquired</Badge>
-                    )}
-                  </Row>
-                  {wish.notes && (
-                    <p className="mt-1 line-clamp-2 text-muted-foreground">
-                      {wish.notes}
-                    </p>
-                  )}
-                </div>
-                <span className="shrink-0 text-muted-foreground">
-                  {wish.candidates.length} option
-                  {wish.candidates.length === 1 ? "" : "s"}
-                </span>
-              </Row>
-              {wish.candidates.length > 0 && (
-                <p className="mt-2 truncate text-muted-foreground">
-                  {wish.candidates
-                    .map(
-                      (candidate) =>
-                        `${candidate.manufacturer} ${candidate.name}${candidate.price === null ? "" : ` · ${formatCurrency(candidate.price)}`}`,
-                    )
-                    .join("  ·  ")}
-                </p>
-              )}
-            </Link>
-          ))}
-        </div>
-      )}
+    <div>
+      <RTable
+        table={table}
+        isLoading={isLoading}
+        error={error}
+        ariaLabel="Wishlist Table"
+        timing={timing}
+        entity="wish"
+        bulkActionBar={bulkActionBar}
+        infiniteScroll={infiniteScroll}
+        refreshControls={refreshControls}
+        actions={
+          <Button onClick={() => setOpen(true)}>
+            <Plus /> New wish
+          </Button>
+        }
+      />
+      {deleteDialog}
       <WishFormDialog open={open} onOpenChange={setOpen} />
-    </Stack>
+    </div>
   );
 }

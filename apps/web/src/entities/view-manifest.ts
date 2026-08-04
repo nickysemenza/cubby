@@ -123,6 +123,14 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       filters: [{ id: "vendor", value: [FILTER_NONE] }],
     },
   ],
+  wish: [
+    {
+      id: "hide-acquired",
+      label: "Hide acquired",
+      description: "Only items still on the list",
+      filters: [{ id: "acquired", value: "false" }],
+    },
+  ],
 };
 
 export function viewsForEntity(entity: Entity | undefined): ViewDefinition[] {

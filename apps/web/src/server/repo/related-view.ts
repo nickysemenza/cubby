@@ -279,6 +279,11 @@ const SQL_RELATED_VIEWS = {
     `JOIN "Purchase" p ON p."id" = s."purchaseId" AND p."deletedAt" IS NULL JOIN "Expense" e ON e."purchaseId" = p."id" AND e."deletedAt" IS NULL JOIN "Product" t ON t."id" = e."productId" AND t."deletedAt" IS NULL`,
     "product",
   ),
+  "wish.candidates": named(
+    "Wish",
+    `JOIN "WishCandidate" wc ON wc."wishId" = s."id" AND wc."deletedAt" IS NULL JOIN "Product" t ON t."id" = wc."productId" AND t."deletedAt" IS NULL`,
+    "product",
+  ),
 } as const satisfies Record<RelatedViewKey, SqlRelatedView>;
 
 type RawRow = {

@@ -22,6 +22,7 @@ import {
   relatedViewRegistry,
 } from "./related-view";
 import { vendorFilterFields } from "./vendor";
+import { wishFilterFields } from "./wish";
 
 const declaredLocalEdges = new Set(
   Object.values(entityManifest).flatMap((descriptor) =>
@@ -156,6 +157,7 @@ describe("relatedViewRegistry", () => {
       expense: expenseFilterFields,
       financialAccount: financialAccountFilterFields,
       financialTransaction: financialTransactionFilterFields,
+      wish: wishFilterFields,
     } as const;
     for (const view of relatedViewRegistry) {
       const prefix = relatedFilterPrefix(view);
