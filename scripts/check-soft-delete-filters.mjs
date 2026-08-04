@@ -26,7 +26,7 @@
  *
  * ---
  *
- * Second form: raw `sql\`...\`` template literals. Drizzle's exists()/notExists()
+ * Second form: raw template-literal SQL text. Drizzle's exists()/notExists()
  * are JS-level function calls, easy to find with a balanced-paren scan of their
  * argument. But several repos build correlated EXISTS subqueries as raw SQL
  * text instead — `sql\`EXISTS (SELECT 1 FROM "Expense" e WHERE ... )\`` — because
@@ -37,21 +37,42 @@
  * satisfies raw-SQL EXISTS for exactly the same reason it satisfies drizzle's
  * — this is the same bug class, just a different surface.
  *
- * We find these by:
- *   1. Locating `sql\`...\`` (optionally `sql<T>\`...\``) tagged templates,
- *      walking their contents with a template-literal-aware scanner so a
- *      nested `${sql\`...\`}` interpolation doesn't prematurely close the
- *      outer template.
- *   2. Within each template's text, finding `EXISTS (` / `NOT EXISTS (` and
- *      taking the balanced-paren body (same backtick-aware balancer used for
- *      the drizzle form, so a nested `${sql.join(...)}` inside the body
- *      doesn't unbalance the parens).
- *   3. Within that body, finding every `FROM "Table" alias` / `JOIN "Table"
+ * Some of these aren't even tagged `sql\`...\`` — data-quality.ts's
+ * purchaseGapRaw/purchaseProductGapRaw build EXISTS text as a PLAIN backtick
+ * string, concatenated across several template literals (`` `${base}
+ * ${condition} AND ${exceptionAbsent})` ``) and handed to `sql.raw(...)` only
+ * at the call site, several lines and a ternary away. That concatenation means
+ * the "EXISTS (" and its matching ")" frequently live in DIFFERENT template
+ * literals — the open paren has no balanced close within the literal that
+ * contains it. A balanced-paren scan of that literal alone can't find it (and
+ * chasing the concatenation across expressions is effectively evaluating the
+ * program, not parsing it — the "real SQL parser" territory this check is
+ * supposed to stay out of). So this scan does not require the parens to
+ * balance within one literal:
+ *
+ *   1. Find every backtick template literal in the file — tagged or not —
+ *      with a template-literal-aware scanner so a nested `${sql\`...\`}`
+ *      interpolation doesn't prematurely close an outer one, and so a
+ *      backtick inside a block or line comment (e.g. a markdown code span in
+ *      a docblock) is never mistaken for a template start.
+ *   2. Within each literal, find the FIRST `EXISTS (` / `NOT EXISTS (` and
+ *      take everything from there to the end of that literal as the body —
+ *      not the balanced-paren argument. That covers a self-contained EXISTS
+ *      (the common case) and also the concatenated-`base`-string case, since
+ *      whatever guards the table stays in the SAME source literal even when
+ *      the closing paren doesn't. It deliberately does not reach into a
+ *      later, separately-concatenated literal (e.g. `${exceptionAbsent}`) —
+ *      only what's textually present alongside the reference counts.
+ *   3. Within that body, find every `FROM "Table" alias` / `JOIN "Table"
  *      alias` (quoted identifier) and `FROM ${tableVar} alias` / `JOIN
  *      ${tableVar} alias` (drizzle table interpolation) reference to a
- *      soft-deletable table, and requiring an `alias."deletedAt" IS NULL`
+ *      soft-deletable table, and require an `alias."deletedAt" IS NULL`
  *      predicate for THAT alias somewhere in the body (or the table's own
- *      quoted name, for the rare unaliased reference).
+ *      quoted name, for the rare unaliased reference). A following SQL
+ *      keyword (WHERE, ON, JOIN, …) is never mistaken for an alias — see
+ *      `SQL_KEYWORDS` — so `FROM "Table"\n WHERE "Table"."deletedAt" IS NULL`
+ *      (no alias at all) is recognized as guarded rather than misread as
+ *      `FROM "Table" WHERE` with alias `WHERE`.
  *
  * This intentionally does not resolve fully dynamic table references (e.g.
  * `FROM ${sql.raw(\`"${runtimeVar}"\`)}`) — that would need evaluating the
@@ -222,31 +243,100 @@ function balancedSlice(text, open) {
   return null;
 }
 
-/** [start,end) ranges of every `sql\`...\`` / `sql<T>\`...\`` template's contents. */
-function sqlTemplateRanges(text) {
+/**
+ * [start,end) ranges of every backtick template literal's contents in the
+ * file — tagged (`sql\`...\``, `sql<T>\`...\``) or not (a plain string later
+ * handed to `sql.raw(...)`, possibly assembled from several concatenated
+ * literals). A single left-to-right walk, so a nested `${sql\`...\`}` is
+ * consumed as part of its enclosing literal via `skipOpaque` and never
+ * revisited as a separate top-level range — ranges never overlap. Quoted
+ * strings and comments are skipped outright so a backtick inside either
+ * (e.g. a markdown code span in a docblock) is never mistaken for the start
+ * of a template.
+ */
+function allTemplateRanges(text) {
   const ranges = [];
-  const tagPattern = /\bsql(?:<[^>]*>)?`/g;
-  let tag;
-  while ((tag = tagPattern.exec(text))) {
-    const backtick = tag.index + tag[0].length - 1;
-    const start = backtick + 1;
-    const closeAfter = skipOpaque(text, backtick);
-    if (closeAfter < 0) continue;
-    ranges.push([start, closeAfter - 1]);
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (
+      ch === '"' ||
+      ch === "'" ||
+      (ch === "/" && (text[i + 1] === "/" || text[i + 1] === "*"))
+    ) {
+      const next = skipOpaque(text, i);
+      if (next < 0) break;
+      i = next;
+      continue;
+    }
+    if (ch === "`") {
+      const start = i + 1;
+      const closeAfter = skipOpaque(text, i);
+      if (closeAfter < 0) break;
+      ranges.push([start, closeAfter - 1]);
+      i = closeAfter;
+      continue;
+    }
+    i++;
   }
   return ranges;
 }
 
-function insideAnyRange(index, ranges) {
-  return ranges.some(([start, end]) => index >= start && index < end);
-}
+/**
+ * SQL keywords that can legitimately follow `FROM "Table"` / `JOIN "Table"`
+ * with NO alias in between (`FROM "Table"\n WHERE ...`, `JOIN "Table" ON
+ * ...`). Without this denylist the optional-alias capture in the table-ref
+ * regexes below greedily swallows the keyword as if it were an alias — e.g.
+ * `FROM "InventoryEntry"\n WHERE "InventoryEntry"."deletedAt" IS NULL` reads
+ * as alias `WHERE`, so the guard search for `WHERE."deletedAt"` (which never
+ * appears) fails even though the query is correctly guarded via the table's
+ * own quoted name. Filtered case-insensitively; see the (unaliased) fallback
+ * a few lines down for what happens once a would-be alias is rejected here.
+ */
+const SQL_KEYWORDS = new Set([
+  "WHERE",
+  "AS",
+  "JOIN",
+  "INNER",
+  "LEFT",
+  "RIGHT",
+  "FULL",
+  "CROSS",
+  "ON",
+  "GROUP",
+  "ORDER",
+  "HAVING",
+  "LIMIT",
+  "OFFSET",
+  "UNION",
+  "INTERSECT",
+  "EXCEPT",
+  "WINDOW",
+  "RETURNING",
+  "AND",
+  "OR",
+  "NOT",
+  "EXISTS",
+  "SELECT",
+  "FROM",
+  "INTO",
+  "VALUES",
+  "SET",
+  "USING",
+  "NATURAL",
+  "LATERAL",
+  "WITH",
+]);
+
+/** Reject a captured alias that's actually the next SQL keyword, not a name. */
+const cleanAlias = (rawAlias) =>
+  rawAlias && !SQL_KEYWORDS.has(rawAlias.toUpperCase()) ? rawAlias : undefined;
 
 const { varNames, sqlNameToVar, varToSqlName } = softDeletableTables();
 const tablePattern = new RegExp(
   `\\.(?:from|\\w*[Jj]oin)\\(\\s*(${[...varNames].join("|")})\\b`,
 );
 const callPattern = /\b(exists|notExists)\s*\(/g;
-const existsTextPattern = /\bEXISTS\s*\(/g;
 const tableRefQuoted = /\b(?:FROM|JOIN)\s+"(\w+)"(?:\s+(?:AS\s+)?(\w+))?/g;
 const tableRefInterp =
   /\b(?:FROM|JOIN)\s+\$\{(\w+)\}(?:\s+(?:AS\s+)?(\w+))?/g;
@@ -285,48 +375,49 @@ for (const file of serverSources()) {
     }
   }
 
-  // --- raw sql`...EXISTS (...)...` form ---
+  // --- raw template-literal EXISTS form (tagged sql`` or plain) ---
   if (text.includes("EXISTS")) {
-    const templateRanges = sqlTemplateRanges(text);
-    existsTextPattern.lastIndex = 0;
-    let call;
-    while ((call = existsTextPattern.exec(text))) {
-      if (!insideAnyRange(call.index, templateRanges)) continue;
+    const seen = new Set(); // dedupe: overlapping literals can revisit a table+alias
+    for (const [rangeStart, rangeEnd] of allTemplateRanges(text)) {
+      const literal = text.slice(rangeStart, rangeEnd);
 
-      const open = call.index + call[0].length - 1;
-      const span = balancedSlice(text, open);
-      if (!span) continue;
-      const body = text.slice(span[0], span[1]);
+      // Anchor on the FIRST EXISTS in this literal and scan from there to the
+      // literal's end — not a balanced-paren argument. Several raw-SQL sites
+      // (data-quality.ts's purchaseGapRaw/purchaseProductGapRaw) assemble one
+      // EXISTS(...) by concatenating multiple template literals at runtime
+      // (`` `${base} ${condition} AND ${exceptionAbsent})` ``), so the "(" this
+      // literal opens is closed in a DIFFERENT literal — a balanced scan would
+      // never find the guard. A table/alias's guard always stays textually
+      // alongside its own reference within one literal even when the paren
+      // doesn't close there, so this still can't wander into an unrelated,
+      // earlier part of the same literal.
+      const first = /\bEXISTS\s*\(/.exec(literal);
+      if (!first) continue;
+      const existsIndex = rangeStart + first.index;
+      if (hasOptOut(existsIndex)) continue;
       const kind = /\bNOT\s+$/.test(
-        text.slice(Math.max(0, call.index - 8), call.index),
+        text.slice(Math.max(0, existsIndex - 8), existsIndex),
       )
         ? "NOT EXISTS"
         : "EXISTS";
-
-      if (hasOptOut(call.index)) continue;
+      const body = text.slice(existsIndex, rangeEnd);
 
       const refs = [];
       tableRefQuoted.lastIndex = 0;
       let ref;
       while ((ref = tableRefQuoted.exec(body))) {
-        const [, sqlName, alias] = ref;
+        const [, sqlName, rawAlias] = ref;
         if (!sqlNameToVar.has(sqlName)) continue;
-        refs.push({
-          table: sqlName,
-          alias: alias ?? sqlName,
-          aliasIsBare: Boolean(alias),
-        });
+        const alias = cleanAlias(rawAlias);
+        refs.push({ table: sqlName, alias: alias ?? sqlName, aliasIsBare: Boolean(alias) });
       }
       tableRefInterp.lastIndex = 0;
       while ((ref = tableRefInterp.exec(body))) {
-        const [, varName, alias] = ref;
+        const [, varName, rawAlias] = ref;
         if (!varNames.has(varName)) continue;
+        const alias = cleanAlias(rawAlias);
         const sqlName = varToSqlName.get(varName);
-        refs.push({
-          table: sqlName,
-          alias: alias ?? sqlName,
-          aliasIsBare: Boolean(alias),
-        });
+        refs.push({ table: sqlName, alias: alias ?? sqlName, aliasIsBare: Boolean(alias) });
       }
 
       for (const { table, alias, aliasIsBare } of refs) {
@@ -335,9 +426,14 @@ for (const file of serverSources()) {
           : new RegExp(`"${alias}"\\s*\\.\\s*"deletedAt"\\s+IS\\s+NULL`);
         if (guard.test(body)) continue;
 
+        const line = lineOf(existsIndex);
+        const key = `${abs}:${line}:${table}:${alias}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
         violations.push({
           file: relative(repoRoot, abs),
-          line: lineOf(call.index),
+          line,
           detail: `raw sql ${kind}(… FROM/JOIN "${table}" ${aliasIsBare ? alias : "(unaliased)"} … — missing ${aliasIsBare ? alias : `"${table}"`}."deletedAt" IS NULL)`,
         });
       }
