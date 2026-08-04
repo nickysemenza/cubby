@@ -29,7 +29,12 @@ export interface ImageWithPreviewProps {
   className?: string;
   /** Graceful fallback rendered when the image is missing or fails to load. */
   fallback?: ReactNode;
-  /** Thumbnail display width in px for CF image transforms (the popup uses previewSize). */
+  /**
+   * Overrides the thumbnail's CF-transform width, which otherwise follows
+   * `size` (the popup always transforms at `previewSize`). Only needed when the
+   * box is sized by `className` rather than `size` — leaving both unset serves
+   * the full-size original, which is never what a thumbnail wants.
+   */
   displayWidth?: number;
   /**
    * How the thumbnail fills its box. `"cover"` (default) crops to fill — right
@@ -55,7 +60,10 @@ export function ImageWithPreview({
   lazyPreview = false,
   className,
   fallback,
-  displayWidth,
+  // Defaulting to `size` is what keeps the transform width and the layout box
+  // from silently diverging — an omitted `displayWidth` used to mean "serve the
+  // multi-MB original into a 32px tile".
+  displayWidth = size,
   fit = "cover",
 }: ImageWithPreviewProps) {
   const thumbnailClasses = cn(

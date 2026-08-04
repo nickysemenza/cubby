@@ -74,6 +74,7 @@ export function CookbookList() {
                       <Image
                         src={coverUrl}
                         alt={book}
+                        displayWidth={300}
                         className="aspect-[3/4] w-full object-cover"
                       />
                     ) : (

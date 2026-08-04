@@ -477,6 +477,34 @@ function dependencyIdentifiers(content) {
   return names;
 }
 
+// `<Image>` (~/components/ui/image) only rewrites an R2 URL through Cloudflare
+// Image Transformations when it's told the rendered width — omit `displayWidth`
+// and the full-size original is served into whatever box the className sets.
+// That's how the locations gallery ended up pulling 1.8MB photos into 32px
+// tiles. Matches the component exactly, so ImageThumbnail / ImageWithPreview /
+// ImageOff don't trip it. Passing the prop on a non-bucket URL is a harmless
+// no-op, which is why this needs no per-site allowlist.
+const IMAGE_ELEMENT_RE = /<Image(?=[\s/>])/g;
+
+/**
+ * The prop-list source of a JSX element starting at `open` (the `<`), i.e. up to
+ * the first `>` at brace-depth 0. Tracking `{}` depth is what keeps an arrow
+ * function (`=>`) or a nested element (`fallback={<Icon />}`) in a prop from
+ * ending the scan early.
+ *
+ * @param {string} content @param {number} open @returns {string}
+ */
+function jsxOpeningTag(content, open) {
+  let depth = 0;
+  for (let i = open; i < content.length; i++) {
+    const ch = content[i];
+    if (ch === "{") depth++;
+    else if (ch === "}") depth--;
+    else if (ch === ">" && depth === 0) return content.slice(open, i + 1);
+  }
+  return content.slice(open);
+}
+
 /** @typedef {{ file: string, line: number, snippet: string, rule: string }} Violation */
 
 /** @param {string[]} files @returns {Violation[]} */
@@ -495,6 +523,21 @@ function scan(files) {
       continue;
     }
     const lines = content.split("\n");
+
+    // Rule (untransformed-image): an <Image> that never declares its rendered
+    // width. Content-level — the prop list spans lines.
+    if (isTsx && !isTestOrFixture(file)) {
+      for (const match of content.matchAll(IMAGE_ELEMENT_RE)) {
+        const tag = jsxOpeningTag(content, match.index);
+        if (/\bdisplayWidth\b/.test(tag)) continue;
+        violations.push({
+          file,
+          line: content.slice(0, match.index).split("\n").length,
+          snippet: tag.replaceAll(/\s+/g, " ").slice(0, 120),
+          rule: "untransformed-image",
+        });
+      }
+    }
 
     // Rule 13: unstable hook-destructure defaults (content-level — the
     // destructure can span lines). Tests are exempt like the other rules.
@@ -864,6 +907,8 @@ const byRule = {
     "getDb() used outside server/repo/ — the opaque Database type may only be unwrapped in the repo layer (CLAUDE.md Opaque Database Type); move the query behind a repo helper.",
   "hw-pair-shorthand":
     "Adjacent equal h-N/w-N pair — use the `size-N` shorthand (e.g. `h-4 w-4` → `size-4`) so icon sizing stays single-token (CLAUDE.md Colors / Design Tokens).",
+  "untransformed-image":
+    "<Image> without `displayWidth` — the Cloudflare Image Transformation is opt-in, so an omitted width serves the full-size R2 original into the rendered box (multi-MB photos into 32px tiles). Pass the rendered CSS width; `srcSet` handles retina, and it's a harmless no-op on non-bucket URLs.",
   "uuid-entity-href":
     "Entity link keyed on a uuid — shortcodes are the public id, so a detail-page URL is `/products/$shortcode`, never `/products/$id` or a `/tasks/${row.id}` template. Route through `entities[e].routes.detail` + `entityDetailParams`.",
   "hand-rolled-array-overlap":
