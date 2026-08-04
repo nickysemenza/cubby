@@ -4,11 +4,12 @@ import { expenseCreateInput } from "@cubby/schemas/project";
 import { count, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { ingredient, recipe } from "~/server/db/schema";
+import { entityEmbedding, ingredient, recipe } from "~/server/db/schema";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { upsertImportRecipe } from "~/server/repo/import-recipe-convert";
 import { deleteRecipes } from "~/server/repo/recipe";
 import { getDb, withTransaction } from "./database-helpers";
+import { findOrphanedEntityEmbeddings } from "./entity-embedding";
 import { createExpense } from "./expense";
 import {
   createIngredient,
@@ -291,6 +292,46 @@ describe("ingredient", () => {
     });
     expect(movedRecipe!.totalsComputedAt).toBeNull();
     expect(summary.affectedRecipeIds).toContain(movedRecipe!.id);
+  });
+
+  // Removal-path invariant (root CLAUDE.md, guard-enforced): `mergeIngredients`
+  // is the only removal path in the repo that HARD-deletes its absorbed rows
+  // rather than soft-deleting them — which made it easy to miss that the
+  // absorbed ingredients' EntityEmbedding rows still need cleanup in the same
+  // transaction. Mirrors the seed/assert shape of
+  // inventory/embedding-cascade-invariant.integration.test.ts.
+  it("mergeIngredients cleans up the absorbed ingredients' embeddings (no orphans)", async () => {
+    const keeper = await findOrCreateIngredient(ctx.db, "embed cascade keeper");
+    const alias = await findOrCreateIngredient(ctx.db, "embed cascade alias");
+
+    // Minimal 3-dim vector — the HNSW index is partial on dimensions=1536, so
+    // small test vectors insert fine (same trick as the inventory test).
+    await getDb(ctx.db)
+      .insert(entityEmbedding)
+      .values({
+        entityType: "ingredient",
+        entityId: alias.id,
+        embeddingText: `ingredient ${alias.id}`,
+        embeddingHash: `hash-${alias.id}`,
+        provider: "test",
+        model: "test",
+        dimensions: 3,
+        embedding: [0, 0, 0],
+      });
+
+    await mergeIngredients(ctx.db, keeper.id, [alias.id]);
+
+    // The alias row is HARD-deleted, so its embedding can't be re-read by id —
+    // the only observable proof of cleanup is that it no longer appears as an
+    // orphan (a soft-deleted or genuinely absent embedding both pass; a LIVE
+    // embedding pointing at the now-hard-deleted alias id is exactly the bug).
+    const orphaned = await findOrphanedEntityEmbeddings(ctx.db);
+    expect(orphaned).toEqual([]);
+
+    const embeddingRow = await getDb(ctx.db).query.entityEmbedding.findFirst({
+      where: eq(entityEmbedding.entityId, alias.id),
+    });
+    expect(embeddingRow?.deletedAt).not.toBeNull();
   });
 
   it("merge rejects a self-merge without deleting the target", async () => {

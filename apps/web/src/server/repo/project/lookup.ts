@@ -13,6 +13,7 @@ import type {
   ProjectOut,
 } from "@cubby/schemas/project";
 import { projectSortableFields } from "@cubby/schemas/project";
+import { parseShortcode } from "@cubby/shared";
 import { arrayOverlaps, asc, inArray, isNull, or, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { project } from "~/server/db/schema";
@@ -114,8 +115,14 @@ export const buildProjectListQuery = async (
     ? [filters.parentProjectId].flat()
     : [];
   const resolvedParents = await resolveShortcodes(db, parentCodes);
+  // `resolveShortcodes` keys its result Map by the CANONICAL code (see its
+  // docstring), so the lookup goes through `parseShortcode(code).shortcode`
+  // rather than the raw input — otherwise a lowercase or legacy-prefix code
+  // resolves fine in SQL but misses the Map here, same trap as
+  // `expense/lookup.ts`'s and `task/lookup.ts`'s `toUuids`.
   const parentProjectUuids = parentCodes.flatMap((code) => {
-    const resolved = resolvedParents.get(code);
+    const parsed = parseShortcode(code);
+    const resolved = parsed ? resolvedParents.get(parsed.shortcode) : undefined;
     return resolved?.entity === "project" ? [unsafeProjectId(resolved.id)] : [];
   });
 

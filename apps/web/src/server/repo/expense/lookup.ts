@@ -7,6 +7,7 @@ import {
 } from "@cubby/schemas/pagination";
 import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
 import { expenseSortableFields } from "@cubby/schemas/project";
+import { parseShortcode } from "@cubby/shared";
 import {
   and,
   eq,
@@ -51,6 +52,12 @@ import { dbExpenseToAPI } from "./helpers";
  * that doesn't exist should match nothing, not throw. The `entity` parameter
  * pins the expected type so a wrong-prefix code is silently dropped rather than
  * matching an unrelated row.
+ *
+ * `resolveShortcodes` keys its result Map by the CANONICAL code (its docstring
+ * says so explicitly), so the lookup below goes through `parseShortcode(code)
+ * .shortcode` rather than the raw input `code` — otherwise a lowercase or
+ * legacy-prefix code resolves fine in SQL but misses the Map here, silently
+ * dropping out as if it didn't exist.
  */
 const toUuids = async (
   db: Database,
@@ -60,7 +67,8 @@ const toUuids = async (
   if (codes.length === 0) return [];
   const resolved = await resolveShortcodes(db, codes);
   return codes.flatMap((code) => {
-    const ref = resolved.get(code);
+    const parsed = parseShortcode(code);
+    const ref = parsed ? resolved.get(parsed.shortcode) : undefined;
     return ref?.entity === entity ? [ref.id] : [];
   });
 };
@@ -237,7 +245,18 @@ export const buildExpenseWhereClause = async (
           ? inArray(expense.projectId, scopedProjectIds)
           : sql`false`
         : undefined,
-      eqAny(expense.productId, productUuids),
+      // `productUuids.length === 0` is ambiguous by itself — it means either
+      // "no productId filter was supplied" (no constraint) or "a productId WAS
+      // supplied but didn't resolve to a live product" (must match nothing).
+      // `eqAny([])` can't tell those apart (it always drops the condition, by
+      // design — see its doc in database-helpers/query.ts), so the requested-
+      // but-unresolved case is handled explicitly here, same as
+      // `selectedProjectIds`/`scopedProjectIds` above.
+      productUuids.length > 0
+        ? eqAny(expense.productId, productUuids)
+        : filters.productId
+          ? sql`false`
+          : undefined,
       // "linked" means productId IS NOT NULL — this deliberately includes
       // expenses whose product was later soft-deleted (those read back with
       // productId still set and productName null; see dbExpenseToAPI). The
@@ -248,9 +267,17 @@ export const buildExpenseWhereClause = async (
       // charge instead of an exact string on the row. `(none)` still ORs in, same
       // rule as project above — and because `purchase.vendorId` is NOT NULL, "no
       // vendor" and "no Purchase" are one predicate: `purchaseId IS NULL`.
+      //
+      // Same requested-but-unresolved handling as `productId` above: a
+      // `filters.vendorId` that resolved to nothing contributes `sql\`false\``
+      // to the OR (not `undefined`, which would drop the vendor half entirely
+      // and let the presence filter alone decide — or, with no presence filter
+      // either, let the whole condition vanish and match every row).
       or(
-        vendorUuids.length > 0
-          ? chargeCondition(db, eqAny(purchase.vendorId, vendorUuids))
+        filters.vendorId
+          ? vendorUuids.length > 0
+            ? chargeCondition(db, eqAny(purchase.vendorId, vendorUuids))
+            : sql`false`
           : undefined,
         presenceCondition(expense.purchaseId, filters.vendorPresenceFilter),
       ),
@@ -301,10 +328,13 @@ export const buildExpenseWhereClause = async (
       // short id like Tool Nirvana's "#11325" can't drag in another retailer's.
       chargeCondition(db, eqAny(purchase.orderId, filters.orderId)),
       // Unlike `vendorId`/`orderId` above, `purchaseId` IS the column on
-      // `expense` — no `chargeCondition` sub-select hop needed.
+      // `expense` — no `chargeCondition` sub-select hop needed. Same
+      // requested-but-unresolved handling as `productId`/`vendorId` above.
       purchaseUuids.length > 0
         ? eqAny(expense.purchaseId, purchaseUuids)
-        : undefined,
+        : filters.purchaseId
+          ? sql`false`
+          : undefined,
     ],
   );
 };

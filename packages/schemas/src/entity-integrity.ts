@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { entitySchema } from "./entity";
 import {
+  anyShortcodeSchema,
   cookbookShortcode,
   expenseShortcode,
   financialAccountShortcode,
@@ -315,60 +316,238 @@ export const previewMergeEntitySchema = z.enum([
 ]);
 export type PreviewMergeEntity = z.infer<typeof previewMergeEntitySchema>;
 
-const previewDeleteInput = <const E extends PreviewDeleteEntity>(
-  entity: E,
-  idSchema: z.ZodType<string, string>,
-) =>
-  z.object({
-    operation: z.literal("delete"),
-    entity: z.literal(entity),
-    ids: z.array(idSchema).min(1).max(200),
+/**
+ * The id schema each entity's preview targets must satisfy — the per-entity
+ * prefix check the `.superRefine` below applies once `entity` is known.
+ */
+const PREVIEW_TARGET_ID_SCHEMA = {
+  product: productShortcode,
+  recipe: recipeShortcode,
+  ingredient: ingredientShortcode,
+  cookbook: cookbookShortcode,
+  meal: mealShortcode,
+  location: locationShortcode,
+  project: projectShortcode,
+  task: taskShortcode,
+  vendor: vendorShortcode,
+  purchase: purchaseShortcode,
+  expense: expenseShortcode,
+  financialAccount: financialAccountShortcode,
+  financialTransaction: financialTransactionShortcode,
+  wish: wishShortcode,
+  inventory: inventoryShortcode,
+  // Image has no shortcode and is the intentional hard-delete UUID exception.
+  image: z.uuid(),
+} as const satisfies Record<PreviewDeleteEntity, z.ZodType<string, string>>;
+
+/**
+ * The field-level shape of one target id: any entity shortcode, or a bare uuid
+ * for `image`. The entity isn't known until `entity` is read, so the *exact*
+ * prefix is enforced in the refine — but publishing the alternation keeps a
+ * real `pattern` in the advertised JSON Schema instead of a bare string.
+ */
+const previewTargetId = z.union([
+  anyShortcodeSchema([
+    "product",
+    "recipe",
+    "ingredient",
+    "cookbook",
+    "meal",
+    "location",
+    "project",
+    "task",
+    "vendor",
+    "purchase",
+    "expense",
+    "financialAccount",
+    "financialTransaction",
+    "wish",
+    "inventory",
+  ]),
+  z.uuid(),
+]);
+
+const previewMergeEntities = new Set<string>(previewMergeEntitySchema.options);
+
+/**
+ * `preview_entity_operation`'s input — deliberately a FLAT object, not a union.
+ *
+ * This used to be a `z.union` of one object per `{operation, entity}` pair, and
+ * that made the MCP tool **uncallable**: the SDK's `normalizeObjectSchema`
+ * returns `undefined` for anything that isn't an object schema or a raw shape,
+ * so the tool advertised `{type: "object", properties: {}}` and every argument
+ * was stripped before the handler ran. A `z.discriminatedUnion` would not have
+ * fixed it either — `z.toJSONSchema` still emits a top-level `anyOf`, and MCP
+ * needs `type: "object"` with real `properties`.
+ *
+ * So the cross-field rules that the per-entity constructors used to get for
+ * free — which fields belong to which operation, which entities support merge,
+ * per-entity shortcode prefixes, `mergeIds` distinctness, `keepId` not being
+ * one of the ids being merged away — all live in the refine below. Every
+ * message names the offending value and says what was expected: an agent
+ * calling this wrongly should learn what to send next, not just that it failed.
+ */
+export const previewOperationInputSchema = z
+  .object({
+    operation: z
+      .enum(["delete", "merge"])
+      .describe(
+        "delete → pass `ids`. merge → pass `mergeIds` (and optionally `keepId`).",
+      ),
+    entity: previewDeleteEntitySchema.describe(
+      "The entity the target ids name. Every entity here supports delete; only ingredient, vendor, and purchase support merge.",
+    ),
+    ids: z
+      .array(previewTargetId)
+      .min(1)
+      .max(200)
+      .optional()
+      .describe(
+        "delete only: the shortcodes to preview deleting (uuids for `image`). Must match the `entity` prefix — e.g. PRD- codes when entity is `product`.",
+      ),
+    mergeIds: z
+      .array(previewTargetId)
+      .min(1)
+      .max(200)
+      .optional()
+      .describe(
+        "merge only: the distinct shortcodes being merged together. Must match the `entity` prefix.",
+      ),
+    keepId: previewTargetId
+      .optional()
+      .describe(
+        "merge only: the record to keep. Omit for candidate ranking; supply it for the final preview. Must not also appear in `mergeIds`.",
+      ),
+  })
+  .superRefine((input, ctx) => {
+    const idSchema = PREVIEW_TARGET_ID_SCHEMA[input.entity];
+    const expected =
+      input.entity === "image"
+        ? "a uuid (`image` is the one entity with no shortcode)"
+        : `a ${input.entity} shortcode`;
+    const checkId = (value: string, path: Array<string | number>) => {
+      if (idSchema.safeParse(value).success) return;
+      ctx.addIssue({
+        code: "custom",
+        path,
+        message: `"${value}" is not ${expected}. Every id must match the \`entity\` you passed ("${input.entity}").`,
+      });
+    };
+    const checkIds = (
+      values: string[] | undefined,
+      key: "ids" | "mergeIds",
+    ) => {
+      for (const [index, value] of (values ?? []).entries()) {
+        checkId(value, [key, index]);
+      }
+    };
+
+    if (input.operation === "delete") {
+      if (!input.ids) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["ids"],
+          message:
+            'operation "delete" requires `ids` — the ids of the rows to preview deleting.',
+        });
+      }
+      for (const key of ["mergeIds", "keepId"] as const) {
+        if (input[key] !== undefined) {
+          ctx.addIssue({
+            code: "custom",
+            path: [key],
+            message: `\`${key}\` belongs to operation "merge"; a delete preview takes \`ids\`.`,
+          });
+        }
+      }
+      checkIds(input.ids, "ids");
+      return;
+    }
+
+    if (!previewMergeEntities.has(input.entity)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["entity"],
+        message: `merge is only supported for ${previewMergeEntitySchema.options.join(", ")}; "${input.entity}" supports delete only.`,
+      });
+    }
+    if (!input.mergeIds) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["mergeIds"],
+        message:
+          'operation "merge" requires `mergeIds` — the ids being merged together.',
+      });
+    }
+    if (input.ids !== undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["ids"],
+        message:
+          '`ids` belongs to operation "delete"; a merge preview takes `mergeIds` plus an optional `keepId`.',
+      });
+    }
+    const mergeIds = input.mergeIds ?? [];
+    if (new Set(mergeIds).size !== mergeIds.length) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["mergeIds"],
+        message: "mergeIds must be distinct",
+      });
+    }
+    if (input.keepId !== undefined && mergeIds.includes(input.keepId)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["keepId"],
+        message: "keepId cannot also appear in mergeIds",
+      });
+    }
+    checkIds(mergeIds, "mergeIds");
+    if (input.keepId !== undefined) checkId(input.keepId, ["keepId"]);
   });
 
-const previewMergeInput = <const E extends PreviewMergeEntity>(
-  entity: E,
-  idSchema: z.ZodType<string, string>,
-) =>
-  z
-    .object({
-      operation: z.literal("merge"),
-      entity: z.literal(entity),
-      /** Omit for candidate ranking; supply it for the final preview. */
-      keepId: idSchema.optional(),
-      mergeIds: z.array(idSchema).min(1).max(200),
-    })
-    .refine((v) => new Set(v.mergeIds).size === v.mergeIds.length, {
-      message: "mergeIds must be distinct",
-      path: ["mergeIds"],
-    })
-    .refine((v) => !v.keepId || !v.mergeIds.includes(v.keepId), {
-      message: "keepId cannot also appear in mergeIds",
-      path: ["keepId"],
-    });
-
-export const previewOperationInputSchema = z.union([
-  previewDeleteInput("product", productShortcode),
-  previewDeleteInput("recipe", recipeShortcode),
-  previewDeleteInput("ingredient", ingredientShortcode),
-  previewDeleteInput("cookbook", cookbookShortcode),
-  previewDeleteInput("meal", mealShortcode),
-  previewDeleteInput("location", locationShortcode),
-  previewDeleteInput("project", projectShortcode),
-  previewDeleteInput("task", taskShortcode),
-  previewDeleteInput("vendor", vendorShortcode),
-  previewDeleteInput("purchase", purchaseShortcode),
-  previewDeleteInput("expense", expenseShortcode),
-  previewDeleteInput("financialAccount", financialAccountShortcode),
-  previewDeleteInput("financialTransaction", financialTransactionShortcode),
-  previewDeleteInput("wish", wishShortcode),
-  previewDeleteInput("inventory", inventoryShortcode),
-  // Image has no shortcode and is the intentional hard-delete UUID exception.
-  previewDeleteInput("image", z.uuid()),
-  previewMergeInput("ingredient", ingredientShortcode),
-  previewMergeInput("vendor", vendorShortcode),
-  previewMergeInput("purchase", purchaseShortcode),
-]);
+/** The flat, wire-shaped input — what the tool and the tRPC procedure accept. */
 export type PreviewOperationInput = z.infer<typeof previewOperationInputSchema>;
+
+/**
+ * The same input narrowed to the per-operation shape the dispatcher matches on.
+ * The flat schema is what MCP can advertise; this is what makes the router's
+ * `match(...).exhaustive()` meaningful, and the refine above is what guarantees
+ * the narrowing always succeeds for a parsed input.
+ */
+export type PreviewOperationRequest =
+  | { operation: "delete"; entity: PreviewDeleteEntity; ids: string[] }
+  | {
+      operation: "merge";
+      entity: PreviewMergeEntity;
+      mergeIds: string[];
+      /** Omit for candidate ranking; supply it for the final preview. */
+      keepId?: string;
+    };
+
+/**
+ * Narrow a parsed input for dispatch. Structural only — the schema owns
+ * validation, so this throws just to keep the impossible cases out of the type.
+ */
+export function narrowPreviewOperationInput(
+  input: PreviewOperationInput,
+): PreviewOperationRequest {
+  if (input.operation === "delete") {
+    if (!input.ids) throw new Error("preview delete requires ids");
+    return { operation: "delete", entity: input.entity, ids: input.ids };
+  }
+  if (!input.mergeIds) throw new Error("preview merge requires mergeIds");
+  const parsedEntity = previewMergeEntitySchema.safeParse(input.entity);
+  if (!parsedEntity.success) {
+    throw new Error(`preview merge does not support entity ${input.entity}`);
+  }
+  return {
+    operation: "merge",
+    entity: parsedEntity.data,
+    mergeIds: input.mergeIds,
+    ...(input.keepId === undefined ? {} : { keepId: input.keepId }),
+  };
+}
 
 /** Per-candidate ranking data, returned by a merge preview with no `keepId`. */
 export const mergeCandidateSchema = z.object({

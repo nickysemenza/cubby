@@ -19,6 +19,10 @@ import { getDb } from "~/server/repo/database-helpers";
 import { findOrphanedEntityEmbeddings } from "~/server/repo/entity-embedding";
 import { createExpense, deleteExpenses } from "~/server/repo/expense";
 import {
+  findOrCreateIngredient,
+  mergeIngredients,
+} from "~/server/repo/ingredient";
+import {
   bulkMoveInventoryEntries,
   bulkProcessInventoryEntries,
   createInventoryEntry,
@@ -393,6 +397,29 @@ describe("tracker removal cascades entity embeddings (no orphans)", () => {
     await deleteExpenses(ctx.db, [expense.id], TEST_ACTOR);
 
     expect(await embeddingDeletedAt("expense", expenseId)).not.toBeNull();
+    expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
+  });
+
+  // mergeIngredients is the one removal path in the repo that HARD-deletes
+  // its absorbed rows instead of soft-deleting them (see ingredient/merge.ts)
+  // — easy to overlook the embedding-cleanup obligation because there's no
+  // `deletedAt` write to hang it off of. The absorbed row's embedding still
+  // must end up soft-deleted, same as a hard-deleted inventory row in the
+  // full-collapse move case above.
+  it("mergeIngredients leaves no orphan", async () => {
+    const keeper = await findOrCreateIngredient(
+      ctx.db,
+      "Embedding Cascade Ingredient Keeper",
+    );
+    const alias = await findOrCreateIngredient(
+      ctx.db,
+      "Embedding Cascade Ingredient Alias",
+    );
+    await seedEmbedding("ingredient", alias.id);
+
+    await mergeIngredients(ctx.db, keeper.id, [alias.id]);
+
+    expect(await embeddingDeletedAt("ingredient", alias.id)).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 });

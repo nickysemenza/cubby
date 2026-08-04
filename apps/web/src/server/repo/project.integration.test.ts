@@ -1230,6 +1230,74 @@ describe("project repository — sub-projects (parentProjectId)", () => {
   });
 });
 
+// P0 regression guard: `parentProjectId` that was SUPPLIED but resolved to no
+// live project must not fall through to "no constraint" (which would return
+// every project in the table) — this file already asserts that shape via
+// `sql\`false\`` when `parentCodes.length > 0 && parentProjectUuids.length ===
+// 0`; what regressed was `resolveShortcodes`' canonical-key lookup: it keys its
+// result Map by the CANONICAL code, and the inlined resolver here indexed it by
+// the RAW input code, so a lowercase or legacy-prefix code resolved fine in SQL
+// but missed the Map and silently fell into the "unresolved" (zero-row) branch.
+describe("project repository — parentProjectId filter widening & canonicalization guard", () => {
+  const ctx = withTestDb();
+  const pagination = { pageIndex: 0, pageSize: 50 };
+
+  it("an unresolvable parentProjectId matches nothing, not every project", async () => {
+    await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "widening guard project one" }),
+      ctx.actor,
+    );
+    await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "widening guard project two" }),
+      ctx.actor,
+    );
+
+    const bogus = unsafeProjectShortcode("PRJ-9999");
+    const { data, count } = await projectList(
+      ctx.db,
+      { parentProjectId: bogus },
+      [],
+      pagination,
+    );
+    expect(data).toEqual([]);
+    expect(count).toBe(0);
+  });
+
+  it("a lowercase parentProjectId still resolves and filters correctly", async () => {
+    const { output: parent } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "widening guard lowercase parent" }),
+      ctx.actor,
+    );
+    const { output: child } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "widening guard lowercase child",
+        parentProjectId: parent.id,
+      }),
+      ctx.actor,
+    );
+    await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "widening guard lowercase unrelated project",
+      }),
+      ctx.actor,
+    );
+
+    const lowercase = unsafeProjectShortcode(parent.id.toLowerCase());
+    const { data } = await projectList(
+      ctx.db,
+      { parentProjectId: lowercase },
+      [],
+      pagination,
+    );
+    expect(data.map((row) => row.id)).toEqual([child.id]);
+  });
+});
+
 /**
  * The WBS renderer's page reader. What's being pinned throughout: the tree page
  * selects the SAME projects the flat list would, and differs only in what a

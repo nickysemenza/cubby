@@ -15,12 +15,17 @@
  * Builders throw on invalid pastes — the clipboard surfaces the message as a
  * toast — and resolve with the saved value for the cell's optimistic display.
  *
- * Pure module: no React and no `~/` imports (only type-only imports, which are
- * erased), so it's importable from vitest unit tests per repo convention.
+ * Logic-only module (no React components of its own). Its one runtime dependency
+ * is the WASM boundary — reached via `tryFormatAmount` for the canonical amount
+ * rendering and `wasm.parse_amount` for reading amount text back. Amount
+ * formatting and parsing belong to the Rust engine; a TS reimplementation of
+ * either is what this module used to have, and it corrupted saved data.
  */
 
 import type { Amount } from "@cubby/schemas/codec";
+import { wasm } from "~/lib/wasm";
 import type { ComboboxItem } from "../combobox/combobox-types";
+import { tryFormatAmount } from "../inventory/format-amount";
 import type { CellClipboardSpec } from "./cell-clipboard";
 import type { CellKind } from "./cell-range";
 import type { FilterableComboboxItem } from "./editable-cell";
@@ -191,6 +196,20 @@ export function entityCellData<TData>(
   };
 }
 
+/**
+ * Amount cell data. BOTH directions go through the engine: copy renders with the
+ * canonical formatter (`tryFormatAmount` → `wasm.format_amount`) and a plain-text
+ * paste is read back by `wasm.parse_amount`, so a copy→paste round-trip through a
+ * spreadsheet is lossless instead of degrading.
+ *
+ * Neither side may be hand-rolled in TS. The `${value} ${unit}` template this
+ * replaces emitted a non-canonical string, and the regex fallback
+ * (`^(-?\d+(?:\.\d+)?)\s*(.*)$`) that read text back misparsed anything the
+ * measurement grammar actually handles — and then SAVED the result:
+ * `"1 1/2 cups"` became `{value: 1, unit: "1/2 cups"}` (a 33% understatement plus
+ * a unit no unit-graph edge can reach, so downstream costing/valuation goes blank
+ * or wrong) and `"1,5 kg"` became `{value: 1, unit: ",5 kg"}`.
+ */
 export function amountCellData<TData>(
   getAmount: (row: TData) => Amount,
   save: (row: TData, amount: Amount) => Promise<void>,
@@ -200,34 +219,97 @@ export function amountCellData<TData>(
     getCopyPayload: (row) => {
       const amount = getAmount(row);
       return {
-        text: `${amount.value} ${amount.unit}`.trim(),
-        json: { value: amount.value, unit: amount.unit },
+        text: tryFormatAmount(amount),
+        // The typed payload is the exact stored amount (range included), so an
+        // in-app cell→cell paste never round-trips through the text at all.
+        json: {
+          value: amount.value,
+          unit: amount.unit,
+          ...(amount.upperValue != null
+            ? { upperValue: amount.upperValue }
+            : {}),
+        },
       };
     },
     applyPaste: async (row, { json, text }) => {
-      const typed = json as { value?: unknown; unit?: unknown } | undefined;
+      const typed = json as
+        | { value?: unknown; unit?: unknown; upperValue?: unknown }
+        | undefined;
       if (typed && typeof typed.value === "number") {
         const next: Amount = {
           value: typed.value,
           unit: typeof typed.unit === "string" ? typed.unit : "",
+          ...(typeof typed.upperValue === "number"
+            ? { upperValue: typed.upperValue }
+            : {}),
         };
         await save(row, next);
         return next;
       }
-      // Text like "5 each" / "2.5 lb" / bare "3".
-      const match = (text ?? "").trim().match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
-      const parsedValue = match?.[1] ? Number.parseFloat(match[1]) : Number.NaN;
-      if (!match || Number.isNaN(parsedValue)) {
+      // No typed payload — free text ("1 1/2 cups", "2.5 lb", "5 each", "3",
+      // "2-3 cups"). The grammar owns mixed numbers, vulgar fractions, ranges,
+      // and unit normalization; it throws on text carrying no measurement, which
+      // is the only correct answer for a paste that isn't an amount.
+      let parsed: { value: number; unit: string; upper_value?: number };
+      try {
+        parsed = wasm.parse_amount(text ?? "");
+      } catch {
         throw new Error("Pasted value is not an amount");
       }
       const next: Amount = {
-        value: parsedValue,
-        unit: (match[2] ?? "").trim(),
+        value: parsed.value,
+        unit: preserveWrittenWholeUnit(text, parsed.unit),
+        ...(parsed.upper_value != null
+          ? { upperValue: parsed.upper_value }
+          : {}),
       };
       await save(row, next);
       return next;
     },
   };
+}
+
+/**
+ * The grammar keeps arbitrary count nouns as written (`1 can` → `can`,
+ * `4 bags` → `bag`) but folds `each`/`ea`/`pcs`/`units` onto their canonical
+ * spelling `whole` — all the same `Unit::Whole` node in the conversion graph.
+ * The fold is invisible to costing and valuation, and very visible in a table:
+ * essentially every inventory row is denominated in "each", so pasting
+ * `5 each` and getting `5 whole` back would leave one row spelled differently
+ * from all its neighbours for no reason the user can see.
+ *
+ * Preserving the written word needs care, because `whole` is also what the
+ * grammar falls back to when it *fails* to reach the unit. `1,5 kg` stops at
+ * the comma and yields `{1, whole}`; blindly keeping the trailing word would
+ * store `{1, "kg"}` — still wrong by a third, but now plausible enough to go
+ * unnoticed, which is worse than an obviously-bogus `whole`.
+ *
+ * So the word only survives if the engine itself confirms it is a `whole`
+ * alias when parsed on its own. `each` → `whole` (keep it); `kg` → `kg`, so
+ * the grammar did know that word and our parse genuinely lost information —
+ * leave the anomaly visible. This self-maintains: a new alias upstream is
+ * honoured with no list to update here.
+ */
+function preserveWrittenWholeUnit(
+  text: string | undefined,
+  parsedUnit: string,
+): string {
+  if (parsedUnit !== "whole") return parsedUnit;
+  const written = (text ?? "")
+    .trim()
+    .match(/([a-z]+)$/i)?.[1]
+    ?.toLowerCase();
+  if (!written || !isWholeAlias(written)) return parsedUnit;
+  return written;
+}
+
+/** Does the grammar fold this word onto `whole` when parsed on its own? */
+function isWholeAlias(word: string): boolean {
+  try {
+    return wasm.parse_amount(`1 ${word}`).unit === "whole";
+  } catch {
+    return false;
+  }
 }
 
 /**

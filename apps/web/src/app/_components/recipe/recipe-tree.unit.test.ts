@@ -2,6 +2,7 @@ import type { RecipeOut } from "@cubby/schemas/recipe";
 import { ok } from "neverthrow";
 import { describe, expect, it } from "vitest";
 import type { IngredientDataItem, RecipeCosting } from "~/lib/recipe-costing";
+import { wasm } from "~/lib/wasm";
 import {
   batchYieldGrams,
   buildIngredientMatrix,
@@ -214,6 +215,83 @@ describe("batchYieldGrams", () => {
   });
   it("is null when nothing resolves", () => {
     expect(batchYieldGrams(node(null, null))).toBeNull();
+  });
+
+  // Drift tripwire for the module's `MASS_TO_GRAMS` table, which re-derives the
+  // parser's own mass normalization (the denominator costing/engine.rs's
+  // `sub_recipe_pairs` scales a sub-recipe by). The table can't simply call the
+  // engine: `conv_amount_to_kind` integer-rounds, so it answers 454 g for 1 lb
+  // where the engine's internal factor is 453.592 — see the comment on the table.
+  // This asks the engine at 1e6× instead, where the ±0.5 g rounding washes out to
+  // ~1e-9 relative, and compares against the live table via `batchYieldGrams`. An
+  // upstream factor change (or an edit to the table) fails HERE rather than
+  // silently desyncing the prep sheet from the costing engine.
+  describe("MASS_TO_GRAMS matches the engine", () => {
+    const PROBE = 1e6;
+    const engineGrams = (unit: string): number | null => {
+      try {
+        return wasm.conv_amount_to_kind([], "weight", { value: PROBE, unit })
+          .value;
+      } catch {
+        return null;
+      }
+    };
+
+    for (const unit of [
+      "g",
+      "gram",
+      "grams",
+      "kg",
+      "kilogram",
+      "kilograms",
+      "oz",
+      "ounce",
+      "ounces",
+      "lb",
+      "lbs",
+      "pound",
+      "pounds",
+    ]) {
+      it(`agrees on ${unit}`, () => {
+        const table = batchYieldGrams(node({ value: PROBE, unit }, null));
+        const engine = engineGrams(unit);
+        expect(engine).not.toBeNull();
+        expect(table).not.toBeNull();
+        // Relative comparison: the engine still rounds to whole grams, which at
+        // this probe size is ~1e-9 of the value.
+        expect(table).toBeCloseTo(engine ?? Number.NaN, 3);
+      });
+    }
+
+    // The table's one entry the engine can't confirm — the parser has no
+    // milligram unit, so `mg` is an `Other` unit with no path to weight. Left in
+    // the table because dropping it would change behavior for a (nonsensical)
+    // milligram yield; pinned here so the asymmetry is deliberate, not forgotten.
+    it("keeps mg, which the parser does not know", () => {
+      expect(engineGrams("mg")).toBeNull();
+      expect(batchYieldGrams(node({ value: 1000, unit: "mg" }, null))).toBe(1);
+    });
+
+    // The known gap the table's fixed spellings leave, and the reason to keep
+    // chasing the engine call. Casing is covered (the table lowercases), but the
+    // plural forms nobody typed in ("kgs", "ozs" — the parser's `singular()`
+    // strips those) fall through to null and quietly downgrade the node to
+    // `batchEstimated`.
+    for (const unit of ["kgs", "ozs"]) {
+      it(`misses ${JSON.stringify(unit)}, which the engine handles`, () => {
+        expect(engineGrams(unit)).not.toBeNull();
+        expect(batchYieldGrams(node({ value: 1, unit }, null))).toBeNull();
+      });
+    }
+
+    // Non-mass yields have no density with no mappings supplied, so both sides
+    // decline and the caller falls back to the ingredient-weight sum.
+    for (const unit of ["cup", "servings", "loaves", "whole", "ml"]) {
+      it(`leaves the non-mass unit ${unit} to the weight fallback`, () => {
+        expect(engineGrams(unit)).toBeNull();
+        expect(batchYieldGrams(node({ value: 8, unit }, 2000))).toBe(2000);
+      });
+    }
   });
 });
 

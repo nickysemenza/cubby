@@ -478,7 +478,7 @@ const documentPresenceCondition = (
 
 const buildPurchaseWhereClause = (
   filters: PurchaseFilters,
-  vendorUuids: string[] | undefined,
+  vendorCondition: SQL | undefined,
 ) =>
   buildSearchConditions(
     purchase,
@@ -494,7 +494,7 @@ const buildPurchaseWhereClause = (
           )
         : undefined,
       ...auditDateWhereConditions(purchase, filters),
-      eqAny(purchase.vendorId, vendorUuids),
+      vendorCondition,
       ...relatedWhereConditions("purchase", filters, purchase.id),
       eqAny(purchase.orderId, filters.orderId),
       presenceCondition(purchase.orderId, filters.orderIdPresenceFilter),
@@ -545,14 +545,23 @@ export const purchaseList = async (
   pagination: PaginationParams,
 ): Promise<{ data: PurchaseOut[]; count: number }> => {
   // An unknown code resolves to nothing and so matches nothing, which is what a
-  // filter naming a missing vendor should do — not throw.
+  // filter naming a missing vendor should do — not throw. `vendorUuids` alone
+  // can't express that: `eqAny([])` is "no constraint" by design (see its doc
+  // in database-helpers/query.ts), so a requested-but-unresolved vendor has to
+  // become an explicit `sql\`false\`` here rather than being handed to `eqAny`
+  // and silently dropping the filter (which would return every purchase).
   const vendorCodes = filters.vendorId ? [filters.vendorId].flat() : undefined;
   const vendorUuids = vendorCodes
     ? [...(await resolveShortcodes(db, vendorCodes)).values()]
         .filter((ref) => ref.entity === "vendor")
         .map((ref) => ref.id)
     : undefined;
-  const whereClause = buildPurchaseWhereClause(filters, vendorUuids);
+  const vendorCondition = vendorCodes
+    ? vendorUuids && vendorUuids.length > 0
+      ? eqAny(purchase.vendorId, vendorUuids)
+      : sql`false`
+    : undefined;
+  const whereClause = buildPurchaseWhereClause(filters, vendorCondition);
   const { take, skip } = buildTakeSkip(pagination);
 
   const [rows, count] = await Promise.all([

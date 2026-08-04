@@ -32,6 +32,7 @@ import { product, wish, wishCandidate } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
+  auditDateWhereConditions,
   buildOrderBy,
   countWhere,
   formatSearchTerm,
@@ -48,6 +49,7 @@ import {
   loadProductPricing,
   resolveProductPricing,
 } from "~/server/repo/product/pricing";
+import { relatedWhereConditions } from "~/server/repo/related-view";
 import {
   resolveLiveShortcode,
   resolveLiveShortcodes,
@@ -195,6 +197,13 @@ const buildWishWhere = (filters: WishFilters) => {
         : sql`${wish.acquiredAt} IS NULL`,
     candidateFilter,
     search,
+    // `wishFilterFields` spreads both of these, and the manifest renders their
+    // controls — so omitting either here is the same manifest/server drift this
+    // entity's UI work set out to remove, just pointing the other way (the UI
+    // sends a filter the server silently ignores). Every other related-view
+    // source repo applies both.
+    ...auditDateWhereConditions(wish, filters),
+    ...relatedWhereConditions("wish", filters, wish.id),
   );
 };
 

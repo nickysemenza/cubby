@@ -440,6 +440,15 @@ export const relatedViewRegistry = [
       out("Expense.productId"),
     ],
   },
+  {
+    key: "wish.candidates",
+    source: "wish",
+    target: "product",
+    label: "Candidates",
+    defaultVisible: true,
+    order: "alphabetical",
+    path: [inc("WishCandidate.wishId"), out("WishCandidate.productId")],
+  },
 ] as const satisfies readonly RelatedViewDefinition[];
 
 export const relatedViewKeys = relatedViewRegistry.map((view) => view.key) as [
@@ -693,3 +702,4 @@ export const financialTransactionRelatedFilterFields = {
   ...trio("expense", expenseShortcode),
   ...trio("product", productShortcode),
 };
+export const wishRelatedFilterFields = trio("product", productShortcode);

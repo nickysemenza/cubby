@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import type { Entity } from "@cubby/schemas/entity";
+import { previewOperationInputSchema } from "@cubby/schemas/entity-integrity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { FINANCIAL_STATEMENT_IMPORT_MAX_ROWS } from "@cubby/schemas/financial-transaction";
 import { unsafeExpenseShortcode } from "@cubby/schemas/identifiers";
@@ -25,6 +26,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { mock } from "~/lib/test/mock-schema";
+import { appRouter } from "~/server/api/root";
 import { SHOPPING_LIST_UI, USDA_PICKER_UI } from "./apps";
 import {
   createMcpServer,
@@ -92,6 +94,48 @@ async function callTool(
     await Promise.allSettled([client.close(), server.close()]);
   }
 }
+
+type Operation = "list" | "get" | "create" | "update" | "delete";
+
+/**
+ * Tool-name slugs per entity: `[singular, plural, overrides]`. Shared by the
+ * manifest-alignment test and the get/router-input agreement test below, which
+ * both need to name a tool from an entity.
+ */
+const MCP_ENTITY_SLUGS: Record<
+  Entity,
+  [
+    singular: string,
+    plural: string,
+    overrides?: Partial<Record<Operation, string>>,
+  ]
+> = {
+  product: ["product", "products", { list: "search_products" }],
+  recipe: ["recipe", "recipes", { delete: "delete_recipe" }],
+  ingredient: ["ingredient", "ingredients", { list: "search_ingredients" }],
+  cookbook: ["cookbook", "cookbooks"],
+  location: ["location", "locations"],
+  inventory: [
+    "inventory_entry",
+    "inventory_entries",
+    { list: "list_inventory" },
+  ],
+  meal: ["meal", "meals"],
+  project: ["project", "projects"],
+  task: ["task", "tasks"],
+  expense: ["expense", "expenses"],
+  financialAccount: ["financial_account", "financial_accounts"],
+  financialTransaction: ["financial_transaction", "financial_transactions"],
+  wish: ["wish", "wishes"],
+  // vendor/purchase expose get/list/create/update but NOT delete, so the
+  // manifest loop never asks for delete_vendors / delete_purchases. Note that
+  // `purchase` here is the vendor transaction, not the old flat ledger row —
+  // that one is `expense` above, and it is the one that owns money.
+  vendor: ["vendor", "vendors"],
+  purchase: ["purchase", "purchases"],
+  "usda-food": ["usda_food", "usda_foods", { list: "search_usda_foods" }],
+  image: ["image", "images"],
+};
 
 describe("MCP tool-call telemetry", () => {
   const identity = {
@@ -860,41 +904,7 @@ describe("listMcpToolCatalog", () => {
   });
 
   it("keeps manifest MCP operations aligned with registered tools", async () => {
-    type Operation = "list" | "get" | "create" | "update" | "delete";
-    const slugs: Record<
-      Entity,
-      [
-        singular: string,
-        plural: string,
-        overrides?: Partial<Record<Operation, string>>,
-      ]
-    > = {
-      product: ["product", "products", { list: "search_products" }],
-      recipe: ["recipe", "recipes", { delete: "delete_recipe" }],
-      ingredient: ["ingredient", "ingredients", { list: "search_ingredients" }],
-      cookbook: ["cookbook", "cookbooks"],
-      location: ["location", "locations"],
-      inventory: [
-        "inventory_entry",
-        "inventory_entries",
-        { list: "list_inventory" },
-      ],
-      meal: ["meal", "meals"],
-      project: ["project", "projects"],
-      task: ["task", "tasks"],
-      expense: ["expense", "expenses"],
-      financialAccount: ["financial_account", "financial_accounts"],
-      financialTransaction: ["financial_transaction", "financial_transactions"],
-      wish: ["wish", "wishes"],
-      // vendor/purchase expose get/list/create/update but NOT delete, so the
-      // loop below never asks for delete_vendors / delete_purchases. Note that
-      // `purchase` here is the vendor transaction, not the old flat ledger row —
-      // that one is `expense` above, and it is the one that owns money.
-      vendor: ["vendor", "vendors"],
-      purchase: ["purchase", "purchases"],
-      "usda-food": ["usda_food", "usda_foods", { list: "search_usda_foods" }],
-      image: ["image", "images"],
-    };
+    const slugs = MCP_ENTITY_SLUGS;
     const catalog = new Set(
       (await listMcpToolCatalog()).tools.map(({ name }) => name),
     );
@@ -933,6 +943,215 @@ describe("listMcpToolCatalog", () => {
     }
   });
 
+  it("keeps preview_entity_operation's per-operation rules after the flattening", () => {
+    // The tool's input used to be a union of one object per {operation, entity}
+    // pair, which is what made it uncallable. Flattening it moved every rule
+    // those constructors gave for free into a single refine — this is the list
+    // of what must NOT have been lost along the way. (Prefix coverage for the
+    // shortcode/uuid split lives in entity-integrity.unit.test.ts.)
+    const rejected: Array<[reason: string, input: unknown]> = [
+      [
+        "wrong prefix for the entity",
+        { operation: "delete", entity: "product", ids: ["LOC-2CRC"] },
+      ],
+      ["delete without ids", { operation: "delete", entity: "product" }],
+      [
+        "delete carrying merge fields",
+        {
+          operation: "delete",
+          entity: "product",
+          ids: ["PRD-2CRC"],
+          keepId: "PRD-2CRD",
+        },
+      ],
+      [
+        "merge on an entity that cannot merge",
+        { operation: "merge", entity: "product", mergeIds: ["PRD-2CRC"] },
+      ],
+      ["merge without mergeIds", { operation: "merge", entity: "ingredient" }],
+      [
+        "merge carrying delete fields",
+        {
+          operation: "merge",
+          entity: "ingredient",
+          mergeIds: ["ING-2CRC"],
+          ids: ["ING-2CRD"],
+        },
+      ],
+      [
+        "repeated mergeIds",
+        {
+          operation: "merge",
+          entity: "ingredient",
+          mergeIds: ["ING-2CRC", "ING-2CRC"],
+        },
+      ],
+      [
+        "keepId also being merged away",
+        {
+          operation: "merge",
+          entity: "ingredient",
+          mergeIds: ["ING-2CRC"],
+          keepId: "ING-2CRC",
+        },
+      ],
+      [
+        "more than 200 targets",
+        {
+          operation: "delete",
+          entity: "product",
+          ids: Array.from({ length: 201 }, () => "PRD-2CRC"),
+        },
+      ],
+    ];
+    for (const [reason, input] of rejected) {
+      expect({
+        reason,
+        accepted: previewOperationInputSchema.safeParse(input).success,
+      }).toEqual({ reason, accepted: false });
+    }
+
+    const accepted: Array<[reason: string, input: unknown]> = [
+      [
+        "delete by shortcode",
+        { operation: "delete", entity: "product", ids: ["PRD-2CRC"] },
+      ],
+      [
+        "hard-delete an image by uuid",
+        {
+          operation: "delete",
+          entity: "image",
+          ids: ["3f2504e0-4f89-41d3-9a0c-0305e82c3302"],
+        },
+      ],
+      [
+        "merge candidates with no keeper yet",
+        {
+          operation: "merge",
+          entity: "ingredient",
+          mergeIds: ["ING-2CRC", "ING-2CRD"],
+        },
+      ],
+      [
+        "merge with a keeper",
+        {
+          operation: "merge",
+          entity: "vendor",
+          mergeIds: ["VEN-2CRC"],
+          keepId: "VEN-2CRD",
+        },
+      ],
+    ];
+    for (const [reason, input] of accepted) {
+      expect({
+        reason,
+        accepted: previewOperationInputSchema.safeParse(input).success,
+      }).toEqual({ reason, accepted: true });
+    }
+  });
+
+  it("delivers preview_entity_operation's arguments to the router", async () => {
+    // Regression: this tool's input was a top-level `z.union`, which
+    // `normalizeObjectSchema` turns into `undefined` — the SDK then parsed every
+    // call against an EMPTY object and the handler received `{}`. The tool
+    // advertised no arguments and could not be called at all.
+    const args = {
+      operation: "delete",
+      entity: "product",
+      ids: ["PRD-2222"],
+    };
+    let received: unknown;
+    const result = await callTool(
+      createMcpServer(),
+      "preview_entity_operation",
+      args,
+      {
+        entityIntegrity: {
+          previewOperation: async (input: unknown) => {
+            received = input;
+            return {
+              operation: "delete",
+              entity: "product",
+              mode: "soft",
+              targetCount: 1,
+              canProceed: true,
+              blockers: [],
+              changes: [],
+              sideEffects: [],
+              generatedAt: new Date().toISOString(),
+            };
+          },
+        },
+      },
+    );
+
+    expect(received).toEqual(args);
+    expect(result.isError).not.toBe(true);
+  });
+
+  it("hands every entity get tool an argument its router's getByID accepts", async () => {
+    // Regression: get_wish was uncallable from the day it shipped. The crud
+    // toolset's default fetch calls `router.getByID({ id })`, but `wish.getByID`
+    // declares `.input(wishShortcode)` — a BARE scalar — so zod rejected every
+    // call before the query ran. vendor and purchase carry hand-written `get:`
+    // overrides for exactly this; wish simply didn't. Nothing in the catalog can
+    // see the mismatch (the advertised input is `{id}` either way), so this
+    // drives the real handler with a stub caller and checks the argument it
+    // actually passes against the schema the router actually declares.
+    const procedures = (
+      appRouter as unknown as {
+        _def: { procedures: Record<string, { _def: { inputs: unknown[] } }> };
+      }
+    )._def.procedures;
+
+    // Every entity with both a shortcode and a declared `get` tool. usda-food
+    // and image are excluded because they have no shortcode (their get tools,
+    // where present, are keyed by fdc_id / uuid, not by the `{ id }` default).
+    const entities = allEntities.filter(
+      (entity) =>
+        Object.hasOwn(SHORTCODE_PREFIX, entity) &&
+        (entityManifest[entity].mcp as readonly Operation[]).includes("get"),
+    );
+    expect(entities.length).toBeGreaterThanOrEqual(14);
+
+    for (const entity of entities) {
+      const prefix = SHORTCODE_PREFIX[entity as keyof typeof SHORTCODE_PREFIX];
+      const [singular, , overrides = {}] = MCP_ENTITY_SLUGS[entity];
+      const toolName = overrides.get ?? `get_${singular}`;
+      const procedure = procedures[`${entity}.getByID`];
+      expect(procedure, `${entity}.getByID is missing`).toBeDefined();
+      const declaredInput = procedure?._def.inputs[0] as z.ZodType | undefined;
+      expect(
+        declaredInput,
+        `${entity}.getByID declares no input schema`,
+      ).toBeDefined();
+
+      let captured: unknown;
+      await callTool(
+        createMcpServer(),
+        toolName,
+        { id: `${prefix}2222` },
+        {
+          [entity]: {
+            getByID: async (argument: unknown) => {
+              captured = argument;
+              return {};
+            },
+          },
+        },
+      );
+
+      expect(
+        captured,
+        `${toolName} never reached ${entity}.getByID`,
+      ).toBeDefined();
+      expect({
+        tool: toolName,
+        accepted: declaredInput?.safeParse(captured).success,
+      }).toEqual({ tool: toolName, accepted: true });
+    }
+  });
+
   it("advertises outputSchema on every tool with no mock metadata", async () => {
     const { tools } = await listMcpToolCatalog();
     expect(tools.length).toBeGreaterThan(50);
@@ -966,6 +1185,65 @@ describe("listMcpToolCatalog", () => {
       ),
     );
     expect(degraded.map((tool) => tool.name)).toEqual([]);
+
+    // An EMPTY `properties` is the other half of the same failure, and it is
+    // the one that let two uncallable tools ship: `normalizeObjectSchema`
+    // returns `undefined` for a non-object input schema, which used to be
+    // silently swapped for `z.object({})` — advertising `{}` AND stripping
+    // every argument before the handler ran (preview_entity_operation's
+    // top-level `z.union`). `properties === undefined` never fires for that,
+    // because `{type: "object", properties: {}}` is perfectly well-formed.
+    // Registration now throws instead (see `toolInputSchema`); this is the
+    // catalog-level backstop.
+    const NO_ARGUMENT_TOOLS = new Set([
+      "list_cookbooks",
+      "get_recipe_tags",
+      "list_actionable_tasks",
+      "get_task_summary",
+    ]);
+    // Deliberately loose OUTPUTS: `sdkOutputSchema` swaps a non-object output
+    // schema (a union, an array, a nullable) for `z.looseObject({})` because
+    // the SDK's own re-validation dies on anything else — `structuredSuccess`
+    // still parses the precise schema before returning. A new name here means
+    // a tool lost its advertised output shape.
+    const LOOSE_OUTPUT_TOOLS = new Set([
+      "list_problems",
+      "list_project_resources",
+      "get_usda_food",
+      "find_usda_food",
+    ]);
+    const isEmpty = (schema: unknown) => {
+      const properties = (schema as { properties?: Record<string, unknown> })
+        ?.properties;
+      return properties !== undefined && Object.keys(properties).length === 0;
+    };
+
+    expect(
+      tools
+        .filter(
+          (tool) =>
+            !NO_ARGUMENT_TOOLS.has(tool.name) && isEmpty(tool.inputSchema),
+        )
+        .map((tool) => tool.name),
+    ).toEqual([]);
+    expect(
+      tools
+        .filter(
+          (tool) =>
+            !LOOSE_OUTPUT_TOOLS.has(tool.name) && isEmpty(tool.outputSchema),
+        )
+        .map((tool) => tool.name),
+    ).toEqual([]);
+
+    // …and both allowlists stay honest: an entry that no longer has an empty
+    // schema is stale and must be deleted, not left to cover a future tool.
+    const byName = new Map(tools.map((tool) => [tool.name, tool]));
+    for (const name of NO_ARGUMENT_TOOLS) {
+      expect(isEmpty(byName.get(name)?.inputSchema), name).toBe(true);
+    }
+    for (const name of LOOSE_OUTPUT_TOOLS) {
+      expect(isEmpty(byName.get(name)?.outputSchema), name).toBe(true);
+    }
   });
 
   it("keeps a JSON Schema pattern on every shortcode-shaped input field", async () => {
@@ -1014,6 +1292,15 @@ describe("listMcpToolCatalog", () => {
       "update_recipe.sections[].ingredients[].id",
       "update_recipe.sections[].instructions[].id",
       "remove_meal_recipe.id",
+      // preview_entity_operation is one flat object over every previewable
+      // entity (a union input is uncallable over MCP — see the schema's own
+      // comment), so its id fields are `anyShortcodeSchema | uuid`: the
+      // shortcode half keeps a real prefix alternation, and the uuid half is
+      // there for `image`, the one entity with no shortcode. Which prefix
+      // applies is enforced against `entity` in the schema's refine.
+      "preview_entity_operation.ids",
+      "preview_entity_operation.mergeIds",
+      "preview_entity_operation.keepId",
     ]);
 
     function stringSchemas(node: unknown): Array<Record<string, unknown>> {
