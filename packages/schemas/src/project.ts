@@ -370,6 +370,9 @@ export const projectFilterFields = {
   dateTo: plainDate.optional(),
   completionYear,
   parentProjectPresenceFilter: presenceFilter,
+  imagePresenceFilter: presenceFilter.describe(
+    "Filter to projects that do / don't have at least one image (PDF attachments don't count).",
+  ),
   /** Exclude sub-projects (rows with a non-null `parentProjectId`) from the list. */
   topLevelOnly: z.boolean().optional(),
   /** Only these parents' live sub-projects. */

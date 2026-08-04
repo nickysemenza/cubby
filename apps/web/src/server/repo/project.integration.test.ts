@@ -1,7 +1,9 @@
 import {
+  type ProjectId,
   unsafeProjectId,
   unsafeProjectShortcode,
 } from "@cubby/schemas/identifiers";
+import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import type {
   ExpenseCreateInput,
   ProjectCreateInput,
@@ -2978,5 +2980,134 @@ describe("project repository — sums.costEstimate", () => {
 
     expect(result.data).toHaveLength(1);
     expect(result.sums.costEstimate).toBe(200);
+  });
+});
+
+describe("project repository — imagePresenceFilter", () => {
+  const ctx = withTestDb();
+
+  const page = { pageIndex: 0, pageSize: 50 };
+
+  /** Attach a fresh image to `entityId`, returning both rows for mutation. */
+  const attachImage = async (
+    entityId: ProjectId,
+    overrides: {
+      contentType?: string;
+      imageDeleted?: boolean;
+      joinDeleted?: boolean;
+    } = {},
+  ) => {
+    const img = await insertAndReturn(ctx.db, image, {
+      key: `image-presence-${entityId}-${overrides.contentType ?? "png"}`,
+      url: "https://example.com/image-presence.png",
+      filename: "image-presence.png",
+      contentType: overrides.contentType ?? "image/png",
+      size: 100,
+      status: "UPLOADED",
+      ...(overrides.imageDeleted ? { deletedAt: new Date() } : {}),
+    });
+    await insertAndReturn(ctx.db, projectImage, {
+      projectId: entityId,
+      imageId: img.id,
+      ...(overrides.joinDeleted ? { deletedAt: new Date() } : {}),
+    });
+  };
+
+  it("partitions projects with a displayable image from those without", async () => {
+    const { output: withImage, entityId: withImageId } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "presence with image" }),
+      ctx.actor,
+    );
+    const { output: withoutImage } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "presence without image" }),
+      ctx.actor,
+    );
+    await attachImage(withImageId);
+
+    const has = await projectList(
+      ctx.db,
+      { search: "presence with", imagePresenceFilter: "has" },
+      [],
+      page,
+    );
+    expect(has.data.map((p) => p.id)).toEqual([withImage.id]);
+
+    // "none" must return the complement — every other live project — not zero
+    // rows, which is the NOT IN / NULL trap `idSetPresence` warns about.
+    const none = await projectList(
+      ctx.db,
+      { imagePresenceFilter: "none" },
+      [],
+      page,
+    );
+    expect(none.data.map((p) => p.id)).toContain(withoutImage.id);
+    expect(none.data.map((p) => p.id)).not.toContain(withImage.id);
+  });
+
+  it("counts a PDF-only, soft-deleted-image, or detached-association project as having no image", async () => {
+    const cases = [
+      {
+        name: "presence pdf only",
+        overrides: { contentType: PDF_CONTENT_TYPE },
+      },
+      { name: "presence image deleted", overrides: { imageDeleted: true } },
+      { name: "presence join deleted", overrides: { joinDeleted: true } },
+    ];
+    const ids: string[] = [];
+    for (const { name, overrides } of cases) {
+      const { output, entityId } = await createProject(
+        ctx.db,
+        projectCreateInput.parse({ name }),
+        ctx.actor,
+      );
+      await attachImage(entityId, overrides);
+      ids.push(output.id);
+    }
+
+    const has = await projectList(
+      ctx.db,
+      { search: "presence", imagePresenceFilter: "has" },
+      [],
+      page,
+    );
+    expect(has.data).toHaveLength(0);
+
+    const none = await projectList(
+      ctx.db,
+      { search: "presence", imagePresenceFilter: "none" },
+      [],
+      page,
+    );
+    expect(none.data.map((p) => p.id).sort()).toEqual([...ids].sort());
+  });
+
+  it("narrows the WBS tree page identically to the flat list", async () => {
+    const { output: parent, entityId: parentId } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "tree presence parent" }),
+      ctx.actor,
+    );
+    await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "tree presence child",
+        parentProjectId: parent.id,
+      }),
+      ctx.actor,
+    );
+    await attachImage(parentId);
+
+    const tree = await projectTreePage(
+      ctx.db,
+      { search: "tree presence", imagePresenceFilter: "has" },
+      [],
+      page,
+    );
+    // The child has no image of its own, so it must not ride along under its
+    // matching parent — membership is the same predicate the flat list applies.
+    expect(tree.data.map((p) => p.id)).toEqual([parent.id]);
+    expect(tree.count).toBe(1);
   });
 });

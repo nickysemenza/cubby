@@ -58,6 +58,9 @@ export interface LocationFilters {
   // The inventory column's "(none)" / "Has inventory" sentinel — "none" is the
   // empty-shelf worklist. Counts only entries whose product is itself live.
   inventoryPresenceFilter?: "has" | "none";
+  // The image column's "(none)" / "Has image" sentinel. Counts only displayable
+  // images, matching the thumbnail cell — PDF attachments don't count.
+  imagePresenceFilter?: "has" | "none";
   directItemCountMin?: number;
   directItemCountMax?: number;
   valuationMin?: number;

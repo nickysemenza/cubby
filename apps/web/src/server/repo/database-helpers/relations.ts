@@ -21,6 +21,7 @@ import { type AnyColumn, asc, sql } from "drizzle-orm";
 import {
   inventoryEntry,
   location,
+  locationImage,
   product,
   productExternalId,
   productImage,
@@ -322,6 +323,10 @@ export const relations = {
           },
         },
         images: {
+          // Association rows are soft-deletable independently of the Image, so
+          // without this a detached image still renders a thumbnail — and would
+          // disagree with `imagePresenceFilter`, which excludes it.
+          where: notDeleted(locationImage),
           orderBy: imageOrder,
           with: {
             image: true,

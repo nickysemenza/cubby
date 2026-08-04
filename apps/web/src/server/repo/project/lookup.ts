@@ -15,8 +15,10 @@ import type {
 import { projectSortableFields } from "@cubby/schemas/project";
 import { parseShortcode } from "@cubby/shared";
 import {
+  and,
   arrayOverlaps,
   asc,
+  eq,
   inArray,
   isNull,
   or,
@@ -24,7 +26,7 @@ import {
   sql,
 } from "drizzle-orm";
 import type { Database } from "~/server/db";
-import { project } from "~/server/db/schema";
+import { image, project, projectImage } from "~/server/db/schema";
 import {
   auditDateWhereConditions,
   buildOrderBy,
@@ -34,9 +36,11 @@ import {
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
+  idSetPresence,
   notDeleted,
   presenceCondition,
 } from "~/server/repo/database-helpers";
+import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { resolveShortcodes } from "~/server/repo/shortcode-resolver";
 import { projectContentDates, projectDependencyIds } from "./analytics";
@@ -180,6 +184,20 @@ export const buildProjectListQuery = async (
         sql`EXISTS (SELECT 1 FROM unnest(${project.locations}) AS location_name WHERE location_name ILIKE ${`%${filters.search}%`})`,
       )
     : undefined;
+
+  // Joins Image so this matches what the thumbnail cell actually renders —
+  // `getImagesByProjectIds` (which feeds the column) applies the same
+  // `displayableImageWhere` gate, and Image is separately soft-deletable from
+  // ProjectImage.
+  const projectIdsWithImages = getDb(db)
+    .select({ projectId: projectImage.projectId })
+    .from(projectImage)
+    .innerJoin(
+      image,
+      and(eq(image.id, projectImage.imageId), notDeleted(image)),
+    )
+    .where(and(notDeleted(projectImage), displayableImageWhere));
+
   const whereClause = buildSearchConditions(
     project,
     [],
@@ -196,6 +214,11 @@ export const buildProjectListQuery = async (
       completionIds ? inArray(project.id, completionIds) : undefined,
       filters.topLevelOnly ? isNull(project.parentProjectId) : undefined,
       parentCondition,
+      idSetPresence(
+        project.id,
+        filters.imagePresenceFilter,
+        projectIdsWithImages,
+      ),
     ],
   );
 
