@@ -100,6 +100,25 @@ const resolveIngredientEntityIds = async (
   });
 };
 
+/**
+ * The factory builds an `update` procedure from this callback, and this router
+ * DISCARDS it — only `getByID`/`getByShortcode`/`create` are destructured,
+ * because the shipped `update` is hand-rolled below (it dispatches the
+ * dependent-recipe recompute the factory's contract can't express). The
+ * factory's `repository` type still requires the key, so this is an unreachable
+ * placeholder.
+ *
+ * Never put behavior here. The version this replaced called
+ * `updateIngredientService` WITHOUT that recompute — a plausible-looking body no
+ * request could reach, which a future fix would have been applied to and would
+ * silently not have shipped.
+ */
+const discardedByFactory = (): never => {
+  throw new Error(
+    "unreachable: ingredient.update is the hand-rolled procedure below",
+  );
+};
+
 // Create standardized CRUD procedures using factory (update is customized below
 // so it can eagerly recompute dependent recipes and report the side-effects).
 // List returns a lean summary (lean ingredient + food + {id,name} recipe refs, no
@@ -179,15 +198,7 @@ const { getByID, getByShortcode, create } =
         });
         return { ...ingredient, sideEffects: { backgroundBatches } };
       },
-      update: async (services, id: IngredientShortcode, data) => {
-        return await updateIngredientService(
-          services.db,
-          services.usdaClient,
-          await resolveIngredientEntityId(services.db, id),
-          data,
-          services.actorContext,
-        );
-      },
+      update: discardedByFactory,
     },
   });
 
