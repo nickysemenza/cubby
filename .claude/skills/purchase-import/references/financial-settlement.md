@@ -69,13 +69,26 @@ ref. Re-derive the ref through `preview_financial_statement_import` — a match
 returns `possible_existing` with the transaction id — then backfill it with
 `update_financial_transactions`. Never create a second transaction to fix this.
 
-The field is **`sourceRefs`**, an array, and it replaces the whole array
-(read–merge–write when appending). The singular `sourceRef` is accepted and
-silently discarded — the write reports success, `sourceRefs` comes back `[]`,
-and the gap stays open. `create_financial_transactions` also does not take a
-source ref at all, so a created transaction always needs this backfill pass.
-Confirm by re-reading the row, or by checking that the Purchase drops out of
-`list_purchases({dataStatus:"needs_data"})`.
+The field is **`sourceRefs`**, an array, and on update it replaces the whole
+array (read–merge–write when appending). The singular `sourceRef` is accepted
+and silently discarded — the write reports success, `sourceRefs` comes back
+`[]`, and the gap stays open. Confirm by re-reading the row, or by checking that
+the Purchase drops out of `list_purchases({dataStatus:"needs_data"})`.
+
+**`create_financial_transactions` does take `sourceRefs`,** so the backfill pass
+above is only for transactions that were created without one — not a mandatory
+second step after every create. Verified 2026-08-03: a 304-row backfill passed
+`sourceRefs` on create and all 304 persisted, 304 distinct, none empty. Treat a
+create + backfill sequence as a smell: it is two writes where one would do, and
+the intermediate row is briefly indistinguishable from a genuinely
+reference-less import.
+
+The ref is a **content hash of the statement row** (account, date, amount,
+original statement), so it is only stable for a row that has settled. Do not
+attach one to a `pending` credit: pending rows can post on a later date, the
+hash changes with the date, and the row then fails to match its own statement
+line on the next import — the exact duplicate this field exists to prevent.
+Attach it when the row posts.
 
 ## Purchases and refunds
 

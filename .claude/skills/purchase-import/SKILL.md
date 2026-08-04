@@ -198,9 +198,12 @@ or raw file contents to Cubby.
    as a clean `ready_to_create` with tying amounts, so a totals check will not
    catch it.
 4. Submit only approved `ready_to_create` rows through
-   `create_financial_transactions`, then backfill `sourceRefs` (plural, an
-   array) with `update_financial_transactions` — the create path does not accept
-   one, and the singular `sourceRef` is silently discarded.
+   `create_financial_transactions`, passing `sourceRefs` (plural, an array) on
+   the create itself — it is accepted and persisted there. Use
+   `update_financial_transactions` to backfill only rows that were created
+   without one. The singular `sourceRef` is silently discarded either way. Never
+   attach a ref to a `pending` row; the hash is date-derived and will move when
+   it posts.
 5. Leave `already_recorded` untouched. Review `possible_existing`,
    `unresolved_account`, and `indistinguishable_duplicate` manually.
 6. Read the generic batch result and then inspect the Purchase's settlement
