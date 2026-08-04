@@ -3,12 +3,7 @@ import type {
   ImpactItem,
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
-import {
-  type MealId,
-  type MealRecipeId,
-  type RecipeId,
-  unsafeRecipeId,
-} from "@cubby/schemas/identifiers";
+import type { MealId, MealRecipeId } from "@cubby/schemas/identifiers";
 import type {
   MealCreateInput,
   MealFilters,
@@ -46,8 +41,8 @@ import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import {
-  resolveLiveShortcode,
-  resolveLiveShortcodes,
+  resolveAllOrThrow,
+  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { dbMealToAPI } from "./helpers";
@@ -154,26 +149,17 @@ export const createMealWithEntityId = async (
       sortOrder: data.sortOrder ?? null,
     });
     if (data.recipes?.length) {
-      const resolved = await resolveLiveShortcodes(
+      // `resolveAllOrThrow` returns ids positionally, one per input code, so
+      // `recipeIds[i]` pairs with `data.recipes[i]` — the documented zip case.
+      const recipeIds = await resolveAllOrThrow(
         tx,
-        data.recipes.map((recipe) => recipe.recipeId),
         "recipe",
+        data.recipes.map((recipe) => recipe.recipeId),
       );
-      const recipes: Array<MealRecipeInput & { entityId: RecipeId }> = [];
-      for (const recipe of data.recipes) {
-        const recipeId = resolved.get(recipe.recipeId);
-        if (!recipeId) {
-          throw createAppError(
-            "RECIPE_NOT_FOUND",
-            `Recipe ${recipe.recipeId} not found`,
-          );
-        }
-        recipes.push({ ...recipe, entityId: unsafeRecipeId(recipeId) });
-      }
       await tx.insert(mealRecipe).values(
-        recipes.map((r) => ({
+        data.recipes.map((r, i) => ({
           mealId: created.id,
-          recipeId: r.entityId,
+          recipeId: recipeIds[i]!,
           scale: r.scale,
           sortOrder: r.sortOrder ?? null,
         })),
@@ -268,16 +254,10 @@ export const addRecipeToMeal = async (
   actor: ActorContext,
 ): Promise<MealOut> => {
   await withTransaction(db, async (tx) => {
-    const recipeId = await resolveLiveShortcode(tx, input.recipeId, "recipe");
-    if (!recipeId) {
-      throw createAppError(
-        "RECIPE_NOT_FOUND",
-        `Recipe ${input.recipeId} not found`,
-      );
-    }
+    const recipeId = await resolveOrThrow(tx, "recipe", input.recipeId);
     await insertAndReturn(tx, mealRecipe, {
       mealId,
-      recipeId: unsafeRecipeId(recipeId),
+      recipeId,
       scale: input.scale,
       sortOrder: input.sortOrder ?? null,
     });

@@ -1,7 +1,6 @@
 import {
   type ProjectShortcode,
   projectShortcode,
-  unsafeProjectId,
 } from "@cubby/schemas/identifiers";
 import {
   attachFileResponse,
@@ -38,7 +37,7 @@ import {
   markImageUploaded,
   updateImage,
 } from "~/server/repo/image";
-import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
+import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 import {
   attachFileToEntity,
   cullPendingImageStorage,
@@ -265,25 +264,14 @@ export const imageRouter = createTRPCRouter({
     .input(z.object({ projectIds: z.array(projectShortcode) }))
     .output(strictOutput(z.record(z.string(), z.array(projectImageSummary))))
     .query(async ({ ctx, input }) => {
-      const resolved = await resolveLiveShortcodes(
+      const entityIds = await resolveAllOrThrow(
         ctx.db,
-        input.projectIds,
         "project",
+        input.projectIds,
       );
-      const missing = input.projectIds.find((id) => !resolved.has(id));
-      if (missing) {
-        throw createAppError(
-          "PROJECT_NOT_FOUND",
-          `Project ${missing} not found`,
-        );
-      }
-
-      const shortcodeByEntityId = new Map<string, ProjectShortcode>();
-      const entityIds = input.projectIds.map((shortcode) => {
-        const entityId = resolved.get(shortcode)!;
-        shortcodeByEntityId.set(entityId, shortcode);
-        return unsafeProjectId(entityId);
-      });
+      const shortcodeByEntityId = new Map<string, ProjectShortcode>(
+        input.projectIds.map((shortcode, i) => [entityIds[i]!, shortcode]),
+      );
       const imagesByEntityId = await getImagesByProjectIds(ctx.db, entityIds);
 
       return Object.fromEntries(

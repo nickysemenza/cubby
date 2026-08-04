@@ -7,7 +7,6 @@ import {
   type ExpenseShortcode,
   expenseShortcode,
   purchaseShortcode,
-  unsafeExpenseId,
   unsafePurchaseId,
   vendorShortcode,
 } from "@cubby/schemas/identifiers";
@@ -31,7 +30,6 @@ import {
 } from "@cubby/schemas/project";
 import { vendorOptionsOut } from "@cubby/schemas/vendor";
 import { z } from "zod";
-import { createAppError } from "~/server/errors/app-error";
 import {
   createExpense,
   deleteExpenses,
@@ -52,8 +50,9 @@ import {
   getPurchaseLinkIdentityByID,
 } from "~/server/repo/purchase";
 import {
+  resolveAllPresent,
   resolveLiveShortcode,
-  resolveLiveShortcodes,
+  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { vendorOptions as loadVendorOptions } from "~/server/repo/vendor";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
@@ -85,14 +84,8 @@ const {
   },
   repository: {
     getByID: async (services, shortcode: ExpenseShortcode) => {
-      const id = await resolveLiveShortcode(services.db, shortcode, "expense");
-      if (!id) {
-        throw createAppError(
-          "EXPENSE_NOT_FOUND",
-          `Expense not found: ${shortcode}`,
-        );
-      }
-      return getExpenseByID(services.db, unsafeExpenseId(id));
+      const id = await resolveOrThrow(services.db, "expense", shortcode);
+      return getExpenseByID(services.db, id);
     },
     getByShortcode: (services, shortcode) =>
       getExpenseByShortcode(services.db, shortcode),
@@ -170,14 +163,10 @@ const deleteWithPurchaseEffects = protectedProcedure
  * whole batch, not one per row.
  */
 async function expenseEntityIds(
-  db: Parameters<typeof resolveLiveShortcodes>[0],
+  db: Parameters<typeof resolveAllPresent>[0],
   ids: ExpenseShortcode[],
 ) {
-  const resolved = await resolveLiveShortcodes(db, ids, "expense");
-  return ids.flatMap((code) => {
-    const uuid = resolved.get(code);
-    return uuid ? [unsafeExpenseId(uuid)] : [];
-  });
+  return resolveAllPresent(db, "expense", ids);
 }
 
 /**
@@ -249,11 +238,8 @@ const chargeContext = protectedProcedure
     ),
   )
   .query(async ({ ctx, input }) => {
-    const id = await resolveLiveShortcode(ctx.db, input, "expense");
-    if (!id) {
-      throw createAppError("EXPENSE_NOT_FOUND", `Expense not found: ${input}`);
-    }
-    const self = await getExpenseByID(ctx.db, unsafeExpenseId(id));
+    const id = await resolveOrThrow(ctx.db, "expense", input);
+    const self = await getExpenseByID(ctx.db, id);
     if (!self.purchaseId) return null;
     const purchaseId = await resolveLiveShortcode(
       ctx.db,

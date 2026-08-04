@@ -298,3 +298,33 @@ export const ENTITY_NOT_FOUND_REASON = {
   vendor: "VENDOR_NOT_FOUND",
   wish: "WISH_NOT_FOUND",
 } as const satisfies Record<ShortcodeEntity, AppErrorReason>;
+
+/**
+ * Entity → the singular noun a not-found message calls it, sentence-cased for
+ * use at the start of one (`"Financial account not found: FAC-4K7M"`).
+ *
+ * The companion to {@link ENTITY_NOT_FOUND_REASON}: that supplies a generic
+ * resolver's error *code*, this supplies its *prose*. Spelled out for the same
+ * reason — capitalizing the entity key gets 12 of 15 right and mangles the rest
+ * (`financialAccount` → `"FinancialAccount"`, `inventory` → `"Inventory"` where
+ * every existing message says `"Inventory entry"`). These strings are taken
+ * verbatim from the messages the hand-rolled lookups already throw, so
+ * collapsing those onto a generic helper doesn't reword any user-facing error.
+ */
+export const ENTITY_LABEL = {
+  cookbook: "Cookbook",
+  expense: "Expense",
+  financialAccount: "Financial account",
+  financialTransaction: "Financial transaction",
+  ingredient: "Ingredient",
+  inventory: "Inventory entry",
+  location: "Location",
+  meal: "Meal",
+  product: "Product",
+  project: "Project",
+  purchase: "Purchase",
+  recipe: "Recipe",
+  task: "Task",
+  vendor: "Vendor",
+  wish: "Wish",
+} as const satisfies Record<ShortcodeEntity, string>;

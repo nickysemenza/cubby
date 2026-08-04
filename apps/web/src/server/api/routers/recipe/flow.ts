@@ -1,12 +1,10 @@
-import { unsafeRecipeId } from "@cubby/schemas/identifiers";
 import {
   recipeFlowArtifactSchema,
   recipeFlowGenerateInputSchema,
   recipeFlowGetInputSchema,
   recipeFlowStateSchema,
 } from "@cubby/schemas/recipe-flow";
-import { createAppError } from "~/server/errors/app-error";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import {
   generateRecipeFlow,
   getRecipeFlowState,
@@ -14,14 +12,10 @@ import {
 import { protectedProcedure, strictOutput } from "../../trpc";
 
 const resolveRecipeEntityId = async (
-  db: Parameters<typeof resolveLiveShortcode>[0],
+  db: Parameters<typeof resolveOrThrow>[0],
   shortcode: string,
 ) => {
-  const id = await resolveLiveShortcode(db, shortcode, "recipe");
-  if (!id) {
-    throw createAppError("RECIPE_NOT_FOUND", `Recipe ${shortcode} not found`);
-  }
-  return unsafeRecipeId(id);
+  return resolveOrThrow(db, "recipe", shortcode);
 };
 
 const getFlow = protectedProcedure

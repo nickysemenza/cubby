@@ -97,6 +97,9 @@ Use these instead of inline patterns:
 | `pMap(ids, (id) => getIngredientByID(...))` per-id loops    | `getIngredientsByIDs(db, usdaClient, ids)`      | `~/server/services/ingredient.service`       |
 | Explicit router `.output(schema)`                           | `.output(strictOutput(schema))`                  | `~/server/api/trpc`                           |
 | Hand-rolled merge that deletes losers, cascades embeddings, and writes audit separately | `finalizeMerge` (plus `resolveMergeTargets`/`repointEdge`) | `~/server/repo/merge` |
+| `resolveLiveShortcode` + `if (!id) throw createAppError("X_NOT_FOUND", …)` + `unsafeXId` | `resolveOrThrow(db, entity, code)` | `~/server/repo/shortcode-resolver` |
+| `resolveLiveShortcodes` + collect-missing + throw | `resolveAllOrThrow(db, entity, codes)` | `~/server/repo/shortcode-resolver` |
+| `resolveLiveShortcodes` + `.flatMap`/`.filter` that drops misses | `resolveAllPresent(db, entity, codes)` | `~/server/repo/shortcode-resolver` |
 
 es-toolkit / ts-pattern caveats (don't over-apply): `keyBy` is for `Object.fromEntries(arr.map(...))` (Record→Record). Leave pure `Record<Enum, _>` value/theme lookups, `neverthrow` `.match()`, debounce/throttle (`@tanstack/react-pacer`), and date math (`date-fns`) as they are.
 
@@ -145,6 +148,19 @@ A uuid PK is an implementation detail of the repo layer. The **shortcode** (`PRD
 
 - **A uuid must never reach a URL or an MCP payload.** Detail routes are `/products/$shortcode`; guard-enforced by `uuid-entity-href` in `scripts/check-conventions.mjs`, which also catches server-built template hrefs the router's typed params can't see.
 - **Resolve in exactly one place** — `apps/web/src/server/repo/shortcode-resolver.ts`. Don't add a `findXByShortcode`; three of those existed and were deleted. `resolveShortcode` answers *"what does this code name"* (soft-deleted rows included, so a scan of a dead label can say so); `resolveLiveShortcode(db, code, entity)` answers *"can I still open it"* and pins the expected entity, so a `LOC-` code handed to a product lookup returns null instead of leaking a uuid.
+- **Reach for the throwing wrappers first.** `resolveOrThrow(db, entity, code)`
+  is what most callers want — it derives the branded id, the `<ENTITY>_NOT_FOUND`
+  reason, and the message label from the entity, so a call site names none of
+  them. Plural splits by what a missing code means: `resolveAllOrThrow` (404s,
+  naming **every** missing code, not just the first) vs `resolveAllPresent`
+  (narrows to what exists). Choosing between them at the call site is the point —
+  the old shapes hid that choice in the `.flatMap` versus `.filter` that followed.
+  Drop to the raw `resolveLiveShortcode(s)` only where a miss is genuinely not a
+  404: a nullable getter, a validation failure on caller-supplied input
+  (`REFERENCED_RECORD_MISSING`), a polymorphic reason, or an invariant violation
+  on a row the same function just created — those throw a plain `Error` **on
+  purpose**, and turning one into a client-facing 404 is a regression, not a
+  cleanup.
 - **Mint via `insertWithShortcode`** (`repo/shortcode-utils.ts`), not by hand. The unique index is authoritative — it spans soft-deleted rows so a retired code is a permanent tombstone — and the helper retries on `23505` inside a SAVEPOINT. A bare `generateUniqueShortcode` + insert is only correct where the code must be materialized outside the insert (a `findOrCreate` values thunk, a caller-supplied code).
 - **Never reassign or reuse a code**, including on merge: the loser keeps its own tombstone. If a merged-away code ever needs to resolve to the survivor, that's an explicit alias table, not a reassignment.
 - Shortcode schemas (`shortcodeSchema(entity)`) must stay a **`ZodString`** — `.trim().toUpperCase().regex()` as string-level checks. Wrapping them in `.transform().pipe()` still parses, but turns them into a `ZodPipe` whose input-side JSON Schema drops the `pattern`, silently stripping the prefix hint MCP advertises to agents. Guarded by `shortcode.unit.test.ts`.

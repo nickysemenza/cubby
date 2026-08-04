@@ -16,7 +16,6 @@ import {
 import {
   type FinancialAccountId,
   type FinancialAccountShortcode,
-  unsafeFinancialAccountId,
   unsafeFinancialAccountShortcode,
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
@@ -52,8 +51,8 @@ import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import {
-  resolveLiveShortcode,
-  resolveLiveShortcodes,
+  resolveAllOrThrow,
+  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -308,13 +307,7 @@ export async function updateFinancialAccount(
   data: FinancialAccountUpdateData,
   actor: ActorContext,
 ) {
-  const resolved = await resolveLiveShortcode(db, id, "financialAccount");
-  if (!resolved)
-    throw createAppError(
-      "FINANCIAL_ACCOUNT_NOT_FOUND",
-      `Financial account not found: ${id}`,
-    );
-  const accountId = unsafeFinancialAccountId(resolved);
+  const accountId = await resolveOrThrow(db, "financialAccount", id);
   await withTransaction(db, async (tx) => {
     const before = await tx.query.financialAccount.findFirst({
       where: and(
@@ -373,22 +366,7 @@ export async function deleteFinancialAccounts(
   shortcodes: FinancialAccountShortcode[],
   actor: ActorContext,
 ) {
-  const resolved = await resolveLiveShortcodes(
-    db,
-    shortcodes,
-    "financialAccount",
-  );
-  const ids = uniq(
-    shortcodes.map((code) => {
-      const id = resolved.get(code);
-      if (!id)
-        throw createAppError(
-          "FINANCIAL_ACCOUNT_NOT_FOUND",
-          `Financial account not found: ${code}`,
-        );
-      return unsafeFinancialAccountId(id);
-    }),
-  );
+  const ids = uniq(await resolveAllOrThrow(db, "financialAccount", shortcodes));
   await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(
       tx,

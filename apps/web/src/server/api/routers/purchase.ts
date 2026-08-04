@@ -45,8 +45,8 @@ import {
   updatePurchase,
 } from "~/server/repo/purchase";
 import {
+  resolveAllPresent,
   resolveLiveShortcode,
-  resolveLiveShortcodes,
   resolveShortcode,
 } from "~/server/repo/shortcode-resolver";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
@@ -137,28 +137,18 @@ const link = protectedProcedure
       input,
       ctx.actorContext,
     );
-    const resolved = await resolveLiveShortcodes(
+    const resolvedIds = await resolveAllPresent(
       ctx.db,
-      input.expenseIds,
       "expense",
+      input.expenseIds,
     );
     await runMutationSideEffectsForEntities(
       ctx.db,
-      input.expenseIds.flatMap((code) => {
-        const uuid = resolved.get(code);
-        return uuid
-          ? [
-              {
-                action: "updated" as const,
-                entity: {
-                  entityType: "expense" as const,
-                  entityId: unsafeExpenseId(uuid),
-                },
-                source: "purchase.link",
-              },
-            ]
-          : [];
-      }),
+      resolvedIds.map((entityId) => ({
+        action: "updated" as const,
+        entity: { entityType: "expense" as const, entityId },
+        source: "purchase.link",
+      })),
     );
     return result;
   });
@@ -176,10 +166,10 @@ const split = protectedProcedure
     // The original is already soft-deleted by the time we get here —
     // `resolveShortcode` (not the live-only variant) is what still names it.
     const originalRef = await resolveShortcode(ctx.db, input.expenseId);
-    const newIds = await resolveLiveShortcodes(
+    const newIds = await resolveAllPresent(
       ctx.db,
-      items.map((item) => item.id),
       "expense",
+      items.map((item) => item.id),
     );
     await runMutationSideEffectsForEntities(ctx.db, [
       // The original is gone and each part is new, so both sides need indexing.
@@ -195,21 +185,11 @@ const split = protectedProcedure
             },
           ]
         : []),
-      ...items.flatMap((item) => {
-        const uuid = newIds.get(item.id);
-        return uuid
-          ? [
-              {
-                action: "created" as const,
-                entity: {
-                  entityType: "expense" as const,
-                  entityId: unsafeExpenseId(uuid),
-                },
-                source: "purchase.split",
-              },
-            ]
-          : [];
-      }),
+      ...newIds.map((entityId) => ({
+        action: "created" as const,
+        entity: { entityType: "expense" as const, entityId },
+        source: "purchase.split",
+      })),
     ]);
     if (priceAffectedProductIds.length > 0) {
       await recomputeRecipesForPriceAffectedProducts(

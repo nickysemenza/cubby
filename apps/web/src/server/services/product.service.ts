@@ -15,7 +15,6 @@ import type {
 import type { FoodSummary } from "@cubby/usda-schemas";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
-import { createAppError } from "~/server/errors/app-error";
 import type { USDAClient } from "../clients/usda";
 import { getRecipeUsagesForIngredient } from "../repo/ingredient";
 import {
@@ -28,8 +27,9 @@ import {
   updateProduct as updateProductRepo,
 } from "../repo/product";
 import {
+  resolveAllOrThrow,
   resolveLiveShortcode,
-  resolveLiveShortcodes,
+  resolveOrThrow,
 } from "../repo/shortcode-resolver";
 import { batchEnrichWithFood } from "./usda-helpers";
 
@@ -111,20 +111,12 @@ export const getProductSummaries = async (
   shortcodes: ProductShortcode[],
   include: ProductSummariesInput["include"],
 ): Promise<ProductSummariesOut> => {
-  const resolved = await resolveLiveShortcodes(db, shortcodes, "product");
-  const missing = shortcodes.find((shortcode) => !resolved.has(shortcode));
-  if (missing) {
-    throw createAppError("PRODUCT_NOT_FOUND", `Product ${missing} not found`);
-  }
-  // Non-null: every shortcode was confirmed present in `resolved` above.
-  const ids = shortcodes.map((shortcode) =>
-    unsafeProductId(resolved.get(shortcode)!),
-  );
+  const ids = await resolveAllOrThrow(db, "product", shortcodes);
   const shortcodeById = new Map(
-    shortcodes.map((shortcode) => [
-      unsafeProductId(resolved.get(shortcode)!),
-      shortcode,
-    ]),
+    shortcodes.map((shortcode, i) => {
+      // Non-null: resolveAllOrThrow returns one id per input code, positionally.
+      return [ids[i]!, shortcode] as const;
+    }),
   );
   const rekey = <T>(record: Record<string, T>): Record<string, T> =>
     Object.fromEntries(
@@ -182,21 +174,13 @@ export const createProductWithFood = async (
   actor: ActorContext,
 ): Promise<ProductWriteResult> => {
   const ingredientEntityId = data.ingredientId
-    ? await resolveLiveShortcode(db, data.ingredientId, "ingredient")
+    ? await resolveOrThrow(db, "ingredient", data.ingredientId)
     : null;
-  if (data.ingredientId && !ingredientEntityId) {
-    throw createAppError(
-      "INGREDIENT_NOT_FOUND",
-      `Ingredient ${data.ingredientId} not found`,
-    );
-  }
   const product = await createProductRepo(
     db,
     {
       ...data,
-      ingredientId: ingredientEntityId
-        ? unsafeIngredientId(ingredientEntityId)
-        : null,
+      ingredientId: ingredientEntityId,
     },
     actor,
   );
@@ -221,24 +205,21 @@ export const updateProductWithFood = async (
   data: ProductUpdateInput["data"],
   actor: ActorContext,
 ): Promise<ProductWriteResult> => {
-  const ingredientEntityId = data.ingredientId
-    ? await resolveLiveShortcode(db, data.ingredientId, "ingredient")
-    : data.ingredientId;
-  if (data.ingredientId && !ingredientEntityId) {
-    throw createAppError(
-      "INGREDIENT_NOT_FOUND",
-      `Ingredient ${data.ingredientId} not found`,
-    );
-  }
+  // Explicit `== null` (not a truthy check): the falsy branch must narrow to
+  // `null | undefined` so it matches the branded `IngredientId | null |
+  // undefined` the repo expects — a truthy check leaves the branch typed as
+  // the unbranded `IngredientShortcode`, since TS can't prove a non-literal
+  // string type is never empty.
+  const ingredientEntityId =
+    data.ingredientId == null
+      ? data.ingredientId
+      : await resolveOrThrow(db, "ingredient", data.ingredientId);
   await updateProductRepo(
     db,
     id,
     {
       ...data,
-      ingredientId:
-        ingredientEntityId == null
-          ? ingredientEntityId
-          : unsafeIngredientId(ingredientEntityId),
+      ingredientId: ingredientEntityId,
     },
     actor,
   );

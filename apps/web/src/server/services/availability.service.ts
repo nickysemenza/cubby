@@ -12,9 +12,7 @@ import {
   type ProductShortcode,
   type RecipeId,
   type RecipeShortcode,
-  unsafeIngredientId,
   unsafeProductId,
-  unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
 import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
 import type { SectionIngredientOut } from "@cubby/schemas/recipe";
@@ -29,8 +27,9 @@ import { createAppError } from "~/server/errors/app-error";
 import { getInventoryForProducts } from "~/server/repo/inventory";
 import { getRecipeByID } from "~/server/repo/recipe";
 import {
-  resolveLiveShortcode,
+  resolveAllPresent,
   resolveLiveShortcodes,
+  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import type { USDAClient } from "../clients/usda";
 import { getIngredientsByIDs } from "./ingredient.service";
@@ -61,13 +60,7 @@ const resolveProductIds = async (
 const resolveIngredientIds = async (
   db: Database,
   shortcodes: IngredientShortcode[],
-): Promise<IngredientId[]> => {
-  const resolved = await resolveLiveShortcodes(db, shortcodes, "ingredient");
-  return shortcodes.flatMap((shortcode) => {
-    const id = resolved.get(shortcode);
-    return id ? [unsafeIngredientId(id)] : [];
-  });
-};
+): Promise<IngredientId[]> => resolveAllPresent(db, "ingredient", shortcodes);
 
 // Output types live in @cubby/schemas/availability (single source of
 // truth, shared with the suggestions router's .output()).
@@ -95,18 +88,7 @@ export class AvailabilityService {
   async getRecipeAvailability(
     recipeShortcode: RecipeShortcode,
   ): Promise<RecipeAvailability> {
-    const resolvedRecipeId = await resolveLiveShortcode(
-      this.db,
-      recipeShortcode,
-      "recipe",
-    );
-    if (!resolvedRecipeId) {
-      throw createAppError(
-        "RECIPE_NOT_FOUND",
-        `Recipe ${recipeShortcode} not found`,
-      );
-    }
-    const recipeId = unsafeRecipeId(resolvedRecipeId);
+    const recipeId = await resolveOrThrow(this.db, "recipe", recipeShortcode);
     const recipe = await getRecipeByID(this.db, recipeId);
     if (!recipe) {
       throw createAppError("RECIPE_NOT_FOUND", `Recipe ${recipeId} not found`);

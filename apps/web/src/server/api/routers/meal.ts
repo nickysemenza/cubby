@@ -12,8 +12,6 @@ import {
   type MealShortcode,
   mealShortcode,
   type RecipeId,
-  unsafeMealId,
-  unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
 import {
   mealAddRecipeInput,
@@ -43,8 +41,8 @@ import {
   updateMealRecipeWithEntityId,
 } from "~/server/repo/meal";
 import {
-  resolveLiveShortcode,
-  resolveLiveShortcodes,
+  resolveAllOrThrow,
+  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import { createSearchableEntityCrudProcedures } from "../crud-factory";
@@ -101,28 +99,17 @@ const {
 });
 
 const resolveMealEntityId = async (
-  db: Parameters<typeof resolveLiveShortcode>[0],
+  db: Parameters<typeof resolveOrThrow>[0],
   shortcode: MealShortcode,
 ): Promise<MealId> => {
-  const id = await resolveLiveShortcode(db, shortcode, "meal");
-  if (!id) {
-    throw createAppError("MEAL_NOT_FOUND", `Meal ${shortcode} not found`);
-  }
-  return unsafeMealId(id);
+  return resolveOrThrow(db, "meal", shortcode);
 };
 
 const resolveMealEntityIds = async (
-  db: Parameters<typeof resolveLiveShortcodes>[0],
+  db: Parameters<typeof resolveAllOrThrow>[0],
   shortcodes: MealShortcode[],
 ): Promise<MealId[]> => {
-  const resolved = await resolveLiveShortcodes(db, shortcodes, "meal");
-  return shortcodes.map((shortcode) => {
-    const id = resolved.get(shortcode);
-    if (!id) {
-      throw createAppError("MEAL_NOT_FOUND", `Meal ${shortcode} not found`);
-    }
-    return unsafeMealId(id);
-  });
+  return resolveAllOrThrow(db, "meal", shortcodes);
 };
 
 // A meal's embedding text is mostly its planned recipes' names, so the child
@@ -214,22 +201,13 @@ const getShoppingList = protectedProcedure
       }
     }
 
-    const recipeIds = await resolveLiveShortcodes(
+    const recipeIds = await resolveAllOrThrow(
       ctx.db,
-      publicLines.map((line) => line.recipeId),
       "recipe",
+      publicLines.map((line) => line.recipeId),
     );
     const lines: { recipeId: RecipeId; scale: number }[] = publicLines.map(
-      (line) => {
-        const id = recipeIds.get(line.recipeId);
-        if (!id) {
-          throw createAppError(
-            "RECIPE_NOT_FOUND",
-            `Recipe ${line.recipeId} not found`,
-          );
-        }
-        return { recipeId: unsafeRecipeId(id), scale: line.scale };
-      },
+      (line, i) => ({ recipeId: recipeIds[i]!, scale: line.scale }),
     );
 
     const needs = await ctx.services.availability.getAggregatedNeeds(lines);

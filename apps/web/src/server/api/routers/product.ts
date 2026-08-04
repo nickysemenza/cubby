@@ -15,7 +15,6 @@ import {
   unsafeIngredientId,
   unsafeProductId,
   unsafeProductShortcode,
-  unsafeProjectId,
 } from "@cubby/schemas/identifiers";
 import {
   mergeProductsInput,
@@ -57,7 +56,6 @@ import {
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { streamItems, streamProgress } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
-import { createAppError } from "~/server/errors/app-error";
 import { findProductExternalIdCollisions } from "~/server/repo/data-quality";
 import {
   deleteProducts,
@@ -78,8 +76,10 @@ import {
   setProductProjectUses,
 } from "~/server/repo/project";
 import {
+  resolveAllOrThrow,
   resolveLiveShortcode,
   resolveLiveShortcodes,
+  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { shouldUseSemanticComboboxFallback } from "~/server/semantic/combobox-fallback";
 import { verifyProductImages } from "~/server/services/image-verification.service";
@@ -110,28 +110,17 @@ import {
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 async function resolveProductId(
-  db: Parameters<typeof resolveLiveShortcode>[0],
+  db: Parameters<typeof resolveOrThrow>[0],
   shortcode: ProductShortcode,
 ): Promise<ProductId> {
-  const id = await resolveLiveShortcode(db, shortcode, "product");
-  if (!id) {
-    throw createAppError("PRODUCT_NOT_FOUND", `Product ${shortcode} not found`);
-  }
-  return unsafeProductId(id);
+  return resolveOrThrow(db, "product", shortcode);
 }
 
 async function resolveProductIds(
-  db: Parameters<typeof resolveLiveShortcodes>[0],
+  db: Parameters<typeof resolveAllOrThrow>[0],
   shortcodes: ProductShortcode[],
 ): Promise<ProductId[]> {
-  const resolved = await resolveLiveShortcodes(db, shortcodes, "product");
-  const missing = shortcodes.find((shortcode) => !resolved.has(shortcode));
-  if (missing) {
-    throw createAppError("PRODUCT_NOT_FOUND", `Product ${missing} not found`);
-  }
-  return shortcodes.map((shortcode) =>
-    unsafeProductId(resolved.get(shortcode)!),
-  );
+  return resolveAllOrThrow(db, "product", shortcodes);
 }
 
 // Product lists are lean DB rows. Detail/create/update are enriched with USDA
@@ -736,21 +725,12 @@ const setProjectUses = protectedProcedure
   .output(strictOutput(productProjectUsesSetOut))
   .mutation(async ({ ctx, input }) => {
     const id = await resolveProductId(ctx.db, input.productId);
-    const resolved = await resolveLiveShortcodes(
+    const projectIds = await resolveAllOrThrow(
       ctx.db,
-      input.projectIds,
       "project",
+      input.projectIds,
     );
-    const missing = input.projectIds.find((code) => !resolved.has(code));
-    if (missing) {
-      throw createAppError("PROJECT_NOT_FOUND", `Project ${missing} not found`);
-    }
-    return setProductProjectUses(
-      ctx.db,
-      id,
-      input.projectIds.map((code) => unsafeProjectId(resolved.get(code)!)),
-      ctx.actorContext,
-    );
+    return setProductProjectUses(ctx.db, id, projectIds, ctx.actorContext);
   });
 
 export const productRouter = createTRPCRouter({

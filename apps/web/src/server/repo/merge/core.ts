@@ -42,9 +42,9 @@ import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { Entity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import type { BrandForEntity } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { searchableEntities } from "@cubby/schemas/search";
-import type { AppErrorReason } from "@cubby/shared";
 import { type AnyColumn, and, getTableColumns, inArray } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
@@ -54,11 +54,10 @@ import type {
   IncomingEdgeKey,
 } from "~/server/db/entity-incoming-edges";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
-import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { notDeleted } from "~/server/repo/database-helpers";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
-import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
+import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 
 /** A table a merge can remove rows from — soft (`deletedAt`) or hard. */
 type MergeableTable = PgTable & { id: AnyColumn; deletedAt: AnyColumn };
@@ -83,33 +82,34 @@ const isSearchable = (entity: Entity): entity is SearchableEntity =>
  * Fail-loud is the point: silently skipping an unresolvable id returns
  * "success" while changing nothing, which is how a typo'd code reads as a
  * completed merge.
+ *
+ * The error reason, the message label, and the id brand are all derived from
+ * `entity` via `resolveAllOrThrow` — this used to take all three as arguments,
+ * which meant every caller could pair a `"vendor"` merge with a
+ * `PRODUCT_NOT_FOUND` reason or another entity's brander and still compile.
  */
-export const resolveMergeTargets = async <Id extends string>(
+export const resolveMergeTargets = async <E extends ShortcodeEntity>(
   db: Database,
   args: {
-    entity: ShortcodeEntity;
+    entity: E;
     keepId: string;
     mergeIds: readonly string[];
-    /** Thrown when any code doesn't resolve — e.g. `"VENDOR_NOT_FOUND"`. */
-    notFound: AppErrorReason;
-    /** Singular entity noun for the error message — e.g. `"Vendor"`. */
-    label: string;
-    brand: (id: string) => Id;
   },
-): Promise<{ keepId: Id; loserIds: Id[] }> => {
+): Promise<{ keepId: BrandForEntity<E>; loserIds: BrandForEntity<E>[] }> => {
   const codes = uniq([args.keepId, ...args.mergeIds]);
-  const resolved = await resolveLiveShortcodes(db, codes, args.entity);
-  const missing = codes.filter((code) => !resolved.has(code));
-  if (missing.length > 0) {
-    throw createAppError(
-      args.notFound,
-      `${args.label}(s) not found: ${missing.join(", ")}`,
-    );
-  }
-  const keepId = args.brand(resolved.get(args.keepId) ?? "");
-  const loserIds = uniq(
-    args.mergeIds.map((code) => args.brand(resolved.get(code) ?? "")),
-  ).filter((id) => id !== keepId);
+  // Deduped on the way in, so the positional result maps back cleanly — and a
+  // caller that passed the keeper twice can't have it counted as a loser.
+  const ids = await resolveAllOrThrow(db, args.entity, codes);
+  // Explicitly generic: left to infer, `Map` widens `BrandForEntity<E>` into a
+  // union of all fifteen brands, which then can't flow back into the deferred
+  // `BrandForEntity<E>` the signature promises.
+  const byCode = new Map<string, BrandForEntity<E>>(
+    codes.map((code, i) => [code, ids[i]!]),
+  );
+  const keepId = byCode.get(args.keepId)!;
+  const loserIds = uniq(args.mergeIds.map((code) => byCode.get(code)!)).filter(
+    (id) => id !== keepId,
+  );
   return { keepId, loserIds };
 };
 

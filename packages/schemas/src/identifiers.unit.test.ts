@@ -3,6 +3,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import { type ShortcodeEntity, shortcodeEntities } from "./entity-manifest";
 import {
   type BrandForEntity,
+  ENTITY_LABEL,
   ENTITY_NOT_FOUND_REASON,
   type FinancialAccountId,
   type InventoryId,
@@ -38,6 +39,28 @@ describe("entity id lookups", () => {
     expect(sorted(Object.keys(ENTITY_NOT_FOUND_REASON))).toEqual(
       sorted(shortcodeEntities),
     );
+    expect(sorted(Object.keys(ENTITY_LABEL))).toEqual(
+      sorted(shortcodeEntities),
+    );
+  });
+
+  it("labels every entity the way its existing messages already do", () => {
+    // These strings go straight into user-facing not-found errors, so they must
+    // read as the start of a sentence — and match what the hand-rolled lookups
+    // they replace already threw, so consolidating reworded nothing.
+    expect(ENTITY_LABEL.inventory).toBe("Inventory entry");
+    expect(ENTITY_LABEL.financialAccount).toBe("Financial account");
+    expect(ENTITY_LABEL.financialTransaction).toBe("Financial transaction");
+
+    for (const entity of shortcodeEntities) {
+      const label = ENTITY_LABEL[entity];
+      expect(label).toMatch(/^[A-Z]/);
+      // Sentence case, not Title Case: "Financial account", never "Financial
+      // Account" — the label is only ever used sentence-initially.
+      expect(label).toBe(
+        label.charAt(0) + label.slice(1).toLowerCase().replace(/_/g, " "),
+      );
+    }
   });
 
   it("maps every entity to a real NOT_FOUND reason", () => {

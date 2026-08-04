@@ -18,11 +18,7 @@ import type {
   ProductShortcode,
   ProjectShortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  projectShortcode,
-  unsafeProductId,
-  unsafeProjectId,
-} from "@cubby/schemas/identifiers";
+import { projectShortcode } from "@cubby/schemas/identifiers";
 import {
   createProjectFromTasksInput,
   createProjectFromTasksOut,
@@ -67,8 +63,8 @@ import {
 } from "~/server/repo/project";
 import { createProjectFromTasks } from "~/server/repo/project/create-from-tasks";
 import {
-  resolveLiveShortcode,
-  resolveLiveShortcodes,
+  resolveAllOrThrow,
+  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import {
@@ -95,14 +91,8 @@ const {
   },
   repository: {
     getByID: async (services, shortcode: ProjectShortcode) => {
-      const id = await resolveLiveShortcode(services.db, shortcode, "project");
-      if (!id) {
-        throw createAppError(
-          "PROJECT_NOT_FOUND",
-          `Project not found: ${shortcode}`,
-        );
-      }
-      return getProjectByID(services.db, unsafeProjectId(id));
+      const id = await resolveOrThrow(services.db, "project", shortcode);
+      return getProjectByID(services.db, id);
     },
     getByShortcode: (services, shortcode) =>
       getProjectByShortcode(services.db, shortcode),
@@ -194,30 +184,15 @@ const createFromTasks = protectedProcedure
   });
 
 async function resolveProjectResourceIds(
-  db: Parameters<typeof resolveLiveShortcode>[0],
+  db: Parameters<typeof resolveOrThrow>[0],
   input: { projectId: ProjectShortcode; productIds?: ProductShortcode[] },
 ) {
-  const projectId = await resolveLiveShortcode(db, input.projectId, "project");
-  if (!projectId) {
-    throw createAppError(
-      "PROJECT_NOT_FOUND",
-      `Project ${input.projectId} not found`,
-    );
-  }
+  const projectId = await resolveOrThrow(db, "project", input.projectId);
   if (!input.productIds) {
-    return { projectId: unsafeProjectId(projectId), productIds: [] };
+    return { projectId, productIds: [] };
   }
-  const resolved = await resolveLiveShortcodes(db, input.productIds, "product");
-  const missing = input.productIds.find((code) => !resolved.has(code));
-  if (missing) {
-    throw createAppError("PRODUCT_NOT_FOUND", `Product ${missing} not found`);
-  }
-  return {
-    projectId: unsafeProjectId(projectId),
-    productIds: input.productIds.map((code) =>
-      unsafeProductId(resolved.get(code)!),
-    ),
-  };
+  const productIds = await resolveAllOrThrow(db, "product", input.productIds);
+  return { projectId, productIds };
 }
 
 const resources = protectedProcedure

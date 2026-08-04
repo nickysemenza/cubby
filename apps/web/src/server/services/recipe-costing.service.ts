@@ -15,7 +15,6 @@ import {
   type IngredientId,
   type RecipeId,
   type RecipeShortcode,
-  unsafeIngredientId,
   unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
 import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
@@ -60,7 +59,10 @@ import {
   selectStaleRecipeIds,
   updateRecipeTotalsBatch,
 } from "~/server/repo/recipe/totals";
-import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
+import {
+  resolveAllPresent,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import { TraceNames, withTrace } from "~/server/tracing";
 import type { USDAClient } from "../clients/usda";
 import { getIngredientsByIDs } from "./ingredient.service";
@@ -187,17 +189,9 @@ export class RecipeCostingService {
           const toFetch = frontier.filter((id) => !seen.has(id));
           for (const id of toFetch) seen.add(id);
           if (toFetch.length === 0) break;
-          const resolved = await resolveLiveShortcodes(
-            this.db,
-            toFetch,
-            "recipe",
-          );
           const fetched = await getRecipesByIDs(
             this.db,
-            toFetch.flatMap((shortcode) => {
-              const id = resolved.get(shortcode);
-              return id ? [unsafeRecipeId(id)] : [];
-            }),
+            await resolveAllPresent(this.db, "recipe", toFetch),
           );
           frontier = [];
           for (const r of fetched) {
@@ -215,18 +209,10 @@ export class RecipeCostingService {
           Object.keys(recipeMap).length,
         );
         span.setAttribute("ingredient.count", ingredientIds.length);
-        const resolvedIngredients = await resolveLiveShortcodes(
-          this.db,
-          ingredientIds,
-          "ingredient",
-        );
         const ingredients = await getIngredientsByIDs(
           this.db,
           this.usdaClient,
-          ingredientIds.flatMap((shortcode) => {
-            const id = resolvedIngredients.get(shortcode);
-            return id ? [unsafeIngredientId(id)] : [];
-          }),
+          await resolveAllPresent(this.db, "ingredient", ingredientIds),
         );
         const ingMap = keyBy(ingredients, (i) => i.id);
         return { ingMap, recipeMap };

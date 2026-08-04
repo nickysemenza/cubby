@@ -1,4 +1,3 @@
-import { unsafeIngredientId } from "@cubby/schemas/identifiers";
 import {
   cleanupOrphanedEntityEmbeddingsInput,
   cleanupOrphanedEntityEmbeddingsOut,
@@ -16,9 +15,8 @@ import {
   recipeUsageByProductOut,
 } from "@cubby/schemas/problems";
 import { streamProgress } from "~/lib/bulk-progress";
-import { createAppError } from "~/server/errors/app-error";
 import { recipeUsageCountsByProduct } from "~/server/repo/problems";
-import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
+import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 import {
   cleanupOrphanedEntityEmbeddings,
   deleteUnusedIngredients,
@@ -137,20 +135,10 @@ const deleteUnused = protectedProcedure
   .input(deleteUnusedIngredientsInput)
   .output(strictOutput(deleteUnusedIngredientsOut))
   .mutation(async ({ ctx, input }) => {
-    const resolved = await resolveLiveShortcodes(
+    const entityIds = await resolveAllOrThrow(
       ctx.db,
-      input.ingredientIds,
       "ingredient",
-    );
-    const missing = input.ingredientIds.find((id) => !resolved.has(id));
-    if (missing) {
-      throw createAppError(
-        "INGREDIENT_NOT_FOUND",
-        `Ingredient ${missing} not found`,
-      );
-    }
-    const entityIds = input.ingredientIds.map((id) =>
-      unsafeIngredientId(resolved.get(id)!),
+      input.ingredientIds,
     );
     const result = await deleteUnusedIngredients(
       ctx.db,

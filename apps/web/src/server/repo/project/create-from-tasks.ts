@@ -10,7 +10,6 @@
  */
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProjectId, TaskId } from "@cubby/schemas/identifiers";
-import { unsafeProjectId } from "@cubby/schemas/identifiers";
 import type {
   CreateProjectFromTasksInput,
   CreateProjectFromTasksOut,
@@ -18,7 +17,6 @@ import type {
 import { and, inArray } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { task } from "~/server/db/schema";
-import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditEntryInput,
   computeChanges,
@@ -27,8 +25,8 @@ import {
 } from "~/server/repo/audit-log";
 import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
 import {
-  resolveLiveShortcode,
-  resolveLiveShortcodes,
+  resolveAllOrThrow,
+  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { getTasksByIDs } from "~/server/repo/task";
@@ -45,39 +43,16 @@ export async function createProjectFromTasks(
 }> {
   // Resolved live-only up front — the same "resolving IS the liveness check"
   // pattern as `createProject`/`moveTasks`.
-  const resolvedTaskIds = await resolveLiveShortcodes(
-    db,
-    input.taskIds,
-    "task",
-  );
-  const missingTasks = input.taskIds.filter(
-    (code) => !resolvedTaskIds.has(code),
-  );
-  if (missingTasks.length > 0) {
-    throw createAppError(
-      "TASK_NOT_FOUND",
-      `Task(s) not found: ${missingTasks.join(", ")}`,
-    );
-  }
-  const taskIdsUuid = input.taskIds.map(
-    (code) => resolvedTaskIds.get(code) as TaskId,
-  );
+  const taskIdsUuid = await resolveAllOrThrow(db, "task", input.taskIds);
 
   const { projectId, taskIds } = await withTransaction(db, async (tx) => {
     let parentProjectId: ProjectId | null = null;
     if (input.project.parentProjectId) {
-      const resolved = await resolveLiveShortcode(
+      parentProjectId = await resolveOrThrow(
         tx,
-        input.project.parentProjectId,
         "project",
+        input.project.parentProjectId,
       );
-      if (!resolved) {
-        throw createAppError(
-          "PROJECT_NOT_FOUND",
-          `Project ${input.project.parentProjectId} does not exist or has been deleted`,
-        );
-      }
-      parentProjectId = unsafeProjectId(resolved);
     }
 
     const created = await insertWithShortcode(tx, "project", {
