@@ -11,6 +11,13 @@ import { useBulkStream } from "./useBulkStream";
 type TRPCClient = ReturnType<typeof useTRPCClient>;
 
 /**
+ * Stable empty default — `invalidateKeys` is a dependency of the `mutate`
+ * callback below, so an inline `= []` would hand every caller that omits it a
+ * fresh reference (and a fresh `mutate`) on every render.
+ */
+const NO_INVALIDATE_KEYS: readonly QueryKey[] = [];
+
+/**
  * Streaming sibling of {@link useActionMutation} for bulk actions whose server
  * procedure is a `.mutation(async function*)` yielding {@link BulkProgressEvent}s.
  * Same on-success contract (toast → invalidate → side effect; error toast), but
@@ -23,7 +30,7 @@ type TRPCClient = ReturnType<typeof useTRPCClient>;
 export function useBulkActionMutation<Vars, Result>({
   run,
   success,
-  invalidateKeys = [],
+  invalidateKeys = NO_INVALIDATE_KEYS,
   onSuccess,
   error,
 }: {

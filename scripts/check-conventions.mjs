@@ -432,6 +432,42 @@ function checkPackageScriptTargets() {
 const UNSTABLE_HOOK_DEFAULT_RE =
   /const\s*\{[^{}]*?=\s*(?:\[\]|\{\}|new\s+[A-Z][\w.]*\s*\([^)]*\))[^{}]*?\}\s*=\s*use[A-Z]\w*\s*\(/g;
 
+// Rule 13b: the same hazard one position over — a fresh-object default on a
+// DESTRUCTURED PARAMETER of a component or hook (`function C({ edges = [] })`,
+// `useTableState({ initialFilter = [] })`). Every caller that omits the prop
+// gets a new reference per render, so any memo/effect keyed on it re-runs
+// unconditionally. That is usually just wasted work — but in `useTableState`
+// it re-ran the URL-reconciliation effect on every render, which then read a
+// stale search mid-write and reverted the filters a saved view had just set.
+//
+// Flagged ONLY when the identifier also appears inside a dependency array in
+// the same file. Without that filter this fires on every server helper and
+// render-only prop with a defaulted array, which is genuinely fine — the
+// hazard is the dependency, not the default.
+// `new Set<string>()` — the generic argument sits between the name and the
+// call, so it has to be optional here or the `new …` arm misses every typed
+// collection (which is most of them).
+const UNSTABLE_PARAM_DEFAULT_RE =
+  /([A-Za-z_$][\w$]*)\s*=\s*(?:\[\]|\{\}|new\s+[A-Z][\w.]*\s*(?:<[^<>()]*>)?\s*\([^)]*\))\s*,/g;
+
+/**
+ * `}, [a, b, c])` / `], [a, b])` — a hook dependency array's contents. The
+ * trailing comma is optional because the formatter adds one on a wrapped call.
+ */
+const DEPENDENCY_ARRAY_RE = /[}\])]\s*,\s*\[([^\]]*)\]\s*,?\s*\)/g;
+
+/** Identifiers named in any dependency array in this file. */
+function dependencyIdentifiers(content) {
+  const names = new Set();
+  for (const match of content.matchAll(DEPENDENCY_ARRAY_RE)) {
+    for (const part of (match[1] ?? "").split(",")) {
+      const name = part.trim().split(/[.?[]/)[0]?.trim();
+      if (name) names.add(name);
+    }
+  }
+  return names;
+}
+
 /** @typedef {{ file: string, line: number, snippet: string, rule: string }} Violation */
 
 /** @param {string[]} files @returns {Violation[]} */
@@ -462,6 +498,24 @@ function scan(files) {
           snippet: match[0].replaceAll(/\s+/g, " ").slice(0, 120),
           rule: "unstable-hook-default",
         });
+      }
+
+      // Rule 13b: the parameter-position form, narrowed to identifiers this
+      // file actually feeds to a dependency array.
+      const deps = dependencyIdentifiers(content);
+      if (deps.size > 0) {
+        for (const match of content.matchAll(UNSTABLE_PARAM_DEFAULT_RE)) {
+          const name = match[1];
+          if (!name || !deps.has(name)) continue;
+          const line = content.slice(0, match.index).split("\n").length;
+          if (isCommentLine(lines[line - 1] ?? "")) continue;
+          violations.push({
+            file,
+            line,
+            snippet: (lines[line - 1] ?? "").trim(),
+            rule: "unstable-param-default",
+          });
+        }
       }
     }
 
@@ -792,6 +846,8 @@ const byRule = {
     "Dead package.json script — the tsx/node target file doesn't exist; delete the script or fix the path.",
   "unstable-hook-default":
     "Unstable hook-destructure default — an inline `= []`/`= {}`/`= new …` default on a hook result mints a new reference every render while the value is undefined, destabilizing memo/effect deps (render-loop hazard). Default to a module-level constant instead (see CLAUDE.md React Hooks).",
+  "unstable-param-default":
+    "Unstable parameter default — an inline `= []`/`= {}`/`= new …` default on a destructured component/hook parameter mints a new reference every render for every caller that omits it, and this identifier is named in a dependency array. Default to a module-level constant instead (see CLAUDE.md React Hooks).",
 };
 
 console.error(
