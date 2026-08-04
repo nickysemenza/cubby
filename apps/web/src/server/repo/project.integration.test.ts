@@ -2763,3 +2763,220 @@ describe("project dashboard — portfolio analytics", () => {
     ]);
   });
 });
+
+/**
+ * The `costEstimate` footer's full-filtered-set total (see
+ * `createCurrencyColumn`'s footer and `repo/project/lookup.ts`'s
+ * `projectListSums`). `apps/web/src/app/projects/shared.tsx`'s Estimate column
+ * renders `meta.serverTotals.sums.costEstimate` when the server supplies it and
+ * otherwise falls back to reducing only the LOADED page — with page size 25
+ * and production sitting at 63 root projects, that fallback silently summed
+ * 25 of 63 rows and presented it as the total. These tests seed MORE than one
+ * page so a page-subtotal and the full-set total genuinely differ; a test with
+ * fewer rows than a page would pass even with the old broken fallback.
+ */
+describe("project repository — sums.costEstimate", () => {
+  const ctx = withTestDb();
+
+  const page = (pageIndex: number, pageSize: number) => ({
+    pageIndex,
+    pageSize,
+  });
+
+  it("projectList sums the FULL filtered set, not the loaded page", async () => {
+    // 7 projects, page size 3 — three full pages' worth, so any one page's
+    // rows sum to well under the true total.
+    const estimates = [10, 20, 30, 40, 50, 60, 70];
+    for (const [i, costEstimate] of estimates.entries()) {
+      await createProject(
+        ctx.db,
+        projectCreateInput.parse({
+          name: `sum flat ${String(i).padStart(2, "0")}`,
+          costEstimate,
+        }),
+        ctx.actor,
+      );
+    }
+    const total = estimates.reduce((a, b) => a + b, 0); // 280
+
+    const firstPage = await projectList(
+      ctx.db,
+      { search: "sum flat" },
+      [{ orderBy: "name", direction: "asc" }],
+      page(0, 3),
+    );
+
+    expect(firstPage.data).toHaveLength(3);
+    const pageSubtotal = firstPage.data.reduce(
+      (acc, p) => acc + (p.costEstimate ?? 0),
+      0,
+    );
+    // The page-local reduction (10+20+30=60) is what the client-side fallback
+    // would compute — genuinely different from the true total.
+    expect(pageSubtotal).toBe(60);
+    expect(pageSubtotal).not.toBe(total);
+    // The server-supplied sum is the full 7-project total regardless of page.
+    expect(firstPage.sums.costEstimate).toBe(total);
+
+    const lastPage = await projectList(
+      ctx.db,
+      { search: "sum flat" },
+      [{ orderBy: "name", direction: "asc" }],
+      page(2, 3),
+    );
+    expect(lastPage.data).toHaveLength(1);
+    expect(lastPage.sums.costEstimate).toBe(total);
+  });
+
+  it("projectList's sum is scoped by the applied filter", async () => {
+    await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "sum filtered live",
+        status: "planning",
+        costEstimate: 100,
+      }),
+      ctx.actor,
+    );
+    await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "sum filtered done",
+        status: "done",
+        costEstimate: 9999,
+      }),
+      ctx.actor,
+    );
+
+    const result = await projectList(
+      ctx.db,
+      { search: "sum filtered", status: ["planning"] },
+      [],
+      page(0, 50),
+    );
+
+    expect(result.data).toHaveLength(1);
+    // The done project's 9999 must not leak into a total scoped to "planning".
+    expect(result.sums.costEstimate).toBe(100);
+  });
+
+  it("reads 0 over a filtered set with no cost estimates at all", async () => {
+    await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "sum unestimated" }),
+      ctx.actor,
+    );
+
+    const result = await projectList(
+      ctx.db,
+      { search: "sum unestimated" },
+      [],
+      page(0, 50),
+    );
+    // sum() over an all-NULL column is SQL NULL — coerced to 0, not passed through.
+    expect(result.sums.costEstimate).toBe(0);
+  });
+
+  it("projectTreePage sums the full matching set across MULTIPLE root pages, not just the page's roots", async () => {
+    // 5 standalone roots, page size 2 roots — so the true total spans more
+    // than any one root-page.
+    const estimates = [11, 22, 33, 44, 55];
+    for (const [i, costEstimate] of estimates.entries()) {
+      await createProject(
+        ctx.db,
+        projectCreateInput.parse({
+          name: `sum tree ${String(i).padStart(2, "0")}`,
+          costEstimate,
+        }),
+        ctx.actor,
+      );
+    }
+    const total = estimates.reduce((a, b) => a + b, 0); // 165
+
+    const firstRootPage = await projectTreePage(
+      ctx.db,
+      { search: "sum tree" },
+      [{ orderBy: "name", direction: "asc" }],
+      page(0, 2),
+    );
+    expect(firstRootPage.count).toBe(5); // 5 matching roots
+    expect(firstRootPage.data).toHaveLength(2); // but only 2 roots' worth of rows
+    const rootPageSubtotal = firstRootPage.data.reduce(
+      (acc, p) => acc + (p.costEstimate ?? 0),
+      0,
+    );
+    expect(rootPageSubtotal).toBe(11 + 22);
+    expect(rootPageSubtotal).not.toBe(total);
+    // The tree page reports the SAME full-set total the flat list would.
+    expect(firstRootPage.sums.costEstimate).toBe(total);
+  });
+
+  it("projectTreePage's sum includes descendants' own estimates, not just roots' — it is NOT roots-only", async () => {
+    // A root with its own estimate, plus a child under it with its OWN
+    // separate estimate. The `costEstimate` column renders each row's own
+    // value (see helpers.ts's `dbProjectToAPI` — not the subtree rollup), so
+    // the honest total sums every matching row, root and descendant alike.
+    const { output: root } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "sum tree root with child",
+        costEstimate: 100,
+      }),
+      ctx.actor,
+    );
+    await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "sum tree child",
+        parentProjectId: root.id,
+        costEstimate: 50,
+      }),
+      ctx.actor,
+    );
+
+    // Page size 1 root — the returned page still carries the root's full
+    // subtree (root + child), and the reported sum must cover both rows even
+    // though only one ROOT is on this page.
+    const result = await projectTreePage(
+      ctx.db,
+      { search: "sum tree" },
+      [],
+      page(0, 1),
+    );
+
+    expect(result.count).toBe(1); // one matching root
+    expect(result.data).toHaveLength(2); // root + child
+    expect(result.sums.costEstimate).toBe(150);
+  });
+
+  it("projectTreePage's sum is scoped by the applied filter, same as the flat list", async () => {
+    await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "sum tree filtered live",
+        status: "planning",
+        costEstimate: 200,
+      }),
+      ctx.actor,
+    );
+    await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "sum tree filtered done",
+        status: "done",
+        costEstimate: 7777,
+      }),
+      ctx.actor,
+    );
+
+    const result = await projectTreePage(
+      ctx.db,
+      { search: "sum tree filtered", status: ["planning"] },
+      [],
+      page(0, 50),
+    );
+
+    expect(result.data).toHaveLength(1);
+    expect(result.sums.costEstimate).toBe(200);
+  });
+});
