@@ -867,6 +867,34 @@ fn stored_money_edge_wins_when_cheaper_than_the_scalar_price() {
     assert_close(r.price, 0.5083, 1e-3, "price");
 }
 
+/// The other side of that comparison: when the scalar price is the cheaper of
+/// the two, it must win. Guards against "cheapest" quietly becoming "always
+/// prefer the stored edge" — the mirror-image of the bug above.
+#[test]
+fn scalar_price_wins_when_cheaper_than_the_stored_money_edge() {
+    // One product, both routes: $1/bag of 1000 g, and a stored edge at ten times
+    // that. The bag works out to $0.10 for 100 g, the edge to $1.00.
+    let both = WCostingIngredient {
+        id: "both".to_string(),
+        products: vec![WProductInput {
+            id: "prod-both".to_string(),
+            price: Some(1.0),
+            unit_mappings: vec![
+                mapping((1.0, "each"), (1000.0, "g")),
+                mapping((100.0, "g"), (1.0, "dollar")),
+            ],
+            food: None,
+        }],
+    };
+    let r = cost(
+        vec![row("both", "both", Some((100.0, "g")), None, None)],
+        vec![both],
+        vec![],
+    );
+
+    assert_close(r.price, 0.1, 1e-9, "price");
+}
+
 #[test]
 fn measured_salt_is_normal_even_with_to_taste() {
     let r = cost(
