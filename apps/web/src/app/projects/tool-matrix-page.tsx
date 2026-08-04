@@ -80,7 +80,8 @@ const KIND_LABELS: Record<ProjectKind, string> = {
   garden: "Garden",
 };
 
-const MATRIX_PAGE_SIZE = 24;
+const MATRIX_PAGE_SIZE = 16;
+const PROJECT_COLUMN_WIDTH = 44;
 
 const cellKey = (projectId: string, productId: string) =>
   `${projectId}:${productId}`;
@@ -209,6 +210,7 @@ function MatrixCell({
   purchaseCost,
   title,
   conflictReason,
+  striped,
   onToggle,
 }: {
   state: CellState;
@@ -216,6 +218,7 @@ function MatrixCell({
   title: string;
   /** Set on `conflict`, and on an ATTACHED cell that predates its own tool. */
   conflictReason: string | null;
+  striped: boolean;
   onToggle: () => void;
 }) {
   const hint = match(state)
@@ -244,7 +247,12 @@ function MatrixCell({
   const flagged = state === "attached" && conflictReason !== null;
 
   return (
-    <td className="border-[var(--border)] border-b border-l p-0">
+    <td
+      className={cn(
+        "border-[var(--border)] border-b border-l p-0 group-hover/row:bg-muted",
+        striped && "bg-muted/20",
+      )}
+    >
       <button
         type="button"
         title={hint}
@@ -692,7 +700,8 @@ function MatrixTable({
   }, [data.columns, data.rows]);
 
   const columnSpan = data.columns.length + 4;
-  const tableWidth = 256 + data.columns.length * 32 + 56 + 80 + 80;
+  const tableWidth =
+    256 + data.columns.length * PROJECT_COLUMN_WIDTH + 56 + 80 + 80;
 
   return (
     <table
@@ -711,16 +720,20 @@ function MatrixTable({
               <span className="eyebrow">Tool</span>
             </div>
           </th>
-          {data.columns.map((column) => (
+          {data.columns.map((column, columnIndex) => (
             <th
               key={column.projectId}
-              className="relative h-28 w-8 min-w-8 overflow-visible border-[var(--border)] border-l bg-card align-bottom"
+              title={`${column.projectName} · ${column.attachedCount} attached, ${column.suggestedCount} suggested`}
+              className={cn(
+                "relative h-28 w-11 min-w-11 overflow-visible border-[var(--border)] border-l bg-card align-bottom",
+                columnIndex % 2 === 1 && "bg-muted/20",
+              )}
             >
-              <div className="relative h-24 w-8 overflow-visible">
+              <div className="relative h-24 w-11 overflow-visible">
                 <EntityPreviewLink
                   entity="project"
                   id={column.projectId}
-                  className="absolute bottom-2 left-1/2 z-10 block w-32 origin-bottom-left rotate-[-55deg] truncate text-2xs text-foreground underline decoration-border/70 decoration-dotted underline-offset-2 transition-colors hover:text-primary hover:decoration-primary hover:decoration-solid"
+                  className="absolute bottom-2 left-1 z-10 block w-24 origin-bottom-left rotate-[-60deg] truncate text-2xs text-foreground leading-none underline decoration-border/70 decoration-dotted underline-offset-2 transition-colors hover:text-primary hover:decoration-primary hover:decoration-solid"
                 >
                   {column.projectName}
                 </EntityPreviewLink>
@@ -792,7 +805,7 @@ function MatrixTable({
                   </div>
                 </div>
               </td>
-              {data.columns.map((column) => {
+              {data.columns.map((column, columnIndex) => {
                 const key = cellKey(column.projectId, row.productId);
                 const cell = cellIndex.get(key);
                 const optimistic = pending.get(key);
@@ -829,6 +842,7 @@ function MatrixTable({
                     purchaseCost={cell?.projectPurchaseCost ?? 0}
                     title={`${row.productName} on ${column.projectName}`}
                     conflictReason={conflictReason}
+                    striped={columnIndex % 2 === 1}
                     onToggle={() =>
                       onToggle(
                         column.projectId,
@@ -891,10 +905,13 @@ function MatrixTable({
               <span className="eyebrow">{data.rows.length} tools</span>
             </div>
           </td>
-          {data.columns.map((column) => (
+          {data.columns.map((column, columnIndex) => (
             <td
               key={column.projectId}
-              className="bg-card text-center font-mono text-2xs tabular-nums"
+              className={cn(
+                "bg-card text-center font-mono text-2xs tabular-nums",
+                columnIndex % 2 === 1 && "bg-muted/20",
+              )}
             >
               {column.attachedCount || (
                 <span className="text-muted-foreground">·</span>
