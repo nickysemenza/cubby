@@ -14,6 +14,7 @@ import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
+  productMergeMutationInvalidateKeys,
   productMutationInvalidateKeys,
   purchaseMutationInvalidateKeys,
 } from "~/lib/query-keys";
@@ -162,6 +163,11 @@ export function DuplicateVendorMergeFix({
  * or erroring — but a POSITIVELY returned `canProceed: false` (that blocker,
  * surfaced in `OperationImpact`'s "Blocked by" section) disables the button so
  * the user sees why up front instead of a failed-mutation toast.
+ *
+ * Invalidates the MERGE key set, not the plain product one — for the same
+ * reason {@link DuplicateVendorMergeFix} reaches past `vendorMutation…`. A
+ * merge re-parents inventory, expenses, and projectUses and recomputes
+ * dependent recipe costs, none of which `productMutationInvalidateKeys` covers.
  */
 export function DuplicateProductMergeFix({
   variant,
@@ -186,7 +192,7 @@ export function DuplicateProductMergeFix({
   const merge = useProblemCardMutation({
     mutationFn: api.product.merge.mutationOptions,
     success: (result) => `Merged into ${result.product.name}`,
-    invalidateKeys: productMutationInvalidateKeys,
+    invalidateKeys: productMergeMutationInvalidateKeys,
     onSuccess: close,
   });
 
