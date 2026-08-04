@@ -18,6 +18,7 @@ import {
   type IngredientDeepDB,
   mapIngredientProducts,
   mapIngredientProductsLean,
+  type Qualified,
 } from "./internal-types";
 
 const PRODUCT_ID = unsafeProductId("123e4567-e89b-12d3-a456-426614174000");
@@ -103,6 +104,22 @@ const deletedUnitMapping = {
   deletedAt: DELETED_AT,
 };
 
+// A real (not hardcoded-complete-footgun) computed quality: the mapper no
+// longer has a fallback for this field, so every fixture below supplies one
+// explicitly, same as a real caller must.
+const completeDataQuality = {
+  status: "complete" as const,
+  facets: [
+    { name: "identity" as const, status: "complete" as const, gaps: [] },
+    { name: "provenance" as const, status: "complete" as const, gaps: [] },
+    { name: "integrity" as const, status: "complete" as const, gaps: [] },
+  ],
+  gaps: [],
+  exceptions: [],
+  relatedGaps: [],
+  relatedExceptions: [],
+};
+
 const firstResult = <T>(items: T[]): T => {
   const item = items[0];
   if (!item) throw new Error("Expected mapper fixture to return one item");
@@ -130,6 +147,7 @@ describe("ingredient product mappers", () => {
     const rows = [
       {
         ...baseProduct,
+        dataQuality: completeDataQuality,
         unitMappings: [activeUnitMapping, deletedUnitMapping],
         externalIds: [
           {
@@ -186,7 +204,7 @@ describe("ingredient product mappers", () => {
           },
         ],
       },
-    ] satisfies IngredientDeepDB["product"];
+    ] satisfies Array<Qualified<IngredientDeepDB["product"][number]>>;
 
     const result = firstResult(mapIngredientProducts(rows));
 
@@ -226,6 +244,7 @@ describe("ingredient product mappers", () => {
             knownUnitCount: 0,
             partial: false,
           },
+          dataQuality: completeDataQuality,
           unitMappings: [activeUnitMapping],
         },
       ]),
@@ -257,6 +276,7 @@ describe("ingredient product mappers", () => {
             knownUnitCount: 0,
             partial: false,
           },
+          dataQuality: completeDataQuality,
           unitMappings: [activeUnitMapping],
           externalIds: [],
           images: [],

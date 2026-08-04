@@ -35,6 +35,7 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "./repo.fixtures";
+import { insertWithShortcode } from "./shortcode-utils";
 import { createTask, deleteTasks } from "./task";
 
 describe("product repository", () => {
@@ -1551,6 +1552,52 @@ describe("product repository", () => {
           columns: { valuation: true },
         });
         expect(resumedValuation?.valuation).toBeCloseTo(8.8);
+      });
+
+      // Regression guard for the layered fix: before it, the ONLY thing
+      // stopping a tax/shipping/fee row from carrying a productId — and
+      // therefore silently distorting `loadProductPricing` /
+      // `derivedProductPriceSql`'s weighted-average derivation (see the
+      // pricing.unit.test.ts golden-SQL guard for that half) — was
+      // `createExpense`'s app-code guard alone. This pins the DB-level
+      // backstop (`Expense_lineKind_productId_check`, declared in schema.ts)
+      // by inserting straight through `insertWithShortcode` — the shape a
+      // bulk import or a direct DB fix could still take, bypassing the repo
+      // guard. NOTE: this constraint is declared in schema.ts and exercised
+      // by this integration-test template (built via `pushSchema`), but is
+      // NOT YET applied to the production database — see the PR description.
+      it("rejects a non-principal Expense carrying a productId at the database", async () => {
+        const taxImmune = await createProduct(
+          ctx.db,
+          makeProductInput({
+            name: "Tax-Immune Price Product",
+            upc: "710000000099",
+          }),
+          ctx.actor,
+        );
+
+        const write = insertWithShortcode(ctx.db, "expense", {
+          name: "Sales tax on the widget order",
+          cost: 900,
+          date: "2024-01-15",
+          lineKind: "tax",
+          costType: "materials",
+          trade: "other",
+          future: false,
+          productId: taxImmune.entityId,
+          productQuantity: 5,
+        });
+        await expect(write).rejects.toThrow();
+        // Pin the specific constraint, not just any rejection — a
+        // NOT_NULL/FK typo elsewhere in the insert would also throw.
+        await write.catch((error: unknown) => {
+          expect((error as { cause?: { constraint?: string } }).cause).toEqual(
+            expect.objectContaining({
+              code: "23514",
+              constraint: "Expense_lineKind_productId_check",
+            }),
+          );
+        });
       });
 
       it("partitions on whether price is set", async () => {

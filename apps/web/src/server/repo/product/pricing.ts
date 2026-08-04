@@ -73,6 +73,7 @@ export const loadProductPricing = async (
       and(
         notDeleted(expense),
         eq(expense.future, false),
+        eq(expense.lineKind, "principal"),
         gt(expense.cost, 0),
         isNotNull(expense.productId),
         inArray(expense.productId, ids),
@@ -130,6 +131,7 @@ export const loadProductPricingForIngredientIds = async (
         eq(expense.productId, product.id),
         notDeleted(expense),
         eq(expense.future, false),
+        eq(expense.lineKind, "principal"),
         gt(expense.cost, 0),
       ),
     )
@@ -219,6 +221,7 @@ const derivedProductPriceSql = (productAlias = '"product"') =>
     WHERE e."productId" = ${productAlias}."id"
       AND e."deletedAt" IS NULL
       AND e."future" = false
+      AND e."lineKind" = 'principal'
       AND e."cost" > 0
       AND e."productQuantity" IS NOT NULL)`;
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveProductPricing } from "./pricing";
+import { effectiveProductPriceSql, resolveProductPricing } from "./pricing";
 
 describe("resolveProductPricing", () => {
   it("uses a weighted all-history unit cost", () => {
@@ -57,5 +57,18 @@ describe("resolveProductPricing", () => {
       knownUnitCount: 0,
       partial: false,
     });
+  });
+});
+
+describe("effectiveProductPriceSql", () => {
+  // Golden-SQL guard for the raw-SQL twin of `loadProductPricing` (used by
+  // Product root-list filtering/sorting/aggregation, where a real query can't
+  // easily be asserted against). Both twins must select on
+  // `lineKind = 'principal'` in lockstep with the drizzle query in
+  // `loadProductPricing` — a tax/shipping/fee row carrying a productId must
+  // never contribute to the derived price. This test would have caught the
+  // regression where neither twin filtered on lineKind at all.
+  it("filters the derived-price subquery to principal Expense lines", () => {
+    expect(effectiveProductPriceSql()).toContain(`e."lineKind" = 'principal'`);
   });
 });

@@ -1406,6 +1406,13 @@ export const expense = pgTable(
       "Expense_productQuantity_check",
       sql`${table.productQuantity} IS NULL OR (${table.productId} IS NOT NULL AND ${table.productQuantity} > 0)`,
     ),
+    // NOTE: `drizzle-kit push` does not diff CHECK constraints (see the longer
+    // note on FinancialTransaction_purchase_settlement_check above). This one
+    // requires the same hand-applied ALTER + pg_constraint read-back.
+    check(
+      "Expense_lineKind_productId_check",
+      sql`${table.lineKind} = 'principal' OR ${table.productId} IS NULL`,
+    ),
   ],
 );
 

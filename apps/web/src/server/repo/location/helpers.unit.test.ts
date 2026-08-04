@@ -11,6 +11,7 @@ import {
   locationListRefOut,
 } from "@cubby/schemas/location";
 import { describe, expect, it } from "vitest";
+import { resolveProductPricing } from "~/server/repo/product/pricing";
 import { dbLocationToAPI, dbLocationToListAPI } from "./helpers";
 import type { LocationListDB } from "./internal-types";
 
@@ -178,7 +179,10 @@ describe("location mappers", () => {
       images: [{ image, deletedAt: null }],
     } satisfies LocationListDB;
 
-    const result = dbLocationToListAPI(row);
+    const pricingByProductId = new Map([
+      [PRODUCT_ID, resolveProductPricing(product.price)],
+    ]);
+    const result = dbLocationToListAPI(row, pricingByProductId);
 
     expect(result.parent).toEqual({
       id: unsafeLocationShortcode("LOC-2345"),

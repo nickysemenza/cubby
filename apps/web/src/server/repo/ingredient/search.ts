@@ -41,6 +41,10 @@ import {
   recipeSectionIngredient,
 } from "~/server/db/schema";
 import {
+  enrichProductRowsWithDataQuality,
+  loadProductDataQualities,
+} from "~/server/repo/data-quality";
+import {
   auditDateWhereConditions,
   buildOrderBy,
   countWhere,
@@ -262,6 +266,10 @@ export const getIngredientsByIDsLean = async (
     // Expense_productId_idx cover the two join keys.
     loadProductPricingForIngredientIds(db, ids),
   ]);
+  const qualityById = await loadProductDataQualities(
+    db,
+    rows.flatMap((row) => row.product.map((product) => product.id)),
+  );
   return rows.map((row) => {
     const { product: productRel } = row;
     return {
@@ -270,6 +278,7 @@ export const getIngredientsByIDsLean = async (
         productRel.map((product) => ({
           ...product,
           pricing: pricingById.get(product.id),
+          dataQuality: qualityById.get(product.id)!,
         })),
       ),
     };
@@ -336,6 +345,13 @@ export const enrichmentWorkbenchIngredients = async (
   const pricingById = new Map(
     pricedProducts.map((product) => [product.id, product.pricing]),
   );
+  const qualifiedProducts = await enrichProductRowsWithDataQuality(
+    db,
+    rows.flatMap((row) => row.product),
+  );
+  const qualityById = new Map(
+    qualifiedProducts.map((product) => [product.id, product.dataQuality]),
+  );
   return rows.map((row) => {
     const { product: productRel, recipeCount, cookbookOnly } = row;
     return {
@@ -344,6 +360,7 @@ export const enrichmentWorkbenchIngredients = async (
         productRel.map((product) => ({
           ...product,
           pricing: pricingById.get(product.id),
+          dataQuality: qualityById.get(product.id)!,
         })),
       ),
       // count() returns bigint (string over the wire), so coerce; the boolean comes
@@ -542,6 +559,13 @@ export const ingredientList = async (
   const pricingById = new Map(
     pricedProducts.map((product) => [product.id, product.pricing]),
   );
+  const qualifiedProducts = await enrichProductRowsWithDataQuality(
+    db,
+    results.flatMap((row) => row.product),
+  );
+  const qualityById = new Map(
+    qualifiedProducts.map((product) => [product.id, product.dataQuality]),
+  );
   return {
     data: results.map((row) =>
       dbIngredientToListAPI({
@@ -549,6 +573,7 @@ export const ingredientList = async (
         product: row.product.map((product) => ({
           ...product,
           pricing: pricingById.get(product.id),
+          dataQuality: qualityById.get(product.id)!,
         })),
       }),
     ),

@@ -11,6 +11,7 @@ import { match } from "ts-pattern";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import type { Database } from "~/server/db";
 import { product } from "~/server/db/schema";
+import { enrichProductRowsWithDataQuality } from "~/server/repo/data-quality";
 import { getDb, imageOrder, notDeleted } from "~/server/repo/database-helpers";
 import { dbProductToTopLevelAPI } from "./mappers";
 import { enrichProductRowsWithPricing } from "./pricing";
@@ -52,9 +53,9 @@ export const findProductsByFoodIdentifier = async (
     },
   });
 
-  return (await enrichProductRowsWithPricing(db, res)).map(
-    dbProductToTopLevelAPI,
-  );
+  const priced = await enrichProductRowsWithPricing(db, res);
+  const qualified = await enrichProductRowsWithDataQuality(db, priced);
+  return qualified.map(dbProductToTopLevelAPI);
 };
 
 export const getFoodLookupsForLinkedProducts = async (
@@ -106,7 +107,9 @@ const findProductToAPI = async (
   }
 
   const priced = (await enrichProductRowsWithPricing(db, [res]))[0];
-  return priced ? dbProductToTopLevelAPI(priced) : null;
+  if (!priced) return null;
+  const qualified = (await enrichProductRowsWithDataQuality(db, [priced]))[0];
+  return qualified ? dbProductToTopLevelAPI(qualified) : null;
 };
 
 // Find a product by UPC code (excludes soft-deleted)

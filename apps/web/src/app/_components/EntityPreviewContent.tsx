@@ -269,7 +269,7 @@ export function IngredientPreviewContent({
     <PreviewQuery query={query} label="Ingredient">
       {(data) => {
         const prices = data.product
-          .map((prod) => prod.price)
+          .map((prod) => prod.pricing.effectivePrice)
           .filter((value): value is number => value != null);
         return (
           <ManifestCard

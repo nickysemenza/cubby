@@ -50,6 +50,7 @@ import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
   getDb,
   notDeleted,
+  unwrapDb,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
@@ -420,7 +421,7 @@ const uniqueTargetExceptions = (
   );
 
 export const loadProductDataQualities = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   ids: ProductId[],
 ): Promise<Map<ProductId, DataQuality>> => {
   const uniqueIds = uniq(ids);
@@ -432,7 +433,7 @@ export const loadProductDataQualities = async (
     amazonExpenses,
     productExternalIds,
   ] = await Promise.all([
-    getDb(db)
+    unwrapDb(db)
       .select({
         id: product.id,
         shortcode: product.shortcode,
@@ -444,7 +445,7 @@ export const loadProductDataQualities = async (
       })
       .from(product)
       .where(and(inArray(product.id, uniqueIds), notDeleted(product))),
-    getDb(db)
+    unwrapDb(db)
       .selectDistinct({ productId: inventoryEntry.productId })
       .from(inventoryEntry)
       .where(
@@ -453,7 +454,7 @@ export const loadProductDataQualities = async (
           notDeleted(inventoryEntry),
         ),
       ),
-    getDb(db)
+    unwrapDb(db)
       .selectDistinct({ productId: expense.productId })
       .from(expense)
       .where(
@@ -463,7 +464,7 @@ export const loadProductDataQualities = async (
           notDeleted(expense),
         ),
       ),
-    getDb(db)
+    unwrapDb(db)
       .selectDistinct({ productId: expense.productId })
       .from(expense)
       .innerJoin(
@@ -482,7 +483,7 @@ export const loadProductDataQualities = async (
           sql`lower(${vendor.name}) LIKE 'amazon%'`,
         ),
       ),
-    getDb(db)
+    unwrapDb(db)
       .select({
         productId: productExternalId.productId,
         source: productExternalId.source,
@@ -506,7 +507,7 @@ export const loadProductDataQualities = async (
   const activeExternalIdOwners =
     externalIdPairs.length === 0
       ? []
-      : await getDb(db)
+      : await unwrapDb(db)
           .select({
             productId: productExternalId.productId,
             source: productExternalId.source,
@@ -624,6 +625,31 @@ export const loadProductDataQualities = async (
     });
   }
   return result;
+};
+
+/**
+ * Attach each row's real, computed DataQuality — never a hardcoded-complete
+ * placeholder. `loadProductDataQualities` only returns entries for live
+ * products, so a row here that's already known-live (the common case: it was
+ * just fetched from the DB in this same call) is guaranteed a map hit; the `!`
+ * mirrors the same non-null assertion already used at every other
+ * `loadProductDataQualities` call site (purchase.ts's `loadPurchaseDataQualities`
+ * sibling, product/crud.ts's productReader).
+ */
+export const enrichProductRowsWithDataQuality = async <
+  T extends { id: ProductId },
+>(
+  db: Database | DrizzleTransaction,
+  products: readonly T[],
+): Promise<Array<T & { dataQuality: DataQuality }>> => {
+  const qualities = await loadProductDataQualities(
+    db,
+    products.map((product) => product.id),
+  );
+  return products.map((product) => ({
+    ...product,
+    dataQuality: qualities.get(product.id)!,
+  }));
 };
 
 export const loadPurchaseDataQualities = async (

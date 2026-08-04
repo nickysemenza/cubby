@@ -68,6 +68,7 @@ import {
   present,
   sideEffect,
 } from "~/server/repo/impact";
+import { loadProductPricing } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import {
   resolveAllPresent,
@@ -713,7 +714,16 @@ export const locationList = async (
     countWhere(db, location, whereClause),
   );
 
-  const items = results.map(dbLocationToListAPI);
+  // One batched pricing load for the whole page (never per-row): flatten every
+  // live inventory entry's product across the page and price them together, then
+  // thread the map into dbLocationToListAPI.
+  const pageProducts = results.flatMap((row) =>
+    row.inventoryEntries.map((entry) => entry.product),
+  );
+  const pricingByProductId = await loadProductPricing(db, pageProducts);
+  const items = results.map((row) =>
+    dbLocationToListAPI(row, pricingByProductId),
+  );
   return { data: items, count: totalCount };
 };
 
