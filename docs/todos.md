@@ -341,13 +341,6 @@ The triage board, not this catalog order, sets priority.
   committed-spend (next 30/60/90d) figure (per-project `BudgetStrip` exists,
   the portfolio equivalent doesn't); mobile fallback for TaskBoard/Gantt
   (desktop column tracks render on phones today).
-- [ ] **`buildProjectTree` is unwired** (2026-07 audit):
-  `apps/web/src/app/projects/project-tree.ts` (129 lines, plus its own unit
-  test) is imported by nothing but that test. The commit that added it
-  advertised an expandable WBS tree for the Projects Data tab; that tab still
-  renders flat lists, and the tree that actually shipped lives inside the
-  Gantt instead (`charts/gantt/gantt-model.ts`, a separate implementation).
-  Decide: wire it into Data, or delete it.
 - [ ] **`projectMaterial` BOM**: on top of the bridge — quantity + free-text unit,
   optional product resolution, durable-vs-consumable flag → **have / need / buy**
   per project via the availability engine, shopping list from shortfalls. No
@@ -670,19 +663,16 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
   client budget hint if MCP standardizes one, otherwise keep the conservative
   server-owned byte budget. Invalid or filter/sort-incompatible cursors must fail
   explicitly rather than silently restarting from page one.
-- [ ] **Product merge doesn't exist** (2026-07 audit): no merge for Product at
-  any layer — no repo function, no router procedure, no MCP tool, and
-  `previewMergeInput` (`packages/schemas/src/entity-integrity.ts`) names only
-  ingredient/vendor/purchase. Merging two products by hand today is four manual
-  steps: clear the loser's UPC, transfer its externalIds/aliases, re-point its
-  inventory, then delete the loser and its now-duplicate stock row. Two
-  structural collisions any implementation must handle:
-  `ProductExternalId`'s one-per-`(source, kind)` unique index and
-  `InventoryEntry`'s partial unique index on `(productId, locationId)` — the
-  same branch-don't-blind-insert trap the receive flow already walks around
-  (see the purchase-import design notes above). Build as a shared merge core
-  with product as the fourth consumer alongside ingredient/vendor/purchase,
-  not a bespoke product-only implementation.
+- [ ] **Unify where a shortcode becomes a uuid** (found by the filter-application
+  guard, #595): most repos resolve their own id filters, but
+  `inventory.locationIdFilter`, `inventory.productIdFilter`, and
+  `recipe.cookbookId` are resolved by their **routers**, so the repo parameter
+  is a uuid brand while the schema declares a shortcode. Feeding a shortcode
+  straight to those repos reaches Postgres as a uuid literal and 500s. The
+  guard documents them in a `REPO_TAKES_UUID` list and probes them one layer
+  down (absent uuid rather than unresolvable code), so nothing is unguarded —
+  this is about removing the asymmetry, not a live bug. Resolve in the repo
+  like everyone else, then delete the list.
 - [ ] **TS re-derives Rust unit conversion** (2026-07 audit):
   `_components/recipe/recipe-tree.ts`'s `MASS_TO_GRAMS` (14 entries —
   mg/g/gram(s)/kg/kilogram(s)/oz/ounce(s)/lb/lbs/pound(s)) hand-copies the
