@@ -1,6 +1,6 @@
-import type { WishOut } from "@cubby/schemas/wish";
+import type { WishCandidateOut, WishOut } from "@cubby/schemas/wish";
 import { Check, Heart, Info, Pencil } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -10,6 +10,7 @@ import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
+import { formatCurrencyRange } from "~/lib/format-range";
 import { wishMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import {
@@ -20,8 +21,14 @@ import { EditableCell } from "../_components/data-table/editable-cell";
 import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
+import {
+  ProductImageSummariesProvider,
+  useHydratedProductImages,
+} from "../_components/products/product-image-summaries";
+import { ImageThumbnail } from "../_components/table/ImageThumbnail";
 import { TableLink } from "../_components/table/TableLink";
 import { WishFormDialog } from "./wish-form-dialog";
+import { wishPriceRange } from "./wish-price-range";
 
 /**
  * Wish detail — the outcome plus its candidate tool alternatives.
@@ -108,17 +115,14 @@ export function WishDetail({ wish }: { wish: WishOut }) {
     },
   ];
 
-  const prices = wish.candidates
-    .map((candidate) => candidate.price)
-    .filter((price): price is number => price !== null);
-  const priceRangeLabel =
-    prices.length === 0
-      ? "—"
-      : prices.length === 1
-        ? // Guarded by the length check above — `noUncheckedIndexedAccess`
-          // exception for access right after a `.length` check.
-          formatCurrency(prices[0]!)
-        : `${formatCurrency(Math.min(...prices))}–${formatCurrency(Math.max(...prices))}`;
+  const candidateProductIds = useMemo(
+    () => wish.candidates.map((candidate) => candidate.id),
+    [wish.candidates],
+  );
+  const priceRange = wishPriceRange(wish.candidates);
+  const priceRangeLabel = priceRange
+    ? formatCurrencyRange(priceRange.low, priceRange.high)
+    : "—";
 
   const sections: DetailSection[] = [
     {
@@ -137,35 +141,17 @@ export function WishDetail({ wish }: { wish: WishOut }) {
             No specific products yet — this is an open-ended idea.
           </p>
         ) : (
-          <div className="divide-y border">
-            {wish.candidates.map((candidate) => (
-              <div key={candidate.id} className="p-2">
-                <Row align="center" justify="between" gap="sm">
-                  <span className="min-w-0">
-                    <TableLink
-                      to={entities.product.routes.detail}
-                      params={entityDetailParams(candidate.id)}
-                      className="block truncate"
-                    >
-                      {candidate.name}
-                    </TableLink>
-                    <span className="block truncate text-muted-foreground">
-                      {candidate.manufacturer}
-                      {candidate.model ? ` · ${candidate.model}` : ""}
-                    </span>
-                  </span>
-                  <Row as="span" align="center" gap="sm">
-                    {candidate.inventoried && (
-                      <Badge variant="positive">In inventory</Badge>
-                    )}
-                    {candidate.price !== null && (
-                      <span>{formatCurrency(candidate.price)}</span>
-                    )}
-                  </Row>
-                </Row>
-              </div>
-            ))}
-          </div>
+          // Wishes own no images; the covers here belong to the candidate
+          // Products and are fetched independently of `wish.getByShortcode`, so
+          // an unillustrated Tool stays an honest placeholder rather than making
+          // every wish response heavier.
+          <ProductImageSummariesProvider productIds={candidateProductIds}>
+            <div className="divide-y border">
+              {wish.candidates.map((candidate) => (
+                <WishCandidateRow key={candidate.id} candidate={candidate} />
+              ))}
+            </div>
+          </ProductImageSummariesProvider>
         ),
     },
     ...commonSections,
@@ -207,5 +193,51 @@ export function WishDetail({ wish }: { wish: WishOut }) {
       {deleteDialog}
       <WishFormDialog open={editing} onOpenChange={setEditing} wish={wish} />
     </Page>
+  );
+}
+
+/**
+ * One candidate alternative. Its own component because
+ * `useHydratedProductImages` is a hook and cannot be called inside the
+ * candidates `.map` (mirrors `ExpenseProductImageCell`).
+ */
+function WishCandidateRow({ candidate }: { candidate: WishCandidateOut }) {
+  const images = useHydratedProductImages(candidate.id);
+  return (
+    <div className="p-2">
+      <Row align="center" justify="between" gap="sm">
+        <Row align="center" gap="sm" className="min-w-0">
+          <span className="block size-10 shrink-0">
+            <ImageThumbnail
+              images={images}
+              alt={candidate.name}
+              lazyPreview
+              entity="product"
+            />
+          </span>
+          <span className="min-w-0">
+            <TableLink
+              to={entities.product.routes.detail}
+              params={entityDetailParams(candidate.id)}
+              className="block truncate"
+            >
+              {candidate.name}
+            </TableLink>
+            <span className="block truncate text-muted-foreground">
+              {candidate.manufacturer}
+              {candidate.model ? ` · ${candidate.model}` : ""}
+            </span>
+          </span>
+        </Row>
+        <Row as="span" align="center" gap="sm">
+          {candidate.inventoried && (
+            <Badge variant="positive">In inventory</Badge>
+          )}
+          {candidate.price !== null && (
+            <span>{formatCurrency(candidate.price)}</span>
+          )}
+        </Row>
+      </Row>
+    </div>
   );
 }

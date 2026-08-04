@@ -8,6 +8,7 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   type OnChangeFn,
+  type Row,
   type RowData,
   type RowSelectionState,
   type Table,
@@ -32,8 +33,11 @@ interface UseTableConfigOptions<TData> {
   enableSorting?: boolean;
   /** Custom row ID function for row selection */
   getRowId?: (row: TData) => string;
-  /** Enable row selection */
-  enableRowSelection?: boolean;
+  /**
+   * `true`/`false` for the whole table, or a predicate for a heterogeneous
+   * tree where only some rows belong to the entity the bulk actions target.
+   */
+  enableRowSelection?: boolean | ((row: Row<TData>) => boolean);
   /** Current row selection state */
   rowSelection?: RowSelectionState;
   /** Callback when row selection changes */

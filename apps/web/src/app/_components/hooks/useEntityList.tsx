@@ -17,6 +17,7 @@ import {
 } from "~/entities/filters";
 import type { QueryTiming } from "~/lib/query-timing";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
+import type { RowLinkResolver } from "../data-table/columnHelpers";
 import type { GroupConfig } from "../data-table/useGroupedList";
 import { useTableColumnVisibility } from "../data-table/useTableColumnVisibility";
 import { useTableConfig } from "../data-table/useTableConfig";
@@ -63,19 +64,46 @@ const NO_FILTERS: FilterInput[] = [];
  * `manualFiltering`/`manualPagination`, so TanStack neither filters nor
  * paginates the rows they'd govern. Don't add them back by analogy.
  */
-interface EntityListTreeConfig<TData> {
+interface EntityListTreeConfig<TData, TRow> {
   /**
    * Nest the accumulated server rows before they reach the table. MUST be
    * referentially stable (module-level constant or `useMemo`d at the page).
+   *
+   * The input is the SERVER row and the output is the TABLE row; they differ
+   * whenever a wish's candidate Products become child rows of a different
+   * shape than their parent. They're the same type for a homogeneous tree
+   * (sub-projects), which is why `TRow` defaults to `TData`.
    */
-  nest: (rows: TData[]) => TData[];
+  nest: (rows: TRow[]) => TData[];
   /** Return a row's children — the presence of this is what wires expansion. */
   getSubRows: (row: TData) => TData[] | undefined;
   /** Render the expand/collapse chevron + depth indent on the name column. */
   expandable?: boolean;
+  /**
+   * Per-row detail link, when child rows are a DIFFERENT entity than the
+   * parents (the wishlist nests candidate Products under a Wish). Threaded to
+   * the name column and the actions menu together so they can't disagree.
+   */
+  rowLink?: RowLinkResolver<TData>;
+  /**
+   * Whether a row is an instance of the table's own `entity`. Required when
+   * child rows are a foreign entity, and false for those children.
+   *
+   * Every mutation this hook wires — bulk delete, the row menu's Delete —
+   * targets `entity`, so a foreign child handed to one goes to the wrong
+   * endpoint under an id that entity never minted. Rather than trust each
+   * caller to remember that twice, one predicate turns OFF both selection and
+   * the row-action menu for those rows. Their own affordances live on their
+   * own detail page, one click away through `rowLink`.
+   */
+  rowIsEntity?: (row: TData) => boolean;
 }
 
-export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
+export interface UseEntityListOptions<
+  TData extends BaseListRow,
+  TFilters,
+  TRow extends BaseListRow = TData,
+> {
   /** The entity type */
   entity: Entity;
   /** tRPC queryOptions function */
@@ -103,7 +131,7 @@ export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
    */
   filterOptions?: Record<string, FilterableComboboxItem[]>;
   /** For unit mappings - function to extract mappings from each row (must be synchronous) */
-  getMappings?: (item: TData) => UnitMapping[];
+  getMappings?: (item: TRow) => UnitMapping[];
   /** Override table state options (initialSort / initialFilter / …) */
   tableStateOptions?: Parameters<typeof useTableState>[0];
   /** Bulk actions configuration - automatically enables row selection */
@@ -144,7 +172,7 @@ export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   /** Group configuration — enables group toggle and server-side group ordering */
   groupConfig?: GroupConfig<TData>;
   /** Render the list as an expandable tree — see {@link EntityListTreeConfig}. */
-  tree?: EntityListTreeConfig<TData>;
+  tree?: EntityListTreeConfig<TData, TRow>;
   /** Enable delete functionality - adds row menu item, bulk action, and dialog */
   deletable?: {
     /** tRPC delete mutation options factory */
@@ -161,7 +189,7 @@ export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   };
 }
 
-export interface UseEntityListReturn<TData, TFilters = unknown> {
+export interface UseEntityListReturn<TData, TFilters = unknown, TRow = TData> {
   /** Configured table instance */
   table: Table<TData>;
   /**
@@ -178,7 +206,7 @@ export interface UseEntityListReturn<TData, TFilters = unknown> {
    * this is every loaded row, parents and children alike, not the nested shape
    * the table renders.
    */
-  data: TData[];
+  data: TRow[];
   /** Loading state */
   isLoading: boolean;
   /** Error state */
@@ -224,7 +252,11 @@ export interface UseEntityListReturn<TData, TFilters = unknown> {
  * - Standard identity columns from entity config plus shared audit dates
  * - Filter expansion from simple string definitions
  */
-export function useEntityList<TData extends BaseListRow, TFilters>({
+export function useEntityList<
+  TData extends BaseListRow,
+  TFilters,
+  TRow extends BaseListRow = TData,
+>({
   entity,
   queryOptions,
   buildFilters,
@@ -246,9 +278,10 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   hiddenFilterColumns,
   groupConfig,
   tree,
-}: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<
+}: UseEntityListOptions<TData, TFilters, TRow>): UseEntityListReturn<
   TData,
-  TFilters
+  TFilters,
+  TRow
 > {
   const [grouped, setGrouped] = useState(false);
 
@@ -354,7 +387,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     listBulkActions.state.clearSelection();
   }, [filterScopeKey, listBulkActions.state.clearSelection]);
 
-  const infiniteResult = useInfiniteTableList<TFilters, TData>({
+  const infiniteResult = useInfiniteTableList<TFilters, TRow>({
     queryOptions,
     buildFilters: effectiveBuildFilters,
     tableState,
@@ -436,6 +469,16 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     [customColumns, relatedColumns],
   );
 
+  // A foreign child row gets no row-action menu and no checkbox: both act
+  // through `entity`'s mutations, which don't know that id. See
+  // `EntityListTreeConfig.rowIsEntity`.
+  const rowActionsGuard = tree?.rowIsEntity;
+  const guardedExtraActions = useMemo(() => {
+    if (!rowActionsGuard) return combinedExtraActions;
+    return (row: TData) =>
+      rowActionsGuard(row) ? combinedExtraActions?.(row) : null;
+  }, [combinedExtraActions, rowActionsGuard]);
+
   const allColumns = useStandardColumns<TData>({
     entity,
     columnHelper,
@@ -443,7 +486,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     filters: filters ?? NO_FILTERS,
     filterOptions,
     enableRowSelection: listBulkActions.enableRowSelection,
-    combinedExtraActions,
+    combinedExtraActions: guardedExtraActions,
     mappingsMap: effectiveMappingsMap,
     hasUnitMappings,
     nameClassName,
@@ -452,6 +495,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     namePrefix,
     hiddenFilterColumns,
     expandable: tree?.expandable,
+    rowLink: tree?.rowLink,
   });
 
   // Row identity is independent of whether selection happens to be enabled.
@@ -466,8 +510,13 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   // related-preview `sourceIds`, `mappingsMap`, the select-all-matching count —
   // deliberately keeps reading the FLAT `data`, which already contains every
   // row including nested ones.
+  //
+  // The cast covers only the NO-tree branch, where the table renders the
+  // server rows as-is: `TRow` defaults to `TData`, so the two are the same
+  // type there and nothing is being reinterpreted. Only `nest` may return a
+  // different row shape, and it is typed to do so.
   const tableData = useMemo(
-    () => (tree ? tree.nest(data) : data),
+    () => (tree ? tree.nest(data) : (data as unknown as TData[])),
     [data, tree],
   );
 
@@ -489,7 +538,10 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
         }
       : {}),
     getRowId,
-    enableRowSelection: listBulkActions.enableRowSelection,
+    enableRowSelection: rowActionsGuard
+      ? (row) =>
+          listBulkActions.enableRowSelection && rowActionsGuard(row.original)
+      : listBulkActions.enableRowSelection,
     rowSelection: listBulkActions.rowSelection,
     onRowSelectionChange: listBulkActions.onRowSelectionChange,
     initialColumnVisibility: mergedInitialColumnVisibility,

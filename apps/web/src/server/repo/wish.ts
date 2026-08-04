@@ -46,6 +46,7 @@ import {
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import {
+  effectiveProductPriceSql,
   loadProductPricing,
   resolveProductPricing,
 } from "~/server/repo/product/pricing";
@@ -157,6 +158,48 @@ const candidateProductSearch = (term: string) => {
   return sql`(p."name" ILIKE ${pattern} OR p."manufacturer" ILIKE ${pattern} OR p."model" ILIKE ${pattern})`;
 };
 
+/**
+ * Low / high effective price across a wish's live candidate alternatives.
+ *
+ * `effectiveProductPriceSql` is the SQL twin of the `explicit ?? derived` rule
+ * `candidateRowsForWishes` applies in TS through `loadProductPricing`, so the
+ * footer totals and the per-row ranges the client derives agree by
+ * construction. Unpriced candidates drop out of MIN/MAX rather than counting
+ * as $0 — same rule as `wishPriceRange` on the client — and a wish with no
+ * priced candidate at all aggregates to NULL, which the outer sums COALESCE
+ * away.
+ *
+ * Both soft-delete guards are load-bearing: emptying a wish soft-deletes its
+ * WishCandidate rows, so a subquery without them would price alternatives the
+ * user already removed.
+ */
+const candidatePriceAggregate = (fn: "min" | "max") => sql`(
+    SELECT ${sql.raw(fn)}(${sql.raw(effectiveProductPriceSql("p"))})
+    FROM "WishCandidate" wc
+    JOIN "Product" p ON p."id" = wc."productId" AND p."deletedAt" IS NULL
+    WHERE wc."wishId" = ${wish.id} AND wc."deletedAt" IS NULL
+  )`;
+
+const wishPriceLow = candidatePriceAggregate("min");
+const wishPriceHigh = candidatePriceAggregate("max");
+/** Midpoint of the range — the repo's deterministic sort key for ranged values. */
+const wishPriceMid = sql`((${wishPriceLow} + ${wishPriceHigh}) / 2)`;
+
+/**
+ * Sorts the generic column path can't produce — a price range is an aggregate
+ * over candidates, not a column on `Wish`. NULLS LAST in both directions is the
+ * house convention (see `buildOrderBy`); here nulls are real, since a wish
+ * whose alternatives are all unpriced has no range at all.
+ */
+const resolveWishSort = (sort: SortParams) => {
+  if (sort.orderBy !== "priceRange") return null;
+  return [
+    sort.direction === "asc"
+      ? sql`${wishPriceMid} asc nulls last`
+      : sql`${wishPriceMid} desc nulls last`,
+  ];
+};
+
 const buildWishWhere = (filters: WishFilters) => {
   const candidateProductIds = filters.candidateProductId
     ? Array.isArray(filters.candidateProductId)
@@ -212,20 +255,45 @@ export const wishList = async (
   filters: WishFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-): Promise<{ data: WishOut[]; count: number }> => {
+): Promise<{
+  data: WishOut[];
+  count: number;
+  sums: { priceLow: number; priceHigh: number };
+}> => {
   const where = buildWishWhere(filters);
   const { take, skip } = buildTakeSkip(pagination);
-  const [rows, count] = await Promise.all([
+  // Footer totals over the WHOLE filtered set, not the loaded page. Summing the
+  // returned rows instead would quietly under-report the moment the wishlist
+  // outgrows one page — a wrong number is worse than no number.
+  const [rows, count, [totals]] = await Promise.all([
     getDb(db)
       .select()
       .from(wish)
       .where(where)
-      .orderBy(...buildOrderBy(wish, sorts, [...wishSortableFields]))
+      .orderBy(
+        ...buildOrderBy(wish, sorts, [...wishSortableFields], {
+          resolve: resolveWishSort,
+        }),
+      )
       .limit(take)
       .offset(skip),
     countWhere(db, wish, where),
+    getDb(db)
+      .select({
+        priceLow: sql<number>`COALESCE(sum(${wishPriceLow}), 0)::double precision`,
+        priceHigh: sql<number>`COALESCE(sum(${wishPriceHigh}), 0)::double precision`,
+      })
+      .from(wish)
+      .where(where),
   ]);
-  return { data: await hydrateWishes(db, rows), count };
+  return {
+    data: await hydrateWishes(db, rows),
+    count,
+    sums: {
+      priceLow: Number(totals?.priceLow ?? 0),
+      priceHigh: Number(totals?.priceHigh ?? 0),
+    },
+  };
 };
 
 const getWishByID = async (db: Database, id: WishId): Promise<WishOut> => {
