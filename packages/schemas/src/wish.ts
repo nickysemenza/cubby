@@ -1,7 +1,12 @@
 import { z } from "zod";
-import { deriveUpdateData, timestampedFields } from "./base-entity";
+import {
+  auditDateFilterFields,
+  deriveUpdateData,
+  timestampedFields,
+} from "./base-entity";
 import { productShortcode, wishShortcode } from "./identifiers";
 import { createPaginatedResponseSchema, oneOrMany } from "./pagination";
+import { wishRelatedFilterFields } from "./related-view";
 
 const wishFields = {
   name: z.string().trim().min(1).max(200),
@@ -51,6 +56,8 @@ export const wishOut = z.object({
 export type WishOut = z.infer<typeof wishOut>;
 
 export const wishFilterFields = {
+  ...auditDateFilterFields,
+  ...wishRelatedFilterFields,
   search: z.string().trim().min(1).optional(),
   acquired: z.boolean().optional(),
   candidateProductId: oneOrMany(productShortcode).optional(),

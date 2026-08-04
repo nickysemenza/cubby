@@ -1,4 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { financialAccountFilterFields } from "@cubby/schemas/financial-account";
+import { financialTransactionFilterFields } from "@cubby/schemas/financial-transaction";
 import {
   unsafeCookbookId,
   unsafeIngredientId,
@@ -9,10 +11,25 @@ import {
   unsafeTaskId,
   unsafeVendorId,
 } from "@cubby/schemas/identifiers";
+import { imageFilterFields } from "@cubby/schemas/image";
+import { ingredientFilterFields } from "@cubby/schemas/ingredient";
+import { inventoryFilterFields } from "@cubby/schemas/inventory";
+import { locationFilterFields } from "@cubby/schemas/location";
+import { mealFilterFields } from "@cubby/schemas/meal";
+import { productFilterFields } from "@cubby/schemas/product";
+import {
+  expenseFilterFields,
+  projectFilterFields,
+  taskFilterFields,
+} from "@cubby/schemas/project";
+import { purchaseFilterFields } from "@cubby/schemas/purchase";
+import { recipeFilterFields } from "@cubby/schemas/recipe";
 import {
   relatedFilterPrefix,
   relatedViewRegistry,
 } from "@cubby/schemas/related-view";
+import { vendorFilterFields } from "@cubby/schemas/vendor";
+import { wishFilterFields } from "@cubby/schemas/wish";
 import type { FilterConfig } from "~/app/_components/data-table/columnHelpers";
 import { locationTypeOptionsWithTheme } from "~/app/_components/locations/location-icons";
 import { productCategoryOptionsWithTheme } from "~/app/_components/products/product-category-icons";
@@ -237,20 +254,41 @@ const resolveCalories = (value: string | undefined) =>
         ? { caloriesTotalMin: 1000 }
         : {};
 
-const auditFilterEntities = new Set<Entity>([
-  "financialAccount",
-  "financialTransaction",
-  "expense",
-  "vendor",
-  "purchase",
-  "task",
-  "product",
-  "recipe",
-  "ingredient",
-  "inventory",
-  "location",
-  "image",
-]);
+/**
+ * Every entity's own `*FilterFields` map, keyed by entity — the single place
+ * that has to be kept current when a new filterable entity is added.
+ * `auditFilterEntities` below is DERIVED from this rather than hand-listing
+ * entity names a second time: that hand-kept list had already drifted —
+ * `projectFilterFields` and `mealFilterFields` both spread
+ * `auditDateFilterFields`, so the server accepted `createdFrom`/`updatedTo`
+ * for project and meal while no UI control could ever send them. Deriving
+ * means a `*FilterFields` gaining `auditDateFilterFields` later (or losing
+ * it) doesn't also require a matching edit to a second set here.
+ */
+const entityFilterFieldMaps: Partial<Record<Entity, Record<string, unknown>>> =
+  {
+    financialAccount: financialAccountFilterFields,
+    financialTransaction: financialTransactionFilterFields,
+    expense: expenseFilterFields,
+    vendor: vendorFilterFields,
+    purchase: purchaseFilterFields,
+    task: taskFilterFields,
+    product: productFilterFields,
+    recipe: recipeFilterFields,
+    ingredient: ingredientFilterFields,
+    inventory: inventoryFilterFields,
+    location: locationFilterFields,
+    image: imageFilterFields,
+    meal: mealFilterFields,
+    project: projectFilterFields,
+    wish: wishFilterFields,
+  };
+
+const auditFilterEntities = new Set<Entity>(
+  (Object.entries(entityFilterFieldMaps) as [Entity, Record<string, unknown>][])
+    .filter(([, fields]) => "createdFrom" in fields)
+    .map(([entity]) => entity),
+);
 
 const auditFilterSpecs: readonly FilterSpec[] = [
   {
@@ -1351,6 +1389,28 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
         field: "parentProjectPresenceFilter",
         label: "parent project",
       },
+    },
+  ],
+
+  wish: [
+    {
+      columnId: "name",
+      field: "search",
+      urlKey: "q",
+      kind: "text",
+      placeholder: "Search wishlist...",
+    },
+    {
+      // `candidateProductId` (a picklist over the candidate roster) needs a
+      // runtime product picklist and stays out of scope for now — this is
+      // just the acquired/still-wanted toggle.
+      columnId: "acquired",
+      kind: "boolean",
+      placeholder: "Filter by status...",
+      options: [
+        { value: "false", label: "Wanted" },
+        { value: "true", label: "Acquired" },
+      ],
     },
   ],
 };

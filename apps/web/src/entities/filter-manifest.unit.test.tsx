@@ -16,6 +16,7 @@ import {
 import { purchaseFilterFields } from "@cubby/schemas/purchase";
 import { recipeFilterFields } from "@cubby/schemas/recipe";
 import { vendorFilterFields } from "@cubby/schemas/vendor";
+import { wishFilterFields } from "@cubby/schemas/wish";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { FilterSpec } from "./filter-manifest";
@@ -914,6 +915,7 @@ describe("manifest fields exist on the server schema", () => {
       image: imageFilterFields,
       financialAccount: financialAccountFilterFields,
       financialTransaction: financialTransactionFilterFields,
+      wish: wishFilterFields,
     };
 
   const emittedFields = (spec: FilterSpec): string[] => {
