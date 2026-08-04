@@ -15,6 +15,7 @@ import {
   unsafeIngredientId,
   unsafeProductId,
   unsafeProductShortcode,
+  unsafeProjectId,
 } from "@cubby/schemas/identifiers";
 import {
   mergeProductsInput,
@@ -50,6 +51,7 @@ import {
 import {
   productProjectUsesInput,
   productProjectUsesOut,
+  productProjectUsesSetInput,
 } from "@cubby/schemas/project";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { streamItems, streamProgress } from "~/lib/bulk-progress";
@@ -70,7 +72,10 @@ import {
   productSearch,
   quickCreateProduct,
 } from "~/server/repo/product";
-import { listProductProjectUses } from "~/server/repo/project";
+import {
+  listProductProjectUses,
+  setProductProjectUses,
+} from "~/server/repo/project";
 import {
   resolveLiveShortcode,
   resolveLiveShortcodes,
@@ -651,6 +656,34 @@ const projectUses = protectedProcedure
     return listProductProjectUses(ctx.db, id);
   });
 
+/**
+ * Replace the set of projects this tool was used on, from the tool's own page.
+ * Returns the refreshed panel so the caller re-renders from the mutation
+ * result instead of invalidating and refetching.
+ */
+const setProjectUses = protectedProcedure
+  .input(productProjectUsesSetInput)
+  .output(strictOutput(productProjectUsesOut))
+  .mutation(async ({ ctx, input }) => {
+    const id = await resolveProductId(ctx.db, input.productId);
+    const resolved = await resolveLiveShortcodes(
+      ctx.db,
+      input.projectIds,
+      "project",
+    );
+    const missing = input.projectIds.find((code) => !resolved.has(code));
+    if (missing) {
+      throw createAppError("PROJECT_NOT_FOUND", `Project ${missing} not found`);
+    }
+    await setProductProjectUses(
+      ctx.db,
+      id,
+      input.projectIds.map((code) => unsafeProjectId(resolved.get(code)!)),
+      ctx.actorContext,
+    );
+    return listProductProjectUses(ctx.db, id);
+  });
+
 export const productRouter = createTRPCRouter({
   getByID,
   getByShortcode,
@@ -676,4 +709,5 @@ export const productRouter = createTRPCRouter({
   verifyImages,
   projectUses,
   merge,
+  setProjectUses,
 });

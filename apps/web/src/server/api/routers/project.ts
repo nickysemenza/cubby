@@ -38,7 +38,11 @@ import {
   projectResourceProjectInput,
   projectResourcesOut,
   projectSortableFields,
+  projectToolMatrixInput,
+  projectToolMatrixOut,
   projectToolSuggestionsOut,
+  projectToolUsageSetInput,
+  projectToolUsageSetOut,
   projectUpdateData,
 } from "@cubby/schemas/project";
 import { z } from "zod";
@@ -55,7 +59,9 @@ import {
   projectList,
   projectNameOptions,
   projectPortfolioAnalytics,
+  projectToolMatrix,
   projectTreePage,
+  setProjectToolUsage,
   suggestProjectTools,
   updateProject,
 } from "~/server/repo/project";
@@ -256,6 +262,50 @@ const detachResources = protectedProcedure
     );
   });
 
+/**
+ * The whole `/projects/tools` grid in one read — columns, rows, and the
+ * non-empty cells. Filters are plain values, so there is nothing to resolve.
+ */
+const toolMatrix = protectedProcedure
+  .input(projectToolMatrixInput)
+  .output(strictOutput(projectToolMatrixOut))
+  .query(({ ctx, input }) => projectToolMatrix(ctx.db, input));
+
+/**
+ * One checkbox. Declarative and idempotent — see `projectToolUsageSetInput`
+ * for why this exists alongside `attachResources`/`detachResources`.
+ */
+const setToolUsage = protectedProcedure
+  .input(projectToolUsageSetInput)
+  .output(strictOutput(projectToolUsageSetOut))
+  .mutation(async ({ ctx, input }) => {
+    const ids = await resolveProjectResourceIds(ctx.db, {
+      projectId: input.projectId,
+      productIds: [input.productId],
+    });
+    const productId = ids.productIds[0];
+    if (!productId) {
+      throw createAppError(
+        "PRODUCT_NOT_FOUND",
+        `Product ${input.productId} not found`,
+      );
+    }
+    const result = await setProjectToolUsage(
+      ctx.db,
+      ids.projectId,
+      productId,
+      input.used,
+      ctx.actorContext,
+    );
+    return {
+      projectId: input.projectId,
+      productId: input.productId,
+      used: input.used,
+      changed: result.changed,
+      ...result.metrics,
+    };
+  });
+
 export const projectRouter = createTRPCRouter({
   getByID,
   getByShortcode,
@@ -270,6 +320,8 @@ export const projectRouter = createTRPCRouter({
   createFromTasks,
   resources,
   toolSuggestions,
+  toolMatrix,
   attachResources,
   detachResources,
+  setToolUsage,
 });

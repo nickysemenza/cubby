@@ -51,11 +51,14 @@ export {
 export { projectDashboardSummary } from "./dashboard-summary";
 export { projectList, projectNameOptions } from "./lookup";
 export { projectPortfolioAnalytics } from "./portfolio-analytics";
+export { projectToolMatrix } from "./tool-matrix";
 export {
   attachProjectResources,
   detachProjectResources,
   listProductProjectUses,
   listProjectResources,
+  setProductProjectUses,
+  setProjectToolUsage,
   suggestProjectTools,
 } from "./tools";
 export { projectTreePage } from "./tree";

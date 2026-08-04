@@ -140,6 +140,7 @@ export const desktopNav: NavNode[] = [
     icon: House,
     children: [
       { to: "/projects", label: "Projects", icon: entities.project.lucideIcon },
+      { to: "/projects/tools", label: "Tool usage", icon: Wrench },
       { to: "/tasks", label: "Tasks", icon: entities.task.lucideIcon },
     ],
   },
