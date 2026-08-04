@@ -109,25 +109,6 @@ const getIngredientUsageEndpoint = protectedProcedure
     );
   });
 
-// One-shot backfill: recompute every recipe's totals regardless of stale state.
-// Admin/recovery (e.g. after the USDA backend was down during a drain). Kept
-// non-streaming for the MCP tool, which wants the plain `{processed}` result.
-const recomputeAll = protectedProcedure
-  .output(strictOutput(recipeRecomputeAllOut))
-  .mutation(async ({ ctx }) => {
-    return await ctx.services.recipeCosting.recomputeAll();
-  });
-
-// Streaming sibling for the maintenance UI button: same work, per-chunk progress.
-const recomputeAllStream = protectedProcedure.mutation(async function* ({
-  ctx,
-}) {
-  yield* streamProgress(
-    ctx.services.recipeCosting.recomputeAllStream(),
-    (r) => r,
-  );
-});
-
 // DURABLE recompute-all for the maintenance UI: instead of holding this request
 // open to do the whole CPU-heavy pass inline (recomputeAllStream — dies on
 // navigate-away / PWA background / Worker CPU limit with no record), mark every
@@ -297,8 +278,6 @@ const harvestEquivalencesEndpoint = protectedProcedure
 
 export const recipeAnalysisProcedures = {
   harvestEquivalences: harvestEquivalencesEndpoint,
-  recomputeAll,
-  recomputeAllStream,
   recomputeAllDurable,
   recomputeStaleDurable,
   recomputeOne,

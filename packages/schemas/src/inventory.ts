@@ -318,6 +318,3 @@ export const inventoryMcpListOut =
   createPaginatedResponseSchema(inventoryMcpOut);
 export const inventoryMcpBulkMoveOut =
   createItemsResponseSchema(inventoryMcpOut);
-export const inventoryDuplicateFindOut = createItemsResponseSchema(
-  duplicateUniqueProductSchema,
-);

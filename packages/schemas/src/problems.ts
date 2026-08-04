@@ -879,11 +879,6 @@ export const maintenanceCountsSchema = z.object({
 });
 export type MaintenanceCounts = z.infer<typeof maintenanceCountsSchema>;
 
-export const reparseStaleSyncOut = z.object({
-  updated: z.number().int().nonnegative(),
-  recipesAffected: z.number().int().nonnegative(),
-});
-
 export const dryRunReparseOut = z.object({
   wouldChange: z.number().int(),
   total: z.number().int(),

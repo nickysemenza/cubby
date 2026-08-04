@@ -14,11 +14,10 @@ import type {
   LocationParentOptionsOut,
   LocationType,
 } from "@cubby/schemas/location";
-import { and, asc, desc, eq, exists, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, exists, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
-import { inventoryEntry, location } from "~/server/db/schema";
+import { location } from "~/server/db/schema";
 import {
   findOrCreate,
   getDb,
@@ -174,52 +173,4 @@ export const findOrCreateLocationByName = async (
     }),
   });
   return { locationId: row.id, created };
-};
-
-/**
- * Get recently active locations for the scanner.
- * Combines two data sources:
- * 1. Locations sorted by updatedAt DESC (catches new locations + bulk inventory)
- * 2. Locations with recent inventory activity
- * Excludes soft-deleted locations and inventory entries.
- */
-export const getRecentlyActiveLocations = async (
-  db: Database,
-  limit = 5,
-): Promise<LocationOut[]> => {
-  // Part 1: Recently updated locations (excludes soft-deleted)
-  const recentLocations = await getDb(db)
-    .select({ id: location.id })
-    .from(location)
-    .where(notDeleted(location))
-    .orderBy(desc(location.updatedAt))
-    .limit(limit);
-
-  // Part 2: Locations with recent inventory activity (excludes soft-deleted inventory)
-  // Use subquery to get distinct location IDs ordered by most recent activity
-  const inventoryLocations = await getDb(db)
-    .select({ id: inventoryEntry.locationId })
-    .from(inventoryEntry)
-    .where(notDeleted(inventoryEntry))
-    .groupBy(inventoryEntry.locationId)
-    .orderBy(desc(sql`max(${inventoryEntry.updatedAt})`))
-    .limit(10);
-
-  // Merge and dedupe by ID, take first N
-  const finalIds = uniq([
-    ...recentLocations.map((l) => l.id),
-    ...inventoryLocations.map((l) => l.id),
-  ]).slice(0, limit);
-
-  if (finalIds.length === 0) {
-    return [];
-  }
-
-  // Fetch full location data (excludes soft-deleted)
-  const locations = await getDb(db).query.location.findMany({
-    where: and(inArray(location.id, finalIds), notDeleted(location)),
-    ...relations.location.withImages,
-  });
-
-  return locations.map(dbLocationToAPI);
 };

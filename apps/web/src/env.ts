@@ -36,9 +36,7 @@ export const env = createEnv({
 
   clientPrefix: "VITE_",
 
-  client: {
-    VITE_APP_TITLE: z.string().min(1).optional(),
-  },
+  client: {},
 
   runtimeEnv: {
     // E2E_DATABASE_URL takes precedence - it won't be overwritten by Vite's .env loading
@@ -61,7 +59,6 @@ export const env = createEnv({
     AI_GATEWAY_API_KEY: process.env.AI_GATEWAY_API_KEY,
     NOTION_API_KEY: process.env.NOTION_API_KEY,
     PORT: process.env.PORT,
-    VITE_APP_TITLE: import.meta.env.VITE_APP_TITLE,
   },
 
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,

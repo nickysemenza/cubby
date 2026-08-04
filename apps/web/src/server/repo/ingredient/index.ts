@@ -41,7 +41,6 @@ export {
   getIngredientByName,
   getIngredientMatches,
   getIngredientsByIDsLean,
-  getRawLinesForIngredients,
   getRecipeUsagesForIngredient,
   ingredientList,
   searchIngredientsForMerge,

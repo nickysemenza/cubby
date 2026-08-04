@@ -685,54 +685,10 @@ export class RecipeCostingService {
   }
 
   /**
-   * Recompute every recipe's totals regardless of stale state. One-shot backfill
-   * / admin recovery (e.g. after the USDA backend was unavailable during a drain).
-   * Chunked so a large library doesn't hold one giant transaction.
-   */
-  async recomputeAll(): Promise<{ processed: number }> {
-    const processed = await this.tracedRecompute(
-      "recomputeAll",
-      {},
-      async () => {
-        const ids = await selectAllActiveRecipeIds(this.db);
-        const CHUNK = 25;
-        for (let i = 0; i < ids.length; i += CHUNK) {
-          await this.recomputeTree(ids.slice(i, i + CHUNK));
-        }
-        return ids.length;
-      },
-    );
-    return { processed };
-  }
-
-  /**
-   * Streaming variant of {@link recomputeAll} for the on-demand maintenance
-   * button: same chunked work (each chunk's `recomputeTree` commits
-   * independently), but `yield`s `{done,total}` per chunk so the UI can show a
-   * live bar. No trace span (the non-streaming method keeps that for MCP).
-   */
-  async *recomputeAllStream(): AsyncGenerator<
-    { done: number; total: number },
-    { processed: number }
-  > {
-    const ids = await selectAllActiveRecipeIds(this.db);
-    const CHUNK = 25;
-    const total = ids.length;
-    let done = 0;
-    yield { done, total };
-    for (let i = 0; i < ids.length; i += CHUNK) {
-      await this.recomputeTree(ids.slice(i, i + CHUNK));
-      done = Math.min(i + CHUNK, total);
-      yield { done, total };
-    }
-    return { processed: total };
-  }
-
-  /**
    * DURABLE recompute-all: mark every active recipe stale and enqueue bounded
    * `recipe-totals.recompute` jobs onto the background-jobs queue, returning the
    * batch id — instead of holding a single request open to do the full CPU-heavy
-   * pass inline ({@link recomputeAllStream}). The work then survives a navigate-
+   * pass inline on the request thread. The work then survives a navigate-
    * away / PWA background / Worker CPU limit: it runs on the queue (or inline in
    * dev, where there's no binding), and its progress is inspectable on
    * `/background-jobs`. This is the same queue + dispatch path every mutation-

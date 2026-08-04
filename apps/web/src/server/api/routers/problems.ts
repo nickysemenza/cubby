@@ -1,4 +1,4 @@
-import { type RecipeId, unsafeIngredientId } from "@cubby/schemas/identifiers";
+import { unsafeIngredientId } from "@cubby/schemas/identifiers";
 import {
   cleanupOrphanedEntityEmbeddingsInput,
   cleanupOrphanedEntityEmbeddingsOut,
@@ -14,7 +14,6 @@ import {
   problemsUpcSchema,
   recipeUsageByProductInput,
   recipeUsageByProductOut,
-  reparseStaleSyncOut,
 } from "@cubby/schemas/problems";
 import { streamProgress } from "~/lib/bulk-progress";
 import { createAppError } from "~/server/errors/app-error";
@@ -99,36 +98,6 @@ const reparseStale = protectedProcedure.mutation(async function* ({ ctx }) {
     return { updated: r.updated, recipesAffected: r.recipesAffected.length };
   });
 });
-
-// Non-streaming twin of {@link reparseStale} for MCP/agent callers (no progress
-// stream). Re-parse every stale line, then DISPATCH the affected recipes'
-// recompute off the request path (queue in prod) so a big sweep can't overrun the
-// Workers budget. This is the agent's mis-merge recovery primitive: once a merge
-// folds the right alias onto the surviving ingredient, a re-parse re-points every
-// line whose `rawLine` now resolves (via alias match) to the correct ingredient.
-const reparseStaleSync = protectedProcedure
-  .output(strictOutput(reparseStaleSyncOut))
-  .mutation(async ({ ctx }) => {
-    const gen = reparseStaleIngredientParses(ctx.db);
-    let result: { updated: number; recipesAffected: RecipeId[] } = {
-      updated: 0,
-      recipesAffected: [],
-    };
-    for (;;) {
-      const next = await gen.next();
-      if (next.done) {
-        result = next.value;
-        break;
-      }
-    }
-    await ctx.services.recipeCosting.dispatchRecompute(result.recipesAffected, {
-      source: "problems.reparseStaleSync",
-    });
-    return {
-      updated: result.updated,
-      recipesAffected: result.recipesAffected.length,
-    };
-  });
 
 // On-demand dry run behind the Settings → Maintenance "Re-parse recipe lines"
 // button (the WASM sweep is too expensive for an always-on count).
@@ -219,7 +188,6 @@ export const problemsRouter = createTRPCRouter({
   getCoverageTotals,
   getMaintenanceCounts,
   reparseStale,
-  reparseStaleSync,
   dryRunReparse: dryRunReparseProc,
   dryRunPruneAliases: dryRunPruneAliasesProc,
   pruneAllUnusedAliasesStream,

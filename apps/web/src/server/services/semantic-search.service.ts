@@ -14,9 +14,7 @@ import { createAppError } from "~/server/errors/app-error";
 import {
   findSemanticEntityCandidates,
   findSimilarEntities,
-  getEmbeddingTextsForEntityTypes,
   getStaleEmbeddingTextsForEntityTypes,
-  upsertEntityEmbedding,
 } from "~/server/repo/entity-embedding";
 import {
   globalSearch,
@@ -25,13 +23,9 @@ import {
 } from "~/server/repo/search";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
-import {
-  SEMANTIC_BACKFILL_BATCH_SIZE,
-  SEMANTIC_MIN_QUERY_LENGTH,
-} from "~/server/semantic/constants";
+import { SEMANTIC_MIN_QUERY_LENGTH } from "~/server/semantic/constants";
 import {
   embedQuery,
-  embedTexts,
   semanticEmbeddingsConfigured,
 } from "~/server/semantic/embeddings";
 import {
@@ -189,51 +183,6 @@ export async function debugHybridSearch(
     }),
     results: mergeHybridSearchResults(query, lexical, semantic, limit),
   };
-}
-
-export async function backfillEntityEmbeddings(
-  db: Database,
-  opts: { entityTypes?: SearchableEntity[]; limit: number },
-): Promise<{ scanned: number; embedded: number; skipped: number }> {
-  if (!semanticEmbeddingsConfigured()) {
-    return { scanned: 0, embedded: 0, skipped: opts.limit };
-  }
-  const config = getSemanticEmbeddingConfig();
-  const entityTypes = opts.entityTypes?.length
-    ? opts.entityTypes
-    : ALL_SEARCHABLE_ENTITIES;
-  const rows = await getEmbeddingTextsForEntityTypes(
-    db,
-    entityTypes,
-    opts.limit,
-  );
-  let embedded = 0;
-  let skipped = 0;
-
-  for (let i = 0; i < rows.length; i += SEMANTIC_BACKFILL_BATCH_SIZE) {
-    const batch = rows.slice(i, i + SEMANTIC_BACKFILL_BATCH_SIZE);
-    const embeddings = await embedTexts(
-      batch.map((row) => row.embeddingText),
-      { operation: "entityEmbeddingBackfill", db, feature: "entity-embedding" },
-    );
-    await Promise.all(
-      batch.map(async (row, index) => {
-        const embedding = embeddings[index];
-        if (!embedding) {
-          skipped += 1;
-          return;
-        }
-        await upsertEntityEmbedding(db, {
-          ...row,
-          config,
-          embedding,
-        });
-        embedded += 1;
-      }),
-    );
-  }
-
-  return { scanned: rows.length, embedded, skipped };
 }
 
 export async function enqueueEntityEmbeddingBackfill(

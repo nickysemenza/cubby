@@ -26,8 +26,6 @@ import {
   ingredientMergeOut,
   ingredientNameFilterInput,
   ingredientNamesInput,
-  ingredientRawLinesInput,
-  ingredientRawLinesOut,
   ingredientRecipeUsagesOut,
   ingredientResolvableNamesInput,
   ingredientResolveOrCreateOut,
@@ -43,7 +41,6 @@ import { createAppError } from "~/server/errors/app-error";
 import {
   deleteIngredients,
   getIngredientMatches,
-  getRawLinesForIngredients,
   getRecipeUsagesForIngredient,
   ingredientList,
   resolveOrCreateIngredients,
@@ -331,20 +328,6 @@ const recipeUsages = protectedProcedure
     return usages.recipeUsages;
   });
 
-// Bulk parser-triage: original `rawLine` + parsed modifier/amounts of every live
-// recipe line linked to each ingredient, in one query. Powers the junk-ingredient
-// sweep (instruction fragments / quantity stubs the importer mis-created as
-// ingredients) without paging recipeUsages per id. Grouped by the MCP tool.
-const rawLines = protectedProcedure
-  .input(ingredientRawLinesInput)
-  .output(strictOutput(ingredientRawLinesOut))
-  .query(async ({ ctx, input }) => {
-    return await getRawLinesForIngredients(
-      ctx.db,
-      await resolveIngredientEntityIds(ctx.db, input.ids),
-    );
-  });
-
 const getByName = protectedProcedure
   .input(ingredientNameFilterInput)
   .output(strictOutput(ingredientWithFoodOut.nullable()))
@@ -424,7 +407,6 @@ export const ingredientRouter = createTRPCRouter({
   getByName,
   enrichmentWorkbench,
   recipeUsages,
-  rawLines,
   matchNames,
   resolveOrCreate,
   getByID,

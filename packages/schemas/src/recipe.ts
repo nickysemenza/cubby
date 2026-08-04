@@ -439,7 +439,3 @@ export const recipeTagsListOut = createItemsResponseSchema(z.string());
 
 export const cookbookSummariesMcpOut =
   createItemsResponseSchema(cookbookSummary);
-
-export const recipeRecomputeMcpOut = z.object({
-  processed: z.number().int().nonnegative(),
-});

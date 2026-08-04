@@ -7,13 +7,10 @@ import {
   globalSearchOut,
   type SearchResultItem,
   searchDebugOutSchema,
-  semanticBackfillInputSchema,
-  semanticBackfillOutSchema,
   similarEntitiesInputSchema,
   similarEntitiesOut,
 } from "@cubby/schemas/search";
 import {
-  backfillEntityEmbeddings,
   debugHybridSearch,
   enqueueEntityEmbeddingBackfill,
   findSimilarEntitiesForPair,
@@ -61,12 +58,6 @@ export const searchRouter = createTRPCRouter({
         input.limit,
         input.entityType,
       );
-    }),
-  backfillEmbeddings: protectedProcedure
-    .input(semanticBackfillInputSchema)
-    .output(strictOutput(semanticBackfillOutSchema))
-    .mutation(async ({ ctx, input }) => {
-      return await backfillEntityEmbeddings(ctx.db, input);
     }),
   enqueueEmbeddingBackfill: protectedProcedure
     .input(enqueueEmbeddingBackfillInputSchema)

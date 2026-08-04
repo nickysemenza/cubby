@@ -285,17 +285,6 @@ export const similarEntitiesOut = z.object({
 });
 export type SimilarEntitiesOut = z.infer<typeof similarEntitiesOut>;
 
-export const semanticBackfillInputSchema = z.object({
-  entityTypes: z.array(searchableEntitySchema).optional(),
-  limit: z.number().min(1).max(500).default(100),
-});
-
-export const semanticBackfillOutSchema = z.object({
-  scanned: z.number().int().nonnegative(),
-  embedded: z.number().int().nonnegative(),
-  skipped: z.number().int().nonnegative(),
-});
-
 export const searchDebugOutSchema = z.object({
   query: z.string(),
   lexical: z.array(searchResultItemSchema),

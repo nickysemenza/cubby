@@ -38,7 +38,6 @@ import {
   deletePurchases,
   getPurchaseByID,
   getPurchaseByShortcode,
-  getPurchaseExpenses,
   linkExpensesToPurchase,
   mergePurchases,
   purchaseList,
@@ -97,21 +96,6 @@ const getByShortcode = createGetByShortcodeProcedure(
   purchaseOut,
   (ctx, shortcode) => getPurchaseByShortcode(ctx.db, shortcode),
 );
-
-/** This Purchase's spend lines — the Expense table on its detail page. */
-const expenses = protectedProcedure
-  .input(purchaseShortcode)
-  .output(strictOutput(z.array(expenseOut)))
-  .query(async ({ ctx, input }) => {
-    const id = await resolveLiveShortcode(ctx.db, input, "purchase");
-    if (!id) {
-      throw createAppError(
-        "PURCHASE_NOT_FOUND",
-        `Purchase not found: ${input}`,
-      );
-    }
-    return getPurchaseExpenses(ctx.db, unsafePurchaseId(id));
-  });
 
 const create = protectedProcedure
   .input(purchaseCreateInput)
@@ -302,7 +286,6 @@ export const purchaseRouter = createTRPCRouter({
   getByID,
   getByShortcode,
   list,
-  expenses,
   create,
   update,
   link,

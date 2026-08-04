@@ -3,7 +3,6 @@ import {
   buildPastePlan,
   type CellSelection,
   type CopiedGrid,
-  cellCount,
   clampSelection,
   gridToTsv,
   moveFocus,
@@ -63,16 +62,6 @@ describe("selectionRect", () => {
       bottom: 2,
       right: 2,
     });
-  });
-});
-
-describe("cellCount", () => {
-  it("counts a single cell", () => {
-    expect(cellCount({ top: 0, left: 0, bottom: 0, right: 0 })).toBe(1);
-  });
-
-  it("counts a rectangular region", () => {
-    expect(cellCount({ top: 0, left: 0, bottom: 2, right: 3 })).toBe(12);
   });
 });
 
