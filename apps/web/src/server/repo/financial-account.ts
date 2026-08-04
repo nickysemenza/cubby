@@ -6,6 +6,7 @@ import type {
 import {
   type FinancialAccountCreateInput,
   type FinancialAccountFilters,
+  type FinancialAccountOptionsOut,
   type FinancialAccountOut,
   type FinancialAccountUpdateData,
   financialAccountIdentity,
@@ -105,6 +106,35 @@ const toOut = (row: FinancialAccountRow): FinancialAccountOut =>
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });
+
+/**
+ * The account picklist. Ordered by transaction count so the cards actually used
+ * for settlement sort to the top, then by name — the same ordering `vendorOptions`
+ * uses, and for the same reason: a roster is scanned, not searched.
+ *
+ * Lists accounts with no transactions too. A provisional account minted by a
+ * statement import before any row is linked is exactly the one you want to be
+ * able to filter for.
+ */
+export const financialAccountOptions = async (
+  db: Database,
+): Promise<FinancialAccountOptionsOut> => {
+  const rows = await getDb(db)
+    .select({
+      shortcode: financialAccount.shortcode,
+      name: financialAccount.name,
+      count: transactionCount,
+    })
+    .from(financialAccount)
+    .where(notDeleted(financialAccount))
+    .orderBy(desc(transactionCount), asc(financialAccount.name));
+
+  return rows.map((row) => ({
+    id: unsafeFinancialAccountShortcode(row.shortcode),
+    name: row.name,
+    count: Number(row.count),
+  }));
+};
 
 const aliasCondition = (
   sources: string[] | undefined,

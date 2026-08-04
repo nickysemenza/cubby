@@ -164,6 +164,43 @@ describe("manifestFilterConfig", () => {
   it("returns undefined for a column with no declared filter", () => {
     expect(manifestFilterConfig("expense", "updatedBy")).toBeUndefined();
   });
+
+  it("returns undefined for a urlOnly spec even when a column shares its id", () => {
+    // `partitionFilterSpecs` keeps a urlOnly spec out of `columnFilters`, so a
+    // header control bound to one can neither read its current value nor write
+    // a new one — it renders an inert combobox over an empty option list. The
+    // usual loud failure (`[Table] Column with id 'x' does not exist`) can't
+    // fire here precisely BECAUSE the column exists, which is how the
+    // transactions table shipped two dead headers. Every other urlOnly spec
+    // escaped only by not colliding with a rendered column's id.
+    const [, urlOnly] = partitionFilterSpecs(getEntityFilters("expense"));
+    expect(urlOnly.length).toBeGreaterThan(0);
+    for (const spec of urlOnly) {
+      expect(manifestFilterConfig("expense", spec.columnId)).toBeUndefined();
+    }
+  });
+
+  it("gives every rendered picklist something to render", () => {
+    // The mirror-image defect: a spec that IS column-backed but declares
+    // neither `options` nor an `optionsKey` renders the same empty dropdown
+    // from the opposite direction. Product's model/UPC/notes presence filters
+    // sat that way unnoticed. Text, boolean and range kinds are exempt — they
+    // aren't picklists (boolean synthesizes Yes/No, range carries its own
+    // static buckets, checked by the schema suite below).
+    const pickerKinds = new Set(["select", "multiselect", "presence", "id"]);
+    const violations: string[] = [];
+    for (const entity of entitySchema.options) {
+      for (const spec of getEntityFilters(entity)) {
+        if (spec.urlOnly || !pickerKinds.has(spec.kind)) continue;
+        // A nullable spec always has the two sentinels, so it is never empty.
+        if (spec.optionsKey || spec.nullable) continue;
+        if (!spec.options?.length) {
+          violations.push(`${entity}.${spec.columnId}`);
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
 });
 
 describe("task subject-product filters", () => {
@@ -591,6 +628,9 @@ describe("purchase filters", () => {
       "expenseTotal",
       "reconciliation",
       "documentCount",
+      "transactionCount",
+      "dataQuality",
+      "dataGaps",
       "related:purchase.expenses",
       "related:purchase.transactions",
       "related:purchase.products",
@@ -627,6 +667,9 @@ describe("purchase filters", () => {
       "lineTotal",
       "reconciliation",
       "documents",
+      "transactions",
+      "dataQuality",
+      "dataGaps",
       "lineTotalMin",
       "lineTotalMax",
       "related-expense",
@@ -677,6 +720,9 @@ describe("purchase filters", () => {
       lineTotal: undefined,
       reconciliation: undefined,
       documents: undefined,
+      transactions: undefined,
+      dataQuality: undefined,
+      dataGaps: undefined,
       lineTotalMin: undefined,
       lineTotalMax: undefined,
     });
@@ -880,6 +926,49 @@ describe("finance filters", () => {
       postedDateFrom: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
       postedDateTo: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     });
+  });
+
+  it("declares every visible transaction filter plus exact URL-only scopes", () => {
+    // The transactions table went a long time with 10 of 16 filters reachable
+    // only by hand-editing a URL or over MCP — which is why the statement-drift
+    // reconciliation happened in a Python scratchpad instead of in the app.
+    // Pinning both halves keeps a new spec from quietly landing on the wrong
+    // side of that line, the way vendor/purchase/expense are already pinned.
+    const [columnBacked, urlOnly] = partitionFilterSpecs(
+      getEntityFilters("financialTransaction"),
+    );
+    expect(columnBacked.map((spec) => spec.columnId)).toEqual([
+      "transaction",
+      "kind",
+      "status",
+      "postedDate",
+      "accountId",
+      "purchasePresence",
+      "source",
+      "merchant",
+      "amount",
+      "related:financialTransaction.vendor",
+      "related:financialTransaction.expenses",
+      "related:financialTransaction.products",
+      "createdAt",
+      "updatedAt",
+    ]);
+    expect(urlOnly.map((spec) => spec.columnId)).toEqual([
+      "purchaseId",
+      "externalId",
+      "amountMin",
+      "amountMax",
+      "transactionDateFrom",
+      "transactionDateTo",
+      "postedDateFrom",
+      "postedDateTo",
+      "vendorId",
+      "vendorPresenceFilter",
+      "expenseId",
+      "expensePresenceFilter",
+      "productId",
+      "productPresenceFilter",
+    ]);
   });
 });
 

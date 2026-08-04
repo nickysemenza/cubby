@@ -1,6 +1,7 @@
 import {
   financialAccountCreateInput,
   financialAccountFiltersSchema,
+  financialAccountOptionsOut,
   financialAccountOut,
   financialAccountSortableFields,
   financialAccountUpdateData,
@@ -12,12 +13,13 @@ import {
 import {
   createFinancialAccount,
   deleteFinancialAccounts,
+  financialAccountOptions,
   getFinancialAccountByShortcode,
   listFinancialAccounts,
   updateFinancialAccount,
 } from "~/server/repo/financial-account";
 import { createSearchableEntityCrudProcedures } from "../crud-factory";
-import { createTRPCRouter } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const procedures = createSearchableEntityCrudProcedures({
   schemas: {
@@ -62,4 +64,17 @@ const procedures = createSearchableEntityCrudProcedures({
   entityName: "financialAccount",
 });
 
-export const financialAccountRouter = createTRPCRouter(procedures);
+/**
+ * The account picklist — feeds the transactions table's Account filter. Cheap
+ * options query, same shape as `vendor.options`. The transaction form keeps its
+ * own search-as-you-type combobox: that one pages the full list, this one is
+ * loaded eagerly for a header control.
+ */
+const options = protectedProcedure
+  .output(strictOutput(financialAccountOptionsOut))
+  .query(({ ctx }) => financialAccountOptions(ctx.db));
+
+export const financialAccountRouter = createTRPCRouter({
+  ...procedures,
+  options,
+});

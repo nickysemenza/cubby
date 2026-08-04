@@ -1,9 +1,13 @@
+import type { FinancialAccountOptionsOut } from "@cubby/schemas/financial-account";
 import type {
   FinancialTransactionFilters,
   FinancialTransactionOut,
+  FinancialTransactionSourceOptionsOut,
 } from "@cubby/schemas/financial-transaction";
+import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
+import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { financialTransactionMutationInvalidateKeys } from "~/lib/query-keys";
@@ -15,13 +19,39 @@ import {
 import RTable from "../_components/data-table/Table";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
+import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { TableLink } from "../_components/table/TableLink";
+
+const NO_OPTIONS: FinancialAccountOptionsOut = [];
+const NO_SOURCES: FinancialTransactionSourceOptionsOut = [];
+
 export function FinancialTransactionList() {
   const api = useTRPC();
   const helper = useMemo(
     () => createColumnHelper<FinancialTransactionOut>(),
     [],
   );
+  // Eagerly-loaded rosters for the Account and Source header filters. The
+  // transaction FORM uses a search-as-you-type account combobox instead — a
+  // header control needs the whole list up front, a form does not.
+  const { data: accounts = NO_OPTIONS } = useQuery(
+    api.financialAccount.options.queryOptions(),
+  );
+  const { data: sources = NO_SOURCES } = useQuery(
+    api.financialTransaction.sourceOptions.queryOptions(),
+  );
+  const filterOptions = useFilterOptions({
+    account: accounts.map((a) => ({
+      value: a.id,
+      label: a.name,
+      hint: `${a.count}`,
+    })),
+    source: sources.map((s) => ({
+      value: s.source,
+      label: s.source,
+      hint: `${s.count}`,
+    })),
+  });
   const deletable = useDeletableConfig({
     mutationFn: api.financialTransaction.delete.mutationOptions,
     entityLabel: "Transaction",
@@ -88,6 +118,28 @@ export function FinancialTransactionList() {
           ),
       }),
       createPlainDateColumn(helper, "postedDate", { header: "Posted" }),
+      // Hidden by default: these exist so `purchasePresence`, `merchant` and
+      // `source` are column-backed specs rather than URL-only ones. A urlOnly
+      // spec can never round-trip through a header control — see
+      // `manifestFilterConfig`.
+      helper.accessor((r) => r.purchaseId, {
+        id: "purchasePresence",
+        header: "Linked",
+        enableSorting: false,
+        meta: { className: "w-24" },
+        cell: (i) => (i.getValue() ? "Has purchase" : <NoneValue />),
+      }),
+      createTextColumn(helper, "merchant", {
+        header: "Merchant",
+        className: "w-40",
+      }),
+      helper.accessor((r) => r.sourceRefs.map((ref) => ref.source).join(", "), {
+        id: "source",
+        header: "Source",
+        enableSorting: false,
+        meta: { className: "w-32" },
+        cell: (i) => i.getValue() || <NoneValue />,
+      }),
     ],
     [helper],
   );
@@ -99,6 +151,12 @@ export function FinancialTransactionList() {
     queryOptions: api.financialTransaction.list.queryOptions,
     columns,
     deletable,
+    filterOptions,
+    initialColumnVisibility: {
+      purchasePresence: false,
+      merchant: false,
+      source: false,
+    },
   });
   return (
     <>
