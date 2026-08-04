@@ -12,6 +12,7 @@ import {
   auditDateFilterFields,
   deriveUpdateData,
   timestampedFields,
+  uniqueBy,
 } from "./base-entity";
 import {
   financialAccountShortcode,
@@ -373,8 +374,10 @@ export const financialStatementImportPreviewInput = z.strictObject({
     .min(1)
     .max(FINANCIAL_STATEMENT_IMPORT_MAX_ROWS)
     .refine(
-      (rows) => new Set(rows.map((row) => row.key)).size === rows.length,
-      "rows must have unique keys",
+      ...uniqueBy(
+        (row: FinancialStatementImportRow) => row.key,
+        "rows must have unique keys",
+      ),
     ),
 });
 export type FinancialStatementImportPreviewInput = z.infer<

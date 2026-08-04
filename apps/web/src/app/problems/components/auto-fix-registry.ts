@@ -1,6 +1,7 @@
 import { CULL_PENDING_IMAGES_DEFAULT_HOURS } from "@cubby/schemas/image";
 import type { AllProblems, MaintenanceCounts } from "@cubby/schemas/problems";
 import type { QueryKey } from "@tanstack/react-query";
+import { sumBy } from "es-toolkit";
 import pluralize from "pluralize";
 import type { useTRPCClient } from "~/integrations/trpc/react";
 import { collectBulkStream } from "~/lib/bulk-progress";
@@ -228,10 +229,9 @@ export function buildAutoFixPlan(
   }));
   const actionable = counted.filter((entry) => (entry.count ?? 0) > 0);
   return {
-    items: actionable.reduce((total, entry) => total + (entry.count ?? 0), 0),
-    listedItems: actionable.reduce(
-      (total, entry) => total + entry.task.listedCount(problems, counts),
-      0,
+    items: sumBy(actionable, (entry) => entry.count ?? 0),
+    listedItems: sumBy(actionable, (entry) =>
+      entry.task.listedCount(problems, counts),
     ),
     // Tail steps ride along, but only when something else justified the run.
     tasks: actionable.length

@@ -1,4 +1,5 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
+import { sumBy } from "es-toolkit";
 import { Eye, EyeOff } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { Row, Stack } from "~/components/layout";
@@ -56,7 +57,7 @@ function VitalsPanel({
     grams: stats[m.key] ?? 0,
     kcal: (stats[m.key] ?? 0) * m.kcalPerG,
   })).filter((m) => m.grams > 0);
-  const macroKcal = macros.reduce((sum, m) => sum + m.kcal, 0);
+  const macroKcal = sumBy(macros, (m) => m.kcal);
 
   // Two small nutrient-density figures, re-expressed from the same cost/kcal/
   // protein numbers already shown above — no new engine call, just division

@@ -13,6 +13,7 @@ import {
   unsafeFinancialTransactionShortcode,
 } from "@cubby/schemas/identifiers";
 import { and, inArray, or, sql } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { financialAccount, financialTransaction } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
@@ -98,7 +99,7 @@ export async function previewFinancialStatementImport(
   input: FinancialStatementImportPreviewInput,
 ): Promise<FinancialStatementImportPreviewOut> {
   const sourceRefIds = await Promise.all(input.rows.map(sourceExternalId));
-  const dates = [...new Set(input.rows.map((row) => row.date))];
+  const dates = uniq(input.rows.map((row) => row.date));
   const sourceRefLookup = sql`EXISTS (
     SELECT 1
     FROM jsonb_array_elements(${financialTransaction.sourceRefs}) AS "sourceRef"

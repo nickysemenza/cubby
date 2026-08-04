@@ -2,6 +2,7 @@ import type { ExpenseOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { format } from "date-fns";
+import { sumBy } from "es-toolkit";
 import { ListFilter } from "lucide-react";
 import type { FC } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
@@ -63,7 +64,7 @@ export const ExpensePurchaseSection: FC<{ expense: ExpenseOut }> = ({
   // and a total that excluded it would never reconcile against a receipt.
   const lines = [expense, ...others];
   const priced = lines.filter((line) => line.cost != null);
-  const total = priced.reduce((sum, line) => sum + (line.cost ?? 0), 0);
+  const total = sumBy(priced, (line) => line.cost ?? 0);
   const unpriced = lines.length - priced.length;
 
   return (

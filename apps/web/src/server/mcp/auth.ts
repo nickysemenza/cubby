@@ -1,4 +1,5 @@
 import { type UserId, unsafeUserId } from "@cubby/schemas/identifiers";
+import { getErrorMessage } from "@cubby/shared";
 import { verifyJwsAccessToken } from "better-auth/oauth2";
 import { auth, MCP_RESOURCE, OAUTH_ISSUER } from "~/lib/auth";
 
@@ -88,7 +89,7 @@ export async function verifyMcpToken(
     // JWT" is invisible in production — which is exactly the hole that made a
     // misconfigured connector impossible to diagnose from the outside.
     console.error("[MCP auth] token rejected", {
-      reason: error instanceof Error ? error.message : String(error),
+      reason: getErrorMessage(error),
       code:
         error && typeof error === "object" && "code" in error
           ? String((error as { code: unknown }).code)

@@ -8,6 +8,7 @@ import type {
   BackgroundJobStatus,
   BackgroundJobSummary,
 } from "@cubby/schemas/background-jobs";
+import { getErrorMessage } from "@cubby/shared";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { backgroundBatch, backgroundJob } from "~/server/db/schema";
@@ -318,7 +319,7 @@ export async function failOrRetryBackgroundJob(
           nextStatus === "failed"
             ? sql`GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (${now}::timestamp - ${backgroundJob.startedAt})) * 1000))::int`
             : null,
-        lastError: error instanceof Error ? error.message : String(error),
+        lastError: getErrorMessage(error),
       })
       .where(eq(backgroundJob.id, jobId));
     await recalculateBackgroundBatchSummaryTx(tx, job.batchId);

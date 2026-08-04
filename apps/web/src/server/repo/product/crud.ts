@@ -9,10 +9,11 @@ import {
   type ExternalIdKind,
   storedExternalIdUrl,
 } from "@cubby/schemas/external-id";
-import type {
-  IngredientId,
-  LocationId,
-  ProductId,
+import {
+  type IngredientId,
+  type ProductId,
+  unsafeIngredientId,
+  unsafeLocationId,
 } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import {
@@ -403,8 +404,10 @@ export const productList = async (
     resolveLiveShortcodes(db, requestedLocationCodes, "location"),
     resolveLiveShortcodes(db, requestedIngredientCodes, "ingredient"),
   ]);
-  const selectedLocationIds = [...locationIdMap.values()] as LocationId[];
-  const selectedIngredientIds = [...ingredientIdMap.values()] as IngredientId[];
+  const selectedLocationIds = [...locationIdMap.values()].map(unsafeLocationId);
+  const selectedIngredientIds = [...ingredientIdMap.values()].map(
+    unsafeIngredientId,
+  );
 
   // Every cross-entity filter below is an UNCORRELATED subquery (it references
   // only the child table, never back at product.id), applied with

@@ -11,6 +11,7 @@ import { mutationSideEffectsSchema } from "./background-jobs";
 import {
   auditDateFilterFields,
   deriveUpdateData,
+  plainDate,
   timestampedFields,
 } from "./base-entity";
 import type { ShortcodeEntity } from "./entity-manifest";
@@ -40,12 +41,9 @@ import {
  * the DB, not in committed code); filter options derive from the data.
  */
 
-/** A calendar day as a plain "YYYY-MM-DD" string, timezone-free. */
-export const plainDate = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD")
-  .meta({ mockValue: "2024-01-15" })
-  .describe('Calendar day as "YYYY-MM-DD"');
+// `plainDate` is re-exported from `./base-entity` (the shared home) so existing
+// `@cubby/schemas/project` imports keep working.
+export { plainDate } from "./base-entity";
 
 /**
  * Parse a complete provider URL without canonicalizing it. URL is used only
@@ -313,6 +311,12 @@ export const projectOptionsOut = z.object({
 });
 export type ProjectOptionsOut = z.infer<typeof projectOptionsOut>;
 
+/** A 4-digit year filter, e.g. "2024". */
+const completionYear = z
+  .string()
+  .regex(/^\d{4}$/)
+  .optional();
+
 /**
  * Visible `/projects` filter state forwarded to embedded Task/Expense lists.
  * Its presence means "must belong to a live project matching this scope";
@@ -325,10 +329,7 @@ export const embeddedProjectScopeSchema = z.object({
   search: z.string().optional(),
   dateFrom: plainDate.optional(),
   dateTo: plainDate.optional(),
-  completionYear: z
-    .string()
-    .regex(/^\d{4}$/)
-    .optional(),
+  completionYear,
 });
 export type EmbeddedProjectScope = z.infer<typeof embeddedProjectScopeSchema>;
 
@@ -343,10 +344,7 @@ export const projectFilterFields = {
   search: z.string().optional(),
   dateFrom: plainDate.optional(),
   dateTo: plainDate.optional(),
-  completionYear: z
-    .string()
-    .regex(/^\d{4}$/)
-    .optional(),
+  completionYear,
   parentProjectPresenceFilter: presenceFilter,
   /** Exclude sub-projects (rows with a non-null `parentProjectId`) from the list. */
   topLevelOnly: z.boolean().optional(),
@@ -1612,10 +1610,7 @@ const projectDashboardFilterFields = {
   search: z.string().optional(),
   dateFrom: plainDate.optional(),
   dateTo: plainDate.optional(),
-  completionYear: z
-    .string()
-    .regex(/^\d{4}$/)
-    .optional(),
+  completionYear,
 };
 export const projectDashboardFiltersSchema = z.object(
   projectDashboardFilterFields,

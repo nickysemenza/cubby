@@ -125,10 +125,7 @@ export const financialAccountFilterFields = {
   search: z.string().optional(),
   identityKind: oneOrMany(financialAccountIdentityKind).optional(),
   provisional: z.boolean().optional(),
-  last4: z
-    .string()
-    .regex(/^\d{4}$/)
-    .optional(),
+  last4: last4.optional(),
   source: oneOrMany(z.string().min(1)).optional(),
   externalAccountId: oneOrMany(z.string().min(1)).optional(),
   sourceAliasPresenceFilter: presenceFilter,

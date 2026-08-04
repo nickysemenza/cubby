@@ -1,5 +1,6 @@
 import type { InfLocation } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
+import { sumBy } from "es-toolkit";
 import { Wallet } from "lucide-react";
 import { useMemo } from "react";
 import { Row } from "~/components/layout";
@@ -46,7 +47,7 @@ export function PantryValueCard() {
       }
     };
     walk(data);
-    const total = byLocation.reduce((sum, b) => sum + b.value, 0);
+    const total = sumBy(byLocation, (b) => b.value);
     const bars = byLocation.sort((a, b) => b.value - a.value).slice(0, 5);
     return { total, bars };
   }, [data]);

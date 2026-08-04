@@ -1,8 +1,9 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type {
-  IngredientId,
-  ProductId,
-  ProductShortcode,
+import {
+  type ProductId,
+  type ProductShortcode,
+  unsafeIngredientId,
+  unsafeProductId,
 } from "@cubby/schemas/identifiers";
 import type {
   ProductCreateInput,
@@ -66,7 +67,10 @@ export const getProductWithFood = async (
     ? await resolveLiveShortcode(db, product.ingredient.id, "ingredient")
     : null;
   const { recipeUsages } = ingredientEntityId
-    ? await getRecipeUsagesForIngredient(db, ingredientEntityId as IngredientId)
+    ? await getRecipeUsagesForIngredient(
+        db,
+        unsafeIngredientId(ingredientEntityId),
+      )
     : { recipeUsages: [] };
 
   return {
@@ -112,19 +116,20 @@ export const getProductSummaries = async (
   if (missing) {
     throw createAppError("PRODUCT_NOT_FOUND", `Product ${missing} not found`);
   }
-  const ids = shortcodes.map(
-    (shortcode) => resolved.get(shortcode) as ProductId,
+  // Non-null: every shortcode was confirmed present in `resolved` above.
+  const ids = shortcodes.map((shortcode) =>
+    unsafeProductId(resolved.get(shortcode)!),
   );
   const shortcodeById = new Map(
     shortcodes.map((shortcode) => [
-      resolved.get(shortcode) as ProductId,
+      unsafeProductId(resolved.get(shortcode)!),
       shortcode,
     ]),
   );
   const rekey = <T>(record: Record<string, T>): Record<string, T> =>
     Object.fromEntries(
       Object.entries(record).flatMap(([id, value]) => {
-        const shortcode = shortcodeById.get(id as ProductId);
+        const shortcode = shortcodeById.get(unsafeProductId(id));
         return shortcode ? [[shortcode, value]] : [];
       }),
     );
@@ -146,7 +151,7 @@ export const getProductSummaries = async (
       ? getProductUnitMappingsByProductIds(db, ids).then((unitMappings) => {
           summaries.unitMappings = Object.fromEntries(
             Object.entries(unitMappings).flatMap(([id, mappings]) => {
-              const shortcode = shortcodeById.get(id as ProductId);
+              const shortcode = shortcodeById.get(unsafeProductId(id));
               return shortcode
                 ? [
                     [
@@ -189,7 +194,9 @@ export const createProductWithFood = async (
     db,
     {
       ...data,
-      ingredientId: ingredientEntityId as IngredientId | null,
+      ingredientId: ingredientEntityId
+        ? unsafeIngredientId(ingredientEntityId)
+        : null,
     },
     actor,
   );
@@ -200,9 +207,10 @@ export const createProductWithFood = async (
   if (!entityId) {
     throw new Error(`Created product ${product.id} could not be resolved`);
   }
+  const productId = unsafeProductId(entityId);
   return {
-    output: await getProductWithFood(db, usdaClient, entityId as ProductId),
-    entityId: entityId as ProductId,
+    output: await getProductWithFood(db, usdaClient, productId),
+    entityId: productId,
   };
 };
 
@@ -227,7 +235,10 @@ export const updateProductWithFood = async (
     id,
     {
       ...data,
-      ingredientId: ingredientEntityId as IngredientId | null | undefined,
+      ingredientId:
+        ingredientEntityId == null
+          ? ingredientEntityId
+          : unsafeIngredientId(ingredientEntityId),
     },
     actor,
   );
