@@ -91,6 +91,7 @@ import {
   findSoldButStillStocked,
   findStaleIngredientParses,
   findStaleLocations,
+  findToolsUsedOutsideOwnership,
   findUnknownParkedItems,
   findUnusedIngredients,
   findVendorsWithoutLogos,
@@ -495,6 +496,10 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       orphanedProducts: () => findOrphanedProducts(scoped),
       productsMissingPrice: () => findProductsMissingPrice(scoped),
       soldButStillStocked: () => findSoldButStillStocked(scoped),
+      // One scan of the ~90 usage edges plus the whole-tree date fold. Cheap
+      // enough for this group and it shares its single connection; the fold is
+      // the same two queries `projectToolMatrix` already runs per page load.
+      toolsUsedOutsideOwnership: () => findToolsUsedOutsideOwnership(scoped),
       productsWithoutMappings: () => findProductsWithoutMappings(scoped),
       ingredientsWithoutProduct: () => findIngredientsWithoutProduct(scoped),
       unusedIngredients: () => findUnusedIngredients(scoped),
@@ -540,6 +545,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     productsMissingPrice: r.productsMissingPrice.real,
     unvaluedBucketProducts: r.productsMissingPrice.buckets,
     soldButStillStocked: r.soldButStillStocked,
+    toolsUsedOutsideOwnership: r.toolsUsedOutsideOwnership,
     productsWithoutMappings: r.productsWithoutMappings,
     ingredientsWithoutProduct: r.ingredientsWithoutProduct,
     unusedIngredientsWithProduct: r.unusedIngredients.withProduct,

@@ -801,20 +801,34 @@ describe("project tool matrix", () => {
     );
 
     const before = await projectToolMatrix(ctx.db, matrixInput());
-    expect(before.cells).toEqual([
-      {
-        projectId: rich.id,
-        productId: tool.id,
-        state: "suggested",
-        lane: "purchased_here",
-        matchedTrade: null,
-        projectPurchaseCost: 300,
-      },
-    ]);
+    expect(before.cells).toEqual(
+      expect.arrayContaining([
+        {
+          projectId: rich.id,
+          productId: tool.id,
+          state: "suggested",
+          lane: "purchased_here",
+          matchedTrade: null,
+          projectPurchaseCost: 300,
+        },
+        // Below the floor, so not a suggestion — but still emitted, because a
+        // purchase charged to this project is proof we owned the tool for it
+        // and the client must not lock a cell it holds evidence for.
+        {
+          projectId: cheap.id,
+          productId: tool.id,
+          state: "purchase_evidence",
+          lane: null,
+          matchedTrade: null,
+          projectPurchaseCost: 40,
+        },
+      ]),
+    );
+    expect(before.cells).toHaveLength(2);
     expect(before.totals.suggestedCells).toBe(1);
 
-    // Below the suggestion floor a pair earns no cell of its own, but once it
-    // IS attached the same query still reports what was bought there.
+    // A sub-floor pair is never counted as a suggestion, and once it IS
+    // attached the same query still reports what was bought there.
     await setProjectToolUsage(ctx.db, cheapId, tool.entityId, true, ctx.actor);
     const after = await projectToolMatrix(ctx.db, matrixInput());
     expect(after.cells).toEqual(
@@ -980,6 +994,476 @@ describe("project tool matrix", () => {
     expect(
       exactOnly.cells.filter((cell) => cell.lane === "trade_match"),
     ).toEqual([]);
+  });
+
+  it("locks trade matches for tools we did not own, and keeps the grid honest", async () => {
+    // The live Kitchen Remodel shape: an explicit end date a year before the
+    // tool was bought. `trade_match` used to draw from the whole present-day
+    // tool shelf, which on production made 80-99% of an old project's
+    // suggestions impossible.
+    const { output: finished, entityId: finishedId } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "Finished reno",
+        startDate: "2022-01-01",
+        endDate: "2022-06-30",
+        status: "done",
+      }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        name: "Rough-in",
+        projectId: finished.id,
+        trade: "electrical",
+      }),
+      ctx.actor,
+    );
+
+    const location = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Shelf" }),
+      ctx.actor,
+    );
+    const stock = async (productId: string) =>
+      createInventoryEntry(
+        ctx.db,
+        {
+          productId,
+          locationId: location.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+
+    const boughtLater = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Late crimper", category: "tools" }),
+      ctx.actor,
+    );
+    const owned = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Owned tester", category: "tools" }),
+      ctx.actor,
+    );
+    const undated = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Ledgerless pliers", category: "tools" }),
+      ctx.actor,
+    );
+    await stock(boughtLater.id);
+    await stock(owned.id);
+    await stock(undated.id);
+
+    // A separate project carries the acquisitions, so `finished`'s own window
+    // stays exactly the explicit override.
+    const { output: elsewhere } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "Other work" }),
+      ctx.actor,
+    );
+    for (const row of [
+      { product: boughtLater, date: "2024-03-01" },
+      { product: owned, date: "2021-05-01" },
+    ]) {
+      await createExpense(
+        ctx.db,
+        toolExpense({
+          name: row.product.name,
+          projectId: elsewhere.id,
+          productId: row.product.id,
+          trade: "electrical",
+          cost: 250,
+          date: row.date,
+        }),
+        ctx.actor,
+      );
+    }
+
+    const suggestions = await suggestProjectTools(ctx.db, finishedId);
+    const suggested = suggestions.items.map((item) => item.productId);
+    expect(suggested).toContain(owned.id);
+    expect(suggested).not.toContain(boughtLater.id);
+    // Disclosed, not silently dropped — a lane that quietly shrinks reads as
+    // "nothing else to suggest".
+    expect(suggestions.timelineConflicts).toEqual({ count: 1 });
+
+    // `undated` has no acquisition Expense at all. Unknown must never restrict:
+    // 42 of the 426 live tools are in exactly that state.
+    expect(suggestions.timelineConflicts.count).toBe(1);
+
+    const matrix = await projectToolMatrix(
+      ctx.db,
+      matrixInput({ minNetLifetimeCost: 0 }),
+    );
+    expect(
+      matrix.cells.filter(
+        (cell) =>
+          cell.projectId === finished.id && cell.productId === boughtLater.id,
+      ),
+    ).toEqual([]);
+    expect(
+      matrix.rows.find((row) => row.productId === boughtLater.id)?.ownership,
+    ).toEqual({ acquiredAt: "2024-03-01", disposedAt: null });
+    expect(
+      matrix.rows.find((row) => row.productId === undated.id)?.ownership,
+    ).toEqual({ acquiredAt: null, disposedAt: null });
+    expect(matrix.totals.timelineConflictCells).toBeGreaterThan(0);
+
+    // And the write path refuses it outright, so MCP and a stale client can't
+    // create what the grid won't offer.
+    await expect(
+      setProjectToolUsage(
+        ctx.db,
+        finishedId,
+        boughtLater.entityId,
+        true,
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({ cause: { reason: "TOOL_TIMELINE_CONFLICT" } });
+    await expect(
+      attachProjectResources(
+        ctx.db,
+        finishedId,
+        [boughtLater.entityId],
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({ cause: { reason: "TOOL_TIMELINE_CONFLICT" } });
+    await expect(
+      setProjectToolUsage(ctx.db, finishedId, owned.entityId, true, ctx.actor),
+    ).resolves.toEqual({ changed: true });
+    await expect(
+      setProjectToolUsage(
+        ctx.db,
+        finishedId,
+        undated.entityId,
+        true,
+        ctx.actor,
+      ),
+    ).resolves.toEqual({ changed: true });
+  });
+
+  it("gives a derived boundary grace an explicit one does not get", async () => {
+    // A derived window is only the min/max of dated content, so it routinely
+    // stops short of the real last day of work. An explicit date is a
+    // statement and is taken literally.
+    const makeProject = async (name: string, explicitEnd: string | null) =>
+      createProject(
+        ctx.db,
+        projectCreateInput.parse({
+          name,
+          status: "done",
+          ...(explicitEnd
+            ? { startDate: "2022-01-01", endDate: explicitEnd }
+            : {}),
+        }),
+        ctx.actor,
+      );
+
+    const { output: derived, entityId: derivedId } = await makeProject(
+      "Derived window",
+      null,
+    );
+    const { entityId: explicitId } = await makeProject(
+      "Explicit window",
+      "2022-06-30",
+    );
+    for (const projectId of [derived.id]) {
+      await createTask(
+        ctx.db,
+        taskCreateInput.parse({
+          name: "Wire it",
+          projectId,
+          trade: "electrical",
+          dueDate: "2022-06-30",
+        }),
+        ctx.actor,
+      );
+    }
+
+    const tool = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Slightly late meter", category: "tools" }),
+      ctx.actor,
+    );
+    const location = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Bench" }),
+      ctx.actor,
+    );
+    await createInventoryEntry(
+      ctx.db,
+      {
+        productId: tool.id,
+        locationId: location.id,
+        amount: { value: 1, unit: "each" },
+      },
+      ctx.actor,
+    );
+    const { output: elsewhere } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "Acquisition home" }),
+      ctx.actor,
+    );
+    // 20 days past both ends — inside the 30-day grace, which only the derived
+    // window is entitled to.
+    await createExpense(
+      ctx.db,
+      toolExpense({
+        name: "Meter",
+        projectId: elsewhere.id,
+        productId: tool.id,
+        trade: "electrical",
+        cost: 250,
+        date: "2022-07-20",
+      }),
+      ctx.actor,
+    );
+
+    await expect(
+      setProjectToolUsage(ctx.db, derivedId, tool.entityId, true, ctx.actor),
+    ).resolves.toEqual({ changed: true });
+    await expect(
+      setProjectToolUsage(ctx.db, explicitId, tool.entityId, true, ctx.actor),
+    ).rejects.toMatchObject({ cause: { reason: "TOOL_TIMELINE_CONFLICT" } });
+  });
+
+  it("reopens the window for a tool sold and later re-bought", async () => {
+    const { output: later, entityId: laterId } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "After the rebuy",
+        startDate: "2024-01-01",
+        endDate: "2024-03-01",
+        status: "done",
+      }),
+      ctx.actor,
+    );
+    const { output: ledger } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "Ledger home" }),
+      ctx.actor,
+    );
+
+    const soldOnly = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Gone planer", category: "tools" }),
+      ctx.actor,
+    );
+    const rebought = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Replaced planer", category: "tools" }),
+      ctx.actor,
+    );
+
+    // A disposal is a Purchase whose Expenses NET negative — a bare negative
+    // line is a refund and must not close the window. `createExpense` resolves
+    // vendor + orderId into that Purchase, same as the detector's own fixtures.
+    // One order id per product, so the two disposals stay separate Purchases.
+    const disposal = (
+      productId: (typeof soldOnly)["id"],
+      orderId: string,
+      date: string,
+    ) =>
+      createExpense(
+        ctx.db,
+        toolExpense({
+          name: "Sold",
+          productId,
+          vendor: "eBay",
+          orderId,
+          cost: -100,
+          date,
+        }),
+        ctx.actor,
+      );
+
+    for (const row of [
+      { product: soldOnly, orderId: "TOOL-SALE-1" },
+      { product: rebought, orderId: "TOOL-SALE-2" },
+    ]) {
+      await createExpense(
+        ctx.db,
+        toolExpense({
+          name: "Original buy",
+          projectId: ledger.id,
+          productId: row.product.id,
+          cost: 250,
+          date: "2021-01-01",
+        }),
+        ctx.actor,
+      );
+      await disposal(row.product.id, row.orderId, "2023-01-01");
+    }
+    await createExpense(
+      ctx.db,
+      toolExpense({
+        name: "Bought again",
+        projectId: ledger.id,
+        productId: rebought.id,
+        cost: 250,
+        date: "2023-06-01",
+      }),
+      ctx.actor,
+    );
+
+    await expect(
+      setProjectToolUsage(ctx.db, laterId, soldOnly.entityId, true, ctx.actor),
+    ).rejects.toMatchObject({ cause: { reason: "TOOL_TIMELINE_CONFLICT" } });
+    await expect(
+      setProjectToolUsage(ctx.db, laterId, rebought.entityId, true, ctx.actor),
+    ).resolves.toEqual({ changed: true });
+
+    const matrix = await projectToolMatrix(
+      ctx.db,
+      matrixInput({ minNetLifetimeCost: 0 }),
+    );
+    expect(
+      matrix.rows.find((row) => row.productId === soldOnly.id)?.ownership,
+    ).toEqual({ acquiredAt: "2021-01-01", disposedAt: "2023-01-01" });
+    expect(
+      matrix.rows.find((row) => row.productId === rebought.id)?.ownership,
+    ).toEqual({ acquiredAt: "2021-01-01", disposedAt: null });
+    expect(later.id).toBeTruthy();
+  });
+
+  it("never blocks detaching, or an edge with purchase evidence", async () => {
+    const { output: finished, entityId: finishedId } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "Locked-down reno",
+        startDate: "2022-01-01",
+        endDate: "2022-06-30",
+        status: "done",
+      }),
+      ctx.actor,
+    );
+    const tool = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Anachronistic saw", category: "tools" }),
+      ctx.actor,
+    );
+    // Bought FOR this project but dated after the explicit end. Ledger evidence
+    // beats the inferred window: lane A never checks, and the cell stays live.
+    await createExpense(
+      ctx.db,
+      toolExpense({
+        name: "Saw",
+        projectId: finished.id,
+        productId: tool.id,
+        cost: 300,
+        date: "2024-01-01",
+      }),
+      ctx.actor,
+    );
+
+    // A sub-floor purchase on the same project — the `purchase_evidence` cell,
+    // which is equally clickable and must be equally writable.
+    const cheapTool = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Anachronistic bit set", category: "tools" }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      toolExpense({
+        name: "Bits",
+        projectId: finished.id,
+        productId: cheapTool.id,
+        cost: 40,
+        date: "2024-01-01",
+      }),
+      ctx.actor,
+    );
+
+    const matrix = await projectToolMatrix(
+      ctx.db,
+      matrixInput({ minNetLifetimeCost: 0 }),
+    );
+    expect(
+      matrix.cells.find(
+        (cell) => cell.projectId === finished.id && cell.productId === tool.id,
+      ),
+    ).toMatchObject({ state: "suggested", lane: "purchased_here" });
+    expect(
+      matrix.cells.find(
+        (cell) =>
+          cell.projectId === finished.id && cell.productId === cheapTool.id,
+      ),
+    ).toMatchObject({ state: "purchase_evidence", projectPurchaseCost: 40 });
+
+    // The write path must honour the SAME exemption the cells above advertise,
+    // or the grid offers a confirm action that always errors and reverts.
+    await expect(
+      setProjectToolUsage(ctx.db, finishedId, tool.entityId, true, ctx.actor),
+    ).resolves.toEqual({ changed: true });
+    await expect(
+      setProjectToolUsage(
+        ctx.db,
+        finishedId,
+        cheapTool.entityId,
+        true,
+        ctx.actor,
+      ),
+    ).resolves.toEqual({ changed: true });
+    // ...through every attach path, not just the single setter.
+    await detachProjectResources(
+      ctx.db,
+      finishedId,
+      [tool.entityId, cheapTool.entityId],
+      ctx.actor,
+    );
+    await expect(
+      attachProjectResources(
+        ctx.db,
+        finishedId,
+        [tool.entityId, cheapTool.entityId],
+        ctx.actor,
+      ),
+    ).resolves.toMatchObject({ changed: 2 });
+    await expect(
+      setProductProjectUses(ctx.db, tool.entityId, [finishedId], ctx.actor),
+    ).resolves.toEqual({ changed: 0 });
+
+    // An already-recorded conflicting edge must stay removable, and re-saving a
+    // set that contains it must not throw — otherwise the rows this rule exists
+    // to surface would be permanently stuck.
+    const stuck = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Stuck driver", category: "tools" }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .insert(projectToolUsage)
+      .values({ projectId: finishedId, productId: stuck.entityId });
+    const { output: elsewhere } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "Driver ledger" }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      toolExpense({
+        name: "Driver",
+        projectId: elsewhere.id,
+        productId: stuck.id,
+        cost: 250,
+        date: "2025-01-01",
+      }),
+      ctx.actor,
+    );
+
+    await expect(
+      setProductProjectUses(ctx.db, stuck.entityId, [finishedId], ctx.actor),
+    ).resolves.toEqual({ changed: 0 });
+    await expect(
+      setProjectToolUsage(ctx.db, finishedId, stuck.entityId, false, ctx.actor),
+    ).resolves.toEqual({ changed: true });
+    // And once removed it can no longer be re-created.
+    await expect(
+      setProjectToolUsage(ctx.db, finishedId, stuck.entityId, true, ctx.actor),
+    ).rejects.toMatchObject({ cause: { reason: "TOOL_TIMELINE_CONFLICT" } });
   });
 
   it("counts visible and lifetime uses separately", async () => {

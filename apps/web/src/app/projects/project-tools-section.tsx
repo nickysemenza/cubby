@@ -451,6 +451,7 @@ export function ProjectResourcesSection({ projectId }: { projectId: string }) {
   const resources = resourcesQuery.data ?? EMPTY_RESOURCES;
   const suggestionCount = suggestionsQuery.data?.items.length ?? 0;
   const unlinked = suggestionsQuery.data?.unlinkedExpensivePurchases;
+  const timelineConflicts = suggestionsQuery.data?.timelineConflicts.count ?? 0;
   const attachedIds = useMemo(
     () => new Set(resources.map((resource) => resource.productId)),
     [resources],
@@ -490,6 +491,15 @@ export function ProjectResourcesSection({ projectId }: { projectId: string }) {
             </a>
           </Description>
         </div>
+      )}
+
+      {timelineConflicts > 0 && (
+        <Description size="xs">
+          {timelineConflicts} tool{timelineConflicts === 1 ? "" : "s"} matching
+          this project&rsquo;s trades {timelineConflicts === 1 ? "was" : "were"}{" "}
+          hidden — we didn&rsquo;t own {timelineConflicts === 1 ? "it" : "them"}{" "}
+          while this project ran.
+        </Description>
       )}
 
       {resourcesQuery.isPending ? (

@@ -63,6 +63,11 @@ export const AppErrors = {
   PRODUCT_HAS_EXPENSES: "PRECONDITION_FAILED",
   PRODUCT_HAS_TASKS: "PRECONDITION_FAILED",
   PRODUCT_HAS_PROJECT_USES: "PRECONDITION_FAILED",
+  // A tool can't be recorded as used on a project we didn't own it during —
+  // acquired after the project ended, or disposed of before it started. Both
+  // dates are ledger-derived, so the fix is usually a missing acquisition
+  // Expense rather than the edge being wrong.
+  TOOL_TIMELINE_CONFLICT: "PRECONDITION_FAILED",
   PRODUCT_HAS_WISH_CANDIDATES: "PRECONDITION_FAILED",
   INGREDIENT_HAS_PRODUCTS: "PRECONDITION_FAILED",
   INGREDIENT_HAS_RECIPES: "PRECONDITION_FAILED",

@@ -5,7 +5,7 @@
  * useful once tools carry several edges, and attaching one project at a time
  * through a dialog is what kept the ledger ~96% empty. Here you scan for holes.
  *
- * Cells render four states, not the server's three: `attached` is recorded
+ * Cells render more states than the server emits: `attached` is recorded
  * history, `empty` is the absence of a cell, and the server's single
  * `suggested` splits by lane into `purchased` and `trade` because those carry
  * very different confidence. Ghosts exist so the common motion is confirming
@@ -13,16 +13,24 @@
  * hammer marked on forty projects makes cost-per-use meaningless.
  *
  * Every membership decision (which rows, which columns, group order, cell
- * state) is made by `project.toolMatrix`. Nothing here filters or sorts.
+ * state) is made by `project.toolMatrix` — with ONE exception, the ownership
+ * gate. `toolTimelineConflict` runs here over `row.ownership` and the column's
+ * window because a dense per-cell conflict state would be thousands of objects
+ * (for a pre-2023 column, 80-99% of the tool shelf did not exist yet). It is
+ * the same pure predicate the suggestion engine filters with and the write path
+ * rejects with, so this is re-running a shared function, not re-deciding
+ * membership — and a cell that slips through is still refused by the server.
  */
 import type { ProjectKind } from "@cubby/schemas/project";
 import {
+  isLiveProjectStatus,
   type ProjectToolMatrixCellOut,
   type ProjectToolMatrixOut,
   projectKindValues,
 } from "@cubby/schemas/project";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Search, Wrench } from "lucide-react";
+import { format } from "date-fns";
+import { Check, Search, Slash, Wrench } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
@@ -40,6 +48,7 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
+import { toolTimelineConflict } from "~/lib/tool-timeline";
 import { cn, formatCurrency } from "~/lib/utils";
 import type { ToolMatrixSearch } from "~/routes/_authenticated/projects.tools";
 
@@ -107,25 +116,41 @@ function SegmentedControl<T extends string | number>({
 /**
  * `suggested` is split by lane rather than rendered once, because the two mean
  * different things to whoever is scanning the grid — see the class list below.
+ *
+ * `conflict` is the ownership gate: we did not own the tool while the project
+ * ran, so the cell is inert. `evidence` is its opposite — a purchase charged to
+ * this project that is under the suggestion floor, which is exactly the proof
+ * that keeps a cell clickable when its neighbours are locked.
  */
-type CellState = "attached" | "purchased" | "trade" | "empty";
+type CellState =
+  | "attached"
+  | "purchased"
+  | "trade"
+  | "evidence"
+  | "conflict"
+  | "empty";
 
 function MatrixCell({
   state,
   purchaseCost,
   title,
+  conflictReason,
   onToggle,
 }: {
   state: CellState;
   purchaseCost: number;
   title: string;
+  /** Set on `conflict`, and on an ATTACHED cell that predates its own tool. */
+  conflictReason: string | null;
   onToggle: () => void;
 }) {
   const hint = match(state)
     .with("attached", () =>
-      purchaseCost > 0
-        ? `${title} · ${formatCurrency(purchaseCost, 0)} bought here`
-        : title,
+      conflictReason
+        ? `${title} · recorded, but ${conflictReason}`
+        : purchaseCost > 0
+          ? `${title} · ${formatCurrency(purchaseCost, 0)} bought here`
+          : title,
     )
     .with(
       "purchased",
@@ -133,8 +158,16 @@ function MatrixCell({
         `${title} · suggested, ${formatCurrency(purchaseCost, 0)} bought here`,
     )
     .with("trade", () => `${title} · suggested by trade`)
+    .with(
+      "evidence",
+      () => `${title} · ${formatCurrency(purchaseCost, 0)} bought here`,
+    )
+    .with("conflict", () => `${title} · ${conflictReason ?? "not owned then"}`)
     .with("empty", () => title)
     .exhaustive();
+
+  const locked = state === "conflict";
+  const flagged = state === "attached" && conflictReason !== null;
 
   return (
     <td className="border-[var(--border)] border-b border-l p-0">
@@ -143,8 +176,15 @@ function MatrixCell({
         title={hint}
         aria-label={hint}
         aria-pressed={state === "attached"}
+        aria-disabled={locked}
+        disabled={locked}
         onClick={onToggle}
-        className="flex h-6 w-full items-center justify-center hover:ring-1 hover:ring-primary/40 hover:ring-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        className={cn(
+          "flex h-6 w-full items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+          locked
+            ? "cursor-not-allowed bg-muted/50"
+            : "hover:ring-1 hover:ring-primary/40 hover:ring-inset",
+        )}
       >
         <span
           className={cn(
@@ -161,11 +201,18 @@ function MatrixCell({
             state === "purchased" &&
               "border border-primary border-dashed text-primary",
             state === "trade" && "border border-muted-foreground border-dotted",
+            // A locked cell says "not possible", not "not yet" — so it reads as
+            // struck-through rather than as one more empty box to fill in.
+            locked && "text-muted-foreground/60",
+            // An attached edge that conflicts stays fully editable: it is the
+            // only way to correct one. It just stops looking clean.
+            flagged && "bg-warning/20 text-warning ring-1 ring-warning",
           )}
         >
           {(state === "attached" || state === "purchased") && (
             <Check className="size-3" aria-hidden />
           )}
+          {locked && <Slash className="size-3" aria-hidden />}
         </span>
       </button>
     </td>
@@ -386,9 +433,20 @@ export function ToolMatrixPage({
           />
           trade match — this project does that kind of work
         </Row>
+        <Row align="center" gap="sm">
+          <span
+            className="flex size-3 items-center justify-center rounded-[3px] bg-muted/50 text-muted-foreground/60"
+            aria-hidden
+          >
+            <Slash className="size-3" />
+          </span>
+          not owned then — bought after, or sold before
+        </Row>
         <span>
           {data.totals.matchingTools} tools · {data.totals.matchingProjects}{" "}
           projects matched
+          {data.totals.timelineConflictCells > 0 &&
+            ` · ${data.totals.timelineConflictCells} cells locked by the ownership timeline`}
           {data.truncated.columns && " (columns capped)"}
           {data.truncated.rows && " (rows capped)"}
         </span>
@@ -417,6 +475,37 @@ function MatrixTable({
     }
     return grouped;
   }, [data.rows]);
+
+  // One pass over the grid rather than a predicate call per render per cell.
+  // Only conflicting pairs are stored, so this stays sparse for the columns
+  // that matter (a current project conflicts with nothing).
+  const conflictIndex = useMemo(() => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    const index = new Map<string, string>();
+    for (const column of data.columns) {
+      const isLive = isLiveProjectStatus(column.status);
+      for (const row of data.rows) {
+        const conflict = toolTimelineConflict(
+          row.ownership,
+          {
+            effectiveStart: column.startDate,
+            effectiveEnd: column.endDate,
+            startSource: column.startSource,
+            endSource: column.endSource,
+          },
+          { isLive, today },
+        );
+        if (!conflict) continue;
+        index.set(
+          cellKey(column.projectId, row.productId),
+          conflict.kind === "acquired_after_end"
+            ? `acquired ${conflict.date}, after this project ended ${conflict.boundary}`
+            : `disposed of ${conflict.date}, before this project started ${conflict.boundary}`,
+        );
+      }
+    }
+    return index;
+  }, [data.columns, data.rows]);
 
   const columnSpan = data.columns.length + 4;
 
@@ -504,14 +593,23 @@ function MatrixTable({
                 const key = cellKey(column.projectId, row.productId);
                 const cell = cellIndex.get(key);
                 const optimistic = pending.get(key);
+                const conflictReason = conflictIndex.get(key) ?? null;
                 const serverState: CellState =
                   cell === undefined
-                    ? "empty"
+                    ? // Locked only with nothing to weigh against it. Any cell
+                      // the server emitted carries evidence — a recorded edge,
+                      // a suggestion, or a purchase charged to this project —
+                      // and evidence always beats the inferred window.
+                      conflictReason
+                      ? "conflict"
+                      : "empty"
                     : cell.state === "attached"
                       ? "attached"
-                      : cell.lane === "purchased_here"
-                        ? "purchased"
-                        : "trade";
+                      : cell.state === "purchase_evidence"
+                        ? "evidence"
+                        : cell.lane === "purchased_here"
+                          ? "purchased"
+                          : "trade";
                 // An optimistic toggle-off drops straight to empty rather than
                 // back to its ghost: the suggestion that produced the ghost is
                 // recomputed server-side, so guessing it here would flicker.
@@ -527,6 +625,7 @@ function MatrixTable({
                     state={state}
                     purchaseCost={cell?.projectPurchaseCost ?? 0}
                     title={`${row.productName} on ${column.projectName}`}
+                    conflictReason={conflictReason}
                     onToggle={() =>
                       onToggle(
                         column.projectId,
