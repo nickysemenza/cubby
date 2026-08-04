@@ -34,7 +34,7 @@ test("tool matrix keeps angled project headers pinned below the nav", async ({
   await expect(table).toBeVisible({ timeout: 15000 });
   const projectLinks = table.locator("thead").getByRole("link");
   await expect(projectLinks).toHaveCount(2);
-  await expect(projectLinks.first()).toHaveCSS("rotate", "-55deg");
+  await expect(projectLinks.first()).toHaveCSS("rotate", "-60deg");
 
   const toolRow = table.getByRole("row").filter({
     has: page.getByRole("link", { name: "Matrix track saw", exact: true }),
