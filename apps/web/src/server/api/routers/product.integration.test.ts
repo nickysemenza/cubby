@@ -216,4 +216,67 @@ describe("product.list quantity ledger", () => {
     const withUnknowns = await list({ unknownQuantityLinesFilter: "has" });
     expect(withUnknowns.items.map((row) => row.id)).toEqual([mismatched.id]);
   });
+
+  /**
+   * A product stocked in two different units has no meaningful on-hand total,
+   * so the Variance cell renders `—`. The filter and the sort have to agree
+   * with that: pulling such a product into "Shelf disagrees" — or ordering by
+   * its position — would be deciding on a number the user is never shown, and
+   * `each` + `can` is not a quantity.
+   */
+  it("leaves mixed-unit products out of both variance filters", async () => {
+    const shelfA = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Mixed unit shelf A" }),
+      ctx.actor,
+    );
+    const shelfB = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Mixed unit shelf B" }),
+      ctx.actor,
+    );
+    const mixed = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Mixed Unit Sealant" }),
+      ctx.actor,
+    );
+
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: mixed.entityId,
+        locationId: shelfA.entityId,
+        amount: { value: 2, unit: "each" },
+      },
+      ctx.actor,
+    );
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: mixed.entityId,
+        locationId: shelfB.entityId,
+        amount: { value: 3, unit: "can" },
+      },
+      ctx.actor,
+    );
+    await seedLine({
+      name: "sealant",
+      cost: 12,
+      productId: mixed.id,
+      productQuantity: 2,
+    });
+
+    const all = await list();
+    const row = all.items.find((item) => item.id === mixed.id);
+    // The render's contract: no total, so no variance.
+    expect(row?.onHandUnits).toBeNull();
+    expect(row?.quantityVariance).toBeNull();
+
+    // 2 each + 3 can would sum to 5 against an expected 2 — a "mismatch" that
+    // only exists if you add apples to oranges.
+    const disagreeing = await list({ quantityVarianceFilter: "mismatched" });
+    expect(disagreeing.items.map((item) => item.id)).not.toContain(mixed.id);
+    const agreeingOnly = await list({ quantityVarianceFilter: "matched" });
+    expect(agreeingOnly.items.map((item) => item.id)).not.toContain(mixed.id);
+  });
 });

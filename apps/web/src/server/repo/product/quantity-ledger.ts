@@ -92,17 +92,37 @@ export const expectedQuantitySql = (productAlias = '"product"') =>
        AND eq_e."productQuantity" IS NOT NULL)`;
 
 /**
- * Live units on shelves, summed across a Product's inventory entries.
+ * Live units on shelves — NULL wherever `deriveOnHandUnits` in mappers.ts
+ * renders `—`, so nothing can be filtered or ordered by a number the cell never
+ * shows. Two predicates carry that, and both mirror the render exactly:
  *
- * The join to `Location` is not decoration: `relations.product.list` loads live
- * entries and the mapper then drops any whose *location* is soft-deleted, so
- * without the same predicate here the filter would decide "mismatched" using a
- * number the column never renders. `InventoryEntry.locationId` is
- * `must-target-live` and production has zero violations today — which is
- * exactly why the divergence would go unnoticed until it didn't.
+ *  - **The `Location` join.** `relations.product.list` loads live entries and
+ *    the mapper drops any whose *location* is soft-deleted.
+ *    `InventoryEntry.locationId` is `must-target-live` and production has zero
+ *    violations today — exactly why the divergence would go unnoticed.
+ *
+ *  - **The mixed-unit guard.** Summing `each` against `can` produces a number
+ *    that means nothing, so the mapper returns null rather than adding them;
+ *    without the same rule here a mixed-unit product could be pulled in by
+ *    "Shelf disagrees" on a meaningless sum while its Variance cell read `—`.
+ *    Live inventory is essentially all `each`, which again is what would have
+ *    kept this quiet.
+ *
+ * NULL propagates the way the render does: through the subtraction in
+ * {@link quantityVarianceSql} (so the sort puts these last, `nulls last`), and
+ * through both `<>` and `=` in the variance filter — a mixed-unit product
+ * matches neither "mismatched" nor "matched", which is the honest answer.
+ *
+ * The zero-entry case returns NULL for the same reason (the mapper does too),
+ * though the filters also gate on `productIdsWithLiveInventory` and never see
+ * it.
  */
 const onHandUnitsSql = (productAlias = '"product"') =>
-  `(SELECT COALESCE(sum((ohu_i."amount"->>'value')::numeric), 0)::double precision
+  `(SELECT CASE
+             WHEN count(*) = 0 THEN NULL
+             WHEN count(DISTINCT ohu_i."amount"->>'unit') > 1 THEN NULL
+             ELSE COALESCE(sum((ohu_i."amount"->>'value')::numeric), 0)
+           END::double precision
       FROM "InventoryEntry" ohu_i
       JOIN "Location" ohu_l
         ON ohu_l."id" = ohu_i."locationId" AND ohu_l."deletedAt" IS NULL
@@ -141,9 +161,17 @@ export const expectedQuantityFilterSql = (productId: AnyColumn) =>
           AND eq_e."future" = false
           AND eq_e."productQuantity" IS NOT NULL)`;
 
-/** Same predicates as {@link onHandUnitsSql}, including the live-Location join. */
+/**
+ * Same predicates as {@link onHandUnitsSql} — the live-Location join AND the
+ * mixed-unit/zero-entry NULLs. Keep the two in step; they are the filter and
+ * the sort halves of one rule.
+ */
 export const onHandUnitsFilterSql = (productId: AnyColumn) =>
-  sql`(SELECT COALESCE(sum((ohu_i."amount"->>'value')::numeric), 0)::double precision
+  sql`(SELECT CASE
+                WHEN count(*) = 0 THEN NULL
+                WHEN count(DISTINCT ohu_i."amount"->>'unit') > 1 THEN NULL
+                ELSE COALESCE(sum((ohu_i."amount"->>'value')::numeric), 0)
+              END::double precision
          FROM "InventoryEntry" ohu_i
          JOIN "Location" ohu_l
            ON ohu_l."id" = ohu_i."locationId" AND ohu_l."deletedAt" IS NULL
