@@ -147,8 +147,23 @@ export const isSyntheticOrderId = (orderId: string): boolean =>
  * `canonicalExternalIdUrl`, which derives an Amazon product link from its ASIN.
  *
  * Null whenever the link can't be trusted: no template, no order id, a
- * synthetic order id, or a template missing the `{orderId}` token (a
- * half-typed value shouldn't silently link every purchase to the same page).
+ * synthetic order id, a template missing the `{orderId}` token (a half-typed
+ * value shouldn't silently link every purchase to the same page), or a result
+ * that isn't an absolute http(s) URL.
+ *
+ * That last check is load-bearing in two directions, because `orderUrlTemplate`
+ * is unvalidated free text a human pastes into the vendor page or writes over
+ * MCP, while the derived `orderUrl` is `z.url()` inside `strictOutput`:
+ *
+ * - A scheme-less paste (`homedepot.com/orders?orderID={orderId}` — the natural
+ *   thing to copy out of a browser) yields a string `z.url()` REJECTS, which
+ *   would throw during output validation and 500 every `purchase.list` /
+ *   `expense.list` / `problems.getFast` read containing that vendor, not merely
+ *   drop the one link.
+ * - `z.url()` ACCEPTS `javascript:alert(1)`, so validity alone is not enough:
+ *   the result is rendered into an `href`, and a non-http(s) scheme there is a
+ *   script-execution vector. Hence the explicit protocol allowlist rather than
+ *   a bare `URL.canParse`.
  */
 export const purchaseOrderUrl = (value: {
   orderUrlTemplate?: string | null;
@@ -159,5 +174,9 @@ export const purchaseOrderUrl = (value: {
   if (!template || !orderId) return null;
   if (!template.includes(ORDER_ID_TOKEN)) return null;
   if (isSyntheticOrderId(orderId)) return null;
-  return template.replaceAll(ORDER_ID_TOKEN, encodeURIComponent(orderId));
+
+  const url = template.replaceAll(ORDER_ID_TOKEN, encodeURIComponent(orderId));
+  if (!URL.canParse(url)) return null;
+  const { protocol } = new URL(url);
+  return protocol === "http:" || protocol === "https:" ? url : null;
 };

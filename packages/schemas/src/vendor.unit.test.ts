@@ -91,6 +91,48 @@ describe("purchaseOrderUrl", () => {
     ).toBe("https://www.ebay.com/mesh/ord/details?orderid=C02791%2F2");
   });
 
+  // `orderUrlTemplate` is unvalidated free text but `orderUrl` is `z.url()`
+  // inside `strictOutput`. A scheme-less paste — the natural thing to copy out
+  // of a browser — would otherwise produce a string zod rejects, throwing
+  // during output validation and 500-ing every read containing that vendor
+  // rather than just dropping the link.
+  it("refuses a template that isn't an absolute URL", () => {
+    for (const template of [
+      "homedepot.com/myaccount/order-details?orderNumber={orderId}",
+      "www.amazon.com/gp/your-account/order-details?orderID={orderId}",
+      "/orders/{orderId}",
+      "{orderId}",
+    ]) {
+      expect(
+        purchaseOrderUrl({ orderUrlTemplate: template, orderId: "AB12" }),
+      ).toBeNull();
+    }
+  });
+
+  // `z.url()` ACCEPTS `javascript:alert(1)`, so schema validity alone wouldn't
+  // catch this — and the result goes straight into an `href`.
+  it("refuses non-http(s) schemes", () => {
+    for (const template of [
+      "javascript:alert('{orderId}')",
+      "data:text/html,{orderId}",
+      "file:///etc/{orderId}",
+      "mailto:orders@x.test?subject={orderId}",
+    ]) {
+      expect(
+        purchaseOrderUrl({ orderUrlTemplate: template, orderId: "AB12" }),
+      ).toBeNull();
+    }
+  });
+
+  it("allows plain http as well as https", () => {
+    expect(
+      purchaseOrderUrl({
+        orderUrlTemplate: "http://intranet.test/orders/{orderId}",
+        orderId: "AB12",
+      }),
+    ).toBe("http://intranet.test/orders/AB12");
+  });
+
   it("substitutes every occurrence of the token", () => {
     expect(
       purchaseOrderUrl({
