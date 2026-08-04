@@ -377,65 +377,96 @@ for (const file of serverSources()) {
 
   // --- raw template-literal EXISTS form (tagged sql`` or plain) ---
   if (text.includes("EXISTS")) {
-    const seen = new Set(); // dedupe: overlapping literals can revisit a table+alias
+    const seen = new Set(); // dedupe safety net; occurrences are non-overlapping by construction
+    const existsPattern = /\b(NOT\s+)?EXISTS\s*\(/g;
     for (const [rangeStart, rangeEnd] of allTemplateRanges(text)) {
       const literal = text.slice(rangeStart, rangeEnd);
 
-      // Anchor on the FIRST EXISTS in this literal and scan from there to the
-      // literal's end — not a balanced-paren argument. Several raw-SQL sites
-      // (data-quality.ts's purchaseGapRaw/purchaseProductGapRaw) assemble one
-      // EXISTS(...) by concatenating multiple template literals at runtime
-      // (`` `${base} ${condition} AND ${exceptionAbsent})` ``), so the "(" this
-      // literal opens is closed in a DIFFERENT literal — a balanced scan would
-      // never find the guard. A table/alias's guard always stays textually
-      // alongside its own reference within one literal even when the paren
-      // doesn't close there, so this still can't wander into an unrelated,
-      // earlier part of the same literal.
-      const first = /\bEXISTS\s*\(/.exec(literal);
-      if (!first) continue;
-      const existsIndex = rangeStart + first.index;
-      if (hasOptOut(existsIndex)) continue;
-      const kind = /\bNOT\s+$/.test(
-        text.slice(Math.max(0, existsIndex - 8), existsIndex),
-      )
-        ? "NOT EXISTS"
-        : "EXISTS";
-      const body = text.slice(existsIndex, rangeEnd);
+      // Find every EXISTS/NOT EXISTS in this literal — not just the first —
+      // and resolve each independently. Two sibling subqueries commonly
+      // reuse the same alias (`EXISTS (... ie ...) OR EXISTS (... ie
+      // ...)`), so a guard belonging to one must never satisfy the other.
+      existsPattern.lastIndex = 0;
+      const occurrences = [...literal.matchAll(existsPattern)];
 
-      const refs = [];
-      tableRefQuoted.lastIndex = 0;
-      let ref;
-      while ((ref = tableRefQuoted.exec(body))) {
-        const [, sqlName, rawAlias] = ref;
-        if (!sqlNameToVar.has(sqlName)) continue;
-        const alias = cleanAlias(rawAlias);
-        refs.push({ table: sqlName, alias: alias ?? sqlName, aliasIsBare: Boolean(alias) });
-      }
-      tableRefInterp.lastIndex = 0;
-      while ((ref = tableRefInterp.exec(body))) {
-        const [, varName, rawAlias] = ref;
-        if (!varNames.has(varName)) continue;
-        const alias = cleanAlias(rawAlias);
-        const sqlName = varToSqlName.get(varName);
-        refs.push({ table: sqlName, alias: alias ?? sqlName, aliasIsBare: Boolean(alias) });
-      }
+      for (let idx = 0; idx < occurrences.length; idx++) {
+        const occ = occurrences[idx];
+        const existsIndex = rangeStart + occ.index;
+        if (hasOptOut(existsIndex)) continue;
+        const kind = occ[1] ? "NOT EXISTS" : "EXISTS";
 
-      for (const { table, alias, aliasIsBare } of refs) {
-        const guard = aliasIsBare
-          ? new RegExp(`\\b${alias}\\s*\\.\\s*"deletedAt"\\s+IS\\s+NULL`)
-          : new RegExp(`"${alias}"\\s*\\.\\s*"deletedAt"\\s+IS\\s+NULL`);
-        if (guard.test(body)) continue;
+        // Prefer the balanced-paren argument. A genuine balance is trustworthy
+        // on its own (it's the same paren-matching that correctly handles a
+        // NESTED EXISTS inside this one's WHERE clause, whose own close comes
+        // before the outer's) — no extra bound needed once it succeeds.
+        //
+        // Only fall back — to "this occurrence up to the START of the NEXT
+        // occurrence in this literal, or the literal's end for the last one" —
+        // when the parens never close within this literal at all: several
+        // raw-SQL sites (data-quality.ts's purchaseGapRaw/
+        // purchaseProductGapRaw/activeExceptionRaw) assemble one EXISTS(...)
+        // by concatenating several SEPARATE template literals at runtime
+        // (`` `${base} ${condition} AND ${exceptionAbsent})` ``), so the "("
+        // this literal opens is closed in a DIFFERENT literal — no balanced
+        // scan of this literal alone can ever find it. The next-occurrence
+        // bound keeps that fallback from reading into a sibling subquery's
+        // own (properly closed) guard. Do not collapse this to one strategy
+        // for the whole literal: that either loses the reach those sites
+        // need (tagged-only / balanced-only) or loses precision for every
+        // self-contained EXISTS (whole-literal / first-occurrence-only,
+        // which lets one occurrence's guard satisfy a sibling's — see #637
+        // review history).
+        const localOpen = occ.index + occ[0].length - 1;
+        const span = balancedSlice(literal, localOpen);
+        const nextStart =
+          idx + 1 < occurrences.length ? occurrences[idx + 1].index : literal.length;
+        const body = span
+          ? literal.slice(span[0], span[1])
+          : literal.slice(occ.index, nextStart);
 
-        const line = lineOf(existsIndex);
-        const key = `${abs}:${line}:${table}:${alias}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
+        const refs = [];
+        tableRefQuoted.lastIndex = 0;
+        let ref;
+        while ((ref = tableRefQuoted.exec(body))) {
+          const [, sqlName, rawAlias] = ref;
+          if (!sqlNameToVar.has(sqlName)) continue;
+          const alias = cleanAlias(rawAlias);
+          refs.push({
+            table: sqlName,
+            alias: alias ?? sqlName,
+            aliasIsBare: Boolean(alias),
+          });
+        }
+        tableRefInterp.lastIndex = 0;
+        while ((ref = tableRefInterp.exec(body))) {
+          const [, varName, rawAlias] = ref;
+          if (!varNames.has(varName)) continue;
+          const alias = cleanAlias(rawAlias);
+          const sqlName = varToSqlName.get(varName);
+          refs.push({
+            table: sqlName,
+            alias: alias ?? sqlName,
+            aliasIsBare: Boolean(alias),
+          });
+        }
 
-        violations.push({
-          file: relative(repoRoot, abs),
-          line,
-          detail: `raw sql ${kind}(… FROM/JOIN "${table}" ${aliasIsBare ? alias : "(unaliased)"} … — missing ${aliasIsBare ? alias : `"${table}"`}."deletedAt" IS NULL)`,
-        });
+        for (const { table, alias, aliasIsBare } of refs) {
+          const guard = aliasIsBare
+            ? new RegExp(`\\b${alias}\\s*\\.\\s*"deletedAt"\\s+IS\\s+NULL`)
+            : new RegExp(`"${alias}"\\s*\\.\\s*"deletedAt"\\s+IS\\s+NULL`);
+          if (guard.test(body)) continue;
+
+          const line = lineOf(existsIndex);
+          const key = `${abs}:${existsIndex}:${table}:${alias}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+
+          violations.push({
+            file: relative(repoRoot, abs),
+            line,
+            detail: `raw sql ${kind}(… FROM/JOIN "${table}" ${aliasIsBare ? alias : "(unaliased)"} … — missing ${aliasIsBare ? alias : `"${table}"`}."deletedAt" IS NULL)`,
+          });
+        }
       }
     }
   }
