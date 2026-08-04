@@ -1,24 +1,18 @@
 import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import type { PreviewDeleteEntity } from "@cubby/schemas/entity-integrity";
 import type { QueryKey } from "@tanstack/react-query";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Trash } from "lucide-react";
 import { type ReactElement, useCallback, useMemo, useState } from "react";
-import { toast } from "sonner";
 import {
   OperationImpact,
   useOperationPreview,
 } from "~/app/_components/impact/operation-impact";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Button } from "~/components/ui/button";
-import { useTRPC } from "~/integrations/trpc/react";
-import {
-  makeBatchStatusFetcher,
-  watchBatchesAndInvalidate,
-} from "~/lib/background-batch-polling";
-import { invalidateTRPCQueries } from "~/lib/query-keys";
+import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+import { type MutationOptionsFn, useActionMutation } from "./useActionMutation";
 
 const emptySideEffects: MutationSideEffects = { backgroundBatches: [] };
 
@@ -80,8 +74,6 @@ export function useEntityDelete({
   redirectTo,
   description,
 }: UseEntityDeleteOptions): UseEntityDeleteReturn {
-  const queryClient = useQueryClient();
-  const api = useTRPC();
   const navigate = useNavigate();
   const [showDialog, setShowDialog] = useState(false);
 
@@ -93,33 +85,27 @@ export function useEntityDelete({
   );
   const preview = useOperationPreview(previewInput, showDialog);
 
-  const deleteMutation = useMutation(
-    mutationOptions({
-      onSuccess: (data) => {
-        toast.success(
-          savedWithBackgroundWork(
-            data.sideEffects ?? emptySideEffects,
-            `${entityLabel} deleted`,
-          ),
-        );
-        invalidateTRPCQueries(queryClient, invalidateKeys);
-        // Re-invalidate once queued background work (e.g. location valuation)
-        // drains so the list reflects recomputed values without a reload.
-        void watchBatchesAndInvalidate({
-          queryClient,
-          result: data,
-          invalidateKeys,
-          fetchBatchStatus: makeBatchStatusFetcher(queryClient, api),
-        });
-        void navigate({ to: redirectTo });
-      },
-      onError: (err) => {
-        toast.error(
-          err.message || `Failed to delete ${entityLabel.toLowerCase()}`,
-        );
-      },
-    }) as Parameters<typeof useMutation>[0],
-  );
+  // `mutationOptions`'s narrower callback shape isn't literally the
+  // `MutationOptionsFn` signature `useActionMutation` is generic over (its
+  // callbacks carry the delete-specific `{ sideEffects }` result), but it's
+  // the same tRPC `*.delete.mutationOptions` factory shape every call site
+  // passes — invalidation, background-batch re-invalidation, and the error
+  // toast all now come from `useActionMutation` itself.
+  const deleteMutation = useActionMutation({
+    mutationFn: mutationOptions as unknown as MutationOptionsFn,
+    invalidateKeys,
+    success: (data) =>
+      savedWithBackgroundWork(
+        (data as { sideEffects?: MutationSideEffects }).sideEffects ??
+          emptySideEffects,
+        `${entityLabel} deleted`,
+      ),
+    onSuccess: () => {
+      void navigate({ to: redirectTo });
+    },
+    error: (err) =>
+      getErrorMessage(err) || `Failed to delete ${entityLabel.toLowerCase()}`,
+  });
 
   const openDeleteDialog = useCallback(() => {
     setShowDialog(true);
