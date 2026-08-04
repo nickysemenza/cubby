@@ -44,7 +44,7 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 - Ingredients can be other recipes (composition)
 - Side-by-side recipe comparison
 - Cost rollups via product unit mappings
-- Prep-sheet, nested (spec), and ingredient × component matrix views, plus a print/export route
+- Prep-sheet, nested (spec), ingredient × component matrix, and AI-assembled step-flow views, plus a print/export route
 - Client-side scaling (multiplier / target weight / anchor ingredient)
 
 **Cookbooks**
@@ -79,10 +79,19 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 - Household projects, tasks, and expenses (the spend ledger) — migrated from Notion into first-class entities
 - Vendor roster and per-transaction `Purchase` records: order id, purchase date, stated total, and invoice PDF, with split/link/merge operations over the Expenses
 - Typed Expense receipt roles (`principal`, tax, shipping, discount, fee, tip, other adjustment) that keep all money in `SUM(Expense.cost)` while excluding ancillary rows from merchandise/category analytics
+- `ProjectToolUsage` — a durable, deliberately coarse edge recording that a reusable tool or software Product was used on a project, for tool lifetime cost / cost-per-project-use rollups
 - Blocked-by dependency edges between projects and between tasks
 - Dashboard with overview/charts/data/gallery views (spending, timelines, task heatmaps, dependency graph)
 - Detail pages with full inline editing, markdown notes, and image galleries
 - First-class inline links/hovercards, global + semantic search, full MCP CRUD
+
+**Financial accounts & transactions**
+- `FinancialAccount ──< FinancialTransaction` — a settlement evidence layer separate from spend: statement activity (pending charges, split tender, installments, refunds), with an optional link from a Transaction to the Purchase it settles
+- Never changes spend — `Expense.cost` remains the sole spend source; reconciliation compares linked non-void transactions against live Expense lines as `unknown` / `pending` / `match` / `mismatch`
+- Client-parsed Monarch statement preview → selective creation, never a CSV upload path
+
+**Wishlist**
+- A simple wanted-items list (name, notes, optional price, acquired toggle) for tracking things not yet owned, independent of inventory or projects
 
 **Analytics**
 - Donut, treemap, sunburst, and network visualizations across products, inventory, and ingredients
@@ -133,6 +142,8 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 | [packages/schemas](packages/schemas) | `@cubby/schemas` | Cross-app Zod schemas | `web` |
 | [packages/shared](packages/shared) | `@cubby/shared` | Shared utilities, including guarded external fetches | `web`, `upc-lookup` |
 | [packages/worker-tracing](packages/worker-tracing) | `@cubby/worker-tracing` | Cloudflare Worker tracing/Sentry bootstrap | all three Workers |
+| [packages/design-tokens](packages/design-tokens) | `@cubby/design-tokens` | Shared brand CSS (palette, type stacks) | `web`, `mcp-apps` |
+| [apps/mcp-apps](apps/mcp-apps) | `@cubby/mcp-apps` | Interactive MCP-hosted UIs — its own build target, inlined into `web`'s server rather than deployed on its own; see [MCP Apps](#mcp-apps-interactive-uis-in-the-conversation) | `web` (inlined at build) |
 | [recipebridge/](recipebridge) | (Rust source) | Source for the ingredient-parser WASM shim | Built into `packages/wasm` |
 
 ## 🏗️ Architecture
@@ -507,11 +518,14 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). The can
 
 ### Recently shipped
 
+- **Tool wishlist** — a `Wish` entity (`WSH-`) for tracking wanted-but-not-yet-owned items, independent of inventory or projects.
+- **Manufacturer spelling snapped on create** — `create_product`/`create_products` now resolve `manufacturer` to the established spelling already used among live Products, closing the drift that let variant spellings accumulate; `update_product` deliberately does not auto-snap.
+- **Financial accounts & transactions** — a settlement evidence layer, `FinancialAccount ──< FinancialTransaction`, separate from spend: statement activity (pending charges, split tender, installments, refunds) with an optional link to the Purchase it settles. `Expense.cost` remains the sole spend source; reconciliation compares linked transactions against Expense lines as `unknown`/`pending`/`match`/`mismatch`. Client-parsed Monarch statement preview drives selective, user-approved creation.
+- **Typed Expense line roles** — `Expense.lineKind` (`principal`, tax, shipping, discount, fee, tip, other adjustment) distinguishes merchandise/services from productless receipt adjustments, all still summed into `SUM(Expense.cost)`, while excluding adjustment rows from merchandise/category analytics.
+- **`ProjectToolUsage`** — a durable, deliberately coarse edge recording that a reusable tool or software Product was used on a project, feeding tool-lifetime-cost and cost-per-project-use rollups without double-counting the original Expense.
 - **Vendor / Purchase / Expense split** — the flat spend ledger became `Vendor ──< Purchase ──< Expense`. The old ledger row is now **`Expense`** (routes `/expenses`, MCP `*_expense(s)` tools); **`Purchase`** is a vendor order/receipt event holding its order id, vendor date, literal never-summed `statedTotal`, and invoice PDF; **`Vendor`** is a real roster. Create/update inputs still take `vendor` (a name) and `orderId` and resolve both on first sight. New operations: `linkExpensesToPurchase`, `splitExpense`, `mergePurchases`.
 - **Project tracker migration + maturation** — the household projects/tasks/expenses databases moved from Notion into first-class cubby entities (DB tables, full CRUD UI at `/projects` `/tasks` `/expenses`, MCP tools, dashboard + charts). Follow-ups consolidated the entities onto shared helpers and the entity manifest, added detail pages with full editing UI, wired all three into global search + semantic embeddings, and made them first-class in inline links/hovercards (with mobile dialogs). The one-time import script was removed post-cutover (recoverable from git history).
 - **Unified planning calendar** — meals, task ranges, planned/actual expenses, and project spans share a filterable month view with a day drawer, quick-add flows, and selective drag-to-reschedule. The Meals calendar tab reuses the same implementation.
-- **Meal planning v1** — plan recipes onto a calendar (month + table views), scale each per meal, and a display-only shopping list (aggregated need vs. on-hand inventory, with a per-meal breakdown). Cook-and-consume inventory deduction is **out of scope for good**, not deferred — see [Tenets](#tenets).
-- **Location arrange** — drag-drop reparenting of locations and items across a tree view and a Miller-column board, with an Unknown dock for unplaced items.
 
 ### Current and future work
 

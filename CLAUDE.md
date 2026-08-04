@@ -1,6 +1,6 @@
 [README.md](README.md) is the canonical source of truth for the project — architecture, monorepo layout, deploy targets, commands, entities, environment, and the roadmap. Read it first. This file contains only rules and anti-patterns for coding agents. When you need context that isn't a rule, go to README rather than embedding the answer here.
 
-The **[Tenets](README.md#tenets)** there are binding on design proposals: inventory never auto-decrements (no cook-and-consume), `fdc_id` is product-only (nutrition goes `ingredient → product → fdc_id`), rare interactive work stays off the background queue, and all money lives on `Expense` (`purchase.statedTotal` is never summed into spend). Don't propose a feature that contradicts one — say it's out of scope and why.
+The **[Tenets](README.md#tenets)** there are binding on design proposals: inventory never auto-decrements (no cook-and-consume), `fdc_id` is product-only (nutrition goes `ingredient → product → fdc_id`), rare interactive work stays off the background queue, all money lives on `Expense` (`purchase.statedTotal` is never summed into spend), and one household of trusted users (no multi-user coordination, no restore/undo, no reservations/locking). Don't propose a feature that contradicts one — say it's out of scope and why.
 
 ## Agent workflow
 
@@ -140,7 +140,7 @@ Don't brand shortcode columns or `Image` ids — those add insert-side friction 
 
 ## Shortcodes are the public id; uuids are private
 
-A uuid PK is an implementation detail of the repo layer. The **shortcode** (`PRD-4K7M`) is what URLs, QR labels, and MCP expose. See [README](README.md#public-identifiers--shortcodes) for the fourteen-prefix registry.
+A uuid PK is an implementation detail of the repo layer. The **shortcode** (`PRD-4K7M`) is what URLs, QR labels, and MCP expose. See [README](README.md#public-identifiers--shortcodes) for the fifteen-prefix registry.
 
 - **A uuid must never reach a URL or an MCP payload.** Detail routes are `/products/$shortcode`; guard-enforced by `uuid-entity-href` in `scripts/check-conventions.mjs`, which also catches server-built template hrefs the router's typed params can't see.
 - **Resolve in exactly one place** — `apps/web/src/server/repo/shortcode-resolver.ts`. Don't add a `findXByShortcode`; three of those existed and were deleted. `resolveShortcode` answers *"what does this code name"* (soft-deleted rows included, so a scan of a dead label can say so); `resolveLiveShortcode(db, code, entity)` answers *"can I still open it"* and pins the expected entity, so a `LOC-` code handed to a product lookup returns null instead of leaking a uuid.

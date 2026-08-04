@@ -1,9 +1,9 @@
 export const meta = {
   name: 'repo-audit',
-  description: 'Full-repo audit: 11 scoped lanes (opus/sonnet/haiku), adversarial verification, opus synthesis',
+  description: 'Full-repo audit: 12 scoped lanes (opus/sonnet/haiku), adversarial verification, opus synthesis',
   whenToUse: 'Full-repo multi-agent audit; run quarterly or after large refactors',
   phases: [
-    { title: 'Audit', detail: '11 parallel domain auditors' },
+    { title: 'Audit', detail: '12 parallel domain auditors' },
     { title: 'Verify', detail: 'adversarial refutation per finding' },
     { title: 'Synthesize', detail: 'opus ranks + writes report', model: 'opus' },
   ],
@@ -174,7 +174,7 @@ Look for: floating promises (unawaited async without ctx.waitUntil — silently 
 ]
 
 phase('Audit')
-log(`Fanning out ${LANES.length} audit lanes (4 opus, 4 sonnet, 3 haiku)`)
+log(`Fanning out ${LANES.length} audit lanes (4 opus, 5 sonnet, 3 haiku)`)
 
 const verifyFinding = (f, laneKey) =>
   agent(

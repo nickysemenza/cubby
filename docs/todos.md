@@ -28,8 +28,7 @@ needs multi-surface verification.
 | 1 | [Empty locations stall a recount](#inventory--recount-2026-07-audit-residue) | Breaks a core inventory-maintenance flow; bounded fix | S |
 | 2 | [Close the equivalences-report loop](#recipe-scaling--density-coverage-phase-2) | Turns an existing report into the data-repair path the costing model expects | M |
 | 3 | [Persist imported recipe times](#recipe--cookbook-ux-2026-07-audit) | Stops dropping already-extracted data and adds the best weeknight decision axis | M |
-| 4 | [Faster scanner lock-on](#mobile--pwa) | Improves the phone-first capture path; requires a real-iPhone acceptance pass | M |
-| 5 | [Add a recipe to an existing meal](#meal-planning-v2) | Prevents one day/slot from fragmenting into duplicate meals | S–M |
+| 4 | [Add a recipe to an existing meal](#meal-planning-v2) | Prevents one day/slot from fragmenting into duplicate meals | S–M |
 
 ### Next
 
@@ -55,8 +54,8 @@ the evidence required before promotion.
 
 - UPC duplicate collapsing, aggregate-range materiality, Sentry lazy-init,
   selection-control consolidation, and all three additional MCP Apps.
-- `ProjectTool`, `PurchaseLine`, `ExpenseProduct`, the service/product advisory,
-  and repeat-purchase ranking.
+- `PurchaseLine`, `ExpenseProduct`, the service/product advisory, and
+  repeat-purchase ranking.
 - Product external-id collisions are **already queryable** through
   `product.externalIdCollisions`; revisit a broader Problems surface only if an
   auto-minting import creates a persistent operator worklist.
@@ -155,9 +154,10 @@ decision value.
 - [ ] **Kitchen-mode persistence**: step check-off is `useState` in
   `RecipeInstructions` — lost on nav or scale change; no ingredient check-off in
   Read view; no timers derived from step text.
-- [ ] **Export "Read" format**: the print/export sheet offers prep/nested/matrix
-  (all spec-flavored) but no plain recipe-as-a-page format
-  (`RecipeMagazineView` would drop in); no multi-recipe/cookbook export.
+- [ ] **Export "Read" format**: the print/export sheet offers prep/nested/matrix/
+  flow (all spec- or diagram-flavored, the last an AI-assembled step flow chart)
+  but no plain recipe-as-a-page format (`RecipeMagazineView` would drop in); no
+  multi-recipe/cookbook export.
 - [ ] **Compare page picker**: "Add Another Recipe" navigates to `/recipes` and
   loses the selection; add an on-page picker.
 - [ ] **Notion importer hygiene**: `staleTime: 0` full-DB refetch on every
@@ -231,16 +231,6 @@ App-shell service worker, critical-bundle trimming, route skeletons, iOS
 camera-permission recovery, and the bundled ZXing scanner (`barcode-detector`, no
 runtime CDN) are all shipped. Target is iOS Safari only. Remaining:
 
-- [ ] **B1 — faster scanner lock-on**: detection currently runs `detector.detect(video)`
-  on the full frame every `requestAnimationFrame` and takes `results[0]`
-  (`useBarcodeScanner.ts`). Throttle to ~10–12 Hz, crop the central scan-box region to a
-  small offscreen canvas (must track the *displayed* reticle box, accounting for
-  `object-fit` on the `<video>`, or it decodes the wrong region), and pick the
-  most-central result when several are detected. Extract the ROI/throttle helper as a
-  pure function and unit-test it; verify lock-on feel manually on a real iPhone.
-- [ ] **B3 — continuous multi-add feedback**: a running tally + recently-scanned chip
-  list in `persistent-scanner.tsx`, so a grocery haul can be ripped through without
-  watching the form (the per-add success pulse already exists there).
 - [ ] **C3 — residual N+1 audit**: sweep products/recipes/inventory-detail for per-row
   query fans and batch them the way `getByLocationIds` did. Network panel should show a
   constant query count regardless of row count. Timeboxed. Flagship instance
@@ -301,7 +291,7 @@ it never writes it. Deferred:
   from the calendar mid-layout.
 - [ ] **Suggestions page follow-ups**: make cards actionable (link missing
   ingredients to their fix surface, "add the missing 2 to the shopping list");
-  reachable from home/inventory, not just the nav dropdown.
+  reachable from inventory, not just the nav dropdown (home already links to it).
 
 ### Rejected
 
@@ -347,13 +337,17 @@ The triage board, not this catalog order, sets priority.
   filter builder without changing the separate project-set filters.
 - [ ] **Tracker data gaps** (2026-07 audit): `task.completedAt` (velocity /
   "year in the house" + de-noises the stalled-project detector — `updatedAt`
-  resets on any edit); portfolio-level estimate
-  total + a forward committed-spend (next 30/60/90d) figure (per-project
-  `BudgetStrip` exists, the portfolio equivalent doesn't; the `credits` value
-  portfolio-analytics computes in SQL is dropped at the schema boundary); mobile
-  fallback for TaskBoard/Gantt (desktop column tracks render on phones today);
-  project-detail History section (manifest declares it, the hand-rolled page
-  drops it); activity-page `entityType` filter (API accepts it, no control).
+  resets on any edit); portfolio-level estimate total + a forward
+  committed-spend (next 30/60/90d) figure (per-project `BudgetStrip` exists,
+  the portfolio equivalent doesn't); mobile fallback for TaskBoard/Gantt
+  (desktop column tracks render on phones today).
+- [ ] **`buildProjectTree` is unwired** (2026-07 audit):
+  `apps/web/src/app/projects/project-tree.ts` (129 lines, plus its own unit
+  test) is imported by nothing but that test. The commit that added it
+  advertised an expandable WBS tree for the Projects Data tab; that tab still
+  renders flat lists, and the tree that actually shipped lives inside the
+  Gantt instead (`charts/gantt/gantt-model.ts`, a separate implementation).
+  Decide: wire it into Data, or delete it.
 - [ ] **`projectMaterial` BOM**: on top of the bridge — quantity + free-text unit,
   optional product resolution, durable-vs-consumable flag → **have / need / buy**
   per project via the availability engine, shopping list from shortfalls. No
@@ -475,10 +469,6 @@ Follow-ups the split itself generated (small, none blocking):
 
 Deferred phases — each purely additive on top of v1, with its promotion trigger:
 
-- [ ] **`ProjectTool`** (`projectId`, `productId`) → cost-per-use = net basis ÷ usage
-  count. **Trigger**: wanting a real cost-per-use number. Amortized tool cost is
-  informational ONLY and must never enter project actuals — the expense already sits
-  in its buying project's ledger (double-count guard). Depends on nothing else.
 - [ ] **`PurchaseLine`** (`purchaseId`, `name`, `sku?`, `quantity?`, `unitPrice?`,
   `expenseId?` soft-link) — was `ReceiptLine`. Optional **SKU-level** itemization,
   **pure annotation**: rollups only ever read `Expense`, lines need no product, and a
@@ -680,6 +670,30 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
   client budget hint if MCP standardizes one, otherwise keep the conservative
   server-owned byte budget. Invalid or filter/sort-incompatible cursors must fail
   explicitly rather than silently restarting from page one.
+- [ ] **Product merge doesn't exist** (2026-07 audit): no merge for Product at
+  any layer — no repo function, no router procedure, no MCP tool, and
+  `previewMergeInput` (`packages/schemas/src/entity-integrity.ts`) names only
+  ingredient/vendor/purchase. Merging two products by hand today is four manual
+  steps: clear the loser's UPC, transfer its externalIds/aliases, re-point its
+  inventory, then delete the loser and its now-duplicate stock row. Two
+  structural collisions any implementation must handle:
+  `ProductExternalId`'s one-per-`(source, kind)` unique index and
+  `InventoryEntry`'s partial unique index on `(productId, locationId)` — the
+  same branch-don't-blind-insert trap the receive flow already walks around
+  (see the purchase-import design notes above). Build as a shared merge core
+  with product as the fourth consumer alongside ingredient/vendor/purchase,
+  not a bespoke product-only implementation.
+- [ ] **TS re-derives Rust unit conversion** (2026-07 audit):
+  `_components/recipe/recipe-tree.ts`'s `MASS_TO_GRAMS` (14 entries —
+  mg/g/gram(s)/kg/kilogram(s)/oz/ounce(s)/lb/lbs/pound(s)) hand-copies the
+  mass-to-grams table `recipebridge/src/costing/engine.rs`'s
+  `sub_recipe_pairs` already owns, which the
+  [layering rule](../CLAUDE.md#where-logic-lives-layering) forbids — TS should
+  call WASM, not reimplement it. The two currently agree (factors verified
+  identical), so this is latent desync risk rather than a live bug today: e.g.
+  `"kgs"`, which upstream's `singular()` handles and the 14-entry TS table does
+  not. Fix by exposing the conversion through WASM rather than widening the TS
+  table.
 
 ### MCP Apps — further candidates
 
