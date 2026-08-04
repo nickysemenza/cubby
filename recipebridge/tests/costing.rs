@@ -224,7 +224,7 @@ fn calculates_totals_with_all_data_available() {
 
     assert_eq!(r.total_ingredients, 2);
     assert_close(r.price, 10.99, 0.005, "price"); // 5.99 + 5.00
-    assert_close(r.weight, 854.0, 0.05, "weight"); // rounds: ~454 + 400
+    assert_close(r.weight, 853.592, 0.05, "weight"); // 453.592 (1 lb) + 400
     assert!(r.missing_by_type.price.is_empty());
     assert!(r.missing_by_type.weight.is_empty());
     assert!(r.missing_by_type.nutrients.is_empty());
@@ -267,7 +267,7 @@ fn handles_partially_missing_data() {
 
     assert_eq!(r.total_ingredients, 2);
     assert_close(r.price, 5.99, 0.005, "price");
-    assert_close(r.weight, 454.0, 0.05, "weight");
+    assert_close(r.weight, 453.592, 0.05, "weight"); // 1 lb
     assert_eq!(r.missing_by_type.price, vec!["unknown spice"]);
     assert_eq!(r.missing_by_type.weight, vec!["unknown spice"]);
     assert_eq!(r.missing_by_type.nutrients, vec!["unknown spice"]);
