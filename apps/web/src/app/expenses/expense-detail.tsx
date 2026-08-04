@@ -1,6 +1,6 @@
 import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import type { CostType, ExpenseOut, Trade } from "@cubby/schemas/project";
-import { ExternalLink, Info, PackagePlus, Receipt, Split } from "lucide-react";
+import { Info, PackagePlus, Receipt, Split } from "lucide-react";
 import { type FC, useState } from "react";
 import {
   WithProductSearch,
@@ -8,6 +8,8 @@ import {
 } from "~/app/_components/combobox/with-search-hook";
 import { WithVendorSearch } from "~/app/_components/combobox/with-vendor-search";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { ExternalLinkText } from "~/app/_components/ExternalLink";
+import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { TradeBadge, tradeOptions } from "~/app/projects/shared";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { VendorCell } from "~/components/entity/vendor-cell";
@@ -245,20 +247,7 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
             });
           }}
           renderValue={(v) =>
-            v ? (
-              <a
-                href={v}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="flex items-center gap-1 hover:underline"
-              >
-                {v}
-                <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
-              </a>
-            ) : (
-              <NoneValue />
-            )
+            v ? <ExternalLinkText href={v} /> : <NoneValue />
           }
         />
       ),
@@ -329,7 +318,22 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
               data: { orderId },
             });
           }}
-          renderValue={(v) => v ?? <NoneValue />}
+          // Mono to match every other Order # surface — it's an opaque
+          // identifier, not prose — with the vendor's order page beside it.
+          renderValue={(v) =>
+            v ? (
+              <Row align="center" gap="xs">
+                <span className="font-mono">{v}</span>
+                <OrderIdLink
+                  orderUrl={expense.orderUrl}
+                  orderId={v}
+                  vendorName={expense.vendor}
+                />
+              </Row>
+            ) : (
+              <NoneValue />
+            )
+          }
         />
       ),
     },

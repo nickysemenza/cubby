@@ -11,7 +11,9 @@ import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import RTable from "~/app/_components/data-table/Table";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
+import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { TableLink } from "~/app/_components/table/TableLink";
+import { Row } from "~/components/layout";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -71,7 +73,23 @@ export function VendorPurchasesTable({ vendor }: { vendor: VendorOut }) {
       }),
       createTextColumn(helper, "orderId", {
         header: "Order #",
-        className: "w-32 font-mono",
+        className: "w-40 font-mono",
+        // Pencil trigger so the link icon beside the id is clickable without
+        // the surrounding cell swallowing the click into the inline editor.
+        trigger: "pencil",
+        renderValue: (v, purchase) =>
+          v ? (
+            <Row align="center" gap="xs">
+              <span className="min-w-0 truncate">{v}</span>
+              <OrderIdLink
+                orderUrl={purchase.orderUrl}
+                orderId={v}
+                vendorName={purchase.vendorName}
+              />
+            </Row>
+          ) : (
+            <NoneValue />
+          ),
         editable: {
           onSave: async (orderId, purchase) => {
             await update.mutateAsync({ id: purchase.id, data: { orderId } });

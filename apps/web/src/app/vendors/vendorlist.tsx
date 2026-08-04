@@ -1,12 +1,12 @@
 import type { VendorFilters, VendorOut } from "@cubby/schemas/vendor";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ExternalLink } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 import {
   createCurrencyColumn,
   createPlainDateColumn,
 } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
+import { ExternalLinkText } from "~/app/_components/ExternalLink";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
@@ -75,18 +75,7 @@ export function VendorList() {
         cell: (info) => {
           const website = info.getValue();
           if (!website) return <NoneValue />;
-          return (
-            <a
-              href={website}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 truncate text-muted-foreground transition-colors hover:text-primary"
-            >
-              <span className="truncate">{website}</span>
-              <ExternalLink className="size-3 shrink-0" />
-            </a>
-          );
+          return <ExternalLinkText href={website} truncate />;
         },
       }),
       columnHelper.accessor((row) => row.purchaseCount, {

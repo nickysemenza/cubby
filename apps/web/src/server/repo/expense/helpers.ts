@@ -13,6 +13,7 @@ import {
   unsafeVendorShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ExpenseOut } from "@cubby/schemas/project";
+import { purchaseOrderUrl } from "@cubby/schemas/vendor";
 import { createAppError } from "~/server/errors/app-error";
 import {
   resolveLiveJoinName,
@@ -89,7 +90,12 @@ export type ExpenseRow = {
     date: string;
     vendorId: VendorId;
     deletedAt: Date | null;
-    vendor: { name: string; shortcode: string; deletedAt: Date | null } | null;
+    vendor: {
+      name: string;
+      shortcode: string;
+      orderUrlTemplate: string | null;
+      deletedAt: Date | null;
+    } | null;
   } | null;
 };
 
@@ -137,6 +143,16 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
         : null,
     vendor: purchaseRow ? resolveLiveJoinName(purchaseRow.vendor) : null,
     orderId: purchaseRow?.orderId ?? null,
+    // Derived, never stored: the vendor's own order page for this order. Gated
+    // on the vendor's liveness like `vendor` above — a soft-deleted vendor's
+    // template shouldn't keep producing links.
+    orderUrl:
+      purchaseRow?.vendor?.deletedAt === null
+        ? purchaseOrderUrl({
+            orderUrlTemplate: purchaseRow.vendor.orderUrlTemplate,
+            orderId: purchaseRow.orderId,
+          })
+        : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

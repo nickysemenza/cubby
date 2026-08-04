@@ -2,8 +2,9 @@ import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ArrowRightLeft, CheckCircle2, ExternalLink } from "lucide-react";
+import { ArrowRightLeft, CheckCircle2 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
+import { ExternalLinkIcon } from "~/app/_components/ExternalLink";
 import {
   expenseCostColumn,
   expenseCostTypeColumn,
@@ -299,18 +300,7 @@ export function ExpenseList() {
         cell: (info) => {
           const url = info.getValue();
           if (!url) return null;
-          return (
-            <a
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="text-muted-foreground transition-colors hover:text-primary"
-            >
-              <ExternalLink className="size-3.5" />
-              <span className="sr-only">Open link</span>
-            </a>
-          );
+          return <ExternalLinkIcon href={url} label="Open link" />;
         },
       }),
     ],

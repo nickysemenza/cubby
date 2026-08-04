@@ -11,6 +11,7 @@ import {
 import { type FC, useState } from "react";
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -133,8 +134,21 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
             });
           }}
           // Opaque identifier, not prose — mono so it reads exactly as stored.
+          // The link out to the vendor's order page is a separate icon beside
+          // the value, so clicking the id itself still opens the editor.
           renderValue={(v) =>
-            v ? <span className="font-mono">{v}</span> : <NoneValue />
+            v ? (
+              <Row align="center" gap="xs">
+                <span className="font-mono">{v}</span>
+                <OrderIdLink
+                  orderUrl={purchase.orderUrl}
+                  orderId={v}
+                  vendorName={purchase.vendorName}
+                />
+              </Row>
+            ) : (
+              <NoneValue />
+            )
           }
         />
       ),

@@ -496,6 +496,7 @@ describe("globalSearch: commercial and finance entities", () => {
       {
         name: "Finance Search Vendor",
         website: "https://finance-search-vendor.example",
+        orderUrlTemplate: null,
         notes: null,
       },
       ctx.actor,

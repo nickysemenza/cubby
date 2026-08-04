@@ -53,6 +53,7 @@ import {
   RECONCILIATION_TOLERANCE,
   reconcilePurchase,
 } from "@cubby/schemas/purchase";
+import { purchaseOrderUrl } from "@cubby/schemas/vendor";
 import {
   and,
   asc,
@@ -259,6 +260,15 @@ const purchaseVendorShortcode = correlated<string>(
   `(SELECT v."shortcode" FROM "Vendor" v WHERE v."id" = "Purchase"."vendorId")`,
 );
 
+// The vendor's order-page URL pattern, pulled alongside its name so `orderUrl`
+// can be derived without a second query. Gated on the vendor's liveness like
+// `purchaseVendorName` (not like the shortcode): a soft-deleted vendor's order
+// lookup is not an affordance worth offering.
+const purchaseVendorOrderUrlTemplate = correlated<string | null>(
+  `(SELECT v."orderUrlTemplate" FROM "Vendor" v
+     WHERE v."id" = "Purchase"."vendorId" AND v."deletedAt" IS NULL)`,
+);
+
 const purchaseColumns = {
   id: purchase.id,
   shortcode: purchase.shortcode,
@@ -271,6 +281,7 @@ const purchaseColumns = {
   updatedAt: purchase.updatedAt,
   vendorName: purchaseVendorName,
   vendorShortcode: purchaseVendorShortcode,
+  vendorOrderUrlTemplate: purchaseVendorOrderUrlTemplate,
   expenseCount: purchaseExpenseCount,
   unpricedExpenseCount: purchaseUnpricedExpenseCount,
   expenseTotal: purchaseExpenseTotal,
@@ -289,6 +300,7 @@ type PurchaseRow = {
   updatedAt: Date;
   vendorName: string | null;
   vendorShortcode: string;
+  vendorOrderUrlTemplate: string | null;
   expenseCount: number;
   unpricedExpenseCount: number;
   expenseTotal: number;
@@ -309,6 +321,10 @@ const dbPurchaseToAPI = (
   statedTotal: row.statedTotal,
   notes: row.notes,
   vendorName: row.vendorName,
+  orderUrl: purchaseOrderUrl({
+    orderUrlTemplate: row.vendorOrderUrlTemplate,
+    orderId: row.orderId,
+  }),
   expenseCount: Number(row.expenseCount),
   unpricedExpenseCount: Number(row.unpricedExpenseCount),
   expenseTotal: Number(row.expenseTotal),

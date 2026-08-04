@@ -25,12 +25,19 @@ import { presenceFilter } from "./pagination";
 const vendorFields = {
   name: z.string().min(1),
   website: z.string().nullable(),
+  orderUrlTemplate: z
+    .string()
+    .nullable()
+    .describe(
+      "URL pattern for this vendor's order-details page, with the literal token {orderId} standing in for a purchase's order id — e.g. \"https://www.amazon.com/gp/your-account/order-details?orderID={orderId}\". Null for vendors with no order lookup. The per-purchase link is derived from this at read time, never stored on the purchase.",
+    ),
   notes: z.string().nullable(),
 };
 
 const vendorCreateShape = {
   ...vendorFields,
   website: z.string().nullable().default(null),
+  orderUrlTemplate: z.string().nullable().default(null),
   notes: z.string().nullable().default(null),
 };
 
@@ -119,3 +126,57 @@ export const mergeVendorsInput = z.object({
   mergeIds: z.array(vendorShortcode).min(1),
 });
 export type MergeVendorsInput = z.infer<typeof mergeVendorsInput>;
+
+/** The token a `vendor.orderUrlTemplate` substitutes the order id into. */
+const ORDER_ID_TOKEN = "{orderId}";
+
+/**
+ * True for the synthetic keys Cubby's importers mint when a vendor issued no
+ * order number — `txn:2023-09-17/639/5201` for an in-store Home Depot receipt.
+ * These are Cubby's own identifiers, not the vendor's, so no template can
+ * resolve them: Home Depot's in-store lookup additionally wants a receipt
+ * number, register number, and transaction type that were never captured.
+ * Linking one would produce a dead link, which is worse than plain text.
+ */
+export const isSyntheticOrderId = (orderId: string): boolean =>
+  orderId.startsWith("txn:");
+
+/**
+ * A purchase's link out to the vendor's own order page, derived from the
+ * vendor's template rather than stored per purchase — the same shape as
+ * `canonicalExternalIdUrl`, which derives an Amazon product link from its ASIN.
+ *
+ * Null whenever the link can't be trusted: no template, no order id, a
+ * synthetic order id, a template missing the `{orderId}` token (a half-typed
+ * value shouldn't silently link every purchase to the same page), or a result
+ * that isn't an absolute http(s) URL.
+ *
+ * That last check is load-bearing in two directions, because `orderUrlTemplate`
+ * is unvalidated free text a human pastes into the vendor page or writes over
+ * MCP, while the derived `orderUrl` is `z.url()` inside `strictOutput`:
+ *
+ * - A scheme-less paste (`homedepot.com/orders?orderID={orderId}` — the natural
+ *   thing to copy out of a browser) yields a string `z.url()` REJECTS, which
+ *   would throw during output validation and 500 every `purchase.list` /
+ *   `expense.list` / `problems.getFast` read containing that vendor, not merely
+ *   drop the one link.
+ * - `z.url()` ACCEPTS `javascript:alert(1)`, so validity alone is not enough:
+ *   the result is rendered into an `href`, and a non-http(s) scheme there is a
+ *   script-execution vector. Hence the explicit protocol allowlist rather than
+ *   a bare `URL.canParse`.
+ */
+export const purchaseOrderUrl = (value: {
+  orderUrlTemplate?: string | null;
+  orderId?: string | null;
+}): string | null => {
+  const template = value.orderUrlTemplate?.trim();
+  const orderId = value.orderId?.trim();
+  if (!template || !orderId) return null;
+  if (!template.includes(ORDER_ID_TOKEN)) return null;
+  if (isSyntheticOrderId(orderId)) return null;
+
+  const url = template.replaceAll(ORDER_ID_TOKEN, encodeURIComponent(orderId));
+  if (!URL.canParse(url)) return null;
+  const { protocol } = new URL(url);
+  return protocol === "http:" || protocol === "https:" ? url : null;
+};

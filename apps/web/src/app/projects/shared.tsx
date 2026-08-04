@@ -26,7 +26,7 @@ import {
   type VisibilityState,
 } from "@tanstack/react-table";
 import { partition } from "es-toolkit";
-import { ExternalLink, ListFilter, ListTodo, ShoppingCart } from "lucide-react";
+import { ListFilter, ListTodo, ShoppingCart } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   type VendorName,
@@ -59,6 +59,7 @@ import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
 import RTable from "~/app/_components/data-table/Table";
 import { useBulkActions } from "~/app/_components/data-table/useBulkActions";
 import { useTableColumnVisibility } from "~/app/_components/data-table/useTableColumnVisibility";
+import { ExternalLinkIcon } from "~/app/_components/ExternalLink";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
@@ -68,6 +69,7 @@ import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useOptimisticDelete } from "~/app/_components/hooks/useOptimisticDelete";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
+import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { TableLink } from "~/app/_components/table/TableLink";
 import {
   ExpenseBulkActionDialogs,
@@ -982,7 +984,7 @@ export function expenseOrderIdColumn(
     mobile: opts?.mobile,
     filterConfig: manifestFilterConfig("expense", "orderId"),
     trigger: "pencil",
-    renderValue: (v) =>
+    renderValue: (v, expense) =>
       v ? (
         <>
           <span className="font-mono">{v}</span>
@@ -994,6 +996,11 @@ export function expenseOrderIdColumn(
           >
             <ListFilter className="size-3.5" />
           </Link>
+          <OrderIdLink
+            orderUrl={expense.orderUrl}
+            orderId={v}
+            vendorName={expense.vendor}
+          />
         </>
       ) : (
         <NoneValue />
@@ -1141,16 +1148,7 @@ export function ExpenseList({
         // the vendor link instead of the cell's inline editor.
         nameSuffix: (expense) =>
           expense.url ? (
-            <a
-              href={expense.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="text-muted-foreground transition-colors hover:text-primary"
-            >
-              <ExternalLink className="size-3.5" />
-              <span className="sr-only">Open vendor link</span>
-            </a>
+            <ExternalLinkIcon href={expense.url} label="Open vendor link" />
           ) : null,
       }),
       // The inline move-to-sub-project affordance — omitted on leaf projects

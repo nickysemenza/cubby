@@ -16,6 +16,7 @@ import { sumBy } from "es-toolkit";
 import { ListChecks } from "lucide-react";
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";
+import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { costTypeLabels } from "~/app/expenses/expense-options";
 import {
   capitalize,
@@ -26,6 +27,7 @@ import {
 } from "~/app/projects/project-formatting";
 import { ProjectMark, ProjectMarkById } from "~/app/projects/project-mark";
 import { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
+import { Row } from "~/components/layout";
 import { EntityIcon } from "~/entities/entities";
 import { fdcIdFromParam } from "~/entities/entity-query";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -936,6 +938,7 @@ export type ExpensePreview = {
   future: boolean;
   vendor?: string | null;
   orderId?: string | null;
+  orderUrl?: string | null;
   projectId?: string | null;
   projectName?: string | null;
 };
@@ -957,7 +960,16 @@ export function toExpenseCard(vm: ExpensePreview): ManifestCardProps {
   if (vm.orderId)
     stats.push({
       label: "Order #",
-      value: <span className="font-mono text-xs">{vm.orderId}</span>,
+      value: (
+        <Row align="center" gap="xs">
+          <span className="font-mono text-xs">{vm.orderId}</span>
+          <OrderIdLink
+            orderUrl={vm.orderUrl}
+            orderId={vm.orderId}
+            vendorName={vm.vendor}
+          />
+        </Row>
+      ),
     });
 
   return {
@@ -993,6 +1005,7 @@ export function ExpensePreviewContent({ expenseId }: { expenseId: string }) {
             future: data.future,
             vendor: data.vendor,
             orderId: data.orderId,
+            orderUrl: data.orderUrl,
             projectId: data.projectId,
             projectName: data.projectName,
           })}
@@ -1027,6 +1040,7 @@ export type PurchasePreview = {
   expenseTotal: number;
   vendorId?: string | null;
   vendorName?: string | null;
+  orderUrl?: string | null;
 };
 
 export function toPurchaseCard(vm: PurchasePreview): ManifestCardProps {
@@ -1062,7 +1076,14 @@ export function toPurchaseCard(vm: PurchasePreview): ManifestCardProps {
           {
             label: "Order #",
             value: vm.orderId ? (
-              <span className="font-mono text-xs">{vm.orderId}</span>
+              <Row align="center" gap="xs">
+                <span className="font-mono text-xs">{vm.orderId}</span>
+                <OrderIdLink
+                  orderUrl={vm.orderUrl}
+                  orderId={vm.orderId}
+                  vendorName={vm.vendorName}
+                />
+              </Row>
             ) : (
               "—"
             ),
@@ -1094,6 +1115,7 @@ export function PurchasePreviewContent({ purchaseId }: { purchaseId: string }) {
             expenseTotal: data.expenseTotal,
             vendorId: data.vendorId,
             vendorName: data.vendorName,
+            orderUrl: data.orderUrl,
           })}
         />
       )}

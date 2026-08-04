@@ -152,6 +152,7 @@ const vendorColumns = {
   shortcode: vendor.shortcode,
   name: vendor.name,
   website: vendor.website,
+  orderUrlTemplate: vendor.orderUrlTemplate,
   notes: vendor.notes,
   createdAt: vendor.createdAt,
   updatedAt: vendor.updatedAt,
@@ -165,6 +166,7 @@ type VendorRow = {
   shortcode: string;
   name: string;
   website: string | null;
+  orderUrlTemplate: string | null;
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -177,6 +179,7 @@ const dbVendorToAPI = (row: VendorRow): VendorOut => ({
   id: unsafeVendorShortcode(row.shortcode),
   name: row.name,
   website: row.website,
+  orderUrlTemplate: row.orderUrlTemplate,
   notes: row.notes,
   purchaseCount: Number(row.purchaseCount),
   // `sum()` comes back as a string over the wire on some drivers even when the
@@ -385,6 +388,7 @@ export const createVendor = async (
     const created = await insertWithShortcode(tx, "vendor", {
       name: data.name.trim(),
       website: data.website,
+      orderUrlTemplate: data.orderUrlTemplate,
       notes: data.notes,
     });
     await logAuditEntry(tx, actor, {
@@ -397,7 +401,12 @@ export const createVendor = async (
   return { output: await getVendorByID(db, id), entityId: id };
 };
 
-const VENDOR_AUDIT_FIELDS = ["name", "website", "notes"] as const;
+const VENDOR_AUDIT_FIELDS = [
+  "name",
+  "website",
+  "orderUrlTemplate",
+  "notes",
+] as const;
 
 export const updateVendor = async (
   db: Database,
@@ -421,6 +430,7 @@ export const updateVendor = async (
       buildPartialUpdateValues({
         name: data.name?.trim(),
         website: data.website,
+        orderUrlTemplate: data.orderUrlTemplate,
         notes: data.notes,
       }),
       id,

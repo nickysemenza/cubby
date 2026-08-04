@@ -1132,6 +1132,18 @@ export const vendor = pgTable(
     shortcode: shortcodeColumn(),
     name: text("name").notNull(),
     website: text("website"),
+    /**
+     * URL pattern for this vendor's own order-details page, with `{orderId}`
+     * standing in for `Purchase.orderId` — e.g.
+     * `https://www.amazon.com/gp/your-account/order-details?orderID={orderId}`.
+     *
+     * The per-purchase link is DERIVED from this at read time
+     * (`purchaseOrderUrl`) rather than stored on every Purchase, the same way
+     * an Amazon product link is derived from its ASIN rather than duplicated
+     * into a column (`canonicalExternalIdUrl`). Vendor identity can't be
+     * recovered from the name string, so this hangs off the vendor row.
+     */
+    orderUrlTemplate: text("orderUrlTemplate"),
     notes: text("notes"),
     ...baseTimestamps(),
     ...softDeletedAt(),

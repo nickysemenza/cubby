@@ -1169,6 +1169,12 @@ export const expenseOut = z.object({
   purchaseDisplayLabel: z.string().nullable(),
   /** The purchase's vendor, denormalized onto the expense so tables can link it. */
   vendorId: vendorShortcode.nullable(),
+  /**
+   * Link out to the vendor's own order page for this expense's purchase,
+   * derived from `vendor.orderUrlTemplate` + `orderId` (see `purchaseOrderUrl`).
+   * Read-only; null means the order simply isn't linkable.
+   */
+  orderUrl: z.url().nullable(),
   projectName: z.string().nullable(),
   // Null when unlinked *or* when the linked product has been soft-deleted —
   // product deletion deliberately does not block on referencing expenses
