@@ -33,6 +33,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import {
   countByTarget,
   impact,
@@ -297,6 +298,20 @@ export const mergeIngredients = async (
 
     // delete the absorbed ingredients
     await tx.delete(ingredient).where(inArray(ingredient.id, uniqueAliases));
+
+    // Removal-path invariant (root CLAUDE.md, guard-enforced): this is a
+    // HARD delete — unlike every other removal path in the repo — but a
+    // hard-deleted row still gets a SOFT-deleted embedding, same as the
+    // hard-deleted source row in a full-collapse inventory move
+    // (inventory/bulk.ts): a soft-deleted embedding is excluded from both
+    // semantic search and orphan detection, and reusing the shared cascade
+    // helper keeps every removal path's embedding cleanup uniform rather than
+    // adding a one-off hard-delete path here. `ingredient` is `searchable:
+    // true`, so skipping this leaves a live `EntityEmbedding` row pointing at
+    // a permanently-gone id — `findOrphanedEntityEmbeddings` flags it forever
+    // (there is no restore to heal it), and until then semantic search keeps
+    // returning a result that renders blank.
+    await softDeleteEntityEmbeddingsTx(tx, "ingredient", uniqueAliases);
 
     // Correctness floor: flag the absorbed recipes stale atomically with the
     // merge, so they read as pending — countable on Settings → Maintenance

@@ -1,3 +1,4 @@
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { ProjectShortcode } from "@cubby/schemas/identifiers";
 import { unsafeProjectId, unsafeTaskId } from "@cubby/schemas/identifiers";
 import {
@@ -8,6 +9,7 @@ import {
 } from "@cubby/schemas/pagination";
 import type { TaskFilters, TaskOut } from "@cubby/schemas/project";
 import { taskSortableFields } from "@cubby/schemas/project";
+import { parseShortcode } from "@cubby/shared";
 import {
   type AnyColumn,
   and,
@@ -51,17 +53,27 @@ import { dbTaskToAPI, effectiveTaskDueDateSql } from "./helpers";
 /**
  * Resolve a batch of shortcodes to their (unbranded) uuids for use in a WHERE
  * clause. Unknown/malformed codes simply drop out — a filter naming a code
- * that doesn't exist should match nothing, not throw.
+ * that doesn't exist should match nothing, not throw. The `entity` parameter
+ * pins the expected type so a wrong-prefix code (a `LOC-` code passed as a
+ * task filter) is silently dropped rather than matching an unrelated row —
+ * mirrors `expense/lookup.ts`'s and `project/lookup.ts`'s siblings.
+ *
+ * `resolveShortcodes` keys its result Map by the CANONICAL code (its docstring
+ * says so explicitly), so the lookup below goes through `parseShortcode(code)
+ * .shortcode` rather than the raw input `code` — otherwise a lowercase or
+ * legacy-prefix code resolves fine in SQL but misses the Map here.
  */
 const toUuids = async (
   db: Database,
   codes: readonly string[],
+  entity: ShortcodeEntity,
 ): Promise<string[]> => {
   if (codes.length === 0) return [];
   const resolved = await resolveShortcodes(db, codes);
   return codes.flatMap((code) => {
-    const ref = resolved.get(code);
-    return ref ? [ref.id] : [];
+    const parsed = parseShortcode(code);
+    const ref = parsed ? resolved.get(parsed.shortcode) : undefined;
+    return ref?.entity === entity ? [ref.id] : [];
   });
 };
 
@@ -88,7 +100,9 @@ async function buildTaskProjectCondition(
   const presenceCond = presenceCondition(task.projectId, presence);
   const selectedCodes = projectId ? [projectId].flat() : [];
   if (selectedCodes.length === 0) return presenceCond;
-  const selected = (await toUuids(db, selectedCodes)).map(unsafeProjectId);
+  const selected = (await toUuids(db, selectedCodes, "project")).map(
+    unsafeProjectId,
+  );
   if (selected.length === 0) return presenceCond ?? sql`false`;
   if (!includeSubProjects)
     return or(eqAny(task.projectId, selected), presenceCond);
@@ -154,13 +168,16 @@ export const taskList = async (
   const parentTaskCodes = filters.parentTaskId
     ? [filters.parentTaskId].flat()
     : [];
-  const parentTaskIds = (await toUuids(db, parentTaskCodes)).map(unsafeTaskId);
+  const parentTaskIds = (await toUuids(db, parentTaskCodes, "task")).map(
+    unsafeTaskId,
+  );
   const scopedProjectIds = filters.projectScope
     ? await matchingEmbeddedProjectIds(db, filters.projectScope)
     : null;
   const subjectProductIds = await toUuids(
     db,
     filters.subjectProductId ? [filters.subjectProductId].flat() : [],
+    "product",
   );
   const subjectProductCondition =
     filters.subjectProductId &&
