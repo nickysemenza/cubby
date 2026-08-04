@@ -224,6 +224,42 @@ export function PurchaseList() {
           />
         ),
       }),
+      // Hidden by default. These three exist so the transaction-presence and
+      // data-quality specs are column-backed: a urlOnly spec can never
+      // round-trip through a header control, and a non-urlOnly spec with no
+      // column makes TanStack error on every render.
+      columnHelper.accessor(
+        (row) => row.financialReconciliation.transactionCount,
+        {
+          id: "transactionCount",
+          header: "Transactions",
+          enableSorting: false,
+          meta: { numeric: true, className: "w-24" },
+          cell: (info) =>
+            info.getValue() > 0 ? (
+              <span className="font-mono tabular-nums">{info.getValue()}</span>
+            ) : (
+              <NoneValue />
+            ),
+        },
+      ),
+      columnHelper.accessor((row) => row.dataQuality.status, {
+        id: "dataQuality",
+        header: "Data quality",
+        enableSorting: false,
+        meta: { className: "w-28" },
+        cell: (info) => info.getValue(),
+      }),
+      columnHelper.accessor(
+        (row) => row.dataQuality.gaps.map((gap) => gap.check).join(", "),
+        {
+          id: "dataGaps",
+          header: "Data gaps",
+          enableSorting: false,
+          meta: { className: "w-48" },
+          cell: (info) => info.getValue() || <NoneValue />,
+        },
+      ),
       columnHelper.accessor((row) => row.documentCount, {
         id: "documentCount",
         header: "Documents",
@@ -265,6 +301,11 @@ export function PurchaseList() {
     filterOptions,
     columns,
     deletable: deletableConfig,
+    initialColumnVisibility: {
+      transactionCount: false,
+      dataQuality: false,
+      dataGaps: false,
+    },
   });
   usePageCount(totalCount);
 

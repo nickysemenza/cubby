@@ -165,6 +165,43 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       // case and stays out — this view is the money that doesn't add up.
       filters: [{ id: "reconciliation", value: ["mismatch"] }],
     },
+    {
+      id: "unsettled",
+      label: "No settlement evidence",
+      description:
+        "Orders with no posted transaction carrying proof of payment",
+      // Narrower than "has no transactions": the gap only clears for a POSTED
+      // transaction of a settlement kind that either carries a sourceRef or
+      // sits on a cash account. An expected refund or an evidence-free row
+      // doesn't close it. See `purchaseGapRaw`.
+      //
+      // This is a large list — a bit under half of all purchases — because it's
+      // dominated by Home Depot and Amazon, whose per-visit and per-shipment
+      // billing don't line up with per-order purchases. Combine it with the
+      // vendor filter to get at the scattered remainder.
+      filters: [{ id: "dataGaps", value: ["settlement_reference"] }],
+      sort: [{ id: "date", desc: true }],
+    },
+  ],
+  financialTransaction: [
+    {
+      id: "outstanding",
+      label: "Outstanding",
+      description: "Expected or pending — money that hasn't moved yet",
+      // The owed-money list: an expected refund a vendor never issued, or a
+      // credit still in flight. `postedDate` is null on these by construction
+      // (posted entries require one), so the sort is really "most recently
+      // recorded first".
+      filters: [{ id: "status", value: ["expected", "pending"] }],
+      sort: [{ id: "createdAt", desc: true }],
+    },
+    {
+      id: "unlinked",
+      label: "Not linked to a purchase",
+      description: "Settlement evidence with no order attached",
+      filters: [{ id: "purchasePresence", value: "none" }],
+      sort: [{ id: "postedDate", desc: true }],
+    },
   ],
   wish: [
     {

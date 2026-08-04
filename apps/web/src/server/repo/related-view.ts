@@ -17,6 +17,7 @@ import {
 } from "@cubby/schemas/related-view";
 import { parseShortcode } from "@cubby/shared";
 import { and, or, type SQL, type SQLWrapper, sql } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
 
@@ -365,14 +366,14 @@ export async function loadRelatedPreviews(
       .filter((view) => view.source === input.source)
       .map((view) => view.key),
   );
-  const relationKeys = [...new Set(input.relationKeys)].filter((key) =>
+  const relationKeys = uniq(input.relationKeys).filter((key) =>
     allowed.has(key),
   );
   if (input.sourceIds.length === 0 || relationKeys.length === 0) return [];
   return (
     await Promise.all(
       relationKeys.map((key) =>
-        loadOne(db, key as RelatedViewKey, [...new Set(input.sourceIds)]),
+        loadOne(db, key as RelatedViewKey, uniq(input.sourceIds)),
       ),
     )
   ).flat();

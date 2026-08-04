@@ -45,6 +45,15 @@ interface CubbyGanttProps {
   emptyMessage?: string;
 }
 
+/**
+ * Stable empty defaults — both feed `useMemo` dependency arrays below, so an
+ * inline `= new Set()` / `= []` would allocate a fresh reference every render
+ * and recompute those memos unconditionally (see apps/web/CLAUDE.md's
+ * `unstable-hook-default` rule).
+ */
+const NO_CHAIN_IDS: ReadonlySet<string> = new Set<string>();
+const NO_EDGES: ReadonlyArray<readonly [string, string]> = [];
+
 const READ_ONLY_INTERACTIONS = {
   drag: false,
   resize: false,
@@ -242,8 +251,8 @@ export function CubbyGantt({
   collapsedGroups,
   onCollapsedGroupsChange,
   renderName,
-  chainIds = new Set<string>(),
-  edges = [],
+  chainIds = NO_CHAIN_IDS,
+  edges = NO_EDGES,
   emptyMessage = "No dated work yet.",
 }: CubbyGanttProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);

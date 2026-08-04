@@ -67,8 +67,6 @@ export const entityDescriptor = z.object({
   lifecycle: entityLifecycleSchema,
   /** CRUD operations exposed over MCP. */
   mcp: z.array(mcpOp).readonly(),
-  /** Whether the tRPC router is built from the shared crud-factory or hand-rolled. */
-  routerStyle: z.enum(["crud-factory", "custom"]),
 });
 export type EntityDescriptor = z.infer<typeof entityDescriptor>;
 
@@ -180,7 +178,6 @@ export const entityManifest = {
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: true },
     mcp: ALL_MCP,
-    routerStyle: "crud-factory",
   },
   recipe: {
     dbTable: "Recipe",
@@ -224,7 +221,6 @@ export const entityManifest = {
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
-    routerStyle: "custom",
   },
   ingredient: {
     dbTable: "Ingredient",
@@ -246,7 +242,6 @@ export const entityManifest = {
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: true },
     mcp: ALL_MCP,
-    routerStyle: "crud-factory",
   },
   cookbook: {
     dbTable: "Cookbook",
@@ -264,7 +259,6 @@ export const entityManifest = {
     // so it is one at a time and confirmed.
     lifecycle: { delete: { mode: "soft", bulk: false }, merge: false },
     mcp: ["list"],
-    routerStyle: "custom",
   },
   location: {
     dbTable: "Location",
@@ -287,7 +281,6 @@ export const entityManifest = {
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
-    routerStyle: "crud-factory",
   },
   inventory: {
     dbTable: "InventoryEntry",
@@ -309,7 +302,6 @@ export const entityManifest = {
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
-    routerStyle: "crud-factory",
   },
   meal: {
     dbTable: "Meal",
@@ -331,7 +323,6 @@ export const entityManifest = {
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
-    routerStyle: "crud-factory",
   },
   project: {
     dbTable: "Project",
@@ -371,7 +362,6 @@ export const entityManifest = {
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
-    routerStyle: "custom",
   },
   task: {
     dbTable: "Task",
@@ -402,7 +392,6 @@ export const entityManifest = {
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
-    routerStyle: "crud-factory",
   },
   // A thin roster of the places money goes. Deliberately minimal in v1 —
   // contractor metadata (license, COI expiry) and vendor-level documents (W-9,
@@ -423,7 +412,6 @@ export const entityManifest = {
     // No delete: `deleteVendors` refuses while live purchases still reference the
     // vendor, and an agent has no way to rehome them.
     mcp: ["get", "list", "create", "update"],
-    routerStyle: "custom",
   },
   // One vendor order/receipt event — identity (`vendorId` + optional `orderId`),
   // vendor date, literal `statedTotal` that is never summed into spend, and
@@ -454,7 +442,6 @@ export const entityManifest = {
     // likewise live outside this CRUD roster and are registered directly in
     // purchase.tools.ts.
     mcp: ["get", "list", "create", "update"],
-    routerStyle: "custom",
   },
   financialAccount: {
     dbTable: "FinancialAccount",
@@ -468,7 +455,6 @@ export const entityManifest = {
     relationships: [],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
-    routerStyle: "crud-factory",
   },
   financialTransaction: {
     dbTable: "FinancialTransaction",
@@ -495,7 +481,6 @@ export const entityManifest = {
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
-    routerStyle: "crud-factory",
   },
   wish: {
     dbTable: "Wish",
@@ -517,7 +502,6 @@ export const entityManifest = {
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
-    routerStyle: "custom",
   },
   expense: {
     dbTable: "Expense",
@@ -535,7 +519,6 @@ export const entityManifest = {
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
-    routerStyle: "crud-factory",
   },
   "usda-food": {
     dbTable: null,
@@ -549,7 +532,6 @@ export const entityManifest = {
     // No local table, so nothing to remove.
     lifecycle: { delete: null, merge: false },
     mcp: ["get", "list"],
-    routerStyle: "custom",
   },
   image: {
     dbTable: "Image",
@@ -564,7 +546,6 @@ export const entityManifest = {
     // R2 object, so there is no tombstone to reason about.
     lifecycle: { delete: { mode: "hard", bulk: true }, merge: false },
     mcp: [],
-    routerStyle: "custom",
   },
 } as const satisfies Record<Entity, EntityDescriptor>;
 

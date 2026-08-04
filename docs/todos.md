@@ -148,9 +148,11 @@ decision value.
   can't print recipe QRs. Completes an already-shipped mechanic.
 - [ ] **Cookbook lifecycle**: no rename/metadata edit (a mangled OPF title is
   permanent); identity is keyed on `name` (same-title books collide, a re-titled
-  EPUB forks a duplicate — needs merge/re-point); `subjects` is stored + on the
-  wire but rendered nowhere (free browse facet); list has no search/sort/filter
-  (incl. a "partially imported" filter from `sourceRecipeCount - recipeCount`).
+  EPUB forks a duplicate — needs merge/re-point); `subjects` renders only as a
+  truncated first-two stat in the cookbook hover-preview card
+  (`EntityPreviewContent.tsx`) — still no browsable/filterable facet on the
+  cookbook list; list has no search/sort/filter (incl. a "partially imported"
+  filter from `sourceRecipeCount - recipeCount`).
 - [ ] **Kitchen-mode persistence**: step check-off is `useState` in
   `RecipeInstructions` — lost on nav or scale change; no ingredient check-off in
   Read view; no timers derived from step text.
@@ -684,6 +686,59 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
   `"kgs"`, which upstream's `singular()` handles and the 14-entry TS table does
   not. Fix by exposing the conversion through WASM rather than widening the TS
   table.
+- [ ] **`meal-format.ts` hand-rolls amount formatting instead of calling
+  WASM.** `formatAmount` (`apps/web/src/app/meals/meal-format.ts`) does
+  `Math.round(value * 100) / 100` plus string concat for the shopping list's
+  need/have/shortfall amounts, bypassing `tryFormatAmount`
+  (`_components/inventory/format-amount.tsx`), which calls
+  `wasm.format_amount` for range/`upperValue` support and `"each"` handling.
+  Same [layering violation](../CLAUDE.md#where-logic-lives-layering) as the
+  entry above; shopping-list amounts render by a different rule than every
+  other amount surface in the app.
+- [ ] **Duplicate `getByID`/`getByShortcode` read paths, no shared cache
+  key.** All 15 shortcode entities (`shortcodeEntities`,
+  `packages/schemas/src/entity-manifest.ts`) get two CRUD-factory procedures
+  over the same row with the same input shape — `getByID` throws on a miss,
+  `getByShortcode` returns `null` — as two separate react-query cache keys.
+  `entity-contracts.ts`'s `detail` points every entity at `getByID`;
+  repointing it at `getByShortcode` would silently swap a thrown-and-caught
+  "Failed to load X" state (`entity-preview-panel.tsx`) for a
+  quietly-successful `data: null` render, so all three preview consumers need
+  an explicit null branch first. The one concrete double-fetch today is
+  `meals.$shortcode.tsx`'s loader (`getByShortcode`, suspense-warmed)
+  followed by `meal-detail-page.tsx` firing its own cold `getByID` for the
+  same row — every other detail page (product, recipe, …) takes the entity as
+  a prop instead of re-querying.
+- [ ] **`inventory` is the last hand-rolled MCP CRUD toolset.** Every other
+  entity's create/list/get/update/delete MCP tools go through
+  `registerEntityCrudToolset` (`server/mcp/tools/_shared.ts`, ~30 lines of
+  config); `inventory.tools.ts` hand-writes the same five operations in ~96
+  lines, partly because it needs `data.amount`-merging logic the generic
+  shape doesn't express and partly because `registerEntityUpdateTool` — the
+  one op helper a migration would need standalone — isn't exported
+  (`registerEntityCreateTool` is exported, with no caller outside the toolset
+  factory and one test).
+- [ ] **Make `crud-factory.ts`'s `repository.create`/`update` optional.**
+  #603 found `product.ts` and `ingredient.ts` each feeding the factory
+  throwaway `create`/`update` callbacks — discarded because both routers
+  hand-roll the real ones for cost-recompute reasons — and left them as
+  `discardedByFactory(): never` stubs with an explanatory comment, because the
+  repository type requires both keys. `inventory`, `location`, and `recipe`
+  still destructure the full `{ getByID, getByShortcode, create, update }`
+  set, so the fix is a conditional return type keyed on which repository keys
+  are actually supplied, not a blanket optional.
+- [ ] **Coverage-concept gaps: two silent-omission spots, one missing
+  exhaustiveness check.** `packages/schemas/src/search.ts`'s
+  `searchResultItemSchema` discriminated union has no
+  `satisfies Record<SearchableEntity, …>` tying its variants to
+  `searchableEntities` — the pattern already exists two dozen lines away
+  (`similarEntityPairs`) but isn't applied here, so a new `searchable: true`
+  entity would compile fine and silently drop out of global search.
+  `entityFilters` (`entities/filter-manifest.tsx`,
+  `Partial<Record<Entity, …>>`) and `relatedViewRegistry`
+  (`packages/schemas/src/related-view.ts`, a flat array not keyed by entity at
+  all) both fall back to `[]` for an absent entity with no way to say "this
+  entity is deliberately missing" versus "nobody added it yet."
 
 ### MCP Apps — further candidates
 
@@ -749,6 +804,14 @@ implementation now uses `idSetPresence`.
       ordinary saved filters. Projects Data uses paginated server lists;
       embedded Tasks and Expenses use an explicit matching-project scope and
       exclude unassigned rows.
+- [ ] **Meals `?view=table` still fetches-all-and-filters-in-React.**
+      `meal-table.tsx` pulls `MEAL_TABLE_PAGE_SIZE = 500` rows in one
+      `meal.list` call and hands them to `useClientEntityList`
+      (`manualPagination: false`), which sorts/filters/paginates client-side
+      with no server total and no omitted-count disclosure past 500 — the
+      exact violation this section closed everywhere else. **Production has 1
+      meal today**, nowhere near the ceiling; fix opportunistically alongside
+      the next meals-table touch, not as a standalone trigger.
 
 ### Rejected
 

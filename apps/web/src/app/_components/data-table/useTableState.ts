@@ -64,6 +64,14 @@ interface TableStateOptions {
 /** Stable empty default (a fresh `[]` per render would churn the memos). */
 const NO_SPECS: readonly FilterSpecCore[] = [];
 const NO_URL_STATE: Record<string, unknown> = {};
+/**
+ * Same reason as `NO_SPECS`, for the caller's filter seed: an inline `= []`
+ * default allocates a new array on every render for every caller that omits
+ * `initialFilter` (which is most of them), and `initialFilter` is a dependency
+ * of the `urlState` memo — so the URL-reconciliation effect below would re-run
+ * on EVERY render rather than only when the URL changes.
+ */
+const NO_INITIAL_FILTER: ColumnFiltersState = [];
 
 // URL search keys for table state.
 const SORT_KEY = "sort";
@@ -166,7 +174,7 @@ export function useTableState(
 ): TableStateReturn {
   const {
     initialSort = "createdAt",
-    initialFilter = [],
+    initialFilter = NO_INITIAL_FILTER,
     initialPagination = defaultPagination,
     filterSpecs = NO_SPECS,
     urlSync = false,
@@ -349,7 +357,12 @@ export function useTableState(
   // target until the following render has all three values, rather than
   // clearing a one-commit boolean before those updates take effect.
   const applyingExternalState = useRef<string | null>(null);
-  const hasObservedSearch = useRef(false);
+  // The managed URL params as of the last time the reconcile effect ran. An
+  // external navigation is BY DEFINITION a change to these, so a run where
+  // they're unchanged is just a re-render and must not reinterpret the URL.
+  // Seeded with the mount value, which also covers the first run (the lazy
+  // initializers already read that URL).
+  const lastObservedSearch = useRef(serializedRawSearchState);
 
   // Wrap state setters in startTransition to prevent UI freezing
   const setSorting = useCallback(
@@ -463,17 +476,24 @@ export function useTableState(
     return buildSortsParams(sorting, initialSort);
   }, [sorting, initialSort]);
 
-  // Live URL state is authoritative after mount. The first render keeps the
-  // lazy initializer behavior intact; after that, an unacknowledged local
-  // write is allowed to finish, while a different URL is browser navigation
-  // and replaces all managed state atomically without the filter/page-reset
-  // side effect meant for interactive edits.
+  // Live URL state is authoritative after mount, but only ON AN ACTUAL URL
+  // CHANGE — the mount value is the lazy initializers' own, and a run with no
+  // change is a re-render, not navigation. Of the real changes, an
+  // unacknowledged local write is allowed to finish, while a different URL is
+  // browser navigation and replaces all managed state atomically without the
+  // filter/page-reset side effect meant for interactive edits.
   useEffect(() => {
     if (!urlSync) return;
-    if (!hasObservedSearch.current) {
-      hasObservedSearch.current = true;
-      return;
-    }
+    // Nothing in the URL moved, so there is nothing to reconcile — this run is
+    // a re-render (a refetch, a parent state change, a churned dependency).
+    // Without this guard, any render landing in the window between the write
+    // effect issuing `navigate` and the router publishing the new search would
+    // compare fresh local state against the STALE url below, read it as
+    // external navigation, and overwrite the state the user just set — the
+    // filters flashing into the URL and reverting on a saved-view apply.
+    if (lastObservedSearch.current === serializedRawSearchState) return;
+    lastObservedSearch.current = serializedRawSearchState;
+
     if (pendingLocalWrite.current === serializedRawSearchState) {
       pendingLocalWrite.current = null;
       return;

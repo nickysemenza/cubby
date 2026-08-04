@@ -1,4 +1,5 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
+import { sumBy } from "es-toolkit";
 import { Clock, ExternalLink, Users } from "lucide-react";
 import { Row } from "~/components/layout";
 import { Image } from "~/components/ui/image";
@@ -13,15 +14,15 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
   const hasImage = !!heroImage;
 
   // Count total ingredients across all sections
-  const totalIngredients = recipe.sections.reduce(
-    (acc, section) => acc + section.ingredients.length,
-    0,
+  const totalIngredients = sumBy(
+    recipe.sections,
+    (section) => section.ingredients.length,
   );
 
   // Count total instruction steps
-  const totalSteps = recipe.sections.reduce(
-    (acc, section) => acc + section.instructions.length,
-    0,
+  const totalSteps = sumBy(
+    recipe.sections,
+    (section) => section.instructions.length,
   );
 
   // Meta row (ingredient/step counts, source) — shared between layouts.

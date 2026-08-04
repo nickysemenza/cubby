@@ -40,7 +40,7 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
-import { uniq } from "es-toolkit";
+import { sumBy, uniq } from "es-toolkit";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { Database, DrizzleClient } from "~/server/db";
@@ -323,9 +323,9 @@ export const findProductsMissingPrice = async (
       id: unsafeProductShortcode(prod.shortcode),
       name: prod.name,
       manufacturer: prod.manufacturer,
-      inventoryQuantity: prod.inventoryEntry.reduce(
-        (sum, entry) => sum + entry.amount.value,
-        0,
+      inventoryQuantity: sumBy(
+        prod.inventoryEntry,
+        (entry) => entry.amount.value,
       ),
       locations: prod.inventoryEntry.map((entry) => ({
         id: unsafeLocationShortcode(entry.location.shortcode),
@@ -494,9 +494,9 @@ export const findSoldButStillStocked = async (
     const disposal = byProduct.get(prod.id);
     if (!disposal) continue;
 
-    const liveQuantity = prod.inventoryEntry.reduce(
-      (sum, entry) => sum + entry.amount.value,
-      0,
+    const liveQuantity = sumBy(
+      prod.inventoryEntry,
+      (entry) => entry.amount.value,
     );
 
     // Nothing on a shelf — the ledger and the inventory already agree, which is

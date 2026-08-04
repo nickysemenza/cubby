@@ -35,6 +35,7 @@ import {
   auditDateWhereConditions,
   buildOrderBy,
   countWhere,
+  executeListQueryWithCount,
   formatSearchTerm,
   getDb,
   lockAndValidateForDelete,
@@ -265,19 +266,21 @@ export const wishList = async (
   // Footer totals over the WHOLE filtered set, not the loaded page. Summing the
   // returned rows instead would quietly under-report the moment the wishlist
   // outgrows one page — a wrong number is worse than no number.
-  const [rows, count, [totals]] = await Promise.all([
-    getDb(db)
-      .select()
-      .from(wish)
-      .where(where)
-      .orderBy(
-        ...buildOrderBy(wish, sorts, [...wishSortableFields], {
-          resolve: resolveWishSort,
-        }),
-      )
-      .limit(take)
-      .offset(skip),
-    countWhere(db, wish, where),
+  const [{ data: rows, count }, [totals]] = await Promise.all([
+    executeListQueryWithCount(
+      getDb(db)
+        .select()
+        .from(wish)
+        .where(where)
+        .orderBy(
+          ...buildOrderBy(wish, sorts, [...wishSortableFields], {
+            resolve: resolveWishSort,
+          }),
+        )
+        .limit(take)
+        .offset(skip),
+      countWhere(db, wish, where),
+    ),
     getDb(db)
       .select({
         priceLow: sql<number>`COALESCE(sum(${wishPriceLow}), 0)::double precision`,

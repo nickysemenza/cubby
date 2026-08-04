@@ -4,6 +4,7 @@ import type {
   FinancialTransactionCreateInput,
   FinancialTransactionFilters,
   FinancialTransactionOut,
+  FinancialTransactionSourceOptionsOut,
   FinancialTransactionUpdateData,
 } from "@cubby/schemas/financial-transaction";
 import {
@@ -571,4 +572,28 @@ export async function previewDeleteFinancialTransactions(
   sideEffects: ImpactItem[];
 }> {
   return { blockers: [], changes: [], sideEffects: [] };
+}
+
+/**
+ * Distinct `sourceRefs[].source` values across live transactions, with counts.
+ *
+ * `sourceRefs` is a jsonb array, so this unnests rather than grouping a column —
+ * one transaction carrying both a `monarch` and a `zoro` ref counts once under
+ * each, which is what a filter over "has a ref from this source" means.
+ */
+export async function financialTransactionSourceOptions(
+  db: Database,
+): Promise<FinancialTransactionSourceOptionsOut> {
+  const rows = await getDb(db).execute<{ source: string; count: number }>(sql`
+    SELECT ref->>'source' AS source, count(*)::int AS count
+    FROM "FinancialTransaction" ft
+    CROSS JOIN LATERAL jsonb_array_elements(ft."sourceRefs") ref
+    WHERE ft."deletedAt" IS NULL AND ref->>'source' IS NOT NULL
+    GROUP BY 1
+    ORDER BY count(*) DESC, 1 ASC
+  `);
+  return rows.rows.map((row) => ({
+    source: row.source,
+    count: Number(row.count),
+  }));
 }
