@@ -2463,6 +2463,36 @@ describe("update_inventory_entry value/unit pairing guard", () => {
       data: { amount: { value: 3, unit: "each" } },
     });
   });
+
+  // The third branch: neither value nor unit. Moving an entry to another
+  // location without touching its amount is an ordinary operation, and the
+  // failure mode is silent — a hook that dropped `rest` would send an empty
+  // `data` and no-op the update rather than erroring.
+  it("passes the other fields through untouched when neither value nor unit is supplied", async () => {
+    const updated = {
+      id: ENTRY_CODE,
+      amount: { value: 1, unit: "each" },
+      valuation: null,
+      product: null,
+      location: null,
+    };
+    const caller = {
+      inventory: { update: vi.fn().mockResolvedValue(updated) },
+    };
+
+    const result = await callTool(
+      createMcpServer(),
+      "update_inventory_entry",
+      { id: ENTRY_CODE, locationId: "LOC-2222" },
+      caller,
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(caller.inventory.update).toHaveBeenCalledWith({
+      id: ENTRY_CODE,
+      data: { locationId: "LOC-2222" },
+    });
+  });
 });
 
 describe("MCP Apps ui:// metadata", () => {
