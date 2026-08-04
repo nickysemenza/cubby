@@ -21,6 +21,7 @@ import {
 } from "~/components/ui/table";
 import { entities } from "~/entities/entities";
 import { getEntityContract } from "~/entities/entity-contracts";
+import { getSortableFields } from "~/entities/sortable-fields";
 import { useTRPC } from "~/integrations/trpc/react";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
@@ -117,9 +118,7 @@ const GROUPS: Group[] = [
       },
       {
         label: "Sortable fields",
-        cell: ({ entity }) => (
-          <Chips items={entities[entity].list?.sortableFields ?? []} />
-        ),
+        cell: ({ entity }) => <Chips items={getSortableFields(entity)} />,
       },
       {
         label: "Standard columns",

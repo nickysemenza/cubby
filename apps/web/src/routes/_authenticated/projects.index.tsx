@@ -9,7 +9,7 @@ import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { CreateProjectDialog } from "~/app/projects/create-project-dialog";
 import { ProjectsDashboard } from "~/app/projects/projects-dashboard";
 import { Page } from "~/components/page/Page";
-import { entityFilterSearchFields } from "~/entities/filter-manifest";
+import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import {
   isValidProjectDateFilter,
   normalizeProjectRenderer,

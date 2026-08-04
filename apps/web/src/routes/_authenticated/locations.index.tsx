@@ -21,10 +21,8 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import {
-  entityFilterSearchFields,
-  getEntityFilters,
-} from "~/entities/filter-manifest";
+import { getEntityFilters } from "~/entities/filter-manifest";
+import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 
 const viewOptions = ["gallery", "table", "visualizations"] as const;
 type ViewOption = (typeof viewOptions)[number];

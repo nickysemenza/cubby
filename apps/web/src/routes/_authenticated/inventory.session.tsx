@@ -2,8 +2,8 @@ import { locationShortcode } from "@cubby/schemas/identifiers";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 import { InventorySessionWorkbench } from "~/app/inventory/session/InventorySessionWorkbench";
+import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
-import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
 
 const searchSchema = z.object({

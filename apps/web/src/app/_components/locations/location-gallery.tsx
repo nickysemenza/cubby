@@ -1,5 +1,8 @@
-import type { inventoryListItemOut } from "@cubby/schemas/inventory";
-import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import type {
+  InfLocation,
+  InventoryItemForTree,
+  LocationType,
+} from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronLeft } from "lucide-react";
@@ -10,7 +13,6 @@ import {
   useRef,
   useState,
 } from "react";
-import type { z } from "zod";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -21,15 +23,15 @@ import {
 } from "~/hooks/useGalleryViewState";
 import { useIsMobile } from "~/hooks/useMobile";
 import { useTRPC } from "~/integrations/trpc/react";
-import { useAllInventoryItems } from "../inventory/use-all-inventory-items";
 import { ProductImageSummariesProvider } from "../products/product-image-summaries";
 import { GalleryHeader } from "./gallery-header";
 import { GallerySidebar } from "./gallery-sidebar";
 import { GalleryUnifiedView } from "./gallery-unified-view";
 import { LocationGalleryCard } from "./location-gallery-card";
+import { buildLocationGalleryData } from "./location-gallery-data";
 import { LocationIcon } from "./location-icons";
 
-type InventoryItem = z.infer<typeof inventoryListItemOut>;
+type InventoryItem = InventoryItemForTree;
 
 /** Find all location IDs matching search term (searches location names and product names) */
 function findMatchingIds(
@@ -52,7 +54,7 @@ function findMatchingIds(
       // Check product names in inventory
       const inventory = inventoryByLocation.get(loc.id) ?? [];
       for (const item of inventory) {
-        if (item.product.name.toLowerCase().includes(term)) {
+        if (item.productName.toLowerCase().includes(term)) {
           matches.add(loc.id);
           break;
         }
@@ -336,24 +338,12 @@ export function LocationGallery() {
     api.location.makeTree.queryOptions(),
   );
 
-  // Fetch all inventory items (without location filter) across capped pages.
-  const { items: inventoryItems, isLoadingAll: inventoryLoading } =
-    useAllInventoryItems();
-
-  // Group inventory by location ID
-  const inventoryByLocation = useMemo(() => {
-    const map = new Map<string, InventoryItem[]>();
-
-    for (const item of inventoryItems) {
-      const locationId = item.location.id;
-      const existing = map.get(locationId) ?? [];
-      map.set(locationId, [...existing, item]);
-    }
-    return map;
-  }, [inventoryItems]);
-  const inventoryProductIds = useMemo(
-    () => inventoryItems.map((item) => item.product.id),
-    [inventoryItems],
+  // `makeTree` already contains the gallery's minimal inventory projection and
+  // persisted valuations. Derive the lookup once instead of auto-paginating
+  // the entire inventory table through `inventory.list`.
+  const { inventoryByLocation, productIds: inventoryProductIds } = useMemo(
+    () => buildLocationGalleryData(locations ?? []),
+    [locations],
   );
 
   // Find matching IDs for type filter (always needed for fading)
@@ -471,7 +461,7 @@ export function LocationGallery() {
     }
   }, []);
 
-  const isLoading = locationsLoading || inventoryLoading;
+  const isLoading = locationsLoading;
 
   if (isLoading) {
     return (

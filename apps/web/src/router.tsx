@@ -1,8 +1,8 @@
 import * as Sentry from "@sentry/tanstackstart-react";
 import { createRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
-import { RouteErrorComponent } from "~/components/route-error";
-import { RouteNotFound } from "~/components/route-not-found";
+import { RouteErrorComponent } from "~/components/lazy-route-error";
+import { RouteNotFound } from "~/components/lazy-route-not-found";
 import { RoutePending } from "~/components/route-pending";
 import { installPreloadErrorRecovery } from "~/lib/deploy-recovery";
 import { isSupersededViewTransitionError } from "~/lib/error-utils";

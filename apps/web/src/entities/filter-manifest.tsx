@@ -66,7 +66,6 @@ import {
   taskStatusOptions,
 } from "~/app/tasks/task-options";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
-import { urlStringParam } from "~/lib/search-params";
 import {
   type FilterKind,
   type FilterSpecCore,
@@ -1720,12 +1719,4 @@ export function manifestFilterConfig(
  * there too — a bare `z.string()` reinstates the silently-dropped-value hole
  * that schema exists to close.
  */
-export function entityFilterSearchFields(
-  entity: Entity,
-): Record<string, typeof urlStringParam> {
-  const fields: Record<string, typeof urlStringParam> = {};
-  for (const spec of getEntityFilters(entity)) {
-    fields[spec.urlKey ?? spec.columnId] = urlStringParam;
-  }
-  return fields;
-}
+export { entityFilterSearchFields } from "./filter-search-fields";

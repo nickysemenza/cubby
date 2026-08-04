@@ -9,7 +9,7 @@ import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { ProductList } from "~/app/products/productlist";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
-import { entityFilterSearchFields } from "~/entities/filter-manifest";
+import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { urlStringParam } from "~/lib/search-params";
 
 const searchSchema = z.object({
