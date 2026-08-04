@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import { join } from "node:path";
 import react from "@vitejs/plugin-react";
+import type { Plugin } from "vite";
 import topLevelAwait from "vite-plugin-top-level-await";
 import wasm from "vite-plugin-wasm";
 import { defineConfig } from "vitest/config";
@@ -9,12 +10,53 @@ const gitCommit = execSync("git rev-parse --short HEAD", {
   encoding: "utf-8",
 }).trim();
 
+/**
+ * `vite-plugin-wasm` with its "inline the WASM as a base64 data URI" branch
+ * forced on for every project.
+ *
+ * The plugin emits one of two things for a `.wasm` import: a base64 data URI
+ * (decoded with `Buffer`, works under Node) when it thinks it's running in SSR
+ * or under Vitest, or an `import … from "<id>?url"` (fetched at runtime) when it
+ * thinks it's running in a browser. Its Vitest detection is
+ * `config.plugins.some((p) => p.name === "vitest")`, and that plugin name is
+ * only present on the *root* config — a Vitest **project** config gets
+ * `vitest:project` / `vitest:project:server` instead, so the check is false
+ * there. That was invisible for the node-environment `unit` project (its
+ * transforms are SSR, which takes the same base64 branch anyway) but broke the
+ * jsdom `ui` project, where the client transform emitted a `/@fs/…` URL that
+ * `fetch` can't parse under Node:
+ *
+ *     TypeError: Failed to parse URL from /@fs/…/packages/wasm/recipebridge_bg.wasm
+ *
+ * That made every module transitively reaching `@cubby/recipebridge` — notably
+ * `data-table/columnHelpers.tsx`, via `cell-data` → `~/lib/wasm` — unimportable
+ * in a `.unit.test.tsx`, forcing whole-module `vi.mock`s instead of real tests.
+ *
+ * Forcing `ssr: true` on the plugin's `load` hook picks the base64 branch
+ * everywhere. It is the same code path the `unit` project already runs, so ui
+ * tests get the **real** WASM module (no stub, no mocked exports) and a genuine
+ * WASM failure still surfaces as a genuine failure.
+ */
+function wasmInlinedForVitest(): Plugin {
+  const plugin = wasm() as Plugin;
+  const load = plugin.load;
+  if (typeof load !== "function") {
+    throw new Error("vite-plugin-wasm no longer exposes a `load` function");
+  }
+  return {
+    ...plugin,
+    load(id, options) {
+      return load.call(this, id, { ...options, ssr: true });
+    },
+  };
+}
+
 export default defineConfig({
   define: {
     __GIT_COMMIT__: JSON.stringify(gitCommit),
   },
   // https://github.com/Menci/vite-plugin-wasm#usage
-  plugins: [wasm(), topLevelAwait()],
+  plugins: [wasmInlinedForVitest(), topLevelAwait()],
   resolve: {
     alias: {
       // https://github.com/juliusmarminge/t3-complete/blob/main/vitest.config.ts
