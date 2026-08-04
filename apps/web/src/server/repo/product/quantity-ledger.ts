@@ -91,10 +91,21 @@ export const expectedQuantitySql = (productAlias = '"product"') =>
        AND eq_e."future" = false
        AND eq_e."productQuantity" IS NOT NULL)`;
 
-/** Live units on shelves, summed across a Product's inventory entries. */
+/**
+ * Live units on shelves, summed across a Product's inventory entries.
+ *
+ * The join to `Location` is not decoration: `relations.product.list` loads live
+ * entries and the mapper then drops any whose *location* is soft-deleted, so
+ * without the same predicate here the filter would decide "mismatched" using a
+ * number the column never renders. `InventoryEntry.locationId` is
+ * `must-target-live` and production has zero violations today — which is
+ * exactly why the divergence would go unnoticed until it didn't.
+ */
 const onHandUnitsSql = (productAlias = '"product"') =>
   `(SELECT COALESCE(sum((ohu_i."amount"->>'value')::numeric), 0)::double precision
       FROM "InventoryEntry" ohu_i
+      JOIN "Location" ohu_l
+        ON ohu_l."id" = ohu_i."locationId" AND ohu_l."deletedAt" IS NULL
      WHERE ohu_i."productId" = ${productAlias}."id"
        AND ohu_i."deletedAt" IS NULL)`;
 
@@ -130,9 +141,12 @@ export const expectedQuantityFilterSql = (productId: AnyColumn) =>
           AND eq_e."future" = false
           AND eq_e."productQuantity" IS NOT NULL)`;
 
+/** Same predicates as {@link onHandUnitsSql}, including the live-Location join. */
 export const onHandUnitsFilterSql = (productId: AnyColumn) =>
   sql`(SELECT COALESCE(sum((ohu_i."amount"->>'value')::numeric), 0)::double precision
          FROM "InventoryEntry" ohu_i
+         JOIN "Location" ohu_l
+           ON ohu_l."id" = ohu_i."locationId" AND ohu_l."deletedAt" IS NULL
         WHERE ohu_i."productId" = ${productId}
           AND ohu_i."deletedAt" IS NULL)`;
 
