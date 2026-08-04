@@ -326,8 +326,9 @@ export async function projectToolMatrix(
     (a.endDate ?? "9999").localeCompare(b.endDate ?? "9999") ||
     a.name.localeCompare(b.name);
 
-  // Which `maxColumns` survive, then displayed oldest-first. Three passes of
-  // this got it wrong, so the reasoning is worth keeping:
+  // Which projects appear first in the paged column browser, then each page is
+  // displayed oldest-first. Three passes of the original cap got this wrong,
+  // so the reasoning is worth keeping:
   //
   //   - NOT chronological-then-cap. That spends the grid on the oldest
   //     projects; on production it gave 24 columns of "spice rack" and "shoe
@@ -338,25 +339,38 @@ export async function projectToolMatrix(
   //     ranked it below two dozen wedding and subscription projects.
   //   - So: projects that have anything to do with tools first, recency second.
   //     This is a ranking, not a hidden filter — nothing is excluded that the
-  //     cap wouldn't have dropped anyway, and `totals.matchingProjects` still
-  //     reports the full match count.
+  //     first page wouldn't have deferred anyway, and
+  //     `totals.matchingProjects` still reports the full match count.
   //
   // Undated projects sort last within their tier, so they drop before real ones.
   const toolSignal = new Set(
     toolSignalRows.flatMap((row) => (row.projectId ? [row.projectId] : [])),
   );
   const matchingProjects = datedProjects.length;
-  const columnRecords = [...datedProjects]
-    .sort(
-      (a, b) =>
-        Number(toolSignal.has(b.id)) - Number(toolSignal.has(a.id)) ||
-        (b.endDate ?? "0000").localeCompare(a.endDate ?? "0000") ||
-        (b.startDate ?? "0000").localeCompare(a.startDate ?? "0000") ||
-        a.name.localeCompare(b.name),
-    )
-    .slice(0, filters.maxColumns)
+  const priorityProjects = [...datedProjects].sort(
+    (a, b) =>
+      Number(toolSignal.has(b.id)) - Number(toolSignal.has(a.id)) ||
+      (b.endDate ?? "0000").localeCompare(a.endDate ?? "0000") ||
+      (b.startDate ?? "0000").localeCompare(a.startDate ?? "0000") ||
+      a.name.localeCompare(b.name),
+  );
+  const pageCount = Math.ceil(matchingProjects / filters.maxColumns);
+  const resolvedPage =
+    pageCount === 0 ? 1 : Math.min(filters.columnPage, pageCount);
+  const pageStart = (resolvedPage - 1) * filters.maxColumns;
+  const columnRecords = priorityProjects
+    .slice(pageStart, pageStart + filters.maxColumns)
     .sort(chronological);
   const columnIds = columnRecords.map((row) => row.id);
+
+  const completionYears = uniq(
+    dated.tree.allRows.flatMap((row) => {
+      const window = dated.dateWindows.get(row.id);
+      return window ? [projectCompletionYear(row, window)] : [];
+    }),
+  )
+    .sort()
+    .reverse();
 
   const empty = rowIds.length === 0 || columnIds.length === 0;
 
@@ -759,6 +773,12 @@ export async function projectToolMatrix(
     columns,
     rows,
     cells,
+    columnPagination: {
+      page: resolvedPage,
+      pageSize: filters.maxColumns,
+      pageCount,
+    },
+    filterOptions: { completionYears },
     totals: {
       matchingProjects,
       matchingTools,
@@ -767,7 +787,6 @@ export async function projectToolMatrix(
       timelineConflictCells,
     },
     truncated: {
-      columns: matchingProjects > columnRecords.length,
       rows: matchingTools > rowRecords.length,
     },
   };

@@ -1786,6 +1786,8 @@ export const projectToolMatrixInput = z.object({
     .min(1)
     .max(MAX_TOOL_MATRIX_COLUMNS)
     .default(DEFAULT_TOOL_MATRIX_COLUMNS),
+  /** One-based page through the priority-ranked project columns. */
+  columnPage: z.number().int().positive().default(1),
 });
 export type ProjectToolMatrixInput = z.input<typeof projectToolMatrixInput>;
 export type ProjectToolMatrixFilters = z.infer<typeof projectToolMatrixInput>;
@@ -1893,8 +1895,19 @@ export const projectToolMatrixOut = z.object({
   columns: z.array(projectToolMatrixColumnOut),
   rows: z.array(projectToolMatrixRowOut),
   cells: z.array(projectToolMatrixCellOut),
+  columnPagination: z.object({
+    /** One-based, clamped to the available page range. */
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+    /** Zero only when no projects match the column scope. */
+    pageCount: z.number().int().nonnegative(),
+  }),
+  filterOptions: z.object({
+    /** All live-project completion years, newest first. */
+    completionYears: z.array(z.string()),
+  }),
   totals: z.object({
-    /** Before `maxColumns` / the row cap — what the filters actually matched. */
+    /** Before column pagination / the row cap — what filters matched. */
     matchingProjects: z.number().int().nonnegative(),
     matchingTools: z.number().int().nonnegative(),
     attachedCells: z.number().int().nonnegative(),
@@ -1907,7 +1920,6 @@ export const projectToolMatrixOut = z.object({
     timelineConflictCells: z.number().int().nonnegative(),
   }),
   truncated: z.object({
-    columns: z.boolean(),
     rows: z.boolean(),
   }),
 });
