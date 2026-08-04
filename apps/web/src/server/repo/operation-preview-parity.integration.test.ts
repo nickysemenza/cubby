@@ -1160,4 +1160,108 @@ describe("operation preview / mutation parity", () => {
       });
     }
   });
+  // ---------------------------------------------------------------------
+  // Ids that name nothing live. These used to be dropped (plural) or turned
+  // into an empty-string branded id (singular `keepId`), so the preview came
+  // back confident and empty — indistinguishable from "this operation is
+  // harmless". The wire schema already rejects a MALFORMED code, so the only
+  // way in is a well-formed code that was deleted or never existed.
+  // ---------------------------------------------------------------------
+  describe("unresolved targets", () => {
+    it("blocks a delete preview whose id names nothing, instead of previewing nothing", async () => {
+      const result = await previewOperation(
+        ctx.db,
+        { operation: "delete", entity: "product", ids: ["PRD-ZZZZ"] },
+        new Date(),
+      );
+
+      expect(result.canProceed).toBe(false);
+      const blocker = result.blockers.find(
+        (b) => b.code === "block-unresolved-target",
+      );
+      expect(blocker).toBeDefined();
+      // The code must reach `label` — `ImpactRow` renders total/label/code and
+      // never `description`, so a description-only message is invisible in the UI.
+      expect(blocker?.label).toContain("PRD-ZZZZ");
+      expect(blocker?.byTargetId).toHaveProperty("PRD-ZZZZ");
+      expect(previewOperationSchema.safeParse(result).success).toBe(true);
+    });
+
+    it("blocks when only SOME ids resolve, rather than silently previewing the survivors", async () => {
+      const product = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Real Product", upc: "800000000901" }),
+        ctx.actor,
+      );
+
+      const result = await previewOperation(
+        ctx.db,
+        {
+          operation: "delete",
+          entity: "product",
+          ids: [product.id, "PRD-ZZZY"],
+        },
+        new Date(),
+      );
+
+      expect(result.canProceed).toBe(false);
+      const blocker = result.blockers.find(
+        (b) => b.code === "block-unresolved-target",
+      );
+      expect(blocker?.label).toContain("PRD-ZZZY");
+      // Only the unknown one is named; the real product is not a blocker.
+      expect(blocker?.label).not.toContain(product.id);
+    });
+
+    it("blocks a merge whose keepId names nothing", async () => {
+      const { output: keep } = await createVendor(
+        ctx.db,
+        vendorCreateInput.parse({ name: "Keeper Vendor" }),
+        ctx.actor,
+      );
+
+      const result = await previewOperation(
+        ctx.db,
+        {
+          operation: "merge",
+          entity: "vendor",
+          mergeIds: [keep.id],
+          keepId: "VEN-ZZZZ",
+        },
+        new Date(),
+      );
+
+      expect(result.canProceed).toBe(false);
+      expect(result.blockers.map((b) => b.code)).toContain(
+        "block-unresolved-target",
+      );
+    });
+
+    it("blocks a non-ingredient merge preview with no keepId", async () => {
+      // `keepId` is optional in the wire schema, but only ingredient can answer
+      // "which should I keep" (candidate ranking). The others used to receive an
+      // empty-string keeper and return a confident preview of an impossible merge.
+      const { output: a } = await createVendor(
+        ctx.db,
+        vendorCreateInput.parse({ name: "Merge A" }),
+        ctx.actor,
+      );
+      const { output: b } = await createVendor(
+        ctx.db,
+        vendorCreateInput.parse({ name: "Merge B" }),
+        ctx.actor,
+      );
+
+      const result = await previewOperation(
+        ctx.db,
+        { operation: "merge", entity: "vendor", mergeIds: [a.id, b.id] },
+        new Date(),
+      );
+
+      expect(result.canProceed).toBe(false);
+      expect(result.blockers.map((b) => b.code)).toContain(
+        "block-missing-keeper",
+      );
+    });
+  });
 });
