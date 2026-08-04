@@ -213,10 +213,7 @@ function collectPiecesFromSubtree(
     // Create pieces for furniture-type locations even if empty (ghost furniture)
     if (!isContainerType(node.type)) {
       const spec = getFurnitureSpec(node.type);
-      const totalValuation = items.reduce(
-        (sum, it) => sum + (it.valuation ?? 0),
-        0,
-      );
+      const totalValuation = sumBy(items, (it) => it.valuation ?? 0);
       pieces.push({
         gx: 0,
         gy: 0,
@@ -318,10 +315,7 @@ export function buildRooms(
       const containerItems = itemsByLocation.get(container.id) ?? [];
       if (containerItems.length > 0) {
         const spec = getFurnitureSpec("table");
-        const totalValuation = containerItems.reduce(
-          (sum, it) => sum + (it.valuation ?? 0),
-          0,
-        );
+        const totalValuation = sumBy(containerItems, (it) => it.valuation ?? 0);
         pieces.push({
           gx: 0,
           gy: 0,
@@ -377,10 +371,7 @@ export function buildRooms(
       const childItems = itemsByLocation.get(child.id) ?? [];
       if (!isContainerType(child.type)) {
         const spec = getFurnitureSpec(child.type);
-        const totalValuation = childItems.reduce(
-          (sum, it) => sum + (it.valuation ?? 0),
-          0,
-        );
+        const totalValuation = sumBy(childItems, (it) => it.valuation ?? 0);
         childPieces.push({
           gx: 0,
           gy: 0,
@@ -408,10 +399,7 @@ export function buildRooms(
     const roomDirectItems = itemsByLocation.get(rootNode.id) ?? [];
     if (roomDirectItems.length > 0) {
       const spec = getFurnitureSpec("table");
-      const totalValuation = roomDirectItems.reduce(
-        (sum, it) => sum + (it.valuation ?? 0),
-        0,
-      );
+      const totalValuation = sumBy(roomDirectItems, (it) => it.valuation ?? 0);
       defaultPieces.push({
         gx: 0,
         gy: 0,

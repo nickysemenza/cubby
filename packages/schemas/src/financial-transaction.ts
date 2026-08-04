@@ -189,15 +189,13 @@ export type FinancialTransactionSourceRef = z.infer<
 
 export const financialTransactionSourceRefs = z
   .array(financialTransactionSourceRef)
-  .refine((refs) => {
-    const seen = new Set<string>();
-    for (const ref of refs) {
-      const key = `${ref.source}\u0000${ref.externalId}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-    }
-    return true;
-  }, "sourceRefs must not contain duplicate source/externalId pairs");
+  .refine(
+    ...uniqueBy(
+      (ref: FinancialTransactionSourceRef) =>
+        `${ref.source}\u0000${ref.externalId}`,
+      "sourceRefs must not contain duplicate source/externalId pairs",
+    ),
+  );
 
 const nonZeroAmount = wholeCentAmount.refine(
   (amount) => amount !== 0,

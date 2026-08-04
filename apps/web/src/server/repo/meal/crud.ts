@@ -31,6 +31,7 @@ import {
   auditDateWhereConditions,
   buildOrderBy,
   countWhere,
+  executeListQueryWithCount,
   getDb,
   insertAndReturn,
   lockAndValidateForDelete,
@@ -127,7 +128,7 @@ export const mealList = async (
     filters.to ? lte(meal.date, filters.to) : undefined,
   );
 
-  const [rows, count] = await Promise.all([
+  const { data: rows, count } = await executeListQueryWithCount(
     getDb(db).query.meal.findMany({
       where: whereCondition,
       orderBy: orderByArray,
@@ -136,7 +137,7 @@ export const mealList = async (
       ...relations.meal.full,
     }),
     countWhere(db, meal, whereCondition),
-  ]);
+  );
 
   return { data: rows.map(dbMealToAPI), count };
 };

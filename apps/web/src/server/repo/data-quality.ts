@@ -31,7 +31,7 @@ import {
 } from "@cubby/schemas/purchase";
 import { parseShortcode, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { and, eq, inArray, isNotNull, or, type SQL, sql } from "drizzle-orm";
-import { groupBy, uniq, uniqBy } from "es-toolkit";
+import { groupBy, sumBy, uniq, uniqBy } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   expense,
@@ -772,10 +772,7 @@ export const loadPurchaseDataQualities = async (
         `${unpriced} linked Expense${unpriced === 1 ? " is" : "s are"} unpriced.`,
       );
     }
-    const expenseTotal = purchaseExpenses.reduce(
-      (sum, item) => sum + (item.cost ?? 0),
-      0,
-    );
+    const expenseTotal = sumBy(purchaseExpenses, (item) => item.cost ?? 0);
     if (
       reconcilePurchase({
         statedTotal: row.statedTotal,
