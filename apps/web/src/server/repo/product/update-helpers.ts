@@ -104,6 +104,30 @@ export async function syncProductUnitMappings(
 }
 
 /**
+ * True when an incoming external-id write for a (source, kind) slot is
+ * identical to the live row already occupying it. Callers use this to skip a
+ * pointless soft-delete+insert (or update) that would otherwise mint a
+ * tombstone / bump `updatedAt` for data that didn't actually change. A `url`
+ * difference alone still counts as a real change — `storedExternalIdUrl`
+ * handles the amazon/asin derived-url special case so the comparison matches
+ * what would actually be persisted.
+ */
+export function externalIdSlotUnchanged(
+  existing: Pick<
+    typeof productExternalId.$inferSelect,
+    "source" | "kind" | "externalId" | "url"
+  >,
+  incoming: Pick<ExternalIdInput, "source" | "kind" | "externalId" | "url">,
+): boolean {
+  return (
+    existing.source === incoming.source &&
+    existing.kind === incoming.kind &&
+    existing.externalId === incoming.externalId &&
+    existing.url === storedExternalIdUrl(incoming)
+  );
+}
+
+/**
  * Reconcile a product's external IDs against the desired set.
  * Same diff pattern as unit mappings, but removals are soft-deletes (deletedAt)
  * since external IDs are referenced elsewhere and retained for history.
@@ -120,14 +144,34 @@ export async function syncProductExternalIds(
     ),
   });
 
-  const toDelete = existingExternalIds.filter(
-    (e) => !externalIds.some((eid) => eid.id === e.id),
-  );
   const normalized = externalIds.map((eid) => ({
     ...eid,
     source: eid.source.trim().toLowerCase(),
   }));
-  const toCreate = normalized.filter((e) => e.id === undefined);
+
+  // An incoming entry with no `id` is nominally a "create", but when it lands
+  // on a slot (source+kind) that already has a live row with the identical
+  // externalId/url, it's a re-submission of the current value, not a real
+  // change. Leave that row untouched (no tombstone, no updatedAt bump)
+  // instead of soft-deleting it and inserting an identical copy.
+  const unchangedExistingIds = new Set<string>();
+  const toCreate = normalized.filter((eid) => {
+    if (eid.id !== undefined) return false;
+    const liveSlot = existingExternalIds.find(
+      (e) => e.source === eid.source && e.kind === eid.kind,
+    );
+    if (liveSlot && externalIdSlotUnchanged(liveSlot, eid)) {
+      unchangedExistingIds.add(liveSlot.id);
+      return false;
+    }
+    return true;
+  });
+
+  const toDelete = existingExternalIds.filter(
+    (e) =>
+      !unchangedExistingIds.has(e.id) &&
+      !externalIds.some((eid) => eid.id === e.id),
+  );
   const toUpdate = externalIds.filter(
     (e): e is ExternalIdInput & { id: string } => e.id !== undefined,
   );

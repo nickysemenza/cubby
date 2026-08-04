@@ -234,6 +234,79 @@ describe("product repository", () => {
     });
   });
 
+  it("no-ops a re-submitted external ID (no tombstone), but still replaces on a url-only change", async () => {
+    const created = await createProduct(
+      ctx.db,
+      makeProductInput({
+        externalIds: [
+          {
+            source: "home-depot",
+            kind: "retailer_sku",
+            externalId: "SKU-100",
+            url: null,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    const allSlotRows = () =>
+      getDb(ctx.db).query.productExternalId.findMany({
+        where: eq(productExternalId.productId, created.entityId),
+      });
+
+    // Re-importing the exact same (source, kind, externalId, url) is a no-op:
+    // the write path must not soft-delete the live row and insert a copy.
+    await updateProduct(
+      ctx.db,
+      created.entityId,
+      {
+        externalIds: [
+          {
+            source: "home-depot",
+            kind: "retailer_sku",
+            externalId: "SKU-100",
+            url: null,
+          },
+        ],
+      },
+      ctx.actor,
+    );
+    const afterReimport = await allSlotRows();
+    expect(afterReimport).toHaveLength(1);
+    expect(afterReimport[0]).toMatchObject({
+      externalId: "SKU-100",
+      deletedAt: null,
+    });
+
+    // A url-only change on the same slot IS a real change and must still
+    // replace: one live row with the new url, one tombstone of the old.
+    await updateProduct(
+      ctx.db,
+      created.entityId,
+      {
+        externalIds: [
+          {
+            source: "home-depot",
+            kind: "retailer_sku",
+            externalId: "SKU-100",
+            url: "https://www.homedepot.com/p/SKU-100",
+          },
+        ],
+      },
+      ctx.actor,
+    );
+    const afterUrlChange = await allSlotRows();
+    const live = afterUrlChange.filter((row) => row.deletedAt === null);
+    const tombstoned = afterUrlChange.filter((row) => row.deletedAt !== null);
+    expect(live).toHaveLength(1);
+    expect(live[0]).toMatchObject({
+      externalId: "SKU-100",
+      url: "https://www.homedepot.com/p/SKU-100",
+    });
+    expect(tombstoned).toHaveLength(1);
+    expect(tombstoned[0]).toMatchObject({ externalId: "SKU-100", url: null });
+  });
+
   it("orders identity-strength worklists deterministically", async () => {
     const weak = await createProduct(
       ctx.db,

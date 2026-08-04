@@ -129,6 +129,7 @@ import {
 import type { ProductDeepDB, ProductListDB } from "./types";
 import {
   assertNoCanonicalPriceMapping,
+  externalIdSlotUnchanged,
   syncProductExternalIds,
   syncProductImages,
   syncProductUnitMappings,
@@ -1333,6 +1334,13 @@ export const patchProductExternalIds = async (
 
     await assertExternalIdsAvailable(tx, input.upsert, id);
 
+    // Slots this call is explicitly removing must never be short-circuited by
+    // the unchanged-value check below, even if their pre-removal value
+    // happens to match an incoming upsert for the same slot.
+    const removedSlots = new Set(
+      input.remove.map((r) => `${r.source.trim().toLowerCase()} ${r.kind}`),
+    );
+
     for (const entry of input.remove) {
       await tx
         .update(productExternalId)
@@ -1348,6 +1356,19 @@ export const patchProductExternalIds = async (
     }
     for (const entry of input.upsert) {
       const source = entry.source.trim().toLowerCase();
+      const liveSlot = beforeIds.find(
+        (e) => e.source === source && e.kind === entry.kind,
+      );
+      // A re-submission of the exact value already live in this slot is a
+      // no-op: skip it so it neither bumps `updatedAt` nor (via the
+      // conflict-target upsert) touches the row for no real change.
+      if (
+        liveSlot &&
+        !removedSlots.has(`${source} ${entry.kind}`) &&
+        externalIdSlotUnchanged(liveSlot, { ...entry, source })
+      ) {
+        continue;
+      }
       await tx
         .insert(productExternalId)
         .values({
