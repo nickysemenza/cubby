@@ -1662,6 +1662,20 @@ export type ProductProjectUsesSetInput = z.infer<
   typeof productProjectUsesSetInput
 >;
 
+/**
+ * Just the edge count that moved — same reasoning as
+ * {@link projectToolUsageSetOut}. Returning the refreshed panel would be dead
+ * payload: a save has to invalidate the project-side resource lists and the
+ * related-view sections too, and that same invalidation refetches this panel,
+ * so any returned copy is overwritten before it can be read. Rebuilding it here
+ * would mean running `listProductProjectUses` (metrics + shared-window
+ * rollups) twice per save.
+ */
+export const productProjectUsesSetOut = z.object({
+  changed: z.number().int().nonnegative(),
+});
+export type ProductProjectUsesSetOut = z.infer<typeof productProjectUsesSetOut>;
+
 // ---------------------------------------------------------------------------
 // MCP / dashboard projections
 // ---------------------------------------------------------------------------

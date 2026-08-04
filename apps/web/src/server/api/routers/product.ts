@@ -52,6 +52,7 @@ import {
   productProjectUsesInput,
   productProjectUsesOut,
   productProjectUsesSetInput,
+  productProjectUsesSetOut,
 } from "@cubby/schemas/project";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { streamItems, streamProgress } from "~/lib/bulk-progress";
@@ -658,12 +659,12 @@ const projectUses = protectedProcedure
 
 /**
  * Replace the set of projects this tool was used on, from the tool's own page.
- * Returns the refreshed panel so the caller re-renders from the mutation
- * result instead of invalidating and refetching.
+ * Returns only the count that moved — see `productProjectUsesSetOut` for why
+ * handing back the refreshed panel would be dead payload.
  */
 const setProjectUses = protectedProcedure
   .input(productProjectUsesSetInput)
-  .output(strictOutput(productProjectUsesOut))
+  .output(strictOutput(productProjectUsesSetOut))
   .mutation(async ({ ctx, input }) => {
     const id = await resolveProductId(ctx.db, input.productId);
     const resolved = await resolveLiveShortcodes(
@@ -675,13 +676,12 @@ const setProjectUses = protectedProcedure
     if (missing) {
       throw createAppError("PROJECT_NOT_FOUND", `Project ${missing} not found`);
     }
-    await setProductProjectUses(
+    return setProductProjectUses(
       ctx.db,
       id,
       input.projectIds.map((code) => unsafeProjectId(resolved.get(code)!)),
       ctx.actorContext,
     );
-    return listProductProjectUses(ctx.db, id);
   });
 
 export const productRouter = createTRPCRouter({
