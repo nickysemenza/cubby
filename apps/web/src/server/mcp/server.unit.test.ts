@@ -1092,12 +1092,15 @@ describe("listMcpToolCatalog", () => {
   it("hands every entity get tool an argument its router's getByID accepts", async () => {
     // Regression: get_wish was uncallable from the day it shipped. The crud
     // toolset's default fetch calls `router.getByID({ id })`, but `wish.getByID`
-    // declares `.input(wishShortcode)` — a BARE scalar — so zod rejected every
-    // call before the query ran. vendor and purchase carry hand-written `get:`
-    // overrides for exactly this; wish simply didn't. Nothing in the catalog can
-    // see the mismatch (the advertised input is `{id}` either way), so this
-    // drives the real handler with a stub caller and checks the argument it
-    // actually passes against the schema the router actually declares.
+    // then declared `.input(wishShortcode)` — a BARE scalar — so zod rejected
+    // every call before the query ran. vendor and purchase carried hand-written
+    // `get:` overrides for exactly this; wish simply didn't. All three have
+    // since moved onto the crud factory, so `{ id }` is now the shape
+    // everywhere and the shims are gone — which is precisely why this guard has
+    // to stay: nothing in the catalog can see such a mismatch (the advertised
+    // input is `{id}` either way), so it drives the real handler with a stub
+    // caller and checks the argument it actually passes against the schema the
+    // router actually declares.
     const procedures = (
       appRouter as unknown as {
         _def: { procedures: Record<string, { _def: { inputs: unknown[] } }> };

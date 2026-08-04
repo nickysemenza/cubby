@@ -852,11 +852,11 @@ function getEntityRouter(
 }
 
 /**
- * How a get tool fetches its row, when `router.getByID({ id })` is the wrong
- * call. The crud-factory routers take `{ id }`, but a hand-rolled router may
- * take the branded id as a BARE scalar (`.input(vendorId)` — vendor, purchase),
- * and `{ id }` fails zod there. Symmetric with the toolset's `create` hatch:
- * the MCP layer adapts, rather than the router changing shape to suit MCP.
+ * How a get tool fetches its row, when the dynamically-resolved
+ * `router.getByID({ id })` is the wrong call — e.g. a toolset that wants the
+ * statically-typed caller so the id it passes is checked at compile time.
+ * Symmetric with the toolset's `create` hatch: the MCP layer adapts, rather
+ * than the router changing shape to suit MCP.
  */
 type GetByIdFetch = (caller: Caller, id: string) => Promise<unknown>;
 

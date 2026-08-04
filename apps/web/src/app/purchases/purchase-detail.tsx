@@ -70,13 +70,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
     entityLabel: "Purchase",
     entity: "purchase",
     mutationOptions: (callbacks) =>
-      // Purchase's delete is hand-rolled and returns void rather than the crud
-      // factory's side-effect summary, so there's nothing to forward into the
-      // hook's "saved with background work" toast.
-      api.purchase.delete.mutationOptions({
-        onSuccess: () => callbacks.onSuccess({}),
-        onError: callbacks.onError,
-      }),
+      api.purchase.delete.mutationOptions(callbacks),
     invalidateKeys: purchaseMutationInvalidateKeys,
     redirectTo: "/purchases",
     description:

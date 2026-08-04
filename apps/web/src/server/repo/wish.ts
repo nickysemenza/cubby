@@ -228,10 +228,7 @@ export const wishList = async (
   return { data: await hydrateWishes(db, rows), count };
 };
 
-export const getWishByID = async (
-  db: Database,
-  id: WishId,
-): Promise<WishOut> => {
+const getWishByID = async (db: Database, id: WishId): Promise<WishOut> => {
   const row = await getDb(db).query.wish.findFirst({
     where: and(eq(wish.id, id), notDeleted(wish)),
   });

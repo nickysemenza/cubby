@@ -1079,9 +1079,9 @@ export function toPurchaseCard(vm: PurchasePreview): ManifestCardProps {
 
 export function PurchasePreviewContent({ purchaseId }: { purchaseId: string }) {
   const trpc = useTRPC();
-  // `purchase.getByID` takes the branded id as a bare scalar, not `{ id }` —
-  // see routers/purchase.ts.
-  const query = useQuery(trpc.purchase.getByID.queryOptions(purchaseId));
+  const query = useQuery(
+    trpc.purchase.getByID.queryOptions({ id: purchaseId }),
+  );
 
   return (
     <PreviewQuery query={query} label="Purchase">
@@ -1136,8 +1136,7 @@ export function toVendorCard(vm: VendorPreview): ManifestCardProps {
 
 export function VendorPreviewContent({ vendorId }: { vendorId: string }) {
   const trpc = useTRPC();
-  // Bare scalar id, like `purchase.getByID` above.
-  const query = useQuery(trpc.vendor.getByID.queryOptions(vendorId));
+  const query = useQuery(trpc.vendor.getByID.queryOptions({ id: vendorId }));
 
   return (
     <PreviewQuery query={query} label="Vendor">

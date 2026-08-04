@@ -114,7 +114,7 @@ const createGetByIdProcedure = <T, TId extends string = string>(
  * resolve to a uuid of the wrong type. The output is nullable because a URL is
  * user-supplied: an unknown code is a 404 for the route to render, not a throw.
  */
-export const createGetByShortcodeProcedure = <T>(
+const createGetByShortcodeProcedure = <T>(
   entity: ShortcodeEntity,
   outputSchema: ZodSchema<T>,
   getByShortcodeFn: (
