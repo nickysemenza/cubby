@@ -26,7 +26,7 @@ import type { AvailabilityService } from "~/server/services/availability.service
 import type { LocationValuationService } from "~/server/services/location-valuation.service";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
-import { protectedProcedure } from "./trpc";
+import { protectedProcedure, strictOutput } from "./trpc";
 
 // Common input schema for update operations
 const updateInputSchema = <T extends ZodSchema>(dataSchema: T) =>
@@ -81,7 +81,7 @@ const createDeleteProcedure = <TId extends string = string>(
           .max(500),
       }),
     )
-    .output(z.object({ sideEffects: mutationSideEffectsSchema }))
+    .output(strictOutput(z.object({ sideEffects: mutationSideEffectsSchema })))
     .mutation(async ({ ctx, input }) => {
       const ids = input.ids.map((id) =>
         idSchema ? (idSchema.parse(id) as TId) : (id as TId),
@@ -97,6 +97,17 @@ const createGetByIdProcedure = <T, TId extends string = string>(
 ) =>
   protectedProcedure
     .input(idSchema ? z.object({ id: idSchema }) : IDInput)
+    // NOTE: cannot be `strictOutput(outputSchema)` here — `T` is a naked,
+    // unresolved generic in this shared factory (unlike the 164 router call
+    // sites, which pass a concrete schema). strictOutput forces the parser's
+    // Input type to equal `T`, which makes tRPC check the resolver against
+    // `DefaultValue<T, T>`; TypeScript never proves a bare `T` assignable to
+    // that conditional for ANY generic T (reproduced with zero zod/trpc code:
+    // `function f<T>(x: T): (T extends Marker ? T : T) { return x }` alone
+    // fails to compile — a TS conditional-type limitation, not a brand
+    // mismatch). Fixing this would require dropping the shared getByID/
+    // getByShortcode/create/update generic factory in favor of per-router
+    // concrete `.output()` calls — out of scope for a mechanical wrap.
     .output(outputSchema)
     .query(({ ctx, input }) => {
       const id = idSchema
@@ -124,6 +135,10 @@ const createGetByShortcodeProcedure = <T>(
 ) =>
   protectedProcedure
     .input(z.object({ shortcode: shortcodeSchema(entity) }))
+    // NOTE: see createGetByIdProcedure above — `T` is a naked generic here
+    // too, so strictOutput(outputSchema.nullable()) breaks tRPC's internal
+    // DefaultValue<T, T> check for the same reason. Not fixable at this
+    // layer without a TS conditional-type workaround; can't be applied.
     .output(outputSchema.nullable())
     .query(({ ctx, input }) => getByShortcodeFn(ctx, input.shortcode));
 
@@ -139,6 +154,10 @@ const createCreateProcedure = <S extends ZodSchema, TOutput>(
 ) =>
   protectedProcedure
     .input(inputSchema)
+    // NOTE: see createGetByIdProcedure above — `TOutput` is a naked generic
+    // here too, so strictOutput(outputSchema) breaks tRPC's internal
+    // DefaultValue<T, T> check for the same reason; can't be applied at
+    // this layer.
     .output(outputSchema)
     // `input` is cast back to `z.infer<S>` because tRPC can't resolve the parsed
     // type from the still-generic `S` inside this builder; the cast is local and
@@ -165,6 +184,10 @@ const createUpdateProcedure = <
         ? z.object({ id: idSchema, data: inputSchema })
         : updateInputSchema(inputSchema),
     )
+    // NOTE: see createGetByIdProcedure above — `TOutput` is a naked generic
+    // here too, so strictOutput(outputSchema) breaks tRPC's internal
+    // DefaultValue<T, T> check for the same reason; can't be applied at
+    // this layer.
     .output(outputSchema)
     .mutation(({ ctx, input }) => {
       // Cast back to the concrete shape: tRPC can't resolve the parsed type from
@@ -223,7 +246,9 @@ export function createEntityListProcedure<TOutput, TFilters>({
       }),
     )
     .output(
-      createPaginatedResponseSchemaWithContext(schemas.output, entityName),
+      strictOutput(
+        createPaginatedResponseSchemaWithContext(schemas.output, entityName),
+      ),
     )
     .query(async ({ ctx, input }) => {
       const { data, count, sums } = await repository.list(
