@@ -14,11 +14,13 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { Calendar, DollarSign, Hammer, Wallet } from "lucide-react";
 import { lazy, type ReactNode, Suspense, useMemo } from "react";
 import { SavedViewsMenu } from "~/app/_components/data-table/DataTableViews";
+import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import type { SummaryItem } from "~/app/_components/SummaryCard";
+import { ProjectMark } from "~/app/projects/project-mark";
 import { Grid, Row, Section, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -496,9 +498,13 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
             >
               {task.name}
             </Link>
-            {task.projectName && (
-              <span className="shrink-0 text-muted-foreground text-xs">
-                {task.projectName}
+            {task.projectName && task.projectId && (
+              <span className="min-w-0 max-w-40 text-muted-foreground text-xs">
+                <EntityInlineLink
+                  entity="project"
+                  data={{ id: task.projectId, name: task.projectName }}
+                  truncate
+                />
               </span>
             )}
             {task.dueDate && (
@@ -830,7 +836,7 @@ function ProjectCard({
         )}
         <CardHeader>
           <CardTitle>
-            {project.icon && <span>{project.icon}</span>}
+            <ProjectMark icon={project.icon} size={20} />
             <span className="truncate">{project.name}</span>
           </CardTitle>
           <CardDescription className="flex items-center gap-2">

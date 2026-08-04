@@ -52,7 +52,7 @@ import {
 } from "./subtree";
 
 /**
- * Lightweight `{id, name}` options for pickers/filter selects — no
+ * Lightweight `{id, name, icon}` options for pickers/filter selects — no
  * rollup/dependency joins. Feeds `project.options` (see `useProjectOptions`),
  * which used to page through the full `list` (rollups + deps) at pageSize 500
  * just to get names.
@@ -73,6 +73,7 @@ export const projectNameOptions = async (
         id: project.id,
         shortcode: project.shortcode,
         name: project.name,
+        icon: project.icon,
         parentProjectId: project.parentProjectId,
         startDate: project.startDate,
         endDate: project.endDate,
@@ -89,6 +90,7 @@ export const projectNameOptions = async (
     return {
       id: unsafeProjectShortcode(row.shortcode),
       name: row.name,
+      icon: row.icon,
       effectiveStart: window.effectiveStart,
       effectiveEnd: window.effectiveEnd,
     };

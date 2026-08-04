@@ -283,6 +283,7 @@ export async function projectToolMatrix(
         id: project.id,
         shortcode: project.shortcode,
         name: project.name,
+        icon: project.icon,
         status: project.status,
         kind: project.kind,
       })
@@ -757,6 +758,7 @@ export async function projectToolMatrix(
   const columns: ProjectToolMatrixColumnOut[] = columnRecords.map((record) => ({
     projectId: unsafeProjectShortcode(record.shortcode),
     projectName: record.name,
+    icon: record.icon,
     status: record.status,
     kind: record.kind,
     startDate: record.startDate,

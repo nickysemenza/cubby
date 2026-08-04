@@ -31,6 +31,10 @@ vi.mock("~/app/_components/EntityPreviewLink", () => ({
   }) => <a href={`/${entity}/${id}`}>{children}</a>,
 }));
 
+vi.mock("~/app/projects/project-mark", () => ({
+  ProjectMarkById: () => <span aria-hidden="true">project</span>,
+}));
+
 type ParentValue = { id: string | null; name: string | null };
 
 type TaskRow = {

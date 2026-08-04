@@ -31,6 +31,7 @@ import {
   getProjectByID,
   projectDashboardSummary,
   projectList,
+  projectNameOptions,
   projectPortfolioAnalytics,
   projectTreePage,
   updateProject,
@@ -50,6 +51,7 @@ describe("project repository", () => {
       ctx.db,
       projectCreateInput.parse({
         name: "test project a",
+        icon: "🏡",
         status: "in_progress",
         locations: ["Cabin"],
       }),
@@ -59,6 +61,13 @@ describe("project repository", () => {
     expect(created.name).toBe("test project a");
     expect(created.status).toBe("in_progress");
     expect(created.locations).toEqual(["Cabin"]);
+    await expect(projectNameOptions(ctx.db)).resolves.toContainEqual(
+      expect.objectContaining({
+        id: created.id,
+        name: "test project a",
+        icon: "🏡",
+      }),
+    );
     expect(created.rollup).toEqual({
       spent: 0,
       actualSpent: 0,

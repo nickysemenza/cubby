@@ -6,6 +6,7 @@ const project: GanttRow = {
   kind: "project",
   id: "project-1",
   name: "Kitchen",
+  icon: "🔨",
   depth: 0,
   expandable: true,
   expanded: true,

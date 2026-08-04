@@ -44,6 +44,7 @@ import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { EntityPreviewLink } from "~/app/_components/EntityPreviewLink";
+import { ProjectMark } from "~/app/projects/project-mark";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import {
@@ -733,9 +734,10 @@ function MatrixTable({
                 <EntityPreviewLink
                   entity="project"
                   id={column.projectId}
-                  className="absolute bottom-2 left-1 z-10 block w-24 origin-bottom-left rotate-[-60deg] truncate text-2xs text-foreground leading-none underline decoration-border/70 decoration-dotted underline-offset-2 transition-colors hover:text-primary hover:decoration-primary hover:decoration-solid"
+                  className="absolute bottom-2 left-1 z-10 flex w-24 origin-bottom-left rotate-[-60deg] items-center gap-1 truncate text-2xs text-foreground leading-none underline decoration-border/70 decoration-dotted underline-offset-2 transition-colors hover:text-primary hover:decoration-primary hover:decoration-solid"
                 >
-                  {column.projectName}
+                  <ProjectMark icon={column.icon} size={12} />
+                  <span className="truncate">{column.projectName}</span>
                 </EntityPreviewLink>
               </div>
               <div className="pb-1 text-center text-2xs text-slate">

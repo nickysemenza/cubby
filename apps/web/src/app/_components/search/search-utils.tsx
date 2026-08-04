@@ -3,6 +3,7 @@ import type { LocationType } from "@cubby/schemas/location";
 import type { ProductCategory } from "@cubby/schemas/product";
 import type { SearchableEntity, SearchResultItem } from "@cubby/schemas/search";
 import { match } from "ts-pattern";
+import { ProjectMark } from "~/app/projects/project-mark";
 import { IconTile } from "~/components/ui/icon-tile";
 import { Image } from "~/components/ui/image";
 import { EntityIcon, entities, entityDetailParams } from "~/entities/entities";
@@ -93,6 +94,10 @@ export function SearchResultItemIcon({
   className?: string;
 }) {
   const entity = entityTypeMap[item.entityType];
+
+  if (item.entityType === "project") {
+    return <ProjectMark icon={item.icon} className={className} />;
+  }
 
   // Location with type hint
   if (item.entityType === "location" && item.typeHint) {

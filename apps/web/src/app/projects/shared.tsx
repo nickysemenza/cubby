@@ -89,6 +89,7 @@ import {
   createExpenseProductImageColumn,
   ExpenseProductImages,
 } from "~/app/expenses/expense-product-image-column";
+import { ProjectMark } from "~/app/projects/project-mark";
 import {
   TASK_STATUS_LABELS,
   taskStatusBadgeVariant,
@@ -1376,6 +1377,10 @@ const subProjectCountSuffix = (row: ProjectOut): ReactNode =>
     <Badge variant="outline">{row.childProjectIds.length} sub</Badge>
   ) : undefined;
 
+const projectIconPrefix = (row: ProjectOut): ReactNode => (
+  <ProjectMark icon={row.icon} />
+);
+
 /**
  * The Projects Data-tab list, in one of two renderers.
  *
@@ -1641,6 +1646,7 @@ export function ProjectTable({
     filterOptions,
     deletable: deletableConfig,
     nameEditable,
+    namePrefix: projectIconPrefix,
     nameSuffix: subProjectCountSuffix,
     tableStateOptions,
     tree: isTree ? PROJECT_TREE_CONFIG : undefined,

@@ -26,6 +26,7 @@ import {
 import { Row, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
 import { entities, entityDetailParams } from "~/entities/entities";
+import { ProjectMark } from "../../project-mark";
 import { type ChainNode, longestChains } from "./gantt-chain";
 import { toDayIndex, todayPlain } from "./gantt-date";
 import { buildProjectRows, type DayRange, type GanttRow } from "./gantt-model";
@@ -155,7 +156,10 @@ export function ProjectGantt({
         params={entityDetailParams(row.id)}
         className="hover:underline"
       >
-        {row.name}
+        <span className="inline-flex min-w-0 items-center gap-1">
+          {row.kind === "project" && <ProjectMark icon={row.icon} size={12} />}
+          <span className="truncate">{row.name}</span>
+        </span>
       </Link>
     );
   }, []);

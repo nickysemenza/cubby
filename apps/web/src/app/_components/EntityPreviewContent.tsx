@@ -24,6 +24,7 @@ import {
   PROJECT_STATUS_LABELS,
   TRADE_LABELS,
 } from "~/app/projects/project-formatting";
+import { ProjectMark, ProjectMarkById } from "~/app/projects/project-mark";
 import { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
 import { EntityIcon } from "~/entities/entities";
 import { fdcIdFromParam } from "~/entities/entity-query";
@@ -755,7 +756,7 @@ export function MealPreviewContent({ mealId }: { mealId: string }) {
 const projectCrossLink = (shortcode: string, name: string): CrossLink => ({
   to: "/projects/$shortcode",
   params: { shortcode },
-  icon: <EntityIcon entity="project" size={12} colored />,
+  icon: <ProjectMarkById projectId={shortcode} size={12} />,
   label: name,
 });
 
@@ -792,11 +793,7 @@ export function toProjectCard(vm: ProjectPreview): ManifestCardProps {
   return {
     entity: "project",
     routeParam: vm.id,
-    icon: vm.icon ? (
-      <span className="text-sm leading-none">{vm.icon}</span>
-    ) : (
-      <EntityIcon entity="project" size={14} colored />
-    ),
+    icon: <ProjectMark icon={vm.icon} />,
     name: vm.name,
     tag: "project",
     identity,

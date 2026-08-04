@@ -318,13 +318,14 @@ export const projectUpdateInput = z.object({
 export type ProjectUpdateInput = z.infer<typeof projectUpdateInput>;
 
 /**
- * Lightweight `{id, name}` projection for pickers/filter selects — no
+ * Lightweight `{id, name, icon}` identity for pickers/filter selects — no
  * rollups/dependency joins, a single indexed query (see
  * repo/project/lookup.ts's `projectNameOptions`).
  */
 export const projectOptionsOut = z.object({
   id: projectShortcode,
   name: z.string(),
+  icon: z.string().nullable(),
   // Carried so a picker can rank by "was this project running on that date?"
   // without a second round trip — see rankProjectSuggestions. These are the
   // EFFECTIVE bounds (override when set, else derived from tasks/expenses/
@@ -1795,6 +1796,7 @@ export type ProjectToolMatrixFilters = z.infer<typeof projectToolMatrixInput>;
 export const projectToolMatrixColumnOut = z.object({
   projectId: projectShortcode,
   projectName: z.string(),
+  icon: z.string().nullable(),
   status: projectStatusSchema,
   kind: projectKindSchema.nullable(),
   /** Recursive effective window — the chronological sort key, not the override. */
