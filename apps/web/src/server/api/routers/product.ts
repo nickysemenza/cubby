@@ -17,6 +17,8 @@ import {
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import {
+  mergeProductsInput,
+  mergeProductsOut,
   patchProductExternalIdsInput,
   productApplyUpcInput,
   productCategoryDistributionOut,
@@ -62,6 +64,7 @@ import {
   getProductsByShortcodes,
   getProductsSharingTags,
   getProductTagOptions,
+  mergeProducts,
   patchProductExternalIds,
   productList as productListRepo,
   productSearch,
@@ -601,6 +604,45 @@ const deleteItem = createDeleteProcedure<ProductShortcode>(
   productShortcode,
 );
 
+/**
+ * Fold duplicate products into one. See `mergeProducts` (repo/product/merge.ts)
+ * for the two structural collisions — the per-product `(source, kind)`
+ * identifier slot and the `(productId, locationId)` stock slot — and why an
+ * identifier conflict discards the loser's value while stock in a shared
+ * location is summed rather than dropped.
+ *
+ * Side effects run for the survivor AND every merged-away product: the survivor
+ * absorbed names, aliases, and identifiers (so its embedding is stale), and the
+ * losers are gone (so theirs must be cleaned up beyond the in-transaction
+ * cascade `finalizeMerge` already did).
+ */
+const merge = protectedProcedure
+  .input(mergeProductsInput)
+  .output(strictOutput(mergeProductsOut))
+  .mutation(async ({ ctx, input }) => {
+    // Destructured, not stripped later: the internal uuids are the repo's
+    // channel to this dispatch and must never reach the wire (the merged-away
+    // rows are already soft-deleted, so their codes can't be re-resolved here).
+    const { keepEntityId, deletedEntityIds, ...mergeSummary } =
+      await mergeProducts(ctx.db, input, ctx.actorContext);
+    await runMutationSideEffectsForEntities(ctx.db, [
+      {
+        action: "updated" as const,
+        entity: { entityType: "product" as const, entityId: keepEntityId },
+        source: "product.merge",
+      },
+      ...deletedEntityIds.map((entityId) => ({
+        action: "deleted" as const,
+        entity: { entityType: "product" as const, entityId },
+        source: "product.merge",
+      })),
+    ]);
+    return {
+      product: await getProductWithFood(ctx.db, ctx.usdaClient, keepEntityId),
+      mergeSummary,
+    };
+  });
+
 const projectUses = protectedProcedure
   .input(productProjectUsesInput)
   .output(strictOutput(productProjectUsesOut))
@@ -633,4 +675,5 @@ export const productRouter = createTRPCRouter({
   patchExternalIds,
   verifyImages,
   projectUses,
+  merge,
 });

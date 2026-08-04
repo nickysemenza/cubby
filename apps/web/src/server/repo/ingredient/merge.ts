@@ -33,13 +33,13 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import {
   countByTarget,
   impact,
   present,
   sideEffect,
 } from "~/server/repo/impact";
+import { finalizeMerge, repointEdge } from "~/server/repo/merge";
 import { mergeImpactForIngredients } from "./search";
 
 export const INGREDIENT_MERGE_EDGE_POLICY = {
@@ -280,38 +280,44 @@ export const mergeIngredients = async (
       .set({ aliases: r.newAliases })
       .where(eq(ingredient.id, target));
 
-    // re-point every recipe line onto the target
-    await tx
-      .update(recipeSectionIngredient)
-      .set({ ingredientId: target })
-      .where(inArray(recipeSectionIngredient.ingredientId, uniqueAliases));
+    // Re-point every recipe line, and every product linked to an alias
+    // ingredient, onto the target. The product repoint isn't optional: the FK
+    // from Product.ingredientId would block the hard delete below (and this is
+    // the whole point of merging — the surviving ingredient inherits the
+    // others' products, e.g. "share this USDA food / price").
+    //
+    // `liveOnly: false` on both: the delete below is a HARD delete, and the FK
+    // constraint applies to every row regardless of `deletedAt`, so a
+    // soft-deleted product left pointing at an alias would abort the merge.
+    await repointEdge(
+      tx,
+      "ingredient",
+      "RecipeSectionIngredient.ingredientId",
+      {
+        from: uniqueAliases,
+        to: target,
+        liveOnly: false,
+      },
+    );
+    await repointEdge(tx, "ingredient", "Product.ingredientId", {
+      from: uniqueAliases,
+      to: target,
+      liveOnly: false,
+    });
 
-    // Re-point any products linked to the alias ingredients onto the target.
-    // Otherwise the FK from Product.ingredientId blocks the hard delete below
-    // (this is the whole point of merging: the surviving ingredient inherits the
-    // others' products — e.g. "share this USDA food / price"). Covers
-    // soft-deleted products too, since the FK applies to every row.
-    await tx
-      .update(product)
-      .set({ ingredientId: target })
-      .where(inArray(product.ingredientId, uniqueAliases));
-
-    // delete the absorbed ingredients
-    await tx.delete(ingredient).where(inArray(ingredient.id, uniqueAliases));
-
-    // Removal-path invariant (root CLAUDE.md, guard-enforced): this is a
-    // HARD delete — unlike every other removal path in the repo — but a
-    // hard-deleted row still gets a SOFT-deleted embedding, same as the
-    // hard-deleted source row in a full-collapse inventory move
-    // (inventory/bulk.ts): a soft-deleted embedding is excluded from both
-    // semantic search and orphan detection, and reusing the shared cascade
-    // helper keeps every removal path's embedding cleanup uniform rather than
-    // adding a one-off hard-delete path here. `ingredient` is `searchable:
-    // true`, so skipping this leaves a live `EntityEmbedding` row pointing at
-    // a permanently-gone id — `findOrphanedEntityEmbeddings` flags it forever
-    // (there is no restore to heal it), and until then semantic search keeps
-    // returning a result that renders blank.
-    await softDeleteEntityEmbeddingsTx(tx, "ingredient", uniqueAliases);
+    // Delete the absorbed ingredients AND cascade their search embeddings, as
+    // one call — see `finalizeMerge`'s doc for why those can't be separated.
+    // This is the repo's one HARD-delete merge; the hard-deleted rows still get
+    // SOFT-deleted embeddings, same as a collapsed inventory source row.
+    // No actor context reaches this signature, so there is no audit entry to
+    // write (see `mergeIngredients`' own signature note).
+    await finalizeMerge(tx, {
+      entity: "ingredient",
+      table: ingredient,
+      keepId: target,
+      loserIds: uniqueAliases,
+      removal: "hard",
+    });
 
     // Correctness floor: flag the absorbed recipes stale atomically with the
     // merge, so they read as pending — countable on Settings → Maintenance

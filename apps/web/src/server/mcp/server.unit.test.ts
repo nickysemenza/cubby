@@ -965,8 +965,11 @@ describe("listMcpToolCatalog", () => {
         },
       ],
       [
+        // `product` used to be the example here; it gained a merge in the same
+        // change that added `mergeProducts`, so this needs an entity that still
+        // has no merge planner. `location` is delete-only.
         "merge on an entity that cannot merge",
-        { operation: "merge", entity: "product", mergeIds: ["PRD-2CRC"] },
+        { operation: "merge", entity: "location", mergeIds: ["LOC-2CRC"] },
       ],
       ["merge without mergeIds", { operation: "merge", entity: "ingredient" }],
       [

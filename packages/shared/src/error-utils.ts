@@ -82,6 +82,12 @@ export const AppErrors = {
   // A merge must stay within one vendor — re-pointing a charge across vendors
   // would silently rewrite who was paid.
   PURCHASE_MERGE_VENDOR_MISMATCH: "BAD_REQUEST",
+  // Two products stocked in the SAME location can't both survive a merge (the
+  // partial-unique (productId, locationId) index), so their entries are summed
+  // — which is only meaningful when the two amounts share a unit. "2 box" plus
+  // "3 each" has no honest answer, so the merge refuses instead of inventing
+  // one; fix the unit on one entry first.
+  PRODUCT_MERGE_INVENTORY_UNIT_MISMATCH: "BAD_REQUEST",
   // project.parentProjectId: arbitrary-depth sub-projects (WBS) — a project
   // can't become its own descendant.
   PROJECT_HAS_CHILDREN: "PRECONDITION_FAILED",

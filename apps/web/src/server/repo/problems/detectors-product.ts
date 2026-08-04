@@ -18,6 +18,7 @@ import {
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
+  DuplicateProductIdentity,
   DuplicateUniqueProduct,
   OrphanedProduct,
   ProductMissingPrice,
@@ -39,6 +40,7 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { Database, DrizzleClient } from "~/server/db";
@@ -48,6 +50,7 @@ import {
   ingredient,
   inventoryEntry,
   product,
+  productExternalId,
   productImage,
   productUnitMappings,
   projectToolUsage,
@@ -59,6 +62,7 @@ import {
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
+import { canonicalLabelKey } from "~/server/repo/label-canonical";
 import {
   isRetainingEdgeKey,
   PRODUCT_EDGE_ROLES,
@@ -523,6 +527,157 @@ export const findSoldButStillStocked = async (
   }
 
   return rows;
+};
+
+// Two Product rows for one physical SKU — the thing `mergeProducts` exists to
+// fix. Nothing on the write path can prevent it: `Product_name_manufacturer_key`
+// only stops an EXACT repeat, and two retailer importers naturally spell the
+// same item differently ("DeWalt DCD791D2" vs "DEWALT 20V MAX XR Drill Kit").
+//
+// **The signal is `(manufacturer, model)` with external ids from different
+// sources**, and the reason it is worth encoding rather than guessing is that
+// it was measured on the live 2,472-product catalog: it found all 5 real
+// duplicates with ~6 false positives, and every false positive was a legitimate
+// variant that a distinct identifier separates. Two rows carrying the same maker
+// part number, entered from two different retailers, are one thing.
+//
+// **Trigram name similarity was near-useless here and must not be re-tried.**
+// The same measurement that validated the model key rejected the fuzzy one:
+// product names are dominated by size/colour/pack variants ("... 4.5in", "...
+// 2-Pack", "... Blue"), so the score tracks the shared product family rather
+// than the part that distinguishes two rows — exactly the failure
+// `detectors-label-variants.ts` records for vendor names, one level down. A
+// model number is an exact key; use it.
+//
+// The false-positive class is suppressed with positive evidence of distinctness,
+// never with a similarity threshold:
+//
+//  1. *Distinct UPCs.* Two live rows can't share a UPC (`Product_upc_key`), so
+//     two non-null differing UPCs mean two different retail packages.
+//  2. *Distinct retailer SKU.* Both rows filling the SAME (source, kind)
+//     identifier slot with different values is the retailer itself saying they
+//     are two products. (They cannot fill it with the same value — the global
+//     `(source, kind, externalId)` unique index forbids it — so a shared slot is
+//     always evidence of difference, never of sameness.)
+//
+// Suppression is per GROUP, not per pair: one distinguishable member is enough
+// to make the whole cluster a variant family rather than a duplicate, which is
+// the conservative direction for a list a human acts on with a destructive
+// merge.
+export const findDuplicateProductIdentities = async (
+  db: Database,
+): Promise<DuplicateProductIdentity[]> => {
+  const dbClient = getDb(db);
+
+  const rows = await dbClient
+    .select({
+      id: product.id,
+      shortcode: product.shortcode,
+      name: product.name,
+      manufacturer: product.manufacturer,
+      model: product.model,
+      upc: product.upc,
+      // The SAME canonical key `findManufacturerSpellingVariants` and
+      // `resolveEstablishedManufacturer` use, so `Ryobi`/`RYOBI` can't split a
+      // real duplicate apart before this detector can group it.
+      manufacturerKey: sql<string>`${canonicalLabelKey(product.manufacturer)}`,
+    })
+    .from(product)
+    .where(and(notDeleted(product), isNotNull(product.model)));
+
+  const candidates = rows.filter(
+    (row): row is typeof row & { model: string } =>
+      row.model != null &&
+      row.model.trim() !== "" &&
+      !isUnspecifiedManufacturer(row.manufacturer) &&
+      !isMiscProduct(row.name),
+  );
+  if (candidates.length === 0) return [];
+
+  const identifiers = await dbClient
+    .select({
+      productId: productExternalId.productId,
+      source: productExternalId.source,
+      kind: productExternalId.kind,
+      externalId: productExternalId.externalId,
+    })
+    .from(productExternalId)
+    .where(
+      and(
+        inArray(
+          productExternalId.productId,
+          candidates.map((row) => row.id),
+        ),
+        notDeleted(productExternalId),
+      ),
+    );
+
+  const byProduct = new Map<
+    string,
+    Array<{ source: string; kind: string; externalId: string }>
+  >();
+  for (const row of identifiers) {
+    const list = byProduct.get(row.productId) ?? [];
+    list.push(row);
+    byProduct.set(row.productId, list);
+  }
+
+  // Model is an exact identifier, so only case and surrounding whitespace are
+  // normalized away; the manufacturer half of the key was canonicalized in SQL.
+  const groups = new Map<string, typeof candidates>();
+  for (const row of candidates) {
+    const key = `${row.manufacturerKey}\u0000${row.model.trim().toLowerCase()}`;
+    const group = groups.get(key) ?? [];
+    group.push(row);
+    groups.set(key, group);
+  }
+
+  const out: DuplicateProductIdentity[] = [];
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+
+    // "External ids from different sources": at least two members carry
+    // identifiers at all, and between them they name more than one source.
+    const withIds = group.filter(
+      (row) => (byProduct.get(row.id) ?? []).length > 0,
+    );
+    if (withIds.length < 2) continue;
+    const sources = uniq(
+      withIds.flatMap((row) =>
+        (byProduct.get(row.id) ?? []).map((id) => id.source),
+      ),
+    );
+    if (sources.length < 2) continue;
+
+    // Positive evidence of distinctness — see the two rules above.
+    const upcs = uniq(group.flatMap((row) => (row.upc ? [row.upc] : [])));
+    if (upcs.length > 1) continue;
+    const bySlot = new Map<string, Set<string>>();
+    for (const row of group) {
+      for (const id of byProduct.get(row.id) ?? []) {
+        const slot = `${id.source}\u0000${id.kind}`;
+        const values = bySlot.get(slot) ?? new Set<string>();
+        values.add(id.externalId);
+        bySlot.set(slot, values);
+      }
+    }
+    if ([...bySlot.values()].some((values) => values.size > 1)) continue;
+
+    out.push({
+      manufacturer: group[0]!.manufacturer,
+      model: group[0]!.model,
+      products: group.map((row) => ({
+        id: unsafeProductShortcode(row.shortcode),
+        name: row.name,
+        upc: row.upc,
+        sources: uniq(
+          (byProduct.get(row.id) ?? []).map((id) => id.source),
+        ).sort(),
+      })),
+    });
+  }
+
+  return out;
 };
 
 // Find products with invalid or duplicate UPC codes

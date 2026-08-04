@@ -31,6 +31,7 @@ const PROBLEM_LABELS: Record<
   (n: number) => string
 > = {
   duplicateInventory: (n) => pl(n, "duplicate"),
+  duplicateProductIdentities: (n) => pl(n, "duplicate product"),
   orphanedProducts: (n) => `${n} orphaned`,
   productsMissingPrice: (n) => `${n} stocked without a price`,
   unvaluedBucketProducts: (n) => pl(n, "unvalued bucket"),

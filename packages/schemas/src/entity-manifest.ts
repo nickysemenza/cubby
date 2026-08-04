@@ -178,7 +178,7 @@ export const entityManifest = {
         "Product.fdc_id",
       ]),
     ],
-    lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
+    lifecycle: { delete: { mode: "soft", bulk: true }, merge: true },
     mcp: ALL_MCP,
     routerStyle: "crud-factory",
   },

@@ -68,6 +68,7 @@ import {
   findCoverageTotals as findCoverageTotalsRepo,
   findDuplicateFinancialAccountSourceAliases,
   findDuplicateFinancialTransactionSourceRefs,
+  findDuplicateProductIdentities,
   findDuplicateUniqueProducts,
   findDuplicateVendors,
   findEmptyLocations,
@@ -488,6 +489,9 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
   const r = await withConnection(db, (scoped) =>
     traceAllSeq({
       duplicateInventory: () => findDuplicateUniqueProducts(scoped),
+      // One extra SELECT over Product + one over ProductExternalId, grouped in
+      // JS — same shape and cost class as the spelling-variant scans below.
+      duplicateProductIdentities: () => findDuplicateProductIdentities(scoped),
       orphanedProducts: () => findOrphanedProducts(scoped),
       productsMissingPrice: () => findProductsMissingPrice(scoped),
       soldButStillStocked: () => findSoldButStillStocked(scoped),
@@ -531,6 +535,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
   );
   return {
     duplicateInventory: r.duplicateInventory,
+    duplicateProductIdentities: r.duplicateProductIdentities,
     orphanedProducts: r.orphanedProducts,
     productsMissingPrice: r.productsMissingPrice.real,
     unvaluedBucketProducts: r.productsMissingPrice.buckets,

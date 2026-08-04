@@ -86,6 +86,7 @@ export {
 } from "./detectors-location";
 // Product-centric detectors (+ ProductWithBetterUpcData type re-export)
 export {
+  findDuplicateProductIdentities,
   findDuplicateUniqueProducts,
   findLinkedProductIds,
   findOrphanedProducts,
