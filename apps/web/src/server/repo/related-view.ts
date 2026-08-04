@@ -15,6 +15,7 @@ import {
   relatedFilterPrefix,
   relatedViewRegistry,
 } from "@cubby/schemas/related-view";
+import { parseShortcode } from "@cubby/shared";
 import { and, or, type SQL, type SQLWrapper, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
@@ -776,12 +777,22 @@ export function relatedWhereConditions(
           AND s."deletedAt" IS NULL
           ${extra ? sql`AND ${extra}` : sql``}
       )`;
-      const exact = ids
-        ? ids.length === 0
+      // Compare against the CANONICAL code. Shortcodes are accepted in any
+      // casing and with legacy prefixes (`parseShortcode` uppercases and
+      // remaps), but the stored column only ever holds the canonical form — so
+      // a raw `IN (...)` silently misses `?parentTaskId=tsk-abcd`. A code that
+      // doesn't parse at all is kept as-is: it matches nothing, which is the
+      // right answer for an unresolvable filter and keeps this predicate's
+      // failure direction safe (it ANDs, so it can never widen the query).
+      const canonicalIds = ids?.map(
+        (id) => parseShortcode(id)?.shortcode ?? id,
+      );
+      const exact = canonicalIds
+        ? canonicalIds.length === 0
           ? sql`false`
           : exists(
               sql`t."shortcode" IN (${sql.join(
-                ids.map((id) => sql`${id}`),
+                canonicalIds.map((id) => sql`${id}`),
                 sql`, `,
               )})`,
             )

@@ -7,9 +7,11 @@ import type {
 import {
   unsafeExpenseShortcode,
   unsafeProductId,
+  unsafeProductShortcode,
   unsafeProjectShortcode,
   unsafePurchaseId,
   unsafePurchaseShortcode,
+  unsafeVendorShortcode,
 } from "@cubby/schemas/identifiers";
 import {
   type ExpenseCreateInput,
@@ -2469,6 +2471,307 @@ describe("expense repository — product bridge", () => {
       "cash at the yard",
       "tile saw",
     ]);
+  });
+});
+
+// P0 regression guard: `eqAny([])` is "no constraint" BY DESIGN (see its doc
+// in database-helpers/query.ts) — a `productId`/`vendorId`/`purchaseId` filter
+// that was SUPPLIED but resolved to no live row must not fall through to "no
+// constraint" (which would return every expense in the table). It must
+// resolve to zero rows. This file also guards `resolveShortcodes`' canonical-
+// key lookup (a lowercase code must still resolve) and the entity guard (a
+// wrong-prefix code must match nothing, never an unrelated row) since all
+// three bugs live in the same `toUuids` helper these filters share.
+describe("expense repository — id filter widening & shortcode canonicalization guards", () => {
+  const ctx = withTestDb();
+  const pagination = { pageIndex: 0, pageSize: 50 };
+
+  it("an unresolvable productId matches nothing, not every expense", async () => {
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2024-01-15",
+        trade: "other",
+        costType: "materials",
+        name: "widening guard row one",
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2024-01-15",
+        trade: "other",
+        costType: "materials",
+        name: "widening guard row two",
+      }),
+      ctx.actor,
+    );
+
+    const bogus = unsafeProductShortcode("PRD-9999");
+    const { data, count } = await expenseList(
+      ctx.db,
+      { productId: bogus },
+      [],
+      pagination,
+    );
+    expect(data).toEqual([]);
+    expect(count).toBe(0);
+  });
+
+  it("a lowercase productId still resolves and filters correctly", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "widening guard product" }),
+      ctx.actor,
+    );
+    const { output: linked } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2024-01-15",
+        trade: "other",
+        costType: "materials",
+        name: "linked to lowercase product",
+        productId: product.id,
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2024-01-15",
+        trade: "other",
+        costType: "materials",
+        name: "unrelated row",
+      }),
+      ctx.actor,
+    );
+
+    const lowercase = unsafeProductShortcode(product.id.toLowerCase());
+    const { data } = await expenseList(
+      ctx.db,
+      { productId: lowercase },
+      [],
+      pagination,
+    );
+    expect(data.map((p) => p.id)).toEqual([linked.id]);
+  });
+
+  it("an unresolvable vendorId matches nothing, not every expense", async () => {
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2024-01-15",
+        trade: "other",
+        costType: "materials",
+        name: "widening guard vendor row one",
+        vendor: "Widening Guard Vendor A",
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2024-01-15",
+        trade: "other",
+        costType: "materials",
+        name: "widening guard vendor row two",
+        vendor: "Widening Guard Vendor B",
+      }),
+      ctx.actor,
+    );
+
+    const bogus = unsafeVendorShortcode("VEN-9999");
+    const { data, count } = await expenseList(
+      ctx.db,
+      { vendorId: bogus },
+      [],
+      pagination,
+    );
+    expect(data).toEqual([]);
+    expect(count).toBe(0);
+  });
+
+  it("an unresolvable vendorId still ORs correctly with vendorPresenceFilter: none", async () => {
+    // The vendor half must contribute `sql\`false\`` to the OR, not `undefined`
+    // — otherwise dropping the vendor half entirely would let the presence
+    // filter alone decide, silently discarding the fact that a specific
+    // (bogus) vendor was also requested. Here the two vendorless rows below
+    // are exactly what "none" should surface either way, so this pins that
+    // combining an unresolvable id with a presence filter still narrows
+    // correctly rather than only accidentally looking right because presence
+    // alone would have produced the same set.
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2024-01-15",
+        trade: "other",
+        costType: "materials",
+        name: "widening guard no-vendor row",
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2024-01-15",
+        trade: "other",
+        costType: "materials",
+        name: "widening guard real-vendor row",
+        vendor: "Widening Guard Vendor C",
+      }),
+      ctx.actor,
+    );
+
+    const bogus = unsafeVendorShortcode("VEN-9999");
+    const { data } = await expenseList(
+      ctx.db,
+      { vendorId: bogus, vendorPresenceFilter: "none" },
+      [],
+      pagination,
+    );
+    expect(data.map((p) => p.name)).toEqual(["widening guard no-vendor row"]);
+  });
+
+  it("a lowercase vendorId still resolves and filters correctly", async () => {
+    const { output: lumber } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2024-01-15",
+        trade: "other",
+        costType: "materials",
+        name: "lowercase vendor lumber run",
+        vendor: "Widening Guard Lowercase Vendor",
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2024-01-15",
+        trade: "other",
+        costType: "materials",
+        name: "lowercase vendor unrelated",
+        vendor: "Widening Guard Other Vendor",
+      }),
+      ctx.actor,
+    );
+
+    const lowercase = unsafeVendorShortcode(vendorIdOf(lumber).toLowerCase());
+    const { data } = await expenseList(
+      ctx.db,
+      { vendorId: lowercase },
+      [],
+      pagination,
+    );
+    expect(data.map((p) => p.id)).toEqual([lumber.id]);
+  });
+
+  it("an unresolvable purchaseId matches nothing, not every expense", async () => {
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2024-01-15",
+        trade: "other",
+        costType: "materials",
+        name: "widening guard purchase row one",
+        vendor: "Widening Guard Purchase Vendor A",
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2024-01-15",
+        trade: "other",
+        costType: "materials",
+        name: "widening guard purchase row two",
+        vendor: "Widening Guard Purchase Vendor B",
+      }),
+      ctx.actor,
+    );
+
+    const bogus = unsafePurchaseShortcode("PUR-9999");
+    const { data, count } = await expenseList(
+      ctx.db,
+      { purchaseId: bogus },
+      [],
+      pagination,
+    );
+    expect(data).toEqual([]);
+    expect(count).toBe(0);
+  });
+
+  it("a lowercase purchaseId still resolves and filters correctly", async () => {
+    const { output: first } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2024-01-15",
+        trade: "other",
+        costType: "materials",
+        name: "lowercase purchase row",
+        vendor: "Widening Guard Lowercase Purchase Vendor",
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2024-01-15",
+        trade: "other",
+        costType: "materials",
+        name: "unrelated purchase row",
+        vendor: "Widening Guard Other Purchase Vendor",
+      }),
+      ctx.actor,
+    );
+
+    const lowercase = unsafePurchaseShortcode(
+      purchaseIdOf(first).toLowerCase(),
+    );
+    const { data } = await expenseList(
+      ctx.db,
+      { purchaseId: lowercase },
+      [],
+      pagination,
+    );
+    expect(data.map((p) => p.id)).toEqual([first.id]);
+  });
+
+  it("a wrong-entity code (a real project shortcode) as purchaseId matches nothing", async () => {
+    const { output: project } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "widening guard wrong entity project" }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2024-01-15",
+        trade: "other",
+        costType: "materials",
+        name: "widening guard wrong entity row",
+        vendor: "Widening Guard Wrong Entity Vendor",
+      }),
+      ctx.actor,
+    );
+
+    // A well-formed, LIVE shortcode — just for the wrong entity. The entity
+    // guard in `toUuids` must reject it rather than let it slip through as an
+    // unbranded uuid that happens to match nothing (or, worse, something).
+    // `${project.id}` de-brands it to a plain string first — `unsafe*Shortcode`
+    // is type-guarded against re-casting an already-branded value, which this
+    // test deliberately does to simulate a caller passing the wrong entity's
+    // code.
+    const wrongEntity = unsafePurchaseShortcode(`${project.id}`);
+    const { data, count } = await expenseList(
+      ctx.db,
+      { purchaseId: wrongEntity },
+      [],
+      pagination,
+    );
+    expect(data).toEqual([]);
+    expect(count).toBe(0);
   });
 });
 

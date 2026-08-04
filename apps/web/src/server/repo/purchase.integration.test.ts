@@ -11,6 +11,7 @@ import {
   unsafePurchaseId,
   unsafePurchaseShortcode,
   unsafeVendorId,
+  unsafeVendorShortcode,
 } from "@cubby/schemas/identifiers";
 import { isDocumentFile } from "@cubby/schemas/image";
 import {
@@ -2069,6 +2070,78 @@ describe("purchase repository — purchase worklist filters", () => {
     expect(await ids({ expenseTotalMin: 99.99 })).toEqual(
       new Set([seeded.match]),
     );
+  });
+});
+
+// P0 regression guard: `eqAny([])` is "no constraint" BY DESIGN (see its doc
+// in database-helpers/query.ts) — so a `vendorId` filter that was SUPPLIED but
+// resolved to no live vendor must not fall through to "no constraint" (which
+// would return every purchase in the table). It must resolve to zero rows.
+// Same file also guards `resolveShortcodes`' canonical-key lookup (a lowercase
+// or legacy-prefix code must still resolve) since both bugs live in the same
+// `purchaseList` vendor-filter code path.
+describe("purchase repository — vendorId filter widening guard", () => {
+  const ctx = withTestDb();
+
+  it("an unresolvable vendorId matches nothing, not every purchase", async () => {
+    const vendorId = await vendorShortcodeByName(ctx.db, "Widening Guard A");
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ date: "2024-01-15", vendorId }),
+      ctx.actor,
+    );
+    const otherVendorId = await vendorShortcodeByName(
+      ctx.db,
+      "Widening Guard B",
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        date: "2024-01-16",
+        vendorId: otherVendorId,
+      }),
+      ctx.actor,
+    );
+
+    const bogus = unsafeVendorShortcode("VEN-9999");
+    const { data, count } = await purchaseList(
+      ctx.db,
+      { vendorId: bogus },
+      [],
+      page,
+    );
+    expect(data).toEqual([]);
+    expect(count).toBe(0);
+  });
+
+  it("a lowercase vendorId still resolves and filters correctly", async () => {
+    const vendorId = await vendorShortcodeByName(ctx.db, "Widening Guard C");
+    const { output: match } = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ date: "2024-01-15", vendorId }),
+      ctx.actor,
+    );
+    const otherVendorId = await vendorShortcodeByName(
+      ctx.db,
+      "Widening Guard D",
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        date: "2024-01-16",
+        vendorId: otherVendorId,
+      }),
+      ctx.actor,
+    );
+
+    const lowercase = unsafeVendorShortcode(vendorId.toLowerCase());
+    const { data } = await purchaseList(
+      ctx.db,
+      { vendorId: lowercase },
+      [],
+      page,
+    );
+    expect(data.map((row) => row.id)).toEqual([match.id]);
   });
 });
 
