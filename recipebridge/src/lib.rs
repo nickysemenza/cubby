@@ -114,9 +114,46 @@ fn is_workerd() -> bool {
         .filter(|n| !n.is_undefined() && !n.is_null())
         .and_then(|n| js_sys::Reflect::get(&n, &JsValue::from_str("userAgent")).ok())
         .and_then(|ua| ua.as_string());
+    workerd_from_user_agent(user_agent.as_deref())
+}
+
+/// The decision half of [`is_workerd`], split out because the probe above needs
+/// a JS global and so can only run on wasm — this is the part worth testing.
+///
+/// `None` means detection was inconclusive (no `navigator`, a throwing getter,
+/// a non-string `userAgent`) and answers **true**. The failure modes are not
+/// symmetric: guessing "browser" on workerd re-arms the INFO-level subscriber
+/// on the hot path, whose per-call cost grows until it trips `cpu_ms`, while
+/// guessing "workerd" in a browser only costs devtools spans and `%c` colors.
+fn workerd_from_user_agent(user_agent: Option<&str>) -> bool {
     match user_agent {
         Some(ua) => ua == "Cloudflare-Workers",
         None => true,
+    }
+}
+
+#[cfg(test)]
+mod workerd_detection_tests {
+    use super::workerd_from_user_agent;
+
+    #[test]
+    fn detects_workerd_by_exact_user_agent() {
+        assert!(workerd_from_user_agent(Some("Cloudflare-Workers")));
+    }
+
+    #[test]
+    fn treats_a_real_browser_as_not_workerd() {
+        assert!(!workerd_from_user_agent(Some(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
+        )));
+    }
+
+    /// The regression this guards: inconclusive detection must fail CLOSED.
+    /// Returning false here is what previously let an INFO subscriber onto the
+    /// wasm hot path in production.
+    #[test]
+    fn assumes_workerd_when_detection_is_inconclusive() {
+        assert!(workerd_from_user_agent(None));
     }
 }
 
