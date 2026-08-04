@@ -868,6 +868,10 @@ jobs:
     # build-cf just may run on a lint-broken PR (cheap on the public repo).
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      # Dispatching the Preview Deploy workflow below.
+      actions: write
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
     steps:
@@ -885,6 +889,40 @@ jobs:
           path: apps/web/dist
           if-no-files-found: ignore
           retention-days: 1
+
+      # Fire the preview the moment the bundle exists (~45s in) instead of
+      # letting it wait on the run's conclusion (~190s, E2E being the pole).
+      # Nothing downstream validates the uploaded version — E2E builds its own
+      # copy — so gating the preview on tests bought latency and no safety, and
+      # denied a preview to exactly the red PRs that most want one.
+      #
+      # Dispatched rather than run inline: a Cloudflare job can take minutes to
+      # acknowledge cancellation, and inside this workflow that would hold a
+      # replacement CI run in pending through the shared concurrency group.
+      #
+      # No `if: always()` — a failed build leaves no artifact to deploy.
+      # Fork PRs get a read-only token and no secrets, so they cannot dispatch;
+      # the explicit repository check states that rather than relying on it.
+      #
+      # `continue-on-error` is load-bearing, not defensive dressing:
+      # `deploy-cf-gate` requires `needs.build-cf.result == 'success'`, so a
+      # convenience step failing to kick off a preview must never be able to
+      # block a production deploy. It also covers the bootstrap — `--ref main`
+      # runs main's copy of the workflow, which rejects the dispatch until this
+      # pair of changes has merged.
+      - name: Trigger preview deploy
+        if: |
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run preview-cf.yaml --ref main \
+            -f pr_number="${{ github.event.pull_request.number }}" \
+            -f head_sha="${{ github.event.pull_request.head.sha }}" \
+            -f run_id="${{ github.run_id }}" ||
+            echo "::warning::Could not dispatch the preview deploy; CI is unaffected."
 
   deploy-cf-gate:
     name: Check current main for web deploy
