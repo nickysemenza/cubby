@@ -590,11 +590,34 @@ export const productPickerItemOut = z.object({
 });
 export type ProductPickerItemOut = z.infer<typeof productPickerItemOut>;
 
+/**
+ * Units expected on hand, what is actually on the shelf, and the gap between
+ * them. One definition shared by the list row and every detail shape, so the
+ * two surfaces cannot describe the same numbers differently — the drift that
+ * produced two bugs when the list owned its own copy.
+ */
+export const productQuantityFields = {
+  quantityLedger: productQuantityLedgerOut,
+  /**
+   * Live units across every shelf this product sits on. Null when it is not
+   * stocked at all, and null when its entries carry MORE THAN ONE unit — a
+   * count of `each` plus a volume of `can` has no meaningful sum, so callers
+   * render `—` rather than adding apples to oranges.
+   */
+  onHandUnits: z.number().nullable(),
+  /**
+   * `onHandUnits - quantityLedger.expectedQuantity`. Null exactly when
+   * `onHandUnits` is. Zero means the shelf and the ledger agree.
+   */
+  quantityVariance: z.number().nullable(),
+};
+
 export const productWithIngredientAndInventoryAndMappingsOut = z.object({
   ...productTopLevelFields,
   ingredient: productIngredientOut.nullable(),
   unitMappings: z.array(unitMappingOut),
   inventoryEntry: z.array(productInventoryWithLocationOut),
+  ...productQuantityFields,
 });
 
 export const productListInventoryEntryOut = z.object({
@@ -621,15 +644,7 @@ export const productListItemOut = z.object({
   // A product can appear on several Expense lines/Purchases. The table shows
   // the latest live Purchase date as the compact scalar provenance cue.
   purchaseDate: plainDate.nullable(),
-  quantityLedger: productQuantityLedgerOut,
-  // Live units across every shelf this product sits on. Null when it is not
-  // stocked at all, and null when its entries carry MORE THAN ONE unit — a
-  // count of `each` plus a volume of `can` has no meaningful sum, and the
-  // Variance column dashes rather than adding apples to oranges.
-  onHandUnits: z.number().nullable(),
-  // `onHandUnits - quantityLedger.expectedQuantity`. Null exactly when
-  // `onHandUnits` is. Zero means the shelf and the ledger agree.
-  quantityVariance: z.number().nullable(),
+  ...productQuantityFields,
 });
 export type ProductListItem = z.infer<typeof productListItemOut>;
 
@@ -643,6 +658,7 @@ export const productWithFoodOut = z.object({
   inventoryEntry: z.array(productInventoryWithLocationOut),
   food: foodSummary.nullable(),
   recipeUsages: z.array(recipeUsageOut),
+  ...productQuantityFields,
 });
 export type ProductWithFoodOut = z.infer<typeof productWithFoodOut>;
 
@@ -654,6 +670,7 @@ export const productWithFoodAndSideEffectsOut = z.object({
   food: foodSummary.nullable(),
   recipeUsages: z.array(recipeUsageOut),
   sideEffects: mutationSideEffectsSchema,
+  ...productQuantityFields,
 });
 export type ProductWithFoodAndSideEffectsOut = z.infer<
   typeof productWithFoodAndSideEffectsOut

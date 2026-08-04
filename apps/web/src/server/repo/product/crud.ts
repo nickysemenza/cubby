@@ -268,7 +268,10 @@ const fetchProductById = async (
     ...relations.product.full,
   });
   if (!row) return undefined;
-  return (await enrichProductRowsWithPricing(db, [row]))[0];
+  const priced = await enrichProductRowsWithPricing(db, [row]);
+  // The detail page shows Expected beside On hand, so it needs the same ledger
+  // the list does — one grouped query for the single row.
+  return (await enrichProductRowsWithQuantityLedger(db, priced))[0];
 };
 
 // Read path through the shared reader (fetch-with-relations → 404 → map). The
@@ -393,7 +396,8 @@ export const getProductsByShortcodes = async (
     results.map((row) => row.id),
   );
   const priced = await enrichProductRowsWithPricing(db, results);
-  return priced.map((row) => dbProductToAPI(row, qualities.get(row.id)!));
+  const ledgered = await enrichProductRowsWithQuantityLedger(db, priced);
+  return ledgered.map((row) => dbProductToAPI(row, qualities.get(row.id)!));
 };
 
 export const productList = async (
