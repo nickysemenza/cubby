@@ -18,7 +18,7 @@ import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
-import { formatCurrencyRange } from "~/lib/format-range";
+import { formatCurrencyRange, rangeMidpoint } from "~/lib/format-range";
 import { wishMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { WishFormDialog } from "./wish-form-dialog";
@@ -153,59 +153,72 @@ export function WishList() {
         },
       ),
       // Hand-rolled rather than `createCurrencyColumn`: that helper renders one
-      // scalar, and a wish row's value is a span. Sorting is wired by
-      // `useStandardColumns` because "priceRange" is in `wishSortableFields`
-      // (the server orders by the range midpoint).
-      columnHelper.display({
-        id: "priceRange",
-        header: "Price range",
-        meta: {
-          numeric: true,
-          // Wide enough for two five-figure amounts plus the en-dash — the
-          // footer totals are the longest string this column ever renders.
-          className: "w-48",
-          mobile: { slot: "trailing", priority: 20 },
+      // scalar, and a wish row's value is a span.
+      //
+      // An ACCESSOR column, not a display one, even though `cell` ignores the
+      // value: TanStack's `getCanSort()` ands in `!!column.accessorFn`, so a
+      // display column never sorts however `enableSorting` is computed — the
+      // header would render no control at all. Sorting itself is manual
+      // (`wishSortableFields` + `resolveWishSort`), so the accessor exists to
+      // enable that control; it returns the same midpoint the server orders by
+      // rather than a bound, so the two can't tell different stories.
+      columnHelper.accessor(
+        (row) => {
+          if (row.kind === "candidate") return row.candidate.price;
+          const range = wishPriceRange(row.wish.candidates);
+          return range ? rangeMidpoint(range.low, range.high) : null;
         },
-        footer: (info) => {
-          // Server sums span the whole filtered set, not the loaded page —
-          // never fall back to reducing the visible rows.
-          const sums = info.table.options.meta?.serverTotals?.sums;
-          if (!sums?.priceHigh) return null;
-          return (
-            <span className="font-mono text-positive tabular-nums">
-              {formatCurrencyRange(sums.priceLow ?? 0, sums.priceHigh)}
-            </span>
-          );
-        },
-        cell: (info) => {
-          const row = info.row.original;
-          if (row.kind === "candidate") {
-            return row.candidate.price === null ? (
-              <NoneValue />
-            ) : (
-              <span className="font-mono tabular-nums">
-                {formatCurrency(row.candidate.price)}
+        {
+          id: "priceRange",
+          header: "Price range",
+          meta: {
+            numeric: true,
+            // Wide enough for two five-figure amounts plus the en-dash — the
+            // footer totals are the longest string this column ever renders.
+            className: "w-48",
+            mobile: { slot: "trailing", priority: 20 },
+          },
+          footer: (info) => {
+            // Server sums span the whole filtered set, not the loaded page —
+            // never fall back to reducing the visible rows.
+            const sums = info.table.options.meta?.serverTotals?.sums;
+            if (!sums?.priceHigh) return null;
+            return (
+              <span className="font-mono text-positive tabular-nums">
+                {formatCurrencyRange(sums.priceLow ?? 0, sums.priceHigh)}
               </span>
             );
-          }
-          const range = wishPriceRange(row.wish.candidates);
-          if (!range) return <NoneValue />;
-          const unpriced = row.wish.candidates.length - range.pricedCount;
-          return (
-            <span
-              className="font-mono tabular-nums"
-              title={
-                unpriced > 0
-                  ? `${range.pricedCount} of ${row.wish.candidates.length} options priced`
-                  : undefined
-              }
-            >
-              {formatCurrencyRange(range.low, range.high)}
-              {unpriced > 0 && <span className="text-slate">*</span>}
-            </span>
-          );
+          },
+          cell: (info) => {
+            const row = info.row.original;
+            if (row.kind === "candidate") {
+              return row.candidate.price === null ? (
+                <NoneValue />
+              ) : (
+                <span className="font-mono tabular-nums">
+                  {formatCurrency(row.candidate.price)}
+                </span>
+              );
+            }
+            const range = wishPriceRange(row.wish.candidates);
+            if (!range) return <NoneValue />;
+            const unpriced = row.wish.candidates.length - range.pricedCount;
+            return (
+              <span
+                className="font-mono tabular-nums"
+                title={
+                  unpriced > 0
+                    ? `${range.pricedCount} of ${row.wish.candidates.length} options priced`
+                    : undefined
+                }
+              >
+                {formatCurrencyRange(range.low, range.high)}
+                {unpriced > 0 && <span className="text-slate">*</span>}
+              </span>
+            );
+          },
         },
-      }),
+      ),
     ],
     [columnHelper],
   );
