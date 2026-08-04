@@ -23,6 +23,8 @@ export const sortableFields = {
     "ingredient",
     "expenseTotal",
     "expenses",
+    "expectedQuantity",
+    "quantityVariance",
     "purchaseDate",
     "related:product.projects",
     "related:product.vendors",
