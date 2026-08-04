@@ -22,7 +22,12 @@ import {
   presenceFilter,
 } from "./pagination";
 import { wholeCentAmount } from "./money";
-import { costTypeSchema, plainDate, tradeSchema } from "./project";
+import {
+  costTypeSchema,
+  plainDate,
+  PRODUCT_QUANTITY_DESCRIPTION,
+  tradeSchema,
+} from "./project";
 
 /**
  * Purchase — one vendor order, receipt, or deliberately separate purchase
@@ -354,7 +359,14 @@ export const splitExpenseInput = z.object({
         trade: tradeSchema,
         projectId: projectShortcode.nullable().default(null),
         productId: productShortcode.nullable().default(null),
-        productQuantity: z.number().int().positive().nullable().default(null),
+        // Signed and never zero, same rule as `Expense.productQuantity`.
+        productQuantity: z
+          .number()
+          .int()
+          .refine((value) => value !== 0, "Quantity cannot be zero")
+          .nullable()
+          .default(null)
+          .describe(PRODUCT_QUANTITY_DESCRIPTION),
         notes: z
           .string()
           .nullable()

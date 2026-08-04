@@ -83,6 +83,33 @@ export const productMissingPriceSchema = z.object({
   ),
 });
 
+// A product whose ledger says more units left than ever arrived.
+//
+// You cannot sell, return, or discard something you never acquired, so a
+// negative expected quantity is unambiguously a data defect — a missing
+// acquisition line, an acquisition whose quantity was never recorded, or an
+// exit entered against the wrong product.
+//
+// Counts EVERY negative line as an exit, deliberately unlike its neighbour
+// `soldButStillStocked`, which requires a disposal Purchase. That detector asks
+// "was this sold off entirely?", where a refund is noise. This asks "do the
+// units balance?", where a return of 8 boxes is 8 real units going back — and
+// on live data returns and refunds are 218 of the 335 negative lines.
+//
+// The unknown-line counts ride along because they change what the row means: a
+// product with unquantified acquisitions is data-entry debt (the missing count
+// is probably the explanation), while one with a fully quantified ledger is a
+// genuine contradiction.
+export const negativeExpectedQuantitySchema = z.object({
+  ...productProblemFields,
+  /** Negative by construction — that is the defect. */
+  expectedQuantity: z.number().int(),
+  acquiredUnits: z.number().int(),
+  exitedUnits: z.number().int(),
+  unknownAcquisitionLines: z.number().int(),
+  unknownExitLines: z.number().int(),
+});
+
 // A product still sitting on a shelf after it was sold off. The disposal is
 // already in the ledger — a Purchase whose Expenses are negative, the shape
 // `purchaseSettlementKinds` documents — but inventory never auto-decrements
@@ -99,7 +126,10 @@ export const productMissingPriceSchema = z.object({
 export const soldButStillStockedSchema = z.object({
   ...productProblemFields,
   // Units accounted for by disposal lines. A line with no `productQuantity`
-  // counts as one, matching how the ledger reads a bare sale row.
+  // counts as one, matching how the ledger reads a bare sale row. Always a
+  // POSITIVE unit count: `productQuantity` is signed, and a negative-cost line
+  // is read as `−|qty|`, so the detector takes `abs()` and either stored sign
+  // yields the same number here.
   soldQuantity: z.number(),
   // Units still on a shelf. Only reported when `soldQuantity >= liveQuantity`;
   // selling 4 of 14 parts bins leaves 10 legitimately stocked.
@@ -537,6 +567,7 @@ const problemsFastShape = {
   productsMissingPrice: z.array(productMissingPriceSchema),
   unvaluedBucketProducts: z.array(productMissingPriceSchema),
   soldButStillStocked: z.array(soldButStillStockedSchema),
+  negativeExpectedQuantity: z.array(negativeExpectedQuantitySchema),
   toolsUsedOutsideOwnership: z.array(toolUsedOutsideOwnershipSchema),
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
   ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
@@ -687,6 +718,12 @@ export const PROBLEM_CLASS = {
   // instead mean the disposal was mis-recorded, and deleting inventory has no
   // restore path.
   soldButStillStocked: "defect",
+  // A contradiction, not a shortfall: more units left than ever arrived, so
+  // some row is wrong and fixing it removes the product from the list for
+  // good. `coverage` would be wrong — there is no denominator, and no reported
+  // row is legitimately correct as it stands. No auto-fix: the repair is
+  // whichever line is missing or miscounted, which only a human can decide.
+  negativeExpectedQuantity: "defect",
   // The edge asserts something that could not have happened, and the gate that
   // now rejects new ones means the list only shrinks. No auto-fix: detaching is
   // usually right, but a missing acquisition Expense produces the same row and
@@ -868,6 +905,9 @@ export type DuplicateUniqueProduct = z.infer<
 export type OrphanedProduct = z.infer<typeof orphanedProductSchema>;
 export type ProductMissingPrice = z.infer<typeof productMissingPriceSchema>;
 export type SoldButStillStocked = z.infer<typeof soldButStillStockedSchema>;
+export type NegativeExpectedQuantity = z.infer<
+  typeof negativeExpectedQuantitySchema
+>;
 export type ToolUsedOutsideOwnership = z.infer<
   typeof toolUsedOutsideOwnershipSchema
 >;

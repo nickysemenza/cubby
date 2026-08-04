@@ -93,13 +93,24 @@ describe("Expense Quantity inline editor", () => {
     await waitFor(() => expect(save).toHaveBeenCalledWith(null, EXPENSE));
   });
 
-  it.each([0, -1, 1.5])("rejects an invalid quantity of %s", async (value) => {
+  it.each([0, 1.5])("rejects an invalid quantity of %s", async (value) => {
     const { column, save } = buildColumn();
     const cellData = column.meta?.cellData as ColumnCellData<ExpenseOut>;
 
     await expect(
       cellData.applyPaste?.(EXPENSE, { json: value }),
-    ).rejects.toThrow("positive whole number");
+    ).rejects.toThrow("non-zero whole number");
     expect(save).not.toHaveBeenCalled();
+  });
+
+  // `productQuantity` is signed: a negative quantity on a $0 line is a discard.
+  // This editor gates every inline quantity edit in the app, so rejecting one
+  // here would make discards uneditable everywhere.
+  it("accepts a negative quantity", async () => {
+    const { column, save } = buildColumn();
+    const cellData = column.meta?.cellData as ColumnCellData<ExpenseOut>;
+
+    await cellData.applyPaste?.(EXPENSE, { json: -1 });
+    expect(save).toHaveBeenCalledWith(-1, EXPENSE);
   });
 });

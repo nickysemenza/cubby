@@ -668,7 +668,12 @@ export function expenseCostColumn(
 }
 
 /** Whole Product units represented by an Expense. Unknown stays null; a row
- * without a linked Product is deliberately read-only. */
+ * without a linked Product is deliberately read-only.
+ *
+ * Signed, never zero — this one `saveValid` gates every inline quantity edit in
+ * the app (expense list, project detail, purchase table, product expense
+ * history), so a `> 0` rule here would make a $0 discard uneditable everywhere.
+ * See `Expense.productQuantity` in schema.ts for the ledger rule. */
 export function expenseProductQuantityColumn(
   helper: ColumnHelper<ExpenseOut>,
   save: (quantity: number | null, expense: ExpenseOut) => Promise<void>,
@@ -685,8 +690,8 @@ export function expenseProductQuantityColumn(
     if (!row.productId) {
       throw new Error("Link a product before recording its quantity");
     }
-    if (quantity !== null && (!Number.isInteger(quantity) || quantity <= 0)) {
-      throw new Error("Product quantity must be a positive whole number");
+    if (quantity !== null && (!Number.isInteger(quantity) || quantity === 0)) {
+      throw new Error("Product quantity must be a non-zero whole number");
     }
     await save(quantity, row);
   };

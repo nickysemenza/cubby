@@ -14,6 +14,7 @@ import { EntityValueField } from "~/app/_components/form-utils/entity-value-fiel
 import { QuickAddDialog } from "~/app/_components/forms/quick-add-dialog";
 import { tradeOptions } from "~/app/projects/shared";
 import { Row } from "~/components/layout";
+import { Description } from "~/components/ui/description";
 import { Switch } from "~/components/ui/switch";
 import { useTRPC } from "~/integrations/trpc/react";
 import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
@@ -44,7 +45,12 @@ const quickAddExpenseSchema = z.object({
   costType: costTypeSchema,
   trade: tradeSchema,
   future: z.boolean(),
-  productQuantity: z.number().int().positive().nullable(),
+  // Signed, never zero — a negative quantity on a $0 line is a discard.
+  productQuantity: z
+    .number()
+    .int()
+    .refine((value) => value !== 0, "Quantity cannot be zero")
+    .nullable(),
   vendor: z.string(),
   orderId: z.string(),
 });
@@ -120,7 +126,7 @@ export function CreateExpenseDialog({
       title={isDisposition ? "Record Sale or Disposal" : "New Expense"}
       description={
         isDisposition
-          ? "Enter a negative cost for a sale or return, or 0 if it broke or was given away. Ownership itself comes off inventory — remember to clear the entry too."
+          ? "Enter a negative cost for a sale or return, or 0 with a negative quantity if it broke or was given away. Ownership itself comes off inventory — remember to clear the entry too."
           : "Log what you bought (or plan to) — the fastest way to keep a project's cost honest."
       }
       mutationFn={api.expense.create.mutationOptions}
@@ -174,13 +180,22 @@ export function CreateExpenseDialog({
             prefix="$"
           />
           {presetProductId ? (
-            <NullableNumericField
-              form={form}
-              name="productQuantity"
-              label="Product quantity"
-              placeholder="Unknown"
-              step="1"
-            />
+            <>
+              <NullableNumericField
+                form={form}
+                name="productQuantity"
+                label="Product quantity"
+                placeholder="Unknown"
+                step="1"
+              />
+              {isDisposition ? (
+                <Description>
+                  On a $0 line the sign is the fact: a negative quantity records
+                  a discard, a positive one a free acquisition. Use the Discard
+                  action on the product to clear the shelf at the same time.
+                </Description>
+              ) : null}
+            </>
           ) : null}
           <Controller
             control={form.control}

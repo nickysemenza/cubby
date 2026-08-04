@@ -22,6 +22,7 @@ import {
   externalIdValues,
 } from "./external-id";
 import {
+  expenseShortcode,
   ingredientShortcode,
   inventoryShortcode,
   locationShortcode,
@@ -270,6 +271,32 @@ export const productFilterFields = {
   expenseCountMax: z.coerce.number().int().nonnegative().optional(),
   expenseTotalMin: z.coerce.number().optional(),
   expenseTotalMax: z.coerce.number().optional(),
+  /**
+   * Inclusive, SIGNED bounds on units bought minus units gone.
+   * `expectedQuantityMax: -1` is the "sold or returned more than was ever
+   * bought" worklist — a real data defect, and the reason this is not clamped
+   * at zero.
+   */
+  expectedQuantityMin: z.coerce.number().int().optional(),
+  expectedQuantityMax: z.coerce.number().int().optional(),
+  /**
+   * Products whose shelf disagrees with the ledger. Restricted to stocked
+   * products on purpose: an unstocked product with no expenses has a variance
+   * of 0 - 0 and would otherwise flood a worklist meant to surface real
+   * disagreements.
+   */
+  quantityVarianceFilter: z
+    .enum(["mismatched", "matched"])
+    .optional()
+    .describe(
+      "mismatched: stocked products whose on-hand units differ from the expected quantity. matched: stocked products where they agree.",
+    ),
+  /**
+   * Products carrying at least one product-linked Expense with no recorded
+   * quantity — the data-entry-debt worklist behind the `+N?` cue on the
+   * Expected column.
+   */
+  unknownQuantityLinesFilter: presenceFilter,
   purchaseDatePresenceFilter: presenceFilter.describe(
     "Filter to products that do / don't have a dated live Purchase linked through an Expense.",
   ),
@@ -329,6 +356,12 @@ export const productSortableFields = [
   "ingredient",
   "expenseTotal",
   "expenses",
+  // Units bought minus units gone, and shelf minus that. Both correlated
+  // subqueries in repo/product/quantity-ledger.ts. These strings must stay
+  // identical to the column ids in productlist.tsx, or `buildOrderBy` drops
+  // the sort while the header still renders a sort affordance.
+  "expectedQuantity",
+  "quantityVariance",
   // Latest linked Purchase date — resolved by a correlated subquery in
   // repo/product/crud.ts.
   "purchaseDate",
@@ -340,6 +373,91 @@ export const productSortableFields = [
 ] as const;
 
 export type ProductSortField = (typeof productSortableFields)[number];
+
+/**
+ * Units bought minus units gone, derived from the Expense ledger. See
+ * repo/product/quantity-ledger.ts for the rule and why every negative line
+ * counts as an exit here (unlike `findSoldButStillStocked`'s stricter
+ * disposal-Purchase predicate).
+ */
+export const productQuantityLedgerOut = z.object({
+  /** Units acquired: positive-cost lines, plus $0 lines with a positive quantity. */
+  acquiredUnits: z.number().int().nonnegative(),
+  /** Units gone: negative-cost lines (returns, refunds, sales), plus $0 discards. */
+  exitedUnits: z.number().int().nonnegative(),
+  /**
+   * `acquiredUnits - exitedUnits`. **May be negative** — more units left than
+   * the ledger can account for buying, which is a real data defect worth
+   * surfacing rather than a number to clamp at zero.
+   */
+  expectedQuantity: z.number().int(),
+  /**
+   * Lines that carry no quantity, so they contribute nothing to the totals
+   * above. Reported rather than guessed at: a receipt that proves the cost but
+   * not the count must not silently read as one unit.
+   */
+  unknownAcquisitionLines: z.number().int().nonnegative(),
+  unknownExitLines: z.number().int().nonnegative(),
+});
+export type ProductQuantityLedgerOut = z.infer<typeof productQuantityLedgerOut>;
+
+/**
+ * Record that units of a Product were thrown away, given away, or written off.
+ *
+ * Mints a $0 Expense carrying a NEGATIVE `productQuantity` — the signal that
+ * distinguishes a discard from a free acquisition — and, when asked, takes the
+ * same units off the shelf in the same transaction.
+ */
+export const productDiscardInput = z.object({
+  productId: productShortcode,
+  quantity: z
+    .number()
+    .int()
+    .positive()
+    .default(1)
+    .describe(
+      "Units leaving the household, as a positive count. Stored on the Expense as a NEGATIVE productQuantity.",
+    ),
+  date: plainDate,
+  reason: z
+    .string()
+    .max(500)
+    .nullable()
+    .default(null)
+    .describe(
+      "Free text stored as the Expense notes — broken, thrown away, given away.",
+    ),
+  /**
+   * Inventory never auto-decrements (a binding tenet). Clearing the shelf here
+   * is not an auto-decrement: it is an explicit instruction on a dialog that
+   * names the entry and the count. Opt-OUT rather than implicit, and no other
+   * write path may take units off a shelf as a side effect of money.
+   */
+  adjustInventory: z.boolean().default(true),
+  /**
+   * Which shelf to take the units from. Required whenever `adjustInventory` is
+   * set and the product sits in more than one location — never guessed, since
+   * guessing would silently empty the wrong shelf.
+   */
+  inventoryEntryId: inventoryShortcode.nullable().default(null),
+});
+export type ProductDiscardInput = z.infer<typeof productDiscardInput>;
+
+export const productDiscardOut = z.object({
+  expenseId: expenseShortcode,
+  /** Negative, as stored on the row. */
+  storedQuantity: z.number().int().negative(),
+  inventory: z
+    .object({
+      entryId: inventoryShortcode,
+      /** True when the discard emptied the entry and it was soft-deleted. */
+      removed: z.boolean(),
+      remainingValue: z.number().nullable(),
+    })
+    .nullable(),
+  sideEffects: mutationSideEffectsSchema,
+});
+export type ProductDiscardOut = z.infer<typeof productDiscardOut>;
 
 export const productPricingOut = z.object({
   derivedPrice: z.number().nullable(),
@@ -503,6 +621,15 @@ export const productListItemOut = z.object({
   // A product can appear on several Expense lines/Purchases. The table shows
   // the latest live Purchase date as the compact scalar provenance cue.
   purchaseDate: plainDate.nullable(),
+  quantityLedger: productQuantityLedgerOut,
+  // Live units across every shelf this product sits on. Null when it is not
+  // stocked at all, and null when its entries carry MORE THAN ONE unit — a
+  // count of `each` plus a volume of `can` has no meaningful sum, and the
+  // Variance column dashes rather than adding apples to oranges.
+  onHandUnits: z.number().nullable(),
+  // `onHandUnits - quantityLedger.expectedQuantity`. Null exactly when
+  // `onHandUnits` is. Zero means the shelf and the ledger agree.
+  quantityVariance: z.number().nullable(),
 });
 export type ProductListItem = z.infer<typeof productListItemOut>;
 

@@ -599,6 +599,124 @@ describe("problems repo", () => {
       );
     });
 
+    it("reports a positive sold quantity even when the disposal stores a negative one", async () => {
+      const loc = await createLocation(
+        ctx.db,
+        makeLocationInput({ name: "Signed disposal shelf" }),
+        ctx.actor,
+      );
+      const prod = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Signed Disposal Router", price: 200 }),
+        ctx.actor,
+      );
+      await createInventoryEntry(
+        ctx.db,
+        {
+          productId: prod.entityId,
+          locationId: loc.entityId,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+      // `productQuantity` is signed, and a negative-cost line is read as
+      // `−|qty|` — so BOTH stored signs are legal on a disposal. Without the
+      // `abs()` in the detector this row makes `soldQuantity` negative, which
+      // silently fails the `soldQuantity >= liveQuantity` comparison (the
+      // product drops off the list entirely) and would render "sold -1".
+      await seedLine({
+        name: "router sold",
+        cost: -150,
+        vendor: "eBay",
+        orderId: "SIGNED-SALE",
+        productId: prod.id,
+        productQuantity: -1,
+      });
+
+      const found = await findFastProblems(ctx.db);
+      const flagged = found.soldButStillStocked.find((p) => p.id === prod.id);
+      expect(flagged?.soldQuantity).toBe(1);
+    });
+  });
+
+  describe("findProductsWithNegativeExpectedQuantity", () => {
+    const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
+      unwrap(
+        createExpense(
+          ctx.db,
+          expenseCreateInput.parse(makeExpenseInput(overrides)),
+          ctx.actor,
+        ),
+      );
+
+    it("flags a product with more units gone than acquired, and spares a balanced one", async () => {
+      const unbalanced = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Ghost Circular Saw", price: 60 }),
+        ctx.actor,
+      );
+      const balanced = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Balanced Outlet Box", price: 4 }),
+        ctx.actor,
+      );
+
+      // The acquisition was never recorded, so the sale has nothing to net
+      // against — the exact defect this detector exists to surface.
+      await seedLine({
+        name: "saw sold",
+        cost: -60,
+        productId: unbalanced.id,
+        productQuantity: 1,
+      });
+      // Bought 8, returned 8. A return is a real exit, so this nets to zero —
+      // and it sits on a Purchase that nets POSITIVE, which is why
+      // `findSoldButStillStocked`'s stricter predicate would miss it entirely.
+      await seedLine({
+        name: "boxes bought",
+        cost: 33.44,
+        vendor: "Home Depot",
+        orderId: "BOX-1",
+        productId: balanced.id,
+        productQuantity: 8,
+      });
+      await seedLine({
+        name: "boxes returned",
+        cost: -30,
+        vendor: "Home Depot",
+        orderId: "BOX-1",
+        productId: balanced.id,
+        productQuantity: 8,
+      });
+
+      const found = await findFastProblems(ctx.db);
+      const flagged = found.negativeExpectedQuantity.find(
+        (p) => p.id === unbalanced.id,
+      );
+      expect(flagged).toMatchObject({
+        expectedQuantity: -1,
+        acquiredUnits: 0,
+        exitedUnits: 1,
+        unknownAcquisitionLines: 0,
+        unknownExitLines: 0,
+      });
+      expect(
+        found.negativeExpectedQuantity.some((p) => p.id === balanced.id),
+      ).toBe(false);
+
+      // Recording the missing acquisition is the fix, and it clears the row.
+      await seedLine({
+        name: "saw bought",
+        cost: 200,
+        productId: unbalanced.id,
+        productQuantity: 1,
+      });
+      const after = await findFastProblems(ctx.db);
+      expect(
+        after.negativeExpectedQuantity.some((p) => p.id === unbalanced.id),
+      ).toBe(false);
+    });
+
     it("counts a disposal line with no quantity as one unit", async () => {
       const loc = await createLocation(
         ctx.db,

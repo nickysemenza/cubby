@@ -1377,8 +1377,9 @@ export const expense = pgTable(
     // get a product. A *negative* expense carrying the same productId is how
     // an exit is recorded — sale at sale price, return at full price, and a
     // broken/gifted item as cost 0 (never null: `cost IS NULL` is already the
-    // Unclassified predicate). Net cost, ownership window and owned/sold status
-    // are derived from these rows plus inventory; nothing is stored.
+    // Unclassified predicate) carrying a *negative* `productQuantity`. Net
+    // cost, ownership window and owned/sold status are derived from these rows
+    // plus inventory; nothing is stored.
     productId: uuid("productId")
       .$type<ProductId>()
       .references(() => product.id),
@@ -1386,6 +1387,20 @@ export const expense = pgTable(
     // intentional: old receipts frequently prove the cost but not the count,
     // and unknown must never be silently treated as one. Whole product units
     // only; measured package conversions belong on Product unit mappings.
+    //
+    // SIGNED — money direction wins, and the quantity's own sign is consulted
+    // only when there is no money:
+    //   cost > 0  → acquisition of +|qty|
+    //   cost < 0  → exit of −|qty|   (302 live rows store these positive; the
+    //               sign is not consulted, so readers must use abs())
+    //   cost = 0  → the sign IS the fact: +qty is a free acquisition (promo
+    //               pack, bundled accessory), −qty is a discard/write-off
+    //   qty NULL  → unknown; contributes nothing and is reported as uncertainty
+    //
+    // Before the signed rule a $0 line was ambiguous between those last two —
+    // see the essay above `findSoldButStillStocked` in
+    // repo/problems/detectors-product.ts for why that ambiguity needed a real
+    // signal on the row rather than a cleverer query.
     productQuantity: integer("productQuantity"),
     // The charge this line belongs to. Nullable: the 193 rows with no vendor
     // recorded have nothing to attach to, and forcing a synthetic charge on them
@@ -1414,9 +1429,14 @@ export const expense = pgTable(
       "Expense_cost_whole_cent_check",
       sql`${table.cost} IS NULL OR abs(${table.cost} * 100 - round(${table.cost} * 100)) < 0.0000001`,
     ),
+    // Signed, but never zero — see the ledger rule on `productQuantity`. NOTE:
+    // `drizzle-kit push` does NOT diff CHECK constraints, so editing this line
+    // changes tests (the template is built from schema.ts) and nothing else.
+    // A change here must be applied to production by hand and read back from
+    // `pg_constraint`.
     check(
       "Expense_productQuantity_check",
-      sql`${table.productQuantity} IS NULL OR (${table.productId} IS NOT NULL AND ${table.productQuantity} > 0)`,
+      sql`${table.productQuantity} IS NULL OR (${table.productId} IS NOT NULL AND ${table.productQuantity} <> 0)`,
     ),
     // NOTE: `drizzle-kit push` does not diff CHECK constraints (see the longer
     // note on FinancialTransaction_purchase_settlement_check above). This one

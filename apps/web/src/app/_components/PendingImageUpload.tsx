@@ -431,6 +431,7 @@ export function PendingImageUpload({
                 <Image
                   src={image.url}
                   alt={image.filename}
+                  displayWidth={200}
                   className="h-24 w-full object-cover"
                 />
                 <Button
@@ -461,6 +462,7 @@ export function PendingImageUpload({
                 <Image
                   src={image.url}
                   alt={image.filename}
+                  displayWidth={200}
                   className="h-24 w-full object-cover"
                 />
                 <Button

@@ -12,7 +12,9 @@ import {
   type ProductId,
   type ProductShortcode,
   productShortcode,
+  unsafeExpenseShortcode,
   unsafeIngredientId,
+  unsafeInventoryShortcode,
   unsafeProductId,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
@@ -24,6 +26,8 @@ import {
   productCategoryDistributionOut,
   productCreateInput,
   productCreateManyInput,
+  productDiscardInput,
+  productDiscardOut,
   productExternalIdCollisionInput,
   productExternalIdCollisionsOut,
   productFiltersSchema,
@@ -58,6 +62,7 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { findProductExternalIdCollisions } from "~/server/repo/data-quality";
 import {
   deleteProducts,
+  discardProductUnits,
   getCategoryDistribution,
   getProductManufacturerOptions,
   getProductPickerItemsByIds,
@@ -81,6 +86,7 @@ import {
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { shouldUseSemanticComboboxFallback } from "~/server/semantic/combobox-fallback";
+import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
 import { verifyProductImages } from "~/server/services/image-verification.service";
 import {
   runMutationSideEffects,
@@ -708,6 +714,84 @@ const setProjectUses = protectedProcedure
     return setProductProjectUses(ctx.db, id, projectIds, ctx.actorContext);
   });
 
+/**
+ * Record that units were thrown away / written off, and optionally take them
+ * off the shelf in the same transaction. See repo/product/discard.ts for why a
+ * discard carries no Purchase and why the inventory half does not breach the
+ * no-auto-decrement tenet.
+ */
+const discard = protectedProcedure
+  .input(productDiscardInput)
+  .output(strictOutput(productDiscardOut))
+  .mutation(async ({ ctx, input }) => {
+    const productId = await resolveProductId(ctx.db, input.productId);
+    const inventoryEntryId =
+      input.adjustInventory && input.inventoryEntryId
+        ? await resolveOrThrow(ctx.db, "inventory", input.inventoryEntryId)
+        : null;
+
+    const result = await discardProductUnits(
+      ctx.db,
+      {
+        productId,
+        quantity: input.quantity,
+        date: input.date,
+        reason: input.reason,
+        inventoryEntryId,
+      },
+      ctx.actorContext,
+    );
+
+    // The inventory event is load-bearing, not symmetry: `needsValuationRecompute`
+    // returns true unconditionally for `inventory`, so this is what dispatches
+    // the location-valuation recompute the changed shelf requires.
+    const backgroundBatches = await runMutationSideEffectsForEntities(ctx.db, [
+      {
+        action: "created" as const,
+        entity: {
+          entityType: "expense" as const,
+          entityId: result.expenseId,
+        },
+        source: "product.discard",
+      },
+      ...(result.inventory
+        ? [
+            {
+              action: result.inventory.removed
+                ? ("deleted" as const)
+                : ("updated" as const),
+              entity: {
+                entityType: "inventory" as const,
+                entityId: result.inventory.entryId,
+              },
+              source: "product.discard",
+            },
+          ]
+        : []),
+    ]);
+    const recipeBatches = await recomputeRecipesForPriceAffectedProducts(
+      ctx.db,
+      ctx.services.recipeCosting,
+      result.priceAffectedProductIds,
+      "product.discard",
+    );
+
+    return {
+      expenseId: unsafeExpenseShortcode(result.expenseShortcode),
+      storedQuantity: result.storedQuantity,
+      inventory: result.inventory
+        ? {
+            entryId: unsafeInventoryShortcode(result.inventory.entryShortcode),
+            removed: result.inventory.removed,
+            remainingValue: result.inventory.remainingValue,
+          }
+        : null,
+      sideEffects: {
+        backgroundBatches: [...backgroundBatches, ...recipeBatches],
+      },
+    };
+  });
+
 export const productRouter = createTRPCRouter({
   getByID,
   getByShortcode,
@@ -721,6 +805,7 @@ export const productRouter = createTRPCRouter({
   update,
   applyUpcData,
   delete: deleteItem,
+  discard,
   quickCreate,
   findOrCreateByUPC,
   backfillUPCImages,

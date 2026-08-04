@@ -60,6 +60,7 @@ const EntityImageList: FC<EntityImageListProps> = ({
                   <InteractiveImage
                     src={image.url}
                     alt={image.filename}
+                    displayWidth={256}
                     hoverEffect="both"
                     transition="all"
                   />

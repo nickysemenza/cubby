@@ -19,6 +19,7 @@ import {
   productTopLevelOut,
   productWithIngredientAndInventoryAndMappingsOut,
 } from "@cubby/schemas/product";
+import { sumBy, uniq } from "es-toolkit";
 import type { z } from "zod";
 import { parseWithContext } from "~/lib/zod-utils";
 import type {
@@ -212,9 +213,49 @@ const dbLocationToProductListInventoryShape = (
   }),
 });
 
+/**
+ * Live units on the shelf, and how far they sit from the ledger.
+ *
+ * Computed from the already-loaded `inventoryEntry` relation rather than a
+ * fifth correlated subquery — the list joins those rows for the Locations
+ * column regardless.
+ *
+ * Both go null when the entries carry more than one unit. Summing `each`
+ * against `can` produces a number that means nothing, and a Variance column
+ * that quietly adds them would manufacture a discrepancy out of a unit
+ * mismatch. (In practice this is rare — live inventory is essentially all
+ * `each` — which is exactly why an unguarded sum would have looked correct
+ * right up until it wasn't.)
+ */
+const deriveOnHandUnits = (
+  entries: ReadonlyArray<{ amount: { value: number; unit: string } }>,
+  expectedQuantity: number,
+): { onHandUnits: number | null; quantityVariance: number | null } => {
+  if (entries.length === 0)
+    return { onHandUnits: null, quantityVariance: null };
+
+  const units = uniq(entries.map((entry) => entry.amount.unit));
+  if (units.length > 1) return { onHandUnits: null, quantityVariance: null };
+
+  const onHandUnits = sumBy(entries, (entry) => entry.amount.value);
+  return { onHandUnits, quantityVariance: onHandUnits - expectedQuantity };
+};
+
 export const dbProductToListAPI = (
   productData: ProductListDB,
 ): ProductListItem => {
+  const inventoryEntry = mapRelation(
+    productData.inventoryEntry.filter((entry) => isNotDeleted(entry.location)),
+    (entry) => ({
+      id: unsafeInventoryShortcode(entry.shortcode),
+      amount: parseInventoryAmount(entry.amount, entry.id),
+      valuation: entry.valuation,
+      verifiedAt: entry.verifiedAt,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+      location: dbLocationToProductListInventoryShape(entry.location),
+    }),
+  );
   const result = {
     ...dbProductToTopLevelShape(productData),
     ingredient:
@@ -225,20 +266,7 @@ export const dbProductToListAPI = (
       unsafeProductShortcode(productData.shortcode),
       productData.unitMappings,
     ),
-    inventoryEntry: mapRelation(
-      productData.inventoryEntry.filter((entry) =>
-        isNotDeleted(entry.location),
-      ),
-      (entry) => ({
-        id: unsafeInventoryShortcode(entry.shortcode),
-        amount: parseInventoryAmount(entry.amount, entry.id),
-        valuation: entry.valuation,
-        verifiedAt: entry.verifiedAt,
-        createdAt: entry.createdAt,
-        updatedAt: entry.updatedAt,
-        location: dbLocationToProductListInventoryShape(entry.location),
-      }),
-    ),
+    inventoryEntry,
     // count() returns bigint (string over the wire), so coerce — mirrors the
     // ingredient list's appearsInRecipes/recipeCount handling.
     expenseCount: Number(productData.expenseCount),
@@ -246,6 +274,11 @@ export const dbProductToListAPI = (
     // null) — mirrors `purchaseExpenseTotal`'s dbPurchaseToAPI coercion.
     expenseTotal: Number(productData.expenseTotal),
     purchaseDate: productData.purchaseDate,
+    quantityLedger: productData.quantityLedger,
+    ...deriveOnHandUnits(
+      inventoryEntry,
+      productData.quantityLedger.expectedQuantity,
+    ),
   };
 
   return parseWithContext(productListItemOut, result, {

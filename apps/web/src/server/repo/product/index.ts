@@ -45,6 +45,9 @@ export {
   quickCreateProduct,
   updateProduct,
 } from "./crud";
+// Discard (a $0, negative-quantity exit — see the module doc for why it
+// carries no Purchase and how it treats the shelf).
+export { discardProductUnits } from "./discard";
 // Helpers
 export { foodLookupParamFromProduct } from "./helpers";
 // Lookup operations

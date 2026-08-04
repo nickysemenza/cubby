@@ -4,6 +4,7 @@ import {
   type AllProblems,
   type CoverageTotals,
   type LabelVariant,
+  type NegativeExpectedQuantity,
   type ProductMissingPrice,
   type PurchaseNotReconciling,
   type SoldButStillStocked,
@@ -599,6 +600,24 @@ function soldButStockedSubtitle(product: SoldButStillStocked): string {
 }
 
 /**
+ * Leads with the arithmetic, because the arithmetic IS the finding — and names
+ * the unquantified lines when there are any, since those change which fix
+ * applies. Unknown acquisitions usually mean a receipt whose count was never
+ * recorded; a fully quantified ledger that still goes negative means a real
+ * acquisition row is missing or an exit is on the wrong product.
+ */
+function negativeExpectedSubtitle(row: NegativeExpectedQuantity): string {
+  const unknown = row.unknownAcquisitionLines + row.unknownExitLines;
+  return [
+    byManufacturer(row.manufacturer),
+    `${row.acquiredUnits} acquired, ${row.exitedUnits} gone → ${row.expectedQuantity}`,
+    unknown > 0 ? `${unknown} line(s) carry no quantity` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/**
  * Both dates, because they are what tells you which of the two fixes applies:
  * an acquisition a few weeks late usually means a missing purchase Expense,
  * one a year late means the edge itself is wrong.
@@ -773,6 +792,21 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       subtitle: soldButStockedSubtitle(product),
       badges: locationBadges(product.locations),
       route: entityDetailLink("product", product.id),
+    }),
+  }),
+  section({
+    id: "negative-expected-quantity",
+    label: "Negative expected",
+    select: (p) => p.negativeExpectedQuantity,
+    entity: "product",
+    title: "Sold More Than Was Bought",
+    description:
+      "The ledger says more units of these products left than ever arrived, which cannot be true. Usually an acquisition Expense is missing, or one is there but its quantity was never recorded. Where lines carry no quantity, filling those in is the fix; where they all do, an exit is probably booked against the wrong product.",
+    emptyMessage: "Every product's units balance.",
+    renderItem: (row) => ({
+      title: row.name,
+      subtitle: negativeExpectedSubtitle(row),
+      route: entityDetailLink("product", row.id),
     }),
   }),
   section({

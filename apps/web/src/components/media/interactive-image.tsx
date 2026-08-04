@@ -56,6 +56,8 @@ interface InteractiveImageProps
   alt: string;
   imageTransition?: VariantProps<typeof imageContentVariants>["transition"];
   imageClassName?: string;
+  /** Rendered tile width in CSS px, for CF image transforms. */
+  displayWidth?: number;
 }
 
 export const InteractiveImage = ({
@@ -67,6 +69,7 @@ export const InteractiveImage = ({
   alt,
   imageTransition = "scale",
   imageClassName,
+  displayWidth,
   ref,
   ...props
 }: InteractiveImageProps & {
@@ -84,6 +87,7 @@ export const InteractiveImage = ({
       <Image
         src={src}
         alt={alt}
+        displayWidth={displayWidth}
         className={cn(
           "absolute inset-0 h-full w-full object-cover",
           imageContentVariants({ transition: imageTransition }),
