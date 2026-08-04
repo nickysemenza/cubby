@@ -156,6 +156,34 @@ export const productMutationInvalidateKeys = [
   queryKeys.wish.all,
 ] as const satisfies readonly QueryKey[];
 
+/**
+ * Product MERGE, which moves far more than a product write does — the same
+ * reason `ingredientMergeMutationInvalidateKeys` exists separately from
+ * `ingredientMutationInvalidateKeys`.
+ *
+ * A rename touches the product row and the surfaces that embed its name. A
+ * merge re-parents rows across five other entities: inventory entries move and
+ * re-value at the keeper's price (`planInventoryFold` →
+ * `syncInventoryValuationsForProduct`), expenses and projectUses are
+ * re-pointed, and dependent recipe costs are recomputed (#603). Left on the
+ * narrow set, every one of those views kept rendering the pre-merge state —
+ * including rows pointing at a now soft-deleted loser — until something else
+ * happened to invalidate them.
+ */
+export const productMergeMutationInvalidateKeys = [
+  ...productMutationInvalidateKeys,
+  queryKeys.inventory.all,
+  queryKeys.location.all,
+  queryKeys.expense.all,
+  queryKeys.project.all,
+  // Cost inputs changed → recipe totals and the meal rollups read off them.
+  queryKeys.recipe.all,
+  queryKeys.meal.all,
+  // A loser leaves the catalog: stale hits and duplicate-detector rows both go.
+  queryKeys.search.all,
+  queryKeys.problems.all,
+] as const satisfies readonly QueryKey[];
+
 export const wishMutationInvalidateKeys = [
   queryKeys.wish.all,
   queryKeys.search.all,

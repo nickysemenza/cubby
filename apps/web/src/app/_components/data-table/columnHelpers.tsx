@@ -1974,3 +1974,62 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
     },
   );
 }
+
+/**
+ * Creates a column linking to a row's parent entity of the SAME kind — a
+ * task's `parentTaskId`/`parentTaskName`, or a project's
+ * `parentProjectId`/`parentProjectName` (the WBS tree's "Parent" column).
+ * Mirrors {@link createProjectLinkColumn}/{@link createProductLinkColumn} —
+ * same flat id+name pair rather than a nested relation object — but unlike
+ * those two, the field names and target entity vary per caller (task vs.
+ * project), so this takes the id/name fields and entity explicitly instead
+ * of hardcoding them. Read-only: none of the three call sites (the task
+ * list, the project detail page's embedded task list, and the project
+ * roster) support inline reparenting through this column.
+ */
+export function createParentLinkColumn<
+  T extends Record<string, unknown>,
+  TEntity extends "task" | "project",
+>(
+  columnHelper: ColumnHelper<T>,
+  entity: TEntity,
+  idField: keyof T,
+  nameField: keyof T,
+  options?: {
+    id?: string;
+    header?: string;
+    className?: string;
+    mobile?: MobileColumnMeta;
+    filterConfig?: FilterConfig;
+  },
+) {
+  const defaultId = entity === "task" ? "parentTask" : "parent";
+  const defaultHeader = entity === "task" ? "Parent Task" : "Parent";
+  return columnHelper.accessor(
+    (row) => ({
+      id: row[idField] as string | null,
+      name: row[nameField] as string | null,
+    }),
+    {
+      id: options?.id ?? defaultId,
+      header: options?.header ?? defaultHeader,
+      enableSorting: false,
+      meta: {
+        className: options?.className ?? "w-40",
+        mobile: options?.mobile,
+        filterConfig: options?.filterConfig,
+      },
+      cell: (info) => {
+        const { id, name } = info.getValue();
+        if (!id || !name) return <NoneValue />;
+        return (
+          <EntityInlineLink
+            entity={entity}
+            data={{ id, name } as never}
+            truncate
+          />
+        );
+      },
+    },
+  );
+}

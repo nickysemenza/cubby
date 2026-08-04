@@ -24,6 +24,7 @@ import {
 } from "~/components/ui/table";
 import { useTRPC } from "~/integrations/trpc/react";
 import { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
+import { formatCount } from "~/lib/utils";
 
 const windows: Array<{ label: string; value: McpUsageWindow }> = [
   { label: "7d", value: 7 },
@@ -33,8 +34,6 @@ const windows: Array<{ label: string; value: McpUsageWindow }> = [
   { label: "Lifetime", value: "lifetime" },
 ];
 
-const number = new Intl.NumberFormat("en-US");
-
 function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="border border-border bg-card p-4">
@@ -42,7 +41,7 @@ function Metric({ label, value }: { label: string; value: number | string }) {
         {label}
       </div>
       <div className="mt-1 font-semibold text-2xl">
-        {typeof value === "number" ? number.format(value) : value}
+        {typeof value === "number" ? formatCount(value) : value}
       </div>
     </div>
   );
@@ -248,7 +247,7 @@ function UsageCharts({ data }: { data: McpUsageDashboardOut }) {
             {data.surfaces.map((row) => (
               <div key={row.key} className="flex justify-between border-t py-2">
                 <span>{row.label}</span>
-                <span className="font-mono">{number.format(row.count)}</span>
+                <span className="font-mono">{formatCount(row.count)}</span>
               </div>
             ))}
           </div>
@@ -257,7 +256,7 @@ function UsageCharts({ data }: { data: McpUsageDashboardOut }) {
             {data.users.map((row) => (
               <div key={row.key} className="flex justify-between border-t py-2">
                 <span>{row.label}</span>
-                <span className="font-mono">{number.format(row.count)}</span>
+                <span className="font-mono">{formatCount(row.count)}</span>
               </div>
             ))}
           </div>
@@ -520,8 +519,8 @@ export function McpUsageDashboard() {
                   <TableCell>
                     <StatusBadge status={tool.status} />
                   </TableCell>
-                  <TableCell>{number.format(tool.periodCalls)}</TableCell>
-                  <TableCell>{number.format(tool.lifetimeCalls)}</TableCell>
+                  <TableCell>{formatCount(tool.periodCalls)}</TableCell>
+                  <TableCell>{formatCount(tool.lifetimeCalls)}</TableCell>
                   <TableCell>
                     {tool.periodCalls === 0
                       ? "—"
