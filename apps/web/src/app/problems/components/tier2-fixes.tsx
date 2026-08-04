@@ -173,9 +173,15 @@ export function DuplicateProductMergeFix({
   const api = useTRPC();
   const first = variant.products[0];
   const [keepId, setKeepId] = useState<string | null>(first?.id ?? null);
-  const mergeIds = variant.products
-    .map((p) => p.id)
-    .filter((id) => id !== keepId);
+  // Memoized because `previewInput` below depends on it: computed inline, this
+  // would be a fresh array every render, which defeats that `useMemo` entirely
+  // (see apps/web/CLAUDE.md on unstable hook deps). Never a render loop —
+  // react-query hashes the query key structurally — but it did re-run the memo
+  // and the zod `.parse()` `useOperationPreview` does on its input every render.
+  const mergeIds = useMemo(
+    () => variant.products.map((p) => p.id).filter((id) => id !== keepId),
+    [variant.products, keepId],
+  );
 
   const merge = useProblemCardMutation({
     mutationFn: api.product.merge.mutationOptions,
