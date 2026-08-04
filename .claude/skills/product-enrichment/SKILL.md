@@ -81,6 +81,14 @@ record. Put maker-issued model/MPN in `model`; retailer SKUs belong in typed
 
 ## Apply metadata safely
 
+`create_product`/`create_products` silently snap `manufacturer` to the
+established spelling already in use among live Products
+(`resolveEstablishedManufacturer` in `server/repo/label-canonical.ts`) — a
+returned `manufacturer` that differs from what you typed is expected, not a
+bug. `update_product` deliberately does **not** auto-snap, so before writing a
+manual manufacturer correction, check what spelling is already established
+rather than assuming your typed value will be normalized.
+
 Read the current product immediately before writing. Use
 `patch_product_external_ids` for identifier-only changes: upsert a precise
 `(source, kind)` slot and remove only an explicitly obsolete slot with its

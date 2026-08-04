@@ -27,16 +27,16 @@ Expense → Purchase ← FinancialTransaction → FinancialAccount
   not the mechanism: it fires only for an adjustment-like name on a Product-less
   Expense and never re-runs on rename. Read the kind back off the write response
   instead of assuming it.
-  **The published MCP schemas omit `lineKind`, but every write tool accepts it** —
-  `create_expense(s)`, `update_expense(s)`, and `split_expense` (per part) all
-  store it and echo it back. `splitExpenseInput.parts` carries an optional
-  `lineKind`, and `splitExpense` resolves `part.lineKind ?? infer(...)`, so an
-  explicit kind on a part wins over inference: splitting a receipt with an
-  `Outside Delivery` part typed `shipping` stores `shipping`, even though that
-  name does not match the inference regex and would otherwise land as
-  `principal`. Do not conclude from the schema that typed rows are unreachable
-  and fall back to allocating tax across merchandise; that is the superseded
-  pattern that older Golden State Lumber and Bay Metals rows still show.
+  **`lineKind` is a documented, optional field on `create_expense(s)`,
+  `update_expense(s)`, and `split_expense` (per part)** — all three store it
+  and echo it back. `splitExpenseInput.parts` carries an optional `lineKind`,
+  and `splitExpense` resolves `part.lineKind ?? infer(...)`, so an explicit
+  kind on a part wins over inference: splitting a receipt with an `Outside
+  Delivery` part typed `shipping` stores `shipping`, even though that name
+  does not match the inference regex and would otherwise land as `principal`.
+  Do not conclude that typed rows are unreachable and fall back to allocating
+  tax across merchandise; that is the superseded pattern that older Golden
+  State Lumber and Bay Metals rows still show.
 - A `Purchase` is one vendor order, receipt, or deliberately separate purchase
   event. `statedTotal` is the literal vendor-printed amount, never a rollup.
 - A `FinancialTransaction` is settlement evidence: a charge, refund,
