@@ -1274,6 +1274,90 @@ describe("project tool matrix", () => {
     ).rejects.toThrow();
   });
 
+  it("filters rows by tool search across both name and manufacturer", async () => {
+    for (const spec of [
+      { name: "Blue drill", manufacturer: "Makita" },
+      { name: "Red saw", manufacturer: "Milwaukee" },
+      { name: "Green sander", manufacturer: "Makita" },
+    ]) {
+      const made = await createProduct(
+        ctx.db,
+        makeProductInput({
+          name: spec.name,
+          manufacturer: spec.manufacturer,
+          category: "tools",
+        }),
+        ctx.actor,
+      );
+      await createExpense(
+        ctx.db,
+        toolExpense({ name: spec.name, productId: made.id, cost: 200 }),
+        ctx.actor,
+      );
+    }
+
+    const byName = await projectToolMatrix(
+      ctx.db,
+      matrixInput({ toolSearch: "drill" }),
+    );
+    expect(byName.rows.map((row) => row.productName)).toEqual(["Blue drill"]);
+    expect(byName.totals.matchingTools).toBe(1);
+
+    // The OR arm: a term that matches no name still finds every tool by that
+    // maker. `buildSearchConditions` ANDs its search filters, so these two
+    // predicates have to be combined by hand — a regression here would silently
+    // return nothing rather than error.
+    const byManufacturer = await projectToolMatrix(
+      ctx.db,
+      matrixInput({ toolSearch: "makita" }),
+    );
+    expect(byManufacturer.rows.map((row) => row.productName).sort()).toEqual([
+      "Blue drill",
+      "Green sander",
+    ]);
+
+    // Whitespace-only is not a filter.
+    const blank = await projectToolMatrix(
+      ctx.db,
+      matrixInput({ toolSearch: "   " }),
+    );
+    expect(blank.totals.matchingTools).toBe(3);
+  });
+
+  it("scopes columns by completion year", async () => {
+    for (const spec of [
+      { name: "Finished in 2024", date: "2024-05-10" },
+      { name: "Finished in 2026", date: "2026-05-10" },
+    ]) {
+      const { output } = await createProject(
+        ctx.db,
+        projectCreateInput.parse({ name: spec.name }),
+        ctx.actor,
+      );
+      await createExpense(
+        ctx.db,
+        makeExpenseInput({
+          name: `${spec.name} spend`,
+          projectId: output.id,
+          cost: 40,
+          date: spec.date,
+        }),
+        ctx.actor,
+      );
+    }
+
+    // The only filter that needs the project tree folded before the column
+    // WHERE can be built, so it takes a different code path to every other one.
+    const scoped = await projectToolMatrix(
+      ctx.db,
+      matrixInput({ completionYear: "2024" }),
+    );
+    expect(scoped.columns.map((column) => column.projectName)).toEqual([
+      "Finished in 2024",
+    ]);
+    expect(scoped.totals.matchingProjects).toBe(1);
+  });
+
   it("groups rows by manufacturer when asked", async () => {
     for (const spec of [
       { name: "Blue drill", manufacturer: "Makita" },
