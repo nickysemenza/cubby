@@ -42,7 +42,6 @@ import {
   productTagOptionsOut,
   productTagSiblingsOut,
   productTopLevelOut,
-  productUpdateData,
   productUpdateInput,
   productWithFoodAndSideEffectsOut,
   productWithFoodOut,
@@ -104,7 +103,7 @@ import {
 import { semanticProductCandidates } from "~/server/services/semantic-search.service";
 import {
   createDeleteProcedure,
-  createEntityCrudWithoutListProcedures,
+  createEntityDetailReadProcedures,
   createEntityListProcedure,
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
@@ -183,32 +182,10 @@ async function linkedIngredientIds(
   return [...resolved.values()].map((id) => unsafeIngredientId(id));
 }
 
-/**
- * The factory builds a `create` and an `update` procedure from these callbacks,
- * and this router DISCARDS both — only `getByID`/`getByShortcode` are
- * destructured, because the shipped `create`/`update` are hand-rolled below
- * (they dispatch the dependent-recipe recompute the factory's contract can't
- * express). The factory's `repository` type still requires both keys, so these
- * are unreachable placeholders.
- *
- * Never put behavior here. A previous version of this file supplied two
- * plausible-looking callbacks that no request could ever reach — a fix applied
- * to one of them would have silently not shipped.
- */
-const discardedByFactory = (): never => {
-  throw new Error(
-    "unreachable: product.create/update are the hand-rolled procedures below",
-  );
-};
-
 // Create standardized detail procedures using the enriched schema.
-const { getByID, getByShortcode } = createEntityCrudWithoutListProcedures({
+const { getByID, getByShortcode } = createEntityDetailReadProcedures({
   entityName: "product",
   schemas: {
-    createInput: productCreateInput,
-    // Defaults-stripped so a partial update never resets an omitted field (e.g.
-    // wiping fdc_id / unitMappings). See productUpdateData.
-    updateInput: productUpdateData,
     output: productWithFoodOut,
     idSchema: productShortcode,
   },
@@ -232,8 +209,6 @@ const { getByID, getByShortcode } = createEntityCrudWithoutListProcedures({
           )
         : null;
     },
-    create: discardedByFactory,
-    update: discardedByFactory,
   },
 });
 

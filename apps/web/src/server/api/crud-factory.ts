@@ -239,6 +239,57 @@ export function createEntityListProcedure<TOutput, TFilters>({
   return { list };
 }
 
+/**
+ * Just the two detail reads — for a router whose create/update are hand-rolled.
+ *
+ * `createEntityCrudWithoutListProcedures` requires `repository.create` and
+ * `repository.update`, so a router that only wants the reads had to hand the
+ * factory callbacks it would then discard, plus the `createInput`/`updateInput`
+ * schemas to type them. #603 found exactly that in `product.ts` and
+ * `ingredient.ts`, where a plausible-looking discarded `update` was missing the
+ * dependent-recipe recompute the real one performs — a fix applied there would
+ * have silently not shipped.
+ *
+ * Splitting the reads out fixes that by construction rather than by comment:
+ * a router with no create/update simply has nowhere to put one. The full
+ * factory below is built on this, so the two can't drift.
+ */
+export function createEntityDetailReadProcedures<
+  TDetailOutput,
+  TId extends string = string,
+>({
+  entityName,
+  schemas,
+  repository,
+}: {
+  entityName: ShortcodeEntity;
+  schemas: {
+    output: ZodSchema<TDetailOutput>;
+    idSchema?: z.ZodType<unknown>;
+  };
+  repository: {
+    getByID: (ctx: ProtectedCrudServices, id: TId) => Promise<TDetailOutput>;
+    /** Public-id read — `null` for an unknown code, which the route 404s on. */
+    getByShortcode: (
+      ctx: ProtectedCrudServices,
+      shortcode: string,
+    ) => Promise<TDetailOutput | null>;
+  };
+}) {
+  return {
+    getByID: createGetByIdProcedure(
+      schemas.output,
+      repository.getByID,
+      schemas.idSchema,
+    ),
+    getByShortcode: createGetByShortcodeProcedure(
+      entityName,
+      schemas.output,
+      repository.getByShortcode,
+    ),
+  };
+}
+
 // Factory for getByID, create, update operations (without list)
 export function createEntityCrudWithoutListProcedures<
   SCreate extends ZodSchema,
@@ -292,16 +343,14 @@ export function createEntityCrudWithoutListProcedures<
     schemas.output) as ZodSchema<TUpdateOutput>;
 
   return {
-    getByID: createGetByIdProcedure(
-      detailOutput,
-      repository.getByID,
-      schemas.idSchema,
-    ),
-    getByShortcode: createGetByShortcodeProcedure(
+    ...createEntityDetailReadProcedures({
       entityName,
-      detailOutput,
-      repository.getByShortcode,
-    ),
+      schemas: { output: detailOutput, idSchema: schemas.idSchema },
+      repository: {
+        getByID: repository.getByID,
+        getByShortcode: repository.getByShortcode,
+      },
+    }),
     create: createCreateProcedure(
       schemas.createInput,
       createOutput,

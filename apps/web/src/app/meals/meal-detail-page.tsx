@@ -37,7 +37,13 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
     isError,
     error,
     refetch,
-  } = useQuery(api.meal.getByID.queryOptions({ id: mealId }));
+    // Deliberately `getByShortcode`, matching the route loader
+    // (`meals.$shortcode.tsx`) that already suspense-loaded this exact row.
+    // `getByID` is a second procedure over the same record under a second
+    // react-query cache key, so using it here made the detail page fire a cold
+    // refetch of data the router had already resolved. Same key = one request,
+    // and invalidation still refreshes both.
+  } = useQuery(api.meal.getByShortcode.queryOptions({ shortcode: mealId }));
 
   const updateMeal = useMutation(
     api.meal.update.mutationOptions({ onSuccess: invalidate }),
