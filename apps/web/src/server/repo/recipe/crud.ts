@@ -43,7 +43,7 @@ import {
 } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { alias } from "drizzle-orm/pg-core";
-import { countBy, uniq } from "es-toolkit";
+import { countBy, sum, uniq } from "es-toolkit";
 import { recipeOutSignature } from "~/lib/recipe-signature";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -1128,10 +1128,7 @@ export const previewDeleteRecipes = async (
     ingredient.recipeId,
     ids,
   );
-  const preservedTotal = Object.values(preservedByTargetId).reduce(
-    (a, b) => a + b,
-    0,
-  );
+  const preservedTotal = sum(Object.values(preservedByTargetId));
   if (preservedTotal > 0) {
     sideEffects.push(
       sideEffect({

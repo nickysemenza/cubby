@@ -102,6 +102,7 @@ import {
   buildSearchConditions,
   countWhere,
   eqAny,
+  executeListQueryWithCount,
   formatSearchTerm,
   getDb,
   lockAndValidateForDelete,
@@ -569,7 +570,7 @@ export const purchaseList = async (
   const whereClause = buildPurchaseWhereClause(filters, vendorCondition);
   const { take, skip } = buildTakeSkip(pagination);
 
-  const [rows, count] = await Promise.all([
+  const { data: rows, count } = await executeListQueryWithCount(
     getDb(db)
       .select(purchaseColumns)
       .from(purchase)
@@ -582,7 +583,7 @@ export const purchaseList = async (
       .limit(take)
       .offset(skip),
     countWhere(db, purchase, whereClause),
-  ]);
+  );
   const [financialByPurchase, dataQualities] = await Promise.all([
     loadPurchaseFinancialAggregates(
       db,

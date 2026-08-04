@@ -14,6 +14,7 @@ import type {
   LocationListRefOut,
 } from "@cubby/schemas/location";
 import { type LocationOut, locationType } from "@cubby/schemas/location";
+import { sumBy } from "es-toolkit";
 import { parseWithContext } from "~/lib/zod-utils";
 import type { location } from "~/server/db/schema";
 import {
@@ -110,9 +111,9 @@ export const buildLocationWithChildren = (
       : [];
 
   const directItemCount = x.directItemCount ?? 0;
-  const childrenTotalCount = children.reduce(
-    (sum, child) => sum + (child.totalItemCount ?? 0),
-    0,
+  const childrenTotalCount = sumBy(
+    children,
+    (child) => child.totalItemCount ?? 0,
   );
 
   return {

@@ -54,6 +54,8 @@ import {
   type ProjectId,
   type TaskId,
   type TaskShortcode,
+  unsafeProjectId,
+  unsafeTaskId,
   unsafeTaskShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
@@ -165,7 +167,7 @@ function buildChain(
     visited.add(key);
 
     if (currentType === "task") {
-      const t = tasksById.get(currentId as TaskId);
+      const t = tasksById.get(unsafeTaskId(currentId));
       if (!t) break;
       chain.push({
         id: t.shortcode,
@@ -199,7 +201,7 @@ function buildChain(
       break;
     }
 
-    const p = projectsById.get(currentId as ProjectId);
+    const p = projectsById.get(unsafeProjectId(currentId));
     if (!p) break;
     chain.push({
       id: p.shortcode,

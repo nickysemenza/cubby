@@ -189,15 +189,13 @@ export type FinancialTransactionSourceRef = z.infer<
 
 export const financialTransactionSourceRefs = z
   .array(financialTransactionSourceRef)
-  .refine((refs) => {
-    const seen = new Set<string>();
-    for (const ref of refs) {
-      const key = `${ref.source}\u0000${ref.externalId}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-    }
-    return true;
-  }, "sourceRefs must not contain duplicate source/externalId pairs");
+  .refine(
+    ...uniqueBy(
+      (ref: FinancialTransactionSourceRef) =>
+        `${ref.source}\u0000${ref.externalId}`,
+      "sourceRefs must not contain duplicate source/externalId pairs",
+    ),
+  );
 
 const nonZeroAmount = wholeCentAmount.refine(
   (amount) => amount !== 0,
@@ -305,6 +303,19 @@ export const financialTransactionFilterFields = {
 export const financialTransactionFiltersSchema = z.object(
   financialTransactionFilterFields,
 );
+
+/**
+ * The distinct `sourceRefs[].source` values in use — feeds the transactions
+ * table's Source filter. A static option list would rot: sources are minted by
+ * whatever importer wrote the row (`monarch`, `zoro`, `amazon-order-export`,
+ * `cb2-order-detail`), so the roster has to come from the data.
+ */
+export const financialTransactionSourceOptionsOut = z.array(
+  z.object({ source: z.string(), count: z.number().int() }),
+);
+export type FinancialTransactionSourceOptionsOut = z.infer<
+  typeof financialTransactionSourceOptionsOut
+>;
 export type FinancialTransactionFilters = z.infer<
   typeof financialTransactionFiltersSchema
 >;

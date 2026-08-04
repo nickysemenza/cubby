@@ -14,7 +14,15 @@ import type {
 } from "@cubby/schemas/project";
 import { projectSortableFields } from "@cubby/schemas/project";
 import { parseShortcode } from "@cubby/shared";
-import { arrayOverlaps, asc, inArray, isNull, or, sql } from "drizzle-orm";
+import {
+  arrayOverlaps,
+  asc,
+  inArray,
+  isNull,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { project } from "~/server/db/schema";
 import {
@@ -246,12 +254,46 @@ export const buildProjectListQuery = async (
   return { tree, whereClause, orderByArray };
 };
 
+/**
+ * Footer total for the `costEstimate` column: `SUM` over the FULL filtered
+ * set, not the loaded page — see `createCurrencyColumn`'s footer and
+ * `vendor.ts`'s `vendorList` for the pattern this follows. The displayed
+ * column reads each row's own `costEstimate` (not the subtree rollup — see
+ * `helpers.ts`'s `dbProjectToAPI`), so the matching total is a flat SUM over
+ * `whereClause`, no tree-fold needed.
+ *
+ * Shared by `projectList` and `projectTreePage`: both apply the identical
+ * `whereClause` (`buildProjectListQuery`), and the tree page's matching SET is
+ * the same filtered forest as the flat list — it only paginates by root. So
+ * "the total" means the same thing in both renderers: the sum over every
+ * matching project, not just roots. A roots-only sum would under-report
+ * whenever a filtered-in project has a costEstimate but its parent (also
+ * shown, also summed in flat mode) does too, and would disagree with what
+ * fully expanding the tree already sums row-by-row.
+ */
+export const projectListSums = async (
+  db: Database,
+  whereClause: SQL | undefined,
+): Promise<{ costEstimate: number }> => {
+  const [row] = await getDb(db)
+    .select({
+      costEstimate: sql<number>`COALESCE(sum(${project.costEstimate}), 0)::double precision`,
+    })
+    .from(project)
+    .where(whereClause);
+  return { costEstimate: Number(row?.costEstimate ?? 0) };
+};
+
 export const projectList = async (
   db: Database,
   filters: ProjectFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-): Promise<{ data: ProjectOut[]; count: number }> => {
+): Promise<{
+  data: ProjectOut[];
+  count: number;
+  sums: { costEstimate: number };
+}> => {
   const { tree, whereClause, orderByArray } = await buildProjectListQuery(
     db,
     filters,
@@ -259,15 +301,18 @@ export const projectList = async (
   );
   const { take, skip } = buildTakeSkip(pagination);
 
-  const { data: rows, count } = await executeListQueryWithCount(
-    getDb(db).query.project.findMany({
-      where: whereClause,
-      orderBy: orderByArray,
-      limit: take,
-      offset: skip,
-    }),
-    countWhere(db, project, whereClause),
-  );
+  const [{ data: rows, count }, sums] = await Promise.all([
+    executeListQueryWithCount(
+      getDb(db).query.project.findMany({
+        where: whereClause,
+        orderBy: orderByArray,
+        limit: take,
+        offset: skip,
+      }),
+      countWhere(db, project, whereClause),
+    ),
+    projectListSums(db, whereClause),
+  ]);
 
   const ids = rows.map((r) => r.id);
 
@@ -278,5 +323,5 @@ export const projectList = async (
 
   const data = rows.map((row) => hydrateProjectRow(row, projectContext, deps));
 
-  return { data, count };
+  return { data, count, sums };
 };

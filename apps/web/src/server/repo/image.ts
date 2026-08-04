@@ -72,6 +72,7 @@ import {
   auditDateWhereConditions,
   buildOrderBy,
   countWhere,
+  executeListQueryWithCount,
   formatSearchTerm,
   getDb,
   insertAndReturn,
@@ -424,7 +425,7 @@ export const imageList = async (
   const skip = pagination.pageIndex * pagination.pageSize;
 
   // Execute queries in parallel - load entity relations in single query
-  const [images, count] = await Promise.all([
+  const { data: images, count } = await executeListQueryWithCount(
     dbClient.query.image.findMany({
       where: whereClause,
       orderBy: orderByClause,
@@ -433,7 +434,7 @@ export const imageList = async (
       with: imageEntityRelations,
     }),
     countWhere(db, image, whereClause),
-  ]);
+  );
 
   // Transform images with pre-loaded relations (no additional queries)
   const processedImages = images.map(imageWithRelationsToAPI);

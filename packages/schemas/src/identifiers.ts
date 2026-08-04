@@ -1,4 +1,5 @@
 import type {
+  AppErrorReason,
   CookbookShortcode,
   ExpenseShortcode,
   FinancialAccountShortcode,
@@ -16,6 +17,7 @@ import type {
   WishShortcode,
 } from "@cubby/shared";
 import { z } from "zod";
+import type { ShortcodeEntity } from "./entity-manifest";
 
 // Generic entity ID (use sparingly - prefer specific branded types)
 export const id = z.uuid().describe("entity identifier");
@@ -36,9 +38,23 @@ type RejectBranded<T> = [Exclude<keyof T, keyof string>] extends [never]
 
 const unsafeId = <T>(id: string): T => id as unknown as T;
 
+/**
+ * The shape every `unsafe*Id` / `unsafe*Shortcode` has: takes an unbranded
+ * string, returns the brand. Named (rather than inlined into `makeUnsafeId`'s
+ * inferred return) so `unsafeIdForEntity` below can require exactly this type —
+ * two structurally-identical-but-separately-written generic signatures don't
+ * compare equal once `RejectBranded<T>` is deferred behind a second `T`.
+ */
+type UnsafeIdCast<Branded> = <T extends string>(
+  id: T & RejectBranded<T>,
+) => Branded;
+
 /** Type-guarded unsafe-cast factory: same guard shape as every hand-written `unsafe*Id`. */
-function makeUnsafeId<Branded>() {
-  return <T extends string>(id: T & RejectBranded<T>) => unsafeId<Branded>(id);
+function makeUnsafeId<Branded>(): UnsafeIdCast<Branded> {
+  // `id` is contextually typed by `UnsafeIdCast` — re-annotating it here would
+  // make this a second, separately-written generic signature, which does NOT
+  // compare equal to the alias (see the note on `UnsafeIdCast`).
+  return (id) => unsafeId<Branded>(id);
 }
 
 /** Brand a uuid schema + return its type-guarded unsafe-cast in one call. */
@@ -164,3 +180,121 @@ export const unsafeRecipeShortcode = makeUnsafeId<RecipeShortcode>();
 export const unsafeTaskShortcode = makeUnsafeId<TaskShortcode>();
 export const unsafeVendorShortcode = makeUnsafeId<VendorShortcode>();
 export const unsafeWishShortcode = makeUnsafeId<WishShortcode>();
+
+// ---------------------------------------------------------------------------
+// Entity → id lookups
+//
+// Everything above is written per-entity: fifteen `XxxId` types, fifteen
+// `unsafeXxxId` functions. Code that only knows its entity as a VALUE (a generic
+// shortcode resolver, a CRUD factory) can't reach any of them. These three
+// lookups close that gap — one entry per `ShortcodeEntity`, i.e. exactly the
+// entities that have a public id to resolve in the first place.
+// ---------------------------------------------------------------------------
+
+/**
+ * The branded id TYPE of each entity. `entityManifest[e].idBrand` carries the
+ * brand's NAME as a display string ("ProductId"); this carries the type itself.
+ *
+ * Not exported directly — `BrandForEntity` is the lookup callers want, and
+ * keeping the table private means the only way to read it is through a key the
+ * compiler has already checked against `ShortcodeEntity`.
+ */
+interface EntityIdBrand {
+  cookbook: CookbookId;
+  expense: ExpenseId;
+  financialAccount: FinancialAccountId;
+  financialTransaction: FinancialTransactionId;
+  ingredient: IngredientId;
+  inventory: InventoryId;
+  location: LocationId;
+  meal: MealId;
+  product: ProductId;
+  project: ProjectId;
+  purchase: PurchaseId;
+  recipe: RecipeId;
+  task: TaskId;
+  vendor: VendorId;
+  wish: WishId;
+}
+
+/**
+ * `BrandForEntity<"product">` is `ProductId`. Lets a function generic over an
+ * entity return that entity's branded id instead of a bare `string`.
+ *
+ * Drift-proof by construction: drop an entity from `EntityIdBrand` and this
+ * declaration stops compiling, because `E` can no longer index the table.
+ */
+export type BrandForEntity<E extends ShortcodeEntity> = EntityIdBrand[E];
+
+/**
+ * One entity's unsafe-cast, indexed. Deliberately keeps the generic parameter of
+ * the hand-written `unsafeXxxId`s rather than collapsing to `(id: string) =>
+ * BrandForEntity<E>`: a `string` parameter would accept an already-branded value
+ * and quietly defeat the no-op-cast guard for every caller that goes through the
+ * map.
+ */
+type UnsafeIdFor<E extends ShortcodeEntity> = UnsafeIdCast<BrandForEntity<E>>;
+
+/**
+ * Entity → its branded-id constructor, the runtime half of `BrandForEntity`.
+ * Needed because `unsafeProductId` and friends are fifteen separate functions:
+ * a type-level lookup alone can't turn a uuid a resolver just read out of the
+ * DB into `ProductId` at the value level.
+ *
+ * The value type is written in terms of `BrandForEntity<E>`, so the two halves
+ * can't disagree — pairing an entity with another entity's brander is a compile
+ * error here, not something the drift test has to notice at runtime.
+ */
+export const unsafeIdForEntity: {
+  readonly [E in ShortcodeEntity]: UnsafeIdFor<E>;
+} = {
+  cookbook: unsafeCookbookId,
+  expense: unsafeExpenseId,
+  financialAccount: unsafeFinancialAccountId,
+  financialTransaction: unsafeFinancialTransactionId,
+  ingredient: unsafeIngredientId,
+  inventory: unsafeInventoryId,
+  location: unsafeLocationId,
+  meal: unsafeMealId,
+  product: unsafeProductId,
+  project: unsafeProjectId,
+  purchase: unsafePurchaseId,
+  recipe: unsafeRecipeId,
+  task: unsafeTaskId,
+  vendor: unsafeVendorId,
+  wish: unsafeWishId,
+};
+
+/**
+ * Entity → the `AppErrorReason` thrown when one of its ids or shortcodes names
+ * nothing live. Lets a generic "resolve or 404" helper raise the same reason the
+ * hand-rolled per-entity lookups raise today.
+ *
+ * Spelled out rather than derived, because `${entity.toUpperCase()}_NOT_FOUND`
+ * is wrong three times over: `inventory` throws `INVENTORY_NOT_FOUND` while its
+ * table is `inventoryEntry`, and the two camelCase financial entities need snake
+ * expansion (`financialAccount` → `FINANCIALACCOUNT_NOT_FOUND`, which is not a
+ * key of `AppErrors` at all). Deriving would also lose the type: a template
+ * string is a `string`, so it could only reach `createAppError` through a cast,
+ * and `AppErrors[reason]` would then hand `TRPCError` an `undefined` code.
+ *
+ * `satisfies` does the checking: a missing entity, or a reason that isn't a real
+ * `AppErrorReason`, fails to compile.
+ */
+export const ENTITY_NOT_FOUND_REASON = {
+  cookbook: "COOKBOOK_NOT_FOUND",
+  expense: "EXPENSE_NOT_FOUND",
+  financialAccount: "FINANCIAL_ACCOUNT_NOT_FOUND",
+  financialTransaction: "FINANCIAL_TRANSACTION_NOT_FOUND",
+  ingredient: "INGREDIENT_NOT_FOUND",
+  inventory: "INVENTORY_NOT_FOUND",
+  location: "LOCATION_NOT_FOUND",
+  meal: "MEAL_NOT_FOUND",
+  product: "PRODUCT_NOT_FOUND",
+  project: "PROJECT_NOT_FOUND",
+  purchase: "PURCHASE_NOT_FOUND",
+  recipe: "RECIPE_NOT_FOUND",
+  task: "TASK_NOT_FOUND",
+  vendor: "VENDOR_NOT_FOUND",
+  wish: "WISH_NOT_FOUND",
+} as const satisfies Record<ShortcodeEntity, AppErrorReason>;
