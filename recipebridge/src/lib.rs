@@ -95,16 +95,29 @@ fn performance_supports_user_timing() -> bool {
 }
 
 /// True when running inside Cloudflare's workerd runtime, which sets
-/// `navigator.userAgent` to the sentinel "Cloudflare-Workers". Any Reflect
-/// failure (missing `navigator`, a throwing getter) folds to `false` — the safe
-/// "assume a console that understands `%c`" path — so detection never panics init.
+/// `navigator.userAgent` to the sentinel "Cloudflare-Workers".
+///
+/// **Fails closed: an inconclusive detection returns `true` (assume workerd).**
+/// This single boolean is all that holds back an INFO-level tracing subscriber
+/// on the costing hot path, and on the reused workerd isolate that subscriber's
+/// span registry grows without bound until it trips `cpu_ms` (see [`init`] for
+/// the 47ms → 53s measurement). The two failure modes are not symmetric:
+/// mis-detecting a browser as workerd costs only devtools spans and `%c` log
+/// colors; mis-detecting workerd as a browser takes production down. So only a
+/// *successfully read string* that isn't the sentinel returns `false` — a
+/// missing `navigator`, a throwing getter, or a non-string `userAgent` all fold
+/// to `true` rather than to the dangerous path. Reflect errors are still
+/// swallowed rather than unwrapped, so detection never panics init.
 fn is_workerd() -> bool {
-    js_sys::Reflect::get(&js_sys::global(), &JsValue::from_str("navigator"))
+    let user_agent = js_sys::Reflect::get(&js_sys::global(), &JsValue::from_str("navigator"))
         .ok()
         .filter(|n| !n.is_undefined() && !n.is_null())
         .and_then(|n| js_sys::Reflect::get(&n, &JsValue::from_str("userAgent")).ok())
-        .and_then(|ua| ua.as_string())
-        .is_some_and(|ua| ua == "Cloudflare-Workers")
+        .and_then(|ua| ua.as_string());
+    match user_agent {
+        Some(ua) => ua == "Cloudflare-Workers",
+        None => true,
+    }
 }
 
 // A pair of measures that can be used for unit conversion

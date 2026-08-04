@@ -95,6 +95,22 @@ const numericGrams = (
 // diverges sharply for anything that loses water in cooking (a 4.5 lb bird →
 // 800 g of meat). Non-mass yields (servings, loaves, cups) aren't convertible
 // here, so those fall back to the ingredient-weight sum + a `batchEstimated` flag.
+//
+// These factors duplicate the parser's own normalization table, which is a
+// layering smell — but the duplication CANNOT be removed by calling
+// `conv_amount_to_kind` today, because that export integer-rounds its result
+// (`convert_measure_with_graph_explained` in ingredient-parser's conversion.rs
+// rounds both bounds). Asking it for 1 lb returns **454 g**, whereas the factor
+// the costing engine itself multiplies by inside `sub_recipe_pairs` is the
+// unrounded 453.592 — so consuming the export would shift every imperial-mass
+// yield's denominator by ~0.09% and quietly move prep-sheet numbers. Removing
+// this table needs an unrounded conversion on the WASM boundary (upstream
+// `Measure::normalize` is `pub(crate)`), i.e. an ingredient-parser change.
+// Until then the "MASS_TO_GRAMS matches the engine" suite in
+// recipe-tree.unit.test.ts pins these factors against the engine (probing at
+// 1e6× so the rounding washes out), so a real upstream factor change fails there
+// instead of silently desyncing. It also pins the cost of not calling the
+// engine: fixed spellings, so a "kgs"/"ozs" yield falls through to null here.
 const MASS_TO_GRAMS: Record<string, number> = {
   mg: 0.001,
   g: 1,

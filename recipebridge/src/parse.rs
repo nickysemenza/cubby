@@ -367,6 +367,30 @@ pub fn parse_quantity(input: &str) -> Result<f64, String> {
         .ok_or_else(|| format!("could not parse quantity {input:?}"))
 }
 
+/// Parse an amount string (`"1 1/2 cups"`, `"2.5 lb"`, `"5 each"`, bare `"3"`) into a
+/// structured `{ value, unit }` — the unit-KEEPING sibling of [`parse_quantity`], which
+/// runs the same `parse_amount` grammar and then throws the unit away.
+///
+/// This is the only correct way to turn free-text amount input (a clipboard paste, a
+/// typed cell) into a stored `Amount`. The grammar owns mixed numbers (`"1 1/2"` → 1.5),
+/// vulgar fractions, ranges, and unit normalization — none of which a TS regex
+/// reproduces: the hand-rolled `^(-?\d+(?:\.\d+)?)\s*(.*)$` it replaces read
+/// `"1 1/2 cups"` as `1` of `"1/2 cups"`, a 33% understatement carrying a unit that can
+/// never resolve in the unit graph, and then saved it.
+///
+/// Errors rather than guessing when the input carries no recognizable measurement, so
+/// the caller rejects the paste instead of persisting garbage.
+#[wasm_bindgen]
+pub fn parse_amount(input: &str) -> Result<WAmount, String> {
+    // Trim up front so the grammar sees the same normalized input `parse_quantity` does.
+    let trimmed = input.trim();
+    ingredient::IngredientParser::new()
+        .parse_amount(trimmed)
+        .ok()
+        .and_then(|measures| measures.first().map(WAmount::from))
+        .ok_or_else(|| format!("could not parse amount {input:?}"))
+}
+
 /// Singularize a unit for display labels ("churros" → "churro", "cups" → "cup").
 /// Wraps the parser's `singular` so cubby and ingredient-parser agree on the rule,
 /// including the `-es` guard ("glasses" → "glass", not "glasse"). It expects a
@@ -629,6 +653,66 @@ mod tests {
             (v - expected).abs() < 1e-6,
             "{input} -> {v}, want {expected}"
         );
+    }
+
+    /// `parse_amount` over the exact clipboard-paste cases the data-table's amount
+    /// cell feeds it. The first two rows are the regression: the TS regex this
+    /// replaces (`^(-?\d+(?:\.\d+)?)\s*(.*)$`) read them as `1` of `"1/2 cups"` and
+    /// `1` of `",5 kg"` — a wrong number plus a unit no unit-graph edge can reach —
+    /// and then SAVED that. Bare counts canonicalize to the engine's `whole`
+    /// (`Unit::Whole`, which `"each"` also parses to), so a unit-less paste yields a
+    /// schema-valid unit rather than the old `""`.
+    #[rstest]
+    #[case("1 1/2 cups", 1.5, "cup")]
+    #[case("1,5 kg", 1.0, "whole")]
+    #[case("2.5 lb", 2.5, "lb")]
+    #[case("5 each", 5.0, "whole")]
+    #[case("3", 3.0, "whole")]
+    #[case("  12 oz  ", 12.0, "oz")]
+    #[case("⅓ cup", 1.0 / 3.0, "cup")]
+    fn parse_amount_table(#[case] input: &str, #[case] value: f64, #[case] unit: &str) {
+        let a = parse_amount(input).expect("parses");
+        assert!(
+            (a.value - value).abs() < 1e-9,
+            "{input} -> {}, want {value}",
+            a.value
+        );
+        assert_eq!(a.unit, unit, "unit for {input}");
+    }
+
+    /// A ranged paste keeps its upper bound, so `"2-3 cups"` round-trips into the
+    /// persisted `Amount`'s `upperValue` instead of silently collapsing to its lower
+    /// bound.
+    #[test]
+    fn parse_amount_carries_a_range() {
+        let a = parse_amount("2-3 cups").expect("parses");
+        assert_eq!((a.value, a.unit.as_str()), (2.0, "cup"));
+        assert_eq!(a.upper_value, Some(3.0));
+    }
+
+    /// Text carrying no recognizable measurement is an `Err`, never a guess — the
+    /// caller surfaces "not an amount" and leaves the cell alone. This is the whole
+    /// point of routing paste through the grammar: the old regex had no failure mode
+    /// short of a leading non-digit, so anything digit-initial was persisted.
+    #[rstest]
+    #[case("not an amount")]
+    #[case("")]
+    #[case("   ")]
+    fn parse_amount_rejects_non_amounts(#[case] input: &str) {
+        assert!(parse_amount(input).is_err(), "expected Err for {input:?}");
+    }
+
+    /// `parse_amount` and `parse_quantity` read the SAME grammar — the former keeps
+    /// the unit, the latter drops it. Pinned so the two can't drift into disagreeing
+    /// about a value (they share one `IngredientParser::parse_amount` call).
+    #[rstest]
+    #[case("1 1/2 cups")]
+    #[case("2.5 lb")]
+    #[case("3")]
+    fn parse_amount_value_matches_parse_quantity(#[case] input: &str) {
+        let a = parse_amount(input).expect("parses");
+        let q = parse_quantity(input).expect("parses");
+        assert!((a.value - q).abs() < 1e-9, "{input}: {} vs {q}", a.value);
     }
 
     /// `format(parse(x))` is stable for fraction strings — the editor can resync a
