@@ -59,6 +59,7 @@ export function useProblemsData(opts?: {
         orphanedProducts: fast.data?.orphanedProducts ?? [],
         productsMissingPrice: fast.data?.productsMissingPrice ?? [],
         unvaluedBucketProducts: fast.data?.unvaluedBucketProducts ?? [],
+        soldButStillStocked: fast.data?.soldButStillStocked ?? [],
         productsWithoutMappings: fast.data?.productsWithoutMappings ?? [],
         ingredientsWithoutProduct: fast.data?.ingredientsWithoutProduct ?? [],
         unusedIngredientsWithProduct:

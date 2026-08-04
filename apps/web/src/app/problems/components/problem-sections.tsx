@@ -6,6 +6,7 @@ import {
   type LabelVariant,
   type ProductMissingPrice,
   type PurchaseNotReconciling,
+  type SoldButStillStocked,
   TRACKER_PROBLEM_KEY_BY_TYPE,
 } from "@cubby/schemas/problems";
 import type {
@@ -580,6 +581,17 @@ function unpricedSubtitle(product: ProductMissingPrice): string {
   return `${byManufacturer(product.manufacturer)} · ${qty} ${qty === 1 ? "unit" : "units"} unvalued`;
 }
 
+/**
+ * `by {mfr} · sold 1, 1 still on a shelf · $700.00 recovered`. Both quantities
+ * are shown because they are what distinguishes a stale shelf from a partial
+ * sale, and `proceeds` is stored negative (it is a disposal).
+ */
+function soldButStockedSubtitle(product: SoldButStillStocked): string {
+  const live = product.liveQuantity;
+  const stocked = `${live} still on a shelf`;
+  return `${byManufacturer(product.manufacturer)} · sold ${product.soldQuantity}, ${stocked} · ${formatCurrency(Math.abs(product.proceeds))} recovered`;
+}
+
 /** Clickable location chips, matching the duplicate-products card. */
 function locationBadges(
   locations: ProductMissingPrice["locations"],
@@ -697,6 +709,22 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     renderItem: (product) => ({
       title: product.name,
       subtitle: unpricedSubtitle(product),
+      badges: locationBadges(product.locations),
+      route: entityDetailLink("product", product.id),
+    }),
+  }),
+  section({
+    id: "sold-but-still-stocked",
+    label: "Sold but stocked",
+    select: (p) => p.soldButStillStocked,
+    entity: "product",
+    title: "Sold But Still Stocked",
+    description:
+      "These products were sold off — the ledger has the disposal — but they are still on a shelf, so the location totals count value you no longer own. Inventory never decrements on its own, so clear the entry once you have confirmed the item is gone.",
+    emptyMessage: "No sold products are still stocked.",
+    renderItem: (product) => ({
+      title: product.name,
+      subtitle: soldButStockedSubtitle(product),
       badges: locationBadges(product.locations),
       route: entityDetailLink("product", product.id),
     }),
