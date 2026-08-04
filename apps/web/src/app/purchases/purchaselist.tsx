@@ -5,6 +5,7 @@ import { sumBy } from "es-toolkit";
 import { FileText } from "lucide-react";
 import { useMemo } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { VendorMark } from "~/components/entity/vendor-cell";
 import { Grid, Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
@@ -135,6 +136,19 @@ export function PurchaseList() {
         header: "Order #",
         className: "w-40 font-mono",
         mobile: { slot: "meta", priority: 20 },
+        renderValue: (v, purchase) =>
+          v ? (
+            <Row align="center" gap="xs">
+              <span className="min-w-0 truncate">{v}</span>
+              <OrderIdLink
+                orderUrl={purchase.orderUrl}
+                orderId={v}
+                vendorName={purchase.vendorName}
+              />
+            </Row>
+          ) : (
+            <NoneValue />
+          ),
       }),
       createTextColumn(columnHelper, "displayLabel", {
         header: "Display label",

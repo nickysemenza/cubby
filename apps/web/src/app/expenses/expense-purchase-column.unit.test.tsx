@@ -62,6 +62,7 @@ const LINKED: ExpenseOut = {
   vendorId: unsafeVendorShortcode("VEN-4K7M"),
   vendor: "Tool Shop",
   orderId: "ORDER-42",
+  orderUrl: null,
   createdAt: new Date("2026-07-20T00:00:00Z"),
   updatedAt: new Date("2026-07-20T00:00:00Z"),
 };

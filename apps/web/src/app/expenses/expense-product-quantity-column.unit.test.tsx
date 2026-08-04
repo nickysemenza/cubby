@@ -42,6 +42,7 @@ const EXPENSE: ExpenseOut = {
   vendorId: null,
   vendor: null,
   orderId: null,
+  orderUrl: null,
   createdAt: new Date("2026-07-20T00:00:00Z"),
   updatedAt: new Date("2026-07-20T00:00:00Z"),
 };

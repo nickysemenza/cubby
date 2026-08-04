@@ -466,6 +466,8 @@ export const purchaseNotReconcilingSchema = z.object({
   /** Through the join; null only if the vendor was soft-deleted. */
   vendorName: z.string().nullable(),
   orderId: z.string().nullable(),
+  /** Derived link out to the vendor's own order page; null if not linkable. */
+  orderUrl: z.url().nullable(),
   date: plainDate.nullable(),
   /** What the paperwork claimed. Never spend. */
   statedTotal: z.number(),

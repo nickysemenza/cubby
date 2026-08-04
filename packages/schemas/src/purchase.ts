@@ -208,6 +208,13 @@ export const purchaseOut = z.object({
   ...purchaseFields,
   /** Resolved through the join; null only if the vendor was soft-deleted. */
   vendorName: z.string().nullable(),
+  /**
+   * Link out to the vendor's own order page, derived at read time from
+   * `vendor.orderUrlTemplate` + `orderId` (see `purchaseOrderUrl`). Read-only
+   * and absent from the create/update shapes — nothing stores it, and null
+   * simply means this order isn't linkable.
+   */
+  orderUrl: z.url().nullable(),
   expenseCount: z.number().int(),
   /** Live Expenses whose cost has not been recorded yet. */
   unpricedExpenseCount: z.number().int(),

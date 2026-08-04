@@ -86,7 +86,12 @@ import {
 import { makeExpenseInput, makeProductInput } from "./repo.fixtures";
 import { resolveLiveShortcode } from "./shortcode-resolver";
 import { insertWithShortcode } from "./shortcode-utils";
-import { deleteVendors, findOrCreateVendor, getVendorByID } from "./vendor";
+import {
+  deleteVendors,
+  findOrCreateVendor,
+  getVendorByID,
+  updateVendor,
+} from "./vendor";
 
 /**
  * `Purchase` is ONE vendor transaction. All money lives on `Expense`; a charge
@@ -2605,5 +2610,107 @@ describe("purchase repository — audit log resolves FK values to shortcodes", (
     expect(vendorChange?.to).toBe(newVendor);
     expect(vendorChange?.to).not.toBe(newVendorUuid);
     expect(vendorChange?.to).toMatch(/^VEN-/);
+  });
+});
+
+describe("purchase repository — order deeplinks", () => {
+  const ctx = withTestDb();
+
+  /**
+   * Point a vendor at its order-details page the way the UI field does, and
+   * hand back its shortcode for the purchase inputs below.
+   */
+  const setTemplate = async (vendorId: VendorId, template: string) => {
+    const { id } = await getVendorByID(ctx.db, vendorId);
+    await updateVendor(
+      ctx.db,
+      { id, data: { orderUrlTemplate: template } },
+      ctx.actor,
+    );
+    return id;
+  };
+
+  it("derives orderUrl on the purchase and its expenses", async () => {
+    const amazon = await setTemplate(
+      await findOrCreateVendor(ctx.db, "Amazon"),
+      "https://www.amazon.com/gp/your-account/order-details?orderID={orderId}",
+    );
+
+    const { output: purchase } = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        vendorId: amazon,
+        orderId: "111-4599076-5153040",
+        date: "2024-03-01",
+      }),
+      ctx.actor,
+    );
+
+    expect(purchase.orderUrl).toBe(
+      "https://www.amazon.com/gp/your-account/order-details?orderID=111-4599076-5153040",
+    );
+
+    // The same link resolves through the Expense read path, which reaches the
+    // template via a different join (expense → purchase → vendor).
+    const { output: expenseRow } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "drill bits",
+          cost: 24.99,
+          date: "2024-03-01",
+          purchaseId: purchase.id,
+        }),
+      ),
+      ctx.actor,
+    );
+    expect(expenseRow.orderUrl).toBe(purchase.orderUrl);
+  });
+
+  it("leaves orderUrl null without a template, and for synthetic order ids", async () => {
+    // A vendor with no template: nothing to substitute into.
+    const noTemplate = await findOrCreateVendor(ctx.db, "Discount Builders");
+    const { output: untemplated } = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        vendorId: (await getVendorByID(ctx.db, noTemplate)).id,
+        orderId: "ABC123",
+        date: "2024-04-01",
+      }),
+      ctx.actor,
+    );
+    expect(untemplated.orderUrl).toBeNull();
+
+    // A templated vendor still refuses Cubby's own synthetic import keys —
+    // Home Depot's in-store lookup needs params this id can't supply.
+    const hdShortcode = await setTemplate(
+      await findOrCreateVendor(ctx.db, "Home Depot"),
+      "https://www.homedepot.com/myaccount/order-details?orderNumber={orderId}",
+    );
+
+    const { output: inStore } = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        vendorId: hdShortcode,
+        orderId: "txn:2023-09-17/639/5201",
+        date: "2023-09-17",
+      }),
+      ctx.actor,
+    );
+    expect(inStore.orderUrl).toBeNull();
+
+    // ...but its online siblings link fine.
+    const { output: online } = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        vendorId: hdShortcode,
+        orderId: "WN28187563",
+        date: "2023-09-18",
+      }),
+      ctx.actor,
+    );
+    expect(online.orderUrl).toBe(
+      "https://www.homedepot.com/myaccount/order-details?orderNumber=WN28187563",
+    );
   });
 });

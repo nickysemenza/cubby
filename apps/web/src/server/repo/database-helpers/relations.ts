@@ -84,7 +84,14 @@ const withProjectAndProductNameOnly = {
       },
       with: {
         vendor: {
-          columns: { name: true, shortcode: true, deletedAt: true },
+          columns: {
+            name: true,
+            shortcode: true,
+            // Derives `expenseOut.orderUrl` — the link out to the vendor's own
+            // order page — without a second query.
+            orderUrlTemplate: true,
+            deletedAt: true,
+          },
         },
       },
     },

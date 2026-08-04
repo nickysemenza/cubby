@@ -1,6 +1,7 @@
 import type { VendorOut } from "@cubby/schemas/vendor";
-import { ExternalLink, Info, Receipt } from "lucide-react";
+import { Info, Receipt } from "lucide-react";
 import type { FC } from "react";
+import { ExternalLinkText } from "~/app/_components/ExternalLink";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
@@ -99,20 +100,31 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
             });
           }}
           renderValue={(v) =>
-            v ? (
-              <a
-                href={v}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="flex items-center gap-1 hover:underline"
-              >
-                {v}
-                <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
-              </a>
-            ) : (
-              <NoneValue />
-            )
+            v ? <ExternalLinkText href={v} /> : <NoneValue />
+          }
+        />
+      ),
+    },
+    {
+      label: "Order URL",
+      value: (
+        <EditableCell
+          value={vendor.orderUrlTemplate}
+          config={{
+            type: "text",
+            placeholder: "https://…?orderID={orderId}",
+          }}
+          onSave={async (orderUrlTemplate) => {
+            await updateMutation.mutateAsync({
+              id: vendor.id,
+              data: { orderUrlTemplate },
+            });
+          }}
+          // A pattern, not a URL — it can't be followed as-is, so it renders as
+          // mono text rather than a link. `{orderId}` is substituted per
+          // purchase to produce the Order # links on this vendor's charges.
+          renderValue={(v) =>
+            v ? <span className="font-mono text-xs">{v}</span> : <NoneValue />
           }
         />
       ),

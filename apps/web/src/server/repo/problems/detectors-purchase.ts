@@ -20,6 +20,7 @@ import {
   RECONCILIATION_TOLERANCE,
   reconcilePurchase,
 } from "@cubby/schemas/purchase";
+import { purchaseOrderUrl } from "@cubby/schemas/vendor";
 import { sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { expense, purchase, vendor } from "~/server/db/schema";
@@ -29,6 +30,7 @@ import { getDb } from "~/server/repo/database-helpers";
 type ChargeSumRow = {
   id: PurchaseShortcode;
   vendorName: string | null;
+  orderUrlTemplate: string | null;
   orderId: string | null;
   date: string | null;
   statedTotal: number;
@@ -71,6 +73,7 @@ export const findPurchasesNotReconciling = async (
     SELECT
       p."shortcode" AS "id",
       v."name" AS "vendorName",
+      v."orderUrlTemplate" AS "orderUrlTemplate",
       p."orderId" AS "orderId",
       p."date"::text AS "date",
       p."statedTotal" AS "statedTotal",
@@ -91,7 +94,7 @@ export const findPurchasesNotReconciling = async (
     LEFT JOIN ${expense} e
       ON e."purchaseId" = p.id AND e."deletedAt" IS NULL
     WHERE p."deletedAt" IS NULL AND p."statedTotal" IS NOT NULL
-    GROUP BY p.id, v."name"
+    GROUP BY p.id, v."name", v."orderUrlTemplate"
     HAVING abs(p."statedTotal" - ${lineTotal}) > ${RECONCILIATION_TOLERANCE}
     ORDER BY abs(p."statedTotal" - ${lineTotal}) DESC, p."date" DESC NULLS LAST
   `);
@@ -101,6 +104,10 @@ export const findPurchasesNotReconciling = async (
       id: row.id,
       vendorName: row.vendorName,
       orderId: row.orderId,
+      orderUrl: purchaseOrderUrl({
+        orderUrlTemplate: row.orderUrlTemplate,
+        orderId: row.orderId,
+      }),
       date: row.date,
       statedTotal: Number(row.statedTotal),
       expenseTotal: Number(row.expenseTotal),

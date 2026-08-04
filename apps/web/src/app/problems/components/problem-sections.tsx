@@ -33,6 +33,7 @@ import {
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
+import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
 import { formatDate } from "~/app/projects/project-formatting";
 import {
@@ -1372,7 +1373,16 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
           // page show, from the same classifier — never a defect red.
           <ReconciliationBadge key="reconciliation" purchase={purchase} />,
           ...(purchase.orderId
-            ? [<CodeChip key="order">{purchase.orderId}</CodeChip>]
+            ? [
+                <Row key="order" align="center" gap="xs">
+                  <CodeChip>{purchase.orderId}</CodeChip>
+                  <OrderIdLink
+                    orderUrl={purchase.orderUrl}
+                    orderId={purchase.orderId}
+                    vendorName={purchase.vendorName}
+                  />
+                </Row>,
+              ]
             : []),
           ...(purchase.date
             ? [

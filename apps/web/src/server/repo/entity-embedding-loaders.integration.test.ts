@@ -132,7 +132,12 @@ describe("searchable entity loader maps", () => {
     );
     const vendor = await createVendor(
       ctx.db,
-      { name: "Loader vendor", website: null, notes: null },
+      {
+        name: "Loader vendor",
+        website: null,
+        orderUrlTemplate: null,
+        notes: null,
+      },
       ctx.actor,
     );
     const purchase = await createPurchase(
@@ -256,12 +261,22 @@ describe("searchable entity loader maps", () => {
 
     const doomedVendor = await createVendor(
       ctx.db,
-      { name: "Embedding delete vendor", website: null, notes: null },
+      {
+        name: "Embedding delete vendor",
+        website: null,
+        orderUrlTemplate: null,
+        notes: null,
+      },
       ctx.actor,
     );
     const purchaseVendor = await createVendor(
       ctx.db,
-      { name: "Embedding purchase vendor", website: null, notes: null },
+      {
+        name: "Embedding purchase vendor",
+        website: null,
+        orderUrlTemplate: null,
+        notes: null,
+      },
       ctx.actor,
     );
     const doomedPurchase = await createPurchase(
@@ -324,12 +339,22 @@ describe("searchable entity loader maps", () => {
 
     const vendorKeep = await createVendor(
       ctx.db,
-      { name: "Embedding vendor keeper", website: null, notes: null },
+      {
+        name: "Embedding vendor keeper",
+        website: null,
+        orderUrlTemplate: null,
+        notes: null,
+      },
       ctx.actor,
     );
     const vendorDrop = await createVendor(
       ctx.db,
-      { name: "Embedding vendor loser", website: null, notes: null },
+      {
+        name: "Embedding vendor loser",
+        website: null,
+        orderUrlTemplate: null,
+        notes: null,
+      },
       ctx.actor,
     );
     const purchaseKeep = await createPurchase(
