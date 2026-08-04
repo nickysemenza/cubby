@@ -1341,7 +1341,7 @@ export const patchProductExternalIds = async (
     // the unchanged-value check below, even if their pre-removal value
     // happens to match an incoming upsert for the same slot.
     const removedSlots = new Set(
-      input.remove.map((r) => `${r.source.trim().toLowerCase()} ${r.kind}`),
+      input.remove.map((r) => `${r.source.trim().toLowerCase()}\0${r.kind}`),
     );
 
     for (const entry of input.remove) {
@@ -1367,7 +1367,7 @@ export const patchProductExternalIds = async (
       // conflict-target upsert) touches the row for no real change.
       if (
         liveSlot &&
-        !removedSlots.has(`${source} ${entry.kind}`) &&
+        !removedSlots.has(`${source}\0${entry.kind}`) &&
         externalIdSlotUnchanged(liveSlot, { ...entry, source })
       ) {
         continue;
