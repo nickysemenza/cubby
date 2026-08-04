@@ -10,11 +10,7 @@ import { EYEBROW_CLASS, Eyebrow } from "~/components/ui/eyebrow";
 import { InkStamp } from "~/components/ui/ink-stamp";
 import { entities } from "~/entities/entities";
 import { ENTITY_ACCENTS } from "~/entities/entity-accents";
-import { cn } from "~/lib/utils";
-
-/** `Intl.NumberFormat` is expensive to construct — one shared instance for
- * every list-page eyebrow's record count ("1,240"). */
-const RECORD_COUNT_FORMATTER = new Intl.NumberFormat("en-US");
+import { cn, formatCount } from "~/lib/utils";
 
 const heroVariants = cva(
   "flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between",
@@ -239,7 +235,7 @@ export function PageHero({
   // the bare count.
   const countLabel =
     hasCount &&
-    `${RECORD_COUNT_FORMATTER.format(count)}${typeof title === "string" ? ` ${title}` : ""}`;
+    `${formatCount(count)}${typeof title === "string" ? ` ${title}` : ""}`;
   // Entity-inked accent rule (falls back to ultramarine via the CSS defaults).
   const accent = entity ? ENTITY_ACCENTS[entity] : null;
   const accentStyle = accent

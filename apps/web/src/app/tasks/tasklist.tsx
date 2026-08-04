@@ -14,12 +14,11 @@ import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
-import { NoneValue } from "~/components/ui/none-value";
-import { entities, entityDetailParams } from "~/entities/entities";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
 import { taskMutationInvalidateKeys } from "~/lib/query-keys";
 import {
+  createParentLinkColumn,
   createProjectLinkColumn,
   createSubjectProductLinkColumn,
 } from "../_components/data-table/columnHelpers";
@@ -33,7 +32,6 @@ import { useNameEditable } from "../_components/hooks/useNameEditable";
 import { useProjectOptions } from "../_components/hooks/useProjectOptions";
 import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
-import { TableLink } from "../_components/table/TableLink";
 import {
   TaskBulkActionDialogs,
   useTaskBulkActions,
@@ -172,29 +170,17 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
           },
         },
       }),
-      columnHelper.accessor("parentTaskName", {
-        id: "parentTask",
-        header: "Parent Task",
-        enableSorting: false,
-        meta: {
-          className: "w-40",
+      createParentLinkColumn(
+        columnHelper,
+        "task",
+        "parentTaskId",
+        "parentTaskName",
+        {
           filterConfig: manifestFilterConfig("task", "parentTask", {
             parentTask: parentOptions,
           }),
         },
-        cell: ({ row, getValue }) =>
-          row.original.parentTaskId && getValue() ? (
-            <TableLink
-              to={entities.task.routes.detail}
-              params={entityDetailParams(row.original.parentTaskId)}
-              className="block truncate"
-            >
-              {getValue()}
-            </TableLink>
-          ) : (
-            <NoneValue />
-          ),
-      }),
+      ),
       taskDueColumn(
         columnHelper,
         async (dueDate, task) => {

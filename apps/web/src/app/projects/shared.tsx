@@ -45,6 +45,7 @@ import {
   createFilterableSelectColumn,
   createImageColumn,
   createNameColumn,
+  createParentLinkColumn,
   createPlainDateColumn,
   createProductLinkColumn,
   createProjectLinkColumn,
@@ -1533,24 +1534,12 @@ export function ProjectTable({
           );
         },
       }),
-      columnHelper.accessor("parentProjectName", {
-        id: "parent",
-        header: "Parent",
-        enableSorting: false,
-        meta: { className: "w-40" },
-        cell: ({ row, getValue }) =>
-          row.original.parentProjectId && getValue() ? (
-            <TableLink
-              to={entities.project.routes.detail}
-              params={entityDetailParams(row.original.parentProjectId)}
-              className="block truncate"
-            >
-              {getValue()}
-            </TableLink>
-          ) : (
-            <NoneValue />
-          ),
-      }),
+      createParentLinkColumn(
+        columnHelper,
+        "project",
+        "parentProjectId",
+        "parentProjectName",
+      ),
       columnHelper.accessor((row) => row.rollup.subtree.actualSpent, {
         id: "actual",
         header: "Actual",

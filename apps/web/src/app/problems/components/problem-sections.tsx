@@ -60,7 +60,11 @@ import {
   type RenderedProblemItem,
 } from "./problem-section";
 import { byManufacturer, CodeChip, createdAgoDetail } from "./render-helpers";
-import { DuplicateVendorMergeFix, OrphanedDeleteFix } from "./tier2-fixes";
+import {
+  DuplicateProductMergeFix,
+  DuplicateVendorMergeFix,
+  OrphanedDeleteFix,
+} from "./tier2-fixes";
 import {
   buildUnitCoverageItems,
   CoverageChips,
@@ -691,6 +695,12 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
         </Link>
       )),
       route: entityDetailLink("product", dupe.products[0]?.id ?? ""),
+      inlineFix: {
+        label: "Merge",
+        render: (close) => (
+          <DuplicateProductMergeFix variant={dupe} close={close} />
+        ),
+      },
     }),
   }),
   section({

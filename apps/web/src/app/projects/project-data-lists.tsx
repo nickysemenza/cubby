@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
 import {
+  createParentLinkColumn,
   createProductLinkColumn,
   createProjectLinkColumn,
 } from "~/app/_components/data-table/columnHelpers";
@@ -20,7 +21,6 @@ import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
-import { TableLink } from "~/app/_components/table/TableLink";
 import {
   ExpenseBulkActionDialogs,
   useExpenseBulkActions,
@@ -38,8 +38,6 @@ import {
   taskStatusColumn,
   taskTradeColumn,
 } from "~/app/projects/shared";
-import { NoneValue } from "~/components/ui/none-value";
-import { entities, entityDetailParams } from "~/entities/entities";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
@@ -116,27 +114,10 @@ export function ProjectDataTaskList({
           },
         },
       }),
-      helper.accessor("parentTaskName", {
-        id: "parentTask",
-        header: "Parent Task",
-        enableSorting: false,
-        meta: {
-          className: "w-40",
-          filterConfig: manifestFilterConfig("task", "parentTask", {
-            parentTask: parentOptions,
-          }),
-        },
-        cell: ({ row, getValue }) =>
-          row.original.parentTaskId && getValue() ? (
-            <TableLink
-              to={entities.task.routes.detail}
-              params={entityDetailParams(row.original.parentTaskId)}
-            >
-              {getValue()}
-            </TableLink>
-          ) : (
-            <NoneValue />
-          ),
+      createParentLinkColumn(helper, "task", "parentTaskId", "parentTaskName", {
+        filterConfig: manifestFilterConfig("task", "parentTask", {
+          parentTask: parentOptions,
+        }),
       }),
       taskDueColumn(helper, async (dueDate, row) => {
         await update.mutateAsync({ id: row.id, data: { dueDate } });

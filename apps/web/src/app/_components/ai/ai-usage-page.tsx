@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { useTRPC } from "~/integrations/trpc/react";
+import { formatCount } from "~/lib/utils";
 
 const supportedEntityTypes = [
   "product",
@@ -24,7 +25,6 @@ const supportedEntityTypes = [
   "inventory",
 ] as const;
 
-const numberFormatter = new Intl.NumberFormat("en-US");
 const usdFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -50,7 +50,7 @@ function isSupportedEntityType(
 }
 
 function formatTokens(value: number | null | undefined): string {
-  return numberFormatter.format(value ?? 0);
+  return formatCount(value ?? 0);
 }
 
 function formatUsd(value: number | null | undefined): string {

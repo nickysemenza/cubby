@@ -18,6 +18,16 @@ export function formatCurrency(value: number, decimals = 2): string {
   }).format(value);
 }
 
+// `Intl.NumberFormat` is expensive to construct — one shared instance for
+// every plain-integer count (record counts, usage tallies, token counts)
+// instead of a fresh formatter per render site.
+const countFormatter = new Intl.NumberFormat("en-US");
+
+/** Format a plain integer with thousands separators (e.g. "1,240"). */
+export function formatCount(value: number): string {
+  return countFormatter.format(value);
+}
+
 // timeZone: "UTC" is load-bearing. __BUILD_DATE__ is a UTC ISO string; without
 // pinning the zone, the CF edge (UTC) and the client (local tz) format it in
 // different zones and can land on different calendar days near a UTC midnight

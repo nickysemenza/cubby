@@ -1,5 +1,9 @@
-import type { DuplicateVendor } from "@cubby/schemas/problems";
-import { useMemo } from "react";
+import type {
+  DuplicateProductIdentity,
+  DuplicateVendor,
+} from "@cubby/schemas/problems";
+import { Check } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
 import {
   OperationImpact,
@@ -13,6 +17,7 @@ import {
   productMutationInvalidateKeys,
   purchaseMutationInvalidateKeys,
 } from "~/lib/query-keys";
+import { cn } from "~/lib/utils";
 
 /**
  * Small inline fixes for problems whose resolution is a single field or a
@@ -137,6 +142,129 @@ export function DuplicateVendorMergeFix({
         disabled={merge.isPending || preview.data?.canProceed === false}
       >
         {merge.isPending ? "Merging…" : `Merge into ${variant.canonical}`}
+      </Button>
+    </Stack>
+  );
+}
+
+/**
+ * Fold a cluster of duplicate product rows (same maker part number, split
+ * across retailers) into one. Unlike {@link DuplicateVendorMergeFix}, the
+ * detector (`findDuplicateProductIdentities`) has no canonical row to default
+ * to — every member is an equally plausible keeper — so this renders a picker
+ * (same toggle-button idiom as `IngredientMergeDialog`'s keeper picker) and
+ * defaults to the first row.
+ *
+ * Product merge has a real merge-time blocker that vendor merge doesn't:
+ * `PRODUCT_MERGE_INVENTORY_UNIT_MISMATCH` when the keeper and a loser both
+ * hold inventory at the same location in incompatible units. The preview is
+ * advisory (`useOperationPreview`'s doc comment) — it never gates on loading
+ * or erroring — but a POSITIVELY returned `canProceed: false` (that blocker,
+ * surfaced in `OperationImpact`'s "Blocked by" section) disables the button so
+ * the user sees why up front instead of a failed-mutation toast.
+ */
+export function DuplicateProductMergeFix({
+  variant,
+  close,
+}: {
+  variant: DuplicateProductIdentity;
+  close: () => void;
+}) {
+  const api = useTRPC();
+  const first = variant.products[0];
+  const [keepId, setKeepId] = useState<string | null>(first?.id ?? null);
+  const mergeIds = variant.products
+    .map((p) => p.id)
+    .filter((id) => id !== keepId);
+
+  const merge = useProblemCardMutation({
+    mutationFn: api.product.merge.mutationOptions,
+    success: (result) => `Merged into ${result.product.name}`,
+    invalidateKeys: productMutationInvalidateKeys,
+    onSuccess: close,
+  });
+
+  // Re-derived every time `keepId` changes (the user can switch keepers), so
+  // this can't reuse a static previewInput the way the vendor fix does.
+  const previewInput = useMemo<PreviewOperationDraft | null>(
+    () =>
+      keepId && mergeIds.length > 0
+        ? { operation: "merge", entity: "product", keepId, mergeIds }
+        : null,
+    [keepId, mergeIds],
+  );
+  const preview = useOperationPreview(previewInput, previewInput !== null);
+
+  // Only the detector's own invariant (group.length >= 2) makes this
+  // unreachable in practice; guard anyway rather than rendering a picker with
+  // nothing to pick.
+  if (!first) return null;
+
+  return (
+    <Stack gap="sm">
+      <p className="text-muted-foreground text-xs">
+        {variant.products.length} rows share the {variant.manufacturer}{" "}
+        {variant.model} part number. Pick which one to keep — the rest merge
+        into it.
+      </p>
+      <Stack gap="xs">
+        {variant.products.map((p) => {
+          const selected = p.id === keepId;
+          return (
+            <Button
+              key={p.id}
+              type="button"
+              variant={selected ? "default" : "outline"}
+              size="sm"
+              className="h-auto justify-start py-1"
+              onClick={() => setKeepId(p.id)}
+            >
+              <Check
+                className={cn(
+                  "size-3.5 shrink-0",
+                  selected ? "opacity-100" : "opacity-0",
+                )}
+              />
+              <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
+                <span className="truncate">{p.name}</span>
+                <span
+                  className={cn(
+                    "text-2xs",
+                    selected
+                      ? "text-primary-foreground/80"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {p.upc ? `UPC ${p.upc} · ` : ""}
+                  {p.sources.join(", ")}
+                </span>
+              </span>
+            </Button>
+          );
+        })}
+      </Stack>
+      <OperationImpact
+        preview={preview.data}
+        isLoading={preview.isLoading}
+        isError={preview.isError}
+        onRetry={() => void preview.refetch()}
+      />
+      <Button
+        size="sm"
+        onClick={() => {
+          if (!keepId || mergeIds.length === 0) return;
+          merge.mutate({ keepId, mergeIds });
+        }}
+        disabled={
+          !keepId ||
+          mergeIds.length === 0 ||
+          merge.isPending ||
+          preview.data?.canProceed === false
+        }
+      >
+        {merge.isPending
+          ? "Merging…"
+          : `Merge ${mergeIds.length === 1 ? "1 row" : `${mergeIds.length} rows`} in`}
       </Button>
     </Stack>
   );
