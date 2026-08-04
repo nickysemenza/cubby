@@ -49,6 +49,32 @@ type AnyColumnDef<TData> = ColumnDef<TData, any>;
 /** Stable empty-filters default (avoids a fresh `[]` reference each render). */
 const NO_FILTERS: FilterInput[] = [];
 
+/**
+ * Expandable-tree rendering for a server-backed list.
+ *
+ * Presentation ONLY. The server still owns membership, ordering, totals, and
+ * pagination — it just pages by tree ROOT instead of by row (see
+ * repo/project/tree.ts), and `nest` reshapes the rows it returned into parents
+ * and children. That's the whole difference from `useClientEntityList`'s
+ * `ClientTreeConfig`, which nests rows the browser also filtered and paginated.
+ *
+ * Deliberately narrower than that config: `filterFromLeafRows` and
+ * `paginateExpandedRows` are omitted because they're inert here — this table is
+ * `manualFiltering`/`manualPagination`, so TanStack neither filters nor
+ * paginates the rows they'd govern. Don't add them back by analogy.
+ */
+interface EntityListTreeConfig<TData> {
+  /**
+   * Nest the accumulated server rows before they reach the table. MUST be
+   * referentially stable (module-level constant or `useMemo`d at the page).
+   */
+  nest: (rows: TData[]) => TData[];
+  /** Return a row's children — the presence of this is what wires expansion. */
+  getSubRows: (row: TData) => TData[] | undefined;
+  /** Render the expand/collapse chevron + depth indent on the name column. */
+  expandable?: boolean;
+}
+
 export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   /** The entity type */
   entity: Entity;
@@ -117,6 +143,8 @@ export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   hiddenFilterColumns?: string[];
   /** Group configuration — enables group toggle and server-side group ordering */
   groupConfig?: GroupConfig<TData>;
+  /** Render the list as an expandable tree — see {@link EntityListTreeConfig}. */
+  tree?: EntityListTreeConfig<TData>;
   /** Enable delete functionality - adds row menu item, bulk action, and dialog */
   deletable?: {
     /** tRPC delete mutation options factory */
@@ -145,7 +173,11 @@ export interface UseEntityListReturn<TData, TFilters = unknown> {
   currentFilters: TFilters;
   /** Loaded unit mappings map (id -> mappings) */
   mappingsMap: Record<string, UnitMapping[]>;
-  /** Raw data array (for edge cases like card view) */
+  /**
+   * Raw data array (for edge cases like card view). Always FLAT — in tree mode
+   * this is every loaded row, parents and children alike, not the nested shape
+   * the table renders.
+   */
   data: TData[];
   /** Loading state */
   isLoading: boolean;
@@ -213,6 +245,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   namePrefix,
   hiddenFilterColumns,
   groupConfig,
+  tree,
 }: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<
   TData,
   TFilters
@@ -418,6 +451,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     nameSuffix,
     namePrefix,
     hiddenFilterColumns,
+    expandable: tree?.expandable,
   });
 
   // Row identity is independent of whether selection happens to be enabled.
@@ -428,14 +462,32 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   // Column widths are NOT wired here — `RTable` owns them, keyed off its
   // `entity`/`sizingKey` prop, so a hand-wired table can't miss out.
 
+  // Tree mode nests the accumulated rows; every other consumer above — the
+  // related-preview `sourceIds`, `mappingsMap`, the select-all-matching count —
+  // deliberately keeps reading the FLAT `data`, which already contains every
+  // row including nested ones.
+  const tableData = useMemo(
+    () => (tree ? tree.nest(data) : data),
+    [data, tree],
+  );
+
   // Feed all accumulated rows as a single "page" so TanStack Table doesn't
   // try to paginate the infinite result.
   const table = useTableConfig({
-    data,
+    data: tableData,
     columns: allColumns,
     tableState,
-    totalCount: data.length,
+    totalCount: tableData.length,
     manualPagination: true,
+    ...(tree
+      ? {
+          getSubRows: tree.getSubRows,
+          // Rows churn on every infinite-scroll page and on every mutation
+          // refetch; TanStack's default would collapse the user's expanded
+          // rows each time.
+          autoResetExpanded: false,
+        }
+      : {}),
     getRowId,
     enableRowSelection: listBulkActions.enableRowSelection,
     rowSelection: listBulkActions.rowSelection,
@@ -473,7 +525,11 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     }
   }, [infiniteResult.infiniteScroll, table, totalCount]);
 
-  // Build bulk action bar element if bulk actions configured
+  // Build bulk action bar element if bulk actions configured.
+  // In tree mode the two counts below measure different things — `data.length`
+  // is loaded ROWS, `totalCount` is matching ROOTS — so the "select all N
+  // matching" offer simply never fires. That's the honest outcome: it would
+  // otherwise promise a count the selection can't match.
   const bulkActionBar = listBulkActions.config ? (
     <ListBulkActionBar
       table={table}

@@ -47,6 +47,7 @@ import {
 import { entities, entityDetailParams } from "~/entities/entities";
 import { type RouterOutputs, useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
+import type { ProjectRowsRenderer } from "~/lib/list-view-normalization";
 import { formatCurrency } from "~/lib/utils";
 import { CreateProjectDialog } from "./create-project-dialog";
 import {
@@ -382,6 +383,13 @@ function MainDashboard({
               onClearDate={() =>
                 handleFiltersChange({ ...filters, dateRange: null })
               }
+              rowsRenderer={search.rows ?? "flat"}
+              onRowsRendererChange={(rows) =>
+                navigate({
+                  search: (prev) => ({ ...prev, rows }),
+                  replace: true,
+                })
+              }
             />
           )}
 
@@ -587,18 +595,27 @@ function DataViewContent({
   completionYears,
   hiddenByDate,
   onClearDate,
+  rowsRenderer,
+  onRowsRendererChange,
 }: {
   projectScope: EmbeddedProjectScope;
   locations: string[];
   completionYears: string[];
   hiddenByDate: ProjectDashboardSummaryOut["hiddenByDate"];
   onClearDate: () => void;
+  rowsRenderer: ProjectRowsRenderer;
+  onRowsRendererChange: (renderer: ProjectRowsRenderer) => void;
 }) {
   return (
     <Stack className="pt-4">
       <Stack as="section">
         <h2 className="font-heading font-semibold text-xl">Projects</h2>
-        <ProjectTable locations={locations} completionYears={completionYears} />
+        <ProjectTable
+          locations={locations}
+          completionYears={completionYears}
+          mode={rowsRenderer}
+          onModeChange={onRowsRendererChange}
+        />
         <HiddenByDateNote
           count={hiddenByDate.projects}
           label="projects"

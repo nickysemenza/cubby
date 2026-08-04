@@ -1,7 +1,9 @@
 /**
  * Project Router — household project tracker (migrated from Notion).
  *
- * Standard CRUD over the `project` entity plus two dashboard reads:
+ * Standard CRUD over the `project` entity, a second list read for the WBS
+ * renderer (`tree` — same filters as `list`, paginated by root of the filtered
+ * forest; see repo/project/tree.ts), plus two dashboard reads:
  * `dashboardSummary` (the bounded Overview read — summary counts, active
  * project list w/ rollups, task-status breakdown, upcoming tasks, Needs
  * Attention, filter options) and `portfolioAnalytics` (on-demand chart
@@ -53,6 +55,7 @@ import {
   projectList,
   projectNameOptions,
   projectPortfolioAnalytics,
+  projectTreePage,
   suggestProjectTools,
   updateProject,
 } from "~/server/repo/project";
@@ -62,7 +65,10 @@ import {
   resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
-import { createSearchableEntityCrudProcedures } from "../crud-factory";
+import {
+  createEntityListProcedure,
+  createSearchableEntityCrudProcedures,
+} from "../crud-factory";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const {
@@ -104,6 +110,26 @@ const {
       await deleteProjects(services.db, ids, services.actorContext);
       return undefined;
     },
+  },
+  entityName: "project",
+});
+
+/**
+ * `/projects?view=data&rows=tree`'s WBS page — same input and `{meta, items}`
+ * output as `list` (so the list hook can swap one for the other), but the page
+ * it returns is N roots of the filtered forest plus their matching descendants,
+ * and `meta.totalCount` counts those roots. See repo/project/tree.ts for why
+ * the page is chosen on this side of the wire.
+ */
+const { list: tree } = createEntityListProcedure({
+  schemas: {
+    output: projectOut,
+    filters: projectFiltersSchema,
+    sort: { sortableFields: projectSortableFields, defaultSort: "createdAt" },
+  },
+  repository: {
+    list: (services, filters, sorts, pagination) =>
+      projectTreePage(services.db, filters, sorts, pagination),
   },
   entityName: "project",
 });
@@ -234,6 +260,7 @@ export const projectRouter = createTRPCRouter({
   getByID,
   getByShortcode,
   list,
+  tree,
   create,
   update,
   delete: deleteItem,

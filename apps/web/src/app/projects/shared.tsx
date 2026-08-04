@@ -104,10 +104,15 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { NoneValue } from "~/components/ui/none-value";
+import {
+  ViewSwitcher,
+  type ViewSwitcherOption,
+} from "~/components/ui/view-switcher";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { multiSelectFilterFnBy } from "~/entities/filters";
 import { useTRPC } from "~/integrations/trpc/react";
+import type { ProjectRowsRenderer } from "~/lib/list-view-normalization";
 import { purchaseLabel } from "~/lib/purchase-label";
 import {
   expenseMutationInvalidateKeys,
@@ -119,6 +124,7 @@ import { cn, formatCurrency } from "~/lib/utils";
 import { persistedVendorId } from "~/lib/vendor-logo";
 import { capitalize, PROJECT_STATUS_LABELS } from "./project-formatting";
 import { PROJECT_STATUS_OPTIONS, projectKindOptions } from "./project-options";
+import { buildProjectTree, type ProjectTreeRow } from "./project-tree";
 import { TradeBadge, tradeOptions } from "./trade-options";
 
 /**
@@ -1369,16 +1375,47 @@ const subProjectCountSuffix = (row: ProjectOut): ReactNode =>
     <Badge variant="outline">{row.childProjectIds.length} sub</Badge>
   ) : undefined;
 
-/** Flat, fully server-filtered project list. Hierarchy is an ordinary Parent column. */
+/**
+ * The Projects Data-tab list, in one of two renderers.
+ *
+ * `flat` — fully server-filtered rows; hierarchy is an ordinary Parent column.
+ * `tree` — the same rows drawn as an expandable WBS. Only the *renderer*
+ * differs: `project.tree` applies identical filters and sorting, and merely
+ * pages by root of the filtered forest instead of by row, so `buildProjectTree`
+ * nests rows the server already chose and ordered. Nothing about membership
+ * moves into the browser.
+ */
+const PROJECT_TREE_CONFIG = {
+  nest: buildProjectTree,
+  getSubRows: (row: ProjectTreeRow) => row.subRows,
+  expandable: true,
+};
+
+const PROJECT_ROWS_RENDERER_OPTIONS: ViewSwitcherOption<ProjectRowsRenderer>[] =
+  [
+    { value: "flat", label: "Flat" },
+    { value: "tree", label: "Tree" },
+  ];
+
 export function ProjectTable({
   locations,
   completionYears,
+  mode,
+  onModeChange,
 }: {
   locations: string[];
   completionYears: string[];
+  mode: ProjectRowsRenderer;
+  onModeChange: (mode: ProjectRowsRenderer) => void;
 }) {
   const api = useTRPC();
-  const columnHelper = useMemo(() => createColumnHelper<ProjectOut>(), []);
+  const isTree = mode === "tree";
+  // Helper'd over `ProjectTreeRow` in both modes: TanStack's `ColumnDef` is
+  // invariant in `TData`, so a `ProjectOut` helper wouldn't typecheck against
+  // the tree table. `ProjectTreeRow` is a structural supertype of `ProjectOut`
+  // and every accessor below reads only `ProjectOut` fields, so this is a pure
+  // type-parameter swap with no behavioural difference in flat mode.
+  const columnHelper = useMemo(() => createColumnHelper<ProjectTreeRow>(), []);
   const { options: projectOptions } = useProjectOptions();
   const projectIds = useMemo(
     () => projectOptions.map((project) => project.value),
@@ -1405,7 +1442,7 @@ export function ProjectTable({
     invalidateKeys: projectMutationInvalidateKeys,
   });
 
-  const nameEditable = useNameEditable<ProjectOut>(
+  const nameEditable = useNameEditable<ProjectTreeRow>(
     updateProjectMutation.mutateAsync,
   );
 
@@ -1597,6 +1634,8 @@ export function ProjectTable({
   const tableStateOptions = useMemo(() => ({ initialSort: "startDate" }), []);
   const {
     table,
+    data,
+    totalCount,
     bulkActionBar,
     deleteDialog,
     infiniteScroll,
@@ -1606,17 +1645,42 @@ export function ProjectTable({
     timing,
   } = useEntityList({
     entity: "project",
-    queryOptions: api.project.list.queryOptions,
+    queryOptions: isTree
+      ? api.project.tree.queryOptions
+      : api.project.list.queryOptions,
     columns,
     filterOptions,
     deletable: deletableConfig,
     nameEditable,
     nameSuffix: subProjectCountSuffix,
     tableStateOptions,
+    tree: isTree ? PROJECT_TREE_CONFIG : undefined,
   });
+
+  // Auto-expand the whole tree while a name search is active, so a match
+  // nested under an ALSO-matching ancestor is actually visible; collapse back
+  // once the search is cleared. (A match with no matching ancestor is already
+  // a root of its own — the server promotes it — so this only covers the
+  // parent-matches-too case.) Edge-triggered on `searching` alone (not every
+  // keystroke, and not on `table`, which is otherwise a stable ref) so it
+  // doesn't fight a user who manually expanded/collapsed rows mid-search.
+  const searching = Boolean(table.getColumn("name")?.getFilterValue());
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally edge-triggered on `searching` only
+  useEffect(() => {
+    if (!isTree) return;
+    table.toggleAllRowsExpanded(searching);
+  }, [searching, isTree]);
 
   return (
     <div>
+      <Row justify="end" className="pb-2">
+        <ViewSwitcher
+          ariaLabel="Projects row renderer"
+          options={PROJECT_ROWS_RENDERER_OPTIONS}
+          value={mode}
+          onValueChange={onModeChange}
+        />
+      </Row>
       <RTable
         table={table}
         isLoading={isLoading}
@@ -1630,8 +1694,60 @@ export function ProjectTable({
         infiniteScroll={infiniteScroll}
         refreshControls={refreshControls}
       />
+      {isTree && (
+        <TreePaginationNote
+          // Core rows are the TOP-LEVEL rows (each carrying its `subRows`);
+          // `getRowModel()` would count expanded descendants too.
+          loadedRoots={table.getCoreRowModel().rows.length}
+          totalRoots={totalCount}
+          loadedRows={data.length}
+          onShowFlat={() => onModeChange("flat")}
+        />
+      )}
       <PreviewSheet />
       {deleteDialog}
     </div>
+  );
+}
+
+/**
+ * Honesty footnote for the WBS renderer: it pages by top-level project, so the
+ * record count means something different here than in the flat list. Same
+ * dotted-underline "here's what you're not seeing" idiom as
+ * `HiddenByDateNote` in projects-dashboard.tsx, with an escape hatch to the
+ * complete flat List rather than a way to widen this one.
+ */
+function TreePaginationNote({
+  loadedRoots,
+  totalRoots,
+  loadedRows,
+  onShowFlat,
+}: {
+  loadedRoots: number;
+  /** `undefined` until the first response lands. */
+  totalRoots: number | undefined;
+  loadedRows: number;
+  onShowFlat: () => void;
+}) {
+  if (totalRoots === undefined) return null;
+  const nested = loadedRows - loadedRoots;
+
+  return (
+    <Row gap="xs" wrap className="px-1 pt-1 text-2xs text-muted-foreground">
+      <span>
+        Paginated by top-level project: {loadedRoots} of {totalRoots} loaded
+        {nested > 0
+          ? `, plus ${nested} matching sub-project${nested === 1 ? "" : "s"}`
+          : ""}
+        .
+      </span>
+      <button
+        type="button"
+        onClick={onShowFlat}
+        className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+      >
+        Show every match as a flat list
+      </button>
+    </Row>
   );
 }

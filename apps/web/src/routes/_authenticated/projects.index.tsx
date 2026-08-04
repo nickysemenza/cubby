@@ -13,6 +13,7 @@ import { entityFilterSearchFields } from "~/entities/filter-manifest";
 import {
   isValidProjectDateFilter,
   normalizeProjectRenderer,
+  PROJECT_ROWS_RENDERERS,
 } from "~/lib/list-view-normalization";
 import { urlStringParam } from "~/lib/search-params";
 
@@ -23,6 +24,15 @@ const dateFilterParam = urlStringParam.refine(
 const completionYearParam = urlStringParam.refine(
   (value) => value === undefined || /^\d{4}$/.test(value),
   "Invalid completion year",
+);
+/**
+ * Which renderer the Data tab's Projects section uses. Piped through the enum
+ * rather than left a loose string so the value arrives typed AND an unknown
+ * renderer fails validation instead of silently falling back to flat — the URL
+ * would otherwise claim a view the page isn't showing.
+ */
+const rowsRendererParam = urlStringParam.pipe(
+  z.enum(PROJECT_ROWS_RENDERERS).optional(),
 );
 const commaSeparatedArray = <T extends z.ZodType>(itemSchema: T) =>
   z.preprocess(
@@ -44,6 +54,7 @@ export const projectSearchSchema = z
     locations: commaSeparatedArray(z.string()),
     date: dateFilterParam,
     view: urlStringParam,
+    rows: rowsRendererParam,
     // Quick-capture deep link (navbar "+" / command palette) — there is no
     // /projects/new route, so the create dialog is opened by this param.
     create: z.boolean().optional().catch(undefined),
@@ -67,6 +78,7 @@ const searchDefaults = {
   date: undefined,
   completed: undefined,
   view: "overview",
+  rows: "flat",
   create: undefined,
 } as const;
 
