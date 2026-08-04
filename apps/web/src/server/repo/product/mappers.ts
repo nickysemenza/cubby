@@ -1,4 +1,3 @@
-import type { DataException } from "@cubby/schemas/data-quality";
 import { canonicalExternalIdUrl } from "@cubby/schemas/external-id";
 import {
   unsafeIngredientShortcode,
@@ -50,7 +49,7 @@ type ProductImageRow =
 type ProductTopLevelDB = RowWithOptionalAliases<typeof product.$inferSelect> & {
   images?: ProductImageRow[] | null;
   externalIds?: MappableProductExternalId[] | null;
-  dataQuality?: ProductTopLevelOut["dataQuality"];
+  dataQuality: ProductTopLevelOut["dataQuality"];
   pricing?: ProductPricing;
 };
 
@@ -109,25 +108,7 @@ export const dbProductToTopLevelShape = (
   price: productData.price,
   pricing: productData.pricing ?? resolveProductPricing(productData.price),
   usdaUnavailable: productData.usdaUnavailable,
-  dataQuality: productData.dataQuality ?? {
-    status: "complete",
-    facets: [
-      { name: "identity", status: "complete", gaps: [] },
-      { name: "provenance", status: "complete", gaps: [] },
-      { name: "integrity", status: "complete", gaps: [] },
-    ],
-    gaps: [],
-    exceptions: (productData.dataExceptions ?? []).map(
-      ({ fingerprint: _fingerprint, ...exception }: DataException) => ({
-        ...exception,
-        targetType: "product" as const,
-        targetId: unsafeProductShortcode(productData.shortcode),
-        state: "stale" as const,
-      }),
-    ),
-    relatedGaps: [],
-    relatedExceptions: [],
-  },
+  dataQuality: productData.dataQuality,
   images: mapImages(productData.images),
   externalIds: mapProductExternalIds(productData.externalIds),
   createdAt: productData.createdAt,
@@ -172,7 +153,7 @@ export const dbProductToPickerItemAPI = (
 
 export const dbProductToInventoryEmbedShape = (
   productData: RowWithOptionalAliases<typeof product.$inferSelect> & {
-    pricing?: ProductPricing;
+    pricing: ProductPricing;
   },
 ): ProductInventoryEmbedOut => ({
   id: unsafeProductShortcode(productData.shortcode),
@@ -184,9 +165,7 @@ export const dbProductToInventoryEmbedShape = (
   notes: productData.notes,
   expectedQuantity: productData.expectedQuantity,
   category: productData.category,
-  price:
-    productData.pricing?.effectivePrice ??
-    resolveProductPricing(productData.price).effectivePrice,
+  price: productData.pricing.effectivePrice,
   usdaUnavailable: productData.usdaUnavailable,
   createdAt: productData.createdAt,
   updatedAt: productData.updatedAt,

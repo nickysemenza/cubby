@@ -47,7 +47,7 @@ export type ProductDeepDB = ProductSelect & {
 
 export type ProductListDB = ProductSelect & {
   pricing?: ProductPricing;
-  dataQuality?: DataQuality;
+  dataQuality: DataQuality;
   ingredient: typeof ingredient.$inferSelect | null;
   unitMappings: Array<typeof productUnitMappings.$inferSelect>;
   externalIds: MappableProductExternalId[];

@@ -5,6 +5,7 @@
 
 import { extractDbTimestampsFromDBRec } from "@cubby/schemas/common";
 import {
+  type ProductId,
   unsafeInventoryShortcode,
   unsafeLocationShortcode,
 } from "@cubby/schemas/identifiers";
@@ -25,7 +26,9 @@ import {
   parseInventoryAmount,
   type RowWithOptionalAliases,
 } from "~/server/repo/database-helpers";
+import { requireLoadedProductPricing } from "~/server/repo/inventory/mappers";
 import { dbProductToInventoryEmbedShape } from "~/server/repo/product/mappers";
+import type { ProductPricing } from "~/server/repo/product/pricing";
 
 import type { LocationListDB, LocationWithParentChild } from "./internal-types";
 
@@ -70,6 +73,7 @@ const dbLocationToListRefShape = (
 
 export const dbLocationToListAPI = (
   locationData: LocationListDB,
+  pricingByProductId: ReadonlyMap<ProductId, ProductPricing>,
 ): LocationListItemOut => ({
   ...dbLocationToAPI(locationData),
   parent:
@@ -87,7 +91,13 @@ export const dbLocationToListAPI = (
       valuation: entry.valuation,
       createdAt: entry.createdAt,
       updatedAt: entry.updatedAt,
-      product: dbProductToInventoryEmbedShape(entry.product),
+      product: dbProductToInventoryEmbedShape({
+        ...entry.product,
+        pricing: requireLoadedProductPricing(
+          pricingByProductId,
+          entry.product.id,
+        ),
+      }),
     }),
   ),
 });

@@ -122,7 +122,7 @@ import {
   loadProductPricing,
   resolveProductPricing,
 } from "./pricing";
-import type { ProductDeepDB, ProductListDB } from "./types";
+import type { ProductDeepDB } from "./types";
 import {
   assertNoCanonicalPriceMapping,
   externalIdSlotUnchanged,
@@ -779,10 +779,10 @@ export const productList = async (
     results.map((row) => row.id),
   );
   const pricedResults = await enrichProductRowsWithPricing(db, results);
-  const products = pricedResults.map((prod: ProductListDB) =>
+  const products = pricedResults.map((prod) =>
     dbProductToListAPI({
       ...prod,
-      dataQuality: qualities.get(prod.id),
+      dataQuality: qualities.get(prod.id)!,
     }),
   );
 
@@ -1032,7 +1032,7 @@ export const createProduct = async (
   // product already links this USDA food/UPC), translate the raw DB error into a
   // clear CONFLICT message — the lookups run on `db` because the tx is aborted.
   try {
-    return await withTransaction(db, async (tx) => {
+    const created = await withTransaction(db, async (tx) => {
       await assertExternalIdsAvailable(tx, externalIds ?? []);
       // Create the product first (price flows in via ...productData)
       const newProduct = await insertWithShortcode(tx, "product", {
@@ -1103,12 +1103,18 @@ export const createProduct = async (
             })
           : [];
 
-      return dbProductToTopLevelAPI({
-        ...newProduct,
-        pricing: resolveProductPricing(newProduct.price),
-        images,
-        externalIds: createdExternalIds,
-      });
+      return { ...newProduct, images, externalIds: createdExternalIds };
+    });
+    // Read-after-commit on the outer `db`, same shape as `getPurchaseByID`.
+    // Every gap check below is gated on the product having live inventory or
+    // expenses, and a brand-new product has neither, so this always resolves
+    // to the empty-gaps case today — computed for real rather than
+    // hardcoded, so it stays correct if that gating ever changes.
+    const qualities = await loadProductDataQualities(db, [created.id]);
+    return dbProductToTopLevelAPI({
+      ...created,
+      pricing: resolveProductPricing(created.price),
+      dataQuality: qualities.get(created.id)!,
     });
   } catch (error) {
     await throwIfDuplicateProduct(db, data, error);
@@ -1265,9 +1271,11 @@ export const updateProduct = async (
     });
 
     const pricing = await loadProductPricing(tx, [updated]);
+    const qualities = await loadProductDataQualities(tx, [updated.id]);
     return dbProductToTopLevelAPI({
       ...updated,
       pricing: pricing.get(updated.id) ?? resolveProductPricing(updated.price),
+      dataQuality: qualities.get(updated.id)!,
       images: productImages,
       externalIds: currentExternalIds,
     });
@@ -1411,9 +1419,14 @@ export const patchProductExternalIds = async (
       });
     }
     const pricing = await loadProductPricing(tx, [before]);
+    // Data quality depends on the external IDs this call just changed (the
+    // amazon_asin/duplicate_external_id checks), so it must be recomputed
+    // here rather than reused from `before`.
+    const qualities = await loadProductDataQualities(tx, [before.id]);
     return dbProductToTopLevelAPI({
       ...before,
       pricing: pricing.get(before.id) ?? resolveProductPricing(before.price),
+      dataQuality: qualities.get(before.id)!,
       updatedAt,
       externalIds,
       images: [],
@@ -1478,9 +1491,11 @@ export const quickCreateProduct = async (
     action: "create",
   });
 
+  const qualities = await loadProductDataQualities(db, [newProduct.id]);
   return dbProductToTopLevelAPI({
     ...newProduct,
     pricing: resolveProductPricing(newProduct.price),
+    dataQuality: qualities.get(newProduct.id)!,
     images: [],
     externalIds: [],
   });

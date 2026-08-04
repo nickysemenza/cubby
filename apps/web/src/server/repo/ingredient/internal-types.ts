@@ -7,6 +7,7 @@
  * these are re-exported from the package barrel.
  */
 
+import type { DataQuality } from "@cubby/schemas/data-quality";
 import {
   unsafeIngredientShortcode,
   unsafeProductShortcode,
@@ -29,6 +30,7 @@ import {
   type recipeSection,
   type recipeSectionIngredient,
 } from "~/server/db/schema";
+import { enrichProductRowsWithDataQuality } from "~/server/repo/data-quality";
 import {
   formatSearchTerm,
   type MappableImageRecord,
@@ -55,6 +57,7 @@ export type IngredientDeepDB = typeof ingredient.$inferSelect & {
   product: Array<
     ProductSelect & {
       pricing?: ProductPricing;
+      dataQuality?: DataQuality;
       unitMappings: Array<typeof productUnitMappings.$inferSelect>;
       externalIds: MappableProductExternalId[];
       images: Array<{
@@ -74,13 +77,24 @@ export type IngredientDeepDB = typeof ingredient.$inferSelect & {
 };
 
 /**
+ * A product row is only mappable to the API once it carries a *real* computed
+ * DataQuality — `dbProductToTopLevelAPI`/`dbProductToTopLevelShape` have no
+ * safe fallback for it (unlike `pricing`, whose empty-aggregate default is
+ * safe), so every caller of {@link mapIngredientProducts} /
+ * {@link mapIngredientProductsLean} must batch-load it first via
+ * `enrichProductRowsWithDataQuality` / `loadProductDataQualities` and attach
+ * it before calling in.
+ */
+export type Qualified<T> = T & { dataQuality: DataQuality };
+
+/**
  * Shape an ingredient's joined product rows into the API product list: brand the
  * shortcode, lift images out of the join table, drop soft-deleted external ids,
  * and attach unit-mapping source metadata. Shared by the full ingredient
  * transform and the lean enrichment-workbench fetch so they can't drift.
  */
 export const mapIngredientProducts = (
-  productRel: IngredientDeepDB["product"],
+  productRel: Array<Qualified<IngredientDeepDB["product"][number]>>,
 ) =>
   mapRelation(productRel, (prod) => {
     const baseProduct = dbProductToTopLevelAPI(prod);
@@ -112,7 +126,7 @@ export const dbIngredientToTopLevelShape = (
 });
 
 type IngredientListDB = IngredientSelect & {
-  product: IngredientDeepDB["product"];
+  product: Array<Qualified<IngredientDeepDB["product"][number]>>;
   appearsInRecipes: RecipeRef[] | null;
 };
 
@@ -139,7 +153,7 @@ export const dbIngredientToListAPI = (
  * {@link mapIngredientProducts} with the two unused relations emptied.
  */
 export const mapIngredientProductsLean = (
-  productRel: IngredientLeanDB["product"],
+  productRel: Array<Qualified<IngredientLeanDB["product"][number]>>,
 ) =>
   mapRelation(productRel, (prod) => {
     const baseProduct = dbProductToTopLevelShape(prod);
@@ -167,7 +181,24 @@ export const dbIngredientToAPI = async (
   )
     ? productRel
     : await enrichProductRowsWithPricing(db, productRel);
-  const productWithMappings = mapIngredientProducts(pricedProductRel);
+  const qualifiedProductRel = pricedProductRel.every(
+    (product) => product.dataQuality !== undefined,
+  )
+    ? // `.every` above is the runtime guarantee; the cast just tells the
+      // compiler what it already proved (same pattern as `pricedProductRel`
+      // being reused untyped above — dataQuality has no safe fallback, so
+      // unlike pricing this one MUST already be real, not just present).
+      //
+      // Do NOT "simplify" this to an unconditional enrich because no
+      // production caller pre-populates `dataQuality`. This branch is
+      // load-bearing for TESTS: `mappers.unit.test.ts` builds fixtures with
+      // `dataQuality` already attached so `dbIngredientToAPI` can be exercised
+      // with no database. Dropping it makes the enrich unconditional, which
+      // reaches `unwrapDb(db).select` and fails those DB-less fixtures. (Tried
+      // on #631, reverted in e2089ead6.)
+      (pricedProductRel as Array<Qualified<(typeof pricedProductRel)[number]>>)
+    : await enrichProductRowsWithDataQuality(db, pricedProductRel);
+  const productWithMappings = mapIngredientProducts(qualifiedProductRel);
 
   // One row per usage (a recipe repeats when it uses this ingredient in multiple
   // sections); the deduped `appearsInRecipes` is derived from these. Shared with

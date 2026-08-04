@@ -41,6 +41,22 @@ const CREATED_AT = new Date("2024-01-01T00:00:00.000Z");
 const UPDATED_AT = new Date("2024-01-02T00:00:00.000Z");
 const DELETED_AT = new Date("2024-01-03T00:00:00.000Z");
 
+// A real (not hardcoded-complete-footgun) computed quality: the mapper no
+// longer has a fallback for this field, so every fixture below supplies one
+// explicitly, same as a real caller must.
+const completeDataQuality = {
+  status: "complete" as const,
+  facets: [
+    { name: "identity" as const, status: "complete" as const, gaps: [] },
+    { name: "provenance" as const, status: "complete" as const, gaps: [] },
+    { name: "integrity" as const, status: "complete" as const, gaps: [] },
+  ],
+  gaps: [],
+  exceptions: [],
+  relatedGaps: [],
+  relatedExceptions: [],
+};
+
 const baseProduct = {
   id: PRODUCT_ID,
   shortcode: "PRD-TEST",
@@ -159,6 +175,7 @@ describe("product mappers", () => {
   it("maps top-level products exactly and filters soft-deleted relations", () => {
     const result = dbProductToTopLevelAPI({
       ...baseProduct,
+      dataQuality: completeDataQuality,
       images: [
         baseImage,
         deletedImage,
@@ -189,6 +206,7 @@ describe("product mappers", () => {
   it("maps list rows to the list contract without full location payloads", () => {
     const row = {
       ...baseProduct,
+      dataQuality: completeDataQuality,
       ingredient: {
         id: INGREDIENT_ID,
         shortcode: "ING-TEST",
@@ -280,6 +298,7 @@ describe("product mappers", () => {
   it("coerces expenseTotal the same way as expenseCount", () => {
     const row = {
       ...baseProduct,
+      dataQuality: completeDataQuality,
       ingredient: null,
       unitMappings: [],
       externalIds: [],
