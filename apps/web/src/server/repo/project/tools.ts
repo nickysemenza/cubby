@@ -34,6 +34,12 @@ import {
   sql,
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
+import {
+  describeToolTimelineConflict,
+  type ToolTimelineProjectWindow,
+  toolTimelineConflict,
+  UNKNOWN_OWNERSHIP,
+} from "~/lib/tool-timeline";
 import type { Database, DrizzleClient } from "~/server/db";
 import {
   expense,
@@ -50,6 +56,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { loadProductOwnershipWindows } from "~/server/repo/product/ownership";
 import { maxPlainDate } from "./helpers";
 import { collectDescendantIds, loadProjectDateWindows } from "./subtree";
 
@@ -189,6 +196,35 @@ function buildResourceWindowContexts(
     });
   }
 
+  return result;
+}
+
+/**
+ * The per-project half of the ownership gate: the folded window plus whether
+ * the project is still running. Deliberately the same shape and the same fold
+ * as {@link buildResourceWindowContexts} above — `toolTimelineConflict` owns
+ * the grace and live-project rules, this only assembles its inputs.
+ */
+export type ProjectTimelineGate = {
+  window: ToolTimelineProjectWindow;
+  isLive: boolean;
+};
+
+export function buildTimelineGates(
+  loaded: LoadedProjectDateWindows,
+  projectIds: ProjectId[],
+): Map<ProjectId, ProjectTimelineGate> {
+  const projectById = new Map(loaded.tree.allRows.map((row) => [row.id, row]));
+  const result = new Map<ProjectId, ProjectTimelineGate>();
+  for (const projectId of projectIds) {
+    const row = projectById.get(projectId);
+    const window = loaded.dateWindows.get(projectId);
+    if (!row || !window) continue;
+    result.set(projectId, {
+      window,
+      isLive: isLiveProjectStatus(row.status),
+    });
+  }
   return result;
 }
 
@@ -409,13 +445,106 @@ async function liveResourceCodes(
   return rows.map((row) => row.shortcode);
 }
 
+type UsagePair = { projectId: ProjectId; productId: ProductId };
+
+/**
+ * Refuse usage edges for tools we did not own while the project ran. Every
+ * attach path funnels through here — the single setter, the project-keyed bulk
+ * attach (which MCP's `attach_project_resources` calls), and the product-keyed
+ * set replacement.
+ *
+ * Two deliberate exemptions, and both matter:
+ *
+ *  - **Pairs that already have a live edge pass.** This blocks NEW conflicts;
+ *    it never blocks preserving an old one. Without it the four live bad rows
+ *    this rule exists to surface would make the "Edit projects" panel
+ *    permanently unsavable, and detaching them impossible.
+ *  - **Detach is never checked.** `used: false` and `detachProjectResources`
+ *    don't call this at all.
+ *
+ * Runs BEFORE `withTransaction` rather than inside `assertUsagePair`: the fold
+ * it needs (`loadProjectDateWindows`) takes the opaque `Database`, and a
+ * transaction hands callees an unwrapped client. Safe here — the check reads
+ * only ledger history, which a concurrent `ProjectToolUsage` write can't move.
+ */
+async function assertNoTimelineConflict(
+  db: Database,
+  pairs: UsagePair[],
+  options: ResourceReadOptions = {},
+): Promise<void> {
+  if (pairs.length === 0) return;
+  const dbc = getDb(db);
+  const today = options.today ?? format(new Date(), "yyyy-MM-dd");
+  const projectIds = uniq(pairs.map((pair) => pair.projectId));
+  const productIds = uniq(pairs.map((pair) => pair.productId));
+
+  const [loadedWindows, ownership, projectRows, productRows, existingRows] =
+    await Promise.all([
+      loadProjectDateWindows(db),
+      loadProductOwnershipWindows(dbc, productIds),
+      dbc
+        .select({ id: project.id, name: project.name })
+        .from(project)
+        .where(and(inArray(project.id, projectIds), notDeleted(project))),
+      dbc
+        .select({ id: product.id, name: product.name })
+        .from(product)
+        .where(and(inArray(product.id, productIds), notDeleted(product))),
+      dbc
+        .select({
+          projectId: projectToolUsage.projectId,
+          productId: projectToolUsage.productId,
+        })
+        .from(projectToolUsage)
+        .where(
+          and(
+            inArray(projectToolUsage.projectId, projectIds),
+            inArray(projectToolUsage.productId, productIds),
+            notDeleted(projectToolUsage),
+          ),
+        ),
+    ]);
+
+  const gates = buildTimelineGates(loadedWindows, projectIds);
+  const projectNameById = new Map(projectRows.map((row) => [row.id, row.name]));
+  const productNameById = new Map(productRows.map((row) => [row.id, row.name]));
+  const alreadyLive = new Set(
+    existingRows.map((row) => `${row.projectId}:${row.productId}`),
+  );
+
+  for (const { projectId, productId } of pairs) {
+    if (alreadyLive.has(`${projectId}:${productId}`)) continue;
+    const gate = gates.get(projectId);
+    if (!gate) continue;
+    const conflict = toolTimelineConflict(
+      ownership.get(productId) ?? UNKNOWN_OWNERSHIP,
+      gate.window,
+      { isLive: gate.isLive, today },
+    );
+    if (!conflict) continue;
+    throw createAppError(
+      "TOOL_TIMELINE_CONFLICT",
+      describeToolTimelineConflict(conflict, {
+        toolName: productNameById.get(productId) ?? "That tool",
+        projectName: projectNameById.get(projectId) ?? "this project",
+      }),
+    );
+  }
+}
+
 export async function attachProjectResources(
   db: Database,
   projectId: ProjectId,
   productIds: ProductId[],
   actor: ActorContext,
+  options: ResourceReadOptions = {},
 ): Promise<{ changed: number; attached: number }> {
   const uniqueProductIds = uniq(productIds);
+  await assertNoTimelineConflict(
+    db,
+    uniqueProductIds.map((productId) => ({ projectId, productId })),
+    options,
+  );
   return withTransaction(db, async (tx) => {
     const liveProject = await tx.query.project.findFirst({
       where: and(eq(project.id, projectId), notDeleted(project)),
@@ -557,7 +686,12 @@ export async function setProjectToolUsage(
   productId: ProductId,
   used: boolean,
   actor: ActorContext,
+  options: ResourceReadOptions = {},
 ): Promise<{ changed: boolean }> {
+  // Attach only. Clearing a checkbox must stay possible on a conflicting edge.
+  if (used) {
+    await assertNoTimelineConflict(db, [{ projectId, productId }], options);
+  }
   return withTransaction(db, async (tx) => {
     const { productCode } = await assertUsagePair(tx, projectId, productId);
 
@@ -627,8 +761,14 @@ export async function setProductProjectUses(
   productId: ProductId,
   projectIds: ProjectId[],
   actor: ActorContext,
+  options: ResourceReadOptions = {},
 ): Promise<{ changed: number }> {
   const desired = uniq(projectIds);
+  await assertNoTimelineConflict(
+    db,
+    desired.map((projectId) => ({ projectId, productId })),
+    options,
+  );
   return withTransaction(db, async (tx) => {
     const liveProduct = await tx.query.product.findFirst({
       where: and(
@@ -738,93 +878,105 @@ type ProjectTradeSignal = {
 export async function suggestProjectTools(
   db: Database,
   projectId: ProjectId,
+  options: ResourceReadOptions = {},
 ): Promise<ProjectToolSuggestionsOut> {
   const dbc = getDb(db);
-  const [attachedRows, taskTrades, expenseTrades, directRows, inventoryRows] =
-    await Promise.all([
-      dbc
-        .select({ productId: projectToolUsage.productId })
-        .from(projectToolUsage)
-        .where(
-          and(
-            eq(projectToolUsage.projectId, projectId),
-            notDeleted(projectToolUsage),
-          ),
+  const today = options.today ?? format(new Date(), "yyyy-MM-dd");
+  const [
+    attachedRows,
+    taskTrades,
+    expenseTrades,
+    directRows,
+    inventoryRows,
+    loadedWindows,
+  ] = await Promise.all([
+    dbc
+      .select({ productId: projectToolUsage.productId })
+      .from(projectToolUsage)
+      .where(
+        and(
+          eq(projectToolUsage.projectId, projectId),
+          notDeleted(projectToolUsage),
         ),
-      dbc
-        .select({ trade: task.trade, taskCount: count() })
-        .from(task)
-        .where(
-          and(
-            eq(task.projectId, projectId),
-            ne(task.trade, "planning"),
-            ne(task.trade, "other"),
-            notDeleted(task),
-          ),
-        )
-        .groupBy(task.trade),
-      dbc
-        .select({
-          trade: expense.trade,
-          expenseCount: count(),
-          grossSpend: sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(
-            Number,
-          ),
-        })
-        .from(expense)
-        .where(
-          and(
-            eq(expense.projectId, projectId),
-            eq(expense.lineKind, "principal"),
-            eq(expense.future, false),
-            gt(expense.cost, 0),
-            ne(expense.trade, "planning"),
-            ne(expense.trade, "other"),
-            notDeleted(expense),
-          ),
-        )
-        .groupBy(expense.trade),
-      dbc
-        .select({
-          productId: product.id,
-          productCode: product.shortcode,
-          productName: product.name,
-          manufacturer: product.manufacturer,
-          projectPurchaseCost:
-            sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(Number),
-        })
-        .from(expense)
-        .innerJoin(
-          product,
-          and(eq(product.id, expense.productId), notDeleted(product)),
-        )
-        .where(
-          and(
-            eq(expense.projectId, projectId),
-            eq(expense.lineKind, "principal"),
-            eq(expense.future, false),
-            eq(expense.costType, "tools"),
-            gt(expense.cost, 0),
-            eq(product.category, "tools"),
-            notDeleted(expense),
-          ),
-        )
-        .groupBy(
-          product.id,
-          product.shortcode,
-          product.name,
-          product.manufacturer,
+      ),
+    dbc
+      .select({ trade: task.trade, taskCount: count() })
+      .from(task)
+      .where(
+        and(
+          eq(task.projectId, projectId),
+          ne(task.trade, "planning"),
+          ne(task.trade, "other"),
+          notDeleted(task),
         ),
-      dbc
-        .selectDistinct({ productId: inventoryEntry.productId })
-        .from(inventoryEntry)
-        .innerJoin(
-          product,
-          and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
-        )
-        .where(and(eq(product.category, "tools"), notDeleted(inventoryEntry))),
-    ]);
+      )
+      .groupBy(task.trade),
+    dbc
+      .select({
+        trade: expense.trade,
+        expenseCount: count(),
+        grossSpend: sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(
+          Number,
+        ),
+      })
+      .from(expense)
+      .where(
+        and(
+          eq(expense.projectId, projectId),
+          eq(expense.lineKind, "principal"),
+          eq(expense.future, false),
+          gt(expense.cost, 0),
+          ne(expense.trade, "planning"),
+          ne(expense.trade, "other"),
+          notDeleted(expense),
+        ),
+      )
+      .groupBy(expense.trade),
+    dbc
+      .select({
+        productId: product.id,
+        productCode: product.shortcode,
+        productName: product.name,
+        manufacturer: product.manufacturer,
+        projectPurchaseCost:
+          sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(Number),
+      })
+      .from(expense)
+      .innerJoin(
+        product,
+        and(eq(product.id, expense.productId), notDeleted(product)),
+      )
+      .where(
+        and(
+          eq(expense.projectId, projectId),
+          eq(expense.lineKind, "principal"),
+          eq(expense.future, false),
+          eq(expense.costType, "tools"),
+          gt(expense.cost, 0),
+          eq(product.category, "tools"),
+          notDeleted(expense),
+        ),
+      )
+      .groupBy(
+        product.id,
+        product.shortcode,
+        product.name,
+        product.manufacturer,
+      ),
+    dbc
+      .selectDistinct({ productId: inventoryEntry.productId })
+      .from(inventoryEntry)
+      .innerJoin(
+        product,
+        and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
+      )
+      .where(and(eq(product.category, "tools"), notDeleted(inventoryEntry))),
+    loadProjectDateWindows(db),
+  ]);
 
+  const timelineGate = buildTimelineGates(loadedWindows, [projectId]).get(
+    projectId,
+  );
   const attached = new Set(attachedRows.map((row) => row.productId));
   const inventoried = new Set(inventoryRows.map((row) => row.productId));
   const taskCountByTrade = new Map(
@@ -902,7 +1054,25 @@ export async function suggestProjectTools(
     ...directRows.map((row) => row.productId),
     ...tradeRows.map((row) => row.productId),
   ]);
-  const metrics = await loadResourceMetrics(dbc, candidateProductIds);
+  const [metrics, ownership] = await Promise.all([
+    loadResourceMetrics(dbc, candidateProductIds),
+    loadProductOwnershipWindows(dbc, candidateProductIds),
+  ]);
+
+  /**
+   * Did we own this tool while the project was running? Only the inferred lane
+   * asks: a `purchased_here` tool's own purchase Expense is charged to this
+   * project, which is ledger fact that an explicit window override does not
+   * make false.
+   */
+  const timelineConflictFor = (productId: ProductId) =>
+    timelineGate
+      ? toolTimelineConflict(
+          ownership.get(productId) ?? UNKNOWN_OWNERSHIP,
+          timelineGate.window,
+          { isLive: timelineGate.isLive, today },
+        )
+      : null;
 
   const directSuggestions: ProjectToolSuggestionOut[] = directRows
     .filter(
@@ -941,20 +1111,27 @@ export async function suggestProjectTools(
   }
 
   const chosenTradeProductIds = new Set<ProductId>();
+  // Tools that cleared every other gate and were dropped ONLY because we did
+  // not own them during the project. Counted distinctly so the count reads as
+  // "how many tools are hidden", not "how many (tool, trade) pairs".
+  const timelineSuppressed = new Set<ProductId>();
   const tradeSuggestions: ProjectToolSuggestionOut[] = [];
   for (const signal of trades) {
     const ranked = (tradeRowsByTrade.get(signal.trade) ?? [])
       .filter((row) => {
         const toolMetrics = metrics.get(row.productId) ?? EMPTY_METRICS;
-        return (
+        const eligible =
           inventoried.has(row.productId) &&
           !attached.has(row.productId) &&
           !expensiveDirectIds.has(row.productId) &&
           !chosenTradeProductIds.has(row.productId) &&
           (toolMetrics.grossLifetimeAcquisitionCost >=
             EXPENSIVE_TOOL_THRESHOLD ||
-            toolMetrics.projectUseCount >= REUSED_CHEAP_TOOL_PROJECTS)
-        );
+            toolMetrics.projectUseCount >= REUSED_CHEAP_TOOL_PROJECTS);
+        if (!eligible) return false;
+        if (timelineConflictFor(row.productId) === null) return true;
+        timelineSuppressed.add(row.productId);
+        return false;
       })
       .sort((a, b) => {
         const aMetrics = metrics.get(a.productId) ?? EMPTY_METRICS;
@@ -1018,6 +1195,7 @@ export async function suggestProjectTools(
     items: [...directSuggestions, ...tradeSuggestions],
     purchasedHereCount: directSuggestions.length,
     tradeMatchCount: tradeSuggestions.length,
+    timelineConflicts: { count: timelineSuppressed.size },
     unlinkedExpensivePurchases: {
       count: Number(unlinked?.count ?? 0),
       grossCost: unlinked?.grossCost ?? 0,

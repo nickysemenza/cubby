@@ -16,6 +16,7 @@ import {
   unsafeIngredientShortcode,
   unsafeLocationShortcode,
   unsafeProductShortcode,
+  unsafeProjectShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
   DuplicateProductIdentity,
@@ -25,8 +26,10 @@ import type {
   ProductWithBetterUpcData,
   ProductWithoutMappings,
   SoldButStillStocked,
+  ToolUsedOutsideOwnership,
 } from "@cubby/schemas/problems";
 import { isMiscProduct, isNonFoodCategory } from "@cubby/shared";
+import { format } from "date-fns";
 import {
   and,
   eq,
@@ -42,6 +45,7 @@ import {
 } from "drizzle-orm";
 import { sumBy, uniq } from "es-toolkit";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { Database, DrizzleClient } from "~/server/db";
 import {
@@ -53,6 +57,7 @@ import {
   productExternalId,
   productImage,
   productUnitMappings,
+  project,
   projectToolUsage,
   recipe,
   recipeSection,
@@ -69,9 +74,15 @@ import {
   type ProductRetainingEdgeKey,
 } from "~/server/repo/product/edge-roles";
 import {
+  disposalPurchaseIds,
+  loadProductOwnershipWindows,
+} from "~/server/repo/product/ownership";
+import {
   effectiveProductPriceSql,
   loadProductPricing,
 } from "~/server/repo/product/pricing";
+import { loadProjectDateWindows } from "~/server/repo/project/subtree";
+import { buildTimelineGates } from "~/server/repo/project/tools";
 
 // ProductWithBetterUpcData is re-exported from the package barrel for the
 // Problems-page components that import it from there.
@@ -403,19 +414,6 @@ export const findSoldButStillStocked = async (
 ): Promise<SoldButStillStocked[]> => {
   const dbClient = getDb(db);
 
-  const disposalPurchaseIds = dbClient
-    .select({ id: expense.purchaseId })
-    .from(expense)
-    .where(
-      and(
-        notDeleted(expense),
-        eq(expense.future, false),
-        isNotNull(expense.purchaseId),
-      ),
-    )
-    .groupBy(expense.purchaseId)
-    .having(sql`sum(${expense.cost}) < 0`);
-
   const disposals = await dbClient
     .select({
       productId: expense.productId,
@@ -434,7 +432,7 @@ export const findSoldButStillStocked = async (
         eq(expense.future, false),
         lt(expense.cost, 0),
         isNotNull(expense.productId),
-        inArray(expense.purchaseId, disposalPurchaseIds),
+        inArray(expense.purchaseId, disposalPurchaseIds(dbClient)),
       ),
     )
     .groupBy(expense.productId);
@@ -527,6 +525,87 @@ export const findSoldButStillStocked = async (
   }
 
   return rows;
+};
+
+/**
+ * Recorded tool→project uses that the ownership timeline says are impossible.
+ *
+ * The `trade_match` suggestion lane shipped without consulting ownership dates,
+ * so an old project's candidate pool was the present-day tool shelf. Every read
+ * and write path now applies `toolTimelineConflict`; this reports the edges
+ * that predate that gate (four on production, all on one renovation whose
+ * explicit end date is a year before the tools were bought).
+ *
+ * Uses the exact same inputs as the gate — same fold, same ownership loader,
+ * same predicate — so a row here is a row the UI would refuse to create today.
+ */
+export const findToolsUsedOutsideOwnership = async (
+  db: Database,
+  options: { today?: string } = {},
+): Promise<ToolUsedOutsideOwnership[]> => {
+  const dbClient = getDb(db);
+  const today = options.today ?? format(new Date(), "yyyy-MM-dd");
+
+  const edges = await dbClient
+    .select({
+      projectId: projectToolUsage.projectId,
+      projectShortcode: project.shortcode,
+      projectName: project.name,
+      productId: projectToolUsage.productId,
+      productShortcode: product.shortcode,
+      productName: product.name,
+      manufacturer: product.manufacturer,
+    })
+    .from(projectToolUsage)
+    .innerJoin(
+      project,
+      and(eq(project.id, projectToolUsage.projectId), notDeleted(project)),
+    )
+    .innerJoin(
+      product,
+      and(eq(product.id, projectToolUsage.productId), notDeleted(product)),
+    )
+    .where(notDeleted(projectToolUsage));
+  if (edges.length === 0) return [];
+
+  const [loadedWindows, ownership] = await Promise.all([
+    loadProjectDateWindows(db),
+    loadProductOwnershipWindows(
+      dbClient,
+      uniq(edges.map((edge) => edge.productId)),
+    ),
+  ]);
+  const gates = buildTimelineGates(
+    loadedWindows,
+    uniq(edges.map((edge) => edge.projectId)),
+  );
+
+  const rows: ToolUsedOutsideOwnership[] = [];
+  for (const edge of edges) {
+    const gate = gates.get(edge.projectId);
+    if (!gate) continue;
+    const conflict = toolTimelineConflict(
+      ownership.get(edge.productId) ?? UNKNOWN_OWNERSHIP,
+      gate.window,
+      { isLive: gate.isLive, today },
+    );
+    if (!conflict) continue;
+    rows.push({
+      id: unsafeProductShortcode(edge.productShortcode),
+      name: edge.productName,
+      manufacturer: edge.manufacturer,
+      projectId: unsafeProjectShortcode(edge.projectShortcode),
+      projectName: edge.projectName,
+      conflict: conflict.kind,
+      toolDate: conflict.date,
+      projectBoundary: conflict.boundary,
+    });
+  }
+  return rows.sort(
+    (a, b) =>
+      a.projectName.localeCompare(b.projectName) ||
+      a.name.localeCompare(b.name),
+  );
 };
 
 // Two Product rows for one physical SKU — the thing `mergeProducts` exists to

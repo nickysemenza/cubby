@@ -61,6 +61,7 @@ export function useProblemsData(opts?: {
         productsMissingPrice: fast.data?.productsMissingPrice ?? [],
         unvaluedBucketProducts: fast.data?.unvaluedBucketProducts ?? [],
         soldButStillStocked: fast.data?.soldButStillStocked ?? [],
+        toolsUsedOutsideOwnership: fast.data?.toolsUsedOutsideOwnership ?? [],
         productsWithoutMappings: fast.data?.productsWithoutMappings ?? [],
         ingredientsWithoutProduct: fast.data?.ingredientsWithoutProduct ?? [],
         unusedIngredientsWithProduct:

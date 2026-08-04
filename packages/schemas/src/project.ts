@@ -421,13 +421,17 @@ export type ProjectSortField = (typeof projectSortableFields)[number];
  *
  * Every rendering surface reads `effectiveStart`/`effectiveEnd`.
  */
+/** Where one side of a resolved window came from. `none` = no boundary at all. */
+export const projectDateSourceSchema = z.enum(["explicit", "derived", "none"]);
+export type ProjectDateSource = z.infer<typeof projectDateSourceSchema>;
+
 export const projectDateWindow = z.object({
   derivedStart: plainDate.nullable(),
   derivedEnd: plainDate.nullable(),
   effectiveStart: plainDate.nullable(),
   effectiveEnd: plainDate.nullable(),
-  startSource: z.enum(["explicit", "derived", "none"]),
-  endSource: z.enum(["explicit", "derived", "none"]),
+  startSource: projectDateSourceSchema,
+  endSource: projectDateSourceSchema,
 });
 export type ProjectDateWindow = z.infer<typeof projectDateWindow>;
 
@@ -1584,6 +1588,17 @@ export const projectToolSuggestionsOut = z.object({
   items: z.array(projectToolSuggestionOut),
   purchasedHereCount: z.number().int().nonnegative(),
   tradeMatchCount: z.number().int().nonnegative(),
+  /**
+   * Tools the `trade_match` lane dropped ONLY because we did not own them while
+   * this project ran — acquired after it ended, or disposed of before it
+   * started. Disclosed rather than silently omitted: a lane that quietly
+   * shrinks reads as "there is nothing else to suggest", which is the opposite
+   * of the truth for an old project (on production, 80-99% of the inventoried
+   * tool shelf postdates a pre-2023 project).
+   */
+  timelineConflicts: z.object({
+    count: z.number().int().nonnegative(),
+  }),
   unlinkedExpensivePurchases: z.object({
     count: z.number().int().nonnegative(),
     grossCost: z.number().nonnegative(),
@@ -1783,6 +1798,13 @@ export const projectToolMatrixColumnOut = z.object({
   /** Recursive effective window — the chronological sort key, not the override. */
   startDate: plainDate.nullable(),
   endDate: plainDate.nullable(),
+  /**
+   * Where each side of that window came from. The ownership gate reads these:
+   * an `explicit` boundary is a date the user typed and is taken literally, a
+   * `derived` one is inferred from dated tasks/expenses and gets grace.
+   */
+  startSource: projectDateSourceSchema,
+  endSource: projectDateSourceSchema,
   attachedCount: z.number().int().nonnegative(),
   suggestedCount: z.number().int().nonnegative(),
 });
@@ -1805,6 +1827,24 @@ export const projectToolMatrixRowOut = z.object({
    * dozen columns of checkmarks reads as a bug.
    */
   visibleUseCount: z.number().int().nonnegative(),
+  /**
+   * When we owned the tool, derived from the ledger (repo/product/ownership.ts).
+   * Either side null means *unknown* — 42 of 426 tools carry no acquisition
+   * Expense at all — and unknown never restricts anything.
+   *
+   * Shipped per row rather than as a per-cell `conflict` state, and this is the
+   * ONE place the grid asks the client to derive something. The reason is
+   * payload size, not preference: for a pre-2023 column 80-99% of the rows are
+   * timeline conflicts, so a dense conflict cell set would be thousands of
+   * objects for a grid that is ~96% empty. `ownership` x `column.start/endDate`
+   * is O(rows + columns), and both sides feed the same shared predicate
+   * (`~/lib/tool-timeline`) the server gates and rejects writes with — so the
+   * client is re-running one pure function, not re-deciding membership.
+   */
+  ownership: z.object({
+    acquiredAt: plainDate.nullable(),
+    disposedAt: plainDate.nullable(),
+  }),
   ...projectToolEconomicsFields,
 });
 export type ProjectToolMatrixRowOut = z.infer<typeof projectToolMatrixRowOut>;
@@ -1816,7 +1856,17 @@ export type ProjectToolMatrixRowOut = z.infer<typeof projectToolMatrixRowOut>;
 export const projectToolMatrixCellOut = z.object({
   projectId: projectShortcode,
   productId: productShortcode,
-  state: z.enum(["attached", "suggested"]),
+  /**
+   * `purchase_evidence` is a pair with real tool spend on this project that
+   * is not being offered as a suggestion (under
+   * {@link DEFAULT_TOOL_MATRIX_COST_FLOOR}, or the `purchased_here` lane is
+   * switched off). It is emitted anyway — 152 such pairs exist household-wide — because a
+   * purchase Expense charged to this project is proof we owned the tool for it,
+   * and the client must never lock a cell it holds evidence for. Without the
+   * cell the client cannot see that evidence and an explicit window override
+   * would grey out a tool the project demonstrably bought.
+   */
+  state: z.enum(["attached", "suggested", "purchase_evidence"]),
   lane: projectToolSuggestionLane.nullable(),
   matchedTrade: tradeSchema.nullable(),
   /** Populated on attached cells too, including below the suggestion floor. */
@@ -1849,6 +1899,12 @@ export const projectToolMatrixOut = z.object({
     matchingTools: z.number().int().nonnegative(),
     attachedCells: z.number().int().nonnegative(),
     suggestedCells: z.number().int().nonnegative(),
+    /**
+     * Visible cells the ownership gate locks. Counted server-side even though
+     * the client renders them, so the disclosure stays a server fact and the
+     * header can say how much of the grid is unreachable.
+     */
+    timelineConflictCells: z.number().int().nonnegative(),
   }),
   truncated: z.object({
     columns: z.boolean(),

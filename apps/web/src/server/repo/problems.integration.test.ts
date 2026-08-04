@@ -35,6 +35,7 @@ import {
   location as locationTable,
   product,
   productImage,
+  projectToolUsage,
   vendor as vendorTable,
 } from "~/server/db/schema";
 import {
@@ -51,6 +52,7 @@ import { ensureGlobalUnknownLocation } from "./location";
 import { findCoverageTotals, findStaleIngredientParses } from "./problems";
 import { deleteProducts, updateProduct } from "./product";
 import { createProject, deleteProjects } from "./project";
+import { detachProjectResources } from "./project/tools";
 import { updatePurchase } from "./purchase";
 import {
   createInventoryFixture as createInventoryEntry,
@@ -698,6 +700,106 @@ describe("problems repo", () => {
 
     it("is a defect, not a coverage backlog", () => {
       expect(PROBLEM_CLASS.soldButStillStocked).toBe("defect");
+    });
+  });
+
+  describe("findToolsUsedOutsideOwnership", () => {
+    it("flags a recorded use that predates the tool, and clears once detached", async () => {
+      // The live Kitchen Remodel shape: explicit end 2022-06-30, tool first
+      // acquired well after. These edges were created before the ownership gate
+      // existed, so only a detector can surface them.
+      const { output: finished, entityId: finishedId } = await createProject(
+        ctx.db,
+        projectCreateInput.parse({
+          name: "Closed reno",
+          status: "done",
+          startDate: "2022-01-01",
+          endDate: "2022-06-30",
+        }),
+        ctx.actor,
+      );
+      const { output: ledger } = await createProject(
+        ctx.db,
+        projectCreateInput.parse({ name: "Ledger home" }),
+        ctx.actor,
+      );
+
+      const late = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Anachronistic Press", category: "tools" }),
+        ctx.actor,
+      );
+      const fine = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Contemporary Level", category: "tools" }),
+        ctx.actor,
+      );
+      const undated = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Ledgerless Chisel", category: "tools" }),
+        ctx.actor,
+      );
+      for (const row of [
+        { product: late, date: "2024-03-01" },
+        { product: fine, date: "2022-02-01" },
+      ]) {
+        await createExpense(
+          ctx.db,
+          expenseCreateInput.parse(
+            makeExpenseInput({
+              name: row.product.name,
+              projectId: ledger.id,
+              productId: row.product.id,
+              costType: "tools",
+              cost: 250,
+              date: row.date,
+            }),
+          ),
+          ctx.actor,
+        );
+      }
+
+      // Straight to the table: the write path now refuses exactly this, which
+      // is the point — these rows can only pre-date the gate.
+      await getDb(ctx.db)
+        .insert(projectToolUsage)
+        .values([
+          { projectId: finishedId, productId: late.entityId },
+          { projectId: finishedId, productId: fine.entityId },
+          { projectId: finishedId, productId: undated.entityId },
+        ]);
+
+      const found = await findFastProblems(ctx.db);
+      const rows = found.toolsUsedOutsideOwnership.filter(
+        (row) => row.projectName === "Closed reno",
+      );
+      expect(rows).toEqual([
+        {
+          id: late.id,
+          name: "Anachronistic Press",
+          manufacturer: expect.any(String),
+          projectId: finished.id,
+          projectName: "Closed reno",
+          conflict: "acquired_after_end",
+          toolDate: "2024-03-01",
+          projectBoundary: "2022-06-30",
+        },
+      ]);
+
+      await detachProjectResources(
+        ctx.db,
+        finishedId,
+        [late.entityId],
+        ctx.actor,
+      );
+      const after = await findFastProblems(ctx.db);
+      expect(
+        after.toolsUsedOutsideOwnership.some((row) => row.id === late.id),
+      ).toBe(false);
+    });
+
+    it("is a defect, not a coverage backlog", () => {
+      expect(PROBLEM_CLASS.toolsUsedOutsideOwnership).toBe("defect");
     });
   });
 

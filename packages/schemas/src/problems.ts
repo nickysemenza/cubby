@@ -10,6 +10,7 @@ import {
   inventoryShortcode,
   locationShortcode,
   productShortcode,
+  projectShortcode,
   purchaseShortcode,
   recipeShortcode,
   vendorShortcode,
@@ -111,6 +112,28 @@ export const soldButStillStockedSchema = z.object({
       name: z.string(),
     }),
   ),
+});
+
+// A recorded ProjectToolUsage edge for a tool we did not own while the project
+// ran. The `trade_match` suggestion lane shipped without consulting ownership
+// dates, so it drew candidates from the whole present-day tool shelf — for a
+// 2020 project, 293 of the 295 inventoried tools were acquired after it ended.
+// Suggestion and every write path now refuse these; this reports the ones that
+// were already recorded before the gate existed.
+//
+// Converges to zero and each row is unambiguously wrong, but the fix is not
+// always "detach": a tool bought before the ledger's coverage of it begins
+// looks acquired-late, in which case the missing acquisition Expense is the
+// real defect. Both dates ride along so the row says which.
+export const toolUsedOutsideOwnershipSchema = z.object({
+  ...productProblemFields,
+  projectId: projectShortcode,
+  projectName: z.string(),
+  conflict: z.enum(["acquired_after_end", "disposed_before_start"]),
+  /** The tool's first acquisition, or its last unreversed exit. */
+  toolDate: plainDate,
+  /** The project boundary it falls outside, grace already applied. */
+  projectBoundary: plainDate,
 });
 
 // Two Product rows for one physical SKU, keyed on (manufacturer, model) with
@@ -512,6 +535,7 @@ const problemsFastShape = {
   productsMissingPrice: z.array(productMissingPriceSchema),
   unvaluedBucketProducts: z.array(productMissingPriceSchema),
   soldButStillStocked: z.array(soldButStillStockedSchema),
+  toolsUsedOutsideOwnership: z.array(toolUsedOutsideOwnershipSchema),
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
   ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
   unusedIngredientsWithProduct: z.array(unusedIngredientSchema),
@@ -661,6 +685,11 @@ export const PROBLEM_CLASS = {
   // instead mean the disposal was mis-recorded, and deleting inventory has no
   // restore path.
   soldButStillStocked: "defect",
+  // The edge asserts something that could not have happened, and the gate that
+  // now rejects new ones means the list only shrinks. No auto-fix: detaching is
+  // usually right, but a missing acquisition Expense produces the same row and
+  // deleting the edge would bury the real defect.
+  toolsUsedOutsideOwnership: "defect",
   productsWithoutMappings: "defect",
   unusedIngredientsWithProduct: "defect",
   unusedIngredientsWithoutProduct: "defect",
@@ -837,6 +866,9 @@ export type DuplicateUniqueProduct = z.infer<
 export type OrphanedProduct = z.infer<typeof orphanedProductSchema>;
 export type ProductMissingPrice = z.infer<typeof productMissingPriceSchema>;
 export type SoldButStillStocked = z.infer<typeof soldButStillStockedSchema>;
+export type ToolUsedOutsideOwnership = z.infer<
+  typeof toolUsedOutsideOwnershipSchema
+>;
 export type DuplicateProductIdentity = z.infer<
   typeof duplicateProductIdentitySchema
 >;

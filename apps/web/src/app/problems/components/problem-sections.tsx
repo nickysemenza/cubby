@@ -7,6 +7,7 @@ import {
   type ProductMissingPrice,
   type PurchaseNotReconciling,
   type SoldButStillStocked,
+  type ToolUsedOutsideOwnership,
   TRACKER_PROBLEM_KEY_BY_TYPE,
 } from "@cubby/schemas/problems";
 import type {
@@ -592,6 +593,17 @@ function soldButStockedSubtitle(product: SoldButStillStocked): string {
   return `${byManufacturer(product.manufacturer)} · sold ${product.soldQuantity}, ${stocked} · ${formatCurrency(Math.abs(product.proceeds))} recovered`;
 }
 
+/**
+ * Both dates, because they are what tells you which of the two fixes applies:
+ * an acquisition a few weeks late usually means a missing purchase Expense,
+ * one a year late means the edge itself is wrong.
+ */
+function outsideOwnershipSubtitle(row: ToolUsedOutsideOwnership): string {
+  return row.conflict === "acquired_after_end"
+    ? `${byManufacturer(row.manufacturer)} · acquired ${row.toolDate}, after ${row.projectName} ended ${row.projectBoundary}`
+    : `${byManufacturer(row.manufacturer)} · disposed of ${row.toolDate}, before ${row.projectName} started ${row.projectBoundary}`;
+}
+
 /** Clickable location chips, matching the duplicate-products card. */
 function locationBadges(
   locations: ProductMissingPrice["locations"],
@@ -750,6 +762,30 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       subtitle: soldButStockedSubtitle(product),
       badges: locationBadges(product.locations),
       route: entityDetailLink("product", product.id),
+    }),
+  }),
+  section({
+    id: "tools-used-outside-ownership",
+    label: "Used before owned",
+    select: (p) => p.toolsUsedOutsideOwnership,
+    entity: "product",
+    title: "Tool Used Outside Its Ownership Window",
+    description:
+      "These tools are recorded as used on a project we did not own them during — bought after it ended, or sold before it started. Suggestions and every write path now refuse these, so the list only shrinks. Detach the use, or add the acquisition Expense if the purchase is simply missing from the ledger.",
+    emptyMessage: "Every recorded tool use falls inside its ownership window.",
+    renderItem: (row) => ({
+      title: row.name,
+      subtitle: outsideOwnershipSubtitle(row),
+      badges: [
+        <Link
+          key={row.projectId}
+          {...entityDetailLink("project", row.projectId)}
+          className="hover:underline"
+        >
+          <Badge variant="outline">{row.projectName}</Badge>
+        </Link>,
+      ],
+      route: entityDetailLink("product", row.id),
     }),
   }),
   section({

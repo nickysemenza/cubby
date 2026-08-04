@@ -46,6 +46,7 @@ import {
   UNASSIGNED_TRADE_LABEL,
   UNKNOWN_MANUFACTURER_LABEL,
 } from "@cubby/schemas/project";
+import { format } from "date-fns";
 import {
   and,
   asc,
@@ -59,6 +60,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
+import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import type { Database, DrizzleClient } from "~/server/db";
 import {
   expense,
@@ -74,9 +76,11 @@ import {
   getDb,
   notDeleted,
 } from "~/server/repo/database-helpers";
+import { loadProductOwnershipWindows } from "~/server/repo/product/ownership";
 import { buildDashboardProjectWhere } from "./dashboard-shared";
 import { loadProjectDateWindows, projectCompletionYear } from "./subtree";
 import {
+  buildTimelineGates,
   EMPTY_METRICS,
   EXPENSIVE_TOOL_THRESHOLD,
   loadResourceMetrics,
@@ -184,8 +188,11 @@ function groupLabel(groupBy: "trade" | "manufacturer", key: string): string {
 export async function projectToolMatrix(
   db: Database,
   filters: ProjectToolMatrixFilters,
+  /** Plain-date override for deterministic live-project window tests. */
+  options: { today?: string } = {},
 ): Promise<ProjectToolMatrixOut> {
   const dbc = getDb(db);
+  const today = options.today ?? format(new Date(), "yyyy-MM-dd");
   const wantsLane = (lane: ProjectToolSuggestionLane): boolean =>
     filters.suggestionLanes === undefined ||
     filters.suggestionLanes.includes(lane);
@@ -306,6 +313,8 @@ export async function projectToolMatrix(
       ...row,
       startDate: window?.effectiveStart ?? null,
       endDate: window?.effectiveEnd ?? null,
+      startSource: window?.startSource ?? ("none" as const),
+      endSource: window?.endSource ?? ("none" as const),
     };
   });
   const chronological = (
@@ -360,6 +369,7 @@ export async function projectToolMatrix(
     inventoryRows,
     candidateRows,
     metrics,
+    ownership,
   ] = await Promise.all([
     deriveToolTrades(dbc, rowIds),
     empty
@@ -486,9 +496,23 @@ export async function projectToolMatrix(
           )
           .groupBy(expense.productId, expense.trade),
     loadResourceMetrics(dbc, rowIds),
+    loadProductOwnershipWindows(dbc, rowIds),
   ]);
 
   // ---- Assembly (no I/O below this line) ---------------------------------
+  // The ownership gate. `buildTimelineGates` folds the same windows
+  // `suggestProjectTools` reads, and `toolTimelineConflict` is the same pure
+  // predicate the write guard and the React cell run — nothing is restated.
+  const timelineGates = buildTimelineGates(dated, columnIds);
+  const conflictFor = (projectId: ProjectId, productId: ProductId) => {
+    const gate = timelineGates.get(projectId);
+    if (!gate) return null;
+    return toolTimelineConflict(
+      ownership.get(productId) ?? UNKNOWN_OWNERSHIP,
+      gate.window,
+      { isLive: gate.isLive, today },
+    );
+  };
   const inventoried = new Set(
     inventoryRows.flatMap((row) => (row.productId ? [row.productId] : [])),
   );
@@ -549,6 +573,7 @@ export async function projectToolMatrix(
   }
 
   const cells: ProjectToolMatrixCellOut[] = [];
+  let timelineConflictCells = 0;
   const attachedByProject = new Map<ProjectId, number>();
   const suggestedByProject = new Map<ProjectId, number>();
   const visibleUseByProduct = new Map<ProductId, number>();
@@ -603,6 +628,31 @@ export async function projectToolMatrix(
       for (const _ of directSuggestions) bump(suggestedByProject, column.id);
     }
 
+    // Sub-floor purchase evidence, and the conflict tally. Both walk the same
+    // rows: a pair with ANY tool spend on this project is proof of ownership,
+    // so it is emitted (the client must not lock it), and everything else with
+    // no attachment and no evidence is locked if the gate says so.
+    for (const row of rowRecords) {
+      const key = cellKey(column.id, row.productId);
+      if (attachedKeys.has(key)) continue;
+      const cost = purchaseCostByKey.get(key) ?? 0;
+      if (cost > 0) {
+        if (cost < EXPENSIVE_TOOL_THRESHOLD || !wantsLane("purchased_here")) {
+          cells.push({
+            projectId: projectCode,
+            productId: unsafeProductShortcode(row.shortcode),
+            state: "purchase_evidence",
+            lane: null,
+            matchedTrade: null,
+            projectPurchaseCost: cost,
+          });
+        }
+        continue;
+      }
+      if (conflictFor(column.id, row.productId) !== null)
+        timelineConflictCells += 1;
+    }
+
     if (!wantsLane("trade_match")) continue;
 
     // Lane B — trade match. Same gate, same ranking, same caps as
@@ -629,7 +679,11 @@ export async function projectToolMatrix(
             !chosen.has(candidate.productId) &&
             (toolMetrics.grossLifetimeAcquisitionCost >=
               EXPENSIVE_TOOL_THRESHOLD ||
-              toolMetrics.projectUseCount >= REUSED_CHEAP_TOOL_PROJECTS)
+              toolMetrics.projectUseCount >= REUSED_CHEAP_TOOL_PROJECTS) &&
+            // We have to have owned it while the project ran. Lane A above is
+            // deliberately exempt: its evidence is the tool's own purchase
+            // Expense charged to this project.
+            conflictFor(column.id, candidate.productId) === null
           );
         })
         .sort((a, b) => {
@@ -681,6 +735,7 @@ export async function projectToolMatrix(
       trade,
       isInventoried: inventoried.has(record.productId),
       visibleUseCount: visibleUseByProduct.get(record.productId) ?? 0,
+      ownership: ownership.get(record.productId) ?? UNKNOWN_OWNERSHIP,
       ...metricsFor(record.productId),
     };
   });
@@ -711,6 +766,8 @@ export async function projectToolMatrix(
     kind: record.kind,
     startDate: record.startDate,
     endDate: record.endDate,
+    startSource: record.startSource,
+    endSource: record.endSource,
     attachedCount: attachedByProject.get(record.id) ?? 0,
     suggestedCount: suggestedByProject.get(record.id) ?? 0,
   }));
@@ -726,6 +783,7 @@ export async function projectToolMatrix(
       matchingTools,
       attachedCells: cells.filter((cell) => cell.state === "attached").length,
       suggestedCells: cells.filter((cell) => cell.state === "suggested").length,
+      timelineConflictCells,
     },
     truncated: {
       columns: matchingProjects > columnRecords.length,
