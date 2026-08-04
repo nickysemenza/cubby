@@ -3,7 +3,7 @@ import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { WishList } from "~/app/wishes/wish-list";
 import { Page } from "~/components/page/Page";
-import { entityFilterSearchFields } from "~/entities/filter-manifest";
+import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { urlStringParam } from "~/lib/search-params";
 
 // The list's filter params come from the wish filter manifest — the same

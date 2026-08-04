@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { QueryKey } from "@tanstack/react-query";
 import { entities } from "~/entities/entities";
+import { getSortableFields } from "~/entities/sortable-fields";
 import type { useTRPC } from "~/integrations/trpc/react";
 import {
   expenseMutationInvalidateKeys,
@@ -110,7 +111,7 @@ function standardContract(
     entity,
     route: entities[entity].routes,
     defaultSort: entities[entity].list?.defaultSort ?? "createdAt",
-    sortableFields: entities[entity].list?.sortableFields ?? [],
+    sortableFields: getSortableFields(entity),
     canPreview: true,
     invalidationKeys,
     query: {
@@ -144,7 +145,7 @@ const entityContracts = {
     entity: "image",
     route: entities.image.routes,
     defaultSort: entities.image.list?.defaultSort ?? "createdAt",
-    sortableFields: entities.image.list?.sortableFields ?? [],
+    sortableFields: getSortableFields("image"),
     canPreview: true,
     invalidationKeys: [queryKeys.image.all, queryKeys.dashboard.counts],
     query: {
@@ -159,7 +160,7 @@ const entityContracts = {
     entity: "usda-food",
     route: entities["usda-food"].routes,
     defaultSort: entities["usda-food"].list?.defaultSort ?? "description",
-    sortableFields: entities["usda-food"].list?.sortableFields ?? [],
+    sortableFields: getSortableFields("usda-food"),
     canPreview: true,
     invalidationKeys: [queryKeys.usda.all],
     query: {

@@ -5,7 +5,7 @@ import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action
 import { CreatePurchaseDialog } from "~/app/purchases/create-purchase-dialog";
 import { PurchaseList } from "~/app/purchases/purchaselist";
 import { Page } from "~/components/page/Page";
-import { entityFilterSearchFields } from "~/entities/filter-manifest";
+import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { urlStringParam } from "~/lib/search-params";
 
 // Spread first so ANY spec in purchase's filter manifest survives this strict

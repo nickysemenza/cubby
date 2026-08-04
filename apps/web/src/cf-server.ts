@@ -16,6 +16,7 @@ import { setCfEnv } from "./server/cf-env";
 import { withRequestDb, withRequestDbClient } from "./server/db";
 import type { TelemetryQueueBatch } from "./server/telemetry-queue-types";
 import { withTrace } from "./server/tracing";
+import { classifyHttpWorkload } from "./server/workload";
 
 // Cache the handler module promise so the dynamic import only runs once (on
 // first request). We keep it lazy (not a top-level static import) so that
@@ -130,7 +131,12 @@ const handler = {
 
               return withHtmlNoCache(response);
             }),
-          { "http.request.method": request.method, "url.path": url.pathname },
+          {
+            "http.request.method": request.method,
+            "url.path": url.pathname,
+            "server.address": url.hostname,
+            "cubby.workload": classifyHttpWorkload(url.pathname),
+          },
         ),
       );
     } catch (error) {
@@ -153,46 +159,55 @@ const handler = {
   // stay bounded. Per-message ack/retry so one bad job doesn't replay the rest.
   async queue(batch: BackgroundQueueBatch | TelemetryQueueBatch, env: Env) {
     setCfEnv(env);
-    // Serial queue work does not need a local pg.Pool. Use one Worker-side
-    // client for the whole invocation; Hyperdrive still owns the origin DB pool.
-    await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
-      if (batch.queue === "cubby-telemetry") {
-        const [{ db }, { processTelemetryQueueBatch }] = await Promise.all([
-          import("./server/db"),
-          import("./server/telemetry-queue"),
-        ]);
-        await processTelemetryQueueBatch(db, batch);
-        return;
-      }
+    await withTrace(
+      "cf.queue",
+      async () => {
+        // Serial queue work does not need a local pg.Pool. Use one Worker-side
+        // client for the whole invocation; Hyperdrive still owns the origin DB pool.
+        await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
+          if (batch.queue === "cubby-telemetry") {
+            const [{ db }, { processTelemetryQueueBatch }] = await Promise.all([
+              import("./server/db"),
+              import("./server/telemetry-queue"),
+            ]);
+            await processTelemetryQueueBatch(db, batch);
+            return;
+          }
 
-      // Imported here, not at module scope: the consumer pulls @tanstack/ai +
-      // @cloudflare/tanstack-ai + @anthropic-ai/sdk (~553 KiB, plus a second
-      // copy of zod) and only queue deliveries need it. A static import puts
-      // all of that on the module-init path of every fetch invocation too.
-      const [{ db }, { processBackgroundQueueMessage }] = await Promise.all([
-        import("./server/db"),
-        import("./server/background-queue"),
-      ]);
-      for (const message of batch.messages) {
-        // Per-message clock: a batch is processed serially in this one
-        // invocation, so capture t0 at each message's start (NOT at batch
-        // arrival) or `duration_ms` would accumulate across the batch.
-        const t0 = performance.now();
-        try {
-          await processBackgroundQueueMessage(db, message);
-          console.log(
-            `[background-queue] message handled batch=${message.body.batchId} job=${message.body.jobId} kind=${message.body.kind} duration_ms=${Math.round(performance.now() - t0)}`,
+          // Imported here, not at module scope: the consumer pulls @tanstack/ai +
+          // @cloudflare/tanstack-ai + @anthropic-ai/sdk (~553 KiB, plus a second
+          // copy of zod) and only queue deliveries need it. A static import puts
+          // all of that on the module-init path of every fetch invocation too.
+          const [{ db }, { processBackgroundQueueMessage }] = await Promise.all(
+            [import("./server/db"), import("./server/background-queue")],
           );
-        } catch (error) {
-          console.error(
-            `[background-queue] message failed batch=${message.body.batchId} job=${message.body.jobId} kind=${message.body.kind} duration_ms=${Math.round(performance.now() - t0)}`,
-            error,
-          );
-          Sentry.captureException(error);
-          message.retry();
-        }
-      }
-    });
+          for (const message of batch.messages) {
+            // Per-message clock: a batch is processed serially in this one
+            // invocation, so capture t0 at each message's start (NOT at batch
+            // arrival) or `duration_ms` would accumulate across the batch.
+            const t0 = performance.now();
+            try {
+              await processBackgroundQueueMessage(db, message);
+              console.log(
+                `[background-queue] message handled batch=${message.body.batchId} job=${message.body.jobId} kind=${message.body.kind} duration_ms=${Math.round(performance.now() - t0)}`,
+              );
+            } catch (error) {
+              console.error(
+                `[background-queue] message failed batch=${message.body.batchId} job=${message.body.jobId} kind=${message.body.kind} duration_ms=${Math.round(performance.now() - t0)}`,
+                error,
+              );
+              Sentry.captureException(error);
+              message.retry();
+            }
+          }
+        });
+      },
+      {
+        "cubby.workload": "queue",
+        "messaging.destination.name": batch.queue,
+        "messaging.batch.message_count": batch.messages.length,
+      },
+    );
   },
 };
 

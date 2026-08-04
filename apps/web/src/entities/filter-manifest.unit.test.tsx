@@ -43,6 +43,14 @@ import {
  * silently diverge back to single-select.
  */
 describe("manifestFilterConfig", () => {
+  it("keeps the eager route search keys aligned with the full UI manifest", () => {
+    for (const entity of entitySchema.options) {
+      expect(Object.keys(entityFilterSearchFields(entity))).toEqual(
+        getEntityFilters(entity).map((spec) => spec.urlKey ?? spec.columnId),
+      );
+    }
+  });
+
   it.each([
     ["task", "status"],
     ["task", "trade"],

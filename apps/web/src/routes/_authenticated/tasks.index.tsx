@@ -19,10 +19,8 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import {
-  entityFilterSearchFields,
-  getEntityFilters,
-} from "~/entities/filter-manifest";
+import { getEntityFilters } from "~/entities/filter-manifest";
+import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import {
   buildFiltersFromManifest,
   filterGetterFromSearch,

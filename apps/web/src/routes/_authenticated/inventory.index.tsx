@@ -4,7 +4,7 @@ import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { InventoryActions } from "~/app/inventory/inventory-actions";
 import { InventoryItemList } from "~/app/inventory/inventoryitemlist";
 import { Page } from "~/components/page/Page";
-import { entityFilterSearchFields } from "~/entities/filter-manifest";
+import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 
 const searchSchema = z.object({
   ...tableSearchFields,

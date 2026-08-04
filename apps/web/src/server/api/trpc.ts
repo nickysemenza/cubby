@@ -39,6 +39,7 @@ import {
   TraceNames,
   withTrace,
 } from "~/server/tracing";
+import { classifyTrpcWorkload, type RequestOrigin } from "~/server/workload";
 
 /**
  * Helper function to build crud services for both production and test contexts.
@@ -96,8 +97,6 @@ export const buildCrudServices = (
  *
  * @see https://trpc.io/docs/server/context
  */
-
-type RequestOrigin = "ui" | "api" | "mcp" | "agent";
 
 export const createTRPCContext = async (opts: {
   headers: Headers;
@@ -281,6 +280,8 @@ const tracingMiddleWare = t.middleware(async (opts) =>
       "rpc.method": opts.path,
       "rpc.type": opts.type,
       "enduser.id": opts.ctx.auth?.userId ?? "guest",
+      "cubby.request_origin": opts.ctx.requestOrigin,
+      "cubby.workload": classifyTrpcWorkload(opts.ctx.requestOrigin),
     });
     recordInput(
       span,
@@ -289,6 +290,13 @@ const tracingMiddleWare = t.middleware(async (opts) =>
     );
     try {
       const result = await opts.next();
+
+      if (result.ok) {
+        span.setAttribute(
+          "cubby.workload",
+          classifyTrpcWorkload(opts.ctx.requestOrigin, result.data),
+        );
+      }
 
       // tRPC returns errors as results with ok: false, not thrown.
       if (!result.ok) {
