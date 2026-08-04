@@ -668,11 +668,12 @@ jobs:
       # wait. Both are JS actions running on the runner's own node, so neither
       # needs curl/unzip/a compiler inside this container.
       # ------------------------------------------------------------------
-      - name: Restore cached WASM pkg
+      - name: Resolve ingredient-parser HEAD
         id: parser
         shell: bash
         run: echo "sha=$(git ls-remote https://github.com/nickysemenza/ingredient-parser refs/heads/main | cut -f1)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      - name: Restore cached WASM pkg
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         id: wasm-cache
         with:
           path: packages/wasm
