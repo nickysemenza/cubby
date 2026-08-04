@@ -50,7 +50,11 @@ treat a near-exact hit as a duplicate to resolve, not a new Product: a
 single-best-match search silently hides the real duplicate behind a
 similarly-named different size. Prefer consolidating onto the record that
 already carries images, model, price, or expenses, then add the missing id kind
-to it. A retailer may also reuse one SKU for unrelated things — Home Depot files
+to it — use `merge_products` for the consolidation itself rather than hand
+copying fields and deleting the loser; it moves external ids, inventory,
+expenses, images, unit mappings, tasks, project-uses, and wish-candidates onto
+the survivor, and sums same-location inventory rather than dropping it. A
+retailer may also reuse one SKU for unrelated things — Home Depot files
 delivery and fee lines under a SKU it also uses for merchandise — so never infer
 identity from a SKU attached to an adjustment line.
 

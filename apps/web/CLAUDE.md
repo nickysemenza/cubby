@@ -119,7 +119,7 @@ Three layers — pick by what the surface is, never hand-roll table styling:
 
 Every entity in `entities.tsx` has a detail route, so **a rendered entity name is never plain truncated text.** Two acceptable shapes:
 
-- **`EntityInlineLink`** — links to the detail route and reveals the full name in its hover preview card. Every entity is previewable (`HoverPreviewEntity`); adding a `title` on top of it would just double up with the card.
+- **`EntityInlineLink`** — links to the detail route and reveals the full name in its hover preview card. Use it for any entity in `HoverPreviewEntity`; adding a `title` on top of it would just double up with the card. Not every entity is previewable — `wish`, `financialAccount`, `financialTransaction`, and `image` have no `EntityInlineLink` case and no hover card, so a name for one of them needs the plain-link shape below instead.
 - **A truncated span/link carrying `title={name}`** — for the surfaces `EntityInlineLink` doesn't fit (chart axis labels, tree rows, calendar chips). Link it too unless an ancestor `<a>` already owns the click (nested anchors are invalid — see the calendar `MealChip`) or the row genuinely carries no id (`ingredientAvailabilityOut`'s sub-recipe rows).
 
 Inside an `<RTable>`, **use `createNameColumn`** — it bundles width + `truncate` + full-name `Tooltip` + `TableLink` to the detail route, plus optional inline rename. Hand-rolling `cell: ({row}) => row.original.name` is what made the project detail page's Task/Expense names unreadable and unreachable. `header` overrides the label for tables embedded under another entity ("Task", not "NAME"); `nameSuffix` carries any secondary affordance (e.g. an expense's external vendor link) without stealing the name's own click.

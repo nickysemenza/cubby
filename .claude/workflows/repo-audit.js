@@ -239,7 +239,7 @@ Tasks:
 3. Write a markdown report to ${REPORT_PATH} with this structure:
    - "# Cubby Repo Audit" (include the run date if you can determine it from repo state; otherwise omit)
    - "## Verdict" — 3-4 sentence overall health assessment (this repo has strong conventions; be honest about whether the findings are serious or polish)
-   - "## Scorecard" — table of the 11 lanes with a letter grade (A-F) and one-line rationale each
+   - "## Scorecard" — table of the 12 lanes with a letter grade (A-F) and one-line rationale each
    - "## Findings" — grouped by severity (Critical, High, Medium, Low), each finding: title, file:line as a code span, what/why, and a concrete fix. Number them F1, F2, ...
    - "## Cleared" — brief bullet list of notable things checked and found solid (from refuted list + lane summaries)
    - "## Suggested attack order" — a short prioritized punch list (what to fix first and why, grouping related fixes into single PRs)
