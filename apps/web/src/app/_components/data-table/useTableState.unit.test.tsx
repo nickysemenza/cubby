@@ -312,6 +312,55 @@ describe("useTableState — URL-backed column filters", () => {
     expect(mockNavigate).toHaveBeenCalledTimes(1);
   });
 
+  /**
+   * `navigate` is async: the router publishes the new search a tick or more
+   * after the write effect calls it, and this table re-renders freely in
+   * between (a list refetch, a parent state change). Such a render must not be
+   * mistaken for external navigation — doing so compared the just-applied
+   * local state against the STALE url and wrote the OLD one back, which is
+   * what made a saved view flash its filters into the URL and revert to
+   * unfiltered.
+   */
+  it("survives re-renders between the write and the router acknowledging it", async () => {
+    const { result, rerender } = renderHook(() =>
+      useTableState({ filterSpecs: URL_BACKED_SPECS, urlSync: true }),
+    );
+    mockNavigate.mockClear();
+
+    // A saved view: filters and sort applied together.
+    await act(async () => {
+      result.current.setColumnFilters([
+        { id: "name", value: "lemon" },
+        { id: "trade", value: ["demo"] },
+      ]);
+      result.current.setSorting([{ id: "name", desc: false }]);
+    });
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledTimes(1));
+
+    // The URL has NOT caught up yet (mockSearch still empty) — re-render.
+    rerender();
+    rerender();
+
+    expect(result.current.columnFilters).toEqual([
+      { id: "name", value: "lemon" },
+      { id: "trade", value: ["demo"] },
+    ]);
+    expect(result.current.sorting).toEqual([{ id: "name", desc: false }]);
+    // No second navigation clearing the params it just wrote.
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+
+    // The router finally publishes it: state stands, still no re-navigation.
+    mockSearch = { q: "lemon", trade: "demo", sort: "name" };
+    rerender();
+    await waitFor(() =>
+      expect(result.current.columnFilters).toEqual([
+        { id: "name", value: "lemon" },
+        { id: "trade", value: ["demo"] },
+      ]),
+    );
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+  });
+
   it("does not let a no-op local setter block later external navigation", async () => {
     const { result, rerender } = renderHook(() =>
       useTableState({ filterSpecs: URL_BACKED_SPECS, urlSync: true }),
