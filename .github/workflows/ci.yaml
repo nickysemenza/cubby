@@ -804,30 +804,59 @@ jobs:
             echo "::warning::$message; uploading the reports produced before the test failure"
           fi
 
+      # Split by language, because only the Rust half can legitimately be absent.
+      # test-rust measures coverage only when the PR touches a Rust-relevant
+      # path, so a TypeScript-only PR uploads no recipebridge lcov — and Codecov
+      # can only carry the base commit's numbers forward for a flag it can name.
+      # Under the old single `complete` flag there was nothing to carry: the head
+      # report simply measured ~2.3k fewer lines of a ~91%-covered crate and the
+      # project status went red on arithmetic (see codecov.yml's flag_management).
       - name: Collect coverage report paths
         id: coverage-files
         shell: bash
         run: |
-          files="$(
-            find coverage-reports -type f \
-              \( -name lcov.info -o -name coverage-final.json \) \
-              -print | sort | paste -sd, -
-          )"
-          if [[ -z "$files" ]]; then
-            echo "::error::No coverage reports were downloaded"
+          # `shell: bash` runs with -eo pipefail, so every `find` here must be
+          # over a path that exists — pointing one at the absent coverage-rust
+          # directory would fail the step on precisely the Rust-inert PRs this
+          # split exists to support. Hence one find over the tree, partitioned
+          # by -path, rather than one find per artifact directory.
+          reports=( -type f \( -name lcov.info -o -name coverage-final.json \) )
+          js="$(find coverage-reports "${reports[@]}" \
+            ! -path 'coverage-reports/coverage-rust/*' -print | sort | paste -sd, -)"
+          rust="$(find coverage-reports "${reports[@]}" \
+            -path 'coverage-reports/coverage-rust/*' -print | sort | paste -sd, -)"
+          if [[ -z "$js" ]]; then
+            echo "::error::No JavaScript coverage reports were downloaded"
             exit 1
           fi
-          echo "files=$files" >> "$GITHUB_OUTPUT"
+          # No error when empty: the Verify step above already decided whether a
+          # missing Rust report is legitimate (Rust-inert PR) or a failure.
+          if [[ -z "$rust" ]]; then
+            echo "::notice::No Rust coverage in this run; Codecov carries the base commit's rust flag forward"
+          fi
+          echo "js=$js" >> "$GITHUB_OUTPUT"
+          echo "rust=$rust" >> "$GITHUB_OUTPUT"
 
-      - name: Upload complete coverage
+      - name: Upload JavaScript coverage
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: nickysemenza/cubby
-          files: ${{ steps.coverage-files.outputs.files }}
+          files: ${{ steps.coverage-files.outputs.js }}
           disable_search: true
-          flags: complete
-          name: complete-coverage
+          flags: js
+          name: js-coverage
+
+      - name: Upload Rust coverage
+        if: steps.coverage-files.outputs.rust != ''
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: nickysemenza/cubby
+          files: ${{ steps.coverage-files.outputs.rust }}
+          disable_search: true
+          flags: rust
+          name: rust-coverage
 
   build-cf:
     name: Build for Cloudflare Workers

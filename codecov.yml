@@ -1,10 +1,36 @@
 # Test jobs publish coverage as workflow artifacts. report-coverage downloads
-# every report and sends one complete upload to Codecov, so status/comment
+# every report and sends them to Codecov from one place, so status/comment
 # calculation never sees a partial commit (the old mid-CI red flapping source).
+# It sends two flagged uploads rather than one — see `flag_management`.
 codecov:
   notify:
+    # Still 1, deliberately, even though the happy path now sends two uploads:
+    # a Rust-inert PR legitimately sends only the `js` one, and a literal 2 would
+    # leave those PRs with no status at all. `wait_for_ci` is what actually
+    # prevents a premature status — both uploads come from the same final job,
+    # back to back.
     after_n_builds: 1
     wait_for_ci: true
+
+# Rust coverage is not re-measured on every PR: test-rust runs `cargo llvm-cov`
+# only when the PR touches a Rust-relevant path (its own classifier), so a
+# TypeScript-only PR produces no recipebridge lcov at all. That is correct — it
+# saves an instrumented rebuild for a crate the PR cannot have changed — but
+# without carryforward the head report then measures ~2.3k FEWER lines than the
+# base, all of them from a crate that sits around 91% covered. The project
+# percentage drops ~2% on arithmetic alone and the status goes red on a PR that
+# added no uncovered code (first seen on #635, which was 100% patch-covered).
+#
+# `carryforward: true` makes Codecov reuse the base commit's `rust` flag
+# measurements when a commit uploads none, so the two reports stay comparable.
+# `js` is NOT carried forward: those suites run on every PR, so a missing `js`
+# upload is a real failure and should look like one.
+flag_management:
+  individual_flags:
+    - name: rust
+      carryforward: true
+    - name: js
+      carryforward: false
 
 # The threshold absorbs small legitimate project-wide drift; patch coverage
 # remains the signal for changed code.
