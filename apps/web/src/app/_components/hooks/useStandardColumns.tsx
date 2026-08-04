@@ -15,6 +15,7 @@ import {
   createUpdatedAtColumn,
   type FilterConfig,
   multiSelectFilterFn,
+  type RowLinkResolver,
 } from "../data-table/columnHelpers";
 import { buildSelectColumn } from "../data-table/row-selection";
 
@@ -91,6 +92,14 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
    */
   expandable?: boolean;
   /**
+   * Per-row detail link for a table whose rows aren't all `entity` — a tree
+   * whose children are a different entity than its parents (the wishlist's
+   * candidate Products under a Wish). Applied to BOTH the name column and the
+   * actions column's "View Details", so they can't disagree. Defaults to
+   * `entity`'s detail route keyed by `row.id`.
+   */
+  rowLink?: RowLinkResolver<TData>;
+  /**
    * Column ids to render with NO filter control, even though the manifest (or
    * a column factory's own fallback) declares one. For a page that pins that
    * column's value via `useEntityList`'s contextual `scopeFilters` — which spreads OVER
@@ -122,6 +131,7 @@ export function useStandardColumns<TData extends BaseListRow>({
   filterOptions,
   enableRowSelection,
   combinedExtraActions,
+  rowLink,
   mappingsMap,
   hasUnitMappings,
   nameClassName,
@@ -243,6 +253,7 @@ export function useStandardColumns<TData extends BaseListRow>({
           nameSuffix,
           namePrefix,
           expandable,
+          rowLink,
         }),
       );
     }
@@ -314,6 +325,7 @@ export function useStandardColumns<TData extends BaseListRow>({
     cols.push(
       createActionsColumn(columnHelper, entity, {
         extraActions: combinedExtraActions,
+        rowLink,
       }),
     );
 
@@ -329,6 +341,7 @@ export function useStandardColumns<TData extends BaseListRow>({
     filterOptions,
     enableRowSelection,
     combinedExtraActions,
+    rowLink,
     nameClassName,
     nameEditable,
     nameSuffix,

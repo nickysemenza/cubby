@@ -212,6 +212,31 @@ function nameColumnParams(
   return { shortcode: String(row.id) };
 }
 
+/** Where a row's name and its "View Details" action point. */
+type EntityRowLink = {
+  to: EntityDetailRoute;
+  // `{ id }` covers `image`, the one entity `EntityDetailRoute` includes that
+  // isn't shortcode-routed.
+  params: EntityDetailParams | { id: string };
+};
+
+/**
+ * Resolve a row's detail link per row instead of from the table's own entity.
+ *
+ * For a table whose rows aren't all the same entity — global search, or a tree
+ * whose children are a different entity than its parents (the wishlist's
+ * candidate Products nested under a Wish). Returning null renders the name as
+ * plain text, for the rare row that names nothing openable.
+ */
+export type RowLinkResolver<T> = (row: T) => EntityRowLink | null;
+
+const defaultRowLink = <T extends BaseRow>(
+  entity: Entity,
+): RowLinkResolver<T> => {
+  const to = entities[entity].routes.detail;
+  return (row) => ({ to, params: nameColumnParams(entity, row) });
+};
+
 interface ImageRow extends BaseRow {
   images?: Array<{
     id: string;
@@ -285,9 +310,16 @@ export function createNameColumn<T extends BaseRow>(
      * this existed, the literal string "null".
      */
     emptyLabel?: (row: T) => string;
+    /**
+     * Per-row detail link, for a table whose rows aren't all `entity` (a tree
+     * whose children are a different entity than its parents). Defaults to
+     * `entity`'s detail route keyed by `row.id`.
+     */
+    rowLink?: RowLinkResolver<T>;
   },
 ) {
   const entityConfig = entities[entity];
+  const rowLink = options?.rowLink ?? defaultRowLink<T>(entity);
   const cellData = textCellData<T>(
     "text",
     (row) => {
@@ -331,6 +363,17 @@ export function createNameColumn<T extends BaseRow>(
       );
       const suffix = options?.nameSuffix?.(info.row.original);
       const prefix = options?.namePrefix?.(info.row.original);
+      const link = rowLink(info.row.original);
+      // A row that names nothing openable still has to be readable, so the
+      // unlinked branch keeps the truncation and the full-name tooltip.
+      const linkName = (label: ReactNode) =>
+        link ? (
+          <TableLink to={link.to} params={link.params}>
+            {label}
+          </TableLink>
+        ) : (
+          label
+        );
       // Only wrap when a prefix or suffix is actually present — every other
       // entity's name column renders exactly as before (no extra markup).
       const wrapWithSuffix = (nameEl: ReactNode) =>
@@ -407,12 +450,7 @@ export function createNameColumn<T extends BaseRow>(
               wrapWithSuffix(
                 <Tooltip>
                   <TooltipTrigger render={<span className="block truncate" />}>
-                    <TableLink
-                      to={entities[entity].routes.detail}
-                      params={nameColumnParams(entity, info.row.original)}
-                    >
-                      {v || value}
-                    </TableLink>
+                    {linkName(v || value)}
                   </TooltipTrigger>
                   <TooltipContent side="top" className="max-w-xs">
                     {v || value}
@@ -428,12 +466,7 @@ export function createNameColumn<T extends BaseRow>(
         wrapWithSuffix(
           <Tooltip>
             <TooltipTrigger render={<span className="block truncate" />}>
-              <TableLink
-                to={entities[entity].routes.detail}
-                params={nameColumnParams(entity, info.row.original)}
-              >
-                {value}
-              </TableLink>
+              {linkName(value)}
             </TooltipTrigger>
             <TooltipContent side="top" className="max-w-xs">
               {value}
@@ -763,6 +796,12 @@ export function createInventoryEntriesColumn<
 interface ActionsColumnOptions<T> {
   /** Additional actions to render after "View Details" */
   extraActions?: (row: T) => ReactNode;
+  /**
+   * Per-row detail link, for rows that aren't all `entity`. Keep it the same
+   * resolver the name column got, or "View Details" opens something other than
+   * the row the user clicked.
+   */
+  rowLink?: RowLinkResolver<T>;
 }
 
 /**
@@ -776,10 +815,7 @@ export function createActionsColumn<T extends { id: string | number }>(
 ) {
   return createActionsColumnBase(
     columnHelper,
-    (row) => ({
-      to: entities[entity].routes.detail,
-      params: nameColumnParams(entity, row),
-    }),
+    options?.rowLink ?? defaultRowLink<T>(entity),
     options?.extraActions,
   );
 }
@@ -791,12 +827,7 @@ export function createActionsColumn<T extends { id: string | number }>(
  */
 export function createActionsColumnBase<T>(
   columnHelper: ColumnHelper<T>,
-  getLinkProps: (row: T) => {
-    to: EntityDetailRoute;
-    // `{ id }` covers `image`, the one entity `EntityDetailRoute` includes
-    // that isn't shortcode-routed.
-    params: EntityDetailParams | { id: string };
-  } | null,
+  getLinkProps: RowLinkResolver<T>,
   extraActions?: (row: T) => ReactNode,
 ) {
   return columnHelper.display({

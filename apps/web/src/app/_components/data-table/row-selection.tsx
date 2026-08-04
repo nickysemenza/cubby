@@ -30,49 +30,57 @@ export function buildSelectColumn<T>(
         />
       </div>
     ),
-    cell: ({ row, table }) => (
-      // Capture-phase runs before the Base UI Checkbox's onCheckedChange, so shiftKeyRef
-      // is set in time. onClick (bubble phase) only stops propagation to the row handler.
-      // biome-ignore lint/a11y/noStaticElementInteractions: wrapper exists only to stop event propagation
-      <div
-        role="presentation"
-        onClickCapture={(e) => {
-          shiftKeyRef.current = e.shiftKey;
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => {
-            const rows = table.getRowModel().rows;
-            const anchorId = lastSelectedIdRef.current;
-            const anchorPos =
-              shiftKeyRef.current && anchorId != null
-                ? rows.findIndex((r) => r.id === anchorId)
-                : -1;
-
-            if (anchorPos !== -1) {
-              const currentPos = rows.findIndex((r) => r.id === row.id);
-              const [from, to] = [
-                Math.min(anchorPos, currentPos),
-                Math.max(anchorPos, currentPos),
-              ];
-              const updates: Record<string, boolean> = {};
-              for (let i = from; i <= to; i++) {
-                const r = rows[i];
-                if (r) updates[r.id] = !!value;
-              }
-              table.setRowSelection((prev) => ({ ...prev, ...updates }));
-            } else {
-              row.toggleSelected(!!value);
-            }
-
-            lastSelectedIdRef.current = row.id;
+    cell: ({ row, table }) =>
+      // A row the table won't select gets no checkbox at all, rather than one
+      // that silently ignores the click. `enableRowSelection` can be a
+      // predicate (a tree whose children belong to a different entity than the
+      // bulk actions target — see `EntityListTreeConfig.rowIsEntity`).
+      !row.getCanSelect() ? null : (
+        // Capture-phase runs before the Base UI Checkbox's onCheckedChange, so shiftKeyRef
+        // is set in time. onClick (bubble phase) only stops propagation to the row handler.
+        // biome-ignore lint/a11y/noStaticElementInteractions: wrapper exists only to stop event propagation
+        <div
+          role="presentation"
+          onClickCapture={(e) => {
+            shiftKeyRef.current = e.shiftKey;
           }}
-          aria-label="Select row"
-        />
-      </div>
-    ),
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => {
+              const rows = table.getRowModel().rows;
+              const anchorId = lastSelectedIdRef.current;
+              const anchorPos =
+                shiftKeyRef.current && anchorId != null
+                  ? rows.findIndex((r) => r.id === anchorId)
+                  : -1;
+
+              if (anchorPos !== -1) {
+                const currentPos = rows.findIndex((r) => r.id === row.id);
+                const [from, to] = [
+                  Math.min(anchorPos, currentPos),
+                  Math.max(anchorPos, currentPos),
+                ];
+                const updates: Record<string, boolean> = {};
+                for (let i = from; i <= to; i++) {
+                  const r = rows[i];
+                  // Skip unselectable rows: this branch writes the selection map
+                  // directly, so it would otherwise select rows the table just
+                  // refused to give a checkbox.
+                  if (r?.getCanSelect()) updates[r.id] = !!value;
+                }
+                table.setRowSelection((prev) => ({ ...prev, ...updates }));
+              } else {
+                row.toggleSelected(!!value);
+              }
+
+              lastSelectedIdRef.current = row.id;
+            }}
+            aria-label="Select row"
+          />
+        </div>
+      ),
     enableSorting: false,
     enableHiding: false,
     meta: { className: "w-10" },
