@@ -791,6 +791,74 @@ describe("expense repository — expenseList filters", () => {
     ]);
   });
 
+  it("round-trips a signed quantity, and refuses the two shapes that make no sense", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "signed quantity product" }),
+      ctx.actor,
+    );
+    const mk = (data: Record<string, unknown>) =>
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse({
+          date: "2026-06-03",
+          trade: "other",
+          costType: "materials",
+          productId: product.id,
+          ...data,
+        }),
+        ctx.actor,
+      );
+
+    // A $0 discard: the negative quantity is the whole signal that a unit left.
+    const discard = await unwrap(
+      mk({ name: "Discarded — thing", cost: 0, productQuantity: -1 }),
+    );
+    expect(discard.productQuantity).toBe(-1);
+
+    // Flipping a mis-entered freebie into a discard is an ordinary update.
+    const freebie = await unwrap(
+      mk({ name: "promo pack", cost: 0, productQuantity: 1 }),
+    );
+    const corrected = await unwrap(
+      updateExpense(ctx.db, freebie.id, { productQuantity: -1 }, ctx.actor),
+    );
+    expect(corrected.productQuantity).toBe(-1);
+
+    // Zero is refused twice over, and both layers are worth asserting.
+    // The schema catches it at the edge...
+    expect(() =>
+      expenseCreateInput.parse({
+        date: "2026-06-03",
+        trade: "other",
+        costType: "materials",
+        name: "zero units",
+        cost: 0,
+        productId: product.id,
+        productQuantity: 0,
+      }),
+    ).toThrow();
+
+    // ...and the DB CHECK is the backstop under it. This second assertion is
+    // the one that fails loudly if someone edits the `check(...)` in schema.ts
+    // and assumes `db:push` shipped it — `drizzle-kit push` does not diff CHECK
+    // constraints, so the test template would carry a constraint production
+    // lacks (or vice versa) with nothing else to notice.
+    await expect(
+      getDb(ctx.db)
+        .update(expenseTable)
+        .set({ productQuantity: 0 })
+        .where(eq(expenseTable.shortcode, discard.id)),
+    ).rejects.toThrow();
+
+    // A positive cost is an acquisition, so a negative quantity there says
+    // nothing and would only corrupt the derived-price aggregate. Rejected by
+    // the repo guard, not the constraint.
+    await expect(
+      mk({ name: "bought negative?", cost: 10, productQuantity: -2 }),
+    ).rejects.toThrow();
+  });
+
   it("ORs several `search` terms over the name, and ANDs notesSearch/urlSearch", async () => {
     const { output: extractor } = await createExpense(
       ctx.db,

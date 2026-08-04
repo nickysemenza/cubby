@@ -13,10 +13,40 @@ import {
   unsafeVendorShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ExpenseOut } from "@cubby/schemas/project";
+import { createAppError } from "~/server/errors/app-error";
 import {
   resolveLiveJoinName,
   resolveLiveJoinShortcode,
 } from "~/server/repo/database-helpers";
+
+/**
+ * Reject a negative quantity on a positive-cost line.
+ *
+ * `Expense.productQuantity` is signed, but money direction wins: a positive
+ * cost is an acquisition of `+|qty|` no matter what sign is stored, so a
+ * negative value there says nothing and only corrupts the one aggregate that
+ * sums the raw column — the derived unit price in `product/pricing.ts`.
+ *
+ * Deliberately NOT mirrored for `cost < 0`: 302 live rows store a *positive*
+ * quantity on a negative-cost line (returns and refunds imported as written),
+ * and the ledger reads those as `−|qty|`, so both signs are legal there.
+ */
+export const assertQuantitySignMatchesCost = (
+  cost: number | null,
+  productQuantity: number | null,
+) => {
+  if (
+    cost !== null &&
+    cost > 0 &&
+    productQuantity !== null &&
+    productQuantity < 0
+  ) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "A positive-cost line is an acquisition; its quantity cannot be negative. Record an exit as a negative cost, or as a $0 line with a negative quantity.",
+    );
+  }
+};
 
 /**
  * Shape of an `expense` row loaded with its (nullable) parent `project`, its

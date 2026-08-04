@@ -21,6 +21,7 @@ import {
 import type {
   DuplicateProductIdentity,
   DuplicateUniqueProduct,
+  NegativeExpectedQuantity,
   OrphanedProduct,
   ProductMissingPrice,
   ProductWithBetterUpcData,
@@ -81,6 +82,7 @@ import {
   effectiveProductPriceSql,
   loadProductPricing,
 } from "~/server/repo/product/pricing";
+import { expenseSignedUnitsSql } from "~/server/repo/product/quantity-ledger";
 import { loadProjectDateWindows } from "~/server/repo/project/subtree";
 import { buildTimelineGates } from "~/server/repo/project/tools";
 
@@ -358,6 +360,87 @@ export const findProductsMissingPrice = async (
   return { real, buckets };
 };
 
+// Find products whose ledger says more units left than ever arrived.
+//
+// You cannot sell, return, or throw away something you never acquired, so a
+// negative expected quantity is a contradiction rather than a shortfall —
+// something is missing or mis-entered, and there is a specific row to go fix.
+//
+// The predicate is deliberately LOOSER than `findSoldButStillStocked` below,
+// which keys on disposal Purchases. That is not an inconsistency: the two ask
+// different questions. "Was this sold off entirely?" treats a refund as
+// innocent noise, which on live data it usually is. "Do the units balance?"
+// treats a return of 8 outlet boxes as 8 real units going back to the store —
+// and 218 of the 335 negative lines in this ledger are exactly that, sitting
+// inside a Purchase that nets positive. Requiring a disposal Purchase here
+// would miss 348 of the 492 exited units.
+//
+// The unknown-quantity counts ride along because they change what the row
+// means. A product with unquantified acquisition lines is data-entry debt (the
+// missing count almost certainly explains the gap); one with a fully
+// quantified ledger is a genuine contradiction. Reporting the bare number would
+// flatten those into the same red row.
+export const findProductsWithNegativeExpectedQuantity = async (
+  db: Database,
+): Promise<NegativeExpectedQuantity[]> => {
+  const dbClient = getDb(db);
+  const signedUnits = sql.raw(expenseSignedUnitsSql('"Expense"'));
+
+  const rows = await dbClient
+    .select({
+      productId: expense.productId,
+      acquiredUnits: sql<number>`COALESCE(sum(GREATEST(${signedUnits}, 0)), 0)::int`,
+      exitedUnits: sql<number>`COALESCE(sum(-LEAST(${signedUnits}, 0)), 0)::int`,
+      unknownAcquisitionLines: sql<number>`count(*) FILTER (WHERE ${expense.productQuantity} IS NULL AND (${expense.cost} IS NULL OR ${expense.cost} >= 0))::int`,
+      unknownExitLines: sql<number>`count(*) FILTER (WHERE ${expense.productQuantity} IS NULL AND ${expense.cost} < 0)::int`,
+    })
+    .from(expense)
+    .where(
+      and(
+        notDeleted(expense),
+        eq(expense.future, false),
+        isNotNull(expense.productId),
+      ),
+    )
+    .groupBy(expense.productId)
+    .having(sql`COALESCE(sum(${signedUnits}), 0) < 0`);
+
+  if (rows.length === 0) return [];
+
+  const products = await dbClient.query.product.findMany({
+    where: and(
+      notDeleted(product),
+      inArray(
+        product.id,
+        rows.flatMap((row) => (row.productId ? [row.productId] : [])),
+      ),
+    ),
+    columns: { id: true, name: true, manufacturer: true, shortcode: true },
+  });
+  const byId = new Map(products.map((prod) => [prod.id, prod]));
+
+  return rows.flatMap((row) => {
+    // A soft-deleted product is not a live defect: nothing points at it, and
+    // there is no row left worth going to correct.
+    const prod = row.productId ? byId.get(row.productId) : undefined;
+    if (!prod) return [];
+    const acquiredUnits = Number(row.acquiredUnits);
+    const exitedUnits = Number(row.exitedUnits);
+    return [
+      {
+        id: unsafeProductShortcode(prod.shortcode),
+        name: prod.name,
+        manufacturer: prod.manufacturer,
+        expectedQuantity: acquiredUnits - exitedUnits,
+        acquiredUnits,
+        exitedUnits,
+        unknownAcquisitionLines: Number(row.unknownAcquisitionLines),
+        unknownExitLines: Number(row.unknownExitLines),
+      },
+    ];
+  });
+};
+
 // Find products that were sold off but are still sitting on a shelf.
 //
 // The exact mirror of `findProductsMissingPrice`, and it exists for the same
@@ -405,14 +488,23 @@ export const findProductsMissingPrice = async (
 // that sit inside a disposal Purchase is sound but changes nothing: zero of
 // them postdate their product's last exit.
 //
-// Known blind spot, and it is a modelling limit rather than a missing check:
-// the same doc note records a broken or gifted item as a **cost-0** exit, and
-// a cost-0 line is exactly how a free promotional *acquisition* is recorded
-// too (the Harbor Freight bucket, the M12 promo pack). The two are
-// indistinguishable, and a net-zero purchase never nets negative, so cost-0
-// exits are not detected. Widening the predicate to `cost <= 0` would flag
-// every freebie as sold — strictly worse. Separating them needs a real signal
-// on the row, not a cleverer query.
+// Cost-0 exits used to be an outright blind spot here: a broken or gifted item
+// is recorded at cost 0, and cost 0 is also how a free promotional
+// *acquisition* is recorded (the Harbor Freight bucket, the M12 promo pack), so
+// the two were indistinguishable and `cost <= 0` would have flagged every
+// freebie as sold. `Expense.productQuantity` is now **signed**, which is the
+// real signal on the row that resolves it: a $0 discard carries a negative
+// quantity, a $0 freebie a positive one.
+//
+// This detector still keys on disposal Purchases anyway, and that is not an
+// oversight. A discard minted through the Discard action carries no
+// `purchaseId` at all and clears its own inventory in the same transaction, so
+// it cannot produce a sold-but-still-stocked row in the first place. Widening
+// the exit predicate to
+// `or(inArray(purchaseId, disposalPurchaseIds), and(eq(cost, 0), lt(productQuantity, 0)))`
+// would only catch a hand-entered $0 discard whose shelf was left behind —
+// coherent, and a reasonable follow-on, but a different question from the one
+// this detector answers today.
 export const findSoldButStillStocked = async (
   db: Database,
 ): Promise<SoldButStillStocked[]> => {
@@ -423,7 +515,15 @@ export const findSoldButStillStocked = async (
       productId: expense.productId,
       // A bare sale row carries no `productQuantity`; read it as one unit, the
       // same way the ledger itself reads it.
-      soldQuantity: sql<number>`sum(coalesce(${expense.productQuantity}, 1))::double precision`,
+      //
+      // `abs`, because this query is filtered to `cost < 0` where the ledger
+      // reads an exit as `−|qty|` and therefore leaves BOTH signs legal — 302
+      // live rows store a positive quantity there, a hand-entered one may store
+      // a negative. Without it a negative row makes `soldQuantity` negative,
+      // which both fails the `soldQuantity < liveQuantity` comparison below
+      // (a silent false negative) and renders a negative "sold" count in the
+      // UI. `abs(NULL)` is `NULL`, so the coalesce default still applies.
+      soldQuantity: sql<number>`sum(coalesce(abs(${expense.productQuantity}), 1))::double precision`,
       proceeds: sql<number>`sum(${expense.cost})::double precision`,
       // Closes the ownership window (see below). `date` is a `mode: "string"`
       // column, so ISO strings order correctly without parsing.

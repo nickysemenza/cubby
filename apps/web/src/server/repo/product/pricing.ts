@@ -66,7 +66,12 @@ export const loadProductPricing = async (
       knownCost: sql<number>`COALESCE(sum(${expense.cost}) FILTER (WHERE ${expense.productQuantity} IS NOT NULL), 0)::double precision`,
       knownExpenseCount: sql<number>`count(*) FILTER (WHERE ${expense.productQuantity} IS NOT NULL)::int`,
       unknownExpenseCount: sql<number>`count(*) FILTER (WHERE ${expense.productQuantity} IS NULL)::int`,
-      knownUnitCount: sql<number>`COALESCE(sum(${expense.productQuantity}), 0)::int`,
+      // `abs`, because `productQuantity` is signed. The `cost > 0` filter below
+      // already excludes discards, but it does not stop a sign error on an
+      // acquisition row — and a negative `knownUnitCount` would divide the
+      // derived unit price negative, which flows straight through
+      // `InventoryEntry.valuation` into the location rollup.
+      knownUnitCount: sql<number>`COALESCE(sum(abs(${expense.productQuantity})), 0)::int`,
     })
     .from(expense)
     .where(
@@ -122,7 +127,8 @@ export const loadProductPricingForIngredientIds = async (
       knownCost: sql<number>`COALESCE(sum(${expense.cost}) FILTER (WHERE ${expense.id} IS NOT NULL AND ${expense.productQuantity} IS NOT NULL), 0)::double precision`,
       knownExpenseCount: sql<number>`count(${expense.id}) FILTER (WHERE ${expense.productQuantity} IS NOT NULL)::int`,
       unknownExpenseCount: sql<number>`count(${expense.id}) FILTER (WHERE ${expense.productQuantity} IS NULL)::int`,
-      knownUnitCount: sql<number>`COALESCE(sum(${expense.productQuantity}), 0)::int`,
+      // `abs` for the same reason as `loadProductPricing` — see the note there.
+      knownUnitCount: sql<number>`COALESCE(sum(abs(${expense.productQuantity})), 0)::int`,
     })
     .from(product)
     .leftJoin(
@@ -214,9 +220,14 @@ export const loadIngredientIdsForProducts = async (
 /**
  * Correlated SQL used only by Product root-list filtering/sorting/aggregation.
  * `productAlias` must be the query's known SQL alias (RQB uses `product`).
+ *
+ * Keep the predicates and the `abs()` identical to {@link loadProductPricing} —
+ * this is what the list sorts and filters by, and the loader is what the row
+ * and the detail page display. A divergence here sorts by a number the user is
+ * never shown.
  */
 const derivedProductPriceSql = (productAlias = '"product"') =>
-  `(SELECT round((sum(e."cost") / NULLIF(sum(e."productQuantity"), 0))::numeric, 2)::double precision
+  `(SELECT round((sum(e."cost") / NULLIF(sum(abs(e."productQuantity")), 0))::numeric, 2)::double precision
     FROM "Expense" e
     WHERE e."productId" = ${productAlias}."id"
       AND e."deletedAt" IS NULL

@@ -19,6 +19,7 @@ import {
   dbProductToListAPI,
   dbProductToTopLevelAPI,
 } from "./mappers";
+import { EMPTY_QUANTITY_LEDGER } from "./quantity-ledger";
 import type { ProductDeepDB, ProductListDB } from "./types";
 
 const PRODUCT_ID = unsafeProductId("123e4567-e89b-12d3-a456-426614174000");
@@ -78,6 +79,7 @@ const baseProduct = {
   expenseCount: 0,
   expenseTotal: 42.5,
   purchaseDate: null,
+  quantityLedger: EMPTY_QUANTITY_LEDGER,
 };
 
 const baseImage = {

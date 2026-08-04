@@ -1,0 +1,210 @@
+/**
+ * Throwing something away, as a ledger event.
+ *
+ * A discard is the one product exit that moves no money: nothing is sold and
+ * nothing is refunded, so `cost` is 0 and the negative `productQuantity` is
+ * the entire signal that a unit left. (Never a null cost — `cost IS NULL` is
+ * already the Unclassified-spend predicate.) Before quantities were signed
+ * this event was indistinguishable from a free promotional acquisition, which
+ * is exactly the ambiguity the essay above `findSoldButStillStocked` records.
+ *
+ * Two shapes are load-bearing here:
+ *
+ *  - **No Purchase.** There is no vendor charge behind throwing something out.
+ *    Attaching the discard to whichever order originally bought the item —
+ *    which is what the one historical discard did — makes it inherit that
+ *    vendor and order id for an event that can be years later, and puts a line
+ *    on an order that never contained it. `purchaseId` is nullable precisely
+ *    for rows with nothing to attach to.
+ *
+ *  - **The shelf moves in the same transaction, and only when asked.**
+ *    Inventory never auto-decrements is a binding tenet, and this does not
+ *    breach it: nothing here is a side effect of recording money. It is an
+ *    explicit human action, on a dialog that names the shelf and the count,
+ *    behind a checkbox the operator can clear. What the tenet forbids is
+ *    inferring consumption; what it does not forbid is doing what the operator
+ *    just said to do, atomically, so expected and actual cannot diverge in the
+ *    gap between two writes.
+ */
+
+import type { ActorContext } from "@cubby/schemas/context";
+import type {
+  ExpenseId,
+  InventoryId,
+  ProductId,
+  ProductShortcode,
+} from "@cubby/schemas/identifiers";
+import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
+import { and, eq } from "drizzle-orm";
+import type { Database } from "~/server/db";
+import { inventoryEntry, product } from "~/server/db/schema";
+import { createAppError } from "~/server/errors/app-error";
+import { logAuditEntry } from "~/server/repo/audit-log";
+import { touchDataQualityTargets } from "~/server/repo/data-quality";
+import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
+import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
+import { computeValuationForEntry } from "~/server/repo/inventory/crud";
+import {
+  pricingProductIds,
+  syncChangedEffectivePrices,
+} from "~/server/repo/product/price-sync";
+import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+
+export type DiscardProductInput = {
+  productId: ProductId;
+  quantity: number;
+  date: string;
+  reason: string | null;
+  /** Null leaves inventory alone — the operator cleared the checkbox. */
+  inventoryEntryId: InventoryId | null;
+};
+
+export type DiscardProductResult = {
+  /** Both forms: the uuid drives side effects, the shortcode is what the API returns. */
+  expenseId: ExpenseId;
+  expenseShortcode: string;
+  storedQuantity: number;
+  productShortcode: ProductShortcode;
+  inventory: {
+    entryId: InventoryId;
+    entryShortcode: string;
+    removed: boolean;
+    remainingValue: number | null;
+  } | null;
+  priceAffectedProductIds: ProductId[];
+};
+
+export const discardProductUnits = async (
+  db: Database,
+  input: DiscardProductInput,
+  actor: ActorContext,
+): Promise<DiscardProductResult> =>
+  withTransaction(db, async (tx) => {
+    // Re-checked inside the transaction even though the router resolved the
+    // shortcode: a preview or a resolve is advisory, the mutation is not.
+    const prod = await tx.query.product.findFirst({
+      where: and(eq(product.id, input.productId), notDeleted(product)),
+      columns: { id: true, name: true, shortcode: true },
+    });
+    if (!prod) {
+      throw createAppError("PRODUCT_NOT_FOUND", "Product not found.");
+    }
+
+    const pricesBefore = await loadEffectiveProductPricesById(
+      tx,
+      pricingProductIds([input.productId]),
+    );
+
+    const storedQuantity = -Math.abs(input.quantity);
+    const created = await insertWithShortcode(tx, "expense", {
+      name: `Discarded — ${prod.name}`,
+      cost: 0,
+      date: input.date,
+      // A Product may only hang off a principal line.
+      lineKind: "principal",
+      costType: "tools",
+      trade: "other",
+      url: null,
+      notes: input.reason,
+      future: false,
+      // A $0 line moves no budget, so attributing it to a project would only
+      // add a zero row to that project's ledger.
+      projectId: null,
+      productId: input.productId,
+      productQuantity: storedQuantity,
+      purchaseId: null,
+    });
+    await logAuditEntry(tx, actor, {
+      entityType: "expense",
+      entityId: created.id,
+      action: "create",
+    });
+
+    let inventory: DiscardProductResult["inventory"] = null;
+    if (input.inventoryEntryId !== null) {
+      const entry = await tx.query.inventoryEntry.findFirst({
+        where: and(
+          eq(inventoryEntry.id, input.inventoryEntryId),
+          // Pinned to this product on purpose. A mismatch is a caller bug, and
+          // silently decrementing whichever shelf was named would take units
+          // off the wrong thing.
+          eq(inventoryEntry.productId, input.productId),
+          notDeleted(inventoryEntry),
+        ),
+        columns: { id: true, shortcode: true, amount: true },
+      });
+      if (!entry) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "That inventory entry does not belong to this product, or is no longer live.",
+        );
+      }
+
+      const remaining = entry.amount.value - Math.abs(input.quantity);
+      if (remaining > 0) {
+        await tx
+          .update(inventoryEntry)
+          .set({
+            amount: { ...entry.amount, value: remaining },
+            valuation: await computeValuationForEntry(
+              tx,
+              input.productId,
+              remaining,
+            ),
+          })
+          .where(eq(inventoryEntry.id, entry.id));
+        await logAuditEntry(tx, actor, {
+          entityType: "inventory",
+          entityId: entry.id,
+          action: "update",
+        });
+        inventory = {
+          entryId: entry.id,
+          entryShortcode: entry.shortcode,
+          removed: false,
+          remainingValue: remaining,
+        };
+      } else {
+        await tx
+          .update(inventoryEntry)
+          .set({ deletedAt: new Date() })
+          .where(eq(inventoryEntry.id, entry.id));
+        // Removal-path invariant (root CLAUDE.md, guard-enforced): every path
+        // that removes an entity clears its embedding in the SAME transaction,
+        // or `findOrphanedEntityEmbeddings` reports it.
+        await softDeleteEntityEmbeddingsTx(tx, "inventory", [entry.id]);
+        await logAuditEntry(tx, actor, {
+          entityType: "inventory",
+          entityId: entry.id,
+          action: "delete",
+        });
+        inventory = {
+          entryId: entry.id,
+          entryShortcode: entry.shortcode,
+          removed: true,
+          remainingValue: null,
+        };
+      }
+    }
+
+    await touchDataQualityTargets(tx, { productIds: [input.productId] });
+
+    // A cost-0 line cannot move a `cost > 0`-filtered aggregate, so this is
+    // expected to be empty. Kept for structural parity with `createExpense`:
+    // if the pricing predicate ever widens, a discard must not be the one
+    // write path that quietly skipped the sync.
+    const priceAffectedProductIds = await syncChangedEffectivePrices(
+      tx,
+      pricesBefore,
+    );
+
+    return {
+      expenseId: created.id,
+      expenseShortcode: created.shortcode,
+      storedQuantity,
+      productShortcode: unsafeProductShortcode(prod.shortcode),
+      inventory,
+      priceAffectedProductIds,
+    };
+  });
