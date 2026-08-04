@@ -1,8 +1,9 @@
-import type { inventoryListItemOut } from "@cubby/schemas/inventory";
-import type { InfLocation } from "@cubby/schemas/location";
+import type {
+  InfLocation,
+  InventoryItemForTree,
+} from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import { type Ref, useMemo } from "react";
-import type { z } from "zod";
 import { Row } from "~/components/layout";
 import { ImageWithPreview } from "~/components/ui/image-with-preview";
 import { EntityIcon } from "~/entities/entities";
@@ -11,16 +12,14 @@ import { useHydratedProductImages } from "../products/product-image-summaries";
 import { InventoryValuationSummary } from "./inventory-valuation-summary";
 import { LocationIcon } from "./location-icons";
 
-type InventoryItem = z.infer<typeof inventoryListItemOut>;
 type ProductPreview = {
   id: string;
   name: string;
-  totalAmount: string;
 };
 
 interface LocationGalleryCardProps {
   location: InfLocation;
-  inventoryItems: InventoryItem[];
+  inventoryItems: InventoryItemForTree[];
   isHighlighted?: boolean;
   isFaded?: boolean;
   className?: string;
@@ -47,15 +46,13 @@ export const LocationGalleryCard = function LocationGalleryCard({
     const productMap = new Map<string, ProductPreview>();
 
     for (const item of inventoryItems) {
-      const existing = productMap.get(item.product.id);
+      const existing = productMap.get(item.productId);
       if (existing) {
-        // Aggregate amounts (simplified - just show count)
         continue;
       }
-      productMap.set(item.product.id, {
-        id: item.product.id,
-        name: item.product.name,
-        totalAmount: `${item.amount.value} ${item.amount.unit}`,
+      productMap.set(item.productId, {
+        id: item.productId,
+        name: item.productName,
       });
     }
 
@@ -113,7 +110,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
               </Link>
               {inventoryItems.length > 0 && (
                 <InventoryValuationSummary
-                  items={inventoryItems}
+                  valuation={location.valuation}
                   variant="compact"
                   hidePricingStatus
                   className="shrink-0 font-mono text-2xs text-muted-foreground tabular-nums"

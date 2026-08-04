@@ -5,7 +5,7 @@ import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action
 import { CreateFinancialAccountDialog } from "~/app/finance/create-financial-account-dialog";
 import { FinancialAccountList } from "~/app/finance/financial-account-list";
 import { Page } from "~/components/page/Page";
-import { entityFilterSearchFields } from "~/entities/filter-manifest";
+import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { urlStringParam } from "~/lib/search-params";
 
 const searchSchema = z.object({

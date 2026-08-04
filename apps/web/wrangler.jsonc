@@ -66,7 +66,9 @@
   // clients fall back to gateway-REST with AI_GATEWAY_API_KEY. See
   // src/server/clients/{anthropic,openai}.ts + src/server/cf-env.ts.
   "ai": { "binding": "AI" },
-  // Hyperdrive connection pooling — creates via:
+  // Hyperdrive connection pooling only. Query-result caching is intentionally
+  // disabled on the live object; deploy:cf verifies that invariant before build.
+  // Creates via:
   //   wrangler hyperdrive create cubby-db --connection-string="postgres://..."
   "hyperdrive": [
     {

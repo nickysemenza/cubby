@@ -1,20 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { Bug, BugOff, LogIn, MoreHorizontal } from "lucide-react";
-import type * as React from "react";
-import { useState } from "react";
+import { LogIn, MoreHorizontal } from "lucide-react";
+import * as React from "react";
 import { Row } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "~/components/ui/sheet";
-import { useDebug } from "~/hooks/useDebug";
 import { useNavAuthed } from "~/hooks/useNavAuthed";
-import { cn, formatBuildDate } from "~/lib/utils";
+import { cn } from "~/lib/utils";
 import {
   bottomNavItems,
   moreNavSections,
@@ -22,7 +11,11 @@ import {
   useActiveTo,
 } from "./nav-items";
 
-const buildDate = formatBuildDate(__BUILD_DATE__);
+const BottomNavMoreSheet = React.lazy(() =>
+  import("./bottom-nav-more-sheet").then((m) => ({
+    default: m.BottomNavMoreSheet,
+  })),
+);
 
 type BottomNavItemProps = {
   /** Optional leading icon. Scales up subtly when `active`. */
@@ -75,8 +68,8 @@ function BottomNavItem({
 
 export function BottomNav() {
   const activeTo = useActiveTo();
-  const [isOpen, setIsOpen] = useState(false);
-  const { isDebugEnabled, toggleDebug } = useDebug();
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [moreMounted, setMoreMounted] = React.useState(false);
   // SSR-accurate auth (see useNavAuthed): the tab bar renders the right state
   // on the first paint instead of flashing the authed tabs and collapsing.
   const authed = useNavAuthed();
@@ -110,87 +103,27 @@ export function BottomNav() {
               />
             ))}
 
-            {/* More button with sheet */}
-            <Sheet open={isOpen} onOpenChange={setIsOpen}>
-              <SheetTrigger
-                render={
-                  <BottomNavItem
-                    as="button"
-                    type="button"
-                    icon={MoreHorizontal}
-                    label="More"
-                    active={isMoreActive}
-                    aria-label="More options"
-                  />
-                }
-              />
-              <SheetContent
-                side="bottom"
-                className="flex max-h-[70vh] flex-col rounded-none"
-              >
-                <SheetHeader className="px-4 pt-4 pb-2">
-                  <SheetTitle>More</SheetTitle>
-                </SheetHeader>
-                <div className="safe-bottom flex flex-1 flex-col gap-1 overflow-y-auto px-4 pb-6">
-                  {/* Debug Toggle */}
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      toggleDebug();
-                      setIsOpen(false);
-                    }}
-                    className={cn(
-                      "min-h-[44px] justify-start px-2 py-2 text-sm",
-                      isDebugEnabled && "bg-warning/30 text-accent-foreground",
-                    )}
-                  >
-                    {isDebugEnabled ? (
-                      <BugOff className="mr-2 size-3.5" />
-                    ) : (
-                      <Bug className="mr-2 size-3.5" />
-                    )}
-                    {isDebugEnabled ? "Disable Debug" : "Enable Debug"}
-                  </Button>
-
-                  {/* Nav items, grouped into labeled sections */}
-                  {moreNavSections.map((section) => (
-                    <div key={section.title} className="flex flex-col gap-1">
-                      <div className="eyebrow px-2 pt-4 pb-1">
-                        {section.title}
-                      </div>
-                      {section.items.map((item) => {
-                        const active = item.to === activeTo;
-                        const Icon = item.icon;
-
-                        return (
-                          <SheetClose
-                            key={item.to}
-                            render={
-                              <Link
-                                to={item.to}
-                                className={cn(
-                                  "flex min-h-[44px] items-center gap-2 rounded-none px-2 py-2 font-medium text-sm transition-colors hover:bg-muted hover:text-primary",
-                                  !active && "text-muted-foreground",
-                                  active &&
-                                    "border-primary border-l-2 bg-muted text-foreground",
-                                )}
-                                aria-current={active ? "page" : undefined}
-                              />
-                            }
-                          >
-                            <Icon className="size-5" />
-                            {item.label}
-                          </SheetClose>
-                        );
-                      })}
-                    </div>
-                  ))}
-                  <div className="mt-auto pt-4 text-center text-muted-foreground text-xs">
-                    {buildDate} · {__GIT_COMMIT__}
-                  </div>
-                </div>
-              </SheetContent>
-            </Sheet>
+            <BottomNavItem
+              as="button"
+              type="button"
+              icon={MoreHorizontal}
+              label="More"
+              active={isMoreActive}
+              aria-label="More options"
+              onClick={() => {
+                setMoreMounted(true);
+                setIsOpen(true);
+              }}
+            />
+            {moreMounted && (
+              <React.Suspense fallback={null}>
+                <BottomNavMoreSheet
+                  activeTo={activeTo}
+                  open={isOpen}
+                  onOpenChange={setIsOpen}
+                />
+              </React.Suspense>
+            )}
           </>
         ) : (
           <>

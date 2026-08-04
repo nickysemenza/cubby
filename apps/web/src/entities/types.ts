@@ -30,8 +30,6 @@ interface EntityListConfig {
   defaultSort?: string;
   /** Auto-include these column types */
   standardColumns?: StandardColumnType[];
-  /** Fields that can be sorted server-side. Used by both repo and UI as single source of truth. */
-  sortableFields?: readonly string[];
 }
 
 /** Entity color classes for consistent visual identification */
