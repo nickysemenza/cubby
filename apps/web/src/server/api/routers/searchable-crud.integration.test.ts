@@ -143,6 +143,11 @@ describe("factory-migrated routers expose the standard getByID/delete contract",
 
     const fetched = await caller.getByID({ id: created.id });
     expect(fetched).toMatchObject({ id: created.id, name: "Contract Vendor" });
+    // getByShortcode is what every detail-page route loader calls, so a broken
+    // adapter here 500s the page while getByID stays green.
+    expect(
+      await caller.getByShortcode({ shortcode: created.id }),
+    ).toMatchObject({ id: created.id });
 
     expectSideEffectSummary(await caller.delete({ ids: [created.id] }));
     await expect(caller.getByID({ id: created.id })).rejects.toThrow();
@@ -158,6 +163,9 @@ describe("factory-migrated routers expose the standard getByID/delete contract",
 
     const fetched = await caller.getByID({ id: created.id });
     expect(fetched).toMatchObject({ id: created.id, name: "Contract Wish" });
+    expect(
+      await caller.getByShortcode({ shortcode: created.id }),
+    ).toMatchObject({ id: created.id });
 
     expectSideEffectSummary(await caller.delete({ ids: [created.id] }));
     await expect(caller.getByID({ id: created.id })).rejects.toThrow();
@@ -180,6 +188,9 @@ describe("factory-migrated routers expose the standard getByID/delete contract",
 
     const fetched = await caller.getByID({ id: created.id });
     expect(fetched).toMatchObject({ id: created.id, vendorId: vendor.id });
+    expect(
+      await caller.getByShortcode({ shortcode: created.id }),
+    ).toMatchObject({ id: created.id });
 
     expectSideEffectSummary(await caller.delete({ ids: [created.id] }));
     await expect(caller.getByID({ id: created.id })).rejects.toThrow();
