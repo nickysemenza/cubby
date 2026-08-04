@@ -143,7 +143,7 @@ const portfolioAnalytics = protectedProcedure
   .query(({ ctx, input }) => projectPortfolioAnalytics(ctx.db, input));
 
 /**
- * Lightweight `{id, name}` options for pickers/filter selects (see
+ * Lightweight `{id, name, icon}` options for pickers/filter selects (see
  * `useProjectOptions`) — a single indexed query, no rollups/dependency joins.
  * Replaces paging through the full `list` at pageSize 500 just for names.
  */

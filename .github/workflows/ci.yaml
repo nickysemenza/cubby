@@ -17,7 +17,7 @@ on:
       - "LICENSE"
   # Manual escape hatch: deploy main even when E2E would fail (known-flaky).
   # `gh workflow run ci.yaml --ref main -f bypass_e2e=true`. Unit/lint/rust still
-  # gate — only E2E is skipped (see test-e2e `if:` and check-tests).
+  # gate — only E2E is skipped (see test-e2e `if:` and deploy-cf-gate).
   workflow_dispatch:
     inputs:
       bypass_e2e:
@@ -40,6 +40,7 @@ jobs:
   change-scope:
     name: Detect affected test suites
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       # Main/manual runs always exercise the full required suite. Pull requests
       # may skip only tests proven unrelated by the conservative filters below.
@@ -73,15 +74,29 @@ jobs:
 
             core.setOutput("e2e", e2e);
 
+  # NOTHING `needs` this job any more, and that is the point. Every consumer used
+  # to block on it for a directory the cache can hand over in ~2s, paying a
+  # second runner acquisition (~23s median, ~90s p95) for the privilege.
+  # Consumers now restore packages/wasm themselves via setup-node-with-deps
+  # (`wasm: "restore"`), which builds in place on a miss.
+  #
+  # This job survives for exactly one reason: test-e2e runs in the Playwright
+  # container, which has no compiler, so it cannot build on a miss. It waits for
+  # and downloads the artifact this job uploads. On the far more common cache-hit
+  # path nothing consumes the artifact at all — it is a 2s insurance premium.
   build-wasm:
     name: Build WASM
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       # ingredient-parser is tracked via `branch = "main"` (not a pinned rev), so
       # resolve its live HEAD SHA and fold it into the cache key below. The key
       # then changes the instant upstream main moves, forcing a rebuild — without
       # this, a moving branch would serve a stale cached WASM pkg indefinitely.
+      # (If upstream main moves *mid-run*, jobs can resolve different SHAs and so
+      # different keys. The loser falls back to this job's artifact, which is
+      # self-consistent; a re-run converges. Rare enough to accept.)
       - name: Resolve ingredient-parser HEAD
         id: parser
         run: echo "sha=$(git ls-remote https://github.com/nickysemenza/ingredient-parser refs/heads/main | cut -f1)" >> "$GITHUB_OUTPUT"
@@ -90,16 +105,25 @@ jobs:
         name: Restore cached WASM pkg
         with:
           path: packages/wasm
+          # Exact key, no restore-keys. The old prefix fallback restored a pkg
+          # built from some other revision, which the build below then
+          # overwrote (cache-hit is false on a prefix match) — so it only ever
+          # cost download time, and risked shipping if the build were skipped.
           key: wasm-pkg-${{ runner.os }}-${{ hashFiles('recipebridge/Cargo.toml') }}-${{ hashFiles('recipebridge/src/**') }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.parser.outputs.sha }}
-          restore-keys: |
-            wasm-pkg-${{ runner.os }}-
       # On a cache hit we only re-upload the restored pkg, so skip the Rust
       # toolchain + pnpm setup (nothing to compile). The artifact upload below
-      # stays unconditional — downstream jobs need it on a hit too.
+      # stays unconditional — test-e2e may miss the cache when this job hit it.
       - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
         if: steps.wasm-cache.outputs.cache-hit != 'true'
         with:
           cache: true
+          # Must match CARGO_TARGET_DIR below. rust-cache defaults to the
+          # workspace-root ./target, which this build never writes to — so the
+          # cache saved ~0 bytes and every cold WASM build recompiled all deps.
+          cache-workspaces: "recipebridge -> target"
+          # Distinct bucket from test-rust: same manifest, different target
+          # triple (wasm32 vs native).
+          cache-key: wasm32
       - name: Setup pnpm
         if: steps.wasm-cache.outputs.cache-hit != 'true'
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
@@ -115,22 +139,43 @@ jobs:
         run: pnpm wasm
         env:
           RUSTFLAGS: '--cfg getrandom_backend="wasm_js"'
+          # The root `wasm` script honours ${CARGO_TARGET_DIR:-…}; pin it so
+          # cache-workspaces above actually covers the build output.
+          CARGO_TARGET_DIR: ${{ github.workspace }}/recipebridge/target
       - name: Upload WASM pkg artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: wasm-pkg
           path: packages/wasm
+          retention-days: 1
 
   test-rust:
-    name: Rust Tests - recipebridge
-    runs-on: ubuntu-latest
-    # Gating job on the deploy critical path: fmt + clippy + a plain `cargo test`.
+    name: Rust - recipebridge
+    # ARM64 standard runners are free and unlimited on public repos (GA
+    # 2025-08-07); published benchmarks put Rust builds ~40% faster than
+    # ubuntu-latest on Cobalt 100. This is the only job worth moving: it is
+    # compute-bound and pure Rust, with no Playwright container, no node
+    # toolchain, and no cross-compilation. Its rust-cache bucket keys on the
+    # host triple, so the switch invalidates it once and rewarms.
+    # If the measured time doesn't beat ubuntu-latest, revert this line alone.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 25
+    # Deploy gate for the Rust crate: fmt + clippy + tests, the tests run under
+    # `cargo llvm-cov` so the same execution also produces the coverage report.
     # It owns its PR path classifier so it can acquire a runner at t=0 instead
     # of waiting for change-scope. Only enumerated, known-non-Rust paths skip it;
     # a novel path fails safe toward running the suite.
-    # Coverage instrumentation (cargo llvm-cov) is a *separate* job (coverage-rust)
-    # because it forces a second, instrumented rebuild (~2m) that used to sit on
-    # this critical path for no gating benefit — codecov is a soft gate.
+    #
+    # Coverage used to live in a separate `coverage-rust` job, split off back
+    # when the instrumented rebuild took ~2m and sat on the deploy critical path.
+    # It is now ~43s warm, the pole is test-e2e either way, and `cargo llvm-cov`
+    # runs the suite itself — so the split was paying for a second runner and a
+    # duplicate `cargo test` (32s) to produce the same pass/fail signal twice.
+    outputs:
+      # Whether the steps below actually ran. report-coverage needs this: on a
+      # Rust-inert PR this job is 'success' having produced no lcov, and the
+      # coverage artifact is legitimately absent rather than missing.
+      ran: ${{ github.event_name != 'pull_request' || steps.scope.outputs.rust == 'true' }}
     steps:
       - name: Detect Rust impact
         id: scope
@@ -191,11 +236,17 @@ jobs:
         if: github.event_name != 'pull_request' || steps.scope.outputs.rust == 'true'
         with:
           cache: true
+          components: llvm-tools-preview
           # recipebridge builds via `--manifest-path recipebridge/Cargo.toml`, so
           # artifacts land in recipebridge/target — NOT the workspace-root ./target
           # that rust-cache caches by default. Without this the cache saved ~0 bytes
           # and clippy recompiled every dep cold (~1:47) on every run.
           cache-workspaces: "recipebridge -> target"
+      - name: Install cargo-llvm-cov
+        if: github.event_name != 'pull_request' || steps.scope.outputs.rust == 'true'
+        uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145 # v2
+        with:
+          tool: cargo-llvm-cov
       - name: Format check
         if: github.event_name != 'pull_request' || steps.scope.outputs.rust == 'true'
         run: cargo fmt --manifest-path recipebridge/Cargo.toml --check
@@ -204,38 +255,16 @@ jobs:
         run: cargo clippy --manifest-path recipebridge/Cargo.toml --all-targets -- -D warnings
       # Native-target tests: the costing + food-mapping modules are pure
       # serde/ingredient code, so the parity suite runs without a wasm runtime.
-      # A test failure fails this step (and thus the deploy gate). NOTE: lib.rs
-      # reads as mostly uncovered by design: it's the #[wasm_bindgen] shim layer,
-      # executable only inside a wasm runtime; the logic lives in the
-      # costing/food_mappings modules (see coverage-rust).
-      - name: Run recipebridge tests
-        if: github.event_name != 'pull_request' || steps.scope.outputs.rust == 'true'
-        run: cargo test --manifest-path recipebridge/Cargo.toml
-
-  coverage-rust:
-    name: Rust Coverage - recipebridge
-    runs-on: ubuntu-latest
-    # Soft deploy gate: report-coverage waits for this artifact, but check-tests
-    # and deploy-cf do not. Keep this unconditional so the combined Codecov
-    # upload always contains recipebridge; cargo llvm-cov uses a separate,
-    # instrumented build.
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
-        with:
-          cache: true
-          components: llvm-tools-preview
-          # See test-rust: cache recipebridge/target, not the empty ./target. The
-          # instrumented llvm-cov RUSTFLAGS give this its own cache bucket (distinct
-          # from test-rust), warmed across runs.
-          cache-workspaces: "recipebridge -> target"
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145 # v2
-        with:
-          tool: cargo-llvm-cov
+      # `cargo llvm-cov` wraps `cargo test`, so this is the gate AND the coverage
+      # producer — a test failure fails this step and thus the deploy gate.
+      # NOTE: lib.rs reads as mostly uncovered by design: it's the
+      # #[wasm_bindgen] shim layer, executable only inside a wasm runtime; the
+      # logic lives in the costing/food_mappings modules.
       - name: Run recipebridge tests (with coverage)
+        if: github.event_name != 'pull_request' || steps.scope.outputs.rust == 'true'
         run: cargo llvm-cov --manifest-path recipebridge/Cargo.toml --lcov --output-path recipebridge/lcov.info
       - name: Save Rust coverage
+        if: github.event_name != 'pull_request' || steps.scope.outputs.rust == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-rust
@@ -245,33 +274,33 @@ jobs:
   lint-format:
     name: Lint and Format
     runs-on: ubuntu-latest
-    needs: [build-wasm]
+    timeout-minutes: 15
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          download-wasm: "true"
+          wasm: "restore"
       - run: pnpm run check
         name: "run repository quality gates"
 
   test-unit-web:
     name: Unit Tests - web
-    needs: [build-wasm]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Pure `unit` + `ui` vitest projects only — NO service containers, so this
     # fast gate never pays the integresql/postgres image pull (normally ~25s but
     # occasionally an ~8m GHCR stall). DB-backed suites run in test-integration-web
     # below. NOTE: no job-level `continue-on-error` — it would force
-    # needs.<job>.result to 'success' even on failure, defeating the check-tests
-    # gate. The test step keeps step-level continue-on-error so coverage still
+    # needs.<job>.result to 'success' even on failure, defeating the
+    # deploy-cf-gate rollup. The test step keeps step-level continue-on-error so coverage still
     # uploads on failure; the final "Fail if tests failed" step then fails honestly.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          download-wasm: "true"
+          wasm: "restore"
 
       - name: Setup web environment
         uses: ./.github/actions/setup-web-env
@@ -310,19 +339,25 @@ jobs:
 
   test-integration-web:
     name: Integration Tests - web (shard ${{ matrix.shard }})
-    needs: [build-wasm]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     # The DB-backed `integration` vitest project — isolated here so the flaky
     # service-container pull never sits on the fast unit gate above. Still gates
-    # the deploy via check-tests. Same honest-failure pattern (no job-level
+    # the deploy via deploy-cf-gate. Same honest-failure pattern (no job-level
     # continue-on-error; step-level so coverage uploads on failure).
     # Sharded across parallel jobs (own services + IntegreSQL template each) to
     # cut wall-clock; vitest --shard splits the file set. needs.<job>.result is
-    # 'success' only if all shards pass, so the check-tests gate is unchanged.
+    # 'success' only if all shards pass, so the deploy gate is unchanged.
     strategy:
       fail-fast: false
       matrix:
         shard: [1, 2]
+    # Every leg writes the same strategy.job-total, so this is deterministic
+    # regardless of which finishes last. report-coverage uses it to know how many
+    # coverage-web-integration-N artifacts to expect, instead of hardcoding the
+    # shard count in a second place that silently rots when the matrix changes.
+    outputs:
+      shard-total: ${{ steps.shard-total.outputs.total }}
     services:
       postgres:
         # pgvector image: integration/E2E setup runs `CREATE EXTENSION vector`
@@ -352,10 +387,14 @@ jobs:
           PGPASSWORD: password
 
     steps:
+      - name: Publish shard total
+        id: shard-total
+        run: echo "total=${{ strategy.job-total }}" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          download-wasm: "true"
+          wasm: "restore"
 
       - name: Setup web environment
         uses: ./.github/actions/setup-web-env
@@ -398,8 +437,11 @@ jobs:
 
   test-unit-aux:
     name: Unit Tests - auxiliary packages
-    needs: [build-wasm]
+    # No `needs` on purpose: none of these packages import @cubby/wasm (this job
+    # passes wasm: "false"), so waiting on build-wasm bought nothing but
+    # a second runner acquisition. Starting at t=0 also pulls deploy-worker in.
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # The old eight-leg matrix spent eight runners checking out and installing
     # the same workspace for tests that usually execute in 1-2 seconds apiece.
     # One runner keeps up to four single-worker test processes in parallel while
@@ -408,7 +450,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          download-wasm: "false"
+          wasm: "false"
 
       - name: Run auxiliary tests in parallel
         id: test
@@ -495,7 +537,7 @@ jobs:
     # Run for every web-impacting PR (including dependency bumps), every main
     # push, and every manual run. Isolated auxiliary-worker PRs skip this long
     # pole. The manual bypass remains the known-flaky deployment escape hatch.
-    # check-tests treats an intentional skip as a pass. NOTE: no job-level
+    # deploy-cf-gate treats an intentional skip as a pass. NOTE: no job-level
     # `continue-on-error` — that would force needs.test-e2e.result to 'success'
     # and let a red E2E ship to prod (same footgun documented on the unit jobs).
     # A real failure now blocks the deploy honestly; post-test steps below stay
@@ -503,8 +545,9 @@ jobs:
     if: |
       needs.change-scope.outputs.e2e == 'true' &&
       !(github.event_name == 'workflow_dispatch' && inputs.bypass_e2e)
-    needs: [build-wasm, change-scope]
+    needs: [change-scope]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # Pin the image to the exact @playwright/test version in pnpm-lock.yaml.
     # Browsers + Linux system dependencies are baked in, removing the apt mirror
     # download that has ranged from ~20 seconds to more than 20 minutes.
@@ -519,8 +562,17 @@ jobs:
     # and its own wrangler dev server, so within-process worker contention (the
     # reason workers stays at 2) never crosses shards — this is the safe way to
     # raise E2E parallelism past 2. needs.test-e2e.result is 'success' only if
-    # every shard passes, so the check-tests gate is unchanged. fail-fast off so
+    # every shard passes, so the deploy gate is unchanged. fail-fast off so
     # one shard's failure doesn't cancel the other (full signal on red).
+    #
+    # THREE shards was tried and REVERTED. The arithmetic looked good — ~85s of
+    # per-shard fixed cost runs in parallel, so only the Playwright time divides,
+    # predicting 176s -> ~153s. It measured 54s/83s/63s of Playwright against a
+    # 2-shard distribution of 67-92s (median 75s, n=14): the max did not move,
+    # because `--shard` splits by FILE COUNT across 19 spec files of very
+    # unequal duration, so a third shard just redraws the imbalance. Wall clock
+    # is set by the slowest shard, and variance already exceeds the theoretical
+    # gain. Re-sharding only pays if the specs are first balanced by runtime.
     strategy:
       fail-fast: false
       matrix:
@@ -565,7 +617,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          download-wasm: "true"
+          # NOT wasm: "restore" — that mode builds on a cache miss, and this
+          # image has no compiler (see below), so a miss would die at the host
+          # proc-macro link step. WASM is fetched separately, further down.
+          wasm: "false"
           # The Playwright image intentionally omits a compiler toolchain.
           # Restrict the install to web + its workspace dependencies so the
           # unrelated USDA API's better-sqlite3 native build is never invoked.
@@ -575,6 +630,13 @@ jobs:
           # The clean PR run spent 41-49 seconds per shard compressing and
           # racing to upload the same 318 MB pnpm cache. The filtered install
           # itself takes only ~25 seconds, so E2E deliberately does not save it.
+          #
+          # Restore-ONLY (an explicit actions/cache/restore with no post-job
+          # save, sidestepping the upload above) was tried and REVERTED. The
+          # premise was a 46s install — which turned out to be a single outlier;
+          # across 14 samples this step's median is ~20s, and restoring 318 MB
+          # into the container measured 20-25s. There is no install cost here
+          # left to buy back. Don't re-derive this from one slow run.
           cache-pnpm-store: "false"
       - name: Assert Playwright package matches the container
         shell: bash
@@ -590,6 +652,60 @@ jobs:
       # nothing reads it. e2e-global-setup.ts provisions its own IntegreSQL
       # template entirely in-process (CREATE EXTENSION pg_trgm + drizzle-kit
       # pushSchema), exactly like test-integration-web above.
+
+      # ------------------------------------------------------------------
+      # WASM arrives here, late and WITHOUT a `needs: [build-wasm]` edge —
+      # that edge was the last hop in front of the critical path's long pole,
+      # worth ~23s median and ~100s p95 for a directory this job does not touch
+      # until `build:cf`, ~95s in (container init ~45s + install ~46s).
+      # build-wasm publishes at ~23s, so the ordering is supplied by the head
+      # start rather than by the dependency graph. Artifacts are run-scoped, so
+      # `needs` was never required to download one from a sibling job.
+      #
+      # The cache is the common path. The artifact is the fallback for a genuine
+      # miss (recipebridge/src changed, or upstream parser main moved), where
+      # build-wasm is still compiling and the head start is negative — hence the
+      # wait. Both are JS actions running on the runner's own node, so neither
+      # needs curl/unzip/a compiler inside this container.
+      # ------------------------------------------------------------------
+      - name: Resolve ingredient-parser HEAD
+        id: parser
+        shell: bash
+        run: echo "sha=$(git ls-remote https://github.com/nickysemenza/ingredient-parser refs/heads/main | cut -f1)" >> "$GITHUB_OUTPUT"
+      - name: Restore cached WASM pkg
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        id: wasm-cache
+        with:
+          path: packages/wasm
+          # Exact key, no restore-keys — same reasoning as setup-node-with-deps.
+          key: wasm-pkg-${{ runner.os }}-${{ hashFiles('recipebridge/Cargo.toml') }}-${{ hashFiles('recipebridge/src/**') }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.parser.outputs.sha }}
+      - name: Wait for the WASM artifact
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const deadlineMs = Date.now() + 5 * 60 * 1000;
+            for (;;) {
+              const { data } = await github.rest.actions.listWorkflowRunArtifacts({
+                ...context.repo,
+                run_id: context.runId,
+                name: "wasm-pkg",
+              });
+              if (data.artifacts.length > 0) return;
+              if (Date.now() >= deadlineMs) {
+                core.setFailed("build-wasm did not publish wasm-pkg within 5 minutes");
+                return;
+              }
+              core.info("wasm-pkg not published yet; retrying in 10s");
+              await new Promise((resolve) => setTimeout(resolve, 10_000));
+            }
+      - name: Download WASM pkg artifact
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: wasm-pkg
+          path: packages/wasm
+
       - name: Build web app for E2E
         run: pnpm --filter @cubby/web run build:cf
       - name: Run Playwright tests
@@ -610,59 +726,12 @@ jobs:
           path: apps/web/playwright-report/
           retention-days: 7
 
-  check-tests:
-    name: Check All Tests Passed
-    needs:
-      [
-        test-unit-web,
-        test-integration-web,
-        test-unit-aux,
-        test-e2e,
-        test-rust,
-        change-scope,
-      ]
-    runs-on: ubuntu-latest
-    if: always()
-    outputs:
-      all-passed: ${{ steps.check.outputs.all-passed }}
-    steps:
-      - name: Check test results
-        id: check
-        run: |
-          unit_web_result="${{ needs.test-unit-web.result }}"
-          integration_web_result="${{ needs.test-integration-web.result }}"
-          unit_aux_result="${{ needs.test-unit-aux.result }}"
-          e2e_result="${{ needs.test-e2e.result }}"
-          rust_result="${{ needs.test-rust.result }}"
-          change_scope_result="${{ needs.change-scope.result }}"
-
-          echo "Unit tests (web) result: $unit_web_result"
-          echo "Integration tests (web) result: $integration_web_result"
-          echo "Unit tests (aux) result: $unit_aux_result"
-          echo "E2E tests result: $e2e_result"
-          echo "Rust tests result: $rust_result"
-          echo "Change scope result: $change_scope_result"
-
-          # E2E may be skipped by the manual escape hatch or when a PR cannot
-          # affect the web app. test-rust stays successful when its internal
-          # classifier intentionally skips its test steps. The shared classifier
-          # itself and all unconditional gates must pass.
-          if [[ "$unit_web_result" == "success" && \
-                "$integration_web_result" == "success" && \
-                "$unit_aux_result" == "success" && \
-                "$change_scope_result" == "success" && \
-                "$rust_result" == "success" && \
-                ("$e2e_result" == "success" || "$e2e_result" == "skipped") ]]; then
-            echo "all-passed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "all-passed=false" >> "$GITHUB_OUTPUT"
-          fi
-
   report-coverage:
     name: Report complete coverage
     needs:
-      [test-unit-web, test-integration-web, test-unit-aux, coverage-rust]
+      [test-unit-web, test-integration-web, test-unit-aux, test-rust]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: always()
     # Soft gate: deployment does not need this job. Coverage is uploaded once
     # after all report-producing tests, so Codecov never computes a status from
@@ -680,17 +749,34 @@ jobs:
       - name: Verify expected coverage artifacts
         shell: bash
         env:
-          ALL_PRODUCERS_SUCCEEDED: ${{ needs.test-unit-web.result == 'success' && needs.test-integration-web.result == 'success' && needs.test-unit-aux.result == 'success' && needs.coverage-rust.result == 'success' }}
+          ALL_PRODUCERS_SUCCEEDED: ${{ needs.test-unit-web.result == 'success' && needs.test-integration-web.result == 'success' && needs.test-unit-aux.result == 'success' && needs.test-rust.result == 'success' }}
+          # Derived from test-integration-web's matrix, not restated here — a
+          # hardcoded shard list silently stops checking the shards it forgot.
+          # Falls back to the current matrix size when the job did not report
+          # (it only failed to report if it failed, and then the check below
+          # warns rather than errors anyway).
+          INTEGRATION_SHARDS: ${{ needs.test-integration-web.outputs.shard-total || '2' }}
+          # False when test-rust's classifier decided the PR is Rust-inert, so
+          # the job succeeded without producing an lcov.
+          RUST_COVERAGE_EXPECTED: ${{ needs.test-rust.outputs.ran }}
         run: |
           set -euo pipefail
           artifacts=(
-            coverage-rust
             coverage-web-unit
-            coverage-web-integration-1
-            coverage-web-integration-2
             coverage-aux
           )
-          minimum_reports=(1 1 1 1 8)
+          minimum_reports=(1 8)
+          # test-rust skips its steps (and so produces no lcov) on a PR whose
+          # every changed path is Rust-inert. That absence is correct, not a
+          # missing report — only demand the artifact when the job actually ran.
+          if [[ "$RUST_COVERAGE_EXPECTED" == "true" ]]; then
+            artifacts+=(coverage-rust)
+            minimum_reports+=(1)
+          fi
+          for shard in $(seq 1 "$INTEGRATION_SHARDS"); do
+            artifacts+=("coverage-web-integration-$shard")
+            minimum_reports+=(1)
+          done
           missing=()
 
           for index in "${!artifacts[@]}"; do
@@ -748,18 +834,18 @@ jobs:
     # Only needs the WASM artifact + source — lint passing is orthogonal to
     # whether the bundle builds. Decoupled from lint-format so it runs in
     # parallel (starts after build-wasm, not after lint), keeping it off the
-    # deploy critical path (check-tests is the pole). The real deploy still
-    # gates on lint-format (deploy-cf `needs`), so a lint failure never ships —
+    # deploy critical path (test-e2e is the pole). The real deploy still
+    # gates on lint-format (deploy-cf-gate `needs`), so a lint failure never ships —
     # build-cf just may run on a lint-broken PR (cheap on the public repo).
-    needs: [build-wasm]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          download-wasm: "true"
+          wasm: "restore"
       - name: Build all Cloudflare Workers
         run: pnpm build
       - name: Upload CF build artifact
@@ -771,17 +857,68 @@ jobs:
 
   deploy-cf-gate:
     name: Check current main for web deploy
-    needs: [lint-format, check-tests, build-cf]
+    # The test rollup is inlined here. It used to live in a separate
+    # "Check All Tests Passed" job, which cost a whole extra runner acquisition
+    # on the deploy critical path — measured at up to 107s of queue, the worst
+    # p95 of any job in this workflow — to evaluate an expression.
+    #
+    # E2E may legitimately be 'skipped' (the bypass_e2e escape hatch, or
+    # change-scope deciding a PR cannot affect the web app); every other gate
+    # must be 'success'. test-rust stays 'success' when its internal classifier
+    # intentionally skips its steps. Matrix jobs roll up to one result:
+    # 'failure' if any leg failed, 'skipped' only if every leg skipped — both
+    # matrix jobs here decide to skip at job level, so all legs skip together
+    # and the rollup is unambiguous.
+    #
+    # MAINTENANCE HAZARD: `!cancelled()` DISABLES GitHub's default "skip when a
+    # need failed" rule. Every job added to `needs` MUST get an explicit
+    # `.result` check below, or a failure in it will ship straight to
+    # production. Likewise `github.ref == 'refs/heads/main'` is the only thing
+    # keeping pull requests out of prod — don't remove it.
+    #
+    # `!cancelled()` rather than `always()`: an always() gate runs even when the
+    # whole run was cancelled, so cancelling a main run whose tests had already
+    # passed still deployed it. cancelled() refers to the run, not to any single
+    # need, and the explicit == 'success' checks cover a cancelled dependency.
+    needs:
+      [
+        lint-format,
+        build-cf,
+        change-scope,
+        test-rust,
+        test-unit-web,
+        test-integration-web,
+        test-unit-aux,
+        test-e2e,
+      ]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: |
-      always() &&
+      !cancelled() &&
+      github.ref == 'refs/heads/main' &&
       needs.lint-format.result == 'success' &&
-      needs.check-tests.outputs.all-passed == 'true' &&
       needs.build-cf.result == 'success' &&
-      github.ref == 'refs/heads/main'
+      needs.change-scope.result == 'success' &&
+      needs.test-rust.result == 'success' &&
+      needs.test-unit-web.result == 'success' &&
+      needs.test-integration-web.result == 'success' &&
+      needs.test-unit-aux.result == 'success' &&
+      (needs.test-e2e.result == 'success' || needs.test-e2e.result == 'skipped')
     outputs:
       current: ${{ steps.main.outputs.current }}
     steps:
+      # Kept from the old check-tests job: when main does NOT deploy, this table
+      # is the one place that says why, without opening eight other jobs.
+      - name: Report gate results
+        run: |
+          echo "lint-format:          ${{ needs.lint-format.result }}"
+          echo "build-cf:             ${{ needs.build-cf.result }}"
+          echo "change-scope:         ${{ needs.change-scope.result }}"
+          echo "test-rust:            ${{ needs.test-rust.result }}"
+          echo "test-unit-web:        ${{ needs.test-unit-web.result }}"
+          echo "test-integration-web: ${{ needs.test-integration-web.result }}"
+          echo "test-unit-aux:        ${{ needs.test-unit-aux.result }}"
+          echo "test-e2e:             ${{ needs.test-e2e.result }}"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Check whether this is still current main
         id: main
@@ -791,6 +928,7 @@ jobs:
     name: Deploy to Cloudflare Workers
     needs: [deploy-cf-gate]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: needs.deploy-cf-gate.outputs.current == 'true'
     concurrency:
       group: deploy-cubby-production
@@ -845,8 +983,8 @@ jobs:
   # wrangler deploy). The web/cubby worker stays separate (deploy-cf): it deploys
   # a prebuilt artifact and gates on the full E2E suite.
   #
-  # Gated on lint-format + the aux unit legs (test-unit-aux), NOT check-tests, so
-  # a flaky web E2E never blocks an aux deploy. Default needs-success gating means
+  # Gated on lint-format + the aux unit legs (test-unit-aux) only, NOT on the web
+  # test suite, so a flaky web E2E never blocks an aux deploy. Default needs-success gating means
   # a failing lint/unit job auto-skips this — no explicit result checks needed.
   #
   # CODE ONLY — no D1 migrations run in CI. Prod schema changes are a deliberate,
@@ -858,6 +996,7 @@ jobs:
     name: Check current main for auxiliary deploys
     needs: [lint-format, test-unit-aux]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: github.ref == 'refs/heads/main'
     outputs:
       current: ${{ steps.main.outputs.current }}
@@ -871,6 +1010,7 @@ jobs:
     name: Deploy ${{ matrix.pkg }} Worker
     needs: [deploy-worker-gate]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: needs.deploy-worker-gate.outputs.current == 'true'
     strategy:
       matrix:
@@ -893,7 +1033,7 @@ jobs:
         with:
           # workspace deps must be installed so wrangler's esbuild can resolve the
           # workspace imports each worker bundles (no prebuilt artifact).
-          download-wasm: "false"
+          wasm: "false"
       - name: Deploy ${{ matrix.pkg }}
         if: steps.current_main.outputs.current == 'true'
         run: pnpm --filter @cubby/${{ matrix.pkg }} run deploy

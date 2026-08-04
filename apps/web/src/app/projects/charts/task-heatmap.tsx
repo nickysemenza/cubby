@@ -2,6 +2,7 @@ import type { TaskOut } from "@cubby/schemas/project";
 import { Link } from "@tanstack/react-router";
 import { CalendarClock } from "lucide-react";
 import { useMemo } from "react";
+import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { formatDate, StatusIcon } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
@@ -79,9 +80,13 @@ export function TaskHeatmap({ tasks }: { tasks: TaskOut[] }) {
           >
             {task.name}
           </Link>
-          {task.projectName && (
-            <span className="ml-auto shrink-0 text-muted-foreground">
-              {task.projectName}
+          {task.projectId && task.projectName && (
+            <span className="ml-auto min-w-0 max-w-32 text-muted-foreground">
+              <EntityInlineLink
+                entity="project"
+                data={{ id: task.projectId, name: task.projectName }}
+                truncate
+              />
             </span>
           )}
         </div>

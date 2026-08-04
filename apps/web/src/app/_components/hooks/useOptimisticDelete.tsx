@@ -2,8 +2,9 @@ import type { PreviewDeleteEntity } from "@cubby/schemas/entity-integrity";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Trash } from "lucide-react";
+import pluralize from "pluralize";
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   OperationImpact,
@@ -146,6 +147,11 @@ function removeDeletedIdsFromCache(
  * - Delete bulk action
  * - Delete menu item in row actions
  * - Delete confirmation dialog
+ *
+ * Single-row delete (row menu / swipe action) and bulk delete (selection
+ * toolbar) are the same flow over a list of targets — one preview, one
+ * dialog — rather than two tiers with different confirmation UX. A bulk
+ * delete of one row and a row-menu delete of that same row render identically.
  */
 export function useOptimisticDelete<
   TData extends { id: string; name?: string | null },
@@ -155,7 +161,14 @@ export function useOptimisticDelete<
   emptyLabel,
 }: UseOptimisticDeleteOptions<TData>): UseOptimisticDeleteReturn<TData> {
   const queryClient = useQueryClient();
-  const [deleteTarget, setDeleteTarget] = useState<TData | null>(null);
+  const [deleteTargets, setDeleteTargets] = useState<TData[] | null>(null);
+  // Set only while the dialog was opened via the bulk-action toolbar. Lets the
+  // dialog resolve `deleteBulkAction.onExecute`'s promise on close/submit so
+  // `useBulkActions.executeAction` knows whether to clear the row selection —
+  // the bulk action bar owns that state, not this hook.
+  const bulkResolveRef = useRef<
+    ((result: { success: boolean }) => void) | null
+  >(null);
 
   // Memoize the mutation options to prevent infinite re-renders
   const deleteMutationOptions = useMemo(() => {
@@ -239,7 +252,36 @@ export function useOptimisticDelete<
     >[0],
   );
 
-  // Build delete bulk action
+  // Opens the dialog for a single row (row menu / swipe action). Not part of
+  // the bulk-action toolbar, so nothing needs to resolve on close.
+  const requestDelete = useCallback((item: TData) => {
+    bulkResolveRef.current = null;
+    setDeleteTargets([item]);
+  }, []);
+
+  // Settle the bulk action's held-open promise, if this dialog session came
+  // from the toolbar. `success: true` lets `useBulkActions.executeAction`
+  // clear the row selection; `success: false` (cancel) leaves it alone.
+  const settleBulkAction = useCallback((result: { success: boolean }) => {
+    bulkResolveRef.current?.(result);
+    bulkResolveRef.current = null;
+  }, []);
+
+  // Build delete bulk action. `onExecute` doesn't delete anything itself — it
+  // opens the same preview-backed dialog `requestDelete` does, over the whole
+  // selection, and holds its returned promise open until the dialog resolves
+  // it (submit or cancel). That's what lets `BulkActionBar` skip its own
+  // generic "are you sure" dialog for this action (no `requiresConfirmation`)
+  // without losing confirmation altogether.
+  //
+  // Consequence worth knowing before reusing this action elsewhere: because the
+  // promise is held open across confirmation, `useBulkActions.executeAction`
+  // flips `isExecuting` true as soon as the dialog OPENS, not when the mutation
+  // starts — so here `isExecuting` means "confirming or deleting", not
+  // "deleting". Harmless today because the dialog is a modal overlay that hides
+  // the toolbar spinner and disabled sibling buttons it drives. A non-modal
+  // surface reusing this action would surface that state to the user and would
+  // need to tell the two apart.
   const deleteBulkAction = useMemo((): BulkAction<TData> | null => {
     if (!deletable) return null;
 
@@ -247,15 +289,13 @@ export function useOptimisticDelete<
       id: "delete" as const,
       label: "Delete",
       icon: <Trash className="size-4" />,
-      requiresConfirmation: true,
-      onExecute: async (selectedRows: { original: TData }[]) => {
-        await deleteMutation.mutateAsync({
-          ids: selectedRows.map((row) => row.original.id),
-        });
-        return { success: true };
-      },
+      onExecute: (selectedRows: { original: TData }[]) =>
+        new Promise<{ success: boolean }>((resolve) => {
+          bulkResolveRef.current = resolve;
+          setDeleteTargets(selectedRows.map((row) => row.original));
+        }),
     };
-  }, [deletable, deleteMutation.mutateAsync]);
+  }, [deletable]);
 
   // Combine user's extra actions with delete action if deletable is provided
   const combinedExtraActions = useMemo(() => {
@@ -271,7 +311,7 @@ export function useOptimisticDelete<
               className="text-destructive focus:text-destructive"
               onClick={(e) => {
                 e.stopPropagation();
-                setDeleteTarget(row);
+                requestDelete(row);
               }}
             >
               <Trash />
@@ -281,55 +321,59 @@ export function useOptimisticDelete<
         )}
       </>
     );
-  }, [deletable, extraActions]);
+  }, [deletable, extraActions, requestDelete]);
+
+  const targetCount = deleteTargets?.length ?? 0;
 
   // Impact preview — fetched only while the dialog is open, for the current
-  // target. See `useOperationPreview`'s doc comment for the gating rule: it
+  // target(s). See `useOperationPreview`'s doc comment for the gating rule: it
   // never disables confirmation, except the one case handled below.
   const previewInput = useMemo(
     () =>
-      deletable && deleteTarget
+      deletable && deleteTargets && deleteTargets.length > 0
         ? {
             operation: "delete" as const,
             entity: deletable.entity,
-            ids: [deleteTarget.id],
+            ids: deleteTargets.map((target) => target.id),
           }
         : null,
-    [deletable, deleteTarget],
+    [deletable, deleteTargets],
   );
-  const preview = useOperationPreview(previewInput, deleteTarget !== null);
+  const preview = useOperationPreview(previewInput, targetCount > 0);
 
   // Build delete dialog element
   const deleteDialog = useMemo(
     () =>
       deletable ? (
         <BulkActionDialog
-          open={deleteTarget !== null}
-          onOpenChange={(open) => !open && setDeleteTarget(null)}
+          open={deleteTargets !== null}
+          onOpenChange={(open) => {
+            if (open) return;
+            setDeleteTargets(null);
+            settleBulkAction({ success: false });
+          }}
           items={
-            deleteTarget
-              ? [
-                  {
-                    id: deleteTarget.id,
-                    name:
-                      deleteTarget.name ||
-                      emptyLabel?.(deleteTarget) ||
-                      deleteTarget.id,
-                  },
-                ]
-              : []
+            deleteTargets?.map((target) => ({
+              id: target.id,
+              name: target.name || emptyLabel?.(target) || target.id,
+            })) ?? []
           }
           itemNoun={deletable.entityLabel}
           action="Delete"
           variant="destructive"
           pendingLabel="Deleting..."
-          description={`This will permanently remove ${deletable.entityLabel.toLowerCase()} from your workspace. This action cannot be undone.`}
+          description={`This will permanently remove ${pluralize(
+            deletable.entityLabel.toLowerCase(),
+            targetCount || 1,
+          )} from your workspace. This action cannot be undone.`}
           renderItem={(item) => item.name}
           onSubmit={async () => {
-            if (deleteTarget) {
-              await deleteMutation.mutateAsync({ ids: [deleteTarget.id] });
-              setDeleteTarget(null);
-            }
+            if (!deleteTargets || deleteTargets.length === 0) return;
+            await deleteMutation.mutateAsync({
+              ids: deleteTargets.map((target) => target.id),
+            });
+            setDeleteTargets(null);
+            settleBulkAction({ success: true });
           }}
           isPending={deletable ? deleteMutation.isPending : false}
           blocked={preview.data?.canProceed === false}
@@ -348,7 +392,9 @@ export function useOptimisticDelete<
     // the scalar fields are read.
     [
       deletable,
-      deleteTarget,
+      deleteTargets,
+      targetCount,
+      settleBulkAction,
       deleteMutation.isPending,
       deleteMutation.mutateAsync,
       emptyLabel,
@@ -363,6 +409,6 @@ export function useOptimisticDelete<
     deleteBulkAction,
     combinedExtraActions,
     deleteDialog,
-    requestDelete: setDeleteTarget,
+    requestDelete,
   };
 }

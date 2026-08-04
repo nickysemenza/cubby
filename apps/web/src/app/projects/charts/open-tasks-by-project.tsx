@@ -3,7 +3,9 @@ import { ResponsiveBar } from "@nivo/bar";
 import { useNavigate } from "@tanstack/react-router";
 import { ListChecks } from "lucide-react";
 import { useMemo } from "react";
+import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import { entityDetailLink } from "~/entities/entities";
+import { ProjectChartLabel, ProjectChartTick } from "../project-mark";
 import { nivoBarChrome, nivoChartTheme } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
@@ -27,19 +29,33 @@ export function OpenTasksByProject({
   data: ProjectPortfolioAnalyticsOut["taskHeatmap"];
 }) {
   const navigate = useNavigate();
+  const { iconById } = useProjectOptions();
 
   const data = useMemo(
     () =>
       rows
         .filter((r) => r.openTaskCount > 0)
         .map((r) => ({
-          project: r.projectName,
           id: r.projectId,
+          name: r.projectName,
           count: r.openTaskCount,
         }))
         .sort((a, b) => a.count - b.count)
         .slice(-15),
     [rows],
+  );
+  const identityById = useMemo(
+    () =>
+      new Map<string, { name: string; icon: string | null }>(
+        data.map(
+          (row) =>
+            [
+              String(row.id),
+              { name: row.name, icon: iconById.get(row.id) ?? null },
+            ] as const,
+        ),
+      ),
+    [data, iconById],
   );
 
   if (data.length === 0) {
@@ -53,9 +69,9 @@ export function OpenTasksByProject({
       <ResponsiveBar
         data={data}
         keys={["count"]}
-        indexBy="project"
+        indexBy="id"
         layout="horizontal"
-        margin={{ top: 10, right: 30, bottom: 30, left: 160 }}
+        margin={{ top: 10, right: 30, bottom: 30, left: 180 }}
         padding={0.3}
         colors={["var(--chart-2)"]}
         {...nivoBarChrome}
@@ -64,7 +80,13 @@ export function OpenTasksByProject({
           tickPadding: 8,
           format: (v: number) => `${v}`,
         }}
-        axisLeft={{ tickSize: 0, tickPadding: 8 }}
+        axisLeft={{
+          tickSize: 0,
+          tickPadding: 8,
+          renderTick: (tick) => (
+            <ProjectChartTick {...tick} identityById={identityById} />
+          ),
+        }}
         label={(d) => `${d.value ?? 0}`}
         labelSkipWidth={16}
         labelTextColor="var(--background)"
@@ -72,11 +94,21 @@ export function OpenTasksByProject({
         enableGridY={false}
         onClick={(bar) => {
           const id = bar.data.id;
-          if (id) navigate(entityDetailLink("project", id));
+          if (id) navigate(entityDetailLink("project", String(id)));
         }}
-        tooltip={({ indexValue, value }) => (
+        tooltip={({ data: row, value }) => (
           <ChartTooltip>
-            <strong>{indexValue}</strong>: {value} open task
+            <strong>
+              <ProjectChartLabel
+                identity={
+                  identityById.get(String(row.id)) ?? {
+                    name: String(row.name),
+                    icon: null,
+                  }
+                }
+              />
+            </strong>
+            : {value} open task
             {value !== 1 ? "s" : ""}
           </ChartTooltip>
         )}

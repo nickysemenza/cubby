@@ -1,10 +1,23 @@
-import type { AuditEntityType, AuditLogListOut } from "@cubby/schemas/audit";
+import type {
+  AuditEntityType,
+  AuditJsonValue,
+  AuditLogListOut,
+} from "@cubby/schemas/audit";
 import type { ActorContext, AuditSource } from "@cubby/schemas/context";
+import {
+  entityManifest,
+  type ShortcodeEntity,
+} from "@cubby/schemas/entity-manifest";
 import { and, desc, eq, gte, lt, lte, or, type SQL } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { EDGE_KEY_TARGET_ENTITY } from "~/server/db/entity-incoming-edges";
 import { auditLog } from "~/server/db/schema";
 import { eqAny, unwrapDb } from "~/server/repo/database-helpers";
-import { lookupShortcodes, refKey } from "~/server/repo/shortcode-resolver";
+import {
+  type EntityRef,
+  lookupShortcodes,
+  refKey,
+} from "~/server/repo/shortcode-resolver";
 
 // Action types for audit entries
 type AuditAction = "create" | "update" | "delete";
@@ -207,6 +220,81 @@ export function buildCascadeAuditEntries(
 }
 
 /**
+ * Every FK-shaped ref (target entity + raw uuid value) named inside a single
+ * entry's `changes` diff — both the `from` and `to` side of each field that
+ * `EDGE_KEY_TARGET_ENTITY` recognizes as a foreign key. Feeds the same batched
+ * `lookupShortcodes` round-trip as the entry's own `entityId`, so a raw uuid
+ * inside `changes` (e.g. `vendorId`, `purchaseId`) never reaches an MCP
+ * payload any more than the top-level `entityId` does.
+ */
+function collectChangeRefs(
+  entityType: AuditEntityType,
+  changes: Record<string, { from: unknown; to: unknown }> | null,
+): EntityRef[] {
+  if (!changes) return [];
+  const dbTable = entityManifest[entityType].dbTable;
+  if (!dbTable) return [];
+
+  const refs: EntityRef[] = [];
+  for (const [field, diff] of Object.entries(changes)) {
+    const targetEntity = EDGE_KEY_TARGET_ENTITY.get(`${dbTable}.${field}`);
+    if (!targetEntity) continue;
+    for (const value of [diff.from, diff.to]) {
+      if (typeof value === "string" && value.length > 0) {
+        refs.push({ entity: targetEntity, id: value });
+      }
+    }
+  }
+  return refs;
+}
+
+/**
+ * Remap a single entry's `changes` diff, replacing any FK-shaped `from`/`to`
+ * value with its resolved shortcode. Non-FK fields, and values that didn't
+ * resolve (deleted rows, malformed data, anything not in `shortcodeByRef`),
+ * pass through unchanged — never coerced to null. `shortcodeByRef` must
+ * already contain every ref `collectChangeRefs` found for this entry.
+ */
+function remapChangeShortcodes(
+  entityType: AuditEntityType,
+  changes: Record<string, { from: unknown; to: unknown }> | null,
+  shortcodeByRef: Map<string, string>,
+): Record<string, { from?: AuditJsonValue; to?: AuditJsonValue }> | null {
+  if (!changes) return null;
+  const dbTable = entityManifest[entityType].dbTable;
+
+  // Every value here already round-tripped through the `changes` jsonb
+  // column, so it is guaranteed to be plain JSON by the time it's read back
+  // (see `AuditJsonValue`'s doc comment) — this cast is the trust boundary,
+  // not a runtime check.
+  const asJson = (value: unknown) => value as AuditJsonValue | undefined;
+  const resolveValue = (
+    targetEntity: ShortcodeEntity,
+    value: unknown,
+  ): AuditJsonValue | undefined =>
+    typeof value === "string" && value.length > 0
+      ? asJson(shortcodeByRef.get(refKey(targetEntity, value)) ?? value)
+      : asJson(value);
+
+  const remapped: Record<
+    string,
+    { from?: AuditJsonValue; to?: AuditJsonValue }
+  > = {};
+  for (const [field, diff] of Object.entries(changes)) {
+    const targetEntity = dbTable
+      ? EDGE_KEY_TARGET_ENTITY.get(`${dbTable}.${field}`)
+      : undefined;
+    remapped[field] = targetEntity
+      ? {
+          from: resolveValue(targetEntity, diff.from),
+          to: resolveValue(targetEntity, diff.to),
+        }
+      : { from: asJson(diff.from), to: asJson(diff.to) };
+  }
+  return remapped;
+}
+
+/**
  * Query audit log entries with pagination.
  */
 export async function getAuditLog(
@@ -297,19 +385,24 @@ export async function getAuditLog(
       : undefined
     : undefined;
 
-  const shortcodeByRef = await lookupShortcodes(
-    db,
-    returnEntries.map((entry) => ({
+  // One batched round-trip covers both the top-level `entityId` AND every
+  // FK-shaped value inside each entry's `changes` diff — never a per-row query.
+  const shortcodeByRef = await lookupShortcodes(db, [
+    ...returnEntries.map((entry) => ({
       entity: entry.entityType,
       id: entry.entityId,
     })),
-  );
+    ...returnEntries.flatMap((entry) =>
+      collectChangeRefs(entry.entityType, entry.changes),
+    ),
+  ]);
 
   return {
-    entries: returnEntries.map(({ id, entityId, ...entry }) => ({
+    entries: returnEntries.map(({ id, entityId, changes, ...entry }) => ({
       ...entry,
       entryKey: encodeAuditCursor({ id, createdAt: entry.createdAt }),
       entityId: shortcodeByRef.get(refKey(entry.entityType, entityId)) ?? null,
+      changes: remapChangeShortcodes(entry.entityType, changes, shortcodeByRef),
     })),
     nextCursor,
   };

@@ -2,13 +2,16 @@ import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
 import { ResponsiveBar } from "@nivo/bar";
 import { DollarSign } from "lucide-react";
 import { useMemo } from "react";
+import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import { formatCurrency } from "~/lib/utils";
+import { ProjectChartLabel, ProjectChartTick } from "../project-mark";
 import { nivoBarChrome, nivoChartTheme } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
 type Datum = {
-  project: string;
+  id: string;
+  name: string;
   percent: number;
   actual: number;
   estimate: number;
@@ -34,26 +37,29 @@ export function CostVsEstimate({
 }: {
   data: ProjectPortfolioAnalyticsOut["costVsEstimate"];
 }) {
+  const { iconById } = useProjectOptions();
   const data = useMemo(() => {
     return (
       rows
-        .map((r) => ({
-          project: r.projectName,
-          actual: r.actual,
-          estimate: r.estimate,
-        }))
+        .flatMap((r): Datum[] =>
+          r.estimate != null && r.estimate > 0
+            ? [
+                {
+                  id: r.projectId,
+                  name: r.projectName,
+                  actual: r.actual,
+                  estimate: r.estimate,
+                  percent: (r.actual / r.estimate) * 100,
+                },
+              ]
+            : [],
+        )
         // No estimate (null or 0) means "% of estimate" is undefined — leave
         // those projects off the chart rather than showing a misleading N/A
         // bar of 0 or infinite height.
-        .filter(
-          (d): d is { project: string; actual: number; estimate: number } =>
-            d.estimate != null && d.estimate > 0,
-        )
         .map(
           (d): Datum => ({
-            project: d.project,
-            actual: d.actual,
-            estimate: d.estimate,
+            ...d,
             // Negative `actual` (net contributions exceeding spend) is real —
             // it just yields a negative percent, which reads fine on an axis
             // that already spans through 0.
@@ -64,6 +70,16 @@ export function CostVsEstimate({
         .slice(0, 15)
     );
   }, [rows]);
+  const identityById = useMemo(
+    () =>
+      new Map(
+        data.map((row) => [
+          row.id,
+          { name: row.name, icon: iconById.get(row.id) ?? null },
+        ]),
+      ),
+    [data, iconById],
+  );
 
   if (data.length === 0) {
     return <ChartEmpty icon={DollarSign} title="No cost data." />;
@@ -76,12 +92,14 @@ export function CostVsEstimate({
       <ResponsiveBar
         data={data}
         keys={["percent"]}
-        indexBy="project"
+        indexBy="id"
         layout="horizontal"
-        margin={{ top: 10, right: 30, bottom: 40, left: 160 }}
+        margin={{ top: 10, right: 30, bottom: 40, left: 180 }}
         padding={0.3}
         colors={({ data: d }) =>
-          d.percent > 100 ? "var(--chart-negative)" : "var(--chart-positive)"
+          Number(d.percent) > 100
+            ? "var(--chart-negative)"
+            : "var(--chart-positive)"
         }
         {...nivoBarChrome}
         axisBottom={{
@@ -93,6 +111,9 @@ export function CostVsEstimate({
         axisLeft={{
           tickSize: 0,
           tickPadding: 8,
+          renderTick: (tick) => (
+            <ProjectChartTick {...tick} identityById={identityById} />
+          ),
         }}
         label={(d) => `${Math.round(d.value ?? 0)}%`}
         labelSkipWidth={28}
@@ -115,10 +136,20 @@ export function CostVsEstimate({
         ]}
         tooltip={({ data: d }) => (
           <ChartTooltip>
-            <strong>{d.project}</strong> — {Math.round(d.percent)}% of estimate
+            <strong>
+              <ProjectChartLabel
+                identity={
+                  identityById.get(String(d.id)) ?? {
+                    name: String(d.name),
+                    icon: null,
+                  }
+                }
+              />
+            </strong>{" "}
+            — {Math.round(Number(d.percent))}% of estimate
             <div className="mt-1 text-muted-foreground text-xs">
-              {formatCurrency(d.actual, 0)} actual /{" "}
-              {formatCurrency(d.estimate, 0)} estimate
+              {formatCurrency(Number(d.actual), 0)} actual /{" "}
+              {formatCurrency(Number(d.estimate), 0)} estimate
             </div>
           </ChartTooltip>
         )}

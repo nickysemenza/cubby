@@ -3,6 +3,7 @@ import type { ExpenseOut, Trade } from "@cubby/schemas/project";
 import { sumBy } from "es-toolkit";
 import { ShoppingBag } from "lucide-react";
 import { Fragment, type ReactElement, useMemo } from "react";
+import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import {
   PreviewCard,
@@ -43,8 +44,15 @@ function CellPreview({ expenses }: { expenses: ExpenseOut[] }) {
         <Row key={p.id} justify="between" align="baseline" gap="sm">
           <span className="truncate">
             {p.name}
-            {p.projectName && (
-              <span className="text-muted-foreground"> · {p.projectName}</span>
+            {p.projectId && p.projectName && (
+              <span className="text-muted-foreground">
+                {" · "}
+                <EntityInlineLink
+                  entity="project"
+                  data={{ id: p.projectId, name: p.projectName }}
+                  compact
+                />
+              </span>
             )}
           </span>
           <span className="shrink-0 font-mono tabular-nums">

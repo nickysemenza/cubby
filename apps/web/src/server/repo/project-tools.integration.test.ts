@@ -714,14 +714,33 @@ describe("project tool matrix", () => {
 
   it("scopes columns by kind and orders them by their effective window", async () => {
     const projects = [
-      { name: "Gamma garden", kind: "garden" as const, date: "2023-02-10" },
-      { name: "Alpha reno", kind: "renovation" as const, date: "2024-01-10" },
-      { name: "Beta shop", kind: "workshop" as const, date: "2025-05-10" },
+      {
+        name: "Gamma garden",
+        kind: "garden" as const,
+        date: "2023-02-10",
+        icon: null,
+      },
+      {
+        name: "Alpha reno",
+        kind: "renovation" as const,
+        date: "2024-01-10",
+        icon: "🛠️",
+      },
+      {
+        name: "Beta shop",
+        kind: "workshop" as const,
+        date: "2025-05-10",
+        icon: null,
+      },
     ];
     for (const spec of projects) {
       const { output } = await createProject(
         ctx.db,
-        projectCreateInput.parse({ name: spec.name, kind: spec.kind }),
+        projectCreateInput.parse({
+          name: spec.name,
+          kind: spec.kind,
+          icon: spec.icon,
+        }),
         ctx.actor,
       );
       await createExpense(
@@ -742,6 +761,7 @@ describe("project tool matrix", () => {
       "Alpha reno",
       "Beta shop",
     ]);
+    expect(all.columns.map((column) => column.icon)).toEqual([null, "🛠️", null]);
     expect(all.totals.matchingProjects).toBe(3);
 
     const scoped = await projectToolMatrix(

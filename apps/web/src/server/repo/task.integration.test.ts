@@ -1427,11 +1427,21 @@ describe("task repository — moveTasks (bulk move to project)", () => {
       auditT1.entries.some(
         (e) =>
           e.action === "update" &&
-          // the audit trail records the column write, i.e. the uuid
+          // `getAuditLog` resolves the raw `projectId` FK column write to its
+          // public shortcode on read, same as it does for `entityId` — see
+          // `remapChangeShortcodes` in repo/audit-log.ts.
+          (e.changes as { projectId?: { from: unknown; to: unknown } } | null)
+            ?.projectId?.to === projectB.id,
+      ),
+    ).toBe(true);
+    // Never the raw uuid the DB column actually stores.
+    expect(
+      auditT1.entries.some(
+        (e) =>
           (e.changes as { projectId?: { from: unknown; to: unknown } } | null)
             ?.projectId?.to === projectBId,
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("moves tasks to null (the inbox)", async () => {

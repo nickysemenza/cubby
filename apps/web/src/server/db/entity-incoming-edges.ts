@@ -36,6 +36,10 @@
  */
 
 import type { Entity } from "@cubby/schemas/entity";
+import {
+  type ShortcodeEntity,
+  shortcodeEntities,
+} from "@cubby/schemas/entity-manifest";
 import type { AnyColumn } from "drizzle-orm";
 import {
   cookbook,
@@ -227,3 +231,31 @@ export type IncomingEdgePolicy<E extends Entity, Disposition> = IncomingEdgeMap<
   E,
   Disposition
 >;
+
+/**
+ * Inverted view of {@link INCOMING_EDGES}: `<SourceTable>.<column>` → the
+ * entity that FK column points at, restricted to targets that carry a public
+ * shortcode (the only kind a raw id could usefully be re-rendered as). Derived
+ * from INCOMING_EDGES rather than hand-kept a second time — a hand-kept
+ * `(entityType, fieldName) -> target` table would be exactly the drift trap
+ * this file exists to prevent (see the module doc comment above).
+ *
+ * Built for `getAuditLog` (repo/audit-log.ts): a `changes` diff records the raw
+ * FK column value for fields like `vendorId`/`purchaseId`/`projectId`, and this
+ * map is how the audit-log reader knows which of those values name another
+ * entity worth resolving to its shortcode, without a second source of truth
+ * for "which fields are FKs".
+ */
+export const EDGE_KEY_TARGET_ENTITY: ReadonlyMap<string, ShortcodeEntity> =
+  new Map(
+    (Object.entries(INCOMING_EDGES) as [Entity, Record<string, IncomingEdge>][])
+      .filter(
+        (entry): entry is [ShortcodeEntity, Record<string, IncomingEdge>] =>
+          (shortcodeEntities as readonly Entity[]).includes(entry[0]),
+      )
+      .flatMap(([targetEntity, entityEdges]) =>
+        Object.keys(entityEdges).map(
+          (edgeKey) => [edgeKey, targetEntity] as const,
+        ),
+      ),
+  );

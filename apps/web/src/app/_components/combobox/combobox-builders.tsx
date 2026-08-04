@@ -10,6 +10,7 @@ import type {
 import type { LocationType } from "@cubby/schemas/location";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
+import { ProjectMark } from "~/app/projects/project-mark";
 import { VendorMark } from "~/components/entity/vendor-cell";
 import { EntityIcon } from "~/entities/entities";
 
@@ -74,11 +75,12 @@ export const buildRecipeComboboxItem = (recipe: {
 export const buildProjectComboboxItem = (project: {
   id: ProjectShortcode;
   name: string;
+  icon?: string | null;
 }): ComboboxItem<ProjectShortcode> => ({
   id: project.id,
   shortcode: project.id,
   name: project.name,
-  icon: <EntityIcon entity="project" size={14} colored />,
+  icon: <ProjectMark icon={project.icon} />,
 });
 
 export const buildTaskComboboxItem = (task: {

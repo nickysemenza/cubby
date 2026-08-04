@@ -29,6 +29,7 @@ export interface GanttProjectRow {
   /** The project's shortcode — the only public id post-cutover. */
   id: string;
   name: string;
+  icon: string | null;
   depth: number;
   expandable: boolean;
   expanded: boolean;
@@ -215,6 +216,7 @@ function buildProjectRow(
     kind: "project",
     id: project.id,
     name: project.name,
+    icon: project.icon,
     depth,
     expandable,
     expanded,

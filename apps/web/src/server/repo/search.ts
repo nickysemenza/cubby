@@ -373,6 +373,7 @@ const searchQueries = {
           entityId: project.id,
           id: project.shortcode,
           name: project.name,
+          icon: project.icon,
           subtitle: project.kind,
           entityType: sql<"project">`'project'`.as("entityType"),
           typeHint: project.status,

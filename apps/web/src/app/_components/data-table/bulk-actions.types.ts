@@ -14,10 +14,6 @@ export interface BulkAction<TData> {
   label: string;
   /** Icon component to display */
   icon?: ReactNode;
-  /** Whether this action requires confirmation */
-  requiresConfirmation?: boolean;
-  /** Custom confirmation dialog content (e.g., for merge showing target vs aliases) */
-  renderConfirmation?: (rows: Row<TData>[]) => ReactNode;
   /** Minimum number of selected rows required (default: 1) */
   minSelection?: number;
   /** Maximum number of selected rows allowed (default: unlimited) */

@@ -7,6 +7,7 @@ import {
   unsafeTaskShortcode,
   unsafeVendorShortcode,
 } from "@cubby/schemas/identifiers";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import {
   buildIngredientComboboxItem,
@@ -65,7 +66,11 @@ describe("entity picker value adapters", () => {
       }),
     ).toMatchObject({ id: product, shortcode: product, secondary: "Makita" });
     expect(
-      buildProjectComboboxItem({ id: project, name: "Garage" }),
+      buildProjectComboboxItem({
+        id: project,
+        name: "Garage",
+        icon: "🔨",
+      }),
     ).toMatchObject({ id: project, shortcode: project });
     expect(buildTaskComboboxItem({ id: task, name: "Paint" })).toMatchObject({
       id: task,
@@ -81,5 +86,16 @@ describe("entity picker value adapters", () => {
     expect(
       buildVendorNameComboboxItem({ id: vendor, name: "Acme" }),
     ).toMatchObject({ id: "Acme", shortcode: vendor, name: "Acme" });
+  });
+
+  it("uses the project's custom mark in picker rows", () => {
+    const item = buildProjectComboboxItem({
+      id: unsafeProjectShortcode("PRJ-6ABC"),
+      name: "Garage",
+      icon: "🔧",
+    });
+
+    render(item.icon);
+    expect(screen.getByText("🔧")).toHaveAttribute("aria-hidden", "true");
   });
 });

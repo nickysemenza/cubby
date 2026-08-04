@@ -1445,8 +1445,11 @@ describe("expense repository — moveExpenses", () => {
     expect(moved.map((p) => p.projectId)).toEqual([projectB.id, projectB.id]);
 
     // `getAuditLog`'s `entityId` matches the internal uuid, not the shortcode
-    // — and so does the diff `computeChanges` records for `projectId` itself,
-    // since that's the raw FK column value, not the public shortcode.
+    // — but the `projectId` FK diff `computeChanges` records IS resolved to
+    // the public shortcode on read, same as `entityId`, so a raw uuid never
+    // reaches an MCP payload (see `getAuditLog`'s `collectChangeRefs`/
+    // `remapChangeShortcodes`, which derive the FK-ness of `projectId` from
+    // `INCOMING_EDGES` rather than a second hand-kept list).
     const auditP1 = await getAuditLog(ctx.db, {
       entityType: "expense",
       entityId: p1Id,
@@ -1457,9 +1460,17 @@ describe("expense repository — moveExpenses", () => {
         (e) =>
           e.action === "update" &&
           (e.changes as { projectId?: { from: unknown; to: unknown } } | null)
-            ?.projectId?.to === projectBId,
+            ?.projectId?.to === projectB.id,
       ),
     ).toBe(true);
+    // And never the raw uuid the DB column actually stores.
+    expect(
+      auditP1.entries.some(
+        (e) =>
+          (e.changes as { projectId?: { from: unknown; to: unknown } } | null)
+            ?.projectId?.to === projectBId,
+      ),
+    ).toBe(false);
   });
 
   it("leaves soft-deleted ids in the input untouched", async () => {

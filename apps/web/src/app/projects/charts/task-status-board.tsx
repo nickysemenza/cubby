@@ -10,6 +10,7 @@ import { useMemo } from "react";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { getStatusChartColor } from "~/lib/status-colors";
+import { ProjectMark } from "../project-mark";
 import { TASK_STATUS_LABELS } from "../shared";
 import { ChartEmpty } from "./chart-empty";
 
@@ -60,6 +61,7 @@ export function TaskStatusBoard({
           projectId: row.projectId,
           projectShortcode: proj?.id ?? null,
           name: proj?.name ?? "Unknown project",
+          icon: proj?.icon,
           date: proj?.startDate ?? "",
           breakdown: row,
           remaining: total,
@@ -128,10 +130,19 @@ export function TaskStatusBoard({
                     className="hover:underline"
                     title={row.name}
                   >
-                    {row.name}
+                    <span className="inline-flex max-w-full items-center gap-1">
+                      <ProjectMark icon={row.icon} size={12} />
+                      <span className="truncate">{row.name}</span>
+                    </span>
                   </Link>
                 ) : (
-                  <span title={row.name}>{row.name}</span>
+                  <span
+                    title={row.name}
+                    className="inline-flex max-w-full items-center gap-1"
+                  >
+                    <ProjectMark icon={row.icon} size={12} />
+                    <span className="truncate">{row.name}</span>
+                  </span>
                 )}
               </td>
               {statuses.map((status) => {

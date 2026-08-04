@@ -1,8 +1,11 @@
 name: "Setup Node.js with Dependencies"
 description: "Sets up Node.js with caching and installs dependencies"
 inputs:
-  download-wasm:
-    description: "Whether to download WASM artifact"
+  wasm:
+    description: >-
+      How to obtain packages/wasm. "restore" restores it from the shared cache
+      and builds it in-place on a miss (needs a compiler toolchain — do NOT use
+      it in the Playwright container, which has none). "false" skips it.
     required: false
     default: "false"
   workspace-filter:
@@ -31,6 +34,75 @@ runs:
         # store can take longer than the filtered install it is meant to save.
         cache: ${{ inputs.cache-pnpm-store == 'true' && 'pnpm' || '' }}
 
+    # ---------------------------------------------------------------------
+    # WASM, restored from the shared cache rather than handed over as an
+    # artifact by a `needs: [build-wasm]` edge. That edge cost every consumer a
+    # second runner acquisition — ~23s median, ~90s p95 — to receive a directory
+    # that the cache can hand over in about two. Consumers now start at t=0.
+    #
+    # This runs BEFORE `pnpm install`: `wasm-pack` recreates its --out-dir, so
+    # building after install would blow away the node_modules links pnpm just
+    # made into packages/wasm.
+    # ---------------------------------------------------------------------
+    - name: Resolve ingredient-parser HEAD
+      if: inputs.wasm == 'restore'
+      id: parser
+      shell: bash
+      # ingredient-parser is tracked via `branch = "main"`, not a pinned rev, so
+      # the cache key folds in its live HEAD and changes the instant upstream
+      # main moves. Without this a moving branch serves a stale pkg forever.
+      run: echo "sha=$(git ls-remote https://github.com/nickysemenza/ingredient-parser refs/heads/main | cut -f1)" >> "$GITHUB_OUTPUT"
+
+    - name: Restore cached WASM pkg
+      if: inputs.wasm == 'restore'
+      id: wasm-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: packages/wasm
+        # Exact key only — deliberately no restore-keys. A prefix hit would
+        # silently serve a pkg built from a different recipebridge or parser
+        # revision, and `cache-hit` would still be false, so the build below
+        # would overwrite it anyway. The fallback only ever cost download time.
+        key: wasm-pkg-${{ runner.os }}-${{ hashFiles('recipebridge/Cargo.toml') }}-${{ hashFiles('recipebridge/src/**') }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.parser.outputs.sha }}
+
+    - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
+      if: inputs.wasm == 'restore' && steps.wasm-cache.outputs.cache-hit != 'true'
+      with:
+        cache: true
+        # Must match CARGO_TARGET_DIR on the build step below. rust-cache's
+        # default (the workspace-root ./target) is not where this build writes,
+        # which used to make every cold WASM build recompile all deps.
+        cache-workspaces: "recipebridge -> target"
+        # Distinct bucket from test-rust/coverage-rust: same manifest, different
+        # target triple (wasm32 vs native), so sharing one key thrashes both.
+        cache-key: wasm32
+
+    - name: Install wasm-pack
+      if: inputs.wasm == 'restore' && steps.wasm-cache.outputs.cache-hit != 'true'
+      uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145 # v2
+      with:
+        tool: wasm-pack
+
+    - name: Build recipebridge WASM
+      if: inputs.wasm == 'restore' && steps.wasm-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: pnpm wasm
+      env:
+        RUSTFLAGS: '--cfg getrandom_backend="wasm_js"'
+        # The root `wasm` script honours ${CARGO_TARGET_DIR:-…}; pin it so
+        # rust-cache's cache-workspaces above actually covers the build output.
+        CARGO_TARGET_DIR: ${{ github.workspace }}/recipebridge/target
+
+    - name: Save WASM pkg to cache
+      if: inputs.wasm == 'restore' && steps.wasm-cache.outputs.cache-hit != 'true'
+      # Several jobs can miss and build concurrently; the first to finish wins
+      # the key and the rest get a harmless 409. Never fail a test job over it.
+      continue-on-error: true
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: packages/wasm
+        key: wasm-pkg-${{ runner.os }}-${{ hashFiles('recipebridge/Cargo.toml') }}-${{ hashFiles('recipebridge/src/**') }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.parser.outputs.sha }}
+
     # NB: caching node_modules directly was tried and REVERTED — on a warm cache
     # hit, actions/cache restoring the linked node_modules tree (tens of
     # thousands of small files) was *slower* than this `pnpm install` against the
@@ -47,10 +119,3 @@ runs:
           pnpm install --frozen-lockfile --prefer-offline
         fi
       shell: bash
-
-    - name: Download WASM pkg artifact
-      if: inputs.download-wasm == 'true'
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-      with:
-        name: wasm-pkg
-        path: packages/wasm

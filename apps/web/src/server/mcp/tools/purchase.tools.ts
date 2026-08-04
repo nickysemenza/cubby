@@ -33,6 +33,10 @@
  * across two order ids, split refuses an expense with no purchase attached) are
  * carried in full in each tool's own description, since that description is the
  * agent's error path when a refusal fires.
+ *
+ * `vendor.merge` is registered too, as `merge_vendors` — the fix for
+ * `findDuplicateVendors` (Problems) candidates, which used to dead-end at
+ * `preview_entity_operation` with no MCP tool that could act on the preview.
  */
 
 import { expenseOut } from "@cubby/schemas/project";
@@ -50,6 +54,7 @@ import {
   splitExpenseInput,
 } from "@cubby/schemas/purchase";
 import {
+  mergeVendorsInput,
   vendorCreateInput,
   vendorFilterFields,
   vendorListResponse,
@@ -196,5 +201,18 @@ export function registerPurchaseTools(server: McpServer) {
     outputSchema: purchaseOut,
     annotations: WRITE_DESTRUCTIVE_CLOSED,
     call: (caller, params) => caller.purchase.merge(params),
+  });
+
+  registerRouterTool(server, {
+    name: "merge_vendors",
+    description:
+      "Merge one or more roster rows (`mergeIds`) into a single keeper vendor (`keepId`) — the fix for two spellings of one vendor (`Amazon` / `amazon` / `Amazon.com`), which `findDuplicateVendors` (Problems) surfaces as candidates but cannot itself act on. Every live Purchase from a merged-away vendor is re-pointed onto the keeper. " +
+      "Because Purchase enforces one row per (vendor, orderId), a purchase on a loser that shares its non-null orderId with a purchase already on the keeper (or on another loser in the same call) cannot simply be re-pointed — those two purchases are folded into one: the loser purchase's Expenses and documents move onto the survivor purchase and the loser purchase is soft-deleted. Order-less purchases (`orderId` null) never collide and always re-point untouched. The keeper also picks up `website`/`notes` from a loser ONLY where the keeper itself has none — it never overwrites a value the keeper already has. " +
+      "Each merged-away Vendor is then SOFT-DELETED. It keeps its OWN `VEN-` shortcode as a permanent tombstone — shortcodes are never reassigned or reused, so that code will never resolve to the keeper; if you need to look up which vendor a stale code named, use preview_entity_operation or a shortcode resolver, not a guess. " +
+      "There is deliberately no inverse operation. Call preview_entity_operation first with operation=merge and entity=vendor to see which purchases would repoint vs. fold before committing; never guess a merge.",
+    inputSchema: mergeVendorsInput.shape,
+    outputSchema: vendorOut,
+    annotations: WRITE_DESTRUCTIVE_CLOSED,
+    call: (caller, params) => caller.vendor.merge(params),
   });
 }

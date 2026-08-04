@@ -3,8 +3,10 @@ import { ResponsiveBar } from "@nivo/bar";
 import { useNavigate } from "@tanstack/react-router";
 import { Wallet } from "lucide-react";
 import { useMemo } from "react";
+import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import { entityDetailLink } from "~/entities/entities";
 import { formatCurrency } from "~/lib/utils";
+import { ProjectChartLabel, ProjectChartTick } from "../project-mark";
 import { nivoBarChrome, nivoChartTheme, nivoCurrencyAxis } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
@@ -21,6 +23,7 @@ export function SpendingByProject({
   data: ProjectPortfolioAnalyticsOut["spendingByProject"];
 }) {
   const navigate = useNavigate();
+  const { iconById } = useProjectOptions();
 
   const data = useMemo(
     () =>
@@ -28,13 +31,25 @@ export function SpendingByProject({
         .filter((r) => r.spend > 0)
         .slice(0, 10)
         .map((r) => ({
-          project: r.projectName,
           id: r.projectId,
-          shortcode: r.projectId,
+          name: r.projectName,
           cost: r.spend,
         }))
         .reverse(),
     [rows],
+  );
+  const identityById = useMemo(
+    () =>
+      new Map<string, { name: string; icon: string | null }>(
+        data.map(
+          (row) =>
+            [
+              String(row.id),
+              { name: row.name, icon: iconById.get(row.id) ?? null },
+            ] as const,
+        ),
+      ),
+    [data, iconById],
   );
 
   if (data.length === 0) {
@@ -48,9 +63,9 @@ export function SpendingByProject({
       <ResponsiveBar
         data={data}
         keys={["cost"]}
-        indexBy="project"
+        indexBy="id"
         layout="horizontal"
-        margin={{ top: 10, right: 80, bottom: 30, left: 160 }}
+        margin={{ top: 10, right: 80, bottom: 30, left: 180 }}
         padding={0.3}
         colors={["var(--chart-1)"]}
         {...nivoBarChrome}
@@ -58,6 +73,9 @@ export function SpendingByProject({
         axisLeft={{
           tickSize: 0,
           tickPadding: 8,
+          renderTick: (tick) => (
+            <ProjectChartTick {...tick} identityById={identityById} />
+          ),
         }}
         label={(d) =>
           d.value && d.value > 0 ? formatCurrency(d.value, 0) : ""
@@ -68,11 +86,22 @@ export function SpendingByProject({
         enableGridY={false}
         onClick={(bar) => {
           const shortcode = bar.data.id;
-          if (shortcode) navigate(entityDetailLink("project", shortcode));
+          if (shortcode)
+            navigate(entityDetailLink("project", String(shortcode)));
         }}
-        tooltip={({ indexValue, value }) => (
+        tooltip={({ data: row, value }) => (
           <ChartTooltip>
-            <strong>{indexValue}</strong>: {formatCurrency(value, 0)}
+            <strong>
+              <ProjectChartLabel
+                identity={
+                  identityById.get(String(row.id)) ?? {
+                    name: String(row.name),
+                    icon: null,
+                  }
+                }
+              />
+            </strong>
+            : {formatCurrency(value, 0)}
           </ChartTooltip>
         )}
         theme={nivoChartTheme}
