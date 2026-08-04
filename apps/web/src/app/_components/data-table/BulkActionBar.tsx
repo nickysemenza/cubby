@@ -1,17 +1,6 @@
 import type { Row } from "@tanstack/react-table";
 import { X } from "lucide-react";
-import { useState } from "react";
 import { Row as LayoutRow } from "~/components/layout";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import type { BulkAction } from "./bulk-actions.types";
@@ -57,10 +46,6 @@ export function BulkActionBar<TData>({
   selectAllMatching,
   disabled = false,
 }: BulkActionBarProps<TData>) {
-  const [confirmAction, setConfirmAction] = useState<BulkAction<TData> | null>(
-    null,
-  );
-
   if (selectedCount === 0) return null;
 
   // Offer "select all N" only once every loaded row is selected and the
@@ -72,109 +57,61 @@ export function BulkActionBar<TData>({
 
   const handleActionClick = (action: BulkAction<TData>) => {
     if (disabled) return;
-    if (action.requiresConfirmation) {
-      setConfirmAction(action);
-    } else {
-      onExecute(action, selectedRows);
-    }
-  };
-
-  const handleConfirm = () => {
-    if (confirmAction) {
-      onExecute(confirmAction, selectedRows);
-      setConfirmAction(null);
-    }
-  };
-
-  const getConfirmationContent = () => {
-    if (!confirmAction) return null;
-
-    // Custom confirmation content takes precedence
-    if (confirmAction.renderConfirmation) {
-      return confirmAction.renderConfirmation(selectedRows);
-    }
-
-    // Default message
-    return `Are you sure you want to ${confirmAction.label.toLowerCase()} ${selectedCount} item${selectedCount === 1 ? "" : "s"}?`;
+    onExecute(action, selectedRows);
   };
 
   return (
-    <>
-      <LayoutRow
-        align="center"
-        gap="sm"
-        className="rounded-md bg-primary/10 px-4 py-2"
-      >
-        <span className="font-medium text-sm">{selectedCount} selected</span>
+    <LayoutRow
+      align="center"
+      gap="sm"
+      className="rounded-md bg-primary/10 px-4 py-2"
+    >
+      <span className="font-medium text-sm">{selectedCount} selected</span>
 
-        {showSelectAll && selectAllMatching && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-primary"
-            onClick={() => void selectAllMatching.onSelectAll()}
-            disabled={
-              disabled || isExecuting || selectAllMatching.isSelectingAll
-            }
-          >
-            {selectAllMatching.isSelectingAll && (
-              <Spinner className="mr-1 size-3" />
-            )}
-            Select all {selectAllMatching.totalCount}
-          </Button>
-        )}
-
-        <LayoutRow align="center" gap="xs">
-          {actions.map((action) => (
-            <Button
-              key={action.id}
-              variant="ghost"
-              size="sm"
-              onClick={() => handleActionClick(action)}
-              disabled={disabled || isExecuting}
-            >
-              {isExecuting && currentAction?.id === action.id ? (
-                <Spinner className="mr-1 size-3" />
-              ) : action.icon ? (
-                <span className="mr-1">{action.icon}</span>
-              ) : null}
-              {action.label}
-            </Button>
-          ))}
-        </LayoutRow>
-
+      {showSelectAll && selectAllMatching && (
         <Button
           variant="ghost"
           size="sm"
-          onClick={onClearSelection}
-          disabled={disabled || isExecuting}
-          className="ml-auto"
+          className="text-primary"
+          onClick={() => void selectAllMatching.onSelectAll()}
+          disabled={disabled || isExecuting || selectAllMatching.isSelectingAll}
         >
-          <X className="size-3" />
-          <span className="sr-only">Clear selection</span>
+          {selectAllMatching.isSelectingAll && (
+            <Spinner className="mr-1 size-3" />
+          )}
+          Select all {selectAllMatching.totalCount}
         </Button>
+      )}
+
+      <LayoutRow align="center" gap="xs">
+        {actions.map((action) => (
+          <Button
+            key={action.id}
+            variant="ghost"
+            size="sm"
+            onClick={() => handleActionClick(action)}
+            disabled={disabled || isExecuting}
+          >
+            {isExecuting && currentAction?.id === action.id ? (
+              <Spinner className="mr-1 size-3" />
+            ) : action.icon ? (
+              <span className="mr-1">{action.icon}</span>
+            ) : null}
+            {action.label}
+          </Button>
+        ))}
       </LayoutRow>
 
-      {/* Confirmation Dialog */}
-      <AlertDialog
-        open={!!confirmAction}
-        onOpenChange={(open) => !open && setConfirmAction(null)}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onClearSelection}
+        disabled={disabled || isExecuting}
+        className="ml-auto"
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirm {confirmAction?.label}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {getConfirmationContent()}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirm} disabled={disabled}>
-              {confirmAction?.label}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+        <X className="size-3" />
+        <span className="sr-only">Clear selection</span>
+      </Button>
+    </LayoutRow>
   );
 }
