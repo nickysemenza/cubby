@@ -39,6 +39,7 @@ import {
   reconcileSessionPayload,
 } from "@cubby/schemas/inventory";
 import { uniq } from "es-toolkit";
+import { match } from "ts-pattern";
 import { createAppError } from "~/server/errors/app-error";
 import {
   bulkMoveInventoryEntries,
@@ -99,11 +100,16 @@ async function resolveEntityIds<T extends string>(
   entity: "inventory" | "location",
 ): Promise<Map<T, string>> {
   const resolved = await resolveLiveShortcodes(db, shortcodes, entity);
-  const missing = shortcodes.find((shortcode) => !resolved.has(shortcode));
-  if (missing) {
+  // List every missing code, not just the first — matches
+  // resolveAllOrThrow's documented rejection of throw-on-first, and this
+  // file's own `bulkProcess` handler does the same for products.
+  const missing = uniq(
+    shortcodes.filter((shortcode) => !resolved.has(shortcode)),
+  );
+  if (missing.length > 0) {
     throw createAppError(
       entity === "inventory" ? "INVENTORY_NOT_FOUND" : "LOCATION_NOT_FOUND",
-      `${entity === "inventory" ? "Inventory entry" : "Location"} not found: ${missing}`,
+      `${entity === "inventory" ? "Inventory entry" : "Location"}(s) not found: ${missing.join(", ")}`,
     );
   }
   return resolved as Map<T, string>;
@@ -384,30 +390,28 @@ const reconcileSession = protectedProcedure
         const inventoryEntryId = unsafeInventoryId(
           resolvedInventories.get(resolution.inventoryEntryId)!,
         );
-        switch (resolution.kind) {
-          case "verify":
-            return { kind: "verify" as const, inventoryEntryId };
-          case "adjust":
-            return {
-              kind: "adjust" as const,
-              inventoryEntryId,
-              amount: resolution.amount,
-            };
-          case "remove":
-            return { kind: "remove" as const, inventoryEntryId };
-          case "relocate":
-            return {
-              kind: "relocate" as const,
-              inventoryEntryId,
-              targetLocationId: unsafeLocationId(
-                resolvedLocations.get(resolution.targetLocationId)!,
-              ),
-            };
-          default: {
-            const exhaustive: never = resolution;
-            throw new Error(`Unsupported resolution: ${String(exhaustive)}`);
-          }
-        }
+        return match(resolution)
+          .with({ kind: "verify" }, () => ({
+            kind: "verify" as const,
+            inventoryEntryId,
+          }))
+          .with({ kind: "adjust" }, (r) => ({
+            kind: "adjust" as const,
+            inventoryEntryId,
+            amount: r.amount,
+          }))
+          .with({ kind: "remove" }, () => ({
+            kind: "remove" as const,
+            inventoryEntryId,
+          }))
+          .with({ kind: "relocate" }, (r) => ({
+            kind: "relocate" as const,
+            inventoryEntryId,
+            targetLocationId: unsafeLocationId(
+              resolvedLocations.get(r.targetLocationId)!,
+            ),
+          }))
+          .exhaustive();
       }),
     };
     const { items, removedIds, recomputeNeeded } =

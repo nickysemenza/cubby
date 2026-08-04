@@ -72,8 +72,7 @@ function buildMonthlySeries(
     };
   }).sort(
     (a, b) =>
-      b.data.reduce((total, point) => total + point.y, 0) -
-      a.data.reduce((total, point) => total + point.y, 0),
+      sumBy(b.data, (point) => point.y) - sumBy(a.data, (point) => point.y),
   );
 }
 

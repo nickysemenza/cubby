@@ -5,7 +5,11 @@
  * this was extracted.
  */
 
-import type { AppErrorReason } from "@cubby/shared";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import {
+  ENTITY_LABEL,
+  ENTITY_NOT_FOUND_REASON,
+} from "@cubby/schemas/identifiers";
 import type { AnyColumn, InferInsertModel } from "drizzle-orm";
 import { and, eq, inArray } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
@@ -22,7 +26,7 @@ import { notDeleted } from "./query";
  *   1. Dedupe `newIds`.
  *   2. Reject a self-reference (`id` blocked by itself) — BAD_REQUEST.
  *   3. Verify every id is a live row in `opts.entityTable` — throws
- *      `opts.notFoundReason` listing the missing ids if not.
+ *      `ENTITY_NOT_FOUND_REASON[opts.entity]` listing the missing ids if not.
  *   4. Delete `id`'s existing edges, then insert the (deduped) new set.
  */
 export async function replaceDependencyEdges<
@@ -40,20 +44,23 @@ export async function replaceDependencyEdges<
     buildRow: (ownId: TId, blockedById: TId) => InferInsertModel<TEdge>;
     /** Table the incoming ids must exist (live) in. */
     entityTable: PgTable & { id: AnyColumn; deletedAt: AnyColumn };
-    /** Human label used in error messages, e.g. "Project" / "Task". */
-    label: string;
-    /** AppErrorReason thrown when an incoming id doesn't exist. */
-    notFoundReason: AppErrorReason;
+    /**
+     * Drives both the error label (`ENTITY_LABEL[entity]`) and the
+     * AppErrorReason (`ENTITY_NOT_FOUND_REASON[entity]`) thrown when an
+     * incoming id doesn't exist, so the pair can't drift out of sync.
+     */
+    entity: ShortcodeEntity;
   },
   id: TId,
   newIds: TId[],
 ): Promise<void> {
   const deduped = uniq(newIds);
+  const label = ENTITY_LABEL[opts.entity];
 
   if (deduped.includes(id)) {
     throw createAppError(
       "SELF_DEPENDENCY",
-      `A ${opts.label.toLowerCase()} cannot be blocked by itself.`,
+      `A ${label.toLowerCase()} cannot be blocked by itself.`,
     );
   }
 
@@ -73,8 +80,8 @@ export async function replaceDependencyEdges<
     const missing = deduped.filter((depId) => !liveIds.has(depId));
     if (missing.length > 0) {
       throw createAppError(
-        opts.notFoundReason,
-        `${opts.label}(s) not found: ${missing.join(", ")}`,
+        ENTITY_NOT_FOUND_REASON[opts.entity],
+        `${label}(s) not found: ${missing.join(", ")}`,
       );
     }
   }

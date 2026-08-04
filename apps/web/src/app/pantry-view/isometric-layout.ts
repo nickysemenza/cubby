@@ -6,6 +6,7 @@ import {
   type ProductCategory,
 } from "@cubby/shared";
 import { sum, sumBy } from "es-toolkit";
+import { formatCurrency } from "~/lib/utils";
 import {
   type Camera,
   pointInPolygon,
@@ -706,7 +707,7 @@ function hitTestPieces(
       const breadcrumb = piece.path.join(" > ");
       const valuationStr =
         piece.totalValuation > 0
-          ? ` — $${piece.totalValuation.toFixed(2)}`
+          ? ` — ${formatCurrency(piece.totalValuation)}`
           : "";
       return {
         type: "furniture",

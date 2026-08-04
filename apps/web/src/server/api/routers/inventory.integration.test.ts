@@ -582,6 +582,49 @@ describe("inventory router", () => {
         }),
       ).rejects.toThrow("Cannot move 10 items - only 5 available");
     });
+
+    // Regression: `resolveEntityIds` used to throw on the FIRST missing code
+    // (`shortcodes.find`), so a request with several bad codes hid all but
+    // one. `resolveAllOrThrow`'s docstring says throw-on-first was
+    // deliberately rejected, and this file's own `bulkProcess` handler
+    // already lists every missing product — location/inventory codes should
+    // behave the same way.
+    it("lists every missing location code, not just the first", async () => {
+      const caller = createTestCaller(inventoryRouter, ctx.db);
+
+      // A real entry, so only the two location codes are unresolvable —
+      // otherwise the concurrent location/inventory resolves could race and
+      // surface the inventory error instead of the one under test.
+      const seed = await seedFromCSV(
+        ctx.db,
+        [
+          {
+            product_name: "Missing-Location Product",
+            manufacturer: "Brand",
+            location_name: "Real Location",
+            quantity: 5,
+            unit: "items",
+          },
+        ],
+        TEST_ACTOR,
+      );
+      const entryId = seed.inventoryIds.get(
+        "Missing-Location Product@Real Location",
+      )!;
+
+      await expect(
+        caller.bulkMove({
+          sourceLocationId: unsafeLocationShortcode("LOC-ZZZZ"),
+          targetLocationId: unsafeLocationShortcode("LOC-YYYY"),
+          items: [
+            {
+              inventoryEntryId: entryId,
+              quantity: { value: 1, unit: "items" },
+            },
+          ],
+        }),
+      ).rejects.toThrow(/LOC-ZZZZ.*LOC-YYYY|LOC-YYYY.*LOC-ZZZZ/);
+    });
   });
 
   it("should handle create and update failures gracefully", async () => {

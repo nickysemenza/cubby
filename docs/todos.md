@@ -739,6 +739,31 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
   (`packages/schemas/src/related-view.ts`, a flat array not keyed by entity at
   all) both fall back to `[]` for an absent entity with no way to say "this
   entity is deliberately missing" versus "nobody added it yet."
+- [ ] **CRUD factory can't use `strictOutput`.** 4 of 6 `.output()` calls in
+  `apps/web/src/server/api/crud-factory.ts` (`createGetByIdProcedure`,
+  `createGetByShortcodeProcedure`, `createCreateProcedure`,
+  `createUpdateProcedure`) can't be wrapped in `strictOutput` — the output
+  type is a naked generic `T`, so tRPC checks the resolver against
+  `DefaultValue<T, T>`, a conditional TypeScript never reduces for an
+  unresolved `T` (reproduced standalone with zero zod/trpc code). Fix is to
+  make the factory generic over the schema rather than the output type. See
+  PR #623, which documents each blocked site inline with this same
+  explanation.
+- [ ] **Two duplicate detectors have no fix action.** `problems/detectors-financial.ts`'s
+  `findDuplicateFinancialTransactionSourceRefs` and
+  `findDuplicateFinancialAccountSourceAliases` surface Problems-page findings
+  with no merge or fix action attached, and neither `financialTransaction` nor
+  `financialAccount` is in `previewMergeEntitySchema`
+  (`packages/schemas/src/entity-integrity.ts`) — merge is money-entity
+  territory and deliberately out of scope everywhere else in this codebase.
+  Either add a lighter "drop the stale sourceRef/alias" fix action, or
+  explicitly document why merge stays out of scope for these two.
+- [ ] **MCP: `create_tasks` batch tool was never registered.** PR #558's body
+  claims a `create_tasks` batch tool; `apps/web/src/server/mcp/tools/project.tools.ts`'s
+  `task` toolset only sets `batch: { update: true }` — no `create`. Either
+  register the batch-create tool or correct the historical PR claim (the code
+  is the source of truth; this is a documentation-vs-reality note, not
+  urgent).
 
 ### MCP Apps — further candidates
 

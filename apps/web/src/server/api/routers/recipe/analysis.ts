@@ -97,13 +97,14 @@ const getIngredientUsageEndpoint = protectedProcedure
   });
 
 // DURABLE recompute-all for the maintenance UI: instead of holding this request
-// open to do the whole CPU-heavy pass inline (recomputeAllStream — dies on
-// navigate-away / PWA background / Worker CPU limit with no record), mark every
-// recipe stale and enqueue bounded jobs onto the background-jobs queue, returning
-// the batchId so the toast can link to `/background-jobs`. Mirrors
-// `ai.backfillLocationDescriptions` (the durable template). Streamed only so it
-// reuses the same BackfillButton plumbing; the two `{done,total}` ticks bracket
-// the (fast) enqueue, not the actual recompute (which runs on the queue).
+// open to do the whole CPU-heavy pass inline (an inline streaming recompute
+// dies on navigate-away / PWA background / Worker CPU limit with no record),
+// mark every recipe stale and enqueue bounded jobs onto the background-jobs
+// queue, returning the batchId so the toast can link to `/background-jobs`.
+// Mirrors `ai.backfillLocationDescriptions` (the durable template). Streamed
+// only so it reuses the same BackfillButton plumbing; the two `{done,total}`
+// ticks bracket the (fast) enqueue, not the actual recompute (which runs on
+// the queue).
 const recomputeAllDurable = protectedProcedure.mutation(async function* ({
   ctx,
 }) {

@@ -128,7 +128,6 @@ const projectReader = createEntityReader({
 
     return hydrateProjectRow(row, projectContext, deps);
   },
-  notFoundReason: "PROJECT_NOT_FOUND",
 });
 
 export const getProjectByID = (
@@ -306,8 +305,7 @@ export const updateProject = async (
             blockedByProjectId,
           }),
           entityTable: project,
-          label: "Project",
-          notFoundReason: "PROJECT_NOT_FOUND",
+          entity: "project",
         },
         id,
         resolvedBlockedByIds,

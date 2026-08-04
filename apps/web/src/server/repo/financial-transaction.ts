@@ -67,8 +67,8 @@ import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import {
   resolveAllOrThrow,
+  resolveAllPresent,
   resolveOrThrow,
-  resolveShortcodes,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -146,16 +146,19 @@ const refsCondition = (
   )`;
 };
 
+// These are filters built from user-supplied codes, not a write target: a
+// mixed batch (some valid, some bogus) should narrow to what exists rather
+// than 404 the whole list, matching the same-shaped filters in
+// locationList/productList. `resolveAllPresent` is the helper that makes
+// that choice explicit instead of leaving it implicit in a hand-rolled
+// resolve-then-filter.
 async function toIds(
   db: Database,
   codes: string[] | undefined,
   entity: "financialAccount" | "purchase",
 ) {
   if (!codes) return undefined;
-  const resolved = await resolveShortcodes(db, codes);
-  return [...resolved.values()]
-    .filter((ref) => ref.entity === entity)
-    .map((ref) => ref.id);
+  return resolveAllPresent(db, entity, codes);
 }
 
 async function whereFor(
@@ -288,7 +291,6 @@ const financialTransactionReader = createEntityReader<
     return row;
   },
   fromDB: (_db, row) => toOut(row),
-  notFoundReason: "FINANCIAL_TRANSACTION_NOT_FOUND",
 });
 
 const getFinancialTransactionByID = financialTransactionReader.getByID;

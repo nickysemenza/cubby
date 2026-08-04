@@ -68,8 +68,8 @@ import {
   findCoverageTotals as findCoverageTotalsRepo,
   findDuplicateFinancialAccountSourceAliases,
   findDuplicateFinancialTransactionSourceRefs,
+  findDuplicateInventoryProducts,
   findDuplicateProductIdentities,
-  findDuplicateUniqueProducts,
   findDuplicateVendors,
   findEmptyLocations,
   findEntitiesMissingEmbeddings,
@@ -489,7 +489,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
   // one connection beats 8 cold connects. See withConnection in db.ts.
   const r = await withConnection(db, (scoped) =>
     traceAllSeq({
-      duplicateInventory: () => findDuplicateUniqueProducts(scoped),
+      duplicateInventory: () => findDuplicateInventoryProducts(scoped),
       // One extra SELECT over Product + one over ProductExternalId, grouped in
       // JS — same shape and cost class as the spelling-variant scans below.
       duplicateProductIdentities: () => findDuplicateProductIdentities(scoped),

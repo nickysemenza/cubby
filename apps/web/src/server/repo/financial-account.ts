@@ -241,7 +241,6 @@ const financialAccountReader = createEntityReader<
     return row;
   },
   fromDB: (_db, row) => toOut(row),
-  notFoundReason: "FINANCIAL_ACCOUNT_NOT_FOUND",
 });
 
 const getFinancialAccountByID = financialAccountReader.getByID;

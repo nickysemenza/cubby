@@ -285,6 +285,10 @@ export async function computeAttentionItems(
         key: attentionKey("missing_budget", row.shortcode),
         type: "missing_budget",
         severity: "info",
+        // Not `formatCurrency`: that helper lives in `~/lib/utils`, a
+        // client-side module with no existing server import (grep confirms
+        // zero); a whole-digit `$`-prefix here is a deliberate no-cents
+        // summary, not a rendering shortcut.
         description: `"${row.name}" has $${spend.toFixed(0)} in spend but no budget estimate`,
         entityType: "project",
         entityId: row.shortcode,

@@ -232,6 +232,55 @@ describe("financial repositories — critical invariants", () => {
     expect(otherKind).toMatchObject({ data: [], count: 0 });
   });
 
+  // Regression: `accountId`/`purchaseId` are `oneOrMany`, so a mixed batch of
+  // real and bogus codes is reachable from the list API and MCP. This must
+  // narrow to what resolves (matching every other list filter's
+  // `resolveAllPresent` convention — locationList, productList) rather than
+  // silently drop the bogus code AND rather than widen to an unfiltered
+  // query. An all-bogus batch still yields nothing, same as before.
+  it("narrows accountId to the codes that resolve, in a mixed valid/bogus batch", async () => {
+    const createdAccount = (
+      await createFinancialAccount(
+        ctx.db,
+        account("Mixed-batch filter Visa"),
+        ctx.actor,
+      )
+    ).output;
+    await createFinancialTransaction(
+      ctx.db,
+      financialTransactionCreateInput.parse({
+        accountId: createdAccount.id,
+        kind: "purchase",
+        status: "pending",
+        amount: 10,
+      }),
+      ctx.actor,
+    );
+    const page = { pageIndex: 0, pageSize: 100 };
+
+    const mixed = await listFinancialTransactions(
+      ctx.db,
+      {
+        accountId: [
+          createdAccount.id,
+          unsafeFinancialAccountShortcode("FAC-ZZZZ"),
+        ],
+      },
+      [],
+      page,
+    );
+    expect(mixed.count).toBe(1);
+    expect(mixed.data.map((row) => row.accountId)).toEqual([createdAccount.id]);
+
+    const allBogus = await listFinancialTransactions(
+      ctx.db,
+      { accountId: [unsafeFinancialAccountShortcode("FAC-ZZZZ")] },
+      [],
+      page,
+    );
+    expect(allBogus).toMatchObject({ data: [], count: 0 });
+  });
+
   // The two header-filter rosters. Both are load-bearing in a way a shape test
   // wouldn't catch: `financialAccountOptions` must emit SHORTCODES, because the
   // manifest's `accountId` spec brands option values with

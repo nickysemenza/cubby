@@ -220,7 +220,6 @@ const inventoryReader = createEntityReader({
       requireLoadedProductPricing(pricing, row.product.id),
     );
   },
-  notFoundReason: "INVENTORY_NOT_FOUND",
 });
 
 export const getInventoryEntryByID = (db: Database, id: InventoryId) =>

@@ -739,7 +739,9 @@ export const mcpProductUpdateInput = z.object({
   removeImageIds: z
     .array(z.uuid())
     .optional()
-    .describe("Product image ids to detach; non-Product files are rejected"),
+    .describe(
+      "Product image ids to detach; an id not currently attached to this product is silently ignored",
+    ),
   imageOrder: z
     .array(z.uuid())
     .optional()

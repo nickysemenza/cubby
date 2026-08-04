@@ -126,6 +126,16 @@ export function GlobalCommandMenu({
   // in the menu — navigation needs no lookup at all, since the prefix already
   // names the entity and the code is the URL. They key on the canonical form so
   // a typed legacy code (`P-4K7M`) previews as well as a current one.
+  //
+  // Suppressed under a scope: `search` there is a query string being typed
+  // INTO that entity's list, not a candidate shortcode, so a partial match
+  // (e.g. scoped to product, typing "PRD-4K7") must stay literal search text
+  // rather than race toward a preview/navigation. `handleSearchPaste` below
+  // deliberately does NOT apply this suppression — a paste is only recognized
+  // when it resolves to a complete, exact shortcode (see
+  // `parsePastedShortcode`'s doc comment), which is a high-confidence,
+  // one-shot user action distinct from incremental typing, so it jumps
+  // regardless of scope.
   const parsedShortcode = searchScope ? null : parseShortcode(search);
   const canonicalShortcode = parsedShortcode?.shortcode ?? "";
   const locationQuery = useQuery({

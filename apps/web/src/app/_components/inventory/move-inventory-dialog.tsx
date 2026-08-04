@@ -29,6 +29,7 @@ import {
 import { useInventoryInvalidation } from "~/app/_components/inventory/hooks";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
+import { getErrorMessage } from "~/lib/error-utils";
 
 type InventoryItem = z.infer<typeof inventoryListItemOut>;
 
@@ -122,9 +123,7 @@ export function MoveInventoryDialog({
       setError(
         completedGroups > 0
           ? `Moved items from ${completedGroups} of ${sourceGroups.size} source locations before the move failed. The list has been refreshed.`
-          : error instanceof Error
-            ? error.message
-            : "Failed to move items",
+          : getErrorMessage(error),
       );
       return;
     }

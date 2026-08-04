@@ -319,7 +319,13 @@ try {
     const candidates = await candidatesFor(domain);
     const best = candidates.sort((a, b) => b.size - a.size)[0];
     if (!best) {
-      noIcon.push(vendor);
+      // A retained vendor already has `manifest[vendor.shortcode]` seeded
+      // from VENDOR_LOGO_BY_SHORTCODE above and keeps that logo untouched —
+      // it's not missing an icon, this refresh attempt just found nothing
+      // new. Only genuinely-iconless vendors count toward the summary.
+      if (!VENDOR_LOGO_BY_SHORTCODE[vendor.shortcode]) {
+        noIcon.push(vendor);
+      }
       continue;
     }
 

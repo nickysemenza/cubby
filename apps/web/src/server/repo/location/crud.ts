@@ -21,7 +21,7 @@ import {
   type SortParams,
 } from "@cubby/schemas/pagination";
 import { and, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
-import { countBy } from "es-toolkit";
+import { countBy, uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -349,10 +349,15 @@ export const updateLocation = async (
  */
 export const bulkReparentLocations = async (
   db: Database,
-  ids: LocationId[],
+  rawIds: LocationId[],
   parentId: LocationId | null,
   actor: ActorContext,
 ): Promise<void> => {
+  // Dedupe so the `updated.length !== ids.length` guard below holds even for
+  // callers that don't pre-dedupe: `inArray` collapses duplicate ids in the
+  // UPDATE, so a duplicate in `ids` would otherwise trip a spurious
+  // LOCATION_NOT_FOUND.
+  const ids = uniq(rawIds);
   await withTransaction(db, async (tx) => {
     // One snapshot serves both live-row validation and the parent-chain walk.
     // Walking parent pointers in memory avoids one database round-trip per

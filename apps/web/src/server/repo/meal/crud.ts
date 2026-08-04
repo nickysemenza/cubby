@@ -72,7 +72,6 @@ const mealReader = createEntityReader({
   entity: "meal",
   fetchById: fetchMealById,
   fromDB: (_db, row) => dbMealToAPI(row),
-  notFoundReason: "MEAL_NOT_FOUND",
 });
 
 export const getMealByID = (

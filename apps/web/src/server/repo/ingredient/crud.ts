@@ -59,7 +59,6 @@ const ingredientCrud = createEntityCrud({
   fromDB: (db, row: IngredientDeepDB) => dbIngredientToAPI(db, row),
   toUpdate: (data: z.infer<typeof ingredientUpdateData>) => data,
   auditUpdateFields: ["name", "aliases"],
-  notFoundReason: "INGREDIENT_NOT_FOUND",
 });
 
 export const getIngredientByID = (
