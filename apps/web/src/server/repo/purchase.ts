@@ -15,7 +15,6 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import type { DataException } from "@cubby/schemas/data-quality";
 import type {
   ImpactItem,
   OperationDisposition,
@@ -28,7 +27,6 @@ import {
   type PurchaseId,
   type PurchaseShortcode,
   unsafeExpenseId,
-  unsafeProductId,
   unsafePurchaseId,
   unsafePurchaseShortcode,
   unsafeVendorShortcode,
@@ -132,7 +130,6 @@ import { relatedWhereConditions } from "~/server/repo/related-view";
 import {
   resolveAllOrThrow,
   resolveLiveShortcode,
-  resolveLiveShortcodes,
   resolveOrThrow,
   resolveShortcodes,
 } from "~/server/repo/shortcode-resolver";
@@ -267,7 +264,6 @@ const purchaseColumns = {
   date: purchase.date,
   statedTotal: purchase.statedTotal,
   notes: purchase.notes,
-  dataExceptions: purchase.dataExceptions,
   createdAt: purchase.createdAt,
   updatedAt: purchase.updatedAt,
   vendorName: purchaseVendorName,
@@ -286,7 +282,6 @@ type PurchaseRow = {
   date: string;
   statedTotal: number | null;
   notes: string | null;
-  dataExceptions: DataException[];
   createdAt: Date;
   updatedAt: Date;
   vendorName: string | null;
@@ -1100,28 +1095,23 @@ export const splitExpense = async (
       const productShortcodes = parts
         .map((part) => part.productId)
         .filter((code): code is NonNullable<typeof code> => code !== null);
-      const productIds = await resolveLiveShortcodes(
+      const resolvedProductIds = await resolveAllOrThrow(
         tx,
-        productShortcodes,
         "product",
+        productShortcodes,
       );
-      const missingProducts = productShortcodes.filter(
-        (code) => !productIds.has(code),
+      const productIds = new Map(
+        productShortcodes.map((code, i) => {
+          // Non-null: resolveAllOrThrow returns one id per input code, positionally.
+          return [code, resolvedProductIds[i]!] as const;
+        }),
       );
-      if (missingProducts.length > 0) {
-        throw createAppError(
-          "PRODUCT_NOT_FOUND",
-          `Product(s) not found: ${missingProducts.join(", ")}`,
-        );
-      }
 
       const pricingCandidates = uniq(
         [
           original.productId,
           ...parts.map((part) =>
-            part.productId
-              ? unsafeProductId(productIds.get(part.productId) ?? "")
-              : null,
+            part.productId ? (productIds.get(part.productId) ?? null) : null,
           ),
         ].filter((value): value is ProductId => value !== null),
       );
@@ -1150,7 +1140,7 @@ export const splitExpense = async (
           projectId = await resolveOrThrow(tx, "project", part.projectId);
         }
         const productId = part.productId
-          ? unsafeProductId(productIds.get(part.productId) ?? "")
+          ? (productIds.get(part.productId) ?? null)
           : null;
         const lineKind =
           part.lineKind ?? inferExpenseLineKind({ name: part.name, productId });
@@ -1201,9 +1191,7 @@ export const splitExpense = async (
         productIds: [
           original.productId,
           ...parts.map((part) =>
-            part.productId
-              ? unsafeProductId(productIds.get(part.productId) ?? "")
-              : null,
+            part.productId ? (productIds.get(part.productId) ?? null) : null,
           ),
         ].filter((value): value is ProductId => value !== null),
         purchaseIds: [chargeId],
@@ -1449,6 +1437,35 @@ export const foldChargeInto = async (
         and(eq(purchaseImage.purchaseId, deadId), notDeleted(purchaseImage)),
       );
   }
+
+  // Evidence-changing invariant: this fold just re-pointed Expenses,
+  // FinancialTransactions, and documents onto the survivor — the exact class
+  // of change `linkExpensesToPurchase` and `splitExpense` already invalidate
+  // stored exceptions for. Bumping `updatedAt` makes an exception's
+  // `check:updatedAt` fingerprint stop matching, so a stale
+  // `paperwork_mismatch`/`settlement_reference`/etc. exception reports STALE
+  // instead of silently staying "active" against evidence that moved out from
+  // under it. Unconditional — even when `carried` above was empty (both
+  // purchases already fully populated, so no column changed on the survivor
+  // row itself), the lines still moved, which is real evidence movement on its
+  // own and must still invalidate the survivor's exceptions. Also touches the
+  // products behind any moved expense: a purchase-level check can read through
+  // to a product (`amazon_asin`'s vendor lookup), and a product-level
+  // exception is fingerprinted against `Product.updatedAt`, not
+  // `Purchase.updatedAt`, so it needs its own bump.
+  const movedExpenseProducts =
+    moved.length > 0
+      ? await tx.query.expense.findMany({
+          where: inArray(expense.id, moved.map(unsafeExpenseId)),
+          columns: { productId: true },
+        })
+      : [];
+  await touchDataQualityTargets(tx, {
+    purchaseIds: [survivorId],
+    productIds: movedExpenseProducts
+      .map((row) => row.productId)
+      .filter((value): value is ProductId => value !== null),
+  });
 
   // Soft-delete the dead charge, cascade its search embedding, and write the
   // trail — one call, so the embedding cascade can't be dropped (see
