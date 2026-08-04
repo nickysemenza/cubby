@@ -15,6 +15,7 @@ import type { WithEntitySearchProps } from "../combobox/with-search-hook";
 export interface DependencyItem<TId extends string> {
   id: TId;
   name: string;
+  icon?: ReactNode;
 }
 
 export interface DependencyPickerProps<TId extends string> {
@@ -106,6 +107,7 @@ export function DependencyPicker<TId extends string>({
             // Entity names — opt out of the mono-uppercase stamp.
             className="gap-1 pr-1 font-normal font-sans normal-case tracking-normal"
           >
+            {item.icon}
             <span className="truncate">{item.name}</span>
             <button
               type="button"

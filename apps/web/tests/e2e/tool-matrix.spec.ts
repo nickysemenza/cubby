@@ -4,6 +4,8 @@ import { waitForFormHydration } from "./e2e-helpers";
 test("tool matrix keeps angled project headers pinned below the nav", async ({
   page,
 }) => {
+  test.setTimeout(120_000);
+
   for (const name of ["Matrix kitchen", "Matrix garage"]) {
     await page.goto("/projects");
     await page.waitForLoadState("networkidle");
@@ -12,6 +14,26 @@ test("tool matrix keeps angled project headers pinned below the nav", async ({
     await dialog.getByLabel("Name").fill(name);
     await dialog.getByRole("button", { name: /^Create$/ }).click();
     await expect(dialog).not.toBeVisible({ timeout: 10000 });
+
+    if (name === "Matrix kitchen") {
+      await page.goto("/projects?view=gallery");
+      await page.waitForLoadState("networkidle");
+      await page.getByRole("link").filter({ hasText: name }).first().click();
+      await expect(page).toHaveURL(
+        /\/projects\/PRJ-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
+      );
+      const iconRow = page.getByText("Icon", { exact: true }).locator("..");
+      await iconRow.getByRole("button").first().click();
+      const iconInput = page.getByPlaceholder("e.g. 🔧");
+      await iconInput.fill("🛠️");
+      const updateResponse = page.waitForResponse(
+        (response) =>
+          response.url().includes("project.update") && response.ok(),
+      );
+      await iconInput.press("Enter");
+      await updateResponse;
+      await expect(iconRow.getByText("🛠️")).toBeVisible();
+    }
   }
 
   await page.goto("/products/new");
@@ -35,6 +57,10 @@ test("tool matrix keeps angled project headers pinned below the nav", async ({
   const projectLinks = table.locator("thead").getByRole("link");
   await expect(projectLinks).toHaveCount(2);
   await expect(projectLinks.first()).toHaveCSS("rotate", "-60deg");
+  const customProject = projectLinks.filter({ hasText: "Matrix kitchen" });
+  await expect(customProject.getByText("🛠️")).toBeVisible();
+  const fallbackProject = projectLinks.filter({ hasText: "Matrix garage" });
+  await expect(fallbackProject.locator("svg.lucide-hammer")).toBeVisible();
 
   const toolRow = table.getByRole("row").filter({
     has: page.getByRole("link", { name: "Matrix track saw", exact: true }),

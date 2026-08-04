@@ -12,6 +12,7 @@ import {
   capitalize,
   PROJECT_STATUS_LABELS,
 } from "~/app/projects/project-formatting";
+import { ProjectMarkById } from "~/app/projects/project-mark";
 import { EntityIcon } from "~/entities/entities";
 import { usdaRouteId } from "~/entities/entity-query";
 import { purchaseLabel, purchaseLabelUsedVendor } from "~/lib/purchase-label";
@@ -307,11 +308,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         openInNewTab={openInNewTab}
         className={wrapperClass}
         icon={
-          data.icon ? (
-            <span className="text-xs leading-none">{data.icon}</span>
-          ) : (
-            <EntityIcon entity="project" size={12} colored />
-          )
+          <ProjectMarkById projectId={data.id} icon={data.icon} size={12} />
         }
         name={data.name}
         metadata={

@@ -39,6 +39,7 @@ import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { RelationshipSummaryTable } from "~/app/_components/relationships/relationship-summary-table";
 import { CreateExpenseDialog } from "~/app/expenses/create-expense-dialog";
+import { ProjectMark } from "~/app/projects/project-mark";
 import { TaskBoard } from "~/app/tasks/board/TaskBoard";
 import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
@@ -139,9 +140,8 @@ interface ProjectDetailPageProps {
 }
 
 /**
- * A blocked-by/blocking dependency link, name-only — `project.options` (used
- * to resolve these) is the lightweight `{id,name}` projection, so this can't
- * carry `ProjectPill`'s status icon/tooltip (those need a full `ProjectOut`).
+ * A blocked-by/blocking dependency link resolved from the lightweight project
+ * identity list. Status tooltips still require a full `ProjectOut`.
  */
 function DependencyBadge({ id, name }: { id: string; name: string }) {
   return <EntityInlineLink entity="project" data={{ id, name }} compact />;
@@ -385,6 +385,7 @@ function SubProjectsList({
                     data={{
                       id: child.id,
                       name: child.name,
+                      icon: child.icon,
                     }}
                     compact
                   />
@@ -528,22 +529,29 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     redirectTo: "/projects",
   });
 
-  // Lightweight {id,name} projection (no rollups/dependency joins) — enough
+  // Lightweight identity projection (no rollups/dependency joins) — enough
   // to resolve blockedByIds/blockingIds into linked badges, and to populate
   // the "Parent project" picker. A project with a dangling reference to a
   // deleted project (excluded from `options`) just drops out of the list,
   // same as the old full-ProjectOut lookup did.
   const { data: projectOptions } = useQuery(api.project.options.queryOptions());
   const projectNamesById = useMemo(() => {
-    const map = new Map<string, { name: string }>();
-    for (const p of projectOptions ?? []) map.set(p.id, { name: p.name });
+    const map = new Map<string, { name: string; icon: string | null }>();
+    for (const p of projectOptions ?? [])
+      map.set(p.id, { name: p.name, icon: p.icon });
     return map;
   }, [projectOptions]);
   const resolveDependencyNames = (ids: ProjectOut["blockedByIds"]) =>
     ids
       .map((id) => {
         const found = projectNamesById.get(id);
-        return found ? { id, name: found.name } : null;
+        return found
+          ? {
+              id,
+              name: found.name,
+              icon: <ProjectMark icon={found.icon} size={12} />,
+            }
+          : null;
       })
       .filter((p): p is NonNullable<typeof p> => p != null);
   const blockedBy = resolveDependencyNames(project.blockedByIds);
@@ -555,7 +563,11 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     () =>
       (projectOptions ?? [])
         .filter((p) => p.id !== project.id)
-        .map((p) => ({ value: p.id, label: p.name })),
+        .map((p) => ({
+          value: p.id,
+          label: p.name,
+          icon: <ProjectMark icon={p.icon} size={12} />,
+        })),
     [projectOptions, project.id],
   );
 
@@ -1243,10 +1255,10 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
       variant="detail"
       entity="project"
       title={
-        <>
-          {project.icon && `${project.icon} `}
+        <Row align="center" gap="xs">
+          <ProjectMark icon={project.icon} size={20} />
           {project.name}
-        </>
+        </Row>
       }
       rawData={project}
       heroImages={images}

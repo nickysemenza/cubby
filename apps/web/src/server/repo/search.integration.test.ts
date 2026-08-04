@@ -415,7 +415,7 @@ describe("hydrateSearchResultsByRefs: tracker entities", () => {
     const { output: project, entityId: projectUuid } = await createProject(
       ctx.db,
       mock(projectCreateInput, {
-        overrides: { name: "Hydrate Ref Project" },
+        overrides: { name: "Hydrate Ref Project", icon: "🔨" },
       }),
       ctx.actor,
     );
@@ -451,6 +451,10 @@ describe("hydrateSearchResultsByRefs: tracker entities", () => {
       projectUuid,
       taskUuid,
     ]);
+    const projectHit = results.find((r) => r.entityType === "project");
+    if (projectHit?.entityType === "project") {
+      expect(projectHit.icon).toBe("🔨");
+    }
     const taskHit = results.find((r) => r.entityType === "task");
     if (taskHit?.entityType === "task") {
       expect(taskHit.projectName).toBe("Hydrate Ref Project");

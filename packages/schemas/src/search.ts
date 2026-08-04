@@ -180,6 +180,7 @@ const projectResult = z.object({
   ...searchResultBaseFields,
   id: projectShortcode,
   entityType: z.literal("project"),
+  icon: z.string().nullable(),
   status: z.string().nullable(),
   spent: z.number().nullable(),
 });

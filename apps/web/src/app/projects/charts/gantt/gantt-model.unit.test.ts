@@ -22,6 +22,7 @@ function project(params: {
   endDate?: string | null;
   kind?: ProjectOut["kind"];
   status?: ProjectOut["status"];
+  icon?: string | null;
   taskCount?: number;
   doneTaskCount?: number;
   subtreeTaskCount?: number;
@@ -42,7 +43,7 @@ function project(params: {
         : null,
     startDate: params.startDate ?? null,
     endDate: params.endDate ?? null,
-    icon: null,
+    icon: params.icon ?? null,
     notes: null,
     googleDriveFolderUrl: null,
     notionPageUrl: null,
@@ -130,6 +131,15 @@ function projectRowsOf(rows: GanttRow[]): GanttProjectRow[] {
 }
 
 describe("buildPortfolioRows", () => {
+  it("carries custom project icons into visualization rows", () => {
+    const { rows } = buildPortfolioRows(
+      [project({ id: "garage", icon: "🔧" })],
+      new Set(),
+    );
+
+    expect(projectRowsOf(rows)[0]?.icon).toBe("🔧");
+  });
+
   it("walks a 3-level project tree with correct depths when fully expanded", () => {
     const root = project({ id: "root" });
     const child = project({ id: "child", parentProjectId: "root" });

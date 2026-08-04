@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { match } from "ts-pattern";
 import { getTradeColor } from "~/app/projects/charts/gantt/trade-colors";
+import { ProjectMarkById } from "~/app/projects/project-mark";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { getStatusChartColor } from "~/lib/status-colors";
@@ -59,6 +60,11 @@ function axisColor(key: BoardColumnKey | BoardLaneKey): string | null {
 
 /** The small square accent chip for a column/lane, or null (project has none). */
 export function axisColorChip(key: BoardColumnKey | BoardLaneKey) {
+  if (key.kind === "project") {
+    return key.projectId ? (
+      <ProjectMarkById projectId={key.projectId} size={12} />
+    ) : null;
+  }
   const color = axisColor(key);
   return color ? (
     <span
