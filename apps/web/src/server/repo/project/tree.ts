@@ -38,7 +38,7 @@ import { project } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { projectDependencyIds } from "./analytics";
 import { hydrateProjectRow } from "./helpers";
-import { buildProjectListQuery } from "./lookup";
+import { buildProjectListQuery, projectListSums } from "./lookup";
 import { collectDescendantIds, loadProjectSubtreeRollups } from "./subtree";
 
 /**
@@ -47,29 +47,44 @@ import { collectDescendantIds, loadProjectSubtreeRollups } from "./subtree";
  * against), and `data` is this page's roots plus every matching descendant
  * beneath them, in the query's global sort order — so the client's per-parent
  * input-order nesting reproduces that ordering at every level of the tree.
+ *
+ * `sums`, by contrast, is deliberately NOT scoped to roots — see
+ * `projectListSums`'s doc comment. It's the same full-filtered-set total
+ * `projectList` returns, computed off the same `whereClause`, because the
+ * `costEstimate` footer means "every matching project's own estimate,
+ * summed" regardless of which renderer is drawing the rows.
  */
 export const projectTreePage = async (
   db: Database,
   filters: ProjectFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-): Promise<{ data: ProjectOut[]; count: number }> => {
+): Promise<{
+  data: ProjectOut[];
+  count: number;
+  sums: { costEstimate: number };
+}> => {
   const { tree, whereClause, orderByArray } = await buildProjectListQuery(
     db,
     filters,
     sorts,
   );
-
   // The full matching set, ordered but unpaginated — ids only. Run through
   // RQB (not `select().from(project)`) because the effective-start ORDER BY is
   // `sql.raw` with the `"project"` alias spelled out by hand, and only the
   // relational builder aliases the root table that way. See the comment on
   // `effectiveStartSortSql` in lookup.ts.
-  const matchingRows = await getDb(db).query.project.findMany({
-    columns: { id: true, parentProjectId: true },
-    where: whereClause,
-    orderBy: orderByArray,
-  });
+  //
+  // The footer sum is independent of root selection (see `projectListSums`'s
+  // doc comment), so it runs alongside this scan rather than after it.
+  const [matchingRows, sums] = await Promise.all([
+    getDb(db).query.project.findMany({
+      columns: { id: true, parentProjectId: true },
+      where: whereClause,
+      orderBy: orderByArray,
+    }),
+    projectListSums(db, whereClause),
+  ]);
   const matching = new Set(matchingRows.map((row) => row.id));
 
   // The forest the CLIENT will draw: an edge exists only between a matching
@@ -97,7 +112,7 @@ export const projectTreePage = async (
 
   const { take, skip } = buildTakeSkip(pagination);
   const pageRoots = roots.slice(skip, skip + take);
-  if (pageRoots.length === 0) return { data: [], count: roots.length };
+  if (pageRoots.length === 0) return { data: [], count: roots.length, sums };
 
   // Every id reachable from a page root through matching-parent edges — by
   // construction already inside the matching set, and depth-capped /
@@ -126,5 +141,6 @@ export const projectTreePage = async (
   return {
     data: rows.map((row) => hydrateProjectRow(row, projectContext, deps)),
     count: roots.length,
+    sums,
   };
 };
