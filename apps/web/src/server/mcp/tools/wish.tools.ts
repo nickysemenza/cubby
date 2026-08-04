@@ -1,3 +1,4 @@
+import { unsafeWishShortcode } from "@cubby/schemas/identifiers";
 import {
   wishCreateInput,
   wishFilterFields,
@@ -22,6 +23,12 @@ export function registerWishTools(server: McpServer) {
     out: wishOut,
     slim: slimWish,
     sort: { orderBy: "createdAt", direction: "desc" },
+    // `wish.getByID` takes the shortcode as a BARE scalar (`.input(wishShortcode)`),
+    // not the `{ id }` the crud-factory routers take — and the default fetch
+    // passes `{ id }`, which zod rejected outright, making get_wish uncallable.
+    // Shim only: when wish.ts moves onto the crud factory this override goes
+    // away with it (same as the vendor/purchase ones in purchase.tools.ts).
+    get: (caller, id) => caller.wish.getByID(unsafeWishShortcode(id)),
     descriptions: {
       list: "List wishlist items. Filter by acquired state, a candidate Tool product, or a name/notes search. Each item is one desired outcome with zero or more alternatives to pick from.",
       get: "Get a wishlist item, including its candidate Tool products.",

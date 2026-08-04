@@ -127,7 +127,47 @@ function getRegisteredTools(
   return (server as unknown as McpServerInternals)._registeredTools;
 }
 
+/** What a tool with no arguments at all advertises. */
 const EMPTY_OBJECT_JSON_SCHEMA = { type: "object", properties: {} };
+
+/**
+ * Resolve a tool's declared input to the object schema the SDK registers.
+ *
+ * `normalizeObjectSchema` recognizes exactly two things — an object schema and
+ * a raw shape — and returns `undefined` for everything else (a union, a pipe, a
+ * lazy). That `undefined` used to fall back to `z.object({})`, which is not a
+ * degradation but a **silent break**: the SDK parses incoming arguments against
+ * the registered schema, so every argument was stripped before the handler ran,
+ * and `tools/list` advertised `{type: "object", properties: {}}` — a tool that
+ * looks argument-less and rejects every call. `preview_entity_operation`
+ * shipped that way with a top-level `z.union` input.
+ *
+ * So: no input at all is fine (an empty object schema is the honest answer),
+ * but an input we cannot represent is a registration-time error.
+ */
+function toolInputSchema(
+  toolName: string,
+  schema: ZodSchemaLike | undefined,
+): z.ZodType {
+  // No schema, or an empty raw shape (`{}` — the other way a caller spells "no
+  // arguments"). Neither has a field to lose.
+  if (
+    !schema ||
+    (!(schema instanceof z.ZodType) && Object.keys(schema).length === 0)
+  ) {
+    return z.object({});
+  }
+  const normalized = normalizeObjectSchema(schema);
+  if (!normalized) {
+    throw new Error(
+      `registerMcpTool(${toolName}): inputSchema must be an object schema or a raw shape. ` +
+        "A union, pipe, or other non-object schema normalizes to `undefined` in the MCP SDK, " +
+        "which advertises the tool as taking no arguments AND strips every argument before the " +
+        "handler runs. Flatten it into one object and put the cross-field rules in `.refine()`.",
+    );
+  }
+  return normalized as z.ZodType;
+}
 
 /** Recursively delete `mock` keys from JSON Schema objects exposed to MCP clients. */
 export function stripMockFromJsonSchema(
@@ -244,11 +284,7 @@ export function structuredError(text: string) {
  * The catch is a last-resort net only — server.unit.test.ts's "advertises real
  * JSON Schema properties for every tool" asserts no tool falls back to it.
  */
-function safeToJsonSchema(
-  obj: ReturnType<typeof normalizeObjectSchema>,
-  io: "input" | "output",
-) {
-  if (!obj) return EMPTY_OBJECT_JSON_SCHEMA;
+function safeToJsonSchema(obj: z.ZodType, io: "input" | "output") {
   try {
     return stripMockFromJsonSchema(
       z.toJSONSchema(obj as z.ZodType, {
@@ -268,6 +304,30 @@ function safeToJsonSchema(
   }
 }
 
+/**
+ * The JSON Schema advertised for one side of one registered tool.
+ *
+ * A tool registered with no schema at all genuinely takes no arguments, and
+ * `{type: "object", properties: {}}` says exactly that. A schema that *exists*
+ * but doesn't normalize is the silent-substitution bug this file used to have
+ * (see `toolInputSchema`), so it throws rather than advertising an empty object
+ * that hides real fields.
+ */
+function advertisedJsonSchema(
+  toolName: string,
+  schema: z.ZodType | undefined,
+  io: "input" | "output",
+) {
+  if (!schema) return EMPTY_OBJECT_JSON_SCHEMA;
+  const normalized = normalizeObjectSchema(schema);
+  if (!normalized) {
+    throw new Error(
+      `${toolName}: registered ${io} schema is not an object schema, so it cannot be advertised without dropping every field.`,
+    );
+  }
+  return safeToJsonSchema(normalized as z.ZodType, io);
+}
+
 /** Install a ListTools handler that strips mock metadata from advertised schemas. */
 export function installMockStrippedListToolsHandler(server: McpServer) {
   // server.server is the underlying SDK Server — private but stable for ListTools override.
@@ -281,12 +341,7 @@ export function installMockStrippedListToolsHandler(server: McpServer) {
           name,
           title: tool.title,
           description: tool.description,
-          inputSchema: safeToJsonSchema(
-            tool.inputSchema
-              ? normalizeObjectSchema(tool.inputSchema)
-              : undefined,
-            "input",
-          ),
+          inputSchema: advertisedJsonSchema(name, tool.inputSchema, "input"),
           annotations: tool.annotations,
         };
         // `_meta` carries the MCP Apps `ui.resourceUri` pointer. Rebuilding the
@@ -296,8 +351,9 @@ export function installMockStrippedListToolsHandler(server: McpServer) {
           definition._meta = tool._meta;
         }
         if (tool.outputSchema) {
-          definition.outputSchema = safeToJsonSchema(
-            normalizeObjectSchema(tool.outputSchema),
+          definition.outputSchema = advertisedJsonSchema(
+            name,
+            tool.outputSchema,
             "output",
           );
         }
@@ -325,7 +381,7 @@ export function registerMcpTool<
   TInput extends ZodSchemaLike,
   TOutput extends z.ZodType,
 >(server: McpServer, config: RegisterMcpToolConfig<TInput, TOutput>) {
-  const inputSchema = normalizeObjectSchema(config.inputSchema) ?? z.object({});
+  const inputSchema = toolInputSchema(config.name, config.inputSchema);
   const callback = async (
     params: Record<string, unknown>,
     extra: ToolExtra,
@@ -1464,7 +1520,10 @@ export function registerRouterTool<
   registerMcpTool(server, {
     name: config.name,
     description: config.description,
-    inputSchema: config.inputSchema ?? ({} as TInput),
+    // Undefined on purpose when the tool takes no arguments — `toolInputSchema`
+    // turns that into an empty object schema, the one case where advertising no
+    // properties is the truth rather than a dropped input.
+    inputSchema: config.inputSchema,
     outputSchema: config.outputSchema,
     annotations: config.annotations,
     uiResourceUri: config.uiResourceUri,
