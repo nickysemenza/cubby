@@ -403,10 +403,14 @@ Key constraints:
   connections at Cloudflare's edge, but every query reaches Postgres so
   mutation → invalidation → refetch paths have predictable read-after-write
   behavior. This is account-level state on the Hyperdrive object, not a
-  `wrangler.jsonc` field; `pnpm --filter @cubby/web run
-  verify:hyperdrive-cache` checks the live object, and production deploys fail
-  if caching has been enabled. Any future cache experiment must use an isolated
-  non-production Hyperdrive object with explicit correctness tests.
+  `wrangler.jsonc` field, so it is not enforced by code review or by CI —
+  inspect it with `wrangler hyperdrive get <id>` if you suspect drift. A deploy
+  gate that checked the live object on every deploy was removed: it put a
+  third-party API call on the deploy critical path and failed closed on being
+  unable to *read* the setting, which blocked seven commits' worth of
+  production deploys when the CI token turned out to lack Hyperdrive scope. Any
+  future cache experiment must use an isolated non-production Hyperdrive object
+  with explicit correctness tests.
 - **WASM uses `?init`** because `vite-plugin-wasm` doesn't apply to CF's SSR environment. `cfWasmPlugin()` redirects `@cubby/recipebridge` to `recipebridge-cf.ts`.
 - **`__CF_WORKERS__` define** eliminates module-level Pool creation from the CF build.
 - **OTel disabled in production** — only runs in dev via `instrument.server.mjs`.
