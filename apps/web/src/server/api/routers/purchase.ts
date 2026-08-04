@@ -1,10 +1,9 @@
 /**
  * Purchase Router — one vendor order/receipt event per row.
  *
- * `list` comes from the shared factory; the rest is hand-rolled for the same two
- * reasons as `vendor.ts` (correlated rollups the factory can't produce), plus
- * the three operations that have no
- * factory analogue at all: `link`, `split` and `merge`.
+ * Standard CRUD comes from the shared searchable factory; spread in alongside
+ * are the operations that have no factory analogue at all: `link`, `split`,
+ * `merge`, `reclassifyDocument` and `deleteEmpty`.
  *
  * There is deliberately no `splitPurchase` — one order is one purchase by
  * construction (the partial-unique `(vendorId, orderId)` index), so there is
@@ -15,6 +14,7 @@ import {
   purchaseShortcode,
   unsafeExpenseId,
   unsafePurchaseId,
+  unsafePurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import { expenseOut } from "@cubby/schemas/project";
 import {
@@ -26,7 +26,7 @@ import {
   purchaseFiltersSchema,
   purchaseOut,
   purchaseSortableFields,
-  purchaseUpdateInput,
+  purchaseUpdateData,
   reclassifyPurchaseDocumentInput,
   splitExpenseInput,
 } from "@cubby/schemas/purchase";
@@ -36,7 +36,6 @@ import {
   createPurchase,
   deleteEmptyPurchases,
   deletePurchases,
-  getPurchaseByID,
   getPurchaseByShortcode,
   linkExpensesToPurchase,
   mergePurchases,
@@ -55,73 +54,74 @@ import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
-import {
-  createEntityListProcedure,
-  createGetByShortcodeProcedure,
-} from "../crud-factory";
+import { createSearchableEntityCrudProcedures } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
-const { list } = createEntityListProcedure({
+const procedures = createSearchableEntityCrudProcedures({
   schemas: {
+    createInput: purchaseCreateInput,
+    updateInput: purchaseUpdateData,
     output: purchaseOut,
     filters: purchaseFiltersSchema,
     sort: {
       sortableFields: purchaseSortableFields,
       defaultSort: "date",
     },
+    idSchema: purchaseShortcode,
   },
   repository: {
+    getByID: async (ctx, id) => {
+      const out = await getPurchaseByShortcode(ctx.db, id);
+      if (!out) {
+        throw createAppError("PURCHASE_NOT_FOUND", `Purchase not found: ${id}`);
+      }
+      return out;
+    },
+    getByShortcode: (ctx, shortcode) =>
+      getPurchaseByShortcode(ctx.db, shortcode),
     list: (ctx, filters, sorts, pagination) =>
       purchaseList(ctx.db, filters, sorts, pagination),
+    create: (ctx, data) => createPurchase(ctx.db, data, ctx.actorContext),
+    update: (ctx, id, data) =>
+      updatePurchase(
+        ctx.db,
+        { id: unsafePurchaseShortcode(id), data },
+        ctx.actorContext,
+      ),
+    /**
+     * NOT a plain repo passthrough. Deleting a purchase DETACHES the expenses
+     * and financial transactions that pointed at it, and those rows embed the
+     * purchase's identity — so each one has to be reindexed even though the
+     * factory's own delete side-effect only ever sees the purchase itself.
+     * `deletePurchases` returns exactly those detached ids for that purpose;
+     * dropping this dispatch would silently leave them stale, with no compiler
+     * signal. Covered by searchable-crud.integration.test.ts.
+     */
+    delete: async (ctx, ids) => {
+      const detached = await deletePurchases(
+        ctx.db,
+        ids.map(unsafePurchaseShortcode),
+        ctx.actorContext,
+      );
+      return runMutationSideEffectsForEntities(ctx.db, [
+        ...detached.expenseIds.map((entityId) => ({
+          action: "updated" as const,
+          entity: { entityType: "expense" as const, entityId },
+          source: "purchase.delete",
+        })),
+        ...detached.financialTransactionIds.map((entityId) => ({
+          action: "updated" as const,
+          entity: {
+            entityType: "financialTransaction" as const,
+            entityId,
+          },
+          source: "purchase.delete",
+        })),
+      ]);
+    },
   },
   entityName: "purchase",
 });
-
-const getByID = protectedProcedure
-  .input(purchaseShortcode)
-  .output(strictOutput(purchaseOut))
-  .query(async ({ ctx, input }) => {
-    const id = await resolveLiveShortcode(ctx.db, input, "purchase");
-    if (!id) {
-      throw createAppError(
-        "PURCHASE_NOT_FOUND",
-        `Purchase not found: ${input}`,
-      );
-    }
-    return getPurchaseByID(ctx.db, unsafePurchaseId(id));
-  });
-
-const getByShortcode = createGetByShortcodeProcedure(
-  "purchase",
-  purchaseOut,
-  (ctx, shortcode) => getPurchaseByShortcode(ctx.db, shortcode),
-);
-
-const create = protectedProcedure
-  .input(purchaseCreateInput)
-  .output(strictOutput(purchaseOut))
-  .mutation(async ({ ctx, input }) => {
-    const result = await createPurchase(ctx.db, input, ctx.actorContext);
-    await runMutationSideEffects(ctx.db, {
-      action: "created",
-      entity: { entityType: "purchase", entityId: result.entityId },
-      source: "purchase.create",
-    });
-    return result.output;
-  });
-
-const update = protectedProcedure
-  .input(purchaseUpdateInput)
-  .output(strictOutput(purchaseOut))
-  .mutation(async ({ ctx, input }) => {
-    const result = await updatePurchase(ctx.db, input, ctx.actorContext);
-    await runMutationSideEffects(ctx.db, {
-      action: "updated",
-      entity: { entityType: "purchase", entityId: result.entityId },
-      source: "purchase.update",
-    });
-    return result.output;
-  });
 
 /**
  * Attach existing expenses to a charge — one invoice spanning trades. The moved
@@ -249,27 +249,6 @@ const reclassifyDocument = protectedProcedure
     reclassifyPurchaseDocument(ctx.db, input, ctx.actorContext),
   );
 
-const deleteItem = protectedProcedure
-  .input(z.object({ ids: z.array(purchaseShortcode).min(1) }))
-  .mutation(async ({ ctx, input }) => {
-    const detached = await deletePurchases(ctx.db, input.ids, ctx.actorContext);
-    await runMutationSideEffectsForEntities(ctx.db, [
-      ...detached.expenseIds.map((entityId) => ({
-        action: "updated" as const,
-        entity: { entityType: "expense" as const, entityId },
-        source: "purchase.delete",
-      })),
-      ...detached.financialTransactionIds.map((entityId) => ({
-        action: "updated" as const,
-        entity: {
-          entityType: "financialTransaction" as const,
-          entityId,
-        },
-        source: "purchase.delete",
-      })),
-    ]);
-  });
-
 const deleteEmpty = protectedProcedure
   .input(deleteEmptyPurchasesInput)
   .output(strictOutput(deleteEmptyPurchasesOut))
@@ -283,15 +262,10 @@ const deleteEmpty = protectedProcedure
   });
 
 export const purchaseRouter = createTRPCRouter({
-  getByID,
-  getByShortcode,
-  list,
-  create,
-  update,
+  ...procedures,
   link,
   split,
   merge,
   reclassifyDocument,
-  delete: deleteItem,
   deleteEmpty,
 });

@@ -35,7 +35,6 @@
  * agent's error path when a refusal fires.
  */
 
-import { unsafePurchaseId, unsafeVendorId } from "@cubby/schemas/identifiers";
 import { expenseOut } from "@cubby/schemas/project";
 import {
   deleteEmptyPurchasesInput,
@@ -104,8 +103,6 @@ export function registerPurchaseTools(server: McpServer) {
     out: vendorOut,
     slim: slimVendor,
     sort: { orderBy: "name", direction: "asc" },
-    // `vendor.getByID` takes the branded id as a bare scalar, not `{ id }`.
-    get: (caller, id) => caller.vendor.getByID(unsafeVendorId(id)),
     operations: { delete: false },
     descriptions: {
       list: "The vendor roster — every counterparty money has gone to, with website, notes, and two read-only rollups: `purchaseCount` (live purchases pointing at this vendor) and `spend` (SUM(cost) over the live expenses of those purchases — the blended net, and NEVER derived from purchase.statedTotal, which is not spend). This is the tool to start from whenever you need a `vendorId`: list_expenses, list_purchases and create_purchase all filter/write by vendor **id**, and they accept only the `VEN-` shortcode returned here. `search` matches vendor identity; related Expenses, Purchases, Products, and FinancialTransactions each expose exact-id, has/none, and terminal-name filters. Sorted by name; pass pageSize up to 100 to pull the whole roster in one call.",
@@ -127,8 +124,6 @@ export function registerPurchaseTools(server: McpServer) {
     out: purchaseOut,
     slim: slimPurchase,
     sort: { orderBy: "date", direction: "desc" },
-    // `purchase.getByID` takes the branded id as a bare scalar, not `{ id }`.
-    get: (caller, id) => caller.purchase.getByID(unsafePurchaseId(id)),
     operations: { delete: false },
     batch: { create: true, update: true },
     descriptions: {

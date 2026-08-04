@@ -373,8 +373,7 @@ export function ExpenseList() {
   // the same helper `link-expenses-dialog.tsx` uses for a Purchase's identity.
   const scopedPurchaseId = expensesSearch.purchaseId;
   const scopedPurchaseQuery = useQuery({
-    // Bare scalar id, not `{ id }` — see routers/purchase.ts.
-    ...api.purchase.getByID.queryOptions(scopedPurchaseId ?? ""),
+    ...api.purchase.getByID.queryOptions({ id: scopedPurchaseId ?? "" }),
     enabled: Boolean(scopedPurchaseId),
   });
   const clearPurchaseScope = useCallback(() => {

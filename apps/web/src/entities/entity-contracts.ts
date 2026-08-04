@@ -61,10 +61,11 @@ export const usdaRouteId = (fdcId: number): string => String(fdcId);
 const listParams = (params: ListParams) => params as never;
 
 // The standard routed entities share a mechanically-identical contract whose axes
-// are the router key (== entity key), the invalidation-key list, how `getByID`
-// takes its id, and (product only) a picker-search query. image / usda-food /
-// cookbook genuinely diverge (different router keys, fdc_id coercion,
-// list-backed detail) and stay spelled out below.
+// are the router key (== entity key), the invalidation-key list, and (product
+// only) a picker-search query — every one of them is a crud-factory router whose
+// `getByID` takes `{ id }`. image / usda-food / cookbook genuinely diverge
+// (different router keys, fdc_id coercion, list-backed detail) and stay spelled
+// out below.
 export const standardEntities = [
   "product",
   "ingredient",
@@ -95,26 +96,16 @@ type StandardRouter = {
   delete: { mutationOptions: (input: never) => unknown };
 };
 
-/**
- * How a router's `getByID` takes its id. Most of the crud-factory routers wrap it
- * in `{ id }`; the hand-rolled vendor/purchase routers take the branded id as a
- * bare scalar (`.input(vendorId)` — see server/api/routers/vendor.ts), and
- * wrapping that in an object would fail zod at the tRPC boundary at runtime
- * rather than here.
- */
-type DetailIdShape = "object" | "scalar";
-
 function standardContract(
   entity: StandardEntity,
   invalidationKeys: readonly QueryKey[],
   options?: {
     pickerSearch?: EntityQueryContract["pickerSearch"];
-    detailId?: DetailIdShape;
   },
 ): EntityContract {
   const router = (api: Api): StandardRouter =>
     api[entity] as unknown as StandardRouter;
-  const { pickerSearch, detailId = "object" } = options ?? {};
+  const { pickerSearch } = options ?? {};
   return {
     entity,
     route: entities[entity].routes,
@@ -124,10 +115,7 @@ function standardContract(
     invalidationKeys,
     query: {
       list: (api, params) => router(api).list.queryOptions(listParams(params)),
-      detail: (api, id) =>
-        router(api).getByID.queryOptions(
-          (detailId === "scalar" ? id : { id }) as never,
-        ),
+      detail: (api, id) => router(api).getByID.queryOptions({ id } as never),
       ...(pickerSearch ? { pickerSearch } : {}),
     },
     mutation: {
@@ -205,15 +193,8 @@ const entityContracts = {
   project: standardContract("project", projectMutationInvalidateKeys),
   task: standardContract("task", taskMutationInvalidateKeys),
   expense: standardContract("expense", expenseMutationInvalidateKeys),
-  // Vendor and purchase are ordinary standard contracts now that `api.vendor.*`
-  // / `api.purchase.*` exist. `detailId: "scalar"` is the one real divergence:
-  // both routers are hand-rolled and take the branded id directly.
-  vendor: standardContract("vendor", vendorMutationInvalidateKeys, {
-    detailId: "scalar",
-  }),
-  purchase: standardContract("purchase", purchaseMutationInvalidateKeys, {
-    detailId: "scalar",
-  }),
+  vendor: standardContract("vendor", vendorMutationInvalidateKeys),
+  purchase: standardContract("purchase", purchaseMutationInvalidateKeys),
   financialAccount: standardContract(
     "financialAccount",
     financialAccountMutationInvalidateKeys,
@@ -222,9 +203,7 @@ const entityContracts = {
     "financialTransaction",
     financialTransactionMutationInvalidateKeys,
   ),
-  wish: standardContract("wish", wishMutationInvalidateKeys, {
-    detailId: "scalar",
-  }),
+  wish: standardContract("wish", wishMutationInvalidateKeys),
 } satisfies Record<Entity, EntityContract>;
 
 export function getEntityContract(entity: Entity): EntityContract {

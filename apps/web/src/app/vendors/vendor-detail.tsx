@@ -60,14 +60,7 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
     entityLabel: "Vendor",
     entity: "vendor",
     mutationOptions: (callbacks) =>
-      api.vendor.delete.mutationOptions({
-        ...callbacks,
-        // `vendor.delete` resolves to `void` — a vendor is out of the embedding
-        // pipeline and owns no rollups to recompute, so there are no background
-        // batches to report. `useEntityDelete` threads the mutation's data into
-        // its side-effect summary, so hand it an empty one rather than `void`.
-        onSuccess: () => callbacks.onSuccess({}),
-      }),
+      api.vendor.delete.mutationOptions(callbacks),
     invalidateKeys: vendorMutationInvalidateKeys,
     redirectTo: "/vendors",
     description:
