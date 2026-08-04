@@ -21,11 +21,9 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import {
-  entityFilterSearchFields,
-  getEntityFilters,
-  listHead,
-} from "~/entities/filter-manifest";
+import { getEntityFilters } from "~/entities/filter-manifest";
+import { entityFilterSearchFields } from "~/entities/filter-search-fields";
+import { pageTitle } from "~/lib/page-title";
 
 const viewOptions = ["gallery", "table", "visualizations"] as const;
 type ViewOption = (typeof viewOptions)[number];
@@ -48,7 +46,7 @@ export const Route = createFileRoute("/_authenticated/locations/")({
   validateSearch: searchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: LocationsPage,
-  head: listHead("Locations", "location"),
+  head: () => ({ meta: [{ title: pageTitle("Locations") }] }),
 });
 
 function LocationsPage() {

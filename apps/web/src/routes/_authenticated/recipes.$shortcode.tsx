@@ -20,8 +20,8 @@ import type { RecipeFlowLayoutMode } from "~/app/_components/recipe/RecipeFlowVi
 import { AddToMeal } from "~/app/meals/add-to-meal";
 import { Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
+import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
-import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";

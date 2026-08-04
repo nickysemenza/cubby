@@ -1,16 +1,15 @@
-import type { inventoryListItemOut } from "@cubby/schemas/inventory";
-import type { InfLocation } from "@cubby/schemas/location";
+import type {
+  InfLocation,
+  InventoryItemForTree,
+} from "@cubby/schemas/location";
 import type { RefCallback } from "react";
-import type { z } from "zod";
 import { Stack } from "~/components/layout";
 import { cn } from "~/lib/utils";
 import { LocationGalleryCard } from "./location-gallery-card";
 
-type InventoryItem = z.infer<typeof inventoryListItemOut>;
-
 interface GalleryUnifiedViewProps {
   locations: InfLocation[];
-  inventoryByLocation: Map<string, InventoryItem[]>;
+  inventoryByLocation: Map<string, InventoryItemForTree[]>;
   searchTerm: string;
   searchMatchingIds: Set<string>;
   fadedIds: Set<string>;
@@ -63,7 +62,7 @@ export function GalleryUnifiedView({
 interface LocationRowProps {
   locations: InfLocation[];
   level: number;
-  inventoryByLocation: Map<string, InventoryItem[]>;
+  inventoryByLocation: Map<string, InventoryItemForTree[]>;
   searchTerm: string;
   searchMatchingIds: Set<string>;
   fadedIds: Set<string>;

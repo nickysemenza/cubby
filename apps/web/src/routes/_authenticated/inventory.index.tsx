@@ -4,7 +4,8 @@ import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { InventoryActions } from "~/app/inventory/inventory-actions";
 import { InventoryItemList } from "~/app/inventory/inventoryitemlist";
 import { Page } from "~/components/page/Page";
-import { entityFilterSearchFields, listHead } from "~/entities/filter-manifest";
+import { entityFilterSearchFields } from "~/entities/filter-search-fields";
+import { pageTitle } from "~/lib/page-title";
 
 const searchSchema = z.object({
   ...tableSearchFields,
@@ -16,7 +17,7 @@ export const Route = createFileRoute("/_authenticated/inventory/")({
   validateSearch: searchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: InventoryPage,
-  head: listHead("Inventory", "inventory"),
+  head: () => ({ meta: [{ title: pageTitle("Inventory") }] }),
 });
 
 function InventoryPage() {

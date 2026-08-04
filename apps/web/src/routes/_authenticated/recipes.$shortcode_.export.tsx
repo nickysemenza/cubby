@@ -32,7 +32,7 @@ import { useRecipeTree } from "~/app/_components/recipe/useRecipeTree";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row } from "~/components/layout";
 import { PageWrapper } from "~/components/layout/page-wrapper";
-import { RouteErrorComponent } from "~/components/route-error";
+import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
 import {

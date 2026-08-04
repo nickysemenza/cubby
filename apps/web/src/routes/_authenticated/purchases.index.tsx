@@ -5,7 +5,8 @@ import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action
 import { CreatePurchaseDialog } from "~/app/purchases/create-purchase-dialog";
 import { PurchaseList } from "~/app/purchases/purchaselist";
 import { Page } from "~/components/page/Page";
-import { entityFilterSearchFields, listHead } from "~/entities/filter-manifest";
+import { entityFilterSearchFields } from "~/entities/filter-search-fields";
+import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 
 // Spread first so ANY spec in purchase's filter manifest survives this strict
@@ -56,7 +57,7 @@ export const Route = createFileRoute("/_authenticated/purchases/")({
   validateSearch: searchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: PurchasesPage,
-  head: listHead("Purchases", "purchase"),
+  head: () => ({ meta: [{ title: pageTitle("Purchases") }] }),
 });
 
 function PurchasesPage() {

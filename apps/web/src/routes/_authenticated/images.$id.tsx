@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import ImageDetailPageContent from "~/app/images/image-detail-page";
-import { RouteErrorComponent } from "~/components/route-error";
+import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/images/$id")({

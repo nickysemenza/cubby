@@ -5,7 +5,8 @@ import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action
 import { CreateFinancialTransactionDialog } from "~/app/finance/create-financial-transaction-dialog";
 import { FinancialTransactionList } from "~/app/finance/financial-transaction-list";
 import { Page } from "~/components/page/Page";
-import { entityFilterSearchFields, listHead } from "~/entities/filter-manifest";
+import { entityFilterSearchFields } from "~/entities/filter-search-fields";
+import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 
 const searchSchema = z.object({
@@ -33,6 +34,6 @@ export const Route = createFileRoute("/_authenticated/financial-transactions/")(
         <FinancialTransactionList />
       </Page>
     ),
-    head: listHead("Transactions", "financialTransaction"),
+    head: () => ({ meta: [{ title: pageTitle("Transactions") }] }),
   },
 );

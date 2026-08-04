@@ -67,15 +67,12 @@ import {
   taskStatusOptions,
 } from "~/app/tasks/task-options";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
-import { pageTitle } from "~/lib/page-title";
-import { urlStringParam } from "~/lib/search-params";
 import {
   type FilterKind,
   type FilterSpecCore,
   isMultiFilterKind,
   nullableSentinelOptions,
   presenceFilterOptions,
-  summarizeListState,
 } from "./filters";
 
 /**
@@ -1723,41 +1720,4 @@ export function manifestFilterConfig(
  * there too — a bare `z.string()` reinstates the silently-dropped-value hole
  * that schema exists to close.
  */
-export function entityFilterSearchFields(
-  entity: Entity,
-): Record<string, typeof urlStringParam> {
-  const fields: Record<string, typeof urlStringParam> = {};
-  for (const spec of getEntityFilters(entity)) {
-    fields[spec.urlKey ?? spec.columnId] = urlStringParam;
-  }
-  return fields;
-}
-
-/**
- * `head` for a list route, summarizing what the page is currently narrowed to:
- * `Products: packout ↓price | cubby`.
- *
- * Three identically-titled `Products | cubby` tabs are indistinguishable, which
- * is the whole reason this exists. The summary is derived from the same manifest
- * specs the table filters by, so it can't drift from what's on screen.
- *
- * Built in `head` rather than from a component, on purpose: `head` receives the
- * route's validated `match.search` and re-runs on every `loadMatches` pass —
- * including search-only navigations — so the title tracks filter edits live AND
- * is already correct in the server-rendered HTML. The cost of that choice is
- * that entity-id filters can only be counted, not named (see
- * {@link summarizeListState}).
- */
-export const listHead =
-  (label: string, entity: Entity) =>
-  ({ match }: { match: { search: Record<string, unknown> } }) => ({
-    meta: [
-      {
-        title: pageTitle(
-          [label, summarizeListState(getEntityFilters(entity), match.search)]
-            .filter(Boolean)
-            .join(": "),
-        ),
-      },
-    ],
-  });
+export { entityFilterSearchFields } from "./filter-search-fields";

@@ -59,11 +59,16 @@ test.describe("tab titles", () => {
       timeout: 15000,
     });
 
-    // Server-rendered too, so the tab is right before hydration.
+    // The SERVER-rendered title is the bare entity name; the summary is added on
+    // the client, by the list hook. That split is deliberate: summarizing in the
+    // route's `head` would pull the icon-bearing filter manifest into the eager
+    // route graph, which is the hydration weight `filter-search-fields` exists to
+    // keep out. So the tab is correct immediately and gets more specific once the
+    // list mounts.
     const html = await page.request
       .get("/products?name=packout&sort=-price")
       .then((response) => response.text());
-    expect(html).toContain("<title>Products: packout ↓price | cubby</title>");
+    expect(html).toContain("<title>Products | cubby</title>");
 
     // An unfiltered list collapses back to the bare entity name.
     await page.goto("/products");

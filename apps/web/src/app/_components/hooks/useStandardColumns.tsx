@@ -4,8 +4,9 @@ import type { ColumnDef, ColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useMemo, useRef } from "react";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
-import { entities, getSortableFields } from "~/entities/entities";
+import { entities } from "~/entities/entities";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
+import { getSortableFields } from "~/entities/sortable-fields";
 import {
   createActionsColumn,
   createCreatedAtColumn,

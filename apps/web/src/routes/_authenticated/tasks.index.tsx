@@ -19,11 +19,8 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import {
-  entityFilterSearchFields,
-  getEntityFilters,
-  listHead,
-} from "~/entities/filter-manifest";
+import { getEntityFilters } from "~/entities/filter-manifest";
+import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import {
   buildFiltersFromManifest,
   filterGetterFromSearch,
@@ -33,6 +30,7 @@ import {
   normalizeTaskRenderer,
   type TaskRenderer,
 } from "~/lib/list-view-normalization";
+import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 
 // Timeline is the Gantt + the Nivo calendar heatmap, and its tab is unmounted
@@ -114,7 +112,7 @@ export const Route = createFileRoute("/_authenticated/tasks/")({
   validateSearch: taskSearchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: TasksPage,
-  head: listHead("Tasks", "task"),
+  head: () => ({ meta: [{ title: pageTitle("Tasks") }] }),
 });
 
 function TasksPage() {

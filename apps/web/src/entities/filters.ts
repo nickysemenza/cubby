@@ -517,45 +517,54 @@ function describeFilter(
   const first = values[0];
   if (first === undefined) return undefined;
 
-  return match(spec.kind)
-    .with("text", () => first)
-    .with("range", () => humanize(first))
-    .with("presence", () => describePresence(spec, first))
-    .with("boolean", () => {
-      const noun = humanize(spec.columnId);
-      return first === "false" ? `No ${noun.toLowerCase()}` : noun;
-    })
-    .with("select", () => optionLabel(spec, first) ?? first)
-    .with("multiselect", () => {
-      const [sentinels, rest] = partition(values, isSentinel);
-      const labels = [
-        ...rest.map((value) => optionLabel(spec, value) ?? value),
-        ...(spec.nullable
+  return (
+    match(spec.kind)
+      .with("text", () => first)
+      // A range preset's value is a bare key (`30d`, `ytd`) that means nothing on
+      // its own — the roster label ("Last 30 days") is the whole point. Same shape
+      // as `select`, so they share the lookup; `humanize` is only the fallback for
+      // a spec whose options are supplied at runtime.
+      .with(
+        "select",
+        "range",
+        () => optionLabel(spec, first) ?? humanize(first),
+      )
+      .with("presence", () => describePresence(spec, first))
+      .with("boolean", () => {
+        const noun = humanize(spec.columnId);
+        return first === "false" ? `No ${noun.toLowerCase()}` : noun;
+      })
+      .with("multiselect", () => {
+        const [sentinels, rest] = partition(values, isSentinel);
+        const labels = [
+          ...rest.map((value) => optionLabel(spec, value) ?? value),
+          ...(spec.nullable
+            ? sentinels.map((value) =>
+                describeSentinel(spec.nullable?.label ?? "", value),
+              )
+            : []),
+        ];
+        return labels.length
+          ? collapse(labels, MAX_VALUES_PER_FILTER)
+          : undefined;
+      })
+      .with("id", "idMulti", () => {
+        // Values are entity UUIDs and their names are only resolvable at runtime,
+        // so the count is the most this surface can honestly say.
+        const [sentinels, rest] = partition(values, isSentinel);
+        const parts = spec.nullable
           ? sentinels.map((value) =>
               describeSentinel(spec.nullable?.label ?? "", value),
             )
-          : []),
-      ];
-      return labels.length
-        ? collapse(labels, MAX_VALUES_PER_FILTER)
-        : undefined;
-    })
-    .with("id", "idMulti", () => {
-      // Values are entity UUIDs and their names are only resolvable at runtime,
-      // so the count is the most this surface can honestly say.
-      const [sentinels, rest] = partition(values, isSentinel);
-      const parts = spec.nullable
-        ? sentinels.map((value) =>
-            describeSentinel(spec.nullable?.label ?? "", value),
-          )
-        : [];
-      if (rest.length) {
-        const noun = humanize(spec.columnId).toLowerCase();
-        parts.unshift(`${rest.length} ${pluralize(noun, rest.length)}`);
-      }
-      return parts.length ? parts.join(", ") : undefined;
-    })
-    .exhaustive();
+          : [];
+        if (rest.length) {
+          const noun = humanize(spec.columnId).toLowerCase();
+          parts.unshift(`${rest.length} ${pluralize(noun, rest.length)}`);
+        }
+        return parts.length ? parts.join(", ") : undefined;
+      })
+      .exhaustive()
+  );
 }
 
 /**

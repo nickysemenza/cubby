@@ -1,23 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { financialAccountSortableFields } from "@cubby/schemas/financial-account";
-import { financialTransactionSortableFields } from "@cubby/schemas/financial-transaction";
-import { imageSortableFields } from "@cubby/schemas/image";
-import { ingredientSortableFields } from "@cubby/schemas/ingredient";
-import { inventorySortableFields } from "@cubby/schemas/inventory";
-import { locationSortableFields } from "@cubby/schemas/location";
-import { mealSortableFields } from "@cubby/schemas/meal";
-import { productSortableFields } from "@cubby/schemas/product";
-import {
-  expenseSortableFields,
-  projectSortableFields,
-  taskSortableFields,
-} from "@cubby/schemas/project";
-import { purchaseSortableFields } from "@cubby/schemas/purchase";
-import { recipeSortableFields } from "@cubby/schemas/recipe";
-import { usdaFoodSortableFields } from "@cubby/schemas/usda";
-import { vendorSortableFields } from "@cubby/schemas/vendor";
-import { wishSortableFields } from "@cubby/schemas/wish";
 import {
   Apple,
   Barcode,
@@ -82,7 +64,6 @@ const entityDefinitions = {
       standardColumns: [],
       // appearsInRecipes/product are computed (recipe + product counts), sorted
       // via correlated subqueries in ingredientList (not real columns).
-      sortableFields: ingredientSortableFields,
     },
   },
   product: {
@@ -105,7 +86,6 @@ const entityDefinitions = {
       standardColumns: ["image", "name"],
       // `ingredient` and `location` are computed sorts handled explicitly by
       // productList, not physical product columns.
-      sortableFields: productSortableFields,
     },
   },
   recipe: {
@@ -126,7 +106,6 @@ const entityDefinitions = {
       // costTotal/caloriesTotal live in the `totals` jsonb (not real columns);
       // recipeList sorts them via a jsonb expression. `source` (SourceType+SourceData)
       // and `yield` (→ servings) are also special-cased there. See recipe/crud.recipeList.
-      sortableFields: recipeSortableFields,
     },
   },
   cookbook: {
@@ -164,7 +143,6 @@ const entityDefinitions = {
     list: {
       defaultSort: "createdAt",
       standardColumns: [],
-      sortableFields: locationSortableFields,
     },
   },
   inventory: {
@@ -184,7 +162,6 @@ const entityDefinitions = {
     list: {
       defaultSort: "createdAt",
       standardColumns: [],
-      sortableFields: inventorySortableFields,
     },
   },
   meal: {
@@ -208,7 +185,6 @@ const entityDefinitions = {
     list: {
       defaultSort: "date",
       standardColumns: [],
-      sortableFields: mealSortableFields,
     },
   },
   project: {
@@ -231,7 +207,6 @@ const entityDefinitions = {
     list: {
       defaultSort: "createdAt",
       standardColumns: ["name"],
-      sortableFields: projectSortableFields,
     },
   },
   task: {
@@ -252,7 +227,6 @@ const entityDefinitions = {
     list: {
       defaultSort: "createdAt",
       standardColumns: ["name"],
-      sortableFields: taskSortableFields,
     },
   },
   vendor: {
@@ -273,7 +247,6 @@ const entityDefinitions = {
     list: {
       defaultSort: "name",
       standardColumns: ["name"],
-      sortableFields: vendorSortableFields,
     },
   },
   purchase: {
@@ -294,7 +267,6 @@ const entityDefinitions = {
     list: {
       defaultSort: "date",
       standardColumns: [],
-      sortableFields: purchaseSortableFields,
     },
   },
   expense: {
@@ -311,7 +283,6 @@ const entityDefinitions = {
     list: {
       defaultSort: "date",
       standardColumns: ["name"],
-      sortableFields: expenseSortableFields,
     },
   },
   financialAccount: {
@@ -332,7 +303,6 @@ const entityDefinitions = {
     list: {
       defaultSort: "name",
       standardColumns: [],
-      sortableFields: financialAccountSortableFields,
     },
   },
   financialTransaction: {
@@ -349,7 +319,6 @@ const entityDefinitions = {
     list: {
       defaultSort: "transactionDate",
       standardColumns: [],
-      sortableFields: financialTransactionSortableFields,
     },
   },
   wish: {
@@ -370,7 +339,6 @@ const entityDefinitions = {
     list: {
       defaultSort: "createdAt",
       standardColumns: ["name"],
-      sortableFields: wishSortableFields,
     },
   },
   "usda-food": {
@@ -392,7 +360,6 @@ const entityDefinitions = {
     list: {
       defaultSort: "fdc_id",
       standardColumns: [],
-      sortableFields: usdaFoodSortableFields,
     },
   },
   image: {
@@ -415,7 +382,6 @@ const entityDefinitions = {
     list: {
       defaultSort: "createdAt",
       standardColumns: [],
-      sortableFields: imageSortableFields,
     },
   },
 } as const satisfies Record<Entity, EntityDefinition>;
@@ -472,13 +438,6 @@ export const entityDetailLink = (entity: ShortcodeEntity, shortcode: string) =>
 
 /** Path-params shape accepted by any entity detail `<Link>`. */
 export type EntityDetailParams = ReturnType<typeof entityDetailParams>;
-
-/**
- * Get the list of server-sortable fields for an entity.
- * Used by both repos (for buildOrderBy) and UI (for enableSorting).
- */
-export const getSortableFields = (entity: Entity): readonly string[] =>
-  entities[entity].list?.sortableFields ?? ["createdAt", "name"];
 
 /**
  * Render an entity's lucide icon. Useful for entities where you need

@@ -372,7 +372,20 @@ describe("summarizeListState", () => {
       nullable: { field: "inventoryPresenceFilter", label: "inventory" },
     },
     { columnId: "food", kind: "boolean" },
-    { columnId: "purchaseDate", kind: "range" },
+    {
+      // Real preset keys, not readable stand-ins: a range value is a bare `30d`
+      // whose meaning lives entirely in the roster label. An earlier fixture
+      // used a self-describing `last-30-days`, which hid that the summarizer
+      // was humanizing the key instead of looking the label up.
+      columnId: "purchaseDate",
+      kind: "range",
+      options: [
+        { value: "30d", label: "Last 30 days" },
+        { value: "ytd", label: "Year to date" },
+      ],
+    },
+    // A range whose roster is supplied at runtime has no static label to find.
+    { columnId: "expenseTotal", kind: "range" },
     // `urlKey` differs from `columnId` — the summary must read the URL key.
     { columnId: "notes", urlKey: "q", kind: "text" },
   ];
@@ -427,10 +440,16 @@ describe("summarizeListState", () => {
     );
   });
 
-  it("renders booleans and range presets", () => {
+  it("renders booleans", () => {
     expect(summarize({ food: "true" })).toBe("Food");
     expect(summarize({ food: "false" })).toBe("No food");
-    expect(summarize({ purchaseDate: "last-30-days" })).toBe("Last 30 days");
+  });
+
+  it("names a range preset by its label, never the bare key", () => {
+    expect(summarize({ purchaseDate: "30d" })).toBe("Last 30 days");
+    expect(summarize({ purchaseDate: "ytd" })).toBe("Year to date");
+    // No static roster to look in — humanized key is the honest fallback.
+    expect(summarize({ expenseTotal: "gte100" })).toBe("Gte100");
   });
 
   it("appends sort direction", () => {
