@@ -45,9 +45,43 @@ export const auditLogListInput = z.object({
 export type AuditLogListInput = z.infer<typeof auditLogListInput>;
 
 const auditLogActionSchema = z.enum(["create", "update", "delete"]);
+
+/**
+ * A `changes.from`/`changes.to` value, narrowed from `z.unknown()`.
+ *
+ * `AuditLog.changes` is jsonb populated by `computeChanges` diffing raw DB
+ * columns (`repo/audit-log.ts`) — so by the time a value round-trips through
+ * Postgres it is plain JSON: string/number/boolean/null, a jsonb object
+ * (e.g. a recipe's `totals`), or an array (e.g. an unordered id-set diff).
+ * `z.unknown()` made this boundary unintrospectable, which is exactly why a
+ * raw uuid FK value (`vendorId`, `purchaseId`, ...) could reach an MCP payload
+ * unnoticed — see `getAuditLog`'s shortcode remap, the fix this schema backs.
+ * `from`/`to` are optional because `JSON.stringify` drops an `undefined`
+ * property entirely on write, so a genuinely-undefined side of a diff comes
+ * back as a missing key, not a present `null`.
+ */
+export type AuditJsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | AuditJsonValue[]
+  | { [key: string]: AuditJsonValue };
+
+const auditJsonValueSchema: z.ZodType<AuditJsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(auditJsonValueSchema),
+    z.record(z.string(), auditJsonValueSchema),
+  ]),
+);
+
 const auditLogChangeSchema = z.object({
-  from: z.unknown(),
-  to: z.unknown(),
+  from: auditJsonValueSchema.optional(),
+  to: auditJsonValueSchema.optional(),
 });
 
 export const auditLogUserOut = z

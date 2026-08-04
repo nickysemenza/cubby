@@ -52,6 +52,7 @@ import {
   attachFileToEntity,
   initiateDocumentUpload,
 } from "~/server/services/image-storage.service";
+import { getAuditLog } from "./audit-log";
 import { getDb, insertAndReturn } from "./database-helpers";
 import {
   createExpense,
@@ -2541,5 +2542,68 @@ describe("purchase repository — documents", () => {
         contentType: "application/pdf",
       }),
     ).rejects.toMatchObject({ cause: { reason: "IMAGE_ATTACH_FAILED" } });
+  });
+});
+
+/**
+ * `computeChanges` diffs raw DB columns, so a moved FK like `vendorId` lands
+ * in `AuditLog.changes` as the internal uuid — every existing row has it baked
+ * in that way. `getAuditLog` resolves it to the public shortcode at READ time
+ * (batched onto the same `lookupShortcodes` round-trip that already resolves
+ * the entry's own `entityId`), which is the only fix that also covers history
+ * instead of just new writes. See `EDGE_KEY_TARGET_ENTITY` in
+ * `server/db/entity-incoming-edges.ts` — the (entityType, fieldName) → target
+ * entity map this derives from `INCOMING_EDGES` rather than a second,
+ * hand-kept table.
+ */
+describe("purchase repository — audit log resolves FK values to shortcodes", () => {
+  const ctx = withTestDb();
+
+  it("resolves a vendorId move in the changes diff to VEN-... , not the raw uuid", async () => {
+    const originalVendor = await vendorShortcodeByName(
+      ctx.db,
+      "Audit Original Vendor",
+    );
+    const newVendor = await vendorShortcodeByName(ctx.db, "Audit New Vendor");
+    const newVendorUuid = await vendorUuid(ctx.db, newVendor);
+
+    const { output: created } = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        date: "2024-06-01",
+        vendorId: originalVendor,
+        orderId: "AUDIT-VENDOR-SHORTCODE-1",
+      }),
+      ctx.actor,
+    );
+    const chargeUuid = await purchaseUuid(ctx.db, created.id);
+
+    await updatePurchase(
+      ctx.db,
+      { id: created.id, data: { vendorId: newVendor } },
+      ctx.actor,
+    );
+
+    const audit = await getAuditLog(ctx.db, {
+      entityType: "purchase",
+      entityId: chargeUuid,
+      limit: 20,
+    });
+
+    const updateEntry = audit.entries.find(
+      (e) =>
+        e.action === "update" &&
+        (e.changes as { vendorId?: { from: unknown; to: unknown } } | null)
+          ?.vendorId !== undefined,
+    );
+    const vendorChange = (
+      updateEntry?.changes as
+        | { vendorId: { from: unknown; to: unknown } }
+        | undefined
+    )?.vendorId;
+
+    expect(vendorChange?.to).toBe(newVendor);
+    expect(vendorChange?.to).not.toBe(newVendorUuid);
+    expect(vendorChange?.to).toMatch(/^VEN-/);
   });
 });

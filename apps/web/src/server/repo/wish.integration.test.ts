@@ -1,12 +1,14 @@
+import { auditLogListOut } from "@cubby/schemas/audit";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { getAuditLog } from "./audit-log";
 import { createExpense } from "./expense";
 import {
   createProductFixture as createProduct,
   makeExpenseInput,
   makeProductInput,
 } from "./repo.fixtures";
-import { createWish, wishList } from "./wish";
+import { createWish, updateWish, wishList } from "./wish";
 
 const pagination = { pageIndex: 0, pageSize: 50 };
 
@@ -277,5 +279,68 @@ describe("wishList price ranges", () => {
       wide,
       narrowLow,
     ]);
+  });
+});
+
+/**
+ * `wish.acquiredAt` is a `timestamp(mode: "date")` column — unlike every FK
+ * column, `computeChanges` here diffs an actual JS `Date` instance, not a
+ * string. That value still has to survive the `changes` jsonb round-trip and
+ * come back parseable by `auditLogListOut`'s narrowed `AuditJsonValue` (see
+ * packages/schemas/src/audit.ts) — this is the empirical check that the
+ * `z.unknown() → AuditJsonValue` narrowing doesn't reject a real non-FK diff
+ * value, not just an assumption about how `pg`/Drizzle serialize a jsonb
+ * column. (`JSON.stringify`, which both use, calls `Date.prototype.toJSON()`
+ * automatically, so a `Date` comes back as its ISO string — this test is what
+ * confirms that rather than asserts it.)
+ */
+describe("wish repository — audit log survives a Date-valued (non-FK) diff", () => {
+  const ctx = withTestDb();
+
+  it("round-trips acquiredAt as an ISO string, and the full response still validates", async () => {
+    const { output: created, entityId: createdId } = await createWish(
+      ctx.db,
+      {
+        name: "acquiredAt audit round-trip",
+        notes: null,
+        candidateProductIds: [],
+      },
+      ctx.actor,
+    );
+    expect(created.acquiredAt).toBeNull();
+
+    await updateWish(
+      ctx.db,
+      { id: created.id, data: { acquired: true } },
+      ctx.actor,
+    );
+
+    const audit = await getAuditLog(ctx.db, {
+      entityType: "wish",
+      entityId: createdId,
+      limit: 20,
+    });
+
+    // The real runtime check `strictOutput`'s type-level pass-through can't
+    // give us: this is the same `.parse()` the tRPC/MCP boundary runs.
+    expect(() => auditLogListOut.parse(audit)).not.toThrow();
+
+    const updateEntry = audit.entries.find(
+      (e) =>
+        e.action === "update" &&
+        (e.changes as { acquiredAt?: { from: unknown; to: unknown } } | null)
+          ?.acquiredAt !== undefined,
+    );
+    const acquiredAtChange = (
+      updateEntry?.changes as
+        | { acquiredAt: { from: unknown; to: unknown } }
+        | undefined
+    )?.acquiredAt;
+
+    expect(acquiredAtChange?.from).toBeNull();
+    expect(typeof acquiredAtChange?.to).toBe("string");
+    expect(acquiredAtChange?.to).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
+    );
   });
 });
