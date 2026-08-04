@@ -157,6 +157,45 @@ const resolveNetBasis = (value: string | undefined) => {
   return {};
 };
 
+/**
+ * Units bought minus units gone. "Negative" is the defect worklist — you cannot
+ * have sold or returned more than you ever bought — and is the reason the
+ * server-side bounds are signed rather than clamped at zero.
+ */
+const expectedQuantityOptions: FilterableComboboxItem[] = [
+  { value: "negative", label: "Negative (sold more than bought)" },
+  { value: "zero", label: "Zero (none expected)" },
+  { value: "positive", label: "One or more expected" },
+  { value: "gte5", label: "5 or more expected" },
+  { value: "unknown", label: "Has lines with no quantity" },
+];
+
+const resolveExpectedQuantity = (value: string | undefined) => {
+  if (value === "negative") return { expectedQuantityMax: -1 };
+  if (value === "zero")
+    return { expectedQuantityMin: 0, expectedQuantityMax: 0 };
+  if (value === "positive") return { expectedQuantityMin: 1 };
+  if (value === "gte5") return { expectedQuantityMin: 5 };
+  if (value === "unknown")
+    return { unknownQuantityLinesFilter: "has" as const };
+  return {};
+};
+
+/**
+ * Shelf against ledger. Both options are scoped server-side to stocked
+ * products — see `quantityVarianceFilter` in the product schema for why an
+ * unscoped "matched" would be meaningless.
+ */
+const quantityVarianceOptions: FilterableComboboxItem[] = [
+  { value: "mismatched", label: "Shelf disagrees with ledger" },
+  { value: "matched", label: "Shelf matches ledger" },
+];
+
+const resolveQuantityVariance = (value: string | undefined) =>
+  value === "mismatched" || value === "matched"
+    ? { quantityVarianceFilter: value }
+    : {};
+
 const resolveVendorPurchases = (value: string | undefined) =>
   value === "none"
     ? { purchaseCountMax: 0 }
@@ -1107,6 +1146,20 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       placeholder: "Filter net basis...",
       options: netBasisOptions,
       expand: resolveNetBasis,
+    },
+    {
+      columnId: "expectedQuantity",
+      kind: "range",
+      placeholder: "Filter expected quantity...",
+      options: expectedQuantityOptions,
+      expand: resolveExpectedQuantity,
+    },
+    {
+      columnId: "quantityVariance",
+      kind: "range",
+      placeholder: "Filter shelf vs. ledger...",
+      options: quantityVarianceOptions,
+      expand: resolveQuantityVariance,
     },
     {
       columnId: "notes",

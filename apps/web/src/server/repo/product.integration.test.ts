@@ -1510,6 +1510,20 @@ describe("product repository", () => {
           }),
           ctx.actor,
         );
+        // A $0 discard, carrying a NEGATIVE quantity. The derived price is
+        // filtered to `cost > 0` and takes `abs()` of the quantity, so this row
+        // must not move `knownUnitCount` or the price — a regression here would
+        // flow through `InventoryEntry.valuation` into the location rollup.
+        await createExpense(
+          ctx.db,
+          makeExpenseInput({
+            name: "Discarded — one",
+            productId: derived.id,
+            productQuantity: -1,
+            cost: 0,
+          }),
+          ctx.actor,
+        );
 
         const loaded = await getProductByID(ctx.db, derived.entityId);
         expect(loaded.pricing).toEqual({

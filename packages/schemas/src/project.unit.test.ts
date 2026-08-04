@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  expenseCreateInput,
   expenseFiltersSchema,
   expenseSortableFields,
   projectCreateInput,
@@ -113,7 +114,7 @@ describe("expense quantity filters", () => {
     });
   });
 
-  it.each([0, -1, 1.5, "not-a-number"])(
+  it.each([1.5, "not-a-number"])(
     "rejects an invalid productQuantityMin of %s",
     (productQuantityMin) => {
       expect(
@@ -121,6 +122,47 @@ describe("expense quantity filters", () => {
       ).toBe(false);
     },
   );
+
+  // Signed, like `costMin`/`costMax` — `productQuantityMax: -1` is the
+  // "everything written off" worklist, and clamping the bound at zero would
+  // make discards unreachable through the filter.
+  it.each([0, -1, -8])(
+    "accepts a signed productQuantityMin of %s",
+    (productQuantityMin) => {
+      expect(
+        expenseFiltersSchema.safeParse({ productQuantityMin }).success,
+      ).toBe(true);
+    },
+  );
+
+  it.each([
+    ["a discard", -1],
+    ["a normal buy", 3],
+  ])("accepts %s quantity on an expense", (_label, productQuantity) => {
+    expect(
+      expenseCreateInput.safeParse({
+        name: "line",
+        date: "2026-06-03",
+        costType: "materials",
+        trade: "other",
+        productId: "PRD-4K7M",
+        productQuantity,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects a zero product quantity — direction has to mean something", () => {
+    expect(
+      expenseCreateInput.safeParse({
+        name: "line",
+        date: "2026-06-03",
+        costType: "materials",
+        trade: "other",
+        productId: "PRD-4K7M",
+        productQuantity: 0,
+      }).success,
+    ).toBe(false);
+  });
 
   it("allows direct sorting on the physical quantity column", () => {
     expect(expenseSortableFields).toContain("productQuantity");

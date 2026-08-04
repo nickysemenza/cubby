@@ -16,6 +16,7 @@ import type {
 } from "~/server/repo/database-helpers";
 import type { MappableProductExternalId } from "./external-id-types";
 import type { ProductPricing } from "./pricing";
+import type { QuantityLedger } from "./quantity-ledger";
 
 type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect>;
 type LocationSelect = RowWithOptionalAliases<typeof location.$inferSelect>;
@@ -70,4 +71,10 @@ export type ProductListDB = ProductSelect & {
   expenseTotal: number;
   /** Latest live Purchase date across the Product's live Expense lines. */
   purchaseDate: string | null;
+  /**
+   * Units bought minus units gone. Attached by `loadProductQuantityLedgers`
+   * after the row loads, not an `extras` scalar — see the note at its call
+   * site in crud.ts.
+   */
+  quantityLedger: QuantityLedger;
 };

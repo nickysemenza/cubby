@@ -122,6 +122,14 @@ import {
   loadProductPricing,
   resolveProductPricing,
 } from "./pricing";
+import {
+  enrichProductRowsWithQuantityLedger,
+  expectedQuantityFilterSql,
+  expectedQuantitySql,
+  hasUnknownQuantityLinesSql,
+  onHandUnitsFilterSql,
+  quantityVarianceSql,
+} from "./quantity-ledger";
 import type { ProductDeepDB } from "./types";
 import {
   assertNoCanonicalPriceMapping,
@@ -179,6 +187,14 @@ const resolveProductSort = (sort: SortParams) => {
           `WHERE e."productId" = "product"."id" AND e."deletedAt" IS NULL) ${dirSql}`,
       ),
     ];
+  }
+
+  if (sort.orderBy === "expectedQuantity") {
+    return [sql.raw(`${expectedQuantitySql()} ${dirSql}`)];
+  }
+
+  if (sort.orderBy === "quantityVariance") {
+    return [sql.raw(`${quantityVarianceSql()} ${dirSql}`)];
   }
 
   if (sort.orderBy === "purchaseDate") {
@@ -638,6 +654,38 @@ export const productList = async (
       filters.expenseTotalMax !== undefined
         ? sql`(SELECT COALESCE(sum(e."cost"), 0) FROM "Expense" e WHERE e."productId" = ${product.id} AND e."deletedAt" IS NULL) <= ${filters.expenseTotalMax}`
         : undefined,
+      filters.expectedQuantityMin !== undefined
+        ? sql`${expectedQuantityFilterSql(product.id)} >= ${filters.expectedQuantityMin}`
+        : undefined,
+      filters.expectedQuantityMax !== undefined
+        ? sql`${expectedQuantityFilterSql(product.id)} <= ${filters.expectedQuantityMax}`
+        : undefined,
+      // Scoped to products that are BOTH stocked and in the ledger. Neither
+      // half is optional, and both were measured against production:
+      //
+      //  - Without "stocked", an unstocked product has a variance of 0 - 0, so
+      //    "matched" would claim every untouched product is reconciled and
+      //    "mismatched" would be dominated by things correctly sold off.
+      //  - Without "in the ledger", 126 of the 218 hits are stocked products
+      //    with no product-linked Expense at all. Those read as a variance of
+      //    the full shelf count, but the disagreement is really "no purchase
+      //    history" — a provenance gap `findOrphanedProducts` and the
+      //    data-quality checks already own — and they swamp the 92 rows where
+      //    a real ledger and a real shelf genuinely disagree.
+      filters.quantityVarianceFilter !== undefined
+        ? and(
+            inArray(product.id, productIdsWithLiveInventory),
+            inArray(product.id, productIdsWithExpenses),
+            filters.quantityVarianceFilter === "mismatched"
+              ? sql`${onHandUnitsFilterSql(product.id)} <> ${expectedQuantityFilterSql(product.id)}`
+              : sql`${onHandUnitsFilterSql(product.id)} = ${expectedQuantityFilterSql(product.id)}`,
+          )
+        : undefined,
+      filters.unknownQuantityLinesFilter === "has"
+        ? hasUnknownQuantityLinesSql(product.id)
+        : filters.unknownQuantityLinesFilter === "none"
+          ? sql`NOT ${hasUnknownQuantityLinesSql(product.id)}`
+          : undefined,
       idSetPresence(
         product.id,
         filters.expensePresenceFilter,
@@ -778,7 +826,15 @@ export const productList = async (
     results.map((row) => row.id),
   );
   const pricedResults = await enrichProductRowsWithPricing(db, results);
-  const products = pricedResults.map((prod) =>
+  // One grouped query for the page, not a fourth correlated `extras` scalar:
+  // the ledger is four numbers, and four correlated subqueries per row would
+  // cost more than one grouped pass. On-hand needs no query at all — the
+  // `inventoryEntry` relation is already loaded above.
+  const ledgeredResults = await enrichProductRowsWithQuantityLedger(
+    db,
+    pricedResults,
+  );
+  const products = ledgeredResults.map((prod) =>
     dbProductToListAPI({
       ...prod,
       dataQuality: qualities.get(prod.id)!,
