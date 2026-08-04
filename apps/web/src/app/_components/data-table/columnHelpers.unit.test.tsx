@@ -6,9 +6,21 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { createParentLinkColumn } from "./columnHelpers";
+import { createImageColumn, createParentLinkColumn } from "./columnHelpers";
+
+/**
+ * The thumbnail itself pulls in the hover-preview popup and the CF image
+ * transform helpers — none of which this suite is asking about. Stubbing it to
+ * a bare count keeps the assertion on the one thing `createImageColumn` owns:
+ * WHICH images reach the cell.
+ */
+vi.mock("~/app/_components/table/ImageThumbnail", () => ({
+  ImageThumbnail: ({ images }: { images: unknown[] }) => (
+    <span data-testid="thumb">{images.length}</span>
+  ),
+}));
 
 /**
  * `EntityInlineLink` renders through `EntityPreviewLink`, which is a TanStack
@@ -154,5 +166,118 @@ describe("createParentLinkColumn", () => {
     expect(column.id).toBe("wbsParent");
     expect(column.header).toBe("Rolls Up To");
     expect(column.meta?.className).toBe("w-64");
+  });
+});
+
+type ImageRowFixture = { id: string };
+
+type ImagesByRowId = Record<
+  string,
+  Array<{ id: string; url: string; filename?: string }>
+>;
+
+/** Same reference on every render — the table must not rebuild its row model. */
+const IMAGE_ROWS: ImageRowFixture[] = [{ id: "PRJ-1" }];
+
+/**
+ * One long-lived table whose `data` never changes while `getImages` does —
+ * exactly the shape of a list that hydrates its thumbnails from a SECOND query
+ * (projects fetch theirs via `image.imagesByProjectIds`).
+ */
+function ImageHarness({ images }: { images: ImagesByRowId }) {
+  const column = useMemo(
+    () =>
+      createImageColumn(createColumnHelper<ImageRowFixture>(), {
+        entity: "project",
+        getImages: (row) => images[row.id] ?? [],
+      }) as ColumnDef<ImageRowFixture, unknown>,
+    [images],
+  );
+  const table = useReactTable({
+    data: IMAGE_ROWS,
+    columns: useMemo(() => [column], [column]),
+    getCoreRowModel: getCoreRowModel(),
+  });
+  const cell = table.getRowModel().rows[0]?.getVisibleCells()[0];
+  if (!cell) throw new Error("expected one row with one cell");
+  return (
+    <table>
+      <tbody>
+        <tr>
+          <td>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+        </tr>
+      </tbody>
+    </table>
+  );
+}
+
+describe("createImageColumn", () => {
+  it("shows images that arrive after the first render", () => {
+    // Mount empty, the way a list renders before its images query resolves.
+    const { rerender } = render(<ImageHarness images={{}} />);
+    expect(screen.getByTestId("thumb")).toHaveTextContent("0");
+
+    // The query resolves: a NEW column def carries a fresh `getImages`, but
+    // `data` is unchanged. TanStack rebuilds its core row model only on `data`,
+    // so `row._valuesCache.image` still holds the empty array from above — the
+    // cell must therefore read `row.original`, not `info.getValue()`, or every
+    // thumbnail stays frozen at the placeholder forever.
+    rerender(
+      <ImageHarness
+        images={{
+          "PRJ-1": [{ id: "img-1", url: "https://example.com/a.png" }],
+        }}
+      />,
+    );
+    expect(screen.getByTestId("thumb")).toHaveTextContent("1");
+  });
+
+  it("keeps PDFs out of the default row-embedded thumbnails", () => {
+    const column = createImageColumn(
+      createColumnHelper<{ id: string; images: unknown[] }>(),
+      { entity: "product" },
+    ) as ColumnDef<{ id: string; images: unknown[] }, unknown>;
+
+    function PdfHarness() {
+      const table = useReactTable({
+        data: [
+          {
+            id: "PRD-1",
+            images: [
+              {
+                id: "doc",
+                url: "https://example.com/manual.pdf",
+                filename: "manual.pdf",
+                contentType: "application/pdf",
+              },
+              {
+                id: "photo",
+                url: "https://example.com/photo.png",
+                filename: "photo.png",
+                contentType: "image/png",
+              },
+            ],
+          },
+        ],
+        columns: [column],
+        getCoreRowModel: getCoreRowModel(),
+      });
+      const cell = table.getRowModel().rows[0]?.getVisibleCells()[0];
+      if (!cell) throw new Error("expected one row with one cell");
+      return (
+        <table>
+          <tbody>
+            <tr>
+              <td>
+                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      );
+    }
+
+    render(<PdfHarness />);
+    expect(screen.getByTestId("thumb")).toHaveTextContent("1");
   });
 });
