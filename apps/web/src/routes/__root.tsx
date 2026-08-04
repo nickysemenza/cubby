@@ -17,6 +17,8 @@ import * as React from "react";
 import { AppFooter } from "~/app/_components/footer";
 import { MainNav } from "~/app/_components/MainNav";
 import { BottomNav } from "~/app/_components/navigation/bottom-nav";
+import { RouteErrorComponent } from "~/components/lazy-route-error";
+import { RouteNotFound } from "~/components/lazy-route-not-found";
 import { Toaster } from "~/components/ui/sonner";
 import { useDebug } from "~/hooks/useDebug";
 import type { TRPCRouter } from "~/integrations/trpc/router";
@@ -40,20 +42,6 @@ const GlobalCommandMenu = React.lazy(() =>
 const PerfOverlay = React.lazy(() =>
   import("~/app/_components/perf-overlay").then((m) => ({
     default: m.PerfOverlay,
-  })),
-);
-
-// Error and 404 UI pull in diagnostics, Sentry capture helpers, and disclosure
-// widgets. They are important when needed, but loading them on every successful
-// navigation made failure-only code part of the eager client closure.
-const RouteErrorComponent = React.lazy(() =>
-  import("~/components/route-error").then((m) => ({
-    default: m.RouteErrorComponent,
-  })),
-);
-const RouteNotFound = React.lazy(() =>
-  import("~/components/route-not-found").then((m) => ({
-    default: m.RouteNotFound,
   })),
 );
 

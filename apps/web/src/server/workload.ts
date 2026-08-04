@@ -1,10 +1,4 @@
-export const workloadKinds = [
-  "ui",
-  "mcp",
-  "queue",
-  "import-stream",
-  "other",
-] as const;
+const workloadKinds = ["ui", "mcp", "queue", "import-stream", "other"] as const;
 
 export type Workload = (typeof workloadKinds)[number];
 export type RequestOrigin = "ui" | "api" | "mcp" | "agent";
