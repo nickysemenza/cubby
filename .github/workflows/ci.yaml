@@ -17,7 +17,7 @@ on:
       - "LICENSE"
   # Manual escape hatch: deploy main even when E2E would fail (known-flaky).
   # `gh workflow run ci.yaml --ref main -f bypass_e2e=true`. Unit/lint/rust still
-  # gate — only E2E is skipped (see test-e2e `if:` and check-tests).
+  # gate — only E2E is skipped (see test-e2e `if:` and deploy-cf-gate).
   workflow_dispatch:
     inputs:
       bypass_e2e:
@@ -40,6 +40,7 @@ jobs:
   change-scope:
     name: Detect affected test suites
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       # Main/manual runs always exercise the full required suite. Pull requests
       # may skip only tests proven unrelated by the conservative filters below.
@@ -76,6 +77,7 @@ jobs:
   build-wasm:
     name: Build WASM
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       # ingredient-parser is tracked via `branch = "main"` (not a pinned rev), so
@@ -120,10 +122,12 @@ jobs:
         with:
           name: wasm-pkg
           path: packages/wasm
+          retention-days: 1
 
   test-rust:
     name: Rust Tests - recipebridge
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     # Gating job on the deploy critical path: fmt + clippy + a plain `cargo test`.
     # It owns its PR path classifier so it can acquire a runner at t=0 instead
     # of waiting for change-scope. Only enumerated, known-non-Rust paths skip it;
@@ -215,8 +219,9 @@ jobs:
   coverage-rust:
     name: Rust Coverage - recipebridge
     runs-on: ubuntu-latest
-    # Soft deploy gate: report-coverage waits for this artifact, but check-tests
-    # and deploy-cf do not. Keep this unconditional so the combined Codecov
+    timeout-minutes: 25
+    # Soft deploy gate: report-coverage waits for this artifact, but
+    # deploy-cf-gate does not. Keep this unconditional so the combined Codecov
     # upload always contains recipebridge; cargo llvm-cov uses a separate,
     # instrumented build.
     steps:
@@ -245,6 +250,7 @@ jobs:
   lint-format:
     name: Lint and Format
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [build-wasm]
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
@@ -260,12 +266,13 @@ jobs:
     name: Unit Tests - web
     needs: [build-wasm]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Pure `unit` + `ui` vitest projects only — NO service containers, so this
     # fast gate never pays the integresql/postgres image pull (normally ~25s but
     # occasionally an ~8m GHCR stall). DB-backed suites run in test-integration-web
     # below. NOTE: no job-level `continue-on-error` — it would force
-    # needs.<job>.result to 'success' even on failure, defeating the check-tests
-    # gate. The test step keeps step-level continue-on-error so coverage still
+    # needs.<job>.result to 'success' even on failure, defeating the
+    # deploy-cf-gate rollup. The test step keeps step-level continue-on-error so coverage still
     # uploads on failure; the final "Fail if tests failed" step then fails honestly.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -312,17 +319,24 @@ jobs:
     name: Integration Tests - web (shard ${{ matrix.shard }})
     needs: [build-wasm]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     # The DB-backed `integration` vitest project — isolated here so the flaky
     # service-container pull never sits on the fast unit gate above. Still gates
-    # the deploy via check-tests. Same honest-failure pattern (no job-level
+    # the deploy via deploy-cf-gate. Same honest-failure pattern (no job-level
     # continue-on-error; step-level so coverage uploads on failure).
     # Sharded across parallel jobs (own services + IntegreSQL template each) to
     # cut wall-clock; vitest --shard splits the file set. needs.<job>.result is
-    # 'success' only if all shards pass, so the check-tests gate is unchanged.
+    # 'success' only if all shards pass, so the deploy gate is unchanged.
     strategy:
       fail-fast: false
       matrix:
         shard: [1, 2]
+    # Every leg writes the same strategy.job-total, so this is deterministic
+    # regardless of which finishes last. report-coverage uses it to know how many
+    # coverage-web-integration-N artifacts to expect, instead of hardcoding the
+    # shard count in a second place that silently rots when the matrix changes.
+    outputs:
+      shard-total: ${{ steps.shard-total.outputs.total }}
     services:
       postgres:
         # pgvector image: integration/E2E setup runs `CREATE EXTENSION vector`
@@ -352,6 +366,10 @@ jobs:
           PGPASSWORD: password
 
     steps:
+      - name: Publish shard total
+        id: shard-total
+        run: echo "total=${{ strategy.job-total }}" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
@@ -398,8 +416,11 @@ jobs:
 
   test-unit-aux:
     name: Unit Tests - auxiliary packages
-    needs: [build-wasm]
+    # No `needs` on purpose: none of these packages import @cubby/wasm (this job
+    # passes download-wasm: "false"), so waiting on build-wasm bought nothing but
+    # a second runner acquisition. Starting at t=0 also pulls deploy-worker in.
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # The old eight-leg matrix spent eight runners checking out and installing
     # the same workspace for tests that usually execute in 1-2 seconds apiece.
     # One runner keeps up to four single-worker test processes in parallel while
@@ -495,7 +516,7 @@ jobs:
     # Run for every web-impacting PR (including dependency bumps), every main
     # push, and every manual run. Isolated auxiliary-worker PRs skip this long
     # pole. The manual bypass remains the known-flaky deployment escape hatch.
-    # check-tests treats an intentional skip as a pass. NOTE: no job-level
+    # deploy-cf-gate treats an intentional skip as a pass. NOTE: no job-level
     # `continue-on-error` — that would force needs.test-e2e.result to 'success'
     # and let a red E2E ship to prod (same footgun documented on the unit jobs).
     # A real failure now blocks the deploy honestly; post-test steps below stay
@@ -505,6 +526,7 @@ jobs:
       !(github.event_name == 'workflow_dispatch' && inputs.bypass_e2e)
     needs: [build-wasm, change-scope]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # Pin the image to the exact @playwright/test version in pnpm-lock.yaml.
     # Browsers + Linux system dependencies are baked in, removing the apt mirror
     # download that has ranged from ~20 seconds to more than 20 minutes.
@@ -519,7 +541,7 @@ jobs:
     # and its own wrangler dev server, so within-process worker contention (the
     # reason workers stays at 2) never crosses shards — this is the safe way to
     # raise E2E parallelism past 2. needs.test-e2e.result is 'success' only if
-    # every shard passes, so the check-tests gate is unchanged. fail-fast off so
+    # every shard passes, so the deploy gate is unchanged. fail-fast off so
     # one shard's failure doesn't cancel the other (full signal on red).
     strategy:
       fail-fast: false
@@ -610,59 +632,12 @@ jobs:
           path: apps/web/playwright-report/
           retention-days: 7
 
-  check-tests:
-    name: Check All Tests Passed
-    needs:
-      [
-        test-unit-web,
-        test-integration-web,
-        test-unit-aux,
-        test-e2e,
-        test-rust,
-        change-scope,
-      ]
-    runs-on: ubuntu-latest
-    if: always()
-    outputs:
-      all-passed: ${{ steps.check.outputs.all-passed }}
-    steps:
-      - name: Check test results
-        id: check
-        run: |
-          unit_web_result="${{ needs.test-unit-web.result }}"
-          integration_web_result="${{ needs.test-integration-web.result }}"
-          unit_aux_result="${{ needs.test-unit-aux.result }}"
-          e2e_result="${{ needs.test-e2e.result }}"
-          rust_result="${{ needs.test-rust.result }}"
-          change_scope_result="${{ needs.change-scope.result }}"
-
-          echo "Unit tests (web) result: $unit_web_result"
-          echo "Integration tests (web) result: $integration_web_result"
-          echo "Unit tests (aux) result: $unit_aux_result"
-          echo "E2E tests result: $e2e_result"
-          echo "Rust tests result: $rust_result"
-          echo "Change scope result: $change_scope_result"
-
-          # E2E may be skipped by the manual escape hatch or when a PR cannot
-          # affect the web app. test-rust stays successful when its internal
-          # classifier intentionally skips its test steps. The shared classifier
-          # itself and all unconditional gates must pass.
-          if [[ "$unit_web_result" == "success" && \
-                "$integration_web_result" == "success" && \
-                "$unit_aux_result" == "success" && \
-                "$change_scope_result" == "success" && \
-                "$rust_result" == "success" && \
-                ("$e2e_result" == "success" || "$e2e_result" == "skipped") ]]; then
-            echo "all-passed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "all-passed=false" >> "$GITHUB_OUTPUT"
-          fi
-
   report-coverage:
     name: Report complete coverage
     needs:
       [test-unit-web, test-integration-web, test-unit-aux, coverage-rust]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: always()
     # Soft gate: deployment does not need this job. Coverage is uploaded once
     # after all report-producing tests, so Codecov never computes a status from
@@ -681,16 +656,24 @@ jobs:
         shell: bash
         env:
           ALL_PRODUCERS_SUCCEEDED: ${{ needs.test-unit-web.result == 'success' && needs.test-integration-web.result == 'success' && needs.test-unit-aux.result == 'success' && needs.coverage-rust.result == 'success' }}
+          # Derived from test-integration-web's matrix, not restated here — a
+          # hardcoded shard list silently stops checking the shards it forgot.
+          # Falls back to the current matrix size when the job did not report
+          # (it only failed to report if it failed, and then the check below
+          # warns rather than errors anyway).
+          INTEGRATION_SHARDS: ${{ needs.test-integration-web.outputs.shard-total || '2' }}
         run: |
           set -euo pipefail
           artifacts=(
             coverage-rust
             coverage-web-unit
-            coverage-web-integration-1
-            coverage-web-integration-2
             coverage-aux
           )
-          minimum_reports=(1 1 1 1 8)
+          minimum_reports=(1 1 8)
+          for shard in $(seq 1 "$INTEGRATION_SHARDS"); do
+            artifacts+=("coverage-web-integration-$shard")
+            minimum_reports+=(1)
+          done
           missing=()
 
           for index in "${!artifacts[@]}"; do
@@ -748,11 +731,12 @@ jobs:
     # Only needs the WASM artifact + source — lint passing is orthogonal to
     # whether the bundle builds. Decoupled from lint-format so it runs in
     # parallel (starts after build-wasm, not after lint), keeping it off the
-    # deploy critical path (check-tests is the pole). The real deploy still
-    # gates on lint-format (deploy-cf `needs`), so a lint failure never ships —
+    # deploy critical path (test-e2e is the pole). The real deploy still
+    # gates on lint-format (deploy-cf-gate `needs`), so a lint failure never ships —
     # build-cf just may run on a lint-broken PR (cheap on the public repo).
     needs: [build-wasm]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
     steps:
@@ -771,17 +755,68 @@ jobs:
 
   deploy-cf-gate:
     name: Check current main for web deploy
-    needs: [lint-format, check-tests, build-cf]
+    # The test rollup is inlined here. It used to live in a separate
+    # "Check All Tests Passed" job, which cost a whole extra runner acquisition
+    # on the deploy critical path — measured at up to 107s of queue, the worst
+    # p95 of any job in this workflow — to evaluate an expression.
+    #
+    # E2E may legitimately be 'skipped' (the bypass_e2e escape hatch, or
+    # change-scope deciding a PR cannot affect the web app); every other gate
+    # must be 'success'. test-rust stays 'success' when its internal classifier
+    # intentionally skips its steps. Matrix jobs roll up to one result:
+    # 'failure' if any leg failed, 'skipped' only if every leg skipped — both
+    # matrix jobs here decide to skip at job level, so all legs skip together
+    # and the rollup is unambiguous.
+    #
+    # MAINTENANCE HAZARD: `!cancelled()` DISABLES GitHub's default "skip when a
+    # need failed" rule. Every job added to `needs` MUST get an explicit
+    # `.result` check below, or a failure in it will ship straight to
+    # production. Likewise `github.ref == 'refs/heads/main'` is the only thing
+    # keeping pull requests out of prod — don't remove it.
+    #
+    # `!cancelled()` rather than `always()`: an always() gate runs even when the
+    # whole run was cancelled, so cancelling a main run whose tests had already
+    # passed still deployed it. cancelled() refers to the run, not to any single
+    # need, and the explicit == 'success' checks cover a cancelled dependency.
+    needs:
+      [
+        lint-format,
+        build-cf,
+        change-scope,
+        test-rust,
+        test-unit-web,
+        test-integration-web,
+        test-unit-aux,
+        test-e2e,
+      ]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: |
-      always() &&
+      !cancelled() &&
+      github.ref == 'refs/heads/main' &&
       needs.lint-format.result == 'success' &&
-      needs.check-tests.outputs.all-passed == 'true' &&
       needs.build-cf.result == 'success' &&
-      github.ref == 'refs/heads/main'
+      needs.change-scope.result == 'success' &&
+      needs.test-rust.result == 'success' &&
+      needs.test-unit-web.result == 'success' &&
+      needs.test-integration-web.result == 'success' &&
+      needs.test-unit-aux.result == 'success' &&
+      (needs.test-e2e.result == 'success' || needs.test-e2e.result == 'skipped')
     outputs:
       current: ${{ steps.main.outputs.current }}
     steps:
+      # Kept from the old check-tests job: when main does NOT deploy, this table
+      # is the one place that says why, without opening eight other jobs.
+      - name: Report gate results
+        run: |
+          echo "lint-format:          ${{ needs.lint-format.result }}"
+          echo "build-cf:             ${{ needs.build-cf.result }}"
+          echo "change-scope:         ${{ needs.change-scope.result }}"
+          echo "test-rust:            ${{ needs.test-rust.result }}"
+          echo "test-unit-web:        ${{ needs.test-unit-web.result }}"
+          echo "test-integration-web: ${{ needs.test-integration-web.result }}"
+          echo "test-unit-aux:        ${{ needs.test-unit-aux.result }}"
+          echo "test-e2e:             ${{ needs.test-e2e.result }}"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Check whether this is still current main
         id: main
@@ -791,6 +826,7 @@ jobs:
     name: Deploy to Cloudflare Workers
     needs: [deploy-cf-gate]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: needs.deploy-cf-gate.outputs.current == 'true'
     concurrency:
       group: deploy-cubby-production
@@ -845,8 +881,8 @@ jobs:
   # wrangler deploy). The web/cubby worker stays separate (deploy-cf): it deploys
   # a prebuilt artifact and gates on the full E2E suite.
   #
-  # Gated on lint-format + the aux unit legs (test-unit-aux), NOT check-tests, so
-  # a flaky web E2E never blocks an aux deploy. Default needs-success gating means
+  # Gated on lint-format + the aux unit legs (test-unit-aux) only, NOT on the web
+  # test suite, so a flaky web E2E never blocks an aux deploy. Default needs-success gating means
   # a failing lint/unit job auto-skips this — no explicit result checks needed.
   #
   # CODE ONLY — no D1 migrations run in CI. Prod schema changes are a deliberate,
@@ -858,6 +894,7 @@ jobs:
     name: Check current main for auxiliary deploys
     needs: [lint-format, test-unit-aux]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: github.ref == 'refs/heads/main'
     outputs:
       current: ${{ steps.main.outputs.current }}
@@ -871,6 +908,7 @@ jobs:
     name: Deploy ${{ matrix.pkg }} Worker
     needs: [deploy-worker-gate]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: needs.deploy-worker-gate.outputs.current == 'true'
     strategy:
       matrix:
