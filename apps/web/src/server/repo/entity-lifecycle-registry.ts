@@ -46,6 +46,7 @@ import { INGREDIENT_MERGE_EDGE_POLICY } from "~/server/repo/ingredient/merge";
 import { LOCATION_DELETE_EDGE_POLICY } from "~/server/repo/location/crud";
 import { MEAL_DELETE_EDGE_POLICY } from "~/server/repo/meal/crud";
 import { PRODUCT_DELETE_EDGE_POLICY } from "~/server/repo/product/edge-roles";
+import { PRODUCT_MERGE_EDGE_POLICY } from "~/server/repo/product/merge";
 import { PROJECT_DELETE_EDGE_POLICY } from "~/server/repo/project/crud";
 import {
   PURCHASE_DELETE_EDGE_POLICY,
@@ -81,6 +82,11 @@ export const ENTITY_LIFECYCLE_REGISTRY: EntityLifecycleRegistryEntry[] = [
     entity: "product",
     operation: "delete",
     policy: PRODUCT_DELETE_EDGE_POLICY,
+  },
+  {
+    entity: "product",
+    operation: "merge",
+    policy: PRODUCT_MERGE_EDGE_POLICY,
   },
   { entity: "recipe", operation: "delete", policy: RECIPE_DELETE_EDGE_POLICY },
   {

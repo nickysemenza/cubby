@@ -61,6 +61,12 @@ import {
 } from "~/server/repo/database-helpers";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { countByTarget, impact, present } from "~/server/repo/impact";
+import {
+  finalizeMerge,
+  planSlotCollisions,
+  repointEdge,
+  resolveMergeTargets,
+} from "~/server/repo/merge";
 import { foldChargeInto } from "~/server/repo/purchase";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import {
@@ -513,32 +519,27 @@ const planVendorMerge = async (
       ),
     );
 
-  const withOrderId = allPurchases.filter(
-    (p): p is typeof p & { orderId: string } => p.orderId !== null,
+  // One survivor per order id, resolved over the whole merge set. The shared
+  // `planSlotCollisions` encodes the two rules this needs: the keeper's own
+  // charge wins its slot (so visible ids stay stable), and an order-less charge
+  // (`orderId IS NULL`) can never collide because the unique index is partial.
+  const slotted = planSlotCollisions({
+    keeperRows: allPurchases.filter((p) => p.vendorId === keepId),
+    loserRows: allPurchases.filter((p) => p.vendorId !== keepId),
+    slotKey: (p) => p.orderId,
+  });
+
+  const folded: VendorMergePlan["folded"] = slotted.absorb.map(
+    ({ row, into }) => ({
+      deadId: row.id,
+      survivorId: into.id,
+      vendorId: row.vendorId,
+    }),
   );
-
-  // One survivor per order id; the keeper's charge takes precedence.
-  const survivorByOrderId = new Map<string, PurchaseId>();
-  for (const c of withOrderId) {
-    const held = survivorByOrderId.get(c.orderId);
-    if (held === undefined || c.vendorId === keepId) {
-      survivorByOrderId.set(c.orderId, c.id);
-    }
-  }
-
-  const foldedIds = new Set<PurchaseId>();
-  const folded: VendorMergePlan["folded"] = [];
-  for (const c of withOrderId) {
-    const survivorId = survivorByOrderId.get(c.orderId);
-    if (survivorId !== undefined && survivorId !== c.id) {
-      folded.push({ deadId: c.id, survivorId, vendorId: c.vendorId });
-      foldedIds.add(c.id);
-    }
-  }
-
-  const repointed = allPurchases
-    .filter((p) => p.vendorId !== keepId && !foldedIds.has(p.id))
-    .map((p) => ({ id: p.id, vendorId: p.vendorId }));
+  const repointed = slotted.repoint.map((p) => ({
+    id: p.id,
+    vendorId: p.vendorId,
+  }));
 
   return { repointed, folded, carried };
 };
@@ -574,19 +575,14 @@ export const mergeVendors = async (
   input: { keepId: VendorShortcode; mergeIds: VendorShortcode[] },
   actor: ActorContext,
 ): Promise<VendorOut> => {
-  const codes = [input.keepId, ...input.mergeIds];
-  const resolved = await resolveLiveShortcodes(db, codes, "vendor");
-  const missing = codes.filter((code) => !resolved.has(code));
-  if (missing.length > 0) {
-    throw createAppError(
-      "VENDOR_NOT_FOUND",
-      `Vendor(s) not found: ${missing.join(", ")}`,
-    );
-  }
-  const keepId = unsafeVendorId(resolved.get(input.keepId) ?? "");
-  const losers = input.mergeIds
-    .map((code) => unsafeVendorId(resolved.get(code) ?? ""))
-    .filter((id) => id !== keepId);
+  const { keepId, loserIds: losers } = await resolveMergeTargets(db, {
+    entity: "vendor",
+    keepId: input.keepId,
+    mergeIds: input.mergeIds,
+    notFound: "VENDOR_NOT_FOUND",
+    label: "Vendor",
+    brand: (id) => unsafeVendorId(id),
+  });
   if (losers.length === 0) return getVendorByID(db, keepId);
 
   await withTransaction(db, async (tx) => {
@@ -603,45 +599,36 @@ export const mergeVendors = async (
     }
 
     // Everything still live moves to the keeper. The doomed charges are already
-    // soft-deleted, so `notDeleted` is what keeps this from re-introducing the
+    // soft-deleted, so `liveOnly` is what keeps this from re-introducing the
     // collision the fold just resolved.
-    await tx
-      .update(purchase)
-      .set({ vendorId: keepId })
-      .where(and(inArray(purchase.vendorId, losers), notDeleted(purchase)));
+    await repointEdge(tx, "vendor", "Purchase.vendorId", {
+      from: losers,
+      to: keepId,
+      liveOnly: true,
+    });
 
-    await tx
-      .update(vendor)
-      .set({ deletedAt: new Date() })
-      .where(and(inArray(vendor.id, losers), notDeleted(vendor)));
-    await softDeleteEntityEmbeddingsTx(tx, "vendor", losers);
-
-    await logAuditEntries(tx, actor, [
-      {
-        entityType: "vendor" as const,
-        entityId: keepId,
-        action: "update" as const,
-        changes: {
-          mergedFrom: { from: null, to: losers },
-          ...(Object.keys(plan.carried).length > 0
-            ? { carriedOver: { from: null, to: plan.carried } }
-            : {}),
-          ...(plan.folded.length > 0
-            ? {
-                foldedCharges: {
-                  from: null,
-                  to: plan.folded.map((d) => d.deadId),
-                },
-              }
-            : {}),
-        },
+    await finalizeMerge(tx, {
+      entity: "vendor",
+      table: vendor,
+      keepId,
+      loserIds: losers,
+      removal: "soft",
+      actor,
+      survivorChanges: {
+        mergedFrom: { from: null, to: losers },
+        ...(Object.keys(plan.carried).length > 0
+          ? { carriedOver: { from: null, to: plan.carried } }
+          : {}),
+        ...(plan.folded.length > 0
+          ? {
+              foldedCharges: {
+                from: null,
+                to: plan.folded.map((d) => d.deadId),
+              },
+            }
+          : {}),
       },
-      ...losers.map((id) => ({
-        entityType: "vendor" as const,
-        entityId: id,
-        action: "delete" as const,
-      })),
-    ]);
+    });
   });
 
   return getVendorByID(db, keepId);

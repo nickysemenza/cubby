@@ -113,6 +113,29 @@ export const soldButStillStockedSchema = z.object({
   ),
 });
 
+// Two Product rows for one physical SKU, keyed on (manufacturer, model) with
+// external ids from different sources — the cluster `merge_products` folds.
+//
+// Measured on the live 2,472-product catalog: 5 real duplicates found, ~6 false
+// positives, every one a legitimate variant separated by a distinct UPC or a
+// distinct retailer SKU (both of which the detector now suppresses on). Trigram
+// name similarity was near-useless for the same job — see the detector's own
+// header note before re-trying it.
+export const duplicateProductIdentitySchema = z.object({
+  manufacturer: z.string(),
+  /** The maker part number the cluster shares. */
+  model: z.string(),
+  products: z.array(
+    z.object({
+      id: productShortcode,
+      name: z.string(),
+      upc: z.string().nullable(),
+      /** Distinct external-id sources on this row (e.g. amazon, homedepot). */
+      sources: z.array(z.string()),
+    }),
+  ),
+});
+
 export const productWithoutMappingsSchema = z.object({
   ...productProblemFields,
   createdAt: z.date(),
@@ -484,6 +507,7 @@ export const invalidFinancialJsonSchema = z.discriminatedUnion("entity", [
 // manual dry-run/fix-all actions in Settings → Maintenance instead.
 const problemsFastShape = {
   duplicateInventory: z.array(duplicateUniqueProductSchema),
+  duplicateProductIdentities: z.array(duplicateProductIdentitySchema),
   orphanedProducts: z.array(orphanedProductSchema),
   productsMissingPrice: z.array(productMissingPriceSchema),
   unvaluedBucketProducts: z.array(productMissingPriceSchema),
@@ -622,6 +646,12 @@ export type ProblemKey = keyof typeof allProblemArrayFields;
 export const PROBLEM_CLASS = {
   // --- defects: wrong data, converges to zero ---
   duplicateInventory: "defect",
+  // Two rows for one SKU is unambiguously wrong — spend, stock, and identifiers
+  // are split across both — and it converges to zero: `mergeProducts` folds the
+  // cluster and the cluster never comes back. Same reasoning as
+  // `duplicateVendors`. No auto-fix: which row survives decides which
+  // identifiers and name stand, and there is no restore path.
+  duplicateProductIdentities: "defect",
   orphanedProducts: "defect",
   productsMissingPrice: "defect",
   // Unambiguously wrong and converges to zero: the item was sold, so the shelf
@@ -807,6 +837,9 @@ export type DuplicateUniqueProduct = z.infer<
 export type OrphanedProduct = z.infer<typeof orphanedProductSchema>;
 export type ProductMissingPrice = z.infer<typeof productMissingPriceSchema>;
 export type SoldButStillStocked = z.infer<typeof soldButStillStockedSchema>;
+export type DuplicateProductIdentity = z.infer<
+  typeof duplicateProductIdentitySchema
+>;
 export type ProductWithoutMappings = z.infer<
   typeof productWithoutMappingsSchema
 >;

@@ -47,7 +47,6 @@ export {
 } from "./crud";
 // Helpers
 export { foodLookupParamFromProduct } from "./helpers";
-
 // Lookup operations
 export {
   findProductByNameFuzzyManufacturer,
@@ -55,3 +54,7 @@ export {
   findProductsByFoodIdentifier,
   getFoodLookupsForLinkedProducts,
 } from "./lookup";
+// Merge (fold duplicate SKUs into one survivor). `PRODUCT_MERGE_EDGE_POLICY`
+// is deliberately NOT re-exported here — the lifecycle registry imports it from
+// `./merge` directly, the same way it reaches every other entity's policy.
+export { mergeProducts, previewMergeProducts } from "./merge";

@@ -1,6 +1,8 @@
 import {
   mcpProductCreateInput,
   mcpProductUpdateInput,
+  mergeProductsInput,
+  mergeProductsMcpOut,
   patchProductExternalIdsInput,
   productExternalIdCollisionInput,
   productExternalIdCollisionsOut,
@@ -24,6 +26,7 @@ import {
   slimProductDetail,
   toUnitMappingInput,
   WRITE_CLOSED,
+  WRITE_DESTRUCTIVE_CLOSED,
 } from "./_shared";
 
 export function registerProductTools(server: McpServer) {
@@ -124,6 +127,22 @@ export function registerProductTools(server: McpServer) {
         await getCaller(extra).product.verifyImages(params.id),
         slimProductDetail,
       ),
+  });
+
+  registerMcpTool(server, {
+    name: "merge_products",
+    description:
+      "Fold duplicate products into one survivor. Moves the merged-away products' stock, ledger lines, identifiers, images, unit mappings, tasks, project uses, and wishlist candidacies onto keepId, then soft-deletes them. Stock in a location the survivor already stocks is SUMMED into the survivor's entry; an identifier slot (source, kind) the survivor already fills keeps the survivor's value and discards the other. Refuses when two entries in one location carry different units — preview with preview_entity_operation first.",
+    inputSchema: mergeProductsInput.shape,
+    outputSchema: mergeProductsMcpOut,
+    annotations: WRITE_DESTRUCTIVE_CLOSED,
+    handler: async (params, extra) => {
+      const result = await getCaller(extra).product.merge(params);
+      return {
+        product: slimProduct(result.product),
+        mergeSummary: result.mergeSummary,
+      };
+    },
   });
 
   registerMcpTool(server, {
