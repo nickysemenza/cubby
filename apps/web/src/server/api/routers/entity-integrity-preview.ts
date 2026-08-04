@@ -3,8 +3,12 @@ import type {
   MergeCandidate,
   PreviewOperation,
   PreviewOperationInput,
+  PreviewOperationRequest,
 } from "@cubby/schemas/entity-integrity";
-import { previewOperationSchema } from "@cubby/schemas/entity-integrity";
+import {
+  narrowPreviewOperationInput,
+  previewOperationSchema,
+} from "@cubby/schemas/entity-integrity";
 import {
   unsafeCookbookId,
   unsafeExpenseId,
@@ -79,16 +83,19 @@ type Planned = {
 
 const plan = async (
   db: Database,
-  input: PreviewOperationInput,
+  input: PreviewOperationRequest,
 ): Promise<{ planned: Planned; publicIdByEntityId: Map<string, string> }> => {
+  // Bound to a local const so the `!== "image"` narrowing survives into the
+  // closures below — TypeScript drops property-path narrowings inside callbacks.
+  const entity = input.entity;
   const publicIds =
     input.operation === "delete"
       ? input.ids
       : [...input.mergeIds, ...(input.keepId ? [input.keepId] : [])];
   const entityIdsByPublicId =
-    input.entity === "image"
+    entity === "image"
       ? new Map(publicIds.map((id) => [id, id]))
-      : await resolveLiveShortcodes(db, publicIds, input.entity);
+      : await resolveLiveShortcodes(db, publicIds, entity);
   const entityIds = (ids: readonly string[]) =>
     ids.flatMap((id) => {
       const entityId = entityIdsByPublicId.get(id);
@@ -188,19 +195,19 @@ const plan = async (
     .exhaustive();
 
   const publicIdByEntityId =
-    input.entity === "image"
+    entity === "image"
       ? new Map(entityIdsByPublicId.entries())
       : await lookupShortcodes(
           db,
           [...entityIdsByPublicId.values()].map((id) => ({
-            entity: input.entity,
+            entity,
             id,
           })),
         ).then(
           (codes) =>
             new Map(
               [...entityIdsByPublicId.values()].flatMap((id) => {
-                const code = codes.get(refKey(input.entity, id));
+                const code = codes.get(refKey(entity, id));
                 return code ? [[id, code] as const] : [];
               }),
             ),
@@ -213,17 +220,22 @@ export const previewOperation = async (
   input: PreviewOperationInput,
   now: Date,
 ): Promise<PreviewOperation> => {
-  const { planned, publicIdByEntityId } = await plan(db, input);
+  // The wire input is a flat object (MCP can't advertise a union); narrowing it
+  // once here is what lets every arm below stay exhaustively matched.
+  const request = narrowPreviewOperationInput(input);
+  const { planned, publicIdByEntityId } = await plan(db, request);
   const targetCount =
-    input.operation === "delete" ? input.ids.length : input.mergeIds.length;
+    request.operation === "delete"
+      ? request.ids.length
+      : request.mergeIds.length;
 
   return previewOperationSchema.parse({
-    operation: input.operation,
-    entity: input.entity,
+    operation: request.operation,
+    entity: request.entity,
     // Only a delete has a mode, and `image` is the one hard delete.
     mode:
-      input.operation === "delete"
-        ? input.entity === "image"
+      request.operation === "delete"
+        ? request.entity === "image"
           ? "hard"
           : "soft"
         : null,
