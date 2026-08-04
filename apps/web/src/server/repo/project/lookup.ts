@@ -86,12 +86,22 @@ export const projectNameOptions = async (
   });
 };
 
-export const projectList = async (
+/**
+ * Everything the project list does before it paginates: the whole-tree load,
+ * the filters resolved into a WHERE clause, and the ORDER BY.
+ *
+ * Shared with the WBS tree page (`repo/project/tree.ts`), which applies the
+ * SAME predicates but paginates by root of the filtered forest rather than by
+ * row. Extracted rather than copied precisely because those two must never
+ * disagree about membership — a tree that selected a different set than the
+ * flat list would be the browser-side membership bug this endpoint exists to
+ * avoid, just moved to the server.
+ */
+export const buildProjectListQuery = async (
   db: Database,
   filters: ProjectFilters,
   sorts: SortParams[],
-  pagination: PaginationParams,
-): Promise<{ data: ProjectOut[]; count: number }> => {
+) => {
   // Whole-tree parent/child map — cheap single query — see subtree.ts's doc
   // comment. Fetched up front (rather than inside `loadProjectSubtreeRollups`
   // below) because it also resolves `includeSubProjects` into the WHERE
@@ -224,6 +234,21 @@ export const projectList = async (
       resolve: (s) =>
         s.orderBy === "startDate" ? [effectiveStartSortSql(s.direction)] : null,
     },
+  );
+
+  return { tree, whereClause, orderByArray };
+};
+
+export const projectList = async (
+  db: Database,
+  filters: ProjectFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+): Promise<{ data: ProjectOut[]; count: number }> => {
+  const { tree, whereClause, orderByArray } = await buildProjectListQuery(
+    db,
+    filters,
+    sorts,
   );
   const { take, skip } = buildTakeSkip(pagination);
 

@@ -18,7 +18,11 @@
  * `computeAttentionItems` re-derived the same thing independently).
  */
 import type { ProjectId } from "@cubby/schemas/identifiers";
-import type { ProjectDateWindow, ProjectStatus } from "@cubby/schemas/project";
+import {
+  MAX_PROJECT_TREE_DEPTH,
+  type ProjectDateWindow,
+  type ProjectStatus,
+} from "@cubby/schemas/project";
 import { format } from "date-fns";
 import { asc } from "drizzle-orm";
 import { uniq } from "es-toolkit";
@@ -55,11 +59,6 @@ export type ProjectParentRow = {
   /** Completion-year fallback when the folded effective end is null. */
   updatedAt: Date;
 };
-
-/** Depth cap for tree walks (children-map traversal, ancestor walks) —
- * defensive backstop against a corrupt/cyclic tree; a well-formed one (the
- * create/update cycle guard rejects cycles) never gets remotely close. */
-export const MAX_PROJECT_TREE_DEPTH = 100;
 
 /**
  * All live projects' `{id, name, parentProjectId}` — the single query every

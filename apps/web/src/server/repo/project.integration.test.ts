@@ -32,6 +32,7 @@ import {
   projectDashboardSummary,
   projectList,
   projectPortfolioAnalytics,
+  projectTreePage,
   updateProject,
 } from "./project";
 import { EMPTY_PROJECT_CONTENT_DATES } from "./project/helpers";
@@ -1226,6 +1227,207 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     expect(new Set(subtree.data.map((p) => p.name))).toEqual(
       new Set(["parent expense", "child expense", "grandchild expense"]),
     );
+  });
+});
+
+/**
+ * The WBS renderer's page reader. What's being pinned throughout: the tree page
+ * selects the SAME projects the flat list would, and differs only in what a
+ * "page" is — roots of the filtered forest, each carrying its matching
+ * descendants. Every assertion here is about that boundary, because the whole
+ * point of the endpoint is that the browser never gets to decide it.
+ */
+describe("project repository — WBS tree page", () => {
+  const ctx = withTestDb();
+
+  /** `parent → child → grandchild`, plus a standalone project. */
+  const makeChain = async (prefix: string) => {
+    const { output: parent } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: `${prefix} parent` }),
+      ctx.actor,
+    );
+    const { output: child } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: `${prefix} child`,
+        parentProjectId: parent.id,
+        status: "done",
+      }),
+      ctx.actor,
+    );
+    const { output: grandchild } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: `${prefix} grandchild`,
+        parentProjectId: child.id,
+      }),
+      ctx.actor,
+    );
+    return { parent, child, grandchild };
+  };
+
+  const page = (pageIndex: number, pageSize: number) => ({
+    pageIndex,
+    pageSize,
+  });
+
+  it("counts ROOTS, not rows, and returns each root's whole matching subtree", async () => {
+    const { parent, child, grandchild } = await makeChain("tree");
+    const { output: standalone } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "tree standalone" }),
+      ctx.actor,
+    );
+
+    const result = await projectTreePage(ctx.db, {}, [], page(0, 50));
+
+    // Four projects, two roots — the count is the paging unit, which is what
+    // the infinite-scroll page arithmetic compares against.
+    expect(result.count).toBe(2);
+    expect(new Set(result.data.map((row) => row.id))).toEqual(
+      new Set([parent.id, child.id, grandchild.id, standalone.id]),
+    );
+  });
+
+  it("paginates by root, carrying descendants along with their root", async () => {
+    const { parent, child, grandchild } = await makeChain("paged");
+    const { output: standalone } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "paged standalone" }),
+      ctx.actor,
+    );
+
+    const sortByName = [
+      { orderBy: "name" as const, direction: "asc" as const },
+    ];
+    const first = await projectTreePage(ctx.db, {}, sortByName, page(0, 1));
+    const second = await projectTreePage(ctx.db, {}, sortByName, page(1, 1));
+
+    // Page 1 is one root plus its two descendants — a page of ONE root is
+    // three rows, which is exactly the thing a row-paginated list can't do.
+    expect(first.count).toBe(2);
+    expect(new Set(first.data.map((row) => row.id))).toEqual(
+      new Set([parent.id, child.id, grandchild.id]),
+    );
+    expect(second.data.map((row) => row.id)).toEqual([standalone.id]);
+  });
+
+  it("promotes a matching project whose parent does not match to a root", async () => {
+    const { parent, child, grandchild } = await makeChain("promote");
+
+    // Only the `done` child matches. Its parent is excluded, so it must become
+    // a root of its own rather than disappearing under an unmatched parent —
+    // the same orphan promotion the client builder does, decided here.
+    const result = await projectTreePage(
+      ctx.db,
+      { status: ["done"] },
+      [],
+      page(0, 50),
+    );
+
+    expect(result.count).toBe(1);
+    expect(result.data.map((row) => row.id)).toEqual([child.id]);
+    expect(result.data.map((row) => row.id)).not.toContain(parent.id);
+    expect(result.data.map((row) => row.id)).not.toContain(grandchild.id);
+  });
+
+  it("excludes a page root's descendants that don't match the filter", async () => {
+    const { parent, child, grandchild } = await makeChain("narrow");
+
+    // The chain's middle link is `done`; filtering it out must not drag it in
+    // as part of its root's closure.
+    const result = await projectTreePage(
+      ctx.db,
+      { status: [...LIVE_PROJECT_STATUSES] },
+      [],
+      page(0, 50),
+    );
+
+    const ids = result.data.map((row) => row.id);
+    expect(ids).toContain(parent.id);
+    expect(ids).toContain(grandchild.id);
+    expect(ids).not.toContain(child.id);
+    // The grandchild's own parent is gone from the result, so it is a root
+    // too: two roots, not one.
+    expect(result.count).toBe(2);
+  });
+
+  it("selects the same set as the flat list, differing only in paging unit", async () => {
+    await makeChain("parity");
+    const filters = { search: "parity" };
+
+    const flat = await projectList(ctx.db, filters, [], page(0, 500));
+    const tree = await projectTreePage(ctx.db, filters, [], page(0, 500));
+
+    expect(new Set(tree.data.map((row) => row.id))).toEqual(
+      new Set(flat.data.map((row) => row.id)),
+    );
+    expect(flat.count).toBe(3);
+    expect(tree.count).toBe(1);
+  });
+
+  it("omits soft-deleted projects as roots and as descendants", async () => {
+    const { parent, child, grandchild } = await makeChain("deleted");
+    const { output: standalone } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "deleted standalone" }),
+      ctx.actor,
+    );
+    // Bottom-up: `deleteProjects` refuses a project that still has children
+    // (PROJECT_HAS_CHILDREN), so a dangling middle link isn't a state the app
+    // can reach — the leaf is the real case.
+    await deleteProjects(ctx.db, [grandchild.id, standalone.id], ctx.actor);
+
+    const result = await projectTreePage(ctx.db, {}, [], page(0, 50));
+
+    const ids = result.data.map((row) => row.id);
+    expect(ids).toEqual(expect.arrayContaining([parent.id, child.id]));
+    expect(ids).not.toContain(grandchild.id);
+    // ...and a deleted ROOT doesn't just vanish from the rows, it stops
+    // counting toward the page total.
+    expect(ids).not.toContain(standalone.id);
+    expect(result.count).toBe(1);
+  });
+
+  it("returns rows in the query's global sort order, so siblings nest sorted", async () => {
+    const { output: root } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "order root" }),
+      ctx.actor,
+    );
+    for (const name of ["order zeta", "order alpha", "order mid"]) {
+      await createProject(
+        ctx.db,
+        projectCreateInput.parse({ name, parentProjectId: root.id }),
+        ctx.actor,
+      );
+    }
+
+    const result = await projectTreePage(
+      ctx.db,
+      { search: "order" },
+      [{ orderBy: "name", direction: "asc" }],
+      page(0, 50),
+    );
+
+    // The client nests by preserving input order within each sibling group,
+    // so this ordering IS the rendered per-level ordering.
+    expect(result.data.map((row) => row.name)).toEqual([
+      "order alpha",
+      "order mid",
+      "order root",
+      "order zeta",
+    ]);
+  });
+
+  it("returns an empty page (with the real root count) past the last root", async () => {
+    await makeChain("beyond");
+
+    const result = await projectTreePage(ctx.db, {}, [], page(5, 10));
+
+    expect(result.data).toEqual([]);
+    expect(result.count).toBe(1);
   });
 });
 

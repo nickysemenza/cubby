@@ -17,10 +17,11 @@ import {
   type ProjectShortcode,
   unsafeProjectId,
 } from "@cubby/schemas/identifiers";
-import type {
-  ProjectCreateInput,
-  ProjectOut,
-  ProjectUpdateInput,
+import {
+  MAX_PROJECT_TREE_DEPTH,
+  type ProjectCreateInput,
+  type ProjectOut,
+  type ProjectUpdateInput,
 } from "@cubby/schemas/project";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { countBy } from "es-toolkit";
@@ -62,7 +63,7 @@ import {
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { projectDependencyIds } from "./analytics";
 import { hydrateProjectRow } from "./helpers";
-import { loadProjectSubtreeRollups, MAX_PROJECT_TREE_DEPTH } from "./subtree";
+import { loadProjectSubtreeRollups } from "./subtree";
 
 export const PROJECT_DELETE_EDGE_POLICY = {
   "Project.parentProjectId": {

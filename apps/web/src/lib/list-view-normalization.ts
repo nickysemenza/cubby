@@ -6,6 +6,15 @@ export type ProjectRenderer = (typeof PROJECT_RENDERERS)[number];
 const TASK_RENDERERS = ["next", "board", "timeline", "list"] as const;
 export type TaskRenderer = (typeof TASK_RENDERERS)[number];
 
+/**
+ * How the Data tab's Projects section draws its rows. A renderer, not a view:
+ * both draw the same server-selected set — `tree` just swaps `project.list`
+ * for `project.tree`, which pages by root of the filtered forest so the nesting
+ * has an honest shape.
+ */
+export const PROJECT_ROWS_RENDERERS = ["flat", "tree"] as const;
+export type ProjectRowsRenderer = (typeof PROJECT_ROWS_RENDERERS)[number];
+
 export function normalizeProjectRenderer(view: string | undefined): {
   view: ProjectRenderer | undefined;
   statuses?: Array<(typeof projectStatusSchema.enum)["done"]>;

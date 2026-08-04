@@ -10,6 +10,9 @@
  *                                handles the `blockedByIds` full-replacement
  *                                set, delete guards on live tasks/expenses)
  *   LOOKUP    → `lookup.ts`    (filtered/sorted/paginated list, id→name lookup)
+ *   TREE      → `tree.ts`      (the same filters as `lookup.ts`, paginated by
+ *                                root of the filtered forest, for the Projects
+ *                                Data tab's WBS renderer)
  *   ANALYTICS → `analytics.ts` (batched cost/progress OWN rollups + dependency-
  *                                edge reads, shared by crud.ts and lookup.ts)
  *   SUBTREE   → `subtree.ts`   (arbitrary-depth sub-project tree: descendant-id
@@ -55,3 +58,4 @@ export {
   listProjectResources,
   suggestProjectTools,
 } from "./tools";
+export { projectTreePage } from "./tree";

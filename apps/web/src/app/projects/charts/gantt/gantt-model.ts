@@ -21,6 +21,7 @@ import {
   type Trade,
 } from "@cubby/schemas/project";
 import { groupBy, keyBy } from "es-toolkit";
+import { buildForest, type Forest, foldForest } from "../../project-forest";
 import { toDayIndex } from "./gantt-date";
 
 export interface GanttProjectRow {
@@ -91,16 +92,6 @@ export interface DayRange {
   endDay: number;
 }
 
-/** Sentinel parent key for root-level projects (never a real project id). */
-const ROOT_KEY = "__root__";
-/**
- * Defensive depth cap on every tree walk here, mirroring the server's
- * `MAX_PROJECT_TREE_DEPTH` (repo/project/subtree.ts). The create/update cycle
- * guard means a well-formed tree never gets close — but these walks run in the
- * browser, where an unguarded cycle is a stack overflow that takes the whole
- * page down rather than a failed query.
- */
-const MAX_TREE_DEPTH = 100;
 /** Sentinel kind key for projects with a null `kind`, in `groupBy: "kind"` mode. */
 const OTHER_KIND_KEY = "other";
 
@@ -141,43 +132,33 @@ function considerInto(extent: Extent, value: number | null): Extent {
 }
 
 /**
- * Post-order DFS over `nodes` (using `childrenByParent`), computing each
- * node's own-effective-dates memoized min/max over itself + every
- * descendant. One pass over the whole node set, O(n).
+ * Each node's own-effective-dates min/max folded over itself + every
+ * descendant. One post-order pass over the whole node set, O(n) — every node
+ * is a starting point, so a node in a cycle (unreachable from the forest's
+ * roots) still gets an extent, and `foldForest`'s emit-once rule makes the
+ * repeat starts free.
  */
 function computeSubtreeExtents(
   nodes: readonly ProjectOut[],
-  childrenByParent: Record<string, ProjectOut[]>,
+  forest: Forest<ProjectOut>,
 ): Map<string, Extent> {
-  const cache = new Map<string, Extent>();
-  // Cycle guard: `cache` is only written *after* the recursion, so a cyclic
-  // parent chain would otherwise recurse forever. A node already on the stack
-  // contributes nothing.
-  const onStack = new Set<string>();
-
-  function visit(node: ProjectOut, depth: number): Extent {
-    const cached = cache.get(node.id);
-    if (cached) return cached;
-    if (onStack.has(node.id) || depth >= MAX_TREE_DEPTH) return EMPTY_EXTENT;
-    onStack.add(node.id);
-    let extent = considerInto(
-      considerInto(EMPTY_EXTENT, ownStartDay(node)),
-      ownEndDay(node),
-    );
-    for (const child of childrenByParent[node.id] ?? []) {
-      const childExtent = visit(child, depth + 1);
-      extent = considerInto(
-        considerInto(extent, childExtent.min),
-        childExtent.max,
+  const extents = new Map<string, Extent>();
+  foldForest<ProjectOut, Extent>(
+    forest,
+    (node, childExtents) => {
+      let extent = considerInto(
+        considerInto(EMPTY_EXTENT, ownStartDay(node)),
+        ownEndDay(node),
       );
-    }
-    onStack.delete(node.id);
-    cache.set(node.id, extent);
-    return extent;
-  }
-
-  for (const node of nodes) visit(node, 0);
-  return cache;
+      for (const child of childExtents) {
+        extent = considerInto(considerInto(extent, child.min), child.max);
+      }
+      extents.set(node.id, extent);
+      return extent;
+    },
+    { roots: nodes },
+  );
+  return extents;
 }
 
 /**
@@ -332,38 +313,42 @@ export function buildPortfolioRows(
   expanded: ReadonlySet<string>,
   options?: { groupBy?: "none" | "kind" },
 ): PortfolioRowsResult {
-  const idSet = new Set(projects.map((p) => p.id));
-  // Orphan promotion: a project whose parent was filtered out of `projects`
-  // renders as a root instead of vanishing.
-  const parentKey = (p: ProjectOut): string =>
-    p.parentProjectId != null && idSet.has(p.parentProjectId)
-      ? p.parentProjectId
-      : ROOT_KEY;
-  const childrenByParent = groupBy(projects, parentKey);
-  const roots = childrenByParent[ROOT_KEY] ?? [];
-  const extents = computeSubtreeExtents(projects, childrenByParent);
+  // Orphan promotion (a project whose parent was filtered out of `projects`
+  // renders as a root instead of vanishing), the depth cap, and the cycle
+  // guard all come from the shared forest core.
+  const forest = buildForest(projects);
+  const { childrenByParent } = forest;
+  const roots = forest.roots;
+  const extents = computeSubtreeExtents(projects, forest);
+
+  // Pre-order flat rows: each node folds to itself followed by its walked
+  // descendants. `cyclicRoots` are deliberately NOT walked — a project in a
+  // parent loop has no honest place on a timeline, so it stays off the chart
+  // (the WBS table makes the opposite call and promotes them).
+  const walkRoots = (rootSet: readonly ProjectOut[]): GanttRow[] =>
+    foldForest<ProjectOut, GanttRow[]>(
+      forest,
+      (node, childRows, depth) => {
+        const kids = childrenByParent.get(node.id) ?? [];
+        const isExpandable = kids.length > 0;
+        const isExpanded = isExpandable && expanded.has(node.id);
+        const extent = extents.get(node.id) ?? EMPTY_EXTENT;
+        return [
+          buildProjectRow(
+            node,
+            depth,
+            isExpandable,
+            isExpanded,
+            kids.length,
+            extent,
+          ),
+          ...childRows.flat(),
+        ];
+      },
+      { roots: rootSet, descend: (node) => expanded.has(node.id) },
+    ).flat();
 
   const rows: GanttRow[] = [];
-
-  function walk(project: ProjectOut, depth: number): void {
-    const kids = childrenByParent[project.id] ?? [];
-    const isExpandable = kids.length > 0;
-    const isExpanded = isExpandable && expanded.has(project.id);
-    const extent = extents.get(project.id) ?? EMPTY_EXTENT;
-    rows.push(
-      buildProjectRow(
-        project,
-        depth,
-        isExpandable,
-        isExpanded,
-        kids.length,
-        extent,
-      ),
-    );
-    if (isExpanded && depth < MAX_TREE_DEPTH) {
-      for (const kid of kids) walk(kid, depth + 1);
-    }
-  }
 
   if (options?.groupBy === "kind") {
     const rootsByKind = groupBy(roots, (p): string => p.kind ?? OTHER_KIND_KEY);
@@ -377,10 +362,12 @@ export function buildPortfolioRows(
         label: kindLabel(kind),
         count: kindRoots.length,
       });
-      for (const root of kindRoots) walk(root, 0);
+      // Safe to walk each kind group separately: the groups partition `roots`,
+      // and a descendant is only ever reachable from its own root.
+      rows.push(...walkRoots(kindRoots));
     }
   } else {
-    for (const root of roots) walk(root, 0);
+    rows.push(...walkRoots(roots));
   }
 
   const unscheduled = roots.filter((p) => {
@@ -413,13 +400,11 @@ export function buildProjectRows(
   expanded: ReadonlySet<string>,
 ): ProjectRowsResult {
   const nonRootProjects = subtreeProjects.filter((p) => p.id !== rootId);
-  const idSet = new Set(nonRootProjects.map((p) => p.id));
-  const parentKey = (p: ProjectOut): string =>
-    p.parentProjectId != null && idSet.has(p.parentProjectId)
-      ? p.parentProjectId
-      : rootId;
-  const childrenByParent = groupBy(nonRootProjects, parentKey);
-  const extents = computeSubtreeExtents(nonRootProjects, childrenByParent);
+  // The root project isn't a node here, so its direct children fall out as the
+  // forest's roots — the same set the old explicit `rootId` parent key produced.
+  const forest = buildForest(nonRootProjects);
+  const { childrenByParent } = forest;
+  const extents = computeSubtreeExtents(nonRootProjects, forest);
   const taskById = keyBy(tasks, (t) => t.id);
   // Own tasks per project id, for the sub-project row's dominant-trade colour.
   const tasksByProject = groupBy(
@@ -448,38 +433,38 @@ export function buildProjectRows(
 
   const rows: GanttRow[] = [];
 
-  function walkSubProject(project: ProjectOut, depth: number): void {
-    const kids = childrenByParent[project.id] ?? [];
-    const hasOwnTasks = tasks.some(
-      (t) => t.projectId === project.id && t.dueDate != null,
-    );
-    const expandable = kids.length > 0 || hasOwnTasks;
-    const isExpanded = expandable && expanded.has(project.id);
-    const extent = extents.get(project.id) ?? EMPTY_EXTENT;
-    rows.push(
-      buildProjectRow(
-        project,
-        depth,
-        expandable,
-        isExpanded,
-        kids.length,
-        extent,
-        dominantTrade(project.id, tasksByProject),
-      ),
-    );
-    if (isExpanded) {
-      rows.push(...datedTaskRows(project.id, depth + 1));
-      if (depth < MAX_TREE_DEPTH) {
-        for (const kid of kids) walkSubProject(kid, depth + 1);
-      }
-    }
-  }
+  // Pre-order: the sub-project row, then (when expanded) its own dated tasks,
+  // then its walked sub-projects.
+  const subProjectRows = foldForest<ProjectOut, GanttRow[]>(
+    forest,
+    (node, childRows, depth) => {
+      const kids = childrenByParent.get(node.id) ?? [];
+      const hasOwnTasks = tasks.some(
+        (t) => t.projectId === node.id && t.dueDate != null,
+      );
+      const expandable = kids.length > 0 || hasOwnTasks;
+      const isExpanded = expandable && expanded.has(node.id);
+      return [
+        buildProjectRow(
+          node,
+          depth,
+          expandable,
+          isExpanded,
+          kids.length,
+          extents.get(node.id) ?? EMPTY_EXTENT,
+          dominantTrade(node.id, tasksByProject),
+        ),
+        ...(isExpanded ? datedTaskRows(node.id, depth + 1) : []),
+        ...childRows.flat(),
+      ];
+    },
+    { descend: (node) => expanded.has(node.id) },
+  ).flat();
 
   // The root's own direct tasks render at depth 0 — the root project itself
   // isn't a row here (its detail page already frames it).
   rows.push(...datedTaskRows(rootId, 0));
-  const rootLevelSubProjects = childrenByParent[rootId] ?? [];
-  for (const sub of rootLevelSubProjects) walkSubProject(sub, 0);
+  rows.push(...subProjectRows);
 
   const unscheduled = tasks.filter((t) => t.dueDate == null);
 
