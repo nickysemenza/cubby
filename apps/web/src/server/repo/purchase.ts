@@ -118,6 +118,11 @@ import { dbExpenseToAPI } from "~/server/repo/expense/helpers";
 import { calculateFinancialReconciliation } from "~/server/repo/financial-reconciliation";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
+import {
+  finalizeMerge,
+  repointEdge,
+  resolveMergeTargets,
+} from "~/server/repo/merge";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
 import {
   emptyPurchaseFinancialAggregate,
@@ -1445,58 +1450,40 @@ export const foldChargeInto = async (
       ? dead.statedTotal
       : undefined;
 
-  const moving = await tx
-    .select({ id: expense.id })
-    .from(expense)
-    .where(and(eq(expense.purchaseId, deadId), notDeleted(expense)));
-
-  await tx
-    .update(expense)
-    .set({ purchaseId: survivorId })
-    .where(and(eq(expense.purchaseId, deadId), notDeleted(expense)));
+  // `repointEdge` returns the ids it moved, so the audit rows come from the
+  // update itself rather than a separate pre-select that could drift from it.
+  const moved = await repointEdge(tx, "purchase", "Expense.purchaseId", {
+    from: [deadId],
+    to: survivorId,
+    liveOnly: true,
+  });
 
   await logAuditEntries(
     tx,
     actor,
-    moving.map((row) => ({
+    moved.map((id) => ({
       entityType: "expense" as const,
-      entityId: row.id,
+      entityId: id,
       action: "update" as const,
       changes: { purchaseId: { from: deadId, to: survivorId } },
     })),
   );
 
-  const movingTransactions = await tx
-    .select({
-      id: financialTransaction.id,
-      purchaseId: financialTransaction.purchaseId,
-    })
-    .from(financialTransaction)
-    .where(
-      and(
-        eq(financialTransaction.purchaseId, deadId),
-        notDeleted(financialTransaction),
-      ),
-    );
-
-  await tx
-    .update(financialTransaction)
-    .set({ purchaseId: survivorId })
-    .where(
-      and(
-        eq(financialTransaction.purchaseId, deadId),
-        notDeleted(financialTransaction),
-      ),
-    );
+  const movedTransactions = await repointEdge(
+    tx,
+    "purchase",
+    "FinancialTransaction.purchaseId",
+    { from: [deadId], to: survivorId, liveOnly: true },
+  );
 
   await logAuditEntries(
     tx,
     actor,
-    movingTransactions.map((row) => ({
+    movedTransactions.map((id) => ({
       entityType: "financialTransaction" as const,
-      entityId: row.id,
+      entityId: id,
       action: "update" as const,
-      changes: { purchaseId: { from: row.purchaseId, to: survivorId } },
+      changes: { purchaseId: { from: deadId, to: survivorId } },
     })),
   );
 
@@ -1527,41 +1514,33 @@ export const foldChargeInto = async (
       );
   }
 
-  await tx
-    .update(purchase)
-    .set({ deletedAt: new Date() })
-    .where(and(eq(purchase.id, deadId), notDeleted(purchase)));
-  await softDeleteEntityEmbeddingsTx(tx, "purchase", [deadId]);
-
-  // The charge itself gets a `delete` entry, and the survivor an `update` naming
-  // what it absorbed — so a fold is reconstructible from the log rather than
-  // inferable only from the absence of a row.
-  await logAuditEntries(tx, actor, [
-    {
-      entityType: "purchase" as const,
-      entityId: survivorId,
-      action: "update" as const,
-      changes: {
-        foldedIn: { from: null, to: deadId },
-        ...(Object.keys(carried).length > 0
-          ? { carriedOver: { from: null, to: carried } }
-          : {}),
-        ...(discardedStatedTotal !== undefined
-          ? {
-              discardedStatedTotal: {
-                from: discardedStatedTotal,
-                to: survivor?.statedTotal ?? null,
-              },
-            }
-          : {}),
-      },
+  // Soft-delete the dead charge, cascade its search embedding, and write the
+  // trail — one call, so the embedding cascade can't be dropped (see
+  // `finalizeMerge`). The charge gets a `delete` entry and the survivor an
+  // `update` naming what it absorbed, so a fold is reconstructible from the log
+  // rather than inferable only from the absence of a row.
+  await finalizeMerge(tx, {
+    entity: "purchase",
+    table: purchase,
+    keepId: survivorId,
+    loserIds: [deadId],
+    removal: "soft",
+    actor,
+    survivorChanges: {
+      foldedIn: { from: null, to: deadId },
+      ...(Object.keys(carried).length > 0
+        ? { carriedOver: { from: null, to: carried } }
+        : {}),
+      ...(discardedStatedTotal !== undefined
+        ? {
+            discardedStatedTotal: {
+              from: discardedStatedTotal,
+              to: survivor?.statedTotal ?? null,
+            },
+          }
+        : {}),
     },
-    {
-      entityType: "purchase" as const,
-      entityId: deadId,
-      action: "delete" as const,
-    },
-  ]);
+  });
 };
 
 /**
@@ -1626,19 +1605,14 @@ export const mergePurchases = async (
   input: MergePurchasesInput,
   actor: ActorContext,
 ): Promise<PurchaseOut> => {
-  const codes = [input.keepId, ...input.mergeIds];
-  const resolved = await resolveLiveShortcodes(db, codes, "purchase");
-  const missing = codes.filter((code) => !resolved.has(code));
-  if (missing.length > 0) {
-    throw createAppError(
-      "PURCHASE_NOT_FOUND",
-      `Purchase(s) not found: ${missing.join(", ")}`,
-    );
-  }
-  const keepId = unsafePurchaseId(resolved.get(input.keepId) ?? "");
-  const losers = input.mergeIds
-    .map((code) => unsafePurchaseId(resolved.get(code) ?? ""))
-    .filter((id) => id !== keepId);
+  const { keepId, loserIds: losers } = await resolveMergeTargets(db, {
+    entity: "purchase",
+    keepId: input.keepId,
+    mergeIds: input.mergeIds,
+    notFound: "PURCHASE_NOT_FOUND",
+    label: "Purchase",
+    brand: (id) => unsafePurchaseId(id),
+  });
   if (losers.length === 0) return getPurchaseByID(db, keepId);
 
   await withTransaction(db, async (tx) => {

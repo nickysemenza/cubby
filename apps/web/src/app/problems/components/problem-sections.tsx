@@ -671,6 +671,29 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     }),
   }),
   section({
+    id: "duplicate-products",
+    label: "Duplicate products",
+    select: (p) => p.duplicateProductIdentities,
+    entity: "product",
+    title: "One SKU, Two Product Rows",
+    description:
+      "Products sharing a maker part number whose identifiers came from different retailers — almost always the same item imported twice. Spend, stock, and identifiers are split across both rows until they are merged. Clusters where a distinct UPC or a distinct retailer SKU proves the rows are different variants are not listed here.",
+    emptyMessage: "No product rows share a maker part number.",
+    renderItem: (dupe) => ({
+      key: `${dupe.manufacturer}/${dupe.model}`,
+      title: `${dupe.manufacturer} ${dupe.model}`,
+      subtitle: dupe.products.map((p) => p.name).join(" · "),
+      badges: dupe.products.map((p) => (
+        <Link key={p.id} to="/products/$shortcode" params={{ shortcode: p.id }}>
+          <Badge variant="outline" className="hover:bg-accent">
+            {p.id}
+          </Badge>
+        </Link>
+      )),
+      route: entityDetailLink("product", dupe.products[0]?.id ?? ""),
+    }),
+  }),
+  section({
     id: "orphaned",
     label: "Orphaned",
     select: (p) => p.orphanedProducts,

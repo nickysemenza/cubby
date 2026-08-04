@@ -313,6 +313,7 @@ export const previewMergeEntitySchema = z.enum([
   "ingredient",
   "vendor",
   "purchase",
+  "product",
 ]);
 export type PreviewMergeEntity = z.infer<typeof previewMergeEntitySchema>;
 
@@ -395,7 +396,7 @@ export const previewOperationInputSchema = z
         "delete → pass `ids`. merge → pass `mergeIds` (and optionally `keepId`).",
       ),
     entity: previewDeleteEntitySchema.describe(
-      "The entity the target ids name. Every entity here supports delete; only ingredient, vendor, and purchase support merge.",
+      `The entity the target ids name. Every entity here supports delete; only ${previewMergeEntitySchema.options.join(", ")} support merge.`,
     ),
     ids: z
       .array(previewTargetId)

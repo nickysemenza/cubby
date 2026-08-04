@@ -1423,6 +1423,108 @@ describe("problems service — totals count defects only", () => {
   });
 });
 
+describe("findDuplicateProductIdentities", () => {
+  const ctx = withTestDb();
+
+  const seed = (
+    name: string,
+    overrides: Parameters<typeof makeProductInput>[0],
+  ) =>
+    createProduct(ctx.db, makeProductInput({ name, ...overrides }), ctx.actor);
+
+  it("flags one SKU entered twice from two retailers", async () => {
+    const amazonRow = await seed("DEWALT 20V MAX XR Drill", {
+      manufacturer: "DeWalt",
+      model: "DCD791D2",
+      externalIds: [
+        { source: "amazon", kind: "asin", externalId: "B01DUPE001", url: null },
+      ],
+    });
+    const hdRow = await seed("Dewalt Cordless Drill Kit", {
+      // Different casing on purpose: the canonical manufacturer key has to
+      // hold the pair together, or the duplicate splits before it is found.
+      manufacturer: "DEWALT",
+      model: "DCD791D2",
+      externalIds: [
+        {
+          source: "homedepot",
+          kind: "retailer_sku",
+          externalId: "HD-DUPE-001",
+          url: null,
+        },
+      ],
+    });
+
+    const { duplicateProductIdentities } = await findFastProblems(ctx.db);
+    const found = duplicateProductIdentities.find(
+      (row) => row.model === "DCD791D2",
+    );
+    expect(found?.products.map((p) => p.id).sort()).toEqual(
+      [amazonRow.id, hdRow.id].sort(),
+    );
+  });
+
+  it("does not flag a variant family separated by distinct UPCs", async () => {
+    await seed("Milwaukee Grinder 4.5in", {
+      manufacturer: "Milwaukee",
+      model: "M18-GRINDER",
+      upc: "011111111116",
+      externalIds: [
+        { source: "amazon", kind: "asin", externalId: "B01VAR0001", url: null },
+      ],
+    });
+    await seed("Milwaukee Grinder 6in", {
+      manufacturer: "Milwaukee",
+      model: "M18-GRINDER",
+      // A different retail package — positive evidence these are two products,
+      // not one entered twice.
+      upc: "022222222229",
+      externalIds: [
+        {
+          source: "homedepot",
+          kind: "retailer_sku",
+          externalId: "HD-VAR-0001",
+          url: null,
+        },
+      ],
+    });
+
+    const { duplicateProductIdentities } = await findFastProblems(ctx.db);
+    expect(
+      duplicateProductIdentities.some((row) => row.model === "M18-GRINDER"),
+    ).toBe(false);
+  });
+
+  it("does not flag rows whose identifiers all come from one source", async () => {
+    // Two Amazon rows for one model are far likelier to be two listings of a
+    // real variant than one item imported twice — the "different sources" half
+    // of the signal is what makes it high precision.
+    await seed("Bosch Bit Set A", {
+      manufacturer: "Bosch",
+      model: "BOSCH-BITS",
+      externalIds: [
+        { source: "amazon", kind: "asin", externalId: "B01SAME001", url: null },
+      ],
+    });
+    await seed("Bosch Bit Set B", {
+      manufacturer: "Bosch",
+      model: "BOSCH-BITS",
+      externalIds: [
+        { source: "amazon", kind: "asin", externalId: "B01SAME002", url: null },
+      ],
+    });
+
+    const { duplicateProductIdentities } = await findFastProblems(ctx.db);
+    expect(
+      duplicateProductIdentities.some((row) => row.model === "BOSCH-BITS"),
+    ).toBe(false);
+  });
+
+  it("classes the detector as a defect", () => {
+    expect(PROBLEM_CLASS.duplicateProductIdentities).toBe("defect");
+  });
+});
+
 describe("problems — brand-label spelling variants", () => {
   const ctx = withTestDb();
 

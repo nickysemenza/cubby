@@ -896,3 +896,50 @@ export const patchProductExternalIdsInput = z
       slots.add(key);
     }
   });
+
+/**
+ * Fold duplicate products into one. A user action, never an import guess:
+ * `Product_name_manufacturer_key` only stops an *exact* repeat, so the same
+ * physical SKU can land twice under two spellings, and nothing on the write
+ * path can safely decide two rows are the same thing.
+ *
+ * See `mergeProducts` (repo/product/merge.ts) for the two structural collisions
+ * it resolves — the per-product `(source, kind)` identifier slot and the
+ * `(productId, locationId)` stock slot.
+ */
+export const mergeProductsInput = z.object({
+  keepId: productShortcode,
+  mergeIds: z.array(productShortcode).min(1),
+});
+export type MergeProductsInput = z.infer<typeof mergeProductsInput>;
+
+/** What a merge actually moved, folded, or discarded. */
+export const productMergeSummaryOut = z.object({
+  keepId: productShortcode,
+  deletedIds: z.array(productShortcode),
+  externalIdsMoved: z.number().int(),
+  externalIdsDiscarded: z.number().int(),
+  inventoryMoved: z.number().int(),
+  inventoryMerged: z.number().int(),
+  expensesMoved: z.number().int(),
+  imagesMoved: z.number().int(),
+  unitMappingsMoved: z.number().int(),
+  tasksMoved: z.number().int(),
+  projectUsesMoved: z.number().int(),
+  wishCandidatesMoved: z.number().int(),
+  aliasesAdded: z.array(z.string()),
+  carriedFields: z.array(z.string()),
+});
+export type ProductMergeSummaryOut = z.infer<typeof productMergeSummaryOut>;
+
+export const mergeProductsOut = z.object({
+  product: productWithFoodOut,
+  mergeSummary: productMergeSummaryOut,
+});
+export type MergeProductsOut = z.infer<typeof mergeProductsOut>;
+
+/** `merge_products`' MCP payload — the slim product, not the USDA-enriched one. */
+export const mergeProductsMcpOut = z.object({
+  product: productMcpOut,
+  mergeSummary: productMergeSummaryOut,
+});

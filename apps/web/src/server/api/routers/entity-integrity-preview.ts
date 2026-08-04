@@ -42,6 +42,7 @@ import { previewDeleteInventoryEntries } from "~/server/repo/inventory/crud";
 import { previewDeleteLocations } from "~/server/repo/location/crud";
 import { previewDeleteMeals } from "~/server/repo/meal/crud";
 import { previewDeleteProducts } from "~/server/repo/product/crud";
+import { previewMergeProducts } from "~/server/repo/product/merge";
 import { previewDeleteProjects } from "~/server/repo/project/crud";
 import {
   previewDeletePurchases,
@@ -190,6 +191,12 @@ const plan = async (
       previewMergePurchases(db, {
         mergeIds: entityIds(mergeIds).map(unsafePurchaseId),
         keepId: unsafePurchaseId(entityId(keepId)),
+      }),
+    )
+    .with({ operation: "merge", entity: "product" }, ({ mergeIds, keepId }) =>
+      previewMergeProducts(db, {
+        mergeIds: entityIds(mergeIds).map(unsafeProductId),
+        keepId: unsafeProductId(entityId(keepId)),
       }),
     )
     .exhaustive();

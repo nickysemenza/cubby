@@ -13,7 +13,12 @@ import { and, eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
-import { entityEmbedding, task, taskDependency } from "~/server/db/schema";
+import {
+  entityEmbedding,
+  inventoryEntry,
+  task,
+  taskDependency,
+} from "~/server/db/schema";
 import { deleteCookbook, upsertCookbook } from "~/server/repo/cookbook";
 import { getDb } from "~/server/repo/database-helpers";
 import { findOrphanedEntityEmbeddings } from "~/server/repo/entity-embedding";
@@ -31,7 +36,7 @@ import {
 } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
 import { createMealWithEntityId, deleteMeals } from "~/server/repo/meal";
-import { createProduct } from "~/server/repo/product";
+import { createProduct, mergeProducts } from "~/server/repo/product";
 import { createProject, deleteProjects } from "~/server/repo/project";
 import {
   makeLocationInput,
@@ -420,6 +425,74 @@ describe("tracker removal cascades entity embeddings (no orphans)", () => {
     await mergeIngredients(ctx.db, keeper.id, [alias.id]);
 
     expect(await embeddingDeletedAt("ingredient", alias.id)).not.toBeNull();
+    expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
+  });
+
+  // A product merge removes TWO kinds of row: the merged-away products, and any
+  // stock entry it absorbs into a survivor entry in the same location. Both are
+  // searchable, so both owe an in-transaction cascade — and the inventory one is
+  // the easy miss, because it is a soft-delete buried inside a fold rather than
+  // the merge's own `finalizeMerge` call.
+  it("mergeProducts leaves no orphan, for the product AND the absorbed stock row", async () => {
+    const resolveId = async (
+      shortcode: string,
+      entity: "location" | "product",
+    ) => {
+      const entityId = await resolveLiveShortcode(ctx.db, shortcode, entity);
+      if (!entityId)
+        throw new Error(`Failed to resolve ${entity} ${shortcode}`);
+      return entityId;
+    };
+    const amount = { value: 3, unit: "each" };
+
+    const location = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Merge Cascade Shelf" }),
+      TEST_ACTOR,
+    );
+    const locationEntityId = unsafeLocationId(
+      await resolveId(location.id, "location"),
+    );
+    const keeper = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Merge Cascade Keeper" }),
+      TEST_ACTOR,
+    );
+    const loser = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Merge Cascade Loser" }),
+      TEST_ACTOR,
+    );
+    const loserEntityId = unsafeProductId(await resolveId(loser.id, "product"));
+    for (const productEntityId of [
+      unsafeProductId(await resolveId(keeper.id, "product")),
+      loserEntityId,
+    ]) {
+      await createInventoryEntry(
+        ctx.db,
+        { productId: productEntityId, locationId: locationEntityId, amount },
+        TEST_ACTOR,
+      );
+    }
+    const absorbedEntry = await getDb(ctx.db).query.inventoryEntry.findFirst({
+      where: eq(inventoryEntry.productId, loserEntityId),
+      columns: { id: true },
+    });
+    if (!absorbedEntry) throw new Error("Expected a loser inventory entry");
+
+    await seedEmbedding("product", loserEntityId);
+    await seedEmbedding("inventory", absorbedEntry.id);
+
+    await mergeProducts(
+      ctx.db,
+      { keepId: keeper.id, mergeIds: [loser.id] },
+      TEST_ACTOR,
+    );
+
+    expect(await embeddingDeletedAt("product", loserEntityId)).not.toBeNull();
+    expect(
+      await embeddingDeletedAt("inventory", absorbedEntry.id),
+    ).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 });

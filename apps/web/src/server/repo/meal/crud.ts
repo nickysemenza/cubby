@@ -43,6 +43,7 @@ import {
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { countByTarget, impact, present } from "~/server/repo/impact";
+import { relatedWhereConditions } from "~/server/repo/related-view";
 import {
   resolveLiveShortcode,
   resolveLiveShortcodes,
@@ -118,6 +119,10 @@ export const mealList = async (
   const whereCondition = and(
     notDeleted(meal),
     ...auditDateWhereConditions(meal, filters),
+    // `mealFilterFields` spreads `mealRelatedFilterFields` (the recipe trio) and
+    // the manifest renders its control — omitting this is the #588 drift, where
+    // the UI sends a filter the server silently ignores.
+    ...relatedWhereConditions("meal", filters, meal.id),
     filters.from ? gte(meal.date, filters.from) : undefined,
     filters.to ? lte(meal.date, filters.to) : undefined,
   );
