@@ -145,17 +145,6 @@ const GROUPS: Group[] = [
   {
     title: "API",
     rows: [
-      {
-        label: "Router",
-        cell: ({ d }) => (
-          <Badge
-            variant={d.routerStyle === "crud-factory" ? "default" : "secondary"}
-            className="text-2xs"
-          >
-            {d.routerStyle}
-          </Badge>
-        ),
-      },
       { label: "MCP tools", cell: ({ d }) => <Chips items={d.mcp} /> },
       {
         label: "Invalidation keys",

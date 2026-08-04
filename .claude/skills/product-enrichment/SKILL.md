@@ -104,8 +104,10 @@ receive the item into inventory.
 
 Before adding an identifier, call `find_product_external_id_collisions` in exact
 mode with `identifiers: [{ source, kind, externalId }]`. A `collision` requires
-manual resolution; `unique` names the current owner; `missing` is safe to add to
-the proven Product. Keep broad source-wide audits separate from exact checks.
+manual resolution — usually `merge_products`, folding the duplicate into the
+proven Product rather than reassigning the identifier by hand; `unique` names
+the current owner; `missing` is safe to add to the proven Product. Keep broad
+source-wide audits separate from exact checks.
 
 All metadata is eligible for correction only when exact-variant evidence is
 authoritative for that field:
