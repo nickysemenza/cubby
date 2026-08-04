@@ -72,15 +72,19 @@ export function buildForest<T extends ForestNode>(
    */
   const hasAcyclicPathToRoot = (item: T): boolean => {
     const seen = new Set<string>();
-    let current: T | undefined = item;
-    while (current) {
+    let current = item;
+    for (;;) {
       if (seen.has(current.id)) return false;
       seen.add(current.id);
       const parentId = current.parentProjectId;
-      if (parentId == null || !byId.has(parentId)) return true;
-      current = byId.get(parentId);
+      if (parentId == null) return true;
+      // One lookup, not `has` + `get`: a missing parent IS the orphan-root
+      // case, so the undefined this guards is the answer rather than an
+      // unreachable fallback the type system would otherwise demand.
+      const parent = byId.get(parentId);
+      if (!parent) return true;
+      current = parent;
     }
-    return true;
   };
 
   const cyclicRoots = items.filter((item) => !hasAcyclicPathToRoot(item));
