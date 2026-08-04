@@ -1172,6 +1172,42 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
     expectOk(stillThere);
     expect(structured(stillThere).name).toBe("Merge Victim Ingredient");
   });
+
+  it("merge_vendors rejects a PRODUCT shortcode as keepId before merging anything", async () => {
+    const caller = createTestCaller(domainRouter, ctx.db);
+    const vendor = await callTool(
+      "create_vendor",
+      { name: "Merge Victim Vendor" },
+      caller,
+    );
+    expectOk(vendor);
+    const vendorCode = structured(vendor).id as string;
+
+    const product = await callTool(
+      "create_product",
+      {
+        name: "Merge Wrong Prefix Product",
+        upc: null,
+        manufacturer: "Test Mfg",
+        ingredientId: null,
+      },
+      caller,
+    );
+    expectOk(product);
+    const productCode = structured(product).id as string;
+
+    const rejected = await callTool(
+      "merge_vendors",
+      { keepId: productCode, mergeIds: [vendorCode] },
+      caller,
+    );
+    expect(rejected.isError).toBe(true);
+
+    // The would-be loser survives untouched.
+    const stillThere = await callTool("get_vendor", { id: vendorCode }, caller);
+    expectOk(stillThere);
+    expect(structured(stillThere).name).toBe("Merge Victim Vendor");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1479,6 +1515,38 @@ describe("specialized tools round-trip on shortcodes", () => {
     );
     expectOk(merged);
     expect(structured(merged).id).toBe(keepCode);
+  });
+
+  it("merge_vendors takes keepId/mergeIds by shortcode and tombstones the loser's own code", async () => {
+    const caller = createTestCaller(domainRouter, ctx.db);
+    const keep = await callTool(
+      "create_vendor",
+      { name: "Merge Vendors Keeper" },
+      caller,
+    );
+    expectOk(keep);
+    const keepCode = structured(keep).id as string;
+
+    const loser = await callTool(
+      "create_vendor",
+      { name: "Merge Vendors Loser" },
+      caller,
+    );
+    expectOk(loser);
+    const loserCode = structured(loser).id as string;
+
+    const merged = await callTool(
+      "merge_vendors",
+      { keepId: keepCode, mergeIds: [loserCode] },
+      caller,
+    );
+    expectOk(merged);
+    expect(structured(merged).id).toBe(keepCode);
+
+    // The loser's code is a permanent tombstone — it resolves to nothing, not
+    // to the keeper.
+    const loserAfter = await callTool("get_vendor", { id: loserCode }, caller);
+    expect(loserAfter.isError).toBe(true);
   });
 
   it("link_expenses_to_purchase takes purchaseId/expenseIds by shortcode (the intended contract)", async () => {

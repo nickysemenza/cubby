@@ -18,6 +18,7 @@ import type {
   McpTelemetryIdentity,
   TelemetryMessageV1,
 } from "@cubby/schemas/telemetry";
+import { vendorOut } from "@cubby/schemas/vendor";
 import { SHORTCODE_PREFIX } from "@cubby/shared";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -2395,6 +2396,27 @@ describe("purchase restructuring tools (split/link/merge)", () => {
     expect(merge).toHaveBeenCalledWith(input);
     expect(result.isError).not.toBe(true);
     expect((result.structuredContent as { id: string }).id).toBe(PURCHASE_A);
+  });
+
+  it("merge_vendors is WRITE_DESTRUCTIVE_CLOSED and passes params through to vendor.merge", async () => {
+    const server = createMcpServer();
+    expect(getRegisteredTool(server, "merge_vendors")?.annotations).toEqual(
+      WRITE_DESTRUCTIVE_CLOSED,
+    );
+
+    const VENDOR_A = "VEN-9992";
+    const VENDOR_B = "VEN-9993";
+    const kept = mock(vendorOut, { seed: 14, overrides: { id: VENDOR_A } });
+    const merge = vi.fn().mockResolvedValue(kept);
+
+    const input = { keepId: VENDOR_A, mergeIds: [VENDOR_B] };
+    const result = await callTool(server, "merge_vendors", input, {
+      vendor: { merge },
+    });
+
+    expect(merge).toHaveBeenCalledWith(input);
+    expect(result.isError).not.toBe(true);
+    expect((result.structuredContent as { id: string }).id).toBe(VENDOR_A);
   });
 });
 
