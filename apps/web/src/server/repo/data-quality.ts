@@ -19,6 +19,7 @@ import {
 import { purchaseSettlementKinds } from "@cubby/schemas/financial-transaction";
 import type { ProductId, PurchaseId } from "@cubby/schemas/identifiers";
 import {
+  ENTITY_NOT_FOUND_REASON,
   unsafeProductId,
   unsafeProductShortcode,
   unsafePurchaseId,
@@ -122,6 +123,14 @@ const externalIdCollisionKey = (value: {
 }) =>
   `${value.source.trim().toLowerCase()}\u0000${value.kind}\u0000${value.externalId}`;
 
+// ⚠️ LOAD-BEARING: this fingerprint format (`<check>:<ms-since-epoch>`) must
+// stay byte-for-byte identical to `evidenceFingerprint` below and to the raw
+// SQL twin in `activeExceptionRaw`. It's how an exception is detected as
+// stale — `updatedAt` moved since the exception was recorded — without a
+// second stored column. `floor(extract(epoch FROM updatedAt) * 1000)`
+// reproduces JS's `Date#getTime()` only because Postgres timestamps here
+// don't carry sub-millisecond precision; if that ever changes, this silently
+// stops matching and staleness detection goes dark.
 const activeException = (
   column: typeof product.dataExceptions | typeof purchase.dataExceptions,
   updatedAt: typeof product.updatedAt | typeof purchase.updatedAt,
@@ -213,6 +222,9 @@ export const productNeedsDataCondition = (): SQL =>
 export const productAnyDataGapCondition = (): SQL =>
   sql`${productMissingDataCondition()} OR ${productDefectCondition()}`;
 
+// ⚠️ LOAD-BEARING: same fingerprint format as `activeException` above (see its
+// comment) — keep the two, plus TS's `evidenceFingerprint`, byte-for-byte in
+// sync.
 const activeExceptionRaw = (alias: string, check: DataCheck) =>
   `EXISTS (
     SELECT 1 FROM jsonb_array_elements(${alias}."dataExceptions") dq_exception
@@ -366,6 +378,11 @@ export const purchaseAnyDataGapCondition = (): SQL =>
 
 type FingerprintedGap = DataQualityGap & { fingerprint: string };
 
+// ⚠️ LOAD-BEARING: must match `activeException`/`activeExceptionRaw`'s SQL
+// fingerprint byte-for-byte — both sides serialize `updatedAt` as
+// milliseconds-since-epoch, and only round-trip identically because these
+// rows' timestamps carry no sub-millisecond precision. See the comment on
+// `activeException` above for the failure mode if that ever stops holding.
 const evidenceFingerprint = (check: DataCheck, updatedAt: Date): string =>
   `${check}:${updatedAt.getTime()}`;
 
@@ -887,7 +904,7 @@ const mutateException = async (
   const resolved = await resolveLiveShortcode(db, input.entityId, parsed.type);
   if (!resolved) {
     throw createAppError(
-      parsed.type === "purchase" ? "PURCHASE_NOT_FOUND" : "PRODUCT_NOT_FOUND",
+      ENTITY_NOT_FOUND_REASON[parsed.type],
       `${parsed.type} not found: ${input.entityId}`,
     );
   }
@@ -927,7 +944,7 @@ const mutateException = async (
           )[0] ?? null);
     if (!currentRow) {
       throw createAppError(
-        parsed.type === "purchase" ? "PURCHASE_NOT_FOUND" : "PRODUCT_NOT_FOUND",
+        ENTITY_NOT_FOUND_REASON[parsed.type],
         `${parsed.type} not found: ${input.entityId}`,
       );
     }

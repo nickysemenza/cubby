@@ -47,9 +47,9 @@ import {
 import {
   auditDateWhereConditions,
   buildOrderBy,
+  buildSearchConditions,
   countWhere,
   executeListQueryWithCount,
-  formatSearchTerm,
   getDb,
   idSetPresence,
   imageOrder,
@@ -94,7 +94,6 @@ export const searchIngredientsForMerge = async (
     productCount: number;
   }[]
 > => {
-  const term = formatSearchTerm(ingredient.name, query);
   const rows = await getDb(db)
     .select({
       id: ingredient.id,
@@ -115,11 +114,10 @@ export const searchIngredientsForMerge = async (
     })
     .from(ingredient)
     .where(
-      and(
-        notDeleted(ingredient),
-        isNull(ingredient.recipeId),
-        ne(ingredient.id, excludeId),
-        ...(term ? [term] : []),
+      buildSearchConditions(
+        ingredient,
+        [{ column: ingredient.name, term: query }],
+        [isNull(ingredient.recipeId), ne(ingredient.id, excludeId)],
       ),
     )
     .limit(limit);

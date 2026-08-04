@@ -17,6 +17,7 @@ import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   type LocationId,
+  type ProductId,
   type ProductShortcode,
   unsafeInventoryId,
   unsafeProductId,
@@ -493,22 +494,16 @@ export async function approveDetectedInventoryItem(
     input.locationId,
   ]);
 
-  let productId = input.productId
-    ? await resolveLiveShortcode(db, input.productId, "product")
+  let productId: ProductId | null = input.productId
+    ? await resolveOrThrow(db, "product", input.productId)
     : null;
-  if (input.productId && !productId) {
-    throw createAppError(
-      "PRODUCT_NOT_FOUND",
-      `Product ${input.productId} not found`,
-    );
-  }
   let productShortcode = input.productId ?? null;
   let productNameForToast = productName;
   let createdProduct = false;
   const backgroundBatches: BackgroundBatchRef[] = [];
 
   if (productId) {
-    const product = await getProductByID(db, unsafeProductId(productId));
+    const product = await getProductByID(db, productId);
     productNameForToast = product.name;
   } else {
     const matched = await findProductByNameFuzzyManufacturer(
@@ -534,7 +529,7 @@ export async function approveDetectedInventoryItem(
       if (!resolved) {
         throw new Error(`Created product ${created.id} could not be resolved`);
       }
-      productId = resolved;
+      productId = unsafeProductId(resolved);
       productShortcode = created.id;
       productNameForToast = created.name;
       createdProduct = true;
@@ -543,7 +538,7 @@ export async function approveDetectedInventoryItem(
           action: "created",
           entity: {
             entityType: "product",
-            entityId: unsafeProductId(resolved),
+            entityId: productId,
           },
           source: "location-ai.inventory.approve",
         })),
@@ -563,7 +558,7 @@ export async function approveDetectedInventoryItem(
   const createdInventory = await createInventoryEntry(
     db,
     {
-      productId: unsafeProductId(productId),
+      productId,
       locationId: input.locationId,
       amount: {
         value: Math.max(input.item.estimatedQuantity, 1),

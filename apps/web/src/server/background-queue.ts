@@ -1,5 +1,6 @@
 import { backgroundJobPayloadSchema } from "@cubby/schemas/background-jobs";
 import { unsafeLocationId, unsafeRecipeId } from "@cubby/schemas/identifiers";
+import { match } from "ts-pattern";
 import type { Database } from "~/server/db";
 import {
   failOrRetryBackgroundJob,
@@ -101,79 +102,69 @@ async function runBackgroundJobPayload(
   batchId: string,
   parsed: ReturnType<typeof backgroundJobPayloadSchema.parse>,
 ): Promise<"succeeded" | "skipped"> {
-  switch (parsed.kind) {
-    case "recipe-totals.recompute": {
+  return match(parsed)
+    .with({ kind: "recipe-totals.recompute" }, async (p) => {
       const { recomputeRecipeIds } = await import("./queue-recompute");
       await recomputeRecipeIds({
         database: db,
-        recipeIds: parsed.payload.recipeIds.map((id) => unsafeRecipeId(id)),
+        recipeIds: p.payload.recipeIds.map((id) => unsafeRecipeId(id)),
         batchId,
       });
-      return "succeeded";
-    }
-    case "entity-embedding.refresh": {
-      if (!semanticEmbeddingsConfigured()) return "skipped";
+      return "succeeded" as const;
+    })
+    .with({ kind: "entity-embedding.refresh" }, async (p) => {
+      if (!semanticEmbeddingsConfigured()) return "skipped" as const;
       const text = await getEmbeddingTextForEntity(
         db,
-        parsed.payload.entityType,
-        parsed.payload.entityId,
+        p.payload.entityType,
+        p.payload.entityId,
       );
-      if (!text) return "skipped";
+      if (!text) return "skipped" as const;
       const [embedding] = await embedTexts([text.embeddingText], {
         operation: "entityEmbeddingRefresh",
         db,
         feature: "entity-embedding",
         entity: {
-          entityType: parsed.payload.entityType,
-          entityId: parsed.payload.entityId,
+          entityType: p.payload.entityType,
+          entityId: p.payload.entityId,
         },
         batchId,
       });
-      if (!embedding) return "skipped";
+      if (!embedding) return "skipped" as const;
       await upsertEntityEmbedding(db, {
         ...text,
         config: getSemanticEmbeddingConfig(),
         embedding,
       });
-      return "succeeded";
-    }
-    case "location-ai.description.refresh": {
+      return "succeeded" as const;
+    })
+    .with({ kind: "location-ai.description.refresh" }, async (p) => {
       try {
-        await describeLocation(
-          db,
-          unsafeLocationId(parsed.payload.locationId),
-          {
-            batchId,
-          },
-        );
+        await describeLocation(db, unsafeLocationId(p.payload.locationId), {
+          batchId,
+        });
       } catch (error) {
-        if (isLocationHasNoImagesToAnalyzeError(error)) return "skipped";
+        if (isLocationHasNoImagesToAnalyzeError(error))
+          return "skipped" as const;
         throw error;
       }
-      return "succeeded";
-    }
-    case "location-ai.inventory.refresh": {
+      return "succeeded" as const;
+    })
+    .with({ kind: "location-ai.inventory.refresh" }, async (p) => {
       try {
-        await detectInventoryItems(
-          db,
-          unsafeLocationId(parsed.payload.locationId),
-          { batchId },
-        );
+        await detectInventoryItems(db, unsafeLocationId(p.payload.locationId), {
+          batchId,
+        });
       } catch (error) {
-        if (isLocationHasNoImagesToAnalyzeError(error)) return "skipped";
+        if (isLocationHasNoImagesToAnalyzeError(error))
+          return "skipped" as const;
         throw error;
       }
-      return "succeeded";
-    }
-    case "location-valuation.recompute": {
+      return "succeeded" as const;
+    })
+    .with({ kind: "location-valuation.recompute" }, async () => {
       await new LocationValuationService(db).recompute();
-      return "succeeded";
-    }
-    default: {
-      const exhaustive: never = parsed;
-      throw new Error(
-        `Unsupported background job: ${JSON.stringify(exhaustive)}`,
-      );
-    }
-  }
+      return "succeeded" as const;
+    })
+    .exhaustive();
 }

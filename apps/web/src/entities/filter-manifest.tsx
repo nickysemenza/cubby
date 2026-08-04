@@ -31,6 +31,7 @@ import {
 } from "@cubby/schemas/related-view";
 import { vendorFilterFields } from "@cubby/schemas/vendor";
 import { wishFilterFields } from "@cubby/schemas/wish";
+import { uniq } from "es-toolkit";
 import type { FilterConfig } from "~/app/_components/data-table/columnHelpers";
 import { locationTypeOptionsWithTheme } from "~/app/_components/locations/location-icons";
 import { productCategoryOptionsWithTheme } from "~/app/_components/products/product-category-icons";
@@ -1502,7 +1503,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
 
 /** The specs for an entity, or an empty list when it has no list table. */
 const relatedFilterSpecs = Object.fromEntries(
-  [...new Set(relatedViewRegistry.map((view) => view.source))].map((entity) => {
+  uniq(relatedViewRegistry.map((view) => view.source)).map((entity) => {
     const existing = entityFilters[entity] ?? [];
     const existingColumns = new Set(existing.map((spec) => spec.columnId));
     const generated: FilterSpec[] = [];

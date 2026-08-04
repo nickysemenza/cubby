@@ -22,6 +22,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { type ParsedShortcode, parseShortcode } from "@cubby/shared";
 import { and, eq, inArray } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 
@@ -177,7 +178,7 @@ export async function resolveAllOrThrow<E extends ShortcodeEntity>(
   if (missing.length > 0) {
     throw createAppError(
       ENTITY_NOT_FOUND_REASON[entity],
-      `${ENTITY_LABEL[entity]} not found: ${[...new Set(missing)].join(", ")}`,
+      `${ENTITY_LABEL[entity]} not found: ${uniq(missing).join(", ")}`,
     );
   }
   // Non-null by construction: `missing` is empty, so every code is a key. The

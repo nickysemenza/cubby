@@ -73,6 +73,15 @@ describe("amountCellData", () => {
     // row uses — the written spelling is kept so a pasted row doesn't end up
     // spelled differently from its neighbours.
     { text: "5 each", want: { value: 5, unit: "each" }, was: "5 / 'each'" },
+    // Regression: trailing punctuation used to defeat the
+    // `/([a-z]+)$/` anchor in preserveWrittenWholeUnit, so a spreadsheet cell
+    // ending in a period fell back to the bare "whole" spelling instead of
+    // keeping "each".
+    {
+      text: "5 each.",
+      want: { value: 5, unit: "each" },
+      was: "5 / 'whole' (trailing '.' broke the word match)",
+    },
     // A bare number has no written word to preserve.
     { text: "3", want: { value: 3, unit: "whole" }, was: "3 / '' (invalid)" },
   ];

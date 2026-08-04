@@ -276,7 +276,6 @@ const taskReader = createEntityReader({
       counts?.doneCount ?? 0,
     );
   },
-  notFoundReason: "TASK_NOT_FOUND",
 });
 
 export const getTaskByID = (db: Database, id: TaskId): Promise<TaskOut> =>
@@ -470,8 +469,7 @@ export const updateTask = async (
             blockedByTaskId,
           }),
           entityTable: task,
-          label: "Task",
-          notFoundReason: "TASK_NOT_FOUND",
+          entity: "task",
         },
         id,
         resolvedBlockedByIds,

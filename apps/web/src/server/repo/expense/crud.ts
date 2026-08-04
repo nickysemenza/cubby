@@ -163,7 +163,6 @@ const expenseCrud = createEntityCrud({
   entity: "expense",
   fetchById: fetchExpenseById,
   fromDB: (_db, row) => dbExpenseToAPI(row),
-  notFoundReason: "EXPENSE_NOT_FOUND",
   toUpdate: (data: ResolvedExpenseUpdate) =>
     buildPartialUpdateValues({
       name: data.name,

@@ -19,7 +19,7 @@ import {
   ingredientListItemOut,
 } from "@cubby/schemas/ingredient";
 import type { RecipeRef } from "@cubby/schemas/recipe";
-import { and, inArray, isNull, or, sql } from "drizzle-orm";
+import { inArray, isNull, or, sql } from "drizzle-orm";
 import { parseWithContext } from "~/lib/zod-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -32,10 +32,10 @@ import {
 } from "~/server/db/schema";
 import { enrichProductRowsWithDataQuality } from "~/server/repo/data-quality";
 import {
+  buildSearchConditions,
   formatSearchTerm,
   type MappableImageRecord,
   mapRelation,
-  notDeleted,
   type RowWithOptionalAliases,
 } from "~/server/repo/database-helpers";
 import type { MappableProductExternalId } from "~/server/repo/product/external-id-types";
@@ -241,35 +241,32 @@ export const buildIngredientWhere = (
 ) => {
   const list = [name, ...(otherSearchNames ?? [])];
 
-  const conditions = [];
-
-  // Name or aliases condition
-  if (exact) {
-    // Exact (case-insensitive) match: lower(name) IN list OR any alias matches
-    conditions.push(
+  // Name or aliases condition: an OR of two shapes, so it can't be expressed
+  // as one of buildSearchConditions' per-column search filters — it goes in
+  // via `extraConditions` instead, alongside notDeleted (which the helper
+  // adds itself).
+  const nameOrAliasCondition = exact
+    ? // Exact (case-insensitive) match: lower(name) IN list OR any alias matches
       or(
         inArray(
           sql`lower(${ingredient.name})`,
           list.map((n) => n.toLowerCase()),
         ),
         aliasMatchesCaseInsensitive(list),
-      ),
-    );
-  } else {
-    // Search on name (ilike), case-insensitive match on aliases
-    conditions.push(
+      )
+    : // Search on name (ilike), case-insensitive match on aliases
       or(
         formatSearchTerm(ingredient.name, name),
         aliasMatchesCaseInsensitive(list),
-      ),
-    );
-  }
+      );
 
-  // Filter for standalone ingredients only, not recipe ingredients
-  conditions.push(isNull(ingredient.recipeId));
-
-  // Filter out deleted items
-  conditions.push(notDeleted(ingredient));
-
-  return and(...conditions);
+  return buildSearchConditions(
+    ingredient,
+    [],
+    [
+      nameOrAliasCondition,
+      // Filter for standalone ingredients only, not recipe ingredients
+      isNull(ingredient.recipeId),
+    ],
+  );
 };

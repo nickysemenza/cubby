@@ -198,10 +198,12 @@ export function RecipeScaleControl({
                 setIngredientRowId(nextValue);
                 const row = ingredientRows.find((r) => r.id === nextValue);
                 if (row) setDraft(String(row.value));
+                else setDraft("");
               }}
               label="Ingredient to scale by"
               placeholder="Choose an ingredient…"
               compact
+              clearable
             />
           )}
 

@@ -7,8 +7,10 @@ import { image, location, locationImage, product } from "~/server/db/schema";
 import { getDb, insertAndReturn } from "./database-helpers";
 import { createInventoryEntry } from "./inventory";
 import {
+  bulkReparentLocations,
   createLocation,
   findOrCreateLocationByName,
+  getLocationById,
   locationList,
 } from "./location";
 import { createProduct } from "./product";
@@ -86,6 +88,42 @@ describe("findOrCreateLocationByName", () => {
       .from(location)
       .where(eq(location.name, name));
     expect(countRow!.count).toEqual(1);
+  });
+});
+
+describe("bulkReparentLocations", () => {
+  const ctx = withTestDb();
+
+  // Regression: `inArray` collapses duplicate ids in the UPDATE, so the
+  // `updated.length !== ids.length` guard used to trip a spurious
+  // LOCATION_NOT_FOUND whenever `ids` contained a repeat. Only the router
+  // caller deduped before this fix — the repo function itself now dedupes,
+  // so the invariant travels with the exported function regardless of caller.
+  it("tolerates a duplicate id in the ids array", async () => {
+    const parent = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "New Parent" }),
+      ctx.actor,
+    );
+    const child = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Reparented Child" }),
+      ctx.actor,
+    );
+
+    const childId = unsafeLocationId(
+      (await resolveLiveShortcode(ctx.db, child.id, "location"))!,
+    );
+    const parentId = unsafeLocationId(
+      (await resolveLiveShortcode(ctx.db, parent.id, "location"))!,
+    );
+
+    await expect(
+      bulkReparentLocations(ctx.db, [childId, childId], parentId, ctx.actor),
+    ).resolves.toBeUndefined();
+
+    const updated = await getLocationById(ctx.db, childId);
+    expect(updated.parent?.id).toEqual(parent.id);
   });
 });
 

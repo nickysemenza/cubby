@@ -265,7 +265,6 @@ const productReader = createEntityReader({
     const qualities = await loadProductDataQualities(db, [row.id]);
     return dbProductToAPI(row, qualities.get(row.id)!);
   },
-  notFoundReason: "PRODUCT_NOT_FOUND",
 });
 
 export const getProductByID = (db: Database, id: ProductId) =>
@@ -1400,17 +1399,21 @@ export const patchProductExternalIds = async (
         notDeleted(productExternalId),
       ),
     });
-    const updatedAt = new Date();
-    await tx
-      .update(product)
-      .set({ updatedAt })
-      .where(and(eq(product.id, id), notDeleted(product)));
     const changes = computeChanges(
       { externalIds: beforeIds },
       { externalIds },
       ["externalIds"],
     );
+    // Every upsert may have been an unchanged-slot no-op (see above) and
+    // `remove` may have targeted nothing live; only bump updatedAt / log an
+    // audit entry when something actually changed.
+    let updatedAt = before.updatedAt;
     if (changes) {
+      updatedAt = new Date();
+      await tx
+        .update(product)
+        .set({ updatedAt })
+        .where(and(eq(product.id, id), notDeleted(product)));
       await logAuditEntry(tx, actor, {
         entityType: "product",
         entityId: id,

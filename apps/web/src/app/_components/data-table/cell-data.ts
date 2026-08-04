@@ -295,9 +295,11 @@ function preserveWrittenWholeUnit(
   parsedUnit: string,
 ): string {
   if (parsedUnit !== "whole") return parsedUnit;
+  // Trailing punctuation (`5 each.`, `5 each!`) shouldn't defeat the match —
+  // anchor on the last run of letters, tolerating punctuation after it.
   const written = (text ?? "")
     .trim()
-    .match(/([a-z]+)$/i)?.[1]
+    .match(/([a-z]+)[.,!?;:]*$/i)?.[1]
     ?.toLowerCase();
   if (!written || !isWholeAlias(written)) return parsedUnit;
   return written;

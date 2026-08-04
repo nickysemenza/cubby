@@ -1130,6 +1130,9 @@ export async function suggestProjectTools(
       manufacturer: row.manufacturer,
       lane: "purchased_here" as const,
       matchedTrade: null,
+      // Not `formatCurrency`: that helper lives in `~/lib/utils`, a
+      // client-side module with no existing server import (grep confirms
+      // zero) — see the same note in repo/project/attention.ts.
       reasons: [`Bought here · $${Math.round(row.projectPurchaseCost)}`],
       isInventoried: inventoried.has(row.productId),
       projectPurchaseCost: row.projectPurchaseCost,

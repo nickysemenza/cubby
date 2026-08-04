@@ -98,8 +98,12 @@ type ProductWithUpcGapCandidate = {
   hasImage: boolean;
 };
 
-// Find products with expectedQuantity=1 that appear in multiple locations
-export const findDuplicateUniqueProducts = async (
+// Find products with expectedQuantity=1 that appear in multiple locations.
+// Named for the `duplicateInventory` Problems key it feeds — not to be
+// confused with product/analytics.ts's identically-shaped but independently
+// implemented findDuplicateUniqueProducts, which serves the inventory
+// router's own (differently-named, self-consistent) duplicate-check surface.
+export const findDuplicateInventoryProducts = async (
   db: Database,
 ): Promise<DuplicateUniqueProduct[]> => {
   const duplicates = await getDb(db).query.product.findMany({

@@ -227,7 +227,7 @@ export function getEnrichmentText(item: SearchResultItem): string | null {
       const parts: string[] = [];
       if (item.expenseCount != null && item.expenseCount > 0)
         parts.push(`${item.expenseCount} expenses`);
-      if (item.expenseTotal != null)
+      if (item.expenseTotal != null && item.expenseTotal !== 0)
         parts.push(formatCurrency(item.expenseTotal));
       return parts.length > 0 ? parts.join(" · ") : null;
     })

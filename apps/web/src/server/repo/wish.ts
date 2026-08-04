@@ -34,6 +34,7 @@ import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
   auditDateWhereConditions,
   buildOrderBy,
+  buildSearchConditions,
   countWhere,
   executeListQueryWithCount,
   formatSearchTerm,
@@ -234,22 +235,29 @@ const buildWishWhere = (filters: WishFilters) => {
         )`,
       )
     : undefined;
-  return and(
-    notDeleted(wish),
-    filters.acquired === undefined
-      ? undefined
-      : filters.acquired
-        ? sql`${wish.acquiredAt} IS NOT NULL`
-        : sql`${wish.acquiredAt} IS NULL`,
-    candidateFilter,
-    search,
-    // `wishFilterFields` spreads both of these, and the manifest renders their
-    // controls — so omitting either here is the same manifest/server drift this
-    // entity's UI work set out to remove, just pointing the other way (the UI
-    // sends a filter the server silently ignores). Every other related-view
-    // source repo applies both.
-    ...auditDateWhereConditions(wish, filters),
-    ...relatedWhereConditions("wish", filters, wish.id),
+  // The name/notes/candidate search is an OR across columns (see `search`
+  // above), not the per-column AND `buildSearchConditions`' own `searchFilters`
+  // would apply — so it goes in via `extraConditions` instead, alongside
+  // notDeleted (which the helper adds itself).
+  return buildSearchConditions(
+    wish,
+    [],
+    [
+      filters.acquired === undefined
+        ? undefined
+        : filters.acquired
+          ? sql`${wish.acquiredAt} IS NOT NULL`
+          : sql`${wish.acquiredAt} IS NULL`,
+      candidateFilter,
+      search,
+      // `wishFilterFields` spreads both of these, and the manifest renders their
+      // controls — so omitting either here is the same manifest/server drift this
+      // entity's UI work set out to remove, just pointing the other way (the UI
+      // sends a filter the server silently ignores). Every other related-view
+      // source repo applies both.
+      ...auditDateWhereConditions(wish, filters),
+      ...relatedWhereConditions("wish", filters, wish.id),
+    ],
   );
 };
 

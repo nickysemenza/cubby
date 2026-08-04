@@ -329,6 +329,7 @@ describe("product repository", () => {
       });
     const before = await slotRows();
     expect(before).toHaveLength(1);
+    const productBefore = await getProductByID(ctx.db, created.entityId);
 
     // Re-patching the identical value must leave the row completely untouched —
     // not even an `updatedAt` bump, which the unconditional onConflictDoUpdate
@@ -353,6 +354,11 @@ describe("product repository", () => {
     expect(afterNoop).toHaveLength(1);
     expect(afterNoop[0]).toMatchObject({ deletedAt: null });
     expect(afterNoop[0]?.updatedAt).toEqual(before[0]?.updatedAt);
+    // The PRODUCT row's own `updatedAt` must not bump either — every upsert
+    // was an unchanged-slot no-op and there were no removes, so nothing
+    // actually changed.
+    const productAfterNoop = await getProductByID(ctx.db, created.entityId);
+    expect(productAfterNoop.updatedAt).toEqual(productBefore.updatedAt);
 
     // A remove and an upsert naming the SAME slot in one call: the removal must
     // win. Without the removedSlots guard the unchanged-value check would
@@ -384,6 +390,15 @@ describe("product repository", () => {
     const live = afterRemovePlusUpsert.filter((row) => row.deletedAt === null);
     expect(live).toHaveLength(1);
     expect(live[0]).toMatchObject({ externalId: "SKU-200" });
+    // This call DID change something (a real remove + re-add), so this time
+    // the product's `updatedAt` must advance.
+    const productAfterRealChange = await getProductByID(
+      ctx.db,
+      created.entityId,
+    );
+    expect(productAfterRealChange.updatedAt.getTime()).toBeGreaterThan(
+      productBefore.updatedAt.getTime(),
+    );
   });
 
   it("orders identity-strength worklists deterministically", async () => {

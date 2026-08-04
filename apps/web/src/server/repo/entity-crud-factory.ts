@@ -31,7 +31,10 @@ import {
   entityManifest,
   type ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
-import type { AppErrorReason } from "@cubby/shared";
+import {
+  ENTITY_LABEL,
+  ENTITY_NOT_FOUND_REASON,
+} from "@cubby/schemas/identifiers";
 import type { AnyColumn } from "drizzle-orm";
 import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -68,12 +71,10 @@ interface EntityReaderConfig<TRow, TOut, TId extends string, TDb = Database> {
   fetchById: (db: TDb, id: TId) => Promise<TRow | undefined>;
   /** DB row → API shape. Async to support mappers that do a follow-up query. */
   fromDB: (db: TDb, row: TRow) => TOut | Promise<TOut>;
-  /** AppError reason thrown when `getByID` finds no live row. */
-  notFoundReason: AppErrorReason;
 }
 
 export interface EntityReader<TOut, TId extends string, TDb = Database> {
-  /** Fetch by id, throwing `notFoundReason` when there is no live row. */
+  /** Fetch by id, throwing `ENTITY_NOT_FOUND_REASON[entity]` when there is no live row. */
   getByID: (db: TDb, id: TId) => Promise<TOut>;
   /** Fetch by id, returning `null` when there is no live row. */
   getByIDOrNull: (db: TDb, id: TId) => Promise<TOut | null>;
@@ -103,8 +104,8 @@ export function createEntityReader<
     const result = await getByIDOrNull(db, id);
     if (result === null) {
       throw createAppError(
-        config.notFoundReason,
-        `${config.entity} ${id} not found`,
+        ENTITY_NOT_FOUND_REASON[config.entity],
+        `${ENTITY_LABEL[config.entity]} ${id} not found`,
       );
     }
     return result;
@@ -172,7 +173,6 @@ export function createEntityCrud<
     entity: config.entity,
     fetchById: config.fetchById,
     fromDB: config.fromDB,
-    notFoundReason: config.notFoundReason,
   });
 
   /**
