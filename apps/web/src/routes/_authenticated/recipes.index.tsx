@@ -3,10 +3,11 @@ import { BookOpen, Link2, Plus, Share2 } from "lucide-react";
 import { RecipeList } from "~/app/recipes/recipelist";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
+import { listHead } from "~/entities/filter-manifest";
 
 export const Route = createFileRoute("/_authenticated/recipes/")({
   component: RecipesPage,
-  head: () => ({ meta: [{ title: "Recipes | cubby" }] }),
+  head: listHead("Recipes", "recipe"),
 });
 
 function RecipesPage() {

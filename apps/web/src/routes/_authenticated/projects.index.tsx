@@ -9,7 +9,7 @@ import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { CreateProjectDialog } from "~/app/projects/create-project-dialog";
 import { ProjectsDashboard } from "~/app/projects/projects-dashboard";
 import { Page } from "~/components/page/Page";
-import { entityFilterSearchFields } from "~/entities/filter-manifest";
+import { entityFilterSearchFields, listHead } from "~/entities/filter-manifest";
 import {
   isValidProjectDateFilter,
   normalizeProjectRenderer,
@@ -86,7 +86,7 @@ export const Route = createFileRoute("/_authenticated/projects/")({
   validateSearch: projectSearchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: ProjectsPage,
-  head: () => ({ meta: [{ title: "Projects | cubby" }] }),
+  head: listHead("Projects", "project"),
 });
 
 function ProjectsPage() {

@@ -16,7 +16,7 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import { entityFilterSearchFields } from "~/entities/filter-manifest";
+import { entityFilterSearchFields, listHead } from "~/entities/filter-manifest";
 import { urlStringParam } from "~/lib/search-params";
 
 // The analytics view is entirely Nivo charts and its tab is unmounted until
@@ -139,7 +139,7 @@ export const Route = createFileRoute("/_authenticated/expenses/")({
   validateSearch: searchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: ExpensesPage,
-  head: () => ({ meta: [{ title: "Expenses | cubby" }] }),
+  head: listHead("Expenses", "expense"),
 });
 
 function ExpensesPage() {

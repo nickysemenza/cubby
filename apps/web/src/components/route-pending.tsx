@@ -1,6 +1,8 @@
+import { useParams } from "@tanstack/react-router";
 import { Stack } from "~/components/layout";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { Skeleton } from "~/components/ui/skeleton";
+import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 
 /** Router-wide default pending component (see `defaultPendingComponent`).
  * Shown during a route transition when the destination isn't ready yet — most
@@ -29,6 +31,16 @@ export function RoutePending() {
  * Mirrors the real detail layout (eyebrow + title, then a 2-column card grid)
  * so the transition into the loaded page doesn't jump. */
 export function DetailPagePending() {
+  // The tab title too, not just the layout. TanStack runs a route's `head`
+  // AFTER its loader resolves, so during a cold detail navigation the pending
+  // match contributes no title and `HeadContent` falls back to the root default
+  // — a ~2s window of a bare "Cubby". The shortcode is in the params already,
+  // so the pending page can say what it's loading. `strict: false` because this
+  // component is shared across every detail route (and `$id` ones have no
+  // `shortcode` param at all).
+  const { shortcode } = useParams({ strict: false });
+  useDocumentTitle(shortcode);
+
   return (
     <PageWrapper>
       <div className="space-y-4 sm:space-y-6">

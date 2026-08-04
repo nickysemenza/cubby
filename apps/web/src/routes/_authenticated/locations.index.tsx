@@ -24,6 +24,7 @@ import {
 import {
   entityFilterSearchFields,
   getEntityFilters,
+  listHead,
 } from "~/entities/filter-manifest";
 
 const viewOptions = ["gallery", "table", "visualizations"] as const;
@@ -47,7 +48,7 @@ export const Route = createFileRoute("/_authenticated/locations/")({
   validateSearch: searchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: LocationsPage,
-  head: () => ({ meta: [{ title: "Locations | cubby" }] }),
+  head: listHead("Locations", "location"),
 });
 
 function LocationsPage() {

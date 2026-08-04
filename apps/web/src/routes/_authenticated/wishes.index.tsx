@@ -3,7 +3,7 @@ import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { WishList } from "~/app/wishes/wish-list";
 import { Page } from "~/components/page/Page";
-import { entityFilterSearchFields } from "~/entities/filter-manifest";
+import { entityFilterSearchFields, listHead } from "~/entities/filter-manifest";
 import { urlStringParam } from "~/lib/search-params";
 
 // The list's filter params come from the wish filter manifest — the same
@@ -33,7 +33,7 @@ export const Route = createFileRoute("/_authenticated/wishes/")({
   validateSearch: searchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: WishesPage,
-  head: () => ({ meta: [{ title: "Wishlist | cubby" }] }),
+  head: listHead("Wishlist", "wish"),
 });
 
 function WishesPage() {

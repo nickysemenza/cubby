@@ -5,8 +5,9 @@ import { Page } from "~/components/page/Page";
 import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
+import { shortcodeHead } from "~/lib/page-title";
 import { purchaseLabel } from "~/lib/purchase-label";
 
 export const Route = createFileRoute("/_authenticated/purchases/$shortcode")({
@@ -31,6 +32,7 @@ export const Route = createFileRoute("/_authenticated/purchases/$shortcode")({
       </Empty>
     </Page>
   ),
+  head: shortcodeHead,
   component: PurchaseDetailPage,
 });
 
@@ -41,7 +43,7 @@ function PurchaseDetailPage() {
     api.purchase.getByShortcode.queryOptions({ shortcode }),
   );
 
-  useDocumentTitle(purchase ? purchaseLabel(purchase) : undefined);
+  useDetailTitle(shortcode, purchase ? purchaseLabel(purchase) : undefined);
 
   // The loader already threw notFound for an unknown code; this guard only
   // satisfies the nullable output type.

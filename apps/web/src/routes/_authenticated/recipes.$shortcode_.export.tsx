@@ -39,8 +39,9 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
+import { pageTitle } from "~/lib/page-title";
 
 type ExportFormat = "prep" | "nested" | "matrix" | "flow";
 
@@ -77,6 +78,9 @@ export const Route = createFileRoute(
   },
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
+  head: ({ params }) => ({
+    meta: [{ title: pageTitle(`${params.shortcode} — export`) }],
+  }),
   component: RecipeExportPage,
 });
 
@@ -92,6 +96,7 @@ function RecipeExportPage() {
 }
 
 function RecipeExportBody({ recipe }: { recipe: RecipeOut }) {
+  const { shortcode } = Route.useParams();
   const { format: rawFormat, scale } = Route.useSearch();
   const navigate = useNavigate();
   const [flowReady, setFlowReady] = useState(false);
@@ -99,7 +104,7 @@ function RecipeExportBody({ recipe }: { recipe: RecipeOut }) {
     setFlowReady(ready);
   }, []);
 
-  useDocumentTitle(`${recipe.name} — export`);
+  useDetailTitle(shortcode, `${recipe.name} — export`);
 
   const format: ExportFormat = rawFormat ?? "prep";
   const factor = scale ?? 1;

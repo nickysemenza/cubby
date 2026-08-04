@@ -15,6 +15,7 @@ import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { entities } from "~/entities/entities";
+import { pageTitle } from "~/lib/page-title";
 
 const searchSchema = z.object({
   // The feed's only controls — `auditLogListInput` already accepts both,
@@ -49,6 +50,7 @@ export const Route = createFileRoute("/_authenticated/activity")({
       ),
     );
   },
+  head: () => ({ meta: [{ title: pageTitle("Activity") }] }),
   component: ActivityPage,
 });
 

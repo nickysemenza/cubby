@@ -17,7 +17,9 @@ import {
   decodeFilters,
   encodeFilters,
   type FilterSpecCore,
+  paramToSort,
   partitionFilterSpecs,
+  sortToParam,
 } from "~/entities/filters";
 import {
   buildSortParams,
@@ -77,31 +79,6 @@ const NO_INITIAL_FILTER: ColumnFiltersState = [];
 const SORT_KEY = "sort";
 const PAGE_KEY = "page";
 const SIZE_KEY = "pageSize";
-
-/**
- * `[{id,desc},...]` → `name,-createdAt` (dash = descending); undefined if
- * empty. A single sort serializes byte-identically to the pre-multi-sort
- * format, so old URLs and the defaultSortParam comparison keep working.
- */
-function sortToParam(sorting: SortingState): string | undefined {
-  if (sorting.length === 0) return undefined;
-  return sorting.map((s) => `${s.desc ? "-" : ""}${s.id}`).join(",");
-}
-
-/** `name,-createdAt` (or legacy single `name`/`-name`) → SortingState. */
-function paramToSort(value: unknown): SortingState | undefined {
-  if (typeof value !== "string" || value.length === 0) return undefined;
-  const parsed = value
-    .split(",")
-    .map((t) => t.trim())
-    .filter(Boolean)
-    .map((t) => ({
-      id: t.startsWith("-") ? t.slice(1) : t,
-      desc: t.startsWith("-"),
-    }))
-    .filter((s) => s.id);
-  return parsed.length ? parsed : undefined;
-}
 
 /** The canonical, URL-owned slice of a table's controlled state. */
 function serializeUrlState(

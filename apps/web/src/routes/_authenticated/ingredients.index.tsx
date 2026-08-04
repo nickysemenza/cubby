@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { IngredientList } from "~/app/ingredients/ingredientlist";
 import { Page } from "~/components/page/Page";
+import { listHead } from "~/entities/filter-manifest";
 
 export const Route = createFileRoute("/_authenticated/ingredients/")({
+  head: listHead("Ingredients", "ingredient"),
   component: IngredientsPage,
 });
 

@@ -11,6 +11,7 @@ import { Page } from "~/components/page/Page";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useTabParam } from "~/hooks/useTabParam";
+import { pageTitle } from "~/lib/page-title";
 
 const searchSchema = z.object({
   // Active tab, deep-linkable. Default ("schema") is omitted from the URL —
@@ -26,7 +27,7 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/_authenticated/entities")({
   validateSearch: searchSchema,
   component: EntitiesRoute,
-  head: () => ({ meta: [{ title: "Entities | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("Entities") }] }),
 });
 
 function EntitiesRoute() {

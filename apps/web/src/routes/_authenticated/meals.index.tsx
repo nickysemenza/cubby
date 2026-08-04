@@ -12,12 +12,13 @@ import {
   mealCalendarSearchSchema,
 } from "~/app/meals/meal-search";
 import { Page } from "~/components/page/Page";
+import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/meals/")({
   validateSearch: mealCalendarSearchSchema,
   search: { middlewares: [stripSearchParams(mealCalendarSearchDefaults)] },
   component: MealsIndexRoute,
-  head: () => ({ meta: [{ title: "Meals | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("Meals") }] }),
 });
 
 function MealsIndexRoute() {

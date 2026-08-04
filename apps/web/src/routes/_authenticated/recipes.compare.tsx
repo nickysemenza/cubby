@@ -24,6 +24,7 @@ import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { useTRPC } from "~/integrations/trpc/react";
+import { pageTitle } from "~/lib/page-title";
 import { computeRecipeCosting } from "~/lib/recipe-costing";
 import { urlStringParam } from "~/lib/search-params";
 
@@ -37,7 +38,7 @@ export const Route = createFileRoute("/_authenticated/recipes/compare")({
   validateSearch: searchParamsSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: RecipeComparePage,
-  head: () => ({ meta: [{ title: "Compare Recipes | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("Compare recipes") }] }),
 });
 
 function RecipeComparePage() {

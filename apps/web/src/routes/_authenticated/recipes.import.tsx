@@ -6,6 +6,7 @@ import { NotionImport } from "~/app/_components/recipe/notion-import";
 import { Page } from "~/components/page/Page";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useTabParam } from "~/hooks/useTabParam";
+import { pageTitle } from "~/lib/page-title";
 
 const searchSchema = z.object({
   // Active tab, deep-linkable. Default ("cookbook") is omitted from the URL.
@@ -19,7 +20,7 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/_authenticated/recipes/import")({
   validateSearch: searchSchema,
   component: ImportPage,
-  head: () => ({ meta: [{ title: "Import recipes | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("Import recipes") }] }),
 });
 
 function ImportPage() {

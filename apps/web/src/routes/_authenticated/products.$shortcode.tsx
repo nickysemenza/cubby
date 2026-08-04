@@ -5,8 +5,9 @@ import { Page } from "~/components/page/Page";
 import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
+import { shortcodeHead } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/products/$shortcode")({
   ssr: false,
@@ -30,6 +31,7 @@ export const Route = createFileRoute("/_authenticated/products/$shortcode")({
       </Empty>
     </Page>
   ),
+  head: shortcodeHead,
   component: ProductDetailPage,
 });
 
@@ -40,7 +42,7 @@ function ProductDetailPage() {
     api.product.getByShortcode.queryOptions({ shortcode }),
   );
 
-  useDocumentTitle(product?.name);
+  useDetailTitle(shortcode, product?.name);
 
   // ProductDetail renders its own <Page> shell (which owns the PageWrapper).
   // The loader already threw notFound for an unknown code; this guard only

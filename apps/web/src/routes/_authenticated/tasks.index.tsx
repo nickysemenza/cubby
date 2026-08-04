@@ -22,6 +22,7 @@ import {
 import {
   entityFilterSearchFields,
   getEntityFilters,
+  listHead,
 } from "~/entities/filter-manifest";
 import {
   buildFiltersFromManifest,
@@ -113,7 +114,7 @@ export const Route = createFileRoute("/_authenticated/tasks/")({
   validateSearch: taskSearchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: TasksPage,
-  head: () => ({ meta: [{ title: "Tasks | cubby" }] }),
+  head: listHead("Tasks", "task"),
 });
 
 function TasksPage() {

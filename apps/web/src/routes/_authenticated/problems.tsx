@@ -6,6 +6,7 @@ import { ProblemsOverview } from "~/app/problems/problems-overview";
 import { Section, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { RoutePending } from "~/components/route-pending";
+import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 
 const searchSchema = z.object({
@@ -34,7 +35,7 @@ export const Route = createFileRoute("/_authenticated/problems")({
   },
   pendingComponent: RoutePending,
   component: ProblemsPage,
-  head: () => ({ meta: [{ title: "Problems | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("Problems") }] }),
 });
 
 function ProblemsPage() {

@@ -6,6 +6,7 @@ import {
   type FilterFieldConfig,
   Filters,
 } from "~/components/reui/filters";
+import { humanize } from "~/entities/filters";
 import type { FilterConfig } from "./columnHelpers";
 
 type LedgerFilterField = FilterFieldConfig<string> & {
@@ -16,12 +17,6 @@ type LedgerFilterField = FilterFieldConfig<string> & {
 const TEXT_OPERATORS = [{ value: "contains", label: "contains" }];
 const SELECT_OPERATORS = [{ value: "is", label: "is" }];
 const MULTISELECT_OPERATORS = [{ value: "is_any_of", label: "is any of" }];
-
-const humanize = (value: string): string =>
-  value
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/[_-]+/g, " ")
-    .replace(/^./, (letter) => letter.toUpperCase());
 
 function operatorFor(field: LedgerFilterField): string {
   if (field.type === "text") return "contains";

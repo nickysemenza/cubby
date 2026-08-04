@@ -25,8 +25,9 @@ import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
+import { shortcodeHead } from "~/lib/page-title";
 import { recipeMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 
@@ -85,6 +86,7 @@ export const Route = createFileRoute("/_authenticated/recipes/$shortcode")({
       </Empty>
     </Page>
   ),
+  head: shortcodeHead,
   component: RecipeDetailPage,
 });
 
@@ -105,6 +107,7 @@ function RecipeDetailPage() {
 }
 
 function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
+  const { shortcode } = Route.useParams();
   const { edit: isEditing, view, flowLayout, scale } = Route.useSearch();
   const navigate = useNavigate();
 
@@ -148,7 +151,7 @@ function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
     redirectTo: "/recipes",
   });
 
-  useDocumentTitle(`Recipe: ${recipe.name}`);
+  useDetailTitle(shortcode, recipe.name);
 
   // Placard stats from the persisted totals — zero engine calls. The Data
   // view's summary card shows live SCALED totals; these are the 1× ledger

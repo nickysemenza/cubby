@@ -9,7 +9,7 @@ import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { ProductList } from "~/app/products/productlist";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
-import { entityFilterSearchFields } from "~/entities/filter-manifest";
+import { entityFilterSearchFields, listHead } from "~/entities/filter-manifest";
 import { urlStringParam } from "~/lib/search-params";
 
 const searchSchema = z.object({
@@ -33,7 +33,7 @@ export const Route = createFileRoute("/_authenticated/products/")({
   validateSearch: searchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: ProductsPage,
-  head: () => ({ meta: [{ title: "Products | cubby" }] }),
+  head: listHead("Products", "product"),
 });
 
 function ProductsPage() {

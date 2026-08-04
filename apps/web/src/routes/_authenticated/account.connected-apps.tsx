@@ -25,6 +25,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { useTRPC } from "~/integrations/trpc/react";
+import { pageTitle } from "~/lib/page-title";
 import { queryKeys } from "~/lib/query-keys";
 
 // A static sibling of /account/$accountView: TanStack ranks literal segments
@@ -32,7 +33,7 @@ import { queryKeys } from "~/lib/query-keys";
 // than rendering as an unknown account view.
 export const Route = createFileRoute("/_authenticated/account/connected-apps")({
   component: ConnectedAppsPage,
-  head: () => ({ meta: [{ title: "Connected apps | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("Connected apps") }] }),
 });
 
 function ConnectedAppsPage() {

@@ -15,6 +15,7 @@ import {
 import { useHydrated } from "~/hooks/useHydrated";
 import { authClient } from "~/lib/auth-client";
 import { getErrorMessage } from "~/lib/error-utils";
+import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 
 // Only the two params this screen renders from. The rest of the signed
@@ -28,6 +29,7 @@ const searchSchema = z.object({
 
 export const Route = createFileRoute("/oauth/consent")({
   validateSearch: searchSchema,
+  head: () => ({ meta: [{ title: pageTitle("Authorize app") }] }),
   component: ConsentPage,
 });
 

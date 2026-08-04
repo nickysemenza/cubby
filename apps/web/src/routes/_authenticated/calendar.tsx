@@ -9,12 +9,13 @@ import {
 } from "~/app/calendar/calendar-search";
 import { UnifiedCalendar } from "~/app/calendar/unified-calendar";
 import { Page } from "~/components/page/Page";
+import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/calendar")({
   validateSearch: calendarSearchSchema,
   search: { middlewares: [stripSearchParams(calendarSearchDefaults)] },
   component: CalendarRoute,
-  head: () => ({ meta: [{ title: "Calendar | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("Calendar") }] }),
 });
 
 function CalendarRoute() {

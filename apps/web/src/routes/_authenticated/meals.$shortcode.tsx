@@ -1,7 +1,9 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { MealDetailPage } from "~/app/meals/meal-detail-page";
+import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
+import { shortcodeHead } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/meals/$shortcode")({
   ssr: false,
@@ -16,7 +18,7 @@ export const Route = createFileRoute("/_authenticated/meals/$shortcode")({
     if (!data) throw notFound();
   },
   component: MealDetailRoute,
-  head: () => ({ meta: [{ title: "Meal | cubby" }] }),
+  head: shortcodeHead,
 });
 
 function MealDetailRoute() {
@@ -25,6 +27,8 @@ function MealDetailRoute() {
   const { data: meal } = useSuspenseQuery(
     api.meal.getByShortcode.queryOptions({ shortcode }),
   );
+
+  useDetailTitle(shortcode, meal?.name);
 
   // The loader already threw notFound for an unknown code; this only satisfies
   // the nullable output type.

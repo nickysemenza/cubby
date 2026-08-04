@@ -7,6 +7,7 @@ import { DetailPagePending } from "~/components/route-pending";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
+import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/usda/$id")({
   ssr: false,
@@ -28,6 +29,7 @@ export const Route = createFileRoute("/_authenticated/usda/$id")({
       </Empty>
     </Page>
   ),
+  head: ({ params }) => ({ meta: [{ title: pageTitle(`USDA ${params.id}`) }] }),
   component: USDAFoodDetailPage,
 });
 

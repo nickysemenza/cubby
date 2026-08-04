@@ -5,7 +5,7 @@ import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action
 import { CreateVendorDialog } from "~/app/vendors/create-vendor-dialog";
 import { VendorList } from "~/app/vendors/vendorlist";
 import { Page } from "~/components/page/Page";
-import { entityFilterSearchFields } from "~/entities/filter-manifest";
+import { entityFilterSearchFields, listHead } from "~/entities/filter-manifest";
 import { urlStringParam } from "~/lib/search-params";
 
 // The roster's filter params come from the vendor filter manifest — the same
@@ -36,7 +36,7 @@ export const Route = createFileRoute("/_authenticated/vendors/")({
   validateSearch: searchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: VendorsPage,
-  head: () => ({ meta: [{ title: "Vendors | cubby" }] }),
+  head: listHead("Vendors", "vendor"),
 });
 
 function VendorsPage() {

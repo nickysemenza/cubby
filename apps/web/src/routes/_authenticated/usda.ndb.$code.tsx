@@ -6,8 +6,12 @@ import { Page } from "~/components/page/Page";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useTRPC } from "~/integrations/trpc/react";
+import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/usda/ndb/$code")({
+  head: ({ params }) => ({
+    meta: [{ title: pageTitle(`USDA NDB ${params.code}`) }],
+  }),
   component: USDANDBLookupPage,
 });
 

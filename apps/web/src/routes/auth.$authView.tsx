@@ -2,6 +2,7 @@ import { AuthView } from "@daveyplate/better-auth-ui";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 import { IconPattern } from "~/components/common/icon-pattern";
+import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 
 // Deliberately NOT loose. The OAuth server appends a signed authorize query
@@ -21,6 +22,7 @@ const searchDefaults = { redirect: undefined } as const;
 export const Route = createFileRoute("/auth/$authView")({
   validateSearch: searchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
+  head: () => ({ meta: [{ title: pageTitle("Sign in") }] }),
   component: AuthPage,
 });
 

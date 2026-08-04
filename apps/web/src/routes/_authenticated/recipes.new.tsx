@@ -2,6 +2,7 @@ import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 import NewRecipe from "~/app/_components/recipe/new-recipe";
 import { Page } from "~/components/page/Page";
+import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 
 // Accepts the iOS/Android Web Share Target payload (see manifest.json
@@ -36,6 +37,7 @@ function extractUrl(...candidates: (string | undefined)[]): string | undefined {
 export const Route = createFileRoute("/_authenticated/recipes/new")({
   validateSearch: searchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
+  head: () => ({ meta: [{ title: pageTitle("New recipe") }] }),
   component: NewRecipePage,
 });
 

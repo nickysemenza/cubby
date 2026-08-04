@@ -9,12 +9,13 @@ import {
 } from "~/app/meals/meal-search";
 import { MealSuggestionsPage } from "~/app/meals/suggestions-page";
 import { Page } from "~/components/page/Page";
+import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/meals/suggestions")({
   validateSearch: mealSuggestionsSearchSchema,
   search: { middlewares: [stripSearchParams(mealSuggestionsSearchDefaults)] },
   component: MealsSuggestionsRoute,
-  head: () => ({ meta: [{ title: "What can I make? | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("What can I make?") }] }),
 });
 
 function MealsSuggestionsRoute() {
