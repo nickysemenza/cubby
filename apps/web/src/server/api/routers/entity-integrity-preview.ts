@@ -82,10 +82,28 @@ type Planned = {
   candidates?: MergeCandidate[];
 };
 
+const EMPTY_PLAN: Planned = { blockers: [], changes: [] };
+
+/**
+ * Why a preview couldn't be planned, when it couldn't. Both cases used to
+ * produce a confident, empty, wrong preview rather than saying anything.
+ */
+type PlanGap = {
+  /** Well-formed ids that name no live row. */
+  unresolved?: string[];
+  /** A non-ingredient merge with no `keepId` — nothing to compute. */
+  needsKeeper?: boolean;
+};
+
 const plan = async (
   db: Database,
   input: PreviewOperationRequest,
-): Promise<{ planned: Planned; publicIdByEntityId: Map<string, string> }> => {
+): Promise<
+  {
+    planned: Planned;
+    publicIdByEntityId: Map<string, string>;
+  } & PlanGap
+> => {
   // Bound to a local const so the `!== "image"` narrowing survives into the
   // closures below — TypeScript drops property-path narrowings inside callbacks.
   const entity = input.entity;
@@ -97,13 +115,42 @@ const plan = async (
     entity === "image"
       ? new Map(publicIds.map((id) => [id, id]))
       : await resolveLiveShortcodes(db, publicIds, entity);
+  // Every id the caller named that doesn't resolve to a live row. Reported
+  // rather than dropped: a preview silently planned over the survivors renders
+  // as "nothing will be affected", which reads as *this operation is harmless*
+  // when the truth is *you named something that doesn't exist*. The wire schema
+  // already rejects a malformed code, so anything here is well-formed and
+  // simply gone (or soft-deleted).
+  const unresolved = publicIds.filter((id) => !entityIdsByPublicId.has(id));
+  if (unresolved.length > 0) {
+    return { planned: EMPTY_PLAN, publicIdByEntityId: new Map(), unresolved };
+  }
+
+  // A merge preview with no keeper is only answerable for `ingredient`, which
+  // has a candidate-ranking arm below. For the others there is nothing to
+  // compute — the old sentinel passed `""` as the keeper, producing a confident
+  // empty preview of a merge that could never run.
+  if (input.operation === "merge" && !input.keepId && entity !== "ingredient") {
+    return {
+      planned: EMPTY_PLAN,
+      publicIdByEntityId: new Map(),
+      needsKeeper: true,
+    };
+  }
+
   const entityIds = (ids: readonly string[]) =>
     ids.flatMap((id) => {
       const entityId = entityIdsByPublicId.get(id);
       return entityId ? [entityId] : [];
     });
-  const entityId = (id: string | undefined) =>
-    id ? (entityIdsByPublicId.get(id) ?? "") : "";
+  // Total past the guard above: every public id resolved, or we returned.
+  const entityId = (id: string | undefined): string => {
+    const resolved = id === undefined ? undefined : entityIdsByPublicId.get(id);
+    if (resolved === undefined) {
+      throw new Error(`unreachable: unresolved ${entity} keeper ${id}`);
+    }
+    return resolved;
+  };
 
   const planned = await match(input)
     .with({ operation: "delete", entity: "product" }, ({ ids }) =>
@@ -230,7 +277,10 @@ export const previewOperation = async (
   // The wire input is a flat object (MCP can't advertise a union); narrowing it
   // once here is what lets every arm below stay exhaustively matched.
   const request = narrowPreviewOperationInput(input);
-  const { planned, publicIdByEntityId } = await plan(db, request);
+  const { planned, publicIdByEntityId, unresolved, needsKeeper } = await plan(
+    db,
+    request,
+  );
   const targetCount =
     request.operation === "delete"
       ? request.ids.length
@@ -247,10 +297,16 @@ export const previewOperation = async (
           : "soft"
         : null,
     targetCount,
-    canProceed: planned.blockers.length === 0,
-    blockers: planned.blockers.map((item) =>
-      publicImpact(item, publicIdByEntityId),
-    ),
+    canProceed: planned.blockers.length === 0 && !unresolved && !needsKeeper,
+    // Gap blockers are appended AFTER translation on purpose: they are already
+    // keyed by public code, and `publicImpact` drops any `byTargetId` key it
+    // can't map back from an entity id — which is every key here, since these
+    // ids resolved to nothing.
+    blockers: [
+      ...planned.blockers.map((item) => publicImpact(item, publicIdByEntityId)),
+      ...(unresolved ? [unresolvedBlocker(request.entity, unresolved)] : []),
+      ...(needsKeeper ? [needsKeeperBlocker(request.entity)] : []),
+    ],
     changes: planned.changes.map((item) =>
       publicImpact(item, publicIdByEntityId),
     ),
@@ -268,6 +324,45 @@ export const previewOperation = async (
     generatedAt: now.toISOString(),
   });
 };
+
+/**
+ * Ids that named nothing live. Reported as an ordinary blocker rather than
+ * thrown: this endpoint is deliberately advisory, so it answers "here is what's
+ * wrong with what you asked" instead of failing the call. `canProceed` goes
+ * false, and `OperationImpact` renders it in the same "Blocked by" section as
+ * every planner-emitted blocker, so the bad code lands somewhere visible.
+ *
+ * `byTargetId` is keyed by the public code itself — for an id that resolved to
+ * nothing there is no entity id to key by, which is exactly the point.
+ *
+ * The codes go in `label`, not just `description`: `ImpactRow` renders only
+ * `total`, `label`, and `code`, so a description-only message would be invisible
+ * in the UI and this blocker would say "something is unknown" without saying
+ * what. `description` still carries the fuller sentence for MCP callers, which
+ * receive the whole payload.
+ */
+const unresolvedBlocker = (entity: string, codes: string[]): ImpactItem => ({
+  code: "block-unresolved-target",
+  effect: "block",
+  label: `unknown ${entity}: ${codes.join(", ")}`,
+  description: `No live ${entity} matches ${codes.join(", ")}. The code is well-formed, so it was deleted or never existed.`,
+  total: codes.length,
+  byTargetId: Object.fromEntries(codes.map((code) => [code, 1])),
+});
+
+/**
+ * A merge preview with no keeper, for an entity that can't rank candidates.
+ * Only `ingredient` answers that question (see the `keepId: undefined` arm);
+ * for the rest there is genuinely nothing to compute.
+ */
+const needsKeeperBlocker = (entity: string): ImpactItem => ({
+  code: "block-missing-keeper",
+  effect: "block",
+  label: "keeper required",
+  description: `A ${entity} merge preview needs a keepId — candidate ranking without one is only supported for ingredient.`,
+  total: 0,
+  byTargetId: {},
+});
 
 const publicImpact = (
   item: ImpactItem,
