@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
   useTableConfig: vi.fn((_options: TableOptions) => ({}) as Table<unknown>),
 }));
 
-vi.mock("~/lib/wasm", () => ({ wasm: {} }));
 vi.mock("@tanstack/react-query", () => ({
   useQuery: () => ({
     data: undefined,
@@ -44,9 +43,6 @@ vi.mock("../_components/hooks/useEntityPreview", () => ({
     onRowHover: vi.fn(),
     PreviewSheet: () => null,
   }),
-}));
-vi.mock("../_components/data-table/columnHelpers", () => ({
-  createEntityInlineLinkColumn: () => ({}),
 }));
 
 import { USDAFoodList } from "./usdafoodlist";
