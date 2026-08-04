@@ -299,13 +299,16 @@ function preserveWrittenWholeUnit(
     .trim()
     .match(/([a-z]+)$/i)?.[1]
     ?.toLowerCase();
-  if (!written) return parsedUnit;
+  if (!written || !isWholeAlias(written)) return parsedUnit;
+  return written;
+}
+
+/** Does the grammar fold this word onto `whole` when parsed on its own? */
+function isWholeAlias(word: string): boolean {
   try {
-    return wasm.parse_amount(`1 ${written}`).unit === "whole"
-      ? written
-      : parsedUnit;
+    return wasm.parse_amount(`1 ${word}`).unit === "whole";
   } catch {
-    return parsedUnit;
+    return false;
   }
 }
 

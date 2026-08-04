@@ -111,6 +111,24 @@ describe("amountCellData", () => {
     expect(save).not.toHaveBeenCalled();
   });
 
+  // The point of routing both directions through the engine is that a trip out
+  // to a spreadsheet and back is lossless. `Unit::Whole` is canonically spelled
+  // as NOTHING, so a naive copy renders {5,"each"} as bare "5" and pasting that
+  // back yields "whole" — silently rewriting essentially every inventory row.
+  it.each([
+    [{ value: 5, unit: "each" }],
+    [{ value: 7, unit: "ea" }],
+    [{ value: 1, unit: "can" }],
+    [{ value: 1.5, unit: "cup" }],
+    [{ value: 2.5, unit: "lb" }],
+    [{ value: 3, unit: "whole" }],
+  ] as const)("survives a text copy→paste round-trip: %j", async (stored) => {
+    const { data } = build(stored as Amount);
+    const text = data.getCopyPayload(null)?.text;
+    expect(text).toBeTruthy();
+    expect(await pasteText(text as string)).toEqual(stored);
+  });
+
   it("prefers the typed payload over the text, range included", async () => {
     const { save, data } = build();
     await data.applyPaste?.(null, {
