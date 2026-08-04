@@ -18,6 +18,7 @@ import { createExpense } from "./expense";
 import {
   createFinancialAccount,
   deleteFinancialAccounts,
+  financialAccountOptions,
   listFinancialAccounts,
   updateFinancialAccount,
 } from "./financial-account";
@@ -25,6 +26,7 @@ import { previewFinancialStatementImport } from "./financial-statement-preview";
 import {
   createFinancialTransaction,
   deleteFinancialTransactions,
+  financialTransactionSourceOptions,
   listFinancialTransactions,
   updateFinancialTransaction,
 } from "./financial-transaction";
@@ -228,6 +230,93 @@ describe("financial repositories — critical invariants", () => {
       page,
     );
     expect(otherKind).toMatchObject({ data: [], count: 0 });
+  });
+
+  // The two header-filter rosters. Both are load-bearing in a way a shape test
+  // wouldn't catch: `financialAccountOptions` must emit SHORTCODES, because the
+  // manifest's `accountId` spec brands option values with
+  // `unsafeFinancialAccountShortcode` and the server parses them with
+  // `oneOrMany(financialAccountShortcode)` — a uuid here would brand into a lie
+  // and resolve to nothing. And `financialTransactionSourceOptions` is raw SQL
+  // over a LATERAL unnest of `sourceRefs`, so its grouping, its per-row fan-out,
+  // and its soft-delete predicate are only ever exercised against a real DB.
+  it("builds the account and source rosters with live counts and shortcode ids", async () => {
+    const busy = (
+      await createFinancialAccount(
+        ctx.db,
+        account("Roster Busy Visa"),
+        ctx.actor,
+      )
+    ).output;
+    const quiet = (
+      await createFinancialAccount(
+        ctx.db,
+        account("Roster Quiet Visa"),
+        ctx.actor,
+      )
+    ).output;
+    // Never linked to a transaction, then retired: proves a soft-deleted account
+    // leaves the roster entirely rather than showing up with a zero count.
+    const retired = (
+      await createFinancialAccount(
+        ctx.db,
+        account("Roster Retired Visa"),
+        ctx.actor,
+      )
+    ).output;
+    await deleteFinancialAccounts(ctx.db, [retired.id], ctx.actor);
+
+    const txn = (accountId: string, sources: string[], amount: number) =>
+      createFinancialTransaction(
+        ctx.db,
+        financialTransactionCreateInput.parse({
+          accountId,
+          kind: "purchase",
+          status: "pending",
+          amount,
+          sourceRefs: sources.map((source, index) => ({
+            source,
+            externalId: `${source}-${accountId}-${amount}-${index}`,
+          })),
+        }),
+        ctx.actor,
+      );
+
+    await txn(busy.id, ["monarch"], 10);
+    // Two refs on ONE row — the count is per reference, not per transaction, so
+    // this row contributes to both `monarch` and `amazon-order-export`.
+    await txn(busy.id, ["monarch", "amazon-order-export"], 20);
+    await txn(quiet.id, ["monarch"], 30);
+    const doomed = (await txn(quiet.id, ["copilot"], 40)).output;
+
+    const beforeDelete = await financialTransactionSourceOptions(ctx.db);
+    expect(beforeDelete).toEqual([
+      { source: "monarch", count: 3 },
+      { source: "amazon-order-export", count: 1 },
+      { source: "copilot", count: 1 },
+    ]);
+
+    // Busy leads on count; `quiet` and the zero-transaction accounts fall back to
+    // name order. An account with no transactions still appears — a provisional
+    // account minted by a statement import is exactly the one you want to filter
+    // for before anything is linked to it.
+    const accounts = await financialAccountOptions(ctx.db);
+    expect(accounts).toEqual([
+      { id: busy.id, name: "Roster Busy Visa", count: 2 },
+      { id: quiet.id, name: "Roster Quiet Visa", count: 2 },
+    ]);
+    // The id is the shortcode the filter brands, not the uuid.
+    expect(accounts[0]?.id).toMatch(/^FAC-/);
+
+    await deleteFinancialTransactions(ctx.db, [doomed.id], ctx.actor);
+    expect(await financialTransactionSourceOptions(ctx.db)).toEqual([
+      { source: "monarch", count: 3 },
+      { source: "amazon-order-export", count: 1 },
+    ]);
+    expect(await financialAccountOptions(ctx.db)).toEqual([
+      { id: busy.id, name: "Roster Busy Visa", count: 2 },
+      { id: quiet.id, name: "Roster Quiet Visa", count: 1 },
+    ]);
   });
 
   it("previews client-parsed Monarch snapshots idempotently without writing", async () => {
