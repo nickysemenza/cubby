@@ -10,6 +10,7 @@ import { ProductList } from "~/app/products/productlist";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
+import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 
 const searchSchema = z.object({
@@ -33,7 +34,7 @@ export const Route = createFileRoute("/_authenticated/products/")({
   validateSearch: searchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: ProductsPage,
-  head: () => ({ meta: [{ title: "Products | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("Products") }] }),
 });
 
 function ProductsPage() {

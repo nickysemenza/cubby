@@ -7,6 +7,7 @@ import {
 import { z } from "zod";
 import { ToolMatrixPage } from "~/app/projects/tool-matrix-page";
 import { Page } from "~/components/page/Page";
+import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 
 const commaSeparatedArray = <T extends z.ZodType>(itemSchema: T) =>
@@ -52,7 +53,7 @@ export const Route = createFileRoute("/_authenticated/projects/tools")({
   search: {
     middlewares: [stripSearchParams({ floor: 100, group: "trade", page: 1 })],
   },
-  head: () => ({ meta: [{ title: "Tool usage matrix | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("Tool usage matrix") }] }),
 });
 
 function ProjectToolMatrixRoute() {

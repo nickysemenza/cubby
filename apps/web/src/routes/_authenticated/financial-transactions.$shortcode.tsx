@@ -1,7 +1,9 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { FinancialTransactionDetail } from "~/app/finance/financial-transaction-detail";
+import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
+import { shortcodeHead } from "~/lib/page-title";
 export const Route = createFileRoute(
   "/_authenticated/financial-transactions/$shortcode",
 )({
@@ -14,6 +16,7 @@ export const Route = createFileRoute(
     );
     if (!item) throw notFound();
   },
+  head: shortcodeHead,
   component: TransactionPage,
 });
 function TransactionPage() {
@@ -22,5 +25,7 @@ function TransactionPage() {
   const { data } = useSuspenseQuery(
     api.financialTransaction.getByShortcode.queryOptions({ shortcode }),
   );
+  // Same fallback chain the detail page's own header uses.
+  useDetailTitle(shortcode, data?.merchant || data?.rawDescription);
   return data ? <FinancialTransactionDetail transaction={data} /> : null;
 }

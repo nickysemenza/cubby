@@ -1,15 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import ImageDetailPageContent from "~/app/images/image-detail-page";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
-import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/images/$id")({
+  // The title is purely param-derived, so `head` covers it — no imperative
+  // document.title write needed here.
+  head: ({ params }) => ({
+    meta: [{ title: pageTitle(`Image ${params.id}`) }],
+  }),
   component: ImageDetailPage,
   errorComponent: RouteErrorComponent,
 });
 
 function ImageDetailPage() {
   const { id } = Route.useParams();
-  useDocumentTitle(`Image ${id}`);
   return <ImageDetailPageContent id={id} />;
 }

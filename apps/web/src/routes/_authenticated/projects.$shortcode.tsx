@@ -14,8 +14,9 @@ import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
+import { shortcodeHead } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/projects/$shortcode")({
   ssr: false,
@@ -67,6 +68,7 @@ export const Route = createFileRoute("/_authenticated/projects/$shortcode")({
       </Empty>
     </Page>
   ),
+  head: shortcodeHead,
   component: ProjectDetailRoute,
 });
 
@@ -77,7 +79,7 @@ function ProjectDetailRoute() {
     api.project.getByShortcode.queryOptions({ shortcode }),
   );
 
-  useDocumentTitle(project?.name);
+  useDetailTitle(shortcode, project?.name);
 
   // The loader already threw notFound for an unknown code; this guard only
   // satisfies the nullable output type.

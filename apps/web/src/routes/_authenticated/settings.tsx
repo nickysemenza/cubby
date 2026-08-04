@@ -33,12 +33,13 @@ import {
   isDevBuildOnlyFlag,
   useFlags,
 } from "~/lib/flags";
+import { pageTitle } from "~/lib/page-title";
 import { queryKeys } from "~/lib/query-keys";
 import type { TimingResponse } from "~/routes/api/debug/timing";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
-  head: () => ({ meta: [{ title: "Settings | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("Settings") }] }),
 });
 
 const GROUPS: { group: FlagGroup; blurb: string }[] = [

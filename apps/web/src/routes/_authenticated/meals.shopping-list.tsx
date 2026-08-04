@@ -9,12 +9,13 @@ import {
 } from "~/app/meals/meal-search";
 import { ShoppingListPage } from "~/app/meals/shopping-list-page";
 import { Page } from "~/components/page/Page";
+import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/meals/shopping-list")({
   validateSearch: shoppingListSearchSchema,
   search: { middlewares: [stripSearchParams(shoppingListSearchDefaults)] },
   component: ShoppingListRoute,
-  head: () => ({ meta: [{ title: "Shopping List | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("Shopping list") }] }),
 });
 
 function ShoppingListRoute() {

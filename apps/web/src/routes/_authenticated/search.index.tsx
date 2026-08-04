@@ -3,6 +3,7 @@ import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 import { SearchPage } from "~/app/_components/search/search-page";
 import { Page } from "~/components/page/Page";
+import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 
 const searchSchema = z.object({
@@ -16,7 +17,7 @@ export const Route = createFileRoute("/_authenticated/search/")({
   validateSearch: searchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: SearchPageRoute,
-  head: () => ({ meta: [{ title: "Search | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("Search") }] }),
 });
 
 function SearchPageRoute() {

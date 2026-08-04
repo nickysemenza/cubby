@@ -25,6 +25,7 @@ import { DetailPagePending } from "~/components/route-pending";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
+import { shortcodeHead } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/$shortcode")({
   ssr: false,
@@ -66,6 +67,7 @@ export const Route = createFileRoute("/_authenticated/$shortcode")({
       </Empty>
     </Page>
   ),
+  head: shortcodeHead,
   component: ShortcodeLandingPage,
 });
 

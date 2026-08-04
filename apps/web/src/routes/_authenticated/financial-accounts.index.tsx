@@ -6,6 +6,7 @@ import { CreateFinancialAccountDialog } from "~/app/finance/create-financial-acc
 import { FinancialAccountList } from "~/app/finance/financial-account-list";
 import { Page } from "~/components/page/Page";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
+import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 
 const searchSchema = z.object({
@@ -30,5 +31,5 @@ export const Route = createFileRoute("/_authenticated/financial-accounts/")({
       <FinancialAccountList />
     </Page>
   ),
-  head: () => ({ meta: [{ title: "Accounts | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("Accounts") }] }),
 });

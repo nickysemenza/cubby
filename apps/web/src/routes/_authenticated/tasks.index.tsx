@@ -30,6 +30,7 @@ import {
   normalizeTaskRenderer,
   type TaskRenderer,
 } from "~/lib/list-view-normalization";
+import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 
 // Timeline is the Gantt + the Nivo calendar heatmap, and its tab is unmounted
@@ -111,7 +112,7 @@ export const Route = createFileRoute("/_authenticated/tasks/")({
   validateSearch: taskSearchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: TasksPage,
-  head: () => ({ meta: [{ title: "Tasks | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("Tasks") }] }),
 });
 
 function TasksPage() {

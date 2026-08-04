@@ -22,9 +22,24 @@ vi.mock("@cubby/schemas/related-view", () => ({ relatedViewRegistry: [] }));
 vi.mock("@tanstack/react-query", () => ({
   useQuery: () => ({ data: [], isLoading: false }),
 }));
+// The hook reads search params directly (for the tab-title summary) rather than
+// only through the mocked `useTableState`, so the router needs a stub here too —
+// the real `useSearch` reaches into `router.stores` and there's no Router above
+// this renderHook.
+vi.mock("@tanstack/react-router", () => ({
+  useSearch: () => ({}),
+}));
+// Title wiring is a side effect on `document`, covered by tests/e2e/tab-title;
+// stubbing it keeps this file about the table contract.
+vi.mock("~/hooks/useDocumentTitle", () => ({
+  useDocumentTitle: () => {},
+}));
 vi.mock("~/entities/entities", () => ({
   entities: {
-    product: { list: { hasUnitMappings: false, defaultSort: "name" } },
+    product: {
+      pluralLabel: "Products",
+      list: { hasUnitMappings: false, defaultSort: "name" },
+    },
   },
 }));
 vi.mock("~/entities/filter-manifest", () => ({
@@ -33,6 +48,7 @@ vi.mock("~/entities/filter-manifest", () => ({
 vi.mock("~/entities/filters", () => ({
   buildFiltersFromManifest: () => ({}),
   filterGetterFromColumnFilters: () => () => undefined,
+  summarizeListState: () => undefined,
 }));
 vi.mock("~/integrations/trpc/react", () => ({
   useTRPC: () => ({

@@ -5,8 +5,9 @@ import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
+import { shortcodeHead } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/wishes/$shortcode")({
   ssr: false,
@@ -28,6 +29,7 @@ export const Route = createFileRoute("/_authenticated/wishes/$shortcode")({
       </Empty>
     </Page>
   ),
+  head: shortcodeHead,
   component: WishDetailPage,
 });
 
@@ -37,6 +39,6 @@ function WishDetailPage() {
   const { data: wish } = useSuspenseQuery(
     api.wish.getByShortcode.queryOptions({ shortcode }),
   );
-  useDocumentTitle(wish?.name);
+  useDetailTitle(shortcode, wish?.name);
   return wish ? <WishDetail key={shortcode} wish={wish} /> : null;
 }

@@ -25,6 +25,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { generateLabelCsv } from "~/lib/label-generator";
+import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 
 const searchParamsSchema = z.object({
@@ -45,7 +46,7 @@ export const Route = createFileRoute("/_authenticated/labels")({
   validateSearch: searchParamsSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: LabelsPage,
-  head: () => ({ meta: [{ title: "Print Labels | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("Print labels") }] }),
 });
 
 function LabelsPage() {

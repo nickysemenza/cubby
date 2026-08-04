@@ -5,8 +5,9 @@ import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
+import { shortcodeHead } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/inventory/$shortcode")({
   ssr: false,
@@ -35,6 +36,7 @@ export const Route = createFileRoute("/_authenticated/inventory/$shortcode")({
       </Empty>
     </Page>
   ),
+  head: shortcodeHead,
   component: InventoryDetailPage,
 });
 
@@ -45,7 +47,7 @@ function InventoryDetailPage() {
     api.inventory.getByShortcode.queryOptions({ shortcode }),
   );
 
-  useDocumentTitle(inventory?.product?.name);
+  useDetailTitle(shortcode, inventory?.product?.name);
 
   // The loader already threw notFound for an unknown code; this guard only
   // satisfies the nullable output type.

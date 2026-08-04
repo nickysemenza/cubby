@@ -15,6 +15,7 @@ import {
   normalizeProjectRenderer,
   PROJECT_ROWS_RENDERERS,
 } from "~/lib/list-view-normalization";
+import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 
 const dateFilterParam = urlStringParam.refine(
@@ -86,7 +87,7 @@ export const Route = createFileRoute("/_authenticated/projects/")({
   validateSearch: projectSearchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: ProjectsPage,
-  head: () => ({ meta: [{ title: "Projects | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("Projects") }] }),
 });
 
 function ProjectsPage() {

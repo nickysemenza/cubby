@@ -17,9 +17,10 @@ import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Image } from "~/components/ui/image";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
-import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTabParam } from "~/hooks/useTabParam";
 import { useTRPC, useTRPCClient } from "~/integrations/trpc/react";
+import { shortcodeHead } from "~/lib/page-title";
 import {
   invalidateTRPCQueries,
   recipeMutationInvalidateKeys,
@@ -37,6 +38,7 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/_authenticated/cookbooks/$shortcode")({
   ssr: false,
   validateSearch: searchSchema,
+  head: shortcodeHead,
   component: CookbookDetailPage,
 });
 
@@ -67,7 +69,10 @@ function CookbookDetailPage() {
     ? Math.max(cookbook.sourceRecipeCount - cookbook.recipeCount, 0)
     : 0;
 
-  useDocumentTitle(`Cookbook: ${name}`);
+  // `cookbook?.book`, not the `name` fallback below — while the query is in
+  // flight the route's own `shortcodeHead` title should stand rather than being
+  // overwritten with the placeholder "Cookbook".
+  useDetailTitle(shortcode, cookbook?.book);
 
   // Reprocess streams progress server-side (one request) via useBulkStream. The
   // RefreshCw button drives it; a live bar shows beneath the hero while it runs.

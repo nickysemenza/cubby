@@ -399,3 +399,221 @@ export const presenceFilterOptions = (
   { value: "has", label: `Has ${label}`, meta: true },
   { value: "none", label: "(none)", meta: true },
 ];
+
+// --- Sort round-trip ---------------------------------------------------------
+//
+// Same shape as the filter round-trip above and, like it, needed by two callers
+// that must agree: `useTableState` owns the live table state, and the tab-title
+// summarizer reads the identical param straight from the URL with no table
+// mounted. Kept here rather than in the table layer so the pure one has no
+// React dependency to drag in.
+
+/** One sort term. Structurally TanStack's `ColumnSort`, without the import. */
+export interface SortTerm {
+  id: string;
+  desc: boolean;
+}
+
+/**
+ * `[{id,desc},...]` → `name,-createdAt` (dash = descending); undefined if
+ * empty. A single sort serializes byte-identically to the pre-multi-sort
+ * format, so old URLs and the defaultSortParam comparison keep working.
+ */
+export function sortToParam(sorting: readonly SortTerm[]): string | undefined {
+  if (sorting.length === 0) return undefined;
+  return sorting.map((s) => `${s.desc ? "-" : ""}${s.id}`).join(LIST_SEPARATOR);
+}
+
+/** `name,-createdAt` (or legacy single `name`/`-name`) → sort terms. */
+export function paramToSort(value: unknown): SortTerm[] | undefined {
+  if (typeof value !== "string" || value.length === 0) return undefined;
+  const parsed = value
+    .split(LIST_SEPARATOR)
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .map((t) => ({
+      id: t.startsWith("-") ? t.slice(1) : t,
+      desc: t.startsWith("-"),
+    }))
+    .filter((s) => s.id);
+  return parsed.length ? parsed : undefined;
+}
+
+// --- Human-readable summary --------------------------------------------------
+//
+// Renders active filter state as short prose, for surfaces that have search
+// params but no table instance — the browser tab title, which is built inside a
+// route's `head` on the server. That's the constraint that shapes what follows:
+// no React, no fetching, so a filter whose values are entity UUIDs can only be
+// counted ("2 locations"), never named. Everything self-describing (text,
+// static picklists, presence predicates) renders in full.
+
+/** `createdAt` / `data_quality` → `Created at` / `Data quality`. */
+export const humanize = (value: string): string =>
+  value
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/^./, (letter) => letter.toUpperCase());
+
+/** Naive plural, sufficient for the entity nouns column ids are built from. */
+const pluralize = (noun: string, count: number): string =>
+  count === 1 || noun.endsWith("s") ? noun : `${noun}s`;
+
+/** Beyond this many values a picklist collapses to `first, second +N`. */
+const MAX_VALUES_PER_FILTER = 2;
+
+/** Beyond this many filters the whole summary collapses to `… +N`. */
+const MAX_SEGMENTS = 3;
+
+/**
+ * A spec plus the option roster the summarizer needs to name a picklist value.
+ *
+ * `options` lives on the richer `FilterSpec` in `filter-manifest.tsx` (it holds
+ * icons, so it can't live in this module). Widening the parameter here rather
+ * than importing that type keeps this file dependency-free while letting
+ * callers pass `getEntityFilters(entity)` straight through — `FilterSpec`
+ * structurally satisfies it.
+ */
+export type SummarizableSpec = FilterSpecCore & {
+  options?: ReadonlyArray<{ value: string; label: string }>;
+};
+
+const optionLabel = (
+  spec: SummarizableSpec,
+  value: string,
+): string | undefined =>
+  spec.options?.find((option) => option.value === value)?.label;
+
+/**
+ * `Has UPC` / `No UPC` for a presence value.
+ *
+ * The noun comes from the spec's own `Has …` option rather than from the column
+ * id, so casing the manifest already got right (`UPC`, not `Upc`) survives. The
+ * `(none)` option label is deliberately not reused — it reads as an omission in
+ * a list of values, but as nothing at all in a tab title.
+ */
+const describePresence = (spec: SummarizableSpec, value: string): string => {
+  const noun =
+    optionLabel(spec, "has")?.replace(/^has\s+/i, "") ??
+    humanize(spec.columnId.replace(/Presence$/, "")).toLowerCase();
+  return value === "none" ? `No ${noun}` : `Has ${noun}`;
+};
+
+/** `Has category` / `No category` for a nullable picklist's sentinel value. */
+const describeSentinel = (label: string, value: string): string =>
+  value === FILTER_NONE ? `No ${label}` : `Has ${label}`;
+
+const collapse = (parts: string[], max: number): string => {
+  const shown = parts.slice(0, max);
+  const extra = parts.length - shown.length;
+  return extra > 0 ? `${shown.join(", ")} +${extra}` : shown.join(", ");
+};
+
+/** One filter's values → one summary segment, or undefined to omit it. */
+function describeFilter(
+  spec: SummarizableSpec,
+  values: string[],
+): string | undefined {
+  const first = values[0];
+  if (first === undefined) return undefined;
+
+  return (
+    match(spec.kind)
+      .with("text", () => first)
+      // A range preset's value is a bare key (`30d`, `ytd`) that means nothing on
+      // its own — the roster label ("Last 30 days") is the whole point. Same shape
+      // as `select`, so they share the lookup; `humanize` is only the fallback for
+      // a spec whose options are supplied at runtime.
+      .with(
+        "select",
+        "range",
+        () => optionLabel(spec, first) ?? humanize(first),
+      )
+      .with("presence", () => describePresence(spec, first))
+      .with("boolean", () => {
+        const noun = humanize(spec.columnId);
+        return first === "false" ? `No ${noun.toLowerCase()}` : noun;
+      })
+      .with("multiselect", () => {
+        const [sentinels, rest] = partition(values, isSentinel);
+        const labels = [
+          ...rest.map((value) => optionLabel(spec, value) ?? value),
+          ...(spec.nullable
+            ? sentinels.map((value) =>
+                describeSentinel(spec.nullable?.label ?? "", value),
+              )
+            : []),
+        ];
+        return labels.length
+          ? collapse(labels, MAX_VALUES_PER_FILTER)
+          : undefined;
+      })
+      .with("id", "idMulti", () => {
+        // Values are entity UUIDs and their names are only resolvable at runtime,
+        // so the count is the most this surface can honestly say.
+        const [sentinels, rest] = partition(values, isSentinel);
+        const parts = spec.nullable
+          ? sentinels.map((value) =>
+              describeSentinel(spec.nullable?.label ?? "", value),
+            )
+          : [];
+        if (rest.length) {
+          const noun = humanize(spec.columnId).toLowerCase();
+          parts.unshift(`${rest.length} ${pluralize(noun, rest.length)}`);
+        }
+        return parts.length ? parts.join(", ") : undefined;
+      })
+      .exhaustive()
+  );
+}
+
+/**
+ * Active filters in the URL → short human-readable segments.
+ *
+ * Reads through {@link decodeFilters} so the summary can never disagree with
+ * what the table actually filtered by: same specs, same `urlKey` resolution,
+ * same comma-splitting.
+ */
+function summarizeFilters(
+  specs: readonly SummarizableSpec[],
+  search: Record<string, unknown>,
+): string[] {
+  const byColumnId = new Map(specs.map((spec) => [spec.columnId, spec]));
+  const segments: string[] = [];
+
+  for (const { id, value } of decodeFilters(specs, search)) {
+    const spec = byColumnId.get(id);
+    if (!spec) continue;
+    const segment = describeFilter(
+      spec,
+      Array.isArray(value) ? value : [value],
+    );
+    if (segment) segments.push(segment);
+  }
+
+  return segments;
+}
+
+/** `-price` → `↓price`; `name,-createdAt` → `↑name ↓createdAt`. */
+function summarizeSort(value: unknown): string | undefined {
+  const terms = paramToSort(value);
+  if (!terms) return undefined;
+  return terms.map((term) => `${term.desc ? "↓" : "↑"}${term.id}`).join(" ");
+}
+
+/**
+ * The whole of a list page's active state as one string: filters first, then
+ * sort. Empty when the page is unnarrowed and unsorted, which is what makes the
+ * caller's title collapse back to a bare `Products | cubby`.
+ */
+export function summarizeListState(
+  specs: readonly SummarizableSpec[],
+  search: Record<string, unknown>,
+): string | undefined {
+  const filters = summarizeFilters(specs, search);
+  const sort = summarizeSort(search.sort);
+  const summary = [collapse(filters, MAX_SEGMENTS), sort]
+    .filter(Boolean)
+    .join(" ");
+  return summary || undefined;
+}

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ArrangeSurface } from "~/app/locations/arrange/ArrangeSurface";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Page } from "~/components/page/Page";
+import { pageTitle } from "~/lib/page-title";
 
 const searchSchema = z.object({
   view: z.enum(["board", "tree"]).optional().catch(undefined),
@@ -12,7 +13,7 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/_authenticated/locations/arrange")({
   validateSearch: searchSchema,
   component: ArrangePage,
-  head: () => ({ meta: [{ title: "Arrange | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("Arrange") }] }),
 });
 
 function ArrangePage() {

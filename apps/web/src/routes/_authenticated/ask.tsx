@@ -17,10 +17,11 @@ import { Card, CardContent } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
 import { entityDetailLink } from "~/entities/entities";
+import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/ask")({
   component: AskPage,
-  head: () => ({ meta: [{ title: "Ask | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("Ask") }] }),
 });
 
 const EXAMPLE_PROMPTS = [

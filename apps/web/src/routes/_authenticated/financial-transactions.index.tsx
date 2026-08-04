@@ -6,6 +6,7 @@ import { CreateFinancialTransactionDialog } from "~/app/finance/create-financial
 import { FinancialTransactionList } from "~/app/finance/financial-transaction-list";
 import { Page } from "~/components/page/Page";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
+import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 
 const searchSchema = z.object({
@@ -33,6 +34,6 @@ export const Route = createFileRoute("/_authenticated/financial-transactions/")(
         <FinancialTransactionList />
       </Page>
     ),
-    head: () => ({ meta: [{ title: "Transactions | cubby" }] }),
+    head: () => ({ meta: [{ title: pageTitle("Transactions") }] }),
   },
 );

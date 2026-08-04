@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { IsometricPantry } from "~/app/pantry-view/IsometricPantry";
+import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/pantry-view")({
   component: PantryViewPage,
-  head: () => ({ meta: [{ title: "Pantry View | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("Pantry view") }] }),
 });
 
 function PantryViewPage() {

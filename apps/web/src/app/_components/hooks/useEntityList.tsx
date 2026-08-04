@@ -3,6 +3,7 @@ import type { PreviewDeleteEntity } from "@cubby/schemas/entity-integrity";
 import { relatedViewRegistry } from "@cubby/schemas/related-view";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { QueryKey } from "@tanstack/react-query";
+import { useSearch } from "@tanstack/react-router";
 import type { ColumnDef, ColumnHelper, Table } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
@@ -14,7 +15,9 @@ import { getEntityFilters } from "~/entities/filter-manifest";
 import {
   buildFiltersFromManifest,
   filterGetterFromColumnFilters,
+  summarizeListState,
 } from "~/entities/filters";
+import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import type { QueryTiming } from "~/lib/query-timing";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import type { RowLinkResolver } from "../data-table/columnHelpers";
@@ -339,6 +342,31 @@ export function useEntityList<
   // One tableState owns the server-backed list. Infinite lists still use page
   // size internally, but never expose meaningless page/pageSize URL state.
   const tableState = useTableState(mergedTableStateOptions);
+
+  // Tab title: `Products: packout ↓price | cubby`, so several list tabs of the
+  // same entity are tellable apart.
+  //
+  // Summarized HERE rather than in the route's `head` on purpose. `head` runs in
+  // the route module, which is part of TanStack Router's eager graph — importing
+  // the icon/options-bearing filter manifest there is exactly the hydration
+  // weight `filter-search-fields` was extracted to avoid. This hook already has
+  // the manifest loaded (the table needs it), so the summary is free here, and
+  // it can use the real option labels ("Last 30 days", not the raw `30d`).
+  //
+  // Gated on `urlSync` because that already marks the ONE list that owns the
+  // page's URL state; an embedded table (the project detail page's tasks and
+  // expenses) opts out of it and must not retitle the page either.
+  const search = useSearch({ strict: false });
+  useDocumentTitle(
+    mergedTableStateOptions.urlSync
+      ? [
+          entities[entity].pluralLabel,
+          summarizeListState(getEntityFilters(entity), search),
+        ]
+          .filter(Boolean)
+          .join(": ")
+      : undefined,
+  );
 
   // Column-filter state → the server's `*Filters` object, driven by the
   // entity's manifest. This replaced a hand-written `buildFilters` on every

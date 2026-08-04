@@ -5,6 +5,7 @@ import { InventorySessionWorkbench } from "~/app/inventory/session/InventorySess
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
+import { pageTitle } from "~/lib/page-title";
 
 const searchSchema = z.object({
   parent: locationShortcode.optional().catch(undefined),
@@ -18,7 +19,7 @@ export const Route = createFileRoute("/_authenticated/inventory/session")({
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
   component: InventorySessionPage,
-  head: () => ({ meta: [{ title: "Inventory session | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("Inventory session") }] }),
 });
 
 function InventorySessionPage() {

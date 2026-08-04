@@ -9,6 +9,11 @@ import {
   multiSelectFilterFn,
   multiSelectFilterFnBy,
   nullableSentinelOptions,
+  paramToSort,
+  presenceFilterOptions,
+  type SummarizableSpec,
+  sortToParam,
+  summarizeListState,
 } from "./filters";
 
 /** Reads from a plain record, mirroring `tableState.getColumnFilter`. */
@@ -338,5 +343,149 @@ describe("multiSelectFilterFn", () => {
     expect(run({ id: "p2", name: "Bath" }, ["p1"], byId)).toBe(false);
     expect(run({ id: null, name: null }, [FILTER_NONE], byId)).toBe(true);
     expect(run({ id: "p1", name: "Kitchen" }, [FILTER_NONE], byId)).toBe(false);
+  });
+});
+
+describe("summarizeListState", () => {
+  // A stand-in for the product manifest entry, exercising every kind the
+  // summarizer branches on.
+  const specs: SummarizableSpec[] = [
+    { columnId: "name", kind: "text" },
+    {
+      columnId: "category",
+      kind: "multiselect",
+      options: [
+        { value: "power-tools", label: "Power Tools" },
+        { value: "fasteners", label: "Fasteners" },
+        { value: "paint", label: "Paint" },
+      ],
+      nullable: { field: "categoryPresenceFilter", label: "category" },
+    },
+    {
+      columnId: "upcPresence",
+      kind: "presence",
+      options: presenceFilterOptions("UPC"),
+    },
+    {
+      columnId: "location",
+      kind: "idMulti",
+      nullable: { field: "inventoryPresenceFilter", label: "inventory" },
+    },
+    { columnId: "food", kind: "boolean" },
+    {
+      // Real preset keys, not readable stand-ins: a range value is a bare `30d`
+      // whose meaning lives entirely in the roster label. An earlier fixture
+      // used a self-describing `last-30-days`, which hid that the summarizer
+      // was humanizing the key instead of looking the label up.
+      columnId: "purchaseDate",
+      kind: "range",
+      options: [
+        { value: "30d", label: "Last 30 days" },
+        { value: "ytd", label: "Year to date" },
+      ],
+    },
+    // A range whose roster is supplied at runtime has no static label to find.
+    { columnId: "expenseTotal", kind: "range" },
+    // `urlKey` differs from `columnId` — the summary must read the URL key.
+    { columnId: "notes", urlKey: "q", kind: "text" },
+  ];
+
+  const summarize = (search: Record<string, unknown>) =>
+    summarizeListState(specs, search);
+
+  it("is undefined when nothing is filtered or sorted", () => {
+    expect(summarize({})).toBeUndefined();
+    // An empty value is not a filter — it must not produce a dangling segment.
+    expect(summarize({ name: "" })).toBeUndefined();
+  });
+
+  it("shows a text filter's value verbatim", () => {
+    expect(summarize({ name: "packout" })).toBe("packout");
+  });
+
+  it("reads a filter through its urlKey, not its columnId", () => {
+    expect(summarize({ q: "shim" })).toBe("shim");
+    expect(summarize({ notes: "shim" })).toBeUndefined();
+  });
+
+  it("names picklist values by label and collapses past two", () => {
+    expect(summarize({ category: "power-tools" })).toBe("Power Tools");
+    expect(summarize({ category: "power-tools,fasteners" })).toBe(
+      "Power Tools, Fasteners",
+    );
+    expect(summarize({ category: "power-tools,fasteners,paint" })).toBe(
+      "Power Tools, Fasteners +1",
+    );
+  });
+
+  it("renders a presence filter as Has/No, keeping the manifest's casing", () => {
+    // "UPC", not the "Upc" a humanized column id would produce.
+    expect(summarize({ upcPresence: "has" })).toBe("Has UPC");
+    expect(summarize({ upcPresence: "none" })).toBe("No UPC");
+  });
+
+  it("renders nullable sentinels rather than leaking the raw token", () => {
+    expect(summarize({ category: FILTER_ANY })).toBe("Has category");
+    expect(summarize({ category: FILTER_NONE })).toBe("No category");
+    expect(summarize({ category: `power-tools,${FILTER_NONE}` })).toBe(
+      "Power Tools, No category",
+    );
+  });
+
+  it("counts id filters, whose values are uuids it cannot name", () => {
+    expect(summarize({ location: "loc-a" })).toBe("1 location");
+    expect(summarize({ location: "loc-a,loc-b" })).toBe("2 locations");
+    expect(summarize({ location: `loc-a,${FILTER_NONE}` })).toBe(
+      "1 location, No inventory",
+    );
+  });
+
+  it("renders booleans", () => {
+    expect(summarize({ food: "true" })).toBe("Food");
+    expect(summarize({ food: "false" })).toBe("No food");
+  });
+
+  it("names a range preset by its label, never the bare key", () => {
+    expect(summarize({ purchaseDate: "30d" })).toBe("Last 30 days");
+    expect(summarize({ purchaseDate: "ytd" })).toBe("Year to date");
+    // No static roster to look in — humanized key is the honest fallback.
+    expect(summarize({ expenseTotal: "gte100" })).toBe("Gte100");
+  });
+
+  it("appends sort direction", () => {
+    expect(summarize({ sort: "-price" })).toBe("↓price");
+    expect(summarize({ sort: "name" })).toBe("↑name");
+    expect(summarize({ sort: "name,-createdAt" })).toBe("↑name ↓createdAt");
+    // The reported URL, end to end.
+    expect(summarize({ name: "packout", sort: "-price" })).toBe(
+      "packout ↓price",
+    );
+  });
+
+  it("collapses past three filter segments, keeping sort visible", () => {
+    expect(
+      summarize({
+        name: "packout",
+        category: "paint",
+        upcPresence: "none",
+        food: "true",
+        sort: "-price",
+      }),
+    ).toBe("packout, Paint, No UPC +1 ↓price");
+  });
+});
+
+describe("paramToSort / sortToParam", () => {
+  it("round-trips, and rejects the empty cases", () => {
+    expect(paramToSort("name,-createdAt")).toEqual([
+      { id: "name", desc: false },
+      { id: "createdAt", desc: true },
+    ]);
+    expect(sortToParam([{ id: "name", desc: true }])).toBe("-name");
+    expect(sortToParam([])).toBeUndefined();
+    expect(paramToSort("")).toBeUndefined();
+    expect(paramToSort(undefined)).toBeUndefined();
+    // A non-string reaches this from `validateSearch`'s `.catch(undefined)`.
+    expect(paramToSort(42)).toBeUndefined();
   });
 });

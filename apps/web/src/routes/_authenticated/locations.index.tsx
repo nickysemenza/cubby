@@ -23,6 +23,7 @@ import {
 } from "~/components/ui/view-switcher";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
+import { pageTitle } from "~/lib/page-title";
 
 const viewOptions = ["gallery", "table", "visualizations"] as const;
 type ViewOption = (typeof viewOptions)[number];
@@ -45,7 +46,7 @@ export const Route = createFileRoute("/_authenticated/locations/")({
   validateSearch: searchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: LocationsPage,
-  head: () => ({ meta: [{ title: "Locations | cubby" }] }),
+  head: () => ({ meta: [{ title: pageTitle("Locations") }] }),
 });
 
 function LocationsPage() {
