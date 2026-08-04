@@ -565,6 +565,15 @@ jobs:
     # raise E2E parallelism past 2. needs.test-e2e.result is 'success' only if
     # every shard passes, so the deploy gate is unchanged. fail-fast off so
     # one shard's failure doesn't cancel the other (full signal on red).
+    #
+    # THREE shards was tried and REVERTED. The arithmetic looked good — ~85s of
+    # per-shard fixed cost runs in parallel, so only the Playwright time divides,
+    # predicting 176s -> ~153s. It measured 54s/83s/63s of Playwright against a
+    # 2-shard distribution of 67-92s (median 75s, n=14): the max did not move,
+    # because `--shard` splits by FILE COUNT across 19 spec files of very
+    # unequal duration, so a third shard just redraws the imbalance. Wall clock
+    # is set by the slowest shard, and variance already exceeds the theoretical
+    # gain. Re-sharding only pays if the specs are first balanced by runtime.
     strategy:
       fail-fast: false
       matrix:
@@ -622,6 +631,13 @@ jobs:
           # The clean PR run spent 41-49 seconds per shard compressing and
           # racing to upload the same 318 MB pnpm cache. The filtered install
           # itself takes only ~25 seconds, so E2E deliberately does not save it.
+          #
+          # Restore-ONLY (an explicit actions/cache/restore with no post-job
+          # save, sidestepping the upload above) was tried and REVERTED. The
+          # premise was a 46s install — which turned out to be a single outlier;
+          # across 14 samples this step's median is ~20s, and restoring 318 MB
+          # into the container measured 20-25s. There is no install cost here
+          # left to buy back. Don't re-derive this from one slow run.
           cache-pnpm-store: "false"
       - name: Assert Playwright package matches the container
         shell: bash
