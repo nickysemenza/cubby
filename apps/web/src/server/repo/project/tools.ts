@@ -278,22 +278,33 @@ async function loadProjectSoftwareWindowCosts(
   return result;
 }
 
-async function loadProjectPurchaseCosts(
+/**
+ * Tool spend charged to a project, per `(project, product)` pair.
+ *
+ * This predicate IS the `purchased_here` definition, and it decides three
+ * different things, which is why it lives in exactly one place: the direct
+ * suggestion lane, the matrix's purchase cells, and — since it is proof we owned
+ * the tool for that project — the ownership guard's exemption. Three copies of
+ * it disagreed once already: the guard didn't have it, so the grid offered a
+ * `purchased_here` cell the server then refused.
+ */
+export async function loadProjectToolPurchaseCosts(
   dbc: DrizzleClient,
-  projectId: ProjectId,
+  projectIds: ProjectId[],
   productIds: ProductId[],
-): Promise<Map<ProductId, number>> {
-  const result = new Map<ProductId, number>();
-  if (productIds.length === 0) return result;
+): Promise<Map<ProjectId, Map<ProductId, number>>> {
+  const result = new Map<ProjectId, Map<ProductId, number>>();
+  if (projectIds.length === 0 || productIds.length === 0) return result;
   const rows = await dbc
     .select({
+      projectId: expense.projectId,
       productId: expense.productId,
       cost: sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(Number),
     })
     .from(expense)
     .where(
       and(
-        eq(expense.projectId, projectId),
+        inArray(expense.projectId, projectIds),
         inArray(expense.productId, productIds),
         eq(expense.future, false),
         eq(expense.lineKind, "principal"),
@@ -302,11 +313,27 @@ async function loadProjectPurchaseCosts(
         notDeleted(expense),
       ),
     )
-    .groupBy(expense.productId);
+    .groupBy(expense.projectId, expense.productId);
   for (const row of rows) {
-    if (row.productId) result.set(row.productId, row.cost);
+    if (!row.projectId || !row.productId) continue;
+    const perProject = result.get(row.projectId) ?? new Map();
+    perProject.set(row.productId, row.cost);
+    result.set(row.projectId, perProject);
   }
   return result;
+}
+
+async function loadProjectPurchaseCosts(
+  dbc: DrizzleClient,
+  projectId: ProjectId,
+  productIds: ProductId[],
+): Promise<Map<ProductId, number>> {
+  const byProject = await loadProjectToolPurchaseCosts(
+    dbc,
+    [projectId],
+    productIds,
+  );
+  return byProject.get(projectId) ?? new Map();
 }
 
 async function loadProductPurchaseCostsByProject(
@@ -453,12 +480,20 @@ type UsagePair = { projectId: ProjectId; productId: ProductId };
  * attach (which MCP's `attach_project_resources` calls), and the product-keyed
  * set replacement.
  *
- * Two deliberate exemptions, and both matter:
+ * Three deliberate exemptions, and all of them matter:
  *
  *  - **Pairs that already have a live edge pass.** This blocks NEW conflicts;
  *    it never blocks preserving an old one. Without it the four live bad rows
  *    this rule exists to surface would make the "Edit projects" panel
  *    permanently unsavable, and detaching them impossible.
+ *  - **Pairs with tool spend charged to that project pass** — the
+ *    `purchased_here` exemption the two read lanes already apply. A purchase
+ *    Expense on the project is direct evidence we owned the tool for it, and it
+ *    outranks a window an explicit override may have narrowed. Without this the
+ *    grid offers a `purchased_here` / `purchase_evidence` cell as its primary
+ *    confirm action and the server refuses every click (live example: Fiskars
+ *    Hedge Shears, $19.98 charged to "Spring 26 Garden Refresh", acquired
+ *    2026-05-16 against an explicit 2026-04-14 end).
  *  - **Detach is never checked.** `used: false` and `detachProjectResources`
  *    don't call this at all.
  *
@@ -478,32 +513,39 @@ async function assertNoTimelineConflict(
   const projectIds = uniq(pairs.map((pair) => pair.projectId));
   const productIds = uniq(pairs.map((pair) => pair.productId));
 
-  const [loadedWindows, ownership, projectRows, productRows, existingRows] =
-    await Promise.all([
-      loadProjectDateWindows(db),
-      loadProductOwnershipWindows(dbc, productIds),
-      dbc
-        .select({ id: project.id, name: project.name })
-        .from(project)
-        .where(and(inArray(project.id, projectIds), notDeleted(project))),
-      dbc
-        .select({ id: product.id, name: product.name })
-        .from(product)
-        .where(and(inArray(product.id, productIds), notDeleted(product))),
-      dbc
-        .select({
-          projectId: projectToolUsage.projectId,
-          productId: projectToolUsage.productId,
-        })
-        .from(projectToolUsage)
-        .where(
-          and(
-            inArray(projectToolUsage.projectId, projectIds),
-            inArray(projectToolUsage.productId, productIds),
-            notDeleted(projectToolUsage),
-          ),
+  const [
+    loadedWindows,
+    ownership,
+    projectRows,
+    productRows,
+    existingRows,
+    purchaseCosts,
+  ] = await Promise.all([
+    loadProjectDateWindows(db),
+    loadProductOwnershipWindows(dbc, productIds),
+    dbc
+      .select({ id: project.id, name: project.name })
+      .from(project)
+      .where(and(inArray(project.id, projectIds), notDeleted(project))),
+    dbc
+      .select({ id: product.id, name: product.name })
+      .from(product)
+      .where(and(inArray(product.id, productIds), notDeleted(product))),
+    dbc
+      .select({
+        projectId: projectToolUsage.projectId,
+        productId: projectToolUsage.productId,
+      })
+      .from(projectToolUsage)
+      .where(
+        and(
+          inArray(projectToolUsage.projectId, projectIds),
+          inArray(projectToolUsage.productId, productIds),
+          notDeleted(projectToolUsage),
         ),
-    ]);
+      ),
+    loadProjectToolPurchaseCosts(dbc, projectIds, productIds),
+  ]);
 
   const gates = buildTimelineGates(loadedWindows, projectIds);
   const projectNameById = new Map(projectRows.map((row) => [row.id, row.name]));
@@ -514,6 +556,8 @@ async function assertNoTimelineConflict(
 
   for (const { projectId, productId } of pairs) {
     if (alreadyLive.has(`${projectId}:${productId}`)) continue;
+    // Bought on this project — the same evidence lane A trusts.
+    if ((purchaseCosts.get(projectId)?.get(productId) ?? 0) > 0) continue;
     const gate = gates.get(projectId);
     if (!gate) continue;
     const conflict = toolTimelineConflict(

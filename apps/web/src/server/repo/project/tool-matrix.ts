@@ -83,6 +83,7 @@ import {
   buildTimelineGates,
   EMPTY_METRICS,
   EXPENSIVE_TOOL_THRESHOLD,
+  loadProjectToolPurchaseCosts,
   loadResourceMetrics,
   MAX_SUGGESTIONS_PER_TRADE,
   MAX_TRADE_SUGGESTIONS,
@@ -387,32 +388,14 @@ export async function projectToolMatrix(
               notDeleted(projectToolUsage),
             ),
           ),
-    // `purchased_here` for every column at once. No HAVING: a pair below the
-    // suggestion floor still earns a "$45 bought here" note on an ATTACHED
-    // cell, so one query serves both readings and the threshold is applied in
-    // TS where only the suggestion needs it.
-    empty
-      ? []
-      : dbc
-          .select({
-            projectId: expense.projectId,
-            productId: expense.productId,
-            projectPurchaseCost:
-              sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(Number),
-          })
-          .from(expense)
-          .where(
-            and(
-              inArray(expense.projectId, columnIds),
-              inArray(expense.productId, rowIds),
-              eq(expense.lineKind, "principal"),
-              eq(expense.future, false),
-              eq(expense.costType, "tools"),
-              gt(expense.cost, 0),
-              notDeleted(expense),
-            ),
-          )
-          .groupBy(expense.projectId, expense.productId),
+    // `purchased_here` for every column at once, from the SHARED predicate in
+    // `./tools` — the same one the direct suggestion lane and the ownership
+    // guard read, so the grid can never offer a purchase cell the write path
+    // refuses. No HAVING: a pair below the suggestion floor still earns a
+    // "$45 bought here" note on an ATTACHED cell, so one query serves both
+    // readings and the threshold is applied in TS where only the suggestion
+    // needs it.
+    empty ? new Map() : loadProjectToolPurchaseCosts(dbc, columnIds, rowIds),
     empty || !wantsLane("trade_match")
       ? []
       : dbc
@@ -520,12 +503,10 @@ export async function projectToolMatrix(
     attachedRows.map((row) => cellKey(row.projectId, row.productId)),
   );
   const purchaseCostByKey = new Map<MatrixCellKey, number>();
-  for (const row of purchasedRows) {
-    if (!row.projectId || !row.productId) continue;
-    purchaseCostByKey.set(
-      cellKey(row.projectId, row.productId),
-      row.projectPurchaseCost,
-    );
+  for (const [projectId, byProduct] of purchasedRows) {
+    for (const [productId, cost] of byProduct) {
+      purchaseCostByKey.set(cellKey(projectId, productId), cost);
+    }
   }
 
   const nameByProduct = new Map(

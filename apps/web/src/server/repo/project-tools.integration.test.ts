@@ -1358,12 +1358,73 @@ describe("project tool matrix", () => {
       ctx.actor,
     );
 
-    const matrix = await projectToolMatrix(ctx.db, matrixInput());
+    // A sub-floor purchase on the same project — the `purchase_evidence` cell,
+    // which is equally clickable and must be equally writable.
+    const cheapTool = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Anachronistic bit set", category: "tools" }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      toolExpense({
+        name: "Bits",
+        projectId: finished.id,
+        productId: cheapTool.id,
+        cost: 40,
+        date: "2024-01-01",
+      }),
+      ctx.actor,
+    );
+
+    const matrix = await projectToolMatrix(
+      ctx.db,
+      matrixInput({ minNetLifetimeCost: 0 }),
+    );
     expect(
       matrix.cells.find(
         (cell) => cell.projectId === finished.id && cell.productId === tool.id,
       ),
     ).toMatchObject({ state: "suggested", lane: "purchased_here" });
+    expect(
+      matrix.cells.find(
+        (cell) =>
+          cell.projectId === finished.id && cell.productId === cheapTool.id,
+      ),
+    ).toMatchObject({ state: "purchase_evidence", projectPurchaseCost: 40 });
+
+    // The write path must honour the SAME exemption the cells above advertise,
+    // or the grid offers a confirm action that always errors and reverts.
+    await expect(
+      setProjectToolUsage(ctx.db, finishedId, tool.entityId, true, ctx.actor),
+    ).resolves.toEqual({ changed: true });
+    await expect(
+      setProjectToolUsage(
+        ctx.db,
+        finishedId,
+        cheapTool.entityId,
+        true,
+        ctx.actor,
+      ),
+    ).resolves.toEqual({ changed: true });
+    // ...through every attach path, not just the single setter.
+    await detachProjectResources(
+      ctx.db,
+      finishedId,
+      [tool.entityId, cheapTool.entityId],
+      ctx.actor,
+    );
+    await expect(
+      attachProjectResources(
+        ctx.db,
+        finishedId,
+        [tool.entityId, cheapTool.entityId],
+        ctx.actor,
+      ),
+    ).resolves.toMatchObject({ changed: 2 });
+    await expect(
+      setProductProjectUses(ctx.db, tool.entityId, [finishedId], ctx.actor),
+    ).resolves.toEqual({ changed: 0 });
 
     // An already-recorded conflicting edge must stay removable, and re-saving a
     // set that contains it must not throw — otherwise the rows this rule exists
