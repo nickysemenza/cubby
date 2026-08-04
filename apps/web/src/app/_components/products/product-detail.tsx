@@ -31,7 +31,7 @@ import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
-import { StatusText } from "~/components/ui/status-text";
+import { OptionalStatusText, StatusText } from "~/components/ui/status-text";
 import { useTRPC } from "~/integrations/trpc/react";
 import { safeConvertAmount } from "~/lib/recipe-costing";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
@@ -371,12 +371,12 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       ? {
           label: "On hand",
           value: (
-            <StatusText tone={quantityVariance ? "warning" : undefined}>
+            <OptionalStatusText tone={quantityVariance ? "warning" : undefined}>
               {tryFormatAmount({
                 value: onHandUnits,
                 unit: entries[0].amount.unit,
               })}
-            </StatusText>
+            </OptionalStatusText>
           ),
         }
       : {
@@ -391,11 +391,11 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     label: "Expected",
     value: (
       <span className="tabular-nums">
-        <StatusText
+        <OptionalStatusText
           tone={quantityLedger.expectedQuantity < 0 ? "destructive" : undefined}
         >
           {quantityLedger.expectedQuantity}
-        </StatusText>
+        </OptionalStatusText>
         {/* Same honesty cue as the products table: an expense line with no
             recorded quantity contributes nothing, so without this a product
             with six unquantified receipts reads as a confident number. */}

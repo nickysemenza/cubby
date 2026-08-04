@@ -56,9 +56,13 @@ export interface ViewDefinition {
    * at whatever the user already had, so this reveals what the view is about
    * without resetting their layout.
    *
-   * Not persisted: `useTableColumnVisibility` keeps writing the user's own
-   * choices to `table-columns:{entity}`, and applying a view is a temporary
-   * override on top. Turning a column back off afterwards sticks.
+   * This DOES persist, and deliberately so. On a list table `useEntityList`
+   * wires `useTableColumnVisibility` in as the controlled handler, so the
+   * reveal lands in `table-columns:{entity}` like any manual toggle and
+   * survives a reload — you keep the columns while you work the list, and
+   * turning them back off sticks the same way. Anything narrower would mean
+   * fighting the controlled-visibility path to make a column vanish on
+   * navigation, which is a worse surprise than an extra column.
    */
   columnVisibility?: Record<string, boolean>;
 }

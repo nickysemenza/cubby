@@ -26,6 +26,28 @@ interface StatusTextProps
   ref?: React.Ref<HTMLElement>;
 }
 
+/**
+ * A status tone that may not apply, for the very common "tint only when
+ * something is wrong" case.
+ *
+ * `StatusText` defaults `tone` to `muted`, which is right for a genuinely
+ * secondary value but wrong for a primary number that happens to be fine:
+ * `tone={problem ? "warning" : undefined}` silently DIMS the healthy case to
+ * the secondary text tier. That is the opposite of the intent every time, and
+ * it is invisible to typecheck and to tests that don't assert color — it
+ * shipped on the products list's Expected column exactly that way.
+ *
+ * So: render the tone when there is one, and plain inherited text when there
+ * isn't.
+ */
+export const OptionalStatusText = ({
+  tone,
+  children,
+}: {
+  tone: StatusTextProps["tone"] | undefined;
+  children: React.ReactNode;
+}) => (tone ? <StatusText tone={tone}>{children}</StatusText> : <>{children}</>);
+
 export const StatusText = ({
   as: Comp = "span",
   tone,

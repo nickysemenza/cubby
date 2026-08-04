@@ -18,7 +18,7 @@ import { Badge } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { NoneValue } from "~/components/ui/none-value";
-import { StatusText } from "~/components/ui/status-text";
+import { OptionalStatusText, StatusText } from "~/components/ui/status-text";
 import {
   Tooltip,
   TooltipContent,
@@ -124,11 +124,11 @@ function ExpectedQuantityCell({
   return (
     <Tooltip>
       <TooltipTrigger render={<span className="tabular-nums" />}>
-        <StatusText
+        <OptionalStatusText
           tone={ledger.expectedQuantity < 0 ? "destructive" : undefined}
         >
           {ledger.expectedQuantity}
-        </StatusText>
+        </OptionalStatusText>
         {ledger.unknownAcquisitionLines > 0 ? (
           <StatusText tone="warning">
             {` +${ledger.unknownAcquisitionLines}?`}
@@ -579,11 +579,17 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <StatusText
-                    as="span"
-                    tone={quantityVariance === 0 ? undefined : "warning"}
-                    className="tabular-nums"
-                  />
+                  // Plain when they agree — a toneless `StatusText` would dim
+                  // the number to the secondary tier (see OptionalStatusText).
+                  quantityVariance === 0 ? (
+                    <span className="tabular-nums" />
+                  ) : (
+                    <StatusText
+                      as="span"
+                      tone="warning"
+                      className="tabular-nums"
+                    />
+                  )
                 }
               >
                 {quantityVariance > 0
