@@ -21,6 +21,7 @@ import { createExpense } from "./expense";
 import { getProductByID, productList } from "./product";
 import {
   createPurchase,
+  mergePurchases,
   purchaseList,
   reclassifyPurchaseDocument,
 } from "./purchase";
@@ -373,6 +374,103 @@ describe("computed purchase and product data quality", () => {
     );
     expect(refreshed.exceptions).toEqual([
       expect.objectContaining({ check: "primary_document", state: "stale" }),
+    ]);
+  });
+
+  it("marks an exception stale when mergePurchases changes the evidence it covered", async () => {
+    // Regression coverage for the bug where `mergePurchases`/`foldChargeInto`
+    // repointed Expenses, FinancialTransactions, and documents onto the
+    // survivor without ever calling `touchDataQualityTargets` — so a stored
+    // exception kept matching its old fingerprint and stayed reported
+    // "active" even though the evidence underneath it had just changed.
+    //
+    // Deliberately built so the `paperwork_mismatch` gap is STILL true after
+    // the merge (just a different-sized mismatch), not resolved by it — a
+    // scenario where the raw gap disappears would mark the exception stale
+    // for the wrong reason (`evaluateTargetQuality` treats "gap no longer
+    // applies" as stale too), which would pass even with the bug still live.
+    // This is the actual failure mode from the bug report: a mismatch that
+    // nobody has reviewed must not stay silently covered by a stale-but-still-
+    // "active" exception.
+    const vendorId = await findOrCreateVendor(ctx.db, "Merge DQ Supply");
+    const vendor = await getVendorByID(ctx.db, vendorId);
+
+    const keep = await createPurchase(
+      ctx.db,
+      {
+        vendorId: vendor.id,
+        orderId: null,
+        date: "2026-07-01",
+        statedTotal: 100,
+        notes: null,
+      },
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({ purchaseId: keep.output.id, cost: 50 }),
+      ctx.actor,
+    );
+
+    // $100 stated vs. $50 of lines is a real paperwork_mismatch gap — except
+    // it as a known-wrong vendor invoice.
+    const excepted = await setDataException(
+      ctx.db,
+      {
+        entityId: keep.output.id,
+        check: "paperwork_mismatch",
+        reason: "expected_mismatch",
+        note: "Vendor invoice total confirmed wrong by phone.",
+      },
+      ctx.actor,
+    );
+    expect(excepted.exceptions).toEqual([
+      expect.objectContaining({
+        check: "paperwork_mismatch",
+        state: "active",
+      }),
+    ]);
+
+    // A second charge of the same vendor carries a line that belongs on this
+    // order — merging it in changes the survivor's expense total (and so the
+    // SIZE of the mismatch, $50 -> $40) without resolving it. The exception
+    // was reviewed against the OLD mismatch, not this new one.
+    const loser = await createPurchase(
+      ctx.db,
+      {
+        vendorId: vendor.id,
+        orderId: null,
+        date: "2026-07-01",
+        statedTotal: null,
+        notes: null,
+      },
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({ purchaseId: loser.output.id, cost: 10 }),
+      ctx.actor,
+    );
+
+    await mergePurchases(
+      ctx.db,
+      { keepId: keep.output.id, mergeIds: [loser.output.id] },
+      ctx.actor,
+    );
+
+    const merged = (
+      await loadPurchaseDataQualities(ctx.db, [keep.entityId])
+    ).get(keep.entityId)!;
+    // The mismatch is still live — $100 stated vs. $60 of lines now — so this
+    // is the case that matters: the check is STILL a real gap, and the stored
+    // exception must not keep hiding it just because it once covered a
+    // smaller, already-reviewed mismatch.
+    expect(merged.gaps.map((gap) => gap.check)).toContain("paperwork_mismatch");
+    expect(merged.exceptions).toEqual([
+      expect.objectContaining({
+        check: "paperwork_mismatch",
+        state: "stale",
+      }),
     ]);
   });
 
