@@ -15,14 +15,12 @@ import {
   ingredientMcpListOut,
   ingredientMcpOut,
   ingredientMergeBatchOut,
-  ingredientRawLinesBatchOut,
   ingredientResolveOrCreateResponseOut,
   mcpIngredientCreateInput,
   ingredientUpdateData,
   type IngredientMcpOut,
 } from "./ingredient";
 import {
-  inventoryDuplicateFindOut,
   inventoryMcpBulkMoveOut,
   inventoryMcpListOut,
   inventoryMcpOut,
@@ -36,7 +34,6 @@ import {
   type LocationMcpOut,
 } from "./location";
 import {
-  mealMcpItemsOut,
   mealMcpListOut,
   mealMcpOut,
   mealAddRecipeInput,
@@ -46,11 +43,7 @@ import {
   type MealMcpOut,
 } from "./meal";
 import { createPaginatedResponseSchema } from "./pagination";
-import {
-  allProblemsSchema,
-  problemsCountSchema,
-  reparseStaleSyncOut,
-} from "./problems";
+import { allProblemsSchema, problemsCountSchema } from "./problems";
 import {
   mcpProductCreateInput,
   mcpProductUpdateInput,
@@ -67,7 +60,6 @@ import {
   recipeMcpListOut,
   recipeMcpOut,
   recipeOut,
-  recipeRecomputeMcpOut,
   recipeTagsListOut,
   recipesUsingIngredientOut,
   type RecipeMcpOut,
@@ -175,13 +167,10 @@ export {
   recipeMcpOut,
   ingredientMcpListOut,
   ingredientMergeBatchOut,
-  ingredientRawLinesBatchOut,
   ingredientResolveOrCreateResponseOut,
-  inventoryDuplicateFindOut,
   inventoryMcpBulkMoveOut,
   inventoryMcpListOut,
   locationMcpListOut,
-  mealMcpItemsOut,
   mealMcpListOut,
   productMcpListOut,
   recipeMcpListOut,
@@ -189,12 +178,10 @@ export {
   recipeTagsListOut,
   recipesUsingIngredientOut,
   recipeIdOut,
-  recipeRecomputeMcpOut,
   shoppingListOut,
   deletedCountOut,
   problemsCountSchema,
   allProblemsSchema,
-  reparseStaleSyncOut,
 };
 
 export const globalSearchMcpOut = z.object({ results: globalSearchOut });

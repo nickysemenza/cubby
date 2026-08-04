@@ -2,7 +2,6 @@ import type { Entity } from "@cubby/schemas/entity";
 import type {
   RelatedBranchInput,
   RelatedBranchOutput,
-  RelatedMatchesInput,
   RelatedOptionsInput,
   RelatedOptionsOutput,
   RelatedPreviewGroup,
@@ -448,42 +447,6 @@ export async function loadRelatedOptions(
     label: row.label,
     count: Number(row.count),
   }));
-}
-
-/** Return source shortcodes in the supplied scope that do (or do not) match. */
-export async function loadRelatedMatches(
-  db: Database,
-  input: RelatedMatchesInput,
-): Promise<string[]> {
-  const definition = relatedViewRegistry.find(
-    (view) => view.key === input.relationKey && view.source === input.source,
-  );
-  if (!definition) return [];
-  const view = SQL_RELATED_VIEWS[input.relationKey];
-  const sourceIds = [...new Set(input.sourceIds)];
-  const targetIds = [...new Set(input.targetIds)];
-  const query = sql`
-    SELECT root."shortcode" AS "id"
-    FROM ${sql.raw(`"${view.sourceTable}"`)} root
-    WHERE root."shortcode" IN (${sql.join(
-      sourceIds.map((id) => sql`${id}`),
-      sql`, `,
-    )})
-      AND root."deletedAt" IS NULL
-      AND ${input.predicate === "none" ? sql`NOT ` : sql``}EXISTS (
-        SELECT 1
-        FROM ${sql.raw(`"${view.sourceTable}"`)} s
-        ${sql.raw(view.joins)}
-        WHERE s."id" = root."id"
-          AND s."deletedAt" IS NULL
-          AND t."shortcode" IN (${sql.join(
-            targetIds.map((id) => sql`${id}`),
-            sql`, `,
-          )})
-      )
-  `;
-  const rows = rowsOf(await getDb(db).execute(query)) as Array<{ id: string }>;
-  return rows.map((row) => row.id);
 }
 
 type SummaryDefinition = {

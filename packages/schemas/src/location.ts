@@ -176,23 +176,11 @@ export type LocationWithParentNameOut = z.infer<
   typeof locationWithParentNameOut
 >;
 
-export const locationTypeCountsOut = z.record(
-  locationType,
-  z.number().int().nonnegative(),
-);
-
 export const locationsWithParentNameOut = z.array(locationWithParentNameOut);
-
-export const recentlyActiveLocationsOut = z.array(locationOut);
 
 export const recomputeLocationValuationsOut = z.object({
   updated: z.number().int().nonnegative(),
 });
-
-export const locationChildCountsOut = z.record(
-  z.string(),
-  z.number().int().nonnegative(),
-);
 
 /** Minimal inventory item info for tree display */
 const inventoryItemForTree = z.object({
@@ -291,16 +279,6 @@ export const locationShortcodesInput = z.object({
 
 export const locationShortcodeInput = z.object({
   shortcode: locationShortcode,
-});
-
-export const recentlyActiveLocationsInput = z
-  .object({
-    limit: z.number().int().min(1).max(10).default(5),
-  })
-  .optional();
-
-export const locationIdsInput = z.object({
-  locationIds: z.array(locationShortcode),
 });
 
 export type LocationCreateInput = z.infer<typeof locationCreateInput>;

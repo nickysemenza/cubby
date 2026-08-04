@@ -13,10 +13,7 @@ import {
   recipeShortcode,
 } from "./identifiers";
 import { mealDate, mealScale } from "./meal-shared";
-import {
-  createItemsResponseSchema,
-  createPaginatedResponseSchema,
-} from "./pagination";
+import { createPaginatedResponseSchema } from "./pagination";
 import {
   costCalorieTotals,
   recipeTotals,
@@ -173,7 +170,6 @@ export const mealMcpOut = z.object({
 export type MealMcpOut = z.infer<typeof mealMcpOut>;
 
 export const mealMcpListOut = createPaginatedResponseSchema(mealMcpOut);
-export const mealMcpItemsOut = createItemsResponseSchema(mealMcpOut);
 
 export const mealListOut = z.array(mealOut);
 

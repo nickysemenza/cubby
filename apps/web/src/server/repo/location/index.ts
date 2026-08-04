@@ -25,7 +25,6 @@ export {
   deleteLocations,
   ensureGlobalUnknownLocation,
   findLocationsNeedingAiDescription,
-  getChildCountsByLocationIds,
   getLocationById,
   isGlobalUnknownLocation,
   locationList,
@@ -37,11 +36,10 @@ export {
   findOrCreateLocationByName,
   getLocationByShortcode,
   getLocationsByShortcodes,
-  getRecentlyActiveLocations,
   locationParentOptions,
 } from "./lookup";
 // Tree and hierarchy operations
-export { buildLocationTree, buildLocationTypeCount } from "./tree";
+export { buildLocationTree } from "./tree";
 // Valuation rollup persistence
 export {
   getLocationValuationInputs,

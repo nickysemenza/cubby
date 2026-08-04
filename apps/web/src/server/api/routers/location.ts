@@ -18,19 +18,14 @@ import {
   infLocationWithSideEffects,
   locationBulkUpdateParentInput,
   locationBulkUpdateParentOut,
-  locationChildCountsOut,
   locationCreateInput,
   locationFiltersSchema,
-  locationIdsInput,
   locationListItemOut,
   locationParentOptionsOut,
   locationShortcodesInput,
   locationSortableFields,
   locationsWithParentNameOut,
-  locationTypeCountsOut,
   locationUpdateData,
-  recentlyActiveLocationsInput,
-  recentlyActiveLocationsOut,
   recomputeLocationValuationsOut,
 } from "@cubby/schemas/location";
 import { uniq } from "es-toolkit";
@@ -38,16 +33,13 @@ import { z } from "zod";
 import { createAppError } from "~/server/errors/app-error";
 import {
   buildLocationTree,
-  buildLocationTypeCount,
   bulkReparentLocations,
   createLocation,
   deleteLocations,
   ensureGlobalUnknownLocation,
-  getChildCountsByLocationIds,
   getLocationById,
   getLocationByShortcode,
   getLocationsByShortcodes,
-  getRecentlyActiveLocations,
   locationList,
   locationParentOptions,
   updateLocation,
@@ -190,12 +182,6 @@ const { getByID, getByShortcode, create, update } =
     },
   });
 
-const getLocationTypesCount = protectedProcedure
-  .output(strictOutput(locationTypeCountsOut))
-  .query(async ({ ctx }) => {
-    return await buildLocationTypeCount(ctx.db);
-  });
-
 const makeTree = protectedProcedure
   .output(strictOutput(infLocationListOut))
   .query(async ({ ctx }) => await buildLocationTree(ctx.db));
@@ -263,14 +249,6 @@ const getByShortcodes = protectedProcedure
     return await getLocationsByShortcodes(ctx.db, input.shortcodes);
   });
 
-// Get recently active locations for scanner quick-select
-const getRecentlyActive = protectedProcedure
-  .input(recentlyActiveLocationsInput)
-  .output(strictOutput(recentlyActiveLocationsOut))
-  .query(async ({ ctx, input }) => {
-    return await getRecentlyActiveLocations(ctx.db, input?.limit ?? 5);
-  });
-
 // Delete procedure using standalone factory
 const deleteItem = createDeleteProcedure<LocationShortcode>(
   async (services, shortcodes) => {
@@ -298,29 +276,11 @@ const recomputeValuations = protectedProcedure
     return { updated };
   });
 
-// Get child location counts for multiple parent locations (batched to avoid N+1)
-const getChildCountsByLocations = protectedProcedure
-  .input(locationIdsInput)
-  .output(strictOutput(locationChildCountsOut))
-  .query(async ({ ctx, input }) => {
-    const ids = await resolveLocationIds(ctx.db, input.locationIds);
-    const counts = await getChildCountsByLocationIds(ctx.db, ids);
-    return Object.fromEntries(
-      input.locationIds.map((shortcode, index) => [
-        shortcode,
-        counts[ids[index]!] ?? 0,
-      ]),
-    );
-  });
-
 export const locationRouter = createTRPCRouter({
   list,
   getByID,
   getByShortcode,
   getByShortcodes,
-  getRecentlyActive,
-  getLocationTypesCount,
-  getChildCountsByLocations,
   makeTree,
   parentOptions,
   ensureGlobalUnknown,

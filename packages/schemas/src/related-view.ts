@@ -607,20 +607,6 @@ export const relatedOptionsOutput = z.array(
 );
 export type RelatedOptionsOutput = z.infer<typeof relatedOptionsOutput>;
 
-/**
- * Lets client-backed tables apply the same server-owned relationship predicate
- * to their already-authoritative source scope.
- */
-export const relatedMatchesInput = z.object({
-  source: entitySchema,
-  relationKey: relatedViewKeySchema,
-  sourceIds: z.array(z.string()).min(1).max(1000),
-  targetIds: z.array(z.string()).min(1).max(100),
-  predicate: z.enum(["has", "none"]).default("has"),
-});
-export type RelatedMatchesInput = z.infer<typeof relatedMatchesInput>;
-export const relatedMatchesOutput = z.array(z.string());
-
 export const relatedFilterPrefix = (view: RelatedViewDefinition): string =>
   view.filterPrefix ?? view.target;
 

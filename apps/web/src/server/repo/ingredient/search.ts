@@ -10,7 +10,6 @@ import {
   type IngredientId,
   type IngredientShortcode,
   unsafeIngredientShortcode,
-  unsafeRecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
   IngredientFilters,
@@ -57,7 +56,6 @@ import {
   enrichProductRowsWithPricing,
   loadProductPricingForIngredientIds,
 } from "~/server/repo/product/pricing";
-import { lookupShortcodes, refKey } from "~/server/repo/shortcode-resolver";
 import {
   appearsInRecipesRefsForIngredientSql,
   computeRecipeUsages,
@@ -236,54 +234,6 @@ export const getRecipeUsagesForIngredient = async (
     },
   });
   return computeRecipeUsages(rows);
-};
-
-/**
- * Bulk parser-triage dump: every live recipe line currently linked to any of the
- * given ingredients, with its original `rawLine` + parsed modifier/amounts and
- * the owning recipe/section. One `inArray` query (not N) so a junk-ingredient
- * sweep can pull source lines for ~hundreds of ids in a couple of calls. Lines on
- * soft-deleted sections/recipes are dropped. Caller groups by `ingredientId`.
- */
-export const getRawLinesForIngredients = async (
-  db: Database,
-  ingredientIds: IngredientId[],
-) => {
-  if (ingredientIds.length === 0) return [];
-  const rows = await getDb(db).query.recipeSectionIngredient.findMany({
-    where: and(
-      inArray(recipeSectionIngredient.ingredientId, ingredientIds),
-      notDeleted(recipeSectionIngredient),
-    ),
-    with: { recipeSection: { with: { recipe: true } } },
-  });
-  const codes = await lookupShortcodes(
-    db,
-    rows.flatMap((r) => [
-      { entity: "ingredient" as const, id: r.ingredientId },
-      { entity: "recipe" as const, id: r.recipeSection.recipe.id },
-    ]),
-  );
-  return rows
-    .filter(
-      (r) =>
-        r.recipeSection.deletedAt === null &&
-        r.recipeSection.recipe.deletedAt === null,
-    )
-    .map((r) => ({
-      ingredientId: unsafeIngredientShortcode(
-        codes.get(refKey("ingredient", r.ingredientId)) ?? "",
-      ),
-      lineId: r.id,
-      rawLine: r.rawLine,
-      modifier: r.modifier,
-      amounts: r.amounts,
-      recipeId: unsafeRecipeShortcode(
-        codes.get(refKey("recipe", r.recipeSection.recipe.id)) ?? "",
-      ),
-      recipeName: r.recipeSection.recipe.name,
-      sectionName: r.recipeSection.name,
-    }));
 };
 
 /**

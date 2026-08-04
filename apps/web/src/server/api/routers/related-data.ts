@@ -1,8 +1,6 @@
 import {
   relatedBranchInput,
   relatedBranchOutput,
-  relatedMatchesInput,
-  relatedMatchesOutput,
   relatedOptionsInput,
   relatedOptionsOutput,
   relatedPreviewInput,
@@ -12,7 +10,6 @@ import {
 } from "@cubby/schemas/related-view";
 import {
   loadRelatedBranch,
-  loadRelatedMatches,
   loadRelatedOptions,
   loadRelatedPreviews,
   loadRelatedSummary,
@@ -32,10 +29,6 @@ export const relatedDataRouter = createTRPCRouter({
     .input(relatedOptionsInput)
     .output(strictOutput(relatedOptionsOutput))
     .query(({ ctx, input }) => loadRelatedOptions(ctx.db, input)),
-  matches: protectedProcedure
-    .input(relatedMatchesInput)
-    .output(strictOutput(relatedMatchesOutput))
-    .query(({ ctx, input }) => loadRelatedMatches(ctx.db, input)),
   summary: protectedProcedure
     .input(relatedSummaryInput)
     .output(strictOutput(relatedSummaryOutput))

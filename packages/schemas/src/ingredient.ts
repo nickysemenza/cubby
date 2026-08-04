@@ -4,14 +4,8 @@ import {
   deriveUpdateData,
   timestampedFields,
 } from "./base-entity";
-import { amount } from "./codec";
 import { requiredName } from "./common";
-import {
-  id,
-  ingredientShortcode,
-  productShortcode,
-  recipeShortcode,
-} from "./identifiers";
+import { ingredientShortcode, productShortcode } from "./identifiers";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import {
   productWithMappingsAndFoodOut,
@@ -98,21 +92,7 @@ export const mergeSummary = z.object({
 });
 export type MergeSummaryOut = z.infer<typeof mergeSummary>;
 
-export const ingredientRawLineOut = z.object({
-  ingredientId: ingredientShortcode,
-  lineId: id,
-  rawLine: z.string().nullable(),
-  modifier: z.string().nullable(),
-  amounts: z.array(amount),
-  recipeId: recipeShortcode,
-  recipeName: z.string(),
-  sectionName: z.string().nullable(),
-});
-export type IngredientRawLineOut = z.infer<typeof ingredientRawLineOut>;
-
 export const ingredientRecipeUsagesOut = z.array(recipeUsageOut);
-
-export const ingredientRawLinesOut = z.array(ingredientRawLineOut);
 
 export const ingredientMatchOut = z
   .object({
@@ -309,10 +289,6 @@ export const ingredientIdsInput = z.object({
   ids: z.array(ingredientShortcode),
 });
 
-export const ingredientRawLinesInput = z.object({
-  ids: z.array(ingredientShortcode).min(1),
-});
-
 export const ingredientNameFilterInput = z.object({
   nameFilter: z.string(),
 });
@@ -383,27 +359,6 @@ export const ingredientMergeBatchOut = z.object({
       ok: z.boolean(),
       summary: mergeSummary.optional(),
       error: z.string().optional(),
-    }),
-  ),
-});
-
-export const ingredientRawLineMcpOut = z.object({
-  lineId: id,
-  rawLine: z.string().nullable(),
-  modifier: z.string().nullable(),
-  amounts: z.array(amount),
-  recipeId: recipeShortcode,
-  recipeName: z.string(),
-  sectionName: z.string().nullable(),
-});
-
-export const ingredientRawLinesBatchOut = z.object({
-  count: z.number().int().nonnegative(),
-  ingredients: z.array(
-    z.object({
-      ingredientId: ingredientShortcode,
-      lineCount: z.number().int().nonnegative(),
-      lines: z.array(ingredientRawLineMcpOut),
     }),
   ),
 });

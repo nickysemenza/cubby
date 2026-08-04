@@ -112,10 +112,6 @@ export function clampSelection(
   };
 }
 
-export function cellCount(rect: CellRect): number {
-  return (rect.bottom - rect.top + 1) * (rect.right - rect.left + 1);
-}
-
 // --- Copy grid / TSV --------------------------------------------------
 
 export interface CopiedCell {

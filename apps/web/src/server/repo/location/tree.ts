@@ -12,8 +12,7 @@ import type {
   InfLocation,
   InventoryItemForTree,
 } from "@cubby/schemas/location";
-import { locationType } from "@cubby/schemas/location";
-import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   type image,
@@ -31,29 +30,6 @@ import {
 
 import { buildLocationWithChildren } from "./helpers";
 import type { LocationWithParentChild } from "./internal-types";
-
-export const buildLocationTypeCount = async (db: Database) => {
-  const types = await getDb(db)
-    .select({
-      type: location.type,
-      count: count(),
-    })
-    .from(location)
-    .where(notDeleted(location))
-    .groupBy(location.type)
-    .orderBy(desc(count()));
-
-  const present = Object.fromEntries(
-    types.map((t) => [t.type, t.count] as const),
-  ) as Record<string, number>;
-
-  // Ensure all enum values are present with a default of 0
-  const allKeys = (locationType.options ?? []) as readonly string[];
-  const full = Object.fromEntries(
-    allKeys.map((k) => [k, present[k] ?? 0] as const),
-  );
-  return full as Record<(typeof allKeys)[number], number>;
-};
 
 export const buildLocationTree = async (db: Database) => {
   // Drizzle doesn't support recursive CTEs in the query builder,
