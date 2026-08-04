@@ -273,6 +273,15 @@ export function useOptimisticDelete<
   // it (submit or cancel). That's what lets `BulkActionBar` skip its own
   // generic "are you sure" dialog for this action (no `requiresConfirmation`)
   // without losing confirmation altogether.
+  //
+  // Consequence worth knowing before reusing this action elsewhere: because the
+  // promise is held open across confirmation, `useBulkActions.executeAction`
+  // flips `isExecuting` true as soon as the dialog OPENS, not when the mutation
+  // starts — so here `isExecuting` means "confirming or deleting", not
+  // "deleting". Harmless today because the dialog is a modal overlay that hides
+  // the toolbar spinner and disabled sibling buttons it drives. A non-modal
+  // surface reusing this action would surface that state to the user and would
+  // need to tell the two apart.
   const deleteBulkAction = useMemo((): BulkAction<TData> | null => {
     if (!deletable) return null;
 
