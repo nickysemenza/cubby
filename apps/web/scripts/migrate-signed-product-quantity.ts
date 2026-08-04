@@ -100,6 +100,30 @@ console.log(
     : `${detached.rowCount} rows (already detached)`,
 );
 
+// The second exit stored as an acquisition, found by reading all 30 live $0
+// product lines rather than by name-matching: "Flat-tip heat gun nozzle — sold
+// with the heat gun" (PRD-JWYJ), whose own notes already said "$0.00 product
+// exit". It left with the heat gun it was sold alongside, so the $0 is right
+// and only the sign was wrong — the product read as expected 2 against an
+// empty shelf, and flips to 0.
+//
+// Unlike EXP-2N4N it is NOT detached: it hangs off PUR-2YNK, the eBay sale
+// that nets −$5.27, which is the event that actually took the nozzle out of
+// the house. An exit belongs on its disposal, just not on its acquisition.
+//
+// Every other $0 line is a genuine free acquisition (promo pack, bundled
+// accessory, comped invoice line) and correctly stays positive.
+const soldWith = await client.query(
+  `UPDATE "Expense" SET "productQuantity" = -"productQuantity"
+    WHERE "shortcode" = 'EXP-74S8' AND "cost" = 0 AND "productQuantity" = 1`,
+);
+console.log(
+  "sold-with-the-heat-gun exit re-signed:",
+  soldWith.rowCount === 1
+    ? "1 row ✓"
+    : `${soldWith.rowCount} rows (already negative)`,
+);
+
 // Verification. `Changes applied` is never evidence — read the catalog back.
 const after = await readConstraint();
 console.log("after: ", after ?? "(constraint missing)");
