@@ -1,0 +1,259 @@
+import type {
+  ShoppingListContribution,
+  ShoppingListItem,
+  UnexpandedSubRecipe,
+} from "@cubby/schemas/meal";
+import { render, screen, within } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { describe, expect, it, vi } from "vitest";
+import { EMPTY_MARK } from "~/components/matrix/matrix-chrome";
+import { ShoppingMatrix } from "./shopping-matrix";
+import { buildShoppingColumns, buildShoppingRows } from "./shopping-model";
+
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ children }: { children: ReactNode }) => <a href="#x">{children}</a>,
+}));
+// The real formatter is the WASM one; stub it to something legible so the
+// assertions below are about the matrix, not about amount rendering (which
+// format-amount.unit.test.ts already covers).
+vi.mock("~/lib/wasm", () => ({
+  wasm: {
+    singularize_unit: (unit: string) => unit,
+    format_amount: ({ value, unit }: { value: number; unit: string }) =>
+      unit === "whole" ? String(value) : `${value} ${unit}`,
+  },
+}));
+
+const contribution = (
+  over: Record<string, unknown> = {},
+): ShoppingListContribution =>
+  ({
+    mealId: "MEL-1",
+    mealName: "Dinner",
+    date: "2026-06-15",
+    recipeId: "RCP-1",
+    recipeName: "Pancakes",
+    scale: 1,
+    needValue: 100,
+    lineIndex: 0,
+    via: [],
+    ...over,
+  }) as unknown as ShoppingListContribution;
+
+const item = (over: Record<string, unknown> = {}): ShoppingListItem =>
+  ({
+    ingredientId: "ING-1",
+    name: "flour",
+    basisUnit: "g",
+    needValue: 100,
+    haveValue: 500,
+    shortfall: 0,
+    status: "ok",
+    perMeal: [contribution()],
+    ...over,
+  }) as unknown as ShoppingListItem;
+
+const NONE: ReadonlySet<string> = new Set();
+
+const meals = [
+  { id: "MEL-1", name: "Lunch", date: "2026-06-15" },
+  { id: "MEL-2", name: "Dinner", date: "2026-06-16" },
+] as Parameters<typeof buildShoppingColumns>[0]["meals"];
+
+function renderMatrix(
+  items: ShoppingListItem[],
+  unexpanded: UnexpandedSubRecipe[] = [],
+) {
+  const data = { meals, items };
+  const { columns, groups } = buildShoppingColumns(data, NONE);
+  return render(
+    <ShoppingMatrix
+      rows={buildShoppingRows(items, NONE, NONE)}
+      columns={columns}
+      groups={groups}
+      unexpanded={unexpanded}
+      onToggleCheck={vi.fn()}
+    />,
+  );
+}
+
+const rowCells = (name: string) =>
+  within(
+    screen.getByRole("rowheader", { name: new RegExp(name) })
+      .parentElement as HTMLElement,
+  )
+    .getAllByRole("cell")
+    .map((c) => c.textContent);
+
+describe("ShoppingMatrix", () => {
+  const twoLines = [
+    item({
+      ingredientId: "ING-FLOUR",
+      name: "flour",
+      perMeal: [
+        contribution({
+          lineIndex: 0,
+          mealId: "MEL-1",
+          recipeName: "A",
+          needValue: 300,
+        }),
+      ],
+    }),
+    item({
+      ingredientId: "ING-SALT",
+      name: "salt",
+      haveValue: 0,
+      perMeal: [
+        contribution({
+          lineIndex: 0,
+          mealId: "MEL-1",
+          recipeName: "A",
+          needValue: 40,
+        }),
+        contribution({
+          lineIndex: 1,
+          mealId: "MEL-2",
+          recipeName: "B",
+          needValue: 6,
+        }),
+      ],
+    }),
+  ];
+
+  it("renders one row header per ingredient, scoped to its row", () => {
+    renderMatrix(twoLines);
+
+    expect(screen.getByRole("rowheader", { name: /flour/ })).toHaveAttribute(
+      "scope",
+      "row",
+    );
+    expect(screen.getByRole("rowheader", { name: /salt/ })).toBeVisible();
+  });
+
+  it("marks a line that doesn't need an ingredient, never as a zero", () => {
+    renderMatrix(twoLines);
+
+    // flour is only in line 0. Columns then Need / Have / Short.
+    expect(rowCells("flour")).toEqual([
+      "300 g",
+      EMPTY_MARK,
+      "300 g",
+      "500 g",
+      "✓",
+    ]);
+  });
+
+  it("sums a split ingredient across its lines", () => {
+    renderMatrix(twoLines);
+
+    const cells = rowCells("salt");
+    expect(cells.slice(0, 2)).toEqual(["40 g", "6 g"]);
+    expect(cells[2]).toBe("46 g");
+  });
+
+  it("shades only rows split across more than one line", () => {
+    const { container } = renderMatrix(twoLines);
+
+    const shaded = [...container.querySelectorAll("tbody td")].filter((td) =>
+      /chart-seq/.test(td.className),
+    );
+    // Against its own max a lone cell is always the darkest bucket, so shading
+    // a single-source row says nothing and drowns out the split ones.
+    expect(shaded).toHaveLength(2);
+    expect(shaded.map((td) => td.textContent)).toEqual(["40 g", "6 g"]);
+  });
+
+  it("spans a meal header over exactly its own lines", () => {
+    renderMatrix([
+      item({
+        perMeal: [
+          contribution({
+            lineIndex: 0,
+            mealId: "MEL-1",
+            mealName: "Lunch",
+            recipeName: "A",
+          }),
+          contribution({
+            lineIndex: 1,
+            mealId: "MEL-1",
+            mealName: "Lunch",
+            recipeName: "B",
+          }),
+          contribution({
+            lineIndex: 2,
+            mealId: "MEL-2",
+            mealName: "Dinner",
+            recipeName: "C",
+          }),
+        ],
+      }),
+    ]);
+
+    expect(screen.getByRole("columnheader", { name: /Lunch/ })).toHaveAttribute(
+      "colspan",
+      "2",
+    );
+    expect(
+      screen.getByRole("columnheader", { name: /Dinner/ }),
+    ).toHaveAttribute("colspan", "1");
+  });
+
+  it("renders an em dash rather than 0 when nothing is on hand", () => {
+    renderMatrix([item({ haveValue: null, status: "missing" })]);
+
+    expect(rowCells("flour")).toContain("—");
+  });
+
+  it("counts ingredients in the footer instead of summing amounts", () => {
+    renderMatrix(twoLines);
+
+    const foot = screen.getByRole("rowheader", { name: "2 ingredients" })
+      .parentElement as HTMLElement;
+    const cells = within(foot)
+      .getAllByRole("cell")
+      .map((c) => c.textContent);
+
+    // Per column: how many ingredients that line touches. Never a gram total —
+    // adding flour + salt grams down a column is dimensionally meaningless.
+    expect(cells.slice(0, 2)).toEqual(["2", "1"]);
+    expect(cells).toContain("1 short");
+  });
+
+  it("marks a column whose sub-recipe couldn't be expanded", () => {
+    renderMatrix(twoLines, [
+      {
+        recipeId: "RCP-DOUGH",
+        name: "Dough",
+        reason: "missingYield",
+        amount: null,
+        via: [],
+        mealId: "MEL-1",
+        mealName: "Lunch",
+        date: "2026-06-15",
+        parentRecipeId: "RCP-1",
+        parentRecipeName: "A",
+        lineIndex: 0,
+      } as unknown as UnexpandedSubRecipe,
+    ]);
+
+    expect(screen.getByLabelText("Incomplete: Dough")).toBeVisible();
+  });
+
+  it("marks a cell whose value came through a sub-recipe", () => {
+    const { container } = renderMatrix([
+      item({
+        perMeal: [
+          contribution({
+            lineIndex: 0,
+            needValue: 120,
+            via: [{ recipeId: "RCP-DOUGH", name: "Dough" }],
+          }),
+        ],
+      }),
+    ]);
+
+    const cell = container.querySelector("tbody td") as HTMLElement;
+    expect(cell.textContent).toBe("↳ 120 g");
+    expect(cell.title).toBe("via Dough");
+  });
+});
