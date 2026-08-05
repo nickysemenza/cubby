@@ -57,6 +57,20 @@ export interface CrossTabTableProps<R, C> {
   columns: readonly CrossTabColumn<C>[];
   rows: readonly CrossTabEntry<R>[];
 
+  /**
+   * Fixed pixel widths, in px. Supplying this switches the table to a fixed
+   * layout and emits a `<colgroup>`.
+   *
+   * A colgroup rather than width classes on the header cells: under
+   * `table-fixed` the browser takes column widths from the FIRST row, which
+   * here is the colSpan'd group-header row — so classes on the real column
+   * headers below it are silently ignored, and every column comes out equal.
+   *
+   * Required whenever any `pinned[].stickyRight` is set: `right-*` offsets are
+   * absolute, so they only align if the pinned columns are exactly this wide.
+   */
+  layout?: { rowHeader: number; column: number; pinned: number };
+
   renderColumnHeader: (column: CrossTabColumn<C>) => ReactNode;
   /** Required to render the spanning row; without it groupKeys are ignored. */
   renderGroupHeader?: (
@@ -96,13 +110,6 @@ export interface CrossTabTableProps<R, C> {
   bareCells?: boolean;
   /** Which surface the sticky panes sit on. Must match the actual background. */
   surface?: "card" | "background";
-  /**
-   * Explicit table width in px, switching the table to a fixed layout.
-   * Required whenever any `pinned[].stickyRight` is set: `right-*` offsets are
-   * absolute, so they only align if the pinned columns have known widths, and
-   * an auto layout won't guarantee that.
-   */
-  tableWidth?: number;
   /** Sticky header offset, e.g. `"top-[51px]"` to sit under the app nav. */
   stickyHeaderTop?: string;
   caption?: ReactNode;
@@ -113,6 +120,7 @@ export function CrossTabTable<R, C>({
   cornerLabel,
   columns,
   rows,
+  layout,
   renderColumnHeader,
   renderGroupHeader,
   renderRowHeader,
@@ -126,7 +134,6 @@ export function CrossTabTable<R, C>({
   rowHover = false,
   bareCells = false,
   surface = "card",
-  tableWidth,
   stickyHeaderTop,
   caption,
   className,
@@ -135,18 +142,34 @@ export function CrossTabTable<R, C>({
   const surfaceBg = surface === "card" ? "bg-card" : "bg-background";
   const runs = renderGroupHeader ? groupColumnRuns(columns) : [];
   const pinnedColumns = pinned ?? [];
+  const tableWidth = layout
+    ? layout.rowHeader +
+      columns.length * layout.column +
+      pinnedColumns.length * layout.pinned
+    : undefined;
 
   return (
     <div className="overflow-x-auto">
       <table
         className={cn(
           "border-collapse text-left",
-          tableWidth == null ? "w-full" : "table-fixed",
+          layout ? "table-fixed" : "w-full",
           className,
         )}
         style={tableWidth == null ? undefined : { width: tableWidth }}
       >
         {caption && <caption className="sr-only">{caption}</caption>}
+        {layout && (
+          <colgroup>
+            <col style={{ width: layout.rowHeader }} />
+            {columns.map((column) => (
+              <col key={column.key} style={{ width: layout.column }} />
+            ))}
+            {pinnedColumns.map((p) => (
+              <col key={p.key} style={{ width: layout.pinned }} />
+            ))}
+          </colgroup>
+        )}
         <thead
           className={cn(
             stickyHeaderTop && ["sticky z-30", stickyHeaderTop, surfaceBg],

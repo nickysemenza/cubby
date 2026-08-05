@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
 import { useId } from "react";
+import { match } from "ts-pattern";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -9,17 +10,21 @@ import { Description } from "~/components/ui/description";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
 import { cn } from "~/lib/utils";
+import type { ShoppingListView } from "./meal-search";
 import { ShoppingCard } from "./shopping-card";
+import { ShoppingMatrix } from "./shopping-matrix";
 import { ShoppingTable } from "./shopping-table";
 import { useShoppingList } from "./use-shopping-list";
 
 interface ShoppingListPageProps {
+  view: ShoppingListView;
   from?: string;
   to?: string;
   onRangeChange: (range: { from?: string; to?: string }) => void;
 }
 
 export function ShoppingListPage({
+  view,
   from,
   to,
   onRangeChange,
@@ -31,6 +36,8 @@ export function ShoppingListPage({
     error,
     refetch,
     rows,
+    columns,
+    groups,
     excluded,
     toggleExcluded,
     toggleChecked,
@@ -132,8 +139,16 @@ export function ShoppingListPage({
                 {remaining} of {rows.length} left
               </Description>
 
-              {/* Mobile: stacked check-off cards, usable one-handed in a store. */}
+              {/* Mobile: stacked check-off cards, usable one-handed in a
+                  store. A 15-column cross-tab is not, so `?view=matrix` still
+                  gets the cards here — but says so, rather than letting a
+                  shared link quietly show something else. */}
               <Stack gap="sm" className="sm:hidden">
+                {view === "matrix" && (
+                  <Description as="div" size="xs">
+                    Matrix view needs a wider screen — showing the list.
+                  </Description>
+                )}
                 {rows.map((r) => (
                   <ShoppingCard
                     key={r.key}
@@ -143,11 +158,23 @@ export function ShoppingListPage({
                 ))}
               </Stack>
 
-              <ShoppingTable
-                rows={rows}
-                excluded={excluded}
-                onToggleCheck={toggleChecked}
-              />
+              {match(view)
+                .with("matrix", () => (
+                  <ShoppingMatrix
+                    rows={rows}
+                    columns={columns}
+                    groups={groups}
+                    onToggleCheck={toggleChecked}
+                  />
+                ))
+                .with("list", () => (
+                  <ShoppingTable
+                    rows={rows}
+                    excluded={excluded}
+                    onToggleCheck={toggleChecked}
+                  />
+                ))
+                .exhaustive()}
             </Stack>
           )}
         </>

@@ -83,7 +83,7 @@ describe("CrossTabTable", () => {
       ],
       renderPinnedCell: (_row, pinned) =>
         pinned.key === "need" ? "10 g" : "2 g",
-      tableWidth: 640,
+      layout: { rowHeader: 200, column: 80, pinned: 80 },
     });
 
     const need = screen.getByRole("columnheader", { name: "Need" });
@@ -92,6 +92,31 @@ describe("CrossTabTable", () => {
     expect(need.className).toContain("right-20");
     expect(short.className).toContain("right-0");
     expect(need.className).toContain("sticky");
+  });
+
+  it("sizes columns through a colgroup, not the first row", () => {
+    // Under table-fixed the browser reads widths from the FIRST row — which is
+    // the colSpan'd group header — so width classes on the real column headers
+    // are ignored and every column comes out equal.
+    const { container } = renderTable({
+      renderGroupHeader: (groupKey) => groupKey,
+      pinned: [{ key: "need", label: "Need" }],
+      renderPinnedCell: () => "10 g",
+      layout: { rowHeader: 200, column: 80, pinned: 80 },
+    });
+
+    const cols = [...container.querySelectorAll("col")];
+    // row header + 3 body columns + 1 pinned
+    expect(cols.map((c) => c.style.width)).toEqual([
+      "200px",
+      "80px",
+      "80px",
+      "80px",
+      "80px",
+    ]);
+    expect((container.querySelector("table") as HTMLElement).style.width).toBe(
+      "520px",
+    );
   });
 
   it("renders footer rows over both body and pinned columns", () => {
