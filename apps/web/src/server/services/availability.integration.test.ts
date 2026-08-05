@@ -104,4 +104,174 @@ describe("AvailabilityService.getRecipeAvailability", () => {
     expect(result.ingredients[0]!.haveValue).toBeNull();
     expect(result.coverage).toBe(0);
   });
+
+  describe("sub-recipes", () => {
+    /** A recipe with a yield, usable as someone else's sub-recipe. */
+    const createSub = (
+      name: string,
+      recipeYield: { value: number; unit: string } | null,
+      ingredients: { ingredientId: string; amounts: Amount[] }[],
+    ) =>
+      createTestCaller(recipeRouter, tdb.db).create({
+        name,
+        meta: null,
+        ...(recipeYield ? { yield: recipeYield } : {}),
+        sections: [
+          {
+            ingredients: ingredients.map((i) => ({
+              type: "ingredient" as const,
+              ingredientId: i.ingredientId,
+              recipeId: null,
+              amounts: i.amounts,
+            })),
+            instructions: [{ instruction: "Mix" }],
+          },
+        ],
+      });
+
+    /** A parent that uses `amounts` of `subRecipeId`, plus optional extras. */
+    const createParent = (
+      subRecipeId: string,
+      amounts: Amount[],
+      extras: { ingredientId: string; amounts: Amount[] }[] = [],
+    ) =>
+      createTestCaller(recipeRouter, tdb.db).create({
+        name: "Assembly",
+        meta: null,
+        sections: [
+          {
+            ingredients: [
+              {
+                type: "recipe" as const,
+                recipeId: subRecipeId,
+                ingredientId: null,
+                amounts,
+              },
+              ...extras.map((e) => ({
+                type: "ingredient" as const,
+                ingredientId: e.ingredientId,
+                recipeId: null,
+                amounts: e.amounts,
+              })),
+            ],
+            instructions: [{ instruction: "Assemble" }],
+          },
+        ],
+      });
+
+    it("expands a sub-recipe's ingredients into the parent, scaled by yield", async () => {
+      const flour = await seedFlourWithStock({ value: 500, unit: "g" });
+      const sub = await createSub("Dough", { value: 4, unit: "cup" }, [
+        { ingredientId: flour.shortcode, amounts: [{ value: 2, unit: "cup" }] },
+      ]);
+      const parent = await createParent(sub.id, [{ value: 2, unit: "cup" }]);
+
+      const result = await ctx().services.availability.getRecipeAvailability(
+        parent.id,
+      );
+
+      // Half a dough batch → half its 2 cups of flour → 1 cup ≈ 120 g.
+      const row = result.ingredients.find((i) => i.name === "flour");
+      expect(row?.needValue).toBeCloseTo(120, 1);
+      expect(row?.status).toBe("ok");
+      expect(row?.via.map((v) => v.name)).toEqual(["Dough"]);
+      // The expanded sub-recipe leaves no placeholder row behind.
+      expect(result.ingredients.some((i) => i.status === "subrecipe")).toBe(
+        false,
+      );
+      expect(result.unexpandedSubRecipes).toBe(0);
+    });
+
+    it("counts inventory once for an ingredient used directly and via a sub-recipe", async () => {
+      // The double-count guard for per-ingredient grouping: 500 g on hand must
+      // be counted once, not once per route to the ingredient.
+      const flour = await seedFlourWithStock({ value: 500, unit: "g" });
+      const sub = await createSub("Dough", { value: 2, unit: "cup" }, [
+        { ingredientId: flour.shortcode, amounts: [{ value: 1, unit: "cup" }] },
+      ]);
+      const parent = await createParent(
+        sub.id,
+        [{ value: 2, unit: "cup" }],
+        [
+          {
+            ingredientId: flour.shortcode,
+            amounts: [{ value: 1, unit: "cup" }],
+          },
+        ],
+      );
+
+      const result = await ctx().services.availability.getRecipeAvailability(
+        parent.id,
+      );
+
+      const rows = result.ingredients.filter((i) => i.name === "flour");
+      expect(rows).toHaveLength(1); // one row per ingredient, not per mention
+      expect(rows[0]!.needValue).toBeCloseTo(240, 1); // 1 cup direct + 1 cup via
+      expect(rows[0]!.haveValue).toBeCloseTo(500, 1); // NOT 1000
+    });
+
+    it("flags a yield-less sub-recipe and excludes it from coverage", async () => {
+      const flour = await seedFlourWithStock({ value: 500, unit: "g" });
+      const sub = await createSub("Dough", null, [
+        { ingredientId: flour.shortcode, amounts: [{ value: 2, unit: "cup" }] },
+      ]);
+      const parent = await createParent(
+        sub.id,
+        [{ value: 2, unit: "cup" }],
+        [
+          {
+            ingredientId: flour.shortcode,
+            amounts: [{ value: 1, unit: "cup" }],
+          },
+        ],
+      );
+
+      const result = await ctx().services.availability.getRecipeAvailability(
+        parent.id,
+      );
+
+      const blocked = result.ingredients.find((i) => i.status === "subrecipe");
+      expect(blocked?.blockedReason).toBe("missingYield");
+      expect(result.unexpandedSubRecipes).toBe(1);
+      // Coverage scores only the resolvable rows — the direct flour.
+      expect(result.totalIngredients).toBe(1);
+      expect(result.coverage).toBe(1);
+    });
+
+    it("terminates on a sub-recipe cycle", async () => {
+      const flour = await seedFlourWithStock({ value: 500, unit: "g" });
+      const caller = createTestCaller(recipeRouter, tdb.db);
+      const a = await createSub("A", { value: 2, unit: "cup" }, [
+        { ingredientId: flour.shortcode, amounts: [{ value: 1, unit: "cup" }] },
+      ]);
+      const b = await createParent(a.id, [{ value: 1, unit: "cup" }]);
+      // Close the loop: A now references B.
+      await caller.update({
+        id: a.id,
+        data: {
+          sections: [
+            {
+              ingredients: [
+                {
+                  type: "recipe" as const,
+                  recipeId: b.id,
+                  ingredientId: null,
+                  amounts: [{ value: 1, unit: "cup" }],
+                },
+              ],
+              instructions: [{ instruction: "Mix" }],
+            },
+          ],
+        },
+      });
+
+      const result = await ctx().services.availability.getRecipeAvailability(
+        b.id,
+      );
+
+      expect(result.ingredients.some((i) => i.blockedReason === "cycle")).toBe(
+        true,
+      );
+    }, 20_000);
+  });
 });

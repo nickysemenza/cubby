@@ -181,4 +181,181 @@ describe("mealRouter", () => {
     expect(item.shortfall).toBeCloseTo(180, 1);
     expect(item.status).toBe("short");
   });
+
+  describe("shopping list sub-recipes", () => {
+    /** A yielding recipe usable as a sub-recipe. */
+    const createSub = (
+      name: string,
+      recipeYield: { value: number; unit: string } | null,
+      ingredientId: string,
+      need: Amount,
+    ) =>
+      recipeCaller().create({
+        name,
+        meta: null,
+        ...(recipeYield ? { yield: recipeYield } : {}),
+        sections: [
+          {
+            ingredients: [
+              {
+                type: "ingredient" as const,
+                ingredientId,
+                recipeId: null,
+                amounts: [need],
+              },
+            ],
+            instructions: [{ instruction: "Mix" }],
+          },
+        ],
+      });
+
+    const createParentUsing = (subRecipeId: string, amounts: Amount[]) =>
+      recipeCaller().create({
+        name: "Assembly",
+        meta: null,
+        sections: [
+          {
+            ingredients: [
+              {
+                type: "recipe" as const,
+                recipeId: subRecipeId,
+                ingredientId: null,
+                amounts,
+              },
+            ],
+            instructions: [{ instruction: "Assemble" }],
+          },
+        ],
+      });
+
+    const planOne = async (recipeId: string, scale = 1) => {
+      const meal = await mealCaller().create({
+        date: "2026-06-15",
+        name: "Dinner",
+      });
+      await mealCaller().addRecipe({ mealId: meal.id, recipeId, scale });
+      return mealCaller().getShoppingList({
+        from: "2026-06-14",
+        to: "2026-06-16",
+      });
+    };
+
+    it("includes ingredients reached through a sub-recipe", async () => {
+      // Before expansion this list was EMPTY — the whole bug.
+      const flour = await seedFlourWithStock({ value: 500, unit: "g" });
+      const sub = await createSub(
+        "Dough",
+        { value: 4, unit: "cup" },
+        flour.shortcode,
+        {
+          value: 2,
+          unit: "cup",
+        },
+      );
+      const parent = await createParentUsing(sub.id, [
+        { value: 2, unit: "cup" },
+      ]);
+
+      const list = await planOne(parent.id);
+
+      expect(list.items).toHaveLength(1);
+      const item = list.items[0]!;
+      expect(item.name).toBe("flour");
+      expect(item.needValue).toBeCloseTo(120, 1); // half the dough's 2 cups
+      expect(item.perMeal[0]!.via.map((v) => v.name)).toEqual(["Dough"]);
+      expect(list.unexpanded).toHaveLength(0);
+    });
+
+    it("counts inventory once across meals when reached via a sub-recipe", async () => {
+      // The :96 invariant, re-run through the expansion path.
+      const flour = await seedFlourWithStock({ value: 500, unit: "g" });
+      const sub = await createSub(
+        "Dough",
+        { value: 2, unit: "cup" },
+        flour.shortcode,
+        {
+          value: 2,
+          unit: "cup",
+        },
+      );
+      const parent = await createParentUsing(sub.id, [
+        { value: 1, unit: "cup" },
+      ]);
+
+      const m1 = await mealCaller().create({ date: "2026-06-15" });
+      await mealCaller().addRecipe({
+        mealId: m1.id,
+        recipeId: parent.id,
+        scale: 1,
+      });
+      const m2 = await mealCaller().create({ date: "2026-06-16" });
+      await mealCaller().addRecipe({
+        mealId: m2.id,
+        recipeId: parent.id,
+        scale: 1,
+      });
+
+      const list = await mealCaller().getShoppingList({
+        from: "2026-06-14",
+        to: "2026-06-17",
+      });
+
+      const item = list.items[0]!;
+      expect(item.needValue).toBeCloseTo(240, 1); // 2 × half a 2-cup dough
+      expect(item.haveValue).toBeCloseTo(500, 1); // NOT 1000
+      expect(item.perMeal).toHaveLength(2);
+    });
+
+    it("discloses an unexpandable sub-recipe without inventing an item", async () => {
+      const flour = await seedFlourWithStock({ value: 500, unit: "g" });
+      const sub = await createSub("Dough", null, flour.shortcode, {
+        value: 2,
+        unit: "cup",
+      });
+      const parent = await createParentUsing(sub.id, [
+        { value: 2, unit: "cup" },
+      ]);
+
+      const list = await planOne(parent.id);
+
+      // No pseudo-item: a zero-shortfall row would sort last and read as fine.
+      expect(list.items).toHaveLength(0);
+      expect(list.unexpanded).toHaveLength(1);
+      const gap = list.unexpanded[0]!;
+      expect(gap.name).toBe("Dough");
+      expect(gap.reason).toBe("missingYield");
+      expect(gap.parentRecipeName).toBe("Assembly");
+      expect(gap.mealName).toBe("Dinner");
+    });
+
+    it("gives each planned line its own index when a meal repeats a recipe", async () => {
+      // Two half-batches of the same recipe in one meal must stay two
+      // distinguishable contributions, not collapse into one.
+      const flour = await seedFlourWithStock({ value: 500, unit: "g" });
+      const recipe = await createRecipe("Pancakes", flour.shortcode, {
+        value: 1,
+        unit: "cup",
+      });
+      const meal = await mealCaller().create({ date: "2026-06-15" });
+      await mealCaller().addRecipe({
+        mealId: meal.id,
+        recipeId: recipe.id,
+        scale: 1,
+      });
+      await mealCaller().addRecipe({
+        mealId: meal.id,
+        recipeId: recipe.id,
+        scale: 2,
+      });
+
+      const list = await mealCaller().getShoppingList({
+        from: "2026-06-14",
+        to: "2026-06-16",
+      });
+
+      const perMeal = list.items[0]!.perMeal;
+      expect(perMeal).toHaveLength(2);
+      expect(new Set(perMeal.map((c) => c.lineIndex)).size).toBe(2);
+    });
+  });
 });

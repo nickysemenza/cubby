@@ -44,6 +44,7 @@ import {
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { alias } from "drizzle-orm/pg-core";
 import { countBy, sum, uniq } from "es-toolkit";
+import { collectSubRecipeIds } from "~/lib/recipe-graph";
 import { recipeOutSignature } from "~/lib/recipe-signature";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -92,7 +93,10 @@ import {
   sideEffect,
 } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import {
+  resolveAllPresent,
+  resolveLiveShortcode,
+} from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { TraceNames, withTrace } from "~/server/tracing";
 
@@ -180,6 +184,49 @@ export const getRecipesByIDs = async (
     span.setAttribute("db.result_count", rows.length);
     return rows.map(dbRecipeToAPIGraph);
   });
+};
+
+/**
+ * Every sub-recipe transitively reachable from `roots`, keyed by shortcode.
+ *
+ * Both engines that recurse into sub-recipes need this closure — costing to
+ * roll totals up, needs-expansion to flatten ingredients down — so it lives
+ * here rather than being BFS'd separately in each service.
+ *
+ * Short-circuits when no root references a sub-recipe at all: most recipes are
+ * flat, and the "what can I make?" fan-out evaluates hundreds of them per call,
+ * so a flat recipe must cost exactly zero extra round trips.
+ */
+export const getSubRecipeClosure = async (
+  db: Database,
+  roots: readonly Pick<RecipeOut, "id" | "sections">[],
+): Promise<Record<string, RecipeGraphOut>> => {
+  const closure: Record<string, RecipeGraphOut> = {};
+  let frontier = collectSubRecipeIds(roots);
+  if (frontier.length === 0) return closure;
+
+  return withTrace(
+    TraceNames.db("recipe.getSubRecipeClosure"),
+    async (span) => {
+      const seen = new Set<string>();
+      while (frontier.length > 0) {
+        const toFetch = frontier.filter((id) => !seen.has(id));
+        for (const id of toFetch) seen.add(id);
+        if (toFetch.length === 0) break;
+        const fetched = await getRecipesByIDs(
+          db,
+          await resolveAllPresent(db, "recipe", toFetch),
+        );
+        frontier = [];
+        for (const r of fetched) {
+          closure[r.id] = r;
+          frontier.push(...collectSubRecipeIds([r]));
+        }
+      }
+      span.setAttribute("recipe.subrecipe_count", Object.keys(closure).length);
+      return closure;
+    },
+  );
 };
 
 /**

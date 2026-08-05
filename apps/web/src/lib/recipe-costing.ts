@@ -7,6 +7,8 @@ import type {
   WCostingRow,
   WIngredientUsage,
   WMeasureResult,
+  WNeedsInput,
+  WNeedsResult,
   WNutrientsResult,
   WProductInput,
   WRecipeCosting,
@@ -104,6 +106,18 @@ export const evaluateAvailability = (
   input: WAvailabilityInput,
 ): WAvailabilityResult => wasm.evaluate_availability(input);
 
+/**
+ * Flatten planned recipe lines into scaled per-ingredient needs, recursing
+ * through sub-recipes by yield. Returns the needs plus every sub-recipe that
+ * could NOT be expanded, which the caller is obliged to disclose.
+ *
+ * Deliberately NOT in `CACHEABLE_METHODS`: the input carries whole recipe
+ * closures, so the cache key would be a multi-KB stringify of freshly-built
+ * objects that never repeat — the same reason `cost_recipes` is uncached.
+ */
+export const expandRecipeNeeds = (input: WNeedsInput): WNeedsResult =>
+  wasm.expand_recipe_needs(input);
+
 /** Price, weight, and nutrient results for one ingredient (or sub-recipe). */
 type IngredientPriceInfo = {
   price: Result<WAmount>;
@@ -194,6 +208,13 @@ export const toWAmount = (a: Amount): WAmount => ({
   value: a.value,
   unit: a.unit,
   ...(a.upperValue != null ? { upper_value: a.upperValue } : {}),
+});
+
+/** The inverse of {@link toWAmount}, for amounts the engine hands back. */
+export const fromWAmount = (a: WAmount): Amount => ({
+  value: a.value,
+  unit: a.unit,
+  ...(a.upper_value != null ? { upperValue: a.upper_value } : {}),
 });
 
 const toWRow = (

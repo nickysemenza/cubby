@@ -5,7 +5,12 @@ import {
   timestampedFields,
 } from "./base-entity";
 import { mealRelatedFilterFields } from "./related-view";
-import { ingredientAvailabilityStatus } from "./availability";
+import {
+  ingredientAvailabilityStatus,
+  needViaOut,
+  subRecipeBlockReason,
+} from "./availability";
+import { amount } from "./codec";
 import {
   ingredientShortcode,
   mealRecipeId,
@@ -183,8 +188,36 @@ export const shoppingListContribution = z.object({
   scale: mealScale,
   /** This contribution's need, in the item's `basisUnit`. */
   needValue: z.number(),
+  /**
+   * Index into this response's own planned-line list — stable for the lifetime
+   * of one response, which is exactly as long as a matrix column needs. Without
+   * it a meal that plans the same recipe twice (two half-batches at different
+   * scales) collapses into a single indistinguishable column.
+   */
+  lineIndex: z.number().int().nonnegative(),
+  /** Sub-recipe chain this contribution came through; empty when direct. */
+  via: z.array(needViaOut),
 });
 export type ShoppingListContribution = z.infer<typeof shoppingListContribution>;
+
+/**
+ * A sub-recipe whose ingredients are NOT in `items`. Server-enforced disclosure
+ * of a real omission — deliberately its own channel rather than a pseudo-item,
+ * which would sort to the bottom of a shortfall-ordered list and read as "fine".
+ */
+export const unexpandedSubRecipeOut = z.object({
+  recipeId: recipeShortcode,
+  name: z.string(),
+  reason: subRecipeBlockReason,
+  amount: amount.nullable(),
+  via: z.array(needViaOut),
+  mealId: mealShortcode,
+  mealName: z.string().nullable(),
+  date: mealDate,
+  parentRecipeId: recipeShortcode,
+  parentRecipeName: z.string(),
+});
+export type UnexpandedSubRecipe = z.infer<typeof unexpandedSubRecipeOut>;
 
 export const shoppingListItem = z.object({
   ingredientId: ingredientShortcode.nullable(),
@@ -213,5 +246,7 @@ export const shoppingListOut = z.object({
     }),
   ),
   items: z.array(shoppingListItem),
+  /** Sub-recipes whose ingredients this list could NOT account for. */
+  unexpanded: z.array(unexpandedSubRecipeOut),
 });
 export type ShoppingListOut = z.infer<typeof shoppingListOut>;
