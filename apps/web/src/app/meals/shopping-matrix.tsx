@@ -19,10 +19,11 @@ import {
   shortText,
   statusClass,
 } from "./meal-format";
-import type {
-  ShoppingLineColumn,
-  ShoppingMealGroup,
-  ShoppingRow,
+import {
+  type ShoppingLineColumn,
+  type ShoppingMealGroup,
+  type ShoppingRow,
+  visibleContributions,
 } from "./shopping-model";
 
 // Rows are ingredients, columns are planned (meal, recipe) lines, cells are
@@ -61,12 +62,20 @@ export function ShoppingMatrix({
   columns,
   groups,
   unexpanded,
+  excluded,
   onToggleCheck,
 }: {
   rows: ShoppingRow[];
   columns: ShoppingLineColumn[];
   groups: ShoppingMealGroup[];
   unexpanded: UnexpandedSubRecipe[];
+  /**
+   * Meals switched off. `columns` is already filtered by this, so the cell map
+   * has to be too — otherwise a hidden contribution still counts toward the
+   * row's max and its source count, and the shading rule below silently
+   * disagrees with what's on screen.
+   */
+  excluded: ReadonlySet<string>;
   onToggleCheck: (key: string) => void;
 }) {
   const crossTabColumns = useMemo(
@@ -99,7 +108,7 @@ export function ShoppingMatrix({
       const values = new Map<string, number>();
       const via = new Map<string, string[]>();
       let max = 0;
-      for (const c of row.item.perMeal) {
+      for (const c of visibleContributions(row.item, excluded)) {
         const key = String(c.lineIndex);
         values.set(key, (values.get(key) ?? 0) + c.needValue);
         if (c.via.length > 0) {
@@ -114,7 +123,7 @@ export function ShoppingMatrix({
       byRow.set(row.key, { values, via, max });
     }
     return byRow;
-  }, [rows]);
+  }, [rows, excluded]);
 
   /** Planned lines whose ingredients are incomplete, by column key. */
   const blockedByColumn = useMemo(() => {

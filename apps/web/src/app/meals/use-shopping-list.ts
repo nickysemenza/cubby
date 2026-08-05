@@ -1,3 +1,4 @@
+import type { UnexpandedSubRecipe } from "@cubby/schemas/meal";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
@@ -9,6 +10,9 @@ import {
   shoppingCheckedStorageKey,
   toggleInSet,
 } from "./shopping-model";
+
+/** Module-level so the empty case doesn't allocate a new array each render. */
+const NO_GAPS: UnexpandedSubRecipe[] = [];
 
 /**
  * The shopping list's query + interaction state, owned above the renderer
@@ -63,11 +67,21 @@ export function useShoppingList(from?: string, to?: string) {
     [data, excludedKeys],
   );
 
+  // Exclusion-aware like `rows` and `columns`: switching a meal off removes its
+  // ingredients from the list, so warning about what that meal couldn't break
+  // down is noise about a gap you can no longer see.
+  const unexpanded = useMemo(
+    () =>
+      data?.unexpanded.filter((u) => !excludedKeys.has(u.mealId)) ?? NO_GAPS,
+    [data, excludedKeys],
+  );
+
   return {
     ...query,
     rows,
     columns,
     groups,
+    unexpanded,
     excluded: excludedKeys,
     toggleExcluded,
     checked,

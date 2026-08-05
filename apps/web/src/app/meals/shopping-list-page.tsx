@@ -39,6 +39,7 @@ export function ShoppingListPage({
     rows,
     columns,
     groups,
+    unexpanded,
     excluded,
     toggleExcluded,
     toggleChecked,
@@ -135,7 +136,7 @@ export function ShoppingListPage({
           {/* Above the renderer switch: an omission in the DATA, so it holds
               whichever way the rows are drawn — and whether or not there are
               any rows at all. */}
-          <ShoppingOmissionNote unexpanded={data.unexpanded} />
+          <ShoppingOmissionNote unexpanded={unexpanded} />
 
           {rows.length === 0 ? (
             <Description>Nothing to buy for the selected meals.</Description>
@@ -170,7 +171,8 @@ export function ShoppingListPage({
                     rows={rows}
                     columns={columns}
                     groups={groups}
-                    unexpanded={data.unexpanded}
+                    unexpanded={unexpanded}
+                    excluded={excluded}
                     onToggleCheck={toggleChecked}
                   />
                 ))

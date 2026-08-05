@@ -63,15 +63,17 @@ const meals = [
 function renderMatrix(
   items: ShoppingListItem[],
   unexpanded: UnexpandedSubRecipe[] = [],
+  excluded: ReadonlySet<string> = NONE,
 ) {
   const data = { meals, items };
-  const { columns, groups } = buildShoppingColumns(data, NONE);
+  const { columns, groups } = buildShoppingColumns(data, excluded);
   return render(
     <ShoppingMatrix
-      rows={buildShoppingRows(items, NONE, NONE)}
+      rows={buildShoppingRows(items, excluded, NONE)}
       columns={columns}
       groups={groups}
       unexpanded={unexpanded}
+      excluded={excluded}
       onToggleCheck={vi.fn()}
     />,
   );
@@ -161,6 +163,22 @@ describe("ShoppingMatrix", () => {
     // a single-source row says nothing and drowns out the split ones.
     expect(shaded).toHaveLength(2);
     expect(shaded.map((td) => td.textContent)).toEqual(["40 g", "6 g"]);
+  });
+
+  it("scales shading to the visible lines when a meal is excluded", () => {
+    // `columns` is exclusion-aware, so the cell map has to be too. Summing the
+    // unfiltered contributions leaves the hidden cell in the row's max and in
+    // its source count — so a row that has BECOME single-source keeps a heat
+    // fill, shaded against a value that isn't on screen.
+    const { container } = renderMatrix(twoLines, [], new Set(["MEL-2"]));
+
+    expect(
+      [...container.querySelectorAll("tbody td")].filter((td) =>
+        /chart-seq/.test(td.className),
+      ),
+    ).toHaveLength(0);
+    // Salt is down to its one visible line.
+    expect(rowCells("salt")).toEqual(["40 g", "40 g", "0 g", "40 g"]);
   });
 
   it("spans a meal header over exactly its own lines", () => {
