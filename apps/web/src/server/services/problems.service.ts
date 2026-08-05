@@ -70,6 +70,7 @@ import {
   findDuplicateFinancialTransactionSourceRefs,
   findDuplicateInventoryProducts,
   findDuplicateProductIdentities,
+  findDuplicateSpendCandidates,
   findDuplicateVendors,
   findEmptyLocations,
   findEntitiesMissingEmbeddings,
@@ -530,6 +531,10 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       purchasesNotReconciling: () => findPurchasesNotReconciling(scoped),
       purchaseFinancialSettlementMismatches: () =>
         findPurchaseFinancialSettlementMismatches(scoped),
+      // Amount+date joins ~80 unlinked expenses against ~1.6k purchases, then
+      // scores trigram similarity on only the handful that survive — measured at
+      // ~31ms, all buffer hits. Cheap because the name comparison is post-join.
+      duplicateSpendCandidates: () => findDuplicateSpendCandidates(scoped),
       duplicateFinancialTransactionSourceRefs: () =>
         findDuplicateFinancialTransactionSourceRefs(scoped),
       duplicateFinancialAccountSourceAliases: () =>
@@ -574,6 +579,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     purchasesNotReconciling: r.purchasesNotReconciling,
     purchaseFinancialSettlementMismatches:
       r.purchaseFinancialSettlementMismatches,
+    duplicateSpendCandidates: r.duplicateSpendCandidates,
     duplicateFinancialTransactionSourceRefs:
       r.duplicateFinancialTransactionSourceRefs,
     duplicateFinancialAccountSourceAliases:

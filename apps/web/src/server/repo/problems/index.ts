@@ -102,7 +102,10 @@ export {
   synthesizeEffectiveMappings,
 } from "./detectors-product";
 // Purchase-centric detectors (the soft stated-total-vs-lines worklist)
-export { findPurchasesNotReconciling } from "./detectors-purchase";
+export {
+  findDuplicateSpendCandidates,
+  findPurchasesNotReconciling,
+} from "./detectors-purchase";
 // Recipe-centric detectors (derived-data-on-removal guardrail)
 export {
   findParentRecipesWithDeletedSubRecipes,

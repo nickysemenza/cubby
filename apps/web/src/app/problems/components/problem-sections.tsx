@@ -1458,6 +1458,60 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     }),
   }),
   section({
+    id: "duplicate-spend-candidates",
+    label: "Possible duplicates",
+    select: (p) => p.duplicateSpendCandidates,
+    // Advisory, and more so than its neighbours: the match itself is a heuristic,
+    // and the remedy destroys a row. No meter — these aren't a fraction of a
+    // population, and a count to drive to zero would invite deleting the doubtful
+    // ones. The expense is the subject, so the card opens the expense, not the
+    // purchase it collides with.
+    coverage: {},
+    entity: "expense",
+    title: "Possible Duplicate Spend",
+    description:
+      "An expense linked to no purchase, costing exactly what an itemized purchase already accounts for, within a week of it. Usually a hand-entered lump that a later vendor import re-created line by line — the same money counted twice. Confirm before acting: two unrelated things can cost the same on the same day.",
+    emptyMessage:
+      "No unlinked expense duplicates a purchase's total. Expenses whose names don't resemble the purchase's lines aren't reported.",
+    renderItem: (item) => ({
+      // Two lump rows can share a name, and the name is the card title.
+      key: item.id,
+      title: item.expenseName,
+      subtitle: `${formatCurrency(item.cost)} · matches ${item.vendorName ?? "deleted vendor"} ${
+        item.matchedOn === "stated_total" ? "stated total" : "expense total"
+      } of ${formatCurrency(
+        item.matchedOn === "stated_total" && item.purchaseStatedTotal !== null
+          ? item.purchaseStatedTotal
+          : item.purchaseExpenseTotal,
+      )} across ${item.purchaseExpenseCount} line${item.purchaseExpenseCount === 1 ? "" : "s"}`,
+      badges: [
+        <Badge key="status" variant="warning">
+          Possible duplicate
+        </Badge>,
+        <Badge key="purchase" variant="outline">
+          {item.purchaseId}
+        </Badge>,
+        ...(item.dayDelta > 0
+          ? [
+              <Badge key="gap" variant="outline">
+                {item.dayDelta} day{item.dayDelta === 1 ? "" : "s"} apart
+              </Badge>,
+            ]
+          : []),
+        ...(item.alternateMatchCount > 0
+          ? [
+              <Badge key="alternates" variant="outline">
+                +{item.alternateMatchCount} weaker match
+                {item.alternateMatchCount === 1 ? "" : "es"}
+              </Badge>,
+            ]
+          : []),
+      ],
+      route: entityDetailLink("expense", item.id),
+      editLabel: "Open expense",
+    }),
+  }),
+  section({
     id: "duplicate-financial-transaction-source-refs",
     label: "Duplicate transaction refs",
     select: (p) => p.duplicateFinancialTransactionSourceRefs,

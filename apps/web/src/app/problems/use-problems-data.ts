@@ -86,6 +86,7 @@ export function useProblemsData(opts?: {
         purchasesNotReconciling: fast.data?.purchasesNotReconciling ?? [],
         purchaseFinancialSettlementMismatches:
           fast.data?.purchaseFinancialSettlementMismatches ?? [],
+        duplicateSpendCandidates: fast.data?.duplicateSpendCandidates ?? [],
         duplicateFinancialTransactionSourceRefs:
           fast.data?.duplicateFinancialTransactionSourceRefs ?? [],
         duplicateFinancialAccountSourceAliases:

@@ -2198,3 +2198,196 @@ describe("problems — charges not reconciling", () => {
     expect(sumProblemSections({ purchasesNotReconciling }, "defect")).toBe(0);
   });
 });
+
+describe("problems — duplicate spend candidates", () => {
+  const ctx = withTestDb();
+
+  // An expense with vendor+orderId mints a Purchase and lands linked; one with
+  // neither stays unlinked, which is the whole population this detector scans.
+  const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
+    unwrap(
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse(makeExpenseInput(overrides)),
+        ctx.actor,
+      ),
+    );
+
+  const setStated = (id: PurchaseShortcode, statedTotal: number) =>
+    unwrap(
+      updatePurchase(
+        ctx.db,
+        purchaseUpdateInput.parse({ id, data: { statedTotal } }),
+        ctx.actor,
+      ),
+    );
+
+  const candidates = async () =>
+    (await findFastProblems(ctx.db)).duplicateSpendCandidates;
+
+  it("flags an unlinked lump matching a purchase's expense total", async () => {
+    await seedLine({
+      name: "framing nails 2 in ring shank collated",
+      cost: 30,
+      date: "2024-06-02",
+      vendor: "Nail Depot",
+      orderId: "ND-1",
+    });
+    await seedLine({
+      name: "wood glue",
+      cost: 13.43,
+      date: "2024-06-02",
+      vendor: "Nail Depot",
+      orderId: "ND-1",
+    });
+    // The hand-entered lump: same money, no purchase, terse name.
+    const lump = await seedLine({
+      name: "framing nails",
+      cost: 43.43,
+      date: "2024-06-02",
+    });
+
+    const rows = await candidates();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: lump.id,
+      cost: 43.43,
+      matchedOn: "expense_total",
+      dayDelta: 0,
+      purchaseExpenseTotal: 43.43,
+      purchaseExpenseCount: 2,
+      alternateMatchCount: 0,
+    });
+    expect(rows[0]?.nameSimilarity).toBeGreaterThanOrEqual(0.15);
+  });
+
+  it("flags a lump matching only the stated total, when the import left the purchase under-itemized", async () => {
+    const line = await seedLine({
+      name: "duplex outlet receptacle white",
+      cost: 47.47,
+      date: "2024-05-22",
+      vendor: "Outlet Mart",
+      orderId: "OM-1",
+    });
+    // Tax never made it into the vendor export, so the lines fall short of what
+    // the paperwork says — the shape that produced the worst real double-counts.
+    await setStated(line.purchaseId as PurchaseShortcode, 50.71);
+    const lump = await seedLine({
+      name: "duplex outlet receptacle",
+      cost: 50.71,
+      date: "2024-05-22",
+    });
+
+    const rows = await candidates();
+    expect(rows.map((r) => r.id)).toEqual([lump.id]);
+    expect(rows[0]).toMatchObject({
+      matchedOn: "stated_total",
+      purchaseStatedTotal: 50.71,
+      purchaseExpenseTotal: 47.47,
+    });
+  });
+
+  it("ignores a same-amount, same-day collision between unrelated things", async () => {
+    await seedLine({
+      name: "monoprice cat6a ethernet patch cable",
+      cost: 22,
+      date: "2024-02-16",
+      vendor: "Cable Mart",
+      orderId: "CM-1",
+    });
+    // Real case: a $22.00 pruners row collided with an unrelated $22.00 order.
+    // Amount and date alone would pair these; the name gate is what refuses.
+    await seedLine({ name: "fiskars pruners", cost: 22, date: "2024-02-16" });
+
+    expect(await candidates()).toEqual([]);
+  });
+
+  it("never reports a purchase's own lines, nor a soft-deleted lump", async () => {
+    await seedLine({
+      name: "cabinet hinge",
+      cost: 43.43,
+      date: "2024-06-02",
+      vendor: "Hinge Co",
+      orderId: "HC-1",
+    });
+    const lump = await seedLine({
+      name: "cabinet hinge",
+      cost: 43.43,
+      date: "2024-06-02",
+    });
+    expect((await candidates()).map((r) => r.id)).toEqual([lump.id]);
+
+    // The linked line has the identical name and cost, so if liveness or the
+    // purchaseId filter were wrong it would pair with its own purchase.
+    await deleteExpenses(ctx.db, [lump.id], ctx.actor);
+    expect(await candidates()).toEqual([]);
+  });
+
+  it("ignores planned spend", async () => {
+    await seedLine({
+      name: "tile saw rental",
+      cost: 88.5,
+      date: "2024-07-01",
+      vendor: "Rental Yard",
+      orderId: "RY-1",
+    });
+    await seedLine({
+      name: "tile saw rental",
+      cost: 88.5,
+      date: "2024-07-01",
+      future: true,
+    });
+
+    expect(await candidates()).toEqual([]);
+  });
+
+  it("reports the best-scoring purchase once, and counts the weaker ones", async () => {
+    await seedLine({
+      name: "framing nails",
+      cost: 43.43,
+      date: "2024-06-02",
+      vendor: "Nail Depot",
+      orderId: "ND-NEAR",
+    });
+    // Same total and an equally strong name, but further from the lump's date —
+    // so the tiebreak, not the score, decides which one is reported.
+    await seedLine({
+      name: "galvanized framing nails collated box",
+      cost: 43.43,
+      date: "2024-06-04",
+      vendor: "Nail Depot",
+      orderId: "ND-FAR",
+    });
+    const lump = await seedLine({
+      name: "framing nails",
+      cost: 43.43,
+      date: "2024-06-02",
+    });
+
+    const rows = await candidates();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: lump.id,
+      dayDelta: 0,
+      alternateMatchCount: 1,
+    });
+  });
+
+  it("is advisory: reported, but never counted as a defect", async () => {
+    await seedLine({
+      name: "spar urethane quart",
+      cost: 10.93,
+      date: "2024-03-01",
+      vendor: "Finish Supply",
+      orderId: "FS-1",
+    });
+    await seedLine({ name: "spar urethane", cost: 10.93, date: "2024-03-01" });
+
+    const duplicateSpendCandidates = await candidates();
+    expect(duplicateSpendCandidates).toHaveLength(1);
+    // The match is a heuristic and the remedy deletes a row, so this must never
+    // reach `totalProblems` or the navbar badge.
+    expect(PROBLEM_CLASS.duplicateSpendCandidates).not.toBe("defect");
+    expect(sumProblemSections({ duplicateSpendCandidates }, "defect")).toBe(0);
+  });
+});
