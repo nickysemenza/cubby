@@ -484,6 +484,123 @@ describe("expense repository — expenseList filters", () => {
     ]);
   });
 
+  it("filters by line basis, and keeps purchase-less rows in the item_line bucket", async () => {
+    // The purchase-less row is the point: `lineBasis` lives on Expense rather
+    // than Purchase precisely so a row with no purchase attached still answers
+    // this filter. A Purchase-level flag would have needed an explicit
+    // `isNull(purchaseId)` arm here, because `IN (SELECT ...)` goes NULL on a
+    // NULL left side — that is ~193 live rows silently dropped.
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "basis deposit",
+          lineBasis: "allocation",
+          vendor: "Basis Vendor",
+          orderId: "BASIS-1",
+          date: "2026-03-01",
+        }),
+      ),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "basis widget",
+          vendor: "Basis Vendor",
+          orderId: "BASIS-1",
+          date: "2026-03-01",
+        }),
+      ),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({ name: "basis unattached", date: "2026-03-01" }),
+      ),
+      ctx.actor,
+    );
+
+    const itemLines = await expenseList(
+      ctx.db,
+      { search: "basis", lineBasis: ["item_line"] },
+      [],
+      pagination,
+    );
+    expect(new Set(itemLines.data.map((row) => row.name))).toEqual(
+      new Set(["basis widget", "basis unattached"]),
+    );
+    // Data and count agree — the filter is a plain column predicate, so the
+    // `$count` query sees the same where clause with no joins to diverge on.
+    expect(itemLines.count).toBe(2);
+
+    const allocations = await expenseList(
+      ctx.db,
+      { search: "basis", lineBasis: ["allocation"] },
+      [],
+      pagination,
+    );
+    expect(allocations.data.map((row) => row.name)).toEqual(["basis deposit"]);
+    expect(allocations.count).toBe(1);
+
+    // Unfiltered is unrestricted — an omitted `lineBasis` never narrows.
+    const unfiltered = await expenseList(
+      ctx.db,
+      { search: "basis" },
+      [],
+      pagination,
+    );
+    expect(unfiltered.count).toBe(3);
+  });
+
+  it("refuses to link a Product to an allocation Expense", async () => {
+    const productRow = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "allocation guard product" }),
+      ctx.actor,
+    );
+
+    // An allocation is a slice of an un-itemized total, so it buys no
+    // particular item. Linking one would halve the product's derived unit
+    // price (sum(cost)/sum(productQuantity) over every linked expense) while
+    // also claiming an extra unit — see the pricing engine's aggregate.
+    await expect(
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({
+            name: "allocation with product",
+            lineBasis: "allocation",
+            productId: productRow.id,
+          }),
+        ),
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/allocation Expense may not link a Product/);
+
+    const linked = await unwrap(
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({
+            name: "item line with product",
+            productId: productRow.id,
+          }),
+        ),
+        ctx.actor,
+      ),
+    );
+    expect(linked.productId).not.toBeNull();
+
+    // The same guard on the update path: flipping an already-linked row to
+    // `allocation` must fail rather than silently orphan the product link.
+    await expect(
+      updateExpense(ctx.db, linked.id, { lineBasis: "allocation" }, ctx.actor),
+    ).rejects.toThrow(/allocation Expense may not link a Product/);
+  });
+
   it("filters by projectId, and projectId + includeSubProjects over a 3-level chain", async () => {
     const { output: parent } = await createProject(
       ctx.db,

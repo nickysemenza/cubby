@@ -10,6 +10,7 @@ import {
   expenseCostTypeColumn,
   expenseDateColumn,
   expenseFutureColumn,
+  expenseLineBasisColumn,
   expenseLineKindColumn,
   expenseOrderIdColumn,
   expenseProductQuantityColumn,
@@ -198,6 +199,12 @@ export function ExpenseList() {
         },
         { mobile: { slot: "meta", priority: 18 } },
       ),
+      expenseLineBasisColumn(columnHelper, async (lineBasis, expense) => {
+        await updateExpenseMutation.mutateAsync({
+          id: expense.id,
+          data: { lineBasis },
+        });
+      }),
       expenseCostTypeColumn(
         columnHelper,
         async (costType, expense) => {
@@ -441,7 +448,9 @@ export function ExpenseList() {
     bulkActions: expenseBulkActions.config,
     extraActions,
     // Purchase is visible by default; its Order # detail remains opt-in.
-    initialColumnVisibility: { orderId: false },
+    // `lineBasis` reads "Line item" on all but a handful of rows, so the column
+    // is dead weight by default; its header filter is the surface that matters.
+    initialColumnVisibility: { orderId: false, lineBasis: false },
   });
   usePageCount(totalCount);
 

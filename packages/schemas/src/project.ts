@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { expenseLineKindSchema } from "./expense-line-kind";
+import {
+  expenseLineBasisSchema,
+  expenseLineKindSchema,
+} from "./expense-line-kind";
 import { financialReconciliationSummary } from "./financial-reconciliation";
 import { wholeCentAmount } from "./money";
 import {
@@ -864,6 +867,9 @@ const expenseFields = {
   lineKind: expenseLineKindSchema.describe(
     "Receipt role. Principal lines are the purchased item/service; every other value is a purchase-level adjustment.",
   ),
+  lineBasis: expenseLineBasisSchema.describe(
+    "Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.",
+  ),
   costType: costTypeSchema,
   trade: tradeSchema,
   url: z.string().nullable(),
@@ -899,6 +905,8 @@ const expenseCreateShape = {
   ...expenseFields,
   // Omitted means infer conservatively from the Expense name in the repo.
   lineKind: expenseLineKindSchema.optional(),
+  // Deliberately never inferred — see `expenseLineBasisValues`.
+  lineBasis: expenseLineBasisSchema.default("item_line"),
   /**
    * Attach directly to a known Purchase, bypassing the `{vendor, orderId}`
    * name-resolution path. The precise form, for callers that already hold a
@@ -967,6 +975,7 @@ export const expenseFilterFields = {
   // stay valid. Resolved with `eqAny` in the repo.
   costType: oneOrMany(costTypeSchema).optional(),
   lineKind: oneOrMany(expenseLineKindSchema).optional(),
+  lineBasis: oneOrMany(expenseLineBasisSchema).optional(),
   trade: oneOrMany(tradeSchema).optional(),
   projectId: oneOrMany(projectShortcode).optional(),
   // Only meaningful alongside `projectId`: expands the filter to the project

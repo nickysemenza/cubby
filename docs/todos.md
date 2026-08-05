@@ -505,20 +505,75 @@ for ~940 new rows. **Rejected as a blanket rule**; the sparse opt-in default sta
 
 What did change is *why* a line stays unlinked. Four of the classes originally listed as
 "not products" are really **un-split imports** — bundles (`wall materials, strut stuff`),
-aggregate credits (`lowes returns` −$77.46), and deposit/balance pairs — and those should
-be unbundled per the existing `splitExpense` path, each part taking its own product. That
-is not a new feature; it is Phase 3 of the purchase-import skill, now stated explicitly
-there. Two classes are genuinely never products: **service/labor lines** (no object, and
-`Expense.productId` is an `acquisition` edge whose net-cost derivation a labor line would
-inflate — work *about* a product is `Task.subjectProductId`) and **installments**
-(`hotel payment 3/11`, `retaining wall 2/2` — that grouping is the purchase and the project).
+aggregate credits (`lowes returns` −$77.46) — and those should be unbundled per the
+existing `splitExpense` path, each part taking its own product. That is not a new feature;
+it is Phase 3 of the purchase-import skill, now stated explicitly there. Two classes are
+genuinely never products: **service/labor lines** (no object, and `Expense.productId` is an
+`acquisition` edge whose net-cost derivation a labor line would inflate — work *about* a
+product is `Task.subjectProductId`) and **allocations** — see below.
+
+##### `Expense.lineBasis` — allocations are never products (2026-08-05)
+
+The "deposit/balance pairs" listed above as un-split imports were **wrong**, and
+`splitExpense` cannot fix them. Both are now `lineBasis: "allocation"`, a first-class
+column, and both are excluded from the goods-without-a-product saved views.
+
+Two ways a lump sum becomes ledger rows without ever being itemized:
+
+- **By payment schedule.** Ferguson order 5099637 is six appliances paid as a $13,000
+  deposit and a $12,734.51 balance. The deposit is money on account; it buys no
+  particular appliance, so there is no split that assigns it to items. Splitting by
+  *item* instead would destroy the two ledger dates, which the purchase merge
+  deliberately preserved.
+- **By an estimated materials/labor split.** `retaining wall 1/2` is `materials` and
+  `2/2` is `services`, $8,000 each, on one non-itemized $16,000 contract — the
+  installment boundary standing in for a guess at the trade split. Same for the
+  countertop pair, the Maldonado fence (whose proposal is explicitly "furnish material
+  **and** labor... for the sum of", with materials listed but unpriced), and SL Electric.
+
+  ⚠️ **This is a deliberate convention, not drift.** The `servicesWithProduct` note below
+  cites `countertop deposit` (materials) vs `2nd half of countertop` (services) as
+  evidence that `costType` is "already inconsistent". It is not — it is this estimate,
+  and reclassifying those rows to match each other would destroy real information.
+  `lineBasis: "allocation"` is now the signal that a row's `costType` is an estimate
+  rather than a vendor-stated fact.
+
+**Never inferred from the name** — `"1/2"` matches `1/2 in. conduit` far more often than
+an installment half. Set it by hand; the `purchase-import` skill checklist covers it.
+
+Why on `Expense` and not `Purchase`: allocation siblings routinely span *separate*
+Purchase rows (drywall 1/3, 2/3, 3/3 are three Purchases; so are the countertop deposit
+and balance). A purchase-level flag would also have needed an explicit `isNull(purchaseId)`
+arm in the expense filter, since `IN (SELECT ...)` goes NULL on a NULL left side — ~193
+live rows silently dropped.
+
+Backfilled 18 rows across 9 contracts on 2026-08-05, which took the
+"Goods without a product" view from 293 to 282. Small by count (3.8%) but it was the
+entire *top* of that cost-sorted list, because lump-sum structure correlates with size —
+the largest purchases are the ones paid in installments.
+
+- [ ] **Surface the estimate caveat in spend breakdowns.** `allocation` makes "this
+  `costType` is a guess" *representable* for the first time, but nothing reads it yet:
+  `expenseAnalytics`' `byCostType` still mixes allocations in with vendor-stated lines,
+  and a human reading those totals gets no hint. As of the 2026-08-05 backfill that is
+  **$74,828.70 across 18 rows** — $52,143.70 booked materials, $22,685.00 services — and
+  for the lump-sum-contract subset those two numbers are a guess at where the split fell,
+  not something a vendor ever stated. The MCP
+  tool description warns an agent; the UI warns nobody. Cheapest honest version is a
+  footnote on the analytics tab ("includes $X across N estimated splits") rather than
+  excluding them — they are real spend and excluding them would understate the total.
+  **Trigger**: actually using a materials-vs-labor breakdown to decide something.
+  (Raised in review on #649.)
 
 - [ ] **`servicesWithProduct` advisory detector** — mirrors `purchasesNotReconciling` in shape
   (soft worklist, not an error list). The 2026-07 audit found **zero** live rows, so any row
   appearing is a real regression rather than a backlog. Deliberately **not** a CHECK
-  constraint: `costType` is an operator-assigned *reporting* dimension and is already
-  inconsistent (`countertop deposit` is materials, `2nd half of countertop` is services —
-  same vendor, same amount, same slab), and `update_expenses` batches can reclassify rows, so a hard
+  constraint: `costType` is an operator-assigned *reporting* dimension that is sometimes an
+  **estimate** rather than a fact (`countertop deposit` is materials, `2nd half of
+  countertop` is services — same vendor, same amount, same slab, because the installment
+  boundary is standing in for a guess at the trade split; those rows now carry
+  `lineBasis: "allocation"`, and reclassifying them to match each other would destroy real
+  information), and `update_expenses` batches can reclassify rows, so a hard
   constraint would fail a bulk reclassify mid-transaction with an error about products.
 - [ ] **Repeat-purchase rollup** — `ProductExpenseHistory` already ships per-product on the
   detail page and the Products list exposes a linked-expense count. What's missing is
@@ -529,6 +584,21 @@ inflate — work *about* a product is `Task.subjectProductId`) and **installment
 **`PurchaseLine`'s trigger is still NOT met by this** (see the deferred phase above). Unbundling
 that *moves money* is `splitExpense`, which exists and is money-bearing; `PurchaseLine` is
 pure SKU/quantity annotation and creates no products. Don't reach for it to do this job.
+
+Re-examined 2026-08-05 while adding `lineBasis` and **still not met.** The tempting case is
+Ferguson: six appliances behind two installment rows, where no expense-level link can ever
+express what was bought. But it is *one* purchase. Of the nine allocation contracts, only
+Paloform (a single fire pit) and Ferguson have discrete goods at all — the rest are
+lump-sum services with nothing to itemize. The cheaper answer, taken instead: create the
+six Products with an **explicit `price`** off bid B907293 (explicit wins unconditionally
+over the derived aggregate) and leave the installments unlinked. That gets correct prices,
+models, and inventory valuation; the only thing forgone is a queryable Product→Purchase
+edge, and the bid PDF is already attached to PUR-SHRG. **Sharpened trigger**: a *third*
+installment-bought purchase with 3+ discrete goods. One Ferguson is not a table.
+
+`ExpenseProduct` is also the wrong shape for this — it is the transpose (one row needing
+many products, not many rows for one purchase's goods), and it would still force an
+arbitrary allocation of the $13,000 deposit across six appliances.
 
 ### Purchase-import — maybe later (trigger-gated)
 

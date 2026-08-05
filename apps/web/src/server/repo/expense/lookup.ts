@@ -237,6 +237,12 @@ export const buildExpenseWhereClause = async (
       ...relatedWhereConditions("expense", filters, expense.id),
       nameSearch,
       eqAny(expense.lineKind, filters.lineKind),
+      // A plain column, deliberately: `lineBasis` lives on Expense rather than
+      // Purchase because allocation siblings routinely span separate Purchase
+      // rows (drywall 1/3, 2/3, 3/3 are three Purchases; so are the countertop
+      // deposit and balance). That also keeps this out of `chargeCondition`,
+      // so the 193 purchase-less rows need no `isNull(purchaseId)` arm here.
+      eqAny(expense.lineBasis, filters.lineBasis),
       eqAny(expense.costType, filters.costType),
       eqAny(expense.trade, filters.trade),
       projectCondition,

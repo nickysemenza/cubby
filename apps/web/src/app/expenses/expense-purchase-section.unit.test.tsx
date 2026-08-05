@@ -59,6 +59,7 @@ const expense: ExpenseOut = {
   cost: 24.99,
   date: "2026-07-31",
   lineKind: "principal",
+  lineBasis: "item_line",
   costType: "materials",
   trade: "other",
   url: null,

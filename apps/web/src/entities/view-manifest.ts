@@ -148,8 +148,16 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       // no product by design, and tax/shipping/discount/fee lines structurally
       // can't hold one. Without both filters this reads as a far larger backlog
       // than it is, because correctly product-free rows dominate the count.
+      //
+      // `lineBasis` excludes the third never-satisfiable class: deposits,
+      // balances and estimated materials/labor splits, which are slices of an
+      // un-itemized total rather than gaps. Small by count but they dominate
+      // the top of this cost-sorted list, because lump-sum structure
+      // correlates with size — the largest purchases are the ones paid in
+      // installments.
       filters: [
         { id: "lineKind", value: ["principal"] },
+        { id: "lineBasis", value: ["item_line"] },
         { id: "costType", value: ["materials", "tools"] },
         { id: "product", value: "none" },
       ],
@@ -165,6 +173,7 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       // batch-importing.
       filters: [
         { id: "lineKind", value: ["principal"] },
+        { id: "lineBasis", value: ["item_line"] },
         { id: "costType", value: ["materials", "tools"] },
         { id: "product", value: "none" },
         { id: "vendor", value: [FILTER_NONE] },

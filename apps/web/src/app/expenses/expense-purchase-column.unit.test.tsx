@@ -46,6 +46,7 @@ const LINKED: ExpenseOut = {
   cost: 500,
   date: "2026-07-20",
   lineKind: "principal",
+  lineBasis: "item_line",
   costType: "tools",
   trade: "other",
   url: null,

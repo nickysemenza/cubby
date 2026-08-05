@@ -13,6 +13,35 @@ export const expenseLineKindValues = [
 export const expenseLineKindSchema = z.enum(expenseLineKindValues);
 export type ExpenseLineKind = z.infer<typeof expenseLineKindSchema>;
 
+/**
+ * Whether an Expense row is a line item or a slice of an un-itemized total.
+ *
+ * `lineKind` answers "what role does this play on the receipt"; `lineBasis`
+ * answers "does this row correspond to something you can point at". They are
+ * orthogonal: an `allocation` is still `principal` money.
+ *
+ * `allocation` covers the two ways a lump sum gets cut into ledger rows without
+ * ever being itemized:
+ *   - by payment schedule — a deposit and a balance on one vendor order, where
+ *     the deposit is money on account and buys no particular item; and
+ *   - by an estimated materials/labor split of a single non-itemized contract,
+ *     where `costType` on the row is a guess rather than a vendor-stated fact.
+ *
+ * Consequences worth knowing before you read one of these rows:
+ *   - it can never carry a `productId` (the money doesn't decompose per item),
+ *     so it is correctly absent from every "goods without a product" worklist;
+ *   - its `costType` may be an estimate, so materials-vs-services breakdowns
+ *     mix guesses with facts wherever allocations are included.
+ *
+ * Deliberately NOT inferred from the name. "1/2" matches `1/2 in. conduit` far
+ * more often than an installment half, and the population is small enough to
+ * set by hand — see the `purchase-import` skill's checklist.
+ */
+export const expenseLineBasisValues = ["item_line", "allocation"] as const;
+
+export const expenseLineBasisSchema = z.enum(expenseLineBasisValues);
+export type ExpenseLineBasis = z.infer<typeof expenseLineBasisSchema>;
+
 export const isPrincipalExpense = (expense: {
   lineKind: ExpenseLineKind;
 }): boolean => expense.lineKind === "principal";

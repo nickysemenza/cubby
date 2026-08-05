@@ -156,6 +156,7 @@ const filterSearchKeys = {
     "date",
     "costType",
     "lineKind",
+    "lineBasis",
     "trade",
     "future",
     "cost",

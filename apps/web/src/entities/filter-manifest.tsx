@@ -39,6 +39,7 @@ import {
   costRangeOptions,
   costTypeOptions,
   dateRangeOptions,
+  expenseLineBasisOptions,
   expenseLineKindOptions,
   futureFilterOptions,
   productQuantityRangeOptions,
@@ -578,6 +579,15 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       kind: "multiselect",
       placeholder: "Filter by line kind...",
       options: expenseLineKindOptions,
+    },
+    {
+      // Orthogonal to `lineKind`, despite the adjacent names — see
+      // `expenseLineBasisValues`. Surfaced as "Itemization" so the two never
+      // read as one taxonomy split across two controls.
+      columnId: "lineBasis",
+      kind: "multiselect",
+      placeholder: "Filter by itemization...",
+      options: expenseLineBasisOptions,
     },
     {
       columnId: "trade",
