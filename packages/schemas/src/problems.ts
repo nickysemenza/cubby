@@ -4,6 +4,7 @@ import { shortcodeEntities, type ShortcodeEntity } from "./entity-manifest";
 import { referentialLivenessViolationSchema } from "./entity-integrity";
 import {
   anyShortcodeSchema,
+  expenseShortcode,
   financialAccountShortcode,
   financialTransactionShortcode,
   ingredientShortcode,
@@ -525,6 +526,77 @@ export const purchaseFinancialSettlementMismatchSchema = z.object({
   }),
 });
 
+/**
+ * An unlinked Expense that looks like the same money as an already-itemized
+ * Purchase — the hand-entered lump that a later vendor import duplicated.
+ *
+ * **Advisory, not a defect.** The 2026-07/08 imports minted itemized purchases
+ * for orders already booked as single 2024 lump rows; neither side knew about
+ * the other, so seven orders were counted twice ($296.61). Nothing detected it.
+ *
+ * The row is keyed on the **Expense**, because that is what a human acts on: the
+ * fix is to carry its project/trade onto the purchase's lines, preserve its name
+ * in the purchase's `displayLabel`, then delete it. Never auto-applied — a
+ * same-amount coincidence is real (a $22.00 "fiskars pruners" row collided with
+ * an unrelated $22.00 Amazon order), so this reports and a human decides.
+ *
+ * `matchedOn` distinguishes the two arms. `stated_total` is not redundant with
+ * `expense_total`: three of the seven real duplicates matched only the stated
+ * total, because the import had left those purchases under-itemized (missing tax
+ * or a line the vendor CSV never exported) — which made them the worst
+ * double-counts, not the weakest signals.
+ */
+export const duplicateSpendCandidateSchema = z.object({
+  /** The unlinked Expense — the row to act on. */
+  id: expenseShortcode,
+  expenseName: z.string(),
+  cost: z.number(),
+  expenseDate: plainDate.nullable(),
+  /** The itemized purchase that appears to already cover this money. */
+  purchaseId: purchaseShortcode,
+  /** Through the join; null only if the vendor was soft-deleted. */
+  vendorName: z.string().nullable(),
+  purchaseDate: plainDate.nullable(),
+  /** `SUM(cost)` over the purchase's live expenses. */
+  purchaseExpenseTotal: z.number(),
+  /** What the paperwork claimed. Never spend. Null if none recorded. */
+  purchaseStatedTotal: z.number().nullable(),
+  purchaseExpenseCount: z.number().int(),
+  /** Which total the expense's cost equalled. */
+  matchedOn: z.enum(["expense_total", "stated_total"]),
+  dayDelta: z.number().int(),
+  /** Trigram score against the purchase's line and product names, 0–1. */
+  nameSimilarity: z.number(),
+  /** Other purchases this expense also matched, all scoring lower. */
+  alternateMatchCount: z.number().int(),
+});
+
+/**
+ * Trigram floor for calling an unlinked Expense a duplicate of a Purchase.
+ *
+ * Calibrated against every duplicate ever resolved in this ledger — 22 rows that
+ * a human deleted as duplicates, replayed through the detector. 21 of them score
+ * **0.217–1.000**; the live same-amount coincidence that must NOT fire scores
+ * 0.095, and matching the *wrong* one of two purchases sharing a price scores
+ * 0.000. Any floor in (0.107, 0.217] yields 21/22 recall at 100% precision.
+ *
+ * The 22nd — "blum hardware test" against twelve SKU-described Blum parts — scores
+ * 0.107 and is a deliberate miss. Its hand-entered name carries only a brand that
+ * appears in none of the vendor's line names, so the signal genuinely is not there;
+ * catching it would mean a floor of 0.10, which sits *below* the 0.088 median of
+ * random pairs and would stop discriminating at all. A lump named only for a brand
+ * the vendor doesn't print is the known false-negative class.
+ *
+ * This is a **secondary** gate and is worthless on its own — across all 127,686
+ * orphan x purchase pairs the score has mean 0.10 and p95 0.25, so a fifth of
+ * random pairs clear it. It only discriminates once amount + date has pruned the
+ * field to a handful. Keep it applied after that join, never before.
+ */
+export const DUPLICATE_SPEND_NAME_SIMILARITY = 0.15;
+
+/** Days either side of a purchase's date an unlinked expense may sit and still pair. */
+export const DUPLICATE_SPEND_DAY_WINDOW = 7;
+
 export const duplicateFinancialTransactionSourceRefSchema = z.object({
   source: z.string(),
   externalId: z.string(),
@@ -589,6 +661,7 @@ const problemsFastShape = {
   purchaseFinancialSettlementMismatches: z.array(
     purchaseFinancialSettlementMismatchSchema,
   ),
+  duplicateSpendCandidates: z.array(duplicateSpendCandidateSchema),
   duplicateFinancialTransactionSourceRefs: z.array(
     duplicateFinancialTransactionSourceRefSchema,
   ),
@@ -780,6 +853,12 @@ export const PROBLEM_CLASS = {
   // it is reported, never counted, and never red.
   purchasesNotReconciling: "coverage",
   purchaseFinancialSettlementMismatches: "coverage",
+  // Advisory for a different reason than the two above: the match itself is a
+  // heuristic. Amount + date is what finds these at all, and two unrelated things
+  // legitimately cost the same on the same day, so a row here is a cue to look
+  // rather than a fault. It is also the one detector whose "fix" destroys data
+  // (delete the duplicate), which must never be mechanical or red.
+  duplicateSpendCandidates: "coverage",
   duplicateFinancialTransactionSourceRefs: "defect",
   duplicateFinancialAccountSourceAliases: "defect",
   invalidFinancialJson: "defect",
@@ -952,6 +1031,9 @@ export type PurchaseNotReconciling = z.infer<
 >;
 export type PurchaseFinancialSettlementMismatch = z.infer<
   typeof purchaseFinancialSettlementMismatchSchema
+>;
+export type DuplicateSpendCandidate = z.infer<
+  typeof duplicateSpendCandidateSchema
 >;
 export type DuplicateFinancialTransactionSourceRef = z.infer<
   typeof duplicateFinancialTransactionSourceRefSchema

@@ -69,6 +69,8 @@ const PROBLEM_LABELS: Record<
   purchasesNotReconciling: (n) =>
     `${n} stated total${n === 1 ? "" : "s"} need review`,
   purchaseFinancialSettlementMismatches: (n) => `${n} settlement mismatch`,
+  duplicateSpendCandidates: (n) =>
+    `${n} possible duplicate expense${n === 1 ? "" : "s"}`,
   duplicateFinancialTransactionSourceRefs: (n) =>
     `${n} duplicate transaction reference`,
   duplicateFinancialAccountSourceAliases: (n) => `${n} duplicate account alias`,
