@@ -122,6 +122,40 @@ describe("duplicate spend section", () => {
     expect(hrefs.some((href) => href.includes("PUR-YUKU"))).toBe(false);
   });
 
+  it("renders the common row against the purchase's line sum, with no gap or alternate badges", () => {
+    // The default candidate is the shape most rows take: matched on the expense
+    // total, same day, nothing else in contention. Both conditional badges take
+    // their empty branch here, and the subtitle takes the expense-total side.
+    // biome-ignore lint/complexity/noUselessFragments: `node` is a ReactNode; the fragment is what makes it a ReactElement for render()
+    render(<>{entry()?.node(problems([candidate()]), undefined as never)}</>);
+
+    expect(screen.getByText(/Best Buy expense total of \$43\.44/)).toBeTruthy();
+    expect(screen.getByText(/across 2 lines/)).toBeTruthy();
+    expect(screen.queryByText(/apart/)).toBeNull();
+    expect(screen.queryByText(/weaker match/)).toBeNull();
+  });
+
+  it("handles the singular and deleted-vendor wording", () => {
+    const node = entry()?.node(
+      problems([
+        candidate({
+          vendorName: null,
+          purchaseExpenseCount: 1,
+          dayDelta: 1,
+          alternateMatchCount: 2,
+        }),
+      ]),
+      undefined as never,
+    );
+    // biome-ignore lint/complexity/noUselessFragments: `node` is a ReactNode; the fragment is what makes it a ReactElement for render()
+    render(<>{node}</>);
+
+    expect(screen.getByText(/deleted vendor expense total/)).toBeTruthy();
+    expect(screen.getByText(/across 1 line$/)).toBeTruthy();
+    expect(screen.getByText("1 day apart")).toBeTruthy();
+    expect(screen.getByText("+2 weaker matches")).toBeTruthy();
+  });
+
   it("renders the empty state when nothing is flagged", () => {
     // biome-ignore lint/complexity/noUselessFragments: as above — ReactNode to ReactElement
     render(<>{entry()?.node(problems([]), undefined as never)}</>);
