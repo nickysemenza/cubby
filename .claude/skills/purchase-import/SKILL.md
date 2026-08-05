@@ -56,6 +56,15 @@ Expense → Purchase ← FinancialTransaction → FinancialAccount
   When such an order does contain discrete goods, promote them as Products with
   an explicit `price` from the quote or invoice and leave the money rows
   unlinked — that is the sanctioned pattern (Ferguson PUR-SHRG), not a workaround.
+  ⚠️ **Search before creating any of them.** An allocation purchase is exactly
+  where a Product is likely to *already* exist — nothing links it to the money
+  rows, so it is invisible from the Expense side and reads as un-productized.
+  All six Ferguson appliances were re-created as duplicates on 2026-08-05 for
+  this reason. A collision check alone will not save you: the originals carried
+  `ferguson`/`legacy_unspecified` and the new ids were `ferguson`/`retailer_sku`,
+  a different slot, so the check reported no match. Run the name-search fallback
+  in [matching-and-duplicates.md](references/matching-and-duplicates.md) too, and
+  search by **model** — that is what actually matched here.
 - A `Purchase` is one vendor order, receipt, or deliberately separate purchase
   event. `statedTotal` is the literal vendor-printed amount, never a rollup.
 - A `FinancialTransaction` is settlement evidence: a charge, refund,
