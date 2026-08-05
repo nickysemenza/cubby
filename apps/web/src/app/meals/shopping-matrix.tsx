@@ -1,5 +1,7 @@
+import type { UnexpandedSubRecipe } from "@cubby/schemas/meal";
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
+import { TriangleAlert } from "lucide-react";
 import { useMemo } from "react";
 import { Row } from "~/components/layout";
 import { CrossTabTable } from "~/components/matrix/cross-tab-table";
@@ -58,11 +60,13 @@ export function ShoppingMatrix({
   rows,
   columns,
   groups,
+  unexpanded,
   onToggleCheck,
 }: {
   rows: ShoppingRow[];
   columns: ShoppingLineColumn[];
   groups: ShoppingMealGroup[];
+  unexpanded: UnexpandedSubRecipe[];
   onToggleCheck: (key: string) => void;
 }) {
   const crossTabColumns = useMemo(
@@ -80,24 +84,50 @@ export function ShoppingMatrix({
     [groups],
   );
 
-  /** Per row: its cell values by column key, and the row's own max. */
+  /** Per row: cell values by column key, the row's own max, and provenance. */
   const cells = useMemo(() => {
     const byRow = new Map<
       string,
-      { values: Map<string, number>; max: number }
+      {
+        values: Map<string, number>;
+        /** Sub-recipe chains the cell's value came through, if any. */
+        via: Map<string, string[]>;
+        max: number;
+      }
     >();
     for (const row of rows) {
       const values = new Map<string, number>();
+      const via = new Map<string, string[]>();
       let max = 0;
       for (const c of row.item.perMeal) {
         const key = String(c.lineIndex);
         values.set(key, (values.get(key) ?? 0) + c.needValue);
+        if (c.via.length > 0) {
+          const chain = c.via.map((v) => v.name).join(" → ");
+          const seen = via.get(key);
+          if (seen) {
+            if (!seen.includes(chain)) seen.push(chain);
+          } else via.set(key, [chain]);
+        }
       }
       for (const v of values.values()) if (v > max) max = v;
-      byRow.set(row.key, { values, max });
+      byRow.set(row.key, { values, via, max });
     }
     return byRow;
   }, [rows]);
+
+  /** Planned lines whose ingredients are incomplete, by column key. */
+  const blockedByColumn = useMemo(() => {
+    const byLine = new Map<string, string[]>();
+    for (const u of unexpanded) {
+      const key = String(u.lineIndex);
+      const names = byLine.get(key);
+      if (names) {
+        if (!names.includes(u.name)) names.push(u.name);
+      } else byLine.set(key, [u.name]);
+    }
+    return byLine;
+  }, [unexpanded]);
 
   const shortCount = rows.filter((r) => r.shortfall > 0).length;
 
@@ -133,22 +163,39 @@ export function ShoppingMatrix({
             </span>
           );
         }}
-        renderColumnHeader={({ data: column }) => (
-          <>
-            <Link
-              {...entityDetailLink("recipe", column.recipeId)}
-              title={column.recipeName}
-              className="block truncate font-medium normal-case tracking-normal hover:underline"
-            >
-              {column.recipeName}
-            </Link>
-            {column.scale !== 1 && (
-              <span className="font-normal text-2xs text-primary normal-case tracking-normal">
-                {column.scale}×
-              </span>
-            )}
-          </>
-        )}
+        renderColumnHeader={({ key, data: column }) => {
+          // The matrix is the only view where "which planned line is
+          // incomplete" is a visible axis, so it localizes what the note above
+          // can only state globally.
+          const blocked = blockedByColumn.get(key);
+          return (
+            <>
+              <Link
+                {...entityDetailLink("recipe", column.recipeId)}
+                title={column.recipeName}
+                className="block truncate font-medium normal-case tracking-normal hover:underline"
+              >
+                {column.recipeName}
+              </Link>
+              <Row justify="end" align="center" gap="tight">
+                {column.scale !== 1 && (
+                  <span className="font-normal text-2xs text-primary normal-case tracking-normal">
+                    {column.scale}×
+                  </span>
+                )}
+                {blocked && (
+                  <span
+                    role="img"
+                    title={`Missing ingredients from ${blocked.join(", ")}`}
+                    aria-label={`Incomplete: ${blocked.join(", ")}`}
+                  >
+                    <TriangleAlert className="size-3 shrink-0 text-warning" />
+                  </span>
+                )}
+              </Row>
+            </>
+          );
+        }}
         renderRowHeader={({ data: row }) => (
           <Row align="center" gap="snug">
             <Checkbox
@@ -198,11 +245,29 @@ export function ShoppingMatrix({
           if (value == null || !cell || cell.values.size < 2) return undefined;
           return HEAT_CLASSES[heatBucket(value, cell.max)];
         }}
+        cellTitle={({ key }, column) => {
+          const chains = cells.get(key)?.via.get(column.key);
+          return chains?.length ? `via ${chains.join("; ")}` : undefined;
+        }}
         renderCell={({ key, data: row }, column) => {
-          const value = cells.get(key)?.values.get(column.key);
+          const cell = cells.get(key);
+          const value = cell?.values.get(column.key);
+          if (value == null) return null;
           // Same WASM formatter the Need column uses, so a cell and its row
           // total can never render by different rules.
-          return value == null ? null : formatAmount(value, row.item.basisUnit);
+          const text = formatAmount(value, row.item.basisUnit);
+          // Marked when the value arrived entirely through a sub-recipe — the
+          // chain itself is in the cell's title.
+          return cell?.via.has(column.key) ? (
+            <>
+              <span className="text-muted-foreground" aria-hidden>
+                ↳{" "}
+              </span>
+              {text}
+            </>
+          ) : (
+            text
+          );
         }}
         renderPinnedCell={({ data: row }, pinned) => {
           if (pinned.key === "need") return needText(row);

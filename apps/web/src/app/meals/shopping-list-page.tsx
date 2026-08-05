@@ -13,6 +13,7 @@ import { cn } from "~/lib/utils";
 import type { ShoppingListView } from "./meal-search";
 import { ShoppingCard } from "./shopping-card";
 import { ShoppingMatrix } from "./shopping-matrix";
+import { ShoppingOmissionNote } from "./shopping-omission-note";
 import { ShoppingTable } from "./shopping-table";
 import { useShoppingList } from "./use-shopping-list";
 
@@ -131,6 +132,11 @@ export function ShoppingListPage({
             })}
           </Row>
 
+          {/* Above the renderer switch: an omission in the DATA, so it holds
+              whichever way the rows are drawn — and whether or not there are
+              any rows at all. */}
+          <ShoppingOmissionNote unexpanded={data.unexpanded} />
+
           {rows.length === 0 ? (
             <Description>Nothing to buy for the selected meals.</Description>
           ) : (
@@ -164,6 +170,7 @@ export function ShoppingListPage({
                     rows={rows}
                     columns={columns}
                     groups={groups}
+                    unexpanded={data.unexpanded}
                     onToggleCheck={toggleChecked}
                   />
                 ))

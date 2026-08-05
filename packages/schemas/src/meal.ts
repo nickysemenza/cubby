@@ -216,6 +216,8 @@ export const unexpandedSubRecipeOut = z.object({
   date: mealDate,
   parentRecipeId: recipeShortcode,
   parentRecipeName: z.string(),
+  /** The planned line this gap belongs to — a matrix column key. */
+  lineIndex: z.number().int().nonnegative(),
 });
 export type UnexpandedSubRecipe = z.infer<typeof unexpandedSubRecipeOut>;
 

@@ -76,9 +76,10 @@ export function RecipeAvailabilityPanel({
     );
   }
 
-  // Sub-recipes aren't expanded by the engine, so they're excluded from
-  // coverage — keep them out of the "need to buy" line too (they show in the
-  // full list below with their own label).
+  // A `subrecipe` row is one the engine could NOT expand, so its ingredients
+  // are unknown — excluded from coverage (you can't score what you can't see)
+  // and from the "need to buy" line. An expandable sub-recipe leaves no row
+  // here at all; its ingredients are counted like any other.
   const shortfalls = data.ingredients.filter(
     (row) => row.status !== "ok" && row.status !== "subrecipe",
   );
@@ -91,14 +92,26 @@ export function RecipeAvailabilityPanel({
           <ChefHat className="size-3.5 text-slate" />
           <span className="eyebrow my-0">Can I make this?</span>
         </Row>
-        <span
-          className={cn(
-            "font-mono text-xs tabular-nums",
-            ready ? "text-positive" : "text-warning",
+        <Row align="center" gap="xs">
+          {/* The omitted count: coverage above is computed over what could be
+              resolved, so say plainly when that isn't everything. */}
+          {data.unexpandedSubRecipes > 0 && (
+            <span
+              className="font-mono text-2xs text-warning tabular-nums"
+              title="These sub-recipes couldn't be broken down, so their ingredients aren't counted"
+            >
+              +{data.unexpandedSubRecipes} not counted
+            </span>
           )}
-        >
-          {data.availableIngredients} of {data.totalIngredients} on hand
-        </span>
+          <span
+            className={cn(
+              "font-mono text-xs tabular-nums",
+              ready ? "text-positive" : "text-warning",
+            )}
+          >
+            {data.availableIngredients} of {data.totalIngredients} on hand
+          </span>
+        </Row>
       </Row>
 
       {ready ? (

@@ -180,6 +180,23 @@ function RowGroup({
                 >
                   {c.recipeName}
                 </Link>
+                {/* Provenance for a need that came through a sub-recipe. The
+                    last hop is the useful one ("via Dough"); the full chain is
+                    in the title for the rare nested case. */}
+                {c.via.length > 0 && (
+                  <span title={c.via.map((v) => v.name).join(" → ")}>
+                    {" · via "}
+                    <Link
+                      {...entityDetailLink(
+                        "recipe",
+                        c.via[c.via.length - 1]!.recipeId,
+                      )}
+                      className="hover:underline"
+                    >
+                      {c.via[c.via.length - 1]!.name}
+                    </Link>
+                  </span>
+                )}
               </span>
             </TableCell>
             <TableCell className="py-1 text-right tabular-nums">

@@ -262,6 +262,7 @@ const getShoppingList = protectedProcedure
                 date: meta.date,
                 parentRecipeId: meta.recipeId,
                 parentRecipeName: meta.recipeName,
+                lineIndex: b.lineIndex,
               },
             ]
           : [];
