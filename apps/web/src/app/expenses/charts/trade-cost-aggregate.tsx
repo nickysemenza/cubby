@@ -5,17 +5,21 @@ import {
   type Trade,
 } from "@cubby/schemas/project";
 import { ResponsiveBar } from "@nivo/bar";
-import { sum } from "es-toolkit";
 import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
 import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
+import { pivotTradeCostContributions } from "~/app/projects/charts/trade-cost-pivot";
+import { capitalize, TRADE_LABELS } from "~/app/projects/project-formatting";
+import { CrossTabTable } from "~/components/matrix/cross-tab-table";
+import type { CrossTabColumn } from "~/components/matrix/group-columns";
+import { HEAT_CLASSES, heatBucket } from "~/components/matrix/heat-scale";
 import {
   cellMono,
-  HEAT_CLASSES,
-  heatBucket,
-} from "~/app/projects/charts/heat-scale";
-import { capitalize, TRADE_LABELS } from "~/app/projects/project-formatting";
+  EMPTY_MARK,
+  emptyCell,
+  totalCell,
+} from "~/components/matrix/matrix-chrome";
 import {
   nivoBarChrome,
   nivoChartTheme,
@@ -26,53 +30,28 @@ import { cn, formatCurrency } from "~/lib/utils";
 
 const COST_KEYS = costTypeValues;
 
-type PivotRow = {
-  trade: Trade;
-  cells: Record<CostType, number>;
-  total: number;
-};
+/** Column key is the cost type itself, so cells index `row.cells` directly. */
+const COLUMNS: CrossTabColumn<CostType>[] = COST_KEYS.map((key) => ({
+  key,
+  data: key,
+}));
+
+const PINNED = [{ key: "total", label: "Total", className: totalCell }];
 
 /**
- * Groups `expense.analytics`'s `tradeCostMatrix` rows (already one row per
- * trade×costType, server-aggregated) into the same trade-keyed pivot shape
- * `~/app/projects/charts/trade-cost-pivot.ts` builds from raw expenses —
- * kept as a local, `net`-keyed variant here so the analytics view never needs
- * a raw expense fetch. Negative-net rows are kept (refunds/credits are
- * real); only all-zero trades are dropped.
+ * `expense.analytics`'s `tradeCostMatrix` is already one row per trade×costType
+ * (server-aggregated), so it only needs normalizing to the shared contribution
+ * shape — the pivot itself, including keeping negative-net rows (refunds and
+ * credits are real) while dropping all-zero trades, lives in trade-cost-pivot.
  */
-function buildAggregatePivot(rows: ExpenseTradeCostAggregate[]) {
-  const grouped = new Map<Trade, Record<CostType, number>>();
-  const emptyCells = (): Record<CostType, number> => ({
-    materials: 0,
-    tools: 0,
-    services: 0,
-  });
-
-  for (const row of rows) {
-    let entry = grouped.get(row.trade);
-    if (!entry) {
-      entry = emptyCells();
-      grouped.set(row.trade, entry);
-    }
-    entry[row.costType] += row.net;
-  }
-
-  const columnTotals = emptyCells();
-  let maxCell = 0;
-  const pivotRows: PivotRow[] = Array.from(grouped.entries())
-    .map(([trade, cells]) => {
-      for (const key of COST_KEYS) {
-        columnTotals[key] += cells[key];
-        if (cells[key] > maxCell) maxCell = cells[key];
-      }
-      return { trade, cells, total: sum(Object.values(cells)) };
-    })
-    .filter((row) => COST_KEYS.some((key) => row.cells[key] !== 0))
-    .sort((a, b) => b.total - a.total);
-
-  const grandTotal = sum(Object.values(columnTotals));
-  return { rows: pivotRows, columnTotals, grandTotal, maxCell };
-}
+const buildAggregatePivot = (rows: ExpenseTradeCostAggregate[]) =>
+  pivotTradeCostContributions(
+    rows.map((row) => ({
+      trade: row.trade,
+      costType: row.costType,
+      value: row.net,
+    })),
+  );
 
 /** Stacked horizontal bars — trade × cost type, positive-net trades only
  * (stacked bars can't render a negative segment; the matrix below keeps them). */
@@ -185,113 +164,74 @@ export function TradeCostMatrixAggregate({
   const activeCellRing = "ring-2 ring-primary ring-inset";
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-left">
-        <thead>
-          <tr className="eyebrow border-primary border-b-2">
-            <th className="sticky left-0 z-10 bg-card px-2 py-2 font-medium">
-              Trade
-            </th>
-            {COST_KEYS.map((key) => (
-              <th key={key} className="px-2 py-2 text-right font-medium">
-                {capitalize(key)}
-              </th>
-            ))}
-            <th className="px-2 py-2 text-right font-medium text-primary">
-              Total
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr
-              key={row.trade}
-              className="border-border border-b border-dashed"
-            >
-              <th
-                scope="row"
-                className="sticky left-0 z-10 bg-card px-2 py-2 text-left font-medium text-sm"
-              >
-                {TRADE_LABELS[row.trade]}
-              </th>
-              {COST_KEYS.map((key) => {
-                const value = row.cells[key];
-                const bucket = heatBucket(value, maxCell);
-                const heat =
-                  value === 0
-                    ? "text-muted-foreground/30"
-                    : HEAT_CLASSES[bucket];
-                const label = value !== 0 ? formatCurrency(value, 0) : "·";
-                const title =
-                  value !== 0 ? formatCurrency(value, 2) : undefined;
-
-                if (!onCellClick) {
-                  return (
-                    <td key={key} className={cn(cellMono, heat)} title={title}>
-                      {label}
-                    </td>
-                  );
-                }
-                return (
-                  <td key={key} className="p-0">
-                    <button
-                      type="button"
-                      onClick={() => onCellClick(row.trade, key)}
-                      title={title}
-                      className={cn(
-                        cellMono,
-                        heat,
-                        interactiveCell,
-                        isActive(row.trade, key) && activeCellRing,
-                      )}
-                    >
-                      {label}
-                    </button>
-                  </td>
-                );
-              })}
-              {onCellClick ? (
-                <td className="p-0">
-                  <button
-                    type="button"
-                    onClick={() => onCellClick(row.trade, null)}
-                    className={cn(
-                      cellMono,
-                      "font-medium text-primary",
-                      interactiveCell,
-                      isActive(row.trade, null) && activeCellRing,
-                    )}
-                  >
-                    {formatCurrency(row.total, 0)}
-                  </button>
-                </td>
-              ) : (
-                <td className={cn(cellMono, "font-medium text-primary")}>
-                  {formatCurrency(row.total, 0)}
-                </td>
-              )}
-            </tr>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr className="eyebrow border-primary border-t-2">
-            <th className="sticky left-0 z-10 bg-card px-2 py-2 text-left font-medium">
-              Total
-            </th>
-            {COST_KEYS.map((key) => (
-              <td
-                key={key}
-                className={cn(cellMono, "font-semibold text-primary")}
-              >
-                {formatCurrency(columnTotals[key], 0)}
-              </td>
-            ))}
-            <td className={cn(cellMono, "font-semibold text-primary")}>
-              {formatCurrency(grandTotal, 0)}
-            </td>
-          </tr>
-        </tfoot>
-      </table>
-    </div>
+    <CrossTabTable
+      cornerLabel="Trade"
+      columns={COLUMNS}
+      rows={rows.map((row) => ({ key: row.trade, data: row }))}
+      pinned={PINNED}
+      bareCells={Boolean(onCellClick)}
+      footer={[
+        {
+          key: "total",
+          label: "Total",
+          cellClassName: "font-semibold text-primary",
+          cell: (key) => formatCurrency(columnTotals[key as CostType], 0),
+          pinnedCell: () => formatCurrency(grandTotal, 0),
+        },
+      ]}
+      renderColumnHeader={({ key }) => capitalize(key)}
+      renderRowHeader={({ data: row }) => TRADE_LABELS[row.trade]}
+      cellTitle={({ data: row }, { key }) => {
+        const value = row.cells[key as CostType];
+        return value !== 0 ? formatCurrency(value, 2) : undefined;
+      }}
+      cellClassName={({ data: row }, { key }) => {
+        const value = row.cells[key as CostType];
+        return value === 0
+          ? emptyCell
+          : HEAT_CLASSES[heatBucket(value, maxCell)];
+      }}
+      renderCell={({ data: row }, { key }) => {
+        const costType = key as CostType;
+        const value = row.cells[costType];
+        const label = value !== 0 ? formatCurrency(value, 0) : EMPTY_MARK;
+        if (!onCellClick) return label;
+        const heat =
+          value === 0 ? emptyCell : HEAT_CLASSES[heatBucket(value, maxCell)];
+        return (
+          <button
+            type="button"
+            onClick={() => onCellClick(row.trade, costType)}
+            title={value !== 0 ? formatCurrency(value, 2) : undefined}
+            className={cn(
+              cellMono,
+              heat,
+              interactiveCell,
+              isActive(row.trade, costType) && activeCellRing,
+            )}
+          >
+            {label}
+          </button>
+        );
+      }}
+      renderPinnedCell={({ data: row }) =>
+        onCellClick ? (
+          <button
+            type="button"
+            onClick={() => onCellClick(row.trade, null)}
+            className={cn(
+              cellMono,
+              totalCell,
+              interactiveCell,
+              isActive(row.trade, null) && activeCellRing,
+            )}
+          >
+            {formatCurrency(row.total, 0)}
+          </button>
+        ) : (
+          formatCurrency(row.total, 0)
+        )
+      }
+    />
   );
 }

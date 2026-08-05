@@ -39,14 +39,16 @@ import {
 } from "~/lib/recipe-costing";
 import {
   collectIngredientIds,
-  collectSubRecipeIds,
   getRecipeIngredientName,
 } from "~/lib/recipe-graph";
 import { dispatchBackgroundJobs } from "~/server/background-dispatch";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { RECOMPUTE_CHUNK_SIZE } from "~/server/queue-recompute";
-import { getRecipesByIDs } from "~/server/repo/recipe/crud";
+import {
+  getRecipesByIDs,
+  getSubRecipeClosure,
+} from "~/server/repo/recipe/crud";
 import {
   findParentRecipeIdsBatch,
   findRecipeIdsUsingIngredients,
@@ -182,23 +184,7 @@ export class RecipeCostingService {
     return withTrace(
       TraceNames.service("recipeCosting", "loadContext"),
       async (span) => {
-        const recipeMap: Record<string, RecipeGraphOut> = {};
-        const seen = new Set<string>();
-        let frontier = collectSubRecipeIds(recipes);
-        while (frontier.length > 0) {
-          const toFetch = frontier.filter((id) => !seen.has(id));
-          for (const id of toFetch) seen.add(id);
-          if (toFetch.length === 0) break;
-          const fetched = await getRecipesByIDs(
-            this.db,
-            await resolveAllPresent(this.db, "recipe", toFetch),
-          );
-          frontier = [];
-          for (const r of fetched) {
-            recipeMap[r.id] = r;
-            frontier.push(...collectSubRecipeIds([r]));
-          }
-        }
+        const recipeMap = await getSubRecipeClosure(this.db, recipes);
 
         const ingredientIds = collectIngredientIds([
           ...recipes,

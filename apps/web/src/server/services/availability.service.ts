@@ -1,7 +1,13 @@
-import type { WAvailabilityGroup } from "@cubby/recipebridge";
+import type {
+  WAvailabilityGroup,
+  WAvailabilityGroupResult,
+  WNeedsRecipe,
+} from "@cubby/recipebridge";
 import type {
   AggregatedNeed,
+  BlockedSubRecipe,
   IngredientAvailability,
+  NeedVia,
   RecipeAvailability,
 } from "@cubby/schemas/availability";
 import type { Amount } from "@cubby/schemas/codec";
@@ -10,22 +16,29 @@ import {
   type IngredientShortcode,
   type ProductId,
   type ProductShortcode,
-  type RecipeId,
   type RecipeShortcode,
+  unsafeIngredientShortcode,
   unsafeProductId,
+  unsafeRecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
-import type { SectionIngredientOut } from "@cubby/schemas/recipe";
+import type { RecipeGraphOut } from "@cubby/schemas/recipe";
 import { uniq } from "es-toolkit";
 import {
   evaluateAvailability,
+  expandRecipeNeeds,
+  fromWAmount,
   toWAmount,
   toWProductInput,
 } from "~/lib/recipe-costing";
+import { getRecipeIngredientName } from "~/lib/recipe-graph";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { getInventoryForProducts } from "~/server/repo/inventory";
-import { getRecipeByID } from "~/server/repo/recipe";
+import {
+  getRecipesByIDs,
+  getSubRecipeClosure,
+} from "~/server/repo/recipe/crud";
 import {
   resolveAllPresent,
   resolveLiveShortcodes,
@@ -62,19 +75,75 @@ const resolveIngredientIds = async (
   shortcodes: IngredientShortcode[],
 ): Promise<IngredientId[]> => resolveAllPresent(db, "ingredient", shortcodes);
 
+/** One planned recipe to make, at a scale. */
+export type PlannedLine = { recipeId: RecipeShortcode; scale: number };
+
+/** One ingredient need produced by one planned line. */
+type NeedContribution = {
+  ingredientId: IngredientShortcode;
+  name: string;
+  /** `null` for an amount-less line ("salt, to taste"). */
+  amount: Amount | null;
+  lineIndex: number;
+  via: NeedVia[];
+};
+
+/** A contribution the evaluator can actually score. */
+type AmountedContribution = NeedContribution & { amount: Amount };
+
+type NeedGroup = {
+  ingredientId: IngredientShortcode;
+  name: string;
+  /**
+   * Contributions carrying an amount, in the order they were sent to WASM —
+   * positionally 1:1 with `result.sources`.
+   */
+  contributions: AmountedContribution[];
+  /** Absent when this ingredient was only ever mentioned without an amount. */
+  result: WAvailabilityGroupResult | undefined;
+};
+
+type EvaluatedNeeds = {
+  /** One entry per distinct ingredient, in first-appearance order. */
+  groups: NeedGroup[];
+  blocked: BlockedSubRecipe[];
+  rootsByShortcode: Map<RecipeShortcode, RecipeGraphOut>;
+};
+
+const toWNeedsRecipe = (recipe: RecipeGraphOut): WNeedsRecipe => ({
+  id: recipe.id,
+  name: recipe.name,
+  // `recipeYieldSchema` is {value, unit} — structurally a WAmount already.
+  recipe_yield: recipe.yield ?? null,
+  rows: recipe.sections.flatMap((section) =>
+    section.ingredients.map((si) => ({
+      kind:
+        si.type === "recipe" ? ("recipe" as const) : ("ingredient" as const),
+      target_id: si.type === "recipe" ? si.recipe.id : si.ingredient.id,
+      name: getRecipeIngredientName(si),
+      amounts: si.amounts.map(toWAmount),
+    })),
+  ),
+});
+
+const toVia = (via: { recipe_id: string; name: string }[]): NeedVia[] =>
+  via.map((v) => ({
+    recipeId: unsafeRecipeShortcode(v.recipe_id),
+    name: v.name,
+  }));
+
 // Output types live in @cubby/schemas/availability (single source of
 // truth, shared with the suggestions router's .output()).
 
 /**
- * Cross-references a recipe's ingredients against current inventory, reconciling
- * units through each linked product's unit mappings, to answer "do I have what
- * this recipe needs, and what am I short?".
+ * Cross-references planned recipes against current inventory, reconciling units
+ * through each linked product's unit mappings, to answer "do I have what this
+ * needs, and what am I short?".
  *
- * The gram-first reconciliation + status verdict run in Rust (recipebridge's
- * availability module, sharing the costing engine's conversion kernel): grams
- * basis whenever every need converts to weight, else the authored unit; mixed
- * units with no weight basis surface as `unconvertible` rather than a bogus
- * total. This service owns the DB loads and shapes the batched WASM result.
+ * Sub-recipe expansion, gram-first reconciliation, and the status verdict all
+ * run in Rust (recipebridge's `needs` + `availability` modules, sharing the
+ * costing engine's conversion kernel). This service owns the DB loads and
+ * shapes the batched WASM results.
  *
  * This is the shared engine behind "what can I make?", the find_cookable_recipes
  * agent tool, and the meal-planning shopping list.
@@ -85,194 +154,78 @@ export class AvailabilityService {
     private usdaClient: USDAClient,
   ) {}
 
-  async getRecipeAvailability(
-    recipeShortcode: RecipeShortcode,
-  ): Promise<RecipeAvailability> {
-    const recipeId = await resolveOrThrow(this.db, "recipe", recipeShortcode);
-    const recipe = await getRecipeByID(this.db, recipeId);
-    if (!recipe) {
-      throw createAppError("RECIPE_NOT_FOUND", `Recipe ${recipeId} not found`);
-    }
-
-    const sectionIngredients = recipe.sections.flatMap((s) => s.ingredients);
-
-    // Load each distinct direct ingredient with its products, food-enriched so
-    // USDA-derived mappings (e.g. density) are available for unit conversion.
-    const directIds = uniq(
-      sectionIngredients
-        .filter(
-          (si): si is Extract<SectionIngredientOut, { type: "ingredient" }> =>
-            si.type === "ingredient",
-        )
-        .map((si) => si.ingredient.id),
-    );
-    const ingredientEntries = await getIngredientsByIDs(
-      this.db,
-      this.usdaClient,
-      await resolveIngredientIds(this.db, directIds),
-    );
-    const ingMap = new Map<IngredientShortcode, IngredientWithFoodLeanOut>(
-      ingredientEntries.map((ing) => [ing.id, ing]),
-    );
-
-    // One batched inventory read across every product of every ingredient.
-    const productIds = uniq(
-      ingredientEntries.flatMap((ing) => ing.product.map((p) => p.id)),
-    );
-    const resolvedProducts = await resolveProductIds(this.db, productIds);
-    const inventory = await getInventoryForProducts(
-      this.db,
-      resolvedProducts.ids,
-    );
-    const inventoryByProduct = new Map<string, Amount[]>();
-    for (const { productId, amount } of inventory) {
-      const publicId = resolvedProducts.shortcodeById.get(productId);
-      if (!publicId) continue;
-      const list = inventoryByProduct.get(publicId);
-      if (list) list.push(amount);
-      else inventoryByProduct.set(publicId, [amount]);
-    }
-
-    // One availability group per resolvable ingredient row. Sub-recipes and
-    // amount-less rows are resolved directly below (never sent to WASM); the
-    // group key is the row's index, so results zip back in order.
-    const groups: WAvailabilityGroup[] = [];
-    sectionIngredients.forEach((si, idx) => {
-      if (si.type !== "ingredient") return;
-      const need = si.amounts[0];
-      if (!need) return;
-      const products = (ingMap.get(si.ingredient.id)?.product ?? []).map(
-        (p) => ({
-          product: toWProductInput(p),
-          on_hand: (inventoryByProduct.get(p.id) ?? []).map(toWAmount),
-        }),
-      );
-      groups.push({
-        key: String(idx),
-        needs: [{ amount: toWAmount(need), line_index: 0 }],
-        products,
-      });
-    });
-    const byKey = new Map(
-      (groups.length ? evaluateAvailability({ groups }).groups : []).map(
-        (g) => [g.key, g] as const,
-      ),
-    );
-
-    const ingredients = sectionIngredients.map(
-      (si, idx): IngredientAvailability => {
-        // Sub-recipes aren't expanded in v1 — flagged, excluded from coverage.
-        if (si.type === "recipe") {
-          return {
-            ingredientId: null,
-            name: si.recipe.name,
-            need: si.amounts[0] ?? null,
-            basisUnit: null,
-            needValue: null,
-            haveValue: null,
-            status: "subrecipe",
-          };
-        }
-        const need = si.amounts[0] ?? null;
-        if (!need) {
-          return {
-            ingredientId: si.ingredient.id,
-            name: si.ingredient.name,
-            need: null,
-            basisUnit: null,
-            needValue: null,
-            haveValue: null,
-            status: "missing",
-          };
-        }
-        const g = byKey.get(String(idx));
-        return {
-          ingredientId: si.ingredient.id,
-          name: si.ingredient.name,
-          need,
-          basisUnit: g?.basis_unit ?? need.unit,
-          needValue: g?.need_value ?? need.value,
-          haveValue: g?.have_value ?? null,
-          status: g?.status ?? "missing",
-        };
-      },
-    );
-
-    const resolvable = ingredients.filter((i) => i.status !== "subrecipe");
-    const available = resolvable.filter((i) => i.status === "ok");
-
-    return {
-      recipeId: recipe.id,
-      recipeName: recipe.name,
-      coverage:
-        resolvable.length === 0 ? 1 : available.length / resolvable.length,
-      totalIngredients: resolvable.length,
-      availableIngredients: available.length,
-      ingredients,
-      missing: resolvable.filter((i) => i.status !== "ok").map((i) => i.name),
-    };
-  }
-
   /**
-   * Aggregate ingredient needs across many planned recipes (the meal-planning
-   * shopping list). Each line is a recipe to make at a scale; needs are scaled and
-   * summed per ingredient, while on-hand inventory is counted ONCE per ingredient
-   * (summing per-line availability would multiply inventory by the number of
-   * recipes that use it — the load-bearing reason this isn't a sum of
-   * getRecipeAvailability calls). Reconciliation is the same gram-first basis.
+   * The shared core: planned lines → per-ingredient needs reconciled against
+   * inventory, plus the sub-recipes that couldn't be expanded.
    *
-   * `sources[].lineIndex` indexes back into `lines`, so the caller can attribute
-   * each contribution to its meal/recipe. Sub-recipes are not expanded in v1.
+   * Inventory is counted ONCE per ingredient. Summing per-line availability
+   * would multiply on-hand by the number of recipes using it — the load-bearing
+   * reason a shopping list isn't a sum of per-recipe availability calls, and
+   * equally the reason a single recipe listing flour twice can't score each
+   * mention against the whole shelf.
    */
-  async getAggregatedNeeds(
-    lines: { recipeId: RecipeId; scale: number }[],
-  ): Promise<AggregatedNeed[]> {
-    if (lines.length === 0) return [];
-
-    // Load each distinct recipe once (a recipe may be planned in several meals).
-    const distinctRecipeIds = uniq(lines.map((l) => l.recipeId));
-    const recipeEntries = await Promise.all(
-      distinctRecipeIds.map(
-        async (id) => [id, await getRecipeByID(this.db, id)] as const,
-      ),
-    );
-    const recipeMap = new Map(recipeEntries);
-
-    // Flatten to per-ingredient contributions, scaling each need by its line.
-    type Contribution = {
-      ingredientId: IngredientShortcode;
-      name: string;
-      scaledNeed: Amount;
-      lineIndex: number;
+  private async evaluateNeeds(lines: PlannedLine[]): Promise<EvaluatedNeeds> {
+    const empty: EvaluatedNeeds = {
+      groups: [],
+      blocked: [],
+      rootsByShortcode: new Map(),
     };
-    const contributions: Contribution[] = [];
-    lines.forEach((line, lineIndex) => {
-      const recipe = recipeMap.get(line.recipeId);
-      if (!recipe) return; // deleted/missing recipe — skip
-      for (const section of recipe.sections) {
-        for (const si of section.ingredients) {
-          if (si.type !== "ingredient") continue; // v1: sub-recipes not expanded
-          const need = si.amounts[0];
-          if (!need) continue;
-          contributions.push({
-            ingredientId: si.ingredient.id,
-            name: si.ingredient.name,
-            scaledNeed: {
-              value: need.value * line.scale,
-              unit: need.unit,
-              ...(need.upperValue != null
-                ? { upperValue: need.upperValue * line.scale }
-                : {}),
-            },
-            lineIndex,
-          });
-        }
-      }
+    if (lines.length === 0) return empty;
+
+    const distinctRecipeIds = uniq(lines.map((l) => l.recipeId));
+    const roots = await getRecipesByIDs(
+      this.db,
+      await resolveAllPresent(this.db, "recipe", distinctRecipeIds),
+    );
+    const rootsByShortcode = new Map(roots.map((r) => [r.id, r]));
+    if (roots.length === 0) return empty;
+
+    // Sub-recipe bodies aren't on the parent (a `recipe` row carries only a
+    // pointer + metadata), so the closure has to be fetched before expansion.
+    const closure = await getSubRecipeClosure(this.db, roots);
+
+    const expanded = expandRecipeNeeds({
+      // Only lines whose recipe actually loaded: a deleted recipe is skipped
+      // here rather than erroring, matching the previous behavior.
+      lines: lines.flatMap((line, lineIndex) =>
+        rootsByShortcode.has(line.recipeId)
+          ? [
+              {
+                recipe_id: line.recipeId,
+                scale: line.scale,
+                line_index: lineIndex,
+              },
+            ]
+          : [],
+      ),
+      recipes: [...roots, ...Object.values(closure)].map(toWNeedsRecipe),
     });
-    if (contributions.length === 0) return [];
+
+    const contributions: NeedContribution[] = expanded.needs.map((n) => ({
+      ingredientId: unsafeIngredientShortcode(n.ingredient_id),
+      name: n.name,
+      amount: n.amount ? fromWAmount(n.amount) : null,
+      lineIndex: n.line_index,
+      via: toVia(n.via),
+    }));
+
+    const blocked: BlockedSubRecipe[] = expanded.blocked.map((b) => ({
+      recipeId: unsafeRecipeShortcode(b.recipe_id),
+      name: b.name,
+      reason: b.reason,
+      amount: b.amount ? fromWAmount(b.amount) : null,
+      via: toVia(b.via),
+      lineIndex: b.line_index,
+    }));
+
+    if (contributions.length === 0) {
+      return { groups: [], blocked, rootsByShortcode };
+    }
 
     // Load each distinct ingredient (food-enriched, for density mappings) + one
-    // batched inventory read across all their products.
+    // batched inventory read across all their products. The id set already
+    // includes ingredients reached through sub-recipes, because the expansion
+    // walked the closure for us.
     const distinctIngredientIds = uniq(
       contributions.map((c) => c.ingredientId),
     );
@@ -301,57 +254,186 @@ export class AvailabilityService {
       else inventoryByProduct.set(publicId, [amount]);
     }
 
-    // Group contributions by ingredient and evaluate each once.
-    const byIngredient = new Map<IngredientShortcode, Contribution[]>();
+    // Group by ingredient, preserving first-appearance order.
+    const byIngredient = new Map<IngredientShortcode, NeedContribution[]>();
     for (const c of contributions) {
       const list = byIngredient.get(c.ingredientId);
       if (list) list.push(c);
       else byIngredient.set(c.ingredientId, [c]);
     }
 
-    // One group per ingredient: every contributing need (carrying its lineIndex)
-    // against the ingredient's products + on-hand (counted once). Reconciled in
-    // one WASM call; results zip back by ingredient id.
-    const groups: WAvailabilityGroup[] = Array.from(byIngredient.entries()).map(
-      ([ingredientId, contribs]) => ({
-        key: ingredientId,
-        needs: contribs.map((c) => ({
-          amount: toWAmount(c.scaledNeed),
+    const evaluable = Array.from(byIngredient.entries()).map(
+      ([ingredientId, all]) => ({
+        ingredientId,
+        all,
+        withAmount: all.filter(
+          (c): c is AmountedContribution => c.amount != null,
+        ),
+      }),
+    );
+
+    const groupsInput: WAvailabilityGroup[] = evaluable
+      .filter((g) => g.withAmount.length > 0)
+      .map((g) => ({
+        key: g.ingredientId,
+        needs: g.withAmount.map((c) => ({
+          amount: toWAmount(c.amount),
           line_index: c.lineIndex,
         })),
-        products: (ingMap.get(ingredientId)?.product ?? []).map((p) => ({
+        products: (ingMap.get(g.ingredientId)?.product ?? []).map((p) => ({
           product: toWProductInput(p),
           on_hand: (inventoryByProduct.get(p.id) ?? []).map(toWAmount),
         })),
-      }),
-    );
+      }));
+
     const byKey = new Map(
-      (groups.length ? evaluateAvailability({ groups }).groups : []).map(
-        (g) => [g.key, g] as const,
-      ),
+      (groupsInput.length
+        ? evaluateAvailability({ groups: groupsInput }).groups
+        : []
+      ).map((g) => [g.key, g] as const),
     );
 
-    return Array.from(byIngredient.entries()).map(
-      ([ingredientId, contribs]): AggregatedNeed => {
-        const g = byKey.get(ingredientId);
+    return {
+      groups: evaluable.map(({ ingredientId, all, withAmount }) => ({
+        ingredientId,
+        name: all[0]?.name ?? "",
+        contributions: withAmount,
+        result: byKey.get(ingredientId),
+      })),
+      blocked,
+      rootsByShortcode,
+    };
+  }
+
+  async getRecipeAvailability(
+    recipeShortcode: RecipeShortcode,
+  ): Promise<RecipeAvailability> {
+    // Resolve first so a missing recipe 404s rather than returning an empty
+    // availability that reads as "nothing needed".
+    await resolveOrThrow(this.db, "recipe", recipeShortcode);
+    const { groups, blocked, rootsByShortcode } = await this.evaluateNeeds([
+      { recipeId: recipeShortcode, scale: 1 },
+    ]);
+    const recipe = rootsByShortcode.get(recipeShortcode);
+    if (!recipe) {
+      throw createAppError(
+        "RECIPE_NOT_FOUND",
+        `Recipe ${recipeShortcode} not found`,
+      );
+    }
+
+    const ingredients: IngredientAvailability[] = groups.map((g) => {
+      const first = g.contributions[0];
+      if (!first) {
+        // Named with no amount anywhere ("to taste") — unscoreable, and
+        // reported as missing exactly as it was before expansion.
         return {
-          ingredientId,
-          name: contribs[0]?.name ?? "",
-          basisUnit: g?.basis_unit ?? contribs[0]?.scaledNeed.unit ?? null,
-          needValue: g?.need_value ?? 0,
-          haveValue: g?.have_value ?? null,
-          status: g?.status ?? "missing",
-          sources: g
-            ? g.sources.map((s) => ({
-                lineIndex: s.line_index,
-                needValue: s.need_value,
-              }))
-            : contribs.map((c) => ({
-                lineIndex: c.lineIndex,
-                needValue: c.scaledNeed.value,
-              })),
+          ingredientId: g.ingredientId,
+          name: g.name,
+          need: null,
+          basisUnit: null,
+          needValue: null,
+          haveValue: null,
+          status: "missing",
+          via: [],
+          blockedReason: null,
         };
-      },
-    );
+      }
+      return {
+        ingredientId: g.ingredientId,
+        name: g.name,
+        // A single contribution still has a meaningful written amount; several
+        // (the same ingredient reached by two routes) do not.
+        need: g.contributions.length === 1 ? first.amount : null,
+        basisUnit: g.result?.basis_unit ?? first.amount.unit,
+        needValue: g.result?.need_value ?? first.amount.value,
+        haveValue: g.result?.have_value ?? null,
+        status: g.result?.status ?? "missing",
+        via: first.via,
+        blockedReason: null,
+      };
+    });
+
+    // A sub-recipe we couldn't expand becomes its own row, so the panel names
+    // what's missing instead of quietly scoring the recipe as complete.
+    const blockedRows: IngredientAvailability[] = blocked.map((b) => ({
+      ingredientId: null,
+      name: b.name,
+      need: b.amount,
+      basisUnit: null,
+      needValue: null,
+      haveValue: null,
+      status: "subrecipe",
+      via: b.via,
+      blockedReason: b.reason,
+    }));
+
+    const rows = [...ingredients, ...blockedRows];
+    const resolvable = rows.filter((i) => i.status !== "subrecipe");
+    const available = resolvable.filter((i) => i.status === "ok");
+
+    return {
+      recipeId: recipe.id,
+      recipeName: recipe.name,
+      coverage:
+        resolvable.length === 0 ? 1 : available.length / resolvable.length,
+      totalIngredients: resolvable.length,
+      availableIngredients: available.length,
+      ingredients: rows,
+      missing: resolvable.filter((i) => i.status !== "ok").map((i) => i.name),
+      unexpandedSubRecipes: blockedRows.length,
+    };
+  }
+
+  /**
+   * Aggregate ingredient needs across many planned recipes (the meal-planning
+   * shopping list). Each line is a recipe to make at a scale; needs are scaled
+   * and summed per ingredient, sub-recipes expanded by yield.
+   *
+   * `sources[].lineIndex` indexes back into `lines`, so the caller can
+   * attribute each contribution to its meal/recipe; `sources[].via` names the
+   * sub-recipe chain it came through.
+   */
+  async getAggregatedNeeds(lines: PlannedLine[]): Promise<{
+    needs: AggregatedNeed[];
+    unexpanded: BlockedSubRecipe[];
+  }> {
+    const { groups, blocked } = await this.evaluateNeeds(lines);
+
+    const needs = groups.flatMap((g): AggregatedNeed[] => {
+      // An ingredient mentioned only without an amount contributes no need to
+      // a shopping list — there's nothing to buy a quantity of.
+      if (g.contributions.length === 0) return [];
+      const first = g.contributions[0];
+      return [
+        {
+          ingredientId: g.ingredientId,
+          name: g.name,
+          basisUnit: g.result?.basis_unit ?? first?.amount.unit ?? null,
+          needValue: g.result?.need_value ?? 0,
+          haveValue: g.result?.have_value ?? null,
+          status: g.result?.status ?? "missing",
+          // `evaluate_group` builds `sources` positionally 1:1 with the needs
+          // it was handed (including under an incoherent basis, which zeroes
+          // the values but keeps the vector), so zip by INDEX. lineIndex is no
+          // longer unique within a group — one line can reach the same
+          // ingredient both directly and through a sub-recipe.
+          sources: (g.result?.sources ?? []).flatMap((s, i) => {
+            const c = g.contributions[i];
+            return c
+              ? [
+                  {
+                    lineIndex: s.line_index,
+                    needValue: s.need_value,
+                    via: c.via,
+                  },
+                ]
+              : [];
+          }),
+        },
+      ];
+    });
+
+    return { needs, unexpanded: blocked };
   }
 }

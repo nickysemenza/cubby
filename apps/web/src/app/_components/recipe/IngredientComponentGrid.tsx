@@ -1,6 +1,12 @@
 import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
-import { cn, formatCurrency } from "~/lib/utils";
+import {
+  type CrossTabFooterRow,
+  CrossTabTable,
+} from "~/components/matrix/cross-tab-table";
+import type { CrossTabColumn } from "~/components/matrix/group-columns";
+import { EMPTY_MARK, totalCell } from "~/components/matrix/matrix-chrome";
+import { formatCurrency } from "~/lib/utils";
 import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import {
   buildIngredientMatrix,
@@ -19,7 +25,7 @@ import { formatMakes, gramText } from "./recipe-utils";
 // view's "grid" sub-mode. `showCost` adds a per-component batch-cost footer row
 // (the Prep view's cost atom); the export sheet leaves it off.
 
-const cellMono = "px-2 py-2 text-right font-mono text-xs tabular-nums";
+const PINNED = [{ key: "total", label: "Total", className: totalCell }];
 
 export function IngredientComponentGrid({
   tree,
@@ -29,7 +35,7 @@ export function IngredientComponentGrid({
   showCost?: boolean;
 }) {
   const {
-    components,
+    columns,
     rows,
     columnTotals,
     grandTotal,
@@ -49,7 +55,14 @@ export function IngredientComponentGrid({
     // axis as the gram subtotal row (sub-recipe rows aren't double-counted).
     const { byComponent, total } = fullBatchCostByComponent(tree);
     return {
-      components: cols,
+      // Column key is the component's recipe id — the same key `byComponent`
+      // and `columnTotals` are keyed by, so cells look up without a mapping.
+      columns: cols.map(
+        (node): CrossTabColumn<RecipeTreeNode> => ({
+          key: node.recipe.id,
+          data: node,
+        }),
+      ),
       rows: matrix,
       columnTotals: colTotals,
       grandTotal: sumBy(matrix, (r) => r.total),
@@ -58,123 +71,88 @@ export function IngredientComponentGrid({
     };
   }, [tree]);
 
+  const footer: CrossTabFooterRow[] = [
+    {
+      key: "subtotal",
+      label: "Subtotal",
+      labelTitle:
+        "Total ingredient weight per component (raw inputs — differs from the yield when a batch loses water in cooking)",
+      cell: (recipeId) =>
+        columnTotals.has(recipeId)
+          ? gramText(columnTotals.get(recipeId)!)
+          : EMPTY_MARK,
+      pinnedCell: () => (
+        <span className="text-primary">{gramText(grandTotal)}</span>
+      ),
+    },
+  ];
+  if (showCost) {
+    footer.push({
+      key: "cost",
+      label: "Cost",
+      emphasis: "plain",
+      cell: (recipeId) =>
+        costByComponent.has(recipeId)
+          ? formatCurrency(costByComponent.get(recipeId)!)
+          : EMPTY_MARK,
+      pinnedCell: () => (
+        <span className="text-primary">
+          {costTotal != null ? formatCurrency(costTotal) : EMPTY_MARK}
+        </span>
+      ),
+    });
+  }
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-left">
-        <thead>
-          <tr className="eyebrow border-primary border-b-2">
-            <th className="sticky left-0 z-10 bg-card px-2 py-2 font-medium">
-              Ingredient
-            </th>
-            {components.map((node) => {
-              const makes = formatMakes(
-                node.recipe.yield,
-                node.costing?.totals.weight ?? null,
-              );
-              return (
-                <th
-                  key={node.recipe.id}
-                  className="px-2 py-2 text-right align-bottom font-medium"
-                >
-                  <div>
-                    <EntityPreviewLink
-                      entity="recipe"
-                      id={node.recipe.id}
-                      className={dottedEntityLink}
-                    >
-                      {node.recipe.name}
-                    </EntityPreviewLink>
-                  </div>
-                  {makes && (
-                    <div className="font-normal text-2xs text-muted-foreground normal-case tracking-normal">
-                      makes {makes}
-                    </div>
-                  )}
-                </th>
-              );
-            })}
-            <th className="px-2 py-2 text-right font-medium text-primary">
-              Total
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr
-              key={row.ingredientId}
-              className="border-border border-b border-dashed"
-            >
-              <th
-                scope="row"
-                className="sticky left-0 z-10 bg-card px-2 py-2 text-left font-medium text-sm"
+    <CrossTabTable
+      cornerLabel="Ingredient"
+      columns={columns}
+      rows={rows.map((row) => ({ key: row.ingredientId, data: row }))}
+      pinned={PINNED}
+      footer={footer}
+      renderColumnHeader={({ data: node }) => {
+        const makes = formatMakes(
+          node.recipe.yield,
+          node.costing?.totals.weight ?? null,
+        );
+        return (
+          <>
+            <div>
+              <EntityPreviewLink
+                entity="recipe"
+                id={node.recipe.id}
+                className={dottedEntityLink}
               >
-                <EntityPreviewLink
-                  entity="ingredient"
-                  id={row.ingredientShortcode}
-                  className={dottedEntityLink}
-                >
-                  {row.name}
-                </EntityPreviewLink>
-              </th>
-              {components.map((node) => {
-                const grams = row.byComponent.get(node.recipe.id);
-                return (
-                  <td
-                    key={node.recipe.id}
-                    className={cn(
-                      cellMono,
-                      grams == null && "text-muted-foreground/30",
-                    )}
-                  >
-                    {grams != null ? gramText(grams) : "·"}
-                  </td>
-                );
-              })}
-              <td className={cn(cellMono, "font-medium text-primary")}>
-                {gramText(row.total)}
-                {row.estimated && <span className="text-warning"> ~</span>}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr className="eyebrow border-primary border-t-2">
-            <th
-              className="sticky left-0 z-10 bg-card px-2 py-2 text-left font-medium"
-              title="Total ingredient weight per component (raw inputs — differs from the yield when a batch loses water in cooking)"
-            >
-              Subtotal
-            </th>
-            {components.map((node) => (
-              <td key={node.recipe.id} className={cellMono}>
-                {columnTotals.has(node.recipe.id)
-                  ? gramText(columnTotals.get(node.recipe.id)!)
-                  : "·"}
-              </td>
-            ))}
-            <td className={cn(cellMono, "text-primary")}>
-              {gramText(grandTotal)}
-            </td>
-          </tr>
-          {showCost && (
-            <tr className="eyebrow">
-              <th className="sticky left-0 z-10 bg-card px-2 py-2 text-left font-medium">
-                Cost
-              </th>
-              {components.map((node) => (
-                <td key={node.recipe.id} className={cellMono}>
-                  {costByComponent.has(node.recipe.id)
-                    ? formatCurrency(costByComponent.get(node.recipe.id)!)
-                    : "·"}
-                </td>
-              ))}
-              <td className={cn(cellMono, "text-primary")}>
-                {costTotal != null ? formatCurrency(costTotal) : "·"}
-              </td>
-            </tr>
-          )}
-        </tfoot>
-      </table>
-    </div>
+                {node.recipe.name}
+              </EntityPreviewLink>
+            </div>
+            {makes && (
+              <div className="font-normal text-2xs text-muted-foreground normal-case tracking-normal">
+                makes {makes}
+              </div>
+            )}
+          </>
+        );
+      }}
+      renderRowHeader={({ data: row }) => (
+        <EntityPreviewLink
+          entity="ingredient"
+          id={row.ingredientShortcode}
+          className={dottedEntityLink}
+        >
+          {row.name}
+        </EntityPreviewLink>
+      )}
+      renderCell={({ data: row }, column) => {
+        const grams = row.byComponent.get(column.key);
+        return grams != null ? gramText(grams) : null;
+      }}
+      renderPinnedCell={({ data: row }) => (
+        <>
+          {gramText(row.total)}
+          {row.estimated && <span className="text-warning"> ~</span>}
+        </>
+      )}
+    />
   );
 }

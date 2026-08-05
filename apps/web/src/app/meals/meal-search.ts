@@ -26,12 +26,19 @@ export const mealCalendarSearchDefaults = {
   week: undefined,
 } as const;
 
+/** A renderer, not a view: both draw the same server-selected set. */
+export type ShoppingListView = "list" | "matrix";
+
 export const shoppingListSearchSchema = z.object({
+  // A bare enum is right here — neither token is a JSON literal, so TanStack's
+  // parseSearch won't coerce it (that's what `urlStringParam` exists for).
+  view: z.enum(["list", "matrix"]).optional().catch(undefined),
   from: dateParamSchema,
   to: dateParamSchema,
 });
 
 export const shoppingListSearchDefaults = {
+  view: undefined,
   from: undefined,
   to: undefined,
 } as const;

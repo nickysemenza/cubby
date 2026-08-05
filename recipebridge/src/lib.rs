@@ -6,6 +6,7 @@
 //! - [`conversion`] — unit-kind conversion, explained paths, graph debugging
 //! - [`food_mappings`] — USDA food/product → unit-mapping synthesis
 //! - [`costing`] — the recipe costing engine (consumption model, two-pass totals)
+//! - [`needs`] — sub-recipe expansion into flat, scaled ingredient needs
 //! - [`epub`] — EPUB cookbook extraction (client-side pipeline)
 //!
 //! Boundary types: `#[derive(Tsify)]` generates the `.d.ts` from the Rust
@@ -31,6 +32,7 @@ mod conversion;
 mod costing;
 mod epub;
 mod food_mappings;
+mod needs;
 mod parse;
 mod reconcile;
 
@@ -39,6 +41,7 @@ pub use conversion::*;
 pub use costing::*;
 pub use epub::*;
 pub use food_mappings::*;
+pub use needs::*;
 pub use parse::*;
 
 // WASM initialization - called automatically when module loads

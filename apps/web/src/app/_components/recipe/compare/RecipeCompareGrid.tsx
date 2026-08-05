@@ -2,6 +2,7 @@ import type { RecipeOut } from "@cubby/schemas/recipe";
 import { Link } from "@tanstack/react-router";
 import { ChefHat, Equal, X } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
+import { stickyRowHeaderCard } from "~/components/matrix/matrix-chrome";
 import { Image } from "~/components/ui/image";
 import {
   formatCurrencyRange,
@@ -154,7 +155,7 @@ const SourceCell: React.FC<{ recipe: RecipeOut }> = ({ recipe }) =>
     <span className="text-muted-foreground">—</span>
   );
 
-const STICKY = "sticky left-0 z-10 bg-card";
+const STICKY = stickyRowHeaderCard;
 
 /** One grid row: sticky label, a cell per recipe, and the average cell. */
 const GridRow: React.FC<{

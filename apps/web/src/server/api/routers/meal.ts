@@ -11,7 +11,6 @@ import {
   type MealId,
   type MealShortcode,
   mealShortcode,
-  type RecipeId,
 } from "@cubby/schemas/identifiers";
 import {
   mealAddRecipeInput,
@@ -44,6 +43,7 @@ import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
+import type { PlannedLine } from "~/server/services/availability.service";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import { createSearchableEntityCrudProcedures } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
@@ -185,8 +185,11 @@ const getShoppingList = protectedProcedure
 
     // Flatten meals → planned recipes into `lines` for the aggregation engine,
     // keeping a parallel `lineMeta` so each contribution maps back to its meal.
-    const publicLines: { recipeId: string; scale: number }[] = [];
-    const lineMeta: Omit<ShoppingListContribution, "needValue">[] = [];
+    const publicLines: PlannedLine[] = [];
+    const lineMeta: Omit<
+      ShoppingListContribution,
+      "needValue" | "lineIndex" | "via"
+    >[] = [];
     for (const m of meals) {
       for (const mr of m.recipes) {
         publicLines.push({ recipeId: mr.recipeId, scale: mr.scale });
@@ -201,16 +204,8 @@ const getShoppingList = protectedProcedure
       }
     }
 
-    const recipeIds = await resolveAllOrThrow(
-      ctx.db,
-      "recipe",
-      publicLines.map((line) => line.recipeId),
-    );
-    const lines: { recipeId: RecipeId; scale: number }[] = publicLines.map(
-      (line, i) => ({ recipeId: recipeIds[i]!, scale: line.scale }),
-    );
-
-    const needs = await ctx.services.availability.getAggregatedNeeds(lines);
+    const { needs, unexpanded } =
+      await ctx.services.availability.getAggregatedNeeds(publicLines);
 
     const items = needs
       .map((n) => {
@@ -225,7 +220,18 @@ const getShoppingList = protectedProcedure
           status: n.status,
           perMeal: n.sources.flatMap((s) => {
             const meta = lineMeta[s.lineIndex];
-            return meta ? [{ ...meta, needValue: s.needValue }] : [];
+            return meta
+              ? [
+                  {
+                    ...meta,
+                    needValue: s.needValue,
+                    // The line index is what distinguishes two columns when one
+                    // meal plans the same recipe twice; `meta` alone can't.
+                    lineIndex: s.lineIndex,
+                    via: s.via,
+                  },
+                ]
+              : [];
           }),
         };
       })
@@ -239,6 +245,28 @@ const getShoppingList = protectedProcedure
       to: input.to,
       meals: meals.map((m) => ({ id: m.id, name: m.name, date: m.date })),
       items,
+      // Attribute each un-expandable sub-recipe back to the meal that asked
+      // for it, so the disclosure can name where the gap is.
+      unexpanded: unexpanded.flatMap((b) => {
+        const meta = lineMeta[b.lineIndex];
+        return meta
+          ? [
+              {
+                recipeId: b.recipeId,
+                name: b.name,
+                reason: b.reason,
+                amount: b.amount,
+                via: b.via,
+                mealId: meta.mealId,
+                mealName: meta.mealName,
+                date: meta.date,
+                parentRecipeId: meta.recipeId,
+                parentRecipeName: meta.recipeName,
+                lineIndex: b.lineIndex,
+              },
+            ]
+          : [];
+      }),
     };
   });
 

@@ -30,21 +30,31 @@ const emptyCells = (): Record<PivotCostKey, number> => ({
   services: 0,
 });
 
-export function buildTradeCostPivot(expenses: ExpenseOut[]): TradeCostPivot {
+/**
+ * One trade×costType amount, whatever produced it. The two callers reach the
+ * same pivot from different places — the projects view from raw expenses, the
+ * analytics view from `expense.analytics`'s already-server-aggregated rows (so
+ * it never needs a raw expense fetch) — and normalizing to this shape is what
+ * lets them share one implementation instead of two that drift.
+ */
+export type TradeCostContribution = {
+  trade: Trade;
+  costType: PivotCostKey;
+  value: number;
+};
+
+export function pivotTradeCostContributions(
+  contributions: Iterable<TradeCostContribution>,
+): TradeCostPivot {
   const grouped = new Map<Trade, Record<PivotCostKey, number>>();
 
-  for (const p of expenses) {
-    if (!isPrincipalExpense(p)) continue;
-    const trade = p.trade;
-    const costType = p.costType;
-    const cost = p.cost ?? 0;
-
+  for (const { trade, costType, value } of contributions) {
     let entry = grouped.get(trade);
     if (!entry) {
       entry = emptyCells();
       grouped.set(trade, entry);
     }
-    entry[costType] += cost;
+    entry[costType] += value;
   }
 
   const columnTotals = emptyCells();
@@ -67,4 +77,14 @@ export function buildTradeCostPivot(expenses: ExpenseOut[]): TradeCostPivot {
   const grandTotal = sum(Object.values(columnTotals));
 
   return { rows, columnTotals, grandTotal, maxCell };
+}
+
+export function buildTradeCostPivot(expenses: ExpenseOut[]): TradeCostPivot {
+  return pivotTradeCostContributions(
+    expenses.filter(isPrincipalExpense).map((p) => ({
+      trade: p.trade,
+      costType: p.costType,
+      value: p.cost ?? 0,
+    })),
+  );
 }
