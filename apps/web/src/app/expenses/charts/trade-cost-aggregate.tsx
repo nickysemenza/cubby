@@ -10,12 +10,18 @@ import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
 import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
-import {
-  cellMono,
-  HEAT_CLASSES,
-  heatBucket,
-} from "~/app/projects/charts/heat-scale";
 import { capitalize, TRADE_LABELS } from "~/app/projects/project-formatting";
+import { HEAT_CLASSES, heatBucket } from "~/components/matrix/heat-scale";
+import {
+  bodyRule,
+  cellMono,
+  EMPTY_MARK,
+  emptyCell,
+  footRule,
+  headRule,
+  stickyRowHeaderCard,
+  totalCell,
+} from "~/components/matrix/matrix-chrome";
 import {
   nivoBarChrome,
   nivoChartTheme,
@@ -188,8 +194,8 @@ export function TradeCostMatrixAggregate({
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-left">
         <thead>
-          <tr className="eyebrow border-primary border-b-2">
-            <th className="sticky left-0 z-10 bg-card px-2 py-2 font-medium">
+          <tr className={headRule}>
+            <th className={cn(stickyRowHeaderCard, "px-2 py-2 font-medium")}>
               Trade
             </th>
             {COST_KEYS.map((key) => (
@@ -197,31 +203,27 @@ export function TradeCostMatrixAggregate({
                 {capitalize(key)}
               </th>
             ))}
-            <th className="px-2 py-2 text-right font-medium text-primary">
-              Total
-            </th>
+            <th className={cn("px-2 py-2 text-right", totalCell)}>Total</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr
-              key={row.trade}
-              className="border-border border-b border-dashed"
-            >
+            <tr key={row.trade} className={bodyRule}>
               <th
                 scope="row"
-                className="sticky left-0 z-10 bg-card px-2 py-2 text-left font-medium text-sm"
+                className={cn(
+                  stickyRowHeaderCard,
+                  "px-2 py-2 text-left font-medium text-sm",
+                )}
               >
                 {TRADE_LABELS[row.trade]}
               </th>
               {COST_KEYS.map((key) => {
                 const value = row.cells[key];
                 const bucket = heatBucket(value, maxCell);
-                const heat =
-                  value === 0
-                    ? "text-muted-foreground/30"
-                    : HEAT_CLASSES[bucket];
-                const label = value !== 0 ? formatCurrency(value, 0) : "·";
+                const heat = value === 0 ? emptyCell : HEAT_CLASSES[bucket];
+                const label =
+                  value !== 0 ? formatCurrency(value, 0) : EMPTY_MARK;
                 const title =
                   value !== 0 ? formatCurrency(value, 2) : undefined;
 
@@ -257,7 +259,7 @@ export function TradeCostMatrixAggregate({
                     onClick={() => onCellClick(row.trade, null)}
                     className={cn(
                       cellMono,
-                      "font-medium text-primary",
+                      totalCell,
                       interactiveCell,
                       isActive(row.trade, null) && activeCellRing,
                     )}
@@ -266,7 +268,7 @@ export function TradeCostMatrixAggregate({
                   </button>
                 </td>
               ) : (
-                <td className={cn(cellMono, "font-medium text-primary")}>
+                <td className={cn(cellMono, totalCell)}>
                   {formatCurrency(row.total, 0)}
                 </td>
               )}
@@ -274,8 +276,13 @@ export function TradeCostMatrixAggregate({
           ))}
         </tbody>
         <tfoot>
-          <tr className="eyebrow border-primary border-t-2">
-            <th className="sticky left-0 z-10 bg-card px-2 py-2 text-left font-medium">
+          <tr className={footRule}>
+            <th
+              className={cn(
+                stickyRowHeaderCard,
+                "px-2 py-2 text-left font-medium",
+              )}
+            >
               Total
             </th>
             {COST_KEYS.map((key) => (

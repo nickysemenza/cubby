@@ -10,6 +10,7 @@ import { Link } from "@tanstack/react-router";
 import { Check, Minus } from "lucide-react";
 import type { ReactNode } from "react";
 import { Stack } from "~/components/layout";
+import { stickyRowHeaderPage } from "~/components/matrix/matrix-chrome";
 import { Badge } from "~/components/ui/badge";
 import {
   Table,
@@ -237,7 +238,7 @@ export function EntityManifestGrid() {
       <Table containerClassName="overflow-x-auto" className="table-auto">
         <TableHeader>
           <TableRow>
-            <TableHead className="sticky left-0 z-10 bg-background text-left">
+            <TableHead className={cn(stickyRowHeaderPage, "text-left")}>
               setting
             </TableHead>
             {allEntities.map((entity) => (
@@ -259,7 +260,12 @@ export function EntityManifestGrid() {
             </TableRow>,
             ...group.rows.map((row) => (
               <TableRow key={`${group.title}-${row.label}`}>
-                <TableCell className="sticky left-0 z-10 whitespace-nowrap bg-background font-medium text-xs">
+                <TableCell
+                  className={cn(
+                    stickyRowHeaderPage,
+                    "whitespace-nowrap font-medium text-xs",
+                  )}
+                >
                   {row.label}
                 </TableCell>
                 {allEntities.map((entity) => (

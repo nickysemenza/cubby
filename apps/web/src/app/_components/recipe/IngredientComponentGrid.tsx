@@ -1,5 +1,15 @@
 import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
+import {
+  bodyRule,
+  cellMono,
+  EMPTY_MARK,
+  emptyCell,
+  footRule,
+  headRule,
+  stickyRowHeaderCard,
+  totalCell,
+} from "~/components/matrix/matrix-chrome";
 import { cn, formatCurrency } from "~/lib/utils";
 import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import {
@@ -18,8 +28,6 @@ import { formatMakes, gramText } from "./recipe-utils";
 // Shared by the print/export sheet (RecipeIngredientMatrixView) and the Prep
 // view's "grid" sub-mode. `showCost` adds a per-component batch-cost footer row
 // (the Prep view's cost atom); the export sheet leaves it off.
-
-const cellMono = "px-2 py-2 text-right font-mono text-xs tabular-nums";
 
 export function IngredientComponentGrid({
   tree,
@@ -62,8 +70,8 @@ export function IngredientComponentGrid({
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-left">
         <thead>
-          <tr className="eyebrow border-primary border-b-2">
-            <th className="sticky left-0 z-10 bg-card px-2 py-2 font-medium">
+          <tr className={headRule}>
+            <th className={cn(stickyRowHeaderCard, "px-2 py-2 font-medium")}>
               Ingredient
             </th>
             {components.map((node) => {
@@ -93,20 +101,18 @@ export function IngredientComponentGrid({
                 </th>
               );
             })}
-            <th className="px-2 py-2 text-right font-medium text-primary">
-              Total
-            </th>
+            <th className={cn("px-2 py-2 text-right", totalCell)}>Total</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr
-              key={row.ingredientId}
-              className="border-border border-b border-dashed"
-            >
+            <tr key={row.ingredientId} className={bodyRule}>
               <th
                 scope="row"
-                className="sticky left-0 z-10 bg-card px-2 py-2 text-left font-medium text-sm"
+                className={cn(
+                  stickyRowHeaderCard,
+                  "px-2 py-2 text-left font-medium text-sm",
+                )}
               >
                 <EntityPreviewLink
                   entity="ingredient"
@@ -121,16 +127,13 @@ export function IngredientComponentGrid({
                 return (
                   <td
                     key={node.recipe.id}
-                    className={cn(
-                      cellMono,
-                      grams == null && "text-muted-foreground/30",
-                    )}
+                    className={cn(cellMono, grams == null && emptyCell)}
                   >
-                    {grams != null ? gramText(grams) : "·"}
+                    {grams != null ? gramText(grams) : EMPTY_MARK}
                   </td>
                 );
               })}
-              <td className={cn(cellMono, "font-medium text-primary")}>
+              <td className={cn(cellMono, totalCell)}>
                 {gramText(row.total)}
                 {row.estimated && <span className="text-warning"> ~</span>}
               </td>
@@ -138,9 +141,12 @@ export function IngredientComponentGrid({
           ))}
         </tbody>
         <tfoot>
-          <tr className="eyebrow border-primary border-t-2">
+          <tr className={footRule}>
             <th
-              className="sticky left-0 z-10 bg-card px-2 py-2 text-left font-medium"
+              className={cn(
+                stickyRowHeaderCard,
+                "px-2 py-2 text-left font-medium",
+              )}
               title="Total ingredient weight per component (raw inputs — differs from the yield when a batch loses water in cooking)"
             >
               Subtotal
@@ -149,7 +155,7 @@ export function IngredientComponentGrid({
               <td key={node.recipe.id} className={cellMono}>
                 {columnTotals.has(node.recipe.id)
                   ? gramText(columnTotals.get(node.recipe.id)!)
-                  : "·"}
+                  : EMPTY_MARK}
               </td>
             ))}
             <td className={cn(cellMono, "text-primary")}>
@@ -158,18 +164,23 @@ export function IngredientComponentGrid({
           </tr>
           {showCost && (
             <tr className="eyebrow">
-              <th className="sticky left-0 z-10 bg-card px-2 py-2 text-left font-medium">
+              <th
+                className={cn(
+                  stickyRowHeaderCard,
+                  "px-2 py-2 text-left font-medium",
+                )}
+              >
                 Cost
               </th>
               {components.map((node) => (
                 <td key={node.recipe.id} className={cellMono}>
                   {costByComponent.has(node.recipe.id)
                     ? formatCurrency(costByComponent.get(node.recipe.id)!)
-                    : "·"}
+                    : EMPTY_MARK}
                 </td>
               ))}
               <td className={cn(cellMono, "text-primary")}>
-                {costTotal != null ? formatCurrency(costTotal) : "·"}
+                {costTotal != null ? formatCurrency(costTotal) : EMPTY_MARK}
               </td>
             </tr>
           )}

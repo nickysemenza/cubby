@@ -46,6 +46,10 @@ import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { EntityPreviewLink } from "~/app/_components/EntityPreviewLink";
 import { ProjectMark } from "~/app/projects/project-mark";
 import { Row, Stack } from "~/components/layout";
+import {
+  cellMonoDense,
+  stickyRowHeaderPage,
+} from "~/components/matrix/matrix-chrome";
 import { Badge } from "~/components/ui/badge";
 import {
   Empty,
@@ -88,8 +92,8 @@ const cellKey = (projectId: string, productId: string) =>
   `${projectId}:${productId}`;
 
 /** Sticky row-header column; the header corner has to outrank it. */
-const STICKY = "sticky left-0 z-10 bg-background";
-const NUMERIC = "px-2 py-1 text-right font-mono text-2xs tabular-nums";
+const STICKY = stickyRowHeaderPage;
+const NUMERIC = cellMonoDense;
 const STICKY_USES = "sticky right-40 z-20 bg-background";
 const STICKY_NET = "sticky right-20 z-20 bg-background";
 const STICKY_COST_PER_USE = "sticky right-0 z-20 bg-background";
