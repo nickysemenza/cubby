@@ -37,6 +37,25 @@ Expense → Purchase ← FinancialTransaction → FinancialAccount
   Do not conclude that typed rows are unreachable and fall back to allocating
   tax across merchandise; that is the superseded pattern that older Golden
   State Lumber and Bay Metals rows still show.
+- `Expense.lineBasis` is **orthogonal** to `lineKind` and answers whether the row
+  corresponds to something you can point at: `item_line` (the default) or
+  `allocation`. Set `allocation` explicitly whenever a lump sum becomes ledger
+  rows without ever being itemized — a deposit and a balance on one order
+  (`appliances deposit` / `2nd half of appliances`), a numbered payment
+  (`drywall 1/3`), or an estimated materials/labor split of a single
+  non-itemized contract (`retaining wall 1/2` materials + `2/2` services, one
+  $16,000 lump sum). It is **never inferred**: `"1/2"` matches `1/2 in. conduit`
+  far more often than an installment half, so an import that forgets it silently
+  re-adds unsatisfiable rows to the top of the "Goods without a product" view.
+  Two consequences to respect: an allocation **may not carry a `productId`**
+  (rejected at write time — linking one would halve that Product's derived unit
+  price and claim a phantom unit), and its `costType` is an *estimate*, so never
+  "fix" a deposit/balance pair whose halves disagree on materials-vs-services.
+  Flag **every** row of an allocation group, including `services` siblings, and
+  note that siblings often sit on **separate Purchases**.
+  When such an order does contain discrete goods, promote them as Products with
+  an explicit `price` from the quote or invoice and leave the money rows
+  unlinked — that is the sanctioned pattern (Ferguson PUR-SHRG), not a workaround.
 - A `Purchase` is one vendor order, receipt, or deliberately separate purchase
   event. `statedTotal` is the literal vendor-printed amount, never a rollup.
 - A `FinancialTransaction` is settlement evidence: a charge, refund,

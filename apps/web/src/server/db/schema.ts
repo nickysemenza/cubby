@@ -9,7 +9,10 @@ import type {
 } from "@cubby/schemas/background-jobs";
 import type { Amount } from "@cubby/schemas/codec";
 import type { DataException } from "@cubby/schemas/data-quality";
-import { expenseLineKindValues } from "@cubby/schemas/expense-line-kind";
+import {
+  expenseLineBasisValues,
+  expenseLineKindValues,
+} from "@cubby/schemas/expense-line-kind";
 import type {
   FinancialAccountIdentity,
   FinancialAccountSourceAlias,
@@ -1363,6 +1366,16 @@ export const expense = pgTable(
     lineKind: text("lineKind", { enum: expenseLineKindValues })
       .notNull()
       .default("principal"),
+    // Is this row a line item, or a slice of a total that was never itemized?
+    // `allocation` marks money cut by payment schedule (a deposit and a balance
+    // on one order) or by an estimated materials/labor split of a lump-sum
+    // contract. Such a row cannot carry a productId — the money doesn't
+    // decompose per item — so it is correctly absent from the goods-without-a-
+    // product worklists, and its costType may be an estimate rather than a
+    // vendor-stated fact. See expenseLineBasisValues for the full contract.
+    lineBasis: text("lineBasis", { enum: expenseLineBasisValues })
+      .notNull()
+      .default("item_line"),
     costType: text("costType", { enum: costTypeValues }).notNull(),
     trade: text("trade", { enum: tradeValues }).notNull(),
     url: text("url"),

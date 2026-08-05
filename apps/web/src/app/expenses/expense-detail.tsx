@@ -1,4 +1,7 @@
-import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
+import type {
+  ExpenseLineBasis,
+  ExpenseLineKind,
+} from "@cubby/schemas/expense-line-kind";
 import type { CostType, ExpenseOut, Trade } from "@cubby/schemas/project";
 import { Info, PackagePlus, Receipt, Split } from "lucide-react";
 import { type FC, useState } from "react";
@@ -37,6 +40,9 @@ import {
   costTypeBadgeVariant,
   costTypeLabels,
   costTypeOptions,
+  expenseLineBasisBadgeVariant,
+  expenseLineBasisLabels,
+  expenseLineBasisOptions,
   expenseLineKindBadgeVariant,
   expenseLineKindLabels,
   expenseLineKindOptions,
@@ -431,6 +437,40 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
                     />
                   ) : v ? (
                     <span>{v.name}</span>
+                  ) : (
+                    <NoneValue />
+                  )
+                }
+              />
+            ),
+          },
+          {
+            // Sits beside Product, deliberately not beside Line kind: its whole
+            // job is answering "why is there no product here?", and next to an
+            // empty Product field "Share of a lump sum" reads as the answer.
+            label: "Itemization",
+            value: (
+              <EditableCell
+                value={expense.lineBasis}
+                config={{ type: "select", options: expenseLineBasisOptions }}
+                onSave={async (lineBasis) => {
+                  if (!lineBasis) return;
+                  await updateMutation.mutateAsync({
+                    id: expense.id,
+                    data: { lineBasis: lineBasis as ExpenseLineBasis },
+                  });
+                }}
+                renderValue={(lineBasis) =>
+                  lineBasis ? (
+                    <Badge
+                      variant={
+                        expenseLineBasisBadgeVariant[
+                          lineBasis as ExpenseLineBasis
+                        ]
+                      }
+                    >
+                      {expenseLineBasisLabels[lineBasis as ExpenseLineBasis]}
+                    </Badge>
                   ) : (
                     <NoneValue />
                   )

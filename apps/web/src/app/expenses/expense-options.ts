@@ -1,5 +1,7 @@
 import {
+  type ExpenseLineBasis,
   type ExpenseLineKind,
+  expenseLineBasisValues,
   expenseLineKindValues,
 } from "@cubby/schemas/expense-line-kind";
 import type { CostType } from "@cubby/schemas/project";
@@ -72,6 +74,31 @@ export const expenseLineKindOptions: FilterableComboboxItem[] =
   expenseLineKindValues.map((value) => ({
     value,
     label: expenseLineKindLabels[value],
+  }));
+
+/**
+ * Labels for `lineBasis`. Deliberately NOT phrased as a twin of the line-kind
+ * labels: the two enums are orthogonal, and surfacing them as "Line kind" /
+ * "Line basis" would read as one taxonomy split across two controls. The
+ * control is labelled "Itemization" wherever it renders.
+ */
+export const expenseLineBasisLabels: Record<ExpenseLineBasis, string> = {
+  item_line: "Line item",
+  allocation: "Share of a lump sum",
+};
+
+export const expenseLineBasisBadgeVariant: Record<
+  ExpenseLineBasis,
+  BadgeVariant
+> = {
+  item_line: "outline",
+  allocation: "plum",
+};
+
+export const expenseLineBasisOptions: FilterableComboboxItem[] =
+  expenseLineBasisValues.map((value) => ({
+    value,
+    label: expenseLineBasisLabels[value],
   }));
 
 /** `{value,label}` options for the "future" (planned vs. made) filter. */

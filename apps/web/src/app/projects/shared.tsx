@@ -1,4 +1,7 @@
-import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
+import type {
+  ExpenseLineBasis,
+  ExpenseLineKind,
+} from "@cubby/schemas/expense-line-kind";
 import type {
   CostType,
   ExpenseOut,
@@ -83,6 +86,9 @@ import {
   costTypeBadgeVariant,
   costTypeLabels,
   costTypeOptions,
+  expenseLineBasisBadgeVariant,
+  expenseLineBasisLabels,
+  expenseLineBasisOptions,
   expenseLineKindBadgeVariant,
   expenseLineKindLabels,
   expenseLineKindOptions,
@@ -570,6 +576,39 @@ export function expenseLineKindColumn(
       onSave: async (newLineKind, expense) => {
         if (!newLineKind) return;
         await save(newLineKind, expense);
+      },
+    },
+  });
+}
+
+/**
+ * Itemization column — whether the row is a line item or a slice of an
+ * un-itemized total. Hidden by default in `expenselist`: it reads `Line item`
+ * on all but a handful of rows, so the filter chip is the surface worth having.
+ * Registered anyway because a manifest spec whose `columnId` matches no
+ * rendered column renders no control at all, silently.
+ */
+export function expenseLineBasisColumn(
+  helper: ColumnHelper<ExpenseOut>,
+  save: (lineBasis: ExpenseLineBasis, expense: ExpenseOut) => Promise<void>,
+  opts?: { mobile?: MobileColumnMeta },
+) {
+  return createFilterableSelectColumn(helper, "lineBasis", {
+    header: "Itemization",
+    className: "w-40",
+    placeholder: "Filter by itemization...",
+    selectOptions: expenseLineBasisOptions,
+    filterConfig: manifestFilterConfig("expense", "lineBasis"),
+    renderCell: (lineBasis: ExpenseLineBasis) => (
+      <Badge variant={expenseLineBasisBadgeVariant[lineBasis]}>
+        {expenseLineBasisLabels[lineBasis]}
+      </Badge>
+    ),
+    mobile: opts?.mobile,
+    editable: {
+      onSave: async (newLineBasis, expense) => {
+        if (!newLineBasis) return;
+        await save(newLineBasis, expense);
       },
     },
   });

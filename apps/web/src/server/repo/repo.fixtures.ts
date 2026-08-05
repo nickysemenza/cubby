@@ -204,6 +204,7 @@ export const makeExpenseInput = (
   name: "Test Expense",
   cost: 100,
   date: "2024-01-15",
+  lineBasis: "item_line",
   costType: "materials",
   trade: "other",
   url: null,

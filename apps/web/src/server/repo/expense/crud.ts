@@ -153,6 +153,7 @@ const expenseCrud = createEntityCrud({
       cost: data.cost,
       date: data.date,
       lineKind: data.lineKind,
+      lineBasis: data.lineBasis,
       costType: data.costType,
       trade: data.trade,
       url: data.url,
@@ -168,6 +169,7 @@ const expenseCrud = createEntityCrud({
     "cost",
     "date",
     "lineKind",
+    "lineBasis",
     "costType",
     "trade",
     "url",
@@ -379,6 +381,7 @@ export const updateExpense = async (
         productQuantity: true,
         purchaseId: true,
         lineKind: true,
+        lineBasis: true,
       },
     });
 
@@ -406,6 +409,14 @@ export const updateExpense = async (
       throw createAppError(
         "CONSTRAINT_VIOLATION",
         "Only principal Expenses may link a Product.",
+      );
+    }
+    const resultingLineBasis =
+      data.lineBasis ?? beforeQualityTargets?.lineBasis ?? "item_line";
+    if (resultingLineBasis === "allocation" && resultingProductId !== null) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "An allocation Expense may not link a Product — the money is a slice of an un-itemized total, so it buys no particular item.",
       );
     }
     if (data.productQuantity != null && resultingProductId === null) {
@@ -645,6 +656,12 @@ export const createExpense = async (
         "Only principal Expenses may link a Product.",
       );
     }
+    if (data.lineBasis === "allocation" && productId !== null) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "An allocation Expense may not link a Product — the money is a slice of an un-itemized total, so it buys no particular item.",
+      );
+    }
     if (data.productQuantity !== null && productId === null) {
       throw createAppError(
         "CONSTRAINT_VIOLATION",
@@ -662,6 +679,7 @@ export const createExpense = async (
       cost: data.cost,
       date: data.date,
       lineKind,
+      lineBasis: data.lineBasis,
       costType: data.costType,
       trade: data.trade,
       url: data.url,
