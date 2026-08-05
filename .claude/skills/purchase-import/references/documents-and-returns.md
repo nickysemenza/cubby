@@ -2,6 +2,12 @@
 
 ## Purchase paperwork
 
+Most Purchases have no primary document and are not expected to grow one.
+Filed paperwork is concentrated in construction and trade material buys, and
+only some of those produce anything attachable. Everything below applies when
+the source in hand actually contains a document — an empty `paperwork` facet on
+an ordinary purchase is the normal state and needs no action.
+
 Attach original files to the Purchase with `attach_file`, using the Purchase
 shortcode and an accurate `documentKind`. Use evidence in this order: final
 invoice or receipt, credit memo, order acknowledgment, then quote or estimate.
@@ -11,12 +17,16 @@ and reconciliation, but is not a file attachment or primary document.
 
 Use `reclassify_purchase_document` when an existing attachment was classified
 incorrectly. Do not fabricate a PDF from an email body or structured text just
-to clear a data-quality gap; retain source evidence and record a supported
-exception when the original cannot be obtained.
+to clear a data-quality gap; retain source evidence instead. Record an exception
+only where the absence is itself established knowledge — a return or a deposit
+against an unnumbered contract that genuinely had no invoice issued. "There is
+no document" is the default for most purchases and does not need to be written
+down.
 
 Reclassification is often cheaper than a rescan: a phone photo already filed as
 `other` may in fact be the invoice, and retyping it closes `primary_document`
-with no new file. Check existing attachments before scanning anything.
+with no new file. Check existing attachments before scanning anything — and do
+not initiate a scan of paper the user has not handed over.
 
 ## Attaching many files, and scans
 

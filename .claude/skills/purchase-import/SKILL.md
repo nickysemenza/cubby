@@ -65,9 +65,12 @@ Expense → Purchase ← FinancialTransaction → FinancialAccount
    range, record count, vendor, source type, whether prices are unit or extended,
    and whether it is vendor paperwork or settlement evidence.
 2. Resolve the Vendor, then start the completeness audit with
-   `list_purchases({dataStatus:"needs_data",vendorId,dateFrom,dateTo})`. Scope
-   `list_expenses`, other `list_purchases` reads, and
-   `list_financial_transactions` to the same vendor/evidence window.
+   `list_purchases({dataStatus:"needs_data",vendorId,dateFrom,dateTo})`. Narrow
+   with `dataGap` to the checks this source can actually close — `needs_data` is
+   dominated by `primary_document`, which is usually not actionable and not a
+   worklist (see Documents and exceptions). Scope `list_expenses`, other
+   `list_purchases` reads, and `list_financial_transactions` to the same
+   vendor/evidence window.
 3. Run `match_expenses` before proposing new Expense rows. It ranks candidates;
    it never verifies or writes. Read candidate descriptions, vendor, order ID,
    date, and amount rather than accepting a score.
@@ -216,6 +219,16 @@ as notes/evidence; do not infer a Financial Account from them.
 
 ## Documents and exceptions
 
+- **Most Purchases have no primary document and never will.** Everyday retail,
+  marketplace, and statement-derived orders leave nothing worth filing.
+  Attachable paperwork is concentrated in construction and trade material
+  buys — contractor invoices, lumber and metal yards, plumbing and electrical
+  suppliers — and only some of those produce a document either. An open
+  `primary_document` gap is the normal resting state of the ledger, not a
+  backlog: file what the source in hand contains, then leave it. Do not go
+  hunting for paperwork the user did not supply, and do not clear the gap with
+  a `set_data_exception` call to make a count go down — an exception records
+  source-backed negative knowledge, not tidiness.
 - Attach original evidence when available; do not manufacture PDFs from email
   or text merely to satisfy completeness.
 - Use final invoice/receipt first, then credit memo, order acknowledgment, and
@@ -255,5 +268,6 @@ as notes/evidence; do not infer a Financial Account from them.
   conflicted, or left pending with a direct user question.
 - Product creation, document filing, and inventory receiving were reported as
   distinct actions. Report coverage separately for the Purchase, acknowledgment,
-  final invoice/receipt, credit memo, charge, and refund, including unresolved
-  gaps.
+  final invoice/receipt, credit memo, charge, and refund — for the kinds the
+  source actually contained. A Purchase whose source carried no paperwork is
+  reported once as undocumented; it is not an unresolved gap per document kind.
