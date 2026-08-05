@@ -195,6 +195,16 @@ type DuplicateSpendRow = {
  * purchases under-itemized — which made them the worst double-counts, not the
  * weakest hits. A null `statedTotal` yields NULL in the OR and simply drops out.
  *
+ * A purchase with a stated total and **zero** live lines is deliberately out of
+ * reach — the join to its lines is inner, so it never forms a pair. That is the
+ * most extreme under-itemization, but it is also the one shape this detector
+ * cannot judge: with no line or product names there is nothing for the trigram
+ * gate to score, so a left join would only push the same row out one step later
+ * (similarity 0). Admitting it would mean bypassing the gate on amount alone,
+ * which is precisely the coincidence class the gate exists to reject. The shape
+ * is not unreported — `empty_expenses` in the data-quality engine already flags a
+ * purchase with no live expenses, which is the more accurate description of it.
+ *
  * Excludes `future` rows: planned spend is not yet double-counted actual spend.
  * Deliberately does NOT exclude expenses that carry a `productId` — only 2 of 80
  * unlinked rows have one, so filtering would cost recall for nothing.
