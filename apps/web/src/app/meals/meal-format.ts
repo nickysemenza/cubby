@@ -2,6 +2,7 @@ import type { IngredientAvailabilityStatus } from "@cubby/schemas/availability";
 import type { MealTotals } from "@cubby/schemas/meal";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { formatCurrency } from "~/lib/utils";
+import type { ShoppingRow } from "./shopping-model";
 
 /**
  * Format a shopping-list need/have/shortfall amount, via the same WASM
@@ -39,6 +40,24 @@ export const statusClass = (status: IngredientAvailabilityStatus): string => {
       return "text-muted-foreground";
   }
 };
+
+// The four amount cells every shopping renderer shows. Written once here so
+// the table, the mobile card and the matrix can't render the same row by three
+// slightly different rules.
+
+export const needText = (row: ShoppingRow): string =>
+  formatAmount(row.need, row.item.basisUnit);
+
+export const haveText = (row: ShoppingRow): string =>
+  row.item.haveValue == null
+    ? "—"
+    : formatAmount(row.item.haveValue, row.item.basisUnit);
+
+export const shortText = (row: ShoppingRow): string =>
+  row.shortfall > 0 ? formatAmount(row.shortfall, row.item.basisUnit) : "✓";
+
+export const shortClass = (row: ShoppingRow): string =>
+  row.shortfall > 0 ? statusClass(row.status) : "text-muted-foreground";
 
 export const statusLabel = (status: IngredientAvailabilityStatus): string => {
   switch (status) {
