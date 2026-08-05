@@ -552,6 +552,19 @@ Backfilled 18 rows across 9 contracts on 2026-08-05, which took the
 entire *top* of that cost-sorted list, because lump-sum structure correlates with size —
 the largest purchases are the ones paid in installments.
 
+- [ ] **Surface the estimate caveat in spend breakdowns.** `allocation` makes "this
+  `costType` is a guess" *representable* for the first time, but nothing reads it yet:
+  `expenseAnalytics`' `byCostType` still mixes allocations in with vendor-stated lines,
+  and a human reading those totals gets no hint. As of the 2026-08-05 backfill that is
+  **$74,828.70 across 18 rows** — $52,143.70 booked materials, $22,685.00 services — and
+  for the lump-sum-contract subset those two numbers are a guess at where the split fell,
+  not something a vendor ever stated. The MCP
+  tool description warns an agent; the UI warns nobody. Cheapest honest version is a
+  footnote on the analytics tab ("includes $X across N estimated splits") rather than
+  excluding them — they are real spend and excluding them would understate the total.
+  **Trigger**: actually using a materials-vs-labor breakdown to decide something.
+  (Raised in review on #649.)
+
 - [ ] **`servicesWithProduct` advisory detector** — mirrors `purchasesNotReconciling` in shape
   (soft worklist, not an error list). The 2026-07 audit found **zero** live rows, so any row
   appearing is a real regression rather than a backlog. Deliberately **not** a CHECK
