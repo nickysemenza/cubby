@@ -20,7 +20,7 @@ export const Route = createFileRoute("/_authenticated/meals/shopping-list")({
 
 function ShoppingListRoute() {
   const { from, to } = Route.useSearch();
-  const navigate = useNavigate();
+  const navigate = useNavigate({ from: Route.fullPath });
 
   return (
     <Page variant="list" title="Shopping list" fullWidth>
@@ -30,10 +30,10 @@ function ShoppingListRoute() {
         onRangeChange={(range) =>
           void navigate({
             to: "/meals/shopping-list",
-            search: {
-              from: range.from,
-              to: range.to,
-            },
+            // Merge, don't replace — a plain object here would drop every other
+            // search param (the renderer `view`, and anything added later) on
+            // each date change. Same trap meals.index.tsx documents.
+            search: (prev) => ({ ...prev, from: range.from, to: range.to }),
             replace: true,
           })
         }
