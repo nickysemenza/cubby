@@ -1243,112 +1243,79 @@ describe("specialized tools round-trip on shortcodes", () => {
     expect(aliasAfter.isError).toBe(true);
   });
 
-  it("move_inventory_entries fans many sources out to many targets by shortcode", async () => {
+  it("move_inventory_entries crosses source locations in one call by shortcode", async () => {
+    // Boundary contract only — that the tool round-trips shortcodes and that a
+    // single call spans more than one source, which `bulk_move_inventory` could
+    // not express. The four per-item branches, the merge arithmetic, and the
+    // ordering hazards are covered against the repo function in
+    // inventory-move-entries.integration.test.ts.
     const caller = createTestCaller(domainRouter, ctx.db);
 
-    const makeProduct = async (name: string) => {
-      const created = await callTool(
-        "create_product",
-        { name, upc: null, manufacturer: "Test Mfg", ingredientId: null },
-        caller,
-      );
-      expectOk(created);
-      return structured(created).id as string;
-    };
-    const makeLocation = async (name: string) => {
-      const created = await callTool(
-        "create_location",
-        { name, type: "shelf", parentId: null },
-        caller,
-      );
-      expectOk(created);
-      return structured(created).id as string;
-    };
-    const makeEntry = async (
-      productCode: string,
-      locationCode: string,
-      value: number,
-    ) => {
-      const created = await callTool(
-        "create_inventory_entry",
-        {
-          productId: productCode,
-          locationId: locationCode,
-          value,
-          unit: "each",
-        },
-        caller,
-      );
+    const create = async (tool: string, args: Record<string, unknown>) => {
+      const created = await callTool(tool, args, caller);
       expectOk(created);
       return structured(created).id as string;
     };
 
-    const [widget, gadget] = await Promise.all([
-      makeProduct("Many Move Widget"),
-      makeProduct("Many Move Gadget"),
-    ]);
-    const [shelfA, shelfB, drawer1, drawer2] = await Promise.all([
-      makeLocation("Many Move Shelf A"),
-      makeLocation("Many Move Shelf B"),
-      makeLocation("Many Move Drawer 1"),
-      makeLocation("Many Move Drawer 2"),
-    ]);
+    const widget = await create("create_product", {
+      name: "Many Move Widget",
+      upc: null,
+      manufacturer: "Test Mfg",
+      ingredientId: null,
+    });
+    const shelfA = await create("create_location", {
+      name: "Many Move Shelf A",
+      type: "shelf",
+      parentId: null,
+    });
+    const shelfB = await create("create_location", {
+      name: "Many Move Shelf B",
+      type: "shelf",
+      parentId: null,
+    });
+    const drawer = await create("create_location", {
+      name: "Many Move Drawer",
+      type: "shelf",
+      parentId: null,
+    });
 
-    // Two DIFFERENT sources, two DIFFERENT targets, in one call — the shape
-    // `bulk_move_inventory` could not express.
-    const widgetOnA = await makeEntry(widget, shelfA!, 10);
-    const gadgetOnB = await makeEntry(gadget, shelfB!, 3);
-    // Already at drawer 1, so the widget arriving there must MERGE into it
-    // rather than mint a second row (the partial unique index forbids two).
-    await makeEntry(widget, drawer1!, 5);
+    const fromA = await create("create_inventory_entry", {
+      productId: widget,
+      locationId: shelfA,
+      value: 4,
+      unit: "each",
+    });
+    const fromB = await create("create_inventory_entry", {
+      productId: widget,
+      locationId: shelfB,
+      value: 6,
+      unit: "each",
+    });
 
     const moved = await callTool(
       "move_inventory_entries",
       {
         items: [
-          // Partial move that merges into an existing destination row.
-          {
-            inventoryEntryId: widgetOnA,
-            targetLocationId: drawer1,
-            quantity: { value: 4, unit: "each" },
-          },
-          // Full move of the remainder to a different target — the same entry
-          // listed twice, splitting one bin across two destinations.
-          { inventoryEntryId: widgetOnA, targetLocationId: drawer2 },
-          // A different source entirely, in the same call.
-          { inventoryEntryId: gadgetOnB, targetLocationId: drawer2 },
+          { inventoryEntryId: fromA, targetLocationId: drawer },
+          { inventoryEntryId: fromB, targetLocationId: drawer },
         ],
       },
       caller,
     );
     expectOk(moved);
 
-    const at = async (locationCode: string) => {
-      const listed = await callTool(
-        "list_inventory",
-        { locationIdFilter: locationCode },
-        caller,
-      );
-      expectOk(listed);
-      return (structured(listed).items as Array<Record<string, unknown>>).map(
-        (item) => ({
-          product: (item.product as Record<string, unknown>)?.id,
-          value: (item.amount as { value: number }).value,
-        }),
-      );
-    };
-
-    // 5 already there + 4 moved in, summed into the one existing row.
-    expect(await at(drawer1!)).toEqual([{ product: widget, value: 9 }]);
-    // The widget's remaining 6 relocated whole; the gadget arrived from shelf B.
-    expect((await at(drawer2!)).sort((a, b) => a.value - b.value)).toEqual([
-      { product: gadget, value: 3 },
-      { product: widget, value: 6 },
-    ]);
-    // Both sources are empty: the widget row was consumed by the split, and the
-    // gadget row relocated away.
-    expect(await at(shelfA!)).toEqual([]);
-    expect(await at(shelfB!)).toEqual([]);
+    const listed = await callTool(
+      "list_inventory",
+      { locationIdFilter: drawer },
+      caller,
+    );
+    expectOk(listed);
+    const items = structured(listed).items as Array<Record<string, unknown>>;
+    // Both sources collapsed into the one destination row.
+    expect(items).toHaveLength(1);
+    const row = items[0]!;
+    expect((row.amount as { value: number }).value).toBe(10);
+    expect((row.location as Record<string, unknown>).id).toBe(drawer);
   });
 
   it("add_recipe_to_meal plans a recipe by shortcode", async () => {
