@@ -19,6 +19,7 @@ import {
   PackageX,
   Plus,
   Receipt,
+  ReceiptText,
   Scale,
   Wrench,
 } from "lucide-react";
@@ -55,6 +56,7 @@ import { ProductDiscardDialog } from "./product-discard-dialog";
 import { ProductExpenseHistory } from "./product-expense-history";
 import { ProductForm } from "./product-form";
 import { ProductProjectUses } from "./product-project-uses";
+import { ProductPurchases } from "./product-purchases";
 import { ProductStockedAt } from "./product-stocked-at";
 import { ProductTagSiblings } from "./product-tag-siblings";
 import { ProductTaskHistory } from "./product-task-history";
@@ -182,8 +184,18 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       ),
       content: <ProductExpenseHistory product={product} />,
     },
+    // Custom section: Purchases — the orders this product is linked to via
+    // `PurchaseProduct`, the transpose of a purchase's own Products section.
+    // Distinct from "Vendors" below: that's the derived vendor/spend rollup,
+    // this is the explicit per-order provenance link.
     {
-      title: "Purchase sources",
+      title: "Purchases",
+      icon: ReceiptText,
+      zone: "main" as const,
+      content: <ProductPurchases productId={product.id} />,
+    },
+    {
+      title: "Vendors",
       icon: Receipt,
       content: (
         <RelationshipSummaryTable
@@ -199,7 +211,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
             "latestActivity",
           ]}
           defaultSort={{ field: "latestActivity", direction: "desc" }}
-          emptyCopy="No purchase sources have been linked to this product yet."
+          emptyCopy="No vendor spend is attributed to this product yet."
           nullLabel="No purchase/vendor"
           compact
           expenseHref={(target) =>

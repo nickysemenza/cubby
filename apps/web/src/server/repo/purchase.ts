@@ -75,6 +75,7 @@ import {
   image,
   purchase,
   purchaseImage,
+  purchaseProduct,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -155,6 +156,12 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
     description:
       "Image associations are soft-deleted with the purchase; the underlying images are not.",
   },
+  "PurchaseProduct.purchaseId": {
+    code: "soft-delete-association",
+    effect: "soft-delete",
+    description:
+      "Product links are soft-deleted with the purchase; the Products themselves are not.",
+  },
   "FinancialTransaction.purchaseId": {
     code: "clear-live-fk-with-audit",
     effect: "detach",
@@ -175,6 +182,12 @@ export const PURCHASE_MERGE_EDGE_POLICY = {
     effect: "move-dedupe",
     description:
       "The absorbed purchase's images move onto the survivor, skipping any already filed there, and the source associations are soft-deleted.",
+  },
+  "PurchaseProduct.purchaseId": {
+    code: "move-dedupe-and-soft-delete-source",
+    effect: "move-dedupe",
+    description:
+      "The absorbed purchase's product links move onto the survivor, skipping products already linked there, and the source links are soft-deleted.",
   },
   "FinancialTransaction.purchaseId": {
     code: "repoint-live-fk-with-audit",
@@ -1458,6 +1471,37 @@ export const foldChargeInto = async (
       );
   }
 
+  // Product links follow their charge for the same reason, and need the same
+  // `onConflictDoNothing`: the partial-unique (purchaseId, productId) would
+  // abort the merge when both charges already name the same Product.
+  const movingProducts = await tx.query.purchaseProduct.findMany({
+    where: and(
+      eq(purchaseProduct.purchaseId, deadId),
+      notDeleted(purchaseProduct),
+    ),
+    columns: { productId: true },
+  });
+  if (movingProducts.length > 0) {
+    await tx
+      .insert(purchaseProduct)
+      .values(
+        movingProducts.map((row) => ({
+          purchaseId: survivorId,
+          productId: row.productId,
+        })),
+      )
+      .onConflictDoNothing();
+    await tx
+      .update(purchaseProduct)
+      .set({ deletedAt: new Date() })
+      .where(
+        and(
+          eq(purchaseProduct.purchaseId, deadId),
+          notDeleted(purchaseProduct),
+        ),
+      );
+  }
+
   // Evidence-changing invariant: this fold just re-pointed Expenses,
   // FinancialTransactions, and documents onto the survivor — the exact class
   // of change `linkExpensesToPurchase` and `splitExpense` already invalidate
@@ -1783,6 +1827,16 @@ const deletePurchasesWithPolicy = async (
     }
 
     await tx
+      .update(purchaseProduct)
+      .set({ deletedAt: now })
+      .where(
+        and(
+          inArray(purchaseProduct.purchaseId, ids),
+          notDeleted(purchaseProduct),
+        ),
+      );
+
+    await tx
       .update(purchaseImage)
       .set({ deletedAt: now })
       .where(
@@ -1874,6 +1928,17 @@ export const previewDeletePurchases = async (
         dbClient,
         purchaseImage,
         purchaseImage.purchaseId,
+        ids,
+      ),
+    }),
+    impact({
+      disposition: PURCHASE_DELETE_EDGE_POLICY["PurchaseProduct.purchaseId"],
+      edgeKey: "PurchaseProduct.purchaseId",
+      label: "product links removed",
+      byTargetId: await countByTarget(
+        dbClient,
+        purchaseProduct,
+        purchaseProduct.purchaseId,
         ids,
       ),
     }),
@@ -1992,6 +2057,17 @@ export const previewMergePurchases = async (
         dbClient,
         purchaseImage,
         purchaseImage.purchaseId,
+        losers,
+      ),
+    }),
+    impact({
+      disposition: PURCHASE_MERGE_EDGE_POLICY["PurchaseProduct.purchaseId"],
+      edgeKey: "PurchaseProduct.purchaseId",
+      label: "product links moved and deduplicated",
+      byTargetId: await countByTarget(
+        dbClient,
+        purchaseProduct,
+        purchaseProduct.purchaseId,
         losers,
       ),
     }),

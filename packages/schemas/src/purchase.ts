@@ -408,3 +408,64 @@ export const mergePurchasesInput = z.object({
   mergeIds: z.array(purchaseShortcode).min(1),
 });
 export type MergePurchasesInput = z.infer<typeof mergePurchasesInput>;
+
+// ---------------------------------------------------------------------------
+// Purchase ⟷ Product links (PurchaseProduct)
+//
+// Which Products a Purchase bought — nothing else. This carries NO money and
+// NO quantity: that stays on `expense` (all money lives on Expense;
+// `statedTotal` above is never summed into spend). It exists because an
+// installment/lump-sum Purchase's Expenses are `lineBasis: "allocation"` and
+// can never carry a `productId` (see `./expense-line-kind`) — an allocation
+// line splits one payment across trades/costTypes, it does not name a
+// product — so this link is otherwise the only way to say "this lump-sum
+// order was for these three tools." Mirrors `projectResource*` in
+// `./project` (the analogous Project ⟷ Product link) as closely as possible.
+// ---------------------------------------------------------------------------
+
+export const purchaseProductsInput = z.object({
+  purchaseId: purchaseShortcode,
+});
+
+export const productPurchasesInput = z.object({
+  productId: productShortcode,
+});
+
+export const purchaseProductMutationInput = z.object({
+  purchaseId: purchaseShortcode,
+  productIds: z.array(productShortcode).min(1).max(100),
+});
+
+export const purchaseProductMutationOut = z.object({
+  changed: z.number().int().nonnegative(),
+  attached: z.number().int().nonnegative(),
+});
+export type PurchaseProductMutationOut = z.infer<
+  typeof purchaseProductMutationOut
+>;
+
+export const purchaseProductOut = z.object({
+  productId: productShortcode,
+  productName: z.string(),
+  manufacturer: z.string(),
+  price: z
+    .number()
+    .nullable()
+    .describe("Effective valuation/costing price — display only, not spend."),
+  coverImageUrl: z.url().nullable(),
+  attachedAt: z.date(),
+});
+export type PurchaseProductOut = z.infer<typeof purchaseProductOut>;
+export const purchaseProductsOut = z.array(purchaseProductOut);
+
+/** The transpose: one Product's row on another Purchase's link list. */
+export const productPurchaseOut = z.object({
+  purchaseId: purchaseShortcode,
+  displayLabel: z.string().nullable(),
+  date: plainDate,
+  vendorName: z.string().nullable(),
+  orderId: z.string().nullable(),
+  attachedAt: z.date(),
+});
+export type ProductPurchaseOut = z.infer<typeof productPurchaseOut>;
+export const productPurchasesOut = z.array(productPurchaseOut);

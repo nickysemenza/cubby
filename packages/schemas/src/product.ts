@@ -1072,6 +1072,7 @@ export const productMergeSummaryOut = z.object({
   unitMappingsMoved: z.number().int(),
   tasksMoved: z.number().int(),
   projectUsesMoved: z.number().int(),
+  purchaseLinksMoved: z.number().int(),
   wishCandidatesMoved: z.number().int(),
   aliasesAdded: z.array(z.string()),
   carriedFields: z.array(z.string()),

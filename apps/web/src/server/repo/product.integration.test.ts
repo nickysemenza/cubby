@@ -27,6 +27,10 @@ import {
 } from "./product";
 import { createProject } from "./project";
 import {
+  attachPurchaseProducts,
+  detachPurchaseProducts,
+} from "./purchase-products";
+import {
   createIngredientFixture as createIngredient,
   createInventoryFixture as createInventoryEntry,
   createLocationFixture as createLocation,
@@ -37,6 +41,7 @@ import {
 } from "./repo.fixtures";
 import { insertWithShortcode } from "./shortcode-utils";
 import { createTask, deleteTasks } from "./task";
+import { findOrCreateVendor } from "./vendor";
 
 describe("product repository", () => {
   const ctx = withTestDb();
@@ -2334,7 +2339,7 @@ describe("product repository", () => {
    * what a future entity needs before that generalization is worth building.
    */
   describe("PRODUCT_EDGE_ROLES backstop", () => {
-    it("has exactly the eight edges this test exercises (name+ordering drift is a signal to update the test too)", () => {
+    it("has exactly the nine edges this test exercises (name+ordering drift is a signal to update the test too)", () => {
       expect(Object.keys(PRODUCT_EDGE_ROLES).sort()).toEqual(
         [
           "Expense.productId",
@@ -2343,6 +2348,7 @@ describe("product repository", () => {
           "ProductImage.productId",
           "ProjectToolUsage.productId",
           "ProductUnitMappings.productId",
+          "PurchaseProduct.productId",
           "Task.subjectProductId",
           "WishCandidate.productId",
         ].sort(),
@@ -2402,6 +2408,47 @@ describe("product repository", () => {
       ).rejects.toMatchObject({ cause: { reason: "PRODUCT_HAS_EXPENSES" } });
 
       await deleteExpenses(ctx.db, [exp.id], ctx.actor);
+
+      await expect(
+        deleteProducts(ctx.db, [prod.entityId], ctx.actor),
+      ).resolves.toBeUndefined();
+    });
+
+    it("blocks delete while a purchase link is live, and allows it once detached", async () => {
+      // The provenance edge is `acquisition`, so it retains the product for the
+      // same reason a linked Expense does: for an installment order this link
+      // is often the ONLY record of which order bought the thing, since those
+      // Expenses are `lineBasis: "allocation"` and can never carry a productId.
+      const prod = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Backstop Purchase Link Product" }),
+        ctx.actor,
+      );
+      const vendorId = await findOrCreateVendor(ctx.db, "Backstop Link Vendor");
+      const purchaseRow = await insertWithShortcode(ctx.db, "purchase", {
+        vendorId,
+        date: "2026-01-05",
+      });
+
+      await attachPurchaseProducts(
+        ctx.db,
+        purchaseRow.id,
+        [prod.entityId],
+        ctx.actor,
+      );
+
+      await expect(
+        deleteProducts(ctx.db, [prod.entityId], ctx.actor),
+      ).rejects.toMatchObject({
+        cause: { reason: "PRODUCT_HAS_PURCHASE_LINKS" },
+      });
+
+      await detachPurchaseProducts(
+        ctx.db,
+        purchaseRow.id,
+        [prod.entityId],
+        ctx.actor,
+      );
 
       await expect(
         deleteProducts(ctx.db, [prod.entityId], ctx.actor),

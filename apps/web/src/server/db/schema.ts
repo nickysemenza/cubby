@@ -1285,6 +1285,47 @@ export const purchaseImage = pgTable(
   ],
 );
 
+// Provenance: this vendor order bought this Product. Deliberately NOT money —
+// `Expense` remains the only spend ledger and nothing here is ever summed.
+//
+// It exists because `Expense.productId` cannot answer the question. That edge is
+// a COST-BASIS link feeding `SUM(cost)/SUM(productQuantity)`, so it is only
+// available where the money decomposes per item. An order paid as a deposit plus
+// a balance is `lineBasis: "allocation"` — the deposit buys no particular item —
+// and pointing several products at it would halve every derived price and claim
+// phantom units. Those products are exactly the ones left with no navigable path
+// back to the order that bought them, which is the hole this fills.
+//
+// One live pair is one link. No quantity: `Expense.productQuantity` already owns
+// "how many units did this money buy", and a second copy here would answer the
+// same question from a second table with no rule for which wins when they
+// disagree. A real multi-unit need belongs on a line-item table with a unit
+// price beside it, not here.
+export const purchaseProduct = pgTable(
+  "PurchaseProduct",
+  {
+    id: pkUuid(),
+    purchaseId: uuid("purchaseId")
+      .notNull()
+      .$type<PurchaseId>()
+      .references(() => purchase.id),
+    productId: uuid("productId")
+      .notNull()
+      .$type<ProductId>()
+      .references(() => product.id),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    // Partial, so detaching and re-attaching the same pair stays legal.
+    uniqueIndex("PurchaseProduct_purchaseId_productId_key")
+      .on(table.purchaseId, table.productId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("PurchaseProduct_purchaseId_idx").on(table.purchaseId),
+    index("PurchaseProduct_productId_idx").on(table.productId),
+  ],
+);
+
 /**
  * A settlement-side event. Amounts are evidence only: they never participate
  * in spend/project/calendar rollups, which remain derived from Expense.cost.
@@ -1569,6 +1610,7 @@ export const productRelations = relations(product, ({ one, many }) => ({
   images: many(productImage),
   expenses: many(expense),
   projectToolUsages: many(projectToolUsage),
+  purchaseProducts: many(purchaseProduct),
   wishCandidates: many(wishCandidate),
 }));
 
@@ -1753,6 +1795,7 @@ export const purchaseRelations = relations(purchase, ({ one, many }) => ({
   }),
   expenses: many(expense),
   images: many(purchaseImage),
+  products: many(purchaseProduct),
   financialTransactions: many(financialTransaction),
 }));
 
@@ -1766,6 +1809,20 @@ export const financialTransactionRelations = relations(
     purchase: one(purchase, {
       fields: [financialTransaction.purchaseId],
       references: [purchase.id],
+    }),
+  }),
+);
+
+export const purchaseProductRelations = relations(
+  purchaseProduct,
+  ({ one }) => ({
+    purchase: one(purchase, {
+      fields: [purchaseProduct.purchaseId],
+      references: [purchase.id],
+    }),
+    product: one(product, {
+      fields: [purchaseProduct.productId],
+      references: [product.id],
     }),
   }),
 );

@@ -10,6 +10,7 @@
  * nothing to split. `split` here splits an *expense* into lines of one charge.
  */
 
+import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import {
   purchaseShortcode,
   unsafeExpenseId,
@@ -25,6 +26,10 @@ import {
   purchaseCreateInput,
   purchaseFiltersSchema,
   purchaseOut,
+  purchaseProductMutationInput,
+  purchaseProductMutationOut,
+  purchaseProductsInput,
+  purchaseProductsOut,
   purchaseSortableFields,
   purchaseUpdateData,
   reclassifyPurchaseDocumentInput,
@@ -45,8 +50,15 @@ import {
   updatePurchase,
 } from "~/server/repo/purchase";
 import {
+  attachPurchaseProducts,
+  detachPurchaseProducts,
+  listPurchaseProducts,
+} from "~/server/repo/purchase-products";
+import {
+  resolveAllOrThrow,
   resolveAllPresent,
   resolveLiveShortcode,
+  resolveOrThrow,
   resolveShortcode,
 } from "~/server/repo/shortcode-resolver";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
@@ -241,6 +253,61 @@ const deleteEmpty = protectedProcedure
     return { deleted: deletedIds.length, deletedIds };
   });
 
+/**
+ * Resolve a purchase-product mutation/query's shortcodes to live ids in one
+ * shot. Mirrors `resolveProjectResourceIds` in the project router.
+ */
+async function resolvePurchaseProductIds(
+  db: Parameters<typeof resolveOrThrow>[0],
+  input: { purchaseId: string; productIds?: ProductShortcode[] },
+) {
+  const purchaseId = await resolveOrThrow(db, "purchase", input.purchaseId);
+  if (!input.productIds) {
+    return { purchaseId, productIds: [] };
+  }
+  const productIds = await resolveAllOrThrow(db, "product", input.productIds);
+  return { purchaseId, productIds };
+}
+
+/**
+ * The Products linked to one Purchase. This link carries no money and is not
+ * a second spend path — see `packages/schemas/src/purchase.ts` for why it
+ * exists (lump-sum/installment Expenses can't carry a productId).
+ */
+const products = protectedProcedure
+  .input(purchaseProductsInput)
+  .output(strictOutput(purchaseProductsOut))
+  .query(async ({ ctx, input }) => {
+    const ids = await resolvePurchaseProductIds(ctx.db, input);
+    return listPurchaseProducts(ctx.db, ids.purchaseId);
+  });
+
+const attachProducts = protectedProcedure
+  .input(purchaseProductMutationInput)
+  .output(strictOutput(purchaseProductMutationOut))
+  .mutation(async ({ ctx, input }) => {
+    const ids = await resolvePurchaseProductIds(ctx.db, input);
+    return attachPurchaseProducts(
+      ctx.db,
+      ids.purchaseId,
+      ids.productIds,
+      ctx.actorContext,
+    );
+  });
+
+const detachProducts = protectedProcedure
+  .input(purchaseProductMutationInput)
+  .output(strictOutput(purchaseProductMutationOut))
+  .mutation(async ({ ctx, input }) => {
+    const ids = await resolvePurchaseProductIds(ctx.db, input);
+    return detachPurchaseProducts(
+      ctx.db,
+      ids.purchaseId,
+      ids.productIds,
+      ctx.actorContext,
+    );
+  });
+
 export const purchaseRouter = createTRPCRouter({
   ...procedures,
   link,
@@ -248,4 +315,7 @@ export const purchaseRouter = createTRPCRouter({
   merge,
   reclassifyDocument,
   deleteEmpty,
+  products,
+  attachProducts,
+  detachProducts,
 });

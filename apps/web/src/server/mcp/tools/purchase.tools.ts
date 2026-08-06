@@ -49,6 +49,10 @@ import {
   purchaseFilterFields,
   purchaseListResponse,
   purchaseOut,
+  purchaseProductMutationInput,
+  purchaseProductMutationOut,
+  purchaseProductsInput,
+  purchaseProductsOut,
   purchaseUpdateData,
   reclassifyPurchaseDocumentInput,
   splitExpenseInput,
@@ -64,6 +68,7 @@ import {
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
+  READ_ONLY_CLOSED,
   registerEntityCrudToolset,
   registerRouterTool,
   slimPurchase,
@@ -214,5 +219,35 @@ export function registerPurchaseTools(server: McpServer) {
     outputSchema: vendorOut,
     annotations: WRITE_DESTRUCTIVE_CLOSED,
     call: (caller, params) => caller.vendor.merge(params),
+  });
+
+  registerRouterTool(server, {
+    name: "list_purchase_products",
+    description:
+      "List the Products one Purchase bought, via the PurchaseProduct link. This link is PROVENANCE, not money: it carries no amount and no quantity, never appears in any spend total, and is never a substitute for an Expense. It exists because an order paid in installments has Expenses with lineBasis \"allocation\" — a slice of a total that was never itemized, either by payment schedule (a deposit buys no particular item) or by an estimated materials/labor split — and such a row can never carry a productId. Linking one would halve the Product's derived unit price, since price derives as SUM(cost)/SUM(productQuantity) over every linked Expense, and would claim a phantom unit besides. Where a Purchase's spend IS itemized per product (lineBasis \"item_line\"), each Expense's own productId already records it and is the better source. Each row returns the Product's identity, effective price (display only), cover image, and when the link was recorded.",
+    inputSchema: purchaseProductsInput.shape,
+    outputSchema: purchaseProductsOut,
+    annotations: READ_ONLY_CLOSED,
+    call: (caller, params) => caller.purchase.products(params),
+  });
+
+  registerRouterTool(server, {
+    name: "attach_purchase_products",
+    description:
+      'Record that one or more existing Products were bought on one existing Purchase. This link is PROVENANCE, not money: it creates, adjusts, and duplicates nothing in the ledger, and must never stand in for pricing a line. It exists because an order paid in installments has Expenses with lineBasis "allocation" — a slice of a total that was never itemized — which can never carry a productId, leaving the goods with no path back to the order that bought them. Prefer setting an Expense\'s own productId whenever the spend is genuinely itemized per product; reach for this only when no Expense can hold the fact. Repeating a live link is idempotent.',
+    inputSchema: purchaseProductMutationInput.shape,
+    outputSchema: purchaseProductMutationOut,
+    annotations: WRITE_CLOSED,
+    call: (caller, params) => caller.purchase.attachProducts(params),
+  });
+
+  registerRouterTool(server, {
+    name: "detach_purchase_products",
+    description:
+      "Soft-delete one or more Product links from one Purchase. The link carries no money and no quantity, so detaching touches no Expense, no inventory, and no spend total — it only removes the record that this order bought that Product. Idempotent: safe to call on a link that is already gone, and it reports nothing changed.",
+    inputSchema: purchaseProductMutationInput.shape,
+    outputSchema: purchaseProductMutationOut,
+    annotations: WRITE_DESTRUCTIVE_CLOSED,
+    call: (caller, params) => caller.purchase.detachProducts(params),
   });
 }

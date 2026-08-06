@@ -9,7 +9,7 @@
  *
  * ## Why this is harder than the other three merges
  *
- * Product has **eight** incoming edges, and five of them sit under a partial
+ * Product has **nine** incoming edges, and six of them sit under a partial
  * unique index, so a blind re-point aborts the transaction rather than
  * producing a wrong answer:
  *
@@ -19,9 +19,10 @@
  *  | `InventoryEntry.productId`    | `(productId, locationId)`      |
  *  | `ProductImage.productId`      | `(productId, imageId)`         |
  *  | `ProjectToolUsage.productId`  | `(projectId, productId)`       |
+ *  | `PurchaseProduct.productId`   | `(purchaseId, productId)`      |
  *  | `WishCandidate.productId`     | `(wishId, productId)`          |
  *
- * All five are planned through the shared `planSlotCollisions`; what happens to
+ * All six are planned through the shared `planSlotCollisions`; what happens to
  * an *absorbed* row is per-edge and deliberately not shared (see below). The
  * remaining three — `ProductUnitMappings`, `Expense`, `Task.subjectProductId` —
  * are plain re-points.
@@ -87,6 +88,7 @@ import {
   productImage,
   productUnitMappings,
   projectToolUsage,
+  purchaseProduct,
   task,
   wishCandidate,
 } from "~/server/db/schema";
@@ -157,6 +159,12 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     description:
       "A merged product's project-use history moves onto the survivor, skipping projects the survivor is already recorded on.",
   },
+  "PurchaseProduct.productId": {
+    code: "repoint-or-drop-same-purchase",
+    effect: "move-dedupe",
+    description:
+      "A merged product's purchase links move onto the survivor, skipping orders the survivor is already recorded against.",
+  },
   "WishCandidate.productId": {
     code: "repoint-or-drop-same-wish",
     effect: "move-dedupe",
@@ -220,6 +228,7 @@ interface ProductMergeSummary {
   unitMappingsMoved: number;
   tasksMoved: number;
   projectUsesMoved: number;
+  purchaseLinksMoved: number;
   wishCandidatesMoved: number;
   aliasesAdded: string[];
   /** Column names the survivor adopted from a merged-away product. */
@@ -461,8 +470,8 @@ export const mergeProducts = async (
     }
     summary.inventoryMerged = inventoryMerged;
 
-    // ---- ProductImage / ProjectToolUsage / WishCandidate -------------------
-    // Three edges, one shape: re-point what fits, soft-delete the duplicate.
+    // ---- ProductImage / ProjectToolUsage / PurchaseProduct / WishCandidate --
+    // Four edges, one shape: re-point what fits, soft-delete the duplicate.
     // An absorbed row here carries no data the survivor's row doesn't already
     // have (the pair IS the row), so there is nothing to fold.
     summary.imagesMoved = await foldAssociation(tx, {
@@ -489,6 +498,19 @@ export const mergeProducts = async (
       }),
       keepId,
       slotKey: (row) => row.projectId,
+      now,
+    });
+    summary.purchaseLinksMoved = await foldAssociation(tx, {
+      table: purchaseProduct,
+      rows: await tx.query.purchaseProduct.findMany({
+        where: and(
+          inArray(purchaseProduct.productId, [keepId, ...loserIds]),
+          notDeleted(purchaseProduct),
+        ),
+        columns: { id: true, productId: true, purchaseId: true },
+      }),
+      keepId,
+      slotKey: (row) => row.purchaseId,
       now,
     });
     summary.wishCandidatesMoved = await foldAssociation(tx, {
@@ -631,6 +653,7 @@ const emptySummary = (
   unitMappingsMoved: 0,
   tasksMoved: 0,
   projectUsesMoved: 0,
+  purchaseLinksMoved: 0,
   wishCandidatesMoved: 0,
   aliasesAdded: [],
   carriedFields: [],
@@ -638,10 +661,10 @@ const emptySummary = (
 
 /**
  * Re-point a pure association row (product↔image, product↔project,
- * product↔wish) onto the survivor, soft-deleting the ones whose pair the
+ * product↔purchase, product↔wish) onto the survivor, soft-deleting the ones whose pair the
  * survivor already has. Returns how many actually moved.
  *
- * These three share an implementation because they share a *shape*, not just a
+ * These four share an implementation because they share a *shape*, not just a
  * plan: the row IS the pair, so an absorbed duplicate carries nothing to fold
  * into its survivor. External ids and inventory look similar and are handled
  * separately precisely because their absorbed rows do (a url; a quantity).
@@ -828,6 +851,17 @@ export const previewMergeProducts = async (
         dbClient,
         projectToolUsage,
         projectToolUsage.productId,
+        losers,
+      ),
+    }),
+    impact({
+      disposition: PRODUCT_MERGE_EDGE_POLICY["PurchaseProduct.productId"],
+      edgeKey: "PurchaseProduct.productId",
+      label: "purchase links moved",
+      byTargetId: await countByTarget(
+        dbClient,
+        purchaseProduct,
+        purchaseProduct.productId,
         losers,
       ),
     }),

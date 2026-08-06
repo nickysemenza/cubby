@@ -60,6 +60,7 @@ import {
   projectToolUsage,
   purchase,
   purchaseImage,
+  purchaseProduct,
   recipe,
   recipeImage,
   recipeSection,
@@ -141,6 +142,7 @@ export const INCOMING_EDGES = {
     "Expense.productId": { column: expense.productId },
     "Task.subjectProductId": { column: task.subjectProductId },
     "ProjectToolUsage.productId": { column: projectToolUsage.productId },
+    "PurchaseProduct.productId": { column: purchaseProduct.productId },
     "WishCandidate.productId": { column: wishCandidate.productId },
   }),
   location: edges({
@@ -179,6 +181,7 @@ export const INCOMING_EDGES = {
   purchase: edges({
     "Expense.purchaseId": { column: expense.purchaseId },
     "PurchaseImage.purchaseId": { column: purchaseImage.purchaseId },
+    "PurchaseProduct.purchaseId": { column: purchaseProduct.purchaseId },
     "FinancialTransaction.purchaseId": {
       column: financialTransaction.purchaseId,
     },

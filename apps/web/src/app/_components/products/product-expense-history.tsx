@@ -129,7 +129,19 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
     return (
       <ShelfEmpty
         entity="expense"
-        label="No expenses linked — link one to track this product's cost basis"
+        // Don't claim the cost basis is missing when it isn't. A product priced
+        // from a quote or invoice carries an explicit `priceOverride`, which
+        // wins unconditionally over the derived aggregate and is what values
+        // its inventory — so "link one to track this product's cost basis" was
+        // false, and the action it invited is refused anyway on the orders this
+        // most often applies to: an installment order's Expenses are
+        // `lineBasis: "allocation"` and cannot carry a productId at all.
+        label={
+          product.pricing.source === "explicit" &&
+          product.pricing.effectivePrice !== null
+            ? `No expenses linked — cost basis is the manual price of ${formatCurrency(product.pricing.effectivePrice)}`
+            : "No expenses linked — link one to track this product's cost basis"
+        }
       />
     );
   }
