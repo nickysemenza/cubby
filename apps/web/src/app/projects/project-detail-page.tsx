@@ -19,6 +19,7 @@ import {
   ListChecks,
   Pencil,
   Plus,
+  Receipt,
   ShoppingCart,
   Wallet,
   Wrench,
@@ -71,6 +72,7 @@ import type { PivotCostKey } from "./charts/trade-cost-pivot";
 import { CreateProjectDialog } from "./create-project-dialog";
 import { ProjectNotes } from "./project-notes";
 import { projectKindOptions } from "./project-options";
+import { ProjectPurchasesTable } from "./project-purchases-table";
 import {
   projectGanttSubtreeQueryParams,
   projectSubtreeExpensesFilters,
@@ -1081,6 +1083,20 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     ),
   };
 
+  // The vendor charges behind the ledger above, each twirling open to its own
+  // lines. Exact project, not the subtree — same scope as the Vendors card.
+  const purchasesSection: DetailSection = {
+    title: "Purchases",
+    icon: Receipt,
+    zone: hasSubtree ? "full" : "main",
+    content: (
+      <ProjectPurchasesTable
+        projectId={project.id}
+        expenses={sortedSubtreeExpenses}
+      />
+    ),
+  };
+
   const purchasedProductsSection: DetailSection = {
     title: "Purchased products",
     icon: ShoppingCart,
@@ -1127,7 +1143,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
         defaultSort={{ field: "netSpend", direction: "desc" }}
         emptyCopy="No vendor-linked expenses have been recorded for this project yet."
         nullLabel="No purchase/vendor"
-        compact
         expenseHref={(target) =>
           `/expenses?project=${encodeURIComponent(project.id)}&subprojects=true&vendor=${encodeURIComponent(target?.id ?? "__none__")}`
         }
@@ -1161,6 +1176,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     tasksSection,
     reusableResourcesSection,
     ...(hasSubtree ? [] : [expensesSection]),
+    ...(hasSubtree ? [] : [purchasesSection]),
     ...(hasSubtree ? [] : [purchasedProductsSection]),
     // Aside rail: metadata + (when empty) the slim Notes card.
     overviewSection,
@@ -1171,6 +1187,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     ...(hasNotesContent ? [] : [notesSection]),
     // Subtree projects show the ledger as a full-width band at the bottom.
     ...(hasSubtree ? [expensesSection] : []),
+    ...(hasSubtree ? [purchasesSection] : []),
     ...(hasSubtree ? [purchasedProductsSection] : []),
     // Paper trail last, same position task/expense detail give it.
     historySection,

@@ -213,7 +213,6 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
           defaultSort={{ field: "latestActivity", direction: "desc" }}
           emptyCopy="No vendor spend is attributed to this product yet."
           nullLabel="No purchase/vendor"
-          compact
           expenseHref={(target) =>
             `/expenses?productId=${encodeURIComponent(product.id)}&vendor=${encodeURIComponent(target?.id ?? "__none__")}`
           }

@@ -1,23 +1,20 @@
-import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { useMutation } from "@tanstack/react-query";
 import pluralize from "pluralize";
 import { useMemo } from "react";
 import { toast } from "sonner";
-import type { z } from "zod";
 import {
   OperationImpact,
   useOperationPreview,
 } from "~/app/_components/impact/operation-impact";
+import type { InventoryDialogItem } from "~/app/_components/inventory/dialog-item";
 import { useInventoryInvalidation } from "~/app/_components/inventory/hooks";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
 
-type InventoryItem = z.infer<typeof inventoryListItemOut>;
-
 interface DeleteInventoryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  items: InventoryItem[];
+  items: InventoryDialogItem[];
   onSuccess: () => void;
 }
 

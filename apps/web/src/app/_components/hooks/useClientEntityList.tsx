@@ -52,9 +52,12 @@ type SharedListOptions<TData extends BaseListRow> = Pick<
   | "entity"
   | "columns"
   | "deletable"
+  | "extraActions"
   | "nameEditable"
   | "nameSuffix"
   | "tableStateOptions"
+  | "initialColumnVisibility"
+  | "columnVisibilityScope"
 >;
 
 interface UseClientEntityListOptions<TData extends BaseListRow>
@@ -104,9 +107,12 @@ export function useClientEntityList<TData extends BaseListRow>({
   columns: customColumns,
   filters,
   deletable,
+  extraActions,
   nameEditable,
   nameSuffix,
   tableStateOptions,
+  initialColumnVisibility,
+  columnVisibilityScope,
   tree,
   bulkActions,
   deleteEmptyLabel,
@@ -123,7 +129,11 @@ export function useClientEntityList<TData extends BaseListRow>({
     combinedExtraActions,
     deleteDialog,
     requestDelete,
-  } = useOptimisticDelete<TData>({ deletable, emptyLabel: deleteEmptyLabel });
+  } = useOptimisticDelete<TData>({
+    deletable,
+    extraActions,
+    emptyLabel: deleteEmptyLabel,
+  });
 
   const listBulkActions = useListBulkActions({
     bulkActions,
@@ -177,11 +187,16 @@ export function useClientEntityList<TData extends BaseListRow>({
             view.defaultVisible,
           ]),
         ),
+        ...initialColumnVisibility,
       }) as Record<string, boolean>,
-    [relatedViews],
+    [relatedViews, initialColumnVisibility],
   );
   const { columnVisibility, onColumnVisibilityChange } =
-    useTableColumnVisibility(entity, relatedInitialVisibility);
+    useTableColumnVisibility(
+      entity,
+      relatedInitialVisibility,
+      columnVisibilityScope,
+    );
   const visibleRelatedKeys = useMemo(
     () =>
       relatedViews

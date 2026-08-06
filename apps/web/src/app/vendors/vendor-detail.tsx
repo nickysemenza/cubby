@@ -220,7 +220,6 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
           defaultSort={{ field: "netSpend", direction: "desc" }}
           emptyCopy="No expenses from this vendor have been assigned to projects yet."
           nullLabel="Unassigned"
-          compact
           expenseHref={(target) =>
             `/expenses?vendor=${encodeURIComponent(vendor.id)}&project=${encodeURIComponent(target?.id ?? "__none__")}`
           }
