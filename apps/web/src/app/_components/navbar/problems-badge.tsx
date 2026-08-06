@@ -36,6 +36,7 @@ const PROBLEM_LABELS: Record<
   productsMissingPrice: (n) => `${n} stocked without a price`,
   unvaluedBucketProducts: (n) => pl(n, "unvalued bucket"),
   soldButStillStocked: (n) => `${n} sold but still stocked`,
+  unlinkedExitExpenses: (n) => `${n} sold without a product`,
   negativeExpectedQuantity: (n) => `${n} sold more than bought`,
   toolsUsedOutsideOwnership: (n) => `${n} used before we owned it`,
   productsWithoutMappings: (n) => `${n} without pricing`,

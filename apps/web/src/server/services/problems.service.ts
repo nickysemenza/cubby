@@ -95,6 +95,7 @@ import {
   findStaleLocations,
   findToolsUsedOutsideOwnership,
   findUnknownParkedItems,
+  findUnlinkedExitExpenses,
   findUnusedIngredients,
   findVendorsWithoutLogos,
   loadProductsForCoverage,
@@ -494,6 +495,9 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       orphanedProducts: () => findOrphanedProducts(scoped),
       productsMissingPrice: () => findProductsMissingPrice(scoped),
       soldButStillStocked: () => findSoldButStillStocked(scoped),
+      // The inverse of the line above: same disposal-Purchase predicate, but
+      // the exits with no product to group by, which that one cannot see.
+      unlinkedExitExpenses: () => findUnlinkedExitExpenses(scoped),
       // One grouped scan of the product-linked Expense rows, filtered down to
       // the offenders by a HAVING rather than in JS.
       negativeExpectedQuantity: () =>
@@ -551,6 +555,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     productsMissingPrice: r.productsMissingPrice.real,
     unvaluedBucketProducts: r.productsMissingPrice.buckets,
     soldButStillStocked: r.soldButStillStocked,
+    unlinkedExitExpenses: r.unlinkedExitExpenses,
     negativeExpectedQuantity: r.negativeExpectedQuantity,
     toolsUsedOutsideOwnership: r.toolsUsedOutsideOwnership,
     productsWithoutMappings: r.productsWithoutMappings,

@@ -96,6 +96,7 @@ export {
   findProductsWithUpcGaps,
   findSoldButStillStocked,
   findToolsUsedOutsideOwnership,
+  findUnlinkedExitExpenses,
   loadProductsForCoverage,
   type ProductWithBetterUpcData,
   recipeUsageCountsByProduct,

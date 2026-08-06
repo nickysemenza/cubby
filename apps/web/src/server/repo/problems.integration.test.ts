@@ -639,6 +639,86 @@ describe("problems repo", () => {
     });
   });
 
+  describe("findUnlinkedExitExpenses", () => {
+    const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
+      unwrap(
+        createExpense(
+          ctx.db,
+          expenseCreateInput.parse(makeExpenseInput(overrides)),
+          ctx.actor,
+        ),
+      );
+
+    it("flags a productless disposal line and spares a refund on an ordinary purchase", async () => {
+      const linked = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Linked Sold Drill", price: 90 }),
+        ctx.actor,
+      );
+
+      // The defect: a sale with nothing naming what left. Invisible to
+      // findSoldButStillStocked, which groups by productId.
+      const unlinked = await seedLine({
+        name: "ebay payout - unknown item",
+        cost: -140,
+        vendor: "eBay",
+        orderId: "UNLINKED-SALE",
+        productId: null,
+      });
+      // Same purchase shape, but linked — the mirror detector's territory, not
+      // this one's.
+      await seedLine({
+        name: "drill sold",
+        cost: -90,
+        vendor: "eBay",
+        orderId: "LINKED-SALE",
+        productId: linked.id,
+        productQuantity: 1,
+      });
+      // THE false positive this predicate exists to avoid. A negative line with
+      // no product, sitting on a purchase that nets POSITIVE: a refund, a price
+      // adjustment, a family contribution. On production these outnumber real
+      // disposals, and keying on bare negative lines was wrong about half the
+      // time.
+      await seedLine({
+        name: "lumber",
+        cost: 300,
+        vendor: "Golden State Lumber",
+        orderId: "REFUND-CASE",
+        productId: null,
+      });
+      await seedLine({
+        name: "lumber overcharge refunded",
+        cost: -45,
+        vendor: "Golden State Lumber",
+        orderId: "REFUND-CASE",
+        productId: null,
+      });
+
+      const found = await findFastProblems(ctx.db);
+      const ids = found.unlinkedExitExpenses.map((row) => row.id);
+
+      expect(ids).toContain(unlinked.id);
+      expect(found.unlinkedExitExpenses).toContainEqual(
+        expect.objectContaining({
+          id: unlinked.id,
+          cost: -140,
+          vendorName: "eBay",
+        }),
+      );
+      // Not a disposal — the purchase nets +$255.
+      expect(
+        found.unlinkedExitExpenses.some(
+          (row) => row.name === "lumber overcharge refunded",
+        ),
+      ).toBe(false);
+      // Linked sales belong to the mirror detector.
+      expect(
+        found.unlinkedExitExpenses.some((row) => row.name === "drill sold"),
+      ).toBe(false);
+    });
+  });
+
   describe("findProductsWithNegativeExpectedQuantity", () => {
     const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
       unwrap(
