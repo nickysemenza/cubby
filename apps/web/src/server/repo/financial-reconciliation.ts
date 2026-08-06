@@ -16,6 +16,16 @@ export interface FinancialReconciliationInput {
    * common shape: a purchase whose payments are ALL still planned has no
    * transactions at all, so it lands in `unknown` and never surfaced the bug.
    * It only appears once some payments have settled and some have not.
+   *
+   * ONE ASYMMETRY TO KNOW ABOUT. This excludes planned spend from the expense
+   * side, but `projectedTotal` on the settlement side still includes expected
+   * and pending transactions. So a payment recorded BOTH as a `future` Expense
+   * AND as an outstanding FinancialTransaction would be dropped from one side
+   * and kept on the other, and report a mismatch of its own amount. No purchase
+   * does that today (checked: zero), and the schedule here is modelled purely
+   * as future Expenses. If it ever starts happening, make the two sides
+   * consistent — do not "fix" it by counting planned spend again, which is the
+   * unsatisfiable comparison this exists to remove.
    */
   settleableExpenseTotal: number;
   /** Unpriced rows among the incurred expenses — same exclusion, same reason. */
