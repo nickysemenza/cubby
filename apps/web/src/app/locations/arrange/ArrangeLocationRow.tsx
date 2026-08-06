@@ -1,11 +1,18 @@
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
-import { ArrowDownToLine } from "lucide-react";
+import { Focus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { LocationTreeRow } from "~/app/_components/locations/location-tree-row";
 import { Row } from "~/components/layout";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
 import { ArrangeMoveTo } from "./ArrangeMoveTo";
+import { ArrangeThumb } from "./ArrangeThumb";
 import { parentIdOf } from "./arrange-tree-utils";
 import type { LocationDragData } from "./arrange-types";
 import { useArrangeDropTarget } from "./use-arrange-drop-target";
@@ -109,17 +116,36 @@ export function ArrangeLocationRow({
           ? `${childCount} sublocation${childCount === 1 ? "" : "s"}`
           : undefined
       }
+      icon={
+        <ArrangeThumb
+          images={node.images}
+          alt={node.name}
+          size={24}
+          fallback={<LocationIcon type={node.type} size={14} />}
+          to="/locations/$shortcode"
+          shortcode={node.id}
+        />
+      }
       trailing={
         <Row align="center" gap="tight" className="shrink-0">
           {hasChildren && (
-            <button
-              type="button"
-              aria-label={`Drill into ${node.name}`}
-              onClick={() => onDrill(node.id)}
-              className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground"
-            >
-              <ArrowDownToLine className="size-3.5" />
-            </button>
+            // Zooms the tree to this node (it sets the breadcrumb root), so the
+            // icon must not read as download or as expand/collapse.
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label={`Zoom into ${node.name}`}
+                    onClick={() => onDrill(node.id)}
+                    className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground"
+                  />
+                }
+              >
+                <Focus className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipContent>Zoom into {node.name}</TooltipContent>
+            </Tooltip>
           )}
           <ArrangeMoveTo
             target={{

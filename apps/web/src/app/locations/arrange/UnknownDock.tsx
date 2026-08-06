@@ -57,7 +57,7 @@ export function UnknownDock({ unknownRoot, roots }: UnknownDockProps) {
     return (
       <Stack
         gap="sm"
-        className="w-full shrink-0 rounded border border-[var(--border-strong)] border-dashed bg-background p-4 lg:w-56"
+        className="w-full shrink-0 rounded border border-[var(--border-strong)] border-dashed bg-background p-4 lg:w-72"
       >
         <Description size="sm">Unknown staging — provisioning…</Description>
       </Stack>
@@ -74,7 +74,7 @@ export function UnknownDock({ unknownRoot, roots }: UnknownDockProps) {
       ref={ref}
       gap="sm"
       className={cn(
-        "w-full shrink-0 rounded border border-[var(--border-strong)] border-dashed bg-background p-4 lg:w-56",
+        "w-full shrink-0 rounded border border-[var(--border-strong)] border-dashed bg-background p-4 lg:w-72",
         isOver && "bg-primary/10",
       )}
     >

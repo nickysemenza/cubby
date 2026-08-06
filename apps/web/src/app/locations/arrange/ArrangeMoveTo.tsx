@@ -10,6 +10,11 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { StatusText } from "~/components/ui/status-text";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
 import { isValidItemDrop, isValidLocationDrop } from "./arrange-tree-utils";
 import type { ItemDragData } from "./arrange-types";
 import { useArrangeMutations } from "./use-arrange-mutations";
@@ -39,18 +44,25 @@ export function ArrangeMoveTo({ target }: { target: ArrangeMoveTarget }) {
 
   return (
     <>
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label={`Move ${target.name}`}
-        className="shrink-0 text-muted-foreground"
-        onClick={(event) => {
-          event.stopPropagation();
-          setOpen(true);
-        }}
-      >
-        <FolderInput />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`Move ${target.name}`}
+              className="shrink-0 text-muted-foreground"
+              onClick={(event) => {
+                event.stopPropagation();
+                setOpen(true);
+              }}
+            />
+          }
+        >
+          <FolderInput />
+        </TooltipTrigger>
+        <TooltipContent>Move to…</TooltipContent>
+      </Tooltip>
       {open && <MoveToDialog target={target} onClose={() => setOpen(false)} />}
     </>
   );
