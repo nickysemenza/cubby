@@ -19,7 +19,6 @@
  * transforms, and the name-match `where` builder) is not re-exported.
  */
 
-// CRUD operations
 export {
   createIngredient,
   findOrCreateIngredient,
@@ -27,15 +26,12 @@ export {
   resolveOrCreateIngredients,
   updateIngredient,
 } from "./crud";
-// Soft delete with dependency guards
 export { deleteIngredients } from "./deletion";
-// Merge: fuzzy candidates + merge op
 export {
   findFuzzyMergeCandidates,
   type MergeSummary,
   mergeIngredients,
 } from "./merge";
-// Search / lookup / list reads
 export {
   enrichmentWorkbenchIngredients,
   getIngredientByName,

@@ -1,18 +1,3 @@
-/**
- * BulkMoveForm - Full-page workflow for moving inventory between locations.
- *
- * Use this component when:
- * - User needs to select both source and target locations
- * - Moving multiple items with partial quantity support (e.g., move 5 of 10)
- * - Need select-all/deselect-all functionality for bulk selection
- * - Full visibility of what's being moved with editable quantities
- *
- * For quick moves from a known location where source is already established,
- * use the lighter-weight MoveInventoryDialog instead.
- *
- * @see MoveInventoryDialog - Lightweight modal for quick moves
- */
-
 import { unsafeInventoryShortcode } from "@cubby/schemas/identifiers";
 import type {
   BulkMoveItem,
@@ -49,7 +34,6 @@ import { useTRPC } from "~/integrations/trpc/react";
 
 type InventoryListItem = z.infer<typeof inventoryListItemOut>;
 
-// Type for an item to move
 interface MoveItem {
   inventoryEntryId: string;
   productName: string;
@@ -59,7 +43,6 @@ interface MoveItem {
   selected: boolean;
 }
 
-// Schema for the form
 const formSchema = z.object({
   sourceLocation: optionalLocationField,
   targetLocation: optionalLocationField,
@@ -81,7 +64,6 @@ export default function BulkMoveForm({
   const [moveItems, setMoveItems] = useState<MoveItem[]>([]);
   const navigate = useNavigate();
 
-  // Initialize the form
   const form = useForm<BulkMoveFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -90,7 +72,6 @@ export default function BulkMoveForm({
     },
   });
 
-  // Watch the location fields
   const sourceLocation = form.watch("sourceLocation");
   const targetLocation = form.watch("targetLocation");
 
@@ -103,7 +84,6 @@ export default function BulkMoveForm({
     enabled: !!initialSourceLocationId,
   });
 
-  // Update URL when source location changes
   useEffect(() => {
     if (sourceLocation && sourceLocation.id !== initialSourceLocationId) {
       navigate({
@@ -114,7 +94,6 @@ export default function BulkMoveForm({
     }
   }, [sourceLocation, initialSourceLocationId, navigate]);
 
-  // Set initial source location from URL
   useEffect(() => {
     if (
       initialSourceLocation &&
@@ -181,7 +160,6 @@ export default function BulkMoveForm({
     setMoveItems(items);
   }, [sourceLocationId, inventoryItemsData]);
 
-  // Toggle item selection
   const toggleItemSelection = (index: number) => {
     setMoveItems((prev) =>
       prev.map((item, i) =>
@@ -190,7 +168,6 @@ export default function BulkMoveForm({
     );
   };
 
-  // Select/deselect all
   const toggleSelectAll = () => {
     const allSelected = moveItems.every((item) => item.selected);
     setMoveItems((prev) =>
@@ -198,7 +175,6 @@ export default function BulkMoveForm({
     );
   };
 
-  // Update move quantity for an item
   const updateMoveQuantity = (index: number, quantity: number) => {
     setMoveItems((prev) =>
       prev.map((item, i) =>
@@ -209,10 +185,8 @@ export default function BulkMoveForm({
     );
   };
 
-  // Get selected items
   const selectedItems = moveItems.filter((item) => item.selected);
 
-  // Bulk move mutation
   const bulkMoveMutation = useMutation(
     api.inventory.bulkMove.mutationOptions({
       onSuccess: (data) => {
@@ -225,7 +199,6 @@ export default function BulkMoveForm({
     }),
   );
 
-  // Submit handler
   const onSubmit = async (values: BulkMoveFormValues) => {
     if (!values.sourceLocation) {
       setError("Please select a source location");
@@ -270,7 +243,6 @@ export default function BulkMoveForm({
         `Successfully moved ${selectedItems.length} item(s) to ${values.targetLocation?.name}`,
       );
 
-      // Clear selections after successful move
       setMoveItems((prev) =>
         prev.map((item) => ({ ...item, selected: false })),
       );
@@ -300,7 +272,6 @@ export default function BulkMoveForm({
         </span>
       }
     >
-      {/* Location selectors */}
       <Row align="end" gap="md" className="mb-4">
         <div className="flex-1">
           <ComboboxFieldWithSearch
@@ -328,7 +299,6 @@ export default function BulkMoveForm({
         </div>
       )}
 
-      {/* Items list */}
       {sourceLocation && (
         <div>
           <Row align="center" justify="between" className="mb-4">
@@ -351,7 +321,6 @@ export default function BulkMoveForm({
 
           {moveItems.length > 0 ? (
             <Stack gap="sm">
-              {/* Header */}
               <Row
                 align="center"
                 gap="md"
@@ -363,7 +332,6 @@ export default function BulkMoveForm({
                 <div className="w-40">Move Quantity</div>
               </Row>
 
-              {/* Items */}
               {moveItems.map((item, index) => (
                 <Row
                   key={item.inventoryEntryId}
@@ -414,7 +382,6 @@ export default function BulkMoveForm({
             </div>
           )}
 
-          {/* Selection summary */}
           {selectedItems.length > 0 && (
             <MutedBox className="mt-4 rounded-lg">
               <h4 className="mb-2 font-medium">Move Summary</h4>

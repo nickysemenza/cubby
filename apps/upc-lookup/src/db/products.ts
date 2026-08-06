@@ -4,13 +4,12 @@ import pMap from "p-map";
 import type { Database } from "./index";
 import { schema } from "./index";
 import type { Env } from "../types";
-import { deleteImage } from "../storage/images";
+import { cleanupImageVariants, deleteImageVariants } from "../storage/images";
 import type { Product, NewProduct } from "./schema";
 
 // D1 caps bound parameters per statement; chunk IN-lists well under the limit.
 const IN_CHUNK = 100;
 
-/** Get a single product by UPC, or undefined if not found. */
 export async function getProduct(
   db: Database,
   upc: string,
@@ -20,7 +19,6 @@ export async function getProduct(
   });
 }
 
-/** Get all cached products for the given UPCs in one chunked IN query. */
 export async function getProducts(
   db: Database,
   upcs: string[],
@@ -37,7 +35,6 @@ export async function getProducts(
   return batches.flat();
 }
 
-/** Insert a product row and return it. */
 export async function createProduct(
   db: Database,
   values: NewProduct,
@@ -50,10 +47,23 @@ export async function createProduct(
 }
 
 /**
- * Update an existing product. Always stamps `updatedAt`. Returns the updated
- * row, or undefined if no product with that UPC exists.
+ * Insert an externally-resolved product unless another request won the same
+ * UPC race. Unlike `createProduct`, this does not throw on a primary-key
+ * conflict so the caller can reread the canonical cache row.
  */
-export async function updateProduct(
+export async function createResolvedProduct(
+  db: Database,
+  values: NewProduct,
+): Promise<Product | undefined> {
+  const [row] = await db
+    .insert(schema.products)
+    .values(values)
+    .onConflictDoNothing()
+    .returning();
+  return row;
+}
+
+async function updateProduct(
   db: Database,
   upc: string,
   values: Partial<Omit<NewProduct, "upc">>,
@@ -63,6 +73,23 @@ export async function updateProduct(
     .set({ ...values, updatedAt: sql`(datetime('now'))` })
     .where(eq(schema.products.upc, upc))
     .returning();
+  return row;
+}
+
+/**
+ * Point a product at its replacement image, then remove stale MIME variants
+ * only after D1 has committed the new pointer.
+ */
+export async function updateProductWithImageCleanup(
+  db: Database,
+  env: Env,
+  upc: string,
+  values: Partial<Omit<NewProduct, "upc">>,
+): Promise<Product | undefined> {
+  const row = await updateProduct(db, upc, values);
+  if (row && values.imageKey !== undefined) {
+    await cleanupImageVariants(env, upc, row.imageKey);
+  }
   return row;
 }
 
@@ -80,9 +107,7 @@ export async function deleteProduct(
 
   await db.delete(schema.products).where(eq(schema.products.upc, upc));
 
-  if (existing.imageKey) {
-    await deleteImage(env, existing.imageKey);
-  }
+  await deleteImageVariants(env, upc);
   return true;
 }
 
@@ -100,10 +125,6 @@ export type ListProductsResult = {
   pageSize: number;
 };
 
-/**
- * Paginated, filterable product listing for the admin UI and MCP.
- * `q` matches name/manufacturer/brand (case-insensitive substring).
- */
 export async function listProducts(
   db: Database,
   { q, source, page = 1, pageSize = 25 }: ListProductsOptions = {},

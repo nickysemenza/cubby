@@ -5,15 +5,6 @@ interface Dimensions {
   height: number;
 }
 
-/**
- * Hook to track container dimensions with ResizeObserver.
- * Commonly used for responsive D3 visualizations.
- *
- * @param containerRef - Ref to the container element
- * @param minHeight - Minimum height to enforce (default: 300)
- * @param initialWidth - Initial width before measurement (default: 400)
- * @param initialHeight - Initial height before measurement (default: minHeight)
- */
 export function useContainerDimensions(
   containerRef: RefObject<HTMLDivElement | null>,
   options: {
@@ -28,7 +19,6 @@ export function useContainerDimensions(
     height: initialHeight ?? minHeight,
   });
 
-  // Initial measurement
   useEffect(() => {
     if (containerRef.current) {
       const { width, height } = containerRef.current.getBoundingClientRect();
@@ -36,7 +26,6 @@ export function useContainerDimensions(
     }
   }, [containerRef, minHeight]);
 
-  // ResizeObserver for responsive updates
   useEffect(() => {
     const element = containerRef.current;
     if (!element) return;

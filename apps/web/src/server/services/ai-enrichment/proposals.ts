@@ -1,4 +1,3 @@
-// ---------------------------------------------------------------------------
 // Enrichment-workbench review-queue pre-compute
 //
 // The review queue walks a backlog of unenriched ingredients one at a time and
@@ -8,7 +7,6 @@
 // client can fill a cache ahead of the user. Read-only: it calls only the two
 // read-only suggesters above and links/merges NOTHING. The user reviews and
 // commits every write in the UI.
-// ---------------------------------------------------------------------------
 
 import type { IngredientId } from "@cubby/schemas/identifiers";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";

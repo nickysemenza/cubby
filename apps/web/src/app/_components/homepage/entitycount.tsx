@@ -12,18 +12,14 @@ import { useHydrated } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 import { authClient } from "~/lib/auth-client";
 
-/** Format large numbers with compact notation (e.g., 2.1M, 15K) */
 const compactFormatter = new Intl.NumberFormat("en", { notation: "compact" });
 const formatCount = (count: number): string => compactFormatter.format(count);
 
-/** Get singular label when count is 1, otherwise use plural label */
 const getCountLabel = (
   pluralLabel: string,
   count: number | undefined,
 ): string => {
   if (count === 1) {
-    // Simple singularization: strip trailing 'S' if present
-    // Special cases: Inventory stays Inventory, USDA Foods → USDA Food
     if (pluralLabel === "Inventory") return "Inventory";
     if (pluralLabel.endsWith("s")) return pluralLabel.slice(0, -1);
   }

@@ -28,10 +28,8 @@ import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 
-// Schema for a single inventory item using shared field schemas
 const inventoryItemSchema = inventoryItemWithIdFields;
 
-// Schema for the entire form
 const formSchema = z.object({
   location: requiredLocationField,
   items: z.array(inventoryItemSchema),
@@ -52,7 +50,6 @@ export default function BulkInventoryForm({
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  // Initialize the form
   const form = useForm<BulkInventoryFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -61,13 +58,11 @@ export default function BulkInventoryForm({
     },
   });
 
-  // Set up the field array for inventory items
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "items",
   });
 
-  // Watch the location field to load items when changed
   const selectedLocation = form.watch("location");
 
   // Resolve the deep-linked `?locationId=` directly. The picker runs its own
@@ -78,7 +73,6 @@ export default function BulkInventoryForm({
     enabled: !!initialLocationId,
   });
 
-  // Update URL when location changes
   useEffect(() => {
     if (selectedLocation && selectedLocation.id !== initialLocationId) {
       navigate({
@@ -89,7 +83,6 @@ export default function BulkInventoryForm({
     }
   }, [selectedLocation, initialLocationId, navigate]);
 
-  // Set initial location from URL
   useEffect(() => {
     if (
       initialLocation &&
@@ -164,7 +157,6 @@ export default function BulkInventoryForm({
     form.setValue("items", existingItems);
   }, [selectedLocationId, inventoryItemsData, form]);
 
-  // Add a new empty inventory item
   const addInventoryItem = () => {
     append({
       product: null,
@@ -172,7 +164,6 @@ export default function BulkInventoryForm({
     });
   };
 
-  // Bulk process mutation
   const bulkProcessMutation = useMutation(
     api.inventory.bulkProcess.mutationOptions({
       onSuccess: (data) => {
@@ -185,10 +176,8 @@ export default function BulkInventoryForm({
     }),
   );
 
-  // UPC lookup for barcode scanning
   const { lookupUpc, isPending: isUpcPending } = useUpcLookup();
 
-  // Handle barcode scan for a specific item index
   const handleBarcodeScan = useCallback(
     async (barcode: string, index: number) => {
       const product = await lookupUpc(barcode);
@@ -203,7 +192,6 @@ export default function BulkInventoryForm({
     [lookupUpc, form],
   );
 
-  // Submit handler
   const onSubmit = async (values: BulkInventoryFormValues) => {
     const location = values.location;
     if (!location) {

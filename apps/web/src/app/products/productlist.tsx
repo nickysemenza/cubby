@@ -68,7 +68,6 @@ import { TruncatedList } from "../_components/TruncatedList";
 
 interface ProductListProps {
   initialCategory?: string;
-  /** Actions to display in the table toolbar (e.g., "Create New" button) */
   actions?: ReactNode;
 }
 
@@ -251,15 +250,12 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   );
   const foodByProductId = useProductFoodSummaries(foodHydrationIds);
 
-  // Mutation for inline editing (price, category, etc.)
   const updateProductMutation = useUpdateMutation({
     mutationFn: api.product.update.mutationOptions,
     entity: "product",
     invalidateKeys: productMutationInvalidateKeys,
   });
 
-  // Inline edit + create for the Locations column (move an entry's location,
-  // or create a new inventory entry from an empty cell).
   const updateInventoryMutation = useUpdateMutation({
     mutationFn: api.inventory.update.mutationOptions,
     entity: "inventory",
@@ -267,7 +263,6 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   });
   const createInventoryMutation = useCreateInventoryMutation();
 
-  // Inline name editing on the hook-prepended name column.
   const nameEditable = useNameEditable<ProductListItem>(
     updateProductMutation.mutateAsync,
   );
@@ -301,10 +296,6 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     [foodByProductId],
   );
 
-  // Memoize columns to prevent recreating on every render
-  // Note: updateProductMutation/updateInventoryMutation/createInventoryMutation
-  // are NOT in dependencies because useMutation returns a new object every render.
-  // The closures capture them correctly, and we only need to recreate if columnHelper changes.
   // biome-ignore lint/correctness/useExhaustiveDependencies: mutations change every render but are functionally stable
   const columns = useMemo(
     () => [
@@ -752,7 +743,6 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     [],
   );
 
-  // Group by product category for mobile section headers
   const groupKeyFn = useCallback(
     (item: ProductListItem) => formatCategoryLabel(item.category),
     [],
@@ -775,8 +765,6 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     [groupKeyFn, groupColorFn],
   );
 
-  // Capture queryOptions ONCE - tRPC Proxy might return new reference on each access!
-  // Store the actual function, not a getter
   const queryOptions = api.product.list.queryOptions;
 
   const {

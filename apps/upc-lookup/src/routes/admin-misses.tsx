@@ -10,8 +10,6 @@ const missRoutes = new Hono<{ Bindings: Env }>();
 const admin = missRoutes;
 const PAGE_SIZE = 25;
 
-// ---------------------------------------------------------------------------
-
 admin.get("/misses", async (c) => {
   const db = createDb(c.env.DB);
   const q = c.req.query("q") ?? "";

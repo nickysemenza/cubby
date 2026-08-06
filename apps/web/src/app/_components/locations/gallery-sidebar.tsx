@@ -12,7 +12,6 @@ import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import { LocationTreeRow } from "./location-tree-row";
 
-/** Build a map of location id -> parent id by traversing the tree */
 function buildParentMap(
   locations: InfLocation[],
   parentId?: string,
@@ -30,7 +29,6 @@ function buildParentMap(
   return map;
 }
 
-/** Get all ancestor IDs for a given location */
 function getAncestorIds(
   id: string,
   parentMap: Map<string, string | undefined>,
@@ -67,19 +65,15 @@ export function GallerySidebar({
   fadedIds,
   className,
 }: GallerySidebarProps) {
-  // Build parent map for ancestor lookup
   const parentMap = useMemo(() => buildParentMap(locations), [locations]);
 
-  // Compute expanded nodes, including auto-expanded ancestors
   const [manualExpandedNodes, setManualExpandedNodes] = useState<Set<string>>(
     new Set(),
   );
 
-  // Auto-expand ancestors for active location and search matches
   const expandedNodes = useMemo(() => {
     const nodes = new Set(manualExpandedNodes);
 
-    // Expand ancestors of active location
     if (activeLocationId) {
       const ancestors = getAncestorIds(activeLocationId, parentMap);
       ancestors.forEach((id) => {
@@ -87,7 +81,6 @@ export function GallerySidebar({
       });
     }
 
-    // When searching, expand ancestors of all matching locations
     if (searchTerm) {
       for (const matchId of searchMatchingIds) {
         const ancestors = getAncestorIds(matchId, parentMap);
@@ -118,10 +111,8 @@ export function GallerySidebar({
     });
   }, []);
 
-  // Ref for scrolling active item into view
   const activeItemRef = useRef<HTMLDivElement>(null);
 
-  // Scroll active item into view when it changes
   useEffect(() => {
     if (activeLocationId && activeItemRef.current) {
       activeItemRef.current.scrollIntoView({

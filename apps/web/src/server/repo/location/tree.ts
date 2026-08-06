@@ -58,11 +58,9 @@ export const buildLocationTree = async (db: Database) => {
     ORDER BY depth, name
   `);
 
-  // Build the tree structure from flat results
   const locationsMap = new Map<string, LocationWithParentChild>();
   const rootLocations: LocationWithParentChild[] = [];
 
-  // Cast raw SQL results to location type (safe because query selects from location table)
   const locationRows = res.rows as unknown as (typeof location.$inferSelect)[];
 
   // Batch fetch all images for all locations in one query to avoid N+1
@@ -75,7 +73,6 @@ export const buildLocationTree = async (db: Database) => {
         })
       : [];
 
-  // Group images by locationId for efficient lookup
   const imagesByLocationId = new Map<
     string,
     Array<{ image: typeof image.$inferSelect }>
@@ -110,7 +107,6 @@ export const buildLocationTree = async (db: Database) => {
           .orderBy(product.name)
       : [];
 
-  // Group inventory entries by locationId
   const inventoryByLocationId = new Map<string, InventoryItemForTree[]>();
   const countsByLocationId = new Map<string, number>();
   for (const entry of allInventoryEntries) {
@@ -128,11 +124,9 @@ export const buildLocationTree = async (db: Database) => {
     );
   }
 
-  // First pass: create all location objects with their images
   for (const loc of locationRows) {
     const locationWithRelations: LocationWithParentChild = {
       ...loc,
-      // Convert string timestamps to Date objects
       createdAt:
         loc.createdAt instanceof Date
           ? loc.createdAt

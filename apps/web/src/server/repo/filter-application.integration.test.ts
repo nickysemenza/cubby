@@ -114,9 +114,7 @@ const HUGE = 1_000_000_000;
 /** Well-formed but unmintable body — `resolveShortcodes` finds nothing for it. */
 const UNRESOLVABLE_BODY = "9999";
 
-// ---------------------------------------------------------------------------
 // Field classification
-// ---------------------------------------------------------------------------
 
 /**
  * How a declared field is probed. Derived from what the field's OWN schema
@@ -199,9 +197,7 @@ const classify = (field: string, schema: z.ZodType): Probe => {
   return { kind: "skip:closed-domain" };
 };
 
-// ---------------------------------------------------------------------------
 // The world every probe runs against
-// ---------------------------------------------------------------------------
 
 type Seeded = {
   /** One live shortcode per entity, for the "real id" and wrong-prefix probes. */
@@ -433,9 +429,7 @@ const seedWorld = async (ctx: {
   };
 };
 
-// ---------------------------------------------------------------------------
 // The registry: every entity that declares filter fields, plus its list call
-// ---------------------------------------------------------------------------
 
 type ListProbe = (
   db: Database,
@@ -521,8 +515,6 @@ const REPO_TAKES_UUID: Record<string, string> = {
   // routers/recipe/crud.ts resolves it through `resolveCookbookFilter`.
   "recipe.cookbookId": "resolved in routers/recipe/crud.ts",
 };
-
-// ---------------------------------------------------------------------------
 
 describe("every declared filter field is applied by its repo", () => {
   const ctx = withTestDb();

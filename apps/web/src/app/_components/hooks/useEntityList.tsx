@@ -78,9 +78,7 @@ interface EntityListTreeConfig<TData, TRow> {
    * (sub-projects), which is why `TRow` defaults to `TData`.
    */
   nest: (rows: TRow[]) => TData[];
-  /** Return a row's children — the presence of this is what wires expansion. */
   getSubRows: (row: TData) => TData[] | undefined;
-  /** Render the expand/collapse chevron + depth indent on the name column. */
   expandable?: boolean;
   /**
    * Per-row detail link, when child rows are a DIFFERENT entity than the
@@ -172,20 +170,14 @@ export interface UseEntityListOptions<
    * render — internally stabilized.
    */
   hiddenFilterColumns?: string[];
-  /** Group configuration — enables group toggle and server-side group ordering */
   groupConfig?: GroupConfig<TData>;
-  /** Render the list as an expandable tree — see {@link EntityListTreeConfig}. */
   tree?: EntityListTreeConfig<TData, TRow>;
-  /** Enable delete functionality - adds row menu item, bulk action, and dialog */
   deletable?: {
-    /** tRPC delete mutation options factory */
     mutationOptions: (callbacks: {
       onSuccess: () => void;
       onError: (err: { message?: string }) => void;
     }) => unknown;
-    /** Entity type label for dialog (e.g., "Product", "Ingredient") */
     entityLabel: string;
-    /** Query keys to invalidate on success */
     invalidateKeys: readonly QueryKey[];
     /** Entity slug for the operation-impact preview fetched while the confirm dialog is open. */
     entity: PreviewDeleteEntity;
@@ -193,7 +185,6 @@ export interface UseEntityListOptions<
 }
 
 export interface UseEntityListReturn<TData, TFilters = unknown, TRow = TData> {
-  /** Configured table instance */
   table: Table<TData>;
   /**
    * The filter object the list query is running with (manifest-derived state
@@ -202,7 +193,6 @@ export interface UseEntityListReturn<TData, TFilters = unknown, TRow = TData> {
    * drift from the table's own.
    */
   currentFilters: TFilters;
-  /** Loaded unit mappings map (id -> mappings) */
   mappingsMap: Record<string, UnitMapping[]>;
   /**
    * Raw data array (for edge cases like card view). Always FLAT — in tree mode
@@ -210,15 +200,10 @@ export interface UseEntityListReturn<TData, TFilters = unknown, TRow = TData> {
    * the table renders.
    */
   data: TRow[];
-  /** Loading state */
   isLoading: boolean;
-  /** Error state */
   error: Error | null;
-  /** Query timing info */
   timing: QueryTiming;
-  /** Bulk action bar element to render in RTable (null if no bulk actions configured) */
   bulkActionBar: ReactNode | null;
-  /** Delete dialog element - render in component if deletable is enabled */
   deleteDialog: ReactNode | null;
   /** Opens the delete confirmation for one item (e.g. mobile swipe actions) */
   requestDelete: (item: TData) => void;

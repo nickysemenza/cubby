@@ -6,11 +6,8 @@
 // the alias and resolves to this ingredient).
 
 interface ComputeUnusedAliasesArgs {
-  /** The ingredient's id. */
   id: string;
-  /** The ingredient's canonical name. */
   name: string;
-  /** The ingredient's full current alias list, in order. */
   aliases: string[];
   /**
    * For each lowercased parsed recipe-line name, the set of ingredient ids it

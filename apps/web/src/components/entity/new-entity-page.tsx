@@ -53,7 +53,6 @@ const formRegistry: Record<
 export function NewEntityPage({ entity }: NewEntityPageProps) {
   const api = useTRPC();
 
-  // Get the correct mutation options based on entity type
   const mutationOptions = {
     product: api.product.create.mutationOptions(),
     ingredient: api.ingredient.create.mutationOptions(),
@@ -69,7 +68,6 @@ export function NewEntityPage({ entity }: NewEntityPageProps) {
           mode="create"
           isPending={isPending}
           error={error}
-          // Location form uses onCreateAsync, others use onCreate
           onCreate={entity === "location" ? onCreateAsync : onCreate}
           onCancel={onCancel}
         />

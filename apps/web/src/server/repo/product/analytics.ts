@@ -16,7 +16,6 @@ import {
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 
-// Find products with expectedQuantity=1 that appear in multiple locations
 export const findDuplicateUniqueProducts = async (
   db: Database,
   { excludeLocationId }: { excludeLocationId?: LocationId } = {},
@@ -48,10 +47,6 @@ export const findDuplicateUniqueProducts = async (
   });
 };
 
-/**
- * Find all products that have no images at all.
- * @param excludeIngredients - If true, excludes products linked to ingredients (for problems dashboard)
- */
 export const findProductsWithNoImages = async (
   db: Database,
   { excludeIngredients = false } = {},
@@ -189,10 +184,6 @@ export const getProductsSharingTags = async (
     .orderBy(product.name);
 };
 
-/**
- * Get product distribution by category with top locations for each category.
- * Used for the category donut visualization on the Insights page.
- */
 export const getCategoryDistribution = async (
   db: Database,
 ): Promise<
@@ -204,7 +195,6 @@ export const getCategoryDistribution = async (
 > => {
   const dbClient = getDb(db);
 
-  // Get all products with their inventory locations
   const productsWithInventory = await dbClient.query.product.findMany({
     where: notDeleted(product),
     columns: {
@@ -227,7 +217,6 @@ export const getCategoryDistribution = async (
     },
   });
 
-  // Group by category and aggregate
   const categoryMap = new Map<
     ProductCategory | null,
     {
@@ -249,7 +238,6 @@ export const getCategoryDistribution = async (
     const catData = categoryMap.get(cat)!;
     catData.productCount++;
 
-    // Count locations for this product
     for (const entry of prod.inventoryEntry) {
       const loc = entry.location;
       const existing = catData.locationCounts.get(loc.id);
@@ -265,7 +253,6 @@ export const getCategoryDistribution = async (
     }
   }
 
-  // Convert to array and sort locations by count (top 5)
   const result: Array<{
     category: ProductCategory | null;
     productCount: number;
@@ -284,7 +271,6 @@ export const getCategoryDistribution = async (
     });
   }
 
-  // Sort by product count descending
   result.sort((a, b) => b.productCount - a.productCount);
 
   return result;

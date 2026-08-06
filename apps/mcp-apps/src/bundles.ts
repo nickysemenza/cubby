@@ -1,12 +1,7 @@
 /**
- * The MCP App manifest — the one place an app is declared.
- *
- * `apps/web` consumes this to register `ui://` resources, and `build.mjs`
- * discovers entry points from the sibling `*.html` files, so adding an app
- * means: a `<id>.html`, a `src/<id>.ts`, and one entry below.
- *
- * The HTML is the *built* single-file bundle, inlined as a string because the
- * CF Worker has no filesystem to read it from at request time.
+ * `apps/web` consumes this to register `ui://` resources, while `build.mjs`
+ * discovers sibling HTML entry points. The built bundle is inlined because a
+ * Cloudflare Worker has no filesystem to read at request time.
  */
 
 /**
@@ -38,11 +33,9 @@ function bundleFor(id: string): string {
 }
 
 export type McpAppBundle = {
-  /** `ui://` URI a tool's `_meta.ui.resourceUri` points at. */
   uri: string;
   name: string;
   description: string;
-  /** The self-contained HTML document, with `__CUBBY_ORIGIN__` unsubstituted. */
   html: string;
 };
 

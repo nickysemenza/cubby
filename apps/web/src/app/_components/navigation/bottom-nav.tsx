@@ -23,11 +23,8 @@ const loadBottomNavMoreSheet = () => importBottomNavMoreSheet();
 const BottomNavMoreSheet = React.lazy(loadBottomNavMoreSheet);
 
 type BottomNavItemProps = {
-  /** Optional leading icon. Scales up subtly when `active`. */
   icon?: React.ComponentType<{ className?: string }>;
-  /** Short label rendered under the icon. */
   label: string;
-  /** Active (current) tab — drives the primary color + icon scale. */
   active?: boolean;
   /**
    * Element to render. Defaults to `Link` (the common nav-link case). Pass
@@ -90,7 +87,6 @@ export function BottomNav() {
     });
   }, [authed]);
 
-  // Check if any "more" item is active
   const isMoreActive = moreNavSections.some((section) =>
     section.items.some((item) => item.to === activeTo),
   );

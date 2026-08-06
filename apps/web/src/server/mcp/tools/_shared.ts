@@ -442,7 +442,6 @@ export function getCaller(extra: ToolExtra): Caller {
   return caller as Caller;
 }
 
-/** Render an error thrown by a tool handler into a single message string. */
 export function formatToolError(error: unknown): string {
   if (error instanceof TRPCError) {
     const reason = (error.cause as { reason?: string })?.reason;
@@ -458,9 +457,7 @@ export function toUnitMappingInput(m: z.infer<typeof mcpUnitMappingInput>) {
   return { a: m.a, b: m.b, source: m.source ?? null };
 }
 
-// ---------------------------------------------------------------------------
 // Slim output projections
-// ---------------------------------------------------------------------------
 
 export type Row = Record<string, unknown>;
 type Slim<T = unknown> = (row: Row) => T;

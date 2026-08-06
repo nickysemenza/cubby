@@ -83,11 +83,6 @@ const loadInventoryEntryPricing = async (
     })),
   );
 
-/**
- * Compute valuation for an inventory entry based on amount and product price.
- * Returns the valuation value to store.
- * Accepts both Database and DrizzleTransaction for use within transactions.
- */
 export const computeValuationForEntry = async (
   db: Database | DrizzleTransaction,
   productId: ProductId,
@@ -104,18 +99,12 @@ export const computeValuationForEntry = async (
   return computeInventoryValuation(amountValue, effectivePrice);
 };
 
-/**
- * Sync valuation for all inventory entries of a specific product.
- * Called when product price changes.
- * Accepts both Database and DrizzleTransaction for use within transactions.
- */
 export const syncInventoryValuationsForProduct = async (
   db: Database | DrizzleTransaction,
   productId: ProductId,
 ): Promise<number> => {
   const client = unwrapDb(db);
 
-  // Get the product's current price
   const productData = await client.query.product.findFirst({
     where: eq(product.id, productId),
     columns: { id: true, price: true },
@@ -124,7 +113,6 @@ export const syncInventoryValuationsForProduct = async (
     ? await loadEffectiveProductPrice(db, productData)
     : null;
 
-  // Get all non-deleted inventory entries for this product
   const entries = await client.query.inventoryEntry.findMany({
     where: and(
       eq(inventoryEntry.productId, productId),
@@ -135,7 +123,6 @@ export const syncInventoryValuationsForProduct = async (
 
   if (entries.length === 0) return 0;
 
-  // Compute valuations in memory
   const updates = entries.map((entry) => {
     const amountValue =
       typeof entry.amount === "object" && entry.amount !== null
@@ -146,7 +133,6 @@ export const syncInventoryValuationsForProduct = async (
     return { id: entry.id, valuation };
   });
 
-  // Batch update all entries (1-4 queries instead of 1000+)
   const updated = await batchUpdateWithCaseWhen(
     client,
     inventoryEntry,
@@ -156,22 +142,16 @@ export const syncInventoryValuationsForProduct = async (
   return updated;
 };
 
-/**
- * Check if a product with expectedQuantity=1 already exists in a different location.
- * Returns null if no duplicate found, or an object with conflicting location details.
- */
 export const checkUniqueProductDuplicate = async (
   db: Database,
   productId: ProductId,
   locationId: LocationId,
 ): Promise<{ productName: string; locationName: string } | null> => {
-  // Check if this is a product with expectedQuantity=1 (unique item)
   const productData = await getDb(db).query.product.findFirst({
     where: eq(product.id, productId),
     columns: { expectedQuantity: true, name: true },
   });
 
-  // If it's a unique item, check for duplicates (excluding soft-deleted entries)
   if (productData?.expectedQuantity === 1) {
     const existingEntry = await getDb(db).query.inventoryEntry.findFirst({
       where: and(
@@ -257,7 +237,6 @@ export const getInventoryCountsByLocations = async (
 
   const dbClient = getDb(db);
 
-  // Query to get counts grouped by location
   const results = await dbClient
     .select({
       locationId: inventoryEntry.locationId,
@@ -272,13 +251,11 @@ export const getInventoryCountsByLocations = async (
     )
     .groupBy(inventoryEntry.locationId);
 
-  // Convert to map
   const countMap: Record<string, number> = {};
   for (const row of results) {
     countMap[row.locationId] = row.count;
   }
 
-  // Fill in zeros for locations with no inventory
   for (const locationId of locationIds) {
     if (!(locationId in countMap)) {
       countMap[locationId] = 0;
@@ -430,15 +407,12 @@ export const updateInventoryEntry = async (
     locationId: data.locationId,
   });
 
-  // Fetch current state for audit logging and valuation computation
   const before = await getDb(db).query.inventoryEntry.findFirst({
     where: and(eq(inventoryEntry.id, id), notDeleted(inventoryEntry)),
   });
 
-  // Recompute valuation if amount or productId changed
   let valuation: number | null | undefined;
   if (data.amount !== undefined || data.productId !== undefined) {
-    // Use new values if provided, otherwise use existing values
     const effectiveProductIdRaw = data.productId ?? before?.productId;
     const effectiveAmount = data.amount ?? before?.amount;
     const amountValue =
@@ -456,7 +430,6 @@ export const updateInventoryEntry = async (
     }
   }
 
-  // Build update values using helper to filter undefined
   const updateValues = buildPartialUpdateValues({
     amount: data.amount,
     productId: data.productId,
@@ -471,7 +444,6 @@ export const updateInventoryEntry = async (
     id,
   );
 
-  // Log audit entry with changes
   if (before) {
     const changes = computeChanges(before, updated, [
       "amount",
@@ -488,7 +460,6 @@ export const updateInventoryEntry = async (
     }
   }
 
-  // Fetch with relations
   const result = await getDb(db).query.inventoryEntry.findFirst({
     where: eq(inventoryEntry.id, updated.id),
     ...relations.inventory.full,
@@ -519,7 +490,6 @@ export const createInventoryEntry = async (
     locationId: data.locationId,
   });
 
-  // Compute valuation based on amount and product price
   const amountValue =
     typeof data.amount === "object" && data.amount !== null
       ? (data.amount as { value: number }).value
@@ -537,14 +507,12 @@ export const createInventoryEntry = async (
     valuation,
   });
 
-  // Log audit entry
   await logAuditEntry(db, actor, {
     entityType: "inventory",
     entityId: created.id,
     action: "create",
   });
 
-  // Fetch with relations
   const result = await getDb(db).query.inventoryEntry.findFirst({
     where: eq(inventoryEntry.id, created.id),
     ...relations.inventory.full,
@@ -617,9 +585,6 @@ export const getInventoryForProducts = async (
   }));
 };
 
-/**
- * Soft delete inventory entries by IDs
- */
 export const deleteInventoryEntries = async (
   db: Database,
   ids: InventoryId[],
@@ -627,7 +592,6 @@ export const deleteInventoryEntries = async (
 ): Promise<void> => {
   if (ids.length === 0) return;
 
-  // Perform soft delete and audit logging in a transaction for atomicity
   await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, inventoryEntry, ids, "Inventory");
     const now = new Date();
@@ -640,7 +604,6 @@ export const deleteInventoryEntries = async (
     // side-effect) can't leave an orphaned entityEmbedding row.
     await softDeleteEntityEmbeddingsTx(tx, "inventory", ids);
 
-    // Log audit entries in batch
     await logAuditEntries(
       tx,
       actor,

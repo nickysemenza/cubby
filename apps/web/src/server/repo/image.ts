@@ -386,10 +386,6 @@ const imageEntityRelations = {
   },
 } as const;
 
-/**
- * List images with pagination, sorting, and filtering
- * This follows the consistent pattern used in other list functions
- */
 export const imageList = async (
   db: Database,
   filters: import("@cubby/schemas/image").ImageListFilters,
@@ -398,7 +394,6 @@ export const imageList = async (
 ) => {
   const dbClient = getDb(db);
 
-  // Build where conditions
   const whereConditions: ReturnType<typeof eq>[] = [];
   const filenameCondition = formatSearchTerm(
     image.filename,
@@ -417,14 +412,11 @@ export const imageList = async (
   const whereClause =
     whereConditions.length > 0 ? and(...whereConditions) : undefined;
 
-  // Build orderBy using central sortableFields config
   const orderByClause = buildOrderBy(image, sorts, [...imageSortableFields]);
 
-  // Calculate skip/take values from pagination parameters
   const take = pagination.pageSize;
   const skip = pagination.pageIndex * pagination.pageSize;
 
-  // Execute queries in parallel - load entity relations in single query
   const { data: images, count } = await executeListQueryWithCount(
     dbClient.query.image.findMany({
       where: whereClause,
@@ -436,7 +428,6 @@ export const imageList = async (
     countWhere(db, image, whereClause),
   );
 
-  // Transform images with pre-loaded relations (no additional queries)
   const processedImages = images.map(imageWithRelationsToAPI);
 
   return {
@@ -445,14 +436,10 @@ export const imageList = async (
   };
 };
 
-/**
- * Get image by ID with entity association information
- */
 export const getImageById = async (
   db: Database,
   imageId: string,
 ): Promise<ImageWithEntity> => {
-  // Find the image by ID with entity relations
   const imageRecord = await getDb(db).query.image.findFirst({
     where: eq(image.id, imageId),
     with: imageEntityRelations,
@@ -512,10 +499,6 @@ export const markImageUploaded = async (
   return getImageById(db, imageId);
 };
 
-/**
- * Get an image by its S3 key
- * Returns null if not found (used for checking if image already exists in DB)
- */
 export const getImageByKey = async (
   db: Database,
   key: string,
@@ -544,7 +527,6 @@ const findCullablePendingImages = async (
 ): Promise<Array<{ id: string; key: string }>> => {
   const dbClient = getDb(db);
 
-  // Calculate the cutoff date
   const cutoffDate = new Date();
   cutoffDate.setHours(cutoffDate.getHours() - olderThanHours);
 
@@ -579,7 +561,6 @@ const findCullablePendingImages = async (
     associationResults.flatMap((rows) => rows.map((row) => row.imageId)),
   );
 
-  // Find pending images older than the cutoff date
   const allPendingImages = await dbClient.query.image.findMany({
     where: and(eq(image.status, "PENDING"), lt(image.createdAt, cutoffDate)),
     columns: {
@@ -588,7 +569,6 @@ const findCullablePendingImages = async (
     },
   });
 
-  // Filter out images that have associations
   return allPendingImages.filter((img) => !associatedImageIds.has(img.id));
 };
 
@@ -599,12 +579,6 @@ export const countCullablePendingImages = async (
 ): Promise<number> =>
   (await findCullablePendingImages(db, olderThanHours)).length;
 
-/**
- * Cull (delete) pending images that are older than the specified threshold
- * @param db Database client
- * @param olderThanHours Delete images older than this many hours
- * @returns Object with count of deleted images and related information
- */
 export const cullPendingImages = async (
   db: Database,
   olderThanHours: number,
@@ -615,14 +589,11 @@ export const cullPendingImages = async (
     return { count: 0, deletedIds: [], deletedKeys: [] };
   }
 
-  // Get the IDs of images to delete
   const imageIds = pendingImages.map((img) => img.id);
   const imageKeys = pendingImages.map((img) => img.key);
 
-  // Delete the images from the database
   await getDb(db).delete(image).where(inArray(image.id, imageIds));
 
-  // Return the result
   return {
     count: pendingImages.length,
     deletedIds: imageIds,

@@ -32,10 +32,6 @@ use crate::reconcile::{finite, product_mapping_pairs};
 /// [`availability_status_for`] rather than carrying its own.
 const COVERAGE_EPSILON: f64 = 1e-6;
 
-// ---------------------------------------------------------------------------
-// Boundary types
-// ---------------------------------------------------------------------------
-
 /// One need: an authored amount plus the index of the line that needs it, echoed
 /// back in `sources` so the caller can attribute each contribution to its meal.
 #[derive(Tsify, Serialize, Deserialize)]
@@ -119,10 +115,6 @@ pub struct WAvailabilityGroupResult {
 pub struct WAvailabilityResult {
     pub groups: Vec<WAvailabilityGroupResult>,
 }
-
-// ---------------------------------------------------------------------------
-// Core
-// ---------------------------------------------------------------------------
 
 /// The unit a group's need/have are compared in. Prefer a grams basis (every
 /// need converts to weight); else the needs' shared authored unit. `Incoherent`
@@ -364,10 +356,6 @@ fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Export
-// ---------------------------------------------------------------------------
-
 /// Evaluate availability for a batch of ingredient groups in one call. Each
 /// group is resolved independently; the caller shapes the results into
 /// `IngredientAvailability` / `AggregatedNeed`.
@@ -377,10 +365,6 @@ pub fn evaluate_availability(input: WAvailabilityInput) -> WAvailabilityResult {
         groups: input.groups.iter().map(evaluate_group).collect(),
     }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

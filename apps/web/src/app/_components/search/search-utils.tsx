@@ -16,7 +16,6 @@ import {
 } from "../locations/location-type-theme";
 import { getCategoryColor, getCategoryIcon } from "../products/category-theme";
 
-/** Map search result entityType to Entity for icons/colors */
 export const entityTypeMap: Record<SearchableEntity, Entity> = {
   product: "product",
   recipe: "recipe",
@@ -85,7 +84,6 @@ export function rememberSearchResult(item: SearchResultItem): void {
   });
 }
 
-/** Render the appropriate icon for a search result item */
 export function SearchResultItemIcon({
   item,
   className = "size-4 shrink-0",
@@ -168,7 +166,6 @@ export function SearchResultMedia({
   );
 }
 
-/** Format enrichment info for display in search results */
 export function getEnrichmentText(item: SearchResultItem): string | null {
   return match(item)
     .with({ entityType: "product" }, (item) => {

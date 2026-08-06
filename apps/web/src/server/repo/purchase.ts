@@ -1733,11 +1733,6 @@ export const mergePurchases = async (
         action: "update" as const,
         changes: { mergedFrom: { from: null, to: losers } },
       },
-      ...losers.map((id) => ({
-        entityType: "purchase" as const,
-        entityId: id,
-        action: "delete" as const,
-      })),
     ]);
   });
 
@@ -2089,6 +2084,18 @@ export const previewMergePurchases = async (
         dbClient,
         purchaseProduct,
         purchaseProduct.purchaseId,
+        losers,
+      ),
+    }),
+    impact({
+      disposition:
+        PURCHASE_MERGE_EDGE_POLICY["FinancialTransaction.purchaseId"],
+      edgeKey: "FinancialTransaction.purchaseId",
+      label: "financial transactions re-pointed",
+      byTargetId: await countByTarget(
+        dbClient,
+        financialTransaction,
+        financialTransaction.purchaseId,
         losers,
       ),
     }),

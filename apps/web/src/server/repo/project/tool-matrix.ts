@@ -198,7 +198,6 @@ export async function projectToolMatrix(
     filters.suggestionLanes === undefined ||
     filters.suggestionLanes.includes(lane);
 
-  // ---- Wave 1 ------------------------------------------------------------
   // Row membership, the derived trade, and the whole-tree date fold that
   // supplies the chronological column sort.
   const toolSearch = filters.toolSearch?.trim() || undefined;
@@ -261,7 +260,6 @@ export async function projectToolMatrix(
   const rowRecords = memberRows.slice(0, MAX_MATRIX_ROWS);
   const rowIds = rowRecords.map((row) => row.productId);
 
-  // ---- Wave 2 ------------------------------------------------------------
   // Columns. `buildDashboardProjectWhere` is reused verbatim: the matrix's
   // column scope IS the Projects-page scope, so a bespoke filter here would be
   // a fourth copy of rules that already drifted once.
@@ -375,7 +373,6 @@ export async function projectToolMatrix(
 
   const empty = rowIds.length === 0 || columnIds.length === 0;
 
-  // ---- Wave 3 ------------------------------------------------------------
   const [
     tradeByProduct,
     attachedRows,
@@ -497,7 +494,6 @@ export async function projectToolMatrix(
     loadProductOwnershipWindows(dbc, rowIds),
   ]);
 
-  // ---- Assembly (no I/O below this line) ---------------------------------
   // The ownership gate. `buildTimelineGates` folds the same windows
   // `suggestProjectTools` reads, and `toolTimelineConflict` is the same pure
   // predicate the write guard and the React cell run — nothing is restated.

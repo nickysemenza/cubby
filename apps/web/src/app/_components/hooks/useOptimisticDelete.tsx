@@ -28,18 +28,14 @@ interface DeletableConfig {
     onSuccess: () => void;
     onError: (err: { message?: string }) => void;
   }) => unknown;
-  /** Entity type label for dialog (e.g., "Product", "Ingredient") */
   entityLabel: string;
-  /** Query keys to invalidate on success */
   invalidateKeys: readonly QueryKey[];
   /** Entity slug for the operation-impact preview fetched while the confirm dialog is open. */
   entity: PreviewDeleteEntity;
 }
 
 interface UseOptimisticDeleteOptions<TData extends { id: string }> {
-  /** Delete configuration (null to disable) */
   deletable: DeletableConfig | undefined;
-  /** Extra actions to render in the row action menu */
   extraActions?: (row: TData) => ReactNode;
   /**
    * How to name a row in the confirm dialog when `row.name` is null/empty.
@@ -52,11 +48,8 @@ interface UseOptimisticDeleteOptions<TData extends { id: string }> {
 }
 
 interface UseOptimisticDeleteReturn<TData> {
-  /** Bulk action for delete (to merge into bulk actions config) */
   deleteBulkAction: BulkAction<TData> | null;
-  /** Combined extra actions renderer (includes delete menu item) */
   combinedExtraActions: ((row: TData) => ReactNode) | undefined;
-  /** Delete dialog element - render in component */
   deleteDialog: ReactNode | null;
   /** Opens the delete confirmation dialog for one item (e.g. swipe actions) */
   requestDelete: (item: TData) => void;

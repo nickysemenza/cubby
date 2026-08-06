@@ -350,10 +350,6 @@ export type FinancialTransactionListResponse = z.infer<
   typeof financialTransactionListResponse
 >;
 
-// ---------------------------------------------------------------------------
-// MCP-client statement-import preview
-// ---------------------------------------------------------------------------
-
 /** Largest client-parsed statement batch one preview accepts. */
 export const FINANCIAL_STATEMENT_IMPORT_MAX_ROWS = 200;
 

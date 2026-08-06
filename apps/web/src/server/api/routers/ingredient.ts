@@ -101,8 +101,7 @@ const discardedByFactory = (): never => {
   );
 };
 
-// Create standardized CRUD procedures using factory (update is customized below
-// so it can eagerly recompute dependent recipes and report the side-effects).
+// Update is customized so it can eagerly recompute dependent recipes and report side-effects.
 // List returns a lean summary (lean ingredient + food + {id,name} recipe refs, no
 // per-usage recipe bodies); detail (getByID/create) keeps the full
 // ingredientWithFoodOut. Split into the two sub-factories so each surface carries
@@ -230,6 +229,7 @@ const merge = protectedProcedure
       ctx.usdaClient,
       target!,
       aliases,
+      ctx.actorContext,
       {
         dryRun: input.dryRun,
       },
@@ -373,7 +373,6 @@ const getManyByIDs = protectedProcedure
     );
   });
 
-// Delete procedure using standalone factory
 const deleteItem = createDeleteProcedure<IngredientShortcode>(
   async (services, shortcodes) => {
     const ids = await resolveIngredientEntityIds(services.db, shortcodes);

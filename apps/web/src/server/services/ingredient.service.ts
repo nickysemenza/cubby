@@ -230,9 +230,10 @@ export const mergeIngredients = async (
   usdaClient: USDAClient,
   target: IngredientId,
   aliases: IngredientId[],
+  actor: ActorContext,
   opts?: { dryRun?: boolean },
 ): Promise<{ ingredient: IngredientWithFoodOut; summary: MergeSummary }> => {
-  const summary = await mergeIngredientsRepo(db, target, aliases, opts);
+  const summary = await mergeIngredientsRepo(db, target, aliases, actor, opts);
   const ingredient = await getIngredientByID(db, usdaClient, target);
   return { ingredient, summary };
 };

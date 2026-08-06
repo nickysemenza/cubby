@@ -15,7 +15,6 @@ const createDatabase = (
 ): BetterSqlite3Database => {
   const db = new BetterSqlite3(path, { readonly });
 
-  // Apply performance-optimized pragmas
   db.pragma("journal_mode = WAL");
   db.pragma("cache_size = -64000"); // 64MB cache per connection
   db.pragma("temp_store = MEMORY"); // Use memory for temp storage

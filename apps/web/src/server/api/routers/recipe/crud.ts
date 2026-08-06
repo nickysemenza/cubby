@@ -78,7 +78,6 @@ const resolveCookbookFilter = async (
   return Array.isArray(value) ? ids : ids[0];
 };
 
-// Create standardized CRUD procedures using factory
 // List returns the lean summary (no section graph); detail keeps full recipeOut — split the factory so each carries its own output schema.
 const { list } = createEntityListProcedure({
   schemas: {
@@ -200,7 +199,6 @@ const getManyByIDs = protectedProcedure
     );
   });
 
-// Delete procedure using standalone factory
 const deleteItem = createDeleteProcedure<RecipeShortcode>(
   async (services, shortcodes) => {
     const ids = await resolveRecipeEntityIds(services.db, shortcodes);

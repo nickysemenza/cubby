@@ -9,8 +9,8 @@ import { Empty, EmptyActions, EmptyDescription } from "~/components/ui/empty";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
+  ingredientMergeMutationInvalidateKeys,
   ingredientProductMutationInvalidateKeys,
-  ingredientRecipeMutationInvalidateKeys,
 } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import type { EnrichmentEditorHandle } from "./enrichment-editor";
@@ -88,7 +88,7 @@ export function ReviewQueue({
   const mergeMutation = useActionMutation({
     mutationFn: api.ingredient.merge.mutationOptions,
     success: (d) => savedWithBackgroundWork(d.sideEffects, "Merged"),
-    invalidateKeys: ingredientRecipeMutationInvalidateKeys,
+    invalidateKeys: ingredientMergeMutationInvalidateKeys,
     onSuccess: () => markProcessed(mergeSourceRef.current),
     error: (err) => `Merge failed: ${getErrorMessage(err)}`,
   });

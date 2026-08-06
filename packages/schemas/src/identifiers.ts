@@ -181,7 +181,6 @@ export const unsafeTaskShortcode = makeUnsafeId<TaskShortcode>();
 export const unsafeVendorShortcode = makeUnsafeId<VendorShortcode>();
 export const unsafeWishShortcode = makeUnsafeId<WishShortcode>();
 
-// ---------------------------------------------------------------------------
 // Entity → id lookups
 //
 // Everything above is written per-entity: fifteen `XxxId` types, fifteen
@@ -189,7 +188,6 @@ export const unsafeWishShortcode = makeUnsafeId<WishShortcode>();
 // shortcode resolver, a CRUD factory) can't reach any of them. These three
 // lookups close that gap — one entry per `ShortcodeEntity`, i.e. exactly the
 // entities that have a public id to resolve in the first place.
-// ---------------------------------------------------------------------------
 
 /**
  * The branded id TYPE of each entity. `entityManifest[e].idBrand` carries the

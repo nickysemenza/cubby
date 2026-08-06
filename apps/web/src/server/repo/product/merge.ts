@@ -335,7 +335,6 @@ export const mergeProducts = async (
     );
     summary.deletedEntityIds = losers.map((row) => row.id);
 
-    // ---- InventoryEntry: refuse before writing anything --------------------
     const inventoryRows = (await tx.query.inventoryEntry.findMany({
       where: and(
         inArray(inventoryEntry.productId, [keepId, ...loserIds]),
@@ -357,7 +356,6 @@ export const mergeProducts = async (
       );
     }
 
-    // ---- ProductExternalId -------------------------------------------------
     const externalIdRows = await tx.query.productExternalId.findMany({
       where: and(
         inArray(productExternalId.productId, [keepId, ...loserIds]),
@@ -421,7 +419,6 @@ export const mergeProducts = async (
     }
     summary.externalIdsDiscarded = externalIdsDiscarded;
 
-    // ---- InventoryEntry: apply --------------------------------------------
     if (inventoryPlan.repoint.length > 0) {
       await tx
         .update(inventoryEntry)
@@ -470,7 +467,6 @@ export const mergeProducts = async (
     }
     summary.inventoryMerged = inventoryMerged;
 
-    // ---- ProductImage / ProjectToolUsage / PurchaseProduct / WishCandidate --
     // Four edges, one shape: re-point what fits, soft-delete the duplicate.
     // An absorbed row here carries no data the survivor's row doesn't already
     // have (the pair IS the row), so there is nothing to fold.
@@ -527,7 +523,6 @@ export const mergeProducts = async (
       now,
     });
 
-    // ---- Plain re-points ---------------------------------------------------
     summary.unitMappingsMoved = (
       await repointEdge(tx, "product", "ProductUnitMappings.productId", {
         from: loserIds,
@@ -567,7 +562,6 @@ export const mergeProducts = async (
       })),
     );
 
-    // ---- Survivor identity -------------------------------------------------
     const folded = uniq([
       ...keeper.aliases,
       ...losers.map((row) => row.name),
@@ -579,8 +573,8 @@ export const mergeProducts = async (
     );
     const tags = uniq([...keeper.tags, ...losers.flatMap((row) => row.tags)]);
 
-    // `upc` is deliberately excluded here and written after the losers are
-    // gone — see CARRIED_COLUMNS' note on the partial-unique index.
+    // The audit captures a UPC carry-over now, but its physical write waits
+    // until the losers release the partial-unique slot below.
     const carried: Record<string, unknown> = {};
     for (const column of CARRIED_COLUMNS) {
       if (column === "upc") continue;
@@ -588,14 +582,22 @@ export const mergeProducts = async (
       const donor = losers.find((row) => row[column] != null);
       if (donor) carried[column] = donor[column];
     }
+    if (keeper.upc == null) {
+      const donor = losers.find((row) => row.upc != null);
+      if (donor) carried.upc = donor.upc;
+    }
     summary.carriedFields = Object.keys(carried);
 
+    const { upc: adoptedUpc, ...carriedBeforeDelete } = carried;
     await tx
       .update(product)
-      .set({ aliases: folded, tags, ...buildPartialUpdateValues(carried) })
+      .set({
+        aliases: folded,
+        tags,
+        ...buildPartialUpdateValues(carriedBeforeDelete),
+      })
       .where(eq(product.id, keepId));
 
-    // ---- Remove the losers -------------------------------------------------
     await finalizeMerge(tx, {
       entity: "product",
       table: product,
@@ -616,15 +618,11 @@ export const mergeProducts = async (
 
     // Only now is the loser's UPC slot free — `Product_upc_key` is partial on
     // `deletedAt IS NULL`, so this must follow the soft-delete above.
-    if (keeper.upc == null) {
-      const donor = losers.find((row) => row.upc != null);
-      if (donor) {
-        await tx
-          .update(product)
-          .set({ upc: donor.upc as string })
-          .where(eq(product.id, keepId));
-        summary.carriedFields.push("upc");
-      }
+    if (adoptedUpc != null) {
+      await tx
+        .update(product)
+        .set({ upc: adoptedUpc as string })
+        .where(eq(product.id, keepId));
     }
 
     // Every moved entry now values at the KEEPER's effective price; without

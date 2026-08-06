@@ -32,7 +32,6 @@ export const UserAvatarDropdown = () => {
     );
   }
 
-  // Get initials for fallback
   const getInitials = (name: string | null | undefined) => {
     if (!name) return "?";
     return name

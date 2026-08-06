@@ -876,7 +876,6 @@ export const findDuplicateProductIdentities = async (
   return out;
 };
 
-// Find products with invalid or duplicate UPC codes
 // Find products with no conversion/price coverage at all. A product is covered
 // if it has a manual unit mapping OR a price (synthesizes a `1 each = $price`
 // edge) OR a USDA link (fdc_id/upc synthesizes portion/serving/nutrient
@@ -928,8 +927,6 @@ export const findProductsWithoutMappings = async (
       ),
     );
 
-  // Filter out misc products (no pricing) and non-food products (no food
-  // coverage meaning); category never surfaces in the result shape.
   return productsWithoutMappings
     .filter((p) => !isMiscProduct(p.name) && !isNonFoodCategory(p.category))
     .map(

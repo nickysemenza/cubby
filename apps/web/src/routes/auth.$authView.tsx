@@ -31,9 +31,7 @@ function AuthPage() {
 
   return (
     <div className="auth-background relative flex min-h-screen items-center justify-center overflow-hidden p-4">
-      {/* Decorative tiled icon background */}
       <IconPattern />
-      {/* Auth form */}
       <div className="relative z-10 w-full max-w-md">
         <AuthView pathname={authView} />
       </div>

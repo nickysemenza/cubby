@@ -119,8 +119,8 @@ function renderDetail(app: App, item: Item): HTMLElement {
     );
     wrap.append(line);
   }
-  // The deep link lives here rather than on the row: on the row it would
-  // compete with check-off, which is the whole point of the surface.
+  // Keeping the deep link off the row avoids competing with check-off, the
+  // primary action on this phone-oriented surface.
   const { ingredientId } = item;
   if (ingredientId) {
     wrap.append(
@@ -153,9 +153,7 @@ function renderItem(app: App, item: Item, index: number): HTMLElement {
 
   row.append(box, label);
 
-  // A partially-stocked item shows the shortfall, not the total need — "buy the
-  // difference" shouldn't require mental arithmetic in a store aisle. The full
-  // need stays beside it so the number is still traceable.
+  // Display the buy amount first; the total remains visible for traceability.
   const isPartial = item.status === "short" && item.haveValue !== null;
   if (isPartial) {
     row.append(el("span", "mono sub", `of ${num(item.needValue)}`));
@@ -173,8 +171,7 @@ function renderItem(app: App, item: Item, index: number): HTMLElement {
     ),
   );
 
-  // The whole row toggles — a 14px checkbox is a poor tap target on the phone
-  // this is actually used on.
+  // The row is the mobile-friendly checkbox tap target.
   row.addEventListener("click", (event) => {
     if (event.target === box) return;
     if ((event.target as HTMLElement).closest("button")) return;

@@ -102,13 +102,6 @@ const NONEXISTENT_UUID_2 = "00000000-0000-0000-0000-000000000002";
 describe("operation preview / mutation parity", () => {
   const ctx = withTestDb();
 
-  // ---------------------------------------------------------------------
-  // 1. Blocker parity — the highest-value assertion. For each entity whose
-  // delete (or purchase-merge's refusal rules) can be blocked: build the
-  // blocking state, assert the preview says canProceed === false AND the
-  // mutation actually throws; then remove the blocker and assert the
-  // preview flips to canProceed === true AND the mutation actually succeeds.
-  // ---------------------------------------------------------------------
   describe("blocker parity", () => {
     it("product: live inventory blocks delete, both in the preview and the mutation", async () => {
       const location = await createLocation(
@@ -526,12 +519,6 @@ describe("operation preview / mutation parity", () => {
     });
   });
 
-  // ---------------------------------------------------------------------
-  // 2. Count parity — for cascading deletes, the preview's `total` for an
-  // edge must equal the number of rows the mutation actually soft-deletes,
-  // hard-deletes, or detaches. Count before/after and compare to the
-  // preview's prediction.
-  // ---------------------------------------------------------------------
   describe("count parity", () => {
     /**
      * The sub-recipe path, which nothing else in this file reaches.
@@ -851,10 +838,6 @@ describe("operation preview / mutation parity", () => {
     });
   });
 
-  // ---------------------------------------------------------------------
-  // 3. Per-target breakdown — a bulk delete must say WHICH target has the
-  // dependents, not just that one somewhere does.
-  // ---------------------------------------------------------------------
   describe("per-target breakdown", () => {
     it("product bulk delete attributes a blocker to only the product that has it", async () => {
       const location = await createLocation(
@@ -910,10 +893,6 @@ describe("operation preview / mutation parity", () => {
     });
   });
 
-  // ---------------------------------------------------------------------
-  // 4. Merge candidates — previewMergeIngredientCandidates must rank a USDA
-  // link above products-only, above recipe-usage-only, above aliases-only.
-  // ---------------------------------------------------------------------
   describe("merge candidates ranking", () => {
     it("ranks USDA link > products > recipe usages > aliases, and carries the underlying counts in detail", async () => {
       const usdaLinked = await createIngredient(
@@ -1028,9 +1007,6 @@ describe("operation preview / mutation parity", () => {
     });
   });
 
-  // ---------------------------------------------------------------------
-  // 5. Empty ids and zero-incoming-edge entities.
-  // ---------------------------------------------------------------------
   describe("empty and zero-edge cases", () => {
     it("an empty ids array short-circuits every planner to empty results", async () => {
       await expect(previewDeleteProducts(ctx.db, [])).resolves.toEqual({
@@ -1122,12 +1098,6 @@ describe("operation preview / mutation parity", () => {
     });
   });
 
-  // ---------------------------------------------------------------------
-  // 6. Router dispatch — every declared {operation, entity} pair in the
-  // schema's own enums must route to a planner and return a payload that
-  // parses against previewOperationSchema. Driven off the schema so a newly
-  // added entity is automatically covered.
-  // ---------------------------------------------------------------------
   describe("router dispatch: previewOperation", () => {
     for (const entity of previewDeleteEntitySchema.options) {
       it(`delete/${entity} dispatches to a planner and returns a schema-valid payload`, async () => {
@@ -1160,13 +1130,6 @@ describe("operation preview / mutation parity", () => {
       });
     }
   });
-  // ---------------------------------------------------------------------
-  // Ids that name nothing live. These used to be dropped (plural) or turned
-  // into an empty-string branded id (singular `keepId`), so the preview came
-  // back confident and empty — indistinguishable from "this operation is
-  // harmless". The wire schema already rejects a MALFORMED code, so the only
-  // way in is a well-formed code that was deleted or never existed.
-  // ---------------------------------------------------------------------
   describe("unresolved targets", () => {
     it("blocks a delete preview whose id names nothing, instead of previewing nothing", async () => {
       const result = await previewOperation(

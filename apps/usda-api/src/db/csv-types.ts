@@ -1,6 +1,3 @@
-// TypeScript interfaces for USDA CSV file structures
-// These types match the exact column names in the CSV files
-
 export interface MeasureUnitCsvRecord extends Record<string, unknown> {
   id: string;
   name: string;

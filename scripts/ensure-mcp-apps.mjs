@@ -36,7 +36,6 @@ const mtimeOf = (dir, pick, seed) =>
     extensions: WATCH_EXT,
   });
 const newest = (dir) => mtimeOf(dir, Math.max, 0);
-// Oldest, not newest: if any one bundle is behind a source edit, rebuild all.
 const oldest = (dir) => mtimeOf(dir, Math.min, Number.POSITIVE_INFINITY);
 
 if (!existsSync(DIST) || !readdirSync(DIST).some((f) => f.endsWith(".html"))) {

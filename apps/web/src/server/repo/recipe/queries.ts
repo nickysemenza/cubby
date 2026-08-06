@@ -41,8 +41,7 @@ export const getIngredientCooccurrence = async (
 ): Promise<IngredientCooccurrence> => {
   const dbClient = getDb(db);
 
-  // Get recipes with their ingredients (excludes soft-deleted)
-  // Limited to most recently updated recipes to prevent unbounded queries
+  // Limit the graph source to recent recipes to bound the query.
   const recipes = await dbClient.query.recipe.findMany({
     where: notDeleted(recipe),
     orderBy: desc(recipe.updatedAt),
@@ -77,7 +76,6 @@ export const getIngredientCooccurrence = async (
     },
   });
 
-  // Build ingredient -> recipe count map and recipe -> ingredients map
   const ingredientRecipeCount = new Map<string, number>();
   const ingredientNames = new Map<string, string>();
   const ingredientShortcodes = new Map<string, string>();
@@ -89,7 +87,6 @@ export const getIngredientCooccurrence = async (
     for (const section of r.sections) {
       for (const si of section.ingredients) {
         if (si.ingredient && !si.ingredient.recipeId) {
-          // Only include regular ingredients, not recipe references
           ingredientIds.add(si.ingredient.id);
           ingredientNames.set(si.ingredient.id, si.ingredient.name);
           ingredientShortcodes.set(si.ingredient.id, si.ingredient.shortcode);
@@ -97,7 +94,6 @@ export const getIngredientCooccurrence = async (
       }
     }
 
-    // Update recipe count for each ingredient
     for (const ingId of ingredientIds) {
       ingredientRecipeCount.set(
         ingId,
@@ -110,8 +106,6 @@ export const getIngredientCooccurrence = async (
     }
   }
 
-  // Build co-occurrence matrix (count how many recipes each pair appears in together)
-  // Also track which recipes contain each pair
   const cooccurrence = new Map<
     string,
     {
@@ -120,7 +114,6 @@ export const getIngredientCooccurrence = async (
     }
   >();
 
-  // Need to also track recipe names
   const recipeNames = new Map<string, string>();
   const recipeShortcodes = new Map<string, string>();
   for (const r of recipes) {
@@ -132,10 +125,8 @@ export const getIngredientCooccurrence = async (
     const ids = Array.from(ingredientIds);
     const recipeName = recipeNames.get(recipeId) ?? "Unknown";
     const recipeShortcode = recipeShortcodes.get(recipeId) ?? "";
-    // For each pair of ingredients in this recipe
     for (let i = 0; i < ids.length; i++) {
       for (let j = i + 1; j < ids.length; j++) {
-        // Create a canonical key (sorted to avoid duplicates)
         const key = [ids[i], ids[j]].sort().join("|");
         const existing = cooccurrence.get(key) ?? { count: 0, recipes: [] };
         existing.count += 1;
@@ -149,7 +140,6 @@ export const getIngredientCooccurrence = async (
     }
   }
 
-  // Build nodes array (only include ingredients that have at least one edge)
   const ingredientsWithEdges = new Set<string>();
   const edges: IngredientEdge[] = [];
 
@@ -183,13 +173,11 @@ export const getIngredientCooccurrence = async (
     });
   }
 
-  // Sort nodes by recipe count (most used first)
   nodes.sort((a, b) => b.recipeCount - a.recipeCount);
 
   return { nodes, edges };
 };
 
-// Map of cookbook id → display name, for labelling/colouring graph nodes.
 const getCookbookNameMap = async (
   db: Database,
 ): Promise<Map<CookbookId, { name: string; shortcode: string }>> => {
@@ -387,13 +375,11 @@ export const getIngredientUsage = async (
 export const getAllTags = async (db: Database): Promise<string[]> => {
   const dbClient = getDb(db);
 
-  // Get all recipes with tags (excludes soft-deleted)
   const recipesWithTags = await dbClient.query.recipe.findMany({
     where: notDeleted(recipe),
     columns: { tags: true },
   });
 
-  // Collect unique tags
   const tagSet = new Set<string>();
   for (const r of recipesWithTags) {
     if (r.tags) {
@@ -403,6 +389,5 @@ export const getAllTags = async (db: Database): Promise<string[]> => {
     }
   }
 
-  // Return sorted array of unique tags
   return Array.from(tagSet).sort();
 };

@@ -79,6 +79,7 @@
  */
 
 import { execFileSync } from "node:child_process";
+import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -88,10 +89,6 @@ const webSrc = join(repoRoot, "apps", "web", "src");
 const upcLookupSrc = join(repoRoot, "apps", "upc-lookup", "src");
 const schemasSrc = join(repoRoot, "packages", "schemas", "src");
 const servicesDir = join(webSrc, "server", "services");
-
-// ---------------------------------------------------------------------------
-// File discovery
-// ---------------------------------------------------------------------------
 
 /** @returns {string[]} absolute paths */
 function gitTrackedSources() {
@@ -139,10 +136,6 @@ function listFiles() {
     return [];
   }
 }
-
-// ---------------------------------------------------------------------------
-// Rules
-// ---------------------------------------------------------------------------
 
 // Files allowed to use raw chromatic colors (design surfaces / illustrations).
 const COLOR_EXCLUDE_BASENAMES = new Set([
@@ -488,21 +481,60 @@ const IMAGE_ELEMENT_RE = /<Image(?=[\s/>])/g;
 
 /**
  * The prop-list source of a JSX element starting at `open` (the `<`), i.e. up to
- * the first `>` at brace-depth 0. Tracking `{}` depth is what keeps an arrow
- * function (`=>`) or a nested element (`fallback={<Icon />}`) in a prop from
- * ending the scan early.
+ * the first `>` at brace-depth 0 and outside a quoted JSX value. Tracking `{}`
+ * depth is what keeps an arrow function (`=>`) or a nested element
+ * (`fallback={<Icon />}`) in a prop from ending the scan early. Quotes matter
+ * too: literal `>` and braces are ordinary attribute text, not JSX structure.
  *
  * @param {string} content @param {number} open @returns {string}
  */
 function jsxOpeningTag(content, open) {
   let depth = 0;
+  /** @type {"'" | '"' | null} */
+  let quote = null;
+  let escaped = false;
+
   for (let i = open; i < content.length; i++) {
     const ch = content[i];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      continue;
+    }
     if (ch === "{") depth++;
     else if (ch === "}") depth--;
     else if (ch === ">" && depth === 0) return content.slice(open, i + 1);
   }
   return content.slice(open);
+}
+
+// Keep this parser's edge cases adjacent to the guard it protects. The script
+// is dependency-free and runs in CI, so these regressions run with every scan.
+for (const [source, expected] of [
+  [
+    '<Image alt="{" displayWidth={32} /><div />',
+    '<Image alt="{" displayWidth={32} />',
+  ],
+  [
+    '<Image alt="literal > with { braces }" displayWidth={32} />',
+    '<Image alt="literal > with { braces }" displayWidth={32} />',
+  ],
+  [
+    "<Image alt='literal > with { braces }' displayWidth={32} />",
+    "<Image alt='literal > with { braces }' displayWidth={32} />",
+  ],
+  [
+    String.raw`<Image alt="an escaped quote: \" > { }" displayWidth={32} />`,
+    String.raw`<Image alt="an escaped quote: \" > { }" displayWidth={32} />`,
+  ],
+]) {
+  assert.equal(jsxOpeningTag(source, 0), expected);
 }
 
 /** @typedef {{ file: string, line: number, snippet: string, rule: string }} Violation */
@@ -859,10 +891,6 @@ function scan(files) {
 
   return violations;
 }
-
-// ---------------------------------------------------------------------------
-// Report
-// ---------------------------------------------------------------------------
 
 const files = listFiles();
 const violations = [

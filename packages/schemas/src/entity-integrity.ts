@@ -262,10 +262,6 @@ export const integrityCatalogSchema = z.object({
 });
 export type IntegrityCatalog = z.infer<typeof integrityCatalogSchema>;
 
-// ---------------------------------------------------------------------------
-// Operation impact previews
-// ---------------------------------------------------------------------------
-
 /**
  * One consequence of running an operation: a blocker, a change it will make, or
  * a side effect it will trigger.

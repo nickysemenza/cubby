@@ -250,13 +250,6 @@ export const ingredientProductMutationInvalidateKeys = [
   ...productMutationInvalidateKeys,
 ] as const satisfies readonly QueryKey[];
 
-export const ingredientRecipeMutationInvalidateKeys = [
-  ...ingredientAllMutationInvalidateKeys,
-  queryKeys.recipe.all,
-  // Recipe cost/calorie inputs changed → refresh meal rollups.
-  queryKeys.meal.all,
-] as const satisfies readonly QueryKey[];
-
 export const ingredientMergeMutationInvalidateKeys = [
   queryKeys.ingredient.all,
   queryKeys.product.all,

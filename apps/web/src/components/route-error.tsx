@@ -110,7 +110,6 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
   const category = categorizeError(code, reason, rawMessage, error);
   const friendlyMessage = FRIENDLY_MESSAGES[category];
 
-  // Capture unexpected errors to Sentry (not auth/notFound which are expected)
   useEffect(() => {
     if (
       category === "generic" ||
@@ -121,7 +120,6 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
     }
   }, [error, category]);
 
-  // Get stack trace if available
   const stack = error instanceof Error ? error.stack : undefined;
 
   return (
@@ -140,7 +138,6 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
         {friendlyMessage}
       </p>
 
-      {/* Auth-specific: Sign in button */}
       {category === "auth" && (
         <Button
           variant="default"
@@ -154,7 +151,6 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
         </Button>
       )}
 
-      {/* Action buttons for non-auth errors */}
       {category !== "auth" && (
         <Row gap="sm">
           <Button

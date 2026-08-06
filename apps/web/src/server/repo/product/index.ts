@@ -18,7 +18,6 @@
  * internals (`update-helpers.ts`) and `types.ts` are not re-exported.
  */
 
-// Analytics operations
 export {
   findDuplicateUniqueProducts,
   findProductsWithNoImages,
@@ -28,7 +27,6 @@ export {
   getProductsSharingTags,
   getProductTagOptions,
 } from "./analytics";
-// CRUD operations
 export {
   createProduct,
   deleteProducts,
@@ -48,9 +46,7 @@ export {
 // Discard (a $0, negative-quantity exit — see the module doc for why it
 // carries no Purchase and how it treats the shelf).
 export { discardProductUnits } from "./discard";
-// Helpers
 export { foodLookupParamFromProduct } from "./helpers";
-// Lookup operations
 export {
   findProductByNameFuzzyManufacturer,
   findProductByUPC,

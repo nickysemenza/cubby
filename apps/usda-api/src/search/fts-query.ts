@@ -1,5 +1,3 @@
-// Convert a raw user search string into an FTS5 query that supports prefix on
-// the last term. This mirrors the existing SQLite runtime behavior.
 export function toFtsQuery(raw: string): string {
   const s = (raw || "").trim();
   if (!s) return "";

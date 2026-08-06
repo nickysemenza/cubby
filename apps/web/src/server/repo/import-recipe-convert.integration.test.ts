@@ -25,13 +25,11 @@ describe("upsertImportRecipe", () => {
   });
 
   const mockRecipeUpdated = makeImportRecipe({
-    meta: { title: "Test Recipe" }, // Same name
+    meta: { title: "Test Recipe" },
     url: "https://example.com/recipe-updated",
     sections: [
       {
-        // Updated instructions
         instructions: ["Mix ingredients well", "Bake for 35 minutes"],
-        // Updated amount, different second ingredient (sugar → butter)
         ingredients: ["3 cups flour", "0.5 cup butter"],
       },
       {
@@ -46,7 +44,6 @@ describe("upsertImportRecipe", () => {
 
     expect(result.id).toBeDefined();
 
-    // Verify recipe was created
     const foundRecipe = await getDb(ctx.db).query.recipe.findFirst({
       where: eq(recipe.name, "Test Recipe"),
       with: {
@@ -97,7 +94,6 @@ describe("upsertImportRecipe", () => {
     const ingredients = found!.sections[0]!.ingredients;
     expect(ingredients).toHaveLength(3);
 
-    // Each ingredient keeps its raw line and a parsed amount (value + unit).
     const rice = ingredients.find((i) => i.rawLine === "1 cup jasmine rice");
     expect(rice).toBeTruthy();
     expect(rice!.amounts?.[0]).toMatchObject({ value: 1, unit: "cup" });
@@ -105,15 +101,12 @@ describe("upsertImportRecipe", () => {
     const soy = ingredients.find((i) => i.rawLine === "1 tbsp soy sauce");
     expect(soy!.amounts?.[0]).toMatchObject({ value: 1, unit: "tbsp" });
 
-    // No duplicate ingredient rows were created for the three distinct names.
     expect(new Set(ingredients.map((i) => i.ingredientId)).size).toBe(3);
   });
 
   it("updates an existing recipe when it already exists", async () => {
-    // First, create the recipe
     const firstResult = await upsertImportRecipe(mockRecipe, ctx.db, ctx.actor);
 
-    // Verify initial state
     const initialRecipe = await getDb(ctx.db).query.recipe.findFirst({
       where: eq(recipe.name, "Test Recipe"),
       with: {
@@ -128,17 +121,14 @@ describe("upsertImportRecipe", () => {
     expect(initialRecipe!.sections).toHaveLength(1);
     expect(initialRecipe!.sections[0]!.ingredients).toHaveLength(2);
 
-    // Now update with different data
     const secondResult = await upsertImportRecipe(
       mockRecipeUpdated,
       ctx.db,
       ctx.actor,
     );
 
-    // Should return same recipe ID (updated, not created new)
     expect(secondResult.id).toBe(firstResult.id);
 
-    // Verify the recipe was updated
     const updatedRecipe = await getDb(ctx.db).query.recipe.findFirst({
       where: eq(recipe.name, "Test Recipe"),
       with: {
@@ -150,24 +140,21 @@ describe("upsertImportRecipe", () => {
       },
     });
 
-    expect(updatedRecipe!.id).toBe(firstResult.id); // Same recipe
+    expect(updatedRecipe!.id).toBe(firstResult.id);
     expect(updatedRecipe!.SourceData).toBe(
       "https://example.com/recipe-updated",
-    ); // Updated URL
-    expect(updatedRecipe!.sections).toHaveLength(2); // Now has 2 sections
+    );
+    expect(updatedRecipe!.sections).toHaveLength(2);
 
-    // Check first section was updated (sections should be in order)
     const firstSection = updatedRecipe!.sections[0];
-    expect(firstSection!.ingredients).toHaveLength(2); // flour + butter (sugar removed)
+    expect(firstSection!.ingredients).toHaveLength(2);
 
-    // Check new section was added
     const secondSection = updatedRecipe!.sections[1];
     expect(secondSection).toBeTruthy();
-    expect(secondSection!.ingredients).toHaveLength(1); // cinnamon
+    expect(secondSection!.ingredients).toHaveLength(1);
   });
 
   it("re-import updates yield/servings and preserves manually-set tags", async () => {
-    // First import: 4 servings, makes 2 loaves.
     const first = await upsertImportRecipe(
       makeImportRecipe({
         meta: {
@@ -181,13 +168,12 @@ describe("upsertImportRecipe", () => {
       ctx.actor,
     );
 
-    // A manual edit a web import can't express: tag the recipe.
+    // Web imports cannot express tags, so a manual tag must survive re-import.
     await getDb(ctx.db)
       .update(recipe)
       .set({ tags: ["dinner"] })
       .where(eq(recipe.id, first.id));
 
-    // Re-import the same recipe (matched by name) with changed yield + servings.
     const second = await upsertImportRecipe(
       makeImportRecipe({
         meta: {
@@ -200,29 +186,24 @@ describe("upsertImportRecipe", () => {
       ctx.db,
       ctx.actor,
     );
-    expect(second.id).toBe(first.id); // updated in place, not a new row
+    expect(second.id).toBe(first.id);
 
     const updated = await getDb(ctx.db).query.recipe.findFirst({
       where: eq(recipe.id, first.id),
     });
-    // yield/servings reflect the re-import source (the bug: previously stale)...
     expect(updated!.servings).toBe(8);
     expect(updated!.yield).toEqual({ value: 4, unit: "loaves" });
-    // ...but the manually-added tag survives, since web imports carry no tags.
     expect(updated!.tags).toEqual(["dinner"]);
   });
 
   it("handles multiple upserts correctly (back-to-back npm run load-data scenario)", async () => {
-    // This tests the exact scenario mentioned - running load-data multiple times
     const firstRun = await upsertImportRecipe(mockRecipe, ctx.db, ctx.actor);
-    const secondRun = await upsertImportRecipe(mockRecipe, ctx.db, ctx.actor); // Same recipe
-    const thirdRun = await upsertImportRecipe(mockRecipe, ctx.db, ctx.actor); // Same recipe again
+    const secondRun = await upsertImportRecipe(mockRecipe, ctx.db, ctx.actor);
+    const thirdRun = await upsertImportRecipe(mockRecipe, ctx.db, ctx.actor);
 
-    // All should return the same recipe ID
     expect(secondRun.id).toBe(firstRun.id);
     expect(thirdRun.id).toBe(firstRun.id);
 
-    // Should only be one recipe in the database
     const allRecipes = await getDb(ctx.db).query.recipe.findMany({
       where: eq(recipe.name, "Test Recipe"),
     });
@@ -231,7 +212,6 @@ describe("upsertImportRecipe", () => {
   });
 
   it("properly cleans up old sections and ingredients", async () => {
-    // Create recipe with 2 sections
     await upsertImportRecipe(mockRecipeUpdated, ctx.db, ctx.actor);
 
     const beforeUpdate = await getDb(ctx.db).query.recipe.findFirst({
@@ -246,7 +226,6 @@ describe("upsertImportRecipe", () => {
       0,
     );
 
-    // Update to recipe with 1 section
     await upsertImportRecipe(mockRecipe, ctx.db, ctx.actor);
 
     const afterUpdate = await getDb(ctx.db).query.recipe.findFirst({
@@ -261,7 +240,6 @@ describe("upsertImportRecipe", () => {
       0,
     );
 
-    // Verify data was properly cleaned up and replaced
     expect(sectionCountAfter).toBe(1);
     expect(sectionCountAfter).toBeLessThan(sectionCountBefore);
     expect(ingredientCountAfter).toBe(2);
@@ -289,7 +267,6 @@ describe("upsertImportRecipe", () => {
     });
     expect(allIngredientsForRecipe).toHaveLength(2);
 
-    // Verify no orphaned records exist for any other recipe either
     const orphanedSections = await getDb(ctx.db).query.recipeSection.findMany({
       where: ne(recipeSection.recipeId, afterUpdate!.id),
     });

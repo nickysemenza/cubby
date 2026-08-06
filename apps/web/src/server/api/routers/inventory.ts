@@ -122,7 +122,6 @@ async function inventoryEntityIds(
   return resolveAllOrThrow(db, "inventory", shortcodes);
 }
 
-// Create standardized CRUD procedures using factory
 const { list } = createEntityListProcedure({
   schemas: {
     output: inventoryListItemOut,
@@ -232,7 +231,6 @@ const { getByID, getByShortcode, create, update } =
     },
   });
 
-// Delete procedure using standalone factory
 const deleteItem = createDeleteProcedure<InventoryShortcode>(
   async (services, shortcodes) => {
     const ids = await inventoryEntityIds(services.db, shortcodes);

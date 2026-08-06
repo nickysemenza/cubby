@@ -245,11 +245,9 @@ export function createPaginatedResponseSchemaWithContext<
           results.push(parseResult.data);
         } else {
           hasErrors = true;
-          // Extract identifying info from the record
           const recordInfo = identifyRecord(item, i);
           const recordStr = formatRecordIdentifier(recordInfo);
 
-          // Log detailed error for server-side debugging
           console.error(
             `[OutputValidation] ${entityName} validation failed for ${recordStr}:`,
             parseResult.error.issues.map((issue) => ({
@@ -258,7 +256,6 @@ export function createPaginatedResponseSchemaWithContext<
             })),
           );
 
-          // Add each issue with record context
           for (const issue of parseResult.error.issues) {
             ctx.addIssue({
               ...issue,
@@ -269,7 +266,6 @@ export function createPaginatedResponseSchemaWithContext<
         }
       }
 
-      // Must return z.NEVER when there are errors to signal validation failure
       if (hasErrors) {
         return z.NEVER;
       }

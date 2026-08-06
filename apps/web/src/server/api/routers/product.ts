@@ -193,7 +193,6 @@ async function linkedIngredientIds(
   return [...resolved.values()].map((id) => unsafeIngredientId(id));
 }
 
-// Create standardized detail procedures using the enriched schema.
 const { getByID, getByShortcode } = createEntityDetailReadProcedures({
   entityName: "product",
   schemas: {
@@ -394,8 +393,6 @@ const quickCreate = protectedProcedure
     return product;
   });
 
-// Find or create a product by UPC code
-// Checks local DB first, then USDA, then UPC worker, then creates with defaults
 const findOrCreateByUPC = protectedProcedure
   .input(productFindOrCreateByUPCInput)
   .output(strictOutput(productFindOrCreateByUPCOut))
@@ -427,7 +424,6 @@ const backfillUPCImages = protectedProcedure.mutation(async function* ({
   );
 });
 
-// Get category distribution for insights visualization
 const categoryDistribution = protectedProcedure
   .output(strictOutput(productCategoryDistributionOut))
   .query(async ({ ctx }) => {

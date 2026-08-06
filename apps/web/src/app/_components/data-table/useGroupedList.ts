@@ -5,7 +5,6 @@ export interface GroupConfig<TItem> {
   field: string;
   /** Extract the group key from an item. Null/undefined becomes "(unspecified)". */
   keyFn: (item: TItem) => string | null | undefined;
-  /** Get the accent color for a group key */
   colorFn: (key: string) => string;
 }
 
@@ -13,14 +12,6 @@ type GroupedVirtualItem<TItem> =
   | { kind: "header"; title: string; count: number; color: string }
   | { kind: "row"; item: TItem };
 
-/**
- * Groups flat data into sections and flattens into a virtualizer-compatible list
- * of interleaved headers and rows. Sections are sorted alphabetically with
- * "(unspecified)" last.
- *
- * Used by mobile list view for client-side grouping. Desktop tables use
- * `useDesktopGroupedRows` which relies on server-side ordering (groupBy param).
- */
 export function useGroupedList<TItem>(
   data: TItem[],
   groupConfig: GroupConfig<TItem> | undefined,

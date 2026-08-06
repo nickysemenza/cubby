@@ -44,7 +44,6 @@ type DrizzlePreparedStatement = {
   };
 };
 
-// Field mappings and transformations for each table
 type FieldTransformValue = "string" | "number" | "integer";
 
 interface TableConfig<TCsv, TSchema extends SQLiteTable> {
@@ -61,7 +60,6 @@ interface TableConfig<TCsv, TSchema extends SQLiteTable> {
   fillEmptyWith?: Partial<Record<keyof TCsv, string>>;
 }
 
-// Configuration for each import table
 const measureUnitConfig: TableConfig<
   MeasureUnitCsvRecord,
   typeof schema.usdaMeasureUnit
@@ -94,8 +92,6 @@ const foodConfig: TableConfig<FoodCsvRecord, typeof schema.usdaFood> = {
     fdc_id: "integer",
   },
   requiredNonNull: ["description"],
-  // If description is empty in CSV, preserve row by using a placeholder
-  // to satisfy NOT NULL constraints and retain referential integrity.
   fillEmptyWith: { description: "<empty>" },
 };
 
@@ -158,7 +154,6 @@ const foodPortionConfig: TableConfig<
   requiredNonNull: ["amount", "gram_weight"],
 };
 
-// Generic transformation utilities
 function transformField(
   value: string,
   transformType: FieldTransformValue,
@@ -205,13 +200,11 @@ function transformRecord<
   return convertEmptyToNull(result);
 }
 
-// Helper function to parse CSV header and get field names
 async function getCsvFieldNames(filePath: string): Promise<string[]> {
   return new Promise((resolve, reject) => {
     const parser = parse({
       columns: true,
-      to_line: 2, // Need to read 2 lines: when columns=true, the first line becomes headers
-      // and the parser only emits records starting from the second line
+      to_line: 2,
     });
 
     let fieldNames: string[] = [];
@@ -241,7 +234,6 @@ async function getCsvFieldNames(filePath: string): Promise<string[]> {
   });
 }
 
-// Generic import factory function
 function createImporter<
   TCsv extends Record<string, unknown>,
   TSchema extends SQLiteTable,
@@ -251,10 +243,8 @@ function createImporter<
     const filePath = path.join(USDA_DATA_PATH, config.csvFile);
 
     try {
-      // Parse CSV header to get field names
       const csvFieldNames = await getCsvFieldNames(filePath);
 
-      // Create placeholder values for all fields
       const placeholderValues = {} as Record<string, unknown>;
       for (const csvField of csvFieldNames) {
         placeholderValues[csvField] = sql.placeholder(csvField);
@@ -266,7 +256,6 @@ function createImporter<
         .onConflictDoNothing()
         .prepare();
 
-      // Optional filter for required non-null fields
       const shouldInclude = config.requiredNonNull
         ? (rec: Record<string, unknown>) =>
             config.requiredNonNull!.every((k) => rec[k as string] !== null)
@@ -316,7 +305,6 @@ async function streamCsvFile<
       if (batch.length === 0) return;
 
       const doInsertBatch = () => {
-        // Drizzle prepared statement per-row inside a transaction
         for (const record of batch) {
           try {
             const info = drizzlePrepared.run(record) as SQLiteRunResult;
@@ -338,7 +326,6 @@ async function streamCsvFile<
         }
       };
 
-      // Use a fast per-batch transaction
       const transaction = sqlite.transaction(doInsertBatch);
       transaction();
 
@@ -391,7 +378,6 @@ async function streamCsvFile<
     });
 
     parser.on("end", () => {
-      // Process any remaining records in the final batch
       processBatch();
       const elapsedSec = Math.max(
         1,
@@ -463,7 +449,6 @@ function countCsvRows(filePath: string): Promise<number> {
   });
 }
 
-// Create import functions using the factory
 const importMeasureUnits = createImporter(measureUnitConfig);
 const importNutrients = createImporter(nutrientConfig);
 const importFoods = createImporter(foodConfig);
@@ -493,8 +478,6 @@ function clearTables() {
     }
   }
 }
-
-// (Removed index drop/recreate per request)
 
 type PragmasSnapshot = {
   journal_mode: string | number;
@@ -607,7 +590,6 @@ async function main() {
   const startTime = Date.now();
   const totalStats: ImportStats = { processed: 0, inserted: 0, skipped: 0 };
 
-  // Import in dependency order
   const importFunctions = [
     { name: "Measure Units", fn: importMeasureUnits },
     { name: "Nutrients", fn: importNutrients },
@@ -633,8 +615,6 @@ async function main() {
     }
   }
 
-  // Import complete
-
   const endTime = Date.now();
   const duration = Math.round((endTime - startTime) / 1000);
 
@@ -644,7 +624,6 @@ async function main() {
   console.log(`Total skipped: ${totalStats.skipped}`);
   console.log(`Duration: ${duration} seconds`);
 
-  // Rebuild FTS search index for fast description/name queries
   console.log("\n=== Building search index (FTS5) ===");
   try {
     rebuildFoodSearchFts();

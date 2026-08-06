@@ -73,7 +73,6 @@ async function resolveLocationIds(
   return uniq(await resolveAllOrThrow(db, "location", shortcodes));
 }
 
-// Create standardized list procedure using factory
 const { list } = createEntityListProcedure({
   schemas: {
     output: locationListItemOut,
@@ -99,7 +98,6 @@ const { list } = createEntityListProcedure({
   entityName: "location",
 });
 
-// Create standardized getByID, create, update procedures using factory
 const { getByID, getByShortcode, create, update } =
   createEntityCrudWithoutListProcedures({
     entityName: "location",
@@ -234,7 +232,6 @@ const getByShortcodes = protectedProcedure
     return await getLocationsByShortcodes(ctx.db, input.shortcodes);
   });
 
-// Delete procedure using standalone factory
 const deleteItem = createDeleteProcedure<LocationShortcode>(
   async (services, shortcodes) => {
     const ids = await resolveLocationIds(services.db, shortcodes);

@@ -409,7 +409,6 @@ export const mergePurchasesInput = z.object({
 });
 export type MergePurchasesInput = z.infer<typeof mergePurchasesInput>;
 
-// ---------------------------------------------------------------------------
 // Purchase ⟷ Product links (PurchaseProduct)
 //
 // Which Products a Purchase bought — nothing else. This carries NO money and
@@ -421,7 +420,6 @@ export type MergePurchasesInput = z.infer<typeof mergePurchasesInput>;
 // product — so this link is otherwise the only way to say "this lump-sum
 // order was for these three tools." Mirrors `projectResource*` in
 // `./project` (the analogous Project ⟷ Product link) as closely as possible.
-// ---------------------------------------------------------------------------
 
 export const purchaseProductsInput = z.object({
   purchaseId: purchaseShortcode,

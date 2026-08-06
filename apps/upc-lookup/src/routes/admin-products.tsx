@@ -15,7 +15,7 @@ import {
   deleteProduct,
   getProduct,
   listProducts,
-  updateProduct,
+  updateProductWithImageCleanup,
 } from "../db/products";
 import { getImageUrl, storeImage, storeImageBlob } from "../storage/images";
 import type { Env } from "../types";
@@ -32,8 +32,6 @@ import { formatUSD, FormError } from "./admin-presentation";
 const productRoutes = new Hono<{ Bindings: Env }>();
 const admin = productRoutes;
 const PAGE_SIZE = 25;
-
-// ---------------------------------------------------------------------------
 
 admin.get("/products", async (c) => {
   const db = createDb(c.env.DB);
@@ -220,10 +218,6 @@ admin.get("/products", async (c) => {
   );
 });
 
-// ---------------------------------------------------------------------------
-// Create
-// ---------------------------------------------------------------------------
-
 admin.get("/products/new", (c) =>
   c.render(
     <Layout title="New product" active="new">
@@ -304,10 +298,6 @@ admin.post("/products", async (c) => {
   return c.redirect(withFlash("/admin/products", `Created ${name}`));
 });
 
-// ---------------------------------------------------------------------------
-// Edit / update
-// ---------------------------------------------------------------------------
-
 admin.get("/products/:upc/edit", async (c) => {
   const db = createDb(c.env.DB);
   const product = await getProduct(db, c.req.param("upc"));
@@ -373,7 +363,7 @@ admin.post("/products/:upc", async (c) => {
       ? ((await storeImage(upc, imageUrl, c.env)) ?? existing.imageKey)
       : existing.imageKey;
 
-  await updateProduct(db, upc, {
+  await updateProductWithImageCleanup(db, c.env, upc, {
     name,
     manufacturer: str(body.manufacturer),
     brand: str(body.brand),
@@ -385,10 +375,6 @@ admin.post("/products/:upc", async (c) => {
 
   return c.redirect(withFlash("/admin/products", `Updated ${name}`));
 });
-
-// ---------------------------------------------------------------------------
-// Re-fetch / delete
-// ---------------------------------------------------------------------------
 
 admin.post("/products/:upc/refetch", async (c) => {
   const db = createDb(c.env.DB);
@@ -414,7 +400,7 @@ admin.post("/products/:upc/refetch", async (c) => {
     ? ((await storeImage(upc, data.imageUrl, c.env)) ?? existing.imageKey)
     : existing.imageKey;
 
-  await updateProduct(db, upc, {
+  await updateProductWithImageCleanup(db, c.env, upc, {
     name: data.name,
     manufacturer: data.manufacturer,
     brand: data.brand,

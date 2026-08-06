@@ -1,10 +1,10 @@
 import type { Database } from "../db";
 import type { Env } from "../types";
 import type { Product } from "../db/schema";
-import { getProduct, createProduct } from "../db/products";
+import { createResolvedProduct, getProduct } from "../db/products";
 import { deleteMiss, getFreshMisses, recordMiss } from "../db/misses";
 import { lookupExternalProduct } from "../api";
-import { storeImage } from "../storage/images";
+import { cleanupImageVariants, storeImage } from "../storage/images";
 
 export type ResolveResult = { product: Product; cached: boolean };
 
@@ -64,7 +64,7 @@ export async function resolveProductOutcome(
     ? await storeImage(upc, data.imageUrl, env)
     : null;
 
-  const product = await createProduct(db, {
+  const product = await createResolvedProduct(db, {
     upc,
     name: data.name,
     manufacturer: data.manufacturer,
@@ -76,6 +76,15 @@ export async function resolveProductOutcome(
     source: data.source,
     sourceData: data.sourceData,
   });
+
+  if (!product) {
+    const winner = await getProduct(db, upc);
+    if (!winner) {
+      throw new Error(`Product ${upc} was not found after an insert conflict`);
+    }
+    await cleanupImageVariants(env, upc, winner.imageKey);
+    return { status: "found", product: winner, cached: true };
+  }
 
   // The UPC graduated to a real product — clear any stale miss row.
   await deleteMiss(db, upc);

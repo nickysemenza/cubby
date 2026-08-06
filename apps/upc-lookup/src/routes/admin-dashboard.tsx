@@ -7,8 +7,6 @@ import { getStats } from "./stats";
 
 const dashboardRoutes = new Hono<{ Bindings: Env }>();
 
-// ---------------------------------------------------------------------------
-
 dashboardRoutes.get("/", async (c) => {
   const db = createDb(c.env.DB);
   const stats = await getStats(db);
@@ -38,8 +36,6 @@ dashboardRoutes.get("/", async (c) => {
     </Layout>,
   );
 });
-// ---------------------------------------------------------------------------
-
 dashboardRoutes.get("/stats", async (c) => {
   const db = createDb(c.env.DB);
   const stats = await getStats(db);

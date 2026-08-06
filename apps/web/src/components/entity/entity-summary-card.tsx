@@ -92,7 +92,6 @@ interface EntitySummaryCardProps {
   summaryData: EntitySummaryData;
 }
 
-// Helper functions for each summary type
 const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
   // Builds one metric: a clean value plus an optional small coverage caption.
   // Keeping coverage out of the value prevents the big number from wrapping into
@@ -256,7 +255,6 @@ export const EntitySummaryCard: React.FC<EntitySummaryCardProps> = ({
   className,
   summaryData,
 }) => {
-  // Get formatted items based on summary type
   const items = React.useMemo(
     () =>
       match(summaryData)

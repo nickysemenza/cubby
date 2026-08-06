@@ -68,7 +68,6 @@ export interface EditModeProps<TEditData, TEntity> extends BaseFormProps {
   entity: TEntity;
 }
 
-// Helper function to generate submit button text based on mode
 export function getSubmitButtonText(mode: "create" | "edit"): string {
   return mode === "create" ? "Create" : "Save";
 }

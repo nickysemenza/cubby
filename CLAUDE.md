@@ -10,6 +10,14 @@ The **[Tenets](README.md#tenets)** there are binding on design proposals: invent
 - For change, build, and fix requests, make the requested in-scope changes and validate them proportionally. Run targeted checks first; run `pnpm run check` plus relevant tests for broad or cross-layer changes.
 - Open pull requests ready for review by default. Use a draft PR only when the user explicitly requests one or the published work is intentionally incomplete.
 
+## Comments
+
+Comments explain **why a constraint exists**, not what the next line already says.
+Keep invariant, regression-cause, security/runtime, database-semantics, algorithm,
+public-contract, and active-TODO context. Delete narration of obvious control flow,
+stale implementation history, redundant section banners, signature-shaped JSDoc,
+and Arrange/Act/Assert prose that adds no behavioral fact.
+
 ## Production database migrations
 
 Follow the shared-production-database guidance in [README's worktree section](README.md#worktrees-parallel-sessions) and its [D1 migration workflow](README.md#common-commands). Agents are authorized to run `pnpm --filter @cubby/web run db:push` when a schema change is necessary to complete the requested work and the migration has been verified as safe.

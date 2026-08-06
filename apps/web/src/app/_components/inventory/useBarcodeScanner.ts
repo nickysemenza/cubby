@@ -24,7 +24,6 @@ import {
   type VideoObjectFit,
 } from "./scan-roi";
 
-/** Barcode format strings supported by the BarcodeDetector API */
 export type BarcodeFormat =
   | "upc_a"
   | "upc_e"
@@ -50,15 +49,10 @@ const FALLBACK_RETICLE_WIDTH_FRACTION = 0.85;
 const FALLBACK_RETICLE_HEIGHT_FRACTION = 0.4;
 
 interface UseBarcodeSccannerOptions {
-  /** Called when a barcode is detected */
   onScan: (barcode: string) => void;
-  /** Called on error */
   onError?: (error: string) => void;
-  /** Whether the scanner is active */
   enabled?: boolean;
-  /** Barcode formats to detect */
   formats: BarcodeFormat[];
-  /** Debounce time for same barcode (ms). Default: 2000 */
   debounceMs?: number;
   /**
    * The on-screen reticle element. Detection crops to this box (mapped back
@@ -105,19 +99,12 @@ function resolveScanRoi(
 }
 
 interface UseBarcodeSccannerResult {
-  /** Ref to attach to the <video> element */
   videoRef: React.RefObject<HTMLVideoElement | null>;
-  /** Current scanner status */
   status: ScannerStatus;
-  /** Error message if status is "error" or "permission_denied" */
   errorMessage: string | null;
-  /** Whether torch/flashlight is available */
   torchAvailable: boolean;
-  /** Whether torch is currently on */
   torchEnabled: boolean;
-  /** Toggle torch on/off */
   toggleTorch: () => void;
-  /** Retry camera access after permission denial */
   retry: () => void;
 }
 
@@ -205,7 +192,6 @@ export function useBarcodeScanner({
 
         streamRef.current = stream;
 
-        // Check torch support
         const videoTrack = stream.getVideoTracks()[0];
         if (videoTrack) {
           const capabilities = videoTrack.getCapabilities?.();
@@ -215,7 +201,6 @@ export function useBarcodeScanner({
           }
         }
 
-        // Attach stream to video element
         const video = videoRef.current;
         if (!video || cancelled) {
           for (const track of stream.getTracks()) track.stop();
@@ -227,7 +212,6 @@ export function useBarcodeScanner({
 
         if (cancelled) return;
 
-        // Create detector
         const detector = new BarcodeDetector({ formats: formatsRef.current });
         detectorRef.current = detector;
 

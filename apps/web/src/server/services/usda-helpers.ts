@@ -1,11 +1,6 @@
 import type { FoodLookupParam, FoodSummary } from "@cubby/usda-schemas";
 import type { USDAClient } from "../clients/usda";
 
-/**
- * Generic helper to enrich an array of items with USDA food data: extract a
- * lookup param per item (fdc_id or UPC — see foodLookupParamFromProduct), batch
- * fetch, and map results back. Items without a valid param get `food: null`.
- */
 export async function batchEnrichWithFood<T extends object>(
   items: T[],
   getLookupParam: (item: T) => FoodLookupParam | null,
@@ -34,21 +29,6 @@ export async function batchEnrichWithFood<T extends object>(
   }));
 }
 
-/**
- * Batch enriches nested items across a collection of parent items.
- *
- * This helper consolidates the pattern of:
- * 1. Flattening nested items from all parents
- * 2. Batch enriching all nested items at once
- * 3. Mapping enriched items back to their respective parents
- *
- * Useful for enriching nested collections (e.g., products within ingredients)
- * while maintaining batch efficiency and proper parent-child relationships.
- *
- * @param parents - Array of parent items containing nested items
- * @param getNestedItems - Function to extract nested items array from a parent
- * @param enrichFn - Async function to batch enrich all nested items
- */
 export async function batchEnrichNestedItems<
   TParent,
   TNested,
@@ -64,7 +44,6 @@ export async function batchEnrichNestedItems<
     return [];
   }
 
-  // Flatten all nested items and track counts per parent
   const allNested: TNested[] = [];
   const countsPerParent: number[] = [];
 
@@ -74,10 +53,8 @@ export async function batchEnrichNestedItems<
     allNested.push(...nested);
   });
 
-  // Batch enrich all nested items at once
   const allEnriched = await enrichFn(allNested);
 
-  // Map enriched items back to their parents
   let currentIndex = 0;
   return parents.map((parent, parentIndex) => {
     const count = countsPerParent[parentIndex] || 0;

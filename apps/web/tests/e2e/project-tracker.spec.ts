@@ -250,7 +250,6 @@ test.describe("Project tracker", () => {
   }) => {
     const name = `e2e palette task ${Date.now()}`;
 
-    // Seed a task the palette can find.
     await page.goto("/tasks");
     await page.waitForLoadState("networkidle");
     await page.getByRole("button", { name: "New" }).click();
@@ -337,7 +336,6 @@ test.describe("Project tracker", () => {
     const projectName = `e2e link project ${Date.now()}`;
     const taskName = `e2e link task ${Date.now()}`;
 
-    // Create a project to link the task to.
     await page.goto("/projects");
     await page.waitForLoadState("networkidle");
     await page.getByRole("button", { name: "New Project" }).click();

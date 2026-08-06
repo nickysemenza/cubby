@@ -422,7 +422,7 @@ describe("tracker removal cascades entity embeddings (no orphans)", () => {
     );
     await seedEmbedding("ingredient", alias.id);
 
-    await mergeIngredients(ctx.db, keeper.id, [alias.id]);
+    await mergeIngredients(ctx.db, keeper.id, [alias.id], TEST_ACTOR);
 
     expect(await embeddingDeletedAt("ingredient", alias.id)).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);

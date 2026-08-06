@@ -203,10 +203,6 @@ export type RecipeCosting = {
   isFlourRows: Map<string, boolean>;
 };
 
-// ---------------------------------------------------------------------------
-// Input assembly
-// ---------------------------------------------------------------------------
-
 /**
  * All tier-1 targets including kcal, in TIER1_NUTRIENTS order. TS stays the
  * source of truth for the list (usda-api shares the package and must not need
@@ -258,10 +254,6 @@ export const toWProductInput = (
   unit_mappings: p.unitMappings,
   food: p.food ? toWFoodInput(p.food) : null,
 });
-
-// ---------------------------------------------------------------------------
-// Result reshaping
-// ---------------------------------------------------------------------------
 
 const KCAL_CODE = TIER1_NUTRIENTS.kcal.code;
 
@@ -370,10 +362,6 @@ const reshape = (w: WRecipeCosting, rows: CostingRow[]): RecipeCosting => {
     isFlourRows: new Map(w.rows.map((r) => [r.id, r.is_flour] as const)),
   };
 };
-
-// ---------------------------------------------------------------------------
-// Entry point
-// ---------------------------------------------------------------------------
 
 /**
  * Cost a batch of recipes in ONE WASM call: totals, per-row resolved measures

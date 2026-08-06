@@ -102,7 +102,6 @@ export const recipeUsageOut = z.object({
 });
 export type RecipeUsage = z.infer<typeof recipeUsageOut>;
 
-// Create a discriminated union to ensure either recipe or ingredient is set
 /** Fields every section line shares, whichever arm it is. */
 export const sectionLineFields = {
   // Declared exception: a recipe section/line id has no shortcode.
