@@ -8,6 +8,7 @@ import {
   buildRecipeTree,
   firstExpansionRowIds,
   flattenComponents,
+  fullBatchCostByComponent,
   fullBatchNeeds,
   type RecipeTreeNode,
 } from "./recipe-tree";
@@ -19,6 +20,33 @@ const mkRow = (id: string, grams: number): IngredientDataItem =>
     id,
     priceInfo: { gram: ok({ value: grams, unit: "g" }) },
   }) as unknown as IngredientDataItem;
+
+/** A row carrying a resolved price, optionally ranged ("2–3 cups"). */
+const mkPricedRow = (
+  id: string,
+  price: number,
+  upper?: number,
+): IngredientDataItem =>
+  ({
+    id,
+    priceInfo: {
+      gram: ok({ value: 1, unit: "g" }),
+      price: ok({
+        value: price,
+        unit: "dollar",
+        ...(upper != null ? { upper_value: upper } : {}),
+      }),
+    },
+  }) as unknown as IngredientDataItem;
+
+const mkPricedCosting = (rows: IngredientDataItem[]): RecipeCosting =>
+  ({
+    rows,
+    totals: { weight: 100 },
+    estimatedRows: new Map(),
+    bakerPct: new Map(),
+    isFlourRows: new Map(),
+  }) as unknown as RecipeCosting;
 
 const mkCosting = (
   rowGrams: Record<string, number>,
@@ -494,5 +522,55 @@ describe("firstExpansionRowIds", () => {
     expect(ids.has("sr-sof-1")).toBe(true);
     expect(ids.has("sr-sof-2")).toBe(false);
     expect(ids.size).toBe(1);
+  });
+});
+
+describe("fullBatchCostByComponent", () => {
+  const priced = (rows: IngredientDataItem[]) => {
+    const root = recipe("r-root", "R", [
+      ing("a", "i-a", "a"),
+      ing("b", "i-b", "b"),
+    ]);
+    return fullBatchCostByComponent(
+      buildRecipeTree(
+        root,
+        new Map([["r-root", mkPricedCosting(rows)]]),
+        {},
+        WASM_YIELD_PORTS,
+      ),
+    );
+  };
+
+  it("sums the component's direct leaf prices", () => {
+    const { byComponent, total } = priced([
+      mkPricedRow("a", 1.5),
+      mkPricedRow("b", 2.25),
+    ]);
+    expect(byComponent.get("r-root")?.price).toBeCloseTo(3.75);
+    expect(total).toBeCloseTo(3.75);
+  });
+
+  it("carries the upper bound a ranged amount produces", () => {
+    // The engine tracks an upper for "2–3 cups"; this used to drop it, so the
+    // prep sheet showed a point cost where every other surface showed a range.
+    const { byComponent, total, totalUpper } = priced([
+      mkPricedRow("a", 1.0, 2.0),
+      mkPricedRow("b", 0.5),
+    ]);
+    expect(byComponent.get("r-root")).toEqual({ price: 1.5, priceUpper: 2.5 });
+    expect(total).toBeCloseTo(1.5);
+    expect(totalUpper).toBeCloseTo(2.5);
+  });
+
+  it("collapses the range to the point when nothing is ranged", () => {
+    // So `formatCurrencyRange`'s `upper > lower` guard never sees "$X – $X".
+    const { total, totalUpper } = priced([mkPricedRow("a", 4)]);
+    expect(totalUpper).toBe(total);
+  });
+
+  it("reports null totals when nothing priced", () => {
+    const { total, totalUpper } = priced([mkRow("a", 100)]);
+    expect(total).toBeNull();
+    expect(totalUpper).toBeNull();
   });
 });
