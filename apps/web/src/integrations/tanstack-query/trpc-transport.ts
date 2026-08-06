@@ -35,6 +35,8 @@ export function createTRPCTransportLink({
     // does not change this load-bearing batching boundary.
     condition: (op) => isUnbatchedTRPCPath(op.path),
     true: httpLink(sharedOptions),
-    false: httpBatchStreamLink(sharedOptions),
+    // Bound concurrent fan-outs so one browser tick cannot concentrate an
+    // unbounded number of procedures into a single Worker CPU budget.
+    false: httpBatchStreamLink({ ...sharedOptions, maxItems: 50 }),
   });
 }
