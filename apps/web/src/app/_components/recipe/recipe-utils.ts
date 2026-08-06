@@ -10,6 +10,7 @@ import { getRecipeIngredientName } from "~/lib/recipe-graph";
 import { wasm } from "~/lib/wasm";
 import { tryFormatAmount } from "../inventory/format-amount";
 import type { RecipeTreeRow } from "./recipe-tree";
+import { formatYield } from "./recipe-yield";
 
 /** Format a gram weight as a display amount, e.g. 184.2 → "184 g". The single
  * grams formatter for the prep sheet, matrix, and shopping list. */
@@ -71,14 +72,6 @@ export const recipeHeadlineTotals = (t: {
   protein: getNutrientValueByKey(t.nutrients, "protein"),
   proteinUpper: upperNutrient(t.nutrientsUpper, "protein"),
 });
-
-/**
- * Format a recipe yield for display, e.g. "18 servings". A unitless yield
- * carries the parser's "whole" sentinel (a bare count); drop it so "18 whole"
- * renders as just "18".
- */
-export const formatYield = (y: { value: number; unit: string }): string =>
-  y.unit === "whole" ? `${y.value}` : `${y.value} ${y.unit}`;
 
 /** Effective servings: explicit servings, or the yield value when its unit is "servings". */
 export const getEffectiveServings = (recipe: RecipeOut): number | null => {
@@ -177,9 +170,7 @@ export function buildRecipeKicker(
 ): string[] {
   const y = input.yield;
   const parts: Array<string | null> = [
-    y?.value
-      ? `Makes ${!y.unit || y.unit === "whole" ? y.value : `${y.value} ${y.unit}`}`
-      : null,
+    y?.value ? `Makes ${formatYield({ value: y.value, unit: y.unit })}` : null,
     input.servings && y?.unit !== "servings"
       ? `Serves ${input.servings}`
       : null,
@@ -320,3 +311,7 @@ export const entityRefForRow = (
     )
     .with({ kind: "stub" }, () => null)
     .exhaustive();
+
+// Re-exported so the ~18 existing `formatYield` imports from recipe-utils
+// keep working; the implementation lives in the wasm-free module.
+export { formatYield };
