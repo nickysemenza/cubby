@@ -19,8 +19,10 @@ import {
   getCaller,
   idParam,
   READ_ONLY_CLOSED,
+  registerBatchTool,
   registerEntityCrudToolset,
   registerMcpTool,
+  rejectDuplicateIds,
   respond,
   slimProduct,
   slimProductDetail,
@@ -53,7 +55,6 @@ export function registerProductTools(server: McpServer) {
       delete:
         "Soft-delete products by IDs. Fails while live inventory entries, expenses, or tasks still reference a product.",
     },
-    batch: { create: true, update: true },
     create: async (caller, params) => {
       const unitMappings = (
         (params.unitMappings as Array<z.infer<typeof mcpUnitMappingInput>>) ??
@@ -115,6 +116,18 @@ export function registerProductTools(server: McpServer) {
       ),
   });
 
+  registerBatchTool(server, {
+    name: "patch_products_external_ids",
+    description:
+      "Patch identifier slots on up to 50 products in request order. Each item uses the same validation and preconditions as patch_product_external_ids; a failed item does not roll back successful items. Use this to apply an enrichment sweep's identifier findings in one call.",
+    itemInput: patchProductExternalIdsInput,
+    itemOutput: productMcpDetailOut,
+    annotations: WRITE_CLOSED,
+    refineItems: rejectDuplicateIds,
+    run: async (caller, item) =>
+      respond(await caller.product.patchExternalIds(item), slimProductDetail),
+  });
+
   registerMcpTool(server, {
     name: "verify_product_images",
     description:
@@ -127,6 +140,22 @@ export function registerProductTools(server: McpServer) {
         await getCaller(extra).product.verifyImages(params.id),
         slimProductDetail,
       ),
+  });
+
+  registerBatchTool(server, {
+    name: "verify_products_images",
+    description:
+      "Run verify_product_images across up to 20 products in request order. Capped lower than other batches because every item makes one R2 round trip per attached file, not a single database write.",
+    itemInput: z.object({ id: idParam("product") }),
+    itemOutput: productMcpDetailOut,
+    // Each item fans out to one R2 fetch PER attached file, so 50 products is a
+    // few hundred network round trips inside one Worker invocation. Every other
+    // batch here is DB-bound, which is why this is the one that departs from 50.
+    maxItems: 20,
+    annotations: WRITE_CLOSED,
+    refineItems: rejectDuplicateIds,
+    run: async (caller, item) =>
+      respond(await caller.product.verifyImages(item.id), slimProductDetail),
   });
 
   registerMcpTool(server, {

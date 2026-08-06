@@ -20,12 +20,17 @@ import {
 export function registerInventoryTools(server: McpServer) {
   registerEntityCrudToolset(server, {
     entity: "inventory",
+    // Every tool here is renamed: the entity is "inventory" but a row is an
+    // "inventory entry", so the derived `${entityPlural}` names would read
+    // `create_inventorys`.
     names: {
       list: "list_inventory",
       get: "get_inventory_entry",
       create: "create_inventory_entry",
       update: "update_inventory_entry",
       delete: "delete_inventory_entries",
+      batchCreate: "create_inventory_entries",
+      batchUpdate: "update_inventory_entries",
     },
     createInput: {
       productId: idParam("product"),

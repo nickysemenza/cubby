@@ -338,7 +338,6 @@ export function registerProjectTools(server: McpServer) {
         "Soft-delete tasks by IDs (dependency edges are cleaned up). Deleting a task cascades to its live subtasks.",
     },
     create: (caller, params) => caller.task.create(params),
-    batch: { update: true },
   });
 
   registerRouterTool(server, {
@@ -378,7 +377,6 @@ export function registerProjectTools(server: McpServer) {
     },
     create: (caller, params) => caller.expense.create(params),
     operations: { delete: false },
-    batch: { create: true, update: true },
     resolveUpdateData: async (_caller, data) =>
       data.productId === undefined
         ? data

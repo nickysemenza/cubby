@@ -936,6 +936,120 @@ function schemaFromShape(input: ZodSchemaLike): z.ZodType {
   return input instanceof z.ZodType ? input : z.object(input);
 }
 
+/** The default cap on a batch tool's `items[]`. */
+const DEFAULT_BATCH_MAX_ITEMS = 50;
+
+type BatchResult =
+  | { index: number; status: "succeeded"; item: unknown }
+  | { index: number; status: "failed"; error: string };
+
+/**
+ * Register a best-effort `{items: [...]}` tool over a per-item operation.
+ *
+ * Every batch tool in this server has the same contract, and it is deliberately
+ * NOT transactional: each item runs the singular operation with its own
+ * validation, side effects, and transaction, so one bad item fails alone
+ * instead of discarding the caller's other 49. `batchMutationOut` reports each
+ * outcome by request index for exactly that reason.
+ *
+ * A wholly-failed batch is still `isError: false` — the per-item errors are the
+ * payload, and flagging the envelope would hide them behind a bare string.
+ */
+export function registerBatchTool<TItem extends z.ZodType>(
+  server: McpServer,
+  config: {
+    name: string;
+    description: string;
+    itemInput: TItem;
+    itemOutput: z.ZodType;
+    maxItems?: number;
+    annotations: ToolAnnotations;
+    /** Cross-item input rules — e.g. rejecting two items that target one entity. */
+    refineItems?: (
+      items: Array<z.output<TItem>>,
+      ctx: z.core.$RefinementCtx,
+    ) => void;
+    run: (caller: Caller, item: z.output<TItem>) => Promise<unknown>;
+  },
+) {
+  const items = z
+    .array(config.itemInput)
+    .min(1)
+    .max(config.maxItems ?? DEFAULT_BATCH_MAX_ITEMS);
+  const refineItems = config.refineItems;
+  const inputSchema = refineItems
+    ? z
+        .strictObject({ items })
+        .superRefine((input, ctx) => refineItems(input.items, ctx))
+    : z.strictObject({ items });
+
+  registerMcpTool(server, {
+    name: config.name,
+    description: config.description,
+    inputSchema,
+    outputSchema: batchMutationOut(config.itemOutput),
+    annotations: config.annotations,
+    handler: async (params, extra) => {
+      const caller = getCaller(extra);
+      const results: BatchResult[] = [];
+      for (const [index, item] of (
+        params.items as Array<z.output<TItem>>
+      ).entries()) {
+        try {
+          results.push({
+            index,
+            status: "succeeded",
+            item: await config.run(caller, item),
+          });
+        } catch (error) {
+          results.push({
+            index,
+            status: "failed",
+            error: formatToolError(error),
+          });
+        }
+      }
+      const succeeded = results.filter(
+        (result) => result.status === "succeeded",
+      ).length;
+      return {
+        summary: {
+          requested: results.length,
+          succeeded,
+          failed: results.length - succeeded,
+        },
+        results,
+      };
+    },
+  });
+}
+
+/**
+ * Reject two items in one batch that target the same entity.
+ *
+ * Two updates to one row in a single call are always a caller mistake: the loop
+ * is sequential and non-transactional, so the second silently wins and the
+ * first's changes are unrecoverable from the response.
+ */
+export function rejectDuplicateIds(
+  items: ReadonlyArray<unknown>,
+  ctx: z.core.$RefinementCtx,
+) {
+  const seen = new Set<string>();
+  for (const [index, item] of items.entries()) {
+    const id = (item as { id?: string }).id;
+    if (!id) continue;
+    if (seen.has(id)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["items", index, "id"],
+        message: `Duplicate update id ${id}; each item must target a different entity.`,
+      });
+    }
+    seen.add(id);
+  }
+}
+
 /**
  * A list tool's filter builder. Most entities have no FK filter fields and
  * stay synchronous (`pickSchemaFilters`); one with a filter like
@@ -1208,6 +1322,15 @@ export function registerEntityCreateTool<TInput extends ZodSchemaLike>(
   });
 }
 
+type CrudOperation = "list" | "get" | "create" | "update" | "delete";
+/**
+ * The plural create/update tools. Named separately from {@link CrudOperation}
+ * because their default name is built from `entityPlural`, which is right for
+ * `create_locations` but not for an entity whose singular tools were already
+ * renamed — `inventory` would otherwise advertise `create_inventorys`.
+ */
+type BatchOperation = "batchCreate" | "batchUpdate";
+
 type EntityCrudToolsetConfig<TCreateInput extends ZodSchemaLike> = {
   /** Singular slug — router key, shortcode prefix, and get/create/update tool names (get_x, create_x, update_x). */
   entity: ShortcodeEntity;
@@ -1238,12 +1361,8 @@ type EntityCrudToolsetConfig<TCreateInput extends ZodSchemaLike> = {
      */
     delete?: string;
   };
-  names?: Partial<
-    Record<"list" | "get" | "create" | "update" | "delete", string>
-  >;
-  operations?: Partial<
-    Record<"list" | "get" | "create" | "update" | "delete", boolean>
-  >;
+  names?: Partial<Record<CrudOperation | BatchOperation, string>>;
+  operations?: Partial<Record<CrudOperation, boolean>>;
   paging?: { defaultPageSize?: number; maxPageSize?: number };
   create?: (
     caller: Caller,
@@ -1256,7 +1375,18 @@ type EntityCrudToolsetConfig<TCreateInput extends ZodSchemaLike> = {
   /** Override list's default filter passthrough — needed when a filter field is itself an FK shortcode. */
   buildFilters?: BuildListFilters;
   listSortInput?: z.ZodType;
-  /** Opt in to conventional best-effort create/update batch tools. */
+  /**
+   * The conventional best-effort create/update batch tools, **on by default**.
+   *
+   * This used to be opt-in, and only five of fifteen toolsets ever opted in —
+   * so `delete_locations` existed while `create_location` stayed singular, and
+   * rearranging a location tree cost one call per node. Plural `delete_*` hid
+   * the gap because it comes from a different mechanism entirely
+   * ({@link registerEntityDeleteTool}, one router call over an `ids[]`).
+   *
+   * Set a flag to `false` only where a plural form is genuinely wrong for the
+   * entity, and say why at the call site.
+   */
   batch?: { create?: boolean; update?: boolean };
 };
 
@@ -1272,12 +1402,15 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
   server: McpServer,
   config: EntityCrudToolsetConfig<TCreateInput>,
 ) {
-  const enabled = (operation: keyof NonNullable<typeof config.operations>) =>
+  const enabled = (operation: CrudOperation) =>
     config.operations?.[operation] !== false;
-  const name = (
-    operation: "list" | "get" | "create" | "update" | "delete",
-    fallback: string,
-  ) => config.names?.[operation] ?? fallback;
+  // A batch tool is a plural wrapper over its singular, so it inherits that
+  // operation's enablement: an entity with no `create_x` must not grow a
+  // `create_xs` that calls a router method it deliberately doesn't expose.
+  const batchEnabled = (operation: "create" | "update") =>
+    enabled(operation) && config.batch?.[operation] !== false;
+  const name = (operation: CrudOperation | BatchOperation, fallback: string) =>
+    config.names?.[operation] ?? fallback;
   const detailOut = config.detailOut ?? config.out;
   const mutationOut = config.mutationOut ?? config.out;
   const entityPlural = config.entityPlural ?? `${config.entity}s`;
@@ -1345,131 +1478,45 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
       resolveUpdateData: config.resolveUpdateData,
     });
 
-  if (config.batch?.create) {
-    const itemInput = schemaFromShape(config.createInput);
-    const outputSchema = batchMutationOut(mutationOut);
-    registerMcpTool(server, {
-      name: `create_${entityPlural}`,
+  if (batchEnabled("create")) {
+    registerBatchTool(server, {
+      name: name("batchCreate", `create_${entityPlural}`),
       description:
-        `Create up to 50 ${entityPlural} in request order. Each item uses the same ` +
-        `validation and side effects as create_${config.entity}; a failed item does not ` +
+        `Create up to ${DEFAULT_BATCH_MAX_ITEMS} ${entityPlural} in request order. Each item uses the same ` +
+        `validation and side effects as ${name("create", `create_${config.entity}`)}; a failed item does not ` +
         "roll back successful items.",
-      inputSchema: z.strictObject({
-        items: z.array(itemInput).min(1).max(50),
-      }),
-      outputSchema,
+      itemInput: schemaFromShape(config.createInput),
+      itemOutput: mutationOut,
       annotations: WRITE_CLOSED,
-      handler: async (params, extra) => {
-        const caller = getCaller(extra);
-        const results: Array<
-          | { index: number; status: "succeeded"; item: unknown }
-          | { index: number; status: "failed"; error: string }
-        > = [];
-        for (const [index, item] of (params.items as unknown[]).entries()) {
-          try {
-            results.push({
-              index,
-              status: "succeeded",
-              item: respond(
-                await create(caller, item as InferSchemaLike<TCreateInput>),
-                config.slim,
-              ),
-            });
-          } catch (error) {
-            results.push({
-              index,
-              status: "failed",
-              error: formatToolError(error),
-            });
-          }
-        }
-        const succeeded = results.filter(
-          (result) => result.status === "succeeded",
-        ).length;
-        return {
-          summary: {
-            requested: results.length,
-            succeeded,
-            failed: results.length - succeeded,
-          },
-          results,
-        };
-      },
+      run: async (caller, item) =>
+        respond(
+          await create(caller, item as InferSchemaLike<TCreateInput>),
+          config.slim,
+        ),
     });
   }
 
-  if (config.batch?.update) {
-    const itemInput = schemaFromShape(updateInput);
-    const outputSchema = batchMutationOut(mutationOut);
-    registerMcpTool(server, {
-      name: `update_${entityPlural}`,
+  if (batchEnabled("update")) {
+    registerBatchTool(server, {
+      name: name("batchUpdate", `update_${entityPlural}`),
       description:
-        `Update up to 50 ${entityPlural} in request order. Each item uses the same ` +
-        `validation and side effects as update_${config.entity}; a failed item does not ` +
+        `Update up to ${DEFAULT_BATCH_MAX_ITEMS} ${entityPlural} in request order. Each item uses the same ` +
+        `validation and side effects as ${name("update", `update_${config.entity}`)}; a failed item does not ` +
         "roll back successful items.",
-      inputSchema: z
-        .strictObject({ items: z.array(itemInput).min(1).max(50) })
-        .superRefine((input, ctx) => {
-          const seen = new Set<string>();
-          for (const [index, item] of input.items.entries()) {
-            const id = (item as { id?: string }).id;
-            if (id && seen.has(id)) {
-              ctx.addIssue({
-                code: "custom",
-                path: ["items", index, "id"],
-                message: `Duplicate update id ${id}; each item must target a different entity.`,
-              });
-            }
-            if (id) seen.add(id);
-          }
-        }),
-      outputSchema,
+      itemInput: schemaFromShape(updateInput),
+      itemOutput: mutationOut,
       annotations: WRITE_CLOSED,
-      handler: async (params, extra) => {
-        const caller = getCaller(extra);
-        const results: Array<
-          | { index: number; status: "succeeded"; item: unknown }
-          | { index: number; status: "failed"; error: string }
-        > = [];
-        for (const [index, item] of (
-          params.items as Array<Record<string, unknown>>
-        ).entries()) {
-          try {
-            const { id, ...rest } = item;
-            let data = omitBy(rest, (value) => value === undefined);
-            if (config.resolveUpdateData) {
-              data = await config.resolveUpdateData(caller, data);
-            }
-            results.push({
-              index,
-              status: "succeeded",
-              item: respond(
-                await getEntityRouter(caller, config.entity).update({
-                  id,
-                  data,
-                }),
-                config.slim,
-              ),
-            });
-          } catch (error) {
-            results.push({
-              index,
-              status: "failed",
-              error: formatToolError(error),
-            });
-          }
+      refineItems: rejectDuplicateIds,
+      run: async (caller, item) => {
+        const { id, ...rest } = item as Record<string, unknown>;
+        let data = omitBy(rest, (value) => value === undefined);
+        if (config.resolveUpdateData) {
+          data = await config.resolveUpdateData(caller, data);
         }
-        const succeeded = results.filter(
-          (result) => result.status === "succeeded",
-        ).length;
-        return {
-          summary: {
-            requested: results.length,
-            succeeded,
-            failed: results.length - succeeded,
-          },
-          results,
-        };
+        return respond(
+          await getEntityRouter(caller, config.entity).update({ id, data }),
+          config.slim,
+        );
       },
     });
   }

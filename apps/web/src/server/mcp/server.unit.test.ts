@@ -321,6 +321,8 @@ describe("registerEntityCrudToolset", () => {
   it("registers bounded best-effort batches with valid all-failed results", async () => {
     const server = new McpServer({ name: "t", version: "1.0.0" });
     const mutationOut = z.object({ id: z.string(), changed: z.boolean() });
+    // No `batch:` here on purpose — batching is the DEFAULT, so a toolset that
+    // says nothing about it still gets the plural tools.
     registerEntityCrudToolset(server, {
       entity: "vendor",
       createInput: { name: z.string() },
@@ -329,7 +331,6 @@ describe("registerEntityCrudToolset", () => {
       mcpListOut: z.object({ items: z.array(z.object({ id: z.string() })) }),
       out: mutationOut,
       sort: { orderBy: "name" },
-      batch: { create: true, update: true },
       slim: (value) => value as Record<string, unknown>,
       descriptions: {
         list: "list",
@@ -369,6 +370,114 @@ describe("registerEntityCrudToolset", () => {
     );
     expect(tooMany.isError).toBe(true);
     expect(create).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a failed batch item from rolling back its siblings", async () => {
+    // The whole point of the best-effort contract: 25 good locations must not
+    // be discarded because the 26th collided with an existing name. Each item
+    // runs the singular operation in its OWN transaction, so this is a property
+    // of the loop, not something the caller has to opt into.
+    const server = new McpServer({ name: "t", version: "1.0.0" });
+    const mutationOut = z.object({ id: z.string(), name: z.string() });
+    registerEntityCrudToolset(server, {
+      entity: "vendor",
+      createInput: { name: z.string() },
+      updateShape: { name: z.string().optional() },
+      filterFields: {},
+      mcpListOut: z.object({ items: z.array(z.object({ id: z.string() })) }),
+      out: mutationOut,
+      sort: { orderBy: "name" },
+      slim: (value) => value as Record<string, unknown>,
+      descriptions: {
+        list: "list",
+        get: "get",
+        create: "create",
+        update: "update",
+        delete: "delete",
+      },
+    });
+
+    const create = vi.fn(async (input: { name: string }) => {
+      if (input.name === "dupe") throw new Error("CONFLICT: already exists");
+      return { id: `v-${input.name}`, name: input.name };
+    });
+    const partial = await callTool(
+      server,
+      "create_vendors",
+      { items: [{ name: "one" }, { name: "dupe" }, { name: "three" }] },
+      { vendor: { create } },
+    );
+
+    expect(partial.isError).not.toBe(true);
+    expect(partial.structuredContent).toMatchObject({
+      summary: { requested: 3, succeeded: 2, failed: 1 },
+      results: [
+        { index: 0, status: "succeeded", item: { id: "v-one", name: "one" } },
+        { index: 1, status: "failed", error: "CONFLICT: already exists" },
+        {
+          index: 2,
+          status: "succeeded",
+          item: { id: "v-three", name: "three" },
+        },
+      ],
+    });
+    // The item AFTER the failure still ran — a failure is not a stop condition.
+    expect(create).toHaveBeenCalledTimes(3);
+  });
+
+  it("renames batch tools through names.batchCreate/batchUpdate", async () => {
+    // `${entityPlural}` is wrong for an entity whose singular tools were already
+    // renamed: inventory's rows are "entries", so the derived names would be
+    // `create_inventorys`. The override is what keeps those readable.
+    const server = new McpServer({ name: "t", version: "1.0.0" });
+    registerEntityCrudToolset(server, {
+      entity: "vendor",
+      names: { batchCreate: "create_widgets", batchUpdate: "update_widgets" },
+      createInput: { name: z.string() },
+      updateShape: { name: z.string().optional() },
+      filterFields: {},
+      mcpListOut: z.object({ items: z.array(z.object({ id: z.string() })) }),
+      out: z.object({ id: z.string() }),
+      sort: { orderBy: "name" },
+      slim: (value) => value as Record<string, unknown>,
+      descriptions: {
+        list: "list",
+        get: "get",
+        create: "create",
+        update: "update",
+        delete: "delete",
+      },
+    });
+
+    expect(getRegisteredTool(server, "create_widgets")).toBeDefined();
+    expect(getRegisteredTool(server, "update_widgets")).toBeDefined();
+    expect(getRegisteredTool(server, "create_vendors")).toBeUndefined();
+    expect(getRegisteredTool(server, "update_vendors")).toBeUndefined();
+  });
+
+  it("omits a batch tool when its singular operation is disabled", async () => {
+    const server = new McpServer({ name: "t", version: "1.0.0" });
+    registerEntityCrudToolset(server, {
+      entity: "vendor",
+      createInput: { name: z.string() },
+      updateShape: { name: z.string().optional() },
+      filterFields: {},
+      mcpListOut: z.object({ items: z.array(z.object({ id: z.string() })) }),
+      out: z.object({ id: z.string() }),
+      sort: { orderBy: "name" },
+      operations: { create: false, delete: false },
+      slim: (value) => value as Record<string, unknown>,
+      descriptions: {
+        list: "list",
+        get: "get",
+        create: "create",
+        update: "update",
+      },
+    });
+
+    // No `create_vendor` means no router method to batch over.
+    expect(getRegisteredTool(server, "create_vendors")).toBeUndefined();
+    expect(getRegisteredTool(server, "update_vendors")).toBeDefined();
   });
 });
 
@@ -947,6 +1056,42 @@ describe("listMcpToolCatalog", () => {
     }
   });
 
+  it("gives every create/update entity a plural batch counterpart", async () => {
+    // Batching is INHERENT, not opt-in. It used to be a per-toolset flag that
+    // only five of fifteen toolsets ever set, which is how `delete_locations`
+    // could exist while `create_location` stayed singular — plural delete comes
+    // from a different mechanism and hid the gap. This asserts the invariant
+    // directly, so flipping the default back, or quietly dropping one entity,
+    // fails here rather than being discovered mid-reorganization.
+    //
+    // An entity that genuinely should not batch goes in BATCH_EXEMPT with a
+    // reason, so the exemption is a visible decision rather than an omission.
+    const BATCH_EXEMPT: Partial<
+      Record<Entity, ReadonlyArray<"create" | "update">>
+    > = {};
+
+    const catalog = new Set(
+      (await listMcpToolCatalog()).tools.map(({ name }) => name),
+    );
+
+    for (const entity of allEntities) {
+      const [, plural] = MCP_ENTITY_SLUGS[entity];
+      const declared = new Set<Operation>(entityManifest[entity].mcp);
+      for (const operation of ["create", "update"] as const) {
+        const toolName = `${operation}_${plural}`;
+        const expected =
+          declared.has(operation) && !BATCH_EXEMPT[entity]?.includes(operation);
+        expect({ entity, toolName, registered: catalog.has(toolName) }).toEqual(
+          {
+            entity,
+            toolName,
+            registered: expected,
+          },
+        );
+      }
+    }
+  });
+
   it("keeps preview_entity_operation's per-operation rules after the flattening", () => {
     // The tool's input used to be a union of one object per {operation, entity}
     // pair, which is what made it uncallable. Flattening it moved every rule
@@ -1312,6 +1457,18 @@ describe("listMcpToolCatalog", () => {
       "preview_entity_operation.ids",
       "preview_entity_operation.mergeIds",
       "preview_entity_operation.keepId",
+      // The plural mirrors of the singular exceptions above. A batch tool wraps
+      // its singular's own input schema in `{items: [...]}`, so it inherits
+      // every declared uuid field verbatim — same fields, same reasons.
+      "update_locations.items[].imageOrder",
+      "update_locations.items[].pendingImageIds",
+      "update_locations.items[].removeImageIds",
+      "create_recipes.items[].sections[].id",
+      "create_recipes.items[].sections[].ingredients[].id",
+      "create_recipes.items[].sections[].instructions[].id",
+      "update_recipes.items[].sections[].id",
+      "update_recipes.items[].sections[].ingredients[].id",
+      "update_recipes.items[].sections[].instructions[].id",
     ]);
 
     function stringSchemas(node: unknown): Array<Record<string, unknown>> {

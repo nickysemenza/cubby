@@ -90,7 +90,8 @@ manual manufacturer correction, check what spelling is already established
 rather than assuming your typed value will be normalized.
 
 Read the current product immediately before writing. Use
-`patch_product_external_ids` for identifier-only changes: upsert a precise
+`patch_product_external_ids` (or `patch_products_external_ids` for a whole
+batch) for identifier-only changes: upsert a precise
 `(source, kind)` slot and remove only an explicitly obsolete slot with its
 exact `expectedExternalId`. It preserves all unrelated identifiers and refuses
 the whole patch if the live slot changed. Use `update_product.externalIds` only
@@ -126,6 +127,45 @@ authoritative for that field:
 - Never blanket-apply a provider response. Compare and write fields
   deliberately.
 
+## Batch the writes, never the research
+
+Identity research is irreducibly per-product: one browser session, one page, one
+variant confirmation. The **writes** are not, and every write tool here has a
+plural form that takes up to 50 items (20 for image verification) and reports
+per-item success or failure by request index. A failed item never rolls back its
+siblings.
+
+So run the sweep in two phases. Research every product in the worklist first,
+accumulating the intended writes; then apply them in one call each:
+
+| Phase | Call | Items |
+| --- | --- | --- |
+| Collision check | `find_product_external_id_collisions` | up to 100 identifier tuples |
+| Metadata + identity | `update_products` | up to 50 |
+| Identifier slots only | `patch_products_external_ids` | up to 50 |
+| Cover images | `attach_files` | up to 50, each with its own `entityId` |
+| Verification | `verify_products_images` | up to 20 |
+
+That is roughly five calls per twenty products instead of eighty. The plural
+forms run the identical validation, side effects, and preconditions as their
+singular counterparts — including `expectedImageCount` and `idempotencyKey` —
+so the per-product safety discipline below is unchanged, not relaxed.
+
+Two rules keep the batching honest:
+
+- **`expectedImageCount` is computed from a read, and the read gets older the
+  longer a batch takes.** That is the precondition working as designed: if
+  another writer touched a gallery in between, that one item fails with a count
+  mismatch and the rest still land. Re-read and re-decide for the failed item;
+  never re-issue it with an incremented count.
+- **Set a distinct `idempotencyKey` per item.** Retrying a partially-failed
+  `attach_files` is the normal recovery path, and the key is what stops the
+  items that already succeeded from double-attaching.
+
+Stay singular when a product needs judgment mid-write — a gallery that drifted, a
+collision that needs `merge_products`, a cover replacement whose `imageOrder` you
+must compute from a fresh read. Batching is for the settled majority.
+
 ## Attach one cover image
 
 Choose one clean representative image, preferring the manufacturer asset and
@@ -155,9 +195,9 @@ this — a component with no separate retail variant (a battery sold under one
 model whether kitted or not) takes the listing's UPC normally.
 
 Read `get_product` immediately before attachment and snapshot its images,
-cover, display order, count, and metadata. Call `attach_file` once with the
-product's `PRD-` shortcode, `expectedImageCount`, and a deterministic retry
-key:
+cover, display order, count, and metadata. Attach once per product — via
+`attach_file`, or as one item of an `attach_files` batch — with the product's
+`PRD-` shortcode, `expectedImageCount`, and a deterministic retry key:
 
 `product-enrichment:<PRD-shortcode>:<source>:<kind-or-purpose>:cover:v1`
 
@@ -174,11 +214,12 @@ count. For cover replacement, never detach the old cover first.
 
 ## Verify every write
 
-Call `verify_product_images` after attachment and use its returned detailed
-Product rather than making a redundant immediate `get_product` call. Confirm
-the gallery is the snapshot plus the new verified file. Only then send one
-`update_product` with any `removeImageIds` and complete `imageOrder`; call
-`verify_product_images` again after that change. Confirm:
+Call `verify_product_images` after attachment — or `verify_products_images` for
+the whole batch — and use the returned detailed Product rather than making a
+redundant immediate `get_product` call. Confirm the gallery is the snapshot plus
+the new verified file. Only then send one `update_product` (or one
+`update_products`) with any `removeImageIds` and complete `imageOrder`; verify
+again after that change. Confirm:
 
 - UPC, model, manufacturer, metadata, and every prior external ID survived;
 - image count, `coverImageId`, `isCover`, and display position match the

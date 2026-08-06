@@ -78,7 +78,6 @@ export function registerFinancialTools(server: McpServer) {
     sort: { orderBy: "postedDate", direction: "desc" },
     get: (caller, id) => caller.financialTransaction.getByID({ id }),
     create: (caller, params) => caller.financialTransaction.create(params),
-    batch: { create: true, update: true },
     descriptions: {
       list: "List Financial Transactions. IDs are FTX- shortcodes. Filter by account, Purchase or presence, kind, status, source/reference, merchant/search, amount, and transaction or posted dates. Amounts are settlement evidence and never enter spend.",
       get: "Get one Financial Transaction by FTX- shortcode.",

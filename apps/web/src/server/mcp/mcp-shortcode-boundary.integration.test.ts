@@ -1643,6 +1643,15 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "update_meal.recipes[].id",
   "update_meal_recipe.recipes[].id",
   "verify_product_images.images[].id",
+  // Plural mirrors of the singular exceptions above. A batch tool wraps its
+  // singular's own output in `results[].item`, so it re-exposes exactly the
+  // same declared-uuid leaves — image ids and the mealRecipe row id, neither of
+  // which has a shortcode.
+  "attach_files.results[].item.imageId",
+  "create_meals.results[].item.recipes[].id",
+  "update_meals.results[].item.recipes[].id",
+  "patch_products_external_ids.results[].item.images[].id",
+  "verify_products_images.results[].item.images[].id",
 ]);
 
 const NOT_YET_CUT_OVER: string[] = [];
