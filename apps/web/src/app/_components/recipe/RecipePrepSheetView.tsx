@@ -2,6 +2,7 @@ import { Grid3x3, ShoppingCart } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
+import { formatCurrencyRange } from "~/lib/format-range";
 import { blockReasonText } from "~/lib/sub-recipe-reason";
 import { formatCurrency } from "~/lib/utils";
 import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
@@ -42,9 +43,11 @@ import { StepNumberBadge, StubWarning } from "./spec-markers";
 function ShoppingList({
   needs,
   totalCost,
+  totalCostUpper,
 }: {
   needs: CombinedNeed[];
   totalCost: number | null;
+  totalCostUpper: number | null;
 }) {
   if (needs.length === 0) return null;
   return (
@@ -55,7 +58,7 @@ function ShoppingList({
         <span className="ml-1 text-muted-foreground">· full batch</span>
         {totalCost != null && (
           <span className="ml-1 text-foreground">
-            · {formatCurrency(totalCost)}
+            · {formatCurrencyRange(totalCost, totalCostUpper ?? undefined)}
           </span>
         )}
       </summary>
@@ -294,10 +297,7 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
   const components = useMemo(() => flattenComponents(tree), [tree]);
   const combined = useMemo(() => fullBatchNeeds(tree), [tree]);
   const usedByRecipe = useMemo(() => asUsedGramsByRecipe(tree), [tree]);
-  const shoppingCost = useMemo(
-    () => fullBatchCostByComponent(tree).total,
-    [tree],
-  );
+  const shoppingCost = useMemo(() => fullBatchCostByComponent(tree), [tree]);
   // The grid disclosure is collapsed by default; defer building/rendering it
   // (matrix walk + table) until the cook first opens it, then keep it mounted.
   const [gridOpened, setGridOpened] = useState(false);
@@ -327,7 +327,11 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
         </span>
       </header>
 
-      <ShoppingList needs={combined} totalCost={shoppingCost} />
+      <ShoppingList
+        needs={combined}
+        totalCost={shoppingCost.total}
+        totalCostUpper={shoppingCost.totalUpper}
+      />
 
       {/* The ingredient × component pivot, folded in as a disclosure (collapsed)
           so it's reachable without a sub-tab; its Total column + cost row mirror

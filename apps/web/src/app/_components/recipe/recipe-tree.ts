@@ -397,6 +397,9 @@ export const batchYieldGrams = (node: RecipeTreeNode): number | null =>
  * (== the matrix row totals). This is what you buy to execute the prep sheet —
  * each sub-recipe batch counted once, not scaled down to its as-used portion.
  */
+/** A component's full-batch leaf cost, carrying the engine's range. */
+export type ComponentCost = { price: number; priceUpper: number };
+
 export const fullBatchNeeds = (root: RecipeTreeNode): CombinedNeed[] =>
   buildIngredientMatrix(root).map((r) => ({
     ingredientId: r.ingredientId,
@@ -412,16 +415,31 @@ export const fullBatchNeeds = (root: RecipeTreeNode): CombinedNeed[] =>
  * sub-recipe's cost is counted once — in its own column — not also rolled into
  * its parent). Per-component sums add up to `total`, mirroring the matrix's gram
  * subtotal row. Returns null costs when nothing priced in. Reads the resolved
- * `priceInfo.price` Result the same way {@link numericGrams} reads grams. */
+ * `priceInfo.price` Result the same way {@link numericGrams} reads grams.
+ *
+ * Deliberately NOT `costing.totals.price`: that includes sub-recipe rows at
+ * their as-used fraction, which on this per-component axis would count a
+ * sub-recipe's cost twice — once in its own column and again inside its
+ * parent's.
+ *
+ * Carries the upper bound the engine tracks, so a recipe with a ranged amount
+ * ("2–3 cups") doesn't read as a point cost here while reading as a range
+ * everywhere else. */
 export const fullBatchCostByComponent = (
   root: RecipeTreeNode,
-): { byComponent: Map<string, number>; total: number | null } => {
-  const byComponent = new Map<string, number>();
+): {
+  byComponent: Map<string, ComponentCost>;
+  total: number | null;
+  totalUpper: number | null;
+} => {
+  const byComponent = new Map<string, ComponentCost>();
   let any = false;
+  let anyUpper = false;
   for (const node of flattenComponents(root)) {
     const costing = node.costing;
     if (!costing) continue;
     let sum = 0;
+    let sumUpper = 0;
     let has = false;
     for (const section of node.sections) {
       for (const row of section.rows) {
@@ -430,17 +448,29 @@ export const fullBatchCostByComponent = (
           ?.price;
         if (price?.isOk()) {
           sum += price.value.value;
+          // A row with no upper bound contributes its point value to both, so
+          // the range collapses to the point when nothing in the component is
+          // ranged.
+          sumUpper += price.value.upper_value ?? price.value.value;
+          if (price.value.upper_value != null) anyUpper = true;
           has = true;
           any = true;
         }
       }
     }
-    if (has) byComponent.set(node.recipe.id, sum);
+    if (has)
+      byComponent.set(node.recipe.id, { price: sum, priceUpper: sumUpper });
   }
   let total: number | null = null;
+  let totalUpper: number | null = null;
   if (any) {
     total = 0;
-    for (const v of byComponent.values()) total += v;
+    totalUpper = 0;
+    for (const v of byComponent.values()) {
+      total += v.price;
+      totalUpper += v.priceUpper;
+    }
+    if (!anyUpper) totalUpper = total;
   }
-  return { byComponent, total };
+  return { byComponent, total, totalUpper };
 };
