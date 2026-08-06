@@ -242,6 +242,23 @@ const purchaseUnpricedExpenseCount = correlated<number>(
        AND e."cost" IS NULL AND e."deletedAt" IS NULL)`,
 );
 
+// Settlement compares against INCURRED spend only. `expenseTotal` above stays
+// the full figure because that is what the purchase displays — a contract's
+// total is worth seeing — but a `future: true` row cannot have settled, so
+// including it would guarantee a mismatch. Two separate numbers on purpose.
+const purchaseSettleableExpenseTotal = correlated<number>(
+  `(SELECT COALESCE(sum(e."cost"), 0)::double precision FROM "Expense" e
+     WHERE e."purchaseId" = "Purchase"."id" AND e."deletedAt" IS NULL
+       AND e."future" = false)`,
+);
+
+const purchaseSettleableUnpricedExpenseCount = correlated<number>(
+  `(SELECT count(*)::int FROM "Expense" e
+     WHERE e."purchaseId" = "Purchase"."id"
+       AND e."cost" IS NULL AND e."deletedAt" IS NULL
+       AND e."future" = false)`,
+);
+
 const purchasePostedRefundTotal = correlated<number>(
   `(SELECT COALESCE(sum(ft."amount"), 0)::double precision
      FROM "FinancialTransaction" ft
@@ -298,6 +315,8 @@ const purchaseColumns = {
   expenseCount: purchaseExpenseCount,
   unpricedExpenseCount: purchaseUnpricedExpenseCount,
   expenseTotal: purchaseExpenseTotal,
+  settleableExpenseTotal: purchaseSettleableExpenseTotal,
+  settleableUnpricedExpenseCount: purchaseSettleableUnpricedExpenseCount,
   documentCount: purchaseDocumentCount,
 } as const;
 
@@ -317,6 +336,8 @@ type PurchaseRow = {
   expenseCount: number;
   unpricedExpenseCount: number;
   expenseTotal: number;
+  settleableExpenseTotal: number;
+  settleableUnpricedExpenseCount: number;
   documentCount: number;
 };
 
@@ -349,8 +370,8 @@ const dbPurchaseToAPI = (
   }),
   documentCount: Number(row.documentCount),
   financialReconciliation: calculateFinancialReconciliation({
-    expenseTotal: row.expenseTotal,
-    unpricedExpenseCount: row.unpricedExpenseCount,
+    settleableExpenseTotal: row.settleableExpenseTotal,
+    settleableUnpricedExpenseCount: row.settleableUnpricedExpenseCount,
     ...financial,
   }),
   dataQuality,

@@ -94,6 +94,8 @@ type MatchRow = {
   purchaseStatedTotal: number | null;
   purchaseExpenseCount: number | null;
   purchaseExpenseTotal: number | null;
+  purchaseSettleableExpenseTotal: number | null;
+  purchaseSettleableUnpricedExpenseCount: number | null;
   purchaseUnpricedExpenseCount: number | null;
   matchedOn: "order_id" | "amount_date";
   vendorMatch: boolean | null;
@@ -232,6 +234,11 @@ export const matchExpenses = async (
         count(e."id") OVER (PARTITION BY p."id")::int AS "purchaseExpenseCount",
         COALESCE(sum(e."cost") OVER (PARTITION BY p."id"), 0)::double precision AS "purchaseExpenseTotal",
         count(*) FILTER (WHERE e."cost" IS NULL) OVER (PARTITION BY p."id")::int AS "purchaseUnpricedExpenseCount",
+        -- Settlement compares against INCURRED spend only; see
+        -- FinancialReconciliationInput. The full total above is what the
+        -- candidate row displays.
+        COALESCE(sum(e."cost") FILTER (WHERE e."future" = false) OVER (PARTITION BY p."id"), 0)::double precision AS "purchaseSettleableExpenseTotal",
+        count(*) FILTER (WHERE e."cost" IS NULL AND e."future" = false) OVER (PARTITION BY p."id")::int AS "purchaseSettleableUnpricedExpenseCount",
         v."name"        AS "vendorName",
         pr."name"       AS "projectName",
         pd."name"       AS "productName"
@@ -384,6 +391,8 @@ export const matchExpenses = async (
       "purchaseExpenseCount",
       "purchaseExpenseTotal",
       "purchaseUnpricedExpenseCount",
+      "purchaseSettleableExpenseTotal",
+      "purchaseSettleableUnpricedExpenseCount",
       CASE WHEN "arm" = 0 THEN 'order_id' ELSE 'amount_date' END AS "matchedOn",
       "vendorMatchRaw"                      AS "vendorMatch",
       "dayDeltaRaw"::int                    AS "dayDelta",
@@ -447,9 +456,11 @@ export const matchExpenses = async (
                 expenseTotal,
                 statedTotal: raw.purchaseStatedTotal,
                 financialReconciliation: calculateFinancialReconciliation({
-                  expenseTotal,
-                  unpricedExpenseCount: Number(
-                    raw.purchaseUnpricedExpenseCount,
+                  settleableExpenseTotal: Number(
+                    raw.purchaseSettleableExpenseTotal,
+                  ),
+                  settleableUnpricedExpenseCount: Number(
+                    raw.purchaseSettleableUnpricedExpenseCount,
                   ),
                   ...financial,
                 }),
