@@ -10,8 +10,11 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { shortcodeHead } from "~/lib/page-title";
 import { getProductDetailForSsr } from "~/lib/product-detail-server";
 
+const PRODUCT_SSR_TIMING = "cubby-product-ssr";
+
 export const Route = createFileRoute("/_authenticated/products/$shortcode")({
   loader: async ({ params, context }) => {
+    const startedAt = import.meta.env.SSR ? performance.now() : null;
     const queryOptions = context.trpc.product.getByShortcode.queryOptions({
       shortcode: params.shortcode,
     });
@@ -31,7 +34,20 @@ export const Route = createFileRoute("/_authenticated/products/$shortcode")({
         : queryOptions,
     );
     if (!data) throw notFound();
+
+    return {
+      // This is end-to-end loader latency, not Worker CPU time: workerd clocks
+      // do not advance during synchronous CPU-only work.
+      serverTiming:
+        startedAt === null
+          ? undefined
+          : `${PRODUCT_SSR_TIMING};dur=${(performance.now() - startedAt).toFixed(1)};desc="Product detail SSR"`,
+    };
   },
+  headers: ({ loaderData }) =>
+    loaderData?.serverTiming
+      ? { "Server-Timing": loaderData.serverTiming }
+      : undefined,
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
   notFoundComponent: () => (

@@ -27,6 +27,9 @@ test.describe("product detail SSR", () => {
       expect(response?.headers()["cache-control"]).toBe(
         "private, no-cache, must-revalidate",
       );
+      expect(response?.headers()["server-timing"]).toMatch(
+        /(?:^|,\s*)cubby-product-ssr;dur=\d+\.\d;desc="Product detail SSR"(?:,|$)/,
+      );
       await expect(
         serverOnlyPage.getByRole("heading", { level: 1, name: productName }),
       ).toBeVisible({ timeout: 15000 });
