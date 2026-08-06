@@ -15,7 +15,7 @@ import {
   deleteProduct,
   getProduct,
   listProducts,
-  updateProduct,
+  updateProductWithImageCleanup,
 } from "../db/products";
 import { getImageUrl, storeImage, storeImageBlob } from "../storage/images";
 import type { Env } from "../types";
@@ -373,7 +373,7 @@ admin.post("/products/:upc", async (c) => {
       ? ((await storeImage(upc, imageUrl, c.env)) ?? existing.imageKey)
       : existing.imageKey;
 
-  await updateProduct(db, upc, {
+  await updateProductWithImageCleanup(db, c.env, upc, {
     name,
     manufacturer: str(body.manufacturer),
     brand: str(body.brand),
@@ -414,7 +414,7 @@ admin.post("/products/:upc/refetch", async (c) => {
     ? ((await storeImage(upc, data.imageUrl, c.env)) ?? existing.imageKey)
     : existing.imageKey;
 
-  await updateProduct(db, upc, {
+  await updateProductWithImageCleanup(db, c.env, upc, {
     name: data.name,
     manufacturer: data.manufacturer,
     brand: data.brand,

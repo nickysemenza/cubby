@@ -6,7 +6,7 @@ import type { Product } from "../db/schema";
 import {
   getProduct,
   createProduct,
-  updateProduct,
+  updateProductWithImageCleanup,
   deleteProduct,
   listProducts,
 } from "../db/products";
@@ -205,10 +205,16 @@ export function createMcpServer(env: Env, baseUrl: string): McpServer {
       if (args.priceDollars !== undefined)
         values.priceDollars = args.priceDollars;
       if (args.imageUrl) {
-        values.imageKey = await storeImage(args.upc, args.imageUrl, env);
+        values.imageKey =
+          (await storeImage(args.upc, args.imageUrl, env)) ?? existing.imageKey;
       }
 
-      const product = await updateProduct(db, args.upc, values);
+      const product = await updateProductWithImageCleanup(
+        db,
+        env,
+        args.upc,
+        values,
+      );
       return json(productToJson(product!, baseUrl));
     }),
   );
@@ -234,7 +240,7 @@ export function createMcpServer(env: Env, baseUrl: string): McpServer {
       const imageKey = data.imageUrl
         ? ((await storeImage(upc, data.imageUrl, env)) ?? existing.imageKey)
         : existing.imageKey;
-      const product = await updateProduct(db, upc, {
+      const product = await updateProductWithImageCleanup(db, env, upc, {
         name: data.name,
         manufacturer: data.manufacturer,
         brand: data.brand,

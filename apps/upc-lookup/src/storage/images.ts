@@ -16,6 +16,12 @@ const ALLOWED_IMAGE_TYPES = [
   "image/heif",
 ] as const;
 
+const IMAGE_EXTENSIONS = ["jpg", "png", "gif", "webp", "heic", "heif"] as const;
+
+function imageVariantKeys(upc: string): string[] {
+  return IMAGE_EXTENSIONS.map((extension) => `images/${upc}.${extension}`);
+}
+
 /**
  * Download an image from an external URL and store it in R2.
  * Returns the R2 object key if successful, null otherwise.
@@ -100,13 +106,29 @@ export async function storeImageBlob(
   }
 }
 
-/**
- * Delete an image from R2 by its object key.
- * Non-blocking - failures are logged but don't throw.
- */
-export async function deleteImage(env: Env, imageKey: string): Promise<void> {
+/** Remove every known MIME variant except the object referenced by D1. */
+export async function cleanupImageVariants(
+  env: Env,
+  upc: string,
+  currentImageKey: string | null,
+): Promise<void> {
+  const staleKeys = imageVariantKeys(upc).filter(
+    (key) => key !== currentImageKey,
+  );
+  await deleteImages(env, staleKeys);
+}
+
+/** Remove every known object variant for a deleted product. */
+export async function deleteImageVariants(
+  env: Env,
+  upc: string,
+): Promise<void> {
+  await deleteImages(env, imageVariantKeys(upc));
+}
+
+async function deleteImages(env: Env, imageKeys: string[]): Promise<void> {
   try {
-    await env.IMAGES.delete(imageKey);
+    await env.IMAGES.delete(imageKeys);
   } catch (error) {
     console.error("Image delete error:", error);
   }

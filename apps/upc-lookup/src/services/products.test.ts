@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // (the negative-caching rules) without a real D1 database.
 vi.mock("../db/products", () => ({
   getProduct: vi.fn(),
-  createProduct: vi.fn(),
+  createResolvedProduct: vi.fn(),
 }));
 vi.mock("../db/misses", () => ({
   getFreshMisses: vi.fn(),
@@ -12,11 +12,15 @@ vi.mock("../db/misses", () => ({
   deleteMiss: vi.fn(),
 }));
 vi.mock("../api", () => ({ lookupExternalProduct: vi.fn() }));
-vi.mock("../storage/images", () => ({ storeImage: vi.fn() }));
+vi.mock("../storage/images", () => ({
+  cleanupImageVariants: vi.fn(),
+  storeImage: vi.fn(),
+}));
 
 import { lookupExternalProduct } from "../api";
-import { createProduct, getProduct } from "../db/products";
+import { createResolvedProduct, getProduct } from "../db/products";
 import { deleteMiss, getFreshMisses, recordMiss } from "../db/misses";
+import { cleanupImageVariants } from "../storage/images";
 import type { Database } from "../db";
 import type { Env } from "../types";
 import type { Product } from "../db/schema";
@@ -105,7 +109,7 @@ describe("resolveProductOutcome", () => {
 
     expect(outcome).toEqual({ status: "error" });
     expect(recordMiss).not.toHaveBeenCalled();
-    expect(createProduct).not.toHaveBeenCalled();
+    expect(createResolvedProduct).not.toHaveBeenCalled();
   });
 
   it("creates the product and clears any miss on a hit", async () => {
@@ -124,7 +128,7 @@ describe("resolveProductOutcome", () => {
         sourceData: "{}",
       },
     });
-    vi.mocked(createProduct).mockResolvedValue(aProduct);
+    vi.mocked(createResolvedProduct).mockResolvedValue(aProduct);
 
     const outcome = await resolveProductOutcome(db, env, "012345678905");
 
@@ -133,8 +137,39 @@ describe("resolveProductOutcome", () => {
       product: aProduct,
       cached: false,
     });
-    expect(createProduct).toHaveBeenCalledOnce();
+    expect(createResolvedProduct).toHaveBeenCalledOnce();
     expect(deleteMiss).toHaveBeenCalledWith(db, "012345678905");
     expect(recordMiss).not.toHaveBeenCalled();
+  });
+
+  it("returns the concurrently cached winner when its cache fill loses", async () => {
+    vi.mocked(getProduct)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(aProduct);
+    vi.mocked(lookupExternalProduct).mockResolvedValue({
+      status: "found",
+      data: {
+        name: "Test Product",
+        manufacturer: null,
+        brand: "Acme",
+        category: null,
+        description: null,
+        priceDollars: 4.99,
+        imageUrl: null,
+        source: "upcitemdb",
+        sourceData: "{}",
+      },
+    });
+    vi.mocked(createResolvedProduct).mockResolvedValue(undefined);
+
+    await expect(resolveProductOutcome(db, env, aProduct.upc)).resolves.toEqual(
+      {
+        status: "found",
+        product: aProduct,
+        cached: true,
+      },
+    );
+    expect(deleteMiss).not.toHaveBeenCalled();
+    expect(cleanupImageVariants).toHaveBeenCalledWith(env, aProduct.upc, null);
   });
 });
