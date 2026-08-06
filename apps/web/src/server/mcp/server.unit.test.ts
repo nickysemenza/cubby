@@ -1475,9 +1475,12 @@ describe("listMcpToolCatalog", () => {
       "update_recipes.items[].sections[].ingredients[].id",
       "update_recipes.items[].sections[].instructions[].id",
       // An Image id is a declared exception — images have no shortcode. These
-      // carry one between create_file_upload and attach_file, so the uuid is
-      // the identifier, not a leaked internal.
-      "create_file_upload.entityId",
+      // two carry one between create_file_upload and attach_file, so the uuid
+      // IS the identifier rather than a leaked internal. Note this covers only
+      // `uploadId`: `create_file_upload.entityId` is an `anyShortcodeSchema`
+      // and publishes a real prefix pattern, so it passes the check on its own
+      // and must stay outside this list — exempting it would let a future
+      // change to a bare uuid slip through silently.
       "attach_file.uploadId",
       "attach_files.items[].uploadId",
     ]);
