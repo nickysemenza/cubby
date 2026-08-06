@@ -3,10 +3,16 @@ import type {
   ProjectShortcode,
 } from "@cubby/schemas/identifiers";
 import type { TaskOut, TaskStatus, Trade } from "@cubby/schemas/project";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { CalendarPlus, Info, Link2, ListChecks } from "lucide-react";
 import type { FC } from "react";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   WithProductSearch,
   WithProjectSearch,
@@ -28,7 +34,13 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
-import { taskMutationInvalidateKeys } from "~/lib/query-keys";
+import { getErrorMessage } from "~/lib/error-utils";
+import { patchListItem } from "~/lib/optimistic-list";
+import {
+  cancelTRPCQueries,
+  invalidateTRPCQueries,
+  taskMutationInvalidateKeys,
+} from "~/lib/query-keys";
 import { DependencyPicker } from "../_components/data-table/dependency-picker";
 import {
   type DetailSection,
@@ -36,7 +48,6 @@ import {
 } from "../_components/data-table/detail-page";
 import { EditableCell } from "../_components/data-table/editable-cell";
 import { EditableEntityCell } from "../_components/data-table/editable-entity-cell";
-import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
@@ -72,7 +83,11 @@ const SUBTASKS_SORT = { orderBy: "createdAt", direction: "asc" } as const;
  */
 function SubtaskChecklist({ task }: { task: TaskOut }) {
   const api = useTRPC();
+  const queryClient = useQueryClient();
   const [newSubtaskName, setNewSubtaskName] = useState("");
+  const [pendingSubtaskName, setPendingSubtaskName] = useState<string | null>(
+    null,
+  );
 
   const { data: subtasksPage } = useQuery(
     api.task.list.queryOptions({
@@ -83,22 +98,80 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
   );
   const subtasks = subtasksPage?.items ?? NO_SUBTASKS;
 
-  // This is its own component (not threaded TaskDetail's `updateMutation`
-  // prop), so it gets its own instance of the same "any field update"
-  // mutation the rest of the page's EditableCells use — same
-  // `taskMutationInvalidateKeys`, so toggling here also refreshes the
-  // parent's own subtaskCount/doneSubtaskCount.
-  const toggleMutation = useUpdateMutation({
-    mutationFn: api.task.update.mutationOptions,
-    entity: "task",
-    invalidateKeys: taskMutationInvalidateKeys,
+  const subtasksKey = api.task.list.queryKey({
+    filters: { parentTaskId: task.id },
+    sort: SUBTASKS_SORT,
+    pagination: SUBTASKS_PAGINATION,
   });
 
-  const createMutation = useActionMutation({
-    mutationFn: api.task.create.mutationOptions,
-    invalidateKeys: taskMutationInvalidateKeys,
-    success: (created) => `Added "${created.name}"`,
-    onSuccess: () => setNewSubtaskName(""),
+  // Keep this deliberately narrow: this checkbox owns one exact checklist
+  // query, so its update never blocks or patches the rest of the detail page.
+  const toggleBase = api.task.update.mutationOptions();
+  const toggleMutation = useMutation({
+    mutationKey: toggleBase.mutationKey,
+    mutationFn: toggleBase.mutationFn,
+    onMutate: async (variables) => {
+      await cancelTRPCQueries(queryClient, [subtasksKey]);
+      const previous =
+        queryClient.getQueryData<typeof subtasksPage>(subtasksKey);
+      queryClient.setQueryData<typeof subtasksPage>(subtasksKey, (current) =>
+        patchListItem(current, String(variables.id), (item: TaskOut) => ({
+          ...item,
+          status: variables.data.status ?? item.status,
+          updatedAt: new Date(),
+        })),
+      );
+      return { previous };
+    },
+    onError: (error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(subtasksKey, context.previous);
+      }
+      toast.error(getErrorMessage(error));
+    },
+    onSettled: () =>
+      invalidateTRPCQueries(queryClient, taskMutationInvalidateKeys),
+  });
+
+  const createBase = api.task.create.mutationOptions();
+  const createMutation = useMutation({
+    mutationKey: createBase.mutationKey,
+    mutationFn: createBase.mutationFn,
+    onMutate: async () => {
+      await cancelTRPCQueries(queryClient, [subtasksKey]);
+      const previous =
+        queryClient.getQueryData<typeof subtasksPage>(subtasksKey);
+      const name = newSubtaskName.trim();
+      setNewSubtaskName("");
+      setPendingSubtaskName(name);
+      return { name, previous };
+    },
+    onSuccess: (created) => {
+      queryClient.setQueryData<typeof subtasksPage>(subtasksKey, (current) =>
+        current
+          ? {
+              ...current,
+              items: [...current.items, created],
+              meta: {
+                ...current.meta,
+                totalCount: current.meta.totalCount + 1,
+              },
+            }
+          : current,
+      );
+      toast.success(`Added "${created.name}"`);
+    },
+    onError: (error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(subtasksKey, context.previous);
+      }
+      setNewSubtaskName(context?.name ?? "");
+      toast.error(getErrorMessage(error));
+    },
+    onSettled: () => {
+      setPendingSubtaskName(null);
+      invalidateTRPCQueries(queryClient, taskMutationInvalidateKeys);
+    },
   });
 
   const addSubtask = () => {
@@ -110,7 +183,7 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
 
   return (
     <Stack gap="sm">
-      {subtasks.length === 0 ? (
+      {subtasks.length === 0 && !pendingSubtaskName ? (
         <p className="text-muted-foreground text-sm">No subtasks yet.</p>
       ) : (
         <Stack gap="xs">
@@ -118,7 +191,10 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
             <Row key={subtask.id} align="center" gap="sm">
               <Checkbox
                 checked={subtask.status === "done"}
-                disabled={toggleMutation.isPending}
+                disabled={
+                  toggleMutation.isPending &&
+                  toggleMutation.variables?.id === subtask.id
+                }
                 onCheckedChange={(checked) =>
                   toggleMutation.mutate({
                     id: subtask.id,
@@ -136,6 +212,12 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
               />
             </Row>
           ))}
+          {pendingSubtaskName && (
+            <Row align="center" gap="sm" className="opacity-60">
+              <Checkbox checked={false} disabled aria-label="Adding subtask" />
+              <span className="text-sm">{pendingSubtaskName}</span>
+            </Row>
+          )}
         </Stack>
       )}
       <Row gap="sm" align="center">
