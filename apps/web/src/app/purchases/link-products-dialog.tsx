@@ -62,15 +62,23 @@ export function LinkProductsDialog({
     (item) => !attachedIds.has(item.id),
   );
 
+  // The ONLY close path. Every dismissal — Escape, overlay click, Cancel, and a
+  // successful attach — goes through here, so the next open can't inherit a
+  // stale selection or search term from the last one.
+  const resetAndClose = (next: boolean) => {
+    if (!next) {
+      setSelected(new Set());
+      setSearchInput("");
+    }
+    onOpenChange(next);
+  };
+
   const attach = useActionMutation({
     mutationFn: api.purchase.attachProducts.mutationOptions,
     success: (result) =>
       `Attached ${result.changed} product${result.changed === 1 ? "" : "s"}`,
     invalidateKeys: purchaseProductMutationInvalidateKeys,
-    onSuccess: () => {
-      setSelected(new Set());
-      onOpenChange(false);
-    },
+    onSuccess: () => resetAndClose(false),
   });
 
   const toggle = (id: ProductShortcode, checked: boolean) => {
@@ -80,14 +88,6 @@ export function LinkProductsDialog({
       else next.delete(id);
       return next;
     });
-  };
-
-  const resetAndClose = (next: boolean) => {
-    if (!next) {
-      setSelected(new Set());
-      setSearchInput("");
-    }
-    onOpenChange(next);
   };
 
   return (
@@ -161,7 +161,7 @@ export function LinkProductsDialog({
           <Description size="xs" className="mr-auto">
             {selected.size} selected
           </Description>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => resetAndClose(false)}>
             Cancel
           </Button>
           <Button
