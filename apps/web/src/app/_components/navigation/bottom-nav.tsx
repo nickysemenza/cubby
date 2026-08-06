@@ -3,6 +3,7 @@ import { LogIn, MoreHorizontal } from "lucide-react";
 import * as React from "react";
 import { Row } from "~/components/layout";
 import { useNavAuthed } from "~/hooks/useNavAuthed";
+import { createCachedLoader, scheduleIdlePreload } from "~/lib/lazy-preload";
 import { cn } from "~/lib/utils";
 import {
   bottomNavItems,
@@ -11,11 +12,15 @@ import {
   useActiveTo,
 } from "./nav-items";
 
-const BottomNavMoreSheet = React.lazy(() =>
+const importBottomNavMoreSheet = createCachedLoader(() =>
   import("./bottom-nav-more-sheet").then((m) => ({
     default: m.BottomNavMoreSheet,
   })),
 );
+
+const loadBottomNavMoreSheet = () => importBottomNavMoreSheet();
+
+const BottomNavMoreSheet = React.lazy(loadBottomNavMoreSheet);
 
 type BottomNavItemProps = {
   /** Optional leading icon. Scales up subtly when `active`. */
@@ -58,6 +63,9 @@ function BottomNavItem({
         className,
       )}
       aria-current={active ? "page" : undefined}
+      {...(Comp === Link
+        ? { preload: "intent" as const, preloadDelay: 0 }
+        : {})}
       {...rest}
     >
       {Icon && <Icon className="size-5" aria-hidden="true" />}
@@ -73,6 +81,14 @@ export function BottomNav() {
   // SSR-accurate auth (see useNavAuthed): the tab bar renders the right state
   // on the first paint instead of flashing the authed tabs and collapsing.
   const authed = useNavAuthed();
+
+  React.useEffect(() => {
+    if (!authed || !window.matchMedia("(max-width: 767px)").matches) return;
+    return scheduleIdlePreload(window, () => void loadBottomNavMoreSheet(), {
+      timeoutMs: 1_500,
+      fallbackMs: 400,
+    });
+  }, [authed]);
 
   // Check if any "more" item is active
   const isMoreActive = moreNavSections.some((section) =>
@@ -110,6 +126,8 @@ export function BottomNav() {
               label="More"
               active={isMoreActive}
               aria-label="More options"
+              onPointerEnter={() => void loadBottomNavMoreSheet()}
+              onTouchStart={() => void loadBottomNavMoreSheet()}
               onClick={() => {
                 setMoreMounted(true);
                 setIsOpen(true);

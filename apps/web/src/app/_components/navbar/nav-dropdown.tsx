@@ -34,7 +34,7 @@ export const NavDropdown = ({ group }: { group: NavGroup }) => {
           return (
             <DropdownMenuItem
               key={item.to}
-              render={<Link to={item.to} />}
+              render={<Link to={item.to} preload="intent" preloadDelay={40} />}
               className={cn("gap-2", item.to === activeTo && "bg-accent")}
             >
               <ItemIcon className="size-3.5" />

@@ -13,6 +13,8 @@ export const NavLink = ({ item }: { item: NavItem }) => {
   return (
     <Link
       to={item.to}
+      preload="intent"
+      preloadDelay={40}
       className={cn(
         "nav-link-animated inline-flex items-center gap-2 font-medium text-sm transition-colors hover:text-primary",
         !active && "text-muted-foreground",
