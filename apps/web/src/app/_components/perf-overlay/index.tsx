@@ -523,6 +523,9 @@ function RendersTab({ snap }: { snap: PerfSnapshot }) {
 
 function RuntimeTab({ snap }: { snap: PerfSnapshot }) {
   const { fps, longTasks, heapUsedMB } = snap.runtime;
+  const navigation = snap.navigation;
+  const commandSearch = snap.commandSearch.records;
+  const lastCommandSearch = commandSearch.at(-1);
   return (
     <Stack gap="xs" className="p-1">
       <Metric label="FPS" value={String(fps)} bad={fps < 30} />
@@ -535,6 +538,34 @@ function RuntimeTab({ snap }: { snap: PerfSnapshot }) {
         label="JS heap"
         value={heapUsedMB === null ? "n/a" : `${heapUsedMB} MB`}
       />
+      <Metric
+        label="Navigation avg"
+        value={
+          navigation.count === 0
+            ? "…"
+            : ms(navigation.totalMs / navigation.count)
+        }
+        bad={
+          navigation.count > 0 && navigation.totalMs / navigation.count > 1000
+        }
+      />
+      {navigation.last && (
+        <Metric
+          label={`Last: ${navigation.last.routeId}`}
+          value={ms(navigation.last.durationMs)}
+          bad={navigation.last.durationMs > 3000}
+        />
+      )}
+      {lastCommandSearch && (
+        <Metric
+          label={`Command-K ${lastCommandSearch.phase}`}
+          value={ms(lastCommandSearch.durationMs)}
+          bad={
+            lastCommandSearch.phase === "lexical" &&
+            lastCommandSearch.durationMs > 400
+          }
+        />
+      )}
     </Stack>
   );
 }

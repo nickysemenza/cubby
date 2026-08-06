@@ -135,7 +135,10 @@ const handler = {
             "http.request.method": request.method,
             "url.path": url.pathname,
             "server.address": url.hostname,
-            "cubby.workload": classifyHttpWorkload(url.pathname),
+            "cubby.workload": classifyHttpWorkload(
+              url.pathname,
+              request.headers,
+            ),
           },
         ),
       );
