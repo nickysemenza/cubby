@@ -1,6 +1,19 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("iPhone WebKit smoke", () => {
+  test("prewarms and opens the More sheet on touch intent", async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "networkidle" });
+    const more = page.getByRole("button", { name: "More options" });
+
+    await more.dispatchEvent("touchstart");
+    await page.waitForTimeout(100);
+    await more.click();
+
+    await expect(page.getByText("Projects", { exact: true })).toBeVisible();
+  });
+
   test("rapid client navigation never enters the View Transitions API", async ({
     page,
   }) => {
