@@ -33,7 +33,7 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { useTRPC } from "~/integrations/trpc/react";
-import { invalidateTRPCQueries } from "~/lib/query-keys";
+import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
 import { cn, formatCurrency } from "~/lib/utils";
 import {
   ShelfCard,
@@ -49,6 +49,7 @@ import {
   type InventoryItem,
 } from "./calculate-inventory-valuation";
 import { CreateChildLocationDialog } from "./create-child-location-dialog";
+import { LocationChildrenTable } from "./location-children-table";
 import {
   LocationInventoryTable,
   locationInventoryListInput,
@@ -228,6 +229,9 @@ export function LocationContents({ location }: { location: InfLocation }) {
   const handleChildCreated = useCallback(() => {
     invalidateTRPCQueries(queryClient, [
       api.location.getByID.queryKey({ id: location.id }),
+      // The tree table reads its own subtree query — without this a new child
+      // shows in the card grid but not in the table.
+      queryKeys.location.subtree,
     ]);
   }, [queryClient, api, location.id]);
 
@@ -313,16 +317,21 @@ export function LocationContents({ location }: { location: InfLocation }) {
         />
       ) : (
         <>
-          {/* Sub-locations group — always cards, in both views. */}
+          {/* Sub-locations group — cards on the shelf, a full descendant tree
+              in the table. The toggle covers both groups. */}
           {hasChildren && (
             <Stack gap="sm">
               <Eyebrow>Locations · {children.length}</Eyebrow>
-              <ShelfGrid
-                items={sortedChildren}
-                renderCard={(child) => (
-                  <LocationShelfCard key={child.id} location={child} />
-                )}
-              />
+              {view === "table" ? (
+                <LocationChildrenTable locationId={location.id} />
+              ) : (
+                <ShelfGrid
+                  items={sortedChildren}
+                  renderCard={(child) => (
+                    <LocationShelfCard key={child.id} location={child} />
+                  )}
+                />
+              )}
             </Stack>
           )}
 

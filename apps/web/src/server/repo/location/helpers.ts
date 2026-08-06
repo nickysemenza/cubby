@@ -143,7 +143,9 @@ export const buildLocationWithChildren = (
       includeParent && x.parent
         ? buildLocationWithChildren(x.parent, excludeId, includeParent)
         : undefined,
-    childCount: x.childCount,
+    // getLocationById queries childCount directly; the tree builder doesn't,
+    // so fall back to the children it already materialized.
+    childCount: x.childCount ?? children.length,
     directItemCount,
     totalItemCount: directItemCount + childrenTotalCount,
     inventoryItems: x.inventoryItems ?? [],

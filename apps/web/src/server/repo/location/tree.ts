@@ -31,18 +31,26 @@ import {
 import { buildLocationWithChildren } from "./helpers";
 import type { LocationWithParentChild } from "./internal-types";
 
-export const buildLocationTree = async (db: Database) => {
+/**
+ * Build the location hierarchy as `InfLocation` roots.
+ *
+ * With no `rootId` this is the whole forest (every parentless location).
+ * With one, the CTE is anchored at that location and the return value is its
+ * CHILDREN — the descendant forest under it, not the anchor itself — which is
+ * what a subtree table on a detail page wants to render.
+ */
+export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
   // Drizzle doesn't support recursive CTEs in the query builder,
   // so we'll use raw SQL for the recursive query
   // Excludes soft-deleted locations
   const res = await getDb(db).execute<LocationWithParentChild>(sql`
     WITH RECURSIVE location_tree AS (
-      -- Base case: locations with no parent (excludes soft-deleted)
+      -- Base case: the anchor location, or every root (excludes soft-deleted)
       SELECT
         l.*,
         0 as depth
       FROM ${location} l
-      WHERE l."parentId" IS NULL AND l."deletedAt" IS NULL
+      WHERE ${rootId ? sql`l."id" = ${rootId}` : sql`l."parentId" IS NULL`} AND l."deletedAt" IS NULL
 
       UNION ALL
 
@@ -174,7 +182,14 @@ export const buildLocationTree = async (db: Database) => {
     }
   }
 
-  const tree: InfLocation[] = rootLocations.map((x) => {
+  // Anchored: the CTE's own base row is the only node whose parent is outside
+  // the result set, so its children are the forest to return. (It can't come
+  // from `rootLocations` — the anchor usually HAS a parentId.)
+  const roots = rootId
+    ? (locationsMap.get(rootId)?.children ?? [])
+    : rootLocations;
+
+  const tree: InfLocation[] = roots.map((x) => {
     return buildLocationWithChildren(x, undefined, false);
   });
   return tree;
