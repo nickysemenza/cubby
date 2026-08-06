@@ -178,9 +178,9 @@ export const productUpdateInput = z.object({
   data: productUpdateData,
 });
 
-// Ancillary product hydration endpoints run through tRPC GET batching. Keep this
-// stricter than the general 1000-row backend ceiling so product list hydration
-// stays under URL/dispatch limits.
+// Keep ancillary product hydration batches stricter than the general 1000-row
+// backend ceiling so each summary query has bounded database and serialization
+// work and retains useful cache granularity.
 export const PRODUCT_SUMMARY_BATCH_MAX = 50;
 
 export const productSummaryBatchInput = z.object({
