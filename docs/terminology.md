@@ -47,7 +47,7 @@ sometimes wears three different names across layers.
 | Cookbook | "Cookbook" | `Cookbook` / `cookbook` | `Cookbook` | A first-class recipe *source* — the book an EPUB-extracted recipe set came from. |
 | Project | "Project" | `Project` / `project` | `Project` | A household undertaking (furniture, renovation, …) grouping Tasks and Expenses; blocked-by edges to other Projects. |
 | Task | "Task" | `Task` / `task` | `Task` | A unit of work, optionally inside a Project; blocked-by edges to other Tasks. |
-| Vendor | "Vendor" | `Vendor` / `vendor` | `Vendor` | The roster of places money goes (name unique, `kind`, website, notes). Identity only — no money. |
+| Vendor | "Vendor" | `Vendor` / `vendor` | `Vendor` | The roster of places money goes (name unique, website, notes). Identity only — no money. |
 | Purchase | "Purchase" | `Purchase` / `purchase` | `Purchase` | One vendor order/receipt event: identity (`vendorId` + optional `orderId`), vendor date, literal never-summed `statedTotal`, and documents. ⚠️ Renamed meaning — see below. |
 | Expense | "Expense" | `Expense` / `expense` | `Expense` | A spend-ledger line (actual, or planned via `future`), optionally inside a Project. **All money lives here.** |
 | Financial account | "Account" | `FinancialAccount` / `financialAccount` | `FinancialAccount` | A statement/receipt account identity, possibly provisional, with source aliases. |
@@ -117,7 +117,8 @@ House  →  Room  →  Shelf  →  Bin
   materialized path column.
 - InventoryEntries reference leaf-ish locations via `inventoryEntry.locationId`,
   but any location can hold inventory.
-- Each location has a printable QR **shortcode** (`L-XXXX`).
+- Each location has a printable QR **shortcode** (`LOC-XXXX`). Legacy `L-XXXX`
+  labels remain accepted on input only, so previously printed labels still resolve.
 
 ---
 
