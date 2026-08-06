@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   rTable: vi.fn(),
+  discardDialog: vi.fn(),
 }));
 
 vi.mock("~/lib/wasm", () => ({ wasm: {} }));
@@ -49,6 +50,12 @@ vi.mock("../inventory/delete-inventory-dialog", () => ({
 vi.mock("../inventory/move-inventory-dialog", () => ({
   MoveInventoryDialog: () => null,
 }));
+vi.mock("../inventory/inventory-discard-dialog", () => ({
+  InventoryDiscardDialog: (props: unknown) => {
+    mocks.discardDialog(props);
+    return null;
+  },
+}));
 
 import { LocationInventoryTable } from "./location-inventory-table";
 
@@ -64,5 +71,19 @@ describe("LocationInventoryTable", () => {
     expect(mocks.rTable).toHaveBeenCalledWith(
       expect.objectContaining({ sizingKey: "inventory:location-detail" }),
     );
+  });
+
+  it("does not mount the discard dialog until a row targets one", () => {
+    // `InventoryDiscardDialog` fetches the row's product so the operator sees
+    // every shelf it sits on, not just this location's. Mounting it at rest
+    // would fire that query on every render of the table.
+    render(
+      <LocationInventoryTable
+        locationId={unsafeLocationShortcode("LOC-TEST")}
+        view="table"
+      />,
+    );
+
+    expect(mocks.discardDialog).not.toHaveBeenCalled();
   });
 });

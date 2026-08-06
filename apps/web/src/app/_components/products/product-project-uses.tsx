@@ -1,10 +1,17 @@
+import type { ProjectShortcode } from "@cubby/schemas/identifiers";
+import type { ProductProjectUsesOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
+import { createColumnHelper } from "@tanstack/react-table";
 import { Pencil, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import {
+  createCurrencyColumn,
+  createTimestampColumn,
+} from "~/app/_components/data-table/columnHelpers";
+import RTable from "~/app/_components/data-table/Table";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
-import { PROJECT_STATUS_LABELS } from "~/app/projects/project-formatting";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -18,6 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import {
   Empty,
   EmptyDescription,
@@ -27,7 +35,29 @@ import {
 import { Input } from "~/components/ui/input";
 import { useTRPC } from "~/integrations/trpc/react";
 import { projectResourceMutationInvalidateKeys } from "~/lib/query-keys";
+import { getStatusBadgeProps } from "~/lib/status-colors";
 import { formatCurrency } from "~/lib/utils";
+
+type ProjectUse = ProductProjectUsesOut["projects"][number];
+/** `id`/`name` are what the shared list hook keys and links rows by. */
+type ProjectUseRow = ProjectUse & { id: ProjectShortcode; name: string };
+
+/** Stable hook config (see apps/web/CLAUDE.md on inline objects). */
+const EMBEDDED_TABLE_STATE = {
+  urlSync: false,
+  readUrlState: false,
+} as const;
+
+/**
+ * The project entity's default-on graph previews (Blocked by, Used tools) are
+ * about the project's own page, not about this tool's history with it — and
+ * "Used tools" would list all 48 of them beside the one row you're reading.
+ * Reachable from the View menu; just not the default here.
+ */
+const HIDDEN_RELATED_COLUMNS = {
+  "related:project.blockedBy": false,
+  "related:project.usedTools": false,
+} as const;
 
 /**
  * Which projects a tool was used on, edited from the tool's own page.
@@ -42,6 +72,7 @@ export function ProductProjectUses({ productId }: { productId: string }) {
   const api = useTRPC();
   const [editing, setEditing] = useState(false);
   const query = useQuery(api.product.projectUses.queryOptions({ productId }));
+  const data = query.data;
 
   const detach = useActionMutation({
     mutationFn: api.project.setToolUsage.mutationOptions,
@@ -49,11 +80,98 @@ export function ProductProjectUses({ productId }: { productId: string }) {
     invalidateKeys: projectResourceMutationInvalidateKeys,
   });
 
+  const rows = useMemo<ProjectUseRow[]>(
+    () =>
+      (data?.projects ?? []).map((project) => ({
+        ...project,
+        id: project.projectId,
+        name: project.projectName,
+      })),
+    [data],
+  );
+
+  const helper = useMemo(() => createColumnHelper<ProjectUseRow>(), []);
+  const category = data?.category;
+  const columns = useMemo(
+    () => [
+      helper.accessor((row) => row.status, {
+        id: "status",
+        header: "Status",
+        meta: { className: "w-32" },
+        cell: (info) => {
+          const { label, className } = getStatusBadgeProps(
+            "project",
+            info.getValue(),
+          );
+          return <Badge className={className}>{label}</Badge>;
+        },
+      }),
+      ...(category === "software"
+        ? [
+            helper.accessor((row) => row.sharedWindow, {
+              id: "sharedSpend",
+              header: "Shared spend",
+              meta: { className: "w-48" },
+              cell: (info) => {
+                const window = info.getValue();
+                if (!window) {
+                  return (
+                    <Description size="xs">
+                      Shared spend unavailable
+                    </Description>
+                  );
+                }
+                return (
+                  <Stack gap="tight">
+                    <span className="font-mono tabular-nums">
+                      {formatCurrency(window.netCost)}
+                    </span>
+                    <Description size="xs">
+                      {window.startDate}–{window.endDate} · non-additive
+                    </Description>
+                  </Stack>
+                );
+              },
+            }),
+          ]
+        : [
+            createCurrencyColumn(helper, "projectPurchaseCost", {
+              header: "Bought here",
+              className: "w-28",
+            }),
+          ]),
+      createTimestampColumn(helper, "attachedAt", {
+        header: "Attached",
+        className: "w-32",
+      }),
+    ],
+    [helper, category],
+  );
+
+  const { table, deleteDialog } = useClientEntityList<ProjectUseRow>({
+    entity: "project",
+    data: rows,
+    columns,
+    tableStateOptions: EMBEDDED_TABLE_STATE,
+    columnVisibilityScope: "product-uses",
+    initialColumnVisibility: HIDDEN_RELATED_COLUMNS,
+    extraActions: (row) => (
+      <DropdownMenuItem
+        disabled={detach.isPending}
+        onClick={(event) => {
+          event.stopPropagation();
+          detach.mutate({ projectId: row.id, productId, used: false });
+        }}
+      >
+        <X />
+        Remove from project
+      </DropdownMenuItem>
+    ),
+  });
+
   if (query.isPending) {
     return <Description>Loading project uses…</Description>;
   }
-
-  const data = query.data;
   if (!data) return null;
 
   const editButton = (
@@ -109,73 +227,14 @@ export function ProductProjectUses({ productId }: { productId: string }) {
         <div className="ml-auto">{editButton}</div>
       </Row>
 
-      <Stack gap="xs">
-        {data.projects.map((project) => (
-          <Row
-            key={project.projectId}
-            align="center"
-            justify="between"
-            gap="md"
-            className="border border-[var(--border)] p-4"
-          >
-            <Stack gap="xs" className="min-w-0">
-              <EntityInlineLink
-                entity="project"
-                data={{
-                  id: project.projectId,
-                  name: project.projectName,
-                  status: project.status,
-                  kind: project.kind,
-                }}
-                truncate
-              />
-              <Description size="xs">
-                {PROJECT_STATUS_LABELS[project.status]}
-              </Description>
-            </Stack>
-            <Row align="center" gap="sm" className="shrink-0">
-              {data.category === "tools" &&
-                project.projectPurchaseCost !== null &&
-                project.projectPurchaseCost > 0 && (
-                  <Badge variant="outline">
-                    {formatCurrency(project.projectPurchaseCost)} bought here
-                  </Badge>
-                )}
-              {data.category === "software" && project.sharedWindow && (
-                <Stack gap="xs" className="text-right">
-                  <Badge variant="outline">
-                    {formatCurrency(project.sharedWindow.netCost)} shared spend
-                  </Badge>
-                  <Description size="xs">
-                    {project.sharedWindow.startDate}–
-                    {project.sharedWindow.endDate} · non-additive
-                  </Description>
-                </Stack>
-              )}
-              {data.category === "software" && !project.sharedWindow && (
-                <Description size="xs" className="text-right">
-                  Shared spend unavailable
-                </Description>
-              )}
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={`Remove ${project.projectName}`}
-                disabled={detach.isPending}
-                onClick={() =>
-                  detach.mutate({
-                    projectId: project.projectId,
-                    productId,
-                    used: false,
-                  })
-                }
-              >
-                <X aria-hidden />
-              </Button>
-            </Row>
-          </Row>
-        ))}
-      </Stack>
+      <RTable
+        table={table}
+        entity="project"
+        ariaLabel="Projects this was used on"
+        sizingKey="project:product-uses"
+        embedded
+      />
+      {deleteDialog}
 
       <ProjectUsesDialog
         productId={productId}

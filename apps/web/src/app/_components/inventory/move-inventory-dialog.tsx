@@ -13,25 +13,22 @@
  */
 
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import type {
-  BulkMoveItem,
-  inventoryListItemOut,
-} from "@cubby/schemas/inventory";
+import type { BulkMoveItem } from "@cubby/schemas/inventory";
 import { useMutation } from "@tanstack/react-query";
 import { FormProvider } from "react-hook-form";
 import { toast } from "sonner";
-import type { z } from "zod";
 import {
   DestinationLocationField,
   resolveDestination,
   useDestinationLocationForm,
 } from "~/app/_components/inventory/destination-location-picker";
+import type { InventoryDialogItem } from "~/app/_components/inventory/dialog-item";
 import { useInventoryInvalidation } from "~/app/_components/inventory/hooks";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 
-type InventoryItem = z.infer<typeof inventoryListItemOut>;
+type InventoryItem = InventoryDialogItem;
 
 interface MoveInventoryDialogProps {
   open: boolean;

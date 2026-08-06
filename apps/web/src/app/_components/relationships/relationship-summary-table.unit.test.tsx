@@ -1,56 +1,86 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { Table } from "@tanstack/react-table";
+import { flexRender } from "@tanstack/react-table";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  queryOptions: vi.fn((input) => input),
+  queryOptions: vi.fn((input) => ({ queryKey: ["related-summary", input] })),
+  summaryQuery: vi.fn(),
+  // The table object RTable was handed, so the test can drive sorting through
+  // the same API RTable's own header buttons use.
+  lastTable: { current: null as Table<unknown> | null },
 }));
 
-vi.mock("@tanstack/react-query", () => ({
-  useQuery: (input: { relationKey: string }) => ({
-    data: {
-      data: [
-        {
-          target:
-            input.relationKey === "product.vendors"
-              ? null
-              : {
-                  entity:
-                    input.relationKey === "project.vendors"
-                      ? "vendor"
-                      : "product",
-                  id: "PRD-TEST",
-                  label: "Brush",
-                  image: null,
-                },
-          expenseCount: 2,
-          purchaseCount: 1,
-          unpricedExpenseCount: 0,
-          netSpend: 18.5,
-          latestActivity: "2026-01-02",
-          knownAcquiredUnits: 3,
-          unknownAcquisitionQuantityCount: 1,
-        },
-      ],
-      count: 1,
-      totals: {
-        expenseCount: 2,
-        purchaseCount: 1,
-        unpricedExpenseCount: 0,
-        netSpend: 18.5,
-        knownAcquiredUnits: 3,
-        unknownAcquisitionQuantityCount: 1,
-      },
-      nextOffset: null,
+const page = (relationKey: string) => ({
+  data: [
+    {
+      target:
+        relationKey === "product.vendors"
+          ? null
+          : {
+              entity: relationKey === "project.vendors" ? "vendor" : "product",
+              id: "PRD-TEST",
+              label: "Brush",
+              image: null,
+            },
+      expenseCount: 2,
+      purchaseCount: 1,
+      unpricedExpenseCount: 0,
+      netSpend: 18.5,
+      latestActivity: "2026-01-02",
+      knownAcquiredUnits: 3,
+      unknownAcquisitionQuantityCount: 1,
     },
-    isPending: false,
-    isError: false,
-    isFetching: false,
-  }),
-}));
+  ],
+  count: 1,
+  totals: {
+    expenseCount: 2,
+    purchaseCount: 1,
+    unpricedExpenseCount: 0,
+    netSpend: 18.5,
+    knownAcquiredUnits: 3,
+    unknownAcquisitionQuantityCount: 1,
+  },
+  nextOffset: null,
+});
+
 vi.mock("~/integrations/trpc/react", () => ({
   useTRPC: () => ({
     relatedData: { summary: { queryOptions: mocks.queryOptions } },
   }),
+  useTRPCClient: () => ({
+    relatedData: { summary: { query: mocks.summaryQuery } },
+  }),
+}));
+// RTable window-virtualizes its rows, which measure to zero height in jsdom.
+// Render the row model plainly instead: the column defs under test still run
+// for real, and sorting is driven through the table object below.
+vi.mock("../data-table/Table", () => ({
+  default: ({
+    table,
+    additionalToolbarContent,
+  }: {
+    table: Table<unknown>;
+    additionalToolbarContent: ReactNode;
+  }) => {
+    mocks.lastTable.current = table;
+    return (
+      <div>
+        {additionalToolbarContent}
+        {table.getRowModel().rows.map((row) => (
+          <div key={row.id}>
+            {row.getVisibleCells().map((cell) => (
+              <span key={cell.id}>
+                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              </span>
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  },
 }));
 vi.mock("~/app/_components/EntityInlineLink", () => ({
   EntityInlineLink: ({ data }: { data: { name: string } }) => (
@@ -80,9 +110,27 @@ vi.mock("~/components/entity/vendor-cell", () => ({
 
 import { RelationshipSummaryTable } from "./relationship-summary-table";
 
+const clients: QueryClient[] = [];
+const renderTable = (ui: ReactNode) => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+  });
+  clients.push(client);
+  return render(
+    <QueryClientProvider client={client}>{ui}</QueryClientProvider>,
+  );
+};
+
+afterEach(() => {
+  for (const client of clients.splice(0)) client.clear();
+  mocks.lastTable.current = null;
+  mocks.summaryQuery.mockReset();
+});
+
 describe("RelationshipSummaryTable", () => {
   it("requests the configured server sort and renders incomplete acquisition quantities", async () => {
-    render(
+    mocks.summaryQuery.mockImplementation(async () => page("vendor.products"));
+    renderTable(
       <RelationshipSummaryTable
         relationKey="vendor.products"
         sourceId="VEN-TEST"
@@ -99,7 +147,7 @@ describe("RelationshipSummaryTable", () => {
       "product",
     );
     expect(screen.getByText("+1?")).toBeInTheDocument();
-    expect(mocks.queryOptions).toHaveBeenLastCalledWith(
+    expect(mocks.summaryQuery).toHaveBeenLastCalledWith(
       expect.objectContaining({
         relationKey: "vendor.products",
         sourceId: "VEN-TEST",
@@ -109,30 +157,48 @@ describe("RelationshipSummaryTable", () => {
       }),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Sort by Net spend" }));
-
+    // Sorting is manual: the click must re-ask the server, not reorder rows.
+    act(() => {
+      mocks.lastTable.current?.getColumn("netSpend")?.toggleSorting(true);
+    });
     await waitFor(() =>
-      expect(mocks.queryOptions).toHaveBeenLastCalledWith(
+      expect(mocks.summaryQuery).toHaveBeenLastCalledWith(
         expect.objectContaining({
           sort: { field: "netSpend", direction: "desc" },
         }),
       ),
     );
 
-    fireEvent.change(
-      screen.getByRole("textbox", { name: "Search relationship summary" }),
-      { target: { value: "brush" } },
-    );
-    await waitFor(() =>
-      expect(mocks.queryOptions).toHaveBeenLastCalledWith(
-        expect.objectContaining({ search: "brush" }),
-      ),
-    );
     expect(screen.getByText(/\$18\.50 net/)).toBeInTheDocument();
   });
 
+  it("only lets the server-sortable columns sort", async () => {
+    mocks.summaryQuery.mockImplementation(async () => page("vendor.products"));
+    renderTable(
+      <RelationshipSummaryTable
+        relationKey="vendor.products"
+        sourceId="VEN-TEST"
+        columns={["target", "unpriced", "netSpend"]}
+        defaultSort={{ field: "netSpend", direction: "desc" }}
+        emptyCopy="Nothing yet."
+        expenseHref={() => "/expenses"}
+      />,
+    );
+
+    await waitFor(() => expect(mocks.lastTable.current).not.toBeNull());
+    // `unpriced` has no server sort field; a sortable header there would do
+    // nothing under manualSorting.
+    expect(mocks.lastTable.current?.getColumn("unpriced")?.getCanSort()).toBe(
+      false,
+    );
+    expect(mocks.lastTable.current?.getColumn("netSpend")?.getCanSort()).toBe(
+      true,
+    );
+  });
+
   it("uses the vendor mark for vendor-target summaries", async () => {
-    render(
+    mocks.summaryQuery.mockImplementation(async () => page("project.vendors"));
+    renderTable(
       <RelationshipSummaryTable
         relationKey="project.vendors"
         sourceId="PRJ-TEST"
@@ -149,7 +215,8 @@ describe("RelationshipSummaryTable", () => {
   });
 
   it("warning-styles a null target and keeps its exact ledger link", async () => {
-    render(
+    mocks.summaryQuery.mockImplementation(async () => page("product.vendors"));
+    renderTable(
       <RelationshipSummaryTable
         relationKey="product.vendors"
         sourceId="PRD-TEST"

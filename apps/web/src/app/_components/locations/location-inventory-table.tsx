@@ -1,9 +1,13 @@
-import type { LocationShortcode } from "@cubby/schemas/identifiers";
+import type {
+  InventoryShortcode,
+  LocationShortcode,
+  ProductShortcode,
+} from "@cubby/schemas/identifiers";
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { Link } from "@tanstack/react-router";
 import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ArrowRightLeft, ImageIcon, Trash } from "lucide-react";
+import { ArrowRightLeft, ImageIcon, PackageMinus, Trash } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { z } from "zod";
 import type { TRPCQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
@@ -19,6 +23,7 @@ import RTable from "../data-table/Table";
 import { useEntityList } from "../hooks/useEntityList";
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
 import { DeleteInventoryDialog } from "../inventory/delete-inventory-dialog";
+import { InventoryDiscardDialog } from "../inventory/inventory-discard-dialog";
 import { InventoryShelf } from "../inventory/inventory-shelf";
 import { MoveInventoryDialog } from "../inventory/move-inventory-dialog";
 import {
@@ -85,6 +90,11 @@ export function LocationInventoryTable({
     type: "move" | "delete" | null;
     items: InventoryItem[];
   }>({ type: null, items: [] });
+  // Discard is single-row only: it writes one ledger line against one product.
+  const [discardTarget, setDiscardTarget] = useState<{
+    productId: ProductShortcode;
+    entryId: InventoryShortcode;
+  } | null>(null);
 
   const bulkActions = useMemo(
     () => ({
@@ -205,6 +215,22 @@ export function LocationInventoryTable({
           <ArrowRightLeft className="mr-2 size-4" />
           Move to...
         </Button>
+        {/* Discard writes a ledger row and can clear the shelf in the same
+            transaction — the honest verb for "used it up", where Delete just
+            says the entry should never have existed. */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() =>
+            setDiscardTarget({
+              productId: item.product.id,
+              entryId: item.id,
+            })
+          }
+        >
+          <PackageMinus className="mr-2 size-4" />
+          Discard...
+        </Button>
         <Button
           variant="ghost"
           size="sm"
@@ -257,6 +283,17 @@ export function LocationInventoryTable({
           table.resetRowSelection();
         }}
       />
+
+      {/* Discard dialog — fetches the product so the operator sees every shelf.
+          Mounted only while targeted, so the fetch never runs at rest. */}
+      {discardTarget && (
+        <InventoryDiscardDialog
+          onOpenChange={(open) => {
+            if (!open) setDiscardTarget(null);
+          }}
+          target={discardTarget}
+        />
+      )}
 
       {/* Delete dialog */}
       <DeleteInventoryDialog

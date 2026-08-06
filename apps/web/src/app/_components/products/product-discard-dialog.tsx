@@ -74,12 +74,23 @@ interface ProductDiscardDialogProps {
       location: { id: LocationShortcode; name: string };
     }>;
   };
+  /**
+   * Pre-select the shelf being discarded from, for callers that opened this
+   * from a specific inventory row. Seeds the form's defaults, so a caller that
+   * reuses one mounted dialog across rows must key the element by the same id
+   * (`key={entryId}`) to remount it for the next row.
+   *
+   * This does not weaken "the server never guesses which shelf" — the value
+   * comes from a row the operator clicked, and they can still change it.
+   */
+  defaultInventoryEntryId?: InventoryShortcode;
 }
 
 export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
   open,
   onOpenChange,
   product,
+  defaultInventoryEntryId,
 }) => {
   const api = useTRPC();
   const adjustInventoryId = useId();
@@ -93,7 +104,7 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
       date: format(new Date(), "yyyy-MM-dd"),
       reason: "",
       adjustInventory: entries.length > 0,
-      inventoryEntryId: soleEntry?.id ?? "",
+      inventoryEntryId: defaultInventoryEntryId ?? soleEntry?.id ?? "",
     },
   });
 

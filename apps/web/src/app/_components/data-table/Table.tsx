@@ -129,6 +129,17 @@ interface TTableProps<TItem> {
    */
   showColumnMenu?: boolean;
   /**
+   * Replaces the entity empty state when there are no rows.
+   *
+   * The stock state is page-level copy that invites creating one of these
+   * ("Nothing on the shelves yet" + an Add Product button) — right for a list
+   * page, wrong for an embedded section whose emptiness is about a
+   * relationship ("no products bought from this vendor"). Callers that own
+   * their own search/scope also own the honest wording, so this always wins
+   * when provided.
+   */
+  emptyState?: ReactNode;
+  /**
    * localStorage key for this table's persisted column widths. Defaults to
    * `entity`, which covers every list page; pass it explicitly for a table with
    * no single entity (the global search table) or for a second table over the
@@ -160,6 +171,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     verticalAlign = "middle",
     embedded = false,
     showColumnMenu = false,
+    emptyState,
     sizingKey,
   } = props;
 
@@ -238,6 +250,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     }
 
     if (!rows.length) {
+      if (emptyState) return renderStatusRow(emptyState, "h-24");
       const state = table.getState();
       // Narrowed-ness and clearability part ways when a URL-only scope is on:
       // the copy must say "no matches", but only column filters are resettable
@@ -434,7 +447,10 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                       : undefined
                   }
                   additionalContent={
-                    <div className="flex items-center gap-2">
+                    // flex-wrap: an embedded table in the aside rail can't fit
+                    // a search box, a summary, and the View menu on one line —
+                    // without it they overlap instead of stacking.
+                    <div className="flex flex-wrap items-center gap-2">
                       {additionalToolbarContent}
                       {groupConfig && onGroupedChange && (
                         <Button
@@ -481,7 +497,13 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                 aria-label={ariaLabel}
                 aria-busy={isTransitioning}
                 className={cn(styles.table)}
-                containerClassName="overflow-visible"
+                // Page-level tables must not clip their sticky header, so they
+                // keep `overflow-visible` and let the window scroll. An
+                // embedded table's header isn't sticky and its host is often a
+                // narrow aside card, so it keeps the primitive's own
+                // `overflow-x-auto`: declared column widths that exceed the
+                // card then scroll inside it instead of being cut off.
+                containerClassName={embedded ? undefined : "overflow-visible"}
               >
                 <TableHeader
                   className={cn(
