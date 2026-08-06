@@ -170,6 +170,22 @@ const makeTree = protectedProcedure
   .query(async ({ ctx }) => await buildLocationTree(ctx.db));
 
 /**
+ * The descendant forest under one location — every level, in one query. Powers
+ * the location detail page's Contents tree table, where `getByShortcode`'s
+ * single level of children stops one twirl short.
+ */
+const subtree = protectedProcedure
+  .input(z.object({ shortcode: locationShortcode }))
+  .output(strictOutput(infLocationListOut))
+  .query(
+    async ({ ctx, input }) =>
+      await buildLocationTree(
+        ctx.db,
+        await resolveLocationId(ctx.db, input.shortcode),
+      ),
+  );
+
+/**
  * Lightweight `{id, name}` options for the location filter's parent picklist
  * (see `useLocationParentOptions`) — only locations with at least one live
  * child, not the full location roster (see repo/location/lookup.ts's
@@ -264,6 +280,7 @@ export const locationRouter = createTRPCRouter({
   getByShortcode,
   getByShortcodes,
   makeTree,
+  subtree,
   parentOptions,
   ensureGlobalUnknown,
   create,
