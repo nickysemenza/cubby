@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "~/server/api/root";
 import { createTRPCContext } from "~/server/api/trpc";
+import { handleTRPCFetchRequest } from "~/server/api/trpc-fetch-handler";
 import { getActiveTraceId } from "~/server/tracing";
 
 const handler = ({ request }: { request: Request }) => {
-  return fetchRequestHandler({
+  return handleTRPCFetchRequest({
     endpoint: "/api/trpc",
     req: request,
     router: appRouter,

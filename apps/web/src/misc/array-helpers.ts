@@ -5,9 +5,9 @@
 export type Flatten<T> = T extends Array<infer U> ? U : T;
 
 /**
- * Max ids per batched `getManyByIDs` query (UUIDs → well under maxURLLength).
- * Pair with es-toolkit's `chunk` to keep batched tRPC queries under the batch
- * link's `maxURLLength`; sort the input first if you want stable cache keys.
+ * Max ids per batched `getManyByIDs` query. Pair with es-toolkit's `chunk` to
+ * bound database and serialization work per query; sort the input first if you
+ * want stable cache keys.
  */
 export const ID_CHUNK_SIZE = 50;
 

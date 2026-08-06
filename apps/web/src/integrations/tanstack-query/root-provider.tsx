@@ -3,23 +3,17 @@ import { AuthUIProviderTanstack } from "@daveyplate/better-auth-ui/tanstack";
 import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { Link as TanStackLink, useNavigate } from "@tanstack/react-router";
-import {
-  createTRPCClient,
-  httpBatchStreamLink,
-  httpLink,
-  loggerLink,
-  splitLink,
-} from "@trpc/client";
+import { createTRPCClient, loggerLink } from "@trpc/client";
 import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import superjson from "superjson";
+import { createTRPCTransportLink } from "~/integrations/tanstack-query/trpc-transport";
 import { TRPCProvider } from "~/integrations/trpc/react";
 import type { TRPCRouter } from "~/integrations/trpc/router";
 import { authClient } from "~/lib/auth-client";
 import { getAppErrorDetails, getErrorMessage } from "~/lib/error-utils";
 import { getFlag } from "~/lib/flags";
-import { isUnbatchedTRPCPath } from "~/lib/problems-query-groups";
 import { configureQueryFreshness } from "~/lib/query-freshness";
 import { persister } from "./persister";
 
@@ -67,12 +61,6 @@ function getUrl() {
   return `${base}/api/trpc`;
 }
 
-const trpcHeaders = () => {
-  const headers = new Headers();
-  headers.set("x-trpc-source", "tanstack-start");
-  return headers;
-};
-
 const trpcClient = createTRPCClient<TRPCRouter>({
   links: [
     loggerLink({
@@ -83,32 +71,7 @@ const trpcClient = createTRPCClient<TRPCRouter>({
         (getFlag("queryLogger") ||
           (op.direction === "down" && op.result instanceof Error)),
     }),
-    splitLink({
-      // The Problems page's cost-grouped detector queries MUST NOT batch: if
-      // they shared one HTTP request they'd run in a single Worker invocation
-      // and re-sum all the detector CPU (re-parsing every recipe line through
-      // WASM twice), which exceeded the 30s CPU limit. Route them through an
-      // unbatched httpLink so each is its own invocation/CPU budget. Everything
-      // else keeps the batched-stream link.
-      condition: (op) => isUnbatchedTRPCPath(op.path),
-      true: httpLink({
-        transformer: superjson,
-        url: getUrl(),
-        headers: trpcHeaders,
-      }),
-      false: httpBatchStreamLink({
-        transformer: superjson,
-        url: getUrl(),
-        // Cap the batched-GET URL length so large fan-outs (e.g. the cookbook
-        // import previewing hundreds of unique ingredients via getByName) split
-        // into several requests instead of one giant URL that exceeds the
-        // server's header-size limit (431 Request Header Fields Too Large). Kept
-        // well under the typical 16KB request-line limit to leave room for
-        // cookies/headers.
-        maxURLLength: 8000,
-        headers: trpcHeaders,
-      }),
-    }),
+    createTRPCTransportLink({ url: getUrl() }),
   ],
 });
 
