@@ -867,12 +867,6 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
   territory and deliberately out of scope everywhere else in this codebase.
   Either add a lighter "drop the stale sourceRef/alias" fix action, or
   explicitly document why merge stays out of scope for these two.
-- [ ] **MCP: `create_tasks` batch tool was never registered.** PR #558's body
-  claims a `create_tasks` batch tool; `apps/web/src/server/mcp/tools/project.tools.ts`'s
-  `task` toolset only sets `batch: { update: true }` — no `create`. Either
-  register the batch-create tool or correct the historical PR claim (the code
-  is the source of truth; this is a documentation-vs-reality note, not
-  urgent).
 
 ### MCP Apps — further candidates
 
