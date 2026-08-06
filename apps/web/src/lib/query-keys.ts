@@ -31,11 +31,16 @@ export const queryKeys = {
     // (product.list) both refresh after any product create/update/delete. The
     // picker reads a different key than the table, so a list-only invalidation
     // would leave its options stale.
+    list: procedureKey("product", "list"),
+    getByID: procedureKey("product", "getByID"),
+    getByShortcode: procedureKey("product", "getByShortcode"),
     all: entityKey("product"),
   },
   location: {
     list: procedureKey("location", "list"),
     makeTree: procedureKey("location", "makeTree"),
+    getByID: procedureKey("location", "getByID"),
+    getByShortcode: procedureKey("location", "getByShortcode"),
     // The bounded parent-filter roster (`useLocationParentOptions`) — only
     // locations with a live child, so it needs its own key rather than
     // reusing `list`'s (different filter shape, would collide in the cache).
@@ -46,6 +51,8 @@ export const queryKeys = {
   },
   ingredient: {
     list: procedureKey("ingredient", "list"),
+    getByID: procedureKey("ingredient", "getByID"),
+    getByShortcode: procedureKey("ingredient", "getByShortcode"),
     getByName: procedureKey("ingredient", "getByName"),
     // Broad prefix — invalidate every ingredient query (list / getByName /
     // getByID …) after an enrich/merge/update so all consumers re-read.
@@ -76,6 +83,7 @@ export const queryKeys = {
   recipe: {
     list: procedureKey("recipe", "list"),
     getByID: procedureKey("recipe", "getByID"),
+    getByShortcode: procedureKey("recipe", "getByShortcode"),
     flow: procedureKey("recipe", "getFlow"),
     // The cookbook browse index lives on the recipe router (`recipe.listCookbooks`),
     // so its key mirrors that tRPC path.
