@@ -11,7 +11,11 @@ test.describe("iPhone WebKit smoke", () => {
     await page.waitForTimeout(100);
     await more.click();
 
-    await expect(page.getByText("Projects", { exact: true })).toBeVisible();
+    const sheet = page.getByRole("dialog", { name: "More" });
+    await expect(sheet).toBeVisible();
+    await expect(
+      sheet.getByRole("link", { name: "Projects", exact: true }),
+    ).toBeVisible();
   });
 
   test("rapid client navigation never enters the View Transitions API", async ({
