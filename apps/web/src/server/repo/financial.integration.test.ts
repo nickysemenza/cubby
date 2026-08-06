@@ -1051,6 +1051,50 @@ describe("financial repositories — critical invariants", () => {
       (await getPurchaseByID(ctx.db, unpriced.uuid)).financialReconciliation,
     ).toMatchObject({ status: "unknown", delta: null, transactionCount: 1 });
 
+    // A payment schedule part-way through: one payment posted, one still
+    // planned. Settlement must compare against the INCURRED expense only —
+    // a `future: true` row cannot have settled, so counting it would report a
+    // mismatch for a purchase behaving exactly as intended.
+    const schedule = await makePurchaseWithExpense("status-schedule", 100);
+    const plannedLine = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2027-01-15",
+        name: "status-schedule planned payment",
+        trade: "other",
+        costType: "materials",
+        cost: 400,
+        future: true,
+      }),
+      ctx.actor,
+    );
+    await linkExpensesToPurchase(
+      ctx.db,
+      { purchaseId: schedule.purchase.id, expenseIds: [plannedLine.output.id] },
+      ctx.actor,
+    );
+    await createFinancialTransaction(
+      ctx.db,
+      financialTransactionCreateInput.parse({
+        accountId: a.id,
+        purchaseId: schedule.purchase.id,
+        kind: "purchase",
+        status: "posted",
+        postedDate: "2026-01-01",
+        amount: 100,
+      }),
+      ctx.actor,
+    );
+    const scheduled = await getPurchaseByID(ctx.db, schedule.uuid);
+    // The displayed total still carries the whole commitment...
+    expect(scheduled.expenseTotal).toBe(500);
+    // ...but settlement only answers for the $100 actually incurred.
+    expect(scheduled.financialReconciliation).toMatchObject({
+      status: "match",
+      delta: 0,
+      postedTotal: 100,
+    });
+
     const pending = await makePurchaseWithExpense("status-pending", 51.49);
     await createFinancialTransaction(
       ctx.db,

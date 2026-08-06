@@ -122,15 +122,24 @@ export async function findPurchaseFinancialSettlementMismatches(
     id: string;
     vendorName: string | null;
     expenseTotal: number;
-    unpriced: number;
+    settleableExpenseTotal: number;
+    settleableUnpriced: number;
   }>(sql`
     SELECT p.id AS uuid, p.shortcode AS id, v.name AS "vendorName",
       COALESCE(e."expenseTotal", 0)::double precision AS "expenseTotal",
-      COALESCE(e.unpriced, 0)::int AS unpriced
+      COALESCE(e."settleableExpenseTotal", 0)::double precision AS "settleableExpenseTotal",
+      COALESCE(e."settleableUnpriced", 0)::int AS "settleableUnpriced"
     FROM "Purchase" p
     LEFT JOIN "Vendor" v ON v.id = p."vendorId" AND v."deletedAt" IS NULL
     LEFT JOIN LATERAL (
-      SELECT COALESCE(sum(e.cost), 0) AS "expenseTotal", count(e.id) FILTER (WHERE e.cost IS NULL) AS unpriced
+      SELECT
+        COALESCE(sum(e.cost), 0) AS "expenseTotal",
+        -- Settlement compares against INCURRED spend; a planned row cannot have
+        -- settled, so counting it guarantees a mismatch. The reported
+        -- expenseTotal stays the full figure so the worklist row still names
+        -- the purchase's real size.
+        COALESCE(sum(e.cost) FILTER (WHERE e.future = false), 0) AS "settleableExpenseTotal",
+        count(e.id) FILTER (WHERE e.cost IS NULL AND e.future = false) AS "settleableUnpriced"
       FROM "Expense" e WHERE e."purchaseId" = p.id AND e."deletedAt" IS NULL
     ) e ON TRUE
     WHERE p."deletedAt" IS NULL
@@ -145,8 +154,8 @@ export async function findPurchaseFinancialSettlementMismatches(
       financialByPurchase.get(unsafePurchaseId(row.uuid)) ??
       emptyPurchaseFinancialAggregate();
     const financialReconciliation = calculateFinancialReconciliation({
-      expenseTotal: row.expenseTotal,
-      unpricedExpenseCount: row.unpriced,
+      settleableExpenseTotal: row.settleableExpenseTotal,
+      settleableUnpricedExpenseCount: row.settleableUnpriced,
       ...financial,
     });
     if (

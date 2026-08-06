@@ -5,8 +5,8 @@ import {
 } from "./financial-reconciliation";
 
 const base: FinancialReconciliationInput = {
-  expenseTotal: 10,
-  unpricedExpenseCount: 0,
+  settleableExpenseTotal: 10,
+  settleableUnpricedExpenseCount: 0,
   transactionCount: 1,
   postedTransactionCount: 1,
   outstandingTransactionCount: 0,
@@ -25,7 +25,7 @@ describe("calculateFinancialReconciliation", () => {
     },
     {
       name: "unknown with an unpriced expense",
-      input: { ...base, unpricedExpenseCount: 1 },
+      input: { ...base, settleableUnpricedExpenseCount: 1 },
       status: "unknown",
       delta: null,
     },
@@ -33,7 +33,7 @@ describe("calculateFinancialReconciliation", () => {
       name: "pending when projected settlement matches",
       input: {
         ...base,
-        expenseTotal: 51.49,
+        settleableExpenseTotal: 51.49,
         transactionCount: 2,
         outstandingTransactionCount: 1,
         postedTotal: 60.56,
@@ -60,9 +60,39 @@ describe("calculateFinancialReconciliation", () => {
     },
     {
       name: "compares in integer cents",
-      input: { ...base, expenseTotal: 10.004, postedTotal: 10.001 },
+      input: { ...base, settleableExpenseTotal: 10.004, postedTotal: 10.001 },
       status: "match",
       delta: -0.0030000000000001137,
+    },
+    {
+      // The shape that motivated `settleableExpenseTotal`: a payment schedule
+      // part-way through. Three payments posted, eight still planned. Passing
+      // the FULL expense total here reports a mismatch for a purchase that is
+      // behaving exactly as intended, so callers must pass the incurred total.
+      name: "match when only the incurred portion is compared",
+      input: {
+        ...base,
+        settleableExpenseTotal: 34787,
+        transactionCount: 3,
+        postedTransactionCount: 3,
+        postedTotal: 34787,
+        projectedTotal: 34787,
+      },
+      status: "match",
+      delta: 0,
+    },
+    {
+      name: "mismatch if a caller passes the full total including planned spend",
+      input: {
+        ...base,
+        settleableExpenseTotal: 142787,
+        transactionCount: 3,
+        postedTransactionCount: 3,
+        postedTotal: 34787,
+        projectedTotal: 34787,
+      },
+      status: "mismatch",
+      delta: -108000,
     },
   ])("returns $status for $name", ({ input, status, delta }) => {
     const result = calculateFinancialReconciliation(input);
