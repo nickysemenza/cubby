@@ -209,14 +209,13 @@ const getShoppingList = protectedProcedure
 
     const items = needs
       .map((n) => {
-        const have = n.haveValue ?? 0;
         return {
           ingredientId: n.ingredientId,
           name: n.name,
           basisUnit: n.basisUnit,
           needValue: n.needValue,
           haveValue: n.haveValue,
-          shortfall: Math.max(0, n.needValue - have),
+          shortfall: n.shortfall,
           status: n.status,
           perMeal: n.sources.flatMap((s) => {
             const meta = lineMeta[s.lineIndex];
@@ -237,7 +236,11 @@ const getShoppingList = protectedProcedure
       })
       // Surface what you need to buy first, then alphabetical.
       .sort(
-        (a, b) => b.shortfall - a.shortfall || a.name.localeCompare(b.name),
+        // Unknown shortfall sorts with the zeros, not above the real ones —
+        // it's not evidence you need to buy anything.
+        (a, b) =>
+          (b.shortfall ?? 0) - (a.shortfall ?? 0) ||
+          a.name.localeCompare(b.name),
       );
 
     return {

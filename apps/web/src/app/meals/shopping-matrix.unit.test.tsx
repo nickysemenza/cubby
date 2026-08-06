@@ -21,6 +21,17 @@ vi.mock("~/lib/wasm", () => ({
     singularize_unit: (unit: string) => unit,
     format_amount: ({ value, unit }: { value: number; unit: string }) =>
       unit === "whole" ? String(value) : `${value} ${unit}`,
+    // Mirrors availability.rs's ladder closely enough for the row fixtures;
+    // the real one is pinned by its own Rust tests.
+    availability_status_for: (
+      need: number,
+      have: number | null | undefined,
+      prior: string,
+    ) => {
+      if (have == null) return prior;
+      if (have + 1e-6 >= need) return "ok";
+      return have > 0 ? "short" : "missing";
+    },
   },
 }));
 

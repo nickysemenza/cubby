@@ -58,6 +58,8 @@ export const aggregatedNeedOut = z.object({
   needValue: z.number(),
   haveValue: z.number().nullable(),
   status: ingredientAvailabilityStatus,
+  /** `need - have`, floored at zero. Null when on-hand isn't known. */
+  shortfall: z.number().nullable(),
   sources: z.array(
     z.object({
       lineIndex: z.number().int(),

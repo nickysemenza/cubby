@@ -28,7 +28,8 @@ use crate::food_mappings::WProductInput;
 use crate::reconcile::{finite, product_mapping_pairs};
 
 /// Tiny tolerance so float rounding doesn't flip an exact match to "short".
-/// Mirrors the TS `COVERAGE_EPSILON`.
+/// The only copy: the shopping list re-verdicts through
+/// [`availability_status_for`] rather than carrying its own.
 const COVERAGE_EPSILON: f64 = 1e-6;
 
 // ---------------------------------------------------------------------------
@@ -73,7 +74,8 @@ pub struct WAvailabilityInput {
 /// Status verdict. Mirrors the zod `ingredientAvailabilityStatus` minus
 /// `subrecipe` (sub-recipes never reach the evaluator — the caller handles them).
 #[derive(Tsify, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[tsify(into_wasm_abi)]
+// `from_wasm_abi` too: `availability_status_for` takes a prior verdict back in.
+#[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(rename_all = "lowercase")]
 pub enum WAvailabilityStatus {
     /// Enough on hand.
@@ -104,6 +106,11 @@ pub struct WAvailabilityGroupResult {
     #[tsify(type = "number | null")]
     pub have_value: Option<f64>,
     pub status: WAvailabilityStatus,
+    /// `need - have`, floored at zero. `None` when on-hand isn't known — see
+    /// `shortfall_for`.
+    #[serde(default)]
+    #[tsify(type = "number | null")]
+    pub shortfall: Option<f64>,
     pub sources: Vec<WAvailabilitySource>,
 }
 
@@ -129,23 +136,59 @@ enum Basis {
     Incoherent,
 }
 
+/// Does a known on-hand total cover a need? The one home of the epsilon.
+fn compare_coverage(need_value: f64, have_total: f64) -> WAvailabilityStatus {
+    use WAvailabilityStatus::*;
+    if have_total + COVERAGE_EPSILON >= need_value {
+        Ok
+    } else if have_total > 0.0 {
+        Short
+    } else {
+        Missing
+    }
+}
+
 fn resolve_status(
     need_value: f64,
     have_total: f64,
     any_entries: bool,
     any_convertible: bool,
 ) -> WAvailabilityStatus {
-    use WAvailabilityStatus::*;
     if !any_entries {
-        Missing
+        WAvailabilityStatus::Missing
     } else if !any_convertible {
-        Unconvertible
-    } else if have_total + COVERAGE_EPSILON >= need_value {
-        Ok
-    } else if have_total > 0.0 {
-        Short
+        WAvailabilityStatus::Unconvertible
     } else {
-        Missing
+        compare_coverage(need_value, have_total)
+    }
+}
+
+/// How much of a need the on-hand total doesn't cover, or `None` when on-hand
+/// isn't known.
+///
+/// `None` is the honest answer for an unconvertible row: treating unknown stock
+/// as zero asserts a shortfall equal to the entire need, and sorts that
+/// invented number to the top of a buy-list.
+fn shortfall_for(need_value: f64, have_value: Option<f64>) -> Option<f64> {
+    have_value.map(|have| (need_value - have).max(0.0))
+}
+
+/// Re-verdict an item against a reduced need — the shopping list excluding some
+/// planned meals client-side, where re-sending the whole inventory to
+/// [`evaluate_availability`] would be absurd.
+///
+/// A `None` on-hand means either "no inventory" or "units don't reconcile", and
+/// only the original evaluation knows which, so `prior` stands. Everything else
+/// goes through the same comparison the evaluator uses.
+#[wasm_bindgen]
+pub fn availability_status_for(
+    need_value: f64,
+    have_value: Option<f64>,
+    prior: WAvailabilityStatus,
+) -> WAvailabilityStatus {
+    match have_value {
+        Some(have) => compare_coverage(need_value, have),
+        None => prior,
     }
 }
 
@@ -161,6 +204,7 @@ fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
             need_value: 0.0,
             have_value: None,
             status: WAvailabilityStatus::Ok,
+            shortfall: None,
             sources: Vec::new(),
         };
     }
@@ -305,6 +349,7 @@ fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
         need_value,
         have_value,
         status,
+        shortfall: shortfall_for(need_value, have_value),
         sources,
     }
 }
@@ -332,6 +377,48 @@ mod tests {
     use super::*;
     use crate::WUnitMapping;
     use rstest::rstest;
+
+    #[test]
+    fn status_for_reverdicts_against_a_reduced_need() {
+        use WAvailabilityStatus::*;
+        // The shopping-list case: excluding a meal lowers the need, and a row
+        // that was short becomes ok without re-sending any inventory.
+        assert_eq!(availability_status_for(100.0, Some(500.0), Short), Ok);
+        assert_eq!(availability_status_for(600.0, Some(500.0), Ok), Short);
+        assert_eq!(availability_status_for(600.0, Some(0.0), Ok), Missing);
+    }
+
+    #[test]
+    fn status_for_keeps_the_prior_verdict_when_on_hand_is_unknown() {
+        use WAvailabilityStatus::*;
+        // None means "no inventory" OR "units don't reconcile"; only the
+        // original evaluation knows which, so it must not be re-derived.
+        assert_eq!(
+            availability_status_for(5.0, None, Unconvertible),
+            Unconvertible
+        );
+        assert_eq!(availability_status_for(5.0, None, Missing), Missing);
+    }
+
+    #[test]
+    fn status_for_shares_the_evaluator_epsilon() {
+        // An exact match must not flip to Short on float noise — the same
+        // tolerance `resolve_status` applies, because it's the same function.
+        assert_eq!(
+            availability_status_for(0.1 + 0.2, Some(0.3), WAvailabilityStatus::Ok),
+            WAvailabilityStatus::Ok
+        );
+    }
+
+    #[test]
+    fn shortfall_is_none_when_on_hand_is_unknown() {
+        // Not zero, and not the whole need: an unconvertible row's shortfall is
+        // genuinely unknown, and claiming the full need sorts an invented
+        // number to the top of the buy list.
+        assert_eq!(shortfall_for(500.0, None), None);
+        assert_eq!(shortfall_for(500.0, Some(200.0)), Some(300.0));
+        assert_eq!(shortfall_for(200.0, Some(500.0)), Some(0.0));
+    }
 
     fn amt(value: f64, unit: &str) -> WAmount {
         WAmount {

@@ -413,6 +413,7 @@ export class AvailabilityService {
           needValue: g.result?.need_value ?? 0,
           haveValue: g.result?.have_value ?? null,
           status: g.result?.status ?? "missing",
+          shortfall: g.result?.shortfall ?? null,
           // `evaluate_group` builds `sources` positionally 1:1 with the needs
           // it was handed (including under an incoherent basis, which zeroes
           // the values but keeps the vector), so zip by INDEX. lineIndex is no

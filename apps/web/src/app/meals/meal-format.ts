@@ -53,11 +53,18 @@ export const haveText = (row: ShoppingRow): string =>
     ? "—"
     : formatAmount(row.item.haveValue, row.item.basisUnit);
 
-export const shortText = (row: ShoppingRow): string =>
-  row.shortfall > 0 ? formatAmount(row.shortfall, row.item.basisUnit) : "✓";
+/** "?" when on-hand is unknown — distinct from a real, covered zero ("✓"). */
+export const shortText = (row: ShoppingRow): string => {
+  if (row.shortfall == null) return "?";
+  return row.shortfall > 0
+    ? formatAmount(row.shortfall, row.item.basisUnit)
+    : "✓";
+};
 
 export const shortClass = (row: ShoppingRow): string =>
-  row.shortfall > 0 ? statusClass(row.status) : "text-muted-foreground";
+  row.shortfall == null || row.shortfall > 0
+    ? statusClass(row.status)
+    : "text-muted-foreground";
 
 export const statusLabel = (status: IngredientAvailabilityStatus): string => {
   switch (status) {
