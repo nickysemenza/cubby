@@ -112,7 +112,7 @@ const fireRowAction = (label: string, rowIndex: number) => {
   render(<ProductStockedAt product={product} />);
   const row = mocks.rows.current[rowIndex];
   expect(row).toBeDefined();
-  const menu = render(<>{mocks.extraActions.current!(row as never)}</>);
+  const menu = render(mocks.extraActions.current!(row as never));
   fireEvent.click(menu.getByText(label));
 };
 
@@ -148,7 +148,7 @@ describe("ProductStockedAt", () => {
   it("offers Move, Discard, and Delete on every row", () => {
     render(<ProductStockedAt product={product} />);
     const menu = render(
-      <>{mocks.extraActions.current!(mocks.rows.current[0] as never)}</>,
+      mocks.extraActions.current!(mocks.rows.current[0] as never),
     );
     expect(menu.getByText("Move to...")).toBeInTheDocument();
     expect(menu.getByText("Discard...")).toBeInTheDocument();
