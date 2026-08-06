@@ -36,11 +36,8 @@ export type FilterKind =
   | "idMulti" // any-of a set of branded entity ids
   | "range"; // preset key expanding to a {from,to} pair
 
-/** The fields the pure builders need. See `FilterSpec` for the full shape. */
 export interface FilterSpecCore {
-  /** Table column this filter renders under. */
   columnId: string;
-  /** Server filter key. Defaults to `columnId` when the two agree. */
   field?: string;
   /**
    * URL search-param key. Defaults to `columnId`; override only to keep an
@@ -48,9 +45,7 @@ export interface FilterSpecCore {
    */
   urlKey?: string;
   kind: FilterKind;
-  /** Brands a raw string into an entity id (`id` / `idMulti` only). */
   brand?: (value: string) => unknown;
-  /** Expands a preset key into multiple server fields (`range` only). */
   expand?: (value: string) => Record<string, unknown>;
   /**
    * No table column renders this spec — it's URL state only: a deep link's

@@ -117,7 +117,6 @@ export const createProductFixture = async (
   return { ...output, entityId: unsafeProductId(resolvedProductId) };
 };
 
-/** Public ingredient output plus its private UUID for repo-only writes. */
 export const createIngredientFixture = async (
   db: Database,
   data: Parameters<typeof createIngredient>[1],
@@ -133,7 +132,6 @@ export const createIngredientFixture = async (
   return { ...output, entityId: unsafeIngredientId(resolvedIngredientId) };
 };
 
-/** Public location output plus the UUID needed by repo-only fixture writes. */
 export const createLocationFixture = async (
   db: Database,
   data: LocationCreateInput,
@@ -256,7 +254,6 @@ export const makeLocationInput = (
     },
   });
 
-/** A section's ingredient row (collapses the type/recipeId/amounts boilerplate). */
 export const ingredientRef = (
   id: string,
   opts: { amounts?: Amount[]; modifier?: string; rawLine?: string } = {},
@@ -269,7 +266,6 @@ export const ingredientRef = (
   ...(opts.rawLine !== undefined ? { rawLine: opts.rawLine } : {}),
 });
 
-/** A direct (non-cookbook) recipe create input with defaults. */
 export const makeRecipeInput = (
   opts: {
     name?: string;
@@ -286,7 +282,6 @@ export const makeRecipeInput = (
   ...("tags" in opts ? { tags: opts.tags } : {}),
 });
 
-/** Public recipe graph plus its private UUID for repo/service test calls. */
 export const createRecipeFixture = async (
   db: Database,
   input: RecipeCreateInput,
@@ -298,7 +293,6 @@ export const createRecipeFixture = async (
   return { ...output, entityId: unsafeRecipeId(resolvedRecipeId) };
 };
 
-/** Public meal output plus its private UUID for repo-only writes. */
 export const createMealFixture = async (
   db: Database,
   input: MealCreateInput,
@@ -310,7 +304,6 @@ export const createMealFixture = async (
   return { ...output, entityId: unsafeMealId(resolvedMealId) };
 };
 
-/** A raw ImportRecipe (the parser's shape; lines parsed server-side on import). */
 export const makeImportRecipe = (
   overrides: Partial<ImportRecipe> = {},
 ): ImportRecipe => ({
@@ -320,7 +313,6 @@ export const makeImportRecipe = (
   ...overrides,
 });
 
-/** Convenience for the common cookbook shape: one section of bare ingredient lines. */
 export const cookbookRecipe = (
   title: string,
   ingredients: string[],
@@ -332,7 +324,6 @@ export const cookbookRecipe = (
     ...overrides,
   });
 
-/** Seed N ingredients by name, returning the created rows in order. */
 export const createIngredients = (
   db: Database,
   names: string[],

@@ -65,7 +65,6 @@ const PREFIX_TO_TYPE = Object.fromEntries(
 const LEGACY_TO_TYPE: Record<string, ShortcodeType | undefined> =
   LEGACY_SHORTCODE_PREFIX;
 
-/** Regex a canonical shortcode of `type` must match, e.g. `^PRD-[…]{4}$`. */
 const shortcodeRegex = (type: ShortcodeType) =>
   new RegExp(`^${SHORTCODE_PREFIX[type]}${BODY_PATTERN}$`);
 

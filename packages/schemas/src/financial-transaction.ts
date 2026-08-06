@@ -350,7 +350,6 @@ export type FinancialTransactionListResponse = z.infer<
   typeof financialTransactionListResponse
 >;
 
-/** Largest client-parsed statement batch one preview accepts. */
 export const FINANCIAL_STATEMENT_IMPORT_MAX_ROWS = 200;
 
 /**
@@ -415,7 +414,6 @@ const financialStatementImportProposedTransaction = z.object({
   notes: z.string().nullable(),
 });
 
-/** A non-persisted account suggestion for an unresolved statement descriptor. */
 const financialStatementProvisionalAccount = z.object({
   name: z.string().min(1),
   identity: financialAccountIdentity,

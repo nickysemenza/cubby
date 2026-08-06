@@ -186,15 +186,10 @@ function DetailBreadcrumb({
 
 interface PageHeroProps extends VariantProps<typeof heroVariants> {
   title: ReactNode;
-  /** Small uppercase label above the title (e.g. "Pantry" above "Locations"). */
   eyebrow?: ReactNode;
-  /** Bullet-separated meta items below the title. Detail/compact variants render with icons inline. */
   meta?: PageHeroMetaItem[];
-  /** Right-aligned action area (typically buttons). */
   actions?: ReactNode;
-  /** Optional entity used for derived eyebrow text and accent color. */
   entity?: Entity;
-  /** Decoration under title. "accent" applies the ultramarine page-header-accent rule. */
   decoration?: "accent" | "none";
   className?: string;
   /**
@@ -398,16 +393,13 @@ function DetailPlate({
 }
 
 interface PageHeaderProps {
-  /** "list" renders the eyebrow/title/accent header; "detail" the spec-plate. */
   variant: "list" | "detail";
   title: ReactNode;
   eyebrow?: ReactNode;
   entity?: Entity;
   actions?: ReactNode;
   className?: string;
-  /** List-only: smaller title for utility pages (maps to PageHero "compact"). */
   compact?: boolean;
-  /** List-only: "none" drops the accent bar under the title. */
   decoration?: "accent" | "none";
   // Detail-only spec-plate extras.
   rawData?: unknown;
@@ -415,7 +407,6 @@ interface PageHeaderProps {
   heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
   heroStats?: DetailHeroStat[];
   heroImages?: Array<{ id: string; url: string; filename: string }>;
-  /** List-only: true filtered record count (see {@link PageHeroProps.count}). */
   count?: number;
 }
 

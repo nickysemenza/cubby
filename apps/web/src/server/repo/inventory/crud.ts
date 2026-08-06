@@ -208,7 +208,6 @@ export const getInventoryEntryByID = (db: Database, id: InventoryId) =>
 export const getInventoryEntryByShortcode = (db: Database, shortcode: string) =>
   inventoryReader.getByShortcode(db, shortcode);
 
-/** Filters for inventory list queries */
 interface InventoryFilters {
   createdFrom?: string;
   createdTo?: string;

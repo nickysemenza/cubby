@@ -331,7 +331,6 @@ export const projectOptionsOut = z.object({
 });
 export type ProjectOptionsOut = z.infer<typeof projectOptionsOut>;
 
-/** A 4-digit year filter, e.g. "2024". */
 const completionYear = z
   .string()
   .regex(/^\d{4}$/)
@@ -556,21 +555,18 @@ export const taskBulkMoveInput = z.object({
 });
 export type TaskBulkMoveInput = z.infer<typeof taskBulkMoveInput>;
 
-/** Bulk status write — same enum as a single `taskUpdateData.status` write. */
 export const taskBulkStatusInput = z.object({
   ids: z.array(taskShortcode).min(1),
   status: taskStatusSchema,
 });
 export type TaskBulkStatusInput = z.infer<typeof taskBulkStatusInput>;
 
-/** Bulk trade write — same enum as a single `taskUpdateData.trade` write. */
 export const taskBulkTradeInput = z.object({
   ids: z.array(taskShortcode).min(1),
   trade: tradeSchema,
 });
 export type TaskBulkTradeInput = z.infer<typeof taskBulkTradeInput>;
 
-/** Bulk due-date write — same nullable pair as a single task update. */
 export const taskBulkDueDateInput = z.object({
   ids: z.array(taskShortcode).min(1),
   dueDate: plainDate.nullable(),
@@ -936,7 +932,6 @@ export const expenseBulkMoveInput = z.object({
 });
 export type ExpenseBulkMoveInput = z.infer<typeof expenseBulkMoveInput>;
 
-/** Bulk trade write — same enum as a single `expenseUpdateData.trade` write. */
 export const expenseBulkTradeInput = z.object({
   ids: z.array(expenseShortcode).min(1),
   trade: tradeSchema,
@@ -1233,7 +1228,6 @@ export type ExpenseListAndSideEffectsOut = z.infer<
  * re-export of the identical schema is a duplicate export, not a real type.
  */
 
-/** actual+committed+credits+net+count, the shared shape every aggregate row carries. */
 const expenseAggregateFields = {
   actual: z.number(),
   committed: z.number(),
@@ -1249,7 +1243,6 @@ export const expenseAnalyticsSummary = z.object({
 });
 export type ExpenseAnalyticsSummary = z.infer<typeof expenseAnalyticsSummary>;
 
-/** Signed aggregate for every non-principal receipt adjustment. */
 export const expenseAdjustmentsAggregate = z.object({
   ...expenseAggregateFields,
 });
@@ -1344,12 +1337,10 @@ export type ExpenseAnalyticsOut = z.infer<typeof expenseAnalyticsOut>;
  */
 export const HOUSE_TAX_RATE = 0.08625;
 
-/** Default half-widths of the amount window, as fractions of the row amount. */
 export const MATCH_TOLERANCE_LOW = 0.1;
 export const MATCH_TOLERANCE_HIGH = 0.15;
 /** Dollars. Below this, a relative band is too narrow to be useful. */
 export const MATCH_AMOUNT_FLOOR = 1.0;
-/** Largest batch one `match_expenses` call accepts. */
 export const MATCH_MAX_ROWS = 200;
 
 /** One line of a vendor export, to be matched against the ledger. */
@@ -1409,14 +1400,11 @@ export const expenseMatchInput = z.object({
   maxCandidatesPerRow: z.number().int().min(1).max(50).default(10),
 });
 export type ExpenseMatchInput = z.input<typeof expenseMatchInput>;
-/** Post-parse shape: every default applied, so the repo takes no optionals. */
 export type ExpenseMatchOptions = z.output<typeof expenseMatchInput>;
 
-/** Which arm produced a candidate. Order-id hits always outrank amount+date. */
 export const expenseMatchedOn = z.enum(["order_id", "amount_date"]);
 export type ExpenseMatchedOn = z.infer<typeof expenseMatchedOn>;
 
-/** How a candidate's `cost / amount` ratio reads against `taxRate`. */
 export const expenseMatchRatioLabel = z.enum([
   "exact",
   "plus_tax",

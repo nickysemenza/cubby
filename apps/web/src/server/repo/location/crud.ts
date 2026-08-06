@@ -308,7 +308,6 @@ export const updateLocation = async (
       );
     }
 
-    // Log audit entry with changes
     if (before) {
       const changes = computeChanges(before, updated, [
         "name",

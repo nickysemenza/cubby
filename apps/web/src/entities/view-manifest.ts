@@ -33,19 +33,15 @@ import { FILTER_NONE } from "./filters";
  *  `{id, value}` shape `decodeFilters` produces and `table.setColumnFilters`
  *  consumes, so no translation layer is needed in either direction. */
 interface ViewFilter {
-  /** A `columnId` of a filter spec declared for this entity. */
   id: string;
   value: string | string[];
 }
 
 export interface ViewDefinition {
-  /** Stable id — also the legacy `?view=` value it replaces, where one exists. */
   id: string;
   label: string;
-  /** One-line description of what the view selects, shown under the label. */
   description: string;
   filters: ViewFilter[];
-  /** TanStack `SortingState`; omitted means "leave the current sort alone". */
   sort?: Array<{ id: string; desc: boolean }>;
   /**
    * Columns to force on (or off) when the view is applied, by `columnId`.

@@ -127,7 +127,6 @@ function getRegisteredTools(
   return (server as unknown as McpServerInternals)._registeredTools;
 }
 
-/** What a tool with no arguments at all advertises. */
 const EMPTY_OBJECT_JSON_SCHEMA = { type: "object", properties: {} };
 
 /**
@@ -169,7 +168,6 @@ function toolInputSchema(
   return normalized as z.ZodType;
 }
 
-/** Recursively delete `mock` keys from JSON Schema objects exposed to MCP clients. */
 export function stripMockFromJsonSchema(
   schema: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -910,7 +908,6 @@ function updateHandler(
   };
 }
 
-/** One item of a best-effort MCP mutation batch. */
 function batchMutationOut(item: z.ZodType) {
   return z.object({
     summary: z.object({
@@ -1042,7 +1039,6 @@ export function strictFilterInput<TShape extends Record<string, z.ZodType>>(
   });
 }
 
-/** Pick filter fields present in params using a filter field map's keys. */
 function pickSchemaFilters(
   params: Row,
   filterFields: Record<string, z.ZodType>,
@@ -1495,7 +1491,6 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
   }
 }
 
-/** Register a tool that calls a tRPC procedure and returns the result as-is. */
 export function registerRouterTool<
   TInput extends ZodSchemaLike = Record<string, never>,
   TOutput extends z.ZodType = z.ZodType,
