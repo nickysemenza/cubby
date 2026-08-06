@@ -106,4 +106,28 @@ describe("useListBulkActions", () => {
     expect(mocks.copyShortcodes).toHaveBeenCalledWith(["PRD-4K7M", "PRD-9X2A"]);
     expect(result.current.state.selectedCount).toBe(2);
   });
+
+  // The other half of `preserveSelection`: an action without it must still
+  // clear. Asserting only the keep-side would let an inverted condition make
+  // EVERY action sticky — including Delete, which would leave rows ticked that
+  // no longer exist.
+  it("still clears the selection for an action that does not preserve it", async () => {
+    const { result } = renderHook(() =>
+      useListBulkActions<TestRow>({
+        entity: "product",
+        deleteBulkAction: noop,
+      }),
+    );
+
+    act(() => {
+      result.current.state.onRowSelectionChange({ "PRD-4K7M": true });
+    });
+    expect(result.current.state.selectedCount).toBe(1);
+
+    await act(async () => {
+      await result.current.state.executeAction(noop, rows("PRD-4K7M"));
+    });
+
+    expect(result.current.state.selectedCount).toBe(0);
+  });
 });

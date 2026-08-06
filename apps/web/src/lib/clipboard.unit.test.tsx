@@ -58,6 +58,18 @@ describe("copyText", () => {
 
     await expect(copyText("PRD-4K7M")).resolves.toBe(false);
   });
+
+  // The fallback can throw rather than return false (older WebKit, and any
+  // context where `execCommand` is absent entirely) — a copy button must not
+  // take the page down with it.
+  it("swallows a throwing fallback instead of rejecting", async () => {
+    stubClipboard(vi.fn().mockRejectedValue(new Error("denied")));
+    document.execCommand = vi.fn(() => {
+      throw new Error("unsupported");
+    });
+
+    await expect(copyText("PRD-4K7M")).resolves.toBe(false);
+  });
 });
 
 describe("copyShortcodes", () => {
