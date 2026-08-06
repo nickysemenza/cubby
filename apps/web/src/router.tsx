@@ -7,6 +7,7 @@ import { RoutePending } from "~/components/route-pending";
 import { installPreloadErrorRecovery } from "~/lib/deploy-recovery";
 import { isSupersededViewTransitionError } from "~/lib/error-utils";
 import { installJsProfiler } from "~/lib/perf/js-self-profile";
+import { installNavigationTracker } from "~/lib/perf/navigation-tracker";
 import { SENTRY_DSN } from "~/lib/sentry-dsn";
 import { scrubSentryEvent } from "~/lib/sentry-scrub";
 import * as TanstackQuery from "./integrations/tanstack-query/root-provider";
@@ -44,8 +45,8 @@ export const getRouter = () => {
     // preloaded (instant) navs show nothing, only genuinely-not-ready ones do;
     // pendingMinMs holds it long enough to avoid a flicker once shown.
     defaultPendingComponent: RoutePending,
-    defaultPendingMs: 200,
-    defaultPendingMinMs: 400,
+    defaultPendingMs: 350,
+    defaultPendingMinMs: 150,
   });
 
   // Initialize Sentry on client only. Dev keeps error reporting but drops
@@ -116,6 +117,7 @@ export const getRouter = () => {
         : (breadcrumb) =>
             breadcrumb.category === "console" ? null : breadcrumb,
     });
+    installNavigationTracker(router);
 
     // Dev-only on-demand CPU profiler: `await __jsProfile(5000)` in the console.
     if (!isProd) installJsProfiler();

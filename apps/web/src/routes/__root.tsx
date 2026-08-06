@@ -10,10 +10,16 @@ import {
   HeadContent,
   Outlet,
   Scripts,
+  useRouterState,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import type { TRPCOptionsProxy } from "@trpc/tanstack-react-query";
 import * as React from "react";
+import {
+  loadCommandMenu,
+  markCommandMenuOpen,
+  preloadCommandMenu,
+} from "~/app/_components/command-menu-loader";
 import { AppFooter } from "~/app/_components/footer";
 import { MainNav } from "~/app/_components/MainNav";
 import { BottomNav } from "~/app/_components/navigation/bottom-nav";
@@ -24,6 +30,7 @@ import { useDebug } from "~/hooks/useDebug";
 import type { TRPCRouter } from "~/integrations/trpc/router";
 import { getClientAuthed, getGuardSession } from "~/lib/auth-guard";
 import { useFlag } from "~/lib/flags";
+import { scheduleIdlePreload } from "~/lib/lazy-preload";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 import { Provider } from "../integrations/tanstack-query/root-provider";
@@ -31,11 +38,7 @@ import appCss from "../styles.css?url";
 
 // Lazy: the command menu pulls in cmdk + react-markdown + the agent stream,
 // none of which is needed for first paint. Loaded on first ⌘K / search click.
-const GlobalCommandMenu = React.lazy(() =>
-  import("~/app/_components/command-menu").then((m) => ({
-    default: m.GlobalCommandMenu,
-  })),
-);
+const GlobalCommandMenu = React.lazy(loadCommandMenu);
 
 // Lazy + flag-gated: the perf overlay and its web-vitals collector only load when
 // the `perfOverlay` flag is on (flippable on /settings, any environment).
@@ -219,6 +222,8 @@ function RootComponent() {
   const [commandMenuMounted, setCommandMenuMounted] = React.useState(false);
 
   const openCommandMenu = React.useCallback(() => {
+    markCommandMenuOpen();
+    preloadCommandMenu();
     setCommandMenuMounted(true);
     setCommandMenuOpen(true);
   }, []);
@@ -226,16 +231,25 @@ function RootComponent() {
   // Shell-owned ⌘K hotkey (toggles), so the shortcut works before the lazily
   // loaded menu has mounted. The menu no longer registers its own listener.
   React.useEffect(() => {
+    return scheduleIdlePreload(window, preloadCommandMenu, {
+      timeoutMs: 2_000,
+      fallbackMs: 500,
+    });
+  }, []);
+
+  React.useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
+        if (!commandMenuOpen) markCommandMenuOpen();
+        preloadCommandMenu();
         setCommandMenuMounted(true);
         setCommandMenuOpen((prev) => !prev);
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [commandMenuOpen]);
 
   return (
     <Provider queryClient={queryClient}>
@@ -244,6 +258,7 @@ function RootComponent() {
           <div className="mx-auto flex h-12 w-full max-w-7xl items-center px-2 md:px-6">
             <MainNav className="mx-0" onSearchClick={openCommandMenu} />
           </div>
+          <NavigationProgress />
         </div>
         <main className="w-full flex-1 px-2 pt-4 pb-20 md:px-6 md:pb-4">
           {/* biome-ignore lint/correctness/useUniqueElementIds: React <Profiler> id, not a DOM id */}
@@ -266,6 +281,32 @@ function RootComponent() {
       <PerfOverlayMount />
       <DevtoolsWrapper />
     </Provider>
+  );
+}
+
+/** A quiet progress rule only for navigations slow enough for users to notice. */
+function NavigationProgress() {
+  const isLoading = useRouterState({ select: (state) => state.isLoading });
+  const [visible, setVisible] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!isLoading) {
+      setVisible(false);
+      return;
+    }
+    const timeout = window.setTimeout(() => setVisible(true), 120);
+    return () => window.clearTimeout(timeout);
+  }, [isLoading]);
+
+  return (
+    <div
+      aria-hidden="true"
+      className="absolute inset-x-0 bottom-0 h-0.5 overflow-hidden"
+    >
+      {visible && (
+        <div className="h-full w-2/5 animate-pulse bg-primary motion-reduce:animate-none" />
+      )}
+    </div>
   );
 }
 

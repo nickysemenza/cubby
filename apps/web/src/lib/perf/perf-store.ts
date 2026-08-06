@@ -53,14 +53,46 @@ export interface PerfSnapshot {
   queries: Record<string, QueryStat>;
   runtime: RuntimeStat;
   vitals: VitalsStat;
+  navigation: NavigationStat;
+  commandSearch: CommandSearchStat;
   slowest: SlowEvent[];
   paused: boolean;
+}
+
+interface NavigationStat {
+  count: number;
+  totalMs: number;
+  maxMs: number;
+  pendingShown: number;
+  last: { routeId: string; durationMs: number } | null;
+  records: NavigationRecord[];
+}
+
+interface NavigationRecord {
+  routeId: string;
+  durationMs: number;
+  pendingShown: boolean;
+  at: number;
+}
+
+export interface CommandSearchRecord {
+  phase: "lexical" | "semantic" | "chunk-preload" | "chunk-open";
+  durationMs: number;
+  resultCount: number;
+  scoped: boolean;
+  queryLength: number;
+  at: number;
+}
+
+interface CommandSearchStat {
+  records: CommandSearchRecord[];
 }
 
 const FANOUT_WINDOW_MS = 1000;
 const FANOUT_THRESHOLD = 5;
 const SLOW_EVENT_MS = 16; // one 60fps frame
 const SLOW_LOG_MAX = 40;
+const INTERACTION_LOG_MAX = 50;
 
 const wasm = new Map<string, WasmStat>();
 const renders = new Map<string, RenderStat>();
@@ -68,6 +100,15 @@ const queries = new Map<string, QueryStat>();
 const queryTimestamps = new Map<string, number[]>();
 const runtime: RuntimeStat = { fps: 0, longTasks: 0, heapUsedMB: null };
 const vitals: VitalsStat = { lcp: null, inp: null, cls: null };
+const navigation: NavigationStat = {
+  count: 0,
+  totalMs: 0,
+  maxMs: 0,
+  pendingShown: 0,
+  last: null,
+  records: [],
+};
+const commandSearch: CommandSearchStat = { records: [] };
 const slowLog: SlowEvent[] = [];
 let cacheSize = 0;
 let paused = false;
@@ -160,6 +201,43 @@ export function recordQuery(procedure: string, durationMs: number): void {
   recordSlow("query", procedure, durationMs);
 }
 
+/** Record router start → first animation frame after the destination rendered. */
+export function recordNavigation({
+  routeId,
+  durationMs,
+  pendingShown,
+}: {
+  routeId: string;
+  durationMs: number;
+  pendingShown: boolean;
+}): void {
+  if (paused) return;
+  navigation.count += 1;
+  navigation.totalMs += durationMs;
+  navigation.maxMs = Math.max(navigation.maxMs, durationMs);
+  if (pendingShown) navigation.pendingShown += 1;
+  navigation.last = { routeId, durationMs };
+  navigation.records.push({
+    routeId,
+    durationMs,
+    pendingShown,
+    at: performance.now(),
+  });
+  if (navigation.records.length > INTERACTION_LOG_MAX)
+    navigation.records.shift();
+}
+
+/** Record one bounded Command-K network or chunk timing sample. */
+export function recordCommandSearch(
+  record: Omit<CommandSearchRecord, "at">,
+): void {
+  if (paused) return;
+  commandSearch.records.push({ ...record, at: performance.now() });
+  if (commandSearch.records.length > INTERACTION_LOG_MAX) {
+    commandSearch.records.shift();
+  }
+}
+
 export function reset(): void {
   wasm.clear();
   renders.clear();
@@ -168,6 +246,13 @@ export function reset(): void {
   slowLog.length = 0;
   runtime.longTasks = 0;
   cacheSize = 0;
+  navigation.count = 0;
+  navigation.totalMs = 0;
+  navigation.maxMs = 0;
+  navigation.pendingShown = 0;
+  navigation.last = null;
+  navigation.records.length = 0;
+  commandSearch.records.length = 0;
 }
 
 export function setPaused(value: boolean): void {
@@ -197,6 +282,8 @@ export function snapshot(): PerfSnapshot {
       heapUsedMB: mem ? Math.round(mem.usedJSHeapSize / 1024 / 1024) : null,
     },
     vitals: { ...vitals },
+    navigation: { ...navigation, records: [...navigation.records] },
+    commandSearch: { records: [...commandSearch.records] },
     slowest: slowLog.slice().reverse(), // most-recent-first
     paused,
   };

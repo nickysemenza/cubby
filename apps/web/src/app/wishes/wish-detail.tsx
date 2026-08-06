@@ -1,6 +1,12 @@
 import type { WishCandidateOut, WishOut } from "@cubby/schemas/wish";
+import {
+  type QueryKey,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { Check, Heart, Info, Pencil } from "lucide-react";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -10,8 +16,16 @@ import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
+import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrencyRange } from "~/lib/format-range";
-import { wishMutationInvalidateKeys } from "~/lib/query-keys";
+import { patchListItem } from "~/lib/optimistic-list";
+import {
+  cancelTRPCQueries,
+  invalidateTRPCQueries,
+  normalizeTRPCQueryKey,
+  queryKeys,
+  wishMutationInvalidateKeys,
+} from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import {
   type DetailSection,
@@ -41,6 +55,7 @@ import { wishPriceRange } from "./wish-price-range";
  */
 export function WishDetail({ wish }: { wish: WishOut }) {
   const api = useTRPC();
+  const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
 
   const updateMutation = useUpdateMutation({
@@ -78,8 +93,53 @@ export function WishDetail({ wish }: { wish: WishOut }) {
     redirectTo: "/wishes",
   });
 
+  const wishKey = api.wish.getByShortcode.queryKey({ shortcode: wish.id });
+  const acquiredBase = api.wish.update.mutationOptions();
+  const acquiredMutation = useMutation({
+    mutationKey: acquiredBase.mutationKey,
+    mutationFn: acquiredBase.mutationFn,
+    onMutate: async (variables) => {
+      await cancelTRPCQueries(queryClient, [wishKey, queryKeys.wish.list]);
+      const previousDetail = queryClient.getQueryData<WishOut | null>(wishKey);
+      const listPrefix = normalizeTRPCQueryKey(queryKeys.wish.list);
+      const previousLists = queryClient.getQueriesData<{ items: WishOut[] }>({
+        queryKey: listPrefix,
+      });
+      const acquiredAt = variables.data.acquired ? new Date() : null;
+      const patchWish = (current: WishOut) => ({ ...current, acquiredAt });
+      queryClient.setQueryData<WishOut | null>(wishKey, (current) =>
+        current ? patchWish(current) : current,
+      );
+      // Every visible wish list uses this procedure prefix. Patch its concrete
+      // page entries directly rather than recursively walking unrelated data.
+      queryClient.setQueriesData<{ items: WishOut[] }>(
+        { queryKey: listPrefix },
+        (current) => patchListItem(current, String(variables.id), patchWish),
+      );
+      return { previousDetail, previousLists };
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(wishKey, updated);
+      queryClient.setQueriesData<{ items: WishOut[] }>(
+        { queryKey: normalizeTRPCQueryKey(queryKeys.wish.list) },
+        (current) => patchListItem(current, updated.id, () => updated),
+      );
+    },
+    onError: (error, _variables, context) => {
+      if (context?.previousDetail) {
+        queryClient.setQueryData(wishKey, context.previousDetail);
+      }
+      for (const [key, data] of context?.previousLists ?? []) {
+        queryClient.setQueryData(key as QueryKey, data);
+      }
+      toast.error(getErrorMessage(error));
+    },
+    onSettled: () =>
+      invalidateTRPCQueries(queryClient, wishMutationInvalidateKeys),
+  });
+
   const toggleAcquired = () =>
-    updateMutation.mutate({
+    acquiredMutation.mutate({
       id: wish.id,
       data: { acquired: !wish.acquiredAt },
     });
@@ -180,7 +240,7 @@ export function WishDetail({ wish }: { wish: WishOut }) {
           <Button
             variant="outline"
             onClick={toggleAcquired}
-            disabled={updateMutation.isPending}
+            disabled={acquiredMutation.isPending}
           >
             <Check />
             {wish.acquiredAt ? "Still wanted" : "Mark acquired"}

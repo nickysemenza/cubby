@@ -3,11 +3,12 @@ import type {
   ProjectToolSuggestionOut,
 } from "@cubby/schemas/project";
 import { TRADE_LABELS } from "@cubby/schemas/project";
-import { useQuery } from "@tanstack/react-query";
+import type { QueryKey } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, Trash2, Wrench } from "lucide-react";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -31,7 +32,12 @@ import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useTRPC } from "~/integrations/trpc/react";
-import { projectResourceMutationInvalidateKeys } from "~/lib/query-keys";
+import { getErrorMessage } from "~/lib/error-utils";
+import {
+  cancelTRPCQueries,
+  invalidateTRPCQueries,
+  projectResourceMutationInvalidateKeys,
+} from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 
 const EMPTY_RESOURCES: ProjectResourceOut[] = [];
@@ -74,15 +80,38 @@ function ResourceIdentity({
 function AttachedResourceRow({
   projectId,
   resource,
+  resourcesKey,
 }: {
   projectId: string;
   resource: ProjectResourceOut;
+  resourcesKey: QueryKey;
 }) {
   const api = useTRPC();
-  const detach = useActionMutation({
-    mutationFn: api.project.detachResources.mutationOptions,
-    success: `Removed ${resource.productName} from this project`,
-    invalidateKeys: projectResourceMutationInvalidateKeys,
+  const queryClient = useQueryClient();
+  const detachBase = api.project.detachResources.mutationOptions();
+  const detach = useMutation({
+    mutationKey: detachBase.mutationKey,
+    mutationFn: detachBase.mutationFn,
+    onMutate: async (variables) => {
+      await cancelTRPCQueries(queryClient, [resourcesKey]);
+      const previous =
+        queryClient.getQueryData<ProjectResourceOut[]>(resourcesKey);
+      queryClient.setQueryData<ProjectResourceOut[]>(resourcesKey, (current) =>
+        current?.filter(
+          (item) => !variables.productIds.includes(item.productId),
+        ),
+      );
+      return { previous };
+    },
+    onSuccess: () =>
+      toast.success(`Removed ${resource.productName} from this project`),
+    onError: (error, _variables, context) => {
+      if (context?.previous)
+        queryClient.setQueryData(resourcesKey, context.previous);
+      toast.error(getErrorMessage(error));
+    },
+    onSettled: () =>
+      invalidateTRPCQueries(queryClient, projectResourceMutationInvalidateKeys),
   });
 
   return (
@@ -181,13 +210,16 @@ function ResourcePickerDialog({
   onOpenChange,
   projectId,
   attachedIds,
+  resourcesKey,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
   attachedIds: Set<string>;
+  resourcesKey: QueryKey;
 }) {
   const api = useTRPC();
+  const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const suggestionsQuery = useQuery(
@@ -220,14 +252,81 @@ function ResourcePickerDialog({
     (item) => !attachedIds.has(item.id),
   );
 
-  const attach = useActionMutation({
-    mutationFn: api.project.attachResources.mutationOptions,
-    success: (result) =>
-      `Attached ${result.changed} resource${result.changed === 1 ? "" : "s"}`,
-    invalidateKeys: projectResourceMutationInvalidateKeys,
-    onSuccess: () => {
+  const attachBase = api.project.attachResources.mutationOptions();
+  const attach = useMutation({
+    mutationKey: attachBase.mutationKey,
+    mutationFn: attachBase.mutationFn,
+    onMutate: async (variables) => {
+      await cancelTRPCQueries(queryClient, [resourcesKey]);
+      const previous =
+        queryClient.getQueryData<ProjectResourceOut[]>(resourcesKey);
+      const browsed = [
+        ...(toolSearchQuery.data?.items ?? []).map((item) => ({
+          id: item.id,
+          name: item.name,
+          manufacturer: item.manufacturer ?? "",
+          category: "tools" as const,
+        })),
+        ...(softwareSearchQuery.data?.items ?? []).map((item) => ({
+          id: item.id,
+          name: item.name,
+          manufacturer: item.manufacturer ?? "",
+          category: "software" as const,
+        })),
+      ];
+      const selectedSuggestions = suggestions.filter((item) =>
+        variables.productIds.includes(item.productId),
+      );
+      const optimistic = variables.productIds.map((productId) => {
+        const typedProductId = productId as ProjectResourceOut["productId"];
+        const suggestion = selectedSuggestions.find(
+          (item) => item.productId === productId,
+        );
+        const product = browsed.find((item) => item.id === productId);
+        return {
+          productId: typedProductId,
+          productName: suggestion?.productName ?? product?.name ?? productId,
+          manufacturer: suggestion?.manufacturer ?? product?.manufacturer ?? "",
+          category: product?.category ?? ("tools" as const),
+          attachedAt: new Date(),
+          projectPurchaseCost: suggestion?.projectPurchaseCost ?? null,
+          sharedWindow: null,
+          projectUseCount: suggestion?.projectUseCount ?? 0,
+          netLifetimeCost: suggestion?.netLifetimeCost ?? 0,
+          costPerProjectUse: suggestion?.costPerProjectUse ?? null,
+          grossLifetimeAcquisitionCost:
+            suggestion?.grossLifetimeAcquisitionCost ?? null,
+        } satisfies ProjectResourceOut;
+      });
+      queryClient.setQueryData<ProjectResourceOut[]>(
+        resourcesKey,
+        (current) => {
+          const ids = new Set((current ?? []).map((item) => item.productId));
+          return [
+            ...(current ?? []),
+            ...optimistic.filter((item) => !ids.has(item.productId)),
+          ];
+        },
+      );
+      const previousSelection = new Set(selected);
       setSelected(new Set());
       onOpenChange(false);
+      return { previous, previousSelection };
+    },
+    onSuccess: (result) => {
+      toast.success(
+        `Attached ${result.changed} resource${result.changed === 1 ? "" : "s"}`,
+      );
+    },
+    onError: (error, _variables, context) => {
+      if (context?.previous)
+        queryClient.setQueryData(resourcesKey, context.previous);
+      setSelected(context?.previousSelection ?? new Set());
+      onOpenChange(true);
+      toast.error(getErrorMessage(error));
+    },
+    onSettled: () => {
+      invalidateTRPCQueries(queryClient, projectResourceMutationInvalidateKeys);
     },
   });
 
@@ -442,6 +541,7 @@ function ResourcePickerDialog({
 export function ProjectResourcesSection({ projectId }: { projectId: string }) {
   const api = useTRPC();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const resourcesKey = api.project.resources.queryKey({ projectId });
   const resourcesQuery = useQuery(
     api.project.resources.queryOptions({ projectId }),
   );
@@ -521,6 +621,7 @@ export function ProjectResourcesSection({ projectId }: { projectId: string }) {
               key={resource.productId}
               projectId={projectId}
               resource={resource}
+              resourcesKey={resourcesKey}
             />
           ))}
         </Stack>
@@ -531,6 +632,7 @@ export function ProjectResourcesSection({ projectId }: { projectId: string }) {
         onOpenChange={setPickerOpen}
         projectId={projectId}
         attachedIds={attachedIds}
+        resourcesKey={resourcesKey}
       />
     </Stack>
   );

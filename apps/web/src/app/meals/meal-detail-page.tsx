@@ -1,14 +1,15 @@
 import type { MealShortcode } from "@cubby/schemas/identifiers";
 import type { MealRecipeOut } from "@cubby/schemas/meal";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import type { QueryKey } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
 import { Clock, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { WithRecipeSearch } from "~/app/_components/combobox/with-search-hook";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import { RelationshipExplorer } from "~/app/_components/relationships/relationship-explorer";
 import { relationshipsSectionIcon as RelationshipsIcon } from "~/app/_components/relationships/relationship-tree";
@@ -22,14 +23,25 @@ import { Description } from "~/components/ui/description";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
 import { entityDetailLink } from "~/entities/entities";
-import { useTRPC } from "~/integrations/trpc/react";
-import { mealMutationInvalidateKeys } from "~/lib/query-keys";
+import { type RouterOutputs, useTRPC } from "~/integrations/trpc/react";
+import { getErrorMessage } from "~/lib/error-utils";
+import {
+  cancelTRPCQueries,
+  mealMutationInvalidateKeys,
+} from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { useInvalidateMeals } from "./use-meal-mutations";
 
+type MealDetail = NonNullable<RouterOutputs["meal"]["getByShortcode"]>;
+
 export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
   const api = useTRPC();
+  const queryClient = useQueryClient();
   const invalidate = useInvalidateMeals();
+  const mealKey = api.meal.getByShortcode.queryKey({ shortcode: mealId });
+  const [pendingRecipeName, setPendingRecipeName] = useState<string | null>(
+    null,
+  );
 
   const {
     data: meal,
@@ -48,9 +60,29 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
   const updateMeal = useMutation(
     api.meal.update.mutationOptions({ onSuccess: invalidate }),
   );
-  const addRecipe = useMutation(
-    api.meal.addRecipe.mutationOptions({ onSuccess: invalidate }),
-  );
+  const addRecipeBase = api.meal.addRecipe.mutationOptions();
+  const addRecipe = useMutation({
+    mutationKey: addRecipeBase.mutationKey,
+    mutationFn: addRecipeBase.mutationFn,
+    onMutate: async (variables) => {
+      await cancelTRPCQueries(queryClient, [mealKey]);
+      const previous = queryClient.getQueryData<MealDetail | null>(mealKey);
+      setPendingRecipeName(variables.recipeId);
+      return { previous };
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(mealKey, updated);
+    },
+    onError: (error, _variables, context) => {
+      if (context?.previous)
+        queryClient.setQueryData(mealKey, context.previous);
+      toast.error(getErrorMessage(error));
+    },
+    onSettled: () => {
+      setPendingRecipeName(null);
+      invalidate();
+    },
+  });
 
   // Confirm + toast + optimistic removal, matching every other entity.
   const mealName = meal?.name
@@ -202,8 +234,24 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
             <Description>No recipes yet — add one below.</Description>
           ) : (
             meal.recipes.map((mr) => (
-              <RecipeRow key={mr.id} mr={mr} onChanged={invalidate} />
+              <RecipeRow
+                key={mr.id}
+                mr={mr}
+                mealKey={mealKey}
+                onChanged={invalidate}
+              />
             ))
+          )}
+          {pendingRecipeName && (
+            <Row
+              align="center"
+              gap="sm"
+              className="rounded-lg border border-[var(--border)] p-2 opacity-60"
+            >
+              <span className="flex-1 truncate font-medium text-sm">
+                Adding recipe…
+              </span>
+            </Row>
           )}
         </Stack>
 
@@ -254,21 +302,75 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
 
 function RecipeRow({
   mr,
+  mealKey,
   onChanged,
 }: {
   mr: MealRecipeOut;
+  mealKey: QueryKey;
   onChanged: () => void;
 }) {
   const api = useTRPC();
+  const queryClient = useQueryClient();
   const [scale, setScale] = useState(String(mr.scale));
 
-  const updateRecipe = useMutation(
-    api.meal.updateRecipe.mutationOptions({ onSuccess: onChanged }),
-  );
-  const removeRecipe = useActionMutation({
-    mutationFn: api.meal.removeRecipe.mutationOptions,
-    success: `Removed ${mr.recipe.name}`,
-    onSuccess: onChanged,
+  const patchMeal = (patch: (meal: MealDetail) => MealDetail) => {
+    queryClient.setQueryData<MealDetail | null>(mealKey, (current) =>
+      current ? patch(current) : current,
+    );
+  };
+  const updateBase = api.meal.updateRecipe.mutationOptions();
+  const updateRecipe = useMutation({
+    mutationKey: updateBase.mutationKey,
+    mutationFn: updateBase.mutationFn,
+    onMutate: async (variables) => {
+      await cancelTRPCQueries(queryClient, [mealKey]);
+      const previous = queryClient.getQueryData<MealDetail | null>(mealKey);
+      patchMeal((meal) => ({
+        ...meal,
+        recipes: meal.recipes.map((recipe) =>
+          recipe.id === variables.id
+            ? { ...recipe, scale: variables.scale ?? recipe.scale }
+            : recipe,
+        ),
+      }));
+      return { previous };
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(mealKey, updated);
+      const reconciled = updated.recipes.find((recipe) => recipe.id === mr.id);
+      if (reconciled) setScale(String(reconciled.scale));
+    },
+    onError: (error, _variables, context) => {
+      if (context?.previous)
+        queryClient.setQueryData(mealKey, context.previous);
+      setScale(String(mr.scale));
+      toast.error(getErrorMessage(error));
+    },
+    onSettled: onChanged,
+  });
+  const removeBase = api.meal.removeRecipe.mutationOptions();
+  const removeRecipe = useMutation({
+    mutationKey: removeBase.mutationKey,
+    mutationFn: removeBase.mutationFn,
+    onMutate: async (variables) => {
+      await cancelTRPCQueries(queryClient, [mealKey]);
+      const previous = queryClient.getQueryData<MealDetail | null>(mealKey);
+      patchMeal((meal) => ({
+        ...meal,
+        recipes: meal.recipes.filter((recipe) => recipe.id !== variables.id),
+      }));
+      return { previous };
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(mealKey, updated);
+      toast.success(`Removed ${mr.recipe.name}`);
+    },
+    onError: (error, _variables, context) => {
+      if (context?.previous)
+        queryClient.setQueryData(mealKey, context.previous);
+      toast.error(getErrorMessage(error));
+    },
+    onSettled: onChanged,
   });
 
   const commitScale = () => {

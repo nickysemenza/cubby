@@ -23,6 +23,8 @@
  *   - `wrapFetchWithSentry` — server.ts, behind `isCfBuild ? … : …`, so also
  *     never called in this build. Identity is the correct fallback regardless:
  *     `withSentry` already wraps the worker's fetch.
+ *   - `startInactiveSpan` — the client navigation tracker. The install call is
+ *     guarded by `router.isServer`, so SSR only needs a shape-compatible no-op.
  *
  * Adding a new `Sentry.*` call to isomorphic or server code means adding it
  * here too — a missing export surfaces as `undefined is not a function` on the
@@ -38,6 +40,17 @@ export function tanstackRouterBrowserTracingIntegration(_router?: unknown): {
   name: string;
 } {
   return { name: "TanStackRouterBrowserTracing" };
+}
+
+/** No-op span: navigation timing is client-only. */
+export function startInactiveSpan(_options?: unknown): {
+  setAttributes(attributes: Record<string, unknown>): void;
+  end(): void;
+} {
+  return {
+    setAttributes: () => {},
+    end: () => {},
+  };
 }
 
 /** Identity: the worker's fetch is already wrapped by `withSentry`. */

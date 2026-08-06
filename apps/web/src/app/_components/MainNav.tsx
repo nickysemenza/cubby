@@ -1,9 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 import * as React from "react";
+import { preloadCommandMenu } from "~/app/_components/command-menu-loader";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { useIdle } from "~/hooks/useIdle";
 import { useNavAuthed } from "~/hooks/useNavAuthed";
 
 const MainNavEnhancements = React.lazy(() =>
@@ -26,7 +26,6 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
   // paint from the signed cookie, then live once the client session resolves —
   // so the nav never flashes the wrong state in either direction.
   const authed = useNavAuthed();
-  const idle = useIdle();
 
   return (
     <div className="flex w-full items-center justify-between">
@@ -39,8 +38,20 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
         </Row>
       </Link>
 
-      {authed && idle ? (
-        <React.Suspense fallback={null}>
+      {authed ? (
+        <React.Suspense
+          fallback={
+            <nav
+              className="hidden h-8 min-w-80 items-center justify-end gap-4 md:flex"
+              aria-hidden="true"
+            >
+              <span className="h-3.5 w-14 rounded-sm bg-muted" />
+              <span className="h-3.5 w-16 rounded-sm bg-muted" />
+              <span className="h-3.5 w-12 rounded-sm bg-muted" />
+              <span className="size-7 rounded-full bg-muted" />
+            </nav>
+          }
+        >
           <MainNavEnhancements className={className} {...props} />
         </React.Suspense>
       ) : !authed ? (
@@ -73,6 +84,9 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
             variant="ghost"
             size="sm"
             onClick={onSearchClick}
+            onPointerEnter={preloadCommandMenu}
+            onFocus={preloadCommandMenu}
+            onTouchStart={preloadCommandMenu}
             className="hidden h-8 px-2 md:flex"
             title="Search"
           >

@@ -281,7 +281,7 @@ const tracingMiddleWare = t.middleware(async (opts) =>
       "rpc.type": opts.type,
       "enduser.id": opts.ctx.auth?.userId ?? "guest",
       "cubby.request_origin": opts.ctx.requestOrigin,
-      "cubby.workload": classifyTrpcWorkload(opts.ctx.requestOrigin),
+      "cubby.workload": classifyTrpcWorkload(opts.ctx.requestOrigin, opts.path),
     });
     recordInput(
       span,
@@ -294,7 +294,7 @@ const tracingMiddleWare = t.middleware(async (opts) =>
       if (result.ok) {
         span.setAttribute(
           "cubby.workload",
-          classifyTrpcWorkload(opts.ctx.requestOrigin, result.data),
+          classifyTrpcWorkload(opts.ctx.requestOrigin, opts.path, result.data),
         );
       }
 

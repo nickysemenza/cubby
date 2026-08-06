@@ -20,6 +20,7 @@ import { authClient } from "~/lib/auth-client";
 import { getAppErrorDetails, getErrorMessage } from "~/lib/error-utils";
 import { getFlag } from "~/lib/flags";
 import { isUnbatchedTRPCPath } from "~/lib/problems-query-groups";
+import { configureQueryFreshness } from "~/lib/query-freshness";
 import { persister } from "./persister";
 
 // Root query-key prefixes whose data is safe + useful to persist for offline
@@ -138,6 +139,7 @@ export function getContext() {
       },
     }),
   });
+  configureQueryFreshness(queryClient);
 
   const serverHelpers = createTRPCOptionsProxy({
     client: trpcClient,
