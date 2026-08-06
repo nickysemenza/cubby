@@ -7,6 +7,7 @@ import {
   type RecipeTreeNode,
   type RecipeTreeRow,
 } from "./recipe-tree";
+import { formatYield } from "./recipe-yield";
 
 // Serialize a recipe tree to Markdown for the export route's "Copy" action.
 // Pure + alias-free (no wasm): the wasm-bound quantity formatting is injected as
@@ -33,8 +34,10 @@ const modifierSuffix = (row: RecipeTreeRow): string =>
 const yieldText = (node: RecipeTreeNode, factor: number): string | null => {
   const y = node.recipe.yield;
   if (!y?.value) return null;
-  const value = Math.round(y.value * factor * 100) / 100;
-  return y.unit === "whole" ? `${value}` : `${value} ${y.unit}`;
+  return formatYield({
+    value: Math.round(y.value * factor * 100) / 100,
+    unit: y.unit,
+  });
 };
 
 const headnote = (node: RecipeTreeNode): string =>

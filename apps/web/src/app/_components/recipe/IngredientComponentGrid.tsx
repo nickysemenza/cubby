@@ -6,7 +6,7 @@ import {
 } from "~/components/matrix/cross-tab-table";
 import type { CrossTabColumn } from "~/components/matrix/group-columns";
 import { EMPTY_MARK, totalCell } from "~/components/matrix/matrix-chrome";
-import { formatCurrency } from "~/lib/utils";
+import { formatCurrencyRange } from "~/lib/format-range";
 import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import {
   buildIngredientMatrix,
@@ -41,6 +41,7 @@ export function IngredientComponentGrid({
     grandTotal,
     costByComponent,
     costTotal,
+    costTotalUpper,
   } = useMemo(() => {
     const cols = flattenComponents(tree);
     const matrix = buildIngredientMatrix(tree);
@@ -53,7 +54,7 @@ export function IngredientComponentGrid({
     }
     // Per-component direct-leaf cost (the cost atom) — sums to `total`, same
     // axis as the gram subtotal row (sub-recipe rows aren't double-counted).
-    const { byComponent, total } = fullBatchCostByComponent(tree);
+    const { byComponent, total, totalUpper } = fullBatchCostByComponent(tree);
     return {
       // Column key is the component's recipe id — the same key `byComponent`
       // and `columnTotals` are keyed by, so cells look up without a mapping.
@@ -68,6 +69,7 @@ export function IngredientComponentGrid({
       grandTotal: sumBy(matrix, (r) => r.total),
       costByComponent: byComponent,
       costTotal: total,
+      costTotalUpper: totalUpper,
     };
   }, [tree]);
 
@@ -93,11 +95,16 @@ export function IngredientComponentGrid({
       emphasis: "plain",
       cell: (recipeId) =>
         costByComponent.has(recipeId)
-          ? formatCurrency(costByComponent.get(recipeId)!)
+          ? formatCurrencyRange(
+              costByComponent.get(recipeId)!.price,
+              costByComponent.get(recipeId)!.priceUpper,
+            )
           : EMPTY_MARK,
       pinnedCell: () => (
         <span className="text-primary">
-          {costTotal != null ? formatCurrency(costTotal) : EMPTY_MARK}
+          {costTotal != null
+            ? formatCurrencyRange(costTotal, costTotalUpper ?? undefined)
+            : EMPTY_MARK}
         </span>
       ),
     });

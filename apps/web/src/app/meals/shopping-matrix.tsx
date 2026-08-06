@@ -138,7 +138,9 @@ export function ShoppingMatrix({
     return byLine;
   }, [unexpanded]);
 
-  const shortCount = rows.filter((r) => r.shortfall > 0).length;
+  // An unknown shortfall isn't evidence you need to buy anything, so it isn't
+  // counted here either.
+  const shortCount = rows.filter((r) => (r.shortfall ?? 0) > 0).length;
 
   return (
     <div className="hidden overflow-hidden rounded-lg border border-[var(--border)] sm:block">

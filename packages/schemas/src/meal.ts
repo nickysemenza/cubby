@@ -231,7 +231,12 @@ export const shoppingListItem = z.object({
   /** On-hand inventory, counted once for the ingredient; null if unconvertible. */
   haveValue: z.number().nullable(),
   /** max(0, need - have). */
-  shortfall: z.number(),
+  /**
+   * What you still need to buy. **Null when on-hand is unknown** (units that
+   * don't reconcile): claiming a shortfall equal to the whole need asserts a
+   * quantity we don't have, and sorts an invented number to the top.
+   */
+  shortfall: z.number().nullable(),
   status: ingredientAvailabilityStatus,
   perMeal: z.array(shoppingListContribution),
 });

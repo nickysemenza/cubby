@@ -39,8 +39,9 @@ vi.mock("./recipe-tree", () => ({
     },
   ],
   fullBatchCostByComponent: () => ({
-    byComponent: new Map([["RCP-DOUGH", 1.5]]),
+    byComponent: new Map([["RCP-DOUGH", { price: 1.5, priceUpper: 2.25 }]]),
     total: 1.5,
+    totalUpper: 2.25,
   }),
 }));
 
@@ -92,6 +93,12 @@ describe("IngredientComponentGrid", () => {
   it("adds the Cost footer row when showCost is set", () => {
     render(<IngredientComponentGrid tree={tree} showCost />);
 
-    expect(rowCells("Cost")).toEqual(["$1.50", EMPTY_MARK, "$1.50"]);
+    // The engine tracks an upper bound for ranged amounts; the grid used to
+    // drop it and show a point cost where every other surface showed a range.
+    expect(rowCells("Cost")).toEqual([
+      "$1.50 – $2.25",
+      EMPTY_MARK,
+      "$1.50 – $2.25",
+    ]);
   });
 });

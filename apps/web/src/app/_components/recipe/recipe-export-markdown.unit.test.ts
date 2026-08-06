@@ -3,7 +3,19 @@ import { ok } from "neverthrow";
 import { describe, expect, it } from "vitest";
 import type { IngredientDataItem, RecipeCosting } from "~/lib/recipe-costing";
 import { recipeTreeToMarkdown } from "./recipe-export-markdown";
-import { buildRecipeTree } from "./recipe-tree";
+import { buildRecipeTree, type YieldPorts } from "./recipe-tree";
+
+// A stub, not the wasm adapter: this file tests markdown, and the module it
+// tests is deliberately wasm-free for the same reason recipe-tree is.
+const STUB_PORTS: YieldPorts = {
+  yieldFraction: (recipeYield, amounts) => {
+    const a = amounts[0];
+    return recipeYield && a && recipeYield.unit === a.unit
+      ? { fraction: a.value / recipeYield.value, reason: null }
+      : { fraction: null, reason: "missingYield" };
+  },
+  massGrams: (a) => (a.unit === "g" ? a.value : null),
+};
 
 const mkRow = (id: string, grams: number): IngredientDataItem =>
   ({
@@ -71,7 +83,7 @@ const buildFixture = () => {
     ["r-root", mkCosting({ "sr-sof": 50, "ri-x": 100 }, 150)],
     ["r-sof", mkCosting({ "si-x": 100 }, 100)],
   ]);
-  return buildRecipeTree(root, costingById, { "r-sof": sof });
+  return buildRecipeTree(root, costingById, { "r-sof": sof }, STUB_PORTS);
 };
 
 const stubQty = () => "Q";

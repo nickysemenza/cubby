@@ -5,14 +5,16 @@ import type {
   ShoppingListOut,
 } from "@cubby/schemas/meal";
 import { sumBy } from "es-toolkit";
+import { availabilityStatusFor } from "~/lib/recipe-costing";
 
 // The shared model behind every shopping-list renderer (desktop table, mobile
 // cards, matrix). Membership, per-row need, status and order are decided here
 // exactly once, so the three surfaces cannot disagree about what you need to
-// buy — and it stays pure (no React, no WASM) so it runs in the node `unit`
-// vitest project.
-
-export const SHOPPING_EPSILON = 1e-6;
+// buy.
+//
+// It stays React-free so it's testable as plain data. The coverage verdict and
+// the epsilon it needs live in recipebridge (`availability_status_for`), so
+// excluding a meal client-side can't drift from the server's own scoring.
 
 export type ShoppingRow = {
   /** Stable per-ingredient key; also the check-off key. */
@@ -20,23 +22,10 @@ export type ShoppingRow = {
   item: ShoppingListItem;
   /** Need after meal exclusions. */
   need: number;
-  shortfall: number;
+  /** Null when on-hand is unknown — see `shoppingListItem.shortfall`. */
+  shortfall: number | null;
   status: IngredientAvailabilityStatus;
   isChecked: boolean;
-};
-
-/** Recompute an item's status from its (post-exclusion) adjusted need. */
-export const adjustedStatus = (
-  item: ShoppingListItem,
-  need: number,
-): IngredientAvailabilityStatus => {
-  // haveValue===null is either "missing" (no inventory) or "unconvertible"
-  // (inventory exists but units don't reconcile) — keep the server's verdict
-  // rather than collapsing both to "unconvertible".
-  if (item.haveValue == null) return item.status;
-  if (item.haveValue + SHOPPING_EPSILON >= need) return "ok";
-  if (item.haveValue > 0) return "short";
-  return "missing";
 };
 
 /** An item's contributions from meals that are still switched on. */
@@ -67,21 +56,27 @@ export const buildShoppingRows = (
         visibleContributions(item, excluded),
         (c) => c.needValue,
       );
-      const have = item.haveValue ?? 0;
       return {
         key,
         item,
         need,
-        shortfall: Math.max(0, need - have),
-        status: adjustedStatus(item, need),
+        // Status comes from the engine, so a client-side exclusion is scored
+        // by the same rule (and the same epsilon) the server used. Shortfall
+        // mirrors the engine's rule: unknown ONLY when the units can't be
+        // reconciled — having none of something is knowledge, not ignorance.
+        shortfall:
+          item.status === "unconvertible"
+            ? null
+            : Math.max(0, need - (item.haveValue ?? 0)),
+        status: availabilityStatusFor(need, item.haveValue, item.status),
         isChecked: checked.has(key),
       };
     })
-    .filter((r) => r.need > SHOPPING_EPSILON)
+    .filter((r) => r.need > 0)
     .sort(
       (a, b) =>
         Number(a.isChecked) - Number(b.isChecked) ||
-        b.shortfall - a.shortfall ||
+        (b.shortfall ?? 0) - (a.shortfall ?? 0) ||
         a.item.name.localeCompare(b.item.name),
     );
 
