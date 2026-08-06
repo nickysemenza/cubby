@@ -30,11 +30,11 @@ interface ArrangeThumbProps {
  * `ProductImageSummariesProvider`; filtering twice is free and keeps the two
  * callers symmetric.
  *
- * A bare `<Image>` rather than one of the wrappers is deliberate:
- * `CardThumbnail` returns null when empty (which would break name alignment
- * down a column), and `ImageThumbnail` is a 64px table cell carrying a hover
- * preview and a `+N` badge. A hover preview is actively unwanted here — an
- * interactive trigger can swallow native drag-start on the card it sits in.
+ * Rendering the bare `Image` primitive rather than one of its wrappers is
+ * deliberate: `CardThumbnail` returns null when empty (which would break name
+ * alignment down a column), and `ImageThumbnail` is a 64px table cell carrying
+ * a hover preview and a `+N` badge. A hover preview is actively unwanted here —
+ * an interactive trigger can swallow native drag-start on the card it sits in.
  */
 export function ArrangeThumb({
   images,
