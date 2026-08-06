@@ -56,6 +56,10 @@ import {
   productProjectUsesSetInput,
   productProjectUsesSetOut,
 } from "@cubby/schemas/project";
+import {
+  productPurchasesInput,
+  productPurchasesOut,
+} from "@cubby/schemas/purchase";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { streamItems, streamProgress } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -79,6 +83,7 @@ import {
   listProductProjectUses,
   setProductProjectUses,
 } from "~/server/repo/project";
+import { listProductPurchases } from "~/server/repo/purchase-products";
 import {
   resolveAllOrThrow,
   resolveLiveShortcode,
@@ -697,6 +702,19 @@ const projectUses = protectedProcedure
   });
 
 /**
+ * The Purchases one Product is linked to (the transpose of
+ * `purchase.products`). No money and no quantity — see
+ * `packages/schemas/src/purchase.ts` for why the link exists.
+ */
+const purchases = protectedProcedure
+  .input(productPurchasesInput)
+  .output(strictOutput(productPurchasesOut))
+  .query(async ({ ctx, input }) => {
+    const id = await resolveProductId(ctx.db, input.productId);
+    return listProductPurchases(ctx.db, id);
+  });
+
+/**
  * Replace the set of projects this tool was used on, from the tool's own page.
  * Returns only the count that moved — see `productProjectUsesSetOut` for why
  * handing back the refreshed panel would be dead payload.
@@ -817,6 +835,7 @@ export const productRouter = createTRPCRouter({
   patchExternalIds,
   verifyImages,
   projectUses,
+  purchases,
   merge,
   setProjectUses,
 });

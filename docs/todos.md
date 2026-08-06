@@ -552,11 +552,28 @@ Backfilled 18 rows across 9 contracts on 2026-08-05, which took the
 entire *top* of that cost-sorted list, because lump-sum structure correlates with size —
 the largest purchases are the ones paid in installments.
 
+⚠️ **That first backfill was incomplete, and the way it was wrong is worth remembering.**
+Its population was built from the goods view itself (`costType IN (materials, tools)`), so
+a **services-only** installment series was structurally invisible to it — the search only
+ever looked at the list it was trying to shorten. It therefore missed the single largest
+series in the ledger: Masseria Calderisi's **11 staged payments, $142,769**, each on its
+own Purchase. A second pass on 2026-08-06 added 23 more rows (that series plus a wedding
+planner's 4, and installment pairs from Avidon, De Le Floor, The Dog Tree Service and A1
+Hauling), taking allocations to **41 rows / $248,985.46**. Deliberately excluded there:
+A1 Hauling's `hauling #1/#2/#3`, where the number is a job counter rather than a payment
+number, and a standalone `palm tree removal`.
+
+One of those, Avidon's `raised beds 1/2` + `2/2`, was in the goods view all along and
+still slipped through — and it turned out to carry the very bug the column exists to
+prevent: both installments pointed at the SAME product with a null `productQuantity`, so
+both costs were silently dropped from that product's price numerator. Its provenance now
+lives on the `PurchaseProduct` link instead.
+
 - [ ] **Surface the estimate caveat in spend breakdowns.** `allocation` makes "this
   `costType` is a guess" *representable* for the first time, but nothing reads it yet:
   `expenseAnalytics`' `byCostType` still mixes allocations in with vendor-stated lines,
-  and a human reading those totals gets no hint. As of the 2026-08-05 backfill that is
-  **$74,828.70 across 18 rows** — $52,143.70 booked materials, $22,685.00 services — and
+  and a human reading those totals gets no hint. As of the 2026-08-06 backfill that is
+  **$248,985.46 across 41 rows** — $58,970.77 booked materials, $190,014.69 services — and
   for the lump-sum-contract subset those two numbers are a guess at where the split fell,
   not something a vendor ever stated. The MCP
   tool description warns an agent; the UI warns nobody. Cheapest honest version is a
@@ -585,20 +602,28 @@ the largest purchases are the ones paid in installments.
 that *moves money* is `splitExpense`, which exists and is money-bearing; `PurchaseLine` is
 pure SKU/quantity annotation and creates no products. Don't reach for it to do this job.
 
-Re-examined 2026-08-05 while adding `lineBasis` and **still not met.** The tempting case is
-Ferguson: six appliances behind two installment rows, where no expense-level link can ever
-express what was bought. But it is *one* purchase. Of the nine allocation contracts, only
-Paloform (a single fire pit) and Ferguson have discrete goods at all — the rest are
-lump-sum services with nothing to itemize. The cheaper answer, taken instead: create the
-six Products with an **explicit `price`** off bid B907293 (explicit wins unconditionally
-over the derived aggregate) and leave the installments unlinked. That gets correct prices,
-models, and inventory valuation; the only thing forgone is a queryable Product→Purchase
-edge, and the bid PDF is already attached to PUR-SHRG. **Sharpened trigger**: a *third*
-installment-bought purchase with 3+ discrete goods. One Ferguson is not a table.
+Re-examined 2026-08-05 while adding `lineBasis` and judged **still not met** on volume —
+one Ferguson is not a table. That reasoning was right about volume and **wrong about
+kind**, and `PurchaseProduct` shipped 2026-08-06 as the answer instead.
+
+The correction: this is not a Ferguson quirk. *Any* purchase paid in two or more parts
+leaves its goods orphaned, because `allocation` makes the expense link permanently
+unavailable — and the correlation runs the wrong way, since the orders most likely to be
+split into installments are big-ticket durable goods (appliances, furniture, custom
+fabrication), which are exactly the things most worth holding as Products. Cheap items
+are paid in one go and productize fine; expensive ones get split and vanish. The backlog
+looked small only because one such order had been productized.
+
+**`PurchaseLine` remains unbuilt and its trigger unmet.** `PurchaseProduct` is the bare
+pair — no `name`, no `sku`, no `unitPrice`, and deliberately **no `quantity`**:
+`Expense.productQuantity` already owns "how many units did this money buy", and a second
+copy would answer the same question from a second table with no rule for which wins.
+Reach for `PurchaseLine` only when a line's own SKU/unit price is genuinely needed;
+`splitExpense` still itemizes wherever the money actually decomposes.
 
 `ExpenseProduct` is also the wrong shape for this — it is the transpose (one row needing
 many products, not many rows for one purchase's goods), and it would still force an
-arbitrary allocation of the $13,000 deposit across six appliances.
+arbitrary allocation of the deposit across the order's items.
 
 ### Purchase-import — maybe later (trigger-gated)
 

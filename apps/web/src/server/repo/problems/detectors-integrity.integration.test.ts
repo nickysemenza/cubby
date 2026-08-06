@@ -32,6 +32,7 @@ import {
   projectImage,
   projectToolUsage,
   purchaseImage,
+  purchaseProduct,
   recipeImage,
   recipeSection,
   recipeSectionIngredient,
@@ -360,6 +361,14 @@ const SOURCE_FACTORIES: Record<
     });
   },
 
+  "PurchaseProduct.productId": async (db, targetId) => {
+    const p = await mkPurchase(db);
+    return insertAndReturn(db, purchaseProduct, {
+      purchaseId: p.id,
+      productId: unsafeProductId(targetId),
+    });
+  },
+
   "InventoryEntry.locationId": async (db, targetId) => {
     const p = await mkProduct(db);
     return insertWithShortcode(db, "inventory", {
@@ -486,6 +495,14 @@ const SOURCE_FACTORIES: Record<
     });
   },
 
+  "PurchaseProduct.purchaseId": async (db, targetId) => {
+    const prod = await mkProduct(db);
+    return insertAndReturn(db, purchaseProduct, {
+      purchaseId: unsafePurchaseId(targetId),
+      productId: prod.id,
+    });
+  },
+
   "FinancialTransaction.purchaseId": async (db, targetId) => {
     const account = await mkFinancialAccount(db);
     return insertWithShortcode(db, "financialTransaction", {
@@ -567,11 +584,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 40 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 42 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(40);
+    expect(derivedMustTargetLiveEdges).toHaveLength(42);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {

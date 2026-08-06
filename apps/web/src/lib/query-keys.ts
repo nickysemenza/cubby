@@ -311,6 +311,14 @@ export const projectResourceMutationInvalidateKeys = [
   queryKeys.relatedData.all,
 ] as const satisfies readonly QueryKey[];
 
+/** A purchase-product link is visible from both ends, but it carries no money
+ * or quantity — no spend, inventory, or calendar state to invalidate. */
+export const purchaseProductMutationInvalidateKeys = [
+  queryKeys.purchase.all,
+  queryKeys.product.all,
+  queryKeys.relatedData.all,
+] as const satisfies readonly QueryKey[];
+
 export const taskMutationInvalidateKeys = [
   queryKeys.task.all,
   queryKeys.project.all,

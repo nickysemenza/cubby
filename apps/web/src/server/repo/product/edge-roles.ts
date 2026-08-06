@@ -146,6 +146,14 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
     reason: "PRODUCT_HAS_PROJECT_USES",
     label: "project uses",
   },
+  "PurchaseProduct.productId": {
+    code: "block-live-purchase-link",
+    effect: "block",
+    description:
+      "A product recorded against the order that bought it can't be deleted — that link is often the only path back to the purchase, since an installment order's expenses can't carry a product.",
+    reason: "PRODUCT_HAS_PURCHASE_LINKS",
+    label: "purchase links",
+  },
   "WishCandidate.productId": {
     code: "block-live-wishlist-candidate",
     effect: "block",

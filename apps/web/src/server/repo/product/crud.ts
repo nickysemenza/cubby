@@ -59,6 +59,7 @@ import {
   productUnitMappings,
   projectToolUsage,
   purchase,
+  purchaseProduct,
   task,
   wishCandidate,
 } from "~/server/db/schema";
@@ -1608,6 +1609,14 @@ const PRODUCT_RETAINING_DEPENDENTS: Record<
       where: and(
         inArray(projectToolUsage.productId, ids),
         notDeleted(projectToolUsage),
+      ),
+      columns: { productId: true },
+    }),
+  "PurchaseProduct.productId": (tx, ids) =>
+    tx.query.purchaseProduct.findMany({
+      where: and(
+        inArray(purchaseProduct.productId, ids),
+        notDeleted(purchaseProduct),
       ),
       columns: { productId: true },
     }),

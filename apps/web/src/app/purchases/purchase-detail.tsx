@@ -1,10 +1,12 @@
-import type { PurchaseOut } from "@cubby/schemas/purchase";
+import type { PurchaseOut, PurchaseProductOut } from "@cubby/schemas/purchase";
+import { useQuery } from "@tanstack/react-query";
 import {
   Clock,
   FileText,
   Info,
   Link2,
   Merge,
+  Package,
   ReceiptText,
   Scale,
 } from "lucide-react";
@@ -36,14 +38,18 @@ import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { RelationshipSummaryTable } from "../_components/relationships/relationship-summary-table";
 import { FinancialSettlement } from "./financial-settlement";
 import { LinkExpensesDialog } from "./link-expenses-dialog";
+import { LinkProductsDialog } from "./link-products-dialog";
 import { MergePurchasesDialog } from "./merge-purchases-dialog";
 import { PurchaseDocuments } from "./purchase-documents";
 import { PurchaseExpensesTable } from "./purchase-expenses-table";
+import { PurchaseProductsTable } from "./purchase-products-table";
 import {
   purchaseReconciliationStatus,
   ReconciliationBadge,
   ReconciliationNote,
 } from "./purchase-reconciliation";
+
+const EMPTY_PURCHASE_PRODUCTS: PurchaseProductOut[] = [];
 
 /**
  * One vendor order/receipt event: what the paperwork said (`statedTotal`, documents) and
@@ -55,6 +61,15 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
   const api = useTRPC();
   const [mergeOpen, setMergeOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
+  const [linkProductsOpen, setLinkProductsOpen] = useState(false);
+
+  const productsQuery = useQuery(
+    api.purchase.products.queryOptions({ purchaseId: purchase.id }),
+  );
+  const linkedProducts = productsQuery.data ?? EMPTY_PURCHASE_PRODUCTS;
+  const attachedProductIds = new Set(
+    linkedProducts.map((item) => item.productId),
+  );
 
   const updateMutation = useUpdateMutation({
     mutationFn: api.purchase.update.mutationOptions,
@@ -256,6 +271,39 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
       ),
     },
     {
+      title: "Products",
+      icon: Package,
+      zone: "main",
+      headerAction: (
+        <Row align="center" gap="sm">
+          {linkedProducts.length > 0 && (
+            <Badge variant="outline">{linkedProducts.length}</Badge>
+          )}
+          {/* Sits with the lines rather than in the page actions: it edits
+              THIS section's contents, unlike Merge (which consumes other
+              purchases). */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setLinkProductsOpen(true)}
+          >
+            <Link2 />
+            Attach products
+          </Button>
+        </Row>
+      ),
+      content: (
+        <Stack gap="sm">
+          <Description>
+            Which products this purchase bought. Useful for a lump-sum or
+            installment order whose expenses can&apos;t carry a product — this
+            link carries no money or quantity of its own.
+          </Description>
+          <PurchaseProductsTable purchaseId={purchase.id} />
+        </Stack>
+      ),
+    },
+    {
       title: "Project allocation",
       icon: ReceiptText,
       zone: "main",
@@ -421,6 +469,12 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
         open={linkOpen}
         onOpenChange={setLinkOpen}
         purchase={purchase}
+      />
+      <LinkProductsDialog
+        open={linkProductsOpen}
+        onOpenChange={setLinkProductsOpen}
+        purchase={purchase}
+        attachedIds={attachedProductIds}
       />
       {deleteDialog}
     </Page>

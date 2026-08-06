@@ -717,6 +717,9 @@ describe("listMcpToolCatalog", () => {
       "detach_project_resources",
       "list_product_project_uses",
       "suggest_project_tools",
+      "list_purchase_products",
+      "attach_purchase_products",
+      "detach_purchase_products",
     ]) {
       expect(names.has(name), `${name} missing from catalog`).toBe(true);
     }
@@ -1218,6 +1221,7 @@ describe("listMcpToolCatalog", () => {
       "list_project_resources",
       "get_usda_food",
       "find_usda_food",
+      "list_purchase_products",
     ]);
     const isEmpty = (schema: unknown) => {
       const properties = (schema as { properties?: Record<string, unknown> })

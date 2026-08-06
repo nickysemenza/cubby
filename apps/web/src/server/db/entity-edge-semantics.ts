@@ -197,6 +197,13 @@ export const ENTITY_EDGE_SEMANTICS = {
         "Durable history that this reusable tool or software Product was used on a household project; deleting the Product would leave that history nameless.",
       liveness: { kind: "must-target-live" },
     },
+    "PurchaseProduct.productId": {
+      role: "acquisition",
+      label: "purchase links",
+      description:
+        "The vendor order this Product was bought on. Provenance, not money — it exists because an order paid in installments is an `allocation` whose Expenses can never carry a productId, leaving the goods with no path back to the order.",
+      liveness: { kind: "must-target-live" },
+    },
     "WishCandidate.productId": {
       role: "association",
       label: "wishlist candidates",
@@ -320,6 +327,13 @@ export const ENTITY_EDGE_SEMANTICS = {
       label: "receipt attachments",
       description:
         "The invoice PDF or a photo of the paper receipt attached to this purchase.",
+      liveness: { kind: "must-target-live" },
+    },
+    "PurchaseProduct.purchaseId": {
+      role: "association",
+      label: "products",
+      description:
+        "A Product this order bought. Carries no money — spend stays entirely on Expense — so this never doubles as a second ledger path.",
       liveness: { kind: "must-target-live" },
     },
     "FinancialTransaction.purchaseId": {

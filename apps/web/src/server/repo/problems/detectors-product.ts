@@ -60,6 +60,7 @@ import {
   productUnitMappings,
   project,
   projectToolUsage,
+  purchaseProduct,
   recipe,
   recipeSection,
   recipeSectionIngredient,
@@ -213,6 +214,18 @@ const PRODUCT_RETAINING_NOT_EXISTS: Record<
           and(
             eq(projectToolUsage.productId, product.id),
             notDeleted(projectToolUsage),
+          ),
+        ),
+    ),
+  "PurchaseProduct.productId": (dbClient) =>
+    notExists(
+      dbClient
+        .select({ id: sql`1` })
+        .from(purchaseProduct)
+        .where(
+          and(
+            eq(purchaseProduct.productId, product.id),
+            notDeleted(purchaseProduct),
           ),
         ),
     ),

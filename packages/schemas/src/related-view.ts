@@ -88,7 +88,14 @@ export const relatedViewRegistry = [
     key: "product.purchases",
     source: "product",
     target: "purchase",
-    label: "Purchases",
+    // "via spend", not just "Purchases": the product detail page now also has a
+    // Purchases section fed by the direct `PurchaseProduct` provenance link, and
+    // the two answer different questions. This path reaches a purchase only
+    // through a money row, so it is empty for an installment order whose
+    // Expenses are `lineBasis: "allocation"` — exactly the case the direct link
+    // was added for. Two sections both labelled "Purchases" is the confusion
+    // that feature exists to remove.
+    label: "Purchases (via spend)",
     defaultVisible: false,
     order: "newest",
     path: [inc("Expense.productId"), out("Expense.purchaseId")],
