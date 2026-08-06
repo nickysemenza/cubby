@@ -8,14 +8,27 @@ import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
 import { shortcodeHead } from "~/lib/page-title";
+import { getProductDetailForSsr } from "~/lib/product-detail-server";
 
 export const Route = createFileRoute("/_authenticated/products/$shortcode")({
-  ssr: false,
   loader: async ({ params, context }) => {
+    const queryOptions = context.trpc.product.getByShortcode.queryOptions({
+      shortcode: params.shortcode,
+    });
     const data = await context.queryClient.ensureQueryData(
-      context.trpc.product.getByShortcode.queryOptions({
-        shortcode: params.shortcode,
-      }),
+      import.meta.env.SSR
+        ? {
+            ...queryOptions,
+            // Keep the exact tRPC query key while replacing only the server's
+            // transport. The result dehydrates through the existing SuperJSON
+            // Query integration, so hydration sees a fresh cache hit and does
+            // not repeat the detail request in the browser.
+            queryFn: () =>
+              getProductDetailForSsr({
+                data: { shortcode: params.shortcode },
+              }),
+          }
+        : queryOptions,
     );
     if (!data) throw notFound();
   },
