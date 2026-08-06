@@ -11,10 +11,6 @@ use tsify_next::Tsify;
 use super::consumption::PlanTrio;
 use crate::{WAmount, WConversionStep, WIngredientUsage, WProductInput};
 
-// ---------------------------------------------------------------------------
-// Input
-// ---------------------------------------------------------------------------
-
 /// Row kind (the zod `kind: "ingredient" | "recipe"`).
 #[derive(Tsify, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(rename_all = "lowercase")]
@@ -100,10 +96,6 @@ pub struct WCostingInput {
     /// Attach unit-graph conversion paths to root rows (the explain surfaces).
     pub explain: bool,
 }
-
-// ---------------------------------------------------------------------------
-// Output
-// ---------------------------------------------------------------------------
 
 /// One resolved measure: the zod `measureDiagnostic` union,
 /// `{ok:true,value,unit} | {ok:false,error}`.

@@ -90,10 +90,6 @@ const upcLookupSrc = join(repoRoot, "apps", "upc-lookup", "src");
 const schemasSrc = join(repoRoot, "packages", "schemas", "src");
 const servicesDir = join(webSrc, "server", "services");
 
-// ---------------------------------------------------------------------------
-// File discovery
-// ---------------------------------------------------------------------------
-
 /** @returns {string[]} absolute paths */
 function gitTrackedSources() {
   const out = execFileSync(
@@ -140,10 +136,6 @@ function listFiles() {
     return [];
   }
 }
-
-// ---------------------------------------------------------------------------
-// Rules
-// ---------------------------------------------------------------------------
 
 // Files allowed to use raw chromatic colors (design surfaces / illustrations).
 const COLOR_EXCLUDE_BASENAMES = new Set([
@@ -899,10 +891,6 @@ function scan(files) {
 
   return violations;
 }
-
-// ---------------------------------------------------------------------------
-// Report
-// ---------------------------------------------------------------------------
 
 const files = listFiles();
 const violations = [

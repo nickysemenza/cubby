@@ -17,7 +17,6 @@ import "./app.css";
 // previous build's output into itself.
 import { readCubbyOrigin } from "./origin";
 
-/** Open a cubby route in the user's browser, via the host. */
 export function openCubby(app: App, path: string): void {
   const origin = readCubbyOrigin(document);
   if (!origin) return;
@@ -60,7 +59,6 @@ export function nestedButton(
   });
 }
 
-/** A titled panel: ink top-rule, hairline border, header row. */
 export function panel(title: string, meta: string): HTMLElement {
   const root = el("div", "panel");
   const head = el("div", "panel-head");
@@ -69,14 +67,12 @@ export function panel(title: string, meta: string): HTMLElement {
   return root;
 }
 
-/** The trailing action row beneath a panel. */
 export function footer(...children: Node[]): HTMLElement {
   const root = el("div", "footer");
   root.append(...children);
   return root;
 }
 
-/** A quiet button that deep-links into cubby. */
 export function cubbyLink(
   app: App,
   label: string,

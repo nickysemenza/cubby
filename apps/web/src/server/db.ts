@@ -12,17 +12,7 @@ import { TraceNames, withTrace } from "./tracing";
 // Re-export Database type for use throughout the application
 export type { Database };
 
-// ---------------------------------------------------------------------------
-// DB Client creation
-// ---------------------------------------------------------------------------
-
-// The query interface is identical whether backed by Client or Pool.
-// Use NodePgDatabase<schema> to avoid $client type mismatch.
 type DBClient = NodePgDatabase<typeof schema>;
-
-// ---------------------------------------------------------------------------
-// DB query tracing
-// ---------------------------------------------------------------------------
 
 // Trace every drizzle query as a span via the unified `withTrace` (OTel → Jaeger
 // in dev, native `cloudflare:workers` tracing → Grafana in prod). This replaces
@@ -186,7 +176,6 @@ const createPoolClient = (connectionString: string) => {
   return drizzleNodePostgres({ client: tracePool(pool), schema });
 };
 
-// ---------------------------------------------------------------------------
 // CF Workers: per-request Pool via AsyncLocalStorage
 // Hyperdrive pools TCP connections to the origin at CF's edge. A single
 // pg.Client per request would serialize every query on ONE connection — the
@@ -194,7 +183,6 @@ const createPoolClient = (connectionString: string) => {
 // sum-of-all-queries. We use a small per-request pg.Pool instead (max 5, the
 // Workers per-invocation connection ceiling — see getDbInstance), giving the
 // fan-out bounded real concurrency (wall time ≈ slowest few queries, not the sum).
-// ---------------------------------------------------------------------------
 
 // Per-request holder. We store the connection string (not a connected pool) so
 // the actual pg.Pool is deferred until the first db access — see
@@ -250,9 +238,7 @@ export const withRequestDbClient = async <T>(
   return requestDbStore.run(holder, fn);
 };
 
-// ---------------------------------------------------------------------------
 // Module-level instance (dev server only — NOT used on CF Workers)
-// ---------------------------------------------------------------------------
 
 // __CF_WORKERS__ is defined by Vite for CF builds — skip module-level pool
 declare const __CF_WORKERS__: boolean | undefined;
@@ -267,9 +253,7 @@ if (!isCFWorkers) {
   if (env.NODE_ENV !== "production") globalForDb.db = moduleDb;
 }
 
-// ---------------------------------------------------------------------------
 // Exported db / drizzle — uses AsyncLocalStorage on CF, module instance in dev
-// ---------------------------------------------------------------------------
 
 const getDbInstance = (): DBClient => {
   // CF Workers: read from per-request store, connecting lazily on first access.

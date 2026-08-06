@@ -198,7 +198,6 @@ export function StatusIcon({ status }: { status: ProjectStatus | TaskStatus }) {
 
 const taskHelper = createColumnHelper<TaskOut>();
 
-// --- Shared task/expense column factories ---
 // These bake the renderCell + select options + editable field-mapping shared by
 // the `/tasks` & `/expenses` index pages (tasklist.tsx / expenselist.tsx, via
 // `useEntityList`) and the embedded tables below (raw `useReactTable` over a
@@ -552,8 +551,6 @@ const futureEditOptions: FilterableComboboxItem[] = [
   { value: "false", label: "Actual" },
   { value: "true", label: "Planned" },
 ];
-
-// --- Shared expense column factories (see the task factories above) ---
 
 export function expenseLineKindColumn(
   helper: ColumnHelper<ExpenseOut>,

@@ -13,7 +13,6 @@ interface UnitMappingPairFieldProps<
    * optional source from `${path}.source`.
    */
   path: string;
-  /** Render the optional free-text "source" field after the pair. */
   showSource?: boolean;
 }
 

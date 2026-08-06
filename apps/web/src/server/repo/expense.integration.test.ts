@@ -2039,7 +2039,6 @@ describe("expense repository — expenseAnalytics", () => {
     );
     expect(result.byCostType).toHaveLength(2);
 
-    // --- byTrade: plumbing + electrical only ---
     expect(result.byTrade).toEqual(
       expect.arrayContaining([
         {
@@ -2062,7 +2061,6 @@ describe("expense repository — expenseAnalytics", () => {
     );
     expect(result.byTrade).toHaveLength(2);
 
-    // --- tradeCostMatrix: the 3 combos actually present, not the full cross product ---
     expect(result.tradeCostMatrix).toHaveLength(3);
     expect(result.tradeCostMatrix).toEqual(
       expect.arrayContaining([
@@ -2096,7 +2094,6 @@ describe("expense repository — expenseAnalytics", () => {
       ]),
     );
 
-    // --- monthly: Jan (p1, p2, p3, p5, p6) and Feb (p4) ---
     expect(result.monthly).toEqual([
       {
         month: "2026-01",
@@ -2116,13 +2113,11 @@ describe("expense repository — expenseAnalytics", () => {
       },
     ]);
 
-    // --- cumulative: running sum of monthly.net, ascending ---
     expect(result.cumulative).toEqual([
       { month: "2026-01", cumulativeNet: 148 },
       { month: "2026-02", cumulativeNet: 178 },
     ]);
 
-    // --- byProject: p3 (no project) excluded ---
     expect(result.byProject).toEqual(
       expect.arrayContaining([
         {

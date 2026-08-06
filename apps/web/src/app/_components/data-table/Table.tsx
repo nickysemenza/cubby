@@ -230,7 +230,6 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     );
   const showPagination = !embedded || table.getPageCount() > 1;
 
-  // Helper to render status rows (loading, error, empty)
   const renderStatusRow = (content: ReactNode, height = "h-16") => (
     <TableRow>
       <TableCell colSpan={colSpan} className={cn("text-center", height)}>
@@ -239,7 +238,6 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     </TableRow>
   );
 
-  // Render table body content based on state
   const renderTableBody = () => {
     if (isLoading || !hydrated) {
       return renderStatusRow(<SimpleLoading />);

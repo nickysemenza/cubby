@@ -290,7 +290,6 @@ export function QuickInventoryAdd({
     );
   }
 
-  // --- Create mode ---
   return (
     <FormProvider {...createForm}>
       <form

@@ -407,11 +407,9 @@ export const findMaintenanceCounts = async (
   };
 };
 
-// ---------------------------------------------------------------------------
 // Settings → Maintenance: the two WASM parse-sweep detectors, re-homed off the
 // Problems hot path as manual dry-run + fix-all actions (they re-parse every
 // recipe line — ~30s CPU and heap pressure that blew the request budget).
-// ---------------------------------------------------------------------------
 
 // Dry run for "Re-parse recipe lines": how many live imported lines would change
 // (the expensive WASM sweep) out of all re-parseable lines (a cheap count).
@@ -472,13 +470,11 @@ export async function* pruneAllUnusedAliases(
   return { pruned };
 }
 
-// ---------------------------------------------------------------------------
 // Cost-grouped detector bundles. The Problems page loads these as separate tRPC
 // queries routed through an UNBATCHED link, so each runs in its own Worker
 // invocation / CPU budget — no single invocation sums all the detector CPU (the
 // failure mode that exceeded the 30s limit). `findAllProblems` recomposes them
 // for the badge/homepage/MCP consumers that still want one combined payload.
-// ---------------------------------------------------------------------------
 
 // DB-only detectors — cheap (no WASM, no network). traceAll keeps a named span
 // per detector for observability.

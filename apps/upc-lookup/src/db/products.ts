@@ -10,7 +10,6 @@ import type { Product, NewProduct } from "./schema";
 // D1 caps bound parameters per statement; chunk IN-lists well under the limit.
 const IN_CHUNK = 100;
 
-/** Get a single product by UPC, or undefined if not found. */
 export async function getProduct(
   db: Database,
   upc: string,
@@ -20,7 +19,6 @@ export async function getProduct(
   });
 }
 
-/** Get all cached products for the given UPCs in one chunked IN query. */
 export async function getProducts(
   db: Database,
   upcs: string[],
@@ -37,7 +35,6 @@ export async function getProducts(
   return batches.flat();
 }
 
-/** Insert a product row and return it. */
 export async function createProduct(
   db: Database,
   values: NewProduct,
@@ -66,10 +63,6 @@ export async function createResolvedProduct(
   return row;
 }
 
-/**
- * Update an existing product. Always stamps `updatedAt`. Returns the updated
- * row, or undefined if no product with that UPC exists.
- */
 async function updateProduct(
   db: Database,
   upc: string,
@@ -132,10 +125,6 @@ export type ListProductsResult = {
   pageSize: number;
 };
 
-/**
- * Paginated, filterable product listing for the admin UI and MCP.
- * `q` matches name/manufacturer/brand (case-insensitive substring).
- */
 export async function listProducts(
   db: Database,
   { q, source, page = 1, pageSize = 25 }: ListProductsOptions = {},

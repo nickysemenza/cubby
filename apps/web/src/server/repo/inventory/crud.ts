@@ -83,11 +83,6 @@ const loadInventoryEntryPricing = async (
     })),
   );
 
-/**
- * Compute valuation for an inventory entry based on amount and product price.
- * Returns the valuation value to store.
- * Accepts both Database and DrizzleTransaction for use within transactions.
- */
 export const computeValuationForEntry = async (
   db: Database | DrizzleTransaction,
   productId: ProductId,
@@ -104,11 +99,6 @@ export const computeValuationForEntry = async (
   return computeInventoryValuation(amountValue, effectivePrice);
 };
 
-/**
- * Sync valuation for all inventory entries of a specific product.
- * Called when product price changes.
- * Accepts both Database and DrizzleTransaction for use within transactions.
- */
 export const syncInventoryValuationsForProduct = async (
   db: Database | DrizzleTransaction,
   productId: ProductId,
@@ -152,10 +142,6 @@ export const syncInventoryValuationsForProduct = async (
   return updated;
 };
 
-/**
- * Check if a product with expectedQuantity=1 already exists in a different location.
- * Returns null if no duplicate found, or an object with conflicting location details.
- */
 export const checkUniqueProductDuplicate = async (
   db: Database,
   productId: ProductId,
@@ -421,15 +407,12 @@ export const updateInventoryEntry = async (
     locationId: data.locationId,
   });
 
-  // Fetch current state for audit logging and valuation computation
   const before = await getDb(db).query.inventoryEntry.findFirst({
     where: and(eq(inventoryEntry.id, id), notDeleted(inventoryEntry)),
   });
 
-  // Recompute valuation if amount or productId changed
   let valuation: number | null | undefined;
   if (data.amount !== undefined || data.productId !== undefined) {
-    // Use new values if provided, otherwise use existing values
     const effectiveProductIdRaw = data.productId ?? before?.productId;
     const effectiveAmount = data.amount ?? before?.amount;
     const amountValue =
@@ -447,7 +430,6 @@ export const updateInventoryEntry = async (
     }
   }
 
-  // Build update values using helper to filter undefined
   const updateValues = buildPartialUpdateValues({
     amount: data.amount,
     productId: data.productId,
@@ -462,7 +444,6 @@ export const updateInventoryEntry = async (
     id,
   );
 
-  // Log audit entry with changes
   if (before) {
     const changes = computeChanges(before, updated, [
       "amount",
@@ -479,7 +460,6 @@ export const updateInventoryEntry = async (
     }
   }
 
-  // Fetch with relations
   const result = await getDb(db).query.inventoryEntry.findFirst({
     where: eq(inventoryEntry.id, updated.id),
     ...relations.inventory.full,
@@ -510,7 +490,6 @@ export const createInventoryEntry = async (
     locationId: data.locationId,
   });
 
-  // Compute valuation based on amount and product price
   const amountValue =
     typeof data.amount === "object" && data.amount !== null
       ? (data.amount as { value: number }).value
@@ -528,14 +507,12 @@ export const createInventoryEntry = async (
     valuation,
   });
 
-  // Log audit entry
   await logAuditEntry(db, actor, {
     entityType: "inventory",
     entityId: created.id,
     action: "create",
   });
 
-  // Fetch with relations
   const result = await getDb(db).query.inventoryEntry.findFirst({
     where: eq(inventoryEntry.id, created.id),
     ...relations.inventory.full,
@@ -608,9 +585,6 @@ export const getInventoryForProducts = async (
   }));
 };
 
-/**
- * Soft delete inventory entries by IDs
- */
 export const deleteInventoryEntries = async (
   db: Database,
   ids: InventoryId[],
@@ -618,7 +592,6 @@ export const deleteInventoryEntries = async (
 ): Promise<void> => {
   if (ids.length === 0) return;
 
-  // Perform soft delete and audit logging in a transaction for atomicity
   await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, inventoryEntry, ids, "Inventory");
     const now = new Date();
@@ -631,7 +604,6 @@ export const deleteInventoryEntries = async (
     // side-effect) can't leave an orphaned entityEmbedding row.
     await softDeleteEntityEmbeddingsTx(tx, "inventory", ids);
 
-    // Log audit entries in batch
     await logAuditEntries(
       tx,
       actor,

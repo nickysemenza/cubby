@@ -41,7 +41,6 @@ export function USDAFoodList() {
       idField: "fdc_id",
     },
   );
-  // Set up table state
   const tableState = useTableState({ initialSort: "fdc_id" });
 
   const nameFilter = tableState.getColumnFilter("foodinfo-description");
@@ -117,7 +116,6 @@ export function USDAFoodList() {
   );
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
 
-  // Set up columns
   const columns = [
     columnHelper.accessor("fdc_id", {
       header: "FDC ID",

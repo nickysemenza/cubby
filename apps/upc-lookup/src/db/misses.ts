@@ -13,10 +13,6 @@ const MISS_TTL_DAYS = 30;
 // D1 caps bound parameters per statement; chunk IN-lists well under the limit.
 const IN_CHUNK = 100;
 
-/**
- * Record (or refresh) a miss for a UPC. On conflict, bump `attempts` and
- * refresh `lastCheckedAt` so the TTL window restarts.
- */
 export async function recordMiss(db: Database, upc: string): Promise<void> {
   await db
     .insert(schema.upcMisses)
@@ -30,15 +26,10 @@ export async function recordMiss(db: Database, upc: string): Promise<void> {
     });
 }
 
-/** Delete a miss (e.g. once the UPC graduates to a real product). */
 export async function deleteMiss(db: Database, upc: string): Promise<void> {
   await db.delete(schema.upcMisses).where(eq(schema.upcMisses.upc, upc));
 }
 
-/**
- * Of the given UPCs, return the set that has a *fresh* miss (within TTL) — i.e.
- * already tried and known-missing, so they should not be looked up again yet.
- */
 export async function getFreshMisses(
   db: Database,
   upcs: string[],
@@ -83,7 +74,6 @@ export type ListMissesResult = {
   pageSize: number;
 };
 
-/** Paginated miss listing for the admin worklist, newest-checked first. */
 export async function listMisses(
   db: Database,
   { q, page = 1, pageSize = 25 }: ListMissesOptions = {},

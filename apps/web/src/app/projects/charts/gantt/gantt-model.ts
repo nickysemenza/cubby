@@ -297,10 +297,6 @@ function globalExtent(projects: readonly ProjectOut[]): DayRange | null {
     : null;
 }
 
-// ---------------------------------------------------------------------------
-// Surface A — portfolio (all projects)
-// ---------------------------------------------------------------------------
-
 export interface PortfolioRowsResult {
   rows: GanttRow[];
   /** Root-level projects with no own dates and nothing dated beneath them. */
@@ -384,10 +380,6 @@ export function buildPortfolioRows(
     activeExtent: globalExtent(projects.filter((p) => p.status !== "done")),
   };
 }
-
-// ---------------------------------------------------------------------------
-// Surface B — single project detail
-// ---------------------------------------------------------------------------
 
 export interface ProjectRowsResult {
   rows: GanttRow[];

@@ -304,7 +304,6 @@ pub fn amount_kind(amount: WAmount) -> Result<WAmountKind, String> {
     to_js(&kind.to_str(), "amount kind").map(Into::into)
 }
 
-// ---------------------------------------------------------------------------
 // Golden tests — drift tripwires for the ingredient crate's unit-conversion
 // surface (pinned by exact git rev). `detect_unit_mapping_islands` and
 // `is_valid_unit` take native types and run
@@ -313,7 +312,6 @@ pub fn amount_kind(amount: WAmount) -> Result<WAmountKind, String> {
 // engine they wrap (`Measure::kind`, `MeasureKind::from_str`,
 // `convert_measure_with_graph_explained`), which is the actual drift surface.
 // Complementary to the food_mappings.rs graph tests, not duplicative.
-// ---------------------------------------------------------------------------
 #[cfg(test)]
 mod tests {
     use super::*;

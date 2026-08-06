@@ -303,7 +303,6 @@ export function useMobileListModel<TItem>({
   );
 }
 
-// --- Height + shape, shared by the virtualizer and the loading skeleton -----
 //
 // Measured in the browser against real rows, not derived from the type scale:
 // spec rows come out at 28-32px, not the ~16px a bare text line would suggest,

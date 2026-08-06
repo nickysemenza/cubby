@@ -11,7 +11,6 @@ async function globalTeardown(_config: FullConfig): Promise<void> {
     console.log("[E2E Teardown] Stopping dev server...");
     serverProcess.kill("SIGTERM");
 
-    // Wait for process to exit
     await new Promise<void>((resolve) => {
       const timeout = setTimeout(() => {
         console.log("[E2E Teardown] Force killing server...");

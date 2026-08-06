@@ -605,9 +605,7 @@ const createRecipeReturningId = async (
   );
   const { pendingImageIds } = recipeInput;
 
-  // Create the recipe in a transaction
   return await withTransaction(db, async (tx) => {
-    // Create the main recipe
     const createdRecipe = await insertWithShortcode(tx, "recipe", {
       name: recipeInput.name,
       ...sourceColumns,
@@ -633,7 +631,6 @@ const createRecipeReturningId = async (
       );
     }
 
-    // Log audit entry
     await logAuditEntry(tx, actor, {
       entityType: "recipe",
       entityId: createdRecipe.id,
@@ -853,7 +850,6 @@ export const updateRecipe = async (
   updates: RecipeUpdateInput["data"],
   actor: ActorContext,
 ): Promise<RecipeOut> => {
-  // Check if recipe exists
   const existingRecipe = await getDb(db).query.recipe.findFirst({
     where: eq(recipe.id, id),
     with: {
@@ -872,7 +868,6 @@ export const updateRecipe = async (
   // Store before state for audit logging
   const beforeState = { name: existingRecipe.name };
 
-  // Update in a transaction
   return await withTransaction(db, async (tx) => {
     await updateRecipeBasicProperties(tx, id, updates, existingRecipe);
     await updateRecipeImages(tx, id, updates);
@@ -889,7 +884,6 @@ export const updateRecipe = async (
       );
     }
 
-    // Log audit entry with changes
     const afterState = { name: fullRecipe.name };
     const changes = computeChanges(beforeState, afterState, ["name"]);
     if (changes) {

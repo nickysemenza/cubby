@@ -112,8 +112,6 @@ export function clampSelection(
   };
 }
 
-// --- Copy grid / TSV --------------------------------------------------
-
 export interface CopiedCell {
   kind: CellKind;
   text: string;
@@ -153,8 +151,6 @@ export function parseTsv(text: string): string[][] {
     return padded;
   });
 }
-
-// --- Paste planning ----------------------------------------------------
 
 export interface PasteColumnTarget {
   kind: CellKind | null;

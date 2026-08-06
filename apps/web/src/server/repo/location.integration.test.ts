@@ -318,7 +318,6 @@ describe("locationList imagePresenceFilter", () => {
       pageSize: 50,
     });
 
-  /** Create a location and attach one image to it, returning the shortcode id. */
   const locationWithImage = async (
     name: string,
     overrides: {

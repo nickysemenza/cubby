@@ -307,15 +307,11 @@ const remapDBConfig = (
 // during vitest globalSetup phase (before test.env variables are applied)
 
 export interface SeedResult {
-  /** Lookup product ID by name */
   productIds: Map<string, ProductShortcode>;
-  /** Lookup location ID by name (leaf name, not full path) */
   locationIds: Map<string, LocationShortcode>;
-  /** Lookup inventory entry ID by "productName@locationName" */
   inventoryIds: Map<string, InventoryShortcode>;
 }
 
-/** Minimal row shape for seeding inventory test data. */
 export interface SeedRow {
   product_name: string;
   manufacturer?: string;

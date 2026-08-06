@@ -107,7 +107,6 @@ export function GlobalCommandMenu({
 
   const trpc = useTRPC();
 
-  // --- Agent ("Ask Cubby") ---
   // Opt-in: the agent only runs when the user explicitly selects the Ask item.
   // Keyword/shortcode fast paths stay instant and untouched. Streams the
   // answer for a progressive "typing" reveal.

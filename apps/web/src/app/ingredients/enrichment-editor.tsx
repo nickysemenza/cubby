@@ -39,10 +39,6 @@ import {
   UnitInput,
 } from "./workbench-editor-core";
 
-// ---------------------------------------------------------------------------
-// Shared sub-fields
-// ---------------------------------------------------------------------------
-
 function PriceField({
   qty,
   unit,
@@ -275,10 +271,6 @@ function LivePanels({
     </Stack>
   );
 }
-
-// ---------------------------------------------------------------------------
-// EnrichmentEditor — the single editing body shared by Browse + Review
-// ---------------------------------------------------------------------------
 
 export interface EnrichmentEditorHandle {
   save: () => void;

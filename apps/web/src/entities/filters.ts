@@ -284,7 +284,6 @@ export const soleValue = <T>(value: T | T[] | undefined): T | undefined => {
   return value.length === 1 ? value[0] : undefined;
 };
 
-// --- URL round-trip ---------------------------------------------------------
 //
 // Filters live in the URL so a filtered view is shareable, bookmarkable, and
 // survives a reload. Sets are comma-joined (`?trade=drywall,electrical`),
@@ -400,7 +399,6 @@ export const presenceFilterOptions = (
   { value: "none", label: "(none)", meta: true },
 ];
 
-// --- Sort round-trip ---------------------------------------------------------
 //
 // Same shape as the filter round-trip above and, like it, needed by two callers
 // that must agree: `useTableState` owns the live table state, and the tab-title
@@ -439,7 +437,6 @@ export function paramToSort(value: unknown): SortTerm[] | undefined {
   return parsed.length ? parsed : undefined;
 }
 
-// --- Human-readable summary --------------------------------------------------
 //
 // Renders active filter state as short prose, for surfaces that have search
 // params but no table instance — the browser tab title, which is built inside a

@@ -43,7 +43,6 @@ interface UseEntityDeleteOptions {
 }
 
 interface UseEntityDeleteReturn {
-  /** Opens the delete confirmation dialog */
   openDeleteDialog: () => void;
   /**
    * Pre-configured destructive delete button — an ELEMENT, not a component.
@@ -53,9 +52,7 @@ interface UseEntityDeleteReturn {
    * `useOptimisticDelete`'s `deleteDialog`.
    */
   deleteButton: ReactElement;
-  /** Delete dialog (must be rendered) */
   deleteDialog: ReactElement;
-  /** Whether delete is in progress */
   isPending: boolean;
 }
 

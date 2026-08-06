@@ -9,25 +9,14 @@ import {
 
 interface TruncatedListProps<T> {
   items: T[];
-  /** Maximum items to show before truncating. undefined = show all */
   maxItems?: number;
-  /** Render function for each visible item */
   renderItem: (item: T, index: number) => ReactNode;
-  /** Render function for items in the overflow tooltip. Defaults to renderItem */
   renderOverflowItem?: (item: T, index: number) => ReactNode;
-  /** Custom className for the container */
   className?: string;
-  /** Gap between items. Defaults to "gap-1" */
   gap?: string;
-  /** Layout direction. Defaults to "horizontal" */
   direction?: "horizontal" | "vertical";
 }
 
-/**
- * Renders a list of items with optional truncation.
- * When maxItems is set and exceeded, shows visible items + a "+N more" badge
- * with a tooltip listing the remaining items.
- */
 export function TruncatedList<T>({
   items,
   maxItems,

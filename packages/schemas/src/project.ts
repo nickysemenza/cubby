@@ -105,10 +105,6 @@ const notionPageUrl = z
     "Complete HTTPS notion.so/notion.site page URL (including subdomains) or app.notion.com page URL; empty input clears the field",
   );
 
-// ---------------------------------------------------------------------------
-// Option sets
-// ---------------------------------------------------------------------------
-
 export const projectStatusValues = [
   "planning",
   "not_started",
@@ -237,10 +233,6 @@ export const TRADE_LABELS: Record<Trade, string> = {
  */
 export const UNASSIGNED_TRADE_LABEL = "No trade signal";
 export const UNKNOWN_MANUFACTURER_LABEL = "Unknown manufacturer";
-
-// ---------------------------------------------------------------------------
-// Project
-// ---------------------------------------------------------------------------
 
 /**
  * Depth cap for every project-tree walk — children-map traversals, ancestor
@@ -499,10 +491,6 @@ export const projectOut = z.object({
 });
 export type ProjectOut = z.infer<typeof projectOut>;
 
-// ---------------------------------------------------------------------------
-// Task
-// ---------------------------------------------------------------------------
-
 const taskFields = {
   name: z.string().min(1),
   status: taskStatusSchema,
@@ -728,10 +716,8 @@ export type CreateProjectFromTasksOut = z.infer<
   typeof createProjectFromTasksOut
 >;
 
-// ---------------------------------------------------------------------------
 // Actionable tasks (computed unblocked/blocked read — see
 // repo/task/actionable.ts for the exact semantics)
-// ---------------------------------------------------------------------------
 
 /**
  * Why a task is blocked, plus (for `task`/`project`) a transitive "why"
@@ -838,10 +824,6 @@ export const taskTimelineOut = z.object({
   undatedCount: z.number().int(),
 });
 export type TaskTimelineOut = z.infer<typeof taskTimelineOut>;
-
-// ---------------------------------------------------------------------------
-// Expense
-// ---------------------------------------------------------------------------
 
 /**
  * The one place the signed-quantity rule is spelled out for callers. MCP
@@ -1241,10 +1223,8 @@ export type ExpenseListAndSideEffectsOut = z.infer<
   typeof expenseListAndSideEffectsOut
 >;
 
-// ---------------------------------------------------------------------------
 // Expense analytics (server-side chart aggregates — see
 // repo/expense/analytics.ts for the SQL)
-// ---------------------------------------------------------------------------
 
 /**
  * `expense.analytics`'s input is `expenseFiltersSchema` directly — the SAME
@@ -1354,10 +1334,6 @@ export const expenseAnalyticsOut = z.object({
   byVendor: z.array(expenseVendorAggregate),
 });
 export type ExpenseAnalyticsOut = z.infer<typeof expenseAnalyticsOut>;
-
-// ---------------------------------------------------------------------------
-// Reconciliation matcher (match_expenses)
-// ---------------------------------------------------------------------------
 
 /**
  * The household's sales-tax rate, 8.625%.
@@ -1532,10 +1508,6 @@ export const expenseTradeAffinityOut = z.object({
   count: z.number(),
 });
 export type ExpenseTradeAffinityOut = z.infer<typeof expenseTradeAffinityOut>;
-
-// ---------------------------------------------------------------------------
-// Project reusable-resource usage and tool recommendation projections
-// ---------------------------------------------------------------------------
 
 export const projectResourceProjectInput = z.object({
   projectId: projectShortcode,
@@ -1727,20 +1699,14 @@ export const productProjectUsesSetOut = z.object({
 });
 export type ProductProjectUsesSetOut = z.infer<typeof productProjectUsesSetOut>;
 
-// ---------------------------------------------------------------------------
-// MCP / dashboard projections
-// ---------------------------------------------------------------------------
-
 export const projectMcpListOut = createPaginatedResponseSchema(projectOut);
 /** MCP aliases retained for the deliberately lean tool catalog imports. */
 export const taskMcpListOut = createPaginatedResponseSchema(taskOut);
 export const expenseMcpListOut = createPaginatedResponseSchema(expenseOut);
 
-// ---------------------------------------------------------------------------
 // Project dashboard: bounded Overview summary + on-demand portfolio
 // analytics (replaces the old single `project.dashboard` fetch-all — see
 // repo/project/dashboard-summary.ts / repo/project/analytics.ts)
-// ---------------------------------------------------------------------------
 
 /**
  * Shared scope filters for both dashboard endpoints. Empty/omitted
@@ -1786,7 +1752,6 @@ export type ProjectDashboardSummaryInput = ProjectDashboardFilters;
  */
 export type ProjectPortfolioAnalyticsInput = ProjectDashboardFilters;
 
-// ---------------------------------------------------------------------------
 // Project x tool matrix (repo/project/tool-matrix.ts)
 //
 // Lives here rather than in the reusable-resource block above only because it
@@ -1794,7 +1759,6 @@ export type ProjectPortfolioAnalyticsInput = ProjectDashboardFilters;
 // The column scope IS the dashboard scope — same fields, same
 // `buildDashboardProjectWhere` — so the matrix page reuses the Projects filter
 // vocabulary instead of inventing a parallel one.
-// ---------------------------------------------------------------------------
 
 export const projectToolMatrixGroupBy = z.enum(["trade", "manufacturer"]);
 export type ProjectToolMatrixGroupBy = z.infer<typeof projectToolMatrixGroupBy>;

@@ -135,9 +135,6 @@ export async function openCommandPalette(page: Page): Promise<Locator> {
   return palette;
 }
 
-// Helper to create a location via UI. Asserts the id-bearing detail URL and
-// that the name renders, so callers (and the create-location spec) get the same
-// coverage the inline flow used to.
 export async function createLocation(page: Page, name: string) {
   await page.goto("/locations/new");
   await waitForFormHydration(page);
@@ -152,10 +149,6 @@ export async function createLocation(page: Page, name: string) {
   await expect(page.getByText(name).first()).toBeVisible({ timeout: 10000 });
 }
 
-// Helper to create a product via UI. Asserts the id-bearing detail URL, the
-// <h1> name heading, and the Basic Information section — matching the coverage
-// the standalone create-product flow used to have. Pass `manufacturer` to also
-// fill that field.
 export async function createProduct(
   page: Page,
   name: string,
@@ -182,7 +175,6 @@ export async function createProduct(
   await expect(page.getByText("Basic Information")).toBeVisible();
 }
 
-// Create an ingredient via its form; asserts the id-bearing detail URL.
 export async function createIngredientViaForm(page: Page, name: string) {
   await page.goto("/ingredients/new");
   await waitForFormHydration(page);
@@ -245,7 +237,6 @@ export async function createProductWithIngredientMappings(
   ).toBeVisible({ timeout: 10000 });
 }
 
-// Helper to add inventory via UI
 export async function addInventory(
   page: Page,
   productName: string,
@@ -256,24 +247,20 @@ export async function addInventory(
   await page.goto("/inventory/new");
   await waitForFormHydration(page);
 
-  // Select product
   await selectComboboxItem(
     page,
     page.getByRole("combobox", { name: /product/i }),
     productName,
   );
 
-  // Select location
   await selectComboboxItem(
     page,
     page.getByRole("combobox", { name: /location/i }),
     locationName,
   );
 
-  // Fill quantity
   await page.getByLabel("Amount Value").fill(quantity.toString());
 
-  // Fill unit
   await page.getByRole("textbox", { name: "Amount Unit" }).fill(unit);
 
   await page.getByRole("button", { name: /^Create$/ }).click();

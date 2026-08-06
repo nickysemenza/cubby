@@ -70,11 +70,9 @@ export const RECIPE_MACRO_KEYS = [
 ] as const satisfies readonly NutrientKey[];
 export type RecipeMacroColumn = `${(typeof RECIPE_MACRO_KEYS)[number]}Total`;
 
-// ---------------------------------------------------------------------------
 // Costing explain payload (recipe.explainCosting + the MCP explain tool).
 // Mirrors the diagnostics calculateTotals produces (lib/recipe-costing.ts) —
 // the zod shapes are the wire contract; the lib types are the source.
-// ---------------------------------------------------------------------------
 
 /** The role the usage classifier assigned to a row (mirrors WIngredientUsage). */
 export const ingredientUsage = z.enum([

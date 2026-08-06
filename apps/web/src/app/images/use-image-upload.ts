@@ -61,14 +61,12 @@ export function useImageUpload() {
       }
 
       try {
-        // Step 1: get a presigned URL (and a PENDING row).
         const initResult = await uploadImageMutation.mutateAsync({
           filename: file.name,
           contentType: file.type as AllowedImageType,
           size: file.size,
         });
 
-        // Step 2: upload the bytes to R2.
         const uploadResult = await fetch(initResult.uploadUrl, {
           method: "PUT",
           body: file,
@@ -83,7 +81,6 @@ export function useImageUpload() {
           );
         }
 
-        // Step 3: finalize — flip PENDING → UPLOADED now that the object exists.
         await markUploadedMutation.mutateAsync({ id: initResult.imageId });
 
         return {

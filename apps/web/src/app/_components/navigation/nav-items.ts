@@ -285,8 +285,6 @@ export function getEntityNavGroup(entity: Entity): NavGroup | undefined {
   );
 }
 
-// --- Derived active state ---------------------------------------------------
-
 /** Every reachable nav target, deduped — the universe active matching resolves over. */
 const allTargets: string[] = uniq(
   [...desktopLeaves, ...bottomNavItems, ...publicNavItems].map(

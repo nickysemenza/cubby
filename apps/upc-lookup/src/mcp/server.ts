@@ -17,7 +17,6 @@ import { getStats } from "../routes/stats";
 import { storeImage, getImageUrl } from "../storage/images";
 import { UPC_REGEX } from "../util/upc";
 
-/** Wrap MCP responses in the text-content envelope the protocol expects. */
 function json(data: unknown) {
   return {
     content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
@@ -31,7 +30,6 @@ function errorResult(message: string) {
   };
 }
 
-/** Catch thrown errors and surface them as MCP error results. */
 function withErrorHandling<A>(
   handler: (args: A) => Promise<ReturnType<typeof json>>,
 ) {

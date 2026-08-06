@@ -9,7 +9,6 @@ import { id } from "./identifiers";
 // Image status values - single source of truth for both Zod and Drizzle
 export const imageStatusValues = ["PENDING", "UPLOADED", "FAILED"] as const;
 
-// Image status enum
 export const ImageStatus = z.enum(imageStatusValues);
 export type ImageStatus = z.infer<typeof ImageStatus>;
 
@@ -42,7 +41,6 @@ export const imageSortableFields = [
 
 export type ImageSortField = (typeof imageSortableFields)[number];
 
-// Allowed image content types for upload validation
 export const ALLOWED_IMAGE_TYPES = [
   "image/jpeg",
   "image/png",
@@ -67,7 +65,6 @@ const ALLOWED_DOCUMENT_TYPES = [PDF_CONTENT_TYPE] as const;
 export const isDocumentFile = (file: { contentType: string }): boolean =>
   file.contentType === PDF_CONTENT_TYPE;
 
-/** True when a file can be shown in a gallery and selected as a cover. */
 export const isDisplayableImageFile = (file: {
   contentType: string;
   renderStatus?: ImageRenderStatus | null;
@@ -78,7 +75,6 @@ export const isDisplayableImageFile = (file: {
   file.storageStatus !== "missing" &&
   file.storageStatus !== "metadata_mismatch";
 
-/** Split an entity's attached files into displayable images vs documents. */
 export const partitionEntityFiles = <T extends { contentType: string }>(
   files: T[],
 ): { images: T[]; documents: T[] } => ({
@@ -86,7 +82,6 @@ export const partitionEntityFiles = <T extends { contentType: string }>(
   documents: files.filter(isDocumentFile),
 });
 
-// Common image input schemas for create and update operations
 export const createInputImages = z.object({
   pendingImageIds: z.array(z.uuid()).optional(),
 });
@@ -112,7 +107,6 @@ const initiateUploadFields = {
   entityType: entityImage.optional(),
 };
 
-// Schema for initiating an image upload without entity ID (for pending uploads)
 export const initiateUploadWithoutEntitySchema = z.object({
   ...initiateUploadFields,
   contentType: imageContentType,
@@ -136,7 +130,6 @@ export type InitiateDocumentUploadInput = z.infer<
   typeof initiateDocumentUploadSchema
 >;
 
-// Schema for getting image by ID
 export const getImageByIdSchema = z.object({
   id: id,
 });
@@ -159,15 +152,10 @@ export const imageFilterFields = {
 export const imageListFiltersSchema = z.object(imageFilterFields);
 export type ImageListFilters = z.infer<typeof imageListFiltersSchema>;
 
-// Schema for importing an image from a URL. `entityType` is optional for the
-// same reason as `initiateUploadFields.entityType` above — a standalone
-// `/images` URL import has no owning entity.
 export const importImageFromUrlSchema = z.object({
   url: z.url(),
   entityType: entityImage.optional(),
 });
-
-// --- MCP attach_file ---------------------------------------------------------
 
 // The image-bearing entities exposed as attach targets. A subset of
 // `entityImage` (uppercase storage keys) — cookbook is excluded because it uses
@@ -284,12 +272,10 @@ export type AttachFileResponse = z.infer<typeof attachFileResponse>;
  */
 export const CULL_PENDING_IMAGES_DEFAULT_HOURS = 24;
 
-// Schema for culling pending images
 export const cullPendingImagesSchema = z.object({
   olderThanHours: z.int().positive().default(CULL_PENDING_IMAGES_DEFAULT_HOURS),
 });
 
-// Schema for image output (response)
 export const imageOut = z.object({
   id: id,
   url: z.url(),
@@ -311,7 +297,6 @@ export const imageOut = z.object({
 
 export type ImageOut = z.infer<typeof imageOut>;
 
-// Response for initiating an upload without entity ID
 export const initiateUploadWithoutEntityResponseSchema = z.object({
   uploadUrl: z.url(),
   imageId: id,
@@ -319,7 +304,6 @@ export const initiateUploadWithoutEntityResponseSchema = z.object({
   url: z.url(),
 });
 
-// Image with entity information
 export const imageWithEntitySchema = z.object({
   id: id,
   url: z.url(),
@@ -344,7 +328,6 @@ export const imageWithEntitySchema = z.object({
 
 export type ImageWithEntity = z.infer<typeof imageWithEntitySchema>;
 
-// Response schema for importing an image from a URL
 export const importImageFromUrlResponseSchema = z.object({
   imageId: id,
   key: z.string(),
@@ -352,7 +335,6 @@ export const importImageFromUrlResponseSchema = z.object({
   filename: z.string(),
 });
 
-// Response schema for culling pending images
 export const cullPendingImagesResponseSchema = z.object({
   count: z.int().nonnegative(),
   deletedIds: z.array(id),

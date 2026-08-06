@@ -29,10 +29,6 @@ use crate::reconcile::convert_with_fallback;
 /// `cubbygraphnode{i}` probe nodes).
 const BATCH_UNIT: &str = "cubbybatch";
 
-// ---------------------------------------------------------------------------
-// Input
-// ---------------------------------------------------------------------------
-
 /// One flattened section-ingredient row. Sections carry no meaning here, so the
 /// caller flattens them away.
 #[derive(Tsify, Serialize, Deserialize)]
@@ -77,10 +73,6 @@ pub struct WNeedsInput {
     /// Every root in `lines`, plus every transitively reachable sub-recipe.
     pub recipes: Vec<WNeedsRecipe>,
 }
-
-// ---------------------------------------------------------------------------
-// Output
-// ---------------------------------------------------------------------------
 
 /// One hop of the sub-recipe chain a need was reached through, outermost first.
 #[derive(Tsify, Serialize, Deserialize, Clone)]
@@ -173,10 +165,6 @@ pub struct WYieldFraction {
     pub reason: Option<WNeedsBlockReason>,
 }
 
-// ---------------------------------------------------------------------------
-// Yield math
-// ---------------------------------------------------------------------------
-
 /// Whether a declared yield can denominate anything at all. See the saturation
 /// note in [`yield_fraction`] for why a zero is a hazard and not just a no-op.
 fn usable_yield(recipe_yield: &WAmount) -> bool {
@@ -255,10 +243,6 @@ fn scale_amount(amount: &WAmount, factor: f64) -> WAmount {
         upper_value: amount.upper_value.map(|upper| upper * factor),
     }
 }
-
-// ---------------------------------------------------------------------------
-// Expansion
-// ---------------------------------------------------------------------------
 
 #[derive(Clone)]
 struct PartialNeed {

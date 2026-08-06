@@ -147,7 +147,6 @@ export function ProblemSection<T>({
   const iconColor =
     hasItems && !coverage ? "text-destructive" : "text-secondary-foreground";
 
-  // Render icon based on whether we have an entity or a LucideIcon
   const IconElement = entity ? (
     <EntityIcon entity={entity} className={`size-4 ${iconColor}`} />
   ) : (

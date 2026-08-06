@@ -38,10 +38,6 @@ export type MealSortField = (typeof mealSortableFields)[number];
  * scale` (totals are linear in scale) — nothing is denormalized onto the tables.
  */
 
-// ---------------------------------------------------------------------------
-// Inputs
-// ---------------------------------------------------------------------------
-
 /** A recipe to plan into a meal. */
 export const mealRecipeInput = z.object({
   recipeId: recipeShortcode.describe("Recipe ID to plan into the meal"),

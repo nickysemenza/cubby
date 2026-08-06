@@ -72,7 +72,6 @@ export type EntityDescriptor = z.infer<typeof entityDescriptor>;
 
 const ALL_MCP = ["get", "list", "create", "update", "delete"] as const;
 
-// --- relationship builders -------------------------------------------------
 // A path starts at the source entity's own table; each step moves to another
 // table. `outgoing` walks an FK from the table HOLDING the column toward the
 // table it points at; `incoming` walks it backwards, from the pointed-at table
@@ -566,10 +565,8 @@ export const entityReferences = (e: Entity): readonly Entity[] => [
   ...new Set(entityManifest[e].relationships.map((r) => r.target)),
 ];
 
-// ---------------------------------------------------------------------------
 // Derived projections — the manifest flags are the only rosters. The conditional
 // type preserves each projection's literal entity union for zod and consumers.
-// ---------------------------------------------------------------------------
 
 type BooleanTrait = {
   [K in keyof EntityDescriptor]-?: NonNullable<

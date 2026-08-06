@@ -514,7 +514,6 @@ export function createCreatedAtColumn<T extends BaseRow>(
   });
 }
 
-/** Creates the standard last-updated audit timestamp column. */
 export function createUpdatedAtColumn<T extends BaseRow>(
   columnHelper: ColumnHelper<T>,
 ) {
@@ -666,10 +665,6 @@ export function createEntityInlineLinkColumn<
 
 type UnitMapping = Parameters<typeof UnitMappingDisplay>[0]["mappings"][number];
 
-/**
- * Creates a column that displays unit mappings for an entity.
- * Requires a pre-computed mappingsMap that maps entity IDs to their unit mappings.
- */
 export function createUnitMappingsColumn<
   // `ingredient.naKinds` is the coverage opt-out; optional so the ingredient
   // list (whose rows ARE the ingredient) and any future caller still fit.
@@ -682,7 +677,6 @@ export function createUnitMappingsColumn<
     header?: string;
     className?: string;
     enableSorting?: boolean;
-    /** Show compact view (no grid) - defaults to true for table columns */
     compact?: boolean;
   },
 ) {
@@ -1525,7 +1519,6 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
     header?: string;
     className?: string;
     onSave: (newAmount: Amount, row: T) => Promise<void>;
-    /** Get unit mappings for price display (optional) */
     getUnitMappings?: (row: T) => UnitMapping[];
     /** Mobile projection metadata override */
     mobile?: MobileColumnMeta;

@@ -175,7 +175,6 @@ export function MobileCardView<TItem>({
   const virtualItems = virtualizer.getVirtualItems();
 
   const renderVirtualItem = (vi: (typeof virtualItems)[number]) => {
-    // --- Grouped mode ---
     if (groupedItems) {
       const gItem = groupedItems[vi.index];
       if (!gItem) return null;
@@ -199,7 +198,6 @@ export function MobileCardView<TItem>({
       return renderRowItem(vi, gItem.item);
     }
 
-    // --- Flat mode ---
     const model = mobileRows[vi.index];
     if (!model) return null;
     return renderRowItem(vi, model);

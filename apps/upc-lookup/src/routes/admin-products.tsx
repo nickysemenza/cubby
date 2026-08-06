@@ -33,8 +33,6 @@ const productRoutes = new Hono<{ Bindings: Env }>();
 const admin = productRoutes;
 const PAGE_SIZE = 25;
 
-// ---------------------------------------------------------------------------
-
 admin.get("/products", async (c) => {
   const db = createDb(c.env.DB);
   const q = c.req.query("q") ?? "";
@@ -220,10 +218,6 @@ admin.get("/products", async (c) => {
   );
 });
 
-// ---------------------------------------------------------------------------
-// Create
-// ---------------------------------------------------------------------------
-
 admin.get("/products/new", (c) =>
   c.render(
     <Layout title="New product" active="new">
@@ -304,10 +298,6 @@ admin.post("/products", async (c) => {
   return c.redirect(withFlash("/admin/products", `Created ${name}`));
 });
 
-// ---------------------------------------------------------------------------
-// Edit / update
-// ---------------------------------------------------------------------------
-
 admin.get("/products/:upc/edit", async (c) => {
   const db = createDb(c.env.DB);
   const product = await getProduct(db, c.req.param("upc"));
@@ -385,10 +375,6 @@ admin.post("/products/:upc", async (c) => {
 
   return c.redirect(withFlash("/admin/products", `Updated ${name}`));
 });
-
-// ---------------------------------------------------------------------------
-// Re-fetch / delete
-// ---------------------------------------------------------------------------
 
 admin.post("/products/:upc/refetch", async (c) => {
   const db = createDb(c.env.DB);

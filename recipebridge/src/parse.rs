@@ -428,14 +428,12 @@ pub fn parse_rich_text(text: String, ingredient_names: Vec<String>) -> Result<WR
         .map(|chunks| WRichItems(chunks.into_iter().map(WRichItem::from).collect()))
 }
 
-// ---------------------------------------------------------------------------
 // Golden tests — drift tripwires for the ingredient / recipe-scraper crates
 // (pinned by exact git rev in Cargo.toml). The parse_* fns are plain Rust under
 // the #[wasm_bindgen] attribute, so they run natively under `cargo test`. The
 // asserts pin the W-bridge serde shapes the TS side reads; a parser rev bump
 // that changes classification, the snake_case rename, yield/singularization, or
 // the rich-text chunk contract fails here instead of three layers downstream.
-// ---------------------------------------------------------------------------
 #[cfg(test)]
 mod tests {
     use super::*;

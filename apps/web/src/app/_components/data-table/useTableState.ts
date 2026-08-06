@@ -490,7 +490,6 @@ export function useTableState(
     urlState,
   ]);
 
-  // --- URL write-through (urlSync only) ------------------------------------
   useEffect(() => {
     if (!urlSync) return;
     if (applyingExternalState.current !== null) {

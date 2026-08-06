@@ -25,9 +25,7 @@ import { domainRouter } from "~/server/api/domain";
 import { createTestCaller } from "~/server/api/trpc";
 import { createMcpServer, listMcpToolCatalog } from "./server";
 
-// ---------------------------------------------------------------------------
 // Harness
-// ---------------------------------------------------------------------------
 
 /**
  * Call a registered tool through a real client/server InMemoryTransport pair,
@@ -96,9 +94,7 @@ function expectShortcode(value: unknown, entity: string) {
   ).toMatchObject({ type: entity, legacy: false });
 }
 
-// ---------------------------------------------------------------------------
 // 1. list -> create -> get -> update -> delete round trips, per entity
-// ---------------------------------------------------------------------------
 
 describe("MCP CRUD round trips are driven by shortcodes only", () => {
   const ctx = withTestDb();
@@ -990,9 +986,7 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // 2. A wrong-entity prefix is rejected BEFORE any mutation runs
-// ---------------------------------------------------------------------------
 
 describe("a wrong-entity shortcode prefix is rejected before any mutation", () => {
   const ctx = withTestDb();
@@ -1210,9 +1204,7 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
   });
 });
 
-// ---------------------------------------------------------------------------
 // 3. Specialized tools round-trip on shortcodes
-// ---------------------------------------------------------------------------
 
 describe("specialized tools round-trip on shortcodes", () => {
   const ctx = withTestDb();
@@ -1621,10 +1613,8 @@ describe("specialized tools round-trip on shortcodes", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // 4. Schema walk: no OUTPUT schema exposes a uuid-shaped id outside the
 //    declared exceptions, driven off the live tool catalog.
-// ---------------------------------------------------------------------------
 
 type JsonSchemaNode = Record<string, unknown>;
 

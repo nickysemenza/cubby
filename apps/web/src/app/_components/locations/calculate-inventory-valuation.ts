@@ -10,20 +10,17 @@ type InventoryValuationBreakdown = {
   valuation: number;
 };
 
-/** Per-category breakdown with counts and item names */
 type PricingCategorySummary = {
   count: number;
   itemNames: string[];
 };
 
-/** Pricing status across three categories */
 export type PricingStatus = {
   priced: PricingCategorySummary;
   missingPricing: PricingCategorySummary;
   miscNoPrice: PricingCategorySummary;
 };
 
-/** Create an empty pricing status object */
 export function emptyPricingStatus(): PricingStatus {
   return {
     priced: { count: 0, itemNames: [] },
@@ -32,7 +29,6 @@ export function emptyPricingStatus(): PricingStatus {
   };
 }
 
-/** Merge multiple pricing statuses into one (for aggregating children) */
 export function mergePricingStatus(statuses: PricingStatus[]): PricingStatus {
   const result = emptyPricingStatus();
   for (const s of statuses) {
@@ -46,7 +42,6 @@ export function mergePricingStatus(statuses: PricingStatus[]): PricingStatus {
   return result;
 }
 
-/** Format pricing status for display in summaries */
 export function formatPricingStatusSummary(
   pricingStatus: PricingStatus,
 ): string | null {
@@ -86,15 +81,6 @@ type InventoryValuationResult = {
   pricingStatus: PricingStatus;
 };
 
-/**
- * Calculate the total inventory valuation for a list of inventory items.
- * Uses the precomputed `valuation` column from each item (amount × effective price).
- * Groups a simple breakdown by product manufacturer (as a proxy for category).
- * Categorizes items by pricing status: priced, missingPricing, or miscNoPrice.
- *
- * This is a synchronous function - no WASM calls needed since valuations
- * are precomputed and stored in the database.
- */
 export function calculateInventoryValuation(
   items: InventoryItem[],
 ): InventoryValuationResult {

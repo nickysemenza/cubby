@@ -181,8 +181,6 @@ export const uploadToS3 = async (params: {
   }
 };
 
-// --- Image import utilities (merged from image-import.ts) ---
-
 interface FetchAndStoreResult {
   key: string;
   url: string;

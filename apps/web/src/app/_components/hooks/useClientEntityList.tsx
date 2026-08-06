@@ -24,9 +24,7 @@ const NO_FILTERS: FilterInput[] = [];
 /** Client-side pageSize default — smaller than the server list default (100). */
 const DEFAULT_CLIENT_PAGE_SIZE = 25;
 
-/** Expandable-tree configuration for the client list. */
 interface ClientTreeConfig<TData extends BaseListRow> {
-  /** Return a row's children — rows become `TData & { subRows: TData[] }`. */
   getSubRows: (row: TData) => TData[] | undefined;
   /** Keep a parent visible when a descendant leaf matches the filter. */
   filterFromLeafRows?: boolean;

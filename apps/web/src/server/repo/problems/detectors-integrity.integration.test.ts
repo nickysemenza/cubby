@@ -81,12 +81,10 @@ const softDelete = (db: Database, tableName: string, id: string) =>
     sql`UPDATE ${sql.identifier(tableName)} SET "deletedAt" = now() WHERE id = ${id}`,
   );
 
-// ---------------------------------------------------------------------------
 // Minimal live-row factories, one per table that appears as a TARGET entity's
 // table or as a SOURCE (incoming-edge) table below. Each supplies only the
 // columns with no default and no fallback (NOT NULL, no `.default()` in
 // schema.ts) plus whichever FK the calling edge cares about.
-// ---------------------------------------------------------------------------
 
 const mkImage = (db: Database) =>
   insertAndReturn(db, image, {
@@ -523,11 +521,9 @@ const SOURCE_FACTORIES: Record<
     }),
 };
 
-// ---------------------------------------------------------------------------
 // Derive the must-target-live edge list from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS
 // directly (not a hand-copied list), so a newly added/removed/reclassified edge
 // changes what this suite tests without anyone touching this file.
-// ---------------------------------------------------------------------------
 
 interface DerivedEdgeSpec {
   edgeKey: string;

@@ -70,7 +70,6 @@ export function QuickAddDialog<
   /** Map validated form values to the mutation's input (branding happens here). */
   buildPayload: (values: TFieldValues) => VariablesOf<TFn>;
   submitButtonText?: string;
-  /** Render the form fields; receives the `useForm` instance for `Controller`-based fields. */
   children: (form: UseFormReturn<TFieldValues>) => ReactNode;
 }) {
   const resolveDefaults = useCallback(

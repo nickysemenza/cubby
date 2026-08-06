@@ -7,36 +7,19 @@ interface UseBulkActionsOptions<TData> {
 }
 
 export interface UseBulkActionsReturn<TData> {
-  /** Current row selection state (for useTableConfig) */
   rowSelection: RowSelectionState;
-  /** Selection change handler (for useTableConfig) */
   onRowSelectionChange: OnChangeFn<RowSelectionState>;
-  /** Number of currently selected rows */
   selectedCount: number;
-  /** Get available actions for current selection */
   getAvailableActions: (selectedRows: Row<TData>[]) => BulkAction<TData>[];
-  /** Execute an action */
   executeAction: (
     action: BulkAction<TData>,
     selectedRows: Row<TData>[],
   ) => Promise<void>;
-  /** Whether an action is currently executing */
   isExecuting: boolean;
-  /** Current action being executed (for UI feedback) */
   currentAction: BulkAction<TData> | null;
-  /** Clear selection */
   clearSelection: () => void;
 }
 
-/**
- * Hook for managing bulk action state and execution.
- *
- * Handles:
- * - Row selection state management
- * - Action availability filtering (min/max selection)
- * - Action execution with loading state
- * - Selection clearing after successful actions
- */
 export function useBulkActions<TData>({
   config,
 }: UseBulkActionsOptions<TData>): UseBulkActionsReturn<TData> {

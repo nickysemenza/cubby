@@ -1,12 +1,5 @@
 import { useCallback, useRef, useSyncExternalStore } from "react";
 
-/**
- * Custom hook for managing localStorage with SSR support and type safety
- * Uses useSyncExternalStore for proper React 18+ external store synchronization
- * @param key - The localStorage key
- * @param initialValue - The initial value if no stored value exists
- * @returns A tuple of [storedValue, setValue] similar to useState
- */
 export function useLocalStorage<T>(
   key: string,
   initialValue: T,
@@ -34,7 +27,6 @@ export function useLocalStorage<T>(
   const getSnapshot = useCallback(() => {
     try {
       const item = window.localStorage.getItem(key);
-      // Only re-parse if the raw string changed
       if (item !== cache.current.raw) {
         cache.current.raw = item;
         cache.current.parsed =

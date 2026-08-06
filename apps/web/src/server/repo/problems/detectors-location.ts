@@ -20,13 +20,11 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
 // components that import it from there.
 export type { EmptyLocation };
 
-// Find leaf locations with no inventory entries (excludes parent locations)
 export const findEmptyLocations = async (
   db: Database,
 ): Promise<EmptyLocation[]> => {
   const dbClient = getDb(db);
 
-  // Alias for checking child locations
   const childLocation = dbClient
     .$with("child_location")
     .as(
@@ -65,7 +63,6 @@ export const findEmptyLocations = async (
     .where(
       and(
         notDeleted(location),
-        // No inventory entries
         notExists(
           dbClient
             .select({ id: sql`1` })
@@ -77,7 +74,6 @@ export const findEmptyLocations = async (
               ),
             ),
         ),
-        // No child locations (is a leaf node)
         notExists(
           dbClient
             .select({ id: sql`1` })

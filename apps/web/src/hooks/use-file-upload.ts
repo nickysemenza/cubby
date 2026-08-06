@@ -150,7 +150,6 @@ export const useFileUpload = (
 
   const clearFiles = useCallback(() => {
     setState((prev) => {
-      // Clean up object URLs
       for (const file of prev.files) {
         if (
           file.preview &&
@@ -339,13 +338,11 @@ export const useFileUpload = (
       e.stopPropagation();
       setState((prev) => ({ ...prev, isDragging: false }));
 
-      // Don't process files if the input is disabled
       if (inputRef.current?.disabled) {
         return;
       }
 
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        // In single file mode, only use the first file
         if (!multiple) {
           const file = e.dataTransfer.files[0]!;
           addFiles([file]);
@@ -414,7 +411,6 @@ export const useFileUpload = (
   ];
 };
 
-// Helper function to format bytes to human-readable format
 export const formatBytes = (bytes: number, decimals = 2): string => {
   if (bytes === 0) return "0 Bytes";
 

@@ -19,10 +19,8 @@ import {
   refKey,
 } from "~/server/repo/shortcode-resolver";
 
-// Action types for audit entries
 type AuditAction = "create" | "update" | "delete";
 
-// Input for the audit entry (without actor context)
 export interface AuditEntryInput {
   entityType: AuditEntityType;
   entityId: string;
@@ -30,7 +28,6 @@ export interface AuditEntryInput {
   changes?: Record<string, { from: unknown; to: unknown }>;
 }
 
-// User info included in audit log entries
 type AuditLogUser = {
   id: string;
   name: string | null;
@@ -38,7 +35,6 @@ type AuditLogUser = {
   image: string | null;
 } | null;
 
-// Output type for audit log entries with user relation
 type AuditLogRow = Omit<
   typeof auditLog.$inferSelect,
   "action" | "changes" | "source"

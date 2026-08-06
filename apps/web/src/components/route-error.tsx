@@ -151,7 +151,6 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
         </Button>
       )}
 
-      {/* Action buttons for non-auth errors */}
       {category !== "auth" && (
         <Row gap="sm">
           <Button

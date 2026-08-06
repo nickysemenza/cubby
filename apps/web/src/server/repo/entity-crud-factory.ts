@@ -138,7 +138,6 @@ interface EntityCrudConfig<
   table: TTable;
   /** Manifest key — drives the auditable / soft-delete behavior. */
   entity: AuditableEntity & ShortcodeEntity;
-  /** Update payload → column values handed to the UPDATE. */
   toUpdate: (data: TUpdate) => PgUpdateSetSource<TTable>;
   /** Columns whose change is recorded in the audit diff. */
   auditUpdateFields: readonly string[];

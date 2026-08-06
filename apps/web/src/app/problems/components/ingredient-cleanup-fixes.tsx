@@ -30,9 +30,6 @@ import {
  * cost-grouped queries and the badge's combined scan both re-read.
  */
 
-// ── Per-card fixes ───────────────────────────────────────────────────────────
-
-/** Delete one unused ingredient (and, when `alsoDeleteProducts`, its products). */
 export function UnusedIngredientDeleteFix({
   id,
   name,

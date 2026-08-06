@@ -105,7 +105,6 @@ export interface AppSpan {
   recordException(error: unknown): void;
 }
 
-/** Get the unified OTel tracer (dev backend + synchronous WASM spans). */
 export const getTracer = () => tracer;
 
 const wrapOtel = (span: ReturnType<typeof tracer.startSpan>): AppSpan => ({

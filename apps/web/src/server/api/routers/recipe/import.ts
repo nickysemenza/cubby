@@ -264,7 +264,6 @@ const getCookbookDiff = protectedProcedure
     return await getCookbookRecipesForDiff(ctx.db, cb.id);
   });
 
-// --- Notion recipe sync ---------------------------------------------------
 // Stable, deterministic import from the Notion "Recipes" database. Preview parses
 // every row server-side (no writes), diffs against already-imported page ids, and
 // lints each for importability; the per-recipe commit upserts keyed on page id.

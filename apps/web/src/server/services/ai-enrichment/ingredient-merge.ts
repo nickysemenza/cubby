@@ -1,4 +1,3 @@
-// ---------------------------------------------------------------------------
 // AI-assisted ingredient merge suggestions
 //
 // EPUB imports create near-duplicate ingredients that string matching can't
@@ -6,7 +5,6 @@
 // agentic loop as the USDA matcher: a search tool over existing ingredients + a
 // terminal select tool, with a `seen` map so the model can only target an id it
 // actually saw. Suggestions only — merge is destructive, so the user confirms.
-// ---------------------------------------------------------------------------
 
 import type { Confidence } from "@cubby/schemas/ai";
 import {

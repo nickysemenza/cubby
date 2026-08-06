@@ -192,7 +192,6 @@ async function globalSetup(config: FullConfig): Promise<void> {
   const context = await browser.newContext();
   const page = await context.newPage();
 
-  // Navigate to home page first
   await page.goto(baseURL);
 
   // Try to sign up first

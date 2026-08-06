@@ -6,7 +6,6 @@ import { createDb, schema } from "../db";
 
 const stats = new Hono<{ Bindings: Env }>();
 
-/** Get stats data - exported for use by admin UI */
 export async function getStats(
   db: ReturnType<typeof createDb>,
 ): Promise<StatsResponse> {

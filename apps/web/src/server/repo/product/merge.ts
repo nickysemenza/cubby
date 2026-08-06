@@ -335,7 +335,6 @@ export const mergeProducts = async (
     );
     summary.deletedEntityIds = losers.map((row) => row.id);
 
-    // ---- InventoryEntry: refuse before writing anything --------------------
     const inventoryRows = (await tx.query.inventoryEntry.findMany({
       where: and(
         inArray(inventoryEntry.productId, [keepId, ...loserIds]),
@@ -357,7 +356,6 @@ export const mergeProducts = async (
       );
     }
 
-    // ---- ProductExternalId -------------------------------------------------
     const externalIdRows = await tx.query.productExternalId.findMany({
       where: and(
         inArray(productExternalId.productId, [keepId, ...loserIds]),
@@ -421,7 +419,6 @@ export const mergeProducts = async (
     }
     summary.externalIdsDiscarded = externalIdsDiscarded;
 
-    // ---- InventoryEntry: apply --------------------------------------------
     if (inventoryPlan.repoint.length > 0) {
       await tx
         .update(inventoryEntry)
@@ -470,7 +467,6 @@ export const mergeProducts = async (
     }
     summary.inventoryMerged = inventoryMerged;
 
-    // ---- ProductImage / ProjectToolUsage / PurchaseProduct / WishCandidate --
     // Four edges, one shape: re-point what fits, soft-delete the duplicate.
     // An absorbed row here carries no data the survivor's row doesn't already
     // have (the pair IS the row), so there is nothing to fold.
@@ -527,7 +523,6 @@ export const mergeProducts = async (
       now,
     });
 
-    // ---- Plain re-points ---------------------------------------------------
     summary.unitMappingsMoved = (
       await repointEdge(tx, "product", "ProductUnitMappings.productId", {
         from: loserIds,
@@ -567,7 +562,6 @@ export const mergeProducts = async (
       })),
     );
 
-    // ---- Survivor identity -------------------------------------------------
     const folded = uniq([
       ...keeper.aliases,
       ...losers.map((row) => row.name),
@@ -604,7 +598,6 @@ export const mergeProducts = async (
       })
       .where(eq(product.id, keepId));
 
-    // ---- Remove the losers -------------------------------------------------
     await finalizeMerge(tx, {
       entity: "product",
       table: product,

@@ -1,4 +1,3 @@
-// ---------------------------------------------------------------------------
 // AI-assisted USDA food matching
 //
 // Cookbook ingredients ("AP flour", "orange juice") rarely match the USDA
@@ -6,7 +5,6 @@
 // Instead of a fixed query set, we give gpt-4o-mini a search tool and let it
 // drive its own (refined, generic-biased) queries, then commit a choice via a
 // terminal select tool. Same @tanstack/ai loop the agent runtime uses.
-// ---------------------------------------------------------------------------
 
 import type { Confidence } from "@cubby/schemas/ai";
 import type { IngredientId } from "@cubby/schemas/identifiers";

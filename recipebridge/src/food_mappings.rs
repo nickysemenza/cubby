@@ -19,10 +19,6 @@ use wasm_bindgen::prelude::*;
 
 use crate::{WAmount, WUnitMapping, WUnitMappings};
 
-// ---------------------------------------------------------------------------
-// Boundary types
-// ---------------------------------------------------------------------------
-
 /// One USDA food portion row (the mapping-relevant subset of `FoodPortion`).
 #[derive(Tsify, Serialize, Deserialize)]
 #[tsify(from_wasm_abi)]
@@ -105,10 +101,6 @@ pub enum WSourceMetadata {
     },
     Manual,
 }
-
-// ---------------------------------------------------------------------------
-// Synthesis
-// ---------------------------------------------------------------------------
 
 fn amount(value: f64, unit: impl Into<String>) -> WAmount {
     WAmount {
@@ -301,10 +293,6 @@ pub(crate) fn product_non_price_mapping_pairs(product: &WProductInput) -> Vec<(M
         .collect()
 }
 
-// ---------------------------------------------------------------------------
-// Exports
-// ---------------------------------------------------------------------------
-
 /// All unit mappings derivable from one USDA food: portion edges, the
 /// (bare-count-guarded) branded serving edge, and per-nutrient `100 g = X`
 /// edges. The TS `unitMappingsFromFood` is a thin wrapper over this.
@@ -322,11 +310,9 @@ pub fn product_unit_mappings(product: WProductInput) -> WUnitMappings {
     WUnitMappings(product_mappings(&product))
 }
 
-// ---------------------------------------------------------------------------
 // Tests — including the ProMix fdc 576208 bare-count regression suite, ported
 // from unit-mapping-utils.unit.test.ts (which now re-verifies the same cases
 // through the TS wrapper).
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

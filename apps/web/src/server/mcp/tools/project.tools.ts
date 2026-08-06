@@ -59,14 +59,12 @@ import {
   WRITE_DESTRUCTIVE_CLOSED,
 } from "./_shared";
 
-// ---------------------------------------------------------------------------
 // Synthesis-read / bulk-write projections
 //
 // These trim the router outputs the same way the slim* projections trim list
 // rows: the handler passes the router payload straight through and the output
 // schema's parse drops the keys below (zod objects strip unknown keys), so a
 // new field on the underlying schema flows through without an MCP-side edit.
-// ---------------------------------------------------------------------------
 
 /** Project row for `get_house_status` — identity, dates, budget and the own +
  * subtree rollup, minus the markdown notes, icon, dependency/child id arrays

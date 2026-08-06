@@ -20,17 +20,12 @@ const DEFAULT_STATE: GalleryViewState = {
   hideNonMatching: false,
 };
 
-/**
- * Custom hook for managing gallery view state with localStorage persistence.
- * Manages sidebar collapse state, search term, and location type filter.
- */
 export function useGalleryViewState() {
   const [sidebarCollapsed, setSidebarCollapsed] = useLocalStorage<boolean>(
     "gallery-sidebar-collapsed",
     DEFAULT_STATE.sidebarCollapsed,
   );
 
-  // Transient state (not persisted)
   const [searchTerm, setSearchTermRaw] = useLocalStorage<string>(
     "gallery-search-term",
     "",
@@ -88,14 +83,12 @@ export function useGalleryViewState() {
 
   return useMemo(
     () => ({
-      // State
       sidebarCollapsed,
       searchTerm,
       locationTypeFilter,
       emptyFilter,
       hideNonMatching,
 
-      // Actions
       setSidebarCollapsed,
       toggleSidebar,
       setSearchTerm,
