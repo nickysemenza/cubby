@@ -15,7 +15,14 @@
  * dropping a duplicate wishlist candidate are three different domain decisions,
  * and a "generic absorb" would have to be one of them and be wrong about the
  * other two.
+ *
+ * The one absorb rule that IS general enough to live here is
+ * {@link foldAssociation}'s: a pure join row where the row *is* the pair, so an
+ * absorbed duplicate carries nothing to fold.
  */
+
+import { inArray } from "drizzle-orm";
+import type { DrizzleTransaction } from "~/server/db";
 
 /**
  * The keeper/loser split for one slotted edge.
@@ -91,4 +98,67 @@ export const planSlotCollisions = <Row>(args: {
     }
   }
   return plan;
+};
+
+/**
+ * Re-point a pure association row onto one owner, soft-deleting the rows whose
+ * slot that owner already fills. Returns how many actually moved.
+ *
+ * The join tables this covers (product↔image, product↔project, product↔purchase,
+ * product↔wish) share an implementation because they share a *shape*, not just a
+ * plan: the row IS the pair, so an absorbed duplicate carries nothing to fold
+ * into its survivor. External ids and inventory look similar and are handled
+ * separately precisely because their absorbed rows DO carry something (a url; a
+ * quantity).
+ *
+ * Lives here rather than inside `mergeProducts` because a merge is not the only
+ * operation that needs it: `repointProjectUses` moves a product's project-use
+ * history without merging anything, and it faces the identical partial-unique-
+ * index collision. A bare `UPDATE ... SET productId` — what `repointEdge` does
+ * for the unslotted edges — aborts the whole transaction the moment the
+ * destination already has a row in that slot.
+ */
+export const foldAssociation = async <
+  Row extends { id: string } & Record<string, unknown>,
+>(
+  tx: DrizzleTransaction,
+  args: {
+    // biome-ignore lint/suspicious/noExplicitAny: one helper over several structurally-identical join tables.
+    table: any;
+    /** Property name of the FK being re-pointed, e.g. `"productId"`. */
+    column: string;
+    rows: Row[];
+    keepId: string;
+    slotKey: (row: Row) => string;
+    now: Date;
+  },
+): Promise<number> => {
+  const plan = planSlotCollisions({
+    keeperRows: args.rows.filter((row) => row[args.column] === args.keepId),
+    loserRows: args.rows.filter((row) => row[args.column] !== args.keepId),
+    slotKey: args.slotKey,
+  });
+  if (plan.repoint.length > 0) {
+    await tx
+      .update(args.table)
+      .set({ [args.column]: args.keepId })
+      .where(
+        inArray(
+          args.table.id,
+          plan.repoint.map((row) => row.id),
+        ),
+      );
+  }
+  if (plan.absorb.length > 0) {
+    await tx
+      .update(args.table)
+      .set({ deletedAt: args.now })
+      .where(
+        inArray(
+          args.table.id,
+          plan.absorb.flatMap(({ rows }) => rows.map((row) => row.id)),
+        ),
+      );
+  }
+  return plan.repoint.length;
 };

@@ -986,21 +986,37 @@ async function throwIfDuplicateProduct(
   if (constraint.includes("upc") && data.upc) {
     const existing = await getDb(db).query.product.findFirst({
       where: and(eq(product.upc, data.upc), notDeleted(product)),
-      columns: { name: true },
+      columns: { name: true, shortcode: true },
     });
     throw createAppError(
       "PRODUCT_ALREADY_EXISTS",
       `UPC ${data.upc} is already used by ${
-        existing ? `product “${existing.name}”` : "another product"
+        existing
+          ? `${existing.shortcode} “${existing.name}”`
+          : "another product"
       }.`,
       error,
     );
   }
 
   if (constraint.includes("name_manufacturer")) {
+    // Re-read the blocker rather than echoing the input back. Without this the
+    // message says only that *something* named this exists, and the next step
+    // is always a list/search call to find out what — so name it here. The
+    // conflicting row is what the caller needs to merge into, rename, or skip.
+    const existing = await getDb(db).query.product.findFirst({
+      where: and(
+        eq(product.name, data.name),
+        eq(product.manufacturer, data.manufacturer),
+        notDeleted(product),
+      ),
+      columns: { name: true, shortcode: true },
+    });
     throw createAppError(
       "PRODUCT_ALREADY_EXISTS",
-      `A product named “${data.name}” by “${data.manufacturer}” already exists.`,
+      existing
+        ? `A product named “${data.name}” by “${data.manufacturer}” already exists: ${existing.shortcode}.`
+        : `A product named “${data.name}” by “${data.manufacturer}” already exists.`,
       error,
     );
   }
@@ -1189,139 +1205,173 @@ export const updateProduct = async (
     ...productData
   } = data;
 
-  return await withTransaction(db, async (tx) => {
-    const beforeProduct = await tx.query.product.findFirst({
-      where: and(eq(product.id, id), notDeleted(product)),
-    });
+  // The identity this update lands on, captured inside the transaction for the
+  // duplicate handler outside it — a rename collides on the SAME indexes a
+  // create does, and used to surface as the generic "a product with that name,
+  // manufacturer already exists" with no way to tell which product that was.
+  let effectiveIdentity: {
+    name: string;
+    manufacturer: string;
+    upc?: string | null;
+  } | null = null;
 
-    if (!beforeProduct) {
-      throw createAppError("PRODUCT_NOT_FOUND", `Product ${id} not found`);
-    }
-
-    // A canonical "1 each = $X" mapping duplicates the price column; reject it.
-    if (unitMappings !== undefined) assertNoCanonicalPriceMapping(unitMappings);
-
-    const updateData: {
-      name?: string;
-      aliases?: string[];
-      tags?: string[];
-      manufacturer?: string;
-      category?: ProductCategory | null;
-      upc?: string | null;
-      fdc_id?: number | null;
-      model?: string | null;
-      expectedQuantity?: number | null;
-      ingredientId?: IngredientId | null;
-      price?: number | null;
-    } = { ...productData };
-
-    if (ingredientId !== undefined) {
-      updateData.ingredientId = ingredientId;
-    }
-
-    // Auto-correct category to "food" if the resulting product will have food indicators
-    const resultingProduct = {
-      fdc_id: updateData.fdc_id ?? beforeProduct.fdc_id,
-      ingredientId: updateData.ingredientId ?? beforeProduct.ingredientId,
-    };
-    if (
-      hasFoodIndicators(resultingProduct) &&
-      beforeProduct.category !== "food"
-    ) {
-      updateData.category = "food";
-    }
-
-    // Wishlist candidates are tools by domain definition. Check the final
-    // category after the food-indicator correction too, so a linked ingredient
-    // cannot silently reclassify a live candidate out of Tools.
-    if (updateData.category !== undefined && updateData.category !== "tools") {
-      const candidate = await tx.query.wishCandidate.findFirst({
-        where: and(eq(wishCandidate.productId, id), notDeleted(wishCandidate)),
-        columns: { id: true },
+  try {
+    return await withTransaction(db, async (tx) => {
+      const beforeProduct = await tx.query.product.findFirst({
+        where: and(eq(product.id, id), notDeleted(product)),
       });
-      if (candidate) {
-        throw createAppError(
-          "PRODUCT_HAS_WISH_CANDIDATES",
-          "Remove this Product from the Wishlist before changing it out of the Tools category.",
-        );
+
+      if (!beforeProduct) {
+        throw createAppError("PRODUCT_NOT_FOUND", `Product ${id} not found`);
       }
-    }
 
-    const updated = await updateLiveAndReturn(tx, product, updateData, id);
+      effectiveIdentity = {
+        name: productData.name ?? beforeProduct.name,
+        manufacturer: productData.manufacturer ?? beforeProduct.manufacturer,
+        upc: productData.upc ?? beforeProduct.upc,
+      };
 
-    // When price changes, resync the dependent inventory valuations (amount × price).
-    if (data.price !== undefined) {
-      await syncInventoryValuationsForProduct(tx, id);
-    }
+      // A canonical "1 each = $X" mapping duplicates the price column; reject it.
+      if (unitMappings !== undefined)
+        assertNoCanonicalPriceMapping(unitMappings);
 
-    if (unitMappings !== undefined) {
-      await syncProductUnitMappings(tx, id, unitMappings);
-    }
-    if (externalIds !== undefined) {
-      await assertExternalIdsAvailable(tx, externalIds, id);
-      await syncProductExternalIds(tx, id, externalIds);
-    }
-    await syncProductImages(
-      tx,
-      id,
-      pendingImageIds,
-      removeImageIds,
-      imageOrder,
-    );
+      const updateData: {
+        name?: string;
+        aliases?: string[];
+        tags?: string[];
+        manufacturer?: string;
+        category?: ProductCategory | null;
+        upc?: string | null;
+        fdc_id?: number | null;
+        model?: string | null;
+        expectedQuantity?: number | null;
+        ingredientId?: IngredientId | null;
+        price?: number | null;
+      } = { ...productData };
 
-    // Fetch all associated images (live only — just-removed ones must not
-    // reappear in the response) in display order.
-    const productImages = await tx.query.productImage.findMany({
-      where: and(
-        eq(productImage.productId, updated.id),
-        notDeleted(productImage),
-      ),
-      with: {
-        image: true,
-      },
-      orderBy: [asc(productImage.sortOrder), asc(productImage.createdAt)],
-    });
+      if (ingredientId !== undefined) {
+        updateData.ingredientId = ingredientId;
+      }
 
-    const changes = computeChanges(beforeProduct, updated, [
-      "name",
-      "aliases",
-      "tags",
-      "manufacturer",
-      "category",
-      "upc",
-      "fdc_id",
-      "model",
-      "expectedQuantity",
-      "ingredientId",
-      "price",
-    ]);
+      // Auto-correct category to "food" if the resulting product will have food indicators
+      const resultingProduct = {
+        fdc_id: updateData.fdc_id ?? beforeProduct.fdc_id,
+        ingredientId: updateData.ingredientId ?? beforeProduct.ingredientId,
+      };
+      if (
+        hasFoodIndicators(resultingProduct) &&
+        beforeProduct.category !== "food"
+      ) {
+        updateData.category = "food";
+      }
 
-    if (changes) {
-      await logAuditEntry(tx, actor, {
-        entityType: "product",
-        entityId: updated.id,
-        action: "update",
-        changes,
+      // Wishlist candidates are tools by domain definition. Check the final
+      // category after the food-indicator correction too, so a linked ingredient
+      // cannot silently reclassify a live candidate out of Tools.
+      if (
+        updateData.category !== undefined &&
+        updateData.category !== "tools"
+      ) {
+        const candidate = await tx.query.wishCandidate.findFirst({
+          where: and(
+            eq(wishCandidate.productId, id),
+            notDeleted(wishCandidate),
+          ),
+          columns: { id: true },
+        });
+        if (candidate) {
+          throw createAppError(
+            "PRODUCT_HAS_WISH_CANDIDATES",
+            "Remove this Product from the Wishlist before changing it out of the Tools category.",
+          );
+        }
+      }
+
+      const updated = await updateLiveAndReturn(tx, product, updateData, id);
+
+      // When price changes, resync the dependent inventory valuations (amount × price).
+      if (data.price !== undefined) {
+        await syncInventoryValuationsForProduct(tx, id);
+      }
+
+      if (unitMappings !== undefined) {
+        await syncProductUnitMappings(tx, id, unitMappings);
+      }
+      if (externalIds !== undefined) {
+        await assertExternalIdsAvailable(tx, externalIds, id);
+        await syncProductExternalIds(tx, id, externalIds);
+      }
+      await syncProductImages(
+        tx,
+        id,
+        pendingImageIds,
+        removeImageIds,
+        imageOrder,
+      );
+
+      // Fetch all associated images (live only — just-removed ones must not
+      // reappear in the response) in display order.
+      const productImages = await tx.query.productImage.findMany({
+        where: and(
+          eq(productImage.productId, updated.id),
+          notDeleted(productImage),
+        ),
+        with: {
+          image: true,
+        },
+        orderBy: [asc(productImage.sortOrder), asc(productImage.createdAt)],
       });
+
+      const changes = computeChanges(beforeProduct, updated, [
+        "name",
+        "aliases",
+        "tags",
+        "manufacturer",
+        "category",
+        "upc",
+        "fdc_id",
+        "model",
+        "expectedQuantity",
+        "ingredientId",
+        "price",
+      ]);
+
+      if (changes) {
+        await logAuditEntry(tx, actor, {
+          entityType: "product",
+          entityId: updated.id,
+          action: "update",
+          changes,
+        });
+      }
+
+      const currentExternalIds = await tx.query.productExternalId.findMany({
+        where: and(
+          eq(productExternalId.productId, updated.id),
+          notDeleted(productExternalId),
+        ),
+      });
+
+      const pricing = await loadProductPricing(tx, [updated]);
+      const qualities = await loadProductDataQualities(tx, [updated.id]);
+      return dbProductToTopLevelAPI({
+        ...updated,
+        pricing:
+          pricing.get(updated.id) ?? resolveProductPricing(updated.price),
+        dataQuality: qualities.get(updated.id)!,
+        images: productImages,
+        externalIds: currentExternalIds,
+      });
+    });
+  } catch (error) {
+    // Safe on a clean connection: withTransaction has already rolled back, so
+    // the lookup inside runs its own statements rather than inheriting a
+    // poisoned transaction (same reasoning as createProduct's handler).
+    if (effectiveIdentity) {
+      await throwIfDuplicateProduct(db, effectiveIdentity, error);
     }
-
-    const currentExternalIds = await tx.query.productExternalId.findMany({
-      where: and(
-        eq(productExternalId.productId, updated.id),
-        notDeleted(productExternalId),
-      ),
-    });
-
-    const pricing = await loadProductPricing(tx, [updated]);
-    const qualities = await loadProductDataQualities(tx, [updated.id]);
-    return dbProductToTopLevelAPI({
-      ...updated,
-      pricing: pricing.get(updated.id) ?? resolveProductPricing(updated.price),
-      dataQuality: qualities.get(updated.id)!,
-      images: productImages,
-      externalIds: currentExternalIds,
-    });
-  });
+    throw error;
+  }
 };
 
 /** Patch selected external-ID slots without replacing unrelated identifiers. */

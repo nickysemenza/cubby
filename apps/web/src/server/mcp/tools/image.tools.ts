@@ -2,6 +2,8 @@ import {
   attachableImageEntity,
   attachFileFields,
   attachFileResponse,
+  createFileUploadInput,
+  createFileUploadResponse,
 } from "@cubby/schemas/image";
 import { parseShortcode } from "@cubby/shared";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -28,8 +30,10 @@ const attachFileItem = z.object(attachFileInputShape);
 type AttachFileItem = z.infer<typeof attachFileItem>;
 
 const ATTACH_FILE_SOURCE_PROSE =
-  "Provide the file as EITHER `data` (base64, or a data: URI) OR `url` " +
-  "(an http(s) link to fetch) — exactly one. For base64, set `contentType` " +
+  "Provide the file exactly one of three ways: `url` (an http(s) link the server " +
+  "fetches), `uploadId` (from create_file_upload — the ONLY route for a file on " +
+  "local disk), or `data` (base64, or a data: URI; avoid at photo sizes, it costs " +
+  "tens of thousands of tokens per image). For base64, set `contentType` " +
   "(image/jpeg, image/png, image/gif, image/webp, image/heic, image/heif, " +
   "or application/pdf) unless a data: URI already carries it.";
 
@@ -56,13 +60,31 @@ async function attachOne(caller: Caller, params: AttachFileItem) {
 /**
  * Image/document attachment tools.
  *
- * A single `attach_file` tool routes base64 bytes or an external URL through the
- * server-side R2 upload pipeline and associates the result with a gallery
- * entity. Images and PDFs share one code path (a "document" is inferred from the
- * PDF content type). The browser's two-phase presigned flow isn't usable from a
- * JSON MCP client, so this is server-side PUT only.
+ * `attach_file` routes bytes through the server-side R2 upload pipeline and
+ * associates the result with a gallery entity. Images and PDFs share one code
+ * path (a "document" is inferred from the PDF content type).
+ *
+ * Three input modes, and the third is why this file grew: `data` (base64) and
+ * `url` are both server-side, which left a file on local disk with no route at
+ * all — the server is remote, so no URL names it, and base64 costs ~82k tokens
+ * for one photo. `create_file_upload` exposes the same two-phase presigned flow
+ * the browser has always used, so the client PUTs the bytes straight to R2 and
+ * `attach_file` takes the resulting `uploadId`.
  */
 export function registerImageTools(server: McpServer) {
+  registerMcpTool(server, {
+    name: "create_file_upload",
+    description:
+      "Stage a LOCAL file for attachment and get a presigned PUT URL back. This is how a file on disk reaches Cubby: the server is remote, so `url` cannot name a local path, and base64 `data` costs tens of thousands of tokens per photo. Three steps: call this, upload the bytes with " +
+      "`curl -X PUT -H 'Content-Type: <contentType>' --upload-file <path> '<uploadUrl>'`, " +
+      "then call attach_file with the returned uploadId. No R2 staging, wrangler, or manual cleanup — the staged object is discarded once attached. Supported types: image/jpeg, image/png, image/gif, image/webp, image/heic, image/heif, application/pdf.",
+    inputSchema: createFileUploadInput.shape,
+    outputSchema: createFileUploadResponse,
+    annotations: WRITE_CLOSED,
+    handler: async (params, extra) =>
+      await getCaller(extra).image.createFileUpload(params),
+  });
+
   registerMcpTool(server, {
     name: "attach_file",
     description:

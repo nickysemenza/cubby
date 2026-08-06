@@ -32,6 +32,7 @@ import {
   product,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
+import { isUniqueViolation } from "~/server/errors/db-errors";
 import {
   buildCascadeAuditEntries,
   computeChanges,
@@ -123,7 +124,59 @@ const findLocationsWithLiveInventory = (
     columns: { locationId: true },
   });
 
+/**
+ * Turn a `Location_name_key` violation into an error that names the blocker.
+ *
+ * Locations have no duplicate pre-check — uniqueness comes solely from the
+ * partial functional index on `lower(name)` — so a collision used to reach the
+ * generic Postgres translator and come back as "A location with these details
+ * already exists." Not even the offending column: `columnsFromDetail` reads
+ * `Key (...)=` with a character class that cannot cross the inner paren of
+ * `Key (lower(name))=(ppe)`, so it matched nothing and fell to the vaguest
+ * branch. The name is right there in the caller's input; what is missing is
+ * *which* location already holds it, which is the thing you need to go look at.
+ *
+ * No-op if the error isn't a unique violation, so callers rethrow.
+ */
+const throwIfDuplicateLocation = async (
+  db: Database,
+  name: string,
+  error: unknown,
+): Promise<void> => {
+  if (!isUniqueViolation(error, "Location_name_key")) return;
+  // `lower(name) = lower($1)` rather than ilike, so the planner uses the same
+  // functional index that raised the violation (see findOrCreateLocationByName).
+  const existing = await unwrapDb(db).query.location.findFirst({
+    where: and(
+      sql`lower(${location.name}) = lower(${name})`,
+      notDeleted(location),
+    ),
+    columns: { name: true, shortcode: true },
+  });
+  throw createAppError(
+    "DUPLICATE_RECORD",
+    existing
+      ? `A location named “${existing.name}” already exists: ${existing.shortcode}.`
+      : `A location named “${name}” already exists.`,
+    error,
+  );
+};
+
 export const createLocation = async (
+  db: Database,
+  data: LocationCreateInput,
+  actor: ActorContext,
+) => {
+  try {
+    return await createLocationTx(db, data, actor);
+  } catch (error) {
+    // Safe on a clean connection: withTransaction has already rolled back.
+    await throwIfDuplicateLocation(db, data.name, error);
+    throw error;
+  }
+};
+
+const createLocationTx = async (
   db: Database,
   data: LocationCreateInput,
   actor: ActorContext,
@@ -328,9 +381,19 @@ export const updateLocation = async (
     return getLocationById(tx, updated.id);
   };
 
-  return "rollback" in db
-    ? await runUpdate(db)
-    : await withTransaction(db, runUpdate);
+  // A rename collides on the same `Location_name_key` a create does, so it gets
+  // the same blocker-naming treatment. Only on the standalone branch: when the
+  // caller passes its OWN open transaction, the violation has poisoned it and
+  // the recovery lookup could not run — that caller rethrows as before.
+  if ("rollback" in db) return await runUpdate(db);
+  try {
+    return await withTransaction(db, runUpdate);
+  } catch (error) {
+    if (data.name !== undefined) {
+      await throwIfDuplicateLocation(db, data.name, error);
+    }
+    throw error;
+  }
 };
 
 /**

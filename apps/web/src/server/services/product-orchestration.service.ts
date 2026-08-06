@@ -234,6 +234,83 @@ export interface FindOrCreateByUPCResult {
 }
 
 /**
+ * The identity a USDA food would give a product created from this barcode.
+ * Shared with {@link lookupUPC} so the read-only answer is exactly what a
+ * create would have written, rather than a second opinion that can drift.
+ */
+const usdaIdentity = (food: NonNullable<UsdaFoodByUpc>) => ({
+  name: food.foodInfo.description,
+  manufacturer:
+    food.brandedFoodInfo?.brand_owner ??
+    food.brandedFoodInfo?.brand_name ??
+    UNSPECIFIED_MANUFACTURER,
+});
+
+/** The same, for a UPC-worker hit. */
+const externalIdentity = (hit: UPCLookupHit) => ({
+  name: hit.name,
+  manufacturer: hit.manufacturer ?? hit.brand ?? UNSPECIFIED_MANUFACTURER,
+  price: hit.priceDollars ?? null,
+});
+
+type UsdaFoodByUpc = Awaited<ReturnType<USDAClient["findFood"]>>;
+type UPCLookupHit = NonNullable<Awaited<ReturnType<UPCLookupClient["lookup"]>>>;
+
+export interface LookupUPCResult {
+  upc: string;
+  localProduct: ProductTopLevelOut | null;
+  usdaFood: (ReturnType<typeof usdaIdentity> & { fdc_id: number }) | null;
+  externalLookup:
+    | (ReturnType<typeof externalIdentity> & {
+        source: UPCLookupHit["source"];
+        category: string | null;
+        description: string | null;
+        imageUrl: string | null;
+      })
+    | null;
+}
+
+/**
+ * Answer "what is this barcode?" without creating anything.
+ *
+ * Deliberately queries all three sources in PARALLEL rather than reusing
+ * `findOrCreateByUPC`'s short-circuiting cascade. The cascade exists to avoid
+ * paying for network lookups it will not use once it has enough to create a
+ * product; this question is the opposite — a local product that claims a
+ * barcode is precisely when you most want to see what the manufacturer and the
+ * UPC database say about it, because that is how a kit masquerading as a bare
+ * tool gets caught. Both clients swallow their own errors and return null, so a
+ * dead source degrades one field rather than the call.
+ */
+export async function lookupUPC(
+  db: Database,
+  usdaClient: USDAClient,
+  upcLookupClient: UPCLookupClient,
+  upc: string,
+): Promise<LookupUPCResult> {
+  const [localProduct, food, external] = await Promise.all([
+    findProductByUPC(db, upc),
+    usdaClient.findFood({ kind: "upc", gtin_upc: upc }),
+    upcLookupClient.lookup(upc),
+  ]);
+
+  return {
+    upc,
+    localProduct,
+    usdaFood: food ? { ...usdaIdentity(food), fdc_id: food.fdc_id } : null,
+    externalLookup: external
+      ? {
+          ...externalIdentity(external),
+          source: external.source,
+          category: external.category ?? null,
+          description: external.description ?? null,
+          imageUrl: external.imageUrl ?? null,
+        }
+      : null,
+  };
+}
+
+/**
  * Find or create a product by UPC code.
  * Cascade: local DB → USDA → UPC worker → create with defaults.
  */
@@ -286,11 +363,7 @@ export async function findOrCreateByUPC(
           await quickCreateProduct(
             db,
             {
-              name: food.foodInfo.description,
-              manufacturer:
-                food.brandedFoodInfo?.brand_owner ??
-                food.brandedFoodInfo?.brand_name ??
-                UNSPECIFIED_MANUFACTURER,
+              ...usdaIdentity(food),
               upc,
               expectedQuantity: null,
               model: null,
@@ -307,15 +380,10 @@ export async function findOrCreateByUPC(
         const newProduct = await quickCreateProduct(
           db,
           {
-            name: upcLookup.name,
-            manufacturer:
-              upcLookup.manufacturer ??
-              upcLookup.brand ??
-              UNSPECIFIED_MANUFACTURER,
+            ...externalIdentity(upcLookup),
             upc,
             expectedQuantity: null,
             model: null,
-            price: upcLookup.priceDollars ?? null,
           },
           actor,
         );

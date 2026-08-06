@@ -1474,6 +1474,12 @@ describe("listMcpToolCatalog", () => {
       "update_recipes.items[].sections[].id",
       "update_recipes.items[].sections[].ingredients[].id",
       "update_recipes.items[].sections[].instructions[].id",
+      // An Image id is a declared exception — images have no shortcode. These
+      // carry one between create_file_upload and attach_file, so the uuid is
+      // the identifier, not a leaked internal.
+      "create_file_upload.entityId",
+      "attach_file.uploadId",
+      "attach_files.items[].uploadId",
     ]);
 
     function stringSchemas(node: unknown): Array<Record<string, unknown>> {

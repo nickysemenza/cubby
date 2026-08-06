@@ -182,8 +182,8 @@ export const attachableImageEntityId = anyShortcodeSchema(
 );
 
 // Field map (not a z.object) so the MCP tool can consume `.shape` directly; the
-// cross-field "exactly one of url/data" rule — which JSON Schema can't express —
-// lives in `mcpAttachFileInput`'s refine (used by the tRPC procedure).
+// cross-field "exactly one of url/data/uploadId" rule — which JSON Schema can't
+// express — lives in `mcpAttachFileInput`'s refine (used by the tRPC procedure).
 export const attachFileFields = {
   entityType: attachableImageEntity.describe(
     "Target entity type to attach the file to",
@@ -193,13 +193,18 @@ export const attachFileFields = {
     .url()
     .optional()
     .describe(
-      "External http(s) URL to fetch the file from. Provide exactly one of `url` or `data`.",
+      "External http(s) URL to fetch the file from. Provide exactly one of `url`, `data`, or `uploadId`.",
     ),
   data: z
     .string()
     .optional()
     .describe(
-      "Base64-encoded file bytes, optionally a `data:<type>;base64,...` URI. Provide exactly one of `url` or `data`.",
+      "Base64-encoded file bytes, optionally a `data:<type>;base64,...` URI. Provide exactly one of `url`, `data`, or `uploadId`. Unusable at photo sizes — stage the file with create_file_upload instead.",
+    ),
+  uploadId: id
+    .optional()
+    .describe(
+      "Id from create_file_upload, after the presigned PUT succeeded. This is the route for a file on local disk: neither `url` nor `data` can carry one. Provide exactly one of `url`, `data`, or `uploadId`.",
     ),
   contentType: z
     .string()
@@ -237,10 +242,11 @@ export const attachFileFields = {
 export const mcpAttachFileInput = z
   .object(attachFileFields)
   .superRefine((value, ctx) => {
-    if (Boolean(value.url) === Boolean(value.data)) {
+    const sources = [value.url, value.data, value.uploadId].filter(Boolean);
+    if (sources.length !== 1) {
       ctx.addIssue({
         code: "custom",
-        message: "Provide exactly one of `url` or `data`",
+        message: "Provide exactly one of `url`, `data`, or `uploadId`",
       });
     }
     if (value.entityType === "purchase" && value.documentKind === undefined) {
@@ -264,6 +270,47 @@ export const attachFileResponse = z.object({
   idempotencyKey: z.string().nullable().optional(),
 });
 export type AttachFileResponse = z.infer<typeof attachFileResponse>;
+
+/**
+ * Stage a local file for attachment.
+ *
+ * A file on disk cannot reach the server any other way. The MCP server is a
+ * remote Worker, so `url` cannot name a local path (and `validateExternalHttpUrl`
+ * blocks `file://`, localhost, and private IPs as an SSRF guard), while `data`
+ * costs ~82k tokens for a single photo. The browser has always had a two-phase
+ * presigned flow for exactly this; this exposes it, so the client PUTs the bytes
+ * straight to R2 and hands `attach_file` the id.
+ */
+export const createFileUploadInput = z.object({
+  entityId: attachableImageEntityId.describe(
+    "Shortcode of the entity the file will be attached to. Only used to file the object readably; the attachment itself happens in attach_file.",
+  ),
+  filename: z.string().min(1).describe("Filename, including its extension."),
+  contentType: z
+    .string()
+    .describe(
+      "MIME type (image/jpeg, image/png, image/gif, image/webp, image/heic, image/heif, or application/pdf). Must match the Content-Type header sent on the PUT.",
+    ),
+  size: z
+    .int()
+    .positive()
+    .describe(
+      "Byte size of the file. Recorded on the staged row; the real size is measured again when attach_file reads the object back.",
+    ),
+});
+export type CreateFileUploadInput = z.infer<typeof createFileUploadInput>;
+
+export const createFileUploadResponse = z.object({
+  uploadId: id.describe(
+    "Pass to attach_file as `uploadId` once the PUT succeeds.",
+  ),
+  uploadUrl: z
+    .url()
+    .describe(
+      "Presigned PUT URL. Upload with the same contentType you declared, e.g. `curl -X PUT -H 'Content-Type: <type>' --upload-file <path> '<uploadUrl>'`.",
+    ),
+});
+export type CreateFileUploadResponse = z.infer<typeof createFileUploadResponse>;
 
 /**
  * Age threshold (hours) past which an unassociated PENDING image counts as an

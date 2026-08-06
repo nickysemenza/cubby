@@ -1515,6 +1515,24 @@ export const projectResourceMutationOut = z.object({
   attached: z.number().int().nonnegative(),
 });
 
+// Move a product's project-use history onto another product. Distinct from
+// attach+detach because those two are separable, and a detach without its
+// matching attach silently discards the history — which is the failure mode
+// this exists to make unreachable.
+export const repointProjectUsesInput = z.object({
+  fromProductId: productShortcode,
+  toProductId: productShortcode,
+  // Omit to repoint every live use.
+  projectIds: z.array(projectShortcode).min(1).max(100).optional(),
+});
+
+export const repointProjectUsesOut = z.object({
+  repointed: z.number().int().nonnegative(),
+  // Uses the destination already recorded on the same project, so the source's
+  // row was dropped rather than moved. Not an error — the history is intact.
+  alreadyPresent: z.number().int().nonnegative(),
+});
+
 export const reusableResourceCategory = z.enum(["tools", "software"]);
 export type ReusableResourceCategory = z.infer<typeof reusableResourceCategory>;
 

@@ -78,7 +78,7 @@ import {
 import type { MergeProductsInput } from "@cubby/schemas/product";
 import { and, eq, inArray } from "drizzle-orm";
 import { sumBy, uniq } from "es-toolkit";
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   expense,
@@ -111,6 +111,7 @@ import {
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import {
   finalizeMerge,
+  foldAssociation,
   planSlotCollisions,
   repointEdge,
   resolveMergeTargets,
@@ -471,6 +472,7 @@ export const mergeProducts = async (
     // An absorbed row here carries no data the survivor's row doesn't already
     // have (the pair IS the row), so there is nothing to fold.
     summary.imagesMoved = await foldAssociation(tx, {
+      column: "productId",
       table: productImage,
       rows: await tx.query.productImage.findMany({
         where: and(
@@ -484,6 +486,7 @@ export const mergeProducts = async (
       now,
     });
     summary.projectUsesMoved = await foldAssociation(tx, {
+      column: "productId",
       table: projectToolUsage,
       rows: await tx.query.projectToolUsage.findMany({
         where: and(
@@ -497,6 +500,7 @@ export const mergeProducts = async (
       now,
     });
     summary.purchaseLinksMoved = await foldAssociation(tx, {
+      column: "productId",
       table: purchaseProduct,
       rows: await tx.query.purchaseProduct.findMany({
         where: and(
@@ -510,6 +514,7 @@ export const mergeProducts = async (
       now,
     });
     summary.wishCandidatesMoved = await foldAssociation(tx, {
+      column: "productId",
       table: wishCandidate,
       rows: await tx.query.wishCandidate.findMany({
         where: and(
@@ -656,59 +661,6 @@ const emptySummary = (
   aliasesAdded: [],
   carriedFields: [],
 });
-
-/**
- * Re-point a pure association row (product↔image, product↔project,
- * product↔purchase, product↔wish) onto the survivor, soft-deleting the ones whose pair the
- * survivor already has. Returns how many actually moved.
- *
- * These four share an implementation because they share a *shape*, not just a
- * plan: the row IS the pair, so an absorbed duplicate carries nothing to fold
- * into its survivor. External ids and inventory look similar and are handled
- * separately precisely because their absorbed rows do (a url; a quantity).
- */
-const foldAssociation = async <
-  Row extends { id: string; productId: ProductId },
->(
-  tx: DrizzleTransaction,
-  args: {
-    // biome-ignore lint/suspicious/noExplicitAny: one helper over three structurally-identical join tables.
-    table: any;
-    rows: Row[];
-    keepId: ProductId;
-    slotKey: (row: Row) => string;
-    now: Date;
-  },
-): Promise<number> => {
-  const plan = planSlotCollisions({
-    keeperRows: args.rows.filter((row) => row.productId === args.keepId),
-    loserRows: args.rows.filter((row) => row.productId !== args.keepId),
-    slotKey: args.slotKey,
-  });
-  if (plan.repoint.length > 0) {
-    await tx
-      .update(args.table)
-      .set({ productId: args.keepId })
-      .where(
-        inArray(
-          args.table.id,
-          plan.repoint.map((row) => row.id),
-        ),
-      );
-  }
-  if (plan.absorb.length > 0) {
-    await tx
-      .update(args.table)
-      .set({ deletedAt: args.now })
-      .where(
-        inArray(
-          args.table.id,
-          plan.absorb.flatMap(({ rows }) => rows.map((row) => row.id)),
-        ),
-      );
-  }
-  return plan.repoint.length;
-};
 
 /**
  * What `mergeProducts` would do to the given products, without doing it.

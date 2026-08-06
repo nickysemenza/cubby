@@ -4,6 +4,8 @@ import {
 } from "@cubby/schemas/identifiers";
 import {
   attachFileResponse,
+  createFileUploadInput,
+  createFileUploadResponse,
   cullPendingImagesResponseSchema,
   cullPendingImagesSchema,
   getImageByIdSchema,
@@ -40,6 +42,7 @@ import {
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 import {
   attachFileToEntity,
+  createFileUpload,
   cullPendingImageStorage,
   deleteImagesWithStorage,
   importImageFromUrl,
@@ -235,6 +238,29 @@ export const imageRouter = createTRPCRouter({
         throw createAppError(
           "IMAGE_UPLOAD_FAILED",
           "Failed to attach file",
+          error,
+        );
+      }
+    }),
+
+  /**
+   * Stage a local file for `attachFile`: a PENDING row plus a presigned PUT.
+   *
+   * The two-phase flow the browser already uses, exposed so a non-browser
+   * client can reach it. A file on disk has no other route — the server is
+   * remote so `url` cannot name it, and base64 is unusable at photo sizes.
+   */
+  createFileUpload: protectedProcedure
+    .input(createFileUploadInput)
+    .output(strictOutput(createFileUploadResponse))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await createFileUpload(ctx.db, input);
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw createAppError(
+          "IMAGE_UPLOAD_FAILED",
+          "Failed to create file upload",
           error,
         );
       }

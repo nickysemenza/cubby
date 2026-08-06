@@ -34,6 +34,7 @@ import {
   productFindOrCreateByUPCInput,
   productFindOrCreateByUPCOut,
   productListItemOut,
+  productLookupUpcOut,
   productManufacturerOptionsOut,
   productMarkUsdaUnavailableManyInput,
   productPickerItemOut,
@@ -109,6 +110,7 @@ import {
   backfillUPCImages as backfillUPCImagesService,
   createProductWithSideEffects,
   findOrCreateByUPC as findOrCreateByUPCService,
+  lookupUPC as lookupUPCService,
   updateProductWithSideEffects,
 } from "~/server/services/product-orchestration.service";
 import { semanticProductCandidates } from "~/server/services/semantic-search.service";
@@ -392,6 +394,16 @@ const quickCreate = protectedProcedure
     });
     return product;
   });
+
+// The read-only half of the UPC cascade: what does this barcode name, according
+// to the local ledger, USDA, and the UPC service. `upc.lookup` already exposed
+// the third of those alone; this is the whole picture, and it creates nothing.
+const lookupUpc = protectedProcedure
+  .input(productFindOrCreateByUPCInput.pick({ upc: true }))
+  .output(strictOutput(productLookupUpcOut))
+  .query(({ ctx, input }) =>
+    lookupUPCService(ctx.db, ctx.usdaClient, ctx.upcLookupClient, input.upc),
+  );
 
 const findOrCreateByUPC = protectedProcedure
   .input(productFindOrCreateByUPCInput)
@@ -822,6 +834,7 @@ export const productRouter = createTRPCRouter({
   discard,
   quickCreate,
   findOrCreateByUPC,
+  lookupUpc,
   backfillUPCImages,
   categoryDistribution,
   tagOptions,

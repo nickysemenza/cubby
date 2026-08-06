@@ -1,5 +1,7 @@
 import type {
   AttachFileResponse,
+  CreateFileUploadInput,
+  CreateFileUploadResponse,
   InitiateDocumentUploadInput,
   InitiateUploadWithoutEntityInput,
   McpAttachFileInput,
@@ -26,6 +28,7 @@ import {
   cullPendingImages,
   deleteImages,
   findAttachmentByIdempotencyKey,
+  getImageById,
   getImageByKey,
 } from "~/server/repo/image";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
@@ -41,6 +44,7 @@ import {
   generateDocumentKey,
   generateImageKey,
   generatePresignedUploadUrl,
+  getS3Object,
   getS3ObjectUrl,
   isOurBucketUrl,
   uploadToS3,
@@ -219,11 +223,91 @@ function decodeBase64File(
 }
 
 /**
- * Store a file (base64 bytes OR a fetched URL) in R2 and associate it with a
- * product / recipe / location / project. Server-side PUT only — the browser's
- * two-phase presigned flow is unusable from a JSON MCP client. Unlike
- * {@link importImageFromUrl} (image-only), this also accepts PDFs, so it drives
- * the bytes path directly rather than reusing that helper.
+ * Stage a file for attachment: mint a PENDING image row and presign its PUT.
+ *
+ * The staged object is scratch space, not the attachment. `attachFileToEntity`
+ * reads it back and runs the SAME pipeline every other input mode runs — size
+ * and content-type checks, integrity inspection, the transactional insert — and
+ * then discards the staging row and its object. Doing it that way rather than
+ * promoting the PENDING row in place is the whole point: nothing about the
+ * validated path becomes conditional on how the bytes arrived, so a client that
+ * PUTs a 400MB file or a mislabelled one fails exactly where a base64 caller
+ * would.
+ *
+ * An abandoned staging row needs no special handling — PENDING with no
+ * association is precisely what `findCullablePendingImages` already sweeps.
+ */
+export const createFileUpload = async (
+  db: Database,
+  input: CreateFileUploadInput,
+): Promise<CreateFileUploadResponse> => {
+  const contentType = input.contentType.toLowerCase();
+  const isDocument = contentType === PDF_CONTENT_TYPE;
+  if (
+    !isDocument &&
+    !(ALLOWED_IMAGE_TYPES as readonly string[]).includes(contentType)
+  ) {
+    throw createAppError(
+      "IMAGE_UPLOAD_FAILED",
+      `Unsupported content type: ${contentType}`,
+    );
+  }
+  if (input.size > MAX_IMAGE_UPLOAD_BYTES) {
+    throw createAppError(
+      "IMAGE_UPLOAD_FAILED",
+      `File exceeds ${MAX_IMAGE_UPLOAD_BYTES} bytes`,
+    );
+  }
+
+  const key = isDocument
+    ? await allocateAttachmentDocumentKey(db, input.filename, input.entityId)
+    : generateImageKey(input.filename);
+  const { uploadUrl, imageId } = await initiatePendingUpload(
+    db,
+    { filename: input.filename, contentType, size: input.size },
+    key,
+  );
+  return { uploadId: imageId, uploadUrl };
+};
+
+/** Read a staged upload's bytes back out of R2. */
+const readStagedUpload = async (
+  db: Database,
+  uploadId: string,
+): Promise<{ bytes: Buffer; contentType: string; filename: string }> => {
+  const staged = await getImageById(db, uploadId);
+  if (!staged) {
+    throw createAppError(
+      "IMAGE_ATTACH_FAILED",
+      `Upload ${uploadId} not found. Call create_file_upload first.`,
+    );
+  }
+  const response = await getS3Object(staged.key);
+  if (!response.ok) {
+    throw createAppError(
+      "IMAGE_ATTACH_FAILED",
+      `Upload ${uploadId} has no stored object — the presigned PUT did not complete.`,
+    );
+  }
+  return {
+    bytes: Buffer.from(await response.arrayBuffer()),
+    // The declared type, not the response's: R2 echoes whatever the PUT set,
+    // and the downstream allowlist + `inspectImageFile` are what actually decide
+    // whether the bytes are what they claim to be.
+    contentType: staged.contentType,
+    filename: staged.filename,
+  };
+};
+
+/**
+ * Store a file in R2 and associate it with a product / recipe / location /
+ * project / purchase. Three input modes — base64 bytes, a URL the server
+ * fetches, or a `uploadId` from {@link createFileUpload} that the client already
+ * PUT to R2 — converge on one pipeline after the bytes are in hand, so the
+ * allowlist, size limits, integrity inspection, and idempotency apply to all
+ * three identically. Unlike {@link importImageFromUrl} (image-only), this also
+ * accepts PDFs, so it drives the bytes path directly rather than reusing that
+ * helper.
  */
 export const attachFileToEntity = async (
   db: Database,
@@ -271,7 +355,13 @@ export const attachFileToEntity = async (
   let contentType: string | undefined;
   let sourceFilename: string | undefined;
 
-  if (input.data) {
+  if (input.uploadId) {
+    ({
+      bytes,
+      contentType,
+      filename: sourceFilename,
+    } = await readStagedUpload(db, input.uploadId));
+  } else if (input.data) {
     ({ bytes, contentType } = decodeBase64File(input.data, input.contentType));
   } else if (input.url) {
     try {
@@ -315,10 +405,10 @@ export const attachFileToEntity = async (
       throw error;
     }
   } else {
-    // Unreachable: mcpAttachFileInput.refine enforces exactly one of url/data.
+    // Unreachable: mcpAttachFileInput.refine enforces exactly one source.
     throw createAppError(
       "IMAGE_ATTACH_FAILED",
-      "Provide exactly one of `url` or `data`",
+      "Provide exactly one of `url`, `data`, or `uploadId`",
     );
   }
 
@@ -401,6 +491,19 @@ export const attachFileToEntity = async (
         cleanupError,
       );
     });
+  }
+
+  // The staging row and its object have served their purpose — the attachment
+  // owns its own copy. Best-effort: `findCullablePendingImages` sweeps an
+  // unassociated PENDING row anyway, so a failure here strands bytes for a day
+  // rather than leaking them, and must not fail an attachment that succeeded.
+  if (input.uploadId) {
+    try {
+      const { deletedKeys } = await deleteImages(db, [input.uploadId]);
+      await deleteStoredObjects(deletedKeys);
+    } catch (cleanupError) {
+      console.error("Failed to clean up staged upload:", cleanupError);
+    }
   }
 
   return {

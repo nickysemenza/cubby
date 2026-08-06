@@ -537,6 +537,39 @@ export const productFindOrCreateByUPCOut = z.object({
   created: z.boolean(),
 });
 
+// What a barcode resolves to, from every source at once and WITHOUT creating
+// anything. The identity fields mirror exactly what findOrCreateByUPC would
+// have written, so "what would this create?" and "what is this?" cannot give
+// different answers.
+export const productLookupUpcOut = z.object({
+  upc: z.string(),
+  localProduct: productTopLevelOut
+    .nullable()
+    .describe("The Product already claiming this barcode, if any"),
+  usdaFood: z
+    .object({
+      fdc_id: z.number().int(),
+      name: z.string(),
+      manufacturer: z.string(),
+    })
+    .nullable()
+    .describe("USDA branded-food match"),
+  externalLookup: z
+    .object({
+      name: z.string(),
+      manufacturer: z.string(),
+      price: z.number().nullable(),
+      source: z.string(),
+      category: z.string().nullable(),
+      description: z.string().nullable(),
+      imageUrl: z.url().nullable(),
+    })
+    .nullable()
+    .describe("UPC lookup service match"),
+});
+
+export type ProductLookupUpcOut = z.infer<typeof productLookupUpcOut>;
+
 export type ProductTopLevelOut = z.infer<typeof productTopLevelOut>;
 export type ProductFindOrCreateByUPCOut = z.infer<
   typeof productFindOrCreateByUPCOut

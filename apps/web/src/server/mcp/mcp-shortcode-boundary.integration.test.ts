@@ -1694,6 +1694,10 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "update_meals.results[].item.recipes[].id",
   "patch_products_external_ids.results[].item.images[].id",
   "verify_products_images.results[].item.images[].id",
+  // The staged-upload handle. It IS an Image id, and images are a declared
+  // exception with no shortcode — the caller hands this straight back to
+  // attach_file, so it is the identifier rather than a leaked internal.
+  "create_file_upload.uploadId",
 ]);
 
 const NOT_YET_CUT_OVER: string[] = [];
