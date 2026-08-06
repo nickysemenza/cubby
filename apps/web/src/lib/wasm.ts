@@ -69,10 +69,16 @@ const CACHEABLE_METHODS = [
   // render (table mapping columns, detail pages) with identical args.
   "unit_mappings_from_food",
   "product_unit_mappings",
+  // One yield + a short amounts array, so the key is tiny. Worth caching where
+  // its sibling `expand_recipe_needs` isn't: the recipe tree has no memo, so a
+  // sub-recipe referenced from two places re-expands and asks this the same
+  // question each time.
+  "recipe_yield_fraction",
 ] as const;
-// NOTE: cost_recipes is deliberately NOT cached — its args are whole recipe
-// closures (multi-KB stringify keys, fresh object identities every render);
-// React useMemo + the persisted-totals service already dedupe the calls.
+// NOTE: cost_recipes and expand_recipe_needs are deliberately NOT cached —
+// their args are whole recipe closures (multi-KB stringify keys, fresh object
+// identities every render); React useMemo + the persisted-totals service
+// already dedupe the calls.
 /** Source of truth shared by the runtime cache and the `ImmutableWasm` types. */
 type CacheableMethod = (typeof CACHEABLE_METHODS)[number];
 const cacheableMethods = new Set<string>(CACHEABLE_METHODS);

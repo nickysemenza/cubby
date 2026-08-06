@@ -3,6 +3,7 @@ import { Fragment, memo, useMemo, useState } from "react";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
+import { blockReasonText } from "~/lib/sub-recipe-reason";
 import { cn } from "~/lib/utils";
 import { renderValueOrMissing } from "~/misc/result";
 import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
@@ -298,7 +299,16 @@ function SpecNode({
             </span>
           ) : null}
           {node.batchEstimated && (
-            <span className="text-warning">· batch est.</span>
+            <span
+              className="text-warning"
+              title={
+                node.batchEstimatedReason
+                  ? `Estimated: this sub-recipe ${blockReasonText(node.batchEstimatedReason)}`
+                  : undefined
+              }
+            >
+              · batch est.
+            </span>
           )}
         </div>
       )}

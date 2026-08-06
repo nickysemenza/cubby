@@ -2,6 +2,7 @@ import { Grid3x3, ShoppingCart } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
+import { blockReasonText } from "~/lib/sub-recipe-reason";
 import { formatCurrency } from "~/lib/utils";
 import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import { IngredientComponentGrid } from "./IngredientComponentGrid";
@@ -224,7 +225,16 @@ function Component({
             <div className="text-primary">{gramText(usedGrams)} used</div>
           )}
           {node.batchEstimated && (
-            <div className="text-warning">batch est.</div>
+            <div
+              className="text-warning"
+              title={
+                node.batchEstimatedReason
+                  ? `Estimated: this sub-recipe ${blockReasonText(node.batchEstimatedReason)}`
+                  : undefined
+              }
+            >
+              batch est.
+            </div>
           )}
         </div>
       </Row>

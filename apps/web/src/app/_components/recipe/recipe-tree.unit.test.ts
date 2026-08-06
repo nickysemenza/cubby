@@ -2,7 +2,6 @@ import type { RecipeOut } from "@cubby/schemas/recipe";
 import { ok } from "neverthrow";
 import { describe, expect, it } from "vitest";
 import type { IngredientDataItem, RecipeCosting } from "~/lib/recipe-costing";
-import { wasm } from "~/lib/wasm";
 import {
   batchYieldGrams,
   buildIngredientMatrix,
@@ -12,6 +11,7 @@ import {
   fullBatchNeeds,
   type RecipeTreeNode,
 } from "./recipe-tree";
+import { WASM_YIELD_PORTS } from "./yield-ports";
 
 // Minimal fixtures — only the fields buildRecipeTree reads (cast through unknown).
 const mkRow = (id: string, grams: number): IngredientDataItem =>
@@ -43,11 +43,20 @@ const ing = (id: string, ingredientId: string, name: string) =>
     ingredient: { id: ingredientId, name },
   }) as const;
 
-const sub = (id: string, recipeId: string, name: string) =>
+// Sub-recipe references carry a written amount, because that's what the engine
+// scales against. (They always did in real data; the fixtures used to omit it
+// and lean on hand-supplied costing grams instead, which no real costing pass
+// would produce for an amount-less row.)
+const sub = (
+  id: string,
+  recipeId: string,
+  name: string,
+  amounts: ReadonlyArray<{ value: number; unit: string }> = [],
+) =>
   ({
     id,
     type: "recipe",
-    amounts: [],
+    amounts,
     modifier: null,
     rawLine: null,
     ingredient: null,
@@ -83,7 +92,7 @@ describe("buildRecipeTree", () => {
       },
     );
     const root = recipe("r-root", "Bolognese", [
-      sub("sr-sof", "r-sof", "Soffritto"),
+      sub("sr-sof", "r-sof", "Soffritto", [{ value: 360, unit: "g" }]),
       ing("ri-mush", "i-mush", "mushroom"),
     ]);
     const costingById = new Map<string, RecipeCosting>([
@@ -91,7 +100,12 @@ describe("buildRecipeTree", () => {
       ["r-sof", mkCosting({ "si-onion": 360 }, 360)],
     ]);
 
-    const tree = buildRecipeTree(root, costingById, { "r-sof": sof });
+    const tree = buildRecipeTree(
+      root,
+      costingById,
+      { "r-sof": sof },
+      WASM_YIELD_PORTS,
+    );
     expect(tree.depth).toBe(0);
     expect(tree.cumulativeFactor).toBe(1);
 
@@ -114,13 +128,20 @@ describe("buildRecipeTree", () => {
       [ing("si-onion", "i-onion", "onion")],
       { yield: { value: 360, unit: "g" } },
     );
-    const root = recipe("r-root", "R", [sub("sr-sof", "r-sof", "Soffritto")]);
+    const root = recipe("r-root", "R", [
+      sub("sr-sof", "r-sof", "Soffritto", [{ value: 180, unit: "g" }]),
+    ]);
     const costingById = new Map<string, RecipeCosting>([
       ["r-root", mkCosting({ "sr-sof": 180 }, 180)], // uses 180 g
       ["r-sof", mkCosting({ "si-onion": 360 }, 360)],
     ]);
 
-    const tree = buildRecipeTree(root, costingById, { "r-sof": sof });
+    const tree = buildRecipeTree(
+      root,
+      costingById,
+      { "r-sof": sof },
+      WASM_YIELD_PORTS,
+    );
     const subRow = firstRows(tree)[0];
     if (subRow?.kind !== "subrecipe") throw new Error("expected subrecipe");
     expect(subRow.child.cumulativeFactor).toBeCloseTo(0.5);
@@ -137,13 +158,18 @@ describe("buildRecipeTree", () => {
       { yield: { value: 800, unit: "g" } },
     );
     const root = recipe("r-root", "Bowl", [
-      sub("sr-chx", "r-chx", "Roast chicken"),
+      sub("sr-chx", "r-chx", "Roast chicken", [{ value: 130, unit: "g" }]),
     ]);
     const costingById = new Map<string, RecipeCosting>([
       ["r-root", mkCosting({ "sr-chx": 130 }, 130)],
       ["r-chx", mkCosting({ "ci-bird": 2000 }, 2000)],
     ]);
-    const tree = buildRecipeTree(root, costingById, { "r-chx": chicken });
+    const tree = buildRecipeTree(
+      root,
+      costingById,
+      { "r-chx": chicken },
+      WASM_YIELD_PORTS,
+    );
     const subRow = firstRows(tree)[0];
     if (subRow?.kind !== "subrecipe") throw new Error("expected subrecipe");
     expect(subRow.child.cumulativeFactor).toBeCloseTo(130 / 800);
@@ -160,7 +186,12 @@ describe("buildRecipeTree", () => {
       ["r-root", mkCosting({}, 0)],
       ["r-sof", mkCosting({ "si-onion": 360 }, 360)],
     ]);
-    const tree = buildRecipeTree(root, costingById, { "r-sof": sof });
+    const tree = buildRecipeTree(
+      root,
+      costingById,
+      { "r-sof": sof },
+      WASM_YIELD_PORTS,
+    );
     const subRow = firstRows(tree)[0];
     if (subRow?.kind !== "subrecipe") throw new Error("expected subrecipe");
     expect(subRow.child.batchEstimated).toBe(true);
@@ -174,7 +205,12 @@ describe("buildRecipeTree", () => {
       ["r-a", mkCosting({ sa: 100 }, 100)],
       ["r-b", mkCosting({ sb: 100 }, 100)],
     ]);
-    const tree = buildRecipeTree(a, costingById, { "r-a": a, "r-b": b });
+    const tree = buildRecipeTree(
+      a,
+      costingById,
+      { "r-a": a, "r-b": b },
+      WASM_YIELD_PORTS,
+    );
     const bRow = firstRows(tree)[0];
     if (bRow?.kind !== "subrecipe") throw new Error("expected subrecipe");
     const aStub = firstRows(bRow.child)[0];
@@ -188,6 +224,7 @@ describe("buildRecipeTree", () => {
       root,
       new Map([["r-root", mkCosting({ s1: 50 }, 50)]]),
       {},
+      WASM_YIELD_PORTS,
     );
     const row = firstRows(tree)[0];
     expect(row?.kind).toBe("stub");
@@ -196,103 +233,111 @@ describe("buildRecipeTree", () => {
 });
 
 describe("batchYieldGrams", () => {
+  // `batchGrams` is resolved by the engine once during buildNode, so this
+  // helper stands in for that — the function itself is now just the
+  // yield-else-ingredient-weight preference.
   const node = (
     recipeYield: { value: number; unit: string } | null,
     weight: number | null,
   ): RecipeTreeNode =>
     ({
       recipe: { yield: recipeYield },
+      batchGrams: recipeYield ? WASM_YIELD_PORTS.massGrams(recipeYield) : null,
       costing: weight == null ? null : { totals: { weight } },
     }) as unknown as RecipeTreeNode;
 
   it("uses a mass yield", () => {
     expect(batchYieldGrams(node({ value: 1.2, unit: "kg" }, 999))).toBe(1200);
   });
-  it("falls back to ingredient weight for a non-mass yield", () => {
-    expect(batchYieldGrams(node({ value: 8, unit: "servings" }, 2000))).toBe(
-      2000,
-    );
-  });
   it("is null when nothing resolves", () => {
     expect(batchYieldGrams(node(null, null))).toBeNull();
   });
 
-  // Drift tripwire for the module's `MASS_TO_GRAMS` table, which re-derives the
-  // parser's own mass normalization (the denominator costing/engine.rs's
-  // `sub_recipe_pairs` scales a sub-recipe by). The table can't simply call the
-  // engine: `conv_amount_to_kind` integer-rounds, so it answers 454 g for 1 lb
-  // where the engine's internal factor is 453.592 — see the comment on the table.
-  // This asks the engine at 1e6× instead, where the ±0.5 g rounding washes out to
-  // ~1e-9 relative, and compares against the live table via `batchYieldGrams`. An
-  // upstream factor change (or an edit to the table) fails HERE rather than
-  // silently desyncing the prep sheet from the costing engine.
-  describe("MASS_TO_GRAMS matches the engine", () => {
-    // Probed at 1: the engine keeps 6 significant figures, so its answer matches
-    // the table's factor outright. This used to probe at 1e6 so that the engine's
-    // integer rounding washed out as a relative error.
-    const PROBE = 1;
-    const engineGrams = (unit: string): number | null => {
-      try {
-        return wasm.conv_amount_to_kind([], "weight", { value: PROBE, unit })
-          .value;
-      } catch {
-        return null;
-      }
-    };
-
-    for (const unit of [
-      "g",
-      "gram",
-      "grams",
-      "kg",
-      "kilogram",
-      "kilograms",
-      "oz",
-      "ounce",
-      "ounces",
-      "lb",
-      "lbs",
-      "pound",
-      "pounds",
-    ]) {
-      it(`agrees on ${unit}`, () => {
-        const table = batchYieldGrams(node({ value: PROBE, unit }, null));
-        const engine = engineGrams(unit);
-        expect(engine).not.toBeNull();
-        expect(table).not.toBeNull();
-        expect(table).toBeCloseTo(engine ?? Number.NaN, 3);
-      });
-    }
-
-    // The table's one entry the engine can't confirm — the parser has no
-    // milligram unit, so `mg` is an `Other` unit with no path to weight. Left in
-    // the table because dropping it would change behavior for a (nonsensical)
-    // milligram yield; pinned here so the asymmetry is deliberate, not forgotten.
-    it("keeps mg, which the parser does not know", () => {
-      expect(engineGrams("mg")).toBeNull();
-      expect(batchYieldGrams(node({ value: 1000, unit: "mg" }, null))).toBe(1);
+  // The suite that pinned a hand-copied mass table against the engine is gone
+  // with the table. What survives is the boundary it also described: which
+  // units can be *weighed*, and which fall through to the ingredient sum.
+  for (const unit of ["cup", "servings", "loaves", "whole", "ml"]) {
+    it(`leaves the non-mass unit ${unit} to the weight fallback`, () => {
+      expect(batchYieldGrams(node({ value: 8, unit }, 2000))).toBe(2000);
     });
+  }
+});
 
-    // The known gap the table's fixed spellings leave, and the reason to keep
-    // chasing the engine call. Casing is covered (the table lowercases), but the
-    // plural forms nobody typed in ("kgs", "ozs" — the parser's `singular()`
-    // strips those) fall through to null and quietly downgrade the node to
-    // `batchEstimated`.
-    for (const unit of ["kgs", "ozs"]) {
-      it(`misses ${JSON.stringify(unit)}, which the engine handles`, () => {
-        expect(engineGrams(unit)).not.toBeNull();
-        expect(batchYieldGrams(node({ value: 1, unit }, null))).toBeNull();
-      });
-    }
+describe("yield fractions come from the engine", () => {
+  const fraction = (
+    recipeYield: { value: number; unit: string } | null,
+    amounts: ReadonlyArray<{ value: number; unit: string }>,
+  ) => WASM_YIELD_PORTS.yieldFraction(recipeYield, amounts);
 
-    // Non-mass yields have no density with no mappings supplied, so both sides
-    // decline and the caller falls back to the ingredient-weight sum.
-    for (const unit of ["cup", "servings", "loaves", "whole", "ml"]) {
-      it(`leaves the non-mass unit ${unit} to the weight fallback`, () => {
-        expect(engineGrams(unit)).toBeNull();
-        expect(batchYieldGrams(node({ value: 8, unit }, 2000))).toBe(2000);
-      });
-    }
+  it("resolves the mass spellings the old table hardcoded", () => {
+    expect(
+      fraction({ value: 1, unit: "kg" }, [{ value: 250, unit: "g" }]).fraction,
+    ).toBeCloseTo(0.25);
+    expect(
+      fraction({ value: 1, unit: "lb" }, [{ value: 453.592, unit: "g" }])
+        .fraction,
+    ).toBeCloseTo(1);
+  });
+
+  // Inverted from the old tripwire, which pinned these as a KNOWN MISS: the
+  // table's spellings were fixed, so a "kgs" yield fell through to null and
+  // quietly downgraded the node to `batchEstimated`. The parser singularizes.
+  for (const unit of ["kgs", "ozs"]) {
+    it(`resolves ${JSON.stringify(unit)}, which the old table missed`, () => {
+      expect(
+        fraction({ value: 1, unit }, [{ value: 1, unit }]).fraction,
+      ).toBeCloseTo(1);
+    });
+  }
+
+  // Also inverted. The table carried `mg` because the parser has no milligram
+  // unit; the engine declines. Zero production recipes use a milligram yield,
+  // so this is a recorded, deliberate loss rather than an oversight.
+  it("declines a milligram yield, which the old table could answer", () => {
+    expect(
+      fraction({ value: 1000, unit: "mg" }, [{ value: 1, unit: "g" }]),
+    ).toEqual({ fraction: null, reason: "unscalable" });
+  });
+
+  // The split that shows what this buys: a volume yield can't be *weighed*
+  // (above), but it can absolutely denominate a volume reference — which the
+  // old ladder couldn't do without an exact unit-string match, so cup/quart
+  // recipes were flagged `batch est.` while showing a correct number.
+  it("relates a volume yield to a volume reference", () => {
+    expect(
+      fraction({ value: 8, unit: "cup" }, [{ value: 1, unit: "quart" }])
+        .fraction,
+    ).toBeCloseTo(0.5);
+  });
+
+  it("relates a count yield across singular and plural", () => {
+    expect(
+      fraction({ value: 8, unit: "servings" }, [{ value: 2, unit: "serving" }])
+        .fraction,
+    ).toBeCloseTo(0.25);
+  });
+
+  it("names why it declined, so the chip can say what to fix", () => {
+    expect(fraction(null, [{ value: 2, unit: "cup" }]).reason).toBe(
+      "missingYield",
+    );
+    expect(
+      fraction({ value: 0, unit: "cup" }, [{ value: 2, unit: "cup" }]).reason,
+    ).toBe("missingYield");
+    expect(
+      fraction({ value: 8, unit: "servings" }, [{ value: 200, unit: "g" }])
+        .reason,
+    ).toBe("unscalable");
+    expect(fraction({ value: 4, unit: "cup" }, []).reason).toBe("noAmount");
+  });
+
+  it("rejects a negative reference the old unit-ratio accepted", () => {
+    // `Number.isFinite(-0.5)` is true, so the old tier 2 happily produced a
+    // negative factor and scaled every descendant by it.
+    expect(
+      fraction({ value: 4, unit: "cup" }, [{ value: -2, unit: "cup" }])
+        .fraction,
+    ).toBeNull();
   });
 });
 
@@ -307,7 +352,12 @@ describe("flattenComponents", () => {
       ["r-root", mkCosting({ "sr-sof": 100, "ri-x": 100 }, 200)],
       ["r-sof", mkCosting({ "si-x": 100 }, 100)],
     ]);
-    const tree = buildRecipeTree(root, costingById, { "r-sof": sof });
+    const tree = buildRecipeTree(
+      root,
+      costingById,
+      { "r-sof": sof },
+      WASM_YIELD_PORTS,
+    );
     expect(flattenComponents(tree).map((n) => n.recipe.id)).toEqual([
       "r-sof",
       "r-root",
@@ -329,7 +379,12 @@ describe("fullBatchNeeds", () => {
       ["r-root", mkCosting({ "sr-sof": 50, "ri-x": 100 }, 150)],
       ["r-sof", mkCosting({ "si-x": 100 }, 100)],
     ]);
-    const tree = buildRecipeTree(root, costingById, { "r-sof": sof });
+    const tree = buildRecipeTree(
+      root,
+      costingById,
+      { "r-sof": sof },
+      WASM_YIELD_PORTS,
+    );
     const x = fullBatchNeeds(tree).find((n) => n.ingredientId === "i-x");
     expect(x?.grams).toBe(200); // 100 (root assembly) + 100 (full Sof batch)
   });
@@ -349,7 +404,12 @@ describe("buildIngredientMatrix", () => {
       ["r-root", mkCosting({ "sr-sof": 50, "ri-x": 100, "ri-y": 40 }, 190)],
       ["r-sof", mkCosting({ "si-x": 100 }, 100)],
     ]);
-    const tree = buildRecipeTree(root, costingById, { "r-sof": sof });
+    const tree = buildRecipeTree(
+      root,
+      costingById,
+      { "r-sof": sof },
+      WASM_YIELD_PORTS,
+    );
     const rows = buildIngredientMatrix(tree);
 
     expect(flattenComponents(tree).map((n) => n.recipe.id)).toEqual([
@@ -380,7 +440,12 @@ describe("buildIngredientMatrix", () => {
       ["r-root", mkCosting({ s1: 50, s2: 30 }, 80)],
       ["r-sof", mkCosting({ "si-x": 100 }, 100)],
     ]);
-    const tree = buildRecipeTree(root, costingById, { "r-sof": sof });
+    const tree = buildRecipeTree(
+      root,
+      costingById,
+      { "r-sof": sof },
+      WASM_YIELD_PORTS,
+    );
     const rows = buildIngredientMatrix(tree);
 
     // One Sof column at its full batch (100 g) — NOT 2× and NOT the as-used 80 g.
@@ -419,7 +484,12 @@ describe("firstExpansionRowIds", () => {
       ["r-sof", mkCosting({ "si-onion": 360 }, 360)],
     ]);
 
-    const tree = buildRecipeTree(root, costingById, { "r-sof": sof });
+    const tree = buildRecipeTree(
+      root,
+      costingById,
+      { "r-sof": sof },
+      WASM_YIELD_PORTS,
+    );
     const ids = firstExpansionRowIds(tree);
     expect(ids.has("sr-sof-1")).toBe(true);
     expect(ids.has("sr-sof-2")).toBe(false);

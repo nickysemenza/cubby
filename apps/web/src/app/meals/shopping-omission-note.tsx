@@ -1,10 +1,9 @@
-import type { SubRecipeBlockReason } from "@cubby/schemas/availability";
 import type { UnexpandedSubRecipe } from "@cubby/schemas/meal";
 import { Link } from "@tanstack/react-router";
 import { TriangleAlert } from "lucide-react";
-import { match } from "ts-pattern";
 import { Row, Stack } from "~/components/layout";
 import { entityDetailLink } from "~/entities/entities";
+import { blockReasonText } from "~/lib/sub-recipe-reason";
 
 /**
  * Honesty footnote for the shopping list: these sub-recipes' ingredients are
@@ -15,19 +14,6 @@ import { entityDetailLink } from "~/entities/entities";
  * Same dotted-underline "here's what you're not seeing" idiom as
  * `TreePaginationNote`, with an escape hatch to the sub-recipe itself.
  */
-function blockReasonText(reason: SubRecipeBlockReason): string {
-  return match(reason)
-    .with("missingYield", () => "needs a yield before it can be scaled")
-    .with(
-      "unscalable",
-      () => "is measured in units that don't convert to its yield",
-    )
-    .with("cycle", () => "refers back to a recipe that contains it")
-    .with("unknownRecipe", () => "has been deleted")
-    .with("noAmount", () => "is used without an amount")
-    .exhaustive();
-}
-
 export function ShoppingOmissionNote({
   unexpanded,
 }: {

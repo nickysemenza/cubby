@@ -9,8 +9,12 @@ import { sumBy } from "es-toolkit";
 // The shared model behind every shopping-list renderer (desktop table, mobile
 // cards, matrix). Membership, per-row need, status and order are decided here
 // exactly once, so the three surfaces cannot disagree about what you need to
-// buy — and it stays pure (no React, no WASM) so it runs in the node `unit`
-// vitest project.
+// buy.
+//
+// It stays React-free so it's testable as plain data. Being wasm-free is NOT a
+// test constraint — `vitest.config.ts` inlines the real module for every
+// project — so `adjustedStatus` below duplicating `availability.rs`'s ladder is
+// a live layering smell, not a justified exception.
 
 export const SHOPPING_EPSILON = 1e-6;
 

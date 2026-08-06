@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { computeRecipeCosting, type RecipeCosting } from "~/lib/recipe-costing";
 import { buildRecipeTree, type RecipeTreeNode } from "./recipe-tree";
 import { getIngredientName } from "./recipe-utils";
+import { WASM_YIELD_PORTS } from "./yield-ports";
 
 /**
  * Builds the full sub-recipe tree for the prep-sheet / nested-spec views.
@@ -37,7 +38,12 @@ export function useRecipeTree(
   const tree = useMemo(
     () =>
       costingById
-        ? buildRecipeTree(scaledRecipe, costingById, recipeMap)
+        ? buildRecipeTree(
+            scaledRecipe,
+            costingById,
+            recipeMap,
+            WASM_YIELD_PORTS,
+          )
         : null,
     [scaledRecipe, costingById, recipeMap],
   );

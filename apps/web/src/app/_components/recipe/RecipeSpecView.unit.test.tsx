@@ -72,6 +72,8 @@ function tree(): RecipeTreeNode {
     depth: 1,
     cumulativeFactor: 1,
     batchEstimated: false,
+    batchEstimatedReason: null,
+    batchGrams: null,
     baseRowId: null,
     sections: [
       {
@@ -96,6 +98,8 @@ function tree(): RecipeTreeNode {
     depth: 0,
     cumulativeFactor: 1,
     batchEstimated: false,
+    batchEstimatedReason: null,
+    batchGrams: null,
     baseRowId: "flour",
     sections: [
       {

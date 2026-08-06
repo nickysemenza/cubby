@@ -1,3 +1,4 @@
+import type { SubRecipeBlockReason } from "@cubby/schemas/availability";
 import type { RecipeShortcode } from "@cubby/schemas/identifiers";
 import type {
   RecipeGraphOut,
@@ -13,11 +14,18 @@ import {
 type RecipeTreeRecipe = RecipeOut | RecipeGraphOut;
 
 // A recipe expanded into its full sub-recipe tree for the prep-sheet and
-// nested-spec views. Pure + alias-free (only type-only imports from
-// recipe-costing, and the already-pure recipe-scaling-pct helpers) so it stays
-// unit-testable in the node "unit" vitest project. The wasm-bound display
-// formatting (buildDisplayQuantities) is applied by the views at render — this
-// module carries only structure + numbers.
+// nested-spec views. The wasm-bound display formatting (buildDisplayQuantities)
+// is applied by the views at render — this module carries only structure +
+// numbers.
+//
+// It imports no wasm, but NOT because tests can't: `vitest.config.ts` inlines
+// the real module for every project, and this module's own test calls
+// `conv_amount_to_kind` directly. The live reason is `recipe-export-markdown`,
+// which imports the walkers below as values and is itself deliberately
+// wasm-free (it injects `quantityText` for the same reason) — a `~/lib/wasm`
+// import here would transitively bind the exporter to tracing/flags/perf-store.
+// So the engine arrives through injected ports, the pattern
+// `lib/harvest-equivalences.ts` already uses for its `UnitTools`.
 //
 // Two scaling representations coexist on purpose:
 //   - The ROOT node is the *scaled* recipe (RecipeDetail multiplies amounts
@@ -72,8 +80,15 @@ export type RecipeTreeNode = {
   depth: number;
   /** Multiply this node's native leaf grams to get the as-used, UI-scaled amount. */
   cumulativeFactor: number;
-  /** True when the factor couldn't be derived (missing as-used/batch weight). */
+  /** True when the engine declined and the factor fell back to a batch-weight ratio. */
   batchEstimated: boolean;
+  /** Why the engine declined, when `batchEstimated`. Null otherwise. */
+  batchEstimatedReason: SubRecipeBlockReason | null;
+  /**
+   * This node's yield in grams, resolved once at build time so the views never
+   * reach for wasm mid-render. Null when the yield isn't a mass.
+   */
+  batchGrams: number | null;
   /** This node's 100%-base row id (flour, else heaviest), for the spec view. */
   baseRowId: string | null;
   sections: RecipeTreeSection[];
@@ -89,67 +104,24 @@ const numericGrams = (
   return gram?.isOk() ? gram.value.value : null;
 };
 
-// Mass-unit → grams, for converting a sub-recipe's yield into the batch
-// denominator. The engine scales a sub-recipe by (amount used ÷ yield), so the
-// denominator must be the YIELD in grams — not the ingredient-weight sum, which
-// diverges sharply for anything that loses water in cooking (a 4.5 lb bird →
-// 800 g of meat). Non-mass yields (servings, loaves, cups) aren't convertible
-// here, so those fall back to the ingredient-weight sum + a `batchEstimated` flag.
-//
-// These factors duplicate the parser's own normalization table, which is a
-// layering smell. The precision objection is gone — `conv_amount_to_kind` used
-// to integer-round, answering 454 g for 1 lb against the 453.592 the costing
-// engine multiplies by, but it now keeps 6 significant figures and agrees
-// exactly. Two reasons to keep the table anyway:
-//   - This module is deliberately wasm-free (see the header) so it runs in the
-//     node "unit" vitest project; calling the export would bind it to wasm.
-//   - The parser has no milligram unit, so `mg` has no path to weight. The
-//     engine cannot answer for it, and this table can.
-// The "MASS_TO_GRAMS matches the engine" suite in recipe-tree.unit.test.ts pins
-// every other entry against the engine directly, so a real upstream factor
-// change fails there instead of silently desyncing. It also pins the cost of not
-// calling the engine: fixed spellings, so a "kgs"/"ozs" yield falls through to
-// null here.
-const MASS_TO_GRAMS: Record<string, number> = {
-  mg: 0.001,
-  g: 1,
-  gram: 1,
-  grams: 1,
-  kg: 1000,
-  kilogram: 1000,
-  kilograms: 1000,
-  oz: 28.3495,
-  ounce: 28.3495,
-  ounces: 28.3495,
-  lb: 453.592,
-  lbs: 453.592,
-  pound: 453.592,
-  pounds: 453.592,
-};
-
-/** A recipe's yield expressed in grams, or null when its unit isn't a mass. */
-const yieldGrams = (recipe: RecipeTreeRecipe): number | null => {
-  const y = recipe.yield;
-  if (!y?.value) return null;
-  const factor = MASS_TO_GRAMS[y.unit.toLowerCase().trim()];
-  return factor != null ? y.value * factor : null;
-};
+type UnitAmount = { value: number; unit: string };
 
 /**
- * For a non-mass yield ("8 servings", "2 loaves"), the engine scales a
- * sub-recipe by matching the reference amount's unit to the yield's unit
- * (e.g. "2 servings" of an "8 servings" batch → 1/4). Returns that ratio when a
- * reference amount shares the yield's unit, else null.
+ * How many batches of a sub-recipe a reference's written amounts represent —
+ * or why the engine declines to say. Backed by recipebridge's
+ * `recipe_yield_fraction`; see the header for why it arrives injected.
  */
-const yieldUnitRatio = (
-  recipe: RecipeTreeRecipe,
-  amounts: readonly { value: number; unit: string }[],
-): number | null => {
-  const y = recipe.yield;
-  if (!y?.value) return null;
-  const unit = y.unit.toLowerCase().trim();
-  const match = amounts.find((a) => a.unit.toLowerCase().trim() === unit);
-  return match ? match.value / y.value : null;
+export type YieldFractionPort = (
+  recipeYield: UnitAmount | null,
+  amounts: readonly UnitAmount[],
+) => { fraction: number | null; reason: SubRecipeBlockReason | null };
+
+/** An amount in grams, or null when it isn't a mass. Backed by `conv_amount_to_kind`. */
+export type MassGramsPort = (amount: UnitAmount) => number | null;
+
+export type YieldPorts = {
+  yieldFraction: YieldFractionPort;
+  massGrams: MassGramsPort;
 };
 
 /**
@@ -162,6 +134,7 @@ export const buildRecipeTree = (
   root: RecipeOut,
   costingById: Map<string, RecipeCosting>,
   recipeMap: Record<string, RecipeGraphOut>,
+  ports: YieldPorts,
 ): RecipeTreeNode => {
   const buildNode = (
     recipe: RecipeTreeRecipe,
@@ -207,24 +180,26 @@ export const buildRecipeTree = (
             reason: "missing",
           };
         }
-        // How much of the sub-recipe's batch this reference uses. Best: as-used
-        // grams ÷ yield-in-grams (what the engine scales against). Next: a
-        // unit-ratio for non-mass yields ("2 of 8 servings"). Last resort: the
-        // ingredient-weight sum — approximate for cooked items, so flag it.
-        const yieldDenom = yieldGrams(childRecipe);
-        const unitRatio = yieldUnitRatio(childRecipe, ing.amounts);
-        let ratio: number | null = null;
+        // How much of the sub-recipe's batch this reference uses. The engine's
+        // verdict is authoritative. When it declines, fall back to the costing
+        // engine's own implied batch mass and flag the row — that fallback is
+        // what the shopping list refuses to guess at, and it's defensible on a
+        // prep sheet ("~130 g, estimated") in a way it isn't in a store aisle.
+        const verdict = ports.yieldFraction(
+          childRecipe.yield ?? null,
+          ing.amounts,
+        );
+        let ratio = verdict.fraction;
         let estimated = false;
-        if (grams != null && yieldDenom != null && yieldDenom > 0) {
-          ratio = grams / yieldDenom;
-        } else if (unitRatio != null && Number.isFinite(unitRatio)) {
-          ratio = unitRatio;
-        } else {
+        let estimateReason: SubRecipeBlockReason | null = null;
+        if (ratio == null) {
           const weightSum = costingById.get(childId)?.totals.weight ?? null;
-          if (grams != null && weightSum != null && weightSum > 0) {
-            ratio = grams / weightSum;
-          }
+          ratio =
+            grams != null && weightSum != null && weightSum > 0
+              ? grams / weightSum
+              : null;
           estimated = true;
+          estimateReason = verdict.reason;
         }
         const childFactor =
           ratio != null ? cumulativeFactor * ratio : cumulativeFactor;
@@ -235,6 +210,7 @@ export const buildRecipeTree = (
           new Set([...visited, childId]),
         );
         child.batchEstimated = estimated;
+        child.batchEstimatedReason = estimateReason;
         return { kind: "subrecipe", id: ing.id, row: ing, grams, pct, child };
       });
       return { id: section.id, name: section.name, rows, steps };
@@ -245,7 +221,11 @@ export const buildRecipeTree = (
       costing,
       depth,
       cumulativeFactor,
+      // Both are overwritten by the parent once it knows how its reference
+      // resolved; a root has no reference, so it keeps these.
       batchEstimated: false,
+      batchEstimatedReason: null,
+      batchGrams: recipe.yield ? ports.massGrams(recipe.yield) : null,
       baseRowId,
       sections,
     };
@@ -410,7 +390,7 @@ export const buildIngredientMatrix = (root: RecipeTreeNode): MatrixRow[] => {
  * batch of a sub-recipe (`asUsedGramsByRecipe` ÷ this).
  */
 export const batchYieldGrams = (node: RecipeTreeNode): number | null =>
-  yieldGrams(node.recipe) ?? node.costing?.totals.weight ?? null;
+  node.batchGrams ?? node.costing?.totals.weight ?? null;
 
 /**
  * The full-batch shopping list: every component's batch summed by ingredient
