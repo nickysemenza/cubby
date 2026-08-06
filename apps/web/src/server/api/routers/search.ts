@@ -16,6 +16,7 @@ import {
   findSimilarEntitiesForPair,
   hybridGlobalSearch,
   lexicalGlobalSearch,
+  semanticGlobalSearch,
 } from "~/server/services/semantic-search.service";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
@@ -24,19 +25,28 @@ const global = protectedProcedure
   .input(globalSearchInputSchema)
   .output(strictOutput(globalSearchOut))
   .query(async ({ ctx, input }): Promise<SearchResultItem[]> => {
-    return input.mode === "lexical"
-      ? await lexicalGlobalSearch(
-          ctx.db,
-          input.query,
-          input.limit,
-          input.entityType,
-        )
-      : await hybridGlobalSearch(
-          ctx.db,
-          input.query,
-          input.limit,
-          input.entityType,
-        );
+    if (input.mode === "lexical") {
+      return await lexicalGlobalSearch(
+        ctx.db,
+        input.query,
+        input.limit,
+        input.entityType,
+      );
+    }
+    if (input.mode === "semantic") {
+      return await semanticGlobalSearch(
+        ctx.db,
+        input.query,
+        input.limit,
+        input.entityType,
+      );
+    }
+    return await hybridGlobalSearch(
+      ctx.db,
+      input.query,
+      input.limit,
+      input.entityType,
+    );
   });
 
 export const searchRouter = createTRPCRouter({

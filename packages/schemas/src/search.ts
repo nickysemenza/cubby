@@ -54,10 +54,12 @@ export const globalSearchInputSchema = z.object({
     .describe("Restrict results to one searchable entity type."),
   /**
    * "lexical" skips the semantic (embedding + pgvector) path so the fast
-   * ilike results can render immediately; the command palette pairs it with
-   * a second "hybrid" request that merges semantic results when they land.
+   * ilike results can render immediately. "semantic" runs only the embedding
+   * and vector path; the command palette pairs that with lexical results
+   * without repeating the lexical DB fan-out. "hybrid" remains the complete
+   * ranking used by the full search page and MCP callers.
    */
-  mode: z.enum(["lexical", "hybrid"]).default("hybrid"),
+  mode: z.enum(["lexical", "semantic", "hybrid"]).default("hybrid"),
 });
 
 /**

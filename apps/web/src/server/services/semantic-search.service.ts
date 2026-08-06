@@ -47,21 +47,32 @@ async function semanticSearchCandidates(
 
   try {
     const config = getSemanticEmbeddingConfig();
-    const embedding = await embedQuery(query, { db });
+    const embedding = await withTrace(
+      TraceNames.service("semanticSearch", "embedQuery"),
+      () => embedQuery(query, { db }),
+    );
     if (!embedding) return [];
 
-    const refs = await findSemanticEntityCandidates(db, embedding, config, {
-      entityTypes,
-      limit: limit * 3,
-    });
+    const refs = await withTrace(
+      TraceNames.service("semanticSearch", "vectorLookup"),
+      () =>
+        findSemanticEntityCandidates(db, embedding, config, {
+          entityTypes,
+          limit: limit * 3,
+        }),
+    );
     if (refs.length === 0) return [];
 
-    const items = await hydrateSearchResultsByRefs(
-      db,
-      refs.map((ref) => ({
-        entityType: ref.entityType,
-        entityId: ref.entityId,
-      })),
+    const items = await withTrace(
+      TraceNames.service("semanticSearch", "hydrate"),
+      () =>
+        hydrateSearchResultsByRefs(
+          db,
+          refs.map((ref) => ({
+            entityType: ref.entityType,
+            entityId: ref.entityId,
+          })),
+        ),
     );
     const itemByKey = new Map(
       items.map(
@@ -104,9 +115,54 @@ export async function lexicalGlobalSearch(
   entityType?: SearchableEntity,
 ): Promise<SearchResultItem[]> {
   const entityTypes = entityType ? [entityType] : ALL_SEARCHABLE_ENTITIES;
-  const lexical = await globalSearch(db, query, limit, entityTypes);
+  const lexical = await withTrace(
+    TraceNames.service("semanticSearch", "lexicalFanout"),
+    () => globalSearch(db, query, limit, entityTypes),
+  );
   const mergedLimit = limit * entityTypes.length;
   return mergeHybridSearchResults(query, lexical, [], mergedLimit);
+}
+
+/**
+ * Semantic-only global search. This intentionally avoids the lexical fan-out
+ * so interactive callers can render lexical hits first, then append related
+ * matches after the embedding request finishes.
+ */
+export async function semanticGlobalSearch(
+  db: Database,
+  query: string,
+  limit: number,
+  entityType?: SearchableEntity,
+): Promise<SearchResultItem[]> {
+  return withTrace(
+    TraceNames.service("semanticSearch", "semanticOnly"),
+    async (span) => {
+      const entityTypes = entityType ? [entityType] : ALL_SEARCHABLE_ENTITIES;
+      const semantic = await semanticSearchCandidates(
+        db,
+        query,
+        limit,
+        entityTypes,
+      );
+      const results = semantic.map((candidate) => {
+        const explanation = explainSemanticCandidate(query, candidate);
+        return {
+          ...candidate.item,
+          score: candidate.similarity,
+          matchKind: "semantic" as const,
+          matchReason: candidate.reason
+            ? `${candidate.reason}; ${explanation.matchReason}`
+            : explanation.matchReason,
+          matchTerms: explanation.matchTerms,
+        };
+      });
+      span.setAttributes({
+        "search.semantic_count": semantic.length,
+        "search.result_count": results.length,
+      });
+      return results;
+    },
+  );
 }
 
 export async function hybridGlobalSearch(
@@ -122,7 +178,9 @@ export async function hybridGlobalSearch(
       // Independent I/O — run the lexical DB fan-out and the semantic
       // (embed + vector) path concurrently.
       const [lexical, semantic] = await Promise.all([
-        globalSearch(db, query, limit, entityTypes),
+        withTrace(TraceNames.service("semanticSearch", "lexicalFanout"), () =>
+          globalSearch(db, query, limit, entityTypes),
+        ),
         semanticSearchCandidates(db, query, limit, entityTypes),
       ]);
       // Keep unified score ranking, but cap the merged list generously (room for

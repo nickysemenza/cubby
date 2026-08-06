@@ -1,4 +1,3 @@
-import type { AgentResult } from "@cubby/schemas/agent";
 import { searchableEntities } from "@cubby/schemas/entity-manifest";
 import type { SearchableEntity, SearchResultItem } from "@cubby/schemas/search";
 import {
@@ -10,7 +9,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   Activity,
-  ArrowLeft,
   Equal,
   Search,
   Settings,
@@ -19,8 +17,7 @@ import {
   X,
 } from "lucide-react";
 import * as React from "react";
-import { toast } from "sonner";
-import { Row, Stack } from "~/components/layout";
+import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import {
   CommandDialog,
@@ -37,14 +34,13 @@ import { useDebug } from "~/hooks/useDebug";
 import { useTRPC } from "~/integrations/trpc/react";
 import { setFlag, useFlag } from "~/lib/flags";
 import { cn } from "~/lib/utils";
-import { AgentAnswer, AgentSourceContent } from "./agent/AgentAnswer";
 import { parsePastedShortcode } from "./command-menu/pasted-shortcode";
 import { quickActions } from "./command-menu/quick-actions";
 import { getRecents, pushRecent } from "./command-menu/recents";
 import { parseCommandSearchScope } from "./command-menu/search-scope";
 import { useConversionAnswer } from "./command-menu/use-conversion-answer";
 import { useGlobalSearch } from "./command-menu/use-global-search";
-import { useAgentStream } from "./hooks/useAgentStream";
+import { recordCommandMenuOpened } from "./command-menu-loader";
 import { desktopLeaves } from "./navigation/nav-items";
 import {
   entityTypeMap,
@@ -64,6 +60,12 @@ import {
 const quickActionPaths = new Set(quickActions.map((action) => action.path));
 const goToLeaves = desktopLeaves.filter(
   (leaf) => leaf.to !== "/settings" && !quickActionPaths.has(leaf.to as string),
+);
+
+const AskCubbyPanel = React.lazy(() =>
+  import("./command-menu/ask-cubby").then((module) => ({
+    default: module.AskCubbyPanel,
+  })),
 );
 
 interface GlobalCommandMenuProps {
@@ -95,7 +97,11 @@ export function GlobalCommandMenu({
   const { isDevtoolsVisible, toggleDevtools } = useDebug();
   const perfOverlayOn = useFlag("perfOverlay");
 
-  const { results, filteredActions, isLoading, isFetching, isEmpty } =
+  React.useEffect(() => {
+    if (open) recordCommandMenuOpened();
+  }, [open]);
+
+  const { results, filteredActions, isLoading, isFindingRelated, isEmpty } =
     useGlobalSearch(search, searchScope ?? undefined);
   const conversion = useConversionAnswer(searchScope ? "" : search);
 
@@ -106,22 +112,16 @@ export function GlobalCommandMenu({
   // Keyword/shortcode fast paths stay instant and untouched. Streams the
   // answer for a progressive "typing" reveal.
   const [answerMode, setAnswerMode] = React.useState(false);
-  const agent = useAgentStream();
+  const [askQuery, setAskQuery] = React.useState<string | null>(null);
   const runAsk = (query: string) => {
     const trimmed = query.trim();
     if (trimmed.length === 0) return;
+    setAskQuery(trimmed);
     setAnswerMode(true);
-    agent.ask(trimmed);
   };
   const exitAnswerMode = () => {
     setAnswerMode(false);
-    agent.reset();
   };
-  // Surface stream errors as a toast.
-  const agentError = agent.error;
-  React.useEffect(() => {
-    if (agentError) toast.error(agentError);
-  }, [agentError]);
   // Shortcode detection and lookup. The queries exist only to PREVIEW the name
   // in the menu — navigation needs no lookup at all, since the prefix already
   // names the entity and the code is the URL. They key on the canonical form so
@@ -200,9 +200,9 @@ export function GlobalCommandMenu({
       setSearch("");
       setSearchScope(null);
       setAnswerMode(false);
-      agent.reset();
+      setAskQuery(null);
     }
-  }, [open, agent.reset]);
+  }, [open]);
 
   // Recent jumps — read on open so the list reflects other tabs/sessions.
   const [recents, setRecents] = React.useState<ReturnType<typeof getRecents>>(
@@ -334,17 +334,14 @@ export function GlobalCommandMenu({
       />
       <CommandList className="max-h-96">
         {answerMode ? (
-          <AnswerView
-            query={search}
-            answer={agent.answer}
-            toolStatus={agent.toolStatus}
-            isStreaming={agent.isStreaming}
-            sources={agent.result?.sources ?? []}
-            toolCalls={agent.result?.toolCalls ?? []}
-            showToolCalls={isDevtoolsVisible}
-            onBack={exitAnswerMode}
-            onSelectSource={goToSource}
-          />
+          <React.Suspense fallback={<CommandSearchSpinner />}>
+            <AskCubbyPanel
+              query={askQuery ?? search}
+              showToolCalls={isDevtoolsVisible}
+              onBack={exitAnswerMode}
+              onSelectSource={goToSource}
+            />
+          </React.Suspense>
         ) : (
           <>
             {/* Inline unit conversion — "250 g flour in cups" */}
@@ -381,6 +378,15 @@ export function GlobalCommandMenu({
               <Row align="center" justify="center" className="py-6">
                 <Spinner className="text-muted-foreground" />
               </Row>
+            )}
+
+            {isFindingRelated && !isLoading && (
+              <div
+                role="status"
+                className="py-2 text-center text-muted-foreground text-xs/relaxed"
+              >
+                Finding related matches…
+              </div>
             )}
 
             {/* Empty state */}
@@ -428,11 +434,10 @@ export function GlobalCommandMenu({
               </CommandGroup>
             )}
 
-            {/* Search results — preserve the server's global rank order. */}
+            {/* Search results — lexical rank remains fixed while semantic-only
+                matches append to unused rows. */}
             {hasResults && !isLoading && (
-              <div
-                className={cn("transition-opacity", isFetching && "opacity-60")}
-              >
+              <div>
                 <CommandGroup
                   heading={
                     scopeLabel ? `${scopeLabel} matches` : "Best matches"
@@ -631,103 +636,10 @@ export function GlobalCommandMenu({
   );
 }
 
-interface AnswerViewProps {
-  query: string;
-  answer: string;
-  toolStatus: string | null;
-  isStreaming: boolean;
-  sources: AgentResult["sources"];
-  toolCalls: AgentResult["toolCalls"];
-  showToolCalls: boolean;
-  onBack: () => void;
-  /** `shortcode` is null when the tool payload carried no public id. */
-  onSelectSource: (
-    entityType: SearchableEntity,
-    shortcode: string | null,
-    name?: string,
-  ) => void;
-}
-
-/**
- * Answer-mode body for the command palette. Wraps the shared {@link AgentAnswer}
- * core in cmdk chrome — a "Back to search" `CommandItem`, `CommandGroup`
- * headings, and `CommandItem` sources for keyboard nav.
- */
-function AnswerView({
-  query,
-  answer,
-  toolStatus,
-  isStreaming,
-  sources,
-  toolCalls,
-  showToolCalls,
-  onBack,
-  onSelectSource,
-}: AnswerViewProps) {
+function CommandSearchSpinner() {
   return (
-    <>
-      <CommandGroup>
-        <CommandItem
-          value="ask-back"
-          onSelect={onBack}
-          className="flex items-center gap-2 text-muted-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          <span>Back to search</span>
-        </CommandItem>
-      </CommandGroup>
-
-      <AgentAnswer
-        answer={answer}
-        toolStatus={toolStatus}
-        isStreaming={isStreaming}
-        sources={sources}
-        answerWrapper={(children) => (
-          <CommandGroup heading={`Answer · "${query}"`}>
-            {children}
-          </CommandGroup>
-        )}
-        sourcesWrapper={(children) => (
-          <CommandGroup heading="Sources">{children}</CommandGroup>
-        )}
-        renderSource={(source) => (
-          <CommandItem
-            key={`${source.entityType}-${source.id}`}
-            value={`source-${source.entityType}-${source.id}`}
-            onSelect={() =>
-              onSelectSource(source.entityType, source.id, source.name)
-            }
-            className="flex items-center gap-2"
-          >
-            <AgentSourceContent source={source} />
-          </CommandItem>
-        )}
-        toolCalls={
-          showToolCalls && toolCalls.length > 0 ? (
-            <CommandGroup heading="Tool calls">
-              <Stack gap="xs" className="px-2 py-1">
-                {toolCalls.map((call, i) => (
-                  <Row
-                    // biome-ignore lint/suspicious/noArrayIndexKey: ordered log, no stable id
-                    key={i}
-                    align="center"
-                    gap="sm"
-                    className="font-mono text-muted-foreground text-xs"
-                  >
-                    <span
-                      className={call.ok ? "text-primary" : "text-destructive"}
-                    >
-                      {call.ok ? "✓" : "✗"}
-                    </span>
-                    <span>{call.tool}</span>
-                    <span className="ml-auto">{call.durationMs}ms</span>
-                  </Row>
-                ))}
-              </Stack>
-            </CommandGroup>
-          ) : undefined
-        }
-      />
-    </>
+    <Row align="center" justify="center" className="py-6">
+      <Spinner className="text-muted-foreground" />
+    </Row>
   );
 }
