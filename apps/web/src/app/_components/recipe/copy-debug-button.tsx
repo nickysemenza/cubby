@@ -2,6 +2,7 @@ import { Check, ClipboardCopy } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
+import { copyText } from "~/lib/clipboard";
 
 /**
  * Shared shell for the "copy as debug" buttons that drop facts into a Claude
@@ -33,14 +34,13 @@ export function CopyDebugButton({
       title={title}
       onClick={async (e) => {
         e.stopPropagation();
-        try {
-          await navigator.clipboard.writeText(getText());
-          setCopied(true);
-          toast.success(toastLabel);
-          setTimeout(() => setCopied(false), 1500);
-        } catch {
+        if (!(await copyText(getText()))) {
           toast.error("Copy failed");
+          return;
         }
+        setCopied(true);
+        toast.success(toastLabel);
+        setTimeout(() => setCopied(false), 1500);
       }}
     >
       {copied ? (

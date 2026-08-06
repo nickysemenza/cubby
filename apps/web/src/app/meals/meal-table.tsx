@@ -149,7 +149,7 @@ export function MealTable() {
     [columnHelper, nameEditable],
   );
 
-  const { table, deleteDialog } = useClientEntityList({
+  const { table, bulkActionBar, deleteDialog } = useClientEntityList({
     entity: "meal",
     data: meals,
     columns,
@@ -163,7 +163,12 @@ export function MealTable() {
 
   return (
     <div>
-      <RTable table={table} ariaLabel="Meals Table" entity="meal" />
+      <RTable
+        table={table}
+        ariaLabel="Meals Table"
+        entity="meal"
+        bulkActionBar={bulkActionBar}
+      />
       {deleteDialog}
     </div>
   );

@@ -135,7 +135,7 @@ export function LocationChildrenTable({
     [helper],
   );
 
-  const { table } = useClientEntityList<LocationTreeRow>({
+  const { table, bulkActionBar } = useClientEntityList<LocationTreeRow>({
     entity: "location",
     data: rows,
     columns,
@@ -166,6 +166,7 @@ export function LocationChildrenTable({
       ariaLabel="Sub-locations"
       entity="location"
       sizingKey="location:contents"
+      bulkActionBar={bulkActionBar}
       embedded
       actions={
         table.getCanSomeRowsExpand() ? (

@@ -172,6 +172,7 @@ export function ProjectPurchasesTable({
       entity="purchase"
       sizingKey="purchase:project-detail"
       ariaLabel="Purchases charged to this project"
+      bulkActionBar={list.bulkActionBar}
       embedded
       showColumnMenu
       infiniteScroll={list.infiniteScroll}

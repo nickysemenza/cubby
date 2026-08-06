@@ -134,6 +134,7 @@ export function useClientEntityList<TData extends BaseListRow>({
   });
 
   const listBulkActions = useListBulkActions({
+    entity,
     bulkActions,
     deleteBulkAction,
   });

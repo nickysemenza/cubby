@@ -295,6 +295,7 @@ export function useEntityList<
   } = useOptimisticDelete<TData>({ deletable, extraActions });
 
   const listBulkActions = useListBulkActions({
+    entity,
     bulkActions,
     deleteBulkAction,
   });

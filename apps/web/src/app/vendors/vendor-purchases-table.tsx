@@ -162,6 +162,7 @@ export function VendorPurchasesTable({ vendor }: { vendor: VendorOut }) {
       timing={list.timing}
       sizingKey="purchase:vendor-detail"
       ariaLabel={`${vendor.name} purchases`}
+      bulkActionBar={list.bulkActionBar}
       embedded
       showColumnMenu
       infiniteScroll={list.infiniteScroll}
