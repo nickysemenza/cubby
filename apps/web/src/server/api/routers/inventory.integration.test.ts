@@ -20,17 +20,14 @@ describe("inventory router", () => {
   const ctx = withTestDb();
 
   it("should create and retrieve an inventory entry", async () => {
-    // Create a test caller for the inventory router
     const caller = createTestCaller(inventoryRouter, ctx.db);
 
-    // Create test location
     const location = await createLocation(
       ctx.db,
       makeLocationInput({ name: "Test Kitchen" }),
       TEST_ACTOR,
     );
 
-    // Create test product
     const product = await createProduct(
       ctx.db,
       makeProductInput({
@@ -42,7 +39,6 @@ describe("inventory router", () => {
       TEST_ACTOR,
     );
 
-    // Create inventory entry data
     const inventoryData = {
       productId: product.id,
       locationId: location.id,
@@ -52,20 +48,16 @@ describe("inventory router", () => {
       },
     };
 
-    // Create the inventory entry
     const createdEntry = await caller.create(inventoryData);
 
-    // Verify the inventory entry was created correctly
     expect(createdEntry.id).toBeDefined();
     expect(createdEntry.amount.value).toEqual(5);
     expect(createdEntry.amount.unit).toEqual("lbs");
     expect(createdEntry.product.name).toEqual("Test Flour");
     expect(createdEntry.location.name).toEqual("Test Kitchen");
 
-    // Retrieve the inventory entry by ID
     const retrievedEntry = await caller.getByID({ id: createdEntry.id });
 
-    // Verify retrieved entry matches created entry
     expect(retrievedEntry.id).toEqual(createdEntry.id);
     expect(retrievedEntry.amount.value).toEqual(5);
     expect(retrievedEntry.amount.unit).toEqual("lbs");
@@ -76,7 +68,6 @@ describe("inventory router", () => {
   it("should list inventory entries with filtering", async () => {
     const caller = createTestCaller(inventoryRouter, ctx.db);
 
-    // Seed test data using CSV import (creates locations, products, and inventory)
     const seed = await seedFromCSV(
       ctx.db,
       [
@@ -107,50 +98,40 @@ describe("inventory router", () => {
 
     const pantryId = seed.locationIds.get("Pantry")!;
 
-    // Test listing without filters
     const allEntries = await caller.list(listParams({ orderBy: "createdAt" }));
 
-    // Should return all entries
     expect(allEntries.items.length).toEqual(3);
     expect(allEntries.meta.totalCount).toEqual(3);
 
-    // Test filtering by product name
     const flourEntries = await caller.list(
       listParams({ filters: { productNameFilter: "Flour" } }),
     );
 
-    // Should return only flour entries
     expect(flourEntries.items.length).toEqual(1);
     expect(flourEntries.meta.totalCount).toEqual(1);
     expect(flourEntries.items[0]!.product.name).toEqual("Flour");
 
-    // Test filtering by location name
     const kitchenEntries = await caller.list(
       listParams({ filters: { locationNameFilter: "Kitchen" } }),
     );
 
-    // Should return only kitchen entries
     expect(kitchenEntries.items.length).toEqual(2);
     expect(kitchenEntries.meta.totalCount).toEqual(2);
     expect(kitchenEntries.items[0]!.location.name).toEqual("Kitchen");
     expect(kitchenEntries.items[1]!.location.name).toEqual("Kitchen");
 
-    // Test filtering by location ID
     const pantryEntries = await caller.list(
       listParams({ filters: { locationIdFilter: pantryId } }),
     );
 
-    // Should return only pantry entries
     expect(pantryEntries.items.length).toEqual(1);
     expect(pantryEntries.meta.totalCount).toEqual(1);
     expect(pantryEntries.items[0]!.location.id).toEqual(pantryId);
 
-    // Test filtering with no matches
     const noMatches = await caller.list(
       listParams({ filters: { productNameFilter: "Nonexistent" } }),
     );
 
-    // Should return no entries
     expect(noMatches.items.length).toEqual(0);
     expect(noMatches.meta.totalCount).toEqual(0);
   });
@@ -158,7 +139,6 @@ describe("inventory router", () => {
   it("should update an inventory entry", async () => {
     const caller = createTestCaller(inventoryRouter, ctx.db);
 
-    // Seed initial inventory
     const seed = await seedFromCSV(
       ctx.db,
       [
@@ -177,7 +157,6 @@ describe("inventory router", () => {
       id: seed.inventoryIds.get("Test Product@Test Location")!,
     };
 
-    // Update the inventory entry
     const updatedEntry = await caller.update({
       id: createdEntry.id,
       data: {
@@ -188,12 +167,10 @@ describe("inventory router", () => {
       },
     });
 
-    // Verify the entry was updated correctly
     expect(updatedEntry.id).toEqual(createdEntry.id);
     expect(updatedEntry.amount.value).toEqual(5);
     expect(updatedEntry.amount.unit).toEqual("kg");
 
-    // Retrieve the entry to verify changes persisted
     const retrievedEntry = await caller.getByID({ id: createdEntry.id });
     expect(retrievedEntry.amount.value).toEqual(5);
     expect(retrievedEntry.amount.unit).toEqual("kg");
@@ -202,7 +179,7 @@ describe("inventory router", () => {
   it("should handle partial updates correctly", async () => {
     const caller = createTestCaller(inventoryRouter, ctx.db);
 
-    // Seed: Product 1 with inventory, Product 2 without (to avoid unique constraint when switching)
+    // Product 2 stays unstocked so switching products cannot violate uniqueness.
     const seed = await seedFromCSV(
       ctx.db,
       [
@@ -213,11 +190,10 @@ describe("inventory router", () => {
           quantity: 1,
           unit: "piece",
         },
-        { product_name: "Product 2", manufacturer: "Brand" }, // product-only
+        { product_name: "Product 2", manufacturer: "Brand" },
       ],
       TEST_ACTOR,
     );
-    // Create Location 2 separately (empty location to move to)
     const location2 = await createLocation(
       ctx.db,
       makeLocationInput({ name: "Location 2", type: "shelf" }),
@@ -231,7 +207,6 @@ describe("inventory router", () => {
       "Product 1@Location 1",
     )!;
 
-    // Update only the product
     const updatedEntry = await caller.update({
       id: createdEntryShortcode,
       data: {
@@ -239,14 +214,12 @@ describe("inventory router", () => {
       },
     });
 
-    // Verify only product was changed
     expect(updatedEntry.id).toEqual(createdEntryShortcode);
     expect(updatedEntry.product.id).toEqual(product2Shortcode);
-    expect(updatedEntry.location.id).toEqual(location1Shortcode); // Unchanged
-    expect(updatedEntry.amount.value).toEqual(1); // Unchanged
-    expect(updatedEntry.amount.unit).toEqual("piece"); // Unchanged
+    expect(updatedEntry.location.id).toEqual(location1Shortcode);
+    expect(updatedEntry.amount.value).toEqual(1);
+    expect(updatedEntry.amount.unit).toEqual("piece");
 
-    // Update only the location
     const updatedEntry2 = await caller.update({
       id: createdEntryShortcode,
       data: {
@@ -254,15 +227,13 @@ describe("inventory router", () => {
       },
     });
 
-    // Verify only location was changed
     expect(updatedEntry2.location.id).toEqual(location2Id);
-    expect(updatedEntry2.product.id).toEqual(product2Shortcode); // From previous update
+    expect(updatedEntry2.product.id).toEqual(product2Shortcode);
   });
 
   it("should perform bulk operations correctly", async () => {
     const caller = createTestCaller(inventoryRouter, ctx.db);
 
-    // Seed: 3 products, one with existing inventory
     const seed = await seedFromCSV(
       ctx.db,
       [
@@ -273,8 +244,8 @@ describe("inventory router", () => {
           quantity: 1,
           unit: "piece",
         },
-        { product_name: "Bulk Product 2", manufacturer: "Brand" }, // product-only
-        { product_name: "Bulk Product 3", manufacturer: "Brand" }, // product-only
+        { product_name: "Bulk Product 2", manufacturer: "Brand" },
+        { product_name: "Bulk Product 3", manufacturer: "Brand" },
       ],
       TEST_ACTOR,
     );
@@ -287,24 +258,21 @@ describe("inventory router", () => {
       "Bulk Product 1@Bulk Location",
     )!;
 
-    // Perform bulk operation (update existing + create new entries)
     const { items: bulkResult } = await caller.bulkProcess({
       locationId: locationId,
       items: [
         {
-          id: existingEntryShortcode, // Update existing entry
+          id: existingEntryShortcode,
           productId: product1Shortcode,
           locationId: locationId,
           amount: { value: 5, unit: "pieces" },
         },
         {
-          // Create new entry
           productId: product2Shortcode,
           locationId: locationId,
           amount: { value: 2, unit: "kg" },
         },
         {
-          // Create another new entry
           productId: product3Shortcode,
           locationId: locationId,
           amount: { value: 10, unit: "grams" },
@@ -312,10 +280,8 @@ describe("inventory router", () => {
       ],
     });
 
-    // Verify bulk operation results
     expect(bulkResult).toHaveLength(3);
 
-    // Find the updated entry
     const updatedEntry = bulkResult.find(
       (entry) => entry.id === existingEntryShortcode,
     );
@@ -323,7 +289,6 @@ describe("inventory router", () => {
     expect(updatedEntry?.amount.value).toEqual(5);
     expect(updatedEntry?.amount.unit).toEqual("pieces");
 
-    // Find the new entries
     const newEntry1 = bulkResult.find(
       (entry) => entry.product.id === product2Shortcode,
     );
@@ -338,17 +303,14 @@ describe("inventory router", () => {
     expect(newEntry2?.amount.value).toEqual(10);
     expect(newEntry2?.amount.unit).toEqual("grams");
 
-    // Verify all entries are for the correct location
     bulkResult.forEach((entry) => {
       expect(entry.location.id).toEqual(locationId);
     });
   });
 
   it("should throw error when retrieving inventory entry with invalid ID", async () => {
-    // Create a test caller for the inventory router
     const caller = createTestCaller(inventoryRouter, ctx.db);
 
-    // Try to retrieve an inventory entry with a non-existent ID
     const nonExistentId = unsafeInventoryShortcode("INV-ZZZZ");
 
     await expect(caller.getByID({ id: nonExistentId })).rejects.toThrow(
@@ -360,7 +322,6 @@ describe("inventory router", () => {
     it("should move full quantity to a new location", async () => {
       const caller = createTestCaller(inventoryRouter, ctx.db);
 
-      // Seed source with inventory, create empty target
       const seed = await seedFromCSV(
         ctx.db,
         [
@@ -383,7 +344,6 @@ describe("inventory router", () => {
       const sourceLocationId = seed.locationIds.get("Source Location")!;
       const entryId = seed.inventoryIds.get("Move Product@Source Location")!;
 
-      // Move full quantity
       const result = await caller.bulkMove({
         sourceLocationId,
         targetLocationId: targetLocation.id,
@@ -399,7 +359,6 @@ describe("inventory router", () => {
       expect(result.items[0]!.location.id).toEqual(targetLocation.id);
       expect(result.items[0]!.amount.value).toEqual(10);
 
-      // Verify source location is empty
       const sourceEntries = await caller.list(
         listParams({ filters: { locationIdFilter: sourceLocationId } }),
       );
@@ -431,7 +390,6 @@ describe("inventory router", () => {
       const sourceLocationId = seed.locationIds.get("Source")!;
       const entryId = seed.inventoryIds.get("Split Product@Source")!;
 
-      // Move only 3 of 10
       const result = await caller.bulkMove({
         sourceLocationId,
         targetLocationId: targetLocation.id,
@@ -444,7 +402,6 @@ describe("inventory router", () => {
       expect(result.items[0]!.amount.value).toEqual(3);
       expect(result.items[0]!.location.id).toEqual(targetLocation.id);
 
-      // Verify source still has 7
       const sourceEntry = await caller.getByID({ id: entryId });
       expect(sourceEntry.amount.value).toEqual(7);
     });
@@ -452,8 +409,7 @@ describe("inventory router", () => {
     it("should merge with existing inventory at target", async () => {
       const caller = createTestCaller(inventoryRouter, ctx.db);
 
-      // Same product at two locations requires direct creation
-      // (seedFromCSV inventoryIds lookup doesn't support same product at multiple locations reliably)
+      // seedFromCSV cannot reliably key the same product at multiple locations.
       const sourceLocation = await createLocation(
         ctx.db,
         makeLocationInput({ name: "Source" }),
@@ -493,7 +449,6 @@ describe("inventory router", () => {
         TEST_ACTOR,
       );
 
-      // Move full quantity from source - should merge
       const result = await caller.bulkMove({
         sourceLocationId: sourceLocation.id,
         targetLocationId: targetLocation.id,
@@ -506,8 +461,8 @@ describe("inventory router", () => {
       });
 
       expect(result.items).toHaveLength(1);
-      expect(result.items[0]!.id).toEqual(targetEntry.id); // Same entry updated
-      expect(result.items[0]!.amount.value).toEqual(8); // 3 + 5 = 8
+      expect(result.items[0]!.id).toEqual(targetEntry.id);
+      expect(result.items[0]!.amount.value).toEqual(8);
     });
 
     it("should throw error when source and target are the same", async () => {
@@ -633,7 +588,6 @@ describe("inventory router", () => {
     const nonExistentId = unsafeLocationShortcode("LOC-ZZZZ");
     const nonExistentProductCode = unsafeProductShortcode("PRD-ZZZZ");
 
-    // Try to create inventory entry with non-existent product
     await expect(
       caller.create({
         productId: nonExistentProductCode,
@@ -642,7 +596,6 @@ describe("inventory router", () => {
       }),
     ).rejects.toThrow(/not found/);
 
-    // Seed a valid entry
     const seed = await seedFromCSV(
       ctx.db,
       [
@@ -658,7 +611,6 @@ describe("inventory router", () => {
     );
     const entryId = seed.inventoryIds.get("Test Product@Test Location")!;
 
-    // Try to update with non-existent product
     await expect(
       caller.update({
         id: entryId,
@@ -671,7 +623,6 @@ describe("inventory router", () => {
     it("should compute valuation on inventory creation when product has price", async () => {
       const caller = createTestCaller(inventoryRouter, ctx.db);
 
-      // Create location and product with price mapping
       const location = await createLocation(
         ctx.db,
         makeLocationInput({ name: "Pantry" }),
@@ -688,21 +639,18 @@ describe("inventory router", () => {
         TEST_ACTOR,
       );
 
-      // Create inventory via router - should compute valuation
       const entry = await caller.create({
         productId: product.id,
         locationId: location.id,
         amount: { value: 5, unit: "each" },
       });
 
-      // Valuation should be computed: 5 units × $10 = $50
       expect(entry.valuation).toBe(50.0);
     });
 
     it("should return null valuation when product has no price", async () => {
       const caller = createTestCaller(inventoryRouter, ctx.db);
 
-      // Create inventory without price mapping
       const seed = await seedFromCSV(
         ctx.db,
         [
@@ -712,7 +660,6 @@ describe("inventory router", () => {
             location_name: "Pantry",
             quantity: 3,
             unit: "each",
-            // No price
           },
         ],
         TEST_ACTOR,
@@ -721,7 +668,6 @@ describe("inventory router", () => {
       const entryId = seed.inventoryIds.get("Unpriced Product@Pantry")!;
       const entry = await caller.getByID({ id: entryId });
 
-      // Valuation should be null
       expect(entry.valuation).toBeNull();
     });
   });

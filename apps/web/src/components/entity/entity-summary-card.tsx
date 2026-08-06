@@ -256,7 +256,6 @@ export const EntitySummaryCard: React.FC<EntitySummaryCardProps> = ({
   className,
   summaryData,
 }) => {
-  // Get formatted items based on summary type
   const items = React.useMemo(
     () =>
       match(summaryData)

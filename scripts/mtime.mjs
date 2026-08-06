@@ -1,10 +1,6 @@
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-/**
- * Fold file mtimes below `dir`, pruning named directories and watching only
- * the requested extensions. Unreadable paths are ignored like a missing tree.
- */
 export const extremeMtime = (
   dir,
   { pick, seed, prune, extensions },

@@ -231,7 +231,6 @@ export async function updateRecipeImages(
   recipeId: RecipeId,
   updates: RecipeUpdateInput["data"],
 ): Promise<void> {
-  // Reorder existing images if requested
   if (updates.imageOrder && updates.imageOrder.length > 0) {
     await applyImageOrder(
       tx,
@@ -242,7 +241,6 @@ export async function updateRecipeImages(
     );
   }
 
-  // Remove images if requested
   if (updates.removeImageIds && updates.removeImageIds.length > 0) {
     await tx
       .delete(recipeImage)
@@ -254,7 +252,6 @@ export async function updateRecipeImages(
       );
   }
 
-  // Add new images if provided
   if (updates.pendingImageIds && updates.pendingImageIds.length > 0) {
     const startSortOrder = await nextImageSortOrder(
       tx,
@@ -293,9 +290,6 @@ async function deleteAllSections(
   await tx.delete(recipeSection).where(inArray(recipeSection.id, sectionIds));
 }
 
-/**
- * Create a new recipe section with ingredients.
- */
 export async function createSectionWithIngredients(
   tx: DrizzleTransaction,
   recipeId: RecipeId,
@@ -353,9 +347,6 @@ export async function replaceRecipeSections(
   }
 }
 
-/**
- * Update an existing section's ingredients.
- */
 async function updateSectionIngredients(
   tx: DrizzleTransaction,
   sectionId: string,
@@ -364,10 +355,8 @@ async function updateSectionIngredients(
   >,
   existingIngredients: Array<typeof recipeSectionIngredient.$inferSelect>,
 ): Promise<void> {
-  // Batch process all ingredients in parallel
   const processedIngredients = await processIngredients(tx, ingredientUpdates);
 
-  // Separate new vs existing ingredients for batch operations
   const newIngredients: ReturnType<typeof sectionIngredientValues>[] = [];
   const updatePromises: Promise<unknown>[] = [];
 
@@ -379,12 +368,10 @@ async function updateSectionIngredients(
     if (!ingredientUpdate || !processedIngredient) continue;
 
     if (!ingredientUpdate.id) {
-      // Collect new ingredients for batch insert
       newIngredients.push(
         sectionIngredientValues(sectionId, processedIngredient, i),
       );
     } else {
-      // Queue update for parallel execution
       updatePromises.push(
         tx
           .update(recipeSectionIngredient)
@@ -402,17 +389,14 @@ async function updateSectionIngredients(
     }
   }
 
-  // Batch insert new ingredients
   if (newIngredients.length > 0) {
     await tx.insert(recipeSectionIngredient).values(newIngredients);
   }
 
-  // Execute updates in parallel
   if (updatePromises.length > 0) {
     await Promise.all(updatePromises);
   }
 
-  // Batch delete ingredients that weren't included in the update
   const updatedIngredientIds = ingredientUpdates
     .filter((ing) => ing.id)
     .map((ing) => ing.id!);
@@ -429,9 +413,6 @@ async function updateSectionIngredients(
   }
 }
 
-/**
- * Update an existing recipe section.
- */
 async function updateExistingSection(
   tx: DrizzleTransaction,
   sectionUpdate: NonNullable<RecipeUpdateInput["data"]["sections"]>[number] & {
@@ -450,7 +431,6 @@ async function updateExistingSection(
     })
     .where(eq(recipeSection.id, sectionUpdate.id));
 
-  // Handle ingredient updates
   if (sectionUpdate.ingredients) {
     await updateSectionIngredients(
       tx,
@@ -460,7 +440,6 @@ async function updateExistingSection(
     );
   }
 
-  // Handle instruction updates
   if (sectionUpdate.instructions) {
     const instructionsJson = sectionUpdate.instructions.map((inst) => ({
       text: inst.instruction,
@@ -472,9 +451,6 @@ async function updateExistingSection(
   }
 }
 
-/**
- * Handle all section updates (create, update, delete).
- */
 export async function handleSectionUpdates(
   tx: DrizzleTransaction,
   recipeId: RecipeId,
@@ -495,10 +471,8 @@ export async function handleSectionUpdates(
 
   for (const [i, sectionUpdate] of sectionUpdates.entries()) {
     if (!sectionUpdate.id) {
-      // Create new section
       await createSectionWithIngredients(tx, recipeId, sectionUpdate, i);
     } else {
-      // Update existing section
       const existingSection = existingRecipe.sections.find(
         (s) => s.id === sectionUpdate.id,
       );

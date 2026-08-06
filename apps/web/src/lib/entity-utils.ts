@@ -1,4 +1,3 @@
-// Type guard for checking if object has a property
 function hasProperty<K extends string>(
   obj: unknown,
   key: K,
@@ -6,7 +5,6 @@ function hasProperty<K extends string>(
   return typeof obj === "object" && obj !== null && key in obj;
 }
 
-// Type guard for objects with a name property
 function isObjectWithName(value: unknown): value is { name: string } {
   return (
     hasProperty(value, "name") &&
@@ -15,12 +13,7 @@ function isObjectWithName(value: unknown): value is { name: string } {
   );
 }
 
-/**
- * Extracts a string title from entity row data.
- * Generic to preserve TItem type - no casting needed at call site.
- */
 export function extractEntityTitle<T>(rowData: T): string {
-  // Check for name field (most entities: products, locations, recipes, etc.)
   if (
     hasProperty(rowData, "name") &&
     typeof rowData.name === "string" &&
@@ -29,7 +22,6 @@ export function extractEntityTitle<T>(rowData: T): string {
     return rowData.name;
   }
 
-  // Check for filename field (images)
   if (
     hasProperty(rowData, "filename") &&
     typeof rowData.filename === "string" &&
@@ -38,8 +30,6 @@ export function extractEntityTitle<T>(rowData: T): string {
     return rowData.filename;
   }
 
-  // Special case: Inventory entries have both product and location
-  // Format: "Product @ Location"
   if (
     hasProperty(rowData, "product") &&
     isObjectWithName(rowData.product) &&

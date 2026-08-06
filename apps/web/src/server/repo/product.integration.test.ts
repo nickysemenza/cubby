@@ -49,23 +49,19 @@ describe("product repository", () => {
   it("should create a product and retrieve it by ID", async () => {
     const productData = makeProductInput({ upc: "123456789012" });
 
-    // Create the product
     const createdProduct = await createProduct(ctx.db, productData, ctx.actor);
 
-    // Verify the product was created correctly
     expect(createdProduct.id).toBeDefined();
     expect(createdProduct.name).toEqual(productData.name);
     expect(createdProduct.manufacturer).toEqual(productData.manufacturer);
     expect(createdProduct.model).toEqual(productData.model);
     expect(createdProduct.upc).toEqual(productData.upc);
 
-    // Retrieve the product by ID
     const retrievedProduct = await getProductByID(
       ctx.db,
       createdProduct.entityId,
     );
 
-    // Verify the retrieved product matches the created product
     expect(retrievedProduct.id).toEqual(createdProduct.id);
     expect(retrievedProduct.name).toEqual(productData.name);
     expect(retrievedProduct.manufacturer).toEqual(productData.manufacturer);
@@ -460,7 +456,6 @@ describe("product repository", () => {
   });
 
   it("should list products with pagination and sorting", async () => {
-    // Create multiple test products
     const products = [
       {
         name: "Product A",
@@ -483,7 +478,6 @@ describe("product repository", () => {
       await createProduct(ctx.db, makeProductInput(product), ctx.actor);
     }
 
-    // Test listing with pagination - first page
     const firstPage = await productList(
       ctx.db,
       {},
@@ -491,13 +485,11 @@ describe("product repository", () => {
       { pageIndex: 0, pageSize: 2 },
     );
 
-    // Should return first 2 products sorted by name ascending
     expect(firstPage.data.length).toEqual(2);
     expect(firstPage.count).toEqual(3); // Total count should be 3
     expect(firstPage.data[0]!.name).toEqual("Product A");
     expect(firstPage.data[1]!.name).toEqual("Product B");
 
-    // Test listing with pagination - second page
     const secondPage = await productList(
       ctx.db,
       {},
@@ -505,12 +497,10 @@ describe("product repository", () => {
       { pageIndex: 1, pageSize: 2 },
     );
 
-    // Should return the last product
     expect(secondPage.data.length).toEqual(1);
     expect(secondPage.count).toEqual(3);
     expect(secondPage.data[0]!.name).toEqual("Product C");
 
-    // Test listing with filtering by manufacturer
     const filteredList = await productList(
       ctx.db,
       {
@@ -520,7 +510,6 @@ describe("product repository", () => {
       { pageIndex: 0, pageSize: 10 },
     );
 
-    // Should return only products from Manufacturer X
     expect(filteredList.data.length).toEqual(2);
     expect(filteredList.count).toEqual(2);
     expect(filteredList.data[0]!.manufacturer).toEqual("Manufacturer X");
@@ -552,10 +541,8 @@ describe("product repository", () => {
       upc: "123456789012",
     });
 
-    // Create the product
     const createdProduct = await createProduct(ctx.db, productData, ctx.actor);
 
-    // Update the product
     const updatedProduct = await updateProduct(
       ctx.db,
       createdProduct.entityId,
@@ -573,20 +560,17 @@ describe("product repository", () => {
       ctx.actor,
     );
 
-    // Verify the product was updated correctly
     expect(updatedProduct.id).toEqual(createdProduct.id);
     expect(updatedProduct.name).toEqual("Updated Product");
     expect(updatedProduct.manufacturer).toEqual("Updated Manufacturer");
     expect(updatedProduct.model).toEqual(productData.model); // Unchanged
     expect(updatedProduct.upc).toEqual(productData.upc); // Unchanged
 
-    // Retrieve the product to verify unit mappings
     const retrievedProduct = await getProductByID(
       ctx.db,
       createdProduct.entityId,
     );
 
-    // Verify unit mappings were created
     expect(retrievedProduct.unitMappings.length).toEqual(1);
     expect(retrievedProduct.unitMappings[0]!.a).toEqual({
       value: 1,
@@ -600,14 +584,12 @@ describe("product repository", () => {
   });
 
   it("should link a product to an ingredient", async () => {
-    // First create an ingredient
     const ingredient = await createIngredient(
       ctx.db,
       { name: "Test Ingredient", aliases: ["test", "ingredient"] },
       ctx.actor,
     );
 
-    // Create a product linked to the ingredient
     const productData = makeProductInput({
       name: "Test Product with Ingredient",
       model: "TEST-ING-123",
@@ -615,23 +597,19 @@ describe("product repository", () => {
       ingredientId: ingredient.id,
     });
 
-    // Create the product
     const createdProduct = await createProduct(ctx.db, productData, ctx.actor);
 
-    // Retrieve the product to verify ingredient association
     const retrievedProduct = await getProductByID(
       ctx.db,
       createdProduct.entityId,
     );
 
-    // Verify the ingredient association
     expect(retrievedProduct.ingredient).not.toBeNull();
     expect(retrievedProduct.ingredient!.id).toEqual(ingredient.id);
     expect(retrievedProduct.ingredient!.name).toEqual("Test Ingredient");
   });
 
   it("should update ingredient association", async () => {
-    // Create two ingredients
     const ingredient1 = await createIngredient(
       ctx.db,
       { name: "Ingredient 1", aliases: ["ing1"] },
@@ -644,7 +622,6 @@ describe("product repository", () => {
       ctx.actor,
     );
 
-    // Create a product linked to the first ingredient
     const productData = makeProductInput({
       name: "Test Product with Ingredient",
       model: "TEST-ING-123",
@@ -652,10 +629,8 @@ describe("product repository", () => {
       ingredientId: ingredient1.id,
     });
 
-    // Create the product
     const createdProduct = await createProduct(ctx.db, productData, ctx.actor);
 
-    // Update the product to link to the second ingredient
     await updateProduct(
       ctx.db,
       createdProduct.entityId,
@@ -663,18 +638,15 @@ describe("product repository", () => {
       ctx.actor,
     );
 
-    // Retrieve the product to verify ingredient association
     const retrievedProduct = await getProductByID(
       ctx.db,
       createdProduct.entityId,
     );
 
-    // Verify the ingredient association was updated
     expect(retrievedProduct.ingredient).not.toBeNull();
     expect(retrievedProduct.ingredient!.id).toEqual(ingredient2.id);
     expect(retrievedProduct.ingredient!.name).toEqual("Ingredient 2");
 
-    // Update the product to remove ingredient association
     await updateProduct(
       ctx.db,
       createdProduct.entityId,
@@ -682,13 +654,11 @@ describe("product repository", () => {
       ctx.actor,
     );
 
-    // Retrieve the product again
     const updatedProduct = await getProductByID(
       ctx.db,
       createdProduct.entityId,
     );
 
-    // Verify the ingredient association was removed
     expect(updatedProduct.ingredient).toBeNull();
   });
 

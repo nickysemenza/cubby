@@ -184,15 +184,12 @@ export const useFileUpload = (
       const newFilesArray = Array.from(newFiles);
       const errors: string[] = [];
 
-      // Clear existing errors when new files are uploaded
       setState((prev) => ({ ...prev, errors: [] }));
 
-      // In single file mode, clear existing files first
       if (!multiple) {
         clearFiles();
       }
 
-      // Check if adding these files would exceed maxFiles (only in multiple mode)
       if (
         multiple &&
         maxFiles !== Number.POSITIVE_INFINITY &&
@@ -207,7 +204,6 @@ export const useFileUpload = (
       const validFiles: FileWithPreview[] = [];
 
       for (const file of newFilesArray) {
-        // Only check for duplicates if multiple files are allowed
         if (multiple) {
           const isDuplicate = state.files.some(
             (existingFile) =>
@@ -215,13 +211,11 @@ export const useFileUpload = (
               existingFile.file.size === file.size,
           );
 
-          // Skip duplicate files silently
           if (isDuplicate) {
             continue;
           }
         }
 
-        // Check file size
         if (file.size > maxSize) {
           errors.push(
             multiple
@@ -243,9 +237,7 @@ export const useFileUpload = (
         }
       }
 
-      // Only update state if we have valid files to add
       if (validFiles.length > 0) {
-        // Call the onFilesAdded callback with the newly added valid files
         onFilesAdded?.(validFiles);
 
         setState((prev) => {
@@ -267,7 +259,6 @@ export const useFileUpload = (
         }));
       }
 
-      // Reset input value after handling files
       if (inputRef.current) {
         inputRef.current.value = "";
       }

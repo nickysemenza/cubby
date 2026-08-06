@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Build every MCP App bundle, one vite pass each.
-//
 // One pass per app is forced, not stylistic: vite-plugin-singlefile turns code
 // splitting off so it can inline everything, and rollup rejects multiple inputs
 // when splitting is off. Clearing dist/ once up front (rather than per pass)

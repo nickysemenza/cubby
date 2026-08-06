@@ -102,7 +102,6 @@ export function useLocationHierarchy(
             ...(children?.map((c) => c.totalPricingStatus) ?? []),
           ]);
 
-      // Calculate value based on mode
       const value =
         valuationMode === "equalWeight" ? 1 : Math.max(1, totalCount);
 

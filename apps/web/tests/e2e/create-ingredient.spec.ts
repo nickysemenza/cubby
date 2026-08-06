@@ -6,20 +6,15 @@ test.describe("Create Ingredient", () => {
   test("can create an ingredient", async ({ page }) => {
     const ingredientName = faker.food.ingredient();
 
-    // Create an ingredient
     await page.goto("/ingredients/new");
     await expect(page).toHaveURL(/\/ingredients\/new/);
 
-    // Wait for form hydration
     await waitForFormHydration(page);
 
-    // Fill in the ingredient form
     await fillInput(page, "Enter ingredient name", ingredientName);
 
-    // Submit ingredient
     await page.getByRole("button", { name: /^Create$/ }).click();
 
-    // Expect redirect to ingredient detail page
     await expect(page).toHaveURL(
       /\/ingredients\/ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
       {

@@ -194,7 +194,6 @@ export async function associatePendingImages<T extends PgTable>(
     return;
   }
 
-  // Create join table records in batch, appending after startSortOrder
   await dbOrTx.insert(joinTable).values(
     pendingImageIds.map((imageId, i) => ({
       [parentIdField]: parentId,
@@ -203,7 +202,6 @@ export async function associatePendingImages<T extends PgTable>(
     })) as InferInsertModel<T>[],
   );
 
-  // Update all image statuses to UPLOADED in batch
   await dbOrTx
     .update(image)
     .set({ status: "UPLOADED" })
@@ -283,14 +281,11 @@ export async function batchUpdateWithCaseWhen<
 
     let totalUpdated = 0;
 
-    // Process in chunks to avoid query size limits
     for (let i = 0; i < updates.length; i += chunkSize) {
       const batch = updates.slice(i, i + chunkSize);
 
-      // Extract column names (all updates must have same columns)
       const columnNames = Object.keys(batch[0]!).filter((k) => k !== "id");
 
-      // Build CASE WHEN for each column
       const caseStatements: SQL[] = [];
 
       for (const columnName of columnNames) {
@@ -308,7 +303,6 @@ export async function batchUpdateWithCaseWhen<
 
         for (const update of batch) {
           const value = update[columnName];
-          // Build: WHEN "id" = {id} THEN {value}
           // Cast values to head off Postgres type inference issues inside CASE:
           //   - numbers → ::real (float4 columns)
           //   - objects/arrays → JSON-encoded ::jsonb (jsonb columns, e.g.
@@ -328,19 +322,15 @@ export async function batchUpdateWithCaseWhen<
           );
         }
 
-        // Build: "columnName" = CASE WHEN ... END
         caseStatements.push(
           sql`${sql.identifier(columnName)} = CASE ${sql.join(cases, sql` `)} END`,
         );
       }
 
-      // Add updatedAt timestamp
       caseStatements.push(sql`${sql.identifier("updatedAt")} = NOW()`);
 
-      // Build WHERE IN clause
       const ids = batch.map((u) => u.id);
 
-      // Execute batch UPDATE
       await dbOrTx.execute(sql`
         UPDATE ${table}
         SET ${sql.join(caseStatements, sql`, `)}

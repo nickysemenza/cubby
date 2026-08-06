@@ -1,14 +1,3 @@
-/**
- * QuickInventoryAdd - Compact inline form for adding inventory items to a location.
- *
- * Two modes:
- * - **Select**: Pick an existing product from combobox + amount (default)
- * - **Create**: Full inline product creation + amount, expanded with animation
- *
- * When the user clicks "create new" in the combobox dropdown, the form switches
- * to create mode, expanding product fields inline using the Collapsible component.
- */
-
 import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import { amount } from "@cubby/schemas/codec";
 import type {
@@ -66,14 +55,12 @@ interface QuickInventoryAddProps {
   initialProduct?: ComboboxItem<ProductShortcode>;
 }
 
-// Schema for select mode (existing product)
 const selectFormSchema = z.object({
   product: requiredProductField,
   amount: amount,
 });
 type SelectFormValues = z.input<typeof selectFormSchema>;
 
-// Schema for create mode (new product + inventory amount)
 const createFormSchema = z
   .object({
     name: z.string().min(1, "Name is required"),
@@ -108,7 +95,6 @@ export function QuickInventoryAdd({
 
   const imageState = useImageState();
 
-  // --- Select mode form ---
   const selectForm = useForm<SelectFormValues>({
     resolver: zodResolver(selectFormSchema),
     defaultValues: {
@@ -137,7 +123,6 @@ export function QuickInventoryAdd({
     });
   };
 
-  // --- Create mode form ---
   const createForm = useForm<CreateFormValues>({
     resolver: zodResolver(createFormSchema),
     defaultValues: {
@@ -166,7 +151,6 @@ export function QuickInventoryAdd({
   const onCreateSubmit = async (values: CreateFormValues) => {
     setIsCreating(true);
     try {
-      // Step 1: Create the product
       const newProduct = await productCreateMutation.mutateAsync({
         name: values.name,
         manufacturer: values.manufacturer,
@@ -182,7 +166,6 @@ export function QuickInventoryAdd({
         ...imageState.getImageData(true),
       });
 
-      // Step 2: Create the inventory entry
       try {
         const inventory = await inventoryCreateMutation.mutateAsync({
           productId: newProduct.id,
@@ -205,7 +188,6 @@ export function QuickInventoryAdd({
         switchToSelectMode();
         onSuccess();
       } catch (inventoryErr) {
-        // Product created but inventory failed
         toast.error(
           `Product "${newProduct.name}" was created, but adding to inventory failed: ${getErrorMessage(inventoryErr)}. Search for it to add manually.`,
         );
@@ -214,13 +196,11 @@ export function QuickInventoryAdd({
       }
     } catch (productErr) {
       toast.error(`Failed to create product: ${getErrorMessage(productErr)}`);
-      // Stay in create mode so the user can fix and retry
     } finally {
       setIsCreating(false);
     }
   };
 
-  // Switch to create mode with initial product name from search text
   const handleCreateNew = useCallback(
     (name: string): Promise<ComboboxItem<ProductShortcode>> => {
       createForm.reset({
@@ -255,7 +235,6 @@ export function QuickInventoryAdd({
     imageState.reset();
   }, [createForm, imageState]);
 
-  // --- Select mode ---
   if (mode === "select") {
     return (
       <FormProvider {...selectForm}>

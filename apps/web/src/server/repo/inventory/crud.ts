@@ -115,7 +115,6 @@ export const syncInventoryValuationsForProduct = async (
 ): Promise<number> => {
   const client = unwrapDb(db);
 
-  // Get the product's current price
   const productData = await client.query.product.findFirst({
     where: eq(product.id, productId),
     columns: { id: true, price: true },
@@ -124,7 +123,6 @@ export const syncInventoryValuationsForProduct = async (
     ? await loadEffectiveProductPrice(db, productData)
     : null;
 
-  // Get all non-deleted inventory entries for this product
   const entries = await client.query.inventoryEntry.findMany({
     where: and(
       eq(inventoryEntry.productId, productId),
@@ -135,7 +133,6 @@ export const syncInventoryValuationsForProduct = async (
 
   if (entries.length === 0) return 0;
 
-  // Compute valuations in memory
   const updates = entries.map((entry) => {
     const amountValue =
       typeof entry.amount === "object" && entry.amount !== null
@@ -146,7 +143,6 @@ export const syncInventoryValuationsForProduct = async (
     return { id: entry.id, valuation };
   });
 
-  // Batch update all entries (1-4 queries instead of 1000+)
   const updated = await batchUpdateWithCaseWhen(
     client,
     inventoryEntry,
@@ -165,13 +161,11 @@ export const checkUniqueProductDuplicate = async (
   productId: ProductId,
   locationId: LocationId,
 ): Promise<{ productName: string; locationName: string } | null> => {
-  // Check if this is a product with expectedQuantity=1 (unique item)
   const productData = await getDb(db).query.product.findFirst({
     where: eq(product.id, productId),
     columns: { expectedQuantity: true, name: true },
   });
 
-  // If it's a unique item, check for duplicates (excluding soft-deleted entries)
   if (productData?.expectedQuantity === 1) {
     const existingEntry = await getDb(db).query.inventoryEntry.findFirst({
       where: and(
@@ -257,7 +251,6 @@ export const getInventoryCountsByLocations = async (
 
   const dbClient = getDb(db);
 
-  // Query to get counts grouped by location
   const results = await dbClient
     .select({
       locationId: inventoryEntry.locationId,
@@ -272,13 +265,11 @@ export const getInventoryCountsByLocations = async (
     )
     .groupBy(inventoryEntry.locationId);
 
-  // Convert to map
   const countMap: Record<string, number> = {};
   for (const row of results) {
     countMap[row.locationId] = row.count;
   }
 
-  // Fill in zeros for locations with no inventory
   for (const locationId of locationIds) {
     if (!(locationId in countMap)) {
       countMap[locationId] = 0;

@@ -1,4 +1,3 @@
-// Location type values - single source of truth for both Zod and Drizzle
 export const locationTypeValues = [
   "room",
   "area",
@@ -28,20 +27,16 @@ export type LocationType = (typeof locationTypeValues)[number];
  * off the warm axis, distinguished by value not hue.
  */
 export const locationTypeColors: Record<LocationType, string> = {
-  // Spaces group
   room: "var(--chart-1)", // top-level space gets the accent
   area: "var(--chart-2)",
 
-  // Surfaces group
   table: "var(--chart-3)",
   cart: "var(--chart-4)",
   shelf: "var(--chart-2)",
 
-  // Storage group
   cabinet: "var(--chart-5)",
   drawer: "var(--chart-6)",
 
-  // Containers group (ink ladder, light end)
   box: "var(--chart-6)",
   crate: "var(--chart-7)",
   "half-crate": "var(--chart-7)",
@@ -53,8 +48,5 @@ export const locationTypeColors: Record<LocationType, string> = {
   bag: "var(--chart-8)",
 };
 
-/**
- * Get the color for a location type
- */
 export const getLocationTypeColor = (type: LocationType): string =>
   locationTypeColors[type];

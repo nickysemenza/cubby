@@ -54,14 +54,12 @@ export function LocationList() {
     parentLocation: parentLocationOptions,
   });
 
-  // Mutation for inline editing (name, type)
   const updateLocationMutation = useUpdateMutation({
     mutationFn: api.location.update.mutationOptions,
     entity: "location",
     invalidateKeys: locationMutationInvalidateKeys,
   });
 
-  // Memoize deletable config to prevent infinite render loop
   const deletableConfig = useDeletableConfig({
     mutationFn: api.location.delete.mutationOptions,
     entityLabel: "Location",
@@ -69,8 +67,6 @@ export function LocationList() {
     entity: "location",
   });
 
-  // Memoize columns to prevent recreating on every render
-  // Note: updateLocationMutation is NOT in dependencies because useMutation returns a new object every render
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateLocationMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
@@ -247,7 +243,6 @@ export function LocationList() {
     [],
   );
 
-  // Group by location type for mobile section headers
   const groupKeyFn = useCallback((item: LocationListItemOut) => item.type, []);
   const groupColorFn = useCallback(
     (key: string) => getLocationTypeColor(key as LocationType),

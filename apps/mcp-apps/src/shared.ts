@@ -24,8 +24,6 @@ export function openCubby(app: App, path: string): void {
   void app.openLink({ url: `${origin}${path}` });
 }
 
-// ── DOM helpers ──────────────────────────────────────────────────────────────
-
 export function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className?: string,
@@ -62,8 +60,6 @@ export function nestedButton(
   });
 }
 
-// ── Layout ───────────────────────────────────────────────────────────────────
-
 /** A titled panel: ink top-rule, hairline border, header row. */
 export function panel(title: string, meta: string): HTMLElement {
   const root = el("div", "panel");
@@ -88,8 +84,6 @@ export function cubbyLink(
 ): HTMLButtonElement {
   return button("btn-quiet", label, () => openCubby(app, path));
 }
-
-// ── Host wiring ──────────────────────────────────────────────────────────────
 
 /**
  * A tool result's structured payload.
@@ -143,8 +137,6 @@ export async function bootstrap<T>(options: {
     root.replaceChildren(options.render(app, payload));
   };
 }
-
-// ── Formatting ───────────────────────────────────────────────────────────────
 
 /** Round for display without dragging in a formatting library. */
 export function num(value: number): string {

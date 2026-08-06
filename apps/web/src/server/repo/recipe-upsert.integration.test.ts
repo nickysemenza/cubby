@@ -20,7 +20,6 @@ describe("upsertRecipe", () => {
 
   let testIngredients: { id: string; name: string }[] = [];
   beforeEach(async () => {
-    // Create the required ingredients for the tests and store their IDs
     testIngredients = await createIngredients(
       ctx.db,
       ["Test Ingredient 1", "Test Ingredient 2", "Test Ingredient 3"],
@@ -52,7 +51,7 @@ describe("upsertRecipe", () => {
 
   const getMockRecipeUpdated = (): RecipeCreateInput =>
     makeRecipeInput({
-      name: "Test Recipe Direct", // Same name
+      name: "Test Recipe Direct",
       url: "https://example.com/recipe-updated",
       sections: [
         {
@@ -62,7 +61,7 @@ describe("upsertRecipe", () => {
           ],
           ingredients: [
             ingredientRef(testIngredients[0]!.id, {
-              amounts: [{ value: 3, unit: "cups" }], // Same ingredient, different amount
+              amounts: [{ value: 3, unit: "cups" }],
             }),
           ],
         },
@@ -70,7 +69,7 @@ describe("upsertRecipe", () => {
           instructions: [{ instruction: "Add topping" }],
           ingredients: [
             ingredientRef(testIngredients[2]!.id, {
-              amounts: [{ value: 1, unit: "tsp" }], // New ingredient
+              amounts: [{ value: 1, unit: "tsp" }],
             }),
           ],
         },
@@ -82,7 +81,6 @@ describe("upsertRecipe", () => {
 
     expect(result.id).toBeDefined();
 
-    // Verify recipe was created
     const foundRecipe = await getDb(ctx.db).query.recipe.findFirst({
       where: eq(recipe.name, "Test Recipe Direct"),
       with: {
@@ -103,24 +101,20 @@ describe("upsertRecipe", () => {
   });
 
   it("updates an existing recipe when it already exists", async () => {
-    // First, create the recipe
     const firstResult = await upsertRecipe(
       getMockRecipeInput(),
       ctx.db,
       ctx.actor,
     );
 
-    // Now update with different data
     const secondResult = await upsertRecipe(
       getMockRecipeUpdated(),
       ctx.db,
       ctx.actor,
     );
 
-    // Should return same recipe ID (updated, not created new)
     expect(secondResult.id).toBe(firstResult.id);
 
-    // Verify the recipe was updated
     const updatedRecipe = await getDb(ctx.db).query.recipe.findFirst({
       where: eq(recipe.name, "Test Recipe Direct"),
       with: {
@@ -132,24 +126,21 @@ describe("upsertRecipe", () => {
       },
     });
 
-    expect(updatedRecipe!.id).toBe(firstResult.id); // Same recipe
+    expect(updatedRecipe!.id).toBe(firstResult.id);
     expect(updatedRecipe!.SourceData).toBe(
       "https://example.com/recipe-updated",
-    ); // Updated URL
-    expect(updatedRecipe!.sections).toHaveLength(2); // Now has 2 sections
+    );
+    expect(updatedRecipe!.sections).toHaveLength(2);
 
-    // Check first section was updated
     const firstSection = updatedRecipe!.sections[0];
-    expect(firstSection!.ingredients).toHaveLength(1); // Now only 1 ingredient
+    expect(firstSection!.ingredients).toHaveLength(1);
 
-    // Check new section was added
     const secondSection = updatedRecipe!.sections[1];
     expect(secondSection).toBeTruthy();
-    expect(secondSection!.ingredients).toHaveLength(1); // New ingredient
+    expect(secondSection!.ingredients).toHaveLength(1);
   });
 
   it("can be called multiple times without conflicts", async () => {
-    // This tests that the function is idempotent
     const firstRun = await upsertRecipe(
       getMockRecipeInput(),
       ctx.db,
@@ -159,18 +150,16 @@ describe("upsertRecipe", () => {
       getMockRecipeInput(),
       ctx.db,
       ctx.actor,
-    ); // Same input
+    );
     const thirdRun = await upsertRecipe(
       getMockRecipeInput(),
       ctx.db,
       ctx.actor,
-    ); // Same input again
+    );
 
-    // All should return the same recipe ID
     expect(secondRun.id).toBe(firstRun.id);
     expect(thirdRun.id).toBe(firstRun.id);
 
-    // Should only be one recipe in the database
     const allRecipes = await getDb(ctx.db).query.recipe.findMany({
       where: eq(recipe.name, "Test Recipe Direct"),
     });

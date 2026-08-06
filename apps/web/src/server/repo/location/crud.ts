@@ -123,7 +123,6 @@ const findLocationsWithLiveInventory = (
     columns: { locationId: true },
   });
 
-// Create a new location
 export const createLocation = async (
   db: Database,
   data: LocationCreateInput,
@@ -216,7 +215,6 @@ export const ensureGlobalUnknownLocation = async (
   }
 };
 
-// Update an existing location
 export const updateLocation = async (
   db: Database | DrizzleTransaction,
   id: LocationId,
@@ -261,7 +259,6 @@ export const updateLocation = async (
     const before = await tx.query.location.findFirst({
       where: and(eq(location.id, id), notDeleted(location)),
     });
-    // Build update values using helper to filter undefined
     const updateValues = buildPartialUpdateValues({
       name: data.name,
       aliases: data.aliases,
@@ -269,7 +266,6 @@ export const updateLocation = async (
       parentId,
     });
 
-    // Update the location (updateAndReturn handles empty values gracefully)
     const updated = await updateLiveAndReturn(tx, location, updateValues, id);
 
     // Reorder existing images (first = cover) before appending new ones so
@@ -284,7 +280,6 @@ export const updateLocation = async (
       );
     }
 
-    // Remove existing images
     if (data.removeImageIds && data.removeImageIds.length > 0) {
       await tx
         .delete(locationImage)
@@ -296,7 +291,6 @@ export const updateLocation = async (
         );
     }
 
-    // Add new images using shared helper
     if (data.pendingImageIds && data.pendingImageIds.length > 0) {
       const startSortOrder = await nextImageSortOrder(
         tx,
@@ -637,7 +631,6 @@ export const locationList = async (
     .groupBy(inventoryEntry.locationId)
     .having(sql`count(*) > ${filters.directItemCountMax ?? 0}`);
 
-  // Build where conditions - always filter out deleted items
   const pickerSearch = filters.nameFilter
     ? or(
         formatSearchTerm(location.name, filters.nameFilter),
@@ -724,7 +717,6 @@ export const locationList = async (
 
   const { take, skip } = buildTakeSkip(pagination);
 
-  // Execute both queries in parallel using shared helper
   const { data: results, count: totalCount } = await executeListQueryWithCount(
     getDb(db).query.location.findMany({
       where: whereClause,
@@ -749,7 +741,6 @@ export const locationList = async (
   return { data: items, count: totalCount };
 };
 
-// Update the AI description for a location
 export const updateLocationAiDescription = async (
   db: Database,
   id: LocationId,
@@ -767,7 +758,6 @@ export const findLocationsNeedingAiDescription = async (
 ): Promise<Array<{ id: LocationId; name: string; imageUrls: string[] }>> => {
   const dbClient = getDb(db);
 
-  // Find locations with images but no AI description
   const locations = await dbClient.query.location.findMany({
     where: and(notDeleted(location), isNull(location.aiDescription)),
     columns: { id: true, name: true },
@@ -783,7 +773,6 @@ export const findLocationsNeedingAiDescription = async (
     },
   });
 
-  // Filter to only those that actually have images
   return locations
     .filter((loc) => loc.images.length > 0)
     .map((loc) => ({
@@ -809,7 +798,6 @@ export const getLocationById = async (
   db: Database | DrizzleTransaction,
   id: LocationId,
 ): Promise<InfLocation> => {
-  // Fetch the location with parent chain and immediate children
   const res = await unwrapDb(db).query.location.findFirst({
     where: and(eq(location.id, id), notDeleted(location)),
     ...relations.location.full,
@@ -847,7 +835,6 @@ export const getLocationById = async (
       depth++;
     }
 
-    // Build parent chain from root to immediate parent
     for (const parentData of parents) {
       const parentWithRelations: LocationWithParentChild = {
         ...parentData,
@@ -871,7 +858,6 @@ export const getLocationById = async (
   if (childIds.length > 0) {
     const dbClient = unwrapDb(db);
 
-    // Run both count queries in parallel
     const [childCountResults, inventoryCountResults] = await Promise.all([
       dbClient
         .select({

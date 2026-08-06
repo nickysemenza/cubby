@@ -1064,7 +1064,6 @@ const assertExternalIdsAvailable = async (
   );
 };
 
-// Create a new product
 export const createProduct = async (
   db: Database,
   data: ProductRepoCreateInput,
@@ -1083,7 +1082,6 @@ export const createProduct = async (
     ? "food"
     : (data.category ?? null);
 
-  // Generate unique shortcode
   // Per-each price is the scalar `productData.price` column; a canonical
   // "1 each = $X" mapping would duplicate it (per-measure money mappings are OK).
   if (unitMappings) assertNoCanonicalPriceMapping(unitMappings);
@@ -1094,7 +1092,6 @@ export const createProduct = async (
   try {
     const created = await withTransaction(db, async (tx) => {
       await assertExternalIdsAvailable(tx, externalIds ?? []);
-      // Create the product first (price flows in via ...productData)
       const newProduct = await insertWithShortcode(tx, "product", {
         ...productData,
         manufacturer: await resolveEstablishedManufacturer(
@@ -1105,7 +1102,6 @@ export const createProduct = async (
         ingredientId: ingredientId ?? null,
       });
 
-      // Persist measurement conversions (money-free; price lives on the column)
       if (unitMappings && unitMappings.length > 0) {
         await tx.insert(productUnitMappings).values(
           unitMappings.map((mapping) => ({
@@ -1117,7 +1113,6 @@ export const createProduct = async (
         );
       }
 
-      // If there are external IDs, create them
       if (externalIds && externalIds.length > 0) {
         await tx.insert(productExternalId).values(
           externalIds.map((eid) => ({
@@ -1130,7 +1125,6 @@ export const createProduct = async (
         );
       }
 
-      // Associate images if provided
       let images: Array<typeof image.$inferSelect> = [];
       if (pendingImageIds && pendingImageIds.length > 0) {
         await associatePendingImages(
@@ -1141,21 +1135,18 @@ export const createProduct = async (
           pendingImageIds,
         );
 
-        // Fetch the associated images
         images = await tx
           .select()
           .from(image)
           .where(inArray(image.id, pendingImageIds));
       }
 
-      // Log audit entry
       await logAuditEntry(tx, actor, {
         entityType: "product",
         entityId: newProduct.id,
         action: "create",
       });
 
-      // Fetch created external IDs for the response
       const createdExternalIds =
         externalIds && externalIds.length > 0
           ? await tx.query.productExternalId.findMany({
@@ -1182,7 +1173,6 @@ export const createProduct = async (
   }
 };
 
-// Update an existing product
 export const updateProduct = async (
   db: Database,
   id: ProductId,
@@ -1199,9 +1189,7 @@ export const updateProduct = async (
     ...productData
   } = data;
 
-  // Use a transaction to ensure atomicity
   return await withTransaction(db, async (tx) => {
-    // Fetch current state for audit logging
     const beforeProduct = await tx.query.product.findFirst({
       where: and(eq(product.id, id), notDeleted(product)),
     });
@@ -1213,7 +1201,6 @@ export const updateProduct = async (
     // A canonical "1 each = $X" mapping duplicates the price column; reject it.
     if (unitMappings !== undefined) assertNoCanonicalPriceMapping(unitMappings);
 
-    // Build update data (price flows in via ...productData)
     const updateData: {
       name?: string;
       aliases?: string[];
@@ -1228,7 +1215,6 @@ export const updateProduct = async (
       price?: number | null;
     } = { ...productData };
 
-    // Handle ingredient relationship
     if (ingredientId !== undefined) {
       updateData.ingredientId = ingredientId;
     }
@@ -1261,7 +1247,6 @@ export const updateProduct = async (
       }
     }
 
-    // Update the product (updateAndReturn handles empty values gracefully)
     const updated = await updateLiveAndReturn(tx, product, updateData, id);
 
     // When price changes, resync the dependent inventory valuations (amount × price).
@@ -1269,7 +1254,6 @@ export const updateProduct = async (
       await syncInventoryValuationsForProduct(tx, id);
     }
 
-    // Reconcile child collections against the incoming desired state.
     if (unitMappings !== undefined) {
       await syncProductUnitMappings(tx, id, unitMappings);
     }
@@ -1298,7 +1282,6 @@ export const updateProduct = async (
       orderBy: [asc(productImage.sortOrder), asc(productImage.createdAt)],
     });
 
-    // Log audit entry with changes
     const changes = computeChanges(beforeProduct, updated, [
       "name",
       "aliases",
@@ -1322,7 +1305,6 @@ export const updateProduct = async (
       });
     }
 
-    // Fetch current external IDs for the response
     const currentExternalIds = await tx.query.productExternalId.findMany({
       where: and(
         eq(productExternalId.productId, updated.id),

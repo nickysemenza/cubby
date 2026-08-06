@@ -16,7 +16,6 @@ import { EntityIcon, entities } from "~/entities/entities";
 interface EntityEmptyConfig {
   title: string;
   description: string;
-  /** If not provided, no action button is shown */
   actionLabel?: string;
 }
 
@@ -122,23 +121,15 @@ const entityEmptyConfig: Record<Entity, EntityEmptyConfig> = {
 
 interface EntityEmptyStateProps {
   entity: Entity;
-  /** Override to show "no results" state (filtered empty) vs "truly empty" state */
   isFiltered?: boolean;
-  /** Callback to clear all active filters */
   onClearFilters?: () => void;
 }
 
-/**
- * Entity-specific empty state for tables.
- * Shows contextual messaging and actions based on entity type.
- * Uses consistent icons and colors from the entity system.
- */
 export function EntityEmptyState({
   entity,
   isFiltered = false,
   onClearFilters,
 }: EntityEmptyStateProps) {
-  // If filtered, show generic "no results" message with clear option
   if (isFiltered) {
     return <FilteredEmptyState onClearFilters={onClearFilters} />;
   }
@@ -176,11 +167,6 @@ export function EntityEmptyState({
   );
 }
 
-/**
- * Generic empty state. When `isFiltered`, it reads as "no results, clear the
- * filters"; otherwise it's an honest "nothing here yet" for a genuinely-empty
- * table with no entity-specific CTA (the RTable no-entity fallback).
- */
 export function FilteredEmptyState({
   isFiltered = true,
   onClearFilters,
@@ -209,7 +195,6 @@ export function FilteredEmptyState({
   );
 }
 
-/** Check if a table has active (column) filters. */
 export function hasActiveFilters(columnFilters: unknown[]): boolean {
   return columnFilters.length > 0;
 }

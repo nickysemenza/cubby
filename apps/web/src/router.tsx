@@ -12,7 +12,6 @@ import { SENTRY_DSN } from "~/lib/sentry-dsn";
 import { scrubSentryEvent } from "~/lib/sentry-scrub";
 import * as TanstackQuery from "./integrations/tanstack-query/root-provider";
 
-// Import the generated route tree
 import { routeTree } from "./routeTree.gen";
 
 // Defined by Vite only for CF builds (build:cf), absent under `vite dev`.
@@ -20,7 +19,6 @@ import { routeTree } from "./routeTree.gen";
 // only ever registers for deployed CF builds, never a local production build.
 declare const __CF_WORKERS__: boolean | undefined;
 
-// Create a new router instance
 export const getRouter = () => {
   const rqContext = TanstackQuery.getContext();
 

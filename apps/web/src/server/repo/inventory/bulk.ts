@@ -163,7 +163,6 @@ export const bulkProcessInventoryEntries = async (
         }
       }
 
-      // First, get all existing inventory entries for this location
       const existingItems = await tx.query.inventoryEntry.findMany({
         where: and(
           eq(inventoryEntry.locationId, locationId),
@@ -172,12 +171,10 @@ export const bulkProcessInventoryEntries = async (
         ...relations.inventory.full,
       });
 
-      // Create a map of existing items for change tracking
       const existingItemsMap = new Map(
         existingItems.map((item) => [item.id, item]),
       );
 
-      // Pre-fetch all product prices in a single query
       const allProductIds = uniq([
         ...items.filter((i) => i.productId).map((i) => i.productId),
         ...existingItems.map((i) => i.productId),
@@ -194,12 +191,10 @@ export const bulkProcessInventoryEntries = async (
         }
       }
 
-      // Get IDs of items in the submitted array (as plain strings for DB comparison)
       const submittedIds = items
         .filter((item) => item.id)
         .map((item) => item.id as string);
 
-      // Find items to delete (existing items not in the submitted array)
       const itemsToDelete = existingItems.filter(
         (item) => !submittedIds.includes(item.id),
       );
@@ -242,14 +237,11 @@ export const bulkProcessInventoryEntries = async (
         );
       }
 
-      // Collect result IDs and audit entries during processing
       const resultIds: string[] = [];
       const auditEntries: AuditEntryInput[] = [];
 
-      // Process submitted items - create new or update existing
       for (const item of items) {
         if (!item.id) {
-          // Create new inventory entry - productId and amount are required
           if (!item.productId || !item.amount) {
             throw createAppError(
               "REQUIRED_FIELD_MISSING",
@@ -257,7 +249,6 @@ export const bulkProcessInventoryEntries = async (
             );
           }
 
-          // Compute valuation using pre-fetched price
           const amountValue =
             typeof item.amount === "object" && item.amount !== null
               ? (item.amount as { value: number }).value
@@ -281,13 +272,11 @@ export const bulkProcessInventoryEntries = async (
             action: "create",
           });
         } else {
-          // Update existing inventory entry using helper to filter undefined
           const updateValues = buildPartialUpdateValues({
             amount: item.amount,
             productId: item.productId,
           });
 
-          // Recompute valuation if amount or productId changed
           let valuation: number | null | undefined;
           if (item.amount !== undefined || item.productId !== undefined) {
             const before = existingItemsMap.get(item.id);
@@ -306,13 +295,11 @@ export const bulkProcessInventoryEntries = async (
             }
           }
 
-          // Add valuation to update values
           const finalUpdateValues = buildPartialUpdateValues({
             ...updateValues,
             valuation,
           });
 
-          // Only process if there are actual updates
           if (Object.keys(finalUpdateValues).length > 0) {
             const before = existingItemsMap.get(item.id);
             const updated = await updateAndReturn(
@@ -322,7 +309,6 @@ export const bulkProcessInventoryEntries = async (
               eq(inventoryEntry.id, item.id),
             );
 
-            // Track audit entry with changes
             if (before) {
               const changes = computeChanges(before, updated, [
                 "amount",
@@ -345,15 +331,12 @@ export const bulkProcessInventoryEntries = async (
         }
       }
 
-      // Batch log all audit entries from the loop
       if (auditEntries.length > 0) {
         await logAuditEntries(tx, actor, auditEntries);
       }
 
-      // Batch re-fetch all results with relations
       const results = await batchFetchResults(tx, resultIds);
 
-      // Update the location's lastBulkInventory timestamp
       await tx
         .update(location)
         .set({ lastBulkInventory: new Date() })

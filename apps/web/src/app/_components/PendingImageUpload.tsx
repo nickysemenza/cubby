@@ -30,8 +30,8 @@ const ACCEPTED_IMAGE_TYPES = ALLOWED_IMAGE_TYPES.join(",");
 interface PendingImageUploadProps {
   entityType: EntityImage;
   onImagesChange?: (images: PendingImage[]) => void;
-  existingImages?: PendingImage[]; // Existing images passed from parent component
-  onExistingImagesRemove?: (removedImageIds: string[]) => void; // Track removed existing images
+  existingImages?: PendingImage[];
+  onExistingImagesRemove?: (removedImageIds: string[]) => void;
   // Report the full display order of the remaining existing images after a
   // reorder (first = cover). Reorder controls render only when provided.
   onExistingImagesReorder?: (orderedImageIds: string[]) => void;
@@ -76,7 +76,6 @@ export function PendingImageUpload({
     setRemovedExistingImageIds([]);
   }
 
-  // tRPC mutation for initiating an upload
   const uploadImageMutation = useMutation(
     api.image.uploadImage.mutationOptions({
       onError: (error) => {
@@ -85,7 +84,6 @@ export function PendingImageUpload({
     }),
   );
 
-  // tRPC mutation for importing from URL
   const importFromUrlMutation = useMutation(
     api.image.importFromUrl.mutationOptions({
       onError: (error) => {
@@ -136,7 +134,6 @@ export function PendingImageUpload({
     [entityType, importFromUrlMutation, pendingImages, onImagesChange],
   );
 
-  // Handle importing an image from the manual URL input.
   const handleImportFromUrl = useCallback(
     () => importUrl(imageUrl),
     [importUrl, imageUrl],
@@ -152,7 +149,6 @@ export function PendingImageUpload({
     }
   }, [autoImportUrl, autoImported, importUrl]);
 
-  // Upload a file (used by both file input and camera)
   const uploadFile = useCallback(
     async (file: File) => {
       if (!file) {
@@ -163,7 +159,6 @@ export function PendingImageUpload({
       setUploading(true);
 
       try {
-        // Validate content type before uploading
         if (!ALLOWED_IMAGE_TYPES.includes(file.type as AllowedImageType)) {
           toast.error(
             `Unsupported image type: ${file.type}. Allowed: JPEG, PNG, GIF, WebP, HEIC.`,
@@ -171,7 +166,6 @@ export function PendingImageUpload({
           return null;
         }
 
-        // Step 1: Get a presigned URL
         const initResult = await uploadImageMutation.mutateAsync({
           filename: file.name,
           contentType: file.type as AllowedImageType,
@@ -179,7 +173,6 @@ export function PendingImageUpload({
           entityType,
         });
 
-        // Step 2: Upload to storage
         const uploadResult = await fetch(initResult.uploadUrl, {
           method: "PUT",
           body: file,
@@ -197,7 +190,6 @@ export function PendingImageUpload({
           );
         }
 
-        // Step 3: Add image to pending images list
         const newImage: PendingImage = {
           id: initResult.imageId,
           url: initResult.url,
@@ -208,12 +200,10 @@ export function PendingImageUpload({
         const updatedImages = [...pendingImages, newImage];
         setPendingImages(updatedImages);
 
-        // Notify parent component of the change
         if (onImagesChange) {
           onImagesChange(updatedImages);
         }
 
-        // Show success message
         toast.success("Photo added.");
 
         return newImage;
@@ -228,7 +218,6 @@ export function PendingImageUpload({
     [entityType, uploadImageMutation, pendingImages, onImagesChange],
   );
 
-  // Handle clipboard paste
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
       if (uploading || importing) return;
@@ -260,7 +249,6 @@ export function PendingImageUpload({
     return () => document.removeEventListener("paste", handlePaste);
   }, [uploadFile, uploading, importing]);
 
-  // Handle file upload from input
   const handleFileUpload = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
@@ -286,13 +274,11 @@ export function PendingImageUpload({
     [uploadFile],
   );
 
-  // Remove an image from the pending list
   const removeImage = useCallback(
     (imageId: string) => {
       const updatedImages = pendingImages.filter((img) => img.id !== imageId);
       setPendingImages(updatedImages);
 
-      // Notify parent component of the change
       if (onImagesChange) {
         onImagesChange(updatedImages);
       }
@@ -300,20 +286,16 @@ export function PendingImageUpload({
     [pendingImages, onImagesChange],
   );
 
-  // Remove an existing image
   const removeExistingImage = useCallback(
     (imageId: string) => {
-      // Update the list of removed image IDs
       const updatedRemovedIds = [...removedExistingImageIds, imageId];
       setRemovedExistingImageIds(updatedRemovedIds);
 
-      // Remove from the displayed existing images
       const updatedExistingImages = currentExistingImages.filter(
         (img) => img.id !== imageId,
       );
       setCurrentExistingImages(updatedExistingImages);
 
-      // Notify parent component of the change
       if (onExistingImagesRemove) {
         onExistingImagesRemove(updatedRemovedIds);
       }
@@ -321,7 +303,6 @@ export function PendingImageUpload({
     [removedExistingImageIds, currentExistingImages, onExistingImagesRemove],
   );
 
-  // Move an existing image within the display order (first = cover)
   const moveExistingImage = useCallback(
     (imageId: string, target: "front" | "left" | "right") => {
       const idx = currentExistingImages.findIndex((img) => img.id === imageId);
@@ -356,7 +337,6 @@ export function PendingImageUpload({
               disabled={uploading || importing}
             />
           </div>
-          {/* Hidden input for native camera capture (opens Camera app on mobile, file picker on desktop) */}
           <input
             ref={cameraInputRef}
             type="file"
@@ -418,7 +398,6 @@ export function PendingImageUpload({
         </div>
       )}
 
-      {/* Pending images (newly uploaded) */}
       {pendingImages.length > 0 && (
         <div className="space-y-2">
           <Label>New images</Label>
@@ -449,7 +428,6 @@ export function PendingImageUpload({
         </div>
       )}
 
-      {/* Existing images (already associated with entity) */}
       {currentExistingImages.length > 0 && (
         <div className="space-y-2">
           <Label>Existing images</Label>

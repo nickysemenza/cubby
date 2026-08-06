@@ -33,13 +33,11 @@ interface ScannedLocation {
   location: InfLocation;
 }
 
-// Form schema for location picker
 const locationPickerSchema = z.object({
   parentLocation: optionalLocationField,
 });
 type LocationPickerValues = z.infer<typeof locationPickerSchema>;
 
-// Inline reassignment form schema
 const reassignSchema = z.object({
   newParent: optionalLocationField,
 });
@@ -63,7 +61,6 @@ export function LocationValidateForm({
     Map<string, ScannedLocation>
   >(new Map());
 
-  // Fetch parent location with children
   const { data: parentLocation } = useQuery({
     ...api.location.getByID.queryOptions({
       id: parentLocationId!,
@@ -71,13 +68,11 @@ export function LocationValidateForm({
     enabled: !!parentLocationId,
   });
 
-  // Set up form for location picker
   const form = useForm<LocationPickerValues>({
     resolver: zodResolver(locationPickerSchema),
     defaultValues: { parentLocation: null },
   });
 
-  // Pre-fill combobox when parent location loads from URL param
   const watchedLocation = form.watch("parentLocation");
   if (
     parentLocation &&
@@ -88,7 +83,6 @@ export function LocationValidateForm({
     form.setValue("parentLocation", buildLocationComboboxItem(parentLocation));
   }
 
-  // Watch for combobox changes
   const selectedLocation = form.watch("parentLocation");
   if (selectedLocation && selectedLocation.id !== parentLocationId) {
     setParentLocationId(selectedLocation.id);
@@ -104,7 +98,6 @@ export function LocationValidateForm({
   );
   const childCount = children.length;
 
-  // Handle QR scan
   const handleScan = useCallback(
     async (rawValue: string) => {
       const parsed = extractShortcodeFromScan(rawValue);
@@ -120,19 +113,16 @@ export function LocationValidateForm({
 
       const shortcode = parsed.shortcode;
 
-      // Skip if this is the parent location itself
       if (parentLocation?.id === shortcode) {
         toast.info("That's the parent location itself");
         return;
       }
 
-      // Skip if already scanned
       if (scannedLocations.has(shortcode)) {
         toast.info("Already scanned");
         return;
       }
 
-      // Resolve the shortcode to a location
       try {
         const location = await queryClient.fetchQuery(
           api.location.getByShortcode.queryOptions({ shortcode }),
@@ -155,7 +145,6 @@ export function LocationValidateForm({
     [parentLocation, scannedLocations, queryClient, api],
   );
 
-  // Reconciliation data
   const childShortcodes = useMemo(
     () => new Set(children.map((c) => c.id as string)),
     [children],
@@ -183,7 +172,6 @@ export function LocationValidateForm({
     childShortcodes.has(s.shortcode),
   ).length;
 
-  // Update mutation for reassignment
   const updateMutation = useMutation(
     api.location.update.mutationOptions({
       onSuccess: () => {
@@ -233,7 +221,6 @@ export function LocationValidateForm({
     form.reset();
   }, [form]);
 
-  // Phase 1: SELECT_LOCATION
   if (phase === "SELECT_LOCATION") {
     return (
       <div className="space-y-2">

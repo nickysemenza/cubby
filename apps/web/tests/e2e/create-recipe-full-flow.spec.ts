@@ -20,9 +20,7 @@ test.describe("Create Recipe - Full Flow", () => {
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(" ");
 
-    // Steps 1-2: Create the ingredient, then a product linked to it with the
-    // standard 1 cup = $2.50 / 100 g = $1.50 conversions (the Step 3 cost/weight
-    // assertions below depend on these exact values).
+    // The later cost and weight assertions depend on the helper's exact mappings.
     await createIngredientViaForm(page, ingredientName);
     await createProductWithIngredientMappings(page, {
       name: productName,
@@ -30,13 +28,11 @@ test.describe("Create Recipe - Full Flow", () => {
       ingredientName,
     });
 
-    // Step 3: Create recipe
     await page.goto("/recipes/new");
     await waitForFormHydration(page);
     await fillInput(page, "Enter recipe name", recipeName);
     await fillInput(page, "Enter recipe URL", faker.internet.url());
 
-    // Fill yield
     await page.getByLabel("Yield Value (Optional)").fill("12");
     await page.getByLabel("Yield Unit").fill("cookies");
 
@@ -50,13 +46,11 @@ test.describe("Create Recipe - Full Flow", () => {
       ingredientName,
     );
 
-    // Add amount (2 cups) — row inputs are labeled "Amount" / "Unit"
     const amountValue = page.getByLabel("Amount", { exact: true });
     await expect(amountValue).toBeVisible({ timeout: 5000 });
     await amountValue.fill("2");
     await page.getByLabel("Unit", { exact: true }).fill("cups");
 
-    // Add instruction
     await page.getByRole("button", { name: /Add Instruction/i }).click();
     const instructionInput = page.getByRole("textbox", { name: "Step" });
     await expect(instructionInput).toBeVisible({ timeout: 5000 });
@@ -65,19 +59,16 @@ test.describe("Create Recipe - Full Flow", () => {
       ` Make sure to use the ${ingredientName} as the main ingredient.`;
     await instructionInput.fill(instruction);
 
-    // Submit recipe
     await page.getByRole("button", { name: /^Create$/i }).click();
     await expect(page).toHaveURL(
       /\/recipes\/RCP-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
       { timeout: 15000 },
     );
 
-    // Verify recipe created
     await expect(
       page.getByRole("heading", { name: recipeName, level: 1 }),
     ).toBeVisible({ timeout: 10000 });
 
-    // Verify ingredient appears in sidebar
     const ingredientsSidebar = page
       .locator("aside")
       .filter({ has: page.getByText("Ingredients") });
@@ -87,7 +78,6 @@ test.describe("Create Recipe - Full Flow", () => {
     // Exact match avoids colliding with the "Data" nav-group dropdown trigger.
     await page.getByRole("button", { name: "Data view", exact: true }).click();
 
-    // Verify ingredient link
     const ingredientLink = page
       .getByRole("link", { name: new RegExp(ingredientName) })
       .first();
@@ -100,7 +90,6 @@ test.describe("Create Recipe - Full Flow", () => {
     await expect(page.getByText("Total Cost", { exact: true })).toBeVisible();
     await expect(page.getByText("$5.00").first()).toBeVisible();
 
-    // Verify weight calculation (2 cups → 333g via chained conversion)
     await expect(page.getByText("Total Weight", { exact: true })).toBeVisible();
     await expect(page.getByText("333g")).toBeVisible();
   });
