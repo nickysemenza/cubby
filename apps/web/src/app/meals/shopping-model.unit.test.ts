@@ -104,8 +104,8 @@ describe("buildShoppingRows", () => {
     expect(rows).toHaveLength(0);
   });
 
-  it("reports an unknown shortfall as null, not as the whole need", () => {
-    // An unconvertible row: we don't know the stock, so claiming a shortfall
+  it("reports an unconvertible row's shortfall as unknown", () => {
+    // Stock exists but its units don't reconcile, so claiming a shortfall
     // equal to the entire need would invent a number and sort it to the top.
     const row = buildShoppingRows(
       [item({ haveValue: null, status: "unconvertible" })],
@@ -115,6 +115,25 @@ describe("buildShoppingRows", () => {
 
     expect(row?.shortfall).toBeNull();
     expect(row?.status).toBe("unconvertible");
+  });
+
+  it("still reports the full need for something you simply don't have", () => {
+    // `missing` also carries a null haveValue, but that's knowledge — buy all
+    // of it. Keying the unknown on haveValue instead of the status would turn
+    // every not-in-stock row into a "?".
+    const row = buildShoppingRows(
+      [
+        item({
+          haveValue: null,
+          status: "missing",
+          perMeal: [contribution({ needValue: 250 })],
+        }),
+      ],
+      NONE,
+      NONE,
+    )[0];
+
+    expect(row?.shortfall).toBe(250);
   });
 
   it("sorts checked last, then most-short-first, then by name", () => {

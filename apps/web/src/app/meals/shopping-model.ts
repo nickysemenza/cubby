@@ -60,10 +60,14 @@ export const buildShoppingRows = (
         key,
         item,
         need,
-        // Both from the engine, so a client-side exclusion is scored by the
-        // same rule (and the same epsilon) the server used.
+        // Status comes from the engine, so a client-side exclusion is scored
+        // by the same rule (and the same epsilon) the server used. Shortfall
+        // mirrors the engine's rule: unknown ONLY when the units can't be
+        // reconciled — having none of something is knowledge, not ignorance.
         shortfall:
-          item.haveValue == null ? null : Math.max(0, need - item.haveValue),
+          item.status === "unconvertible"
+            ? null
+            : Math.max(0, need - (item.haveValue ?? 0)),
         status: availabilityStatusFor(need, item.haveValue, item.status),
         isChecked: checked.has(key),
       };

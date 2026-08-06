@@ -163,14 +163,24 @@ fn resolve_status(
     }
 }
 
-/// How much of a need the on-hand total doesn't cover, or `None` when on-hand
-/// isn't known.
+/// How much of a need the on-hand total doesn't cover, or `None` when that
+/// genuinely can't be known.
 ///
-/// `None` is the honest answer for an unconvertible row: treating unknown stock
-/// as zero asserts a shortfall equal to the entire need, and sorts that
-/// invented number to the top of a buy-list.
-fn shortfall_for(need_value: f64, have_value: Option<f64>) -> Option<f64> {
-    have_value.map(|have| (need_value - have).max(0.0))
+/// Keyed on the status, not on `have_value`, because a `None` on-hand means two
+/// different things. `Missing` — no stock — is *knowledge*: you need all of it.
+/// `Unconvertible` — stock exists but its units don't reconcile — is ignorance,
+/// and reporting the full need there would invent a quantity and sort it to the
+/// top of a buy list.
+fn shortfall_for(
+    need_value: f64,
+    have_value: Option<f64>,
+    status: WAvailabilityStatus,
+) -> Option<f64> {
+    match status {
+        WAvailabilityStatus::Unconvertible => None,
+        WAvailabilityStatus::Missing => Some(need_value),
+        _ => Some((need_value - have_value.unwrap_or(0.0)).max(0.0)),
+    }
 }
 
 /// Re-verdict an item against a reduced need — the shopping list excluding some
@@ -349,7 +359,7 @@ fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
         need_value,
         have_value,
         status,
-        shortfall: shortfall_for(need_value, have_value),
+        shortfall: shortfall_for(need_value, have_value, status),
         sources,
     }
 }
@@ -411,13 +421,16 @@ mod tests {
     }
 
     #[test]
-    fn shortfall_is_none_when_on_hand_is_unknown() {
-        // Not zero, and not the whole need: an unconvertible row's shortfall is
-        // genuinely unknown, and claiming the full need sorts an invented
-        // number to the top of the buy list.
-        assert_eq!(shortfall_for(500.0, None), None);
-        assert_eq!(shortfall_for(500.0, Some(200.0)), Some(300.0));
-        assert_eq!(shortfall_for(200.0, Some(500.0)), Some(0.0));
+    fn shortfall_is_unknown_only_when_units_dont_reconcile() {
+        use WAvailabilityStatus::*;
+        // Stock exists but can't be compared — claiming the full need would
+        // invent a quantity and sort it to the top of the buy list.
+        assert_eq!(shortfall_for(500.0, None, Unconvertible), None);
+        // Having none of something is knowledge, not ignorance: buy all of it.
+        assert_eq!(shortfall_for(500.0, None, Missing), Some(500.0));
+        assert_eq!(shortfall_for(500.0, Some(0.0), Missing), Some(500.0));
+        assert_eq!(shortfall_for(500.0, Some(200.0), Short), Some(300.0));
+        assert_eq!(shortfall_for(200.0, Some(500.0), Ok), Some(0.0));
     }
 
     fn amt(value: f64, unit: &str) -> WAmount {
