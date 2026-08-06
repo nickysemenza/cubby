@@ -245,6 +245,33 @@ export const bulkMovePayload = z.object({
 
 export type BulkMovePayload = z.infer<typeof bulkMovePayload>;
 
+// Move entries to per-item destinations. The general shape: reorganizing is
+// inherently many-source→many-target (one shelf fanning out across a dozen
+// drawers), which `bulkMovePayload` above cannot express — it pins ONE source
+// and ONE target for the whole call, so the UI had to group a selection by
+// source location and fire a separate request per group.
+//
+// The source is not asked for because it is not information the caller has to
+// supply: an entry already knows the location it sits in.
+const moveInventoryItem = z.object({
+  inventoryEntryId: inventoryShortcode,
+  targetLocationId: locationShortcode,
+  // Omit to move the entry entirely. Present = a partial move, leaving the
+  // remainder behind. Listing one entry twice with two quantities is how a bin
+  // gets split across several destinations.
+  quantity: positiveAmount.optional(),
+});
+
+export type MoveInventoryItem = z.infer<typeof moveInventoryItem>;
+
+export const moveInventoryEntriesPayload = z.object({
+  items: z.array(moveInventoryItem).min(1).max(200),
+});
+
+export type MoveInventoryEntriesPayload = z.infer<
+  typeof moveInventoryEntriesPayload
+>;
+
 // One staged decision about an expected row, committed atomically on "Done".
 // `verify` = confirmed present as-is; `adjust` = present at a corrected count;
 // `remove` = not here, soft-delete it; `relocate` = move the full row to the

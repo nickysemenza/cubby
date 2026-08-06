@@ -1243,70 +1243,112 @@ describe("specialized tools round-trip on shortcodes", () => {
     expect(aliasAfter.isError).toBe(true);
   });
 
-  it("bulk_move_inventory moves entries between locations by shortcode", async () => {
+  it("move_inventory_entries fans many sources out to many targets by shortcode", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
-    const product = await callTool(
-      "create_product",
-      {
-        name: "Bulk Move Product",
-        upc: null,
-        manufacturer: "Test Mfg",
-        ingredientId: null,
-      },
-      caller,
-    );
-    expectOk(product);
-    const productCode = structured(product).id as string;
 
-    const source = await callTool(
-      "create_location",
-      { name: "Bulk Move Source", type: "shelf", parentId: null },
-      caller,
-    );
-    expectOk(source);
-    const sourceCode = structured(source).id as string;
+    const makeProduct = async (name: string) => {
+      const created = await callTool(
+        "create_product",
+        { name, upc: null, manufacturer: "Test Mfg", ingredientId: null },
+        caller,
+      );
+      expectOk(created);
+      return structured(created).id as string;
+    };
+    const makeLocation = async (name: string) => {
+      const created = await callTool(
+        "create_location",
+        { name, type: "shelf", parentId: null },
+        caller,
+      );
+      expectOk(created);
+      return structured(created).id as string;
+    };
+    const makeEntry = async (
+      productCode: string,
+      locationCode: string,
+      value: number,
+    ) => {
+      const created = await callTool(
+        "create_inventory_entry",
+        {
+          productId: productCode,
+          locationId: locationCode,
+          value,
+          unit: "each",
+        },
+        caller,
+      );
+      expectOk(created);
+      return structured(created).id as string;
+    };
 
-    const target = await callTool(
-      "create_location",
-      { name: "Bulk Move Target", type: "shelf", parentId: null },
-      caller,
-    );
-    expectOk(target);
-    const targetCode = structured(target).id as string;
+    const [widget, gadget] = await Promise.all([
+      makeProduct("Many Move Widget"),
+      makeProduct("Many Move Gadget"),
+    ]);
+    const [shelfA, shelfB, drawer1, drawer2] = await Promise.all([
+      makeLocation("Many Move Shelf A"),
+      makeLocation("Many Move Shelf B"),
+      makeLocation("Many Move Drawer 1"),
+      makeLocation("Many Move Drawer 2"),
+    ]);
 
-    const entry = await callTool(
-      "create_inventory_entry",
-      {
-        productId: productCode,
-        locationId: sourceCode,
-        value: 10,
-        unit: "each",
-      },
-      caller,
-    );
-    expectOk(entry);
-    const entryCode = structured(entry).id as string;
+    // Two DIFFERENT sources, two DIFFERENT targets, in one call — the shape
+    // `bulk_move_inventory` could not express.
+    const widgetOnA = await makeEntry(widget, shelfA!, 10);
+    const gadgetOnB = await makeEntry(gadget, shelfB!, 3);
+    // Already at drawer 1, so the widget arriving there must MERGE into it
+    // rather than mint a second row (the partial unique index forbids two).
+    await makeEntry(widget, drawer1!, 5);
 
     const moved = await callTool(
-      "bulk_move_inventory",
+      "move_inventory_entries",
       {
-        sourceLocationId: sourceCode,
-        targetLocationId: targetCode,
         items: [
-          { inventoryEntryId: entryCode, quantity: { value: 4, unit: "each" } },
+          // Partial move that merges into an existing destination row.
+          {
+            inventoryEntryId: widgetOnA,
+            targetLocationId: drawer1,
+            quantity: { value: 4, unit: "each" },
+          },
+          // Full move of the remainder to a different target — the same entry
+          // listed twice, splitting one bin across two destinations.
+          { inventoryEntryId: widgetOnA, targetLocationId: drawer2 },
+          // A different source entirely, in the same call.
+          { inventoryEntryId: gadgetOnB, targetLocationId: drawer2 },
         ],
       },
       caller,
     );
     expectOk(moved);
-    const movedItems = structured(moved).items as Array<
-      Record<string, unknown>
-    >;
-    expect(
-      movedItems.some(
-        (item) => (item.location as Record<string, unknown>)?.id === targetCode,
-      ),
-    ).toBe(true);
+
+    const at = async (locationCode: string) => {
+      const listed = await callTool(
+        "list_inventory",
+        { locationIdFilter: locationCode },
+        caller,
+      );
+      expectOk(listed);
+      return (structured(listed).items as Array<Record<string, unknown>>).map(
+        (item) => ({
+          product: (item.product as Record<string, unknown>)?.id,
+          value: (item.amount as { value: number }).value,
+        }),
+      );
+    };
+
+    // 5 already there + 4 moved in, summed into the one existing row.
+    expect(await at(drawer1!)).toEqual([{ product: widget, value: 9 }]);
+    // The widget's remaining 6 relocated whole; the gadget arrived from shelf B.
+    expect((await at(drawer2!)).sort((a, b) => a.value - b.value)).toEqual([
+      { product: gadget, value: 3 },
+      { product: widget, value: 6 },
+    ]);
+    // Both sources are empty: the widget row was consumed by the split, and the
+    // gadget row relocated away.
+    expect(await at(shelfA!)).toEqual([]);
+    expect(await at(shelfB!)).toEqual([]);
   });
 
   it("add_recipe_to_meal plans a recipe by shortcode", async () => {

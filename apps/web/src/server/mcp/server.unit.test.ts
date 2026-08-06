@@ -859,6 +859,7 @@ describe("listMcpToolCatalog", () => {
       "create_financial_transactions",
       "update_financial_transactions",
       "find_or_create_product_by_upc",
+      "move_inventory_entries",
     ]) {
       expect(names.has(name), `${name} missing from catalog`).toBe(true);
     }
@@ -867,6 +868,10 @@ describe("listMcpToolCatalog", () => {
       "update_product_unit_mappings",
       "bulk_set_task_status",
       "bulk_move_tasks",
+      // The last `bulk_*` tool, retired for the same reason as the others: it
+      // named a narrower operation than the work. `move_inventory_entries` is a
+      // strict superset (per-item target, derivable source, optional quantity).
+      "bulk_move_inventory",
       "bulk_set_task_due_date",
       "bulk_move_expenses",
       "bulk_set_expense_trade",

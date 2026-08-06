@@ -36,6 +36,7 @@ import {
   inventoryWithLocationAndProductListAndSideEffectsOut,
   inventoryWithLocationAndProductListOut,
   inventoryWithLocationAndProductOut,
+  moveInventoryEntriesPayload,
   reconcileSessionPayload,
 } from "@cubby/schemas/inventory";
 import { uniq } from "es-toolkit";
@@ -52,6 +53,7 @@ import {
   getInventoryEntryByID,
   getInventoryEntryByShortcode,
   inventoryentryList,
+  moveInventoryEntries,
   reconcileLocationSession,
   updateInventoryEntry,
 } from "~/server/repo/inventory";
@@ -357,6 +359,55 @@ const bulkMove = protectedProcedure
     return { items: result, sideEffects: { backgroundBatches } };
   });
 
+// Move entries to per-item destinations. The general form of a move: one call
+// fans a shelf out across many drawers, or consolidates many drawers onto one
+// shelf, atomically. `bulkMove` above is the one-source/one-target case.
+const moveEntries = protectedProcedure
+  .input(moveInventoryEntriesPayload)
+  .output(strictOutput(inventoryWithLocationAndProductListAndSideEffectsOut))
+  .mutation(async ({ ctx, input }) => {
+    const [resolvedLocations, resolvedInventories] = await Promise.all([
+      resolveEntityIds(
+        ctx.db,
+        input.items.map((item) => item.targetLocationId),
+        "location",
+      ),
+      resolveEntityIds(
+        ctx.db,
+        input.items.map((item) => item.inventoryEntryId),
+        "inventory",
+      ),
+    ]);
+    const result = await moveInventoryEntries(
+      ctx.db,
+      {
+        items: input.items.map((item) => ({
+          inventoryEntryId: unsafeInventoryId(
+            resolvedInventories.get(item.inventoryEntryId)!,
+          ),
+          targetLocationId: unsafeLocationId(
+            resolvedLocations.get(item.targetLocationId)!,
+          ),
+          quantity: item.quantity,
+        })),
+      },
+      ctx.actorContext,
+    );
+    const entityIds = await inventoryEntityIds(
+      ctx.db,
+      result.map((entry) => entry.id),
+    );
+    const backgroundBatches = await runMutationSideEffectsForEntities(
+      ctx.db,
+      entityIds.map((entityId) => ({
+        action: "updated" as const,
+        entity: { entityType: "inventory" as const, entityId },
+        source: "inventory.moveEntries",
+      })),
+    );
+    return { items: result, sideEffects: { backgroundBatches } };
+  });
+
 // Commit an audit-session recount: apply the staged verify/adjust/remove diff +
 // stamp lastBulkInventory. Only dispatch a valuation recompute if something
 // actually changed (adjust/remove) — a pure-verify commit is a free no-op.
@@ -510,6 +561,7 @@ export const inventoryRouter = createTRPCRouter({
   delete: deleteItem,
   bulkProcess,
   bulkMove,
+  moveEntries,
   reconcileSession,
   findDuplicates,
   getCountsByLocations,

@@ -13,8 +13,8 @@
  */
 
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import type { BulkMoveItem } from "@cubby/schemas/inventory";
 import { useMutation } from "@tanstack/react-query";
+import { uniq } from "es-toolkit";
 import { FormProvider } from "react-hook-form";
 import { toast } from "sonner";
 import {
@@ -50,8 +50,8 @@ export function MoveInventoryDialog({
   const invalidateInventory = useInventoryInvalidation();
   const { form, error, setError, reset } = useDestinationLocationForm();
 
-  const bulkMoveMutation = useMutation(
-    api.inventory.bulkMove.mutationOptions({
+  const moveMutation = useMutation(
+    api.inventory.moveEntries.mutationOptions({
       onError: (err) => {
         setError(err.message || "Failed to move items");
       },
@@ -61,26 +61,18 @@ export function MoveInventoryDialog({
   const handleSubmit = async () => {
     const values = form.getValues();
 
-    const sourceGroups = new Map<LocationShortcode, InventoryItem[]>();
-    for (const item of items) {
-      const sourceLocationId = sourceLocationIdProp ?? item.location.id;
-      if (!sourceLocationId) {
-        setError("No source location available");
-        return;
-      }
-      const group = sourceGroups.get(sourceLocationId) ?? [];
-      group.push(item);
-      sourceGroups.set(sourceLocationId, group);
-    }
+    const sourceLocationIds = uniq(
+      items.map((item) => sourceLocationIdProp ?? item.location.id),
+    ).filter((id): id is LocationShortcode => Boolean(id));
 
-    if (sourceGroups.size === 0) {
+    if (sourceLocationIds.length === 0) {
       setError("No source location available");
       return;
     }
 
     const resolved = resolveDestination(
       values.targetLocation,
-      [...sourceGroups.keys()],
+      sourceLocationIds,
       {
         missingTarget: "Please select a target location",
         sameAsSource:
@@ -95,47 +87,31 @@ export function MoveInventoryDialog({
 
     setError(null);
 
-    let completedGroups = 0;
-    const results: Array<
-      Awaited<ReturnType<typeof bulkMoveMutation.mutateAsync>>
-    > = [];
+    // One atomic request, whatever the selection spans. This used to group the
+    // selection by source location and fire a `bulkMove` per group, because
+    // that call pinned a single source — so a failure partway through left the
+    // earlier groups moved and reported "moved items from 2 of 3 source
+    // locations". `moveEntries` carries the target per item, so there is no
+    // partial-completion state left to describe.
+    let result: Awaited<ReturnType<typeof moveMutation.mutateAsync>>;
     try {
-      for (const [sourceLocationId, sourceItems] of sourceGroups) {
-        const moveItems: BulkMoveItem[] = sourceItems.map((item) => ({
+      result = await moveMutation.mutateAsync({
+        items: items.map((item) => ({
           inventoryEntryId: item.id,
+          targetLocationId,
           quantity: item.amount,
-        }));
-
-        results.push(
-          await bulkMoveMutation.mutateAsync({
-            sourceLocationId,
-            targetLocationId,
-            items: moveItems,
-          }),
-        );
-        completedGroups += 1;
-      }
+        })),
+      });
     } catch (error) {
       invalidateInventory();
-      setError(
-        completedGroups > 0
-          ? `Moved items from ${completedGroups} of ${sourceGroups.size} source locations before the move failed. The list has been refreshed.`
-          : getErrorMessage(error),
-      );
+      setError(getErrorMessage(error));
       return;
     }
 
     toast.success(
       `Successfully moved ${items.length} item${items.length !== 1 ? "s" : ""}`,
     );
-    // Poll every group's queued valuation work, not just the last group's.
-    invalidateInventory({
-      sideEffects: {
-        backgroundBatches: results.flatMap(
-          (r) => r.sideEffects.backgroundBatches,
-        ),
-      },
-    });
+    invalidateInventory({ sideEffects: result.sideEffects });
     form.reset();
     onSuccess();
     onOpenChange(false);
@@ -161,7 +137,7 @@ export function MoveInventoryDialog({
           `${item.product.name} - ${item.amount.value} ${item.amount.unit}`
         }
         onSubmit={handleSubmit}
-        isPending={bulkMoveMutation.isPending}
+        isPending={moveMutation.isPending}
       >
         <DestinationLocationField
           form={form}
