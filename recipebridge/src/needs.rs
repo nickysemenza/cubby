@@ -147,13 +147,39 @@ pub struct WNeedsResult {
     pub blocked: Vec<WBlockedSubRecipe>,
 }
 
+/// One sub-recipe reference: the sub's declared yield, and the parent's written
+/// amounts for the row referencing it.
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(from_wasm_abi)]
+pub struct WYieldFractionInput {
+    #[serde(default)]
+    #[tsify(optional, type = "WAmount | null")]
+    pub recipe_yield: Option<WAmount>,
+    #[serde(default)]
+    pub amounts: Vec<WAmount>,
+}
+
+/// Exactly one of `fraction` / `reason` is present. `fraction` is batches of the
+/// sub-recipe; `reason` is the same verdict the shopping list discloses, so the
+/// two surfaces can never disagree about what is knowable.
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi)]
+pub struct WYieldFraction {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[tsify(optional)]
+    pub fraction: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[tsify(optional)]
+    pub reason: Option<WNeedsBlockReason>,
+}
+
 // ---------------------------------------------------------------------------
 // Yield math
 // ---------------------------------------------------------------------------
 
 /// Whether a declared yield can denominate anything at all. See the saturation
 /// note in [`yield_fraction`] for why a zero is a hazard and not just a no-op.
-fn usable_yield(recipe_yield: &&WAmount) -> bool {
+fn usable_yield(recipe_yield: &WAmount) -> bool {
     recipe_yield.value.is_finite() && recipe_yield.value > 0.0
 }
 
@@ -169,8 +195,8 @@ fn usable_yield(recipe_yield: &&WAmount) -> bool {
 /// conversion: the whole point here is to stop the shopping list being
 /// confidently wrong.
 ///
-/// This is the authoritative implementation of yield scaling for needs;
-/// `recipe-tree.ts` keeps a wasm-free approximation for the tree UI only.
+/// This is the single implementation of yield scaling. The tree UI reaches it
+/// through the [`recipe_yield_fraction`] export rather than approximating it.
 pub(crate) fn yield_fraction(recipe_yield: &WAmount, amounts: &[WAmount]) -> Option<f64> {
     // A zero/negative/non-finite yield is not merely useless, it's dangerous:
     // `make_graph` divides by the mapping's value, and the rational conversion
@@ -192,6 +218,34 @@ pub(crate) fn yield_fraction(recipe_yield: &WAmount, amounts: &[WAmount]) -> Opt
     .value();
     // Belt and braces against a saturated rational or a non-positive amount.
     (fraction.is_finite() && fraction > 0.0).then_some(fraction)
+}
+
+/// The batch fraction a parent's written amounts represent, or the reason the
+/// engine declines to guess.
+///
+/// The single ladder behind both [`expand_recipe_needs`] — which turns an `Err`
+/// into a disclosed omission — and the [`recipe_yield_fraction`] export, which
+/// hands the verdict to the tree UI so it can decide its own fallback. Cycle and
+/// UnknownRecipe are deliberately NOT here: those are properties of the
+/// recursion, not of this pair of amounts.
+///
+/// Order matters and mirrors `expand_batch`: a reference with no amount at all
+/// is `NoAmount` even when the sub-recipe also lacks a yield, because that's the
+/// nearer of the two fixes.
+pub fn yield_verdict(
+    recipe_yield: Option<&WAmount>,
+    amounts: &[WAmount],
+) -> Result<f64, WNeedsBlockReason> {
+    if amounts.is_empty() {
+        return Err(WNeedsBlockReason::NoAmount);
+    }
+    // A declared-but-unusable yield (0, negative, non-finite) is reported as
+    // missing rather than unscalable: the fix is "give this recipe a yield", not
+    // "these units don't relate", and that's what the disclosure will say.
+    let Some(recipe_yield) = recipe_yield.filter(|y| usable_yield(y)) else {
+        return Err(WNeedsBlockReason::MissingYield);
+    };
+    yield_fraction(recipe_yield, amounts).ok_or(WNeedsBlockReason::Unscalable)
 }
 
 fn scale_amount(amount: &WAmount, factor: f64) -> WAmount {
@@ -323,21 +377,12 @@ impl<'a> Expander<'a> {
                         out.blocked.push(blocked(WNeedsBlockReason::UnknownRecipe));
                         continue;
                     };
-                    if row.amounts.is_empty() {
-                        out.blocked.push(blocked(WNeedsBlockReason::NoAmount));
-                        continue;
-                    }
-                    // A declared-but-unusable yield (0, negative, non-finite)
-                    // is reported as missing rather than unscalable: the fix is
-                    // "give this recipe a yield", not "these units don't
-                    // relate", and that's what the disclosure will tell you.
-                    let Some(recipe_yield) = sub.recipe_yield.as_ref().filter(usable_yield) else {
-                        out.blocked.push(blocked(WNeedsBlockReason::MissingYield));
-                        continue;
-                    };
-                    let Some(fraction) = yield_fraction(recipe_yield, &row.amounts) else {
-                        out.blocked.push(blocked(WNeedsBlockReason::Unscalable));
-                        continue;
+                    let fraction = match yield_verdict(sub.recipe_yield.as_ref(), &row.amounts) {
+                        Ok(fraction) => fraction,
+                        Err(reason) => {
+                            out.blocked.push(blocked(reason));
+                            continue;
+                        }
                     };
 
                     let expansion = self.batch_for(sub, visited, taint);
@@ -421,6 +466,28 @@ pub fn expand_recipe_needs_impl(input: &WNeedsInput) -> Result<WNeedsResult, Str
 #[wasm_bindgen]
 pub fn expand_recipe_needs(input: WNeedsInput) -> Result<WNeedsResult, String> {
     expand_recipe_needs_impl(&input)
+}
+
+/// How many batches of a sub-recipe a parent's written amounts represent.
+///
+/// The tree UI's counterpart to [`expand_recipe_needs`]: same math, same
+/// decline reasons, one row at a time. The caller decides what a decline means
+/// — the shopping list omits the sub-recipe and discloses it, while the prep
+/// sheet falls back to the costing engine's own batch weight and flags the row.
+/// That fallback can't live here: its denominator is a costing total, and this
+/// module deliberately knows nothing about costing.
+#[wasm_bindgen]
+pub fn recipe_yield_fraction(input: WYieldFractionInput) -> WYieldFraction {
+    match yield_verdict(input.recipe_yield.as_ref(), &input.amounts) {
+        Ok(fraction) => WYieldFraction {
+            fraction: Some(fraction),
+            reason: None,
+        },
+        Err(reason) => WYieldFraction {
+            fraction: None,
+            reason: Some(reason),
+        },
+    }
 }
 
 #[cfg(test)]
@@ -508,6 +575,71 @@ mod tests {
             yield_fraction(&amount("cup", f64::INFINITY), &[amount("cup", 2.0)]),
             None
         );
+    }
+
+    // `yield_verdict` is the ladder `expand_batch` and the wasm export share.
+    // Its reason ordering is load-bearing: it decides which fix a disclosure
+    // asks the user for.
+
+    #[test]
+    fn verdict_reports_a_missing_amount_before_a_missing_yield() {
+        // Both are wrong, but "this line has no amount" is the nearer fix.
+        assert_eq!(yield_verdict(None, &[]), Err(WNeedsBlockReason::NoAmount));
+        assert_eq!(
+            yield_verdict(Some(&amount("cup", 4.0)), &[]),
+            Err(WNeedsBlockReason::NoAmount)
+        );
+    }
+
+    #[test]
+    fn verdict_treats_an_unusable_yield_as_missing() {
+        for bad in [0.0, -4.0, f64::NAN, f64::INFINITY] {
+            assert_eq!(
+                yield_verdict(Some(&amount("cup", bad)), &[amount("cup", 2.0)]),
+                Err(WNeedsBlockReason::MissingYield),
+                "yield value {bad}",
+            );
+        }
+        assert_eq!(
+            yield_verdict(None, &[amount("cup", 2.0)]),
+            Err(WNeedsBlockReason::MissingYield)
+        );
+    }
+
+    #[test]
+    fn verdict_reports_unrelatable_units_as_unscalable() {
+        assert_eq!(
+            yield_verdict(Some(&amount("servings", 8.0)), &[amount("g", 200.0)]),
+            Err(WNeedsBlockReason::Unscalable)
+        );
+    }
+
+    #[test]
+    fn verdict_agrees_with_yield_fraction_on_the_happy_path() {
+        // Guards the shim: the export must not develop its own opinion.
+        let recipe_yield = amount("cup", 4.0);
+        let amounts = [amount("cup", 2.0)];
+        assert_eq!(
+            yield_verdict(Some(&recipe_yield), &amounts).ok(),
+            yield_fraction(&recipe_yield, &amounts),
+        );
+    }
+
+    #[test]
+    fn export_returns_exactly_one_of_fraction_or_reason() {
+        let ok = recipe_yield_fraction(WYieldFractionInput {
+            recipe_yield: Some(amount("cup", 4.0)),
+            amounts: vec![amount("cup", 1.0)],
+        });
+        assert!(ok.fraction.is_some_and(|f| (f - 0.25).abs() < 1e-9));
+        assert!(ok.reason.is_none());
+
+        let declined = recipe_yield_fraction(WYieldFractionInput {
+            recipe_yield: None,
+            amounts: vec![amount("cup", 1.0)],
+        });
+        assert!(declined.fraction.is_none());
+        assert_eq!(declined.reason, Some(WNeedsBlockReason::MissingYield));
     }
 
     #[test]
