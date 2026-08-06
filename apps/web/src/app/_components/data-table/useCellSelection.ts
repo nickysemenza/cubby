@@ -2,6 +2,7 @@ import type { Table as ITable, Row } from "@tanstack/react-table";
 import * as React from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
+import { copyText } from "~/lib/clipboard";
 import { getErrorMessage } from "~/lib/error-utils";
 import { resolveCellClearTarget } from "./cell-clear";
 import { flashElement } from "./cell-clipboard";
@@ -407,9 +408,13 @@ export function useCellSelection<TItem>({
       });
       const tsv = gridToTsv(grid);
       setCopyBuffer(grid, tsv);
-      navigator.clipboard
-        ?.writeText(tsv)
-        .catch(() => toast.error("Couldn't access the clipboard to copy"));
+      // Through `copyText` for its execCommand fallback: range copy is also
+      // reachable by keyboard on iOS, where the async clipboard rejects
+      // outside a trusted gesture. Still no success toast — the ring flash
+      // below is the confirmation.
+      void copyText(tsv).then((copied) => {
+        if (!copied) toast.error("Couldn't access the clipboard to copy");
+      });
       const coords: { row: number; col: number }[] = [];
       for (let r = rect.top; r <= rect.bottom; r++) {
         for (let c = rect.left; c <= rect.right; c++)
