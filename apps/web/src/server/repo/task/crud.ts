@@ -90,16 +90,13 @@ export const TASK_DELETE_EDGE_POLICY = {
   },
 } as const satisfies IncomingEdgePolicy<"task", OperationDisposition>;
 
-/** `taskUpdateData` has no standalone type export — derive it from the input. */
 type TaskUpdateData = TaskUpdateInput["data"];
 
-/** Plain (no relations) row fetch — used for the update-path before/after diff. */
 const fetchTaskRow = (db: Database, id: TaskId) =>
   getDb(db).query.task.findFirst({
     where: and(eq(task.id, id), notDeleted(task)),
   });
 
-/** Row fetch joined to the parent project's name — used for the public reader. */
 const fetchTaskWithProject = (db: Database, id: TaskId) =>
   getDb(db).query.task.findFirst({
     where: and(eq(task.id, id), notDeleted(task)),
@@ -502,16 +499,6 @@ export const updateTask = async (
 };
 
 /**
- * Bulk "move to project" — a plain `projectId` column write over `ids`, one
- * transaction, one audit entry per row that actually changed. `projectId:
- * null` moves every listed task to the inbox. Unlike the single-row
- * `updateTask` there's no before/after row diff to lean on for validation, so
- * the target project's liveness is checked explicitly (`assertProjectLive`) —
- * the UI's project picker already filters to live projects, but the tRPC API
- * is callable directly.
- */
-/** Batch-resolve task shortcodes to live uuids, or throw naming the misses. */
-/**
  * Resolve a bulk selection to live uuids, DROPPING codes that name nothing
  * live. Bulk writes are documented to skip a soft-deleted or unknown id rather
  * than reject the batch; use {@link resolveLiveTaskIdsOrThrow} where a specific
@@ -527,12 +514,20 @@ const resolveLiveTaskIdsOrThrow = (
   shortcodes: TaskShortcode[],
 ): Promise<TaskId[]> => resolveAllOrThrow(tx, "task", shortcodes);
 
-/** Resolve a project shortcode to a live uuid, or throw. */
 const resolveLiveTaskProjectId = (
   tx: DrizzleTransaction,
   shortcode: ProjectShortcode,
 ): Promise<ProjectId> => resolveOrThrow(tx, "project", shortcode);
 
+/**
+ * Bulk "move to project" — a plain `projectId` column write over `ids`, one
+ * transaction, one audit entry per row that actually changed. `projectId:
+ * null` moves every listed task to the inbox. Unlike the single-row
+ * `updateTask` there's no before/after row diff to lean on for validation, so
+ * the target project's liveness is checked explicitly (`assertProjectLive`) —
+ * the UI's project picker already filters to live projects, but the tRPC API
+ * is callable directly.
+ */
 export const moveTasks = async (
   db: Database,
   input: TaskBulkMoveInput,

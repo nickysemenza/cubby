@@ -917,7 +917,6 @@ const deleteRecipesTx = async (
 
   const now = new Date();
 
-  // Get all sections for these recipes
   const sections = await tx.query.recipeSection.findMany({
     where: and(inArray(recipeSection.recipeId, ids), notDeleted(recipeSection)),
     columns: { id: true, recipeId: true },
@@ -925,7 +924,6 @@ const deleteRecipesTx = async (
 
   const sectionIds = sections.map((s) => s.id);
 
-  // Get counts of cascaded items (per recipe) for the audit trail.
   const cascadedImages = await tx.query.recipeImage.findMany({
     where: and(inArray(recipeImage.recipeId, ids), notDeleted(recipeImage)),
     columns: { recipeId: true },

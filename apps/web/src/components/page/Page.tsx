@@ -54,41 +54,27 @@ export function usePageCount(totalCount: number | undefined) {
 }
 
 interface PageBaseProps {
-  /** Page title — the big heading (list) or the spec-plate name (detail). */
   title: ReactNode;
-  /** Override the auto-derived eyebrow. */
   eyebrow?: ReactNode;
-  /** Right-aligned action cluster on the header. */
   actions?: ReactNode;
-  /** Let very wide content breathe instead of capping at the readable column. */
   fullWidth?: boolean;
   children: ReactNode;
 }
 
 interface PageListProps extends PageBaseProps {
-  /** "list" (default) renders the list header. */
   variant?: "list";
-  /** Entity drives the eyebrow path + accent bar. */
   entity?: Entity;
-  /** Smaller title for utility pages (e.g. Ask). */
   compact?: boolean;
-  /** "none" drops the ultramarine accent rule under the title. */
   decoration?: "accent" | "none";
 }
 
 interface PageDetailProps extends PageBaseProps {
   variant: "detail";
-  /** Required on detail — drives the spec-plate eyebrow + ink spine. */
   entity: Entity;
-  /** Status stamp on the plate (e.g. IN STOCK). */
   heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
-  /** Inline ledger stats strip (on hand, value, ...). */
   heroStats?: DetailHeroStat[];
-  /** Reference code shown in the eyebrow (e.g. the product shortcode). */
   heroNo?: string;
-  /** Images shown as a swipeable hero gallery on mobile. */
   heroImages?: Array<{ id: string; url: string; filename: string }>;
-  /** Raw entity used for the "On file since" ledger line. */
   rawData?: unknown;
 }
 

@@ -32,7 +32,6 @@ export const IDInput = z
   })
   .describe("input for retrieving by ID");
 
-/** Delete-tool output: count of rows soft-deleted. */
 export const deletedCountOut = z.object({
   deleted: z.number().int().nonnegative(),
 });

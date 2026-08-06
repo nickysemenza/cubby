@@ -71,7 +71,6 @@ export type ResolvedReconcileSessionPayload = {
   >;
 };
 
-/** Batch fetch inventory entries with full relations, preserving order. */
 async function batchFetchResults(
   tx: DrizzleTransaction,
   resultIds: string[],

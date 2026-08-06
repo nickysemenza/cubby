@@ -40,8 +40,6 @@ describe("bulkProcessInventoryEntries staleness guard", () => {
     return entityId;
   };
 
-  // Add an entry (with a new product) to a location, returning the bulk-op item
-  // that re-submits it unchanged.
   const addEntry = async (locationId: LocationId, productName: string) => {
     const product = await createProduct(
       ctx.db,

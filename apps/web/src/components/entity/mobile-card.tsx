@@ -12,32 +12,20 @@ import { useLongPress } from "~/hooks/useLongPress";
 import { cn } from "~/lib/utils";
 
 interface MobileCardProps {
-  /** Optional selection state - omit for non-selectable cards */
   selectable?: {
     isSelected: boolean;
     onSelectionChange: (checked: boolean) => void;
   };
-  /** Optional actions element (typically a dropdown menu) */
   actions?: ReactNode;
-  /** Main content of the card */
   children?: ReactNode;
-  /** Additional className for the card container */
   className?: string;
-  /** Optional link to details page - renders a visible view button */
   detailsHref?: string;
-  /** Optional title - renders structured header when provided */
   title?: string;
-  /** Optional icon for title */
   titleIcon?: LucideIcon;
-  /** Optional subtitle below title */
   subtitle?: ReactNode;
-  /** Optional image/thumbnail to render left of the title */
   imageSlot?: ReactNode;
-  /** Optional entity type for colored accent border */
   entity?: Entity;
-  /** Optional click handler for the entire card */
   onClick?: () => void;
-  /** Optional touchstart handler (e.g., for route preloading) */
   onTouchStart?: () => void;
   /**
    * Press-and-hold handler — the row variant's way into selection mode, so a
@@ -51,7 +39,6 @@ interface MobileCardProps {
    * - "row": compact row with bottom divider, used by MobileCardView for dense lists
    */
   variant?: "card" | "row";
-  /** Right-aligned values for compact row variant (max 2 lines) */
   rightValues?: ReactNode[];
   /**
    * Parallel array to `rightValues` — `rightValueInteractive[i] === true`

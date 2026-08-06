@@ -104,7 +104,6 @@ export const mcpPaginationParams = {
     .describe("Items per page (default 50, max 100)"),
 };
 
-/** Configurable pageSize field for MCP list tools (locations use max 200). */
 export function mcpPageSizeParam(opts?: {
   defaultPageSize?: number;
   max?: number;
@@ -120,7 +119,6 @@ export function mcpPageSizeParam(opts?: {
     .describe(`Items per page (default ${def}, max ${max})`);
 }
 
-/** Spread into MCP list tool input schemas: filter fields + pagination. */
 export function mcpListInputShape(
   filterFields: Record<string, z.ZodType>,
   opts?: { defaultPageSize?: number; maxPageSize?: number },
