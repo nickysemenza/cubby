@@ -39,7 +39,13 @@ import { vendorSortableFields } from "@cubby/schemas/vendor";
 import { and, asc, desc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { expense, purchase, purchaseImage, vendor } from "~/server/db/schema";
+import {
+  expense,
+  financialTransaction,
+  purchase,
+  purchaseImage,
+  vendor,
+} from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   computeChanges,
@@ -832,6 +838,12 @@ export const previewMergeVendors = async (
     purchaseImage.purchaseId,
     foldedPurchaseIds,
   );
+  const transactionMoveCounts = await countByTarget(
+    dbClient,
+    financialTransaction,
+    financialTransaction.purchaseId,
+    foldedPurchaseIds,
+  );
 
   const sideEffects = present([
     impact({
@@ -853,6 +865,16 @@ export const previewMergeVendors = async (
       },
       label: "documents moved by a fold",
       byTargetId: byVendorFromPurchase(imageMoveCounts),
+    }),
+    impact({
+      disposition: {
+        code: "transitive-financial-transaction-repoint",
+        effect: "repoint",
+        description:
+          "Financial settlement entries on a folded purchase move onto the surviving purchase.",
+      },
+      label: "financial transactions moved by a fold",
+      byTargetId: byVendorFromPurchase(transactionMoveCounts),
     }),
     impact({
       disposition: {

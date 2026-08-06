@@ -4,6 +4,7 @@
  * surviving target before hard-deleting the absorbed rows.
  */
 
+import type { ActorContext } from "@cubby/schemas/context";
 import type {
   ImpactItem,
   MergeCandidate,
@@ -171,6 +172,7 @@ export const mergeIngredients = async (
   db: Database,
   target: IngredientId,
   aliases: IngredientId[],
+  actor: ActorContext,
   opts?: { dryRun?: boolean },
 ): Promise<MergeSummary> => {
   const uniqueAliases = uniq(aliases);
@@ -309,14 +311,16 @@ export const mergeIngredients = async (
     // one call — see `finalizeMerge`'s doc for why those can't be separated.
     // This is the repo's one HARD-delete merge; the hard-deleted rows still get
     // SOFT-deleted embeddings, same as a collapsed inventory source row.
-    // No actor context reaches this signature, so there is no audit entry to
-    // write (see `mergeIngredients`' own signature note).
     await finalizeMerge(tx, {
       entity: "ingredient",
       table: ingredient,
       keepId: target,
       loserIds: uniqueAliases,
       removal: "hard",
+      actor,
+      survivorChanges: {
+        mergedFrom: { from: null, to: uniqueAliases },
+      },
     });
 
     // Correctness floor: flag the absorbed recipes stale atomically with the

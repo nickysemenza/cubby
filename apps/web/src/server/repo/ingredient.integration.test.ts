@@ -4,7 +4,12 @@ import { expenseCreateInput } from "@cubby/schemas/project";
 import { count, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { entityEmbedding, ingredient, recipe } from "~/server/db/schema";
+import {
+  auditLog,
+  entityEmbedding,
+  ingredient,
+  recipe,
+} from "~/server/db/schema";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { upsertImportRecipe } from "~/server/repo/import-recipe-convert";
 import { deleteRecipes } from "~/server/repo/recipe";
@@ -261,7 +266,12 @@ describe("ingredient", () => {
       .set({ totalsComputedAt: new Date() })
       .where(eq(recipe.name, "egg recipe"));
 
-    const summary = await mergeIngredients(ctx.db, a.id, [b.id, c.id]);
+    const summary = await mergeIngredients(
+      ctx.db,
+      a.id,
+      [b.id, c.id],
+      ctx.actor,
+    );
     const [resultAfterMerge] = await getDb(ctx.db)
       .select({ count: count() })
       .from(ingredient);
@@ -292,6 +302,30 @@ describe("ingredient", () => {
     });
     expect(movedRecipe!.totalsComputedAt).toBeNull();
     expect(summary.affectedRecipeIds).toContain(movedRecipe!.id);
+
+    const audit = await getDb(ctx.db)
+      .select({
+        entityId: auditLog.entityId,
+        action: auditLog.action,
+        changes: auditLog.changes,
+      })
+      .from(auditLog)
+      .where(eq(auditLog.entityType, "ingredient"));
+    expect(
+      audit.find(
+        (entry) => entry.entityId === a.id && entry.action === "update",
+      )?.changes?.mergedFrom,
+    ).toEqual({
+      from: null,
+      to: expect.arrayContaining([b.id, c.id]),
+    });
+    for (const entityId of [b.id, c.id]) {
+      expect(
+        audit.filter(
+          (entry) => entry.entityId === entityId && entry.action === "delete",
+        ),
+      ).toHaveLength(1);
+    }
   });
 
   // Removal-path invariant (root CLAUDE.md, guard-enforced): `mergeIngredients`
@@ -319,7 +353,7 @@ describe("ingredient", () => {
         embedding: [0, 0, 0],
       });
 
-    await mergeIngredients(ctx.db, keeper.id, [alias.id]);
+    await mergeIngredients(ctx.db, keeper.id, [alias.id], ctx.actor);
 
     // The alias row is HARD-deleted, so its embedding can't be re-read by id —
     // the only observable proof of cleanup is that it no longer appears as an
@@ -338,9 +372,9 @@ describe("ingredient", () => {
     const a = await findOrCreateIngredient(ctx.db, "self target");
     const b = await findOrCreateIngredient(ctx.db, "self alias");
 
-    await expect(mergeIngredients(ctx.db, a.id, [a.id, b.id])).rejects.toThrow(
-      /itself/i,
-    );
+    await expect(
+      mergeIngredients(ctx.db, a.id, [a.id, b.id], ctx.actor),
+    ).rejects.toThrow(/itself/i);
 
     // Target (and alias) untouched — the old code would have hard-deleted `a`.
     const [survivors] = await getDb(ctx.db)
@@ -353,9 +387,9 @@ describe("ingredient", () => {
     const a = await findOrCreateIngredient(ctx.db, "keeper");
     const bogus = unsafeIngredientId("00000000-0000-0000-0000-000000000000");
 
-    await expect(mergeIngredients(ctx.db, a.id, [bogus])).rejects.toThrow(
-      /not found/i,
-    );
+    await expect(
+      mergeIngredients(ctx.db, a.id, [bogus], ctx.actor),
+    ).rejects.toThrow(/not found/i);
 
     // Nothing changed: the survivor still exists, gained no aliases.
     const keeper = await getDb(ctx.db).query.ingredient.findFirst({
@@ -394,7 +428,12 @@ describe("ingredient", () => {
       .set({ totalsComputedAt: new Date() })
       .where(eq(recipe.name, "pepper recipe"));
 
-    const summary = await mergeIngredients(ctx.db, target.id, [alias.id]);
+    const summary = await mergeIngredients(
+      ctx.db,
+      target.id,
+      [alias.id],
+      ctx.actor,
+    );
 
     // No recipe used the alias, so nothing "moved"…
     expect(summary.recipesMoved).toEqual(0);
@@ -411,7 +450,7 @@ describe("ingredient", () => {
     const a = await findOrCreateIngredient(ctx.db, "dry keeper");
     const b = await findOrCreateIngredient(ctx.db, "dry alias");
 
-    const summary = await mergeIngredients(ctx.db, a.id, [b.id], {
+    const summary = await mergeIngredients(ctx.db, a.id, [b.id], ctx.actor, {
       dryRun: true,
     });
     expect(summary.deletedIds).toEqual([b.shortcode]);

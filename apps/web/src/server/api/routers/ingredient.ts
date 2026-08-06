@@ -230,6 +230,7 @@ const merge = protectedProcedure
       ctx.usdaClient,
       target!,
       aliases,
+      ctx.actorContext,
       {
         dryRun: input.dryRun,
       },

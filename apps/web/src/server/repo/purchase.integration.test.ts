@@ -79,6 +79,7 @@ import {
   getPurchaseExpenses,
   linkExpensesToPurchase,
   mergePurchases,
+  previewMergePurchases,
   purchaseList,
   splitExpense,
   updatePurchase,
@@ -1145,6 +1146,84 @@ describe("purchase repository — mergePurchases", () => {
     // The keeper's rollup now covers both sides' money.
     expect(merged.expenseCount).toBe(2);
     expect(merged.expenseTotal).toBe(30);
+  });
+
+  it("previews settlement movement and audits each absorbed purchase once", async () => {
+    const vendorId = await vendorShortcodeByName(ctx.db, "Settlement Merge");
+    const createCharge = (date: string) =>
+      createPurchase(
+        ctx.db,
+        purchaseCreateInput.parse({ vendorId, date }),
+        ctx.actor,
+      );
+    const { output: keeper } = await createCharge("2024-02-01");
+    const { output: loserA } = await createCharge("2024-02-02");
+    const { output: loserB } = await createCharge("2024-02-03");
+    const keeperId = await purchaseUuid(ctx.db, keeper.id);
+    const loserIds = await Promise.all(
+      [loserA.id, loserB.id].map((id) => purchaseUuid(ctx.db, id)),
+    );
+    const account = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Settlement Merge Card",
+      identity: {
+        kind: "credit_card",
+        issuer: null,
+        network: "visa",
+        last4: "4242",
+      },
+      provisional: false,
+      sourceAliases: [],
+      notes: null,
+    });
+    for (const [index, purchaseId] of loserIds.entries()) {
+      await insertWithShortcode(ctx.db, "financialTransaction", {
+        accountId: account.id,
+        purchaseId,
+        kind: "purchase",
+        status: "posted",
+        amount: index + 1,
+        transactionDate: `2024-02-0${index + 2}`,
+        postedDate: `2024-02-0${index + 3}`,
+        merchant: "Settlement Merge",
+        rawDescription: null,
+        sourceCategory: null,
+        sourceRefs: [],
+        notes: null,
+      });
+    }
+
+    const preview = await previewMergePurchases(ctx.db, {
+      keepId: keeperId,
+      mergeIds: loserIds,
+    });
+    expect(
+      preview.changes.find(
+        (item) => item.edgeKey === "FinancialTransaction.purchaseId",
+      ),
+    ).toMatchObject({
+      label: "financial transactions re-pointed",
+      total: 2,
+      byTargetId: { [loserIds[0]!]: 1, [loserIds[1]!]: 1 },
+    });
+
+    await mergePurchases(
+      ctx.db,
+      { keepId: keeper.id, mergeIds: [loserA.id, loserB.id] },
+      ctx.actor,
+    );
+    for (const loserId of loserIds) {
+      const deleteAudits = await getDb(ctx.db)
+        .select({ id: auditLog.id })
+        .from(auditLog)
+        .where(
+          and(
+            eq(auditLog.entityType, "purchase"),
+            eq(auditLog.entityId, loserId),
+            eq(auditLog.action, "delete"),
+          ),
+        );
+      expect(deleteAudits).toHaveLength(1);
+    }
   });
 
   it("lets the keeper ADOPT a loser's order id when it had none", async () => {

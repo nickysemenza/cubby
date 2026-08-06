@@ -33,12 +33,14 @@ import {
 } from "./purchase";
 import { makeExpenseInput } from "./repo.fixtures";
 import { resolveLiveShortcode } from "./shortcode-resolver";
+import { insertWithShortcode } from "./shortcode-utils";
 import {
   createVendor,
   deleteVendors,
   findOrCreateVendor,
   getVendorByID,
   mergeVendors,
+  previewMergeVendors,
   updateVendor,
   vendorList,
   vendorOptions,
@@ -705,6 +707,52 @@ describe("vendor repository — mergeVendors", () => {
     // The folded charge's money moved to the survivor, it did not disappear
     // with the charge.
     expect(await liveExpenseTotal()).toBe(moneyBefore);
+  });
+
+  it("previews settlement movement caused by a transitive purchase fold", async () => {
+    const keeper = await findOrCreateVendor(ctx.db, "Preview Amazon");
+    const loser = await findOrCreateVendor(ctx.db, "Preview Amazon.com");
+    await charge(keeper, "PREVIEW-FOLD");
+    const dead = await charge(loser, "PREVIEW-FOLD");
+    const account = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Preview Fold Card",
+      identity: {
+        kind: "credit_card",
+        issuer: null,
+        network: "visa",
+        last4: "4242",
+      },
+      provisional: false,
+      sourceAliases: [],
+      notes: null,
+    });
+    await insertWithShortcode(ctx.db, "financialTransaction", {
+      accountId: account.id,
+      purchaseId: dead,
+      kind: "purchase",
+      status: "posted",
+      amount: 25,
+      transactionDate: "2024-02-01",
+      postedDate: "2024-02-02",
+      merchant: "Preview Amazon",
+      rawDescription: null,
+      sourceCategory: null,
+      sourceRefs: [],
+      notes: null,
+    });
+
+    const preview = await previewMergeVendors(ctx.db, {
+      keepId: keeper,
+      mergeIds: [loser],
+    });
+    expect(
+      preview.sideEffects.find(
+        (item) => item.label === "financial transactions moved by a fold",
+      ),
+    ).toMatchObject({
+      total: 1,
+      byTargetId: { [loser]: 1 },
+    });
   });
 
   it("gives the survivor slot to the KEEPER's charge when it holds the order id", async () => {

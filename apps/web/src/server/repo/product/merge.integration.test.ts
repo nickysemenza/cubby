@@ -7,7 +7,12 @@ import type { ProductCreateInput } from "@cubby/schemas/product";
 import { and, eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { inventoryEntry, product, productExternalId } from "~/server/db/schema";
+import {
+  auditLog,
+  inventoryEntry,
+  product,
+  productExternalId,
+} from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { createInventoryEntry } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
@@ -127,6 +132,18 @@ describe("mergeProducts", () => {
     // unique `Product_upc_key` would abort the merge otherwise.
     expect(survivor?.upc).toBe("012345678905");
     expect(summary.carriedFields).toContain("upc");
+    const [audit] = await getDb(ctx.db)
+      .select({ changes: auditLog.changes })
+      .from(auditLog)
+      .where(
+        and(eq(auditLog.entityId, keeper.id), eq(auditLog.action, "update")),
+      );
+    expect(audit?.changes?.carriedOver).toEqual(
+      expect.objectContaining({
+        from: null,
+        to: expect.objectContaining({ upc: "012345678905" }),
+      }),
+    );
   });
 
   it("keeps the survivor's value when both fill the same external-id slot", async () => {
