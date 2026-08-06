@@ -9,6 +9,7 @@ import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { Row } from "~/components/layout";
 import { cn } from "~/lib/utils";
 import { ArrangeMoveTo } from "./ArrangeMoveTo";
+import { ArrangeThumb } from "./ArrangeThumb";
 import {
   isValidItemDrop,
   isValidLocationDrop,
@@ -35,7 +36,8 @@ interface ArrangeLocationCardProps {
  * clickable (opens its children as the next Miller column). The "Move to…"
  * trigger sits OUTSIDE the card element on purpose — native drag doesn't start
  * from inside an interactive child, so nesting it would eat the card's own
- * drag surface.
+ * drag surface. The cover tile is outside for a second reason: it links to the
+ * location's detail page, and an <a> nested in a <button> is invalid HTML.
  */
 export function ArrangeLocationCard({
   node,
@@ -44,6 +46,9 @@ export function ArrangeLocationCard({
   onOpen,
 }: ArrangeLocationCardProps) {
   const ref = useRef<HTMLButtonElement>(null);
+  // The drop target is the whole bordered card, not just the drag handle, so
+  // the cover-link gutter still accepts a drop.
+  const cardRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
   const [isOver, setIsOver] = useState(false);
 
@@ -63,7 +68,7 @@ export function ArrangeLocationCard({
   }, [node.id, roots]);
 
   useEffect(() => {
-    const element = ref.current;
+    const element = cardRef.current;
     if (!element) return;
     return dropTargetForElements({
       element,
@@ -89,12 +94,12 @@ export function ArrangeLocationCard({
 
   return (
     <Row align="center" gap="tight" className="min-w-0">
-      <button
-        ref={ref}
-        type="button"
-        onClick={onOpen}
+      <Row
+        ref={cardRef}
+        align="center"
+        gap="tight"
         className={cn(
-          "flex min-w-0 flex-1 cursor-grab items-center gap-2 rounded border px-2 py-1.5 text-left active:cursor-grabbing" /* tight: card */,
+          "min-w-0 flex-1 rounded border px-2 py-1.5" /* tight: card */,
           active
             ? "border-primary bg-primary/10"
             : "border-[var(--border)] bg-background hover:bg-muted/50",
@@ -102,22 +107,36 @@ export function ArrangeLocationCard({
           dragging && "opacity-40",
         )}
       >
-        <LocationIcon type={node.type} size={16} />
-        <span
-          className="min-w-0 flex-1 truncate font-medium text-sm"
-          title={node.name}
+        <ArrangeThumb
+          images={node.images}
+          alt={node.name}
+          size={24}
+          fallback={<LocationIcon type={node.type} size={14} />}
+          to="/locations/$shortcode"
+          shortcode={node.id}
+        />
+        <button
+          ref={ref}
+          type="button"
+          onClick={onOpen}
+          className="flex min-w-0 flex-1 cursor-grab items-center gap-2 text-left active:cursor-grabbing"
         >
-          {node.name}
-        </span>
-        {count > 0 && (
-          <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
-            {count}
+          <span
+            className="min-w-0 flex-1 truncate font-medium text-sm"
+            title={node.name}
+          >
+            {node.name}
           </span>
-        )}
-        {childCount > 0 && (
-          <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-        )}
-      </button>
+          {count > 0 && (
+            <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
+              {count}
+            </span>
+          )}
+          {childCount > 0 && (
+            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+          )}
+        </button>
+      </Row>
       <ArrangeMoveTo
         target={{
           kind: "location",

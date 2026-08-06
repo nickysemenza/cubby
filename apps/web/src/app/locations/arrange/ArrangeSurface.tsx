@@ -5,11 +5,14 @@ import {
 } from "@tanstack/react-query";
 import { Columns3, ListTree } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { collectTreeProductIds } from "~/app/_components/locations/location-gallery-data";
+import { ProductImageSummariesProvider } from "~/app/_components/products/product-image-summaries";
 import { Row, Stack } from "~/components/layout";
 import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
+import { useHydrated } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
 import { ArrangeBoard } from "./ArrangeBoard";
@@ -24,6 +27,9 @@ const VIEW_OPTIONS: ViewSwitcherOption<ArrangeView>[] = [
   { value: "board", label: "Board", icon: Columns3 },
   { value: "tree", label: "Tree", icon: ListTree },
 ];
+
+/** Stable empty default — a fresh `[]` per render would thrash the image query. */
+const NO_PRODUCT_IDS: string[] = [];
 
 const DEPTH_KEY = "arrange:depth";
 const MIN_DEPTH = 1;
@@ -59,6 +65,27 @@ export function ArrangeSurface({ view, onViewChange }: ArrangeSurfaceProps) {
   }, [depth]);
 
   const unknownRoot = useMemo(() => findUnknownRoot(roots), [roots]);
+
+  // Product covers for the item chips. Derived from the same forest the
+  // locations gallery uses, and `useChunkedRecordQuery` sorts before chunking,
+  // so the two pages share cache entries instead of refetching.
+  //
+  // The hydration gate is load-bearing. `makeTree` above is a *suspense* query,
+  // so `roots` is already populated during SSR — feeding it straight to the
+  // provider fanned ~600 products out into a dozen concurrent
+  // `product.summaries` calls inside the server render, and the whole SSR batch
+  // came back UNAUTHORIZED (taking `makeTree` and even `dashboard.counts` down
+  // with it, so the page rendered its error boundary instead).
+  //
+  // The locations gallery reads the same forest through a plain `useQuery`, so
+  // its `locations` is undefined on the server and the fan-out can't happen —
+  // it gets this property for free. Here it has to be explicit. Covers are
+  // decorative; keep them off the server-render path.
+  const hydrated = useHydrated();
+  const productIds = useMemo(
+    () => (hydrated ? collectTreeProductIds(roots) : NO_PRODUCT_IDS),
+    [hydrated, roots],
+  );
 
   // Create the global "Unknown" staging location once, lazily, only if it's
   // missing — so a first visit provisions it but repeat visits don't re-write.
@@ -103,11 +130,13 @@ export function ArrangeSurface({ view, onViewChange }: ArrangeSurfaceProps) {
         </Row>
       </Row>
 
-      {view === "board" ? (
-        <ArrangeBoard roots={roots} depth={depth} unknownRoot={unknownRoot} />
-      ) : (
-        <ArrangeTree roots={roots} depth={depth} unknownRoot={unknownRoot} />
-      )}
+      <ProductImageSummariesProvider productIds={productIds}>
+        {view === "board" ? (
+          <ArrangeBoard roots={roots} depth={depth} unknownRoot={unknownRoot} />
+        ) : (
+          <ArrangeTree roots={roots} depth={depth} unknownRoot={unknownRoot} />
+        )}
+      </ProductImageSummariesProvider>
     </Stack>
   );
 }

@@ -51,7 +51,7 @@ export function ArrangeColumn({
   return (
     <div
       className={cn(
-        "flex w-60 shrink-0 flex-col rounded-lg border",
+        "flex w-72 shrink-0 flex-col rounded-lg border",
         pinned
           ? "border-[var(--border-strong)] border-dashed"
           : "border-[var(--border)]",
