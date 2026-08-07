@@ -215,13 +215,21 @@ type AncestorRow = {
 /**
  * Root-first ancestor chain for each of `ids`, batched into ONE query.
  *
- * The downward twin of {@link buildLocationTree}, and the reason `getLocationById`'s
+ * The upward twin of {@link buildLocationTree}, and the reason `getLocationById`'s
  * per-level `findFirst` loop must not be reused for list-shaped reads: this
  * costs one round-trip for a whole page instead of one per ancestor per row.
  *
- * A soft-deleted rung TRUNCATES the chain rather than being skipped — showing
- * "Garage › tool chest" when the intervening workbench was deleted would assert
- * a containment that no longer exists.
+ * Deliberately does NOT skip soft-deleted rungs, matching `getLocationById`'s
+ * walk. A picker resolves a typed `LOC-` code through that read and a typed
+ * name through this one, so any divergence here shows the SAME location two
+ * different breadcrumbs depending on how it was found. `Location.parentId` is
+ * `must-target-live` (entity-edge-semantics), so a live location under a
+ * deleted parent is a referential-liveness violation that
+ * `findReferentialLivenessViolations` already reports — it is not a state for
+ * two render paths to paper over in two different ways.
+ *
+ * (`buildLocationTree` does filter deleted rows — going DOWN, a soft-deleted
+ * node must not appear as a row at all. Different question.)
  */
 export const loadLocationAncestors = async (
   db: Database,
@@ -248,7 +256,8 @@ export const loadLocationAncestors = async (
 
       UNION ALL
 
-      -- Recursive case: walk UP to each row's parent (excludes soft-deleted)
+      -- Recursive case: walk UP to each row's parent. No deletedAt filter —
+      -- see the doc comment: this has to match getLocationById's walk.
       SELECT
         a.root,
         l."parentId" AS "parentId",
@@ -258,7 +267,7 @@ export const loadLocationAncestors = async (
         l."type"
       FROM ${location} l
       INNER JOIN ancestors a ON l."id" = a."parentId"
-      WHERE a.depth < ${MAX_TREE_DEPTH} AND l."deletedAt" IS NULL
+      WHERE a.depth < ${MAX_TREE_DEPTH}
     )
     SELECT root, depth, "shortcode", "name", "type"
     FROM ancestors

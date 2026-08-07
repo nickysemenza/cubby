@@ -20,6 +20,7 @@ import {
   locationCreateInput,
   locationFiltersSchema,
   locationListItemOut,
+  locationOptionItemOut,
   locationParentOptionsOut,
   locationPickerItemOut,
   locationPickerSortableFields,
@@ -42,6 +43,7 @@ import {
   getLocationByShortcode,
   getLocationsByShortcodes,
   locationList,
+  locationOptions,
   locationParentOptions,
   locationSearch,
   updateLocation,
@@ -101,13 +103,48 @@ const { list } = createEntityListProcedure({
   entityName: "location",
 });
 
-// Lightweight typeahead for location-picker comboboxes and picklists. Same
-// filters/pagination shape as `list`, but the repo skips the inventory-entry /
-// product / valuation relation load AND the batched product-pricing pass that
-// `list` pays for — none of which a dropdown row renders. What it adds instead
-// is what a dropdown row actually needs: the ancestor breadcrumb and the cover
-// photo. Defaults to name order, not `list`'s `createdAt`, because a typeahead
+/**
+ * Explicit pick, not a spread: the roster reads ignore the date, valuation, and
+ * count filters by design, and their narrowed param type makes that a compile
+ * error rather than a silent drop.
+ */
+const rosterFilters = (filters: z.infer<typeof locationFiltersSchema>) => ({
+  nameFilter: filters.nameFilter,
+  itemTypeFilter: filters.itemTypeFilter,
+  parentId: filters.parentId,
+  parentPresenceFilter: filters.parentPresenceFilter,
+  inventoryPresenceFilter: filters.inventoryPresenceFilter,
+});
+
+// Both roster reads take `list`'s filters/pagination shape but skip the
+// inventory-entry / product / valuation relation load AND the batched
+// product-pricing pass that `list` pays for — none of which a dropdown row
+// renders. Both default to name order, not `list`'s `createdAt`, because a
 // roster in creation order is unscannable.
+
+/** Breadcrumb-only picklist: a name and its ancestry, no thumbnail, no cover load. */
+const { list: options } = createEntityListProcedure({
+  schemas: {
+    output: locationOptionItemOut,
+    filters: locationFiltersSchema,
+    sort: {
+      sortableFields: locationPickerSortableFields,
+      defaultSort: "name",
+    },
+  },
+  repository: {
+    list: async (services, filters, sort, pagination) =>
+      await locationOptions(
+        services.db,
+        rosterFilters(filters),
+        sort,
+        pagination,
+      ),
+  },
+  entityName: "location",
+});
+
+/** Picker typeahead: the same roster plus each row's cover photo. */
 const { list: search } = createEntityListProcedure({
   schemas: {
     output: locationPickerItemOut,
@@ -118,23 +155,13 @@ const { list: search } = createEntityListProcedure({
     },
   },
   repository: {
-    list: async (services, filters, sort, pagination) => {
-      // Explicit pick, not a spread: `locationSearch` ignores the date,
-      // valuation, and count filters by design, and its narrowed param type
-      // makes that a compile error rather than a silent drop.
-      return await locationSearch(
+    list: async (services, filters, sort, pagination) =>
+      await locationSearch(
         services.db,
-        {
-          nameFilter: filters.nameFilter,
-          itemTypeFilter: filters.itemTypeFilter,
-          parentId: filters.parentId,
-          parentPresenceFilter: filters.parentPresenceFilter,
-          inventoryPresenceFilter: filters.inventoryPresenceFilter,
-        },
+        rosterFilters(filters),
         sort,
         pagination,
-      );
-    },
+      ),
   },
   entityName: "location",
 });
@@ -318,6 +345,7 @@ const recomputeValuations = protectedProcedure
 export const locationRouter = createTRPCRouter({
   list,
   search,
+  options,
   getByID,
   getByShortcode,
   getByShortcodes,

@@ -18,6 +18,7 @@ import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type {
   InfLocation,
   LocationCreateInput,
+  LocationOptionItemOut,
   LocationPickerItemOut,
   LocationUpdateInput,
 } from "@cubby/schemas/location";
@@ -857,30 +858,36 @@ const loadLocationCoverImages = async (
 };
 
 /**
- * Lightweight location search for typeahead/picker comboboxes.
- *
- * Returns the picker shape only — scalar columns plus the ancestor breadcrumb
- * and cover photo a dropdown row needs to tell repeated names apart. It
- * deliberately skips the inventory-entry / product / valuation relation load
- * AND the batched product-pricing pass that `locationList` pays for, none of
- * which a picker renders. Same split as `productSearch`.
+ * Filters the roster reads accept. Narrowed on purpose: these paths ignore the
+ * date/valuation/count filters, and the type should say so rather than accept
+ * the full LocationFilters and silently drop them.
  */
-export const locationSearch = async (
+type LocationRosterFilters = Pick<
+  LocationFilters,
+  | "nameFilter"
+  | "itemTypeFilter"
+  | "parentId"
+  | "parentPresenceFilter"
+  | "inventoryPresenceFilter"
+>;
+
+/**
+ * The shared body of both roster reads: one scalar page + its breadcrumbs.
+ *
+ * Skips the inventory-entry / product / valuation relation load AND the
+ * batched product-pricing pass that `locationList` pays for, none of which a
+ * dropdown renders. Same split as `productSearch`.
+ */
+const locationRosterPage = async (
   db: Database,
-  // Narrowed on purpose: this path ignores the date/valuation/count filters,
-  // and the type should say so rather than accept the full LocationFilters and
-  // silently drop them.
-  filters: Pick<
-    LocationFilters,
-    | "nameFilter"
-    | "itemTypeFilter"
-    | "parentId"
-    | "parentPresenceFilter"
-    | "inventoryPresenceFilter"
-  >,
+  filters: LocationRosterFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-): Promise<{ data: LocationPickerItemOut[]; count: number }> => {
+): Promise<{
+  data: LocationOptionItemOut[];
+  ids: LocationId[];
+  count: number;
+}> => {
   const parentCodes = filters.parentId ? [filters.parentId].flat() : [];
   const parentIds = await resolveAllPresent(db, "location", parentCodes);
   // A requested-but-unresolvable parent must match nothing rather than widening
@@ -943,11 +950,8 @@ export const locationSearch = async (
     countWhere(db, location, whereClause),
   );
 
-  const pageIds = results.map((row) => row.id);
-  const [ancestorsById, coverById] = await Promise.all([
-    loadLocationAncestors(db, pageIds),
-    loadLocationCoverImages(db, pageIds),
-  ]);
+  const ids = results.map((row) => row.id);
+  const ancestorsById = await loadLocationAncestors(db, ids);
 
   const data = results.map((row) => ({
     id: unsafeLocationShortcode(row.shortcode),
@@ -959,10 +963,57 @@ export const locationSearch = async (
     }),
     aliases: row.aliases ?? [],
     ancestors: ancestorsById.get(row.id) ?? [],
-    coverImage: coverById.get(row.id) ?? null,
   }));
 
-  return { data, count: totalCount };
+  return { data, ids, count: totalCount };
+};
+
+/**
+ * Breadcrumb-only roster — for filter picklists, which render a name and its
+ * ancestry and nothing else. Skips the cover-image load entirely; the product
+ * list pulls 500 of these on every options load and draws no thumbnails.
+ */
+export const locationOptions = async (
+  db: Database,
+  filters: LocationRosterFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+): Promise<{ data: LocationOptionItemOut[]; count: number }> => {
+  const { data, count } = await locationRosterPage(
+    db,
+    filters,
+    sorts,
+    pagination,
+  );
+  return { data, count };
+};
+
+/**
+ * Location typeahead for picker comboboxes — the roster plus each row's cover
+ * photo, which is the other half of telling two same-named shelves apart.
+ */
+export const locationSearch = async (
+  db: Database,
+  filters: LocationRosterFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+): Promise<{ data: LocationPickerItemOut[]; count: number }> => {
+  const { data, ids, count } = await locationRosterPage(
+    db,
+    filters,
+    sorts,
+    pagination,
+  );
+  const coverById = await loadLocationCoverImages(db, ids);
+
+  return {
+    data: data.map((row, index) => ({
+      ...row,
+      // `ids` is the same page in the same order — `data` is a 1:1 map of it.
+      coverImage: coverById.get(ids[index]!) ?? null,
+    })),
+    count,
+  };
 };
 
 export const updateLocationAiDescription = async (

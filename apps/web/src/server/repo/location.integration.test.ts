@@ -13,6 +13,7 @@ import {
   findOrCreateLocationByName,
   getLocationById,
   locationList,
+  locationOptions,
   locationSearch,
   updateLocation,
 } from "./location";
@@ -252,8 +253,12 @@ describe("locationSearch picker rows", () => {
     expect(found.data[0]!.ancestors).toEqual([]);
   });
 
-  it("truncates the chain at a soft-deleted ancestor rather than skipping it", async () => {
-    const [root, middle, , leaf] = await makeChain([
+  // A picker resolves a typed name through locationSearch and a typed `LOC-`
+  // code through getLocationById's nested parent chain. If the two walks
+  // disagreed about soft-deleted rungs, the SAME location would render two
+  // different breadcrumbs depending on how the user found it.
+  it("agrees with getLocationById's parent chain when an ancestor is soft-deleted", async () => {
+    const [, middle, , leaf] = await makeChain([
       "Live Root",
       "Doomed Middle",
       "Live Inner",
@@ -264,14 +269,19 @@ describe("locationSearch picker rows", () => {
       .set({ deletedAt: new Date() })
       .where(eq(location.id, await idOf(middle!.id)));
 
-    // "Live Root › Live Inner" would assert a containment that no longer
-    // exists — the visible path has to stop at the gap.
+    const detail = await getLocationById(ctx.db, await idOf(leaf!.id));
+    const detailChain: string[] = [];
+    for (let node = detail.parent; node; node = node.parent) {
+      detailChain.unshift(node.name);
+    }
+
     const found = await searchFor("Deep Bin");
     expect(found.data[0]!.id).toBe(leaf!.id);
-    expect(found.data[0]!.ancestors.map((a) => a.name)).toEqual(["Live Inner"]);
-    expect(found.data[0]!.ancestors.map((a) => a.name)).not.toContain(
-      root!.name,
-    );
+    expect(found.data[0]!.ancestors.map((a) => a.name)).toEqual(detailChain);
+    // Both keep the deleted rung: Location.parentId is `must-target-live`, so
+    // this state is a referential-liveness violation the Problems detector
+    // reports — not something two render paths should paper over differently.
+    expect(detailChain).toEqual(["Live Root", "Doomed Middle", "Live Inner"]);
   });
 
   it("stops walking up at the depth cap", async () => {
@@ -336,6 +346,42 @@ describe("locationSearch picker rows", () => {
 
     const found = await searchFor("Bare Bin");
     expect(found.data[0]!.coverImage).toBeNull();
+  });
+
+  // The breadcrumb-only roster must not carry a `coverImage` key at all —
+  // a `null` there would be indistinguishable from "this location has no
+  // photo", and the whole point of the split is that picklists don't pay the
+  // LocationImage⨝Image load or ship ImageOut they never draw.
+  it("omits coverImage entirely from the breadcrumb-only roster", async () => {
+    const [, leaf] = await makeChain(["Optioned Room", "Optioned Bin"]);
+    const entityId = await idOf(leaf!.id);
+    const img = await insertAndReturn(ctx.db, image, {
+      key: "optioned-bin",
+      url: "https://example.com/optioned-bin.png",
+      filename: "optioned-bin.png",
+      contentType: "image/png",
+      size: 100,
+      status: "UPLOADED",
+    });
+    await insertAndReturn(ctx.db, locationImage, {
+      locationId: entityId,
+      imageId: img.id,
+    });
+
+    const options = await locationOptions(
+      ctx.db,
+      { nameFilter: "Optioned Bin" },
+      [{ orderBy: "name", direction: "asc" }],
+      { pageIndex: 0, pageSize: 50 },
+    );
+    expect(options.data[0]!.ancestors.map((a) => a.name)).toEqual([
+      "Optioned Room",
+    ]);
+    expect(options.data[0]).not.toHaveProperty("coverImage");
+
+    // Same location, same page — the picker read still resolves the cover.
+    const found = await searchFor("Optioned Bin");
+    expect(found.data[0]!.coverImage?.id).toBe(img.id);
   });
 });
 

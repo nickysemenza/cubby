@@ -166,20 +166,36 @@ export const locationParentOptionsOut = z.object({
 export type LocationParentOptionsOut = z.infer<typeof locationParentOptionsOut>;
 
 /**
- * Picker/typeahead row. Scalar columns plus the two things a dropdown needs to
- * tell repeated names apart: the ancestor chain and the cover photo.
+ * Breadcrumb-only roster row — scalar columns plus the ancestor chain that
+ * tells repeated names apart ("shelf 1" exists in four rooms).
  *
  * Deliberately NOT `locationListItemOut` — that shape carries every inventory
- * entry, its full product embed, and a batched pricing pass that a picker
- * discards on every keystroke. Same split as `productPickerItemOut`.
+ * entry, its full product embed, and a batched pricing pass that a picklist
+ * discards. Same split as `productPickerItemOut`.
  */
-export const locationPickerItemOut = z.object({
+const locationOptionItemFields = {
   id: locationShortcode,
   name: z.string(),
   type: locationType,
   aliases: z.array(z.string()).default([]),
   /** Root → immediate parent. Empty for a top-level location. */
   ancestors: z.array(locationAncestorOut),
+};
+
+export const locationOptionItemOut = z.object(locationOptionItemFields);
+export type LocationOptionItemOut = z.infer<typeof locationOptionItemOut>;
+
+/**
+ * A roster row for a surface that also draws a thumbnail.
+ *
+ * `coverImage` is a separate SHAPE rather than a nullable field on
+ * `locationOptionItemOut` on purpose: consumers that never draw a thumbnail
+ * shouldn't pay the LocationImage⨝Image load or carry ~400 bytes of ImageOut
+ * per row, and a `null` that meant "not requested" as well as "no photo" would
+ * be the kind of ambiguity a reader can't resolve.
+ */
+export const locationPickerItemOut = z.object({
+  ...locationOptionItemFields,
   /** First displayable image by `imageOrder`; null when the location has none. */
   coverImage: imageOut.nullable(),
 });

@@ -29,6 +29,7 @@ export {
   getLocationById,
   isGlobalUnknownLocation,
   locationList,
+  locationOptions,
   locationSearch,
   updateLocation,
   updateLocationAiDescription,
