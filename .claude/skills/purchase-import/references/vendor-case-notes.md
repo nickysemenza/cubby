@@ -40,9 +40,9 @@ source.
   per-component allocation.
 - Orders rung up without the Pro Xtra account never appear in the export at all,
   so absence there is not evidence a purchase did not happen.
-- Return quantities remain positive while the Expense cost is negative. Preserve
-  source tax/discount rounding and explain any residual rather than redistributing
-  it silently.
+- A return is an exit: the Expense cost is negative and its `productQuantity` is
+  negative too, `−|units returned|`. Preserve source tax/discount rounding and
+  explain any residual rather than redistributing it silently.
 - Marketplace listing exports contain asking prices and listing dates; a
   `Sold` state can include cancellation or cross-listed inventory. Seek actual
   settlement before booking a sale.

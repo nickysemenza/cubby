@@ -111,7 +111,9 @@ marketplace's own **order earnings** figure — not the item price. Earnings are
 what actually reached the account; item price, buyer-paid shipping, transaction
 fee, shipping label and ad fee belong in the note, not in separate rows.
 Marketplace-collected sales tax is excluded entirely: the marketplace remits it,
-so it was never seller money. Set `statedTotal` to the same earnings figure.
+so it was never seller money. Set `statedTotal` to the same earnings figure. A
+sale line is an exit like any other: its `productQuantity` is `−|units sold|`
+(EXP-GW5X), never positive.
 
 The payout is `kind: "income"` and links to the sale Purchase; linked income
 must be negative. It is **not** a `refund` — that means "the vendor gave money

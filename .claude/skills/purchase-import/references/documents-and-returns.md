@@ -85,6 +85,8 @@ and unit ticks (`20'`, `5'`) distinguish feet from pieces.
 File refund Expenses and Financial Transactions on the original Purchase.
 
 - Full return: a negative Expense can offset the original line on that Purchase.
+  Sign its `productQuantity` negative as well — `−|units returned|` — unless the
+  credit is a price concession that returned no unit, which takes null.
 - Partial refund on a multi-item order: preserve the actual kept-item cost;
   never change stated total merely to hide the difference.
 - A return where neither charge nor refund is in the ledger needs no synthetic

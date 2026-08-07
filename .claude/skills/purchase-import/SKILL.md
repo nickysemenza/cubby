@@ -173,9 +173,24 @@ Expense → Purchase ← FinancialTransaction → FinancialAccount
   receipt, PDF, or notes establish a whole-unit count, also write
   `productQuantity`; the derived per-unit price comes from cost divided by that
   quantity. Never replace the extended cost with a unit price.
-- Leave `productQuantity` null when the count is unknown, and never assume one.
-  For an evidenced return, keep the returned-unit count positive on the
-  negative Expense; negative costs do not participate in acquisition pricing.
+- `productQuantity` is **signed and never zero**, and money direction wins: a
+  positive-cost line is an acquisition of `+|qty|`, and a negative-cost line —
+  return, refund, disposal, sale — is an exit of `−|qty|`, so write the sign
+  yourself. An evidenced one-unit return carries `productQuantity: -1` (EXP-5BKQ
+  Amazon customer return, EXP-GW5X eBay sale), not `1`; a positive quantity there
+  still *reads* as an exit, but it makes the stored column lie, which is what a
+  302-row re-signing sweep on 2026-08-06 had to undo. On a `$0` line the sign is
+  the entire fact: positive is a free acquisition (promo pack, bundled
+  accessory), negative is a discard or write-off. A positive-cost line may not
+  carry a negative quantity — that is rejected at write time. Negative costs
+  still do not participate in acquisition pricing, which reads positive-cost
+  lines only.
+- Leave `productQuantity` null only when the count is genuinely unknown, and
+  never assume one. Null is also the right answer on a negative-cost line where
+  no unit left: an Amazon `Account adjustment` is a price concession with the
+  item kept, so it takes null rather than `−1` — negating it would zero that
+  Product's unit count and divide its derived price by zero. Classify by the
+  evidenced reversal reason, never by the product name.
 - Keep quantity evidence in the Purchase paperwork or existing notes and cite
   it in the approval table. Do not invent `productQuantitySource` or separate
   evidence fields.
