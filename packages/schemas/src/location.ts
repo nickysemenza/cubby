@@ -76,6 +76,19 @@ export const locationSortableFields = [
 
 export type LocationSortField = (typeof locationSortableFields)[number];
 
+/**
+ * What the picker endpoint can actually order by. Narrower than
+ * `locationSortableFields` on purpose — `locationSearch` loads no relations, so
+ * the joined/rollup sorts (parent name, valuation, inventory count) have
+ * nothing to sort on and must not be advertised.
+ */
+export const locationPickerSortableFields = [
+  "name",
+  "type",
+  "createdAt",
+  "updatedAt",
+] as const;
+
 // Per-category counts for a location's inventory (matches the client's
 // PricingStatus buckets in calculate-inventory-valuation).
 const pricingCounts = z.object({
@@ -127,6 +140,18 @@ export const locationListRefOut = z.object({
 export type LocationListRefOut = z.infer<typeof locationListRefOut>;
 
 /**
+ * One rung of a location's ancestor chain. Ordered root-first and never
+ * includes the location itself, so a dropdown row can disambiguate the many
+ * legitimately-repeated names in the tree ("shelf 1" exists in four rooms).
+ */
+export const locationAncestorOut = z.object({
+  id: locationShortcode,
+  name: z.string(),
+  type: locationType,
+});
+export type LocationAncestorOut = z.infer<typeof locationAncestorOut>;
+
+/**
  * Lightweight `{id, name}` roster for the location filter's `parentLocation`
  * picklist (see `useLocationParentOptions`) — only locations with at least
  * one live child (repo/location/lookup.ts's `locationParentOptions`), not the
@@ -135,8 +160,46 @@ export type LocationListRefOut = z.infer<typeof locationListRefOut>;
 export const locationParentOptionsOut = z.object({
   id: locationShortcode,
   name: z.string(),
+  /** Root → immediate parent. Empty for a top-level location. */
+  ancestors: z.array(locationAncestorOut),
 });
 export type LocationParentOptionsOut = z.infer<typeof locationParentOptionsOut>;
+
+/**
+ * Breadcrumb-only roster row — scalar columns plus the ancestor chain that
+ * tells repeated names apart ("shelf 1" exists in four rooms).
+ *
+ * Deliberately NOT `locationListItemOut` — that shape carries every inventory
+ * entry, its full product embed, and a batched pricing pass that a picklist
+ * discards. Same split as `productPickerItemOut`.
+ */
+const locationOptionItemFields = {
+  id: locationShortcode,
+  name: z.string(),
+  type: locationType,
+  aliases: z.array(z.string()).default([]),
+  /** Root → immediate parent. Empty for a top-level location. */
+  ancestors: z.array(locationAncestorOut),
+};
+
+export const locationOptionItemOut = z.object(locationOptionItemFields);
+export type LocationOptionItemOut = z.infer<typeof locationOptionItemOut>;
+
+/**
+ * A roster row for a surface that also draws a thumbnail.
+ *
+ * `coverImage` is a separate SHAPE rather than a nullable field on
+ * `locationOptionItemOut` on purpose: consumers that never draw a thumbnail
+ * shouldn't pay the LocationImage⨝Image load or carry ~400 bytes of ImageOut
+ * per row, and a `null` that meant "not requested" as well as "no photo" would
+ * be the kind of ambiguity a reader can't resolve.
+ */
+export const locationPickerItemOut = z.object({
+  ...locationOptionItemFields,
+  /** First displayable image by `imageOrder`; null when the location has none. */
+  coverImage: imageOut.nullable(),
+});
+export type LocationPickerItemOut = z.infer<typeof locationPickerItemOut>;
 
 const locationProductCategory = z.enum(productCategoryValues);
 

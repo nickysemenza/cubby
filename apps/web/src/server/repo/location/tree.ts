@@ -1,5 +1,6 @@
 import {
   unsafeInventoryShortcode,
+  unsafeLocationShortcode,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 /**
@@ -11,8 +12,11 @@ import type { LocationId } from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
   InventoryItemForTree,
+  LocationAncestorOut,
 } from "@cubby/schemas/location";
+import { locationType } from "@cubby/schemas/location";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { parseWithContext } from "~/lib/zod-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   type image,
@@ -30,6 +34,9 @@ import {
 
 import { buildLocationWithChildren } from "./helpers";
 import type { LocationWithParentChild } from "./internal-types";
+
+/** Depth cap shared by both recursive walks over the location tree. */
+const MAX_TREE_DEPTH = 10;
 
 /**
  * Build the location hierarchy as `InfLocation` roots.
@@ -60,7 +67,7 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
         lt.depth + 1 as depth
       FROM ${location} l
       INNER JOIN location_tree lt ON l."parentId" = lt.id
-      WHERE lt.depth < 10 AND l."deletedAt" IS NULL
+      WHERE lt.depth < ${MAX_TREE_DEPTH} AND l."deletedAt" IS NULL
     )
     SELECT * FROM location_tree
     ORDER BY depth, name
@@ -193,6 +200,97 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
     return buildLocationWithChildren(x, undefined, false);
   });
   return tree;
+};
+
+// A type alias, not an interface: `execute<T>` constrains T to
+// `Record<string, unknown>`, which an interface can't satisfy implicitly.
+type AncestorRow = {
+  root: LocationId;
+  depth: number;
+  shortcode: string;
+  name: string;
+  type: string;
+};
+
+/**
+ * Root-first ancestor chain for each of `ids`, batched into ONE query.
+ *
+ * The upward twin of {@link buildLocationTree}, and the reason `getLocationById`'s
+ * per-level `findFirst` loop must not be reused for list-shaped reads: this
+ * costs one round-trip for a whole page instead of one per ancestor per row.
+ *
+ * Deliberately does NOT skip soft-deleted rungs, matching `getLocationById`'s
+ * walk. A picker resolves a typed `LOC-` code through that read and a typed
+ * name through this one, so any divergence here shows the SAME location two
+ * different breadcrumbs depending on how it was found. `Location.parentId` is
+ * `must-target-live` (entity-edge-semantics), so a live location under a
+ * deleted parent is a referential-liveness violation that
+ * `findReferentialLivenessViolations` already reports — it is not a state for
+ * two render paths to paper over in two different ways.
+ *
+ * (`buildLocationTree` does filter deleted rows — going DOWN, a soft-deleted
+ * node must not appear as a row at all. Different question.)
+ */
+export const loadLocationAncestors = async (
+  db: Database,
+  ids: LocationId[],
+): Promise<Map<LocationId, LocationAncestorOut[]>> => {
+  const byId = new Map<LocationId, LocationAncestorOut[]>();
+  if (ids.length === 0) return byId;
+
+  const res = await getDb(db).execute<AncestorRow>(sql`
+    WITH RECURSIVE ancestors AS (
+      -- Base case: the seed rows themselves, carrying their own id as \`root\`
+      -- so every ancestor stays attributable to the row that asked for it.
+      -- Unaliased on purpose: \`inArray\` renders the real table name, and a
+      -- hand-rolled \`IN \${ids}\` would be the row-constructor trap.
+      SELECT
+        ${location.id} AS root,
+        ${location.parentId} AS "parentId",
+        0 AS depth,
+        ${location.shortcode},
+        ${location.name},
+        ${location.type}
+      FROM ${location}
+      WHERE ${inArray(location.id, ids)}
+
+      UNION ALL
+
+      -- Recursive case: walk UP to each row's parent. No deletedAt filter —
+      -- see the doc comment: this has to match getLocationById's walk.
+      SELECT
+        a.root,
+        l."parentId" AS "parentId",
+        a.depth + 1 AS depth,
+        l."shortcode",
+        l."name",
+        l."type"
+      FROM ${location} l
+      INNER JOIN ancestors a ON l."id" = a."parentId"
+      WHERE a.depth < ${MAX_TREE_DEPTH}
+    )
+    SELECT root, depth, "shortcode", "name", "type"
+    FROM ancestors
+    WHERE depth > 0
+    ORDER BY root, depth DESC
+  `);
+
+  // `depth DESC` already puts the outermost ancestor first, so each group is
+  // root → immediate parent in arrival order.
+  for (const row of res.rows) {
+    const chain = byId.get(row.root);
+    const rung: LocationAncestorOut = {
+      id: unsafeLocationShortcode(row.shortcode),
+      name: row.name,
+      type: parseWithContext(locationType, row.type, {
+        entityType: "Location",
+        identifier: { id: row.shortcode, name: row.name },
+      }),
+    };
+    if (chain) chain.push(rung);
+    else byId.set(row.root, [rung]);
+  }
+  return byId;
 };
 
 /**

@@ -21,6 +21,12 @@ export type ComboboxItem<TId extends string = string> = {
   aliases?: string[];
   /** Compact secondary row metadata (manufacturer, location type, etc.). */
   secondary?: string;
+  /**
+   * Second-line context under the name — a location's ancestor breadcrumb.
+   * Distinct from `secondary`, which is a short trailing tag on the name line:
+   * this is the longer disambiguator that earns its own row.
+   */
+  detail?: string;
 };
 
 export type PickerEntity =

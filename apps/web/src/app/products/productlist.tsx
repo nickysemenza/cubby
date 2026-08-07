@@ -160,8 +160,13 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
   const { options: tagOptions } = useProductTagOptions();
   const { options: projectOptions } = useProjectOptions();
+  // `location.options`, not `.list` or `.search`: this is a 500-row picklist
+  // that renders name + breadcrumb only. `.list` would drag every row's
+  // inventory entries, product embeds, and a pricing pass along with it, and
+  // `.search` would add a cover-image load plus ~400 bytes of ImageOut per row
+  // for thumbnails this surface never draws.
   const locationOptionsQuery = useQuery(
-    api.location.list.queryOptions({
+    api.location.options.queryOptions({
       filters: { inventoryPresenceFilter: "has" },
       sort: { orderBy: "name", direction: "asc" },
       pagination: { pageIndex: 0, pageSize: 500 },
@@ -179,9 +184,10 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   );
   const locationOptions = useMemo<FilterableComboboxItem[]>(
     () =>
-      locationOptionsQuery.data?.items.map(({ id, name }) => ({
+      locationOptionsQuery.data?.items.map(({ id, name, ancestors }) => ({
         value: id,
         label: name,
+        detail: ancestors.map((a) => a.name).join(" › ") || undefined,
       })) ?? NO_FILTER_OPTIONS,
     [locationOptionsQuery.data],
   );

@@ -7,9 +7,11 @@ import type {
   TaskShortcode,
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
-import type { LocationType } from "@cubby/schemas/location";
+import { isDisplayableImageFile } from "@cubby/schemas/image";
+import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
-import { LocationIcon } from "~/app/_components/locations/location-icons";
+import { locationToSegments } from "~/app/_components/locations/location-breadcrumb";
+import { LocationPickerThumb } from "~/app/_components/locations/location-picker-thumb";
 import { ProjectMark } from "~/app/projects/project-mark";
 import { VendorMark } from "~/components/entity/vendor-cell";
 import { EntityIcon } from "~/entities/entities";
@@ -30,25 +32,51 @@ export const buildProductComboboxItem = (product: {
   icon: <EntityIcon entity="product" size={14} colored />,
 });
 
+/**
+ * `ancestors` and `coverImage` are optional because three shapes feed this
+ * builder: the search endpoint (both present), a by-shortcode read (ancestors
+ * derived from its nested parent chain, see `locationToSegments`), and a
+ * freshly-created location (neither — it has no parent chain loaded yet).
+ */
 export const buildLocationComboboxItem = (location: {
   id: LocationShortcode;
   name: string;
   type: LocationType;
   aliases?: string[] | null;
+  ancestors?: Array<{ name: string }> | null;
+  coverImage?: { url: string } | null;
 }): ComboboxItem<LocationShortcode> => ({
   id: location.id,
   shortcode: location.id,
   name: location.name,
   aliases: location.aliases ?? [],
   secondary: location.type,
+  detail: location.ancestors?.length
+    ? location.ancestors.map((ancestor) => ancestor.name).join(" › ")
+    : undefined,
   icon: (
-    <LocationIcon
+    <LocationPickerThumb
+      imageUrl={location.coverImage?.url}
       type={location.type}
-      size={14}
-      className="text-muted-foreground"
     />
   ),
 });
+
+/**
+ * Same row, built from a detail-shaped location — a by-shortcode read or a
+ * just-created one. Those carry the ancestor chain nested under `parent` and
+ * the full image list, rather than the flat `ancestors` / `coverImage` the
+ * search endpoint returns.
+ */
+export const buildLocationComboboxItemFromDetail = (
+  location: InfLocation,
+): ComboboxItem<LocationShortcode> =>
+  buildLocationComboboxItem({
+    ...location,
+    // `locationToSegments` is root→leaf and includes the location itself.
+    ancestors: locationToSegments(location).slice(0, -1),
+    coverImage: location.images.find(isDisplayableImageFile) ?? null,
+  });
 
 export const buildIngredientComboboxItem = (ingredient: {
   id: IngredientShortcode;

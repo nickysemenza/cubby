@@ -29,6 +29,7 @@ import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { getLocationById } from "./crud";
 import { dbLocationToAPI } from "./helpers";
+import { loadLocationAncestors } from "./tree";
 
 // Self-join alias for the child-existence check in `locationParentOptions` —
 // the outer query and the EXISTS subquery both read the `location` table, and
@@ -54,7 +55,11 @@ export const locationParentOptions = async (
 ): Promise<LocationParentOptionsOut[]> => {
   const dbClient = getDb(db);
   const rows = await dbClient
-    .select({ shortcode: location.shortcode, name: location.name })
+    .select({
+      id: location.id,
+      shortcode: location.shortcode,
+      name: location.name,
+    })
     .from(location)
     .where(
       and(
@@ -73,9 +78,17 @@ export const locationParentOptions = async (
       ),
     )
     .orderBy(asc(location.name));
+
+  // "shelf 1" appears in four rooms; the picklist is unusable without the
+  // chain that tells them apart.
+  const ancestorsById = await loadLocationAncestors(
+    db,
+    rows.map((row) => row.id),
+  );
   return rows.map((row) => ({
     id: unsafeLocationShortcode(row.shortcode),
     name: row.name,
+    ancestors: ancestorsById.get(row.id) ?? [],
   }));
 };
 

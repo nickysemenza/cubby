@@ -25,7 +25,13 @@ export function matchesPickerItem(
 ): boolean {
   const query = rawQuery.trim().toLocaleLowerCase();
   if (!query) return true;
-  return [item.name, item.shortcode, item.secondary, ...(item.aliases ?? [])]
+  return [
+    item.name,
+    item.shortcode,
+    item.secondary,
+    item.detail,
+    ...(item.aliases ?? []),
+  ]
     .filter((part): part is string => !!part)
     .some((part) => part.toLocaleLowerCase().includes(query));
 }
@@ -259,7 +265,12 @@ export function EntityPicker<TId extends string>({
                 <ComboboxPrimitive.Item
                   key={item.id}
                   value={item}
-                  aria-label={[item.name, item.secondary, item.shortcode]
+                  aria-label={[
+                    item.name,
+                    item.secondary,
+                    item.detail,
+                    item.shortcode,
+                  ]
                     .filter(Boolean)
                     .join(" ")}
                   className={cn(
@@ -279,13 +290,20 @@ export function EntityPicker<TId extends string>({
                   {renderItem ? (
                     <span className="min-w-0 flex-1">{renderItem(item)}</span>
                   ) : (
-                    <span className="flex min-w-0 flex-1 items-baseline gap-2">
-                      <span className="min-w-0 flex-1 truncate">
-                        {item.name}
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="flex min-w-0 items-baseline gap-2">
+                        <span className="min-w-0 flex-1 truncate">
+                          {item.name}
+                        </span>
+                        {item.secondary && (
+                          <span className="max-w-40 truncate text-muted-foreground text-xs">
+                            {item.secondary}
+                          </span>
+                        )}
                       </span>
-                      {item.secondary && (
-                        <span className="max-w-40 truncate text-muted-foreground text-xs">
-                          {item.secondary}
+                      {item.detail && (
+                        <span className="truncate text-muted-foreground text-xs">
+                          {item.detail}
                         </span>
                       )}
                     </span>

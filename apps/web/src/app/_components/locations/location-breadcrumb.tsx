@@ -15,7 +15,7 @@ import { getDefaultLocationType } from "~/lib/location-path";
 import { cn } from "~/lib/utils";
 import { LocationIcon } from "./location-icons";
 
-interface LocationSegment {
+export interface LocationSegment {
   id?: string;
   name: string;
   type: LocationType;
@@ -24,8 +24,12 @@ interface LocationSegment {
 /**
  * Convert an InfLocation (with parent chain) to an array of LocationSegments.
  * Returns segments from root to leaf.
+ *
+ * Exported because the same walk is how a picker row derives its breadcrumb for
+ * a location fetched by shortcode — that read carries a nested `parent` chain
+ * rather than the flat `ancestors` the search endpoint returns.
  */
-function locationToSegments(location: InfLocation): LocationSegment[] {
+export function locationToSegments(location: InfLocation): LocationSegment[] {
   const segments: LocationSegment[] = [];
 
   // Walk up the parent chain

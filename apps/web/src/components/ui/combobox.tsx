@@ -24,6 +24,15 @@ export interface FilterableComboboxItem {
    */
   hint?: string;
   /**
+   * Trailing prose annotation that DISAMBIGUATES the option — today, a
+   * location's ancestor breadcrumb, because "shelf 1" exists in four rooms.
+   * Separate from `hint`: that slot is a mono/tabular-nums count register, and
+   * a breadcrumb rendered there reads as data rather than as context. Like
+   * `hint` it stays out of `label`, which is interpolated verbatim into
+   * `LedgerFilters` and the collapsed multi-select summary.
+   */
+  detail?: string;
+  /**
    * A meta option is a predicate ABOUT the data (e.g. "Has project" / "(none)"
    * nullable-filter sentinels), not a value drawn FROM it — it renders in the
    * eyebrow register instead of alongside the roster it sits above. `label`
@@ -274,7 +283,19 @@ function ComboboxPopup({
                     {item.icon && (
                       <span className="shrink-0">{item.icon}</span>
                     )}
-                    <span className="flex-1 truncate">{item.label}</span>
+                    {item.detail ? (
+                      // Second line, not a trailing column: the label is what
+                      // the user is picking, and sharing the row with a
+                      // breadcrumb truncated it to "2 drawer pa…".
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="truncate">{item.label}</span>
+                        <span className="truncate text-2xs text-muted-foreground">
+                          {item.detail}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="flex-1 truncate">{item.label}</span>
+                    )}
                     {item.hint && (
                       <span className="shrink-0 font-mono text-2xs text-slate tabular-nums">
                         {item.hint}
