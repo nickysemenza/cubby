@@ -69,6 +69,70 @@ describe("product repository", () => {
     expect(retrievedProduct.ingredient).toBeNull();
   });
 
+  // A duplicate-identity error has to name the product that is blocking. The
+  // name+manufacturer branch used to just echo the caller's own input back,
+  // which says a conflict exists without saying what to merge into or skip —
+  // so the next call was always a search to find out.
+  describe("duplicate identity errors name the blocker", () => {
+    it("names the shortcode on a name+manufacturer collision", async () => {
+      const first = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Bare Grinder", manufacturer: "Ryobi" }),
+        ctx.actor,
+      );
+
+      await expect(
+        createProduct(
+          ctx.db,
+          makeProductInput({ name: "Bare Grinder", manufacturer: "Ryobi" }),
+          ctx.actor,
+        ),
+      ).rejects.toThrow(new RegExp(`already exists: ${first.id}`));
+    });
+
+    it("names the shortcode on a UPC collision", async () => {
+      const first = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Barcoded", upc: "033287188048" }),
+        ctx.actor,
+      );
+
+      await expect(
+        createProduct(
+          ctx.db,
+          makeProductInput({ name: "Different Name", upc: "033287188048" }),
+          ctx.actor,
+        ),
+      ).rejects.toThrow(new RegExp(`already used by ${first.id}`));
+    });
+
+    it("names the shortcode when a RENAME collides", async () => {
+      // updateProduct had no duplicate handler at all, so a rename fell through
+      // to the generic translator's "a product with that name, manufacturer
+      // already exists" — the one path where the conflicting row was never
+      // looked up.
+      const taken = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Taken Name", manufacturer: "Acme" }),
+        ctx.actor,
+      );
+      const other = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Other Name", manufacturer: "Acme" }),
+        ctx.actor,
+      );
+
+      await expect(
+        updateProduct(
+          ctx.db,
+          other.entityId,
+          { name: "Taken Name" },
+          ctx.actor,
+        ),
+      ).rejects.toThrow(new RegExp(`already exists: ${taken.id}`));
+    });
+  });
+
   // Regression: this lookup was built as sql`id = ANY(${ids})`. Drizzle expands
   // a JS array in a template into a row constructor, so the query went out as
   // `= ANY(($1))` and postgres rejected it — the product combobox's semantic

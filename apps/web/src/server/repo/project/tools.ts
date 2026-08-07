@@ -56,6 +56,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { foldAssociation } from "~/server/repo/merge";
 import { loadProductOwnershipWindows } from "~/server/repo/product/ownership";
 import { maxPlainDate } from "./helpers";
 import { collectDescendantIds, loadProjectDateWindows } from "./subtree";
@@ -668,6 +669,143 @@ export async function detachProjectResources(
     }
     return { changed: removed.length, attached: after.length };
   });
+}
+
+/**
+ * Move a product's project-use history onto another product.
+ *
+ * The gap this closes is a *silent* one. `deleteProducts` blocks on live
+ * `ProjectToolUsage` (`block-live-project-use`), and the only tools were attach
+ * and detach — so unblocking a delete meant detaching, and a detach without a
+ * matching attach discards the project's tool history with nothing to flag it.
+ * Merge has no equivalent problem because `finalizeMerge` derives the cascade
+ * from the entity; delete had no counterpart until this.
+ *
+ * Two gates deliberately differ from `attachProjectResources`:
+ *
+ *  - **The category gate is KEPT** on the destination. Repointing tool history
+ *    onto something that is not a tool or software is a mistake worth blocking,
+ *    and a split's destination component is a tool by construction.
+ *  - **The timeline gate is SKIPPED.** `assertNoTimelineConflict` exempts pairs
+ *    that already have a live edge, and that exemption cannot fire here: a
+ *    repoint mints a new `(project, toProduct)` pair, and a freshly-created
+ *    component product has no Expense of its own, so the `purchased_here`
+ *    exemption is zero too. Every legitimate repoint would be rejected. Merge is
+ *    exempt for the same structural reason — the survivor inherits the loser's
+ *    Expense rows in the same transaction. A repoint corrects *where existing
+ *    history is recorded*; it does not assert new ownership, so the ownership
+ *    window is not the right question to ask. `findToolsUsedOutsideOwnership`
+ *    remains the backstop if that judgment is ever wrong.
+ */
+export async function repointProjectUses(
+  db: Database,
+  args: {
+    fromProductId: ProductId;
+    toProductId: ProductId;
+    /** Omit to repoint every live use. */
+    projectIds?: ProjectId[];
+  },
+  actor: ActorContext,
+): Promise<{ repointed: number; alreadyPresent: number }> {
+  const { fromProductId, toProductId, projectIds } = args;
+  if (fromProductId === toProductId) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Source and destination products must be different",
+    );
+  }
+
+  return withTransaction(db, async (tx) => {
+    const destination = await tx.query.product.findFirst({
+      where: and(
+        eq(product.id, toProductId),
+        inArray(product.category, ["tools", "software"]),
+        notDeleted(product),
+      ),
+      columns: { id: true },
+    });
+    if (!destination) {
+      throw createAppError(
+        "PRODUCT_NOT_FOUND",
+        "The destination Product must exist, be live, and have category tools or software.",
+      );
+    }
+
+    const rows = await tx.query.projectToolUsage.findMany({
+      where: and(
+        inArray(projectToolUsage.productId, [fromProductId, toProductId]),
+        projectIds?.length
+          ? inArray(projectToolUsage.projectId, projectIds)
+          : undefined,
+        notDeleted(projectToolUsage),
+      ),
+      columns: { id: true, productId: true, projectId: true },
+    });
+    const movable = rows.filter((row) => row.productId === fromProductId);
+    if (movable.length === 0) return { repointed: 0, alreadyPresent: 0 };
+
+    // `foldAssociation`, not a bare `UPDATE ... SET productId`: the partial
+    // unique index `(projectId, productId)` means a project that already
+    // records the destination would abort the transaction. This is the same
+    // helper `mergeProducts` uses for this exact table.
+    const repointed = await foldAssociation(tx, {
+      table: projectToolUsage,
+      column: "productId",
+      rows,
+      keepId: toProductId,
+      slotKey: (row) => row.projectId,
+      now: new Date(),
+    });
+
+    // Audit BOTH sides. A project-keyed diff would record that the destination
+    // gained uses without recording that the source lost them, which is exactly
+    // the half-story the detach-without-attach failure told.
+    for (const entityId of [fromProductId, toProductId]) {
+      await logAuditEntry(tx, actor, {
+        entityType: "product",
+        entityId,
+        action: "update",
+        changes: {
+          usedOnProjectIds: {
+            from: await liveProjectCodes(tx, entityId, rows),
+            to: await liveProjectCodes(tx, entityId),
+          },
+        },
+      });
+    }
+
+    return { repointed, alreadyPresent: movable.length - repointed };
+  });
+}
+
+/** Live project shortcodes a product is recorded on, for an audit diff. */
+async function liveProjectCodes(
+  tx: DrizzleClient,
+  productId: ProductId,
+  before?: ReadonlyArray<{ productId: ProductId; projectId: ProjectId }>,
+): Promise<string[]> {
+  if (before) {
+    const projectIds = before
+      .filter((row) => row.productId === productId)
+      .map((row) => row.projectId);
+    if (projectIds.length === 0) return [];
+    const rows = await tx.query.project.findMany({
+      where: inArray(project.id, projectIds),
+      columns: { shortcode: true },
+    });
+    return rows.map((row) => row.shortcode).sort();
+  }
+  const rows = await tx
+    .select({ shortcode: project.shortcode })
+    .from(projectToolUsage)
+    .innerJoin(project, eq(project.id, projectToolUsage.projectId))
+    .where(
+      and(
+        eq(projectToolUsage.productId, productId),
+        notDeleted(projectToolUsage),
+      ),
+    );
+  return rows.map((row) => row.shortcode).sort();
 }
 
 /**

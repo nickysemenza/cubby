@@ -37,6 +37,8 @@ import {
   projectTaskStatusBreakdown,
   projectToolSuggestionsOut,
   projectUpdateData,
+  repointProjectUsesInput,
+  repointProjectUsesOut,
   taskCreateInput,
   taskFilterFields,
   taskMcpListOut,
@@ -237,6 +239,16 @@ export function registerProjectTools(server: McpServer) {
   });
 
   registerRouterTool(server, {
+    name: "repoint_project_uses",
+    description:
+      "Move a Product's recorded project uses onto another Product, in one transaction. This is the tool for retiring or splitting a Product that delete_products refuses because it has project-use history: repoint the history onto the component or replacement that should carry it, then delete. Do NOT do this as detach_project_resources plus attach_project_resources — a detach whose attach is missed discards the project's tool history with nothing to flag it. Omit projectIds to move every live use. Projects that already record the destination keep their existing row and are reported as alreadyPresent, not as an error. The destination must be a live Product with category tools or software.",
+    inputSchema: repointProjectUsesInput.shape,
+    outputSchema: repointProjectUsesOut,
+    annotations: WRITE_CLOSED,
+    call: (caller, params) => caller.project.repointUses(params),
+  });
+
+  registerRouterTool(server, {
     name: "list_product_project_uses",
     description:
       "Show every exact project on which a reusable Cubby tool or software Product is explicitly recorded as used. Tool rows include purchase/use economics; software rows include non-additive spend charged during each project's effective window.",
@@ -338,7 +350,6 @@ export function registerProjectTools(server: McpServer) {
         "Soft-delete tasks by IDs (dependency edges are cleaned up). Deleting a task cascades to its live subtasks.",
     },
     create: (caller, params) => caller.task.create(params),
-    batch: { update: true },
   });
 
   registerRouterTool(server, {
@@ -378,7 +389,6 @@ export function registerProjectTools(server: McpServer) {
     },
     create: (caller, params) => caller.expense.create(params),
     operations: { delete: false },
-    batch: { create: true, update: true },
     resolveUpdateData: async (_caller, data) =>
       data.productId === undefined
         ? data

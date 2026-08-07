@@ -21,6 +21,7 @@
 export {
   bulkMoveInventoryEntries,
   bulkProcessInventoryEntries,
+  moveInventoryEntries,
   reconcileLocationSession,
 } from "./bulk";
 export {

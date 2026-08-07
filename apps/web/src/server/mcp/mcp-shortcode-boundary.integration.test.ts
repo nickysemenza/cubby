@@ -1243,70 +1243,79 @@ describe("specialized tools round-trip on shortcodes", () => {
     expect(aliasAfter.isError).toBe(true);
   });
 
-  it("bulk_move_inventory moves entries between locations by shortcode", async () => {
+  it("move_inventory_entries crosses source locations in one call by shortcode", async () => {
+    // Boundary contract only — that the tool round-trips shortcodes and that a
+    // single call spans more than one source, which `bulk_move_inventory` could
+    // not express. The four per-item branches, the merge arithmetic, and the
+    // ordering hazards are covered against the repo function in
+    // inventory-move-entries.integration.test.ts.
     const caller = createTestCaller(domainRouter, ctx.db);
-    const product = await callTool(
-      "create_product",
-      {
-        name: "Bulk Move Product",
-        upc: null,
-        manufacturer: "Test Mfg",
-        ingredientId: null,
-      },
-      caller,
-    );
-    expectOk(product);
-    const productCode = structured(product).id as string;
 
-    const source = await callTool(
-      "create_location",
-      { name: "Bulk Move Source", type: "shelf", parentId: null },
-      caller,
-    );
-    expectOk(source);
-    const sourceCode = structured(source).id as string;
+    const create = async (tool: string, args: Record<string, unknown>) => {
+      const created = await callTool(tool, args, caller);
+      expectOk(created);
+      return structured(created).id as string;
+    };
 
-    const target = await callTool(
-      "create_location",
-      { name: "Bulk Move Target", type: "shelf", parentId: null },
-      caller,
-    );
-    expectOk(target);
-    const targetCode = structured(target).id as string;
+    const widget = await create("create_product", {
+      name: "Many Move Widget",
+      upc: null,
+      manufacturer: "Test Mfg",
+      ingredientId: null,
+    });
+    const shelfA = await create("create_location", {
+      name: "Many Move Shelf A",
+      type: "shelf",
+      parentId: null,
+    });
+    const shelfB = await create("create_location", {
+      name: "Many Move Shelf B",
+      type: "shelf",
+      parentId: null,
+    });
+    const drawer = await create("create_location", {
+      name: "Many Move Drawer",
+      type: "shelf",
+      parentId: null,
+    });
 
-    const entry = await callTool(
-      "create_inventory_entry",
-      {
-        productId: productCode,
-        locationId: sourceCode,
-        value: 10,
-        unit: "each",
-      },
-      caller,
-    );
-    expectOk(entry);
-    const entryCode = structured(entry).id as string;
+    const fromA = await create("create_inventory_entry", {
+      productId: widget,
+      locationId: shelfA,
+      value: 4,
+      unit: "each",
+    });
+    const fromB = await create("create_inventory_entry", {
+      productId: widget,
+      locationId: shelfB,
+      value: 6,
+      unit: "each",
+    });
 
     const moved = await callTool(
-      "bulk_move_inventory",
+      "move_inventory_entries",
       {
-        sourceLocationId: sourceCode,
-        targetLocationId: targetCode,
         items: [
-          { inventoryEntryId: entryCode, quantity: { value: 4, unit: "each" } },
+          { inventoryEntryId: fromA, targetLocationId: drawer },
+          { inventoryEntryId: fromB, targetLocationId: drawer },
         ],
       },
       caller,
     );
     expectOk(moved);
-    const movedItems = structured(moved).items as Array<
-      Record<string, unknown>
-    >;
-    expect(
-      movedItems.some(
-        (item) => (item.location as Record<string, unknown>)?.id === targetCode,
-      ),
-    ).toBe(true);
+
+    const listed = await callTool(
+      "list_inventory",
+      { locationIdFilter: drawer },
+      caller,
+    );
+    expectOk(listed);
+    const items = structured(listed).items as Array<Record<string, unknown>>;
+    // Both sources collapsed into the one destination row.
+    expect(items).toHaveLength(1);
+    const row = items[0]!;
+    expect((row.amount as { value: number }).value).toBe(10);
+    expect((row.location as Record<string, unknown>).id).toBe(drawer);
   });
 
   it("add_recipe_to_meal plans a recipe by shortcode", async () => {
@@ -1643,6 +1652,19 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "update_meal.recipes[].id",
   "update_meal_recipe.recipes[].id",
   "verify_product_images.images[].id",
+  // Plural mirrors of the singular exceptions above. A batch tool wraps its
+  // singular's own output in `results[].item`, so it re-exposes exactly the
+  // same declared-uuid leaves — image ids and the mealRecipe row id, neither of
+  // which has a shortcode.
+  "attach_files.results[].item.imageId",
+  "create_meals.results[].item.recipes[].id",
+  "update_meals.results[].item.recipes[].id",
+  "patch_products_external_ids.results[].item.images[].id",
+  "verify_products_images.results[].item.images[].id",
+  // The staged-upload handle. It IS an Image id, and images are a declared
+  // exception with no shortcode — the caller hands this straight back to
+  // attach_file, so it is the identifier rather than a leaked internal.
+  "create_file_upload.uploadId",
 ]);
 
 const NOT_YET_CUT_OVER: string[] = [];

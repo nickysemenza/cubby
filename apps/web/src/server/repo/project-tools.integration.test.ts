@@ -1,3 +1,4 @@
+import type { ProductId } from "@cubby/schemas/identifiers";
 import {
   projectCreateInput,
   projectToolMatrixInput,
@@ -18,6 +19,7 @@ import {
   detachProjectResources,
   listProductProjectUses,
   listProjectResources,
+  repointProjectUses,
   setProductProjectUses,
   setProjectToolUsage,
   suggestProjectTools,
@@ -587,6 +589,205 @@ describe("project reusable resources", () => {
     await expect(
       deleteProducts(ctx.db, [tool.entityId], ctx.actor),
     ).resolves.toBeUndefined();
+  });
+});
+
+// `deleteProducts` blocks on live project uses, and before this the only way
+// past it was detach — which drops the project's tool history entirely. Merge
+// never had this problem (finalizeMerge derives the cascade from the entity);
+// delete had no counterpart until repointProjectUses.
+describe("repointProjectUses", () => {
+  const ctx = withTestDb();
+
+  const seed = async (name: string) => {
+    const [kitchen, yard, shed] = await Promise.all([
+      createProject(
+        ctx.db,
+        projectCreateInput.parse({ name: `${name} kitchen` }),
+        ctx.actor,
+      ),
+      createProject(
+        ctx.db,
+        projectCreateInput.parse({ name: `${name} yard` }),
+        ctx.actor,
+      ),
+      createProject(
+        ctx.db,
+        projectCreateInput.parse({ name: `${name} shed` }),
+        ctx.actor,
+      ),
+    ]);
+    const [kit, component] = await Promise.all([
+      createProduct(
+        ctx.db,
+        makeProductInput({ name: `${name} kit`, category: "tools" }),
+        ctx.actor,
+      ),
+      createProduct(
+        ctx.db,
+        makeProductInput({ name: `${name} bare tool`, category: "tools" }),
+        ctx.actor,
+      ),
+    ]);
+    return { kitchen, yard, shed, kit, component };
+  };
+
+  const liveProjectIdsFor = async (productEntityId: ProductId) => {
+    const rows = await getDb(ctx.db).query.projectToolUsage.findMany({
+      where: and(
+        eq(projectToolUsage.productId, productEntityId),
+        notDeleted(projectToolUsage),
+      ),
+      columns: { projectId: true },
+    });
+    return rows.map((row) => row.projectId).sort();
+  };
+
+  it("moves every live use and unblocks the source's delete", async () => {
+    const { kitchen, yard, kit, component } = await seed("Repoint");
+    await attachProjectResources(
+      ctx.db,
+      kitchen.entityId,
+      [kit.entityId],
+      ctx.actor,
+    );
+    await attachProjectResources(
+      ctx.db,
+      yard.entityId,
+      [kit.entityId],
+      ctx.actor,
+    );
+
+    const result = await repointProjectUses(
+      ctx.db,
+      { fromProductId: kit.entityId, toProductId: component.entityId },
+      ctx.actor,
+    );
+
+    expect(result).toEqual({ repointed: 2, alreadyPresent: 0 });
+    expect(await liveProjectIdsFor(kit.entityId)).toEqual([]);
+    expect(await liveProjectIdsFor(component.entityId)).toEqual(
+      [kitchen.entityId, yard.entityId].sort(),
+    );
+    // The whole point: the block is gone because the history moved, not because
+    // it was discarded.
+    await expect(
+      deleteProducts(ctx.db, [kit.entityId], ctx.actor),
+    ).resolves.toBeUndefined();
+  });
+
+  it("keeps one live row when the destination already records the project", async () => {
+    // The partial unique index `(projectId, productId)` makes a bare
+    // `UPDATE ... SET productId` abort the transaction here. foldAssociation
+    // drops the colliding source row instead, so the history is intact.
+    const { kitchen, kit, component } = await seed("Collide");
+    await attachProjectResources(
+      ctx.db,
+      kitchen.entityId,
+      [kit.entityId, component.entityId],
+      ctx.actor,
+    );
+
+    const result = await repointProjectUses(
+      ctx.db,
+      { fromProductId: kit.entityId, toProductId: component.entityId },
+      ctx.actor,
+    );
+
+    expect(result).toEqual({ repointed: 0, alreadyPresent: 1 });
+    expect(await liveProjectIdsFor(component.entityId)).toEqual([
+      kitchen.entityId,
+    ]);
+    expect(await liveProjectIdsFor(kit.entityId)).toEqual([]);
+  });
+
+  it("scopes to the named projects and leaves the rest", async () => {
+    const { kitchen, yard, shed, kit, component } = await seed("Scoped");
+    for (const project of [kitchen, yard, shed]) {
+      await attachProjectResources(
+        ctx.db,
+        project.entityId,
+        [kit.entityId],
+        ctx.actor,
+      );
+    }
+
+    const result = await repointProjectUses(
+      ctx.db,
+      {
+        fromProductId: kit.entityId,
+        toProductId: component.entityId,
+        projectIds: [kitchen.entityId, shed.entityId],
+      },
+      ctx.actor,
+    );
+
+    expect(result.repointed).toBe(2);
+    expect(await liveProjectIdsFor(kit.entityId)).toEqual([yard.entityId]);
+    expect(await liveProjectIdsFor(component.entityId)).toEqual(
+      [kitchen.entityId, shed.entityId].sort(),
+    );
+  });
+
+  it("audits both products, not just the destination", async () => {
+    // A project-keyed diff would record that the destination gained uses
+    // without recording that the source lost them — the same half-story the
+    // detach-without-attach failure told.
+    const { kitchen, kit, component } = await seed("Audited");
+    await attachProjectResources(
+      ctx.db,
+      kitchen.entityId,
+      [kit.entityId],
+      ctx.actor,
+    );
+
+    await repointProjectUses(
+      ctx.db,
+      { fromProductId: kit.entityId, toProductId: component.entityId },
+      ctx.actor,
+    );
+
+    for (const [productEntityId, expected] of [
+      [kit.entityId, { from: [kitchen.output.id], to: [] }],
+      [component.entityId, { from: [], to: [kitchen.output.id] }],
+    ] as const) {
+      const entries = await getDb(ctx.db).query.auditLog.findMany({
+        where: and(
+          eq(auditLog.entityType, "product"),
+          eq(auditLog.entityId, productEntityId),
+          eq(auditLog.action, "update"),
+        ),
+        columns: { changes: true },
+      });
+      expect(entries).toContainEqual(
+        expect.objectContaining({
+          changes: { usedOnProjectIds: expected },
+        }),
+      );
+    }
+  });
+
+  it("refuses a destination that is not a tool or software", async () => {
+    const { kitchen, kit } = await seed("Category");
+    const consumable = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Category screws", category: "hardware" }),
+      ctx.actor,
+    );
+    await attachProjectResources(
+      ctx.db,
+      kitchen.entityId,
+      [kit.entityId],
+      ctx.actor,
+    );
+
+    await expect(
+      repointProjectUses(
+        ctx.db,
+        { fromProductId: kit.entityId, toProductId: consumable.entityId },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({ cause: { reason: "PRODUCT_NOT_FOUND" } });
   });
 });
 

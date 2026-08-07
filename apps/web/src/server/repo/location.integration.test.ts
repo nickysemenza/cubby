@@ -12,6 +12,7 @@ import {
   findOrCreateLocationByName,
   getLocationById,
   locationList,
+  updateLocation,
 } from "./location";
 import { createProduct } from "./product";
 import { makeLocationInput, makeProductInput } from "./repo.fixtures";
@@ -88,6 +89,67 @@ describe("findOrCreateLocationByName", () => {
       .from(location)
       .where(eq(location.name, name));
     expect(countRow!.count).toEqual(1);
+  });
+});
+
+// A duplicate-name error has to name the location that is blocking, not just
+// report that something is. Without the shortcode the only way to find the
+// blocker is a follow-up list_locations scan — which is exactly what the
+// generic Postgres translation forced, and it could not even name the column:
+// `Key (lower(name))=(ppe)` defeats its `Key (...)=` extraction.
+describe("duplicate location names", () => {
+  const ctx = withTestDb();
+
+  it("names the conflicting shortcode when creating", async () => {
+    const first = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "PPE" }),
+      ctx.actor,
+    );
+
+    await expect(
+      createLocation(ctx.db, makeLocationInput({ name: "PPE" }), ctx.actor),
+    ).rejects.toThrow(new RegExp(`already exists: ${first.id}`));
+  });
+
+  it("matches case-insensitively, like the index does", async () => {
+    const first = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Solder Drawer" }),
+      ctx.actor,
+    );
+
+    // `Location_name_key` is on `lower(name)`, so this collides — and the
+    // message must still resolve to the row that actually holds the name.
+    await expect(
+      createLocation(
+        ctx.db,
+        makeLocationInput({ name: "solder drawer" }),
+        ctx.actor,
+      ),
+    ).rejects.toThrow(
+      new RegExp(`“Solder Drawer” already exists: ${first.id}`),
+    );
+  });
+
+  it("names the conflicting shortcode when renaming", async () => {
+    const taken = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Taken Bin" }),
+      ctx.actor,
+    );
+    const other = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Other Bin" }),
+      ctx.actor,
+    );
+    const otherId = unsafeLocationId(
+      (await resolveLiveShortcode(ctx.db, other.id, "location"))!,
+    );
+
+    await expect(
+      updateLocation(ctx.db, otherId, { name: "Taken Bin" }, ctx.actor),
+    ).rejects.toThrow(new RegExp(`already exists: ${taken.id}`));
   });
 });
 

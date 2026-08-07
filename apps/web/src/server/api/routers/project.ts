@@ -40,6 +40,8 @@ import {
   projectToolUsageSetInput,
   projectToolUsageSetOut,
   projectUpdateData,
+  repointProjectUsesInput,
+  repointProjectUsesOut,
 } from "@cubby/schemas/project";
 import { z } from "zod";
 import { createAppError } from "~/server/errors/app-error";
@@ -57,6 +59,7 @@ import {
   projectPortfolioAnalytics,
   projectToolMatrix,
   projectTreePage,
+  repointProjectUses,
   setProjectToolUsage,
   suggestProjectTools,
   updateProject,
@@ -237,6 +240,24 @@ const detachResources = protectedProcedure
     );
   });
 
+const repointUses = protectedProcedure
+  .input(repointProjectUsesInput)
+  .output(strictOutput(repointProjectUsesOut))
+  .mutation(async ({ ctx, input }) => {
+    const [fromProductId, toProductId] = await Promise.all([
+      resolveOrThrow(ctx.db, "product", input.fromProductId),
+      resolveOrThrow(ctx.db, "product", input.toProductId),
+    ]);
+    const projectIds = input.projectIds
+      ? await resolveAllOrThrow(ctx.db, "project", input.projectIds)
+      : undefined;
+    return repointProjectUses(
+      ctx.db,
+      { fromProductId, toProductId, projectIds },
+      ctx.actorContext,
+    );
+  });
+
 /**
  * The whole `/projects/tools` grid in one read — columns, rows, and the
  * non-empty cells. Filters are plain values, so there is nothing to resolve.
@@ -297,5 +318,6 @@ export const projectRouter = createTRPCRouter({
   toolMatrix,
   attachResources,
   detachResources,
+  repointUses,
   setToolUsage,
 });

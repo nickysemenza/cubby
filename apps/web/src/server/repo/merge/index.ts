@@ -4,5 +4,5 @@
  * why `finalizeMerge` is the piece that matters.
  */
 
-export { planSlotCollisions } from "./collisions";
+export { foldAssociation, planSlotCollisions } from "./collisions";
 export { finalizeMerge, repointEdge, resolveMergeTargets } from "./core";

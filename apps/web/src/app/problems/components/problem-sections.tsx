@@ -10,6 +10,7 @@ import {
   type SoldButStillStocked,
   type ToolUsedOutsideOwnership,
   TRACKER_PROBLEM_KEY_BY_TYPE,
+  type UnlinkedExitExpense,
 } from "@cubby/schemas/problems";
 import type {
   ProjectAttentionItem,
@@ -618,6 +619,16 @@ function negativeExpectedSubtitle(row: NegativeExpectedQuantity): string {
 }
 
 /**
+ * The vendor and the money, because between them they are what identifies which
+ * product a payout describes — which is the whole of the work on these rows.
+ */
+function unlinkedExitSubtitle(row: UnlinkedExitExpense): string {
+  return [row.vendorName, formatCurrency(Math.abs(row.cost)), row.date]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/**
  * Both dates, because they are what tells you which of the two fixes applies:
  * an acquisition a few weeks late usually means a missing purchase Expense,
  * one a year late means the edge itself is wrong.
@@ -792,6 +803,21 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       subtitle: soldButStockedSubtitle(product),
       badges: locationBadges(product.locations),
       route: entityDetailLink("product", product.id),
+    }),
+  }),
+  section({
+    id: "unlinked-exit-expenses",
+    label: "Sold without a product",
+    select: (p) => p.unlinkedExitExpenses,
+    entity: "expense",
+    title: "Sold, But Nothing Says What",
+    description:
+      "These are disposal lines with no product linked, so the ledger knows money came in but not what left. The section above can only see a sale once it is linked, which is why an unlinked one is invisible there — and marketplace payouts arrive unlinked by default. Link each row to the product that was actually sold; if the sale was not of an inventoried product, record an exception.",
+    emptyMessage: "Every recorded disposal names its product.",
+    renderItem: (row) => ({
+      title: row.name,
+      subtitle: unlinkedExitSubtitle(row),
+      route: entityDetailLink("expense", row.id),
     }),
   }),
   section({

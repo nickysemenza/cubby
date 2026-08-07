@@ -7,6 +7,7 @@ import {
   productExternalIdCollisionInput,
   productExternalIdCollisionsOut,
   productFilterFields,
+  productLookupUpcOut,
   productMcpDetailOut,
   productMcpListOut,
   productMcpOut,
@@ -19,8 +20,11 @@ import {
   getCaller,
   idParam,
   READ_ONLY_CLOSED,
+  READ_ONLY_OPEN,
+  registerBatchTool,
   registerEntityCrudToolset,
   registerMcpTool,
+  rejectDuplicateIds,
   respond,
   slimProduct,
   slimProductDetail,
@@ -28,6 +32,19 @@ import {
   WRITE_CLOSED,
   WRITE_DESTRUCTIVE_CLOSED,
 } from "./_shared";
+
+/**
+ * `lookup_upc` over the slim product projection.
+ *
+ * The tRPC output carries `productTopLevelOut`, whose nested `images[].id` and
+ * `externalIds[].id` are raw uuids — fine inside the app, but a uuid must never
+ * reach an MCP payload. `slimProduct` is the same projection every other product
+ * tool publishes, so the local match reads identically here and in
+ * `search_products`.
+ */
+const lookupUpcMcpOut = productLookupUpcOut.extend({
+  localProduct: productMcpOut.nullable(),
+});
 
 export function registerProductTools(server: McpServer) {
   registerEntityCrudToolset(server, {
@@ -53,7 +70,6 @@ export function registerProductTools(server: McpServer) {
       delete:
         "Soft-delete products by IDs. Fails while live inventory entries, expenses, or tasks still reference a product.",
     },
-    batch: { create: true, update: true },
     create: async (caller, params) => {
       const unitMappings = (
         (params.unitMappings as Array<z.infer<typeof mcpUnitMappingInput>>) ??
@@ -115,6 +131,18 @@ export function registerProductTools(server: McpServer) {
       ),
   });
 
+  registerBatchTool(server, {
+    name: "patch_products_external_ids",
+    description:
+      "Patch identifier slots on up to 50 products in request order. Each item uses the same validation and preconditions as patch_product_external_ids; a failed item does not roll back successful items. Use this to apply an enrichment sweep's identifier findings in one call.",
+    itemInput: patchProductExternalIdsInput,
+    itemOutput: productMcpDetailOut,
+    annotations: WRITE_CLOSED,
+    refineItems: rejectDuplicateIds,
+    run: async (caller, item) =>
+      respond(await caller.product.patchExternalIds(item), slimProductDetail),
+  });
+
   registerMcpTool(server, {
     name: "verify_product_images",
     description:
@@ -127,6 +155,22 @@ export function registerProductTools(server: McpServer) {
         await getCaller(extra).product.verifyImages(params.id),
         slimProductDetail,
       ),
+  });
+
+  registerBatchTool(server, {
+    name: "verify_products_images",
+    description:
+      "Run verify_product_images across up to 20 products in request order. Capped lower than other batches because every item makes one R2 round trip per attached file, not a single database write.",
+    itemInput: z.object({ id: idParam("product") }),
+    itemOutput: productMcpDetailOut,
+    // Each item fans out to one R2 fetch PER attached file, so 50 products is a
+    // few hundred network round trips inside one Worker invocation. Every other
+    // batch here is DB-bound, which is why this is the one that departs from 50.
+    maxItems: 20,
+    annotations: WRITE_CLOSED,
+    refineItems: rejectDuplicateIds,
+    run: async (caller, item) =>
+      respond(await caller.product.verifyImages(item.id), slimProductDetail),
   });
 
   registerMcpTool(server, {
@@ -146,9 +190,29 @@ export function registerProductTools(server: McpServer) {
   });
 
   registerMcpTool(server, {
+    name: "lookup_upc",
+    description:
+      "Resolve a UPC barcode to an identity WITHOUT creating anything. Returns all three sources at once: the Product already claiming the barcode, the USDA branded-food match, and the UPC lookup service's record. Use this whenever the question is what a barcode names — verifying a scan, confirming a product page really describes the item you hold, or checking whether a barcode belongs to a bare tool or the kit it ships in. A barcode identifies the PACKAGE, so a kit and its bare-tool variant carry different UPCs; a manufacturer page reached by guessing a URL from a barcode is not evidence. Prefer this over find_or_create_product_by_upc unless you actually intend to create a Product.",
+    inputSchema: { upc },
+    outputSchema: lookupUpcMcpOut,
+    annotations: READ_ONLY_OPEN,
+    handler: async (params, extra) => {
+      const result = await getCaller(extra).product.lookupUpc({
+        upc: params.upc,
+      });
+      return {
+        ...result,
+        localProduct: result.localProduct
+          ? respond(result.localProduct, slimProduct)
+          : null,
+      };
+    },
+  });
+
+  registerMcpTool(server, {
     name: "find_or_create_product_by_upc",
     description:
-      "Find or create a product by UPC barcode. Checks local DB, then USDA, then UPC lookup service.",
+      "Find or create a product by UPC barcode. Checks local DB, then USDA, then UPC lookup service. This WRITES — it mints a Product when nothing matches, using whatever name the lookup returned. To only ask what a barcode names, use lookup_upc instead.",
     inputSchema: {
       upc,
       defaultName: z

@@ -57,6 +57,7 @@ export {
   detachProjectResources,
   listProductProjectUses,
   listProjectResources,
+  repointProjectUses,
   setProductProjectUses,
   setProjectToolUsage,
   suggestProjectTools,

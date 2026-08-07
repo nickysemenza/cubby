@@ -13,10 +13,12 @@ import type {
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import {
+  unsafeExpenseShortcode,
   unsafeIngredientShortcode,
   unsafeLocationShortcode,
   unsafeProductShortcode,
   unsafeProjectShortcode,
+  unsafePurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
   DuplicateProductIdentity,
@@ -28,6 +30,7 @@ import type {
   ProductWithoutMappings,
   SoldButStillStocked,
   ToolUsedOutsideOwnership,
+  UnlinkedExitExpense,
 } from "@cubby/schemas/problems";
 import { isMiscProduct, isNonFoodCategory } from "@cubby/shared";
 import { format } from "date-fns";
@@ -60,11 +63,13 @@ import {
   productUnitMappings,
   project,
   projectToolUsage,
+  purchase,
   purchaseProduct,
   recipe,
   recipeSection,
   recipeSectionIngredient,
   task,
+  vendor,
   wishCandidate,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -452,6 +457,62 @@ export const findProductsWithNegativeExpectedQuantity = async (
       },
     ];
   });
+};
+
+// Find disposal lines that name no product — the exact inverse of
+// `findSoldButStillStocked` below.
+//
+// That detector groups by `expense.productId`, so a sale with a null one is
+// invisible to it BY CONSTRUCTION rather than by oversight. Those are the norm
+// for marketplace sales: the row arrives from a statement or a payout export
+// with a description and an amount and nothing tying it to a shelf, so the
+// ledger records that money came in and cannot say what left.
+//
+// The predicate is the same disposal-Purchase test its mirror uses, and the
+// reasoning behind that choice is the essay above `findSoldButStillStocked` —
+// worth reading rather than restating here. The short version: bare negative
+// Expense lines are overwhelmingly refunds, price adjustments, and family
+// contributions, and keying on them instead was wrong about half the time on
+// production data.
+export const findUnlinkedExitExpenses = async (
+  db: Database,
+): Promise<UnlinkedExitExpense[]> => {
+  const dbClient = getDb(db);
+
+  const rows = await dbClient
+    .select({
+      shortcode: expense.shortcode,
+      name: expense.name,
+      cost: expense.cost,
+      date: expense.date,
+      purchaseShortcode: purchase.shortcode,
+      vendorName: vendor.name,
+    })
+    .from(expense)
+    .innerJoin(
+      purchase,
+      and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
+    )
+    .leftJoin(vendor, and(eq(vendor.id, purchase.vendorId), notDeleted(vendor)))
+    .where(
+      and(
+        notDeleted(expense),
+        eq(expense.future, false),
+        lt(expense.cost, 0),
+        isNull(expense.productId),
+        inArray(expense.purchaseId, disposalPurchaseIds(dbClient)),
+      ),
+    )
+    .orderBy(sql`${expense.date} DESC NULLS LAST`);
+
+  return rows.map((row) => ({
+    id: unsafeExpenseShortcode(row.shortcode),
+    name: row.name,
+    cost: Number(row.cost),
+    date: row.date,
+    purchaseId: unsafePurchaseShortcode(row.purchaseShortcode),
+    vendorName: row.vendorName,
+  }));
 };
 
 // Find products that were sold off but are still sitting on a shelf.

@@ -145,6 +145,33 @@ export const soldButStillStockedSchema = z.object({
   ),
 });
 
+// The exact inverse of `soldButStillStocked`: a disposal line that names no
+// product at all.
+//
+// That detector can only fire when the sale is linked, so an exit whose
+// `productId` is null is invisible to it BY CONSTRUCTION — and those are the
+// common case for marketplace sales, where rows arrive from a statement or an
+// export with a payout description and nothing tying them to a shelf. Both of
+// the finds that motivated this were exactly that shape, and neither showed up
+// anywhere.
+//
+// Keyed on a disposal Purchase for the same reason its mirror is, and the
+// reasoning is worth not restating: see `soldButStillStockedSchema` above and
+// the essay over `findSoldButStillStocked`. Negative Expense lines on their own
+// are overwhelmingly refunds, price adjustments, and family contributions —
+// every one of them legitimate, none of them a sale.
+export const unlinkedExitExpenseSchema = z.object({
+  id: expenseShortcode,
+  name: z.string(),
+  /** Negative, as stored. */
+  cost: z.number(),
+  date: plainDate.nullable(),
+  /** The disposal Purchase this line sits on. */
+  purchaseId: purchaseShortcode,
+  /** Through the join; null only if the vendor was soft-deleted. */
+  vendorName: z.string().nullable(),
+});
+
 // A recorded ProjectToolUsage edge for a tool we did not own while the project
 // ran. The `trade_match` suggestion lane shipped without consulting ownership
 // dates, so it drew candidates from the whole present-day tool shelf — for a
@@ -639,6 +666,7 @@ const problemsFastShape = {
   productsMissingPrice: z.array(productMissingPriceSchema),
   unvaluedBucketProducts: z.array(productMissingPriceSchema),
   soldButStillStocked: z.array(soldButStillStockedSchema),
+  unlinkedExitExpenses: z.array(unlinkedExitExpenseSchema),
   negativeExpectedQuantity: z.array(negativeExpectedQuantitySchema),
   toolsUsedOutsideOwnership: z.array(toolUsedOutsideOwnershipSchema),
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
@@ -791,6 +819,12 @@ export const PROBLEM_CLASS = {
   // instead mean the disposal was mis-recorded, and deleting inventory has no
   // restore path.
   soldButStillStocked: "defect",
+  // Every row is a sale whose product was never identified, so the ledger
+  // cannot say what left. Converges: each row is either linked to a product or
+  // recorded as an exception. No auto-fix — deciding WHICH product a marketplace
+  // payout describes is the whole of the work, and guessing it would write a
+  // false ownership history that `soldButStillStocked` would then trust.
+  unlinkedExitExpenses: "defect",
   // A contradiction, not a shortfall: more units left than ever arrived, so
   // some row is wrong and fixing it removes the product from the list for
   // good. `coverage` would be wrong — there is no denominator, and no reported
@@ -984,6 +1018,7 @@ export type DuplicateUniqueProduct = z.infer<
 export type OrphanedProduct = z.infer<typeof orphanedProductSchema>;
 export type ProductMissingPrice = z.infer<typeof productMissingPriceSchema>;
 export type SoldButStillStocked = z.infer<typeof soldButStillStockedSchema>;
+export type UnlinkedExitExpense = z.infer<typeof unlinkedExitExpenseSchema>;
 export type NegativeExpectedQuantity = z.infer<
   typeof negativeExpectedQuantitySchema
 >;
