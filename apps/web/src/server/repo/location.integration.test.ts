@@ -1,3 +1,4 @@
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import { unsafeLocationId, unsafeProductId } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { count, eq } from "drizzle-orm";
@@ -12,6 +13,7 @@ import {
   findOrCreateLocationByName,
   getLocationById,
   locationList,
+  locationSearch,
   updateLocation,
 } from "./location";
 import { createProduct } from "./product";
@@ -186,6 +188,154 @@ describe("bulkReparentLocations", () => {
 
     const updated = await getLocationById(ctx.db, childId);
     expect(updated.parent?.id).toEqual(parent.id);
+  });
+});
+
+describe("locationSearch picker rows", () => {
+  const ctx = withTestDb();
+
+  const searchFor = (name: string) =>
+    locationSearch(
+      ctx.db,
+      { nameFilter: name },
+      [{ orderBy: "name", direction: "asc" }],
+      { pageIndex: 0, pageSize: 50 },
+    );
+
+  /** Create a chain root → … → leaf, returning every created location. */
+  const makeChain = async (names: string[]) => {
+    const created = [];
+    let parentId: LocationShortcode | null = null;
+    for (const name of names) {
+      const node = await createLocation(
+        ctx.db,
+        makeLocationInput({ name, type: "shelf", parentId }),
+        ctx.actor,
+      );
+      created.push(node);
+      parentId = node.id;
+    }
+    return created;
+  };
+
+  const idOf = async (shortcode: string) =>
+    unsafeLocationId(
+      (await resolveLiveShortcode(ctx.db, shortcode, "location"))!,
+    );
+
+  it("returns the ancestor chain root-first, excluding the location itself", async () => {
+    const [, , , leaf] = await makeChain([
+      "House",
+      "Garage",
+      "Workbench",
+      "tool chest",
+    ]);
+
+    const found = await searchFor("tool chest");
+    expect(found.data).toHaveLength(1);
+    expect(found.data[0]!.id).toBe(leaf!.id);
+    expect(found.data[0]!.ancestors.map((a) => a.name)).toEqual([
+      "House",
+      "Garage",
+      "Workbench",
+    ]);
+  });
+
+  it("returns an empty chain for a top-level location", async () => {
+    await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Standalone Room", type: "room" }),
+      ctx.actor,
+    );
+
+    const found = await searchFor("Standalone Room");
+    expect(found.data[0]!.ancestors).toEqual([]);
+  });
+
+  it("truncates the chain at a soft-deleted ancestor rather than skipping it", async () => {
+    const [root, middle, , leaf] = await makeChain([
+      "Live Root",
+      "Doomed Middle",
+      "Live Inner",
+      "Deep Bin",
+    ]);
+    await getDb(ctx.db)
+      .update(location)
+      .set({ deletedAt: new Date() })
+      .where(eq(location.id, await idOf(middle!.id)));
+
+    // "Live Root › Live Inner" would assert a containment that no longer
+    // exists — the visible path has to stop at the gap.
+    const found = await searchFor("Deep Bin");
+    expect(found.data[0]!.id).toBe(leaf!.id);
+    expect(found.data[0]!.ancestors.map((a) => a.name)).toEqual(["Live Inner"]);
+    expect(found.data[0]!.ancestors.map((a) => a.name)).not.toContain(
+      root!.name,
+    );
+  });
+
+  it("stops walking up at the depth cap", async () => {
+    const names = Array.from({ length: 13 }, (_, i) => `Level ${i}`);
+    const chain = await makeChain(names);
+
+    const found = await searchFor("Level 12");
+    expect(found.data[0]!.id).toBe(chain.at(-1)!.id);
+    // 10 rungs above the leaf, not the full 12.
+    expect(found.data[0]!.ancestors).toHaveLength(10);
+    expect(found.data[0]!.ancestors.at(-1)!.name).toBe("Level 11");
+  });
+
+  it("picks the first displayable image by sort order as the cover", async () => {
+    const created = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Photographed Bin" }),
+      ctx.actor,
+    );
+    const entityId = await idOf(created.id);
+
+    const addImage = async (
+      key: string,
+      sortOrder: number,
+      overrides: { contentType?: string; renderStatus?: "failed" } = {},
+    ) => {
+      const img = await insertAndReturn(ctx.db, image, {
+        key,
+        url: `https://example.com/${key}.png`,
+        filename: `${key}.png`,
+        contentType: overrides.contentType ?? "image/png",
+        size: 100,
+        status: "UPLOADED",
+        ...(overrides.renderStatus
+          ? { renderStatus: overrides.renderStatus }
+          : {}),
+      });
+      await insertAndReturn(ctx.db, locationImage, {
+        locationId: entityId,
+        imageId: img.id,
+        sortOrder,
+      });
+      return img;
+    };
+
+    // Sort order 0 is a PDF and 1 a failed render: neither can be drawn, so the
+    // cover slot falls through to the first image that actually renders.
+    await addImage("bin-manual", 0, { contentType: PDF_CONTENT_TYPE });
+    await addImage("bin-broken", 1, { renderStatus: "failed" });
+    const usable = await addImage("bin-photo", 2);
+
+    const found = await searchFor("Photographed Bin");
+    expect(found.data[0]!.coverImage?.id).toBe(usable.id);
+  });
+
+  it("leaves coverImage null when a location has no image", async () => {
+    await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Bare Bin" }),
+      ctx.actor,
+    );
+
+    const found = await searchFor("Bare Bin");
+    expect(found.data[0]!.coverImage).toBeNull();
   });
 });
 

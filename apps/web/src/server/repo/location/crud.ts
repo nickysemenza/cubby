@@ -8,13 +8,24 @@ import type {
   ImpactItem,
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
-import { type LocationId, unsafeLocationId } from "@cubby/schemas/identifiers";
+import {
+  type LocationId,
+  unsafeLocationId,
+  unsafeLocationShortcode,
+} from "@cubby/schemas/identifiers";
+import type { ImageOut } from "@cubby/schemas/image";
+import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type {
   InfLocation,
   LocationCreateInput,
+  LocationPickerItemOut,
   LocationUpdateInput,
 } from "@cubby/schemas/location";
-import { locationSortableFields } from "@cubby/schemas/location";
+import {
+  locationPickerSortableFields,
+  locationSortableFields,
+  locationType,
+} from "@cubby/schemas/location";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -22,6 +33,7 @@ import {
 } from "@cubby/schemas/pagination";
 import { and, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 import { countBy, uniq } from "es-toolkit";
+import { parseWithContext } from "~/lib/zod-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -54,7 +66,9 @@ import {
   formatSearchTerm,
   getDb,
   idSetPresence,
+  imageOrder,
   lockAndValidateForDelete,
+  mapImages,
   nextImageSortOrder,
   notDeleted,
   relations,
@@ -83,7 +97,7 @@ import type {
   LocationFilters,
   LocationWithParentChild,
 } from "./internal-types";
-import { wouldCreateParentCycle } from "./tree";
+import { loadLocationAncestors, wouldCreateParentCycle } from "./tree";
 
 export const LOCATION_DELETE_EDGE_POLICY = {
   "InventoryEntry.locationId": {
@@ -629,6 +643,20 @@ export const previewDeleteLocations = async (
   return { blockers, changes, sideEffects };
 };
 
+/**
+ * The free-text match behind both the location table's name filter and the
+ * picker typeahead: name ∪ AI description ∪ aliases. Shared so the two surfaces
+ * can't drift into disagreeing about what "matches" means.
+ */
+const locationNameSearchCondition = (nameFilter: string | undefined) =>
+  nameFilter
+    ? or(
+        formatSearchTerm(location.name, nameFilter),
+        formatSearchTerm(location.aiDescription, nameFilter),
+        sql`EXISTS (SELECT 1 FROM unnest(${location.aliases}) AS alias WHERE alias ILIKE ${`%${nameFilter}%`})`,
+      )
+    : undefined;
+
 export const locationList = async (
   db: Database,
   filters: LocationFilters,
@@ -693,13 +721,6 @@ export const locationList = async (
     .groupBy(inventoryEntry.locationId)
     .having(sql`count(*) > ${filters.directItemCountMax ?? 0}`);
 
-  const pickerSearch = filters.nameFilter
-    ? or(
-        formatSearchTerm(location.name, filters.nameFilter),
-        formatSearchTerm(location.aiDescription, filters.nameFilter),
-        sql`EXISTS (SELECT 1 FROM unnest(${location.aliases}) AS alias WHERE alias ILIKE ${`%${filters.nameFilter}%`})`,
-      )
-    : undefined;
   const whereClause = buildSearchConditions(
     location,
     [],
@@ -710,7 +731,7 @@ export const locationList = async (
         filters as unknown as Record<string, unknown>,
         location.id,
       ),
-      pickerSearch,
+      locationNameSearchCondition(filters.nameFilter),
       eqAny(location.type, filters.itemTypeFilter),
       parentCondition,
       idSetPresence(
@@ -801,6 +822,147 @@ export const locationList = async (
     dbLocationToListAPI(row, pricingByProductId),
   );
   return { data: items, count: totalCount };
+};
+
+/**
+ * Cover photo per location — first displayable image by `imageOrder` — for a
+ * page of ids, in one query. Non-displayable rows (PDF attachments, failed
+ * renders, missing storage) don't block the location: the next image gets the
+ * slot, matching what the thumbnail cells elsewhere actually render.
+ */
+const loadLocationCoverImages = async (
+  db: Database,
+  ids: LocationId[],
+): Promise<Map<LocationId, ImageOut>> => {
+  const byId = new Map<LocationId, ImageOut>();
+  if (ids.length === 0) return byId;
+
+  const rows = await getDb(db).query.locationImage.findMany({
+    where: and(
+      inArray(locationImage.locationId, ids),
+      notDeleted(locationImage),
+    ),
+    orderBy: imageOrder,
+    with: { image: true },
+  });
+
+  for (const row of rows) {
+    if (byId.has(row.locationId)) continue;
+    const [mapped] = mapImages([row]);
+    if (mapped && isDisplayableImageFile(mapped)) {
+      byId.set(row.locationId, mapped);
+    }
+  }
+  return byId;
+};
+
+/**
+ * Lightweight location search for typeahead/picker comboboxes.
+ *
+ * Returns the picker shape only — scalar columns plus the ancestor breadcrumb
+ * and cover photo a dropdown row needs to tell repeated names apart. It
+ * deliberately skips the inventory-entry / product / valuation relation load
+ * AND the batched product-pricing pass that `locationList` pays for, none of
+ * which a picker renders. Same split as `productSearch`.
+ */
+export const locationSearch = async (
+  db: Database,
+  // Narrowed on purpose: this path ignores the date/valuation/count filters,
+  // and the type should say so rather than accept the full LocationFilters and
+  // silently drop them.
+  filters: Pick<
+    LocationFilters,
+    | "nameFilter"
+    | "itemTypeFilter"
+    | "parentId"
+    | "parentPresenceFilter"
+    | "inventoryPresenceFilter"
+  >,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+): Promise<{ data: LocationPickerItemOut[]; count: number }> => {
+  const parentCodes = filters.parentId ? [filters.parentId].flat() : [];
+  const parentIds = await resolveAllPresent(db, "location", parentCodes);
+  // A requested-but-unresolvable parent must match nothing rather than widening
+  // to an unfiltered query — same rule as `locationList`.
+  const parentCondition =
+    parentCodes.length > 0 && parentIds.length === 0
+      ? filters.parentPresenceFilter
+        ? eqAnyOrPresence(location.parentId, [], filters.parentPresenceFilter)
+        : sql`false`
+      : eqAnyOrPresence(
+          location.parentId,
+          parentIds,
+          filters.parentPresenceFilter,
+        );
+
+  const locationIdsWithLiveInventory = getDb(db)
+    .select({ locationId: inventoryEntry.locationId })
+    .from(inventoryEntry)
+    .innerJoin(
+      product,
+      and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
+    )
+    .where(notDeleted(inventoryEntry));
+
+  const whereClause = buildSearchConditions(
+    location,
+    [],
+    [
+      locationNameSearchCondition(filters.nameFilter),
+      eqAny(location.type, filters.itemTypeFilter),
+      parentCondition,
+      idSetPresence(
+        location.id,
+        filters.inventoryPresenceFilter,
+        locationIdsWithLiveInventory,
+      ),
+    ],
+  );
+
+  const orderByClause = buildOrderBy(location, sorts, [
+    ...locationPickerSortableFields,
+  ]);
+  const { take, skip } = buildTakeSkip(pagination);
+
+  const { data: results, count: totalCount } = await executeListQueryWithCount(
+    // No `...relations.location.list` — scalar columns only.
+    getDb(db).query.location.findMany({
+      where: whereClause,
+      columns: {
+        id: true,
+        shortcode: true,
+        name: true,
+        type: true,
+        aliases: true,
+      },
+      orderBy: orderByClause,
+      limit: take,
+      offset: skip,
+    }),
+    countWhere(db, location, whereClause),
+  );
+
+  const pageIds = results.map((row) => row.id);
+  const [ancestorsById, coverById] = await Promise.all([
+    loadLocationAncestors(db, pageIds),
+    loadLocationCoverImages(db, pageIds),
+  ]);
+
+  const data = results.map((row) => ({
+    id: unsafeLocationShortcode(row.shortcode),
+    name: row.name,
+    // `type` is a free-text column; parse it the same way dbLocationToAPI does.
+    type: parseWithContext(locationType, row.type, {
+      entityType: "Location",
+      identifier: { id: row.id, name: row.name },
+    }),
+    aliases: row.aliases ?? [],
+    ancestors: ancestorsById.get(row.id) ?? [],
+    coverImage: coverById.get(row.id) ?? null,
+  }));
+
+  return { data, count: totalCount };
 };
 
 export const updateLocationAiDescription = async (

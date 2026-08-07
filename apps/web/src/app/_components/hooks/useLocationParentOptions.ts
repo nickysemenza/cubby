@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { useTRPC } from "~/integrations/trpc/react";
 
-const NO_PARENT_LOCATION_OPTIONS: Array<{ value: string; label: string }> = [];
+const NO_PARENT_LOCATION_OPTIONS: FilterableComboboxItem[] = [];
 
 /**
  * Locations with at least one live child, as `{value,label}` options —
@@ -17,11 +18,12 @@ export function useLocationParentOptions() {
     api.location.parentOptions.queryOptions(),
   );
 
-  const options = useMemo(
+  const options = useMemo<FilterableComboboxItem[]>(
     () =>
       data?.map((location) => ({
         value: location.id as string,
         label: location.name,
+        detail: location.ancestors.map((a) => a.name).join(" › ") || undefined,
       })) ?? NO_PARENT_LOCATION_OPTIONS,
     [data],
   );

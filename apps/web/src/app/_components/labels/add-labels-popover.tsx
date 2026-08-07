@@ -6,7 +6,7 @@ import { uniq } from "es-toolkit";
 import { Plus, Search, Users } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { LocationIcon } from "~/app/_components/locations/location-icons";
+import { LocationPickerThumb } from "~/app/_components/locations/location-picker-thumb";
 import { typeSupportsQrCode } from "~/app/_components/locations/location-type-theme";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -40,8 +40,10 @@ export function AddLabelsPopover({
     }
   }, [open]);
 
+  // `location.search`, not `.list`: this roster only renders name + breadcrumb
+  // + cover, so it has no use for `.list`'s inventory/product/pricing payload.
   const { data: searchResults, isLoading } = useQuery({
-    ...api.location.list.queryOptions({
+    ...api.location.search.queryOptions({
       filters: { nameFilter: debouncedSearch || undefined },
       pagination: { pageIndex: 0, pageSize: 10 },
       sort: { orderBy: "name", direction: "asc" },
@@ -117,7 +119,11 @@ export function AddLabelsPopover({
           </Button>
         }
       />
-      <PopoverContent align="start" className="w-80 p-0">
+      {/* w-96, not w-80: the Add/Children pair takes a fixed ~7rem, and at the
+          narrower width the breadcrumb squeezed names down to "2 drawer packout
+          …" — dropping exactly the "lower"/"upper" suffix it exists to
+          disambiguate. */}
+      <PopoverContent align="start" className="w-96 p-0">
         <div className="flex items-center gap-2 border-b px-2 py-2">
           <Search className="size-4 shrink-0 text-muted-foreground" />
           <input
@@ -144,11 +150,18 @@ export function AddLabelsPopover({
                 key={loc.id}
                 className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm" /* tight */
               >
-                <LocationIcon
+                <LocationPickerThumb
+                  imageUrl={loc.coverImage?.url}
                   type={loc.type}
-                  className="size-4 shrink-0 text-muted-foreground"
                 />
-                <span className="min-w-0 flex-1 truncate">{loc.name}</span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate">{loc.name}</span>
+                  {loc.ancestors.length > 0 && (
+                    <span className="truncate text-muted-foreground text-xs">
+                      {loc.ancestors.map((a) => a.name).join(" › ")}
+                    </span>
+                  )}
+                </span>
                 <div className="flex shrink-0 gap-1">
                   {typeSupportsQrCode(loc.type) && loc.id && (
                     <button

@@ -21,6 +21,8 @@ import {
   locationFiltersSchema,
   locationListItemOut,
   locationParentOptionsOut,
+  locationPickerItemOut,
+  locationPickerSortableFields,
   locationShortcodesInput,
   locationSortableFields,
   locationsWithParentNameOut,
@@ -41,6 +43,7 @@ import {
   getLocationsByShortcodes,
   locationList,
   locationParentOptions,
+  locationSearch,
   updateLocation,
   updateLocationAiDescription,
 } from "~/server/repo/location";
@@ -92,6 +95,44 @@ const { list } = createEntityListProcedure({
         sort,
         pagination,
         groupBy,
+      );
+    },
+  },
+  entityName: "location",
+});
+
+// Lightweight typeahead for location-picker comboboxes and picklists. Same
+// filters/pagination shape as `list`, but the repo skips the inventory-entry /
+// product / valuation relation load AND the batched product-pricing pass that
+// `list` pays for — none of which a dropdown row renders. What it adds instead
+// is what a dropdown row actually needs: the ancestor breadcrumb and the cover
+// photo. Defaults to name order, not `list`'s `createdAt`, because a typeahead
+// roster in creation order is unscannable.
+const { list: search } = createEntityListProcedure({
+  schemas: {
+    output: locationPickerItemOut,
+    filters: locationFiltersSchema,
+    sort: {
+      sortableFields: locationPickerSortableFields,
+      defaultSort: "name",
+    },
+  },
+  repository: {
+    list: async (services, filters, sort, pagination) => {
+      // Explicit pick, not a spread: `locationSearch` ignores the date,
+      // valuation, and count filters by design, and its narrowed param type
+      // makes that a compile error rather than a silent drop.
+      return await locationSearch(
+        services.db,
+        {
+          nameFilter: filters.nameFilter,
+          itemTypeFilter: filters.itemTypeFilter,
+          parentId: filters.parentId,
+          parentPresenceFilter: filters.parentPresenceFilter,
+          inventoryPresenceFilter: filters.inventoryPresenceFilter,
+        },
+        sort,
+        pagination,
       );
     },
   },
@@ -276,6 +317,7 @@ const recomputeValuations = protectedProcedure
 
 export const locationRouter = createTRPCRouter({
   list,
+  search,
   getByID,
   getByShortcode,
   getByShortcodes,

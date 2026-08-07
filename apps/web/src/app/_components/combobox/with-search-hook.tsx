@@ -23,6 +23,7 @@ import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import {
   buildIngredientComboboxItem,
   buildLocationComboboxItem,
+  buildLocationComboboxItemFromDetail,
   buildProductComboboxItem,
   buildProjectComboboxItem,
   buildRecipeComboboxItem,
@@ -158,15 +159,23 @@ export function WithLocationSearch({
   } = useEntitySearchWithDialog<LocationShortcode>();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
+  // `location.search` (not `.list`): the picker needs {id, name, type,
+  // ancestors, coverImage}, so it skips the inventory-entry + product relation
+  // joins and the batched product-pricing pass that `.list` pays for on every
+  // keystroke.
   const parsedCode = parseShortcode(searchQuery);
   const exactCode =
     parsedCode?.type === "location" ? parsedCode.shortcode : null;
   const searchingByCode = parsedCode != null;
 
   const { data, isLoading } = useQuery({
-    ...api.location.list.queryOptions({
+    ...api.location.search.queryOptions({
       filters: { nameFilter: searchQuery },
       pagination,
+      // Explicit: the list factory's default direction is `desc` (right for a
+      // `createdAt` table, backwards for a name-ordered typeahead — it opened
+      // on "zipties & pads").
+      sort: { orderBy: "name", direction: "asc" },
     }),
     enabled: enabled && !searchingByCode,
   });
@@ -186,7 +195,7 @@ export function WithLocationSearch({
       ),
     invalidateKeys: locationMutationInvalidateKeys,
     onSuccess: (newLocation) =>
-      resolveWithEntity(buildLocationComboboxItem(newLocation)),
+      resolveWithEntity(buildLocationComboboxItemFromDetail(newLocation)),
     error: (err) => `Failed to create location: ${getErrorMessage(err)}`,
   });
 
@@ -208,7 +217,7 @@ export function WithLocationSearch({
       {children({
         items: searchingByCode
           ? exactItem
-            ? [buildLocationComboboxItem(exactItem)]
+            ? [buildLocationComboboxItemFromDetail(exactItem)]
             : []
           : (data?.items.map(buildLocationComboboxItem) ?? []),
         onSearchChange,

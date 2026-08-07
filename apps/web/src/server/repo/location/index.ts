@@ -11,8 +11,9 @@
  *                          AI-description backfill helpers)
  *   LOOKUP → `lookup.ts`  (find-or-create by name, by-shortcode reads, recently
  *                          active)
- *   TREE   → `tree.ts`    (buildLocationTree / type counts derived read-time;
- *                          there is no materialized path column)
+ *   TREE   → `tree.ts`    (buildLocationTree downward / loadLocationAncestors
+ *                          upward, both derived read-time; there is no
+ *                          materialized path column)
  *
  * Sibling relationships: holds `inventory` entries (`inventoryEntry.locationId`).
  * `helpers.ts` / `internal-types.ts` are internal and not re-exported.
@@ -28,6 +29,7 @@ export {
   getLocationById,
   isGlobalUnknownLocation,
   locationList,
+  locationSearch,
   updateLocation,
   updateLocationAiDescription,
 } from "./crud";
@@ -39,6 +41,8 @@ export {
   locationParentOptions,
 } from "./lookup";
 // Tree and hierarchy operations
+// `loadLocationAncestors` / `wouldCreateParentCycle` stay module-internal —
+// they're inputs to the reads below, not operations of their own.
 export { buildLocationTree } from "./tree";
 // Valuation rollup persistence
 export {
