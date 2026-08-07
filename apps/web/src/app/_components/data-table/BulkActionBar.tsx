@@ -83,7 +83,9 @@ export function BulkActionBar<TData>({
         </Button>
       )}
 
-      <LayoutRow align="center" gap="xs">
+      {/* Wraps because the action count is per-entity and open-ended — Tasks
+          already carries five before the shared Copy and Delete. */}
+      <LayoutRow align="center" gap="xs" wrap>
         {actions.map((action) => (
           <Button
             key={action.id}

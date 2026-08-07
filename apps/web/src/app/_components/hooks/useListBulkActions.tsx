@@ -1,5 +1,9 @@
+import type { Entity } from "@cubby/schemas/entity";
+import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import type { Row, Table } from "@tanstack/react-table";
+import { ClipboardCopy } from "lucide-react";
 import { useMemo } from "react";
+import { copyShortcodes } from "~/lib/clipboard";
 import {
   BulkActionBar,
   type BulkActionBarProps,
@@ -13,23 +17,60 @@ import {
   useBulkActions,
 } from "../data-table/useBulkActions";
 
-export function useListBulkActions<TData>({
+/**
+ * "Copy shortcodes" for every shortcode-bearing entity list.
+ *
+ * Generic because a list row's `id` IS its public shortcode (see
+ * `nameColumnParams` in columnHelpers.tsx, which builds every detail link as
+ * `{ shortcode: String(row.id) }`). `image` is the one entity whose id stays a
+ * uuid, so it's gated out by the `shortcodeEntities` roster rather than by a
+ * second hand-kept list.
+ *
+ * Foreign child rows in a tree can't reach this: `EntityListTreeConfig.rowIsEntity`
+ * already turns selection off for them, so their synthetic `parent:child` ids
+ * never enter a selection.
+ */
+function useCopyShortcodesAction<TData extends { id: string }>(
+  entity: Entity,
+): BulkAction<TData> | null {
+  return useMemo(() => {
+    if (!(shortcodeEntities as readonly Entity[]).includes(entity)) return null;
+    return {
+      id: "copy-shortcodes",
+      label: "Copy codes",
+      icon: <ClipboardCopy className="size-3.5" />,
+      preserveSelection: true,
+      onExecute: async (rows) => ({
+        success: await copyShortcodes(rows.map((row) => row.original.id)),
+      }),
+    };
+  }, [entity]);
+}
+
+export function useListBulkActions<TData extends { id: string }>({
+  entity,
   bulkActions,
   deleteBulkAction,
 }: {
+  entity: Entity;
   bulkActions?: BulkActionsConfig<TData>;
   deleteBulkAction?: BulkAction<TData> | null;
 }) {
+  const copyAction = useCopyShortcodesAction<TData>(entity);
+
   const config = useMemo((): BulkActionsConfig<TData> | undefined => {
-    if (!deleteBulkAction && !bulkActions) return undefined;
+    if (!deleteBulkAction && !bulkActions && !copyAction) return undefined;
     return {
       ...bulkActions,
+      // Copy leads and delete trails: the cheap, reversible action sits where
+      // the pointer already is, the destructive one stays furthest from it.
       actions: [
+        ...(copyAction ? [copyAction] : []),
         ...(bulkActions?.actions ?? []),
         ...(deleteBulkAction ? [deleteBulkAction] : []),
       ],
     };
-  }, [bulkActions, deleteBulkAction]);
+  }, [bulkActions, copyAction, deleteBulkAction]);
   const emptyConfig = useMemo<BulkActionsConfig<TData>>(
     () => ({ actions: [] }),
     [],

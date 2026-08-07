@@ -1,8 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import { cva, type VariantProps } from "class-variance-authority";
-import type { LucideIcon } from "lucide-react";
-import type { CSSProperties, ReactNode } from "react";
+import { Check, ClipboardCopy, type LucideIcon } from "lucide-react";
+import { type CSSProperties, type ReactNode, useState } from "react";
 import { getEntityNavGroup } from "~/app/_components/navigation/nav-items";
 import { ImageGallery } from "~/components/media/image-gallery";
 import { Card, CardContent } from "~/components/ui/card";
@@ -10,6 +10,7 @@ import { EYEBROW_CLASS, Eyebrow } from "~/components/ui/eyebrow";
 import { InkStamp } from "~/components/ui/ink-stamp";
 import { entities } from "~/entities/entities";
 import { ENTITY_ACCENTS } from "~/entities/entity-accents";
+import { copyShortcodes } from "~/lib/clipboard";
 import { cn, formatCount } from "~/lib/utils";
 
 const heroVariants = cva(
@@ -177,10 +178,42 @@ function DetailBreadcrumb({
       {heroNo && (
         <>
           <EyebrowSeparator />
-          <span className="text-foreground">No. {heroNo}</span>
+          <CopyableHeroNo heroNo={heroNo} />
         </>
       )}
     </nav>
+  );
+}
+
+/**
+ * The breadcrumb's reference-code leaf, click-to-copy.
+ *
+ * The shortcode is the id every other surface speaks — MCP payloads, QR labels,
+ * URLs — so the one place it's always on screen should hand it over rather than
+ * make it retypeable-only. Not a `Button`: it has to keep the breadcrumb's
+ * eyebrow type, and a variant would fight it.
+ */
+function CopyableHeroNo({ heroNo }: { heroNo: string }) {
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <button
+      type="button"
+      title="Copy shortcode"
+      className="inline-flex items-center gap-1 text-foreground transition-colors hover:text-primary"
+      onClick={async () => {
+        if (!(await copyShortcodes([heroNo]))) return;
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+    >
+      No. {heroNo}
+      {copied ? (
+        <Check className="size-3" />
+      ) : (
+        <ClipboardCopy className="size-3 opacity-60" />
+      )}
+    </button>
   );
 }
 

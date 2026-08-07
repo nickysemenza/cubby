@@ -63,7 +63,11 @@ export function useBulkActions<TData>({
       try {
         const result = await action.onExecute(selectedRows);
 
-        if (result.success && config.clearSelectionOnComplete !== false) {
+        if (
+          result.success &&
+          !action.preserveSelection &&
+          config.clearSelectionOnComplete !== false
+        ) {
           setRowSelection({});
         }
       } finally {

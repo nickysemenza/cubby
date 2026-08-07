@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Row, Stack } from "~/components/layout";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
+import { copyText } from "~/lib/clipboard";
 import { setFlag } from "~/lib/flags";
 import {
   type PerfSnapshot,
@@ -102,29 +103,13 @@ export function PerfOverlay() {
       ...snapshot(),
     };
     const json = JSON.stringify(report, null, 2);
-    // Modern clipboard (needs a secure context + user gesture)…
-    try {
-      await navigator.clipboard.writeText(json);
+    if (await copyText(json)) {
       toast.success("Perf report copied as JSON");
       return;
-    } catch {
-      // …fall back to the legacy execCommand path…
     }
-    try {
-      const ta = document.createElement("textarea");
-      ta.value = json;
-      ta.style.cssText = "position:fixed;top:0;left:0;opacity:0";
-      document.body.appendChild(ta);
-      ta.select();
-      const ok = document.execCommand("copy");
-      ta.remove();
-      if (ok) {
-        toast.success("Perf report copied as JSON");
-        return;
-      }
-    } catch {
-      // …finally guarantee the data is recoverable via the console.
-    }
+    // A third tier the shared helper doesn't have, and shouldn't: when both
+    // clipboard paths are blocked, the report is still recoverable because
+    // this surface has a console to dump it to.
     // eslint-disable-next-line no-console
     console.log("[perf] report:\n", json);
     toast.message("Clipboard blocked — perf report logged to console");

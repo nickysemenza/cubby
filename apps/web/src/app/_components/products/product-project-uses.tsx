@@ -148,26 +148,27 @@ export function ProductProjectUses({ productId }: { productId: string }) {
     [helper, category],
   );
 
-  const { table, deleteDialog } = useClientEntityList<ProjectUseRow>({
-    entity: "project",
-    data: rows,
-    columns,
-    tableStateOptions: EMBEDDED_TABLE_STATE,
-    columnVisibilityScope: "product-uses",
-    initialColumnVisibility: HIDDEN_RELATED_COLUMNS,
-    extraActions: (row) => (
-      <DropdownMenuItem
-        disabled={detach.isPending}
-        onClick={(event) => {
-          event.stopPropagation();
-          detach.mutate({ projectId: row.id, productId, used: false });
-        }}
-      >
-        <X />
-        Remove from project
-      </DropdownMenuItem>
-    ),
-  });
+  const { table, bulkActionBar, deleteDialog } =
+    useClientEntityList<ProjectUseRow>({
+      entity: "project",
+      data: rows,
+      columns,
+      tableStateOptions: EMBEDDED_TABLE_STATE,
+      columnVisibilityScope: "product-uses",
+      initialColumnVisibility: HIDDEN_RELATED_COLUMNS,
+      extraActions: (row) => (
+        <DropdownMenuItem
+          disabled={detach.isPending}
+          onClick={(event) => {
+            event.stopPropagation();
+            detach.mutate({ projectId: row.id, productId, used: false });
+          }}
+        >
+          <X />
+          Remove from project
+        </DropdownMenuItem>
+      ),
+    });
 
   if (query.isPending) {
     return <Description>Loading project uses…</Description>;
@@ -233,6 +234,7 @@ export function ProductProjectUses({ productId }: { productId: string }) {
         ariaLabel="Projects this was used on"
         sizingKey="project:product-uses"
         embedded
+        bulkActionBar={bulkActionBar}
       />
       {deleteDialog}
 

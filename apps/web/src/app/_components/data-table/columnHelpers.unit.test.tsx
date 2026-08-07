@@ -5,10 +5,14 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { type ReactNode, useMemo } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { createImageColumn, createParentLinkColumn } from "./columnHelpers";
+import {
+  createActionsColumn,
+  createImageColumn,
+  createParentLinkColumn,
+} from "./columnHelpers";
 
 /**
  * The thumbnail itself pulls in the hover-preview popup and the CF image
@@ -47,6 +51,47 @@ vi.mock("~/app/projects/project-mark", () => ({
   ProjectMarkById: () => <span aria-hidden="true">project</span>,
 }));
 
+const clipboardMocks = vi.hoisted(() => ({ copyShortcodes: vi.fn() }));
+vi.mock("~/lib/clipboard", () => ({
+  copyShortcodes: clipboardMocks.copyShortcodes,
+}));
+
+/**
+ * The actions menu is a base-ui portal that only mounts its items once opened.
+ * Flattening the primitives renders those items inline, which keeps the
+ * assertion on what `createActionsColumnBase` decides — which items exist, and
+ * with what payload — rather than on base-ui's open/close machinery.
+ */
+vi.mock("~/components/ui/dropdown-menu", () => ({
+  DropdownMenu: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DropdownMenuContent: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DropdownMenuTrigger: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DropdownMenuItem: ({
+    children,
+    onClick,
+    render,
+  }: {
+    children: ReactNode;
+    onClick?: () => void;
+    render?: { props: { to: string; params: Record<string, string> } };
+  }) =>
+    render ? (
+      <a href={`${render.props.to}:${Object.values(render.props.params)[0]}`}>
+        {children}
+      </a>
+    ) : (
+      <button type="button" onClick={onClick}>
+        {children}
+      </button>
+    ),
+}));
+
 type ParentValue = { id: string | null; name: string | null };
 
 type TaskRow = {
@@ -64,7 +109,10 @@ type ProjectRow = {
  * exercised the way `<RTable>` runs them — a hand-built `info.getValue()` would
  * test the cell body while silently accepting a wrong `idField`/`nameField`.
  */
-function renderColumn<TRow>(column: ColumnDef<TRow, ParentValue>, row: TRow) {
+function renderColumn<TRow, TValue = ParentValue>(
+  column: ColumnDef<TRow, TValue>,
+  row: TRow,
+) {
   function Harness() {
     const table = useReactTable({
       data: [row],
@@ -283,5 +331,39 @@ describe("createImageColumn", () => {
 
     render(<PdfHarness />);
     expect(screen.getByTestId("thumb")).toHaveTextContent("1");
+  });
+});
+
+describe("createActionsColumn", () => {
+  interface ActionRow {
+    id: string;
+  }
+
+  const actionsColumn = (entity: "product" | "image") =>
+    createActionsColumn(createColumnHelper<ActionRow>(), entity) as ColumnDef<
+      ActionRow,
+      unknown
+    >;
+
+  it("offers the row's own code, and copies exactly that", () => {
+    renderColumn<ActionRow, unknown>(actionsColumn("product"), {
+      id: "PRD-4K7M",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Copy PRD-4K7M/ }));
+
+    expect(clipboardMocks.copyShortcodes).toHaveBeenCalledWith(["PRD-4K7M"]);
+  });
+
+  // `image` is the one entity routed by uuid, so its link params carry `id`
+  // rather than `shortcode` — and a uuid must never reach the clipboard as if
+  // it were a public code.
+  it("omits the copy item for an entity routed by uuid", () => {
+    renderColumn<ActionRow, unknown>(actionsColumn("image"), {
+      id: "3f6c1e0a-0000-4000-8000-000000000000",
+    });
+
+    expect(screen.getByRole("link", { name: /View Details/ })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Copy/ })).toBeNull();
   });
 });

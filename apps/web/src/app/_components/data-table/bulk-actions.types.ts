@@ -18,6 +18,13 @@ export interface BulkAction<TData> {
   minSelection?: number;
   /** Maximum number of selected rows allowed (default: unlimited) */
   maxSelection?: number;
+  /**
+   * Keep the selection after a successful run, overriding the config-wide
+   * `clearSelectionOnComplete`. For a read-only action (copy) the selection is
+   * still what the user is working with once the action is done — dropping it
+   * is what makes them re-tick every row to copy a second thing.
+   */
+  preserveSelection?: boolean;
   /** Execute the action on selected rows */
   onExecute: (selectedRows: Row<TData>[]) => Promise<BulkActionResult>;
 }

@@ -15,7 +15,13 @@ import { Link } from "@tanstack/react-router";
 import type { CellContext, ColumnHelper } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { uniqBy } from "es-toolkit";
-import { ChevronRight, Eye, ImageIcon, MoreHorizontal } from "lucide-react";
+import {
+  ChevronRight,
+  ClipboardCopy,
+  Eye,
+  ImageIcon,
+  MoreHorizontal,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -37,6 +43,7 @@ import type {
 } from "~/entities/entities";
 import { entities } from "~/entities/entities";
 import { multiSelectFilterFn, multiSelectFilterFnBy } from "~/entities/filters";
+import { copyShortcodes } from "~/lib/clipboard";
 import { type BaseKind, gradedKinds } from "~/lib/conversion-coverage";
 import { parsePlainDate } from "~/lib/plain-date";
 import { cn, formatCurrency } from "~/lib/utils";
@@ -845,6 +852,14 @@ export function createActionsColumnBase<T>(
     cell: (info) => {
       const row = info.row.original;
       const linkProps = getLinkProps(row);
+      // Read the code off the row's OWN link params rather than `row.id` + the
+      // table's entity: that makes it right for polymorphic rows (global
+      // search) and absent for `image` — the one entity routed by uuid — with
+      // no second roster to keep in sync.
+      const shortcode =
+        linkProps && "shortcode" in linkProps.params
+          ? linkProps.params.shortcode
+          : null;
 
       return (
         <DropdownMenu>
@@ -870,6 +885,14 @@ export function createActionsColumnBase<T>(
               >
                 <Eye className="mr-2 size-3.5" />
                 View Details
+              </DropdownMenuItem>
+            )}
+            {shortcode && (
+              <DropdownMenuItem
+                onClick={() => void copyShortcodes([shortcode])}
+              >
+                <ClipboardCopy className="mr-2 size-3.5" />
+                Copy {shortcode}
               </DropdownMenuItem>
             )}
             {extraActions?.(row)}
