@@ -453,6 +453,29 @@ describe("attachFileToEntity", () => {
       expect(mocks.deleteImages).not.toHaveBeenCalled();
     });
 
+    it("names create_file_upload when the uploadId does not exist", async () => {
+      // `getImageById` throws rather than returning null, so without catching
+      // its reason the caller gets a bare "Image not found" and no hint about
+      // which id was wanted.
+      mocks.getImageById.mockRejectedValue(
+        Object.assign(new Error("Image not found"), {
+          cause: { reason: "IMAGE_NOT_FOUND" },
+        }),
+      );
+
+      await expect(
+        attachFileToEntity({} as never, { ...base, uploadId: "upl-missing" }),
+      ).rejects.toThrow(/Call create_file_upload first/);
+    });
+
+    it("propagates a non-not-found lookup failure unchanged", async () => {
+      mocks.getImageById.mockRejectedValue(new Error("database unavailable"));
+
+      await expect(
+        attachFileToEntity({} as never, { ...base, uploadId: "upl-1" }),
+      ).rejects.toThrow("database unavailable");
+    });
+
     it("refuses a row that is unassociated but already marked uploaded", async () => {
       // A standalone `/images` upload that `markUploaded` flipped. It is nobody's
       // staging row, so consuming it would still hard-delete a real file.

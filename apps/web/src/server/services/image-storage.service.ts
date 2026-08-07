@@ -286,13 +286,22 @@ const readStagedUpload = async (
   db: Database,
   uploadId: string,
 ): Promise<{ bytes: Buffer; contentType: string; filename: string }> => {
-  const staged = await getImageById(db, uploadId);
-  if (!staged) {
+  // `getImageById` THROWS `IMAGE_NOT_FOUND` on a miss rather than returning
+  // null, so a `if (!staged)` check here would be dead code and the caller
+  // would get a bare "Image not found" with no hint about which id it wanted.
+  const staged = await getImageById(db, uploadId).catch((error: unknown) => {
+    if (
+      (error as { cause?: { reason?: string } })?.cause?.reason !==
+      "IMAGE_NOT_FOUND"
+    ) {
+      throw error;
+    }
     throw createAppError(
       "IMAGE_ATTACH_FAILED",
       `Upload ${uploadId} not found. Call create_file_upload first.`,
+      error,
     );
-  }
+  });
   if (staged.status !== "PENDING" || staged.entityType !== null) {
     throw createAppError(
       "IMAGE_ATTACH_FAILED",
