@@ -270,16 +270,43 @@ export const createFileUpload = async (
   return { uploadId: imageId, uploadUrl };
 };
 
-/** Read a staged upload's bytes back out of R2. */
+/**
+ * Read a staged upload's bytes back out of R2.
+ *
+ * The PENDING/unassociated check is not a formality. `attachFileToEntity`
+ * discards the staging row on success, and `deleteImages` is a HARD delete that
+ * takes the row's entity associations with it — so an `uploadId` naming an
+ * already-attached image would duplicate the attachment and then destroy the
+ * original. That mixup is easy to make rather than exotic: `attach_file`
+ * RETURNS an `imageId` and `create_file_upload` returns an `uploadId`, both
+ * bare uuids over the same table, so a retry that reaches for the wrong one
+ * looks identical. Requiring the staged state turns it into a clean error.
+ */
 const readStagedUpload = async (
   db: Database,
   uploadId: string,
 ): Promise<{ bytes: Buffer; contentType: string; filename: string }> => {
-  const staged = await getImageById(db, uploadId);
-  if (!staged) {
+  // `getImageById` THROWS `IMAGE_NOT_FOUND` on a miss rather than returning
+  // null, so a `if (!staged)` check here would be dead code and the caller
+  // would get a bare "Image not found" with no hint about which id it wanted.
+  const staged = await getImageById(db, uploadId).catch((error: unknown) => {
+    if (
+      (error as { cause?: { reason?: string } })?.cause?.reason !==
+      "IMAGE_NOT_FOUND"
+    ) {
+      throw error;
+    }
     throw createAppError(
       "IMAGE_ATTACH_FAILED",
       `Upload ${uploadId} not found. Call create_file_upload first.`,
+      error,
+    );
+  });
+  if (staged.status !== "PENDING" || staged.entityType !== null) {
+    throw createAppError(
+      "IMAGE_ATTACH_FAILED",
+      `${uploadId} is not a staged upload — it is an existing ${staged.entityType ?? "stored"} file. ` +
+        "Pass the uploadId returned by create_file_upload, not an imageId from a previous attach_file.",
     );
   }
   const response = await getS3Object(staged.key);
