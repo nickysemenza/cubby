@@ -747,13 +747,15 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 
 ## Architecture / engineering
 
-- [ ] **Re-evaluate SSR for authenticated detail routes.** They are deliberately
-  `ssr: false` today: the SSR tRPC client targets `http://localhost`, which Cloudflare
-  returns as error 1003 instead of JSON, and that self-fetch has no request session
-  context. Re-enable only after loaders use a direct server-side caller or a
-  request-scoped origin with forwarded authentication, and a Cloudflare preview
-  hard-refresh proves finance detail pages render. First confirm that SSR's initial
-  render benefit is worth the complexity for this single-user PWA.
+- [ ] **Measure and expand selective SSR only if the product-detail pilot wins.**
+  Product detail now uses a request-scoped tRPC local link during SSR, preserving
+  the incoming session, middleware, SuperJSON, formatted errors, and the existing
+  TanStack Query key without a Cloudflare self-fetch. Its E2E proof covers initial
+  HTML with JavaScript disabled, hydration without a duplicate detail request,
+  authenticated not-found, signed-out redirect, and private no-cache headers. Run
+  the planned cold-cache Chromium and mobile-WebKit comparison before migrating any
+  other detail family; keep the remaining routes `ssr: false` unless the measured
+  LCP threshold is met without an INP/CLS or Worker-error regression.
 - [ ] **Document test placement criteria** (unit vs integration vs e2e)
 - [ ] **Selection-control consolidation — non-form phase.** Form and inline-edit
   pickers share the Base UI assignment-picker shell; remaining selectors are

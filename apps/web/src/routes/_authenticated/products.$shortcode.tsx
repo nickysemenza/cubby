@@ -8,17 +8,46 @@ import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
 import { shortcodeHead } from "~/lib/page-title";
+import { getProductDetailForSsr } from "~/lib/product-detail-server";
+
+const PRODUCT_SSR_TIMING = "cubby-product-ssr";
 
 export const Route = createFileRoute("/_authenticated/products/$shortcode")({
-  ssr: false,
   loader: async ({ params, context }) => {
+    const startedAt = import.meta.env.SSR ? performance.now() : null;
+    const queryOptions = context.trpc.product.getByShortcode.queryOptions({
+      shortcode: params.shortcode,
+    });
     const data = await context.queryClient.ensureQueryData(
-      context.trpc.product.getByShortcode.queryOptions({
-        shortcode: params.shortcode,
-      }),
+      import.meta.env.SSR
+        ? {
+            ...queryOptions,
+            // Keep the exact tRPC query key while replacing only the server's
+            // transport. The result dehydrates through the existing SuperJSON
+            // Query integration, so hydration sees a fresh cache hit and does
+            // not repeat the detail request in the browser.
+            queryFn: () =>
+              getProductDetailForSsr({
+                data: { shortcode: params.shortcode },
+              }),
+          }
+        : queryOptions,
     );
     if (!data) throw notFound();
+
+    return {
+      // This is end-to-end loader latency, not Worker CPU time: workerd clocks
+      // do not advance during synchronous CPU-only work.
+      serverTiming:
+        startedAt === null
+          ? undefined
+          : `${PRODUCT_SSR_TIMING};dur=${(performance.now() - startedAt).toFixed(1)};desc="Product detail SSR"`,
+    };
   },
+  headers: ({ loaderData }) =>
+    loaderData?.serverTiming
+      ? { "Server-Timing": loaderData.serverTiming }
+      : undefined,
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
   notFoundComponent: () => (
