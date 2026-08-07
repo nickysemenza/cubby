@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({
   createAndAssociateUploadedImage: vi.fn(),
   createOrReuseAttachedImage: vi.fn(),
   findAttachmentByIdempotencyKey: vi.fn(),
+  getImageById: vi.fn(),
+  deleteImages: vi.fn(),
+  getS3Object: vi.fn(),
   fetchExternalResponse: vi.fn(),
   resolveLiveShortcode: vi.fn(),
 }));
@@ -25,6 +28,8 @@ vi.mock("~/server/repo/image", () => ({
   createAndAssociateUploadedImage: mocks.createAndAssociateUploadedImage,
   createOrReuseAttachedImage: mocks.createOrReuseAttachedImage,
   findAttachmentByIdempotencyKey: mocks.findAttachmentByIdempotencyKey,
+  getImageById: mocks.getImageById,
+  deleteImages: mocks.deleteImages,
 }));
 
 vi.mock("~/server/repo/shortcode-resolver", () => ({
@@ -40,6 +45,7 @@ vi.mock("~/server/utils/s3", () => ({
   generateDocumentKey: (filename: string, folder?: string) =>
     `cubby/documents/${folder ? `${folder}/` : ""}${filename}`,
   generatePresignedUploadUrl: mocks.generatePresignedUploadUrl,
+  getS3Object: mocks.getS3Object,
   getS3ObjectUrl: (key: string) => `https://images.example/${key}`,
   isOurBucketUrl: () => false,
   uploadToS3: mocks.uploadToS3,
@@ -390,6 +396,79 @@ describe("attachFileToEntity", () => {
       }),
     ).rejects.toThrow(/Unsupported content type/);
     expect(mocks.uploadToS3).not.toHaveBeenCalled();
+  });
+
+  // The staged-upload mode discards its staging row on success, and
+  // `deleteImages` is a HARD delete that takes the row's entity associations
+  // with it. So an `uploadId` naming an already-attached image would duplicate
+  // the attachment and then destroy the original — and that mixup is easy to
+  // make, since `attach_file` returns an `imageId` and `create_file_upload`
+  // returns an `uploadId`, both bare uuids over the same table.
+  describe("uploadId mode", () => {
+    const stagedRow = {
+      id: "upl-1",
+      key: "cubby/images/staged.png",
+      filename: "staged.png",
+      contentType: "image/png",
+      status: "PENDING",
+      entityType: null,
+    };
+
+    it("attaches a staged upload and cleans up its staging row", async () => {
+      mocks.getImageById.mockResolvedValue(stagedRow);
+      mocks.getS3Object.mockResolvedValue({
+        ok: true,
+        arrayBuffer: async () => Buffer.from(PNG_BASE64, "base64"),
+      });
+      mocks.deleteImages.mockResolvedValue({
+        deletedIds: ["upl-1"],
+        deletedKeys: ["cubby/images/staged.png"],
+      });
+
+      const result = await attachFileToEntity({} as never, {
+        ...base,
+        uploadId: "upl-1",
+      });
+
+      expect(result.kind).toBe("image");
+      // The attachment owns its own copy, so the staging row goes away.
+      expect(mocks.deleteImages).toHaveBeenCalledWith({}, ["upl-1"]);
+    });
+
+    it("refuses an uploadId that names an already-attached image", async () => {
+      mocks.getImageById.mockResolvedValue({
+        ...stagedRow,
+        status: "UPLOADED",
+        entityType: "PRODUCT",
+      });
+
+      await expect(
+        attachFileToEntity({} as never, { ...base, uploadId: "img-existing" }),
+      ).rejects.toThrow(/not a staged upload/);
+
+      // The point of the guard: nothing is uploaded, and above all the
+      // already-attached image is NOT hard-deleted by the cleanup step.
+      expect(mocks.getS3Object).not.toHaveBeenCalled();
+      expect(mocks.uploadToS3).not.toHaveBeenCalled();
+      expect(mocks.deleteImages).not.toHaveBeenCalled();
+    });
+
+    it("refuses a row that is unassociated but already marked uploaded", async () => {
+      // A standalone `/images` upload that `markUploaded` flipped. It is nobody's
+      // staging row, so consuming it would still hard-delete a real file.
+      mocks.getImageById.mockResolvedValue({
+        ...stagedRow,
+        status: "UPLOADED",
+      });
+
+      await expect(
+        attachFileToEntity({} as never, {
+          ...base,
+          uploadId: "img-standalone",
+        }),
+      ).rejects.toThrow(/not a staged upload/);
+      expect(mocks.deleteImages).not.toHaveBeenCalled();
+    });
   });
 
   it("rolls back the R2 object when the insert+associate transaction fails", async () => {

@@ -270,7 +270,18 @@ export const createFileUpload = async (
   return { uploadId: imageId, uploadUrl };
 };
 
-/** Read a staged upload's bytes back out of R2. */
+/**
+ * Read a staged upload's bytes back out of R2.
+ *
+ * The PENDING/unassociated check is not a formality. `attachFileToEntity`
+ * discards the staging row on success, and `deleteImages` is a HARD delete that
+ * takes the row's entity associations with it — so an `uploadId` naming an
+ * already-attached image would duplicate the attachment and then destroy the
+ * original. That mixup is easy to make rather than exotic: `attach_file`
+ * RETURNS an `imageId` and `create_file_upload` returns an `uploadId`, both
+ * bare uuids over the same table, so a retry that reaches for the wrong one
+ * looks identical. Requiring the staged state turns it into a clean error.
+ */
 const readStagedUpload = async (
   db: Database,
   uploadId: string,
@@ -280,6 +291,13 @@ const readStagedUpload = async (
     throw createAppError(
       "IMAGE_ATTACH_FAILED",
       `Upload ${uploadId} not found. Call create_file_upload first.`,
+    );
+  }
+  if (staged.status !== "PENDING" || staged.entityType !== null) {
+    throw createAppError(
+      "IMAGE_ATTACH_FAILED",
+      `${uploadId} is not a staged upload — it is an existing ${staged.entityType ?? "stored"} file. ` +
+        "Pass the uploadId returned by create_file_upload, not an imageId from a previous attach_file.",
     );
   }
   const response = await getS3Object(staged.key);
