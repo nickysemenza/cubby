@@ -148,7 +148,7 @@
     "@devoxa/integresql-client": "^2.1.2",
     "@faker-js/faker": "^10.5.0",
     "@hookform/devtools": "^4.4.0",
-    "@playwright/test": "1.61.1",
+    "@playwright/test": "1.62.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@tanstack/devtools-vite": "^0.8.1",
     "@testing-library/dom": "^10.4.1",
