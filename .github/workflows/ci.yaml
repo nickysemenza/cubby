@@ -555,7 +555,7 @@ jobs:
     # path/cache without using a literal `~`; the browsers currently come from
     # the image and need no separate install or cache.
     container:
-      image: mcr.microsoft.com/playwright:v1.61.1-noble
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
       options: --user 1001
     # Shard the spec suite across parallel jobs to cut wall-clock. Each shard is
     # a *separate* job with its own postgres/integresql services + IntegreSQL DB
@@ -579,7 +579,7 @@ jobs:
         shard: [1, 2]
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
-      PLAYWRIGHT_IMAGE_VERSION: "1.61.1"
+      PLAYWRIGHT_IMAGE_VERSION: "1.62.1"
       E2E_TEST_USER_EMAIL: nicky@test.com
       E2E_TEST_USER_PASSWORD: password1234
       BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
