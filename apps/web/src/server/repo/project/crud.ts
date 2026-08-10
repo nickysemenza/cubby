@@ -435,8 +435,10 @@ export const deleteProjects = async (
       removal: "soft",
       actor,
       children: [
-        // Both ends: a dependency edge carries no meaning once either endpoint
-        // is gone, so it is hard-deleted rather than soft-deleted.
+        // First, as it was when this was a hand-written statement above the
+        // call. Both columns: a dependency row names the project from either
+        // end, and carries no meaning once either endpoint is gone — so it is
+        // hard-deleted rather than soft-deleted.
         {
           table: projectDependency,
           parentColumns: [

@@ -46,7 +46,7 @@ import {
   sum,
 } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
-import { countBy, uniq } from "es-toolkit";
+import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   expense,
@@ -99,7 +99,7 @@ import { countByTarget, impact, present } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { resolveEstablishedManufacturer } from "~/server/repo/label-canonical";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { cascadeRemoval } from "~/server/repo/removal";
+import { removeEntity } from "~/server/repo/removal";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
@@ -1716,78 +1716,28 @@ export const deleteProducts = async (
       });
     }
 
-    const now = new Date();
-
-    // Get counts of cascaded items (per product) for the audit trail.
-    const cascadedMappings = await tx.query.productUnitMappings.findMany({
-      where: and(
-        inArray(productUnitMappings.productId, ids),
-        notDeleted(productUnitMappings),
-      ),
-      columns: { productId: true },
-    });
-
-    const cascadedImages = await tx.query.productImage.findMany({
-      where: and(
-        inArray(productImage.productId, ids),
-        notDeleted(productImage),
-      ),
-      columns: { productId: true },
-    });
-
-    const cascadedExternalIds = await tx.query.productExternalId.findMany({
-      where: and(
-        inArray(productExternalId.productId, ids),
-        notDeleted(productExternalId),
-      ),
-      columns: { productId: true },
-    });
-
-    // Soft delete unit mappings
-    await tx
-      .update(productUnitMappings)
-      .set({ deletedAt: now })
-      .where(
-        and(
-          inArray(productUnitMappings.productId, ids),
-          notDeleted(productUnitMappings),
-        ),
-      );
-
-    // Soft delete external IDs
-    await tx
-      .update(productExternalId)
-      .set({ deletedAt: now })
-      .where(
-        and(
-          inArray(productExternalId.productId, ids),
-          notDeleted(productExternalId),
-        ),
-      );
-
-    // Soft delete product images
-    await tx
-      .update(productImage)
-      .set({ deletedAt: now })
-      .where(
-        and(inArray(productImage.productId, ids), notDeleted(productImage)),
-      );
-
-    // Soft delete products
-    await tx
-      .update(product)
-      .set({ deletedAt: now })
-      .where(and(inArray(product.id, ids), notDeleted(product)));
-
-    await cascadeRemoval(tx, {
+    await removeEntity(tx, {
       entity: "product",
       ids,
-      audit: { actor },
-      counts: {
-        cascadedUnitMappings: countBy(cascadedMappings, (m) => m.productId),
-        cascadedImages: countBy(cascadedImages, (i) => i.productId),
-        cascadedExternalIds: countBy(cascadedExternalIds, (e) => e.productId),
-      },
+      removal: "soft",
+      actor,
+      children: [
+        {
+          table: productUnitMappings,
+          parentColumns: [productUnitMappings.productId],
+          auditKey: "cascadedUnitMappings",
+        },
+        {
+          table: productExternalId,
+          parentColumns: [productExternalId.productId],
+          auditKey: "cascadedExternalIds",
+        },
+        {
+          table: productImage,
+          parentColumns: [productImage.productId],
+          auditKey: "cascadedImages",
+        },
+      ],
     });
   });
 };

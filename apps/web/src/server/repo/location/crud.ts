@@ -33,7 +33,7 @@ import {
   type SortParams,
 } from "@cubby/schemas/pagination";
 import { and, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
-import { countBy, uniq } from "es-toolkit";
+import { uniq } from "es-toolkit";
 import { parseWithContext } from "~/lib/zod-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -85,7 +85,7 @@ import {
 } from "~/server/repo/impact";
 import { loadProductPricing } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { cascadeRemoval } from "~/server/repo/removal";
+import { removeEntity } from "~/server/repo/removal";
 import {
   resolveAllPresent,
   resolveLiveShortcode,
@@ -521,43 +521,26 @@ export const deleteLocations = async (
         `Cannot delete ${count} location(s): ${names} have inventory entries. Move or remove them first.`,
     });
 
-    // Orphan any children by setting their parentId to null
-    // This makes them top-level locations instead of blocking deletion
+    // Orphan any children by setting their parentId to null before the parents
+    // go: a child location becomes top-level rather than blocking the delete.
+    // Not a `ChildCascade` — the row survives, only its edge is cleared.
     await tx
       .update(location)
       .set({ parentId: null })
       .where(and(inArray(location.parentId, ids), notDeleted(location)));
 
-    const now = new Date();
-
-    // Get counts of cascaded images (per location) for the audit trail.
-    const cascadedImages = await tx.query.locationImage.findMany({
-      where: and(
-        inArray(locationImage.locationId, ids),
-        notDeleted(locationImage),
-      ),
-      columns: { locationId: true },
-    });
-
-    // Soft delete location images
-    await tx
-      .update(locationImage)
-      .set({ deletedAt: now })
-      .where(
-        and(inArray(locationImage.locationId, ids), notDeleted(locationImage)),
-      );
-
-    // Soft delete locations
-    await tx
-      .update(location)
-      .set({ deletedAt: now })
-      .where(and(inArray(location.id, ids), notDeleted(location)));
-
-    await cascadeRemoval(tx, {
+    await removeEntity(tx, {
       entity: "location",
       ids,
-      audit: { actor },
-      counts: { cascadedImages: countBy(cascadedImages, (i) => i.locationId) },
+      removal: "soft",
+      actor,
+      children: [
+        {
+          table: locationImage,
+          parentColumns: [locationImage.locationId],
+          auditKey: "cascadedImages",
+        },
+      ],
     });
   });
 };

@@ -10,4 +10,5 @@
 
 export type { RemovableEntity } from "./core";
 export { cascadeRemoval } from "./core";
+export type { ChildCascade } from "./entity";
 export { removeEntity } from "./entity";

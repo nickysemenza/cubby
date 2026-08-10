@@ -52,7 +52,7 @@ import {
   resolveProductPricing,
 } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { cascadeRemoval } from "~/server/repo/removal";
+import { removeEntity } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveLiveShortcode,
@@ -498,20 +498,19 @@ export const deleteWishes = async (
   const ids = await resolveAllOrThrow(db, "wish", shortcodes);
   await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, wish, ids, "Wish");
-    const now = new Date();
-    await tx
-      .update(wishCandidate)
-      .set({ deletedAt: now })
-      .where(
-        and(inArray(wishCandidate.wishId, ids), notDeleted(wishCandidate)),
-      );
-    await tx
-      .update(wish)
-      .set({ deletedAt: now })
-      .where(and(inArray(wish.id, ids), notDeleted(wish)));
-    // Was N singular inserts in a loop; one batch writes the same rows with one
-    // shared `createdAt` instead of N distinct ones.
-    await cascadeRemoval(tx, { entity: "wish", ids, audit: { actor } });
+    await removeEntity(tx, {
+      entity: "wish",
+      ids,
+      removal: "soft",
+      actor,
+      children: [
+        {
+          table: wishCandidate,
+          parentColumns: [wishCandidate.wishId],
+          auditKey: "cascadedCandidates",
+        },
+      ],
+    });
   });
 };
 

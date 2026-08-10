@@ -747,14 +747,16 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 
 ## Architecture / engineering
 
-- [ ] **Root-cause the E2E shard-2 workerd crash.** Shard 2 dies mid-run and
-  takes the whole shard with it; shard 1 has never done this. Measured over the
-  last ~40 first-attempt E2E jobs: **shard 1 = 20/20 pass, shard 2 = 17/21**, so
-  ~19% and entirely one-sided — not generic runner flakiness. It hits unrelated
-  PRs (#670, a renovate bump, failed identically hours before the #671–#677
-  batch), and because E2E gates deploy with no `continue-on-error` (deliberately —
+- [ ] **Root-cause the E2E workerd crash.** A shard dies mid-run and takes the
+  rest of its specs with it. Over ~40 first-attempt jobs it measured **shard 1 =
+  20/20, shard 2 = 17/21**, which read as shard-2-specific — **that was sampling
+  noise, and the original framing here was wrong.** Shard 1 crashed on #680 with
+  the identical signature. Treat it as one bug that either shard can hit, more
+  often whichever one's spec mix loads the dashboard hardest; do not go looking
+  for a shard-2-specific cause. It also hits unrelated PRs (#670, a renovate
+  bump), and because E2E gates deploy with no `continue-on-error` (deliberately —
   see the comment on the job), every occurrence blocks a merge until someone
-  re-runs. It cost three re-runs during that batch alone.
+  re-runs.
   - **Shape:** wrangler prints an empty `✘ [ERROR]` and `Logs were written to
     <path>`, workerd exits, and every remaining spec fails
     `ERR_CONNECTION_REFUSED`. One crash, dozens of reported failures — reading the
@@ -782,8 +784,8 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
     occurrence stays unfalsifiable after the fact — which is why these got
     re-run instead of diagnosed. Add an `if: failure()` upload of
     `/github/home/.config/.wrangler/logs/` with `if-no-files-found: ignore`,
-    then read it on the next red shard 2: it holds the assertion workerd
-    actually died on. Pushing that edit needs `workflow` token scope.
+    then read it on the next red shard: it holds the assertion workerd actually
+    died on. Pushing that edit needs `workflow` token scope.
   - **Candidate fixes, once that log confirms the cause:** stub USDA with a
     local server returning valid empty JSON instead of a dead port, or make the
     harness fail fast with a clear message when the server dies rather than
