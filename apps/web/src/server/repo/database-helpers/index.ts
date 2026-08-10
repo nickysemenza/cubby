@@ -32,6 +32,7 @@ export {
   auditDateWhereConditions,
   buildOrderBy,
   buildSearchConditions,
+  correlated,
   countWhere,
   eqAny,
   eqAnyOrPresence,

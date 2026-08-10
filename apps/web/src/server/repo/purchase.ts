@@ -99,6 +99,7 @@ import {
   buildOrderBy,
   buildPartialUpdateValues,
   buildSearchConditions,
+  correlated,
   countWhere,
   eqAny,
   executeListQueryWithCount,
@@ -117,7 +118,11 @@ import {
   assertQuantitySignMatchesCost,
   dbExpenseToAPI,
 } from "~/server/repo/expense/helpers";
-import { calculateFinancialReconciliation } from "~/server/repo/financial-reconciliation";
+import {
+  calculateFinancialReconciliation,
+  settleableExpenseTotalSql,
+  settleableUnpricedExpenseCountSql,
+} from "~/server/repo/financial-reconciliation";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import {
@@ -207,26 +212,11 @@ export const PURCHASE_MERGE_EDGE_POLICY = {
  * charge with no lines totals 0, not null, so the reconciliation cue reads
  * "stated $431.24, lines $0" rather than going blank.
  *
- * ⚠️ **`sql.raw` with hand-qualified identifiers, NOT interpolated Drizzle
- * columns.** For a single-table `select().from(x)`, Drizzle's `buildSelection`
- * rewrites every top-level `PgColumn` chunk inside a `sql` select field to a
- * BARE identifier, stripping the table prefix — so
- * `` sql`… WHERE ${expense.purchaseId} = ${purchase.id}` `` emits
- * `WHERE "purchaseId" = "id"`, which silently self-joins `Expense` and returns 0
- * for every row. Nested SQL (`notDeleted(t)`, `eq()`) is not recursed into and
- * survives, and `orderBy` is not a select field at all — so the SAME expression
- * sorts correctly while the displayed value is wrong, which is what makes this
- * so easy to miss. Aliasing the inner table (`e`, `v`) and spelling the outer
- * reference as `"Purchase"."…"` sidesteps the rewrite entirely: `sql.raw` has no
- * column chunks to strip. Same house pattern as `resolveExpenseSort` and
- * `repo/search.ts`.
- *
- * The outer reference must stay FULLY qualified. A bare `"id"` would bind to the
- * aliased inner table (which also has an `id`), not to the outer query.
+ * Every fragment below is hand-qualified raw SQL wrapped in `correlated()` —
+ * see its doc comment in `database-helpers/query.ts` for the
+ * `buildSelection`-strips-prefixes trap that rule exists to avoid, and why
+ * `"Purchase"."id"` must stay fully qualified.
  */
-const correlated = <T>(fragment: string): SQL<T> =>
-  sql<T>`${sql.raw(fragment)}`;
-
 const purchaseExpenseCount = correlated<number>(
   `(SELECT count(*)::int FROM "Expense" e
      WHERE e."purchaseId" = "Purchase"."id" AND e."deletedAt" IS NULL)`,
@@ -243,21 +233,17 @@ const purchaseUnpricedExpenseCount = correlated<number>(
        AND e."cost" IS NULL AND e."deletedAt" IS NULL)`,
 );
 
-// Settlement compares against INCURRED spend only. `expenseTotal` above stays
-// the full figure because that is what the purchase displays — a contract's
-// total is worth seeing — but a `future: true` row cannot have settled, so
-// including it would guarantee a mismatch. Two separate numbers on purpose.
+// Settlement compares against INCURRED spend only, so it gets its own pair of
+// numbers from the shared fragments rather than reusing the two above.
+// `expenseTotal` stays the full figure because that is what the purchase
+// displays — a contract's total is worth seeing — but a `future: true` row
+// cannot have settled, so including it would guarantee a mismatch.
 const purchaseSettleableExpenseTotal = correlated<number>(
-  `(SELECT COALESCE(sum(e."cost"), 0)::double precision FROM "Expense" e
-     WHERE e."purchaseId" = "Purchase"."id" AND e."deletedAt" IS NULL
-       AND e."future" = false)`,
+  settleableExpenseTotalSql('"Purchase"'),
 );
 
 const purchaseSettleableUnpricedExpenseCount = correlated<number>(
-  `(SELECT count(*)::int FROM "Expense" e
-     WHERE e."purchaseId" = "Purchase"."id"
-       AND e."cost" IS NULL AND e."deletedAt" IS NULL
-       AND e."future" = false)`,
+  settleableUnpricedExpenseCountSql('"Purchase"'),
 );
 
 const purchasePostedRefundTotal = correlated<number>(

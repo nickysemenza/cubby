@@ -36,7 +36,7 @@ import type {
   VendorUpdateInput,
 } from "@cubby/schemas/vendor";
 import { vendorSortableFields } from "@cubby/schemas/vendor";
-import { and, asc, desc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -53,6 +53,7 @@ import {
   buildOrderBy,
   buildPartialUpdateValues,
   buildSearchConditions,
+  correlated,
   countWhere,
   formatSearchTerm,
   getDb,
@@ -117,20 +118,12 @@ export const VENDOR_MERGE_EDGE_POLICY = {
  * not reach a vendor's spend, and an emptied charge (expenses deleted, charge
  * kept) must read as zero rather than as its old total.
  *
- * ⚠️ **`sql.raw` with hand-qualified identifiers, NOT interpolated Drizzle
- * columns.** For a single-table `select().from(x)`, Drizzle's `buildSelection`
- * rewrites every top-level `PgColumn` chunk inside a `sql` select field to a BARE
- * identifier, stripping the table prefix. Interpolating columns here emitted
- * `WHERE "vendorId" = "id"` — which made `/vendors` fail outright with `column
- * reference "id" is ambiguous`, and made `vendorOptions` silently count 0. See
- * the longer note on the same trap in repo/purchase.ts.
- *
- * The outer `"Vendor"."id"` must stay fully qualified: a bare `"id"` would bind
- * to the aliased inner table, not to the outer query.
+ * Hand-qualified raw SQL wrapped in `correlated()` — see its doc comment in
+ * `database-helpers/query.ts`. This file is where that trap showed its loud
+ * face: interpolated columns emitted `WHERE "vendorId" = "id"`, which made
+ * `/vendors` fail outright with `column reference "id" is ambiguous` and made
+ * `vendorOptions` silently count 0.
  */
-const correlated = <T>(fragment: string): SQL<T> =>
-  sql<T>`${sql.raw(fragment)}`;
-
 const vendorPurchaseCount = correlated<number>(
   `(SELECT count(*)::int FROM "Purchase" p
      WHERE p."vendorId" = "Vendor"."id" AND p."deletedAt" IS NULL)`,
