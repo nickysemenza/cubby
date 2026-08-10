@@ -7,16 +7,6 @@ import {
 } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-// Mock WASM module - can't load binary in jsdom
-vi.mock("~/lib/wasm", () => ({
-  wasm: {
-    format_amount: (amt: { value: number; unit: string }) =>
-      `${amt.value} ${amt.unit}`,
-    is_valid_unit: () => true,
-    amount_kind: () => "volume",
-  },
-}));
-
 import {
   CELL_EDIT_EVENT,
   CellSelectionContext,

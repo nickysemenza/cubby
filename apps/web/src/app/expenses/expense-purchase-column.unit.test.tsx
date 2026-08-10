@@ -28,14 +28,6 @@ vi.mock("@tanstack/react-router", () => ({
   ),
 }));
 
-vi.mock("~/lib/wasm", () => ({
-  wasm: {
-    format_amount: () => "",
-    is_valid_unit: () => true,
-    amount_kind: () => "volume",
-  },
-}));
-
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
 import { expenseVendorColumn } from "~/app/projects/shared";

@@ -8,14 +8,6 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ColumnCellData } from "~/app/_components/data-table/cell-data";
 
-vi.mock("~/lib/wasm", () => ({
-  wasm: {
-    format_amount: () => "",
-    is_valid_unit: () => true,
-    amount_kind: () => "volume",
-  },
-}));
-
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
 import { expenseProductQuantityColumn } from "~/app/projects/shared";

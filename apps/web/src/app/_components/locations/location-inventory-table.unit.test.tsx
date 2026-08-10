@@ -8,7 +8,6 @@ const mocks = vi.hoisted(() => ({
   discardDialog: vi.fn(),
 }));
 
-vi.mock("~/lib/wasm", () => ({ wasm: {} }));
 vi.mock("~/integrations/trpc/react", () => ({
   useTRPC: () => ({
     inventory: {
