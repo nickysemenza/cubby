@@ -1,8 +1,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { BrandForEntity } from "@cubby/schemas/identifiers";
 import { unsafeUserId } from "@cubby/schemas/identifiers";
-import { getTableName } from "drizzle-orm";
-import type { PgTable } from "drizzle-orm/pg-core";
+import { getTableName, type SQL } from "drizzle-orm";
+import { PgDialect, type PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import type { DrizzleTransaction } from "~/server/db";
 import {
@@ -23,9 +23,26 @@ const ACTOR: ActorContext = { userId: unsafeUserId("user-1"), source: "ui" };
 const AUDIT = getTableName(auditLog);
 const EMBEDDING = getTableName(entityEmbedding);
 
+type WriteStatement = {
+  op: "select" | "update" | "delete";
+  table: string;
+  where?: SQL;
+};
 type Statement =
-  | { op: "select" | "update" | "delete"; table: string }
+  | WriteStatement
   | { op: "insert"; table: string; rows: Array<Record<string, unknown>> };
+
+/** The predicate a recorded statement ran with, rendered as parameterized SQL. */
+const renderedWhere = (statement: Statement | undefined) => {
+  if (
+    statement === undefined ||
+    statement.op === "insert" ||
+    !statement.where
+  ) {
+    throw new Error("no recorded where clause");
+  }
+  return new PgDialect().sqlToQuery(statement.where);
+};
 
 /**
  * A `tx` that records the statements a removal issues, in order, without a
@@ -54,13 +71,29 @@ const recordingTx = (
     }),
     update: (table: PgTable) => ({
       set: () => {
-        log.push({ op: "update", table: getTableName(table) });
-        return { where: async () => undefined };
+        const statement: WriteStatement = {
+          op: "update",
+          table: getTableName(table),
+        };
+        log.push(statement);
+        return {
+          where: async (where: SQL) => {
+            statement.where = where;
+          },
+        };
       },
     }),
     delete: (table: PgTable) => {
-      log.push({ op: "delete", table: getTableName(table) });
-      return { where: async () => undefined };
+      const statement: WriteStatement = {
+        op: "delete",
+        table: getTableName(table),
+      };
+      log.push(statement);
+      return {
+        where: async (where: SQL) => {
+          statement.where = where;
+        },
+      };
     },
     insert: (table: PgTable) => ({
       values: async (rows: Array<Record<string, unknown>>) => {
@@ -88,9 +121,9 @@ describe("removeEntity — statement order", () => {
       children: [
         {
           table: productUnitMappings,
-          parentColumn: productUnitMappings.productId,
+          parentColumns: [productUnitMappings.productId],
         },
-        { table: productImage, parentColumn: productImage.productId },
+        { table: productImage, parentColumns: [productImage.productId] },
       ],
     });
 
@@ -117,11 +150,11 @@ describe("removeEntity — statement order", () => {
       children: [
         {
           table: productUnitMappings,
-          parentColumn: productUnitMappings.productId,
+          parentColumns: [productUnitMappings.productId],
         },
         {
           table: productImage,
-          parentColumn: productImage.productId,
+          parentColumns: [productImage.productId],
           auditKey: "cascadedImages",
         },
       ],
@@ -182,7 +215,7 @@ describe("removeEntity — removal mode", () => {
       children: [
         {
           table: taskDependency,
-          parentColumn: taskDependency.taskId,
+          parentColumns: [taskDependency.taskId],
           mode: "hard",
         },
       ],
@@ -193,6 +226,59 @@ describe("removeEntity — removal mode", () => {
       `update ${EMBEDDING}`,
       `insert ${AUDIT}`,
     ]);
+  });
+});
+
+describe("removeEntity — multi-column child edges", () => {
+  it("ORs every declared column against the same id set", async () => {
+    // A dependency edge names the parent from either end, and both ends die
+    // with it. Testing the rendered predicate (not just that a DELETE ran) is
+    // the point: an edge that dropped one column would still look correct in
+    // the statement log while leaving half the rows behind.
+    const { log, tx } = recordingTx();
+    await removeEntity(tx, {
+      entity: "task",
+      ids: ids<"task">("t1", "t2"),
+      removal: "soft",
+      actor: ACTOR,
+      children: [
+        {
+          table: taskDependency,
+          parentColumns: [
+            taskDependency.taskId,
+            taskDependency.blockedByTaskId,
+          ],
+          mode: "hard",
+        },
+      ],
+    });
+
+    const { sql, params } = renderedWhere(log[0]);
+    expect(sql).toBe(
+      `("${getTableName(taskDependency)}"."taskId" in ($1, $2) or "${getTableName(taskDependency)}"."blockedByTaskId" in ($3, $4))`,
+    );
+    expect(params).toEqual(["t1", "t2", "t1", "t2"]);
+  });
+
+  it("leaves a single-column edge as a bare IN, with no OR wrapper", async () => {
+    const { log, tx } = recordingTx();
+    await removeEntity(tx, {
+      entity: "task",
+      ids: ids<"task">("t1"),
+      removal: "soft",
+      actor: ACTOR,
+      children: [
+        {
+          table: taskDependency,
+          parentColumns: [taskDependency.taskId],
+          mode: "hard",
+        },
+      ],
+    });
+
+    expect(renderedWhere(log[0]).sql).toBe(
+      `"${getTableName(taskDependency)}"."taskId" in ($1)`,
+    );
   });
 });
 
@@ -210,7 +296,7 @@ describe("removeEntity — the parent table is derived, not passed", () => {
         removal: "soft",
         actor: ACTOR,
       });
-      expect(log[0]).toEqual({
+      expect(log[0]).toMatchObject({
         op: "update",
         table: getTableName(SHORTCODE_TABLE[entity]),
       });
@@ -226,7 +312,7 @@ describe("removeEntity — the type-level lock", () => {
     // @ts-expect-error a hard-delete child cannot be counted, so it has no audit key
     const child: ChildCascade = {
       table: taskDependency,
-      parentColumn: taskDependency.taskId,
+      parentColumns: [taskDependency.taskId],
       mode: "hard",
       auditKey: "cascadedDependencies",
     };
@@ -237,7 +323,7 @@ describe("removeEntity — the type-level lock", () => {
     // @ts-expect-error TaskDependency has no deletedAt, so it cannot be soft-deleted
     const child: ChildCascade = {
       table: taskDependency,
-      parentColumn: taskDependency.taskId,
+      parentColumns: [taskDependency.taskId],
     };
     void child;
   });

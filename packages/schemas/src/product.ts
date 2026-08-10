@@ -753,6 +753,21 @@ export const productTagOptionsOut = z.array(
 );
 export type ProductTagOptionsOut = z.infer<typeof productTagOptionsOut>;
 
+/**
+ * The external-ID source slugs actually stored, with the number of live
+ * products carrying each. A static list would rot: sources are minted by
+ * whichever importer wrote the row, so the roster comes from the data.
+ */
+export const productExternalIdSourceOptionsOut = z.array(
+  z.object({
+    source: z.string(),
+    count: z.number().int().nonnegative(),
+  }),
+);
+export type ProductExternalIdSourceOptionsOut = z.infer<
+  typeof productExternalIdSourceOptionsOut
+>;
+
 export const productManufacturerOptionsOut = z.array(
   z.object({
     manufacturer: z.string(),

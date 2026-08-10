@@ -11,6 +11,7 @@ import {
   image,
   inventoryEntry,
   product,
+  productExternalId,
   productImage,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -115,6 +116,33 @@ export const getProductTagOptions = async (
 
   return rows;
 };
+
+/**
+ * The distinct external-ID source roster with product counts — feeds the
+ * product list's External IDs filter picklist.
+ *
+ * A source is an open kebab-case slug minted by whichever importer wrote the
+ * row (`amazon`, `home-depot`, `mcmaster`), so there is no enum to render a
+ * static option list from; the roster has to come from the data. Counted over
+ * DISTINCT products because one product can carry several ids from one source
+ * (different `kind`s), and the filter narrows PRODUCTS.
+ */
+export const getProductExternalIdSourceOptions = async (
+  db: Database,
+): Promise<Array<{ source: string; count: number }>> =>
+  getDb(db)
+    .select({
+      source: productExternalId.source,
+      count: sql<number>`count(distinct ${productExternalId.productId})::int`,
+    })
+    .from(productExternalId)
+    .innerJoin(product, eq(product.id, productExternalId.productId))
+    .where(and(notDeleted(productExternalId), notDeleted(product)))
+    .groupBy(productExternalId.source)
+    .orderBy(
+      sql`count(distinct ${productExternalId.productId}) DESC`,
+      productExternalId.source,
+    );
 
 /** Distinct server-backed manufacturer roster for exact list filtering. */
 export const getProductManufacturerOptions = async (

@@ -1215,11 +1215,21 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       ],
     },
     {
+      // An exact SOURCE roster rather than the has/none it replaced: "which of
+      // these came from Home Depot" is the question the column is opened for,
+      // and has/none survives as the two nullable sentinels.
+      //
+      // `optionsKey`, not `options`: a source is an open kebab-case slug
+      // (external-id.ts validates the shape, it is not a `z.enum`), so the
+      // roster is whatever importers have actually written and must come from
+      // `product.externalIdSourceOptions` at runtime. A stale bookmark naming
+      // a source nobody uses anymore simply matches nothing.
       columnId: "externalIds",
-      field: "externalIdPresenceFilter",
-      kind: "presence",
-      placeholder: "Filter external IDs...",
-      options: presenceFilterOptions("external ID"),
+      field: "externalIdSource",
+      kind: "multiselect",
+      placeholder: "Filter by external ID source...",
+      optionsKey: "externalIdSources",
+      nullable: { field: "externalIdPresenceFilter", label: "external ID" },
     },
     {
       // Products may appear on several ledger lines; the cell shows the latest
@@ -1555,9 +1565,6 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       placeholder: "Search wishlist...",
     },
     {
-      // `candidateProductId` (a picklist over the candidate roster) needs a
-      // runtime product picklist and stays out of scope for now — this is
-      // just the acquired/still-wanted toggle.
       columnId: "acquired",
       kind: "boolean",
       placeholder: "Filter by status...",
@@ -1640,6 +1647,18 @@ const relatedFilterSpecs = Object.fromEntries(
           ],
           expand: resolveProductTaskFilter,
         });
+        // The deep-link scope the range control can't express. Every other
+        // related view gets this from the generated trio; the `continue` above
+        // skips it, which left `taskId` reachable from nowhere. No matching
+        // `taskPresenceFilter` scope — `resolveProductTaskFilter` already
+        // reaches that field, and a second URL writer for one server field is
+        // a conflict, not a convenience.
+        generated.push({
+          columnId: `${prefix}Id`,
+          urlOnly: true,
+          kind: "idMulti",
+          placeholder: `Filter by related ${view.label.toLowerCase()} id...`,
+        });
         continue;
       }
       if (view.key === "purchase.projects") {
@@ -1669,6 +1688,39 @@ const relatedFilterSpecs = Object.fromEntries(
             urlOnly: true,
             kind: "presence",
             placeholder: "Filter project presence...",
+          },
+        );
+        continue;
+      }
+      if (view.key === "wish.candidates") {
+        // `candidateProductId`, not the generated `productId`: both predicates
+        // mean "wishes naming this candidate", but only the former is the
+        // wish repo's own `WishCandidate` EXISTS clause. The generated urlOnly
+        // pair below stays so existing deep links keep working.
+        generated.push({
+          columnId: `related:${view.key}`,
+          field: "candidateProductId",
+          urlKey: `related-${prefix}`,
+          kind: "idMulti",
+          placeholder: "Filter by candidate product...",
+          optionsKey: "wishCandidates",
+          nullable: {
+            field: `${prefix}PresenceFilter`,
+            label: "candidate",
+          },
+        });
+        generated.push(
+          {
+            columnId: `${prefix}Id`,
+            urlOnly: true,
+            kind: "idMulti",
+            placeholder: "Filter by candidate product id...",
+          },
+          {
+            columnId: `${prefix}PresenceFilter`,
+            urlOnly: true,
+            kind: "presence",
+            placeholder: "Filter candidate presence...",
           },
         );
         continue;

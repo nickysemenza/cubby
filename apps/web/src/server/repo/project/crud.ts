@@ -19,8 +19,7 @@ import {
   type ProjectOut,
   type ProjectUpdateInput,
 } from "@cubby/schemas/project";
-import { and, eq, inArray, or } from "drizzle-orm";
-import { countBy } from "es-toolkit";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -49,7 +48,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { countByTarget, impact, present } from "~/server/repo/impact";
-import { cascadeRemoval } from "~/server/repo/removal";
+import { removeEntity } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveOrThrow,
@@ -430,67 +429,33 @@ export const deleteProjects = async (
         `Cannot delete ${count} project(s): ${names} still have expenses. Delete or reassign them first.`,
     });
 
-    await tx
-      .delete(projectDependency)
-      .where(
-        or(
-          inArray(projectDependency.projectId, ids),
-          inArray(projectDependency.blockedByProjectId, ids),
-        ),
-      );
-
-    const now = new Date();
-
-    // Cascaded counts (per project) for the audit trail, gathered before the
-    // soft-delete below flips their deletedAt.
-    const cascadedImages = await tx.query.projectImage.findMany({
-      where: and(
-        inArray(projectImage.projectId, ids),
-        notDeleted(projectImage),
-      ),
-      columns: { projectId: true },
-    });
-    const cascadedToolUsages = await tx.query.projectToolUsage.findMany({
-      where: and(
-        inArray(projectToolUsage.projectId, ids),
-        notDeleted(projectToolUsage),
-      ),
-      columns: { projectId: true },
-    });
-
-    await tx
-      .update(projectImage)
-      .set({ deletedAt: now })
-      .where(
-        and(inArray(projectImage.projectId, ids), notDeleted(projectImage)),
-      );
-
-    await tx
-      .update(projectToolUsage)
-      .set({ deletedAt: now })
-      .where(
-        and(
-          inArray(projectToolUsage.projectId, ids),
-          notDeleted(projectToolUsage),
-        ),
-      );
-
-    await tx
-      .update(project)
-      .set({ deletedAt: now })
-      .where(and(inArray(project.id, ids), notDeleted(project)));
-
-    await cascadeRemoval(tx, {
+    await removeEntity(tx, {
       entity: "project",
       ids,
-      audit: { actor },
-      counts: {
-        cascadedImages: countBy(cascadedImages, (i) => i.projectId),
-        cascadedToolUsages: countBy(
-          cascadedToolUsages,
-          (usage) => usage.projectId,
-        ),
-      },
+      removal: "soft",
+      actor,
+      children: [
+        // Both ends: a dependency edge carries no meaning once either endpoint
+        // is gone, so it is hard-deleted rather than soft-deleted.
+        {
+          table: projectDependency,
+          parentColumns: [
+            projectDependency.projectId,
+            projectDependency.blockedByProjectId,
+          ],
+          mode: "hard",
+        },
+        {
+          table: projectImage,
+          parentColumns: [projectImage.projectId],
+          auditKey: "cascadedImages",
+        },
+        {
+          table: projectToolUsage,
+          parentColumns: [projectToolUsage.projectId],
+          auditKey: "cascadedToolUsages",
+        },
+      ],
     });
   });
 };
