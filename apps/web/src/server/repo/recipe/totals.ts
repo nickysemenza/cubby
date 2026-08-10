@@ -73,10 +73,16 @@ export const markRecipeTotalsFresh = async (
  * the correctness floor when the recompute is deferred to the queue: the rows
  * read as pending until the queue drains. If a wave is lost (DLQ), they stay
  * stale and are surfaced by `countStaleRecipeTotals` on Settings → Maintenance,
- * cleared by recompute-all. Unconditional on purpose: this is the durable
- * "these are pending" stamp at dispatch (and at merge). The cascade tail uses
- * {@link markRecipesStaleReturningTransitioned} instead, to avoid re-staling
- * recipes a sibling chunk already queued.
+ * cleared by recompute-all. Unconditional on purpose: that's about the
+ * fresh/stale predicate (no `AND totalsComputedAt IS NOT NULL` guard, unlike
+ * the transitioned-only variant below), NOT about liveness — this is still the
+ * durable "these are pending" stamp at dispatch (and at merge). The cascade
+ * tail uses {@link markRecipesStaleReturningTransitioned} instead, to avoid
+ * re-staling recipes a sibling chunk already queued. `notDeleted` is required:
+ * every path that could later heal this stamp (`selectStaleRecipeIds`,
+ * `selectAllStaleRecipeIds`, `countStaleRecipeTotals`, `getRecipesByIDs`)
+ * filters to live recipes, so a soft-deleted recipe stamped stale here would
+ * be nulled forever with nothing to clear it or report it.
  */
 export const markRecipesStale = async (
   db: Database,
@@ -90,6 +96,7 @@ export const markRecipesStale = async (
       ids.map((id) => sql`${id}`),
       sql`, `,
     )})
+      AND ${notDeleted(recipe)}
   `);
 };
 
@@ -117,6 +124,7 @@ export const markRecipesStaleReturningTransitioned = async (
       sql`, `,
     )})
       AND ${recipe.totalsComputedAt} IS NOT NULL
+      AND ${notDeleted(recipe)}
     RETURNING ${recipe.id}
   `);
   return rows.rows.map((r) => r.id);
@@ -174,6 +182,25 @@ export const getRecipeTotalsState = async (
       .limit(1);
     return row ?? null;
   });
+
+/**
+ * Raw `totalsComputedAt` for one recipe, live or soft-deleted. Every other
+ * reader in this file requires `notDeleted` (that's the point of the liveness
+ * guard on {@link markRecipesStale}), so there is otherwise no way to observe
+ * whether a stamp reached a deleted row — this exists for that verification.
+ * includes-deleted: diagnostic-only read, not a correctness-sensitive query.
+ */
+export const getRecipeTotalsStateIncludingDeleted = async (
+  db: Database,
+  id: RecipeId,
+): Promise<{ totalsComputedAt: Date | null } | null> => {
+  const [row] = await getDb(db)
+    .select({ totalsComputedAt: recipe.totalsComputedAt })
+    .from(recipe)
+    .where(eq(recipe.id, id))
+    .limit(1);
+  return row ?? null;
+};
 
 /** All active recipe ids — for a full backfill/recompute. */
 export const selectAllActiveRecipeIds = async (
@@ -236,6 +263,16 @@ export const findRecipeIdsUsingIngredients = async (
  * cascade calls this once per level instead of one query per recipe (the old N+1
  * that fanned out a DB round-trip per changed recipe). Sub-recipes with no parent
  * are absent from the map.
+ *
+ * Deliberately does NOT filter `deletedAt` on the section/link/ingredient joins
+ * (unlike the sibling {@link recipeTreeLeafIngredientIds} and unlike
+ * `findParentRecipesWithDeletedSubRecipes` in repo/problems/detectors-recipe.ts).
+ * It must stay MORE inclusive than that detector — over-inclusion here is what
+ * keeps the detector's "always empty after the fix" contract true instead of
+ * merely reducing how often it fires. A phantom parent picked up through a
+ * stale/soft-deleted link just recomputes to the same totals, since the actual
+ * recompute reads only live sections. Tightening this filter is the risky
+ * direction, not the safe one.
  */
 export const findParentRecipeIdsBatch = async (
   db: Database,

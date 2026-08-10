@@ -19,7 +19,11 @@ import {
   deleteRecipes,
   upsertCookbookRecipe,
 } from "~/server/repo/recipe";
-import { getRecipeTotalsState } from "~/server/repo/recipe/totals";
+import {
+  getRecipeTotalsState,
+  getRecipeTotalsStateIncludingDeleted,
+  markRecipesStale,
+} from "~/server/repo/recipe/totals";
 import {
   ingredientRef,
   makeProductInput,
@@ -275,5 +279,50 @@ describe("findParentRecipesWithDeletedSubRecipes detector", () => {
 
     const flagged = await findParentRecipesWithDeletedSubRecipes(ctx.db);
     expect(flagged.map((r) => r.id)).not.toContain(parentCode);
+  });
+});
+
+// Regression guard: `findParentRecipeIdsBatch` deliberately does not filter
+// `deletedAt` on its joins, so a cascade can hand `markRecipesStale` the id of
+// a recipe that was soft-deleted between dispatch and write. Nothing later
+// heals that stamp (selectStaleRecipeIds/selectAllStaleRecipeIds/
+// countStaleRecipeTotals/getRecipesByIDs all require notDeleted), so a stamp
+// that reaches a deleted row would be permanent and invisible to Settings →
+// Maintenance. `markRecipesStale` must exclude deleted recipes itself.
+describe("markRecipesStale liveness guard", () => {
+  const ctx = withTestDb();
+
+  const recompute = (ids: RecipeId[]) =>
+    createTestTRPCContext(ctx.db, {
+      auth: { userId: ctx.actor.userId },
+    }).services.recipeCosting.recompute(ids);
+
+  it("does not null totalsComputedAt for a soft-deleted recipe", async () => {
+    const created = await createRecipe(
+      ctx.db,
+      makeRecipeInput({ name: "Soon Deleted" }),
+      ctx.actor,
+    );
+    const entityId = await resolveLiveShortcode(ctx.db, created.id, "recipe");
+    if (!entityId) throw new Error("seed failed");
+    const target = unsafeRecipeId(entityId);
+
+    await recompute([target]);
+    expect(
+      (await getRecipeTotalsState(ctx.db, target))?.totalsComputedAt,
+    ).not.toBeNull();
+
+    // Repo layer directly, bypassing the router — reconstructs the escaped
+    // state (a recipe deleted out from under a dispatch already in flight).
+    await deleteRecipes(ctx.db, [target], ctx.actor);
+
+    // Simulates a cascade reaching the now-deleted id (e.g. via
+    // findParentRecipeIdsBatch's deliberately inclusive join).
+    await markRecipesStale(ctx.db, [target]);
+
+    // getRecipeTotalsState itself filters notDeleted, so it can't tell us
+    // whether the stamp was (wrongly) cleared on a deleted row.
+    const row = await getRecipeTotalsStateIncludingDeleted(ctx.db, target);
+    expect(row?.totalsComputedAt).not.toBeNull();
   });
 });
