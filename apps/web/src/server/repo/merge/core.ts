@@ -28,6 +28,12 @@
  * and the cascade is derived from the entity, not passed in. A future merge
  * that forgets it is not a test failure waiting to happen — it is unwritable.
  *
+ * The cascade tail itself now lives in `repo/removal` — `cascadeRemoval` is the
+ * same mechanism generalized to the non-merge removal paths, and it owns the
+ * only mint site for a delete audit entry. `finalizeMerge` keeps the row
+ * removal (its statement order is load-bearing for `mergeProducts`) and
+ * delegates the tail.
+ *
  * ## What deliberately stayed per-entity
  *
  * Which columns carry over, which rollups recompute, which collisions are
@@ -38,13 +44,10 @@
  * duplication it replaced.
  */
 
-import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { Entity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { BrandForEntity } from "@cubby/schemas/identifiers";
-import type { SearchableEntity } from "@cubby/schemas/search";
-import { searchableEntities } from "@cubby/schemas/search";
 import { type AnyColumn, and, getTableColumns, inArray } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
@@ -54,9 +57,11 @@ import type {
   IncomingEdgeKey,
 } from "~/server/db/entity-incoming-edges";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
+import type { AuditEntryInput } from "~/server/repo/audit-log";
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { notDeleted } from "~/server/repo/database-helpers";
-import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
+import type { RemovableEntity } from "~/server/repo/removal";
+import { cascadeRemoval } from "~/server/repo/removal";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 
 /** A table a merge can remove rows from — soft (`deletedAt`) or hard. */
@@ -64,12 +69,6 @@ type MergeableTable = PgTable & { id: AnyColumn; deletedAt: AnyColumn };
 
 /** Audit `changes` payload, matching {@link logAuditEntries}' entry shape. */
 type MergeAuditChanges = Record<string, { from: unknown; to: unknown }>;
-
-const SEARCHABLE = new Set<string>(searchableEntities);
-
-/** Whether removing a row of this entity must cascade an `EntityEmbedding`. */
-const isSearchable = (entity: Entity): entity is SearchableEntity =>
-  SEARCHABLE.has(entity);
 
 /**
  * Resolve `{keepId, mergeIds}` shortcodes to entity ids, failing loudly when
@@ -204,14 +203,19 @@ export const repointEdge = async <E extends Entity>(
  * per-operation vocabulary — `mergedFrom` naming an array on a vendor merge,
  * `foldedIn` naming one charge on a purchase fold — and normalizing it would
  * rewrite a trail that is already the historical record.
+ *
+ * The ids are branded to `entity` rather than a free `Id extends string`, so
+ * `{entity: "vendor", loserIds: productIds}` no longer compiles — the same lock
+ * {@link cascadeRemoval} applies, and what lets the tail below delegate to it
+ * without a cast.
  */
-export const finalizeMerge = async <Id extends string>(
+export const finalizeMerge = async <E extends RemovableEntity>(
   tx: DrizzleTransaction,
   args: {
-    entity: AuditEntityType;
+    entity: E;
     table: MergeableTable;
-    keepId: Id;
-    loserIds: readonly Id[];
+    keepId: BrandForEntity<E>;
+    loserIds: readonly BrandForEntity<E>[];
     /** `hard` is `mergeIngredients` only; every other merge soft-deletes. */
     removal: "soft" | "hard";
     /** Omit for a merge with no actor context (`mergeIngredients`). */
@@ -224,6 +228,10 @@ export const finalizeMerge = async <Id extends string>(
   if (loserIds.length === 0) return;
   const ids = [...loserIds];
 
+  // The row removal stays here: `mergeProducts` depends on the loser vacating
+  // the partial `Product_upc_key` slot BEFORE the keeper adopts the UPC, so
+  // this statement's position relative to the caller's own writes is load-
+  // bearing. Only the tail — cascade plus delete entries — is shared.
   if (removal === "hard") {
     await tx.delete(table).where(inArray(table.id, ids));
   } else {
@@ -234,29 +242,21 @@ export const finalizeMerge = async <Id extends string>(
       .where(and(inArray(table.id, ids), notDeleted(table)));
   }
 
-  // Removal-path invariant (root CLAUDE.md, guard-enforced by
-  // `findOrphanedEntityEmbeddings`). Unconditional and derived — see the doc.
-  if (isSearchable(entity)) {
-    await softDeleteEntityEmbeddingsTx(tx, entity, ids);
-  }
-
-  if (!actor) return;
+  // A merge with no actor context (`mergeIngredients`) still has to cascade, so
+  // the entries go to a local buffer that is only flushed when there IS one.
+  // That is the one difference from every other removal path — and the reason
+  // `cascadeRemoval`'s audit sink is mandatory rather than optional.
+  const entries: AuditEntryInput[] = [];
   const survivorChanges = args.survivorChanges ?? {};
-  await logAuditEntries(tx, actor, [
-    ...(Object.keys(survivorChanges).length > 0
-      ? [
-          {
-            entityType: entity,
-            entityId: keepId,
-            action: "update" as const,
-            changes: survivorChanges,
-          },
-        ]
-      : []),
-    ...ids.map((id) => ({
+  if (actor && Object.keys(survivorChanges).length > 0) {
+    entries.push({
       entityType: entity,
-      entityId: id,
-      action: "delete" as const,
-    })),
-  ]);
+      entityId: keepId,
+      action: "update",
+      changes: survivorChanges,
+    });
+  }
+  await cascadeRemoval(tx, { entity, ids, audit: { into: entries } });
+  if (!actor) return;
+  await logAuditEntries(tx, actor, entries);
 };

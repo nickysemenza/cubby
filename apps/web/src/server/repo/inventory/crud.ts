@@ -23,11 +23,7 @@ import {
   product,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import {
-  computeChanges,
-  logAuditEntries,
-  logAuditEntry,
-} from "~/server/repo/audit-log";
+import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
   auditDateWhereConditions,
   batchUpdateWithCaseWhen,
@@ -44,7 +40,6 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
-import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import {
   countByTarget,
   impact,
@@ -56,6 +51,7 @@ import {
   loadProductPricing,
 } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
+import { cascadeRemoval } from "~/server/repo/removal";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { assertLiveTargets } from "./helpers";
 import {
@@ -599,19 +595,7 @@ export const deleteInventoryEntries = async (
       .set({ deletedAt: now })
       .where(and(inArray(inventoryEntry.id, ids), notDeleted(inventoryEntry)));
 
-    // Cascade the search embedding so a direct repo delete (no mutation
-    // side-effect) can't leave an orphaned entityEmbedding row.
-    await softDeleteEntityEmbeddingsTx(tx, "inventory", ids);
-
-    await logAuditEntries(
-      tx,
-      actor,
-      ids.map((id) => ({
-        entityType: "inventory" as const,
-        entityId: id,
-        action: "delete" as const,
-      })),
-    );
+    await cascadeRemoval(tx, { entity: "inventory", ids, audit: { actor } });
   });
 };
 

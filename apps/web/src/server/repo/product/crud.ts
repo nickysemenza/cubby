@@ -64,12 +64,7 @@ import {
   wishCandidate,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import {
-  buildCascadeAuditEntries,
-  computeChanges,
-  logAuditEntries,
-  logAuditEntry,
-} from "~/server/repo/audit-log";
+import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
   loadProductDataQualities,
   productAnyDataGapCondition,
@@ -99,12 +94,12 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
-import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { resolveEstablishedManufacturer } from "~/server/repo/label-canonical";
 import { relatedWhereConditions } from "~/server/repo/related-view";
+import { cascadeRemoval } from "~/server/repo/removal";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
@@ -1784,17 +1779,16 @@ export const deleteProducts = async (
       .set({ deletedAt: now })
       .where(and(inArray(product.id, ids), notDeleted(product)));
 
-    // Cascade the search embedding so a direct repo delete (no mutation
-    // side-effect) can't leave an orphaned entityEmbedding row.
-    await softDeleteEntityEmbeddingsTx(tx, "product", ids);
-
-    const auditEntries = buildCascadeAuditEntries("product", ids, {
-      cascadedUnitMappings: countBy(cascadedMappings, (m) => m.productId),
-      cascadedImages: countBy(cascadedImages, (i) => i.productId),
-      cascadedExternalIds: countBy(cascadedExternalIds, (e) => e.productId),
+    await cascadeRemoval(tx, {
+      entity: "product",
+      ids,
+      audit: { actor },
+      counts: {
+        cascadedUnitMappings: countBy(cascadedMappings, (m) => m.productId),
+        cascadedImages: countBy(cascadedImages, (i) => i.productId),
+        cascadedExternalIds: countBy(cascadedExternalIds, (e) => e.productId),
+      },
     });
-
-    await logAuditEntries(tx, actor, auditEntries);
   });
 };
 

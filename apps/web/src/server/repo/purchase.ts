@@ -79,6 +79,7 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
+  type AuditEntryInput,
   computeChanges,
   logAuditEntries,
   logAuditEntry,
@@ -112,7 +113,6 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import {
   assertQuantitySignMatchesCost,
   dbExpenseToAPI,
@@ -132,6 +132,7 @@ import {
   type PurchaseFinancialAggregate,
 } from "~/server/repo/purchase-financial-aggregates";
 import { relatedWhereConditions } from "~/server/repo/related-view";
+import { cascadeRemoval } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveLiveShortcode,
@@ -1228,18 +1229,26 @@ export const splitExpense = async (
         inserted.push(row.id);
       }
 
+      // NO `notDeleted` guard here, deliberately. The `original` read above uses
+      // one but takes no `FOR UPDATE`, so adding the predicate would turn a
+      // stomping update into a silent 0-row no-op while the N part rows are
+      // still inserted and a delete entry is still logged for a row this
+      // transaction didn't delete. Leave it stomping.
       await tx
         .update(expense)
         .set({ deletedAt: new Date() })
         .where(eq(expense.id, expenseId));
 
-      // Removal-path invariant (root CLAUDE.md, guard-enforced): this is a delete
-      // path like any other, so the original's embedding goes in the SAME
-      // transaction. `expense` is `searchable: true`, so skipping this leaves a live
-      // `EntityEmbedding` row pointing at a dead id — semantic search keeps
-      // returning a result that renders blank, `findOrphanedEntityEmbeddings` flags
-      // it, and soft deletes aren't restorable so there's no clean recovery.
-      await softDeleteEntityEmbeddingsTx(tx, "expense", [expenseId]);
+      const auditEntries: AuditEntryInput[] = inserted.map((id) => ({
+        entityType: "expense" as const,
+        entityId: id,
+        action: "create" as const,
+      }));
+      await cascadeRemoval(tx, {
+        entity: "expense",
+        ids: [expenseId],
+        audit: { into: auditEntries },
+      });
 
       await touchDataQualityTargets(tx, {
         productIds: [
@@ -1251,18 +1260,7 @@ export const splitExpense = async (
         purchaseIds: [chargeId],
       });
 
-      await logAuditEntries(tx, actor, [
-        ...inserted.map((id) => ({
-          entityType: "expense" as const,
-          entityId: id,
-          action: "create" as const,
-        })),
-        {
-          entityType: "expense" as const,
-          entityId: expenseId,
-          action: "delete" as const,
-        },
-      ]);
+      await logAuditEntries(tx, actor, auditEntries);
 
       const pricesAfter = await loadEffectiveProductPricesById(
         tx,
@@ -1863,17 +1861,10 @@ const deletePurchasesWithPolicy = async (
       .update(purchase)
       .set({ deletedAt: now })
       .where(and(inArray(purchase.id, ids), notDeleted(purchase)));
-    await softDeleteEntityEmbeddingsTx(tx, "purchase", ids);
 
-    await logAuditEntries(
-      tx,
-      actor,
-      ids.map((id) => ({
-        entityType: "purchase" as const,
-        entityId: id,
-        action: "delete" as const,
-      })),
-    );
+    // The immediate arm, not `{into}`: the detach `update` entries above were
+    // already flushed, and the delete entries must follow them.
+    await cascadeRemoval(tx, { entity: "purchase", ids, audit: { actor } });
     return {
       expenseIds: detaching.map((row) => row.id),
       financialTransactionIds: detachingTransactions.map((row) => row.id),

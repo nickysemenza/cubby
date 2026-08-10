@@ -21,7 +21,7 @@ import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { meal, mealRecipe } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import { logAuditEntries, logAuditEntry } from "~/server/repo/audit-log";
+import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   auditDateWhereConditions,
   buildOrderBy,
@@ -37,9 +37,9 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
-import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
+import { cascadeRemoval } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveOrThrow,
@@ -230,19 +230,9 @@ export const deleteMeals = async (
       .update(meal)
       .set({ deletedAt: now })
       .where(and(inArray(meal.id, ids), notDeleted(meal)));
-    // Removal-path invariant: meals are searchable/embedded, and the meal
-    // manifest has onDelete: [], so this transaction is the only place their
-    // EntityEmbedding rows get cleaned up.
-    await softDeleteEntityEmbeddingsTx(tx, "meal", ids);
-    await logAuditEntries(
-      tx,
-      actor,
-      ids.map((id) => ({
-        entityType: "meal" as const,
-        entityId: id,
-        action: "delete" as const,
-      })),
-    );
+    // The meal manifest has onDelete: [], so this transaction is the only place
+    // a meal's EntityEmbedding row gets cleaned up.
+    await cascadeRemoval(tx, { entity: "meal", ids, audit: { actor } });
   });
 };
 

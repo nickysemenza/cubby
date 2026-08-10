@@ -93,7 +93,7 @@ import {
   wishCandidate,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import { logAuditEntries } from "~/server/repo/audit-log";
+import { type AuditEntryInput, logAuditEntries } from "~/server/repo/audit-log";
 import {
   buildPartialUpdateValues,
   getDb,
@@ -101,7 +101,6 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import {
   countByTarget,
   impact,
@@ -116,6 +115,7 @@ import {
   repointEdge,
   resolveMergeTargets,
 } from "~/server/repo/merge";
+import { cascadeRemoval } from "~/server/repo/removal";
 
 export const PRODUCT_MERGE_EDGE_POLICY = {
   "ProductExternalId.productId": {
@@ -448,22 +448,22 @@ export const mergeProducts = async (
         .update(inventoryEntry)
         .set({ deletedAt: now })
         .where(inArray(inventoryEntry.id, absorbedIds));
-      // Removal-path invariant: the absorbed stock rows are removals like any
-      // other, so their embeddings cascade with them (`inventory` is searchable).
-      await softDeleteEntityEmbeddingsTx(tx, "inventory", absorbedIds);
-      await logAuditEntries(tx, actor, [
+      // The survivor's `update` entry and the absorbed rows' `delete` entries
+      // land in one batch, so the buffered arm rather than the immediate one.
+      const entries: AuditEntryInput[] = [
         {
           entityType: "inventory",
           entityId: into.id,
           action: "update",
           changes: { amount: { from: into.amount, to } },
         },
-        ...absorbedIds.map((entityId) => ({
-          entityType: "inventory" as const,
-          entityId,
-          action: "delete" as const,
-        })),
-      ]);
+      ];
+      await cascadeRemoval(tx, {
+        entity: "inventory",
+        ids: absorbedIds,
+        audit: { into: entries },
+      });
+      await logAuditEntries(tx, actor, entries);
       inventoryMerged += rows.length;
     }
     summary.inventoryMerged = inventoryMerged;

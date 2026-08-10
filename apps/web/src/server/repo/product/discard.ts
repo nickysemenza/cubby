@@ -42,13 +42,13 @@ import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { touchDataQualityTargets } from "~/server/repo/data-quality";
 import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
-import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { computeValuationForEntry } from "~/server/repo/inventory/crud";
 import {
   pricingProductIds,
   syncChangedEffectivePrices,
 } from "~/server/repo/product/price-sync";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
+import { cascadeRemoval } from "~/server/repo/removal";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 export type DiscardProductInput = {
@@ -170,14 +170,10 @@ export const discardProductUnits = async (
           .update(inventoryEntry)
           .set({ deletedAt: new Date() })
           .where(eq(inventoryEntry.id, entry.id));
-        // Removal-path invariant (root CLAUDE.md, guard-enforced): every path
-        // that removes an entity clears its embedding in the SAME transaction,
-        // or `findOrphanedEntityEmbeddings` reports it.
-        await softDeleteEntityEmbeddingsTx(tx, "inventory", [entry.id]);
-        await logAuditEntry(tx, actor, {
-          entityType: "inventory",
-          entityId: entry.id,
-          action: "delete",
+        await cascadeRemoval(tx, {
+          entity: "inventory",
+          ids: [entry.id],
+          audit: { actor },
         });
         inventory = {
           entryId: entry.id,

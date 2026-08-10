@@ -47,11 +47,7 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import {
-  computeChanges,
-  logAuditEntries,
-  logAuditEntry,
-} from "~/server/repo/audit-log";
+import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
   auditDateWhereConditions,
   buildOrderBy,
@@ -65,7 +61,6 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import {
   finalizeMerge,
@@ -75,6 +70,7 @@ import {
 } from "~/server/repo/merge";
 import { foldChargeInto } from "~/server/repo/purchase";
 import { relatedWhereConditions } from "~/server/repo/related-view";
+import { cascadeRemoval } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveLiveShortcode,
@@ -688,17 +684,8 @@ export const deleteVendors = async (
       .update(vendor)
       .set({ deletedAt: now })
       .where(and(inArray(vendor.id, ids), notDeleted(vendor)));
-    await softDeleteEntityEmbeddingsTx(tx, "vendor", ids);
 
-    await logAuditEntries(
-      tx,
-      actor,
-      ids.map((id) => ({
-        entityType: "vendor" as const,
-        entityId: id,
-        action: "delete" as const,
-      })),
-    );
+    await cascadeRemoval(tx, { entity: "vendor", ids, audit: { actor } });
   });
 };
 

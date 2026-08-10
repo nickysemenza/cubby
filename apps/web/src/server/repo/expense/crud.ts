@@ -53,7 +53,6 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
-import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import {
   pricingProductIds,
@@ -65,6 +64,7 @@ import {
   foldChargeInto,
   renameChargeOrderId,
 } from "~/server/repo/purchase";
+import { cascadeRemoval } from "~/server/repo/removal";
 import {
   resolveAllPresent,
   resolveOrThrow,
@@ -908,8 +908,7 @@ export const deleteExpensesWithPurchaseEffects = async (
       .set({ deletedAt: now })
       .where(and(inArray(expense.id, ids), notDeleted(expense)));
 
-    // Removal-path invariant: every delete path cleans up its embeddings in-tx.
-    await softDeleteEntityEmbeddingsTx(tx, "expense", ids);
+    await cascadeRemoval(tx, { entity: "expense", ids, audit: { actor } });
 
     await touchDataQualityTargets(tx, {
       productIds: qualityTargets
@@ -919,16 +918,6 @@ export const deleteExpensesWithPurchaseEffects = async (
         .map((row) => row.purchaseId)
         .filter((value): value is PurchaseId => value !== null),
     });
-
-    await logAuditEntries(
-      tx,
-      actor,
-      ids.map((id) => ({
-        entityType: "expense" as const,
-        entityId: id,
-        action: "delete" as const,
-      })),
-    );
 
     const purchases =
       affectedPurchaseDbIds.length === 0
@@ -1006,7 +995,7 @@ export const deleteExpenses = async (
  * there is nothing to block or cascade: `blockers` and `changes` are always
  * empty. That doesn't make an expense delete a no-op — its one real
  * consequence, read straight off `deleteExpenses` above, is the same-transaction
- * `softDeleteEntityEmbeddingsTx` call that removes the row from search. The
+ * `cascadeRemoval` call that removes the row from search. The
  * count here is the SAME predicate that call uses (entityType match +
  * `inArray` + `notDeleted`), via `countByTarget`, so the two can't disagree.
  *

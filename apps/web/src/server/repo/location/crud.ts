@@ -47,7 +47,6 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { isUniqueViolation } from "~/server/errors/db-errors";
 import {
-  buildCascadeAuditEntries,
   computeChanges,
   logAuditEntries,
   logAuditEntry,
@@ -77,7 +76,6 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import {
   countByTarget,
@@ -87,6 +85,7 @@ import {
 } from "~/server/repo/impact";
 import { loadProductPricing } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
+import { cascadeRemoval } from "~/server/repo/removal";
 import {
   resolveAllPresent,
   resolveLiveShortcode,
@@ -554,15 +553,12 @@ export const deleteLocations = async (
       .set({ deletedAt: now })
       .where(and(inArray(location.id, ids), notDeleted(location)));
 
-    // Cascade the search embedding so a direct repo delete (no mutation
-    // side-effect) can't leave an orphaned entityEmbedding row.
-    await softDeleteEntityEmbeddingsTx(tx, "location", ids);
-
-    const auditEntries = buildCascadeAuditEntries("location", ids, {
-      cascadedImages: countBy(cascadedImages, (i) => i.locationId),
+    await cascadeRemoval(tx, {
+      entity: "location",
+      ids,
+      audit: { actor },
+      counts: { cascadedImages: countBy(cascadedImages, (i) => i.locationId) },
     });
-
-    await logAuditEntries(tx, actor, auditEntries);
   });
 };
 

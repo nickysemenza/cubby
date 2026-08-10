@@ -33,10 +33,8 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
-  buildCascadeAuditEntries,
   computeChanges,
   diffUnorderedIdSet,
-  logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import {
@@ -50,8 +48,8 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
-import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { countByTarget, impact, present } from "~/server/repo/impact";
+import { cascadeRemoval } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveOrThrow,
@@ -482,18 +480,18 @@ export const deleteProjects = async (
       .set({ deletedAt: now })
       .where(and(inArray(project.id, ids), notDeleted(project)));
 
-    // Removal-path invariant: every delete path cleans up its embeddings in-tx.
-    await softDeleteEntityEmbeddingsTx(tx, "project", ids);
-
-    const auditEntries = buildCascadeAuditEntries("project", ids, {
-      cascadedImages: countBy(cascadedImages, (i) => i.projectId),
-      cascadedToolUsages: countBy(
-        cascadedToolUsages,
-        (usage) => usage.projectId,
-      ),
+    await cascadeRemoval(tx, {
+      entity: "project",
+      ids,
+      audit: { actor },
+      counts: {
+        cascadedImages: countBy(cascadedImages, (i) => i.projectId),
+        cascadedToolUsages: countBy(
+          cascadedToolUsages,
+          (usage) => usage.projectId,
+        ),
+      },
     });
-
-    await logAuditEntries(tx, actor, auditEntries);
   });
 };
 
