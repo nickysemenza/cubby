@@ -51,7 +51,7 @@ import {
   loadProductPricing,
 } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { cascadeRemoval } from "~/server/repo/removal";
+import { removeEntity } from "~/server/repo/removal";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { assertLiveTargets } from "./helpers";
 import {
@@ -589,13 +589,12 @@ export const deleteInventoryEntries = async (
 
   await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, inventoryEntry, ids, "Inventory");
-    const now = new Date();
-    await tx
-      .update(inventoryEntry)
-      .set({ deletedAt: now })
-      .where(and(inArray(inventoryEntry.id, ids), notDeleted(inventoryEntry)));
-
-    await cascadeRemoval(tx, { entity: "inventory", ids, audit: { actor } });
+    await removeEntity(tx, {
+      entity: "inventory",
+      ids,
+      removal: "soft",
+      actor,
+    });
   });
 };
 
@@ -609,7 +608,8 @@ export const deleteInventoryEntries = async (
  * both read straight off the actual delete paths rather than invented:
  *
  *  1. **Search index removal.** `deleteInventoryEntries` above soft-deletes
- *     the entry's `EntityEmbedding` row in the same transaction. Counted here
+ *     the entry's `EntityEmbedding` row in the same transaction (via
+ *     `removeEntity`'s cascade). Counted here
  *     with the SAME predicate that call uses (entityType match + `inArray` +
  *     `notDeleted`), via `countByTarget`, so the two can't disagree.
  *  2. **Location valuation recompute.** `needsValuationRecompute` in

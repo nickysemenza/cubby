@@ -64,7 +64,7 @@ import {
   foldChargeInto,
   renameChargeOrderId,
 } from "~/server/repo/purchase";
-import { cascadeRemoval } from "~/server/repo/removal";
+import { removeEntity } from "~/server/repo/removal";
 import {
   resolveAllPresent,
   resolveOrThrow,
@@ -902,13 +902,7 @@ export const deleteExpensesWithPurchaseEffects = async (
       pricingProductIds(qualityTargets.map((row) => row.productId)),
     );
 
-    const now = new Date();
-    await tx
-      .update(expense)
-      .set({ deletedAt: now })
-      .where(and(inArray(expense.id, ids), notDeleted(expense)));
-
-    await cascadeRemoval(tx, { entity: "expense", ids, audit: { actor } });
+    await removeEntity(tx, { entity: "expense", ids, removal: "soft", actor });
 
     await touchDataQualityTargets(tx, {
       productIds: qualityTargets
@@ -995,7 +989,7 @@ export const deleteExpenses = async (
  * there is nothing to block or cascade: `blockers` and `changes` are always
  * empty. That doesn't make an expense delete a no-op — its one real
  * consequence, read straight off `deleteExpenses` above, is the same-transaction
- * `cascadeRemoval` call that removes the row from search. The
+ * `removeEntity` cascade that removes the row from search. The
  * count here is the SAME predicate that call uses (entityType match +
  * `inArray` + `notDeleted`), via `countByTarget`, so the two can't disagree.
  *

@@ -60,7 +60,7 @@ import {
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { cascadeRemoval } from "~/server/repo/removal";
+import { removeEntity } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveAllPresent,
@@ -474,19 +474,11 @@ export async function deleteFinancialTransactions(
       ),
       columns: { purchaseId: true },
     });
-    await tx
-      .update(financialTransaction)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(
-          inArray(financialTransaction.id, ids),
-          notDeleted(financialTransaction),
-        ),
-      );
-    await cascadeRemoval(tx, {
+    await removeEntity(tx, {
       entity: "financialTransaction",
       ids,
-      audit: { actor },
+      removal: "soft",
+      actor,
     });
     await touchDataQualityTargets(tx, {
       purchaseIds: qualityTargets
