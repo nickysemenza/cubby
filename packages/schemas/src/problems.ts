@@ -775,6 +775,27 @@ export const allProblemsSchema = z.object({
 
 export type ProblemKey = keyof typeof allProblemArrayFields;
 
+/** The detector sections of `AllProblems`, without the derived `totalProblems`. */
+export type ProblemArrays = { [K in ProblemKey]: AllProblems[K] };
+
+/**
+ * Every detector key at empty. The Problems page merges four separately-loaded
+ * cost groups into one `AllProblems`, and a group that hasn't resolved yet has
+ * to render as empty sections rather than as missing keys — spreading the
+ * loaded groups over this derives all 42 defaults from the group shapes, so a
+ * new detector needs no edit at the merge site.
+ *
+ * The empty arrays are shared rather than rebuilt per merge: problem sections
+ * are only ever read, and a stable identity keeps a not-yet-loaded group from
+ * churning the memos downstream of the merge on every recompute.
+ */
+export const EMPTY_PROBLEM_ARRAYS: ProblemArrays = Object.freeze(
+  Object.keys(allProblemArrayFields).reduce((empty, key) => {
+    empty[key as ProblemKey] = [];
+    return empty;
+  }, {} as ProblemArrays),
+);
+
 /**
  * What kind of thing each detector reports. This is the axis the Problems page
  * splits on, and it is deliberately INDEPENDENT of the cost grouping above
@@ -896,7 +917,19 @@ export const PROBLEM_CLASS = {
   duplicateFinancialTransactionSourceRefs: "defect",
   duplicateFinancialAccountSourceAliases: "defect",
   invalidFinancialJson: "defect",
-} as const satisfies Record<ProblemKey, "defect" | "coverage">;
+} as const satisfies Record<ProblemKey, ProblemClass>;
+
+export type ProblemClass = "defect" | "coverage";
+
+/**
+ * The keys classed `coverage`. Derived, so the Problems page can require that a
+ * section marked coverage names the keys it renders and that every key classed
+ * here has such a section — the two declarations agreed by hand before this,
+ * with nothing to catch a new coverage detector rendered in the defect list.
+ */
+export type CoverageProblemKey = {
+  [K in ProblemKey]: (typeof PROBLEM_CLASS)[K] extends "coverage" ? K : never;
+}[ProblemKey];
 
 const isDefectKey = (key: string): boolean =>
   PROBLEM_CLASS[key as ProblemKey] === "defect";
