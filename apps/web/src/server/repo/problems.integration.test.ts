@@ -1,4 +1,5 @@
 import type {
+  FinancialAccountId,
   LocationId,
   ProductId,
   ProjectShortcode,
@@ -2469,5 +2470,189 @@ describe("problems — duplicate spend candidates", () => {
     // reach `totalProblems` or the navbar badge.
     expect(PROBLEM_CLASS.duplicateSpendCandidates).not.toBe("defect");
     expect(sumProblemSections({ duplicateSpendCandidates }, "defect")).toBe(0);
+  });
+});
+
+// The settlement verdict against FinancialTransaction evidence — a different
+// question from "charges not reconciling" above, which compares a charge's
+// stated total against its own lines and never looks at a card statement.
+describe("problems — purchase financial settlement mismatches", () => {
+  const ctx = withTestDb();
+
+  const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
+    unwrap(
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse(makeExpenseInput(overrides)),
+        ctx.actor,
+      ),
+    );
+
+  const seedAccount = () =>
+    insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Settlement Visa",
+      identity: {
+        kind: "credit_card",
+        issuer: null,
+        network: "visa",
+        last4: "1111",
+      },
+      provisional: false,
+      sourceAliases: [],
+      notes: null,
+    });
+
+  /** A posted card charge against the purchase an expense minted. */
+  const postCharge = async (
+    accountId: FinancialAccountId,
+    purchaseShortcode: PurchaseShortcode,
+    amount: number,
+  ) => {
+    const purchaseId = unsafePurchaseId(
+      (await resolveLiveShortcode(ctx.db, purchaseShortcode, "purchase"))!,
+    );
+    await insertWithShortcode(ctx.db, "financialTransaction", {
+      accountId,
+      purchaseId,
+      kind: "purchase",
+      status: "posted",
+      amount,
+      transactionDate: "2026-07-01",
+      postedDate: "2026-07-03",
+      merchant: "Settlement Merchant",
+      rawDescription: null,
+      sourceCategory: null,
+      sourceRefs: [],
+      notes: null,
+    });
+  };
+
+  const mismatches = async () =>
+    (await findFastProblems(ctx.db)).purchaseFinancialSettlementMismatches;
+
+  it("flags a purchase the card evidence underpays, and leaves a fully-settled one alone", async () => {
+    const settled = await seedLine({
+      name: "settled in full",
+      cost: 120,
+      vendor: "Settle Depot",
+      orderId: "SD-MATCH",
+    });
+    const short = await seedLine({
+      name: "short-settled",
+      cost: 120,
+      vendor: "Settle Depot",
+      orderId: "SD-SHORT",
+    });
+    const account = await seedAccount();
+    await postCharge(account.id, settled.purchaseId as PurchaseShortcode, 120);
+    await postCharge(account.id, short.purchaseId as PurchaseShortcode, 95);
+
+    const rows = await mismatches();
+    expect(rows.map((row) => row.id)).toEqual([short.purchaseId]);
+    expect(rows[0]).toMatchObject({
+      vendorName: "Settle Depot",
+      expenseTotal: 120,
+      financialReconciliation: {
+        status: "mismatch",
+        postedTransactionCount: 1,
+        outstandingTransactionCount: 0,
+        postedTotal: 95,
+        delta: -25,
+      },
+    });
+  });
+
+  it("compares against incurred spend only, so a planned line can't manufacture a mismatch", async () => {
+    // The payment-schedule shape from FinancialReconciliationInput: a deposit
+    // has settled, the rest of the contract is booked but hasn't happened yet.
+    // Counting the planned $400 would report a mismatch against a purchase
+    // behaving exactly as intended.
+    const deposit = await seedLine({
+      name: "venue deposit",
+      cost: 100,
+      vendor: "Venue Co",
+      orderId: "VC-1",
+    });
+    const planned = await seedLine({
+      name: "venue remaining payments",
+      cost: 400,
+      future: true,
+      vendor: "Venue Co",
+      orderId: "VC-1",
+    });
+    expect(planned.purchaseId).toBe(deposit.purchaseId);
+
+    const account = await seedAccount();
+    await postCharge(account.id, deposit.purchaseId as PurchaseShortcode, 100);
+
+    expect(await mismatches()).toEqual([]);
+  });
+
+  it("still flags the incurred portion when the rest of the schedule is planned", async () => {
+    // The mirror of the case above: excluding planned spend must not also
+    // suppress a real disagreement on the part that HAS settled.
+    const deposit = await seedLine({
+      name: "gala deposit",
+      cost: 100,
+      vendor: "Gala Co",
+      orderId: "GC-1",
+    });
+    await seedLine({
+      name: "gala remaining payments",
+      cost: 400,
+      future: true,
+      vendor: "Gala Co",
+      orderId: "GC-1",
+    });
+    const account = await seedAccount();
+    await postCharge(account.id, deposit.purchaseId as PurchaseShortcode, 88);
+
+    const rows = await mismatches();
+    expect(rows.map((row) => row.id)).toEqual([deposit.purchaseId]);
+    // The worklist row still names the purchase's real size, even though only
+    // the incurred $100 was compared.
+    expect(rows[0]).toMatchObject({
+      expenseTotal: 500,
+      financialReconciliation: { delta: -12 },
+    });
+  });
+
+  it("goes quiet on an unpriced incurred line, but not on an unpriced planned one", async () => {
+    const unknown = await seedLine({
+      name: "unknown-priced order line",
+      cost: 60,
+      vendor: "Unpriced Mart",
+      orderId: "UM-UNKNOWN",
+    });
+    await seedLine({
+      name: "unknown-priced order tax",
+      cost: null,
+      vendor: "Unpriced Mart",
+      orderId: "UM-UNKNOWN",
+    });
+    // Same shape, except the unpriced row is planned — which takes it out of
+    // the settleable population and restores the comparison.
+    const compared = await seedLine({
+      name: "planned-unpriced order line",
+      cost: 60,
+      vendor: "Unpriced Mart",
+      orderId: "UM-PLANNED",
+    });
+    await seedLine({
+      name: "planned-unpriced order tax",
+      cost: null,
+      future: true,
+      vendor: "Unpriced Mart",
+      orderId: "UM-PLANNED",
+    });
+    const account = await seedAccount();
+    await postCharge(account.id, unknown.purchaseId as PurchaseShortcode, 95);
+    await postCharge(account.id, compared.purchaseId as PurchaseShortcode, 95);
+
+    // Cost unknown is not cost zero: with an incurred row unpriced there is no
+    // total to compare, so the first purchase is silence, not a mismatch.
+    const rows = await mismatches();
+    expect(rows.map((row) => row.id)).toEqual([compared.purchaseId]);
+    expect(rows[0]?.financialReconciliation.delta).toBe(35);
   });
 });

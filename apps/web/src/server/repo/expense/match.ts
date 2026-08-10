@@ -231,12 +231,31 @@ export const matchExpenses = async (
         p."id"          AS "purchaseId",
         p."shortcode"   AS "purchaseShortcode",
         p."statedTotal"::double precision AS "purchaseStatedTotal",
+        -- ⚠️ The partition key p."id" is NULLABLE here — the Purchase join is a
+        -- LEFT JOIN and most of the interesting population is unlinked
+        -- expenses. SQL puts every NULL key in ONE partition, so on an unlinked
+        -- row each of these windows reads the aggregate across ALL
+        -- purchase-less expenses in the ledger, not "this expense's purchase".
+        -- Harmless only because the consumer below gates the whole purchase
+        -- object on raw.purchaseShortcode && raw.purchaseId, so no caller ever
+        -- sees them. Anything that starts reading these off an unlinked
+        -- candidate must partition on a non-null key first.
         count(e."id") OVER (PARTITION BY p."id")::int AS "purchaseExpenseCount",
         COALESCE(sum(e."cost") OVER (PARTITION BY p."id"), 0)::double precision AS "purchaseExpenseTotal",
         count(*) FILTER (WHERE e."cost" IS NULL) OVER (PARTITION BY p."id")::int AS "purchaseUnpricedExpenseCount",
         -- Settlement compares against INCURRED spend only; see
         -- FinancialReconciliationInput. The full total above is what the
         -- candidate row displays.
+        --
+        -- Deliberately NOT settleableExpenseTotalSql /
+        -- settleableUnpricedExpenseCountSql from repo/financial-reconciliation.
+        -- Those are correlated scalar SELECTs against one outer Purchase row;
+        -- this is a window aggregate over a rowset that has ALREADY joined
+        -- every expense to its purchase, and that rowset is materialized once
+        -- and reused by both matcher arms. Swapping in a per-row subquery would
+        -- re-scan "Expense" for every candidate to recompute numbers this pass
+        -- already has. Same rule, and it must stay the same rule — a different
+        -- shape is the price.
         COALESCE(sum(e."cost") FILTER (WHERE e."future" = false) OVER (PARTITION BY p."id"), 0)::double precision AS "purchaseSettleableExpenseTotal",
         count(*) FILTER (WHERE e."cost" IS NULL AND e."future" = false) OVER (PARTITION BY p."id")::int AS "purchaseSettleableUnpricedExpenseCount",
         v."name"        AS "vendorName",

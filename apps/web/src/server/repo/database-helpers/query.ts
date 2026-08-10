@@ -275,6 +275,43 @@ export async function assertNoDependents<TId extends string>(opts: {
 }
 
 /**
+ * Wrap a hand-written, fully-qualified SQL fragment as a typed select field,
+ * bypassing Drizzle's column rewriting. The house escape hatch for a
+ * **correlated scalar subquery** in a select list.
+ *
+ * ⚠️ **Why this exists — the `drizzle-buildSelection-strips-prefixes` trap.**
+ * For a single-table `select().from(x)`, Drizzle's `buildSelection` rewrites
+ * every top-level `PgColumn` chunk inside a `sql` select field to a BARE
+ * identifier, stripping the table prefix. So
+ * `` sql`… WHERE ${expense.purchaseId} = ${purchase.id}` `` emits
+ * `WHERE "purchaseId" = "id"`, and the two ways that lands are both bad:
+ *
+ *  - **Silently wrong.** The bare name binds to the *subquery's* own column, so
+ *    `Expense` self-joins and the field returns 0 for every row (what happened
+ *    to `Purchase.expenseTotal`, and to `vendorOptions`' purchase count).
+ *  - **A hard error.** When both the inner and outer table expose the name and
+ *    neither wins, Postgres rejects the whole query — `/vendors` failed
+ *    outright with `column reference "id" is ambiguous`.
+ *
+ * Nested SQL (`notDeleted(t)`, `eq()`) is not recursed into and survives, and
+ * `orderBy` is not a select field at all — so the SAME expression sorts
+ * correctly while the displayed value is wrong, which is what makes this so
+ * easy to miss. It has produced four bugs in this repo.
+ *
+ * `sql.raw` has no column chunks to strip, so aliasing the inner table (`e`,
+ * `v`, `se_e`) and spelling the outer reference as `"Purchase"."id"` sidesteps
+ * the rewrite entirely. **The outer reference must stay FULLY qualified**: a
+ * bare `"id"` would bind to the aliased inner table, which also has an `id`.
+ *
+ * Other sites work around the same hazard without going through this helper —
+ * `repo/search.ts`, `product/quantity-ledger.ts`, `product/crud.ts`,
+ * `ingredient/search.ts`, and `problems/detectors-integrity.ts` — each for its
+ * own structural reason. Any new hand-qualified correlated scalar belongs here.
+ */
+export const correlated = <T>(fragment: string): SQL<T> =>
+  sql<T>`${sql.raw(fragment)}`;
+
+/**
  * Equality against one value or any of a set — the server half of a
  * multi-select column filter (see `oneOrMany`).
  *

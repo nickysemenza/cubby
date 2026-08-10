@@ -1,6 +1,17 @@
 import type { FinancialReconciliationSummary } from "@cubby/schemas/financial-reconciliation";
+import type { PurchaseFinancialAggregate } from "~/server/repo/purchase-financial-aggregates";
 
-export interface FinancialReconciliationInput {
+/**
+ * The settlement-side aggregate every caller gets verbatim from
+ * `loadPurchaseFinancialAggregates`, plus the two expense-side fields each
+ * caller derives itself.
+ *
+ * Spelled as an intersection with `PurchaseFinancialAggregate` rather than
+ * restating its six fields: all three call sites spread `...financial` straight
+ * in, so the loader's shape and this function's shape cannot drift apart
+ * without a compile error.
+ */
+export type FinancialReconciliationInput = PurchaseFinancialAggregate & {
   /**
    * The **incurred** expense total — `future: true` rows excluded.
    *
@@ -30,13 +41,40 @@ export interface FinancialReconciliationInput {
   settleableExpenseTotal: number;
   /** Unpriced rows among the incurred expenses — same exclusion, same reason. */
   settleableUnpricedExpenseCount: number;
-  transactionCount: number;
-  postedTransactionCount: number;
-  outstandingTransactionCount: number;
-  postedTotal: number;
-  projectedTotal: number;
-  postedRefundTotal: number;
-}
+};
+
+/**
+ * The `settleableExpenseTotal` / `settleableUnpricedExpenseCount` above, as
+ * hand-qualified raw SQL, so the "INCURRED spend only" rule has one definition
+ * instead of one per query shape. `purchaseAlias` is the enclosing query's
+ * Purchase alias, quoted as it appears there — `'"Purchase"'` for a Drizzle
+ * select, `'p'` inside a hand-written statement.
+ *
+ * Raw strings rather than interpolated Drizzle columns: a cross-table
+ * correlated reference gets prefix-stripped by `buildSelection` and silently
+ * self-joins. See `correlated()` in `database-helpers/query.ts`, which is how a
+ * Drizzle select field wraps the result.
+ *
+ * **Contract: the enclosing query owns Purchase liveness.** These fragments
+ * filter Expense liveness and the incurred-only rule, and nothing else — a
+ * correlated scalar can only ever return a number, so it has no way to *drop* a
+ * soft-deleted purchase's row. Every caller already restricts to live purchases
+ * in its own WHERE or join.
+ *
+ * `repo/expense/match.ts` deliberately does NOT use these; see the note there.
+ */
+export const settleableExpenseTotalSql = (purchaseAlias: string) =>
+  `(SELECT COALESCE(sum(se_e."cost"), 0)::double precision FROM "Expense" se_e
+     WHERE se_e."purchaseId" = ${purchaseAlias}."id"
+       AND se_e."deletedAt" IS NULL
+       AND se_e."future" = false)`;
+
+export const settleableUnpricedExpenseCountSql = (purchaseAlias: string) =>
+  `(SELECT count(*)::int FROM "Expense" se_e
+     WHERE se_e."purchaseId" = ${purchaseAlias}."id"
+       AND se_e."cost" IS NULL
+       AND se_e."deletedAt" IS NULL
+       AND se_e."future" = false)`;
 
 const cents = (value: number) => Math.round(value * 100);
 

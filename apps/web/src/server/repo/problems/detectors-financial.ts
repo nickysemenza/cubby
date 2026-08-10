@@ -18,7 +18,11 @@ import type {
 import { sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
-import { calculateFinancialReconciliation } from "~/server/repo/financial-reconciliation";
+import {
+  calculateFinancialReconciliation,
+  settleableExpenseTotalSql,
+  settleableUnpricedExpenseCountSql,
+} from "~/server/repo/financial-reconciliation";
 import {
   emptyPurchaseFinancialAggregate,
   loadPurchaseFinancialAggregates,
@@ -127,19 +131,17 @@ export async function findPurchaseFinancialSettlementMismatches(
   }>(sql`
     SELECT p.id AS uuid, p.shortcode AS id, v.name AS "vendorName",
       COALESCE(e."expenseTotal", 0)::double precision AS "expenseTotal",
-      COALESCE(e."settleableExpenseTotal", 0)::double precision AS "settleableExpenseTotal",
-      COALESCE(e."settleableUnpriced", 0)::int AS "settleableUnpriced"
+      -- The incurred-only rule comes from the shared fragments in
+      -- repo/financial-reconciliation, not a third hand-written FILTER. The
+      -- reported expenseTotal stays the full figure so the worklist row still
+      -- names the purchase's real size; the outer deletedAt predicate below is
+      -- this query's half of the fragments' purchase-liveness contract.
+      ${sql.raw(settleableExpenseTotalSql("p"))} AS "settleableExpenseTotal",
+      ${sql.raw(settleableUnpricedExpenseCountSql("p"))} AS "settleableUnpriced"
     FROM "Purchase" p
     LEFT JOIN "Vendor" v ON v.id = p."vendorId" AND v."deletedAt" IS NULL
     LEFT JOIN LATERAL (
-      SELECT
-        COALESCE(sum(e.cost), 0) AS "expenseTotal",
-        -- Settlement compares against INCURRED spend; a planned row cannot have
-        -- settled, so counting it guarantees a mismatch. The reported
-        -- expenseTotal stays the full figure so the worklist row still names
-        -- the purchase's real size.
-        COALESCE(sum(e.cost) FILTER (WHERE e.future = false), 0) AS "settleableExpenseTotal",
-        count(e.id) FILTER (WHERE e.cost IS NULL AND e.future = false) AS "settleableUnpriced"
+      SELECT COALESCE(sum(e.cost), 0) AS "expenseTotal"
       FROM "Expense" e WHERE e."purchaseId" = p.id AND e."deletedAt" IS NULL
     ) e ON TRUE
     WHERE p."deletedAt" IS NULL
