@@ -79,6 +79,7 @@ import {
   unwrapDb,
   updateLiveAndReturn,
   withTransaction,
+  withTransactionOn,
 } from "~/server/repo/database-helpers";
 import {
   countByTarget,
@@ -87,7 +88,7 @@ import {
   sideEffect,
 } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { cascadeRemoval } from "~/server/repo/removal";
+import { removeEntity } from "~/server/repo/removal";
 import {
   resolveAllPresent,
   resolveLiveShortcode,
@@ -895,137 +896,133 @@ export const updateRecipe = async (
 };
 
 /**
- * Tx-scoped body of {@link deleteRecipes}. Split out so a caller that owns a
- * wider transaction (the cookbook delete, which removes the book row in the same
- * txn) shares the exact cascade, embedding cleanup, and audit trail.
+ * Soft-delete recipes along with their sections, section ingredients, images,
+ * and meal-plan memberships.
+ *
+ * Joins the caller's transaction when one is open, so the cookbook delete —
+ * which removes the book row in the same txn — shares the exact cascade,
+ * embedding cleanup, and audit trail rather than reimplementing it.
+ *
+ * The four child statements stay hand-rolled instead of becoming
+ * `removeEntity`'s declared `children`, because `RecipeSectionIngredient` is
+ * scoped by `sectionIds` and counted *through* `RecipeSection.recipeId` — a
+ * child cascade addresses one parent column and counts what it removes, so
+ * expressing this one would take both a scope override and a count override.
+ * The invariant survives regardless: the delete audit entries are still minted
+ * by the shared cascade below, which is the only thing that can mint them.
  */
-const deleteRecipesTx = async (
-  tx: DrizzleTransaction,
+export const deleteRecipes = async (
+  dbOrTx: Database | DrizzleTransaction,
   ids: RecipeId[],
   actor: ActorContext,
 ): Promise<void> => {
   if (ids.length === 0) return;
 
-  // Lock recipes and validate they exist and aren't already deleted
-  // Prevents race conditions by acquiring row-level locks
-  await lockAndValidateForDelete(tx, recipe, ids, "Recipe");
+  await withTransactionOn(dbOrTx, async (tx) => {
+    // Row-level locks: proves the ids exist and aren't already deleted, and
+    // keeps a concurrent delete from interleaving with the cascade below.
+    await lockAndValidateForDelete(tx, recipe, ids, "Recipe");
 
-  const now = new Date();
+    const now = new Date();
 
-  const sections = await tx.query.recipeSection.findMany({
-    where: and(inArray(recipeSection.recipeId, ids), notDeleted(recipeSection)),
-    columns: { id: true, recipeId: true },
-  });
-
-  const sectionIds = sections.map((s) => s.id);
-
-  const cascadedImages = await tx.query.recipeImage.findMany({
-    where: and(inArray(recipeImage.recipeId, ids), notDeleted(recipeImage)),
-    columns: { recipeId: true },
-  });
-
-  // Meal-plan membership. This is a cascade, not a guard, for two reasons: the
-  // removal-path invariant says a delete cleans up its dependents in the same
-  // transaction, and a guard here would make deleteCookbook's unconditional
-  // recipe cascade throw mid-transaction. Without this the MealRecipe row
-  // outlives its recipe and the meal keeps counting it.
-  //
-  // The other incoming edge, `ingredient.recipeId` (the sub-recipe pointer), is
-  // deliberately NOT touched: the router resolves parents and calls
-  // dispatchRecompute, with findParentRecipesWithDeletedSubRecipes as the
-  // backstop detector. Cascading or guarding it would break sub-recipe deletion.
-  const cascadedMealRecipes = await tx.query.mealRecipe.findMany({
-    where: and(inArray(mealRecipe.recipeId, ids), notDeleted(mealRecipe)),
-    columns: { recipeId: true },
-  });
-
-  let cascadedIngredients: Array<{ recipeSectionId: string }> = [];
-  if (sectionIds.length > 0) {
-    cascadedIngredients = await tx.query.recipeSectionIngredient.findMany({
+    const sections = await tx.query.recipeSection.findMany({
       where: and(
-        inArray(recipeSectionIngredient.recipeSectionId, sectionIds),
-        notDeleted(recipeSectionIngredient),
+        inArray(recipeSection.recipeId, ids),
+        notDeleted(recipeSection),
       ),
-      columns: { recipeSectionId: true },
+      columns: { id: true, recipeId: true },
     });
-  }
 
-  // Ingredients are counted via their section's recipe (no direct recipeId).
-  const sectionToRecipe = new Map(sections.map((s) => [s.id, s.recipeId]));
-  const sectionsByRecipe = countBy(sections, (s) => s.recipeId);
-  const imagesByRecipe = countBy(cascadedImages, (i) => i.recipeId);
-  const mealRecipesByRecipe = countBy(cascadedMealRecipes, (mr) => mr.recipeId);
-  const ingredientsByRecipe = countBy(
-    cascadedIngredients
-      .map((ing) => sectionToRecipe.get(ing.recipeSectionId))
-      .filter((id): id is RecipeId => id != null),
-    (id) => id,
-  );
+    const sectionIds = sections.map((s) => s.id);
 
-  // Soft delete recipe section ingredients
-  if (sectionIds.length > 0) {
-    await tx
-      .update(recipeSectionIngredient)
-      .set({ deletedAt: now })
-      .where(
-        and(
+    const cascadedImages = await tx.query.recipeImage.findMany({
+      where: and(inArray(recipeImage.recipeId, ids), notDeleted(recipeImage)),
+      columns: { recipeId: true },
+    });
+
+    // Meal-plan membership. This is a cascade, not a guard, for two reasons: the
+    // removal-path invariant says a delete cleans up its dependents in the same
+    // transaction, and a guard here would make deleteCookbook's unconditional
+    // recipe cascade throw mid-transaction. Without this the MealRecipe row
+    // outlives its recipe and the meal keeps counting it.
+    //
+    // The other incoming edge, `ingredient.recipeId` (the sub-recipe pointer), is
+    // deliberately NOT touched: the router resolves parents and calls
+    // dispatchRecompute, with findParentRecipesWithDeletedSubRecipes as the
+    // backstop detector. Cascading or guarding it would break sub-recipe deletion.
+    const cascadedMealRecipes = await tx.query.mealRecipe.findMany({
+      where: and(inArray(mealRecipe.recipeId, ids), notDeleted(mealRecipe)),
+      columns: { recipeId: true },
+    });
+
+    let cascadedIngredients: Array<{ recipeSectionId: string }> = [];
+    if (sectionIds.length > 0) {
+      cascadedIngredients = await tx.query.recipeSectionIngredient.findMany({
+        where: and(
           inArray(recipeSectionIngredient.recipeSectionId, sectionIds),
           notDeleted(recipeSectionIngredient),
         ),
-      );
-  }
+        columns: { recipeSectionId: true },
+      });
+    }
 
-  // Soft delete recipe sections
-  await tx
-    .update(recipeSection)
-    .set({ deletedAt: now })
-    .where(
-      and(inArray(recipeSection.recipeId, ids), notDeleted(recipeSection)),
+    // Ingredients are counted via their section's recipe (no direct recipeId).
+    const sectionToRecipe = new Map(sections.map((s) => [s.id, s.recipeId]));
+    const sectionsByRecipe = countBy(sections, (s) => s.recipeId);
+    const imagesByRecipe = countBy(cascadedImages, (i) => i.recipeId);
+    const mealRecipesByRecipe = countBy(
+      cascadedMealRecipes,
+      (mr) => mr.recipeId,
+    );
+    const ingredientsByRecipe = countBy(
+      cascadedIngredients
+        .map((ing) => sectionToRecipe.get(ing.recipeSectionId))
+        .filter((id): id is RecipeId => id != null),
+      (id) => id,
     );
 
-  // Soft delete recipe images
-  await tx
-    .update(recipeImage)
-    .set({ deletedAt: now })
-    .where(and(inArray(recipeImage.recipeId, ids), notDeleted(recipeImage)));
+    if (sectionIds.length > 0) {
+      await tx
+        .update(recipeSectionIngredient)
+        .set({ deletedAt: now })
+        .where(
+          and(
+            inArray(recipeSectionIngredient.recipeSectionId, sectionIds),
+            notDeleted(recipeSectionIngredient),
+          ),
+        );
+    }
 
-  // Soft delete meal-plan memberships
-  await tx
-    .update(mealRecipe)
-    .set({ deletedAt: now })
-    .where(and(inArray(mealRecipe.recipeId, ids), notDeleted(mealRecipe)));
+    await tx
+      .update(recipeSection)
+      .set({ deletedAt: now })
+      .where(
+        and(inArray(recipeSection.recipeId, ids), notDeleted(recipeSection)),
+      );
 
-  // Soft delete recipes
-  await tx
-    .update(recipe)
-    .set({ deletedAt: now })
-    .where(and(inArray(recipe.id, ids), notDeleted(recipe)));
+    await tx
+      .update(recipeImage)
+      .set({ deletedAt: now })
+      .where(and(inArray(recipeImage.recipeId, ids), notDeleted(recipeImage)));
 
-  await cascadeRemoval(tx, {
-    entity: "recipe",
-    ids,
-    audit: { actor },
-    counts: {
-      cascadedSections: sectionsByRecipe,
-      cascadedIngredients: ingredientsByRecipe,
-      cascadedImages: imagesByRecipe,
-      cascadedMealRecipes: mealRecipesByRecipe,
-    },
+    await tx
+      .update(mealRecipe)
+      .set({ deletedAt: now })
+      .where(and(inArray(mealRecipe.recipeId, ids), notDeleted(mealRecipe)));
+
+    await removeEntity(tx, {
+      entity: "recipe",
+      ids,
+      removal: "soft",
+      actor,
+      extraCounts: {
+        cascadedSections: sectionsByRecipe,
+        cascadedIngredients: ingredientsByRecipe,
+        cascadedImages: imagesByRecipe,
+        cascadedMealRecipes: mealRecipesByRecipe,
+      },
+    });
   });
-};
-
-/**
- * Soft delete recipes by setting deletedAt timestamp.
- * Also soft deletes related sections, ingredients, and images.
- */
-export const deleteRecipes = async (
-  db: Database,
-  ids: RecipeId[],
-  actor: ActorContext,
-): Promise<void> => {
-  if (ids.length === 0) return;
-
-  await withTransaction(db, (tx) => deleteRecipesTx(tx, ids, actor));
 };
 
 /**
@@ -1045,7 +1042,7 @@ export const deleteRecipesByCookbookTx = async (
     columns: { id: true, shortcode: true },
   });
   const ids = rows.map((r) => r.id);
-  await deleteRecipesTx(tx, ids, actor);
+  await deleteRecipes(tx, ids, actor);
   return ids;
 };
 
@@ -1090,18 +1087,18 @@ const resolveRecomputeParents = async (
 /**
  * What {@link deleteRecipes} would do to the given recipes, without doing it.
  *
- * Reads the SAME `RECIPE_DELETE_EDGE_POLICY` `deleteRecipesTx` is described
+ * Reads the SAME `RECIPE_DELETE_EDGE_POLICY` `deleteRecipes` is described
  * by. The policy has no `block`-effect edge — a recipe delete never refuses on
  * an incoming edge, unlike `previewDeleteProducts` — so `blockers` is always
  * empty here.
  *
  * `RecipeSection.recipeId` / `MealRecipe.recipeId` / `RecipeImage.recipeId`
  * cascade (`soft-delete`) and become `changes`, counted with the identical
- * `inArray(column, ids) AND notDeleted(table)` predicate `deleteRecipesTx`
+ * `inArray(column, ids) AND notDeleted(table)` predicate `deleteRecipes`
  * fetches its `cascadedX` rows with (via {@link countByTarget}). Two things
  * that are NOT row cascades become `sideEffects`: `Ingredient.recipeId`'s
  * `preserve` disposition (the sub-recipe pointer deliberately left untouched —
- * see `deleteRecipesTx`'s comment on `cascadedMealRecipes`), and the
+ * see `deleteRecipes`'s comment on `cascadedMealRecipes`), and the
  * parent-recipe recomputes that pointer triggers (see
  * {@link resolveRecomputeParents}).
  *
