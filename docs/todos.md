@@ -776,13 +776,18 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
     ([workerd#3119](https://github.com/cloudflare/workerd/issues/3119),
     [workerd#1401](https://github.com/cloudflare/workerd/issues/1401)); pinned
     version here is workerd 1.20260801.1.
-  - **Next step is now unblocked:** CI uploads the wrangler crash log as an
-    artifact on failure (it previously captured only `playwright-report/`, which
-    is why every occurrence was re-run instead of diagnosed). Read that log on the
-    next red shard 2 — it holds the assertion workerd actually died on. Candidate
-    fixes once confirmed: stub USDA with a local server returning valid empty JSON
-    instead of a dead port, or make the harness fail fast with a clear message when
-    the server dies rather than emitting N confusing spec failures.
+  - **Next step — a one-line CI change that is NOT yet merged.** The E2E failure
+    artifact uploads only `playwright-report/` (the `upload-artifact` step in
+    `test-e2e`), so wrangler's crash log dies with the runner and every
+    occurrence stays unfalsifiable after the fact — which is why these got
+    re-run instead of diagnosed. Add an `if: failure()` upload of
+    `/github/home/.config/.wrangler/logs/` with `if-no-files-found: ignore`,
+    then read it on the next red shard 2: it holds the assertion workerd
+    actually died on. Pushing that edit needs `workflow` token scope.
+  - **Candidate fixes, once that log confirms the cause:** stub USDA with a
+    local server returning valid empty JSON instead of a dead port, or make the
+    harness fail fast with a clear message when the server dies rather than
+    emitting N confusing spec failures.
 
 - [ ] **Measure and expand selective SSR only if the product-detail pilot wins.**
   Product detail now uses a request-scoped tRPC local link during SSR, preserving
