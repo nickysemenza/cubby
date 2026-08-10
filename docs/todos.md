@@ -747,6 +747,43 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 
 ## Architecture / engineering
 
+- [ ] **Root-cause the E2E shard-2 workerd crash.** Shard 2 dies mid-run and
+  takes the whole shard with it; shard 1 has never done this. Measured over the
+  last ~40 first-attempt E2E jobs: **shard 1 = 20/20 pass, shard 2 = 17/21**, so
+  ~19% and entirely one-sided — not generic runner flakiness. It hits unrelated
+  PRs (#670, a renovate bump, failed identically hours before the #671–#677
+  batch), and because E2E gates deploy with no `continue-on-error` (deliberately —
+  see the comment on the job), every occurrence blocks a merge until someone
+  re-runs. It cost three re-runs during that batch alone.
+  - **Shape:** wrangler prints an empty `✘ [ERROR]` and `Logs were written to
+    <path>`, workerd exits, and every remaining spec fails
+    `ERR_CONNECTION_REFUSED`. One crash, dozens of reported failures — reading the
+    failure list is misleading, only the first event matters.
+  - **Signature (n=2, identical):** the last thing before the abort is
+    `dashboard.counts` taking its USDA-unavailable path, then
+    `Uncaught Error: Network connection lost.` In one instance a
+    `kj/async-io-unix.c++:186: disconnected: ::write(...)` with a native workerd
+    stack immediately preceded it. That fatal is a **late, unhandled** rejection:
+    `dashboard.ts`'s `getCounts().catch(...)` handles the awaited promise, so
+    something rejecting *after* it settles is escaping — most likely an in-flight
+    subrequest abandoned when Playwright navigates away mid-response.
+  - **Why USDA is always in the picture:** `e2e-global-setup.ts` points
+    `USDA_API_URL` at a dead port on purpose, so E2E never depends on a remote
+    service. That is the right call, but it means every dashboard load takes an
+    error path, widening the window in which a client disconnect can land.
+  - **Not a cubby-only bug:** `kj/async-io-unix` disconnect errors escaping and
+    destabilising the process are a known workerd fragility
+    ([workerd#3119](https://github.com/cloudflare/workerd/issues/3119),
+    [workerd#1401](https://github.com/cloudflare/workerd/issues/1401)); pinned
+    version here is workerd 1.20260801.1.
+  - **Next step is now unblocked:** CI uploads the wrangler crash log as an
+    artifact on failure (it previously captured only `playwright-report/`, which
+    is why every occurrence was re-run instead of diagnosed). Read that log on the
+    next red shard 2 — it holds the assertion workerd actually died on. Candidate
+    fixes once confirmed: stub USDA with a local server returning valid empty JSON
+    instead of a dead port, or make the harness fail fast with a clear message when
+    the server dies rather than emitting N confusing spec failures.
+
 - [ ] **Measure and expand selective SSR only if the product-detail pilot wins.**
   Product detail now uses a request-scoped tRPC local link during SSR, preserving
   the incoming session, middleware, SuperJSON, formatted errors, and the existing
