@@ -16,7 +16,7 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import { and, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, eq, gte, lte } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { meal, mealRecipe } from "~/server/db/schema";
@@ -39,7 +39,7 @@ import {
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { cascadeRemoval } from "~/server/repo/removal";
+import { removeEntity } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveOrThrow,
@@ -219,20 +219,23 @@ export const deleteMeals = async (
   if (ids.length === 0) return;
   await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, meal, ids, "Meal");
-    const now = new Date();
-    // notDeleted guard so rows already removed via removeMealRecipe keep their
-    // original deletedAt instead of being stomped with `now`.
-    await tx
-      .update(mealRecipe)
-      .set({ deletedAt: now })
-      .where(and(inArray(mealRecipe.mealId, ids), notDeleted(mealRecipe)));
-    await tx
-      .update(meal)
-      .set({ deletedAt: now })
-      .where(and(inArray(meal.id, ids), notDeleted(meal)));
     // The meal manifest has onDelete: [], so this transaction is the only place
-    // a meal's EntityEmbedding row gets cleaned up.
-    await cascadeRemoval(tx, { entity: "meal", ids, audit: { actor } });
+    // a meal's EntityEmbedding row gets cleaned up. And because
+    // `removeMealRecipe` unplans rows singly, a meal can already own dead
+    // MealRecipe rows — the soft cascade's `notDeleted` is what preserves them.
+    await removeEntity(tx, {
+      entity: "meal",
+      ids,
+      removal: "soft",
+      actor,
+      children: [
+        {
+          table: mealRecipe,
+          parentColumn: mealRecipe.mealId,
+          auditKey: "cascadedMealRecipes",
+        },
+      ],
+    });
   });
 };
 
@@ -349,9 +352,9 @@ export const removeMealRecipeWithEntityId = async (
  *
  * Reads the SAME `MEAL_DELETE_EDGE_POLICY` `deleteMeals` is described by. Its
  * one incoming edge, `MealRecipe.mealId`, is a `soft-delete` cascade — there
- * is nothing to block on, so `blockers` is always empty — counted with the
- * identical `inArray(mealRecipe.mealId, ids) AND notDeleted(mealRecipe)`
- * predicate `deleteMeals` updates with (via {@link countByTarget}).
+ * is nothing to block on, so `blockers` is always empty — counted here with the
+ * same {@link countByTarget} call `removeEntity` uses for the audit count of
+ * that very cascade, so the preview and the delete cannot disagree.
  *
  * Advisory only. `deleteMeals` still re-runs its own cascade inside its own
  * transaction; nothing here is a lock or a permission.
