@@ -71,7 +71,7 @@ import {
 } from "~/server/repo/merge";
 import { foldChargeInto } from "~/server/repo/purchase";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { cascadeRemoval } from "~/server/repo/removal";
+import { removeEntity } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveLiveShortcode,
@@ -672,13 +672,7 @@ export const deleteVendors = async (
       );
     }
 
-    const now = new Date();
-    await tx
-      .update(vendor)
-      .set({ deletedAt: now })
-      .where(and(inArray(vendor.id, ids), notDeleted(vendor)));
-
-    await cascadeRemoval(tx, { entity: "vendor", ids, audit: { actor } });
+    await removeEntity(tx, { entity: "vendor", ids, removal: "soft", actor });
   });
 };
 

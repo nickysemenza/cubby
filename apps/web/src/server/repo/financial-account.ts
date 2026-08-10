@@ -45,7 +45,7 @@ import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { cascadeRemoval } from "~/server/repo/removal";
+import { removeEntity } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveOrThrow,
@@ -384,16 +384,11 @@ export async function deleteFinancialAccounts(
         "FINANCIAL_ACCOUNT_HAS_TRANSACTIONS",
         "Cannot delete a financial account while live transactions reference it.",
       );
-    await tx
-      .update(financialAccount)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(inArray(financialAccount.id, ids), notDeleted(financialAccount)),
-      );
-    await cascadeRemoval(tx, {
+    await removeEntity(tx, {
       entity: "financialAccount",
       ids,
-      audit: { actor },
+      removal: "soft",
+      actor,
     });
   });
 }
