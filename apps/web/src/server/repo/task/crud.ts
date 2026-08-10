@@ -57,7 +57,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { countByTarget, impact, present } from "~/server/repo/impact";
-import { cascadeRemoval } from "~/server/repo/removal";
+import { removeEntity } from "~/server/repo/removal";
 import {
   type EntityRef,
   lookupShortcodes,
@@ -827,6 +827,10 @@ export const deleteTasks = async (
     const liveSubtasks = await fetchLiveSubtasks(tx, ids);
     const allIds = [...ids, ...liveSubtasks.map((t) => t.id)];
 
+    // Not a `ChildCascade`: a dependency edge points at the task from either
+    // end, and `parentColumn` addresses exactly one column. Hand-written here,
+    // immediately before the parent removal, so it keeps the children-first
+    // ordering `removeEntity` fixes for its declared edges.
     await tx
       .delete(taskDependency)
       .where(
@@ -836,17 +840,12 @@ export const deleteTasks = async (
         ),
       );
 
-    const now = new Date();
-    await tx
-      .update(task)
-      .set({ deletedAt: now })
-      .where(and(inArray(task.id, allIds), notDeleted(task)));
-
     // Over `allIds`, not `ids`: the cascaded subtasks are removals too.
-    await cascadeRemoval(tx, {
+    await removeEntity(tx, {
       entity: "task",
       ids: allIds,
-      audit: { actor },
+      removal: "soft",
+      actor,
     });
   });
 };

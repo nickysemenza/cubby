@@ -1,3 +1,40 @@
+/**
+ * The embedding-cascade invariant: a removal must soft-delete the removed row's
+ * `EntityEmbedding` in the same transaction. A live embedding pointing at a
+ * removed id is permanent damage — soft deletes aren't restorable, semantic
+ * search keeps returning a result that renders blank, and in the hard-delete
+ * case the row dangles with no FK.
+ *
+ * It used to prove that each of 21 hand-copied `softDeleteEntityEmbeddingsTx`
+ * calls was present — one real-DB case per call site, each asserting somebody
+ * remembered. That is structural now: `cascadeRemoval` derives the cascade from
+ * `entity` (a type predicate over the searchable roster, so it can't be
+ * disabled or mis-aimed) and is the only thing that can mint a removal's
+ * `delete` audit entry, so a path that skips the cascade can't write its audit
+ * trail either — a compile error, not a test failure. `removeEntity` owns the
+ * whole write half above it.
+ *
+ * Four things remain provable only here:
+ *
+ *  - **Wiring** — that an entrypoint reaches the shared machinery at all. The
+ *    table-driven case, one row per migrated entity.
+ *  - **The paths that deliberately keep hand-written removal statements** — the
+ *    four inventory cases. Reconcile and the bulk diffs interleave their own
+ *    statements with the borrowed tail, and nothing structural pins where that
+ *    tail sits relative to the slot planner.
+ *  - **Merges** — a separate path (`finalizeMerge`); `mergeProducts` is the only
+ *    coverage of the absorbed-stock cascade and of its ordering against UPC
+ *    adoption.
+ *  - **Expansion semantics** — `deleteTasks` widens its own id set to live
+ *    subtasks, and the cascade must run over the widened set. No type says so.
+ *
+ * `findOrphanedEntityEmbeddings` is asserted after every case: a shipped
+ * Problems detector, not a test helper, catching what types cannot — out-of-band
+ * SQL, migrations, and a removal that writes no audit at all. The remaining
+ * one-line orphan assertions stay scattered across the suites that own them
+ * (expense, cookbook, ingredient, discard, mutation-side-effects).
+ */
+
 import {
   unsafeInventoryId,
   unsafeLocationId,
@@ -10,9 +47,11 @@ import {
 } from "@cubby/schemas/project";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { and, eq } from "drizzle-orm";
+import type { TestDbContext } from "tooling/test-setup";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
+import type { Database } from "~/server/db";
 import {
   entityEmbedding,
   inventoryEntry,
@@ -45,86 +84,107 @@ import {
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { createTask, deleteTasks, updateTask } from "~/server/repo/task";
 
-// F1 regression guard: the inventory manifest has onDelete: [], so a repo/bulk
-// removal transaction is the ONLY place an inventory entry's search-embedding
-// row gets cleaned up. Every removal path must cascade softDeleteEntityEmbeddingsTx
-// in-tx — otherwise a removed entry leaves a live EntityEmbedding orphan that
-// consumes HNSW candidate slots (recall degradation) and, in the hard-delete
-// case, dangles forever with no FK. This exercises every removal path and asserts
-// zero live orphans after each.
-describe("inventory removal cascades entity embeddings (no orphans)", () => {
-  const ctx = withTestDb();
-  const amount = { value: 3, unit: "each" };
+const amount = { value: 3, unit: "each" };
 
-  // Seed a live search-embedding row for an entity (minimal 3-dim vector — the
-  // HNSW index is partial on dimensions=1536, so small test vectors insert fine).
-  const seedEmbedding = (entityType: SearchableEntity, entityId: string) =>
-    getDb(ctx.db)
-      .insert(entityEmbedding)
-      .values({
-        entityType,
-        entityId,
-        embeddingText: `${entityType} ${entityId}`,
-        embeddingHash: `hash-${entityId}`,
-        provider: "test",
-        model: "test",
-        dimensions: 3,
-        embedding: [0, 0, 0],
-      });
-
-  const embeddingDeletedAt = async (entityId: string) =>
-    (
-      await getDb(ctx.db).query.entityEmbedding.findFirst({
-        where: and(
-          eq(entityEmbedding.entityType, "inventory"),
-          eq(entityEmbedding.entityId, entityId),
-        ),
-        columns: { deletedAt: true },
-      })
-    )?.deletedAt;
-
-  const requireResolvedId = async (
+/**
+ * Bound to the holder rather than to a `Database`: `ctx.db` is only populated in
+ * `withTestDb`'s `beforeEach`, so every read of it has to happen at call time.
+ */
+const embeddingProbes = (ctx: TestDbContext) => {
+  const resolveId = async (
     shortcode: string,
     entity: "inventory" | "location" | "product",
   ) => {
-    const entityId = await resolveLiveShortcode(ctx.db, shortcode, entity);
-    if (!entityId) throw new Error(`Failed to resolve ${entity} ${shortcode}`);
-    return entityId;
+    const id = await resolveLiveShortcode(ctx.db, shortcode, entity);
+    if (!id) throw new Error(`Failed to resolve ${entity} ${shortcode}`);
+    return id;
   };
 
+  return {
+    resolveId,
+
+    // Minimal 3-dim vector: the HNSW index is partial on dimensions=1536, so
+    // small test vectors insert fine.
+    seedEmbedding: (entityType: SearchableEntity, entityId: string) =>
+      getDb(ctx.db)
+        .insert(entityEmbedding)
+        .values({
+          entityType,
+          entityId,
+          embeddingText: `${entityType} ${entityId}`,
+          embeddingHash: `hash-${entityId}`,
+          provider: "test",
+          model: "test",
+          dimensions: 3,
+          embedding: [0, 0, 0],
+        }),
+
+    embeddingDeletedAt: async (
+      entityType: SearchableEntity,
+      entityId: string,
+    ) =>
+      (
+        await getDb(ctx.db).query.entityEmbedding.findFirst({
+          where: and(
+            eq(entityEmbedding.entityType, entityType),
+            eq(entityEmbedding.entityId, entityId),
+          ),
+          columns: { deletedAt: true },
+        })
+      )?.deletedAt,
+
+    /** Both identities: the shortcode repo writes take, and the entity id. */
+    seedLocation: async (name: string) => {
+      const row = await createLocation(
+        ctx.db,
+        makeLocationInput({ name }),
+        TEST_ACTOR,
+      );
+      return {
+        shortcode: row.id,
+        id: unsafeLocationId(await resolveId(row.id, "location")),
+      };
+    },
+
+    seedProduct: async (name: string) => {
+      const row = await createProduct(
+        ctx.db,
+        makeProductInput({ name }),
+        TEST_ACTOR,
+      );
+      return {
+        shortcode: row.id,
+        id: unsafeProductId(await resolveId(row.id, "product")),
+      };
+    },
+  };
+};
+
+describe("inventory removal cascades entity embeddings (no orphans)", () => {
+  const ctx = withTestDb();
+  const {
+    seedEmbedding,
+    embeddingDeletedAt,
+    resolveId,
+    seedLocation,
+    seedProduct,
+  } = embeddingProbes(ctx);
+
   const seedEntry = async (locationName: string, productName: string) => {
-    const location = await createLocation(
-      ctx.db,
-      makeLocationInput({ name: locationName }),
-      TEST_ACTOR,
-    );
-    const product = await createProduct(
-      ctx.db,
-      makeProductInput({ name: productName }),
-      TEST_ACTOR,
-    );
-    const locationEntityId = unsafeLocationId(
-      await requireResolvedId(location.id, "location"),
-    );
-    const productEntityId = unsafeProductId(
-      await requireResolvedId(product.id, "product"),
-    );
+    const locationEntityId = (await seedLocation(locationName)).id;
     const entry = await createInventoryEntry(
       ctx.db,
-      { productId: productEntityId, locationId: locationEntityId, amount },
+      {
+        productId: (await seedProduct(productName)).id,
+        locationId: locationEntityId,
+        amount,
+      },
       TEST_ACTOR,
     );
     const entryEntityId = unsafeInventoryId(
-      await requireResolvedId(entry.id, "inventory"),
+      await resolveId(entry.id, "inventory"),
     );
-    return {
-      location,
-      locationEntityId,
-      product,
-      productEntityId,
-      entry,
-      entryEntityId,
-    };
+    return { locationEntityId, entry, entryEntityId };
   };
 
   it("deleteInventoryEntries (single soft delete) leaves no orphan", async () => {
@@ -133,7 +193,7 @@ describe("inventory removal cascades entity embeddings (no orphans)", () => {
 
     await deleteInventoryEntries(ctx.db, [entryEntityId], TEST_ACTOR);
 
-    expect(await embeddingDeletedAt(entryEntityId)).not.toBeNull();
+    expect(await embeddingDeletedAt("inventory", entryEntityId)).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 
@@ -147,7 +207,7 @@ describe("inventory removal cascades entity embeddings (no orphans)", () => {
     // Empty batch omits the existing entry → it is soft-deleted.
     await bulkProcessInventoryEntries(ctx.db, locationEntityId, [], TEST_ACTOR);
 
-    expect(await embeddingDeletedAt(entryEntityId)).not.toBeNull();
+    expect(await embeddingDeletedAt("inventory", entryEntityId)).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 
@@ -170,37 +230,16 @@ describe("inventory removal cascades entity embeddings (no orphans)", () => {
     );
     expect(removedIds).toEqual([entryEntityId]);
 
-    expect(await embeddingDeletedAt(entryEntityId)).not.toBeNull();
+    expect(await embeddingDeletedAt("inventory", entryEntityId)).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 
   it("bulkMoveInventoryEntries full-collapse (hard delete of source) leaves no orphan", async () => {
     // Source + target hold the SAME product, so a full move collapses the source
     // onto the target's existing row — the source row is HARD-deleted.
-    const source = await createLocation(
-      ctx.db,
-      makeLocationInput({ name: "Source Bin" }),
-      TEST_ACTOR,
-    );
-    const target = await createLocation(
-      ctx.db,
-      makeLocationInput({ name: "Target Bin" }),
-      TEST_ACTOR,
-    );
-    const product = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "Shared Bolt" }),
-      TEST_ACTOR,
-    );
-    const sourceEntityId = unsafeLocationId(
-      await requireResolvedId(source.id, "location"),
-    );
-    const targetEntityId = unsafeLocationId(
-      await requireResolvedId(target.id, "location"),
-    );
-    const productEntityId = unsafeProductId(
-      await requireResolvedId(product.id, "product"),
-    );
+    const sourceEntityId = (await seedLocation("Source Bin")).id;
+    const targetEntityId = (await seedLocation("Target Bin")).id;
+    const productEntityId = (await seedProduct("Shared Bolt")).id;
     const sourceEntry = await createInventoryEntry(
       ctx.db,
       { productId: productEntityId, locationId: sourceEntityId, amount },
@@ -211,98 +250,141 @@ describe("inventory removal cascades entity embeddings (no orphans)", () => {
       { productId: productEntityId, locationId: targetEntityId, amount },
       TEST_ACTOR,
     );
-    const sourceEntryEntityId = unsafeInventoryId(
-      await requireResolvedId(sourceEntry.id, "inventory"),
+    const sourceEntryId = unsafeInventoryId(
+      await resolveId(sourceEntry.id, "inventory"),
     );
-    await seedEmbedding("inventory", sourceEntryEntityId);
+    await seedEmbedding("inventory", sourceEntryId);
 
     await bulkMoveInventoryEntries(
       ctx.db,
       {
         sourceLocationId: sourceEntityId,
         targetLocationId: targetEntityId,
-        items: [{ inventoryEntryId: sourceEntryEntityId, quantity: amount }],
+        items: [{ inventoryEntryId: sourceEntryId, quantity: amount }],
       },
       TEST_ACTOR,
     );
 
     // The source inventory row is hard-deleted; its embedding is deliberately
     // soft-deleted (excluded from search + orphan detection), never left live.
-    expect(await embeddingDeletedAt(sourceEntryEntityId)).not.toBeNull();
+    expect(await embeddingDeletedAt("inventory", sourceEntryId)).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 });
 
-// Same F1 regression guard as above, extended to the tracker entities
-// (project/task/expense) — their delete paths cascade
-// softDeleteEntityEmbeddingsTx exactly like inventory's.
-describe("tracker removal cascades entity embeddings (no orphans)", () => {
-  const ctx = withTestDb();
-
-  const seedEmbedding = (entityType: SearchableEntity, entityId: string) =>
-    getDb(ctx.db)
-      .insert(entityEmbedding)
-      .values({
-        entityType,
+/**
+ * One row per entrypoint that hands its whole write half to `removeEntity`.
+ * The cascade itself is structural now; what a row proves is that this repo
+ * function is wired to the shared machinery.
+ */
+const REMOVAL_ENTRYPOINTS: ReadonlyArray<{
+  label: string;
+  entity: SearchableEntity;
+  seed: (
+    db: Database,
+  ) => Promise<{ entityId: string; remove: () => Promise<unknown> }>;
+}> = [
+  {
+    label: "deleteProjects",
+    entity: "project",
+    seed: async (db) => {
+      const { output, entityId } = await createProject(
+        db,
+        mock(projectCreateInput, { overrides: { name: "Cascade Project" } }),
+        TEST_ACTOR,
+      );
+      return {
         entityId,
-        embeddingText: `${entityType} ${entityId}`,
-        embeddingHash: `hash-${entityId}`,
-        provider: "test",
-        model: "test",
-        dimensions: 3,
-        embedding: [0, 0, 0],
-      });
+        remove: () => deleteProjects(db, [output.id], TEST_ACTOR),
+      };
+    },
+  },
+  {
+    label: "deleteTasks",
+    entity: "task",
+    seed: async (db) => {
+      const { output, entityId } = await createTask(
+        db,
+        mock(taskCreateInput, { overrides: { name: "Cascade Task" } }),
+        TEST_ACTOR,
+      );
+      return {
+        entityId,
+        remove: () => deleteTasks(db, [output.id], TEST_ACTOR),
+      };
+    },
+  },
+  {
+    label: "deleteExpenses",
+    entity: "expense",
+    seed: async (db) => {
+      const { output, entityId } = await createExpense(
+        db,
+        mock(expenseCreateInput, { overrides: { name: "Cascade Expense" } }),
+        TEST_ACTOR,
+      );
+      return {
+        entityId,
+        remove: () => deleteExpenses(db, [output.id], TEST_ACTOR),
+      };
+    },
+  },
+  {
+    label: "deleteMeals",
+    entity: "meal",
+    seed: async (db) => {
+      const { entityId } = await createMealWithEntityId(
+        db,
+        { date: "2026-06-01", name: "Cascade Meal" },
+        TEST_ACTOR,
+      );
+      return {
+        entityId,
+        remove: () => deleteMeals(db, [entityId], TEST_ACTOR),
+      };
+    },
+  },
+  {
+    // Also the nesting case: the book's own removal follows a whole second
+    // entity's removal path (the recipe cascade) in the same transaction.
+    label: "deleteCookbook",
+    entity: "cookbook",
+    seed: async (db) => {
+      const { entityId } = await upsertCookbook(
+        db,
+        { name: "Cascade Cookbook", rawJson: [], sourceLabel: "cascade.epub" },
+        TEST_ACTOR,
+      );
+      return {
+        entityId,
+        remove: () => deleteCookbook(db, entityId, TEST_ACTOR),
+      };
+    },
+  },
+];
 
-  const embeddingDeletedAt = async (
-    entityType: SearchableEntity,
-    entityId: string,
-  ) =>
-    (
-      await getDb(ctx.db).query.entityEmbedding.findFirst({
-        where: and(
-          eq(entityEmbedding.entityType, entityType),
-          eq(entityEmbedding.entityId, entityId),
-        ),
-        columns: { deletedAt: true },
-      })
-    )?.deletedAt;
+describe("removal entrypoints reach the shared cascade (no orphans)", () => {
+  const ctx = withTestDb();
+  const { seedEmbedding, embeddingDeletedAt, seedLocation, seedProduct } =
+    embeddingProbes(ctx);
 
-  it("deleteProjects leaves no orphan", async () => {
-    const { output: project, entityId: projectId } = await createProject(
-      ctx.db,
-      mock(projectCreateInput, {
-        overrides: { name: "Embedding Cascade Project" },
-      }),
-      TEST_ACTOR,
-    );
-    await seedEmbedding("project", projectId);
+  it.each(REMOVAL_ENTRYPOINTS)(
+    "$label leaves no orphan",
+    async ({ entity, seed }) => {
+      const { entityId, remove } = await seed(ctx.db);
+      await seedEmbedding(entity, entityId);
 
-    await deleteProjects(ctx.db, [project.id], TEST_ACTOR);
+      await remove();
 
-    expect(await embeddingDeletedAt("project", projectId)).not.toBeNull();
-    expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
-  });
+      expect(await embeddingDeletedAt(entity, entityId)).not.toBeNull();
+      expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
+    },
+  );
 
-  it("deleteTasks leaves no orphan", async () => {
-    const { output: task, entityId: taskId } = await createTask(
-      ctx.db,
-      mock(taskCreateInput, {
-        overrides: { name: "Embedding Cascade Task" },
-      }),
-      TEST_ACTOR,
-    );
-    await seedEmbedding("task", taskId);
-
-    await deleteTasks(ctx.db, [task.id], TEST_ACTOR);
-
-    expect(await embeddingDeletedAt("task", taskId)).not.toBeNull();
-    expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
-  });
-
-  // task.parentTaskId one-level cascade: deleting a parent takes its live
-  // subtasks with it (they have no independent existence — a checklist item
-  // is represented via its parent). Same soft-delete/edge-cleanup/embedding
-  // treatment as the explicitly-requested id.
+  // Behavior, not wiring: `deleteTasks` widens its own id set to the live
+  // subtasks (a checklist item has no independent existence), and the
+  // dependency-edge cleanup, the soft delete, and the cascade must all run over
+  // the widened set rather than the requested ids.
   it("deleteTasks cascades to live subtasks (soft-deleted, edges cleaned, embeddings cleaned)", async () => {
     const { output: parentTask, entityId: parentTaskId } = await createTask(
       ctx.db,
@@ -355,71 +437,13 @@ describe("tracker removal cascades entity embeddings (no orphans)", () => {
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 
-  // Cookbook and meal joined the searchable set later; their delete paths carry
-  // the same in-transaction embedding cleanup obligation.
-  it("deleteCookbook leaves no orphan", async () => {
-    const { entityId: cookbookId } = await upsertCookbook(
-      ctx.db,
-      {
-        name: "Embedding Cascade Cookbook",
-        rawJson: [],
-        sourceLabel: "cascade.epub",
-      },
-      TEST_ACTOR,
-    );
-    await seedEmbedding("cookbook", cookbookId);
-
-    await deleteCookbook(ctx.db, cookbookId, TEST_ACTOR);
-
-    expect(await embeddingDeletedAt("cookbook", cookbookId)).not.toBeNull();
-    expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
-  });
-
-  it("deleteMeals leaves no orphan", async () => {
-    const { entityId: mealId } = await createMealWithEntityId(
-      ctx.db,
-      { date: "2026-06-01", name: "Embedding Cascade Meal" },
-      TEST_ACTOR,
-    );
-    await seedEmbedding("meal", mealId);
-
-    await deleteMeals(ctx.db, [mealId], TEST_ACTOR);
-
-    expect(await embeddingDeletedAt("meal", mealId)).not.toBeNull();
-    expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
-  });
-
-  it("deleteExpenses leaves no orphan", async () => {
-    const { output: expense, entityId: expenseId } = await createExpense(
-      ctx.db,
-      mock(expenseCreateInput, {
-        overrides: { name: "Embedding Cascade Expense" },
-      }),
-      TEST_ACTOR,
-    );
-    await seedEmbedding("expense", expenseId);
-
-    await deleteExpenses(ctx.db, [expense.id], TEST_ACTOR);
-
-    expect(await embeddingDeletedAt("expense", expenseId)).not.toBeNull();
-    expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
-  });
-
-  // mergeIngredients is the one removal path in the repo that HARD-deletes
-  // its absorbed rows instead of soft-deleting them (see ingredient/merge.ts)
-  // — easy to overlook the embedding-cleanup obligation because there's no
-  // `deletedAt` write to hang it off of. The absorbed row's embedding still
-  // must end up soft-deleted, same as a hard-deleted inventory row in the
-  // full-collapse move case above.
+  // mergeIngredients is the one removal path in the repo that HARD-deletes its
+  // absorbed rows instead of soft-deleting them (see ingredient/merge.ts) —
+  // easy to overlook the embedding-cleanup obligation because there is no
+  // `deletedAt` write to hang it off of.
   it("mergeIngredients leaves no orphan", async () => {
-    const keeper = await findOrCreateIngredient(
-      ctx.db,
-      "Embedding Cascade Ingredient Keeper",
-    );
-    const alias = await findOrCreateIngredient(
-      ctx.db,
-      "Embedding Cascade Ingredient Alias",
-    );
+    const keeper = await findOrCreateIngredient(ctx.db, "Cascade Keeper");
+    const alias = await findOrCreateIngredient(ctx.db, "Cascade Alias");
     await seedEmbedding("ingredient", alias.id);
 
     await mergeIngredients(ctx.db, keeper.id, [alias.id], TEST_ACTOR);
@@ -434,62 +458,32 @@ describe("tracker removal cascades entity embeddings (no orphans)", () => {
   // the easy miss, because it is a soft-delete buried inside a fold rather than
   // the merge's own `finalizeMerge` call.
   it("mergeProducts leaves no orphan, for the product AND the absorbed stock row", async () => {
-    const resolveId = async (
-      shortcode: string,
-      entity: "location" | "product",
-    ) => {
-      const entityId = await resolveLiveShortcode(ctx.db, shortcode, entity);
-      if (!entityId)
-        throw new Error(`Failed to resolve ${entity} ${shortcode}`);
-      return entityId;
-    };
-    const amount = { value: 3, unit: "each" };
-
-    const location = await createLocation(
-      ctx.db,
-      makeLocationInput({ name: "Merge Cascade Shelf" }),
-      TEST_ACTOR,
-    );
-    const locationEntityId = unsafeLocationId(
-      await resolveId(location.id, "location"),
-    );
-    const keeper = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "Merge Cascade Keeper" }),
-      TEST_ACTOR,
-    );
-    const loser = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "Merge Cascade Loser" }),
-      TEST_ACTOR,
-    );
-    const loserEntityId = unsafeProductId(await resolveId(loser.id, "product"));
-    for (const productEntityId of [
-      unsafeProductId(await resolveId(keeper.id, "product")),
-      loserEntityId,
-    ]) {
+    const location = await seedLocation("Merge Cascade Shelf");
+    const keeper = await seedProduct("Merge Cascade Keeper");
+    const loser = await seedProduct("Merge Cascade Loser");
+    for (const productId of [keeper.id, loser.id]) {
       await createInventoryEntry(
         ctx.db,
-        { productId: productEntityId, locationId: locationEntityId, amount },
+        { productId, locationId: location.id, amount },
         TEST_ACTOR,
       );
     }
     const absorbedEntry = await getDb(ctx.db).query.inventoryEntry.findFirst({
-      where: eq(inventoryEntry.productId, loserEntityId),
+      where: eq(inventoryEntry.productId, loser.id),
       columns: { id: true },
     });
     if (!absorbedEntry) throw new Error("Expected a loser inventory entry");
 
-    await seedEmbedding("product", loserEntityId);
+    await seedEmbedding("product", loser.id);
     await seedEmbedding("inventory", absorbedEntry.id);
 
     await mergeProducts(
       ctx.db,
-      { keepId: keeper.id, mergeIds: [loser.id] },
+      { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
       TEST_ACTOR,
     );
 
-    expect(await embeddingDeletedAt("product", loserEntityId)).not.toBeNull();
+    expect(await embeddingDeletedAt("product", loser.id)).not.toBeNull();
     expect(
       await embeddingDeletedAt("inventory", absorbedEntry.id),
     ).not.toBeNull();

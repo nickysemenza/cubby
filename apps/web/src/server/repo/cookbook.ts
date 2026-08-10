@@ -44,7 +44,7 @@ import {
   getCookbookRecipeIdsByTitle,
   getCookbookRecipeTitles,
 } from "~/server/repo/recipe";
-import { cascadeRemoval } from "~/server/repo/removal";
+import { removeEntity } from "~/server/repo/removal";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 export const COOKBOOK_DELETE_EDGE_POLICY = {
@@ -241,19 +241,16 @@ export const deleteCookbook = async (
   }
 
   return withTransaction(db, async (tx) => {
+    // A whole second entity's removal path, nested in this one's transaction so
+    // a book can't survive its recipes. It covers the recipes' rows, cascades,
+    // and embeddings; the call below covers the book's own.
     const deletedRecipeIds = await deleteRecipesByCookbookTx(tx, id, actor);
 
-    await tx
-      .update(cookbook)
-      .set({ deletedAt: new Date() })
-      .where(and(eq(cookbook.id, id), notDeleted(cookbook)));
-
-    // The recipe cascade above covers the recipes' embeddings; this covers the
-    // cookbook's own.
-    await cascadeRemoval(tx, {
+    await removeEntity(tx, {
       entity: "cookbook",
       ids: [id],
-      audit: { actor },
+      removal: "soft",
+      actor,
     });
 
     return { deletedRecipeIds };

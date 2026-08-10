@@ -123,7 +123,7 @@ describe("recipe crud repo", () => {
       expect(entry?.changes?.cascadedIngredients).toEqual({ from: 1, to: 0 });
     });
 
-    // Regression guard: deleteRecipesTx now soft-deletes the recipe's live
+    // Regression guard: deleteRecipes now soft-deletes the recipe's live
     // MealRecipe rows (and counts them into the audit trail as
     // cascadedMealRecipes) in the SAME transaction as the recipe delete — a
     // deleted recipe used to keep rendering inside any meal it was planned

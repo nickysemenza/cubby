@@ -137,7 +137,7 @@ import {
   type PurchaseFinancialAggregate,
 } from "~/server/repo/purchase-financial-aggregates";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { cascadeRemoval } from "~/server/repo/removal";
+import { cascadeRemoval, removeEntity } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveLiveShortcode,
@@ -1752,8 +1752,6 @@ const deletePurchasesWithPolicy = async (
   return withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, purchase, ids, "Purchase");
 
-    const now = new Date();
-
     // Detaching a line is an audited change to its `purchaseId`, same as every
     // other writer of that column. Without these rows, spend silently loses its
     // vendor attribution with only the charge's own `delete` entry to hint at it —
@@ -1826,31 +1824,21 @@ const deletePurchasesWithPolicy = async (
       );
     }
 
-    await tx
-      .update(purchaseProduct)
-      .set({ deletedAt: now })
-      .where(
-        and(
-          inArray(purchaseProduct.purchaseId, ids),
-          notDeleted(purchaseProduct),
-        ),
-      );
+    // `{actor}`, not a caller-owned buffer: the detach `update` entries above
+    // were already flushed, and the delete entries must follow them.
+    // No `auditKey` on either child — the counts were never part of a
+    // Purchase's delete entry, and adding one would change what the audit says.
+    await removeEntity(tx, {
+      entity: "purchase",
+      ids,
+      removal: "soft",
+      actor,
+      children: [
+        { table: purchaseProduct, parentColumn: purchaseProduct.purchaseId },
+        { table: purchaseImage, parentColumn: purchaseImage.purchaseId },
+      ],
+    });
 
-    await tx
-      .update(purchaseImage)
-      .set({ deletedAt: now })
-      .where(
-        and(inArray(purchaseImage.purchaseId, ids), notDeleted(purchaseImage)),
-      );
-
-    await tx
-      .update(purchase)
-      .set({ deletedAt: now })
-      .where(and(inArray(purchase.id, ids), notDeleted(purchase)));
-
-    // The immediate arm, not `{into}`: the detach `update` entries above were
-    // already flushed, and the delete entries must follow them.
-    await cascadeRemoval(tx, { entity: "purchase", ids, audit: { actor } });
     return {
       expenseIds: detaching.map((row) => row.id),
       financialTransactionIds: detachingTransactions.map((row) => row.id),
