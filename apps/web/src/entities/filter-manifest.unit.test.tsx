@@ -1110,7 +1110,7 @@ describe("every server filter field is reachable from the manifest", () => {
 
     // Real gaps. Fixing them means adding UI, which is out of scope for a guard.
     "product.externalIdSource":
-      "TODO: real gap — a closed enum (amazon / home_depot / …) the server filters on, with no control at all; the External IDs column offers only has/none. Wants its own multiselect spec",
+      "TODO: real gap — the server filters on it with no control at all; the External IDs column offers only has/none. externalIdSource is an OPEN kebab-case slug (a regex-validated string in external-id.ts, not a z.enum), so there is no fixed value set to render: this wants a runtime distinct-values picklist, not a static multiselect",
     "product.taskId":
       "TODO: real gap — every other related view keeps a urlOnly <prefix>Id deep-link scope, but product.tasks' specialized range spec skips the generated trio, so this one has no URL entry point",
     "wish.candidateProductId":
