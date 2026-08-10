@@ -946,9 +946,12 @@ implementation now uses `idSetPresence`.
       schema→manifest guard (#673) closed the last direction of the
       manifest/schema/repo loop and immediately found three real gaps, currently
       allowlisted with `TODO:` reasons rather than silently skipped.
-      `product.externalIdSource` is a closed enum (`amazon` / `home_depot` / …)
-      the repo filters on with **no control at all** — the External IDs column
-      offers only has/none — and is the cheapest of the three.
+      `product.externalIdSource` is filtered by the repo with **no control at
+      all** — the External IDs column offers only has/none. Note it is an *open*
+      kebab-case slug (`externalIdSource` in `packages/schemas/src/external-id.ts`
+      is a regex-validated string, not a `z.enum`), so there is no fixed value
+      set to render: like `wish.candidateProductId` it needs a runtime
+      distinct-values picklist, which puts the three at roughly equal cost.
       `product.taskId` is an oversight rather than a decision: every other
       related view keeps a `urlOnly` `<prefix>Id` deep-link scope, but
       `product.tasks`' specialized range spec `continue`s past the generated
