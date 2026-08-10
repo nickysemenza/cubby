@@ -942,6 +942,34 @@ implementation now uses `idSetPresence`.
       exact violation this section closed everywhere else. **Production has 1
       meal today**, nowhere near the ceiling; fix opportunistically alongside
       the next meals-table touch, not as a standalone trigger.
+- [ ] **Three server filter fields no UI control can reach.** The
+      schema→manifest guard (#673) closed the last direction of the
+      manifest/schema/repo loop and immediately found three real gaps, currently
+      allowlisted with `TODO:` reasons rather than silently skipped.
+      `product.externalIdSource` is filtered by the repo with **no control at
+      all** — the External IDs column offers only has/none. Note it is an *open*
+      kebab-case slug (`externalIdSource` in `packages/schemas/src/external-id.ts`
+      is a regex-validated string, not a `z.enum`), so there is no fixed value
+      set to render: like `wish.candidateProductId` it needs a runtime
+      distinct-values picklist, which puts the three at roughly equal cost.
+      `product.taskId` is an oversight rather than a decision: every other
+      related view keeps a `urlOnly` `<prefix>Id` deep-link scope, but
+      `product.tasks`' specialized range spec `continue`s past the generated
+      trio. `wish.candidateProductId` needs a runtime candidate-product
+      picklist, and is already named as out-of-scope in the manifest's own
+      `wish.acquired` comment. Fixing any of them means deleting its allowlist
+      entry — the guard then proves the control is reachable.
+- [ ] **Codegen the two eager-route filter mirrors.** `entities/sortable-fields.ts`
+      and `entities/filter-search-fields.ts` re-describe what
+      `packages/schemas/src/*.ts` already declares. They are hand-kept on
+      purpose: importing every entity schema here pulls the validation graphs
+      into the eager route tree, which is why the files exist at all. So the fix
+      is a build-time projection, not an import — and `sortable-fields`' drift
+      test would retire rather than stay load-bearing. The URL-key mirror is
+      already pinned to the manifest by a property test, so only
+      `sortable-fields` is genuinely unguarded (its test compares against a
+      hand-written literal that itself needs a manual edit per new entity).
+      Not worth a build step on its own; do it if a third mirror ever appears.
 
 ### Rejected
 
@@ -957,3 +985,23 @@ implementation now uses `idSetPresence`.
   hero-image import both run a handful of times with a human waiting. They stay
   synchronous; the hero-image fix is a plain inline call — see
   [Recipes & Import](#recipes--import).
+- **A `defineDetector` registry for Problems.** The recurring suggestion is to
+  collapse each detector's five-step ritual (SQL in `repo/problems/detectors-*.ts`,
+  schema + shape key + `PROBLEM_CLASS` entry, `problems/index.ts` re-export,
+  `problems.service.ts` fan-out, `problem-sections.tsx` section) into one
+  declaration. Measured before rejecting: **42 keys across 34 sections**, and a
+  registry would have to carry cost group, extra constructor args, env gating
+  (`semanticEmbeddingsConfigured`), fan-out shape (one detector → 1, 2, or 7
+  keys), section ordering (carried by array position today), and **14 sections'
+  bespoke React** — `unit-coverage` alone is a 4-way branch over a discriminated
+  union merged from 3 keys, with different actions per branch. Detector
+  signatures aren't uniform either (some take extra args, some return objects
+  rather than arrays, some are sourced outside the problems barrel). Against
+  that, the registry would have to preserve the four cost groups, the
+  `PROBLEMS_HOT_PATH_PROCEDURES` splitLink routing that gives each group its own
+  Worker CPU budget (the old monolithic scan blew the 30s limit), and
+  `traceAllSeq`'s sequential execution on a pinned connection. The two drift
+  holes that actually mattered were welded structurally in #675 without a
+  registry: `PROBLEM_CLASS` now types the UI's coverage declaration, and the 42
+  hand-written merge defaults are derived. Revisit only if the per-detector
+  ritual starts producing real bugs rather than boilerplate.
