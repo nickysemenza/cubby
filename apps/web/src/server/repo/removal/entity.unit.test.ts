@@ -14,9 +14,13 @@ import {
   task,
   taskDependency,
 } from "~/server/db/schema";
+// `ChildCascade` deliberately through the barrel, not `./entity`: the
+// type-level tests below are assertions about the module's public surface, so
+// they have to be written against the path callers actually use.
+import type { ChildCascade } from "~/server/repo/removal";
 import { SHORTCODE_TABLE } from "~/server/repo/shortcode-utils";
 import type { RemovableEntity } from "./core";
-import { type ChildCascade, removeEntity } from "./entity";
+import { removeEntity } from "./entity";
 
 const ACTOR: ActorContext = { userId: unsafeUserId("user-1"), source: "ui" };
 
@@ -137,6 +141,54 @@ describe("removeEntity — statement order", () => {
     ]);
     expect(auditRows(log)[0]?.changes).toEqual({
       cascadedImages: { from: 2, to: 0 },
+    });
+  });
+
+  it("interleaves counted and uncounted children in declared order", async () => {
+    // The real multi-child shape (`deleteProjects`: two counted soft edges plus
+    // an uncounted hard one). Order is declared, not sorted by mode, and the
+    // hard edge contributes no SELECT and no `changes` key.
+    const { log, tx } = recordingTx({
+      [getTableName(productImage)]: [{ key: "p1", n: 2 }],
+      [getTableName(productUnitMappings)]: [{ key: "p1", n: 5 }],
+    });
+    await removeEntity(tx, {
+      entity: "product",
+      ids: ids<"product">("p1"),
+      removal: "soft",
+      actor: ACTOR,
+      children: [
+        {
+          table: productImage,
+          parentColumn: productImage.productId,
+          auditKey: "cascadedImages",
+        },
+        {
+          table: taskDependency,
+          parentColumn: taskDependency.taskId,
+          mode: "hard",
+        },
+        {
+          table: productUnitMappings,
+          parentColumn: productUnitMappings.productId,
+          auditKey: "cascadedUnitMappings",
+        },
+      ],
+    });
+
+    expect(log.map((s) => `${s.op} ${s.table}`)).toEqual([
+      `select ${getTableName(productImage)}`,
+      `select ${getTableName(productUnitMappings)}`,
+      `update ${getTableName(productImage)}`,
+      `delete ${getTableName(taskDependency)}`,
+      `update ${getTableName(productUnitMappings)}`,
+      `update ${getTableName(product)}`,
+      `update ${EMBEDDING}`,
+      `insert ${AUDIT}`,
+    ]);
+    expect(auditRows(log)[0]?.changes).toEqual({
+      cascadedImages: { from: 2, to: 0 },
+      cascadedUnitMappings: { from: 5, to: 0 },
     });
   });
 
