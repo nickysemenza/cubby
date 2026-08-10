@@ -1,26 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { entitySchema } from "@cubby/schemas/entity";
-import { financialAccountFilterFields } from "@cubby/schemas/financial-account";
-import { financialTransactionFilterFields } from "@cubby/schemas/financial-transaction";
-import { imageFilterFields } from "@cubby/schemas/image";
-import { ingredientFilterFields } from "@cubby/schemas/ingredient";
-import { inventoryFilterFields } from "@cubby/schemas/inventory";
-import { locationFilterFields } from "@cubby/schemas/location";
-import { mealFilterFields } from "@cubby/schemas/meal";
-import { productFilterFields } from "@cubby/schemas/product";
-import {
-  expenseFilterFields,
-  projectFilterFields,
-  taskFilterFields,
-} from "@cubby/schemas/project";
-import { purchaseFilterFields } from "@cubby/schemas/purchase";
-import { recipeFilterFields } from "@cubby/schemas/recipe";
-import { vendorFilterFields } from "@cubby/schemas/vendor";
-import { wishFilterFields } from "@cubby/schemas/wish";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { FilterSpec } from "./filter-manifest";
 import {
+  entityFilterFieldMaps,
   entityFilterSearchFields,
   getEntityFilters,
   manifestFilterConfig,
@@ -981,6 +965,29 @@ describe("finance filters", () => {
 });
 
 /**
+ * Every server filter field a spec can emit.
+ *
+ * A spec emits `field ?? columnId`, plus `nullable.field`, plus — for a `range`
+ * kind — whatever its `expand()` returns. Range options are static, so every
+ * emitted key is enumerable by calling `expand` for each declared option.
+ */
+const emittedFields = (spec: FilterSpec): string[] => {
+  // A `range` spec emits ONLY what its expander returns — `buildFiltersFromManifest`'s
+  // range arm never touches `field`/`columnId`, which is why `expense.date`'s
+  // columnId is `date` while the fields it writes are `dateFrom`/`dateTo`.
+  if (spec.kind === "range") {
+    const expand = spec.expand;
+    if (!expand) return [];
+    return (spec.options ?? []).flatMap((option) =>
+      Object.keys(expand(option.value)),
+    );
+  }
+  const fields = [spec.field ?? spec.columnId];
+  if (spec.nullable) fields.push(spec.nullable.field);
+  return fields;
+};
+
+/**
  * Every field a manifest spec can emit must exist on that entity's
  * `*FilterFields`.
  *
@@ -990,60 +997,23 @@ describe("finance filters", () => {
  * that silently does nothing. That is the same wrong-but-plausible failure the
  * MCP surface now rejects outright (`strictFilterInput`); the web side can't
  * reject at runtime without breaking the page, so it's pinned here instead.
- *
- * A spec emits `field ?? columnId`, plus `nullable.field`, plus — for a `range`
- * kind — whatever its `expand()` returns. Range options are static, so every
- * emitted key is enumerable by calling `expand` for each declared option.
  */
 describe("manifest fields exist on the server schema", () => {
-  const filterFieldsByEntity: Partial<Record<Entity, Record<string, unknown>>> =
-    {
-      expense: expenseFilterFields,
-      task: taskFilterFields,
-      project: projectFilterFields,
-      product: productFilterFields,
-      inventory: inventoryFilterFields,
-      meal: mealFilterFields,
-      purchase: purchaseFilterFields,
-      vendor: vendorFilterFields,
-      location: locationFilterFields,
-      ingredient: ingredientFilterFields,
-      recipe: recipeFilterFields,
-      image: imageFilterFields,
-      financialAccount: financialAccountFilterFields,
-      financialTransaction: financialTransactionFilterFields,
-      wish: wishFilterFields,
-    };
-
-  const emittedFields = (spec: FilterSpec): string[] => {
-    // A `range` spec emits ONLY what its expander returns — `buildFiltersFromManifest`'s
-    // range arm never touches `field`/`columnId`, which is why `expense.date`'s
-    // columnId is `date` while the fields it writes are `dateFrom`/`dateTo`.
-    if (spec.kind === "range") {
-      const expand = spec.expand;
-      if (!expand) return [];
-      return (spec.options ?? []).flatMap((option) =>
-        Object.keys(expand(option.value)),
-      );
-    }
-    const fields = [spec.field ?? spec.columnId];
-    if (spec.nullable) fields.push(spec.nullable.field);
-    return fields;
-  };
-
   it("covers every entity that has manifest specs", () => {
-    // Guards the map above against a new entity silently skipping this check.
+    // Guards `entityFilterFieldMaps` against a new entity silently skipping
+    // this check — and, since `auditFilterEntities` is derived from that same
+    // map, against the audit specs quietly not being composed in for it.
     const withSpecs = entitySchema.options.filter(
       (entity) => getEntityFilters(entity).length > 0,
     );
     expect(withSpecs.sort()).toEqual(
-      Object.keys(filterFieldsByEntity).sort() as Entity[],
+      Object.keys(entityFilterFieldMaps).sort() as Entity[],
     );
   });
 
   it("emits no field the server does not declare", () => {
     const violations: string[] = [];
-    for (const [entity, fields] of Object.entries(filterFieldsByEntity)) {
+    for (const [entity, fields] of Object.entries(entityFilterFieldMaps)) {
       for (const spec of getEntityFilters(entity as Entity)) {
         for (const field of emittedFields(spec)) {
           if (!(field in fields)) {
@@ -1053,5 +1023,150 @@ describe("manifest fields exist on the server schema", () => {
       }
     }
     expect(violations).toEqual([]);
+  });
+});
+
+/**
+ * The reverse direction: every field the server declares must be REACHABLE from
+ * some manifest spec.
+ *
+ * The list-filter contract has four directions, and this was the last unguarded
+ * one:
+ *
+ *   manifest → URL keys   `manifestFilterConfig` above
+ *   manifest → schema     the describe above (a spec emitting a field nobody declares)
+ *   schema   → repo       `server/repo/filter-application.integration.test.ts` (#595)
+ *   schema   → manifest   HERE
+ *
+ * A declared-but-unreachable field is the mirror image of #588: there, the
+ * manifest rendered controls the where-builder never read; here, the server
+ * accepts a predicate no control can ever send, so the capability exists only
+ * for whoever thinks to hand-write the URL. Both are invisible — a filter that
+ * does nothing and a filter that can't be reached look identical from the page.
+ *
+ * "Reachable" is exactly {@link emittedFields}: a spec's `field ?? columnId`,
+ * its `nullable.field`, or a key some `range` expander returns. urlOnly specs
+ * count — a deep-link scope has no header control but is still reachable from
+ * the URL and over MCP.
+ */
+describe("every server filter field is reachable from the manifest", () => {
+  /**
+   * Fields no spec can reach, each with the reason it is unreachable ON PURPOSE.
+   *
+   * Entries starting with `TODO:` are NOT purposeful — they are real missing UI
+   * controls, parked here so the guard stays green while the gap stays named and
+   * countable. Both kinds are held to the same hygiene below: an entry naming a
+   * field that no longer exists is stale, and one that has since become
+   * reachable must be deleted rather than left to rot.
+   */
+  const UNREACHABLE_BY_DESIGN: Record<string, string> = {
+    // Contextual scope a surrounding page imposes — never user-chosen state, so
+    // there is nothing for a header control or a URL key to bind to.
+    "expense.projectScope":
+      "the /projects page forwards its own visible filter state into the embedded Expense list; an object scope has no URL string form",
+    "task.projectScope":
+      "same forwarding as expense.projectScope, into the embedded Task list",
+    "task.includeSubProjects":
+      "set by the project detail page beside its projectId scope. Expense's counterpart IS user-facing (?subprojects=) because the ledger is deep-linked from a project summary and must reconcile against it; the embedded task list is never linked into",
+    "project.includeSubProjects":
+      "set by the project detail page beside its parentProjectId scope, for the same reason",
+    "inventory.locationIdFilter":
+      "the surrounding page's scope (location detail's inventory table, the bulk edit/move forms); the visible controls are the name substring filters. routers/inventory.ts resolves it to a uuid before the repo sees it",
+    "inventory.productIdFilter":
+      "same page-imposed scope and same router-side resolution as inventory.locationIdFilter",
+
+    // List SHAPING rather than a predicate about a row's data — decided by the
+    // renderer or by an MCP caller, not by the person reading the table.
+    "task.topLevelOnly":
+      "tree shaping: the table renders parents with expandable subtasks, so the renderer owns this. Advertised on MCP list_tasks",
+    "project.topLevelOnly":
+      "same tree shaping for sub-projects. Advertised on MCP list_projects",
+    "task.completion":
+      "the board and the actionable-task queries pick this scope server-side; the table's visible control is `status`, whose values it summarizes",
+    "meal.from":
+      "Meals has no filterable list table — the calendar owns its window through ?week= and the shopping list through its own ?from=/?to=. This is the MCP window",
+    "meal.to": "the other half of meal.from",
+
+    // A richer control already owns the column's single filter slot, and the
+    // unreachable field is the weaker predicate it replaced.
+    "product.vendorSearch":
+      "the Vendors related column upgraded from the generated substring filter to an exact vendor roster (vendorId, ?related-vendor=)",
+    "product.projectSearch":
+      "the Projects related column upgraded to an exact project roster (projectId, ?related-project=)",
+    "product.purchaseSearch":
+      "the Purchases related column upgraded to an exact purchase roster (purchaseId, ?related-purchase=)",
+    "purchase.projectSearch":
+      "the Projects related column upgraded to an exact project roster (projectId, ?related-project=)",
+    "recipe.ingredientSearch":
+      "the Ingredients related column upgraded to an exact ingredient roster (ingredientId, ?related-ingredient=)",
+    "product.taskSearch":
+      "the Tasks related column spends its slot on the status/due range control (resolveProductTaskFilter); a substring match over task names does not compose with it",
+    "location.inventoryPresenceFilter":
+      "the Inventory control expresses the same predicate through its count bounds — `has` is directItemCountMin: 1, `none` is directItemCountMax: 0",
+    "product.expenseCountMax":
+      "the Expenses presets are lower bounds plus the two presence sentinels (`none` routes to expensePresenceFilter), so no option can emit an upper bound",
+    "purchase.orderId":
+      "the visible order-id control is the has/none reconciliation worklist, and ?q= already substring-matches order id. A purchase has its own detail route, so there is no expense-style exact-order-id deep-link scope here",
+
+    // Real gaps. Fixing them means adding UI, which is out of scope for a guard.
+    "product.externalIdSource":
+      "TODO: real gap — the server filters on it with no control at all; the External IDs column offers only has/none. externalIdSource is an OPEN kebab-case slug (a regex-validated string in external-id.ts, not a z.enum), so there is no fixed value set to render: this wants a runtime distinct-values picklist, not a static multiselect",
+    "product.taskId":
+      "TODO: real gap — every other related view keeps a urlOnly <prefix>Id deep-link scope, but product.tasks' specialized range spec skips the generated trio, so this one has no URL entry point",
+    "wish.candidateProductId":
+      "TODO: real gap, already named in the manifest's wish.acquired comment — needs a runtime candidate-product picklist",
+  };
+
+  const reachableFields = (entity: Entity): Set<string> =>
+    new Set(getEntityFilters(entity).flatMap(emittedFields));
+
+  const unreachableFields = (
+    entity: Entity,
+    fields: Record<string, unknown>,
+  ): string[] => {
+    const reachable = reachableFields(entity);
+    return Object.keys(fields).filter((field) => !reachable.has(field));
+  };
+
+  it("every range expander yields at least one field", () => {
+    // The reachability set is only as good as this: a `range` spec contributes
+    // NOTHING but what `expand()` returns for its own declared option values,
+    // and several expanders answer `{}` to a key they don't recognize. One that
+    // silently returned `{}` for every option would under-report reachability
+    // and quietly turn this whole guard into a formality.
+    const silent: string[] = [];
+    for (const entity of entitySchema.options) {
+      for (const spec of getEntityFilters(entity)) {
+        if (spec.kind !== "range") continue;
+        if (emittedFields(spec).length === 0) {
+          silent.push(`${entity}.${spec.columnId}`);
+        }
+      }
+    }
+    expect(silent).toEqual([]);
+  });
+
+  it("leaves no declared field without a manifest entry point", () => {
+    const violations: string[] = [];
+    for (const [entity, fields] of Object.entries(entityFilterFieldMaps)) {
+      for (const field of unreachableFields(entity as Entity, fields)) {
+        const key = `${entity}.${field}`;
+        if (key in UNREACHABLE_BY_DESIGN) continue;
+        violations.push(key);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("keeps the allowlist free of fields that are gone or now reachable", () => {
+    const stale = Object.keys(UNREACHABLE_BY_DESIGN).filter((key) => {
+      const [entityName, field] = key.split(".");
+      const entity = entitySchema.safeParse(entityName);
+      if (!entity.success || !field) return true;
+      const fields = entityFilterFieldMaps[entity.data];
+      if (!fields || !(field in fields)) return true;
+      return reachableFields(entity.data).has(field);
+    });
+    expect(stale).toEqual([]);
   });
 });
