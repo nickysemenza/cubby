@@ -251,8 +251,8 @@ async function refreshOwnEmbedding(
 }
 
 // NOTE: there is no onDelete embedding handler. Embedding soft-delete is
-// cascaded at the repo delete layer (softDeleteEntityEmbeddingsTx inside each
-// entity's deleteXxx transaction), so it covers ALL delete callers — including
+// cascaded at the repo delete layer (`cascadeRemoval` inside each entity's
+// deleteXxx transaction), so it covers ALL delete callers — including
 // direct repo deletes that skip this side-effect pipeline (e.g.
 // problems.service.deleteUnusedIngredients). Re-adding it here would be a
 // redundant higher-layer duplicate.

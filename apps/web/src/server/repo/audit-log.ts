@@ -21,12 +21,48 @@ import {
 
 type AuditAction = "create" | "update" | "delete";
 
-export interface AuditEntryInput {
+/**
+ * Phantom key that only `repo/removal` can mint. Declared (never defined), so
+ * it costs nothing at runtime and never reaches a row — {@link logAuditEntries}
+ * copies explicit fields rather than spreading, which is what makes carrying an
+ * un-insertable key on the type safe.
+ *
+ * Not exported: naming it is how you'd forge one.
+ */
+declare const removalWitness: unique symbol;
+
+type AuditEntryFields = {
   entityType: AuditEntityType;
   entityId: string;
-  action: AuditAction;
   changes?: Record<string, { from: unknown; to: unknown }>;
-}
+};
+
+/** A create/update entry — anyone may write one; nothing cascades. */
+type MutationAuditEntry = AuditEntryFields & {
+  action: "create" | "update";
+};
+
+/**
+ * A delete entry, and the proof that an embedding cascade ran with it.
+ *
+ * The removal-path invariant (root CLAUDE.md) says every path that removes an
+ * entity must soft-delete its `EntityEmbedding` rows in the same transaction.
+ * That used to be a hand-copied line at 21 call sites, caught only after the
+ * fact by `findOrphanedEntityEmbeddings` and a real-DB test. The witness moves
+ * the check to compile time: `cascadeRemoval` is the only thing that can
+ * produce this type, and it does the cascade before it produces one — so a
+ * removal path that writes a delete entry without cascading no longer
+ * typechecks.
+ *
+ * Runtime detection stays: types can't see out-of-band SQL, migrations, or a
+ * removal that writes no audit row at all.
+ */
+export type RemovalAuditEntry = AuditEntryFields & {
+  action: "delete";
+  readonly [removalWitness]: true;
+};
+
+export type AuditEntryInput = MutationAuditEntry | RemovalAuditEntry;
 
 type AuditLogUser = {
   id: string;
@@ -186,33 +222,6 @@ export async function logAuditEntries(
   }));
 
   await unwrapDb(db).insert(auditLog).values(auditRecords);
-}
-
-/**
- * Build delete audit entries for a batch of parent ids, attaching per-parent
- * cascade counts. `cascades` maps each change key (e.g. "cascadedImages") to a
- * parentId→count record; only counts > 0 are emitted, and an entry with no
- * cascades gets `changes: undefined`. Shared by the product/location/recipe
- * delete paths so the count-and-assemble shape lives in one place.
- */
-export function buildCascadeAuditEntries(
-  entityType: AuditEntityType,
-  ids: string[],
-  cascades: Record<string, Record<string, number>> = {},
-): AuditEntryInput[] {
-  return ids.map((id) => {
-    const changes: Record<string, { from: unknown; to: unknown }> = {};
-    for (const [key, byParent] of Object.entries(cascades)) {
-      const count = byParent[id] ?? 0;
-      if (count > 0) changes[key] = { from: count, to: 0 };
-    }
-    return {
-      entityType,
-      entityId: id,
-      action: "delete" as const,
-      changes: Object.keys(changes).length > 0 ? changes : undefined,
-    };
-  });
 }
 
 /**

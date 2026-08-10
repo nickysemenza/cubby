@@ -21,18 +21,14 @@ import {
   recipeSectionIngredient,
 } from "~/server/db/schema";
 import {
-  buildCascadeAuditEntries,
-  logAuditEntries,
-} from "~/server/repo/audit-log";
-import {
   assertNoDependents,
   lockAndValidateForDelete,
   notDeleted,
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { impact, present } from "~/server/repo/impact";
+import { cascadeRemoval } from "~/server/repo/removal";
 
 export const INGREDIENT_DELETE_EDGE_POLICY = {
   "RecipeSectionIngredient.ingredientId": {
@@ -150,19 +146,17 @@ export const deleteIngredients = async (
 
     const now = new Date();
 
+    // No `notDeleted` guard, unlike every sibling delete path: this row set was
+    // already `FOR UPDATE`-locked as live by `lockAndValidateForDelete` above,
+    // so it provably cannot have changed under us. Left as-is deliberately —
+    // adding the predicate would be inert, not a fix.
     await tx
       .update(ingredient)
       .set({ deletedAt: now })
       .where(inArray(ingredient.id, ids));
 
-    // Cascade the search embedding so a direct repo delete (no mutation
-    // side-effect) can't leave an orphaned entityEmbedding row.
-    await softDeleteEntityEmbeddingsTx(tx, "ingredient", ids);
-
-    // No cascaded items for ingredients — plain delete audit entries.
-    const auditEntries = buildCascadeAuditEntries("ingredient", ids);
-
-    await logAuditEntries(tx, actor, auditEntries);
+    // No cascade counts: an ingredient delete has no cascaded child rows.
+    await cascadeRemoval(tx, { entity: "ingredient", ids, audit: { actor } });
   });
 };
 
@@ -174,8 +168,8 @@ export const deleteIngredients = async (
  * ({@link findLiveRecipeUsagesOfIngredients},
  * {@link findLiveProductsLinkedToIngredients}) the mutation's guard uses, so
  * the preview cannot claim a delete will succeed that the guard then refuses.
- * Both edges are blockers — an ingredient delete has no cascade edges (see
- * "No cascaded items for ingredients" above), so `changes` is always empty.
+ * Both edges are blockers — an ingredient delete has no cascade edges (hence
+ * the countless `cascadeRemoval` above), so `changes` is always empty.
  *
  * Advisory only. `deleteIngredients` still re-runs every check inside its own
  * transaction; nothing here is a lock or a permission.

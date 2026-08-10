@@ -45,7 +45,6 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import {
   effectiveProductPriceSql,
@@ -53,6 +52,7 @@ import {
   resolveProductPricing,
 } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
+import { cascadeRemoval } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveLiveShortcode,
@@ -509,13 +509,9 @@ export const deleteWishes = async (
       .update(wish)
       .set({ deletedAt: now })
       .where(and(inArray(wish.id, ids), notDeleted(wish)));
-    await softDeleteEntityEmbeddingsTx(tx, "wish", ids);
-    for (const id of ids)
-      await logAuditEntry(tx, actor, {
-        entityType: "wish",
-        entityId: id,
-        action: "delete",
-      });
+    // Was N singular inserts in a loop; one batch writes the same rows with one
+    // shared `createdAt` instead of N distinct ones.
+    await cascadeRemoval(tx, { entity: "wish", ids, audit: { actor } });
   });
 };
 

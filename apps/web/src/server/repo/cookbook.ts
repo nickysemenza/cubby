@@ -34,7 +34,6 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import {
   type CookbookImportContext,
@@ -45,6 +44,7 @@ import {
   getCookbookRecipeIdsByTitle,
   getCookbookRecipeTitles,
 } from "~/server/repo/recipe";
+import { cascadeRemoval } from "~/server/repo/removal";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 export const COOKBOOK_DELETE_EDGE_POLICY = {
@@ -248,15 +248,12 @@ export const deleteCookbook = async (
       .set({ deletedAt: new Date() })
       .where(and(eq(cookbook.id, id), notDeleted(cookbook)));
 
-    // Removal-path invariant: a cookbook is a searchable/embedded entity, so its
-    // own EntityEmbedding row must die in the same transaction (the recipe
-    // cascade above only covers the recipes').
-    await softDeleteEntityEmbeddingsTx(tx, "cookbook", [id]);
-
-    await logAuditEntry(tx, actor, {
-      entityType: "cookbook",
-      entityId: id,
-      action: "delete",
+    // The recipe cascade above covers the recipes' embeddings; this covers the
+    // cookbook's own.
+    await cascadeRemoval(tx, {
+      entity: "cookbook",
+      ids: [id],
+      audit: { actor },
     });
 
     return { deletedRecipeIds };

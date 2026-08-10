@@ -60,12 +60,7 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
-import {
-  buildCascadeAuditEntries,
-  computeChanges,
-  logAuditEntries,
-  logAuditEntry,
-} from "~/server/repo/audit-log";
+import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
   associatePendingImages,
   auditDateWhereConditions,
@@ -85,7 +80,6 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import {
   countByTarget,
   impact,
@@ -93,6 +87,7 @@ import {
   sideEffect,
 } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
+import { cascadeRemoval } from "~/server/repo/removal";
 import {
   resolveAllPresent,
   resolveLiveShortcode,
@@ -1006,18 +1001,17 @@ const deleteRecipesTx = async (
     .set({ deletedAt: now })
     .where(and(inArray(recipe.id, ids), notDeleted(recipe)));
 
-  // Cascade the search embedding so a direct repo delete (no mutation
-  // side-effect) can't leave an orphaned entityEmbedding row.
-  await softDeleteEntityEmbeddingsTx(tx, "recipe", ids);
-
-  const auditEntries = buildCascadeAuditEntries("recipe", ids, {
-    cascadedSections: sectionsByRecipe,
-    cascadedIngredients: ingredientsByRecipe,
-    cascadedImages: imagesByRecipe,
-    cascadedMealRecipes: mealRecipesByRecipe,
+  await cascadeRemoval(tx, {
+    entity: "recipe",
+    ids,
+    audit: { actor },
+    counts: {
+      cascadedSections: sectionsByRecipe,
+      cascadedIngredients: ingredientsByRecipe,
+      cascadedImages: imagesByRecipe,
+      cascadedMealRecipes: mealRecipesByRecipe,
+    },
   });
-
-  await logAuditEntries(tx, actor, auditEntries);
 };
 
 /**

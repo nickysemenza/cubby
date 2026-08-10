@@ -26,8 +26,8 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { loadProductPricing } from "~/server/repo/product/pricing";
+import { cascadeRemoval } from "~/server/repo/removal";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { assertLiveTargets } from "./helpers";
 import { dbInventoryEntryToAPI, requireLoadedProductPricing } from "./mappers";
@@ -218,22 +218,13 @@ export const bulkProcessInventoryEntries = async (
             ),
           );
 
-        // Cascade the search embedding in-tx: the inventory manifest has
-        // onDelete: [], so this delete-on-omit reconcile is the only cleanup
-        // site — without it a removed entry leaves a live EntityEmbedding
-        // orphan (recall degradation + HNSW bloat). Mirrors deleteInventoryEntries.
-        await softDeleteEntityEmbeddingsTx(tx, "inventory", idsToDelete);
-
-        // Batch log delete audit entries
-        await logAuditEntries(
-          tx,
-          actor,
-          itemsToDelete.map((item) => ({
-            entityType: "inventory" as const,
-            entityId: item.id,
-            action: "delete" as const,
-          })),
-        );
+        // The inventory manifest has onDelete: [], so this delete-on-omit
+        // reconcile is the only cleanup site for these entries' embeddings.
+        await cascadeRemoval(tx, {
+          entity: "inventory",
+          ids: idsToDelete,
+          audit: { actor },
+        });
       }
 
       const resultIds: string[] = [];
@@ -614,11 +605,6 @@ export const moveInventoryEntries = async (
         await tx.delete(inventoryEntry).where(eq(inventoryEntry.id, entry.id));
         hardDeletedSourceIds.push(entry.id);
         occupantBySlot.delete(slotKey(entry.productId, entry.locationId));
-        auditEntries.push({
-          entityType: "inventory",
-          entityId: entry.id,
-          action: "delete",
-        });
       }
 
       // One write and one audit entry per affected row, regardless of how many
@@ -706,13 +692,16 @@ export const moveInventoryEntries = async (
         if (id) resultIds.push(id);
       }
 
-      // Cascade the search embeddings of collapsed source rows. Invariant: the
-      // source row is HARD-deleted (no FK, permanently gone), so we deliberately
-      // soft-delete its embedding via the shared cascade helper rather than add a
-      // hard-delete path — a soft-deleted embedding is excluded from both semantic
-      // search and orphan detection, and reusing one helper keeps every removal
-      // path's embedding cleanup uniform.
-      await softDeleteEntityEmbeddingsTx(tx, "inventory", hardDeletedSourceIds);
+      // Once, over every id the loop above accumulated — NOT interleaved into
+      // it: those deletes run up front to free unique-index slots, and pulling
+      // the cascade in with them would re-order the statements that vacate
+      // `InventoryEntry_productId_locationId_key`. The source rows are HARD
+      // deleted; their embeddings are still soft-deleted (see `cascadeRemoval`).
+      await cascadeRemoval(tx, {
+        entity: "inventory",
+        ids: hardDeletedSourceIds,
+        audit: { into: auditEntries },
+      });
 
       if (auditEntries.length > 0) {
         await logAuditEntries(tx, actor, auditEntries);
@@ -962,11 +951,6 @@ export const reconcileLocationSession = async (
               .where(eq(inventoryEntry.id, before.id));
             recomputeNeeded = true;
             removedIds.push(before.id);
-            auditEntries.push({
-              entityType: "inventory",
-              entityId: before.id,
-              action: "delete",
-            });
           })
           .with({ kind: "relocate" }, async ({ targetLocationId }) => {
             const sourceAmount = parseInventoryAmount(before.amount, before.id);
@@ -1009,11 +993,6 @@ export const reconcileLocationSession = async (
                 .delete(inventoryEntry)
                 .where(eq(inventoryEntry.id, before.id));
               removedIds.push(before.id);
-              auditEntries.push({
-                entityType: "inventory",
-                entityId: before.id,
-                action: "delete",
-              });
               resultIds.push(updatedTarget.id);
               targetRowsByLocationProduct.set(targetKey, {
                 id: updatedTarget.id,
@@ -1048,9 +1027,14 @@ export const reconcileLocationSession = async (
           .exhaustive();
       }
 
-      // Cascade search embeddings for both soft-deleted rows and source rows
-      // hard-deleted by a merge-at-destination relocation.
-      await softDeleteEntityEmbeddingsTx(tx, "inventory", removedIds);
+      // One call over the mixed set: `remove` soft-deletes, a merge-at-
+      // destination relocation hard-deletes, and both get the same soft-deleted
+      // embedding — which is why no mode parameter is needed here.
+      await cascadeRemoval(tx, {
+        entity: "inventory",
+        ids: removedIds,
+        audit: { into: auditEntries },
+      });
 
       await tx
         .update(location)

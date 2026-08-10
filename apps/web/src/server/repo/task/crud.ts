@@ -56,8 +56,8 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
-import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { countByTarget, impact, present } from "~/server/repo/impact";
+import { cascadeRemoval } from "~/server/repo/removal";
 import {
   type EntityRef,
   lookupShortcodes,
@@ -842,18 +842,12 @@ export const deleteTasks = async (
       .set({ deletedAt: now })
       .where(and(inArray(task.id, allIds), notDeleted(task)));
 
-    // Removal-path invariant: every delete path cleans up its embeddings in-tx.
-    await softDeleteEntityEmbeddingsTx(tx, "task", allIds);
-
-    await logAuditEntries(
-      tx,
-      actor,
-      allIds.map((id) => ({
-        entityType: "task" as const,
-        entityId: id,
-        action: "delete" as const,
-      })),
-    );
+    // Over `allIds`, not `ids`: the cascaded subtasks are removals too.
+    await cascadeRemoval(tx, {
+      entity: "task",
+      ids: allIds,
+      audit: { actor },
+    });
   });
 };
 

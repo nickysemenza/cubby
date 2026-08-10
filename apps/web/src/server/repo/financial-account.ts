@@ -26,11 +26,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { financialAccount, financialTransaction } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import {
-  computeChanges,
-  logAuditEntries,
-  logAuditEntry,
-} from "~/server/repo/audit-log";
+import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
   auditDateWhereConditions,
   buildOrderBy,
@@ -46,10 +42,10 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
-import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
+import { cascadeRemoval } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveOrThrow,
@@ -394,16 +390,11 @@ export async function deleteFinancialAccounts(
       .where(
         and(inArray(financialAccount.id, ids), notDeleted(financialAccount)),
       );
-    await softDeleteEntityEmbeddingsTx(tx, "financialAccount", ids);
-    await logAuditEntries(
-      tx,
-      actor,
-      ids.map((entityId) => ({
-        entityType: "financialAccount" as const,
-        entityId,
-        action: "delete" as const,
-      })),
-    );
+    await cascadeRemoval(tx, {
+      entity: "financialAccount",
+      ids,
+      audit: { actor },
+    });
   });
 }
 
