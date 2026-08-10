@@ -8,19 +8,6 @@ import {
 import type { MouseEvent } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-// Mock WASM module - can't load binary in jsdom. editable-entity-cell.tsx
-// imports `useOptimisticDisplayValue` from ./editable-cell, whose other
-// exports transitively import ~/lib/wasm (via format-amount.tsx), so the
-// whole module graph loads even though this component never calls wasm.
-vi.mock("~/lib/wasm", () => ({
-  wasm: {
-    format_amount: (amt: { value: number; unit: string }) =>
-      `${amt.value} ${amt.unit}`,
-    is_valid_unit: () => true,
-    amount_kind: () => "volume",
-  },
-}));
-
 // Mock sonner toast
 vi.mock("sonner", () => ({
   toast: {

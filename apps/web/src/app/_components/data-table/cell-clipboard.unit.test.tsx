@@ -7,15 +7,6 @@ vi.mock("sonner", () => ({
   },
 }));
 
-// `cell-data` reaches the WASM boundary for the amount cell (canonical
-// formatting on copy, `parse_amount` on paste). vite-plugin-wasm can't
-// instantiate the binary under the jsdom "ui" project — its helper resolves the
-// module through a base-less `/@fs/…` URL and throws `ERR_INVALID_URL` at import
-// time — while the node "unit" project loads it fine. Nothing in this file
-// exercises amount cells, so stub the boundary rather than drag the engine in.
-// (`cell-data.unit.test.ts` covers the amount paths against the real WASM.)
-vi.mock("~/lib/wasm", () => ({ wasm: {} }));
-
 import {
   CELL_CLIPBOARD_MIME,
   type CellClipboardSpec,

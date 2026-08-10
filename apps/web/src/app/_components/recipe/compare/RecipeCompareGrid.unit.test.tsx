@@ -9,9 +9,6 @@ vi.mock("@tanstack/react-router", () => ({
     <a href="#recipe">{children}</a>
   ),
 }));
-vi.mock("~/lib/wasm", () => ({
-  wasm: { singularize_unit: (unit: string) => unit },
-}));
 
 const comparedRecipe: ComparedRecipe = {
   recipe: {

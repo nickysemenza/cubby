@@ -18,18 +18,6 @@ import {
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-// Mock WASM module - can't load binary in jsdom. inventory-entries-cell.tsx
-// (via tryFormatAmount / editable-entity-cell's editable-cell import) pulls in
-// the whole ~/lib/wasm module graph even though no test here exercises it.
-vi.mock("~/lib/wasm", () => ({
-  wasm: {
-    format_amount: (amt: { value: number; unit: string }) =>
-      `${amt.value} ${amt.unit}`,
-    is_valid_unit: () => true,
-    amount_kind: () => "volume",
-  },
-}));
-
 // Mock sonner toast (EditableEntityCell/EditableEntityEditor toast on error).
 vi.mock("sonner", () => ({
   toast: {
