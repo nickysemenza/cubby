@@ -1,4 +1,8 @@
-import { sumProblemSections } from "@cubby/schemas/problems";
+import {
+  EMPTY_PROBLEM_ARRAYS,
+  type ProblemArrays,
+  sumProblemSections,
+} from "@cubby/schemas/problems";
 import { useQueries } from "@tanstack/react-query";
 import { useTRPC } from "~/integrations/trpc/react";
 import type { ProblemsHotPathProcedure } from "~/lib/problems-query-groups";
@@ -54,59 +58,17 @@ export function useProblemsData(opts?: {
       problemGroupQueries.getTracker,
     ],
     combine: ([fast, coverage, upc, tracker]) => {
-      const sections = {
-        duplicateInventory: fast.data?.duplicateInventory ?? [],
-        duplicateProductIdentities: fast.data?.duplicateProductIdentities ?? [],
-        orphanedProducts: fast.data?.orphanedProducts ?? [],
-        productsMissingPrice: fast.data?.productsMissingPrice ?? [],
-        unvaluedBucketProducts: fast.data?.unvaluedBucketProducts ?? [],
-        soldButStillStocked: fast.data?.soldButStillStocked ?? [],
-        unlinkedExitExpenses: fast.data?.unlinkedExitExpenses ?? [],
-        negativeExpectedQuantity: fast.data?.negativeExpectedQuantity ?? [],
-        toolsUsedOutsideOwnership: fast.data?.toolsUsedOutsideOwnership ?? [],
-        productsWithoutMappings: fast.data?.productsWithoutMappings ?? [],
-        ingredientsWithoutProduct: fast.data?.ingredientsWithoutProduct ?? [],
-        unusedIngredientsWithProduct:
-          fast.data?.unusedIngredientsWithProduct ?? [],
-        unusedIngredientsWithoutProduct:
-          fast.data?.unusedIngredientsWithoutProduct ?? [],
-        emptyLocations: fast.data?.emptyLocations ?? [],
-        productsWithNoImages: fast.data?.productsWithNoImages ?? [],
-        locationsWithoutAiDescription:
-          fast.data?.locationsWithoutAiDescription ?? [],
-        orphanedEntityEmbeddings: fast.data?.orphanedEntityEmbeddings ?? [],
-        entitiesMissingEmbeddings: fast.data?.entitiesMissingEmbeddings ?? [],
-        staleParentRecipes: fast.data?.staleParentRecipes ?? [],
-        staleLocations: fast.data?.staleLocations ?? [],
-        neverVerifiedInventory: fast.data?.neverVerifiedInventory ?? [],
-        unknownParkedItems: fast.data?.unknownParkedItems ?? [],
-        manufacturerSpellingVariants:
-          fast.data?.manufacturerSpellingVariants ?? [],
-        duplicateVendors: fast.data?.duplicateVendors ?? [],
-        vendorsWithoutLogos: fast.data?.vendorsWithoutLogos ?? [],
-        purchasesNotReconciling: fast.data?.purchasesNotReconciling ?? [],
-        purchaseFinancialSettlementMismatches:
-          fast.data?.purchaseFinancialSettlementMismatches ?? [],
-        duplicateSpendCandidates: fast.data?.duplicateSpendCandidates ?? [],
-        duplicateFinancialTransactionSourceRefs:
-          fast.data?.duplicateFinancialTransactionSourceRefs ?? [],
-        duplicateFinancialAccountSourceAliases:
-          fast.data?.duplicateFinancialAccountSourceAliases ?? [],
-        invalidFinancialJson: fast.data?.invalidFinancialJson ?? [],
-        referentialLivenessViolations:
-          fast.data?.referentialLivenessViolations ?? [],
-        ingredientsWithPartialCoverage:
-          coverage.data?.ingredientsWithPartialCoverage ?? [],
-        productsWithIslandedMappings:
-          coverage.data?.productsWithIslandedMappings ?? [],
-        productsWithBetterUpcData: upc.data?.productsWithBetterUpcData ?? [],
-        overdueTasks: tracker.data?.overdueTasks ?? [],
-        stalledProjects: tracker.data?.stalledProjects ?? [],
-        projectsMissingBudget: tracker.data?.projectsMissingBudget ?? [],
-        pastDuePlannedExpenses: tracker.data?.pastDuePlannedExpenses ?? [],
-        unclassifiedExpenses: tracker.data?.unclassifiedExpenses ?? [],
-        blockedWorkProjects: tracker.data?.blockedWorkProjects ?? [],
-        projectsWithDateDrift: tracker.data?.projectsWithDateDrift ?? [],
+      // Each group's own shape supplies its keys, so a group that hasn't
+      // resolved yet falls through to the derived empties rather than to 42
+      // hand-written `?? []` defaults that a new detector would have to be
+      // added to. A resolved group overwrites every key it owns, so the four
+      // spreads are exhaustive once all four have loaded.
+      const sections: ProblemArrays = {
+        ...EMPTY_PROBLEM_ARRAYS,
+        ...fast.data,
+        ...coverage.data,
+        ...upc.data,
+        ...tracker.data,
       };
       const results = [fast, coverage, upc, tracker];
       return {

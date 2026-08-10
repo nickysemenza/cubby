@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { ReferentialLivenessViolation } from "@cubby/schemas/entity-integrity";
 import {
   type AllProblems,
+  type CoverageProblemKey,
   type CoverageTotals,
   type LabelVariant,
   type NegativeExpectedQuantity,
@@ -88,10 +89,21 @@ import {
  * can't drift. `meter` is optional because `unvalued-buckets` is coverage with
  * no meaningful denominator (a misc bucket isn't a fraction of anything).
  *
+ * `keys` welds that marker to the schema's own class declaration: it may only
+ * name keys `PROBLEM_CLASS` classes `coverage`, and
+ * `SectionsClaimingEveryCoverageKey` (on `PROBLEM_SECTIONS` below) fails to
+ * compile if a coverage-classed key has no section claiming it. Without it the
+ * two declarations agreed only by hand, and a detector classed coverage but
+ * rendered in the defect list would still count toward the badge the class
+ * exists to keep actionable.
+ *
  * Auto-fixable membership is NOT expressed here — it's derived from
  * `AUTO_FIX_SECTION_IDS` so it can't drift from what the Fix button clears.
  */
-type ProblemSectionDeclaredCoverage = {
+type ProblemSectionDeclaredCoverage<
+  K extends CoverageProblemKey = CoverageProblemKey,
+> = {
+  keys: readonly K[];
   meter?: { total: (totals: CoverageTotals) => number; doneLabel: string };
 };
 
@@ -119,8 +131,12 @@ const resolveCoverage = (
   };
 };
 
-/** One row of the Problems page: its scroll anchor, summary-chip label, count, and card. */
-type ProblemSectionEntry = {
+/**
+ * One row of the Problems page: its scroll anchor, summary-chip label, count,
+ * and card. Generic in its coverage declaration so the declared keys survive
+ * into `PROBLEM_SECTIONS`, where the exhaustiveness assertion reads them back.
+ */
+type ProblemSectionEntry<K extends CoverageProblemKey = CoverageProblemKey> = {
   /** Scroll-anchor id; also the summary-chip key. */
   id: string;
   /** Short label shown on the summary chip. */
@@ -136,7 +152,7 @@ type ProblemSectionEntry = {
     totals: CoverageTotals | undefined,
   ) => ReactNode;
   /** Present ⇒ coverage, not a defect; absent ⇒ the main defect list. */
-  coverage?: ProblemSectionDeclaredCoverage;
+  coverage?: ProblemSectionDeclaredCoverage<K>;
 };
 
 /**
@@ -145,7 +161,7 @@ type ProblemSectionEntry = {
  * `renderItem`. The element type flows from `select` into `renderItem` with no
  * annotations. `headerAction` is a `<BackfillButton>` for the "fix all" sections.
  */
-function section<T>(config: {
+function section<T, K extends CoverageProblemKey = never>(config: {
   id: string;
   label: string;
   select: (problems: AllProblems) => readonly T[];
@@ -158,8 +174,8 @@ function section<T>(config: {
   groupBy?: (items: T[]) => Record<string, T[]>;
   /** A static "fix all" node, or one built from the current items (for bulk delete). */
   headerAction?: ReactNode | ((items: T[]) => ReactNode);
-  coverage?: ProblemSectionDeclaredCoverage;
-}): ProblemSectionEntry {
+  coverage?: ProblemSectionDeclaredCoverage<K>;
+}): ProblemSectionEntry<K> {
   const iconProp: IconProp = config.entity
     ? { entity: config.entity }
     : { icon: config.icon as LucideIcon };
@@ -196,7 +212,7 @@ function section<T>(config: {
 }
 
 /** Escape hatch for a section that needs its own component (e.g. section-level state). */
-function customSection<T>(def: {
+function customSection<T, K extends CoverageProblemKey = never>(def: {
   id: string;
   label: string;
   select: (problems: AllProblems) => readonly T[];
@@ -204,8 +220,8 @@ function customSection<T>(def: {
     items: T[],
     coverage: ProblemSectionCoverage | undefined,
   ) => ReactNode;
-  coverage?: ProblemSectionDeclaredCoverage;
-}): ProblemSectionEntry {
+  coverage?: ProblemSectionDeclaredCoverage<K>;
+}): ProblemSectionEntry<K> {
   return {
     id: def.id,
     label: def.label,
@@ -680,11 +696,46 @@ function purchaseDeltaHint(purchase: PurchaseNotReconciling): string | null {
     : `Expenses come in ${gap} over the stated total — an extra expense, or a stated total captured before one was added.`;
 }
 
+/** The coverage keys a list of sections claims through their `coverage.keys`. */
+type ClaimedCoverageKey<S extends readonly ProblemSectionEntry[]> = NonNullable<
+  S[number]["coverage"]
+>["keys"][number];
+
+/**
+ * The section list, but only if its coverage sections claim every key
+ * `PROBLEM_CLASS` classes `coverage` — otherwise a shape nothing can satisfy,
+ * whose one property names the unclaimed keys.
+ *
+ * This is the other half of the weld (see `ProblemSectionDeclaredCoverage`).
+ * The schema's `coverage` class and this file's coverage sections are two
+ * independent declarations of one membership and agreed only by hand: a key
+ * classed `coverage` with no section claiming it would render in the defect
+ * list and go on counting toward the badge the class exists to keep actionable.
+ * The other direction — a section claiming a key that isn't classed `coverage`
+ * — is the `CoverageProblemKey` type on `keys` itself, and a `keys` list that
+ * disagrees with the section's own `select` is caught in
+ * problem-sections.unit.test.tsx.
+ */
+type SectionsClaimingEveryCoverageKey<
+  S extends readonly ProblemSectionEntry[],
+> = [Exclude<CoverageProblemKey, ClaimedCoverageKey<S>>] extends [never]
+  ? readonly ProblemSectionEntry[]
+  : {
+      coverageKeysWithNoSection: Exclude<
+        CoverageProblemKey,
+        ClaimedCoverageKey<S>
+      >;
+    };
+
 /**
  * The Problems page in declaration order — the summary chips and the section
  * list both derive from this, so adding a check is a single entry here.
+ *
+ * Declared without a type annotation on purpose: annotating the literal
+ * contextually types each `section(...)` call, which erases the coverage keys
+ * the weld below reads back out of it.
  */
-export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
+const DECLARED_SECTIONS = [
   section({
     id: "duplicates",
     label: "Duplicates",
@@ -865,7 +916,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     select: (p) => p.unvaluedBucketProducts,
     // Coverage, but with no meter: a misc bucket isn't a fraction of any
     // population, so there's nothing honest to put in a denominator.
-    coverage: {},
+    coverage: { keys: ["unvaluedBucketProducts"] },
     entity: "product",
     title: "Unvalued Bucket Products",
     description:
@@ -903,6 +954,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     label: "No product",
     select: (p) => p.ingredientsWithoutProduct,
     coverage: {
+      keys: ["ingredientsWithoutProduct"],
       meter: {
         total: (t) => t.ingredientsWithoutProduct,
         doneLabel: "linked to a product",
@@ -1005,6 +1057,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     label: "Locations",
     select: (p) => p.emptyLocations,
     coverage: {
+      keys: ["emptyLocations"],
       meter: { total: (t) => t.emptyLocations, doneLabel: "itemized" },
     },
     render: (items, coverage) => (
@@ -1016,6 +1069,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     label: "Stale recounts",
     select: (p) => p.staleLocations,
     coverage: {
+      keys: ["staleLocations"],
       meter: { total: (t) => t.staleLocations, doneLabel: "recounted" },
     },
     entity: "location",
@@ -1051,6 +1105,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     label: "Never verified",
     select: (p) => p.neverVerifiedInventory,
     coverage: {
+      keys: ["neverVerifiedInventory"],
       meter: { total: (t) => t.neverVerifiedInventory, doneLabel: "verified" },
     },
     entity: "inventory",
@@ -1133,6 +1188,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     label: "Vendor logos",
     select: (p) => p.vendorsWithoutLogos,
     coverage: {
+      keys: ["vendorsWithoutLogos"],
       meter: {
         total: (t) => t.vendorsWithPurchases,
         doneLabel: "with a mini logo",
@@ -1185,6 +1241,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     label: "Images",
     select: (p) => p.productsWithNoImages,
     coverage: {
+      keys: ["productsWithNoImages"],
       meter: {
         total: (t) => t.productsWithNoImages,
         doneLabel: "photographed",
@@ -1406,7 +1463,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     // the defect list, out of the red, and out of `totalProblems`. No meter: a
     // discrepancy isn't a fraction of a population, and "N of M purchases
     // reconcile" would read as a score to drive to 100%, which this isn't.
-    coverage: {},
+    coverage: { keys: ["purchasesNotReconciling"] },
     entity: "purchase",
     title: "Stated Totals That Need Review",
     description:
@@ -1462,7 +1519,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     label: "Settlement",
     select: (p) => p.purchaseFinancialSettlementMismatches,
     // A mismatch needs review, but does not imply an Expense should be changed.
-    coverage: {},
+    coverage: { keys: ["purchaseFinancialSettlementMismatches"] },
     entity: "purchase",
     title: "Purchase financial settlement mismatches",
     description:
@@ -1492,7 +1549,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     // population, and a count to drive to zero would invite deleting the doubtful
     // ones. The expense is the subject, so the card opens the expense, not the
     // purchase it collides with.
-    coverage: {},
+    coverage: { keys: ["duplicateSpendCandidates"] },
     entity: "expense",
     title: "Possible Duplicate Spend",
     description:
@@ -1581,3 +1638,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     }),
   }),
 ];
+
+export const PROBLEM_SECTIONS: SectionsClaimingEveryCoverageKey<
+  typeof DECLARED_SECTIONS
+> = DECLARED_SECTIONS;
