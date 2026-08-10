@@ -309,25 +309,31 @@ const resolveCalories = (value: string | undefined) =>
  * for project and meal while no UI control could ever send them. Deriving
  * means a `*FilterFields` gaining `auditDateFilterFields` later (or losing
  * it) doesn't also require a matching edit to a second set here.
+ *
+ * Exported for the two drift guards in `filter-manifest.unit.test.tsx`, which
+ * compare the manifest against these maps in both directions. They must read
+ * the map `auditFilterEntities` is derived from, not a second copy — a copy
+ * would agree with itself while this one went stale.
  */
-const entityFilterFieldMaps: Partial<Record<Entity, Record<string, unknown>>> =
-  {
-    financialAccount: financialAccountFilterFields,
-    financialTransaction: financialTransactionFilterFields,
-    expense: expenseFilterFields,
-    vendor: vendorFilterFields,
-    purchase: purchaseFilterFields,
-    task: taskFilterFields,
-    product: productFilterFields,
-    recipe: recipeFilterFields,
-    ingredient: ingredientFilterFields,
-    inventory: inventoryFilterFields,
-    location: locationFilterFields,
-    image: imageFilterFields,
-    meal: mealFilterFields,
-    project: projectFilterFields,
-    wish: wishFilterFields,
-  };
+export const entityFilterFieldMaps: Partial<
+  Record<Entity, Record<string, unknown>>
+> = {
+  financialAccount: financialAccountFilterFields,
+  financialTransaction: financialTransactionFilterFields,
+  expense: expenseFilterFields,
+  vendor: vendorFilterFields,
+  purchase: purchaseFilterFields,
+  task: taskFilterFields,
+  product: productFilterFields,
+  recipe: recipeFilterFields,
+  ingredient: ingredientFilterFields,
+  inventory: inventoryFilterFields,
+  location: locationFilterFields,
+  image: imageFilterFields,
+  meal: mealFilterFields,
+  project: projectFilterFields,
+  wish: wishFilterFields,
+};
 
 const auditFilterEntities = new Set<Entity>(
   (Object.entries(entityFilterFieldMaps) as [Entity, Record<string, unknown>][])
