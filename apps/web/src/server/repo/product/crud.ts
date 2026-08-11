@@ -1724,17 +1724,17 @@ export const deleteProducts = async (
       children: [
         {
           table: productUnitMappings,
-          parentColumn: productUnitMappings.productId,
+          parentColumns: [productUnitMappings.productId],
           auditKey: "cascadedUnitMappings",
         },
         {
           table: productExternalId,
-          parentColumn: productExternalId.productId,
+          parentColumns: [productExternalId.productId],
           auditKey: "cascadedExternalIds",
         },
         {
           table: productImage,
-          parentColumn: productImage.productId,
+          parentColumns: [productImage.productId],
           auditKey: "cascadedImages",
         },
       ],

@@ -506,7 +506,7 @@ export const deleteWishes = async (
       children: [
         {
           table: wishCandidate,
-          parentColumn: wishCandidate.wishId,
+          parentColumns: [wishCandidate.wishId],
           auditKey: "cascadedCandidates",
         },
       ],

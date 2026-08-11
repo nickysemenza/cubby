@@ -182,6 +182,9 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   const manufacturerOptionsQuery = useQuery(
     api.product.manufacturerOptions.queryOptions(),
   );
+  const externalIdSourceOptionsQuery = useQuery(
+    api.product.externalIdSourceOptions.queryOptions(),
+  );
   const locationOptions = useMemo<FilterableComboboxItem[]>(
     () =>
       locationOptionsQuery.data?.items.map(({ id, name, ancestors }) => ({
@@ -207,6 +210,15 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         hint: String(count),
       })) ?? NO_FILTER_OPTIONS,
     [manufacturerOptionsQuery.data],
+  );
+  const externalIdSourceOptions = useMemo<FilterableComboboxItem[]>(
+    () =>
+      externalIdSourceOptionsQuery.data?.map(({ source, count }) => ({
+        value: source,
+        label: source,
+        hint: String(count),
+      })) ?? NO_FILTER_OPTIONS,
+    [externalIdSourceOptionsQuery.data],
   );
   // The graph owns this picklist too: its count is distinct matching Products,
   // not the Vendor roster's purchase-count hint. Keeping the query keyed by
@@ -250,6 +262,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     productIngredients: ingredientOptions,
     manufacturers: manufacturerOptions,
     productPurchases: purchaseOptions,
+    externalIdSources: externalIdSourceOptions,
   });
   const [foodHydrationIds, setFoodHydrationIds] = useState<readonly string[]>(
     [],

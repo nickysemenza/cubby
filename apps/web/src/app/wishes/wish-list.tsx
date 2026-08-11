@@ -1,4 +1,5 @@
 import type { WishFilters, WishOut } from "@cubby/schemas/wish";
+import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
 import { uniq } from "es-toolkit";
 import { ImageIcon, Plus } from "lucide-react";
@@ -6,6 +7,7 @@ import { useMemo, useState } from "react";
 import RTable from "~/app/_components/data-table/Table";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
+import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import {
   ProductImageSummariesProvider,
   useHydratedProductImages,
@@ -15,6 +17,7 @@ import { ImageThumbnail } from "~/app/_components/table/ImageThumbnail";
 import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -34,6 +37,9 @@ import { buildWishRows, type WishRow, wishSubRows } from "./wish-rows";
  * and `rowIsEntity` keeps the wish-only affordances (selection, the row menu's
  * Delete) off candidate rows.
  */
+/** Stable empty default — `useFilterOptions` needs a referentially fixed miss. */
+const NO_FILTER_OPTIONS: FilterableComboboxItem[] = [];
+
 const WISH_TREE_CONFIG = {
   nest: buildWishRows,
   getSubRows: wishSubRows,
@@ -223,6 +229,24 @@ export function WishList() {
     [columnHelper],
   );
 
+  // The candidate roster comes from the relation itself, not the product
+  // catalog: only a Product that is somebody's candidate can narrow this list,
+  // and the hint is the number of wishes naming it.
+  const candidateOptionsQuery = useQuery(
+    api.relatedData.options.queryOptions({
+      relationKey: "wish.candidates",
+      limit: 100,
+    }),
+  );
+  const filterOptions = useFilterOptions({
+    wishCandidates:
+      candidateOptionsQuery.data?.map(({ id, label, count }) => ({
+        value: id,
+        label,
+        hint: String(count),
+      })) ?? NO_FILTER_OPTIONS,
+  });
+
   // Neither `buildFilters` nor `filters` is passed: the `wish` entry in
   // `entities/filter-manifest.tsx` drives the Name search box, the server
   // `WishFilters` object, and the `?q=` URL round-trip.
@@ -243,6 +267,7 @@ export function WishList() {
     columns,
     deletable: deletableConfig,
     tree: WISH_TREE_CONFIG,
+    filterOptions,
   });
   usePageCount(totalCount);
 

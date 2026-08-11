@@ -49,6 +49,7 @@ const filterSearchKeys = {
     "relatedInventoryId",
     "relatedInventoryPresenceFilter",
     "related:product.tasks",
+    "taskId",
     "createdAt",
     "updatedAt",
   ],

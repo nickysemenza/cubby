@@ -30,6 +30,7 @@ import {
   productDiscardOut,
   productExternalIdCollisionInput,
   productExternalIdCollisionsOut,
+  productExternalIdSourceOptionsOut,
   productFiltersSchema,
   productFindOrCreateByUPCInput,
   productFindOrCreateByUPCOut,
@@ -69,6 +70,7 @@ import {
   deleteProducts,
   discardProductUnits,
   getCategoryDistribution,
+  getProductExternalIdSourceOptions,
   getProductManufacturerOptions,
   getProductPickerItemsByIds,
   getProductsByShortcodes,
@@ -457,6 +459,11 @@ const manufacturerOptions = protectedProcedure
   .output(strictOutput(productManufacturerOptionsOut))
   .query(({ ctx }) => getProductManufacturerOptions(ctx.db));
 
+/** Source roster for the product list's External IDs filter picklist. */
+const externalIdSourceOptions = protectedProcedure
+  .output(strictOutput(productExternalIdSourceOptionsOut))
+  .query(({ ctx }) => getProductExternalIdSourceOptions(ctx.db));
+
 /**
  * "Fits with this" — every other product sharing a tag. Separate from
  * `getByID` so the detail page's main payload doesn't grow a join that only
@@ -839,6 +846,7 @@ export const productRouter = createTRPCRouter({
   categoryDistribution,
   tagOptions,
   manufacturerOptions,
+  externalIdSourceOptions,
   tagSiblings,
   externalIdCollisions,
   patchExternalIds,

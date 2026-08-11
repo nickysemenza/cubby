@@ -1101,20 +1101,14 @@ describe("every server filter field is reachable from the manifest", () => {
       "the Ingredients related column upgraded to an exact ingredient roster (ingredientId, ?related-ingredient=)",
     "product.taskSearch":
       "the Tasks related column spends its slot on the status/due range control (resolveProductTaskFilter); a substring match over task names does not compose with it",
+    "wish.productSearch":
+      "the Candidates related column upgraded to an exact candidate-product roster (candidateProductId, ?related-product=), which is the predicate the wish repo actually owns",
     "location.inventoryPresenceFilter":
       "the Inventory control expresses the same predicate through its count bounds — `has` is directItemCountMin: 1, `none` is directItemCountMax: 0",
     "product.expenseCountMax":
       "the Expenses presets are lower bounds plus the two presence sentinels (`none` routes to expensePresenceFilter), so no option can emit an upper bound",
     "purchase.orderId":
       "the visible order-id control is the has/none reconciliation worklist, and ?q= already substring-matches order id. A purchase has its own detail route, so there is no expense-style exact-order-id deep-link scope here",
-
-    // Real gaps. Fixing them means adding UI, which is out of scope for a guard.
-    "product.externalIdSource":
-      "TODO: real gap — the server filters on it with no control at all; the External IDs column offers only has/none. externalIdSource is an OPEN kebab-case slug (a regex-validated string in external-id.ts, not a z.enum), so there is no fixed value set to render: this wants a runtime distinct-values picklist, not a static multiselect",
-    "product.taskId":
-      "TODO: real gap — every other related view keeps a urlOnly <prefix>Id deep-link scope, but product.tasks' specialized range spec skips the generated trio, so this one has no URL entry point",
-    "wish.candidateProductId":
-      "TODO: real gap, already named in the manifest's wish.acquired comment — needs a runtime candidate-product picklist",
   };
 
   const reachableFields = (entity: Entity): Set<string> =>

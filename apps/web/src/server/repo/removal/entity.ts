@@ -39,7 +39,7 @@
 
 import type { ActorContext } from "@cubby/schemas/context";
 import type { BrandForEntity } from "@cubby/schemas/identifiers";
-import { and, inArray, type SQL } from "drizzle-orm";
+import { and, inArray, or, type SQL } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, withTransactionOn } from "~/server/repo/database-helpers";
@@ -58,6 +58,19 @@ import {
 type SoftDeletableTable = PgTable & { deletedAt: PgColumn };
 
 /**
+ * The columns on a child table that point at the parent. Non-empty by type, so
+ * the OR below always has at least one clause.
+ *
+ * A list rather than a single column because a dependency edge
+ * (`ProjectDependency`, `TaskDependency`) references the parent from *either*
+ * end, and both ends die with it. Deliberately a column list and not an
+ * arbitrary predicate: an escape hatch that took a `SQL` would let a caller
+ * remove rows the declared edge does not describe, which is the hand-written
+ * delete this module exists to replace.
+ */
+type ParentColumns = readonly [PgColumn, ...PgColumn[]];
+
+/**
  * One child edge to remove before the parent.
  *
  * The two arms differ in more than a flag. `auditKey` exists only on the soft
@@ -69,18 +82,33 @@ type SoftDeletableTable = PgTable & { deletedAt: PgColumn };
 export type ChildCascade =
   | {
       table: SoftDeletableTable;
-      parentColumn: PgColumn;
+      parentColumns: ParentColumns;
       mode?: "soft";
       /** Audit-change key for the per-parent count, e.g. `cascadedImages`. */
       auditKey?: string;
     }
   | {
       table: PgTable;
-      parentColumn: PgColumn;
+      parentColumns: ParentColumns;
       mode: "hard";
       /** Unreachable: see {@link ChildCascade}. */
       auditKey?: never;
     };
+
+/** `ids` matched against any of the edge's parent columns. */
+const parentMatches = (
+  columns: ParentColumns,
+  ids: readonly string[],
+): SQL<unknown> => {
+  const [first, ...rest] = columns;
+  const match = (column: PgColumn) => inArray(column, [...ids]);
+  if (rest.length === 0) return match(first);
+  // `or` returns `SQL | undefined` for the all-arguments-undefined case; every
+  // clause here is a real predicate, so it cannot be that case. The `or` (not a
+  // hand-joined `sql`) is load-bearing: it parenthesizes the disjunction, which
+  // the soft path's `and(where, notDeleted(...))` then depends on.
+  return or(match(first), ...rest.map(match)) as SQL<unknown>;
+};
 
 /**
  * Issue one removal statement. Soft removal re-applies `notDeleted` so a row
@@ -145,12 +173,19 @@ export const removeEntity = async <E extends RemovableEntity>(
     const counts: CascadeCounts = {};
     for (const child of children) {
       if (child.auditKey === undefined) continue;
-      counts[child.auditKey] = await countByTarget(
-        tx,
-        child.table,
-        child.parentColumn,
-        ids,
-      );
+      // Per column, summed: a multi-column edge's count is "rows removed that
+      // name this parent", so a row naming it from both ends is two removals'
+      // worth of reference. Only reachable for a soft child — the two
+      // multi-column edges in the schema are both hard and therefore uncounted.
+      const perColumn: Record<string, number> = {};
+      for (const column of child.parentColumns) {
+        for (const [id, n] of Object.entries(
+          await countByTarget(tx, child.table, column, ids),
+        )) {
+          perColumn[id] = (perColumn[id] ?? 0) + n;
+        }
+      }
+      counts[child.auditKey] = perColumn;
     }
 
     const now = new Date();
@@ -158,7 +193,7 @@ export const removeEntity = async <E extends RemovableEntity>(
       await removeRows(
         tx,
         child.table,
-        inArray(child.parentColumn, [...ids]),
+        parentMatches(child.parentColumns, ids),
         child.mode ?? "soft",
         now,
       );

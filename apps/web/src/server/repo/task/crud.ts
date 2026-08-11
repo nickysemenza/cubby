@@ -30,7 +30,7 @@ import type {
   TaskOut,
   TaskUpdateInput,
 } from "@cubby/schemas/project";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -827,25 +827,24 @@ export const deleteTasks = async (
     const liveSubtasks = await fetchLiveSubtasks(tx, ids);
     const allIds = [...ids, ...liveSubtasks.map((t) => t.id)];
 
-    // Not a `ChildCascade`: a dependency edge points at the task from either
-    // end, and `parentColumn` addresses exactly one column. Hand-written here,
-    // immediately before the parent removal, so it keeps the children-first
-    // ordering `removeEntity` fixes for its declared edges.
-    await tx
-      .delete(taskDependency)
-      .where(
-        or(
-          inArray(taskDependency.taskId, allIds),
-          inArray(taskDependency.blockedByTaskId, allIds),
-        ),
-      );
-
     // Over `allIds`, not `ids`: the cascaded subtasks are removals too.
     await removeEntity(tx, {
       entity: "task",
       ids: allIds,
       removal: "soft",
       actor,
+      children: [
+        // Both ends: a dependency edge carries no meaning once either endpoint
+        // is gone, so it is hard-deleted rather than soft-deleted.
+        {
+          table: taskDependency,
+          parentColumns: [
+            taskDependency.taskId,
+            taskDependency.blockedByTaskId,
+          ],
+          mode: "hard",
+        },
+      ],
     });
   });
 };

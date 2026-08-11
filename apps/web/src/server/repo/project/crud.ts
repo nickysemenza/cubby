@@ -19,7 +19,7 @@ import {
   type ProjectOut,
   type ProjectUpdateInput,
 } from "@cubby/schemas/project";
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -429,33 +429,32 @@ export const deleteProjects = async (
         `Cannot delete ${count} project(s): ${names} still have expenses. Delete or reassign them first.`,
     });
 
-    // Stays a hand-written statement: a dependency row names the project in
-    // either of two columns, and `ChildCascade` matches a single
-    // `parentColumn`. Widening it to an arbitrary predicate would give back the
-    // freedom the declared shape exists to remove.
-    await tx
-      .delete(projectDependency)
-      .where(
-        or(
-          inArray(projectDependency.projectId, ids),
-          inArray(projectDependency.blockedByProjectId, ids),
-        ),
-      );
-
     await removeEntity(tx, {
       entity: "project",
       ids,
       removal: "soft",
       actor,
       children: [
+        // First, as it was when this was a hand-written statement above the
+        // call. Both columns: a dependency row names the project from either
+        // end, and carries no meaning once either endpoint is gone — so it is
+        // hard-deleted rather than soft-deleted.
+        {
+          table: projectDependency,
+          parentColumns: [
+            projectDependency.projectId,
+            projectDependency.blockedByProjectId,
+          ],
+          mode: "hard",
+        },
         {
           table: projectImage,
-          parentColumn: projectImage.projectId,
+          parentColumns: [projectImage.projectId],
           auditKey: "cascadedImages",
         },
         {
           table: projectToolUsage,
-          parentColumn: projectToolUsage.projectId,
+          parentColumns: [projectToolUsage.projectId],
           auditKey: "cascadedToolUsages",
         },
       ],

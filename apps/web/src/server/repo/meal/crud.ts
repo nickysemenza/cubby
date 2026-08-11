@@ -231,7 +231,7 @@ export const deleteMeals = async (
       children: [
         {
           table: mealRecipe,
-          parentColumn: mealRecipe.mealId,
+          parentColumns: [mealRecipe.mealId],
           auditKey: "cascadedMealRecipes",
         },
       ],

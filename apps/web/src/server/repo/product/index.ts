@@ -22,6 +22,7 @@ export {
   findDuplicateUniqueProducts,
   findProductsWithNoImages,
   getCategoryDistribution,
+  getProductExternalIdSourceOptions,
   getProductManufacturerOptions,
   getProductSummaryForAudit,
   getProductsSharingTags,

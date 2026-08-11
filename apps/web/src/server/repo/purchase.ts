@@ -1826,16 +1826,22 @@ const deletePurchasesWithPolicy = async (
 
     // `{actor}`, not a caller-owned buffer: the detach `update` entries above
     // were already flushed, and the delete entries must follow them.
-    // No `auditKey` on either child — the counts were never part of a
-    // Purchase's delete entry, and adding one would change what the audit says.
     await removeEntity(tx, {
       entity: "purchase",
       ids,
       removal: "soft",
       actor,
       children: [
-        { table: purchaseProduct, parentColumn: purchaseProduct.purchaseId },
-        { table: purchaseImage, parentColumn: purchaseImage.purchaseId },
+        {
+          table: purchaseProduct,
+          parentColumns: [purchaseProduct.purchaseId],
+          auditKey: "cascadedPurchaseProducts",
+        },
+        {
+          table: purchaseImage,
+          parentColumns: [purchaseImage.purchaseId],
+          auditKey: "cascadedPurchaseImages",
+        },
       ],
     });
 

@@ -537,7 +537,7 @@ export const deleteLocations = async (
       children: [
         {
           table: locationImage,
-          parentColumn: locationImage.locationId,
+          parentColumns: [locationImage.locationId],
           auditKey: "cascadedImages",
         },
       ],
