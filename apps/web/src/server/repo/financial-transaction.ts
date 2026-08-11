@@ -18,7 +18,6 @@ import {
 import {
   type FinancialTransactionId,
   type FinancialTransactionShortcode,
-  type PurchaseId,
   unsafeFinancialAccountShortcode,
   unsafeFinancialTransactionShortcode,
   unsafePurchaseShortcode,
@@ -63,7 +62,6 @@ import {
   assertAllocationSetValid,
   assertPurchasesLive,
   countLiveAllocations,
-  materializeLegacyMirror,
   readAllocations,
   resolveAllocationInputs,
   writeAllocationSet,
@@ -114,7 +112,6 @@ const columns = {
   id: financialTransaction.id,
   shortcode: financialTransaction.shortcode,
   accountId: financialTransaction.accountId,
-  purchaseId: financialTransaction.purchaseId,
   kind: financialTransaction.kind,
   status: financialTransaction.status,
   amount: financialTransaction.amount,
@@ -128,9 +125,6 @@ const columns = {
   createdAt: financialTransaction.createdAt,
   updatedAt: financialTransaction.updatedAt,
   accountShortcode: sql<string>`(SELECT fa.shortcode FROM "FinancialAccount" fa WHERE fa.id = "FinancialTransaction"."accountId")`,
-  purchaseShortcode: sql<
-    string | null
-  >`(SELECT p.shortcode FROM "Purchase" p WHERE p.id = "FinancialTransaction"."purchaseId")`,
   // Ordered by shortcode so the field is stable across reads rather than
   // following whatever order the planner happens to produce.
   allocations: sql<{ purchaseId: string; amount: number }[]>`COALESCE((
@@ -147,18 +141,26 @@ type FinancialTransactionRow = Omit<
   "deletedAt"
 > & {
   accountShortcode: string;
-  purchaseShortcode: string | null;
   allocations: { purchaseId: string; amount: number }[];
   accountName: string | null;
 };
 
-const toOut = (row: FinancialTransactionRow): FinancialTransactionOut =>
-  financialTransactionOut.parse({
+const toOut = (row: FinancialTransactionRow): FinancialTransactionOut => {
+  const allocations = (row.allocations ?? []).map((allocation) => ({
+    purchaseId: unsafePurchaseShortcode(allocation.purchaseId),
+    amount: Number(allocation.amount),
+  }));
+  return financialTransactionOut.parse({
     id: unsafeFinancialTransactionShortcode(row.shortcode),
     accountId: unsafeFinancialAccountShortcode(row.accountShortcode),
-    purchaseId: row.purchaseShortcode
-      ? unsafePurchaseShortcode(row.purchaseShortcode)
-      : null,
+    // DERIVED, not stored: the sole Purchase this transaction settled, or null
+    // when it settled none or several. Kept in the output because 3,445 of
+    // 3,447 transactions have exactly one allocation and every consumer of that
+    // shape reads better for it.
+    purchaseId:
+      allocations.length === 1 && allocations[0]
+        ? allocations[0].purchaseId
+        : null,
     kind: row.kind,
     status: row.status,
     amount: Number(row.amount),
@@ -169,14 +171,12 @@ const toOut = (row: FinancialTransactionRow): FinancialTransactionOut =>
     sourceCategory: row.sourceCategory,
     sourceRefs: row.sourceRefs,
     notes: row.notes,
-    allocations: (row.allocations ?? []).map((allocation) => ({
-      purchaseId: unsafePurchaseShortcode(allocation.purchaseId),
-      amount: Number(allocation.amount),
-    })),
+    allocations,
     accountName: row.accountName,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });
+};
 
 const refsCondition = (
   sources?: string[],
@@ -378,10 +378,7 @@ async function resolveForeignKeys(
     "financialAccount",
     data.accountId,
   );
-  const purchaseId = data.purchaseId
-    ? await resolveOrThrow(db, "purchase", data.purchaseId)
-    : null;
-  return { accountId, purchaseId };
+  return { accountId };
 }
 
 export async function createFinancialTransaction(
@@ -414,8 +411,10 @@ export async function createFinancialTransaction(
     const requested: AllocationInput[] =
       allocations.length > 0
         ? await resolveAllocationInputs(tx, allocations)
-        : foreign.purchaseId
-          ? [{ purchaseId: foreign.purchaseId, amount: data.amount }]
+        : data.purchaseId
+          ? await resolveAllocationInputs(tx, [
+              { purchaseId: data.purchaseId, amount: data.amount },
+            ])
           : [];
     if (requested.length > 0) {
       await assertPurchasesLive(
@@ -485,9 +484,6 @@ export async function updateFinancialTransaction(
         and(eq(financialTransaction.id, id), notDeleted(financialTransaction)),
       )
       .for("update");
-    // A row whose mirror predates its allocation gets one now, so nothing below
-    // can derive the mirror to NULL and silently drop a real settlement link.
-    await materializeLegacyMirror(tx, id);
     const before = await tx.query.financialTransaction.findFirst({
       where: and(
         eq(financialTransaction.id, id),
@@ -503,12 +499,6 @@ export async function updateFinancialTransaction(
       data.accountId === undefined
         ? before.accountId
         : await resolveOrThrow(tx, "financialAccount", data.accountId);
-    const purchaseId =
-      data.purchaseId === undefined
-        ? before.purchaseId
-        : data.purchaseId === null
-          ? null
-          : await resolveOrThrow(tx, "purchase", data.purchaseId);
     const sourceRefs = data.sourceRefs ?? before.sourceRefs;
     await lockFinancialEvidenceKeys(
       tx,
@@ -517,11 +507,9 @@ export async function updateFinancialTransaction(
     );
     await assertSourceRefsAvailable(tx, sourceRefs, id);
 
-    // `purchaseId` is NOT written here. It is a derived mirror, and
-    // syncSettlementMirror is its only writer — writing it directly would audit
-    // an intermediate value that the re-derivation then overwrites, so the trail
-    // would claim a settlement state that never committed.
-    const { purchaseId: _mirrorIsDerived, ...writableData } = data;
+    // `purchaseId` is input sugar only — there is no such column any more, so it
+    // never reaches the physical update.
+    const { purchaseId: _sugarOnly, ...writableData } = data;
     const values = buildPartialUpdateValues({ ...writableData, accountId });
 
     // The create input rejects a purchaseId/allocations pair that disagrees;
@@ -551,10 +539,14 @@ export async function updateFinancialTransaction(
       );
     const allocationCount = await countLiveAllocations(tx, id);
     const settlementViolation = financialTransactionSettlementViolation({
-      // A split transaction's mirror is NULL while it is very much linked, so
-      // linkage is the allocation count first and the mirror only as a fallback
-      // for rows this migration has not reached.
-      linked: allocationCount > 0 || purchaseId !== null,
+      // Linkage is the allocation count, full stop — there is no mirror column
+      // left to infer it from, and inferring it was always the weaker signal.
+      linked:
+        data.allocations !== undefined
+          ? data.allocations.length > 0
+          : data.purchaseId !== undefined
+            ? data.purchaseId !== null
+            : allocationCount > 0,
       kind: nextKind as FinancialTransactionCreateInput["kind"],
       amount: nextAmount,
     });
@@ -581,7 +573,6 @@ export async function updateFinancialTransaction(
       );
     const changes = computeChanges(before, { ...before, ...values }, [
       "accountId",
-      "purchaseId",
       "kind",
       "status",
       "amount",
@@ -613,13 +604,15 @@ export async function updateFinancialTransaction(
     //   • an amount change on a singly-allocated transaction, where the sole
     //     legal allocation value is the new amount.
     const allocationsBefore = await readAllocations(tx, [id]);
-    const explicitPurchaseChange =
-      data.purchaseId !== undefined && purchaseId !== before.purchaseId;
     let nextAllocations: AllocationInput[] | null = null;
     if (data.allocations !== undefined) {
       nextAllocations = await resolveAllocationInputs(tx, data.allocations);
-    } else if (explicitPurchaseChange) {
-      nextAllocations = purchaseId ? [{ purchaseId, amount: nextAmount }] : [];
+    } else if (data.purchaseId !== undefined) {
+      nextAllocations = data.purchaseId
+        ? await resolveAllocationInputs(tx, [
+            { purchaseId: data.purchaseId, amount: nextAmount },
+          ])
+        : [];
     } else if (amountChanged && allocationCount === 1) {
       const sole = allocationsBefore.get(id)?.[0];
       if (sole)
@@ -643,13 +636,8 @@ export async function updateFinancialTransaction(
       actor,
     });
 
-    if (changes) {
-      await touchDataQualityTargets(tx, {
-        purchaseIds: [before.purchaseId, purchaseId].filter(
-          (value): value is PurchaseId => value !== null,
-        ),
-      });
-    }
+    // Data-quality targets come from applyAllocationChanges, which knows the
+    // union of before/after purchases; nothing else here can name one.
   });
   return { output: await getFinancialTransactionByID(db, id), entityId: id };
 }
@@ -684,22 +672,14 @@ export async function deleteFinancialTransactions(
     // Quality targets come from the allocations as well as the mirror: a
     // transaction split across two purchases has a NULL mirror, so reading only
     // that column would leave both purchases' data-quality exceptions stale.
-    const [mirrorTargets, allocationTargets] = await Promise.all([
-      tx.query.financialTransaction.findMany({
-        where: and(
-          inArray(financialTransaction.id, ids),
-          notDeleted(financialTransaction),
-        ),
-        columns: { purchaseId: true },
-      }),
-      tx.query.financialTransactionAllocation.findMany({
+    const allocationTargets =
+      await tx.query.financialTransactionAllocation.findMany({
         where: and(
           inArray(financialTransactionAllocation.transactionId, ids),
           notDeleted(financialTransactionAllocation),
         ),
         columns: { purchaseId: true },
-      }),
-    ]);
+      });
     await removeEntity(tx, {
       entity: "financialTransaction",
       ids,
@@ -714,12 +694,7 @@ export async function deleteFinancialTransactions(
       ],
     });
     await touchDataQualityTargets(tx, {
-      purchaseIds: uniq([
-        ...mirrorTargets
-          .map((row) => row.purchaseId)
-          .filter((value): value is PurchaseId => value !== null),
-        ...allocationTargets.map((row) => row.purchaseId),
-      ]),
+      purchaseIds: uniq(allocationTargets.map((row) => row.purchaseId)),
     });
   });
 }

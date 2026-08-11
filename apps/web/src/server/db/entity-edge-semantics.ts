@@ -1,7 +1,7 @@
 /**
  * The stable *meaning* of every incoming edge in `INCOMING_EDGES`
  * (`./entity-incoming-edges.ts`) — one `EdgeSemantics` record per edge,
- * covering all 14 entities and all 37 edges (two entities have none).
+ * covering all 14 entities and all 36 edges (two entities have none).
  *
  * "Stable" is the whole point: a `role` describes what the edge represents in
  * the domain (a photo, a ledger line, a hierarchy pointer) — never what any
@@ -334,13 +334,6 @@ export const ENTITY_EDGE_SEMANTICS = {
       label: "products",
       description:
         "A Product this order bought. Carries no money — spend stays entirely on Expense — so this never doubles as a second ledger path.",
-      liveness: { kind: "must-target-live" },
-    },
-    "FinancialTransaction.purchaseId": {
-      role: "transaction",
-      label: "financial transactions",
-      description:
-        "A settlement-side event linked to this vendor purchase. Its amount is evidence only; spend remains SUM(Expense.cost). Transitional: a derived mirror of the sole settlement allocation, non-null only when there is exactly one, and dropped once the settlement reads have migrated to FinancialTransactionAllocation.",
       liveness: { kind: "must-target-live" },
     },
     "FinancialTransactionAllocation.purchaseId": {

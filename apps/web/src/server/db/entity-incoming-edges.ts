@@ -183,10 +183,6 @@ export const INCOMING_EDGES = {
     "Expense.purchaseId": { column: expense.purchaseId },
     "PurchaseImage.purchaseId": { column: purchaseImage.purchaseId },
     "PurchaseProduct.purchaseId": { column: purchaseProduct.purchaseId },
-    "FinancialTransaction.purchaseId": {
-      column: financialTransaction.purchaseId,
-      note: "Transitional. A derived mirror of the sole settlement allocation, kept only while the settlement reads migrate onto FinancialTransactionAllocation; it is dropped once they have.",
-    },
     "FinancialTransactionAllocation.purchaseId": {
       column: financialTransactionAllocation.purchaseId,
     },

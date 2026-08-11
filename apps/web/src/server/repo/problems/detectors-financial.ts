@@ -107,18 +107,14 @@ export async function findDuplicateFinancialTransactionSourceRefs(
  * The backstop for every `FinancialTransactionAllocation` invariant the write
  * path enforces but the database cannot.
  *
- * Two of these reasons are load-bearing rather than belt-and-braces. A
- * transaction split across several Purchases has a NULL mirror `purchaseId`, so
- * `FinancialTransaction_purchase_settlement_check` — which is scoped to linked
- * rows — passes it **vacuously**: the kind allowlist and the per-kind sign rule
- * have no DB enforcement at all on exactly the rows this feature exists for.
- * `non-settlement-kind` and `kind-sign-violation` are what replace it, and they
- * become the *only* enforcement for every linked row once the mirror column is
- * dropped. Both predicates are generated from `purchaseSettlementSignRules` via
- * the shared expression builders, never hand-written, so they cannot drift from
- * the constant the way a hand-mirrored copy would.
- *
- * `mirror-drift` is transitional and retires with the mirror column.
+ * `non-settlement-kind` and `kind-sign-violation` are not belt-and-braces: they
+ * are now the ONLY enforcement of the settlement kind allowlist and the per-kind
+ * sign rule anywhere. `FinancialTransaction_purchase_settlement_check` was
+ * dropped with the `purchaseId` column it read, because "is this linked" became
+ * a question about another table that a row-level CHECK cannot ask. Both
+ * predicates are generated from `purchaseSettlementSignRules` via the shared
+ * expression builders, never hand-written, so they cannot drift from the
+ * constant the way a hand-mirrored copy would.
  */
 export async function findFinancialTransactionAllocationDefects(
   db: Database,
@@ -139,12 +135,6 @@ export async function findFinancialTransactionAllocationDefects(
   // Declared once and reused in both SELECT and HAVING — spelling a predicate
   // twice is the drift this module's own detectors exist to find.
   const sumMismatch = sql`(${allocationCount} > 0 AND ${allocatedCents} IS DISTINCT FROM ${amountCents})`;
-  // `::text` because postgres has ordering operators for uuid but no min()
-  // aggregate over it. Comparing the text forms is exact for uuids.
-  const mirrorDrift = sql`(
-    (${allocationCount} = 1 AND ft."purchaseId"::text IS DISTINCT FROM min(a."purchaseId"::text))
-    OR (${allocationCount} <> 1 AND ft."purchaseId" IS NOT NULL)
-  )`;
   const nonSettlementKind = sql`(${allocationCount} > 0 AND NOT (${kindAllowed}))`;
   const kindSignViolation = sql`(${allocationCount} > 0 AND ${kindAllowed} AND NOT ${signSatisfied})`;
   const allocationSignMismatch = sql`COALESCE(bool_or(sign(a."amount") <> sign(ft."amount")), false)`;
@@ -157,7 +147,6 @@ export async function findFinancialTransactionAllocationDefects(
     allocatedTotal: number;
     purchaseIds: string[] | null;
     sumMismatch: boolean;
-    mirrorDrift: boolean;
     nonSettlementKind: boolean;
     kindSignViolation: boolean;
     allocationSignMismatch: boolean;
@@ -170,7 +159,6 @@ export async function findFinancialTransactionAllocationDefects(
       COALESCE(sum(a."amount"), 0)::double precision AS "allocatedTotal",
       array_remove(array_agg(p.shortcode), NULL) AS "purchaseIds",
       ${sumMismatch} AS "sumMismatch",
-      ${mirrorDrift} AS "mirrorDrift",
       ${nonSettlementKind} AS "nonSettlementKind",
       ${kindSignViolation} AS "kindSignViolation",
       ${allocationSignMismatch} AS "allocationSignMismatch"
@@ -181,7 +169,6 @@ export async function findFinancialTransactionAllocationDefects(
     WHERE ft."deletedAt" IS NULL
     GROUP BY ft.id
     HAVING ${sumMismatch}
-      OR ${mirrorDrift}
       OR ${nonSettlementKind}
       OR ${kindSignViolation}
       OR ${allocationSignMismatch}
@@ -197,7 +184,6 @@ export async function findFinancialTransactionAllocationDefects(
     purchaseIds: (row.purchaseIds ?? []).map(unsafePurchaseShortcode),
     reasons: [
       ...(row.sumMismatch ? (["sum-mismatch"] as const) : []),
-      ...(row.mirrorDrift ? (["mirror-drift"] as const) : []),
       ...(row.nonSettlementKind ? (["non-settlement-kind"] as const) : []),
       ...(row.kindSignViolation ? (["kind-sign-violation"] as const) : []),
       ...(row.allocationSignMismatch
