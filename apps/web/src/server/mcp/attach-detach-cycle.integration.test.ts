@@ -1,6 +1,6 @@
 /**
- * The attach → detach → re-attach cycle, driven through the real MCP server
- * against a real Postgres.
+ * The attach → detach → re-attach cycle, and the entity delete, driven through
+ * the real MCP server against a real Postgres.
  *
  * Regression cover for a bug that made `attach_file` lie. Detaching an image
  * hard-deleted only the join row, leaving the `Image` alive with `deletedAt`
@@ -8,20 +8,23 @@
  * and its object still in R2. Two things followed:
  *
  * 1. The bytes leaked. `cullPendingImages` only ever reaps PENDING rows, so
- *    nothing collected them — 132 rows / 68 MB had piled up in production.
+ *    nothing collected them — 133 rows / 68 MB had piled up in production.
  * 2. `findAttachmentByIdempotencyKey` matched on the target columns alone, so a
  *    retry with the SAME key found that detached row and returned it as a
  *    success. No upload, no join row, `imageCount` unchanged, and a response
  *    byte-identical to a real attach.
  *
- * Both assertions below are about what a passing-but-wrong implementation would
- * still produce: a returned `imageId` proves nothing, so the tests read the join
- * row and `get_product`'s `imageCount`; and "the image is gone" is checked with
- * an UNFILTERED select, because a `notDeleted` read cannot tell a deleted row
- * from an orphaned one.
+ * Entity DELETES leaked the same way (50 of those orphans): `removeEntity`
+ * cascaded a *soft* delete onto the join rows and never touched the file.
+ *
+ * This file asserts what a CLIENT can see — `reused`, `imageCount`, and which
+ * R2 objects were dropped — because that is the surface the bug lied on: the
+ * response was indistinguishable from a real attach. The row-level half (the
+ * `Image` row being gone rather than merely orphaned, and which references keep
+ * it alive) is asserted in repo/image.integration.test.ts, where unwrapping the
+ * opaque `Database` belongs.
  */
 
-import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
@@ -40,10 +43,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { DomainCaller } from "~/server/api/domain";
 import { domainRouter } from "~/server/api/domain";
 import { createTestCaller } from "~/server/api/trpc";
-import type { Database } from "~/server/db";
-import { image, productImage } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
-import { deleteS3Object } from "~/server/utils/s3";
+import { deleteS3Object, extractKeyFromUrl } from "~/server/utils/s3";
 import { createMcpServer } from "./server";
 
 /** A 1×1 PNG — real bytes, so `inspectImageFile`'s signature and dimension
@@ -112,14 +112,14 @@ describe("attach_file / detach cycle", () => {
 
   const attach = async (
     caller: DomainCaller,
-    productCode: string,
+    entityCode: string,
     idempotencyKey: string,
     filename: string,
   ) => {
     const result = await callTool(
       "attach_file",
       {
-        entityId: productCode,
+        entityId: entityCode,
         data: PNG_BASE64,
         contentType: "image/png",
         filename,
@@ -137,16 +137,13 @@ describe("attach_file / detach cycle", () => {
     return structured(got).imageCount;
   };
 
-  /** Unfiltered on purpose: a `notDeleted` read passes whether the row was
-   * deleted or merely orphaned, which is the exact distinction under test. */
-  const rawImageRows = async (db: Database, imageId: string) =>
-    await getDb(db).select().from(image).where(eq(image.id, imageId));
-
-  const liveJoinRows = async (db: Database, imageId: string) =>
-    await getDb(db)
-      .select()
-      .from(productImage)
-      .where(eq(productImage.imageId, imageId));
+  /** The stored key, from the response's own url — no DB read needed, and it
+   * doubles as a check that the returned url really names the stored object. */
+  const storedKeyOf = (attached: Record<string, unknown>) => {
+    const key = extractKeyFromUrl(attached.url as string);
+    expect(key).toBeTruthy();
+    return key;
+  };
 
   it("re-attaching after a detach uploads again instead of replaying the dead row", async () => {
     const caller = makeCaller();
@@ -155,15 +152,11 @@ describe("attach_file / detach cycle", () => {
     const first = await attach(caller, productCode, "k1", "cover.png");
     expect(first.reused).toBe(false);
     const firstImageId = first.imageId as string;
-
-    // A returned imageId is what the broken version produced too — the join row
-    // and the count are what actually prove the file landed.
-    expect(await liveJoinRows(ctx.db, firstImageId)).toHaveLength(1);
+    const firstKey = storedKeyOf(first);
+    // A returned imageId is what the broken version produced too — the count is
+    // what actually proves the file landed.
     expect(await imageCountOf(caller, productCode)).toBe(1);
-
-    const [storedImage] = await rawImageRows(ctx.db, firstImageId);
-    const storedKey = storedImage?.key;
-    expect(storedKey).toBeTruthy();
+    vi.mocked(deleteS3Object).mockClear();
 
     const removed = await callTool(
       "update_product",
@@ -172,20 +165,15 @@ describe("attach_file / detach cycle", () => {
     );
     expectOk(removed);
 
-    // The row is GONE, not orphaned — this is the assertion the bug failed.
-    expect(await rawImageRows(ctx.db, firstImageId)).toHaveLength(0);
-    expect(await liveJoinRows(ctx.db, firstImageId)).toHaveLength(0);
     expect(await imageCountOf(caller, productCode)).toBe(0);
-    expect(vi.mocked(deleteS3Object)).toHaveBeenCalledWith(storedKey);
+    // The file went with the association — the assertion the bug failed.
+    expect(vi.mocked(deleteS3Object)).toHaveBeenCalledWith(firstKey);
 
     // The same key again. Previously this returned the detached row with a
     // success payload and attached nothing.
     const second = await attach(caller, productCode, "k1", "cover-again.png");
     expect(second.reused).toBe(false);
     expect(second.imageId).not.toBe(firstImageId);
-    expect(await liveJoinRows(ctx.db, second.imageId as string)).toHaveLength(
-      1,
-    );
     expect(await imageCountOf(caller, productCode)).toBe(1);
   });
 
@@ -204,36 +192,46 @@ describe("attach_file / detach cycle", () => {
     expect(await imageCountOf(caller, productCode)).toBe(1);
   });
 
-  it("keeps a file that another entity still references", async () => {
-    const caller = makeCaller();
-    const productA = await createProduct(caller, "Shared Widget A");
-    const productB = await createProduct(caller, "Shared Widget B");
+  /**
+   * The other half of the leak, end to end. A delete cascades a SOFT delete onto
+   * the join row, so "is it still attached?" answers yes-it's-gone either way —
+   * only the R2 object tells the fix from the bug at this layer.
+   */
+  describe("deleting the owning entity takes the file with it", () => {
+    it("drops a deleted product's R2 object", async () => {
+      const caller = makeCaller();
+      const productCode = await createProduct(caller, "Doomed Widget");
+      const attached = await attach(caller, productCode, "d1", "doomed.png");
+      const key = storedKeyOf(attached);
+      vi.mocked(deleteS3Object).mockClear();
 
-    const attached = await attach(caller, productA, "k3", "shared.png");
-    const imageId = attached.imageId as string;
+      expectOk(
+        await callTool("delete_products", { ids: [productCode] }, caller),
+      );
 
-    // Reuse the one Image row on a second product, the way the gallery's
-    // pendingImageIds path does.
-    await getDb(ctx.db)
-      .insert(productImage)
-      .values({
-        productId: (await getDb(ctx.db).query.product.findFirst({
-          where: (p, { eq: e }) => e(p.shortcode, productB),
-        }))!.id,
-        imageId,
-        sortOrder: 0,
-      });
+      expect(vi.mocked(deleteS3Object)).toHaveBeenCalledWith(key);
+    });
 
-    const removed = await callTool(
-      "update_product",
-      { id: productA, removeImageIds: [imageId] },
-      caller,
-    );
-    expectOk(removed);
+    it("drops a deleted recipe's R2 object", async () => {
+      const caller = makeCaller();
+      const created = await callTool(
+        "create_recipe",
+        { name: "Doomed Recipe", meta: { url: null }, sections: [] },
+        caller,
+      );
+      expectOk(created);
+      const recipeCode = structured(created).id as string;
 
-    // Detached from A, but B still points at it — the bytes must survive.
-    expect(await rawImageRows(ctx.db, imageId)).toHaveLength(1);
-    expect(await imageCountOf(caller, productA)).toBe(0);
-    expect(await imageCountOf(caller, productB)).toBe(1);
+      const attached = await attach(caller, recipeCode, "d2", "recipe.png");
+      const key = storedKeyOf(attached);
+      vi.mocked(deleteS3Object).mockClear();
+
+      // Recipes reach `removeEntity` with `recipeImage` DECLARED in `children`
+      // rather than hand-rolled above the call — this is what proves the
+      // declaration is what makes the reap visible.
+      expectOk(await callTool("delete_recipe", { ids: [recipeCode] }, caller));
+
+      expect(vi.mocked(deleteS3Object)).toHaveBeenCalledWith(key);
+    });
   });
 });

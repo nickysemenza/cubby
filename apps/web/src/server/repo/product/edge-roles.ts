@@ -177,6 +177,6 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
-      "Image associations are soft-deleted with the product; the underlying images are not.",
+      "Image associations are soft-deleted with the product, and each file is\n      deleted too unless something else still references it.",
   },
 } as const satisfies IncomingEdgePolicy<"product", ProductDeleteDisposition>;

@@ -217,7 +217,13 @@ const deleteItem = createDeleteProcedure<RecipeShortcode>(
       [...parentsByRecipe.values()].flat().filter((id) => !deletedSet.has(id)),
     );
 
-    await deleteRecipes(services.db, ids, services.actorContext);
+    const { detachedImageKeys } = await deleteRecipes(
+      services.db,
+      ids,
+      services.actorContext,
+    );
+    // After the commit, never inside it: an R2 delete has no rollback.
+    await deleteStoredObjects(detachedImageKeys);
     const sideEffectBatches = await runMutationSideEffectsForEntities(
       services.db,
       ids.map((id) => ({

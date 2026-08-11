@@ -8,12 +8,12 @@ import { Client } from "pg";
  * reaches: `Image` rows with `status = 'UPLOADED'` and `deletedAt IS NULL` that
  * nothing points at. R2 bills for every one and no page can render them.
  *
- * These are the residue of removal paths that dropped an association without
- * taking the file with it. The detach path is fixed (`detachImagesFromEntity`
- * reaps as it detaches); the entity-delete cascade still leaks, so this stays
- * useful. Settings → Maintenance → "Delete unreferenced files" does the same
- * thing from the app; this script exists so the list can be reviewed offline
- * before anything is destroyed.
+ * These are the residue of removal paths that used to drop an association
+ * without taking the file with it — a detach (`detachImagesFromEntity`) and an
+ * entity delete (`removeEntity`) both reap now, so this is a backfill for what
+ * accumulated before, not an ongoing sweep. Settings → Maintenance → "Delete
+ * unreferenced files" does the same thing from the app; this script exists so
+ * the list can be reviewed offline before anything is destroyed.
  *
  * Usage:
  *   # 1. Review. This is the default — no flag deletes anything.

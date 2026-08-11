@@ -151,7 +151,7 @@ describe("operation preview / mutation parity", () => {
       expect(unblocked.blockers).toEqual([]);
       await expect(
         deleteProducts(ctx.db, [product.entityId], ctx.actor),
-      ).resolves.toBeUndefined();
+      ).resolves.toMatchObject({ detachedImageKeys: [] });
     });
 
     it("ingredient: a live recipe usage blocks delete, both in the preview and the mutation", async () => {
@@ -258,7 +258,7 @@ describe("operation preview / mutation parity", () => {
       expect(unblocked.blockers).toEqual([]);
       await expect(
         deleteLocations(ctx.db, [location.entityId], ctx.actor),
-      ).resolves.toBeUndefined();
+      ).resolves.toMatchObject({ detachedImageKeys: [] });
     });
 
     it("project: a live task blocks delete, both in the preview and the mutation", async () => {
@@ -304,7 +304,7 @@ describe("operation preview / mutation parity", () => {
       expect(unblocked.blockers).toEqual([]);
       await expect(
         deleteProjects(ctx.db, [project.id], ctx.actor),
-      ).resolves.toBeUndefined();
+      ).resolves.toMatchObject({ detachedImageKeys: [] });
     });
 
     it("vendor: a live purchase blocks delete, both in the preview and the mutation", async () => {
@@ -884,7 +884,7 @@ describe("operation preview / mutation parity", () => {
       // own, while the blocked one alone still throws.
       await expect(
         deleteProducts(ctx.db, [cleanProduct.entityId], ctx.actor),
-      ).resolves.toBeUndefined();
+      ).resolves.toMatchObject({ detachedImageKeys: [] });
       await expect(
         deleteProducts(ctx.db, [blockedProduct.entityId], ctx.actor),
       ).rejects.toMatchObject({

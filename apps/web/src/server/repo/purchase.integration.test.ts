@@ -1563,16 +1563,27 @@ describe("purchase repository — deletion cascades", () => {
 
     await expect(
       deleteEmptyPurchases(ctx.db, [emptyPurchase.id], ctx.actor),
-    ).resolves.toEqual([emptyPurchase.id]);
+    ).resolves.toEqual({
+      shortcodes: [emptyPurchase.id],
+      // Nothing else referenced the document, so the delete reaps it and hands
+      // back the R2 key for the router to drop after the commit.
+      detachedImageKeys: [document.key],
+    });
     await expect(
       getPurchaseByShortcode(ctx.db, emptyPurchase.id),
     ).resolves.toBeNull();
 
-    const [joinAfter] = await getDb(ctx.db)
-      .select({ deletedAt: purchaseImage.deletedAt })
-      .from(purchaseImage)
-      .where(eq(purchaseImage.id, join.id));
-    expect(joinAfter?.deletedAt).not.toBeNull();
+    // The cascade soft-deletes the join row, then the reap hard-deletes it with
+    // the file — a tombstone pointing at a deleted `Image` would strand the FK.
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(purchaseImage)
+        .where(eq(purchaseImage.id, join.id)),
+    ).toHaveLength(0);
+    expect(
+      await getDb(ctx.db).select().from(image).where(eq(image.id, document.id)),
+    ).toHaveLength(0);
 
     const auditRows = await getDb(ctx.db)
       .select({ action: auditLog.action })

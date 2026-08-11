@@ -2316,7 +2316,7 @@ describe("product repository", () => {
 
       await expect(
         deleteProducts(ctx.db, [bought.entityId], ctx.actor),
-      ).resolves.toBeUndefined();
+      ).resolves.toMatchObject({ detachedImageKeys: [] });
 
       await expect(
         getProductByID(ctx.db, bought.entityId),
@@ -2352,7 +2352,7 @@ describe("product repository", () => {
       await deleteTasks(ctx.db, [maintenance.id], ctx.actor);
       await expect(
         deleteProducts(ctx.db, [furnace.entityId], ctx.actor),
-      ).resolves.toBeUndefined();
+      ).resolves.toMatchObject({ detachedImageKeys: [] });
     });
   });
 
@@ -2418,7 +2418,7 @@ describe("product repository", () => {
 
       await expect(
         deleteProducts(ctx.db, [prod.entityId], ctx.actor),
-      ).resolves.toBeUndefined();
+      ).resolves.toMatchObject({ detachedImageKeys: [] });
     });
 
     it("blocks delete while an expense is live, and allows it once the expense is gone", async () => {
@@ -2445,7 +2445,7 @@ describe("product repository", () => {
 
       await expect(
         deleteProducts(ctx.db, [prod.entityId], ctx.actor),
-      ).resolves.toBeUndefined();
+      ).resolves.toMatchObject({ detachedImageKeys: [] });
     });
 
     it("blocks delete while a purchase link is live, and allows it once detached", async () => {
@@ -2486,7 +2486,7 @@ describe("product repository", () => {
 
       await expect(
         deleteProducts(ctx.db, [prod.entityId], ctx.actor),
-      ).resolves.toBeUndefined();
+      ).resolves.toMatchObject({ detachedImageKeys: [] });
     });
 
     it("allows delete — and cascade-soft-deletes — when only metadata edges (external id, unit mapping, image) are live", async () => {
@@ -2538,9 +2538,15 @@ describe("product repository", () => {
       expect(mappingBefore).toBeDefined();
       expect(imageJoinBefore).toBeDefined();
 
+      // The image was the product's alone, so the delete reaps it and returns
+      // its R2 key for the caller to drop after the commit.
+      const imageKeyBefore = await getDb(ctx.db).query.image.findFirst({
+        where: eq(image.id, pendingImage.id),
+        columns: { key: true },
+      });
       await expect(
         deleteProducts(ctx.db, [prod.entityId], ctx.actor),
-      ).resolves.toBeUndefined();
+      ).resolves.toMatchObject({ detachedImageKeys: [imageKeyBefore!.key] });
 
       // Cascade: the metadata rows are soft-deleted along with the product,
       // not left live and pointing at a gone parent.
@@ -2552,12 +2558,25 @@ describe("product repository", () => {
       ).query.productUnitMappings.findFirst({
         where: eq(productUnitMappings.id, mappingBefore!.id),
       });
-      const imageJoinAfter = await getDb(ctx.db).query.productImage.findFirst({
-        where: eq(productImage.id, imageJoinBefore!.id),
-      });
       expect(extIdAfter?.deletedAt).not.toBeNull();
       expect(mappingAfter?.deletedAt).not.toBeNull();
-      expect(imageJoinAfter?.deletedAt).not.toBeNull();
+
+      // The image edge is the exception, and asserting `deletedAt` here would
+      // pass vacuously on a row that no longer exists. The cascade soft-deletes
+      // the join row, then the reap HARD-deletes it along with the now-orphaned
+      // `Image` — leaving a tombstoned join row pointing at a deleted file
+      // would strand the FK.
+      expect(
+        await getDb(ctx.db).query.productImage.findFirst({
+          where: eq(productImage.id, imageJoinBefore!.id),
+        }),
+      ).toBeUndefined();
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(image)
+          .where(eq(image.id, pendingImage.id)),
+      ).toHaveLength(0);
     });
 
     // TODO(generic cascade backstop): this describe block is deliberately

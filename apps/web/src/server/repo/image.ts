@@ -17,6 +17,8 @@
  * - {@link deleteImages}                      — hard-delete image rows (+ their associations) and return their keys
  * - {@link previewDeleteImages}                — what {@link deleteImages} would do, without doing it
  * - {@link detachImagesFromEntity}            — remove one entity's associations, reaping images nothing else references
+ * - {@link reapUnreferencedImages}           — delete whichever of these images nothing points at any more
+ * - {@link imageJoinColumnFor}                — is this table an image join table? (drives removeEntity's cascade reap)
  * - {@link findUnreferencedImages}            — the backstop detector for images no edge reaches
  * - {@link countUnreferencedImages}           — how many rows that detector reports
  * - {@link associateImagesWithProduct}        — attach PENDING images to a product
@@ -48,6 +50,7 @@ import {
 } from "@cubby/schemas/image";
 import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
 import { and, asc, count, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
+import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { match } from "ts-pattern";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type {
@@ -876,11 +879,52 @@ export const detachImagesFromEntity = async (
     )
     .exhaustive();
 
+  return await reapUnreferencedImages(tx, imageIds);
+};
+
+/**
+ * Of these images, delete the ones nothing points at any more — the shared tail
+ * of every removal that drops an association.
+ *
+ * Call it AFTER the associations are gone (a still-live join row is still a
+ * reference), on the same transaction, and drop the returned R2 keys only once
+ * that transaction commits. Idempotent and safe on ids that are still
+ * referenced: those are simply filtered out.
+ *
+ * Exported so `removeEntity`'s child cascade can share the reference rules
+ * rather than restate them — {@link findReferencedImageIds} is the one place
+ * "referenced" is defined, and a second definition is exactly how the detach and
+ * delete paths drifted apart in the first place.
+ */
+export const reapUnreferencedImages = async (
+  tx: DrizzleTransaction,
+  imageIds: string[],
+): Promise<{ deletedIds: string[]; deletedKeys: string[] }> => {
+  if (imageIds.length === 0) return { deletedIds: [], deletedKeys: [] };
   const referenced = await findReferencedImageIds(tx, imageIds);
   return await deleteImagesTx(
     tx,
     imageIds.filter((id) => !referenced.has(id)),
   );
+};
+
+/**
+ * The `imageId` column, if this table is one of `image`'s join tables — i.e. an
+ * edge {@link IMAGE_HARD_DELETE} disposes of by deleting the row rather than
+ * nulling an FK. Read from `INCOMING_EDGES.image` rather than a hand-kept list,
+ * so a sixth gallery entity is picked up here the moment it is declared there.
+ *
+ * Lets a caller that only knows it is cascading onto some table (`removeEntity`)
+ * discover that the rows it is about to remove are image attachments, and read
+ * the ids before they stop being findable.
+ */
+export const imageJoinColumnFor = (table: PgTable): PgColumn | undefined => {
+  for (const [key, disposition] of Object.entries(IMAGE_HARD_DELETE)) {
+    if (disposition.effect !== "hard-delete") continue;
+    const { column } = INCOMING_EDGES.image[key as IncomingEdgeKey<"image">];
+    if (column.table === table) return column;
+  }
+  return undefined;
 };
 
 /** Grace window before an unattached UPLOADED row counts as orphaned. */
@@ -897,12 +941,10 @@ export const UNREFERENCED_IMAGE_GRACE_HOURS = 1;
  * cookbook cover import create an UPLOADED row and associate it in a SEPARATE
  * step, so a seconds-old unattached row is in flight, not orphaned.
  *
- * This does NOT sit at zero yet. `detachImagesFromEntity` closed the detach
- * path, but an entity *delete* still leaks: `removeEntity` cascades a soft
- * delete onto the join rows and never touches the `Image` — 49 of the 132 rows
- * found in production came from there. Until that cascade takes the file too,
- * "Delete unreferenced files" in Settings → Maintenance is the sweep that clears
- * the residue, and a nonzero reading here is expected rather than a new bug.
+ * Both removal paths now take the file with them — `detachImagesFromEntity` on a
+ * detach, `removeEntity` on an entity delete — so this converges to zero and a
+ * row here names a removal path that skipped the reap, not a backlog. "Delete
+ * unreferenced files" in Settings → Maintenance clears whatever one leaves.
  */
 export const findUnreferencedImages = async (
   db: Database,

@@ -26,7 +26,7 @@ import {
   markImageUploaded,
   updateImage,
 } from "./image";
-import { createProject } from "./project";
+import { createProject, deleteProjects, getProjectByID } from "./project";
 import { createPurchase } from "./purchase";
 import { findOrCreateVendor, getVendorByID } from "./vendor";
 
@@ -454,6 +454,81 @@ describe("image repository — purchase (charge) documents", () => {
           .from(projectImage)
           .where(eq(projectImage.id, tombstoned!.id)),
       ).toHaveLength(0);
+    });
+  });
+
+  /**
+   * The delete half of the same invariant. `removeEntity` cascades a SOFT delete
+   * onto the join rows, so the association looks gone either way — only the
+   * `Image` row itself, read UNFILTERED, tells a reaped file from an orphaned
+   * one. These assert on the RETURNED keys rather than a mocked
+   * `deleteS3Object`, because the keys are the contract: a caller that never
+   * receives them cannot drop the object, and reaping the row without them makes
+   * the key unrecoverable.
+   */
+  describe("removeEntity reaps images its cascade orphaned", () => {
+    const rawImageRows = async (imageId: string) =>
+      await getDb(ctx.db).select().from(image).where(eq(image.id, imageId));
+
+    const makeProjectWithImage = async (name: string) => {
+      const projectId = (
+        await createProject(
+          ctx.db,
+          projectCreateInput.parse({ name }),
+          ctx.actor,
+        )
+      ).entityId;
+      const attached = await createAndAssociateUploadedImage(
+        ctx.db,
+        {
+          key: `test/${crypto.randomUUID()}.jpg`,
+          url: "https://example.com/doomed.jpg",
+          filename: "doomed.jpg",
+          contentType: "image/jpeg",
+          size: 1024,
+        },
+        "project",
+        projectId,
+      );
+      return { projectId, attached };
+    };
+
+    it("deletes the file and hands back its key", async () => {
+      const { projectId, attached } = await makeProjectWithImage("Doomed Proj");
+
+      const { detachedImageKeys } = await deleteProjects(
+        ctx.db,
+        [(await getProjectByID(ctx.db, projectId))!.id],
+        ctx.actor,
+      );
+
+      expect(detachedImageKeys).toEqual([attached.key]);
+      expect(await rawImageRows(attached.id)).toHaveLength(0);
+    });
+
+    it("keeps a file the deleted entity was not the last to reference", async () => {
+      const { projectId, attached } =
+        await makeProjectWithImage("Doomed Share");
+      const survivorId = (
+        await createProject(
+          ctx.db,
+          projectCreateInput.parse({ name: "Surviving Proj" }),
+          ctx.actor,
+        )
+      ).entityId;
+      await insertAndReturn(ctx.db, projectImage, {
+        projectId: survivorId,
+        imageId: attached.id,
+      });
+
+      const { detachedImageKeys } = await deleteProjects(
+        ctx.db,
+        [(await getProjectByID(ctx.db, projectId))!.id],
+        ctx.actor,
+      );
+
+      expect(detachedImageKeys).toEqual([]);
+      expect(await rawImageRows(attached.id)).toHaveLength(1);
     });
   });
 

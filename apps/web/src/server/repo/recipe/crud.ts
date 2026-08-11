@@ -119,7 +119,7 @@ export const RECIPE_DELETE_EDGE_POLICY = {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
-      "Image associations are soft-deleted with the recipe; the underlying images are not.",
+      "Image associations are soft-deleted with the recipe, and each file is\n      deleted too unless something else still references it.",
   },
 } as const satisfies IncomingEdgePolicy<"recipe", OperationDisposition>;
 
@@ -905,22 +905,28 @@ export const updateRecipe = async (
  * which removes the book row in the same txn — shares the exact cascade,
  * embedding cleanup, and audit trail rather than reimplementing it.
  *
- * The four child statements stay hand-rolled instead of becoming
+ * Three of the four child statements stay hand-rolled instead of becoming
  * `removeEntity`'s declared `children`, because `RecipeSectionIngredient` is
  * scoped by `sectionIds` and counted *through* `RecipeSection.recipeId` — a
  * child cascade addresses one parent column and counts what it removes, so
  * expressing this one would take both a scope override and a count override.
  * The invariant survives regardless: the delete audit entries are still minted
  * by the shared cascade below, which is the only thing that can mint them.
+ * `recipeImage` is the exception and IS declared — see the note at the call.
+ *
+ * Returns the R2 keys of images the cascade reaped. Note this function joins a
+ * caller's transaction when given one, so "the await resolved" does not mean
+ * "committed" on that path — `deleteCookbook` passes the keys further up rather
+ * than dropping the objects itself.
  */
 export const deleteRecipes = async (
   dbOrTx: Database | DrizzleTransaction,
   ids: RecipeId[],
   actor: ActorContext,
-): Promise<void> => {
-  if (ids.length === 0) return;
+): Promise<{ detachedImageKeys: string[] }> => {
+  if (ids.length === 0) return { detachedImageKeys: [] };
 
-  await withTransactionOn(dbOrTx, async (tx) => {
+  return await withTransactionOn(dbOrTx, async (tx) => {
     // Row-level locks: proves the ids exist and aren't already deleted, and
     // keeps a concurrent delete from interleaving with the cascade below.
     await lockAndValidateForDelete(tx, recipe, ids, "Recipe");
@@ -936,11 +942,6 @@ export const deleteRecipes = async (
     });
 
     const sectionIds = sections.map((s) => s.id);
-
-    const cascadedImages = await tx.query.recipeImage.findMany({
-      where: and(inArray(recipeImage.recipeId, ids), notDeleted(recipeImage)),
-      columns: { recipeId: true },
-    });
 
     // Meal-plan membership. This is a cascade, not a guard, for two reasons: the
     // removal-path invariant says a delete cleans up its dependents in the same
@@ -971,7 +972,6 @@ export const deleteRecipes = async (
     // Ingredients are counted via their section's recipe (no direct recipeId).
     const sectionToRecipe = new Map(sections.map((s) => [s.id, s.recipeId]));
     const sectionsByRecipe = countBy(sections, (s) => s.recipeId);
-    const imagesByRecipe = countBy(cascadedImages, (i) => i.recipeId);
     const mealRecipesByRecipe = countBy(
       cascadedMealRecipes,
       (mr) => mr.recipeId,
@@ -1003,24 +1003,34 @@ export const deleteRecipes = async (
       );
 
     await tx
-      .update(recipeImage)
-      .set({ deletedAt: now })
-      .where(and(inArray(recipeImage.recipeId, ids), notDeleted(recipeImage)));
-
-    await tx
       .update(mealRecipe)
       .set({ deletedAt: now })
       .where(and(inArray(mealRecipe.recipeId, ids), notDeleted(mealRecipe)));
 
-    await removeEntity(tx, {
+    // `recipeImage` is DECLARED rather than hand-rolled like its three
+    // siblings above, and that is load-bearing: `removeEntity` reaps the
+    // `Image` rows (and returns their R2 keys) for the join tables it can see
+    // in `children`, and it can only see declared ones. A hand-rolled update
+    // here would leave the files behind — the leak this cascade closed.
+    // Unlike `RecipeSectionIngredient` (scoped by sectionIds, counted through
+    // `RecipeSection.recipeId`), this edge is a plain `recipeId` column, so it
+    // expresses cleanly as a `ChildCascade` and `removeEntity` derives
+    // `cascadedImages` itself — hence its removal from `extraCounts`.
+    return await removeEntity(tx, {
       entity: "recipe",
       ids,
       removal: "soft",
       actor,
+      children: [
+        {
+          table: recipeImage,
+          parentColumns: [recipeImage.recipeId],
+          auditKey: "cascadedImages",
+        },
+      ],
       extraCounts: {
         cascadedSections: sectionsByRecipe,
         cascadedIngredients: ingredientsByRecipe,
-        cascadedImages: imagesByRecipe,
         cascadedMealRecipes: mealRecipesByRecipe,
       },
     });
@@ -1038,14 +1048,17 @@ export const deleteRecipesByCookbookTx = async (
   tx: DrizzleTransaction,
   cookbookId: CookbookId,
   actor: ActorContext,
-): Promise<RecipeId[]> => {
+): Promise<{ recipeIds: RecipeId[]; detachedImageKeys: string[] }> => {
   const rows = await tx.query.recipe.findMany({
     where: and(eq(recipe.cookbookId, cookbookId), notDeleted(recipe)),
     columns: { id: true, shortcode: true },
   });
   const ids = rows.map((r) => r.id);
-  await deleteRecipes(tx, ids, actor);
-  return ids;
+  // Runs on the CALLER's transaction, so the R2 keys ride out rather than being
+  // dropped here — the cookbook row is removed in that same txn and could still
+  // roll back.
+  const { detachedImageKeys } = await deleteRecipes(tx, ids, actor);
+  return { recipeIds: ids, detachedImageKeys };
 };
 
 /**

@@ -161,7 +161,7 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
-      "Image associations are soft-deleted with the purchase; the underlying images are not.",
+      "Image associations are soft-deleted with the purchase, and each file is\n      deleted too unless something else still references it.",
   },
   "PurchaseProduct.purchaseId": {
     code: "soft-delete-association",
@@ -1756,9 +1756,15 @@ const deletePurchasesWithPolicy = async (
 ): Promise<{
   expenseIds: ExpenseId[];
   financialTransactionIds: FinancialTransactionId[];
+  /** R2 objects the image cascade reaped; drop them after this commit. */
+  detachedImageKeys: string[];
 }> => {
   if (shortcodes.length === 0)
-    return { expenseIds: [], financialTransactionIds: [] };
+    return {
+      expenseIds: [],
+      financialTransactionIds: [],
+      detachedImageKeys: [],
+    };
 
   const ids = await resolveAllOrThrow(db, "purchase", shortcodes);
 
@@ -1839,7 +1845,7 @@ const deletePurchasesWithPolicy = async (
 
     // `{actor}`, not a caller-owned buffer: the detach `update` entries above
     // were already flushed, and the delete entries must follow them.
-    await removeEntity(tx, {
+    const { detachedImageKeys } = await removeEntity(tx, {
       entity: "purchase",
       ids,
       removal: "soft",
@@ -1861,6 +1867,7 @@ const deletePurchasesWithPolicy = async (
     return {
       expenseIds: detaching.map((row) => row.id),
       financialTransactionIds: detachingTransactions.map((row) => row.id),
+      detachedImageKeys,
     };
   });
 };
@@ -1880,9 +1887,17 @@ export const deleteEmptyPurchases = async (
   db: Database,
   shortcodes: PurchaseShortcode[],
   actor: ActorContext,
-): Promise<PurchaseShortcode[]> => {
-  await deletePurchasesWithPolicy(db, shortcodes, actor, "require-empty");
-  return shortcodes;
+): Promise<{
+  shortcodes: PurchaseShortcode[];
+  detachedImageKeys: string[];
+}> => {
+  const { detachedImageKeys } = await deletePurchasesWithPolicy(
+    db,
+    shortcodes,
+    actor,
+    "require-empty",
+  );
+  return { shortcodes, detachedImageKeys };
 };
 
 /**

@@ -69,6 +69,7 @@ import {
 import { findParentRecipeIdsBatch } from "~/server/repo/recipe/totals";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { importRecipeImageFromUrl } from "~/server/services/image-import";
+import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
@@ -441,11 +442,13 @@ const deleteCookbookEndpoint = protectedProcedure
     const parentIds = uniq(
       [...parentsByRecipe.values()].flat().filter((id) => !deletedSet.has(id)),
     );
-    const { deletedRecipeIds } = await deleteCookbook(
+    const { deletedRecipeIds, detachedImageKeys } = await deleteCookbook(
       ctx.db,
       cookbookId,
       ctx.actorContext,
     );
+    // After the commit, never inside it: an R2 delete has no rollback.
+    await deleteStoredObjects(detachedImageKeys);
     await runMutationSideEffectsForEntities(
       ctx.db,
       deletedRecipeIds.map((id) => ({

@@ -111,7 +111,7 @@ export const LOCATION_DELETE_EDGE_POLICY = {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
-      "Image associations are soft-deleted with the location; the underlying images are not.",
+      "Image associations are soft-deleted with the location, and each file is\n      deleted too unless something else still references it.",
   },
   "Location.parentId": {
     code: "clear-live-child-parent",
@@ -507,14 +507,18 @@ export const bulkReparentLocations = async (
  * Child locations are orphaned (parentId set to null) and become top-level locations.
  * Throws if any location has inventory.
  */
+/**
+ * Returns the R2 keys of images the cascade reaped, for the caller to drop
+ * after this commit — an object delete has no rollback.
+ */
 export const deleteLocations = async (
   db: Database,
   ids: LocationId[],
   actor: ActorContext,
-): Promise<void> => {
-  if (ids.length === 0) return;
+): Promise<{ detachedImageKeys: string[] }> => {
+  if (ids.length === 0) return { detachedImageKeys: [] };
 
-  await withTransaction(db, async (tx) => {
+  return await withTransaction(db, async (tx) => {
     // Lock locations and validate they exist and aren't already deleted
     // Prevents race conditions by acquiring row-level locks
     await lockAndValidateForDelete(tx, location, ids, "Location");
@@ -541,7 +545,7 @@ export const deleteLocations = async (
       .set({ parentId: null })
       .where(and(inArray(location.parentId, ids), notDeleted(location)));
 
-    await removeEntity(tx, {
+    return await removeEntity(tx, {
       entity: "location",
       ids,
       removal: "soft",

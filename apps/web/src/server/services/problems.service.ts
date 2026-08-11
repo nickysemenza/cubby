@@ -117,6 +117,7 @@ import { countStaleRecipeTotals } from "~/server/repo/recipe/totals";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
+import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
 import { traceAll, traceAllSeq } from "~/server/tracing";
 
@@ -367,7 +368,9 @@ export const deleteUnusedIngredients = async (
       if (alsoDeleteProducts) {
         const linked = await findLinkedProductIds(db, id);
         if (linked.length > 0) {
-          await deleteProducts(db, linked, actor);
+          const { detachedImageKeys } = await deleteProducts(db, linked, actor);
+          // After the commit, never inside it: an R2 delete has no rollback.
+          await deleteStoredObjects(detachedImageKeys);
         }
       }
       await deleteIngredients(db, [id], actor);

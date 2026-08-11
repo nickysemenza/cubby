@@ -580,10 +580,11 @@ export const cullPendingImageStorage = async (
  * Delete UPLOADED files nothing references, plus their R2 objects — the sibling
  * of the pending cull for rows that already made it past the upload.
  *
- * The detach path no longer produces these (it reaps as it detaches), but an
- * entity *delete* still does: `removeEntity` cascades a soft delete onto the
- * join rows and leaves the `Image` behind. This sweep is what clears that
- * residue until the cascade takes the file with it too.
+ * Neither removal path produces these any more — a detach reaps via
+ * `detachImagesFromEntity`, an entity delete via `removeEntity` — so this is the
+ * backfill for rows that accumulated before, and the recovery route if a future
+ * removal path forgets. `findUnreferencedImages` is the detector that finds
+ * them.
  */
 export const cleanupUnreferencedImageStorage = async (
   db: Database,

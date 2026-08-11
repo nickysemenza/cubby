@@ -1672,14 +1672,18 @@ const PRODUCT_RETAINING_DEPENDENTS: Record<
  * (inventory, expenses, or tasks — see `PRODUCT_EDGE_ROLES` in
  * `./edge-roles`).
  */
+/**
+ * Returns the R2 keys of images the cascade reaped, for the caller to drop
+ * after this commit — an object delete has no rollback.
+ */
 export const deleteProducts = async (
   db: Database,
   ids: ProductId[],
   actor: ActorContext,
-): Promise<void> => {
-  if (ids.length === 0) return;
+): Promise<{ detachedImageKeys: string[] }> => {
+  if (ids.length === 0) return { detachedImageKeys: [] };
 
-  await withTransaction(db, async (tx) => {
+  return await withTransaction(db, async (tx) => {
     // Lock products and validate they exist and aren't already deleted
     // Prevents race conditions by acquiring row-level locks
     await lockAndValidateForDelete(tx, product, ids, "Product");
@@ -1724,7 +1728,7 @@ export const deleteProducts = async (
       });
     }
 
-    await removeEntity(tx, {
+    return await removeEntity(tx, {
       entity: "product",
       ids,
       removal: "soft",

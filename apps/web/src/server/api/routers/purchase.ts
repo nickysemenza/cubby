@@ -121,6 +121,8 @@ const procedures = createSearchableEntityCrudProcedures({
         ids.map(unsafePurchaseShortcode),
         ctx.actorContext,
       );
+      // After the commit, never inside it: an R2 delete has no rollback.
+      await deleteStoredObjects(detached.detachedImageKeys);
       return runMutationSideEffectsForEntities(ctx.db, [
         ...detached.expenseIds.map((entityId) => ({
           action: "updated" as const,
@@ -251,11 +253,10 @@ const deleteEmpty = protectedProcedure
   .input(deleteEmptyPurchasesInput)
   .output(strictOutput(deleteEmptyPurchasesOut))
   .mutation(async ({ ctx, input }) => {
-    const deletedIds = await deleteEmptyPurchases(
-      ctx.db,
-      input.ids,
-      ctx.actorContext,
-    );
+    const { shortcodes: deletedIds, detachedImageKeys } =
+      await deleteEmptyPurchases(ctx.db, input.ids, ctx.actorContext);
+    // After the commit, never inside it: an R2 delete has no rollback.
+    await deleteStoredObjects(detachedImageKeys);
     return { deleted: deletedIds.length, deletedIds };
   });
 
