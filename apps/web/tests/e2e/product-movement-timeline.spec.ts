@@ -21,8 +21,8 @@ test("Product filters persist while switching movement renderers", async ({
 
   await page.getByRole("button", { name: "Lifecycles view" }).click();
   await expect(page).toHaveURL(/view=lifecycles/);
-  await expect(page).toHaveURL(
-    new RegExp(`manufacturer=${encodeURIComponent(manufacturer)}`),
+  expect(new URL(page.url()).searchParams.get("manufacturer")).toBe(
+    manufacturer,
   );
   await expect(
     page.getByRole("button", { name: "Lifecycles view" }),
@@ -30,7 +30,7 @@ test("Product filters persist while switching movement renderers", async ({
 
   await page.getByRole("button", { name: "Table view" }).click();
   await expect(page).not.toHaveURL(/(?:\?|&)view=/);
-  await expect(page).toHaveURL(
-    new RegExp(`manufacturer=${encodeURIComponent(manufacturer)}`),
+  expect(new URL(page.url()).searchParams.get("manufacturer")).toBe(
+    manufacturer,
   );
 });
