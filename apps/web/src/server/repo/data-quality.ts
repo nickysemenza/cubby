@@ -16,7 +16,6 @@ import {
   purchaseDataCheck,
   type SetDataExceptionInput,
 } from "@cubby/schemas/data-quality";
-import { purchaseSettlementKinds } from "@cubby/schemas/financial-transaction";
 import type { ProductId, PurchaseId } from "@cubby/schemas/identifiers";
 import {
   ENTITY_NOT_FOUND_REASON,
@@ -55,6 +54,12 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import {
+  postedRefundPredicate,
+  postedRefundTotalSql,
+  settlementReferenceAbsentSql,
+  settlementReferencePredicate,
+} from "~/server/repo/financial-reconciliation";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 const AMAZON_SOURCE = "amazon";
@@ -323,10 +328,7 @@ const purchaseGapRaw = (check: PurchaseDataCheck): string => {
       WHERE dq_e."purchaseId" = "Purchase"."id" AND dq_e."deletedAt" IS NULL), 0) * 100)::numeric + 0.5)`;
     const statedCents = `floor(("Purchase"."statedTotal" * 100)::numeric + 0.5)`;
     const deltaCents = `(${expenseCents} - ${statedCents})`;
-    const refundCents = `floor((COALESCE((SELECT sum(dq_ft."amount") FROM "FinancialTransaction" dq_ft
-      WHERE dq_ft."purchaseId" = "Purchase"."id"
-        AND dq_ft."kind" = 'refund' AND dq_ft."status" = 'posted'
-        AND dq_ft."deletedAt" IS NULL), 0) * 100)::numeric + 0.5)`;
+    const refundCents = `floor((${postedRefundTotalSql('"Purchase"')} * 100)::numeric + 0.5)`;
     const fullyPriced = `NOT EXISTS (SELECT 1 FROM "Expense" dq_unpriced
       WHERE dq_unpriced."purchaseId" = "Purchase"."id"
         AND dq_unpriced."cost" IS NULL AND dq_unpriced."deletedAt" IS NULL)`;
@@ -337,19 +339,7 @@ const purchaseGapRaw = (check: PurchaseDataCheck): string => {
       AND NOT ${refundAdjusted}
       AND ${exceptionAbsent})`;
   }
-  return `(NOT EXISTS (
-    SELECT 1 FROM "FinancialTransaction" dq_ft
-    JOIN "FinancialAccount" dq_fa
-      ON dq_fa."id" = dq_ft."accountId" AND dq_fa."deletedAt" IS NULL
-    WHERE dq_ft."purchaseId" = "Purchase"."id"
-      AND dq_ft."deletedAt" IS NULL
-      AND dq_ft."status" = 'posted'
-      AND dq_ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
-      AND (
-        jsonb_array_length(dq_ft."sourceRefs") > 0
-        OR dq_fa."identity"->>'kind' = 'cash'
-      )
-  ) AND ${exceptionAbsent})`;
+  return `(${settlementReferenceAbsentSql('"Purchase"')} AND ${exceptionAbsent})`;
 };
 
 export const purchaseDataGapCondition = (check: DataCheck): SQL =>
@@ -718,29 +708,24 @@ export const loadPurchaseDataQualities = async (
       getDb(db)
         .select({
           purchaseId: financialTransaction.purchaseId,
-          hasSettlementReference: sql<boolean>`bool_or(
-            ${financialTransaction.status} = 'posted'
-            AND ${financialTransaction.kind} IN (${sql.join(
-              purchaseSettlementKinds.map((kind) => sql`${kind}`),
-              sql`, `,
-            )})
-            AND (
-              jsonb_array_length(${financialTransaction.sourceRefs}) > 0
-              OR ${financialAccount.identity}->>'kind' = 'cash'
-            )
-          )`,
+          hasSettlementReference: sql<boolean>`bool_or(${sql.raw(
+            settlementReferencePredicate(
+              '"FinancialTransaction"',
+              '"FinancialAccount"',
+            ),
+          )})`,
           postedRefundTotal: sql<number>`COALESCE(sum(${financialTransaction.amount}) FILTER (
-            WHERE ${financialTransaction.status} = 'posted'
-              AND ${financialTransaction.kind} = 'refund'
+            WHERE ${sql.raw(postedRefundPredicate('"FinancialTransaction"'))}
           ), 0)::double precision`,
         })
         .from(financialTransaction)
-        .innerJoin(
+        // LEFT, not INNER: account liveness is part of the COVERAGE rule (it reads
+        // the account's identity), but not of the refund total — a refund happened
+        // whether or not its account row was later retired. An inner join here
+        // silently applied the coverage rule to the refund sum too.
+        .leftJoin(
           financialAccount,
-          and(
-            eq(financialAccount.id, financialTransaction.accountId),
-            notDeleted(financialAccount),
-          ),
+          eq(financialAccount.id, financialTransaction.accountId),
         )
         .where(
           and(

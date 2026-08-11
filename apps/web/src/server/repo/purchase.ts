@@ -120,6 +120,7 @@ import {
 } from "~/server/repo/expense/helpers";
 import {
   calculateFinancialReconciliation,
+  postedRefundTotalSql,
   settleableExpenseTotalSql,
   settleableUnpricedExpenseCountSql,
 } from "~/server/repo/financial-reconciliation";
@@ -248,12 +249,7 @@ const purchaseSettleableUnpricedExpenseCount = correlated<number>(
 );
 
 const purchasePostedRefundTotal = correlated<number>(
-  `(SELECT COALESCE(sum(ft."amount"), 0)::double precision
-     FROM "FinancialTransaction" ft
-     WHERE ft."purchaseId" = "Purchase"."id"
-       AND ft."kind" = 'refund'
-       AND ft."status" = 'posted'
-       AND ft."deletedAt" IS NULL)`,
+  postedRefundTotalSql('"Purchase"'),
 );
 
 const purchaseDocumentCount = correlated<number>(

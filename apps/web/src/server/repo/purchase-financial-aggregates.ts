@@ -4,6 +4,9 @@ import { and, inArray, ne, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { financialTransaction } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+// Type-only back-edge from that module to this one, so this value import creates
+// no runtime cycle.
+import { postedRefundPredicate } from "~/server/repo/financial-reconciliation";
 
 export type PurchaseFinancialAggregate = {
   transactionCount: number;
@@ -39,7 +42,7 @@ export async function loadPurchaseFinancialAggregates(
       outstandingTransactionCount: sql<number>`count(*) FILTER (WHERE ${financialTransaction.status} IN ('expected', 'pending'))::int`,
       postedTotal: sql<number>`COALESCE(sum(${financialTransaction.amount}) FILTER (WHERE ${financialTransaction.status} = 'posted'), 0)::double precision`,
       projectedTotal: sql<number>`COALESCE(sum(${financialTransaction.amount}), 0)::double precision`,
-      postedRefundTotal: sql<number>`COALESCE(sum(${financialTransaction.amount}) FILTER (WHERE ${financialTransaction.status} = 'posted' AND ${financialTransaction.kind} = 'refund'), 0)::double precision`,
+      postedRefundTotal: sql<number>`COALESCE(sum(${financialTransaction.amount}) FILTER (WHERE ${sql.raw(postedRefundPredicate('"FinancialTransaction"'))}), 0)::double precision`,
     })
     .from(financialTransaction)
     .where(
