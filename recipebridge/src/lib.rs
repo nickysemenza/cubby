@@ -180,6 +180,23 @@ impl WAmount {
             None => Measure::new(&self.unit, self.value),
         }
     }
+
+    /// Multiply by `factor`, leaving non-scalable kinds alone. A recipe scaled
+    /// 2× needs twice the flour but not an 18-inch pan, a 700°F oven, or a
+    /// 60-minute rest — `Measure::scale` owns that rule, and routing through it
+    /// is what keeps the decision in one place instead of at each call site.
+    ///
+    /// The caller's unit spelling is preserved rather than canonicalized.
+    /// `Measure::scale` deliberately does not normalize, so scaling changes the
+    /// numbers and nothing else; without this, the `Measure` round-trip would
+    /// re-spell `"inch"` as `"` and `"tablespoons"` as `"tbsp"`, making a scaled
+    /// recipe read differently from the same recipe at 1×.
+    pub(crate) fn scale(&self, factor: f64) -> Self {
+        Self {
+            unit: self.unit.clone(),
+            ..Self::from(self.to_measure().scale(factor))
+        }
+    }
 }
 
 impl From<&Measure> for WAmount {
@@ -253,4 +270,61 @@ pub(crate) fn from_js<T: for<'de> Deserialize<'de>>(
 
 pub(crate) fn to_js<T: Serialize>(v: &T, ctx: &str) -> Result<JsValue, String> {
     serde_wasm_bindgen::to_value(v).map_err(|e| format!("Failed to serialize {ctx}: {e}"))
+}
+
+#[cfg(test)]
+mod amount_scale_tests {
+    use super::WAmount;
+
+    fn amount(unit: &str, value: f64) -> WAmount {
+        WAmount {
+            unit: unit.into(),
+            value,
+            upper_value: None,
+        }
+    }
+
+    #[test]
+    fn scales_both_ends_of_a_range() {
+        let scaled = WAmount {
+            upper_value: Some(20.0),
+            ..amount("g", 10.0)
+        }
+        .scale(2.5);
+        assert_eq!(scaled.value, 25.0);
+        assert_eq!(scaled.upper_value, Some(50.0));
+    }
+
+    /// The bug this crate shipped before `Measure::scale` existed: doubling a
+    /// recipe resized the pan, reset the oven, and doubled the resting time.
+    #[test]
+    fn leaves_non_scalable_kinds_alone() {
+        for unit in ["inch", "minute", "°F"] {
+            let scaled = amount(unit, 9.0).scale(2.0);
+            assert_eq!(scaled.value, 9.0, "{unit} must not scale");
+            assert_eq!(scaled.unit, unit);
+        }
+    }
+
+    #[test]
+    fn scales_weight_and_volume() {
+        assert_eq!(amount("g", 100.0).scale(2.5).value, 250.0);
+        assert_eq!(amount("cup", 2.0).scale(0.5).value, 1.0);
+    }
+
+    /// Scaling changes numbers only. Canonicalizing here would make a 2× recipe
+    /// read "tbsp" where the 1× recipe (returned untouched) reads "tablespoons".
+    #[test]
+    fn preserves_the_authored_unit_spelling() {
+        for unit in ["tablespoons", "inch", "Cups"] {
+            assert_eq!(amount(unit, 2.0).scale(2.0).unit, unit);
+        }
+    }
+
+    /// Exact because `Measure` multiplies rationals, not floats — `1/3 × 3` is
+    /// `1`, not `0.9999999999999998`.
+    #[test]
+    fn thirds_scale_exactly() {
+        assert_eq!(amount("cup", 1.0 / 3.0).scale(3.0).value, 1.0);
+    }
 }

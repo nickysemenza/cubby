@@ -304,6 +304,18 @@ pub fn amount_kind(amount: WAmount) -> Result<WAmountKind, String> {
     to_js(&kind.to_str(), "amount kind").map(Into::into)
 }
 
+/// Multiply an amount by a recipe scale factor, leaving non-scalable kinds
+/// (length, time, temperature, money, calories, nutrients) untouched — doubling
+/// a recipe must not turn a 9-inch pan into an 18-inch one.
+///
+/// TS calls this instead of multiplying `value` itself: the scalable-kind rule
+/// lives upstream in `Measure::scale`, and a second copy in TS is exactly the
+/// layering violation CLAUDE.md forbids.
+#[wasm_bindgen]
+pub fn scale_amount(amount: WAmount, factor: f64) -> WAmount {
+    amount.scale(factor)
+}
+
 // Golden tests — drift tripwires for the ingredient crate's unit-conversion
 // surface (pinned by exact git rev). `detect_unit_mapping_islands` and
 // `is_valid_unit` take native types and run
