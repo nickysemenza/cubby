@@ -123,6 +123,7 @@ import {
   settleableExpenseTotalSql,
   settleableUnpricedExpenseCountSql,
 } from "~/server/repo/financial-reconciliation";
+import { detachImagesFromEntity } from "~/server/repo/image";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import {
@@ -160,7 +161,7 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
-      "Image associations are soft-deleted with the purchase; the underlying images are not.",
+      "Image associations are soft-deleted with the purchase, and each file is\n      deleted too unless something else still references it.",
   },
   "PurchaseProduct.purchaseId": {
     code: "soft-delete-association",
@@ -412,7 +413,9 @@ const syncPurchaseImages = async (
   pendingImageIds: string[] | undefined,
   removeImageIds: string[] | undefined,
   imageOrder: string[] | undefined,
-): Promise<void> => {
+): Promise<string[]> => {
+  let detachedImageKeys: string[] = [];
+
   if (imageOrder && imageOrder.length > 0) {
     await applyImageOrder(
       tx,
@@ -424,14 +427,12 @@ const syncPurchaseImages = async (
   }
 
   if (removeImageIds && removeImageIds.length > 0) {
-    await tx
-      .delete(purchaseImage)
-      .where(
-        and(
-          eq(purchaseImage.purchaseId, id),
-          inArray(purchaseImage.imageId, removeImageIds),
-        ),
-      );
+    ({ deletedKeys: detachedImageKeys } = await detachImagesFromEntity(
+      tx,
+      "purchase",
+      id,
+      removeImageIds,
+    ));
   }
 
   if (pendingImageIds && pendingImageIds.length > 0) {
@@ -450,6 +451,8 @@ const syncPurchaseImages = async (
       startSortOrder,
     );
   }
+
+  return detachedImageKeys;
 };
 
 /**
@@ -897,9 +900,15 @@ export const updatePurchase = async (
   db: Database,
   input: PurchaseUpdateInput,
   actor: ActorContext,
-): Promise<{ output: PurchaseOut; entityId: PurchaseId }> => {
+): Promise<{
+  output: PurchaseOut;
+  entityId: PurchaseId;
+  /** R2 objects `removeImageIds` reaped; drop them after this commit. */
+  detachedImageKeys: string[];
+}> => {
   const { data } = input;
   const id = await resolveOrThrow(db, "purchase", input.id);
+  let detachedImageKeys: string[] = [];
 
   await withTransaction(db, async (tx) => {
     const before = await tx.query.purchase.findFirst({
@@ -952,7 +961,7 @@ export const updatePurchase = async (
       }
     }
 
-    await syncPurchaseImages(
+    detachedImageKeys = await syncPurchaseImages(
       tx,
       id,
       data.pendingImageIds,
@@ -989,7 +998,11 @@ export const updatePurchase = async (
     }
   });
 
-  return { output: await getPurchaseByID(db, id), entityId: id };
+  return {
+    output: await getPurchaseByID(db, id),
+    entityId: id,
+    detachedImageKeys,
+  };
 };
 
 /**
@@ -1743,9 +1756,15 @@ const deletePurchasesWithPolicy = async (
 ): Promise<{
   expenseIds: ExpenseId[];
   financialTransactionIds: FinancialTransactionId[];
+  /** R2 objects the image cascade reaped; drop them after this commit. */
+  detachedImageKeys: string[];
 }> => {
   if (shortcodes.length === 0)
-    return { expenseIds: [], financialTransactionIds: [] };
+    return {
+      expenseIds: [],
+      financialTransactionIds: [],
+      detachedImageKeys: [],
+    };
 
   const ids = await resolveAllOrThrow(db, "purchase", shortcodes);
 
@@ -1826,7 +1845,7 @@ const deletePurchasesWithPolicy = async (
 
     // `{actor}`, not a caller-owned buffer: the detach `update` entries above
     // were already flushed, and the delete entries must follow them.
-    await removeEntity(tx, {
+    const { detachedImageKeys } = await removeEntity(tx, {
       entity: "purchase",
       ids,
       removal: "soft",
@@ -1848,6 +1867,7 @@ const deletePurchasesWithPolicy = async (
     return {
       expenseIds: detaching.map((row) => row.id),
       financialTransactionIds: detachingTransactions.map((row) => row.id),
+      detachedImageKeys,
     };
   });
 };
@@ -1867,9 +1887,17 @@ export const deleteEmptyPurchases = async (
   db: Database,
   shortcodes: PurchaseShortcode[],
   actor: ActorContext,
-): Promise<PurchaseShortcode[]> => {
-  await deletePurchasesWithPolicy(db, shortcodes, actor, "require-empty");
-  return shortcodes;
+): Promise<{
+  shortcodes: PurchaseShortcode[];
+  detachedImageKeys: string[];
+}> => {
+  const { detachedImageKeys } = await deletePurchasesWithPolicy(
+    db,
+    shortcodes,
+    actor,
+    "require-empty",
+  );
+  return { shortcodes, detachedImageKeys };
 };
 
 /**

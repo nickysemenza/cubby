@@ -53,6 +53,7 @@ import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
+import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
@@ -207,12 +208,14 @@ const { getByID, getByShortcode, create, update } =
         const imagesChanged =
           (data.pendingImageIds?.length ?? 0) > 0 ||
           (data.removeImageIds?.length ?? 0) > 0;
-        const updated = await updateLocation(
+        const { location: updated, detachedImageKeys } = await updateLocation(
           services.db,
           id,
           data,
           services.actorContext,
         );
+        // After the commit, never inside it: an R2 delete has no rollback.
+        await deleteStoredObjects(detachedImageKeys);
         const backgroundBatches = await runMutationSideEffects(services.db, {
           action: "updated",
           entity: { entityType: "location", entityId: id },
@@ -319,7 +322,13 @@ const getByShortcodes = protectedProcedure
 const deleteItem = createDeleteProcedure<LocationShortcode>(
   async (services, shortcodes) => {
     const ids = await resolveLocationIds(services.db, shortcodes);
-    await deleteLocations(services.db, ids, services.actorContext);
+    const { detachedImageKeys } = await deleteLocations(
+      services.db,
+      ids,
+      services.actorContext,
+    );
+    // After the commit, never inside it: an R2 delete has no rollback.
+    await deleteStoredObjects(detachedImageKeys);
     return await runMutationSideEffectsForEntities(
       services.db,
       ids.map((id) => ({

@@ -588,7 +588,7 @@ describe("project reusable resources", () => {
     await deleteProjects(ctx.db, [project.id], ctx.actor);
     await expect(
       deleteProducts(ctx.db, [tool.entityId], ctx.actor),
-    ).resolves.toBeUndefined();
+    ).resolves.toMatchObject({ detachedImageKeys: [] });
   });
 });
 
@@ -673,7 +673,7 @@ describe("repointProjectUses", () => {
     // it was discarded.
     await expect(
       deleteProducts(ctx.db, [kit.entityId], ctx.actor),
-    ).resolves.toBeUndefined();
+    ).resolves.toMatchObject({ detachedImageKeys: [] });
   });
 
   it("keeps one live row when the destination already records the project", async () => {

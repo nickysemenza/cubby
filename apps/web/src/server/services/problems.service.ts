@@ -56,7 +56,11 @@ import {
   findOrphanedEntityEmbeddings,
   softDeleteEntityEmbeddingRows,
 } from "~/server/repo/entity-embedding";
-import { countCullablePendingImages } from "~/server/repo/image";
+import {
+  countCullablePendingImages,
+  countUnreferencedImages,
+  findUnreferencedImages,
+} from "~/server/repo/image";
 import {
   deleteIngredients,
   findOrCreateIngredient,
@@ -113,6 +117,7 @@ import { countStaleRecipeTotals } from "~/server/repo/recipe/totals";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
+import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
 import { traceAll, traceAllSeq } from "~/server/tracing";
 
@@ -363,7 +368,9 @@ export const deleteUnusedIngredients = async (
       if (alsoDeleteProducts) {
         const linked = await findLinkedProductIds(db, id);
         if (linked.length > 0) {
-          await deleteProducts(db, linked, actor);
+          const { detachedImageKeys } = await deleteProducts(db, linked, actor);
+          // After the commit, never inside it: an R2 delete has no rollback.
+          await deleteStoredObjects(detachedImageKeys);
         }
       }
       await deleteIngredients(db, [id], actor);
@@ -390,6 +397,7 @@ export const findMaintenanceCounts = async (
     staleRecipeTotals: () => countStaleRecipeTotals(db),
     cullablePendingImages: () =>
       countCullablePendingImages(db, CULL_PENDING_IMAGES_DEFAULT_HOURS),
+    unreferencedImages: () => countUnreferencedImages(db),
     entitiesMissingEmbeddings: () => countMissingEmbeddings(db),
   });
 
@@ -402,6 +410,7 @@ export const findMaintenanceCounts = async (
     locationsWithoutAiDescription: r.locationsWithoutAiDescription.length,
     staleRecipeTotals: r.staleRecipeTotals,
     cullablePendingImages: r.cullablePendingImages,
+    unreferencedImages: r.unreferencedImages,
     // Uncapped, unlike the Problems section's sampled item rows — this is what
     // the auto-fix button counts.
     entitiesMissingEmbeddings: r.entitiesMissingEmbeddings,
@@ -515,6 +524,10 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       locationsWithoutAiDescription: () =>
         findLocationsWithoutAiDescription(scoped),
       orphanedEntityEmbeddings: () => findOrphanedEntityEmbeddings(scoped),
+      // Six index-only scans of the small join tables plus one Image scan. Sits
+      // in this group for the same reason `referentialLivenessViolations` does:
+      // the cost is I/O, not the CPU the other groups exist to isolate.
+      unreferencedImages: () => findUnreferencedImages(scoped),
       entitiesMissingEmbeddings: () => findMissingEmbeddings(scoped),
       staleParentRecipes: () => findParentRecipesWithDeletedSubRecipes(scoped),
       staleLocations: () => findStaleLocations(scoped),
@@ -569,6 +582,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     })),
     locationsWithoutAiDescription: r.locationsWithoutAiDescription,
     orphanedEntityEmbeddings: r.orphanedEntityEmbeddings,
+    unreferencedImages: r.unreferencedImages,
     entitiesMissingEmbeddings: r.entitiesMissingEmbeddings,
     staleParentRecipes: r.staleParentRecipes,
     staleLocations: r.staleLocations,

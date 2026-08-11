@@ -93,7 +93,7 @@ export const PROJECT_DELETE_EDGE_POLICY = {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
-      "Image associations are soft-deleted with the project; the underlying images are not.",
+      "Image associations are soft-deleted with the project, and each file is\n      deleted too unless something else still references it.",
   },
   "ProjectToolUsage.projectId": {
     code: "soft-delete-association",
@@ -378,16 +378,20 @@ const fetchLiveProjectExpenses = (dbc: ProjectQueryClient, ids: ProjectId[]) =>
  * and soft-deletes the project's images (mirrors product delete's
  * productImage cascade).
  */
+/**
+ * Returns the R2 keys of images the cascade reaped, for the caller to drop
+ * after this commit — an object delete has no rollback.
+ */
 export const deleteProjects = async (
   db: Database,
   shortcodes: ProjectShortcode[],
   actor: ActorContext,
-): Promise<void> => {
-  if (shortcodes.length === 0) return;
+): Promise<{ detachedImageKeys: string[] }> => {
+  if (shortcodes.length === 0) return { detachedImageKeys: [] };
 
   const ids = await resolveAllOrThrow(db, "project", shortcodes);
 
-  await withTransaction(db, async (tx) => {
+  return await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, project, ids, "Project");
 
     const liveChildren = await fetchLiveChildProjects(tx, ids);
@@ -429,7 +433,7 @@ export const deleteProjects = async (
         `Cannot delete ${count} project(s): ${names} still have expenses. Delete or reassign them first.`,
     });
 
-    await removeEntity(tx, {
+    return await removeEntity(tx, {
       entity: "project",
       ids,
       removal: "soft",

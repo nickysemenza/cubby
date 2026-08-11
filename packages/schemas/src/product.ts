@@ -164,7 +164,12 @@ export const productCreateInput = z.object(productCreateShape);
 // is update-only.
 export const productUpdateData = deriveUpdateData(productCreateShape, {
   extend: {
-    removeImageIds: z.array(z.uuid()).optional(),
+    removeImageIds: z
+      .array(z.uuid())
+      .optional()
+      .describe(
+        "Image ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
+      ),
     imageOrder: z
       .array(z.uuid())
       .optional()
@@ -932,7 +937,7 @@ export const mcpProductUpdateInput = z.object({
     .array(z.uuid())
     .optional()
     .describe(
-      "Product image ids to detach; an id not currently attached to this product is silently ignored",
+      "Product image ids to detach; an id not currently attached to this product is silently ignored. Detaching DELETES the stored file when nothing else references it — there is no restore.",
     ),
   imageOrder: z
     .array(z.uuid())

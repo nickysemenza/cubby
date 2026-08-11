@@ -69,7 +69,18 @@ const recordingTx = (
         const name = getTableName(table);
         log.push({ op: "select", table: name });
         return {
-          where: () => ({ groupBy: async () => counts[name] ?? [] }),
+          // Two shapes off one `where`: `countByTarget` grouped-counts it, and
+          // the image-id read (`collectCascadingImageIds`) awaits it directly.
+          // A real Promise carrying the extra method, rather than a hand-rolled
+          // thenable, so both work without tripping noThenProperty.
+          //
+          // Resolving to no rows keeps the reap a no-op here — that it deletes
+          // the right files is a real-DB question, asserted in
+          // repo/image.integration.test.ts. This file only pins ORDER.
+          where: () =>
+            Object.assign(Promise.resolve([] as unknown[]), {
+              groupBy: async () => counts[name] ?? [],
+            }),
         };
       },
     }),
@@ -132,6 +143,10 @@ describe("removeEntity — statement order", () => {
     });
 
     expect(log.map((s) => `${s.op} ${s.table}`)).toEqual([
+      // The image-join child is READ before anything is removed: the cascade
+      // soft-deletes the join row, and a tombstoned row stops counting as a
+      // reference, so the ids would be unfindable afterwards.
+      `select ${getTableName(productImage)}`,
       `update ${getTableName(productUnitMappings)}`,
       `update ${getTableName(productImage)}`,
       `update ${getTableName(product)}`,
@@ -165,6 +180,8 @@ describe("removeEntity — statement order", () => {
     });
 
     expect(log.map((s) => s.op)).toEqual([
+      // count(productImage), then the image-id read, then the removals.
+      "select",
       "select",
       "update",
       "update",
@@ -210,8 +227,10 @@ describe("removeEntity — statement order", () => {
     });
 
     expect(log.map((s) => `${s.op} ${s.table}`)).toEqual([
+      // Both audited counts, then the image-id read, then the removals.
       `select ${getTableName(productImage)}`,
       `select ${getTableName(productUnitMappings)}`,
+      `select ${getTableName(productImage)}`,
       `update ${getTableName(productImage)}`,
       `delete ${getTableName(taskDependency)}`,
       `update ${getTableName(productUnitMappings)}`,

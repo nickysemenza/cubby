@@ -76,6 +76,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { detachImagesFromEntity } from "~/server/repo/image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import {
   countByTarget,
@@ -110,7 +111,7 @@ export const LOCATION_DELETE_EDGE_POLICY = {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
-      "Image associations are soft-deleted with the location; the underlying images are not.",
+      "Image associations are soft-deleted with the location, and each file is\n      deleted too unless something else still references it.",
   },
   "Location.parentId": {
     code: "clear-live-child-parent",
@@ -282,6 +283,15 @@ export const ensureGlobalUnknownLocation = async (
   }
 };
 
+/**
+ * `detachedImageKeys` are R2 objects that `removeImageIds` reaped; the caller
+ * drops them once its transaction has committed.
+ *
+ * Careful on the joined branch: `db` may be a caller-owned `DrizzleTransaction`,
+ * so "the await resolved" does NOT mean "committed" there. Only the standalone
+ * (`Database`) path — the router's — may drain the keys directly. Today the
+ * router is the only caller that passes a `Database`.
+ */
 export const updateLocation = async (
   db: Database | DrizzleTransaction,
   id: LocationId,
@@ -289,6 +299,7 @@ export const updateLocation = async (
   actor: ActorContext,
   options?: { resolvedParentId?: LocationId | null },
 ) => {
+  let detachedImageKeys: string[] = [];
   const runUpdate = async (tx: DrizzleTransaction) => {
     let parentId: LocationId | null | undefined;
     if (data.parentId !== undefined) {
@@ -348,14 +359,12 @@ export const updateLocation = async (
     }
 
     if (data.removeImageIds && data.removeImageIds.length > 0) {
-      await tx
-        .delete(locationImage)
-        .where(
-          and(
-            eq(locationImage.locationId, updated.id),
-            inArray(locationImage.imageId, data.removeImageIds),
-          ),
-        );
+      ({ deletedKeys: detachedImageKeys } = await detachImagesFromEntity(
+        tx,
+        "location",
+        updated.id,
+        data.removeImageIds,
+      ));
     }
 
     if (data.pendingImageIds && data.pendingImageIds.length > 0) {
@@ -399,9 +408,12 @@ export const updateLocation = async (
   // the same blocker-naming treatment. Only on the standalone branch: when the
   // caller passes its OWN open transaction, the violation has poisoned it and
   // the recovery lookup could not run — that caller rethrows as before.
-  if ("rollback" in db) return await runUpdate(db);
+  if ("rollback" in db) {
+    return { location: await runUpdate(db), detachedImageKeys };
+  }
   try {
-    return await withTransaction(db, runUpdate);
+    const location = await withTransaction(db, runUpdate);
+    return { location, detachedImageKeys };
   } catch (error) {
     if (data.name !== undefined) {
       await throwIfDuplicateLocation(db, data.name, error);
@@ -495,14 +507,18 @@ export const bulkReparentLocations = async (
  * Child locations are orphaned (parentId set to null) and become top-level locations.
  * Throws if any location has inventory.
  */
+/**
+ * Returns the R2 keys of images the cascade reaped, for the caller to drop
+ * after this commit — an object delete has no rollback.
+ */
 export const deleteLocations = async (
   db: Database,
   ids: LocationId[],
   actor: ActorContext,
-): Promise<void> => {
-  if (ids.length === 0) return;
+): Promise<{ detachedImageKeys: string[] }> => {
+  if (ids.length === 0) return { detachedImageKeys: [] };
 
-  await withTransaction(db, async (tx) => {
+  return await withTransaction(db, async (tx) => {
     // Lock locations and validate they exist and aren't already deleted
     // Prevents race conditions by acquiring row-level locks
     await lockAndValidateForDelete(tx, location, ids, "Location");
@@ -529,7 +545,7 @@ export const deleteLocations = async (
       .set({ parentId: null })
       .where(and(inArray(location.parentId, ids), notDeleted(location)));
 
-    await removeEntity(tx, {
+    return await removeEntity(tx, {
       entity: "location",
       ids,
       removal: "soft",

@@ -1311,6 +1311,31 @@ const DECLARED_SECTIONS = [
     }),
   }),
   section({
+    id: "unreferenced-images",
+    label: "Files",
+    select: (p) => p.unreferencedImages,
+    icon: Wrench,
+    title: "Unreferenced files",
+    description:
+      "Stored files nothing points at. R2 bills for every one and no page can render them. Detaching a file used to remove only the association, leaving the file and its object behind — these are the residue. Safe to delete: there is nothing left to detach them from.",
+    emptyMessage: "No unreferenced files.",
+    renderItem: (file) => ({
+      key: file.id,
+      title: file.filename,
+      // Provenance, not a link: `targetType`/`targetId` are stamped at attach
+      // time and the entity they name may itself be gone, which is often the
+      // very reason the file ended up here. Same call as the orphaned-embedding
+      // section below — no `route`.
+      subtitle: file.targetType
+        ? `${file.targetType} · ${file.targetId?.slice(0, 8) ?? "unknown"}`
+        : file.contentType,
+      details: [
+        `${Math.round(file.size / 1024)} KB`,
+        createdAgoDetail(file.createdAt),
+      ],
+    }),
+  }),
+  section({
     id: "missing-embeddings",
     label: "Unindexed",
     select: (p) => p.entitiesMissingEmbeddings,

@@ -30,6 +30,7 @@ import {
   notDeleted,
   unwrapDb,
 } from "~/server/repo/database-helpers";
+import { detachImagesFromEntity } from "~/server/repo/image";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -225,12 +226,18 @@ export async function updateRecipeBasicProperties(
  * Add new images, remove requested images, and apply an explicit display
  * order (first = cover). Order is applied before the append so new images
  * always land after the reordered existing set.
+ *
+ * Returns the R2 keys of images the removal reaped (see
+ * {@link detachImagesFromEntity}). They have no rollback, so the caller drops
+ * the objects only after its transaction commits.
  */
 export async function updateRecipeImages(
   tx: DrizzleTransaction,
   recipeId: RecipeId,
   updates: RecipeUpdateInput["data"],
-): Promise<void> {
+): Promise<string[]> {
+  let detachedImageKeys: string[] = [];
+
   if (updates.imageOrder && updates.imageOrder.length > 0) {
     await applyImageOrder(
       tx,
@@ -242,14 +249,12 @@ export async function updateRecipeImages(
   }
 
   if (updates.removeImageIds && updates.removeImageIds.length > 0) {
-    await tx
-      .delete(recipeImage)
-      .where(
-        and(
-          eq(recipeImage.recipeId, recipeId),
-          inArray(recipeImage.imageId, updates.removeImageIds),
-        ),
-      );
+    ({ deletedKeys: detachedImageKeys } = await detachImagesFromEntity(
+      tx,
+      "recipe",
+      recipeId,
+      updates.removeImageIds,
+    ));
   }
 
   if (updates.pendingImageIds && updates.pendingImageIds.length > 0) {
@@ -268,6 +273,8 @@ export async function updateRecipeImages(
       startSortOrder,
     );
   }
+
+  return detachedImageKeys;
 }
 
 /**

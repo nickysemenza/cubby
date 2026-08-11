@@ -25,6 +25,7 @@ import {
   nextImageSortOrder,
   notDeleted,
 } from "~/server/repo/database-helpers";
+import { detachImagesFromEntity } from "~/server/repo/image";
 
 /**
  * Reject a canonical "1 each <-> $X" price mapping in unit mappings.
@@ -218,6 +219,10 @@ export async function syncProductExternalIds(
  * Add newly-uploaded images, remove requested ones, and apply an explicit
  * display order (first = cover) for a product. Order is applied before the
  * append so new images always land after the reordered existing set.
+ *
+ * Returns the R2 keys of images the removal reaped (see
+ * {@link detachImagesFromEntity}). They have no rollback, so the caller drops
+ * the objects only after its transaction commits.
  */
 export async function syncProductImages(
   tx: DrizzleTransaction,
@@ -225,7 +230,9 @@ export async function syncProductImages(
   pendingImageIds: string[] | undefined,
   removeImageIds: string[] | undefined,
   imageOrder?: string[],
-): Promise<void> {
+): Promise<string[]> {
+  let detachedImageKeys: string[] = [];
+
   if (imageOrder && imageOrder.length > 0) {
     await applyImageOrder(
       tx,
@@ -237,14 +244,12 @@ export async function syncProductImages(
   }
 
   if (removeImageIds && removeImageIds.length > 0) {
-    await tx
-      .delete(productImage)
-      .where(
-        and(
-          eq(productImage.productId, productId),
-          inArray(productImage.imageId, removeImageIds),
-        ),
-      );
+    ({ deletedKeys: detachedImageKeys } = await detachImagesFromEntity(
+      tx,
+      "product",
+      productId,
+      removeImageIds,
+    ));
   }
 
   if (pendingImageIds && pendingImageIds.length > 0) {
@@ -263,4 +268,6 @@ export async function syncProductImages(
       startSortOrder,
     );
   }
+
+  return detachedImageKeys;
 }

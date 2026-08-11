@@ -41,8 +41,13 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { BrandForEntity } from "@cubby/schemas/identifiers";
 import { and, inArray, or, type SQL } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
+import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, withTransactionOn } from "~/server/repo/database-helpers";
+import {
+  imageJoinColumnFor,
+  reapUnreferencedImages,
+} from "~/server/repo/image";
 import { countByTarget } from "~/server/repo/impact";
 import {
   type CascadeCounts,
@@ -134,6 +139,48 @@ const removeRows = async (
 };
 
 /**
+ * The images a child cascade is about to orphan, read BEFORE it runs.
+ *
+ * Timing is the whole point. A cascade soft-deletes its join rows, and a
+ * tombstoned join row is (correctly) not a reference — that is what makes the
+ * reap afterwards find them unreferenced. But it also means the ids are no
+ * longer reachable through the association once the cascade has run, so they
+ * have to be collected first.
+ *
+ * Which children are image attachments is not declared here: `imageJoinColumnFor`
+ * answers it from `INCOMING_EDGES.image`, so a sixth gallery entity is covered
+ * the moment it is declared there rather than when someone remembers this file.
+ */
+const collectCascadingImageIds = async (
+  tx: DrizzleTransaction,
+  children: readonly ChildCascade[],
+  ids: readonly string[],
+): Promise<string[]> => {
+  const imageIds: string[] = [];
+  for (const child of children) {
+    const imageColumn = imageJoinColumnFor(child.table);
+    if (!imageColumn) continue;
+    const rows = (await tx
+      // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for select()
+      .select({ imageId: imageColumn as any })
+      .from(child.table)
+      .where(
+        and(
+          parentMatches(child.parentColumns, ids),
+          // A row already tombstoned belongs to an earlier removal, and was
+          // either reaped then or is the residue this cascade is now cleaning
+          // up anyway — either way `reapUnreferencedImages` re-checks.
+          notDeleted(child.table as SoftDeletableTable),
+        ),
+      )) as Array<{ imageId: string | null }>;
+    for (const row of rows) {
+      if (row.imageId) imageIds.push(row.imageId);
+    }
+  }
+  return uniq(imageIds);
+};
+
+/**
  * Remove `ids` of `entity`, its declared children, their search embeddings, and
  * the delete audit entries — atomically with whatever transaction is already
  * open, or in a new one.
@@ -150,6 +197,16 @@ const removeRows = async (
  * that ordering is fixed here rather than left to the caller's array, because
  * a parent removed first would leave the child counts describing rows that no
  * longer belong to it.
+ *
+ * ## Images are reaped, not just detached
+ *
+ * A child cascade onto one of `image`'s join tables leaves the `Image` row and
+ * its R2 object behind — that is unreferenced bytes nothing can render, and it
+ * accounted for 50 of the 133 orphans found in production. So any image the
+ * cascade orphaned is deleted here too, and its R2 key comes back in
+ * `detachedImageKeys` for the caller to drop **after the commit** (an object
+ * delete has no rollback). Callers that own no images get an empty array and
+ * can ignore it; a caller that owns images and discards it leaks the object.
  */
 export const removeEntity = async <E extends RemovableEntity>(
   dbOrTx: Database | DrizzleTransaction,
@@ -162,11 +219,11 @@ export const removeEntity = async <E extends RemovableEntity>(
     /** Counts the caller computed itself, merged over the derived ones. */
     extraCounts?: CascadeCounts;
   },
-): Promise<void> => {
+): Promise<{ detachedImageKeys: string[] }> => {
   const { entity, ids, removal, actor, children = [], extraCounts } = args;
-  if (ids.length === 0) return;
+  if (ids.length === 0) return { detachedImageKeys: [] };
 
-  await withTransactionOn(dbOrTx, async (tx) => {
+  return await withTransactionOn(dbOrTx, async (tx) => {
     // Every count is taken before any statement runs: counting between removals
     // would report a child's rows against a parent whose earlier sibling edge
     // had already cleared them.
@@ -188,6 +245,9 @@ export const removeEntity = async <E extends RemovableEntity>(
       counts[child.auditKey] = perColumn;
     }
 
+    // Before any removal: afterwards the association is gone and the ids with it.
+    const cascadingImageIds = await collectCascadingImageIds(tx, children, ids);
+
     const now = new Date();
     for (const child of children) {
       await removeRows(
@@ -208,5 +268,12 @@ export const removeEntity = async <E extends RemovableEntity>(
       counts: { ...counts, ...extraCounts },
       audit: { actor },
     });
+
+    // After the cascade, so the audit entry above describes the association
+    // removal rather than the file deletion that followed from it. Re-checks
+    // every id against the full edge set, so an image another entity still
+    // shows survives.
+    const reaped = await reapUnreferencedImages(tx, cascadingImageIds);
+    return { detachedImageKeys: reaped.deletedKeys };
   });
 };

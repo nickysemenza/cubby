@@ -96,7 +96,12 @@ export type PurchaseCreateInput = z.infer<typeof purchaseCreateInput>;
  */
 export const purchaseUpdateData = deriveUpdateData(purchaseCreateShape, {
   extend: {
-    removeImageIds: z.array(z.uuid()).optional(),
+    removeImageIds: z
+      .array(z.uuid())
+      .optional()
+      .describe(
+        "Document ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
+      ),
     imageOrder: z
       .array(z.uuid())
       .optional()

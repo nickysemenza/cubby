@@ -1184,12 +1184,17 @@ export const createProduct = async (
   }
 };
 
+/**
+ * `detachedImageKeys` are R2 objects that `removeImageIds` reaped. They have no
+ * rollback, so they ride out of the transaction rather than being dropped inside
+ * it; `updateProductWithFood` drains them once the commit is real.
+ */
 export const updateProduct = async (
   db: Database,
   id: ProductId,
   data: ProductRepoUpdateData,
   actor: ActorContext,
-): Promise<ProductTopLevelOut> => {
+): Promise<{ product: ProductTopLevelOut; detachedImageKeys: string[] }> => {
   const {
     ingredientId,
     unitMappings,
@@ -1199,6 +1204,8 @@ export const updateProduct = async (
     imageOrder,
     ...productData
   } = data;
+
+  let detachedImageKeys: string[] = [];
 
   // The identity this update lands on, captured inside the transaction for the
   // duplicate handler outside it — a rename collides on the SAME indexes a
@@ -1211,7 +1218,7 @@ export const updateProduct = async (
   } | null = null;
 
   try {
-    return await withTransaction(db, async (tx) => {
+    const updatedProduct = await withTransaction(db, async (tx) => {
       const beforeProduct = await tx.query.product.findFirst({
         where: and(eq(product.id, id), notDeleted(product)),
       });
@@ -1296,7 +1303,7 @@ export const updateProduct = async (
         await assertExternalIdsAvailable(tx, externalIds, id);
         await syncProductExternalIds(tx, id, externalIds);
       }
-      await syncProductImages(
+      detachedImageKeys = await syncProductImages(
         tx,
         id,
         pendingImageIds,
@@ -1358,6 +1365,7 @@ export const updateProduct = async (
         externalIds: currentExternalIds,
       });
     });
+    return { product: updatedProduct, detachedImageKeys };
   } catch (error) {
     // Safe on a clean connection: withTransaction has already rolled back, so
     // the lookup inside runs its own statements rather than inheriting a
@@ -1664,14 +1672,18 @@ const PRODUCT_RETAINING_DEPENDENTS: Record<
  * (inventory, expenses, or tasks — see `PRODUCT_EDGE_ROLES` in
  * `./edge-roles`).
  */
+/**
+ * Returns the R2 keys of images the cascade reaped, for the caller to drop
+ * after this commit — an object delete has no rollback.
+ */
 export const deleteProducts = async (
   db: Database,
   ids: ProductId[],
   actor: ActorContext,
-): Promise<void> => {
-  if (ids.length === 0) return;
+): Promise<{ detachedImageKeys: string[] }> => {
+  if (ids.length === 0) return { detachedImageKeys: [] };
 
-  await withTransaction(db, async (tx) => {
+  return await withTransaction(db, async (tx) => {
     // Lock products and validate they exist and aren't already deleted
     // Prevents race conditions by acquiring row-level locks
     await lockAndValidateForDelete(tx, product, ids, "Product");
@@ -1716,7 +1728,7 @@ export const deleteProducts = async (
       });
     }
 
-    await removeEntity(tx, {
+    return await removeEntity(tx, {
       entity: "product",
       ids,
       removal: "soft",

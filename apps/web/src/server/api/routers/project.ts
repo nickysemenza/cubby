@@ -69,6 +69,7 @@ import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
+import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import {
   createEntityListProcedure,
@@ -106,7 +107,13 @@ const {
     update: async (services, shortcode: ProjectShortcode, data) =>
       updateProject(services.db, shortcode, data, services.actorContext),
     delete: async (services, ids: ProjectShortcode[]) => {
-      await deleteProjects(services.db, ids, services.actorContext);
+      const { detachedImageKeys } = await deleteProjects(
+        services.db,
+        ids,
+        services.actorContext,
+      );
+      // After the commit, never inside it: an R2 delete has no rollback.
+      await deleteStoredObjects(detachedImageKeys);
       return undefined;
     },
   },

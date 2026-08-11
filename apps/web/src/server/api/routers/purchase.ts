@@ -62,6 +62,7 @@ import {
   resolveShortcode,
 } from "~/server/repo/shortcode-resolver";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
+import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
@@ -94,12 +95,17 @@ const procedures = createSearchableEntityCrudProcedures({
     list: (ctx, filters, sorts, pagination) =>
       purchaseList(ctx.db, filters, sorts, pagination),
     create: (ctx, data) => createPurchase(ctx.db, data, ctx.actorContext),
-    update: (ctx, id, data) =>
-      updatePurchase(
+    update: async (ctx, id, data) => {
+      const { output, entityId, detachedImageKeys } = await updatePurchase(
         ctx.db,
         { id: unsafePurchaseShortcode(id), data },
         ctx.actorContext,
-      ),
+      );
+      // After the commit, never inside it: an R2 delete has no rollback. The
+      // keys are destructured off here so they never reach `strictOutput`.
+      await deleteStoredObjects(detachedImageKeys);
+      return { output, entityId };
+    },
     /**
      * NOT a plain repo passthrough. Deleting a purchase DETACHES the expenses
      * and financial transactions that pointed at it, and those rows embed the
@@ -115,6 +121,8 @@ const procedures = createSearchableEntityCrudProcedures({
         ids.map(unsafePurchaseShortcode),
         ctx.actorContext,
       );
+      // After the commit, never inside it: an R2 delete has no rollback.
+      await deleteStoredObjects(detached.detachedImageKeys);
       return runMutationSideEffectsForEntities(ctx.db, [
         ...detached.expenseIds.map((entityId) => ({
           action: "updated" as const,
@@ -245,11 +253,10 @@ const deleteEmpty = protectedProcedure
   .input(deleteEmptyPurchasesInput)
   .output(strictOutput(deleteEmptyPurchasesOut))
   .mutation(async ({ ctx, input }) => {
-    const deletedIds = await deleteEmptyPurchases(
-      ctx.db,
-      input.ids,
-      ctx.actorContext,
-    );
+    const { shortcodes: deletedIds, detachedImageKeys } =
+      await deleteEmptyPurchases(ctx.db, input.ids, ctx.actorContext);
+    // After the commit, never inside it: an R2 delete has no rollback.
+    await deleteStoredObjects(detachedImageKeys);
     return { deleted: deletedIds.length, deletedIds };
   });
 

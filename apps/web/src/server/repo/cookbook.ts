@@ -234,7 +234,7 @@ export const deleteCookbook = async (
   db: Database,
   id: CookbookId,
   actor: ActorContext,
-): Promise<{ deletedRecipeIds: RecipeId[] }> => {
+): Promise<{ deletedRecipeIds: RecipeId[]; detachedImageKeys: string[] }> => {
   const cb = await getCookbookById(db, id);
   if (!cb) {
     throw createAppError("COOKBOOK_NOT_FOUND", `Cookbook ${id} not found`);
@@ -244,16 +244,24 @@ export const deleteCookbook = async (
     // A whole second entity's removal path, nested in this one's transaction so
     // a book can't survive its recipes. It covers the recipes' rows, cascades,
     // and embeddings; the call below covers the book's own.
-    const deletedRecipeIds = await deleteRecipesByCookbookTx(tx, id, actor);
+    const { recipeIds: deletedRecipeIds, detachedImageKeys: recipeImageKeys } =
+      await deleteRecipesByCookbookTx(tx, id, actor);
 
-    await removeEntity(tx, {
+    // A cookbook cover is a direct FK, not a join row, so `removeEntity` cannot
+    // reap it — `cascadeRemoval` leaves `coverImageId` pointing at a live image
+    // on a tombstoned book, and `findReferencedImageIds` deliberately counts
+    // that as a reference. The cover therefore survives the book, by design.
+    const { detachedImageKeys } = await removeEntity(tx, {
       entity: "cookbook",
       ids: [id],
       removal: "soft",
       actor,
     });
 
-    return { deletedRecipeIds };
+    return {
+      deletedRecipeIds,
+      detachedImageKeys: [...recipeImageKeys, ...detachedImageKeys],
+    };
   });
 };
 

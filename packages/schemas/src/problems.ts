@@ -441,6 +441,26 @@ export const orphanedEntityEmbeddingSchema = z.object({
 });
 
 /**
+ * A stored file no edge still reaches — R2 bytes nothing can render.
+ *
+ * Permanent diagnostic exceptions, same reasoning as
+ * {@link orphanedEntityEmbeddingSchema}: `Image` has no public shortcode at all,
+ * and `targetType`/`targetId` are provenance recorded at attach time, so the
+ * entity they name may itself be gone. They are shown to say where the file came
+ * from, never to link anywhere.
+ */
+export const unreferencedImageSchema = z.object({
+  id: z.uuid(),
+  key: z.string(),
+  filename: z.string(),
+  contentType: z.string(),
+  size: z.number(),
+  createdAt: z.date(),
+  targetType: z.string().nullable(),
+  targetId: z.string().nullable(),
+});
+
+/**
  * A live entity with no embedding row under the current provider/model/dimensions
  * — invisible to semantic search until backfilled. The mirror image of
  * {@link orphanedEntityEmbeddingSchema}, and carries no id/model of its own
@@ -677,6 +697,7 @@ const problemsFastShape = {
   productsWithNoImages: z.array(productWithNoImagesSchema),
   locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
   orphanedEntityEmbeddings: z.array(orphanedEntityEmbeddingSchema),
+  unreferencedImages: z.array(unreferencedImageSchema),
   entitiesMissingEmbeddings: z.array(entityMissingEmbeddingSchema),
   staleParentRecipes: z.array(staleParentRecipeSchema),
   staleLocations: z.array(staleLocationSchema),
@@ -862,6 +883,10 @@ export const PROBLEM_CLASS = {
   unusedIngredientsWithoutProduct: "defect",
   locationsWithoutAiDescription: "defect",
   orphanedEntityEmbeddings: "defect",
+  // Every row is a removal path that dropped an association without taking the
+  // file with it. Converges to zero once each such path is fixed, so a row here
+  // names a bug rather than a backlog.
+  unreferencedImages: "defect",
   entitiesMissingEmbeddings: "defect",
   staleParentRecipes: "defect",
   unknownParkedItems: "defect",
@@ -1129,6 +1154,9 @@ export const maintenanceCountsSchema = z.object({
   // Unassociated PENDING image rows older than the cull threshold (24h) — the
   // abandoned-upload backlog the "Cull pending images" tool clears.
   cullablePendingImages: z.number().int(),
+  // UPLOADED files no edge reaches — what the "Delete unreferenced files" tool
+  // clears. The same figure the matching Problems section lists (it is uncapped).
+  unreferencedImages: z.number().int(),
   // Live entities with no embedding under the current model. The TRUE figure —
   // the matching Problems section only carries a capped sample, so this is what
   // the auto-fix button counts. 0 when embeddings aren't configured.

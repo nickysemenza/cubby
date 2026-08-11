@@ -28,8 +28,10 @@ import {
   cullPendingImages,
   deleteImages,
   findAttachmentByIdempotencyKey,
+  findUnreferencedImages,
   getImageById,
   getImageByKey,
+  UNREFERENCED_IMAGE_GRACE_HOURS,
 } from "~/server/repo/image";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import {
@@ -373,6 +375,7 @@ export const attachFileToEntity = async (
         entityType: input.entityType,
         entityId: input.entityId,
         idempotencyKey: existing.idempotencyKey,
+        reused: true,
       };
     }
   }
@@ -542,12 +545,19 @@ export const attachFileToEntity = async (
     entityType: input.entityType,
     entityId: input.entityId,
     idempotencyKey: created.row.idempotencyKey,
+    reused: created.reused,
   };
 };
 
-/** Best-effort R2 cleanup for rows already removed from the DB. A failed object
- * delete only strands bytes in the bucket — never fail the mutation over it. */
-const deleteStoredObjects = async (keys: string[]): Promise<void> => {
+/**
+ * Best-effort R2 cleanup for rows already removed from the DB. A failed object
+ * delete only strands bytes in the bucket — never fail the mutation over it.
+ *
+ * Exported for the four entity-update seams that detach images: repos must not
+ * reach into `~/server/utils/s3` themselves, so `detachImagesFromEntity` hands
+ * its reaped keys up and the router/service drains them here, after the commit.
+ */
+export const deleteStoredObjects = async (keys: string[]): Promise<void> => {
   for (const key of keys) {
     try {
       await deleteS3Object(key);
@@ -564,6 +574,33 @@ export const cullPendingImageStorage = async (
   const result = await cullPendingImages(db, olderThanHours);
   await deleteStoredObjects(result.deletedKeys);
   return result;
+};
+
+/**
+ * Delete UPLOADED files nothing references, plus their R2 objects — the sibling
+ * of the pending cull for rows that already made it past the upload.
+ *
+ * Neither removal path produces these any more — a detach reaps via
+ * `detachImagesFromEntity`, an entity delete via `removeEntity` — so this is the
+ * backfill for rows that accumulated before, and the recovery route if a future
+ * removal path forgets. `findUnreferencedImages` is the detector that finds
+ * them.
+ */
+export const cleanupUnreferencedImageStorage = async (
+  db: Database,
+  olderThanHours: number = UNREFERENCED_IMAGE_GRACE_HOURS,
+) => {
+  const found = await findUnreferencedImages(db, olderThanHours);
+  if (found.length === 0) return { count: 0, deletedIds: [], deletedKeys: [] };
+  // Via `deleteImages`, not a bare row delete: these rows can still be FK'd by
+  // the tombstoned join rows an entity delete left behind, and only the
+  // IMAGE_HARD_DELETE cascade clears every incoming edge first.
+  const result = await deleteImages(
+    db,
+    found.map((row) => row.id),
+  );
+  await deleteStoredObjects(result.deletedKeys);
+  return { count: result.deletedIds.length, ...result };
 };
 
 /**
