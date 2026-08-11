@@ -1901,6 +1901,12 @@ const deletePurchasesWithPolicy = async (
         })),
       );
 
+      // Complementary to the allocation sweep below, not a competing writer of
+      // the mirror. The sweep finds transactions THROUGH their allocations, so a
+      // row whose mirror predates its allocation would be invisible to it and
+      // would be left pointing at a deleted purchase — a referential-liveness
+      // violation. This clears those; for every other row the sweep's
+      // re-derivation independently arrives at the same NULL.
       await tx
         .update(financialTransaction)
         .set({ purchaseId: null })

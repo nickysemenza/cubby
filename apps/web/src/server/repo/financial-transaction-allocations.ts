@@ -12,7 +12,11 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { financialTransactionAllocation, purchase } from "~/server/db/schema";
+import {
+  financialTransaction,
+  financialTransactionAllocation,
+  purchase,
+} from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { touchDataQualityTargets } from "~/server/repo/data-quality";
@@ -337,6 +341,47 @@ export async function resolveAllocationInputs(
     purchaseId: ids[index] as PurchaseId,
     amount: row.amount,
   }));
+}
+
+/**
+ * Give a pre-allocation row its allocation before anything derives from it.
+ *
+ * `syncSettlementMirror` computes the mirror from live allocations, so a row
+ * carrying `purchaseId` with no allocation would derive to NULL — meaning an
+ * unrelated edit (a note, a status, a merchant) would silently erase a real
+ * settlement link. The backfill closed that window for every row that existed
+ * when it ran, but the write path must not depend on a one-off script having
+ * been run: a fresh environment, a restored dump, or a future import that sets
+ * the column directly would all reopen it.
+ *
+ * Materializing rather than refusing, because the mirror IS the allocation for
+ * such a row — one slice of the full amount — so there is exactly one correct
+ * answer and no judgement to make. Caller must already hold the transaction's
+ * FOR UPDATE lock.
+ */
+export async function materializeLegacyMirror(
+  tx: DrizzleTransaction,
+  transactionId: FinancialTransactionId,
+): Promise<void> {
+  const [row] = await tx
+    .select({
+      purchaseId: financialTransaction.purchaseId,
+      amount: financialTransaction.amount,
+    })
+    .from(financialTransaction)
+    .where(
+      and(
+        eq(financialTransaction.id, transactionId),
+        notDeleted(financialTransaction),
+      ),
+    );
+  if (!row?.purchaseId) return;
+  if ((await countLiveAllocations(tx, transactionId)) > 0) return;
+  await tx.insert(financialTransactionAllocation).values({
+    transactionId,
+    purchaseId: row.purchaseId,
+    amount: Number(row.amount),
+  });
 }
 
 /** Live allocation count per transaction — the "is this split?" question. */

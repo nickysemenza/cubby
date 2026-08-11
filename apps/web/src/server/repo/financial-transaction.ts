@@ -63,6 +63,7 @@ import {
   assertAllocationSetValid,
   assertPurchasesLive,
   countLiveAllocations,
+  materializeLegacyMirror,
   readAllocations,
   resolveAllocationInputs,
   writeAllocationSet,
@@ -433,9 +434,37 @@ export async function updateFinancialTransaction(
 ) {
   const id = await resolveOrThrow(db, "financialTransaction", shortcode);
   await withTransaction(db, async (tx) => {
-    // Lock before reading: the amount and its allocations must move together,
-    // and this is the same row lock setFinancialTransactionAllocations takes,
-    // so the two cannot interleave.
+    // LOCK ORDER: Purchase rows first, THEN the transaction row. Every purchase
+    // operation locks purchases first (lockAndValidateForDelete, the merge) and
+    // reaches FinancialTransaction afterwards via syncSettlementMirror, so
+    // taking the transaction first here would form an ABBA cycle — updating a
+    // transaction while one of its purchases is being deleted would deadlock and
+    // postgres would abort one of them. Keep this order.
+    //
+    // The set locked here must cover every purchase this update could touch —
+    // the ones it already allocates to AND the ones it is about to. Locking only
+    // the current ones would leave a newly named purchase to be locked after the
+    // transaction, reopening the cycle for exactly the interesting case.
+    //
+    // The pre-lock read is unlocked on purpose and is not a race: nothing adds
+    // an allocation to this transaction without holding its FOR UPDATE lock,
+    // which is taken below, and the set is re-read under that lock before
+    // anything is written.
+    const incomingPurchaseCodes = [
+      ...(data.allocations?.map((row) => row.purchaseId) ?? []),
+      ...(data.purchaseId ? [data.purchaseId] : []),
+    ];
+    await assertPurchasesLive(
+      tx,
+      uniq([
+        ...((await readAllocations(tx, [id]))
+          .get(id)
+          ?.map((row) => row.purchaseId) ?? []),
+        ...(incomingPurchaseCodes.length > 0
+          ? await resolveAllOrThrow(tx, "purchase", incomingPurchaseCodes)
+          : []),
+      ]),
+    );
     await tx
       .select({ id: financialTransaction.id })
       .from(financialTransaction)
@@ -443,6 +472,9 @@ export async function updateFinancialTransaction(
         and(eq(financialTransaction.id, id), notDeleted(financialTransaction)),
       )
       .for("update");
+    // A row whose mirror predates its allocation gets one now, so nothing below
+    // can derive the mirror to NULL and silently drop a real settlement link.
+    await materializeLegacyMirror(tx, id);
     const before = await tx.query.financialTransaction.findFirst({
       where: and(
         eq(financialTransaction.id, id),
@@ -471,7 +503,29 @@ export async function updateFinancialTransaction(
       sourceRefs.map((ref) => `${ref.source}\0${ref.externalId}`),
     );
     await assertSourceRefsAvailable(tx, sourceRefs, id);
-    const values = buildPartialUpdateValues({ ...data, accountId, purchaseId });
+
+    // `purchaseId` is NOT written here. It is a derived mirror, and
+    // syncSettlementMirror is its only writer — writing it directly would audit
+    // an intermediate value that the re-derivation then overwrites, so the trail
+    // would claim a settlement state that never committed.
+    const { purchaseId: _mirrorIsDerived, ...writableData } = data;
+    const values = buildPartialUpdateValues({ ...writableData, accountId });
+
+    // The create input rejects a purchaseId/allocations pair that disagrees;
+    // deriveUpdateData drops that refinement, so the same check belongs here
+    // rather than silently letting one field win.
+    if (data.purchaseId !== undefined && data.allocations !== undefined) {
+      const single = data.allocations.length === 1 ? data.allocations[0] : null;
+      const agrees =
+        data.purchaseId === null
+          ? data.allocations.length === 0
+          : single?.purchaseId === data.purchaseId;
+      if (!agrees)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "purchaseId and allocations disagree. purchaseId is shorthand for one allocation of the full amount — supply one or the other.",
+        );
+    }
     const nextStatus = data.status ?? before.status;
     const nextKind = data.kind ?? before.kind;
     const nextAmount = data.amount ?? before.amount;
