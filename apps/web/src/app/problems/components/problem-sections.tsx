@@ -1648,6 +1648,28 @@ const DECLARED_SECTIONS = [
     }),
   }),
   section({
+    id: "financial-transaction-allocation-defects",
+    label: "Broken settlement allocations",
+    select: (p) => p.financialTransactionAllocationDefects,
+    entity: "financialTransaction",
+    title: "Broken settlement allocations",
+    description:
+      "A transaction's purchase allocations violate an invariant the write path enforces but the database cannot: they must sum to the transaction's own amount and share its sign, and only settlement kinds may carry them. A split transaction's mirror purchaseId is NULL, so the DB CHECK passes it vacuously — these rows are the only thing watching.",
+    emptyMessage:
+      "Every settlement allocation reconciles with its transaction.",
+    renderItem: (item) => ({
+      title: `${item.id} · ${item.reasons.join(", ")}`,
+      details: [
+        `${item.kind} ${item.amount.toFixed(2)} — ${item.allocationCount} allocation${
+          item.allocationCount === 1 ? "" : "s"
+        } totalling ${item.allocatedTotal.toFixed(2)}`,
+        ...(item.purchaseIds.length ? [item.purchaseIds.join(", ")] : []),
+      ],
+      route: entityDetailLink("financialTransaction", item.id),
+      editLabel: "Open transaction",
+    }),
+  }),
+  section({
     id: "invalid-financial-json",
     label: "Invalid finance JSON",
     select: (p) => p.invalidFinancialJson,

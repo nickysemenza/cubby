@@ -45,6 +45,7 @@ import {
   cookbook,
   expense,
   financialTransaction,
+  financialTransactionAllocation,
   ingredient,
   inventoryEntry,
   location,
@@ -184,6 +185,10 @@ export const INCOMING_EDGES = {
     "PurchaseProduct.purchaseId": { column: purchaseProduct.purchaseId },
     "FinancialTransaction.purchaseId": {
       column: financialTransaction.purchaseId,
+      note: "Transitional. A derived mirror of the sole settlement allocation, kept only while the settlement reads migrate onto FinancialTransactionAllocation; it is dropped once they have.",
+    },
+    "FinancialTransactionAllocation.purchaseId": {
+      column: financialTransactionAllocation.purchaseId,
     },
   }),
   financialAccount: edges({
@@ -191,7 +196,11 @@ export const INCOMING_EDGES = {
       column: financialTransaction.accountId,
     },
   }),
-  financialTransaction: edges({}),
+  financialTransaction: edges({
+    "FinancialTransactionAllocation.transactionId": {
+      column: financialTransactionAllocation.transactionId,
+    },
+  }),
   wish: edges({
     "WishCandidate.wishId": { column: wishCandidate.wishId },
   }),

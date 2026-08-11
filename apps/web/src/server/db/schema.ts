@@ -1395,6 +1395,77 @@ export const financialTransaction = pgTable(
   ],
 );
 
+// How much of ONE settlement transaction settled ONE Purchase.
+//
+// A real card line is not one-to-one with a vendor order: a return desk will
+// process items from several orders onto one receipt, and a statement will post
+// one combined line for several same-day refunds. Before this table the only way
+// to record that was to fabricate one *posted* FinancialTransaction per Purchase
+// — which made the database assert card events that never occurred, since every
+// consumer (the transaction API, the finance list, MCP, postedRefundTotal) reads
+// those rows as literal settlement evidence and no note can repair a typed field.
+//
+// EVIDENCE ONLY. `amount` never enters spend — spend is SUM(Expense.cost) and
+// nothing else. Nothing may sum this column into a project, calendar, or purchase
+// total; its readers are the settlement reconciliation cue and the Problems
+// detectors, and that is the whole list.
+//
+// INVARIANT: a live transaction has EITHER zero live allocations (unlinked
+// evidence) OR live allocations that sum to its own amount to the cent, all
+// carrying that amount's sign. Enforced in the repo write path under a FOR UPDATE
+// lock on the transaction row — a row-level CHECK cannot see sibling rows — and
+// audited after the fact by findFinancialTransactionAllocationDefects.
+//
+// Mixed-sign allocations are deliberately unsupported: same-sign is what makes
+// "sums to the amount" a decomposition rather than an arbitrary set of numbers
+// that happens to add up. A +$1,000/-$995 pair netting $5 would assert $1,000 of
+// settlement against one purchase. A genuinely two-directional event is two
+// transactions, which is how the statement will show it anyway.
+export const financialTransactionAllocation = pgTable(
+  "FinancialTransactionAllocation",
+  {
+    id: pkUuid(),
+    transactionId: uuid("transactionId")
+      .notNull()
+      .$type<FinancialTransactionId>()
+      .references(() => financialTransaction.id),
+    purchaseId: uuid("purchaseId")
+      .notNull()
+      .$type<PurchaseId>()
+      .references(() => purchase.id),
+    amount: doublePrecision("amount").notNull(),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    // Partial, so unallocating and re-allocating the same pair stays legal — same
+    // rule as PurchaseProduct's. One live row per (transaction, purchase): two
+    // slices of one charge against one order is one slice, and merging two
+    // purchases that share a transaction SUMS into this row rather than adding a
+    // second (see PURCHASE_MERGE_EDGE_POLICY — `onConflictDoNothing` there would
+    // silently destroy money).
+    uniqueIndex("FinancialTransactionAllocation_transactionId_purchaseId_key")
+      .on(table.transactionId, table.purchaseId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("FinancialTransactionAllocation_transactionId_idx").on(
+      table.transactionId,
+    ),
+    index("FinancialTransactionAllocation_purchaseId_idx").on(table.purchaseId),
+    // Same whole-cent and non-zero rules as FinancialTransaction.amount: a
+    // zero-dollar allocation says nothing, and unlinking is deleting the row
+    // rather than zeroing it.
+    //
+    // Declarable here only because push emits CHECKs inside CREATE TABLE for a
+    // NEW table; it is edits to an EXISTING table's CHECK that push silently
+    // ignores. Treat this expression as immutable — changing it later means a
+    // hand-applied ALTER plus a pg_constraint re-read.
+    check(
+      "FinancialTransactionAllocation_amount_whole_cent_check",
+      sql`${table.amount} <> 0 AND abs(${table.amount} * 100 - round(${table.amount} * 100)) < 0.0000001`,
+    ),
+  ],
+);
+
 export const expense = pgTable(
   "Expense",
   {
@@ -1797,17 +1868,33 @@ export const purchaseRelations = relations(purchase, ({ one, many }) => ({
   images: many(purchaseImage),
   products: many(purchaseProduct),
   financialTransactions: many(financialTransaction),
+  settlementAllocations: many(financialTransactionAllocation),
 }));
 
 export const financialTransactionRelations = relations(
   financialTransaction,
-  ({ one }) => ({
+  ({ one, many }) => ({
     account: one(financialAccount, {
       fields: [financialTransaction.accountId],
       references: [financialAccount.id],
     }),
     purchase: one(purchase, {
       fields: [financialTransaction.purchaseId],
+      references: [purchase.id],
+    }),
+    allocations: many(financialTransactionAllocation),
+  }),
+);
+
+export const financialTransactionAllocationRelations = relations(
+  financialTransactionAllocation,
+  ({ one }) => ({
+    transaction: one(financialTransaction, {
+      fields: [financialTransactionAllocation.transactionId],
+      references: [financialTransaction.id],
+    }),
+    purchase: one(purchase, {
+      fields: [financialTransactionAllocation.purchaseId],
       references: [purchase.id],
     }),
   }),

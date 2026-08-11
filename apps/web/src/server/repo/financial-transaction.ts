@@ -1,5 +1,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { ImpactItem } from "@cubby/schemas/entity-integrity";
+import type {
+  ImpactItem,
+  OperationDisposition,
+} from "@cubby/schemas/entity-integrity";
 import type {
   FinancialTransactionCreateInput,
   FinancialTransactionFilters,
@@ -37,7 +40,11 @@ import {
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { financialTransaction } from "~/server/db/schema";
+import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import {
+  financialTransaction,
+  financialTransactionAllocation,
+} from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import { touchDataQualityTargets } from "~/server/repo/data-quality";
@@ -59,6 +66,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
+import { countByTarget, impact, present } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import {
@@ -452,6 +460,18 @@ export async function updateFinancialTransaction(
   return { output: await getFinancialTransactionByID(db, id), entityId: id };
 }
 
+export const FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY = {
+  "FinancialTransactionAllocation.transactionId": {
+    code: "soft-delete-association",
+    effect: "soft-delete",
+    description:
+      "Deleting a settlement transaction soft-deletes the purchase allocations that decompose it. Those Purchases keep their expenses and their identity; they simply lose this piece of settlement evidence.",
+  },
+} as const satisfies IncomingEdgePolicy<
+  "financialTransaction",
+  OperationDisposition
+>;
+
 export async function deleteFinancialTransactions(
   db: Database,
   shortcodes: FinancialTransactionShortcode[],
@@ -467,37 +487,82 @@ export async function deleteFinancialTransactions(
       ids,
       "FinancialTransaction",
     );
-    const qualityTargets = await tx.query.financialTransaction.findMany({
-      where: and(
-        inArray(financialTransaction.id, ids),
-        notDeleted(financialTransaction),
-      ),
-      columns: { purchaseId: true },
-    });
+    // Quality targets come from the allocations as well as the mirror: a
+    // transaction split across two purchases has a NULL mirror, so reading only
+    // that column would leave both purchases' data-quality exceptions stale.
+    const [mirrorTargets, allocationTargets] = await Promise.all([
+      tx.query.financialTransaction.findMany({
+        where: and(
+          inArray(financialTransaction.id, ids),
+          notDeleted(financialTransaction),
+        ),
+        columns: { purchaseId: true },
+      }),
+      tx.query.financialTransactionAllocation.findMany({
+        where: and(
+          inArray(financialTransactionAllocation.transactionId, ids),
+          notDeleted(financialTransactionAllocation),
+        ),
+        columns: { purchaseId: true },
+      }),
+    ]);
     await removeEntity(tx, {
       entity: "financialTransaction",
       ids,
       removal: "soft",
       actor,
+      children: [
+        {
+          table: financialTransactionAllocation,
+          parentColumns: [financialTransactionAllocation.transactionId],
+          auditKey: "cascadedSettlementAllocations",
+        },
+      ],
     });
     await touchDataQualityTargets(tx, {
-      purchaseIds: qualityTargets
-        .map((row) => row.purchaseId)
-        .filter((value): value is PurchaseId => value !== null),
+      purchaseIds: uniq([
+        ...mirrorTargets
+          .map((row) => row.purchaseId)
+          .filter((value): value is PurchaseId => value !== null),
+        ...allocationTargets.map((row) => row.purchaseId),
+      ]),
     });
   });
 }
 
-/** Financial transactions have no incoming edges or delete side effects. */
+/**
+ * Nothing refuses a transaction delete — its allocations are parts of it, not
+ * dependents with a claim on it — but they do go with it, so the preview says so.
+ */
 export async function previewDeleteFinancialTransactions(
-  _db: Database,
-  _ids: FinancialTransactionId[],
+  db: Database,
+  ids: FinancialTransactionId[],
 ): Promise<{
   blockers: ImpactItem[];
   changes: ImpactItem[];
   sideEffects: ImpactItem[];
 }> {
-  return { blockers: [], changes: [], sideEffects: [] };
+  const dbClient = getDb(db);
+  return {
+    blockers: [],
+    changes: present([
+      impact({
+        disposition:
+          FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY[
+            "FinancialTransactionAllocation.transactionId"
+          ],
+        edgeKey: "FinancialTransactionAllocation.transactionId",
+        label: "settlement allocations removed",
+        byTargetId: await countByTarget(
+          dbClient,
+          financialTransactionAllocation,
+          financialTransactionAllocation.transactionId,
+          ids,
+        ),
+      }),
+    ]),
+    sideEffects: [],
+  };
 }
 
 /**

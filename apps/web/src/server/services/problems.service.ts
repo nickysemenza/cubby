@@ -78,6 +78,7 @@ import {
   findDuplicateVendors,
   findEmptyLocations,
   findEntitiesMissingEmbeddings,
+  findFinancialTransactionAllocationDefects,
   findIngredientsWithoutProduct,
   findIngredientsWithUnusedAliases,
   findInvalidFinancialJson,
@@ -552,6 +553,11 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
         findDuplicateFinancialTransactionSourceRefs(scoped),
       duplicateFinancialAccountSourceAliases: () =>
         findDuplicateFinancialAccountSourceAliases(scoped),
+      // One grouped scan over live transactions LEFT JOINed to live
+      // allocations — DB-only and indexed on both FKs, so it belongs here
+      // rather than in a CPU group.
+      financialTransactionAllocationDefects: () =>
+        findFinancialTransactionAllocationDefects(scoped),
       invalidFinancialJson: () => findInvalidFinancialJson(scoped),
       // Two UNION ALL queries over 34 indexed FK joins. Sits in this group
       // rather than its own because the cost is I/O, not the CPU the other
@@ -599,6 +605,8 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       r.duplicateFinancialTransactionSourceRefs,
     duplicateFinancialAccountSourceAliases:
       r.duplicateFinancialAccountSourceAliases,
+    financialTransactionAllocationDefects:
+      r.financialTransactionAllocationDefects,
     invalidFinancialJson: r.invalidFinancialJson,
     referentialLivenessViolations: r.referentialLivenessViolations,
   };

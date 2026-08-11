@@ -1,7 +1,7 @@
 /**
  * The stable *meaning* of every incoming edge in `INCOMING_EDGES`
  * (`./entity-incoming-edges.ts`) — one `EdgeSemantics` record per edge,
- * covering all 14 entities and all 35 edges (three entities have none).
+ * covering all 14 entities and all 37 edges (two entities have none).
  *
  * "Stable" is the whole point: a `role` describes what the edge represents in
  * the domain (a photo, a ledger line, a hierarchy pointer) — never what any
@@ -340,7 +340,14 @@ export const ENTITY_EDGE_SEMANTICS = {
       role: "transaction",
       label: "financial transactions",
       description:
-        "A settlement-side event linked to this vendor purchase. Its amount is evidence only; spend remains SUM(Expense.cost).",
+        "A settlement-side event linked to this vendor purchase. Its amount is evidence only; spend remains SUM(Expense.cost). Transitional: a derived mirror of the sole settlement allocation, non-null only when there is exactly one, and dropped once the settlement reads have migrated to FinancialTransactionAllocation.",
+      liveness: { kind: "must-target-live" },
+    },
+    "FinancialTransactionAllocation.purchaseId": {
+      role: "transaction",
+      label: "settlement allocations",
+      description:
+        "A slice of one card or bank transaction attributed to this purchase. One real charge can settle several purchases, so the slice — not the whole transaction — is what this order settled. The amount is evidence only; spend remains SUM(Expense.cost).",
       liveness: { kind: "must-target-live" },
     },
   },
@@ -353,7 +360,15 @@ export const ENTITY_EDGE_SEMANTICS = {
       liveness: { kind: "must-target-live" },
     },
   },
-  financialTransaction: {},
+  financialTransaction: {
+    "FinancialTransactionAllocation.transactionId": {
+      role: "composition",
+      label: "purchase allocations",
+      description:
+        "One slice of this transaction's amount, attributed to a single Purchase. The slices are meaningless apart from the charge whose amount they decompose: a transaction has either none of them, or a set that sums to its amount exactly and shares its sign.",
+      liveness: { kind: "must-target-live" },
+    },
+  },
   wish: {
     "WishCandidate.wishId": {
       role: "owned-child",

@@ -76,6 +76,8 @@ const PROBLEM_LABELS: Record<
   duplicateFinancialTransactionSourceRefs: (n) =>
     `${n} duplicate transaction reference`,
   duplicateFinancialAccountSourceAliases: (n) => `${n} duplicate account alias`,
+  financialTransactionAllocationDefects: (n) =>
+    pl(n, "broken settlement allocation"),
   invalidFinancialJson: (n) => `${n} invalid financial record`,
   referentialLivenessViolations: (n) => pl(n, "dangling reference"),
 };

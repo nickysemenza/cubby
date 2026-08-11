@@ -656,6 +656,34 @@ export const duplicateFinancialAccountSourceAliasSchema = z.object({
   accountIds: z.array(financialAccountShortcode),
 });
 
+/**
+ * A broken `FinancialTransactionAllocation` invariant. Every reason has a
+ * mechanical cause and a definite right answer, so this is a `defect`, not a
+ * judgment call like `purchaseFinancialSettlementMismatches`.
+ */
+export const financialTransactionAllocationDefectReason = z.enum([
+  /** Allocations exist but do not sum to the transaction's own amount. */
+  "sum-mismatch",
+  /** The derived `purchaseId` mirror disagrees with the live allocations. Transitional; retires with the column. */
+  "mirror-drift",
+  /** A transaction of a non-settlement kind carries allocations. */
+  "non-settlement-kind",
+  /** The transaction's amount has the wrong sign for its kind. Replaces the DB CHECK, which passes vacuously once the mirror is NULL. */
+  "kind-sign-violation",
+  /** An allocation's sign differs from the transaction it slices. */
+  "allocation-sign-mismatch",
+]);
+
+export const financialTransactionAllocationDefectSchema = z.object({
+  id: financialTransactionShortcode,
+  reasons: z.array(financialTransactionAllocationDefectReason).min(1),
+  kind: z.string(),
+  amount: z.number(),
+  allocationCount: z.number().int(),
+  allocatedTotal: z.number(),
+  purchaseIds: z.array(purchaseShortcode),
+});
+
 export const invalidFinancialJsonSchema = z.discriminatedUnion("entity", [
   z.object({
     entity: z.literal("financialAccount"),
@@ -716,6 +744,9 @@ const problemsFastShape = {
   ),
   duplicateFinancialAccountSourceAliases: z.array(
     duplicateFinancialAccountSourceAliasSchema,
+  ),
+  financialTransactionAllocationDefects: z.array(
+    financialTransactionAllocationDefectSchema,
   ),
   invalidFinancialJson: z.array(invalidFinancialJsonSchema),
   // A live row still pointing at a soft-deleted target — see
@@ -941,6 +972,7 @@ export const PROBLEM_CLASS = {
   duplicateSpendCandidates: "coverage",
   duplicateFinancialTransactionSourceRefs: "defect",
   duplicateFinancialAccountSourceAliases: "defect",
+  financialTransactionAllocationDefects: "defect",
   invalidFinancialJson: "defect",
 } as const satisfies Record<ProblemKey, ProblemClass>;
 
@@ -1133,6 +1165,9 @@ export type DuplicateFinancialTransactionSourceRef = z.infer<
 >;
 export type DuplicateFinancialAccountSourceAlias = z.infer<
   typeof duplicateFinancialAccountSourceAliasSchema
+>;
+export type FinancialTransactionAllocationDefect = z.infer<
+  typeof financialTransactionAllocationDefectSchema
 >;
 export type InvalidFinancialJson = z.infer<typeof invalidFinancialJsonSchema>;
 export type EntityMissingEmbedding = z.infer<

@@ -55,6 +55,7 @@ export {
 export {
   findDuplicateFinancialAccountSourceAliases,
   findDuplicateFinancialTransactionSourceRefs,
+  findFinancialTransactionAllocationDefects,
   findInvalidFinancialJson,
   findPurchaseFinancialSettlementMismatches,
 } from "./detectors-financial";

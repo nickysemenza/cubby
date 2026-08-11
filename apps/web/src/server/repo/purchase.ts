@@ -176,6 +176,12 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
     description:
       "Deleting a purchase detaches its linked financial settlement entries; financial evidence remains retained on its account.",
   },
+  "FinancialTransactionAllocation.purchaseId": {
+    code: "soft-delete-allocations-of-affected-transactions",
+    effect: "soft-delete",
+    description:
+      "Deleting a purchase removes its settlement allocations — and, for a transaction that was split across this purchase and others, the sibling slices too, because a partial allocation set is not a legal state: a transaction has either none, or a set summing to its amount. Those transactions revert to unlinked evidence on their accounts; no amount changes. For the ordinary single-allocation transaction this is exactly equivalent to detaching it.",
+  },
 } as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
 
 export const PURCHASE_MERGE_EDGE_POLICY = {
@@ -198,10 +204,16 @@ export const PURCHASE_MERGE_EDGE_POLICY = {
       "The absorbed purchase's product links move onto the survivor, skipping products already linked there, and the source links are soft-deleted.",
   },
   "FinancialTransaction.purchaseId": {
-    code: "repoint-live-fk-with-audit",
+    code: "rederive-settlement-mirror",
     effect: "repoint",
     description:
-      "Merging purchases re-points their linked financial settlement entries to the surviving purchase.",
+      "The single-settlement mirror column is re-derived from the surviving allocations rather than re-pointed directly — a transaction holding a slice of both purchases collapses to one slice on the survivor and becomes singly-linked again, which a plain repoint could never produce.",
+  },
+  "FinancialTransactionAllocation.purchaseId": {
+    code: "move-and-sum-amounts-then-soft-delete-source",
+    effect: "move-dedupe",
+    description:
+      "The absorbed purchase's settlement allocations move onto the survivor. Where BOTH purchases held a slice of the SAME transaction the two slices are SUMMED into one row rather than one being skipped — unlike images and product links an allocation carries an amount, so dropping the duplicate would destroy evidence and break the transaction's sum-to-amount invariant. The source rows are soft-deleted.",
   },
 } as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
 

@@ -135,13 +135,17 @@ const quoteKinds = (kinds: readonly string[]) =>
   kinds.map((kind) => `'${kind}'`).join(", ");
 
 /**
- * The SQL body of `FinancialTransaction_purchase_settlement_check`, generated
- * from `purchaseSettlementSignRules` so the DB constraint cannot drift from the
- * TypeScript rule above. The CHECK is scoped to linked rows, so `binds` is not
- * consulted here — every rule applies.
+ * "This row's amount has the right sign for its kind" as SQL, generated from
+ * `purchaseSettlementSignRules`. Scoped to rows already known to be LINKED, so
+ * `binds` is not consulted — every rule applies to a linked row.
+ *
+ * Exported because two things need it and neither may hand-write it: the DB
+ * CHECK below, and `findFinancialTransactionAllocationDefects`, which is what
+ * still enforces this rule for a transaction split across several Purchases —
+ * such a row's mirror `purchaseId` is NULL, so the CHECK passes vacuously and
+ * the detector is the only thing left watching.
  */
-export const purchaseSettlementCheckExpression = (columns: {
-  purchaseId: string;
+export const purchaseSettlementSignSatisfiedExpression = (columns: {
   kind: string;
   amount: string;
 }): string => {
@@ -164,10 +168,27 @@ export const purchaseSettlementCheckExpression = (columns: {
       ? [`${columns.kind} IN (${quoteKinds(withSign("any"))})`]
       : []),
   ];
-  return `${columns.purchaseId} IS NULL OR (${columns.kind} IN (${quoteKinds(
-    purchaseSettlementKinds,
-  )}) AND (${clauses.join(" OR ")}))`;
+  return `(${clauses.join(" OR ")})`;
 };
+
+/** `kind IN (<settlement kinds>)` — the allowlist half, same single source. */
+export const purchaseSettlementKindAllowedExpression = (kindColumn: string) =>
+  `${kindColumn} IN (${quoteKinds(purchaseSettlementKinds)})`;
+
+/**
+ * The SQL body of `FinancialTransaction_purchase_settlement_check`, generated
+ * from `purchaseSettlementSignRules` so the DB constraint cannot drift from the
+ * TypeScript rule above. The CHECK is scoped to linked rows, so `binds` is not
+ * consulted here — every rule applies.
+ */
+export const purchaseSettlementCheckExpression = (columns: {
+  purchaseId: string;
+  kind: string;
+  amount: string;
+}): string =>
+  `${columns.purchaseId} IS NULL OR (${purchaseSettlementKindAllowedExpression(
+    columns.kind,
+  )} AND ${purchaseSettlementSignSatisfiedExpression(columns)})`;
 
 export const financialTransactionStatus = z.enum([
   "expected",
