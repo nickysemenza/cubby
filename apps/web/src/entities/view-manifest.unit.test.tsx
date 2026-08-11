@@ -311,3 +311,43 @@ describe("views reveal the columns they select on", () => {
     }
   });
 });
+
+/**
+ * `unlocated` and `unlocated-durables` answer the same question at two widths,
+ * and the narrow one is only trustworthy as a shortcut if it is a strict
+ * narrowing rather than a second, independently-drifting definition. Asserting
+ * the superset relation is what keeps them from diverging: edit the broad
+ * view's predicate and this fails until the narrow one follows.
+ */
+describe("the unlocated views stay one question at two widths", () => {
+  const productViews = viewManifest.product ?? [];
+  const broad = productViews.find((v) => v.id === "unlocated");
+  const durables = productViews.find((v) => v.id === "unlocated-durables");
+
+  it("selects on expected-quantity and inventory-presence", () => {
+    expect(broad?.filters).toEqual([
+      { id: "expectedQuantity", value: "positive" },
+      { id: "location", value: [FILTER_NONE] },
+    ]);
+  });
+
+  it("narrows the broad view rather than restating it", () => {
+    expect(broad).toBeDefined();
+    expect(durables).toBeDefined();
+    for (const filter of broad?.filters ?? []) {
+      expect(
+        durables?.filters,
+        `unlocated-durables dropped ${filter.id}`,
+      ).toContainEqual(filter);
+    }
+    expect(durables?.filters.length).toBe((broad?.filters.length ?? 0) + 1);
+  });
+
+  it("never reveals Variance, which is `—` for every row it selects", () => {
+    // `onHandUnitsSql` returns NULL on a zero-entry shelf, so the variance
+    // subtraction is NULL across the whole cohort by construction.
+    for (const view of [broad, durables]) {
+      expect(view?.columnVisibility?.quantityVariance).toBeUndefined();
+    }
+  });
+});

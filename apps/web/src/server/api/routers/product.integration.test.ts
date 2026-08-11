@@ -1,3 +1,4 @@
+import type { ProductCategory } from "@cubby/schemas/product";
 import {
   type ExpenseCreateInput,
   expenseCreateInput,
@@ -278,6 +279,138 @@ describe("product.list quantity ledger", () => {
     expect(disagreeing.items.map((item) => item.id)).not.toContain(mixed.id);
     const agreeingOnly = await list({ quantityVarianceFilter: "matched" });
     expect(agreeingOnly.items.map((item) => item.id)).not.toContain(mixed.id);
+  });
+});
+
+/**
+ * The `unlocated` saved views select on `expectedQuantityMin` + an inventory
+ * presence of `none` — two filters that already existed but were never combined
+ * or tested. This is the behavioural contract behind them; the manifest entries
+ * are only a preset over this query.
+ *
+ * It is deliberately the complement of the variance filters above:
+ * `quantityVarianceFilter` is scoped to products that are BOTH stocked and in
+ * the ledger, and `onHandUnitsSql` is NULL for a zero-entry shelf, so nothing in
+ * that pair can reach a product that is owned on paper and stocked nowhere.
+ */
+describe("product.list unlocated cohort", () => {
+  const ctx = withTestDb();
+
+  const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
+    createExpense(
+      ctx.db,
+      expenseCreateInput.parse(makeExpenseInput(overrides)),
+      ctx.actor,
+    );
+
+  const list = (filters: Record<string, unknown> = {}) =>
+    createTestCaller(productRouter, ctx.db).list({
+      filters,
+      sort: { orderBy: "name", direction: "asc" },
+      pagination: { pageIndex: 0, pageSize: 50 },
+    });
+
+  it("selects owned-on-paper, stocked-nowhere — and nothing else", async () => {
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Unlocated shelf" }),
+      ctx.actor,
+    );
+    const make = (name: string, category: ProductCategory) =>
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name, category }),
+        ctx.actor,
+      );
+
+    // Bought 2, never sold, never stocked. The whole point.
+    const unlocated = await make("A Unlocated Rack", "tools");
+    // Same ledger, but it is on a shelf — that is `shelf-disagrees` territory.
+    const stocked = await make("B Stocked Rack", "tools");
+    // Bought one, sold one: nets to zero, so nothing is owned to be missing.
+    const soldOff = await make("C Sold Off Rack", "tools");
+    // No ledger at all — a provenance gap, not a location one.
+    const noLedger = await make("D Ledgerless Rack", "tools");
+    // Its only line proves the cost but not the count. A null quantity is never
+    // read as 1, so it cannot push the ledger to "one or more owned".
+    const unknownOnly = await make("E Uncounted Rack", "tools");
+    // Unlocated too, but a consumable — the reason the broad view cannot be
+    // scoped by category, and the reason the durables view exists.
+    const consumable = await make("F Unlocated Snacks", "food");
+
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: stocked.entityId,
+        locationId: shelf.entityId,
+        amount: { value: 2, unit: "each" },
+      },
+      ctx.actor,
+    );
+
+    await seedLine({
+      name: "racks",
+      cost: 40,
+      productId: unlocated.id,
+      productQuantity: 2,
+    });
+    await seedLine({
+      name: "racks, shelved",
+      cost: 40,
+      productId: stocked.id,
+      productQuantity: 2,
+    });
+    await seedLine({
+      name: "rack in",
+      cost: 20,
+      productId: soldOff.id,
+      productQuantity: 1,
+    });
+    await seedLine({
+      name: "rack out",
+      cost: -12,
+      productId: soldOff.id,
+      productQuantity: 1,
+    });
+    await seedLine({
+      name: "racks, count unknown",
+      cost: 15,
+      productId: unknownOnly.id,
+      productQuantity: null,
+    });
+    await seedLine({
+      name: "snacks",
+      cost: 9,
+      productId: consumable.id,
+      productQuantity: 3,
+    });
+
+    const cohort = await list({
+      expectedQuantityMin: 1,
+      inventoryPresenceFilter: "none",
+    });
+    expect(cohort.items.map((row) => row.id)).toEqual([
+      unlocated.id,
+      consumable.id,
+    ]);
+    // Spelled out so a regression names the row it wrongly admitted.
+    for (const excluded of [stocked, soldOff, noLedger, unknownOnly]) {
+      expect(cohort.items.map((row) => row.id)).not.toContain(excluded.id);
+    }
+
+    // The unlocated row is exactly the one the variance filters cannot see.
+    const disagreeing = await list({ quantityVarianceFilter: "mismatched" });
+    expect(disagreeing.items.map((row) => row.id)).not.toContain(unlocated.id);
+    const agreeing = await list({ quantityVarianceFilter: "matched" });
+    expect(agreeing.items.map((row) => row.id)).not.toContain(unlocated.id);
+
+    // `unlocated-durables` adds one category predicate and drops the snacks.
+    const durables = await list({
+      expectedQuantityMin: 1,
+      inventoryPresenceFilter: "none",
+      categoryFilter: ["tools", "tool-accessories", "storage"],
+    });
+    expect(durables.items.map((row) => row.id)).toEqual([unlocated.id]);
   });
 });
 
