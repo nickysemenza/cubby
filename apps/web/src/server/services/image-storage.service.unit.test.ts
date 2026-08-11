@@ -180,6 +180,8 @@ describe("attachFileToEntity", () => {
 
     expect(result.kind).toBe("image");
     expect(result.imageId).toBe("img-99");
+    // A real upload, so the caller can tell this apart from a replay.
+    expect(result.reused).toBe(false);
     expect(result.entityId).toBe("PRD-TEST");
     expect(mocks.uploadToS3).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -330,6 +332,7 @@ describe("attachFileToEntity", () => {
     });
 
     expect(result.imageId).toBe("winner-1");
+    expect(result.reused).toBe(true);
     expect(mocks.uploadToS3).not.toHaveBeenCalled();
   });
 
@@ -353,6 +356,7 @@ describe("attachFileToEntity", () => {
     });
 
     expect(result.imageId).toBe("winner-2");
+    expect(result.reused).toBe(true);
     expect(mocks.deleteS3Object).toHaveBeenCalledWith(
       expect.stringContaining("cubby/images/"),
     );

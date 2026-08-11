@@ -307,7 +307,12 @@ export const locationCreateInput = z.object(locationCreateShape);
 // `parentId` inherits the create field's description — harmless doc, same type.)
 export const locationUpdateData = deriveUpdateData(locationCreateShape, {
   extend: {
-    removeImageIds: z.array(z.uuid()).optional(),
+    removeImageIds: z
+      .array(z.uuid())
+      .optional()
+      .describe(
+        "Image ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
+      ),
     imageOrder: z
       .array(z.uuid())
       .optional()

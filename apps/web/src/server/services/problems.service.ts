@@ -56,7 +56,11 @@ import {
   findOrphanedEntityEmbeddings,
   softDeleteEntityEmbeddingRows,
 } from "~/server/repo/entity-embedding";
-import { countCullablePendingImages } from "~/server/repo/image";
+import {
+  countCullablePendingImages,
+  countUnreferencedImages,
+  findUnreferencedImages,
+} from "~/server/repo/image";
 import {
   deleteIngredients,
   findOrCreateIngredient,
@@ -390,6 +394,7 @@ export const findMaintenanceCounts = async (
     staleRecipeTotals: () => countStaleRecipeTotals(db),
     cullablePendingImages: () =>
       countCullablePendingImages(db, CULL_PENDING_IMAGES_DEFAULT_HOURS),
+    unreferencedImages: () => countUnreferencedImages(db),
     entitiesMissingEmbeddings: () => countMissingEmbeddings(db),
   });
 
@@ -402,6 +407,7 @@ export const findMaintenanceCounts = async (
     locationsWithoutAiDescription: r.locationsWithoutAiDescription.length,
     staleRecipeTotals: r.staleRecipeTotals,
     cullablePendingImages: r.cullablePendingImages,
+    unreferencedImages: r.unreferencedImages,
     // Uncapped, unlike the Problems section's sampled item rows — this is what
     // the auto-fix button counts.
     entitiesMissingEmbeddings: r.entitiesMissingEmbeddings,
@@ -515,6 +521,10 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       locationsWithoutAiDescription: () =>
         findLocationsWithoutAiDescription(scoped),
       orphanedEntityEmbeddings: () => findOrphanedEntityEmbeddings(scoped),
+      // Six index-only scans of the small join tables plus one Image scan. Sits
+      // in this group for the same reason `referentialLivenessViolations` does:
+      // the cost is I/O, not the CPU the other groups exist to isolate.
+      unreferencedImages: () => findUnreferencedImages(scoped),
       entitiesMissingEmbeddings: () => findMissingEmbeddings(scoped),
       staleParentRecipes: () => findParentRecipesWithDeletedSubRecipes(scoped),
       staleLocations: () => findStaleLocations(scoped),
@@ -569,6 +579,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     })),
     locationsWithoutAiDescription: r.locationsWithoutAiDescription,
     orphanedEntityEmbeddings: r.orphanedEntityEmbeddings,
+    unreferencedImages: r.unreferencedImages,
     entitiesMissingEmbeddings: r.entitiesMissingEmbeddings,
     staleParentRecipes: r.staleParentRecipes,
     staleLocations: r.staleLocations,

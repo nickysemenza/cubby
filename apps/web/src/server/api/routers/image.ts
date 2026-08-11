@@ -42,6 +42,7 @@ import {
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 import {
   attachFileToEntity,
+  cleanupUnreferencedImageStorage,
   createFileUpload,
   cullPendingImageStorage,
   deleteImagesWithStorage,
@@ -326,6 +327,24 @@ export const imageRouter = createTRPCRouter({
         throw createAppError(
           "IMAGE_CULL_FAILED",
           "Failed to cull pending images",
+          error,
+        );
+      }
+    }),
+
+  /**
+   * Delete UPLOADED files nothing references, plus their R2 objects. The
+   * fix path for the `unreferencedImages` Problems section.
+   */
+  cleanupUnreferencedImages: protectedProcedure
+    .output(strictOutput(cullPendingImagesResponseSchema))
+    .mutation(async ({ ctx }) => {
+      try {
+        return await cleanupUnreferencedImageStorage(ctx.db);
+      } catch (error) {
+        throw createAppError(
+          "IMAGE_CULL_FAILED",
+          "Failed to clean up unreferenced files",
           error,
         );
       }

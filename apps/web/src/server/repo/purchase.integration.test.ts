@@ -2482,6 +2482,67 @@ describe("purchase repository — a soft-deleted charge reads as absent", () => 
 describe("purchase repository — documents", () => {
   const ctx = withTestDb();
 
+  /**
+   * Detaching a document deletes it — the join row is not the only thing the
+   * removal has to take. This is also the one detach site with a data-quality
+   * dependency: `deleteImagesTx` calls `touchDataQualityTargets`, so the
+   * purchase's documentCount has to move with the file.
+   */
+  it("removing a document deletes the file and returns its key for R2", async () => {
+    const vendorId = await vendorShortcodeByName(ctx.db, "Metal Supermarkets");
+    const { output: charge } = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        date: "2024-02-20",
+        vendorId,
+        orderId: "MS-INVOICE-DETACH",
+      }),
+      ctx.actor,
+    );
+    const chargeUuid = await purchaseUuid(ctx.db, charge.id);
+
+    const attached = await attachFileToEntity(ctx.db, {
+      entityType: "purchase",
+      entityId: charge.id,
+      data: Buffer.from("%PDF-1.4 detach me").toString("base64"),
+      contentType: "application/pdf",
+      filename: "detach-me.pdf",
+      documentKind: "invoice",
+    });
+    const [before] = await getDb(ctx.db)
+      .select({ key: image.key })
+      .from(image)
+      .where(eq(image.id, attached.imageId));
+
+    const { detachedImageKeys } = await updatePurchase(
+      ctx.db,
+      { id: charge.id, data: { removeImageIds: [attached.imageId] } },
+      ctx.actor,
+    );
+
+    expect(detachedImageKeys).toEqual([before?.key]);
+    // Unfiltered: a `notDeleted` read cannot tell "deleted" from "orphaned".
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(image)
+        .where(eq(image.id, attached.imageId)),
+    ).toHaveLength(0);
+    expect(
+      await getDb(ctx.db).query.purchaseImage.findMany({
+        where: eq(purchaseImage.purchaseId, chargeUuid),
+      }),
+    ).toHaveLength(0);
+
+    const stillListed = await purchaseList(
+      ctx.db,
+      { documentPresenceFilter: "has" },
+      [],
+      page,
+    );
+    expect(stillListed.data.map((row) => row.id)).not.toContain(charge.id);
+  });
+
   it("attaches a PDF to a charge and reads it back as a document", async () => {
     const vendorId = await vendorShortcodeByName(ctx.db, "Metal Supermarkets");
     const { output: charge } = await createPurchase(

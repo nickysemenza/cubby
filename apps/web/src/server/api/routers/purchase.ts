@@ -62,6 +62,7 @@ import {
   resolveShortcode,
 } from "~/server/repo/shortcode-resolver";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
+import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
@@ -94,12 +95,17 @@ const procedures = createSearchableEntityCrudProcedures({
     list: (ctx, filters, sorts, pagination) =>
       purchaseList(ctx.db, filters, sorts, pagination),
     create: (ctx, data) => createPurchase(ctx.db, data, ctx.actorContext),
-    update: (ctx, id, data) =>
-      updatePurchase(
+    update: async (ctx, id, data) => {
+      const { output, entityId, detachedImageKeys } = await updatePurchase(
         ctx.db,
         { id: unsafePurchaseShortcode(id), data },
         ctx.actorContext,
-      ),
+      );
+      // After the commit, never inside it: an R2 delete has no rollback. The
+      // keys are destructured off here so they never reach `strictOutput`.
+      await deleteStoredObjects(detachedImageKeys);
+      return { output, entityId };
+    },
     /**
      * NOT a plain repo passthrough. Deleting a purchase DETACHES the expenses
      * and financial transactions that pointed at it, and those rows embed the

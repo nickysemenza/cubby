@@ -283,6 +283,30 @@ function CullPendingImagesAction() {
   );
 }
 
+// Delete UPLOADED files no edge reaches, plus their R2 objects. The fix path for
+// the "Unreferenced files" Problems section — mostly residue from entity deletes,
+// whose cascade soft-deletes the join row and leaves the file behind.
+function CleanupUnreferencedImagesAction() {
+  const api = useTRPC();
+  const cleanup = useActionMutation({
+    mutationFn: api.image.cleanupUnreferencedImages.mutationOptions,
+    success: (data) =>
+      data.count > 0
+        ? `Deleted ${pluralize("unreferenced file", data.count, true)}.`
+        : "No unreferenced files.",
+    invalidateKeys: CULL_INVALIDATE_KEYS,
+  });
+
+  return (
+    <ProblemActionButton
+      onClick={() => cleanup.mutate(undefined)}
+      isPending={cleanup.isPending}
+      idleLabel="Delete now"
+      pendingLabel="Deleting…"
+    />
+  );
+}
+
 // Rebuild every location's persisted valuation rollup. Idempotent; the safety
 // net for writes that bypass the router (raw SQL / postgres MCP).
 function RecomputeValuationsAction() {
@@ -361,6 +385,13 @@ const MAINTENANCE_TOOLS: {
     description: `Delete abandoned uploads — PENDING images with no entity, older than ${CULL_PENDING_IMAGES_DEFAULT_HOURS}h — from the database and R2.`,
     count: (c) => c.cullablePendingImages,
     action: <CullPendingImagesAction />,
+  },
+  {
+    label: "Delete unreferenced files",
+    description:
+      "Delete UPLOADED files nothing points at — R2 pays for them and no page can render them — from the database and R2.",
+    count: (c) => c.unreferencedImages,
+    action: <CleanupUnreferencedImagesAction />,
   },
   {
     label: "Recompute location valuations",

@@ -123,6 +123,7 @@ import {
   settleableExpenseTotalSql,
   settleableUnpricedExpenseCountSql,
 } from "~/server/repo/financial-reconciliation";
+import { detachImagesFromEntity } from "~/server/repo/image";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import {
@@ -412,7 +413,9 @@ const syncPurchaseImages = async (
   pendingImageIds: string[] | undefined,
   removeImageIds: string[] | undefined,
   imageOrder: string[] | undefined,
-): Promise<void> => {
+): Promise<string[]> => {
+  let detachedImageKeys: string[] = [];
+
   if (imageOrder && imageOrder.length > 0) {
     await applyImageOrder(
       tx,
@@ -424,14 +427,12 @@ const syncPurchaseImages = async (
   }
 
   if (removeImageIds && removeImageIds.length > 0) {
-    await tx
-      .delete(purchaseImage)
-      .where(
-        and(
-          eq(purchaseImage.purchaseId, id),
-          inArray(purchaseImage.imageId, removeImageIds),
-        ),
-      );
+    ({ deletedKeys: detachedImageKeys } = await detachImagesFromEntity(
+      tx,
+      "purchase",
+      id,
+      removeImageIds,
+    ));
   }
 
   if (pendingImageIds && pendingImageIds.length > 0) {
@@ -450,6 +451,8 @@ const syncPurchaseImages = async (
       startSortOrder,
     );
   }
+
+  return detachedImageKeys;
 };
 
 /**
@@ -897,9 +900,15 @@ export const updatePurchase = async (
   db: Database,
   input: PurchaseUpdateInput,
   actor: ActorContext,
-): Promise<{ output: PurchaseOut; entityId: PurchaseId }> => {
+): Promise<{
+  output: PurchaseOut;
+  entityId: PurchaseId;
+  /** R2 objects `removeImageIds` reaped; drop them after this commit. */
+  detachedImageKeys: string[];
+}> => {
   const { data } = input;
   const id = await resolveOrThrow(db, "purchase", input.id);
+  let detachedImageKeys: string[] = [];
 
   await withTransaction(db, async (tx) => {
     const before = await tx.query.purchase.findFirst({
@@ -952,7 +961,7 @@ export const updatePurchase = async (
       }
     }
 
-    await syncPurchaseImages(
+    detachedImageKeys = await syncPurchaseImages(
       tx,
       id,
       data.pendingImageIds,
@@ -989,7 +998,11 @@ export const updatePurchase = async (
     }
   });
 
-  return { output: await getPurchaseByID(db, id), entityId: id };
+  return {
+    output: await getPurchaseByID(db, id),
+    entityId: id,
+    detachedImageKeys,
+  };
 };
 
 /**

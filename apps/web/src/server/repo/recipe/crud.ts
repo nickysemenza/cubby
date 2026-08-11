@@ -845,7 +845,8 @@ export const updateRecipe = async (
   id: RecipeId,
   updates: RecipeUpdateInput["data"],
   actor: ActorContext,
-): Promise<RecipeOut> => {
+): Promise<{ recipe: RecipeOut; detachedImageKeys: string[] }> => {
+  let detachedImageKeys: string[] = [];
   const existingRecipe = await getDb(db).query.recipe.findFirst({
     where: eq(recipe.id, id),
     with: {
@@ -864,9 +865,9 @@ export const updateRecipe = async (
   // Store before state for audit logging
   const beforeState = { name: existingRecipe.name };
 
-  return await withTransaction(db, async (tx) => {
+  const updatedRecipe = await withTransaction(db, async (tx) => {
     await updateRecipeBasicProperties(tx, id, updates, existingRecipe);
-    await updateRecipeImages(tx, id, updates);
+    detachedImageKeys = await updateRecipeImages(tx, id, updates);
 
     if (updates.sections) {
       await handleSectionUpdates(tx, id, updates.sections, existingRecipe);
@@ -893,6 +894,7 @@ export const updateRecipe = async (
 
     return fullRecipe;
   });
+  return { recipe: updatedRecipe, detachedImageKeys };
 };
 
 /**

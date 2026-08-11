@@ -607,7 +607,7 @@ describe("product repository", () => {
 
     const createdProduct = await createProduct(ctx.db, productData, ctx.actor);
 
-    const updatedProduct = await updateProduct(
+    const { product: updatedProduct } = await updateProduct(
       ctx.db,
       createdProduct.entityId,
       {
@@ -1583,7 +1583,7 @@ describe("product repository", () => {
         const has = await listWith({ pricePresenceFilter: "has" });
         expect(has.data.map((p) => p.id)).toContain(derived.id);
 
-        const overridden = await updateProduct(
+        const { product: overridden } = await updateProduct(
           ctx.db,
           derived.entityId,
           { price: 8 },
@@ -1602,7 +1602,7 @@ describe("product repository", () => {
         });
         expect(overrideValuation?.valuation).toBeCloseTo(16);
 
-        const resumed = await updateProduct(
+        const { product: resumed } = await updateProduct(
           ctx.db,
           derived.entityId,
           { price: null },
@@ -2067,7 +2067,7 @@ describe("product repository", () => {
         ctx.actor,
       );
 
-      const renamed = await updateProduct(
+      const { product: renamed } = await updateProduct(
         ctx.db,
         other.entityId,
         { manufacturer: "BOSCH" },

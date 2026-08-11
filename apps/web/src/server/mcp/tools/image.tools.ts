@@ -95,7 +95,9 @@ export function registerImageTools(server: McpServer) {
       `${ATTACH_FILE_SOURCE_PROSE} Resolve the ` +
       "target shortcode first via search_products / list_recipes / list_locations / " +
       "list_projects; for a purchase use list_purchases / get_purchase, or read " +
-      "`purchaseId` off any expense row (list_expenses / get_expense).",
+      "`purchaseId` off any expense row (list_expenses / get_expense). " +
+      "`reused: true` in the response means the idempotencyKey matched a file that is " +
+      "still attached and nothing was uploaded; `false` means this call stored bytes.",
     // `entityType` is dropped on purpose: a shortcode's prefix already names
     // the entity, so asking for both invites a mismatched pair. The handler
     // derives the type from the code and rejects a non-attachable one.

@@ -31,6 +31,7 @@ import {
   resolveLiveShortcode,
   resolveOrThrow,
 } from "../repo/shortcode-resolver";
+import { deleteStoredObjects } from "./image-storage.service";
 import { batchEnrichWithFood } from "./usda-helpers";
 
 export type ProductWriteResult = {
@@ -214,7 +215,7 @@ export const updateProductWithFood = async (
     data.ingredientId == null
       ? data.ingredientId
       : await resolveOrThrow(db, "ingredient", data.ingredientId);
-  await updateProductRepo(
+  const { detachedImageKeys } = await updateProductRepo(
     db,
     id,
     {
@@ -223,6 +224,9 @@ export const updateProductWithFood = async (
     },
     actor,
   );
+  // After the commit, never inside it: an R2 delete has no rollback. Best-effort
+  // by contract — stranded bytes are cheaper than failing a committed update.
+  await deleteStoredObjects(detachedImageKeys);
   // Eager recompute of dependent recipes (and inventory valuations) happens at
   // the router layer (covers UI + MCP callers) — see the product router's
   // update proc.

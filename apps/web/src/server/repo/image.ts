@@ -16,6 +16,9 @@
  * - {@link countCullablePendingImages}        — how many rows that cull would remove
  * - {@link deleteImages}                      — hard-delete image rows (+ their associations) and return their keys
  * - {@link previewDeleteImages}                — what {@link deleteImages} would do, without doing it
+ * - {@link detachImagesFromEntity}            — remove one entity's associations, reaping images nothing else references
+ * - {@link findUnreferencedImages}            — the backstop detector for images no edge reaches
+ * - {@link countUnreferencedImages}           — how many rows that detector reports
  * - {@link associateImagesWithProduct}        — attach PENDING images to a product
  * - {@link associateImagesWithRecipe}         — attach PENDING images to a recipe
  *
@@ -690,46 +693,262 @@ export const deleteImages = async (
   imageIds: string[],
 ): Promise<{ deletedIds: string[]; deletedKeys: string[] }> => {
   if (imageIds.length === 0) return { deletedIds: [], deletedKeys: [] };
-
-  return await withTransaction(db, async (tx) => {
-    const rows = await fetchExistingImages(tx, imageIds);
-    if (rows.length === 0) return { deletedIds: [], deletedKeys: [] };
-
-    const ids = rows.map((row) => row.id);
-    const affectedPurchases = await tx
-      .selectDistinct({ purchaseId: purchaseImage.purchaseId })
-      .from(purchaseImage)
-      .where(
-        and(inArray(purchaseImage.imageId, ids), notDeleted(purchaseImage)),
-      );
-
-    for (const [key, disposition] of Object.entries(IMAGE_HARD_DELETE)) {
-      const { column } = INCOMING_EDGES.image[key as IncomingEdgeKey<"image">];
-      if (disposition.effect === "hard-delete") {
-        await tx
-          // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for delete()
-          .delete(column.table as any)
-          // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for inArray()
-          .where(inArray(column as any, ids));
-      } else {
-        await tx
-          // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for update()
-          .update(column.table as any)
-          .set({ [column.name]: null })
-          // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for inArray()
-          .where(inArray(column as any, ids));
-      }
-    }
-
-    await tx.delete(image).where(inArray(image.id, ids));
-
-    await touchDataQualityTargets(tx, {
-      purchaseIds: affectedPurchases.map((row) => row.purchaseId),
-    });
-
-    return { deletedIds: ids, deletedKeys: rows.map((row) => row.key) };
-  });
+  return await withTransaction(db, (tx) => deleteImagesTx(tx, imageIds));
 };
+
+/**
+ * The cascade + hard delete itself, on a caller-owned transaction. Extracted so
+ * {@link detachImagesFromEntity} can run it inside the very transaction that
+ * removed the join rows — splitting the two across transactions would leave
+ * exactly the window this whole mechanism exists to close.
+ *
+ * Private on purpose: `deleteImages` keeps the public "I own a boundary"
+ * promise (and its `db.transaction` span) that `withTransactionOn` would blur.
+ */
+const deleteImagesTx = async (
+  tx: DrizzleTransaction,
+  imageIds: string[],
+): Promise<{ deletedIds: string[]; deletedKeys: string[] }> => {
+  if (imageIds.length === 0) return { deletedIds: [], deletedKeys: [] };
+
+  const rows = await fetchExistingImages(tx, imageIds);
+  if (rows.length === 0) return { deletedIds: [], deletedKeys: [] };
+
+  const ids = rows.map((row) => row.id);
+  const affectedPurchases = await tx
+    .selectDistinct({ purchaseId: purchaseImage.purchaseId })
+    .from(purchaseImage)
+    .where(and(inArray(purchaseImage.imageId, ids), notDeleted(purchaseImage)));
+
+  for (const [key, disposition] of Object.entries(IMAGE_HARD_DELETE)) {
+    const { column } = INCOMING_EDGES.image[key as IncomingEdgeKey<"image">];
+    if (disposition.effect === "hard-delete") {
+      await tx
+        // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for delete()
+        .delete(column.table as any)
+        // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for inArray()
+        .where(inArray(column as any, ids));
+    } else {
+      await tx
+        // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for update()
+        .update(column.table as any)
+        .set({ [column.name]: null })
+        // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for inArray()
+        .where(inArray(column as any, ids));
+    }
+  }
+
+  await tx.delete(image).where(inArray(image.id, ids));
+
+  await touchDataQualityTargets(tx, {
+    purchaseIds: affectedPurchases.map((row) => row.purchaseId),
+  });
+
+  return { deletedIds: ids, deletedKeys: rows.map((row) => row.key) };
+};
+
+/**
+ * Which of these images something still points at, reading the SAME edge set as
+ * {@link deleteImages}'s cascade (`INCOMING_EDGES.image`) so "still referenced"
+ * can never drift from "what a delete would have to clear". Omit `imageIds` to
+ * scan every edge whole, for {@link findUnreferencedImages}.
+ *
+ * Liveness is per-disposition, and deliberately NOT uniform:
+ *
+ * - `hard-delete` edges are join rows, filtered by `notDeleted`. A tombstoned
+ *   join row is not a reference: entity deletes cascade a *soft* delete onto it,
+ *   so its owning product/recipe/location/project/purchase is already gone and
+ *   nothing renders it. Reaping the image cannot strand the FK, because
+ *   {@link deleteImagesTx} deletes tombstoned join rows along with live ones.
+ * - the `detach` edge is a direct FK (`Cookbook.coverImageId`), counted with NO
+ *   liveness filter, for the reason `findCullablePendingImages` documents above:
+ *   `deleteCookbook` tombstones the row without nulling the FK, so a soft-deleted
+ *   cookbook still holds a live cover reference. Leaking a cover's bytes is the
+ *   cheaper mistake.
+ */
+const findReferencedImageIds = async (
+  dbc: DrizzleClient | DrizzleTransaction,
+  imageIds?: string[],
+): Promise<Set<string>> => {
+  const referenced = new Set<string>();
+  // Sequential, not Promise.all: a pg transaction is a single connection, and
+  // this runs inside the caller's.
+  for (const [key, disposition] of Object.entries(IMAGE_HARD_DELETE)) {
+    const { column } = INCOMING_EDGES.image[key as IncomingEdgeKey<"image">];
+    const rows = (await dbc
+      // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for select()
+      .select({ imageId: column as any })
+      // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for from()
+      .from(column.table as any)
+      .where(
+        and(
+          // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for isNotNull()
+          isNotNull(column as any),
+          // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for inArray()
+          imageIds ? inArray(column as any, imageIds) : undefined,
+          disposition.effect === "hard-delete"
+            ? // biome-ignore lint/suspicious/noExplicitAny: Drizzle's table type is too narrow for notDeleted()
+              notDeleted(column.table as any)
+            : undefined,
+        ),
+      )) as Array<{ imageId: string | null }>;
+    for (const row of rows) {
+      if (row.imageId) referenced.add(row.imageId);
+    }
+  }
+  return referenced;
+};
+
+/**
+ * Detach images from one entity — and hard-delete the ones that are now
+ * unreachable, because the join row is not the only thing a removal has to take.
+ *
+ * Deleting only the association left an `Image` row with `deletedAt` NULL,
+ * `status` UPLOADED, its `targetType`/`targetId`/`idempotencyKey` intact and its
+ * R2 object still in the bucket: unreferenced, unrenderable, and invisible to
+ * `cullPendingImages` (which only ever reaps PENDING). It also made
+ * `findAttachmentByIdempotencyKey` report that detached row as a successful
+ * re-attach, so an `attach_file` retry with the same key returned success having
+ * uploaded nothing. 132 rows / 68 MB had accumulated in R2 before this landed.
+ *
+ * Runs on the caller's transaction so the detach and the reap commit together.
+ * The returned keys are R2 objects, which have no rollback — drop them only
+ * AFTER the outermost transaction commits, and best-effort.
+ */
+export const detachImagesFromEntity = async (
+  tx: DrizzleTransaction,
+  entityType: AttachableImageEntity,
+  entityId: string,
+  imageIds: string[],
+): Promise<{ deletedIds: string[]; deletedKeys: string[] }> => {
+  if (imageIds.length === 0) return { deletedIds: [], deletedKeys: [] };
+
+  await match(entityType)
+    .with("product", () =>
+      tx
+        .delete(productImage)
+        .where(
+          and(
+            eq(productImage.productId, unsafeProductId(entityId)),
+            inArray(productImage.imageId, imageIds),
+          ),
+        ),
+    )
+    .with("recipe", () =>
+      tx
+        .delete(recipeImage)
+        .where(
+          and(
+            eq(recipeImage.recipeId, unsafeRecipeId(entityId)),
+            inArray(recipeImage.imageId, imageIds),
+          ),
+        ),
+    )
+    .with("location", () =>
+      tx
+        .delete(locationImage)
+        .where(
+          and(
+            eq(locationImage.locationId, unsafeLocationId(entityId)),
+            inArray(locationImage.imageId, imageIds),
+          ),
+        ),
+    )
+    .with("project", () =>
+      tx
+        .delete(projectImage)
+        .where(
+          and(
+            eq(projectImage.projectId, unsafeProjectId(entityId)),
+            inArray(projectImage.imageId, imageIds),
+          ),
+        ),
+    )
+    .with("purchase", () =>
+      tx
+        .delete(purchaseImage)
+        .where(
+          and(
+            eq(purchaseImage.purchaseId, unsafePurchaseId(entityId)),
+            inArray(purchaseImage.imageId, imageIds),
+          ),
+        ),
+    )
+    .exhaustive();
+
+  const referenced = await findReferencedImageIds(tx, imageIds);
+  return await deleteImagesTx(
+    tx,
+    imageIds.filter((id) => !referenced.has(id)),
+  );
+};
+
+/** Grace window before an unattached UPLOADED row counts as orphaned. */
+export const UNREFERENCED_IMAGE_GRACE_HOURS = 1;
+
+/**
+ * UPLOADED images no edge still reaches — bytes R2 charges for that nothing can
+ * render. The mirror of `findCullablePendingImages`, which only ever swept
+ * PENDING rows; that gap is exactly why these accumulated unnoticed. Reads the
+ * same {@link findReferencedImageIds} the detach reap reads, so the detector and
+ * the fix cannot disagree about what "referenced" means.
+ *
+ * The grace window is load-bearing, not cosmetic: `importImageFromUrl` and the
+ * cookbook cover import create an UPLOADED row and associate it in a SEPARATE
+ * step, so a seconds-old unattached row is in flight, not orphaned.
+ *
+ * This does NOT sit at zero yet. `detachImagesFromEntity` closed the detach
+ * path, but an entity *delete* still leaks: `removeEntity` cascades a soft
+ * delete onto the join rows and never touches the `Image` — 49 of the 132 rows
+ * found in production came from there. Until that cascade takes the file too,
+ * "Delete unreferenced files" in Settings → Maintenance is the sweep that clears
+ * the residue, and a nonzero reading here is expected rather than a new bug.
+ */
+export const findUnreferencedImages = async (
+  db: Database,
+  olderThanHours: number = UNREFERENCED_IMAGE_GRACE_HOURS,
+): Promise<
+  Array<{
+    id: string;
+    key: string;
+    filename: string;
+    contentType: string;
+    size: number;
+    createdAt: Date;
+    targetType: string | null;
+    targetId: string | null;
+  }>
+> => {
+  const dbClient = getDb(db);
+  const cutoffDate = new Date();
+  cutoffDate.setHours(cutoffDate.getHours() - olderThanHours);
+
+  const referenced = await findReferencedImageIds(dbClient);
+  const candidates = await dbClient.query.image.findMany({
+    where: and(
+      eq(image.status, "UPLOADED"),
+      notDeleted(image),
+      lt(image.createdAt, cutoffDate),
+    ),
+    columns: {
+      id: true,
+      key: true,
+      filename: true,
+      contentType: true,
+      size: true,
+      createdAt: true,
+      targetType: true,
+      targetId: true,
+    },
+  });
+  return candidates.filter((img) => !referenced.has(img.id));
+};
+
+/** How many unreferenced files {@link findUnreferencedImages} would report. */
+export const countUnreferencedImages = async (
+  db: Database,
+  olderThanHours: number = UNREFERENCED_IMAGE_GRACE_HOURS,
+): Promise<number> => (await findUnreferencedImages(db, olderThanHours)).length;
 
 /** Human-readable labels for each {@link IMAGE_HARD_DELETE} edge, for the preview. */
 const IMAGE_HARD_DELETE_LABELS: Record<IncomingEdgeKey<"image">, string> = {
@@ -933,22 +1152,122 @@ export const assertAttachableEntityExists = async (
   }
 };
 
-/** Locate a previous MCP attachment retry without treating arbitrary Image rows
- * as idempotency winners. */
+/**
+ * Is this image still LIVE-attached to that entity? The five-way dispatch
+ * mirrors {@link countDisplayableAttachedImages}, minus the displayability
+ * filter — a replay is about the attachment existing, not about it rendering.
+ */
+const hasLiveAttachment = async (
+  dbc: DrizzleClient | DrizzleTransaction,
+  entityType: AttachableImageEntity,
+  entityId: string,
+  imageId: string,
+): Promise<boolean> => {
+  const rows = await match(entityType)
+    .with("product", () =>
+      dbc
+        .select({ id: productImage.id })
+        .from(productImage)
+        .where(
+          and(
+            eq(productImage.productId, unsafeProductId(entityId)),
+            eq(productImage.imageId, imageId),
+            notDeleted(productImage),
+          ),
+        )
+        .limit(1),
+    )
+    .with("recipe", () =>
+      dbc
+        .select({ id: recipeImage.id })
+        .from(recipeImage)
+        .where(
+          and(
+            eq(recipeImage.recipeId, unsafeRecipeId(entityId)),
+            eq(recipeImage.imageId, imageId),
+            notDeleted(recipeImage),
+          ),
+        )
+        .limit(1),
+    )
+    .with("location", () =>
+      dbc
+        .select({ id: locationImage.id })
+        .from(locationImage)
+        .where(
+          and(
+            eq(locationImage.locationId, unsafeLocationId(entityId)),
+            eq(locationImage.imageId, imageId),
+            notDeleted(locationImage),
+          ),
+        )
+        .limit(1),
+    )
+    .with("project", () =>
+      dbc
+        .select({ id: projectImage.id })
+        .from(projectImage)
+        .where(
+          and(
+            eq(projectImage.projectId, unsafeProjectId(entityId)),
+            eq(projectImage.imageId, imageId),
+            notDeleted(projectImage),
+          ),
+        )
+        .limit(1),
+    )
+    .with("purchase", () =>
+      dbc
+        .select({ id: purchaseImage.id })
+        .from(purchaseImage)
+        .where(
+          and(
+            eq(purchaseImage.purchaseId, unsafePurchaseId(entityId)),
+            eq(purchaseImage.imageId, imageId),
+            notDeleted(purchaseImage),
+          ),
+        )
+        .limit(1),
+    )
+    .exhaustive();
+  return rows.length > 0;
+};
+
+/**
+ * Locate a previous MCP attachment retry without treating arbitrary Image rows
+ * as idempotency winners.
+ *
+ * `targetType`/`targetId` are PROVENANCE, not a reference — detaching the image
+ * leaves them intact, and so does an entity delete (which soft-deletes the join
+ * row) and the `Cookbook.coverImageId` set-null path. Matching on them alone
+ * made a retry of a detached file report success: no upload, no join row,
+ * `imageCount` unchanged, and a response indistinguishable from a real attach.
+ * So the keyed lookup only names a candidate; the attachment still has to exist.
+ *
+ * Defense in depth now that {@link detachImagesFromEntity} deletes the row it
+ * detaches, and still load-bearing for the paths that leave a
+ * targeted-but-unattached image behind.
+ */
 export const findAttachmentByIdempotencyKey = async (
   db: Database | DrizzleTransaction,
   entityType: AttachableImageEntity,
   entityId: string,
   idempotencyKey: string,
-): Promise<typeof image.$inferSelect | null> =>
-  (await ("query" in db ? db : getDb(db)).query.image.findFirst({
+): Promise<typeof image.$inferSelect | null> => {
+  const dbc = "query" in db ? db : getDb(db);
+  const candidate = await dbc.query.image.findFirst({
     where: and(
       eq(image.targetType, entityType),
       eq(image.targetId, entityId),
       eq(image.idempotencyKey, idempotencyKey),
       notDeleted(image),
     ),
-  })) ?? null;
+  });
+  if (!candidate) return null;
+  return (await hasLiveAttachment(dbc, entityType, entityId, candidate.id))
+    ? candidate
+    : null;
+};
 
 export const getImagesAttachedToEntity = async (
   db: Database,
@@ -1359,6 +1678,16 @@ export const createOrReuseAttachedImage = async (
           params.idempotencyKey,
         );
         if (winner) return { row: winner, reused: true };
+        // Conflicted with a row the liveness check then rejected: the partial
+        // unique index spans unattached rows, so a stale one still owns this
+        // key. `detachImagesFromEntity` no longer produces those; a row here
+        // means some removal path left one behind and `findUnreferencedImages`
+        // will be reporting it.
+        throw createAppError(
+          "IMAGE_ATTACH_FAILED",
+          `A detached file still holds idempotencyKey "${params.idempotencyKey}" for this ${entityType}. ` +
+            "Retry with a different key, and check Problems → unreferenced files.",
+        );
       }
       throw new Error("Image attachment insert unexpectedly returned no row");
     }

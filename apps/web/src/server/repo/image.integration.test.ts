@@ -1,3 +1,4 @@
+import type { ProjectId } from "@cubby/schemas/identifiers";
 import { projectCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { eq } from "drizzle-orm";
@@ -10,13 +11,16 @@ import {
   purchaseImage,
 } from "~/server/db/schema";
 import { deleteCookbook, upsertCookbook } from "./cookbook";
-import { getDb, insertAndReturn } from "./database-helpers";
+import { getDb, insertAndReturn, withTransaction } from "./database-helpers";
 import {
   createAndAssociateUploadedImage,
   createPendingImageRecord,
   createUploadedImageRecord,
   cullPendingImages,
   deleteImages,
+  detachImagesFromEntity,
+  findAttachmentByIdempotencyKey,
+  findUnreferencedImages,
   getImageById,
   getImagesByProjectIds,
   markImageUploaded,
@@ -323,6 +327,243 @@ describe("image repository — purchase (charge) documents", () => {
 
     const stillThere = await getImageById(ctx.db, pending.id);
     expect(stillThere.status).toEqual("PENDING");
+  });
+
+  /**
+   * `detachImagesFromEntity` decides, per removal, whether the file it just
+   * detached still has a reason to exist. These pin the reference rules — the
+   * cases where the answer differs are exactly where a "tidy-up" would break it.
+   */
+  describe("detachImagesFromEntity", () => {
+    const attachToProject = async (projectId: ProjectId, filename: string) =>
+      await createAndAssociateUploadedImage(
+        ctx.db,
+        {
+          key: `test/${crypto.randomUUID()}-${filename}`,
+          url: `https://example.com/${filename}`,
+          filename,
+          contentType: "image/jpeg",
+          size: 1024,
+        },
+        "project",
+        projectId,
+      );
+
+    const makeProject = async (name: string) =>
+      (
+        await createProject(
+          ctx.db,
+          projectCreateInput.parse({ name }),
+          ctx.actor,
+        )
+      ).entityId;
+
+    const rawImageRows = async (imageId: string) =>
+      await getDb(ctx.db).select().from(image).where(eq(image.id, imageId));
+
+    it("deletes the file and returns its key when nothing else references it", async () => {
+      const projectId = await makeProject("Detach Solo");
+      const attached = await attachToProject(projectId, "solo.jpg");
+
+      const result = await withTransaction(ctx.db, (tx) =>
+        detachImagesFromEntity(tx, "project", projectId, [attached.id]),
+      );
+
+      expect(result.deletedIds).toEqual([attached.id]);
+      expect(result.deletedKeys).toEqual([attached.key]);
+      expect(await rawImageRows(attached.id)).toHaveLength(0);
+    });
+
+    it("keeps the file when a live join row on another entity still points at it", async () => {
+      const projectA = await makeProject("Detach Shared A");
+      const projectB = await makeProject("Detach Shared B");
+      const attached = await attachToProject(projectA, "shared.jpg");
+      await insertAndReturn(ctx.db, projectImage, {
+        projectId: projectB,
+        imageId: attached.id,
+      });
+
+      const result = await withTransaction(ctx.db, (tx) =>
+        detachImagesFromEntity(tx, "project", projectA, [attached.id]),
+      );
+
+      expect(result.deletedIds).toEqual([]);
+      expect(await rawImageRows(attached.id)).toHaveLength(1);
+    });
+
+    /**
+     * The `includes-deleted` decision, pinned. `deleteCookbook` tombstones the
+     * row WITHOUT nulling `coverImageId`, so a soft-deleted cookbook still holds
+     * a live FK — adding a `notDeleted(cookbook)` filter to the reference probe
+     * would start destroying covers the row still points at.
+     */
+    it("keeps a cookbook cover even after the cookbook is soft-deleted", async () => {
+      const projectId = await makeProject("Detach Cover");
+      const attached = await attachToProject(projectId, "cover.jpg");
+      const { entityId: cookbookId } = await upsertCookbook(
+        ctx.db,
+        {
+          name: "Detach Cover Book",
+          rawJson: [],
+          sourceLabel: "Detach Cover Book",
+        },
+        ctx.actor,
+      );
+      await getDb(ctx.db)
+        .update(cookbook)
+        .set({ coverImageId: attached.id })
+        .where(eq(cookbook.id, cookbookId));
+      await deleteCookbook(ctx.db, cookbookId, ctx.actor);
+
+      const result = await withTransaction(ctx.db, (tx) =>
+        detachImagesFromEntity(tx, "project", projectId, [attached.id]),
+      );
+
+      expect(result.deletedIds).toEqual([]);
+      expect(await rawImageRows(attached.id)).toHaveLength(1);
+    });
+
+    /**
+     * The opposite call for join rows: a tombstoned one is NOT a reference. Its
+     * owning entity is gone (entity deletes cascade a soft delete onto it) and
+     * nothing renders it, so the file goes — and the tombstone goes with it,
+     * which is what keeps the FK from stranding.
+     */
+    it("reaps a file whose only other join row is soft-deleted, tombstone and all", async () => {
+      const projectA = await makeProject("Detach Tombstone A");
+      const projectB = await makeProject("Detach Tombstone B");
+      const attached = await attachToProject(projectA, "tombstone.jpg");
+      const [tombstoned] = await getDb(ctx.db)
+        .insert(projectImage)
+        .values({
+          projectId: projectB,
+          imageId: attached.id,
+          deletedAt: new Date(),
+        })
+        .returning();
+
+      const result = await withTransaction(ctx.db, (tx) =>
+        detachImagesFromEntity(tx, "project", projectA, [attached.id]),
+      );
+
+      expect(result.deletedIds).toEqual([attached.id]);
+      expect(await rawImageRows(attached.id)).toHaveLength(0);
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(projectImage)
+          .where(eq(projectImage.id, tombstoned!.id)),
+      ).toHaveLength(0);
+    });
+  });
+
+  /**
+   * The idempotency lookup names a candidate; the attachment still has to exist.
+   * Constructed by hand rather than via a detach, so it keeps testing the gate
+   * even though `detachImagesFromEntity` now deletes the row it detaches.
+   */
+  it("findAttachmentByIdempotencyKey ignores a targeted row with no live attachment", async () => {
+    const project = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "Idempotency Liveness" }),
+      ctx.actor,
+    );
+    const orphan = await createUploadedImageRecord(ctx.db, {
+      key: `test/${crypto.randomUUID()}.jpg`,
+      url: "https://example.com/orphan.jpg",
+      filename: "orphan.jpg",
+      contentType: "image/jpeg",
+      size: 1024,
+      targetType: "project",
+      targetId: project.entityId,
+      idempotencyKey: "enrichment:v1",
+    });
+
+    await expect(
+      findAttachmentByIdempotencyKey(
+        ctx.db,
+        "project",
+        project.entityId,
+        "enrichment:v1",
+      ),
+    ).resolves.toBeNull();
+
+    // The row itself is untouched — the gate narrows the lookup, it does not
+    // clean up. That is `findUnreferencedImages`' job.
+    expect((await getImageById(ctx.db, orphan.id)).id).toEqual(orphan.id);
+  });
+
+  describe("findUnreferencedImages", () => {
+    it("reports an unattached UPLOADED row and skips everything still spoken for", async () => {
+      const projectId = (
+        await createProject(
+          ctx.db,
+          projectCreateInput.parse({ name: "Unreferenced Sweep" }),
+          ctx.actor,
+        )
+      ).entityId;
+
+      const orphan = await createUploadedImageRecord(ctx.db, {
+        key: `test/${crypto.randomUUID()}.jpg`,
+        url: "https://example.com/unref.jpg",
+        filename: "unref.jpg",
+        contentType: "image/jpeg",
+        size: 1024,
+      });
+      const attached = await createAndAssociateUploadedImage(
+        ctx.db,
+        {
+          key: `test/${crypto.randomUUID()}.jpg`,
+          url: "https://example.com/attached.jpg",
+          filename: "attached.jpg",
+          contentType: "image/jpeg",
+          size: 1024,
+        },
+        "project",
+        projectId,
+      );
+      const pending = await makePendingImage();
+      const coverOnly = await createUploadedImageRecord(ctx.db, {
+        key: `test/${crypto.randomUUID()}.jpg`,
+        url: "https://example.com/book.jpg",
+        filename: "book.jpg",
+        contentType: "image/jpeg",
+        size: 1024,
+      });
+      const { entityId: cookbookId } = await upsertCookbook(
+        ctx.db,
+        { name: "Sweep Book", rawJson: [], sourceLabel: "Sweep Book" },
+        ctx.actor,
+      );
+      await getDb(ctx.db)
+        .update(cookbook)
+        .set({ coverImageId: coverOnly.id })
+        .where(eq(cookbook.id, cookbookId));
+
+      const found = (await findUnreferencedImages(ctx.db, 0)).map((r) => r.id);
+
+      expect(found).toContain(orphan.id);
+      expect(found).not.toContain(attached.id);
+      // PENDING rows belong to the pending cull, not this sweep.
+      expect(found).not.toContain(pending.id);
+      expect(found).not.toContain(coverOnly.id);
+    });
+
+    it("leaves a just-created row alone until the grace window passes", async () => {
+      const fresh = await createUploadedImageRecord(ctx.db, {
+        key: `test/${crypto.randomUUID()}.jpg`,
+        url: "https://example.com/fresh.jpg",
+        filename: "fresh.jpg",
+        contentType: "image/jpeg",
+        size: 1024,
+      });
+
+      // The default window — an import that associates in a separate step must
+      // not be reaped out from under itself mid-flight.
+      const found = await findUnreferencedImages(ctx.db);
+
+      expect(found.map((r) => r.id)).not.toContain(fresh.id);
+    });
   });
 
   it("getImageById resolves a purchase-attached image to entityType PURCHASE", async () => {

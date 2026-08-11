@@ -55,6 +55,7 @@ const PROBLEM_LABELS: Record<
   productsWithNoImages: (n) => pl(n, "missing image"),
   locationsWithoutAiDescription: (n) => pl(n, "missing AI description"),
   orphanedEntityEmbeddings: (n) => pl(n, "orphaned embedding"),
+  unreferencedImages: (n) => pl(n, "unreferenced file"),
   entitiesMissingEmbeddings: (n) => `${n} missing a search embedding`,
   staleParentRecipes: (n) => pl(n, "deleted sub-recipe reference"),
   productsWithBetterUpcData: (n) => pl(n, "UPC update"),

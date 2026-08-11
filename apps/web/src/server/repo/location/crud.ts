@@ -76,6 +76,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { detachImagesFromEntity } from "~/server/repo/image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import {
   countByTarget,
@@ -282,6 +283,15 @@ export const ensureGlobalUnknownLocation = async (
   }
 };
 
+/**
+ * `detachedImageKeys` are R2 objects that `removeImageIds` reaped; the caller
+ * drops them once its transaction has committed.
+ *
+ * Careful on the joined branch: `db` may be a caller-owned `DrizzleTransaction`,
+ * so "the await resolved" does NOT mean "committed" there. Only the standalone
+ * (`Database`) path — the router's — may drain the keys directly. Today the
+ * router is the only caller that passes a `Database`.
+ */
 export const updateLocation = async (
   db: Database | DrizzleTransaction,
   id: LocationId,
@@ -289,6 +299,7 @@ export const updateLocation = async (
   actor: ActorContext,
   options?: { resolvedParentId?: LocationId | null },
 ) => {
+  let detachedImageKeys: string[] = [];
   const runUpdate = async (tx: DrizzleTransaction) => {
     let parentId: LocationId | null | undefined;
     if (data.parentId !== undefined) {
@@ -348,14 +359,12 @@ export const updateLocation = async (
     }
 
     if (data.removeImageIds && data.removeImageIds.length > 0) {
-      await tx
-        .delete(locationImage)
-        .where(
-          and(
-            eq(locationImage.locationId, updated.id),
-            inArray(locationImage.imageId, data.removeImageIds),
-          ),
-        );
+      ({ deletedKeys: detachedImageKeys } = await detachImagesFromEntity(
+        tx,
+        "location",
+        updated.id,
+        data.removeImageIds,
+      ));
     }
 
     if (data.pendingImageIds && data.pendingImageIds.length > 0) {
@@ -399,9 +408,12 @@ export const updateLocation = async (
   // the same blocker-naming treatment. Only on the standalone branch: when the
   // caller passes its OWN open transaction, the violation has poisoned it and
   // the recovery lookup could not run — that caller rethrows as before.
-  if ("rollback" in db) return await runUpdate(db);
+  if ("rollback" in db) {
+    return { location: await runUpdate(db), detachedImageKeys };
+  }
   try {
-    return await withTransaction(db, runUpdate);
+    const location = await withTransaction(db, runUpdate);
+    return { location, detachedImageKeys };
   } catch (error) {
     if (data.name !== undefined) {
       await throwIfDuplicateLocation(db, data.name, error);

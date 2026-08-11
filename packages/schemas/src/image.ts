@@ -228,7 +228,7 @@ export const attachFileFields = {
     .max(255)
     .optional()
     .describe(
-      "Optional stable key: repeating it for the same target returns the original attachment.",
+      "Optional stable key: repeating it for the same target returns the original attachment, as long as that attachment still exists. If the file was detached in between, the retry uploads again and `reused` comes back false.",
     ),
   expectedImageCount: z
     .int()
@@ -268,6 +268,16 @@ export const attachFileResponse = z.object({
   entityType: attachableImageEntity,
   entityId: attachableImageEntityId,
   idempotencyKey: z.string().nullable().optional(),
+  /**
+   * Required, not optional, so both return paths in `attachFileToEntity` have
+   * to state which one they took — the whole point is that a caller could not
+   * previously tell a replay from an upload.
+   */
+  reused: z
+    .boolean()
+    .describe(
+      "True when idempotencyKey matched a still-attached file and nothing was uploaded. False on a real attach — including a repeat of a key whose file was detached in between.",
+    ),
 });
 export type AttachFileResponse = z.infer<typeof attachFileResponse>;
 
@@ -382,6 +392,10 @@ export const importImageFromUrlResponseSchema = z.object({
   filename: z.string(),
 });
 
+/**
+ * Shared by the pending cull and the unreferenced-file sweep — both delete rows
+ * and hand back the R2 keys that went with them.
+ */
 export const cullPendingImagesResponseSchema = z.object({
   count: z.int().nonnegative(),
   deletedIds: z.array(id),

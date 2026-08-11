@@ -43,6 +43,7 @@ import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
+import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
@@ -160,12 +161,14 @@ const { getByID, getByShortcode, create, update } =
       },
       update: async (services, shortcode: RecipeShortcode, data) => {
         const id = await resolveRecipeEntityId(services.db, shortcode);
-        const updated = await updateRecipe(
+        const { recipe: updated, detachedImageKeys } = await updateRecipe(
           services.db,
           id,
           data,
           services.actorContext,
         );
+        // After the commit, never inside it: an R2 delete has no rollback.
+        await deleteStoredObjects(detachedImageKeys);
         const recipeBatches =
           await services.services.recipeCosting.dispatchRecompute([id], {
             source: "recipe.update",
