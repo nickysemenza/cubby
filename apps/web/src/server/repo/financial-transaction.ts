@@ -131,6 +131,14 @@ const columns = {
   purchaseShortcode: sql<
     string | null
   >`(SELECT p.shortcode FROM "Purchase" p WHERE p.id = "FinancialTransaction"."purchaseId")`,
+  // Ordered by shortcode so the field is stable across reads rather than
+  // following whatever order the planner happens to produce.
+  allocations: sql<{ purchaseId: string; amount: number }[]>`COALESCE((
+    SELECT jsonb_agg(jsonb_build_object('purchaseId', ap.shortcode, 'amount', aa."amount") ORDER BY ap.shortcode)
+    FROM "FinancialTransactionAllocation" aa
+    JOIN "Purchase" ap ON ap."id" = aa."purchaseId"
+    WHERE aa."transactionId" = "FinancialTransaction"."id" AND aa."deletedAt" IS NULL
+  ), '[]'::jsonb)`,
   accountName,
 } as const;
 
@@ -140,6 +148,7 @@ type FinancialTransactionRow = Omit<
 > & {
   accountShortcode: string;
   purchaseShortcode: string | null;
+  allocations: { purchaseId: string; amount: number }[];
   accountName: string | null;
 };
 
@@ -160,6 +169,10 @@ const toOut = (row: FinancialTransactionRow): FinancialTransactionOut =>
     sourceCategory: row.sourceCategory,
     sourceRefs: row.sourceRefs,
     notes: row.notes,
+    allocations: (row.allocations ?? []).map((allocation) => ({
+      purchaseId: unsafePurchaseShortcode(allocation.purchaseId),
+      amount: Number(allocation.amount),
+    })),
     accountName: row.accountName,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

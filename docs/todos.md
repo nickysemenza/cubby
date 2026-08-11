@@ -630,7 +630,7 @@ arbitrary allocation of the deposit across the order's items.
 These are not work implied by a completed historical backfill. Future imports are
 expected to be small and interactive; promote one only on the stated evidence.
 
-- [ ] **`FinancialTransactionAllocation`** — allocate one settlement transaction
+- [x] **`FinancialTransactionAllocation`** — SHIPPED. Allocates one settlement transaction
   across several Purchases. **Trigger**: real one-to-many charges or refunds remain
   operationally unresolved after retaining the transaction unlinked. Allocations are
   settlement evidence only; they never enter spend.

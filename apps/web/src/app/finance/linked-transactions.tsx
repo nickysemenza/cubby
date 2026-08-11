@@ -72,7 +72,27 @@ export function LinkedTransactions({
             <TableCell>{transaction.status}</TableCell>
             <TableCell>{transaction.postedDate ?? "—"}</TableCell>
             <TableCell className="text-right font-mono tabular-nums">
-              {formatCurrency(transaction.amount)}
+              {/* Scoped to one purchase, the slice is the honest figure — the
+                  full charge settled several orders, and showing it here would
+                  overstate what this one received. The whole amount stays
+                  visible beside it so the split is legible. */}
+              {(() => {
+                const slice = purchaseId
+                  ? transaction.allocations.find(
+                      (allocation) => allocation.purchaseId === purchaseId,
+                    )
+                  : undefined;
+                if (!slice || transaction.allocations.length <= 1)
+                  return formatCurrency(transaction.amount);
+                return (
+                  <>
+                    {formatCurrency(slice.amount)}
+                    <span className="ml-2 text-muted-foreground">
+                      of {formatCurrency(transaction.amount)}
+                    </span>
+                  </>
+                );
+              })()}
             </TableCell>
           </TableRow>
         ))}

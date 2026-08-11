@@ -21,6 +21,35 @@ for credits, and that the sign matches. Rows pasted into chat frequently arrive
 already flipped relative to a raw Monarch export — trust the receipt for what
 actually happened, not the sign in the row.
 
+## One card line, several Purchases
+
+A single charge or credit that settles more than one Purchase is ordinary, not
+exotic — it is what a return desk produces when several orders go back on one
+receipt, and what a statement produces when it combines same-day refunds.
+
+Record it as **one** transaction carrying an `allocations` array:
+
+```
+update_financial_transaction(FTX-…, { allocations: [
+  { purchaseId: "PUR-9QXK", amount: -8.96 },
+  { purchaseId: "PUR-9ZMQ", amount: -7.80 },
+]})
+```
+
+Allocations must sum to the transaction's amount to the cent and share its sign;
+the write path refuses anything else. Mixed signs are unsupported by design — a
+charge and a credit are two settlement events, and the statement will show them
+as two rows.
+
+`FinancialTransaction.purchaseId` is a derived mirror: non-null only when there
+is exactly one allocation, NULL for a split. NULL there means "not exactly one
+purchase", never "unsettled" — read `allocations` for the general case.
+
+⚠️ **Superseded: the void-aggregate convention.** Splits used to be faked with
+one posted transaction per Purchase, plus the real combined line kept as `void`
+to hold the statement hash. Do not do this any more, and do not add new rows in
+that shape. It made the database assert card events that never occurred.
+
 ## Statement import
 
 Use `preview_financial_statement_import` for normalized client-side Monarch

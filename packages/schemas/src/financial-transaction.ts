@@ -233,6 +233,12 @@ const nonZeroAmount = wholeCentAmount.refine(
 
 const financialTransactionFields = {
   accountId: financialAccountShortcode,
+  /**
+   * DERIVED — the sole Purchase this transaction settled, non-null only when
+   * there is exactly one allocation. NULL both for unlinked evidence and for a
+   * charge split across several Purchases, so read `allocations` for the general
+   * case. As input it is shorthand for one allocation of the full amount.
+   */
   purchaseId: purchaseShortcode.nullable(),
   kind: financialTransactionKind,
   status: financialTransactionStatus,
@@ -245,6 +251,12 @@ const financialTransactionFields = {
   sourceRefs: financialTransactionSourceRefs,
   notes: z.string().nullable(),
 };
+
+/** One slice of a transaction's amount, attributed to one Purchase, as read. */
+export const financialTransactionAllocationOut = z.object({
+  purchaseId: purchaseShortcode,
+  amount: wholeCentAmount,
+});
 
 /** One slice of a transaction's amount, attributed to one Purchase. */
 export const financialTransactionAllocationInput = z.object({
@@ -434,6 +446,13 @@ export const financialTransactionOut = postedRequiresDate(
   z.object({
     id: financialTransactionShortcode,
     ...financialTransactionFields,
+    /**
+     * Every Purchase this transaction settled and how much of it each got.
+     * Empty for unlinked evidence; otherwise sums to `amount` exactly and shares
+     * its sign. Ordered by purchase shortcode so the field is stable across
+     * reads.
+     */
+    allocations: z.array(financialTransactionAllocationOut),
     accountName: z.string().nullable(),
     ...timestampedFields,
   }),
