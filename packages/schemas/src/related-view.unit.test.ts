@@ -96,13 +96,19 @@ describe("relatedViewRegistry", () => {
     ).toThrow();
   });
 
-  it("has unique, source-prefixed keys and only curated 1-3 hop paths", () => {
+  it("has unique, source-prefixed keys and only curated 1-4 hop paths", () => {
     const keys = relatedViewRegistry.map((view) => view.key);
     expect(new Set(keys).size).toBe(keys.length);
     for (const view of relatedViewRegistry) {
       expect(view.key.startsWith(`${view.source}.`)).toBe(true);
       expect(view.path.length).toBeGreaterThanOrEqual(1);
-      expect(view.path.length).toBeLessThanOrEqual(3);
+      // 4, not 3, since FinancialTransactionAllocation landed: a transaction
+      // reaches a Purchase through a join table now, so every path crossing
+      // that relationship costs two hops rather than one. The ceiling still
+      // exists to stop a related view becoming an arbitrary graph walk — it is
+      // just that the shortest honest route across this edge is longer than it
+      // used to be.
+      expect(view.path.length).toBeLessThanOrEqual(4);
       expect(view.source).not.toBe("usda-food");
       expect(view.source).not.toBe("image");
     }
