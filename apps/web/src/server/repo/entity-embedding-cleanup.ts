@@ -40,6 +40,7 @@ import {
   expense,
   financialAccount,
   financialTransaction,
+  financialTransactionAllocation,
   ingredient,
   inventoryEntry,
   location,
@@ -294,13 +295,30 @@ export async function findEmbeddingRefsForPurchases(
       where: and(inArray(expense.purchaseId, purchaseIds), notDeleted(expense)),
       columns: { id: true },
     }),
-    getDb(db).query.financialTransaction.findMany({
-      where: and(
-        inArray(financialTransaction.purchaseId, purchaseIds),
-        notDeleted(financialTransaction),
+    // Through allocations, not the mirror: a transaction split across two
+    // purchases has a NULL mirror, so the mirror alone would fail to re-embed
+    // it and leave a stale vendor/order in its embedding text. This is a
+    // removal-path invariant site — missing a transaction here leaks an
+    // orphaned embedding.
+    getDb(db)
+      .selectDistinct({ id: financialTransactionAllocation.transactionId })
+      .from(financialTransactionAllocation)
+      .innerJoin(
+        financialTransaction,
+        and(
+          eq(
+            financialTransaction.id,
+            financialTransactionAllocation.transactionId,
+          ),
+          notDeleted(financialTransaction),
+        ),
+      )
+      .where(
+        and(
+          inArray(financialTransactionAllocation.purchaseId, purchaseIds),
+          notDeleted(financialTransactionAllocation),
+        ),
       ),
-      columns: { id: true },
-    }),
   ]);
   return [
     ...(includePurchases

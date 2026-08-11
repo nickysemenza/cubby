@@ -46,6 +46,7 @@ import {
   vendor,
   wish,
 } from "~/server/db/schema";
+import { solePurchaseForTransaction } from "~/server/repo/financial-transaction-allocations";
 import { formatSearchTerm, getDb, notDeleted } from "./database-helpers";
 import { effectiveProductPriceSql } from "./product/pricing";
 import { liveRecipeCountForIngredientSql } from "./recipe";
@@ -622,10 +623,13 @@ const searchQueries = {
             notDeleted(financialAccount),
           ),
         )
+        // Through the allocation table — a split transaction's mirror is NULL,
+        // and this subtitle should still name a vendor. One row per
+        // transaction; see the same pick in entity-embedding-refresh.
         .leftJoin(
           purchase,
           and(
-            eq(financialTransaction.purchaseId, purchase.id),
+            eq(purchase.id, solePurchaseForTransaction),
             notDeleted(purchase),
           ),
         )

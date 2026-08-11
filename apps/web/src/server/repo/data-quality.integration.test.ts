@@ -1,6 +1,7 @@
 import type { PurchaseId } from "@cubby/schemas/identifiers";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { eq } from "drizzle-orm";
+import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import {
@@ -107,7 +108,7 @@ describe("computed purchase and product data quality", () => {
       sourceAliases: [],
       notes: null,
     });
-    await insertWithShortcode(ctx.db, "financialTransaction", {
+    await insertSettlementTransaction(ctx.db, {
       accountId: account.id,
       purchaseId: seeded.entityId,
       kind: "purchase",
@@ -122,7 +123,7 @@ describe("computed purchase and product data quality", () => {
       notes: null,
     });
     for (const status of ["expected", "pending", "void"] as const) {
-      await insertWithShortcode(ctx.db, "financialTransaction", {
+      await insertSettlementTransaction(ctx.db, {
         accountId: account.id,
         purchaseId: seeded.entityId,
         kind: "purchase",
@@ -249,7 +250,7 @@ describe("computed purchase and product data quality", () => {
       sourceAliases: [],
       notes: null,
     });
-    const refund = await insertWithShortcode(ctx.db, "financialTransaction", {
+    const refund = await insertSettlementTransaction(ctx.db, {
       accountId: account.id,
       purchaseId: seeded.entityId,
       kind: "refund",

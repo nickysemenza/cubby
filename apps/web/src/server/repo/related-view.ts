@@ -208,7 +208,7 @@ const SQL_RELATED_VIEWS = {
   ),
   "vendor.transactions": dated(
     "Vendor",
-    `JOIN "Purchase" p ON p."vendorId" = s."id" AND p."deletedAt" IS NULL JOIN "FinancialTransaction" t ON t."purchaseId" = p."id" AND t."deletedAt" IS NULL`,
+    `JOIN "Purchase" p ON p."vendorId" = s."id" AND p."deletedAt" IS NULL JOIN "FinancialTransactionAllocation" fta ON fta."purchaseId" = p."id" AND fta."deletedAt" IS NULL JOIN "FinancialTransaction" t ON t."id" = fta."transactionId" AND t."deletedAt" IS NULL`,
     "financialTransaction",
     `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,
     `COALESCE(t."postedDate", t."transactionDate", t."createdAt"::date)`,
@@ -222,7 +222,7 @@ const SQL_RELATED_VIEWS = {
   ),
   "purchase.transactions": dated(
     "Purchase",
-    `JOIN "FinancialTransaction" t ON t."purchaseId" = s."id" AND t."deletedAt" IS NULL`,
+    `JOIN "FinancialTransactionAllocation" fta ON fta."purchaseId" = s."id" AND fta."deletedAt" IS NULL JOIN "FinancialTransaction" t ON t."id" = fta."transactionId" AND t."deletedAt" IS NULL`,
     "financialTransaction",
     `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,
     `COALESCE(t."postedDate", t."transactionDate", t."createdAt"::date)`,
@@ -239,7 +239,7 @@ const SQL_RELATED_VIEWS = {
   ),
   "expense.transactions": dated(
     "Expense",
-    `JOIN "Purchase" p ON p."id" = s."purchaseId" AND p."deletedAt" IS NULL JOIN "FinancialTransaction" t ON t."purchaseId" = p."id" AND t."deletedAt" IS NULL`,
+    `JOIN "Purchase" p ON p."id" = s."purchaseId" AND p."deletedAt" IS NULL JOIN "FinancialTransactionAllocation" fta ON fta."purchaseId" = p."id" AND fta."deletedAt" IS NULL JOIN "FinancialTransaction" t ON t."id" = fta."transactionId" AND t."deletedAt" IS NULL`,
     "financialTransaction",
     `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,
     `COALESCE(t."postedDate", t."transactionDate", t."createdAt"::date)`,
@@ -253,31 +253,31 @@ const SQL_RELATED_VIEWS = {
   ),
   "financialAccount.purchases": dated(
     "FinancialAccount",
-    `JOIN "FinancialTransaction" ft ON ft."accountId" = s."id" AND ft."deletedAt" IS NULL JOIN "Purchase" t ON t."id" = ft."purchaseId" AND t."deletedAt" IS NULL`,
+    `JOIN "FinancialTransaction" ft ON ft."accountId" = s."id" AND ft."deletedAt" IS NULL JOIN "FinancialTransactionAllocation" fta ON fta."transactionId" = ft."id" AND fta."deletedAt" IS NULL JOIN "Purchase" t ON t."id" = fta."purchaseId" AND t."deletedAt" IS NULL`,
     "purchase",
     `COALESCE(NULLIF(t."orderId", ''), t."shortcode")`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
   "financialAccount.vendors": named(
     "FinancialAccount",
-    `JOIN "FinancialTransaction" ft ON ft."accountId" = s."id" AND ft."deletedAt" IS NULL JOIN "Purchase" p ON p."id" = ft."purchaseId" AND p."deletedAt" IS NULL JOIN "Vendor" t ON t."id" = p."vendorId" AND t."deletedAt" IS NULL`,
+    `JOIN "FinancialTransaction" ft ON ft."accountId" = s."id" AND ft."deletedAt" IS NULL JOIN "FinancialTransactionAllocation" fta ON fta."transactionId" = ft."id" AND fta."deletedAt" IS NULL JOIN "Purchase" p ON p."id" = fta."purchaseId" AND p."deletedAt" IS NULL JOIN "Vendor" t ON t."id" = p."vendorId" AND t."deletedAt" IS NULL`,
     "vendor",
   ),
   "financialTransaction.vendor": named(
     "FinancialTransaction",
-    `JOIN "Purchase" p ON p."id" = s."purchaseId" AND p."deletedAt" IS NULL JOIN "Vendor" t ON t."id" = p."vendorId" AND t."deletedAt" IS NULL`,
+    `JOIN "FinancialTransactionAllocation" fta ON fta."transactionId" = s."id" AND fta."deletedAt" IS NULL JOIN "Purchase" p ON p."id" = fta."purchaseId" AND p."deletedAt" IS NULL JOIN "Vendor" t ON t."id" = p."vendorId" AND t."deletedAt" IS NULL`,
     "vendor",
   ),
   "financialTransaction.expenses": dated(
     "FinancialTransaction",
-    `JOIN "Purchase" p ON p."id" = s."purchaseId" AND p."deletedAt" IS NULL JOIN "Expense" t ON t."purchaseId" = p."id" AND t."deletedAt" IS NULL`,
+    `JOIN "FinancialTransactionAllocation" fta ON fta."transactionId" = s."id" AND fta."deletedAt" IS NULL JOIN "Purchase" p ON p."id" = fta."purchaseId" AND p."deletedAt" IS NULL JOIN "Expense" t ON t."purchaseId" = p."id" AND t."deletedAt" IS NULL`,
     "expense",
     `t."name"`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
   "financialTransaction.products": named(
     "FinancialTransaction",
-    `JOIN "Purchase" p ON p."id" = s."purchaseId" AND p."deletedAt" IS NULL JOIN "Expense" e ON e."purchaseId" = p."id" AND e."deletedAt" IS NULL JOIN "Product" t ON t."id" = e."productId" AND t."deletedAt" IS NULL`,
+    `JOIN "FinancialTransactionAllocation" fta ON fta."transactionId" = s."id" AND fta."deletedAt" IS NULL JOIN "Purchase" p ON p."id" = fta."purchaseId" AND p."deletedAt" IS NULL JOIN "Expense" e ON e."purchaseId" = p."id" AND e."deletedAt" IS NULL JOIN "Product" t ON t."id" = e."productId" AND t."deletedAt" IS NULL`,
     "product",
   ),
   "wish.candidates": named(

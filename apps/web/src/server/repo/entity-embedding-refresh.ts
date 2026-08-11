@@ -47,6 +47,7 @@ import {
   notDeleted,
   updateAndReturn,
 } from "~/server/repo/database-helpers";
+import { solePurchaseForTransaction } from "~/server/repo/financial-transaction-allocations";
 import type { SemanticEmbeddingConfig } from "~/server/semantic/config";
 import { embeddingTextHash } from "~/server/semantic/hash";
 import {
@@ -660,12 +661,15 @@ async function getFinancialTransactionEmbeddingTexts(
         notDeleted(financialAccount),
       ),
     )
+    // Resolved through the allocation table, so a split transaction still gets a
+    // vendor and order in its embedded text instead of the NULL its mirror now
+    // holds. The correlated pick keeps exactly one row per transaction: a split
+    // contributes its first purchase by id rather than all of them, which is a
+    // deliberate narrowing — aggregating several vendors into one subtitle is
+    // not worth it for the handful of rows that will ever be split.
     .leftJoin(
       purchase,
-      and(
-        eq(financialTransaction.purchaseId, purchase.id),
-        notDeleted(purchase),
-      ),
+      and(eq(purchase.id, solePurchaseForTransaction), notDeleted(purchase)),
     )
     .leftJoin(vendor, and(eq(purchase.vendorId, vendor.id), notDeleted(vendor)))
     .where(

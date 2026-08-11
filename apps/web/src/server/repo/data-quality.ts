@@ -37,6 +37,7 @@ import {
   expense,
   financialAccount,
   financialTransaction,
+  financialTransactionAllocation,
   image,
   inventoryEntry,
   product,
@@ -707,18 +708,32 @@ export const loadPurchaseDataQualities = async (
         ),
       getDb(db)
         .select({
-          purchaseId: financialTransaction.purchaseId,
+          purchaseId: financialTransactionAllocation.purchaseId,
           hasSettlementReference: sql<boolean>`bool_or(${sql.raw(
             settlementReferencePredicate(
               '"FinancialTransaction"',
               '"FinancialAccount"',
             ),
           )})`,
-          postedRefundTotal: sql<number>`COALESCE(sum(${financialTransaction.amount}) FILTER (
+          // The allocation's share, matching postedRefundTotalSql — its raw-SQL
+          // twin powering the dataGap/dataStatus list filters. These two must
+          // stay meaning-equivalent or the filter and the row badge disagree
+          // about the same purchase.
+          postedRefundTotal: sql<number>`COALESCE(sum(${financialTransactionAllocation.amount}) FILTER (
             WHERE ${sql.raw(postedRefundPredicate('"FinancialTransaction"'))}
           ), 0)::double precision`,
         })
-        .from(financialTransaction)
+        .from(financialTransactionAllocation)
+        .innerJoin(
+          financialTransaction,
+          and(
+            eq(
+              financialTransaction.id,
+              financialTransactionAllocation.transactionId,
+            ),
+            notDeleted(financialTransaction),
+          ),
+        )
         // LEFT, not INNER: account liveness is part of the COVERAGE rule (it reads
         // the account's identity), but not of the refund total — a refund happened
         // whether or not its account row was later retired. An inner join here
@@ -729,11 +744,11 @@ export const loadPurchaseDataQualities = async (
         )
         .where(
           and(
-            inArray(financialTransaction.purchaseId, uniqueIds),
-            notDeleted(financialTransaction),
+            inArray(financialTransactionAllocation.purchaseId, uniqueIds),
+            notDeleted(financialTransactionAllocation),
           ),
         )
-        .groupBy(financialTransaction.purchaseId),
+        .groupBy(financialTransactionAllocation.purchaseId),
     ]);
   const expensesByPurchase = groupBy(expenses, (row) => row.purchaseId ?? "");
   const documentsByPurchase = groupBy(documents, (row) => row.purchaseId);

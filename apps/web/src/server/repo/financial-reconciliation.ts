@@ -106,9 +106,11 @@ export const postedRefundPredicate = (ftxAlias: string) =>
  * the enclosing query owns Purchase liveness.
  */
 export const postedRefundTotalSql = (purchaseAlias: string) =>
-  `(SELECT COALESCE(sum(pr_ft."amount"), 0)::double precision
-     FROM "FinancialTransaction" pr_ft
-     WHERE pr_ft."purchaseId" = ${purchaseAlias}."id"
+  `(SELECT COALESCE(sum(pr_a."amount"), 0)::double precision
+     FROM "FinancialTransactionAllocation" pr_a
+     JOIN "FinancialTransaction" pr_ft ON pr_ft."id" = pr_a."transactionId"
+     WHERE pr_a."purchaseId" = ${purchaseAlias}."id"
+       AND pr_a."deletedAt" IS NULL
        AND pr_ft."deletedAt" IS NULL
        AND ${postedRefundPredicate("pr_ft")})`;
 
@@ -151,11 +153,13 @@ export const settlementReferencePredicate = (
  */
 export const settlementReferenceAbsentSql = (purchaseAlias: string) =>
   `NOT EXISTS (
-    SELECT 1 FROM "FinancialTransaction" sr_ft
+    SELECT 1 FROM "FinancialTransactionAllocation" sr_a
+    JOIN "FinancialTransaction" sr_ft
+      ON sr_ft."id" = sr_a."transactionId" AND sr_ft."deletedAt" IS NULL
     JOIN "FinancialAccount" sr_fa
       ON sr_fa."id" = sr_ft."accountId" AND sr_fa."deletedAt" IS NULL
-    WHERE sr_ft."purchaseId" = ${purchaseAlias}."id"
-      AND sr_ft."deletedAt" IS NULL
+    WHERE sr_a."purchaseId" = ${purchaseAlias}."id"
+      AND sr_a."deletedAt" IS NULL
       AND ${settlementReferencePredicate("sr_ft", "sr_fa")}
   )`;
 

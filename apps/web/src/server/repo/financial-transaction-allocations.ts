@@ -420,3 +420,19 @@ export async function transactionIdsAllocatedTo(
     );
   return rows.map((row) => row.transactionId);
 }
+
+/**
+ * The single Purchase a transaction's search/embedding subtitle should name,
+ * picked deterministically from its live allocations.
+ *
+ * A correlated scalar rather than a joined subquery so it drops into an existing
+ * leftJoin without a subquery alias. Lowest purchase id wins; for the ordinary
+ * single-allocation transaction that is simply "its purchase".
+ */
+export const solePurchaseForTransaction = sql`(
+  SELECT spa."purchaseId" FROM "FinancialTransactionAllocation" spa
+  WHERE spa."transactionId" = "FinancialTransaction"."id"
+    AND spa."deletedAt" IS NULL
+  ORDER BY spa."purchaseId"
+  LIMIT 1
+)`;

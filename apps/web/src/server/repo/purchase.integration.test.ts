@@ -38,6 +38,7 @@ vi.mock("~/server/utils/s3", async (importOriginal) => ({
   deleteS3Object: vi.fn(async () => undefined),
 }));
 
+import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import type { Database } from "~/server/db";
 import {
   auditLog,
@@ -1991,7 +1992,7 @@ describe("purchase repository — purchase worklist filters", () => {
     const refundPurchaseId = unsafePurchaseId(
       (await resolveLiveShortcode(ctx.db, refundAdjusted, "purchase"))!,
     );
-    await insertWithShortcode(ctx.db, "financialTransaction", {
+    await insertSettlementTransaction(ctx.db, {
       accountId: account.id,
       purchaseId: refundPurchaseId,
       kind: "refund",
@@ -2009,7 +2010,7 @@ describe("purchase repository — purchase worklist filters", () => {
     const expectedPurchaseId = unsafePurchaseId(
       (await resolveLiveShortcode(ctx.db, expectedOnly, "purchase"))!,
     );
-    await insertWithShortcode(ctx.db, "financialTransaction", {
+    await insertSettlementTransaction(ctx.db, {
       accountId: account.id,
       purchaseId: expectedPurchaseId,
       kind: "refund",
@@ -2027,7 +2028,7 @@ describe("purchase repository — purchase worklist filters", () => {
     const nonRefundPurchaseId = unsafePurchaseId(
       (await resolveLiveShortcode(ctx.db, nonRefund, "purchase"))!,
     );
-    await insertWithShortcode(ctx.db, "financialTransaction", {
+    await insertSettlementTransaction(ctx.db, {
       accountId: account.id,
       purchaseId: nonRefundPurchaseId,
       kind: "adjustment",
