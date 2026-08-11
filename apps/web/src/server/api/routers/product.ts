@@ -38,6 +38,8 @@ import {
   productLookupUpcOut,
   productManufacturerOptionsOut,
   productMarkUsdaUnavailableManyInput,
+  productMovementTimelineInput,
+  productMovementTimelineOut,
   productPickerItemOut,
   productQuickCreatePayload,
   productShortcodeListOut,
@@ -72,6 +74,7 @@ import {
   getCategoryDistribution,
   getProductExternalIdSourceOptions,
   getProductManufacturerOptions,
+  getProductMovementTimeline,
   getProductPickerItemsByIds,
   getProductsByShortcodes,
   getProductsSharingTags,
@@ -458,6 +461,11 @@ const tagOptions = protectedProcedure
 const manufacturerOptions = protectedProcedure
   .output(strictOutput(productManufacturerOptionsOut))
   .query(({ ctx }) => getProductManufacturerOptions(ctx.db));
+
+const movementTimeline = protectedProcedure
+  .input(productMovementTimelineInput)
+  .output(strictOutput(productMovementTimelineOut))
+  .query(({ ctx, input }) => getProductMovementTimeline(ctx.db, input));
 
 /** Source roster for the product list's External IDs filter picklist. */
 const externalIdSourceOptions = protectedProcedure
@@ -846,6 +854,7 @@ export const productRouter = createTRPCRouter({
   categoryDistribution,
   tagOptions,
   manufacturerOptions,
+  movementTimeline,
   externalIdSourceOptions,
   tagSiblings,
   externalIdCollisions,

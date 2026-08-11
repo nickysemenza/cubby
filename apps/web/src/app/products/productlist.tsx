@@ -1,10 +1,19 @@
-import type { ProductListItem } from "@cubby/schemas/product";
+import type { ProductFilters, ProductListItem } from "@cubby/schemas/product";
 import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { uniq } from "es-toolkit";
-import { Package, PackageX, Pencil, Printer } from "lucide-react";
+import {
+  CalendarRange,
+  Clock3,
+  Package,
+  PackageX,
+  Pencil,
+  Printer,
+  Rows3,
+  Table2,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -12,7 +21,7 @@ import {
   useHydratedProductFood,
   useProductFoodSummaries,
 } from "~/app/_components/products/product-food-summaries";
-import { Row } from "~/components/layout";
+import { Row, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
@@ -24,6 +33,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import {
+  ViewSwitcher,
+  type ViewSwitcherOption,
+} from "~/components/ui/view-switcher";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
   inventoryMutationInvalidateKeys,
@@ -41,11 +54,8 @@ import {
   createSingleEntityInlineLinkColumn,
   createTextColumn,
 } from "../_components/data-table/columnHelpers";
+import { DataTableToolbar } from "../_components/data-table/data-table-toolbar";
 import { EditableCell } from "../_components/data-table/editable-cell";
-import {
-  ShelfTableToggle,
-  type ShelfView,
-} from "../_components/data-table/shelf";
 import RTable from "../_components/data-table/Table";
 import type { GroupConfig } from "../_components/data-table/useGroupedList";
 import { EntityInlineLink } from "../_components/EntityInlineLink";
@@ -65,10 +75,22 @@ import { productCategoryOptionsWithTheme } from "../_components/products/product
 import { ProductDiscardDialog } from "../_components/products/product-discard-dialog";
 import { ProductShelf } from "../_components/products/product-shelf";
 import { TruncatedList } from "../_components/TruncatedList";
+import { ProductMovementViews } from "./product-movement-views";
+
+export type ProductListView = "table" | "shelf" | "events" | "lifecycles";
+
+const PRODUCT_VIEW_OPTIONS: ViewSwitcherOption<ProductListView>[] = [
+  { value: "table", label: "Table", icon: Table2 },
+  { value: "shelf", label: "Shelf", icon: Rows3 },
+  { value: "events", label: "Events", icon: Clock3 },
+  { value: "lifecycles", label: "Lifecycles", icon: CalendarRange },
+];
 
 interface ProductListProps {
   initialCategory?: string;
   actions?: ReactNode;
+  view: ProductListView;
+  onViewChange: (view: ProductListView) => void;
 }
 
 // A module-level fallback keeps the runtime options reference stable while the
@@ -153,7 +175,12 @@ function ProductFoodCell({ product }: { product: ProductListItem }) {
   );
 }
 
-export function ProductList({ initialCategory, actions }: ProductListProps) {
+export function ProductList({
+  initialCategory,
+  actions,
+  view,
+  onViewChange,
+}: ProductListProps) {
   const api = useTRPC();
   const columnHelper = useMemo(() => createColumnHelper<ProductListItem>(), []);
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("product");
@@ -799,6 +826,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     grouped,
     onGroupedChange,
     totalCount,
+    currentFilters,
   } = useEntityList({
     entity: "product",
     queryOptions,
@@ -830,7 +858,6 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   });
   usePageCount(totalCount);
 
-  const [view, setView] = useState<ShelfView>("table");
   const items = table.getRowModel().rows.map((r) => r.original);
   const discardProduct = discardProductId
     ? (data.find((p) => p.id === discardProductId) ?? null)
@@ -857,38 +884,57 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       productIds={productIds}
       summaries={foodByProductId}
     >
-      <Row align="center" justify="between" gap="sm" className="mb-4">
-        {/* Keep primary actions reachable in shelf view (they live in the
-            table toolbar otherwise). */}
-        <div className="min-w-0">{view === "shelf" ? actions : null}</div>
-        <ShelfTableToggle value={view} onChange={setView} />
-      </Row>
-      {view === "shelf" ? (
-        <ProductShelf
-          items={items}
-          isLoading={isLoading}
-          error={error}
-          infiniteScroll={infiniteScroll}
-        />
-      ) : (
-        <RTable
-          table={table}
-          isLoading={isLoading}
-          error={error}
-          ariaLabel="Products Table"
-          timing={timing}
-          entity="product"
-          onRowClick={onRowClick}
-          onRowHover={onRowHover}
-          actions={actions}
-          bulkActionBar={bulkActionBar}
-          infiniteScroll={infiniteScroll}
-          refreshControls={refreshControls}
-          groupConfig={groupConfig}
-          grouped={grouped}
-          onGroupedChange={onGroupedChange}
-        />
-      )}
+      <Stack gap="sm">
+        <Row justify="end">
+          <ViewSwitcher
+            ariaLabel="Products view"
+            options={PRODUCT_VIEW_OPTIONS}
+            value={view}
+            onValueChange={onViewChange}
+          />
+        </Row>
+        {view !== "table" && (
+          <DataTableToolbar
+            table={table}
+            entity="product"
+            showViewOptions={false}
+            actions={actions}
+          />
+        )}
+        {view === "table" && (
+          <RTable
+            table={table}
+            isLoading={isLoading}
+            error={error}
+            ariaLabel="Products Table"
+            timing={timing}
+            entity="product"
+            onRowClick={onRowClick}
+            onRowHover={onRowHover}
+            actions={actions}
+            bulkActionBar={bulkActionBar}
+            infiniteScroll={infiniteScroll}
+            refreshControls={refreshControls}
+            groupConfig={groupConfig}
+            grouped={grouped}
+            onGroupedChange={onGroupedChange}
+          />
+        )}
+        {view === "shelf" && (
+          <ProductShelf
+            items={items}
+            isLoading={isLoading}
+            error={error}
+            infiniteScroll={infiniteScroll}
+          />
+        )}
+        {(view === "events" || view === "lifecycles") && (
+          <ProductMovementViews
+            filters={currentFilters as ProductFilters}
+            view={view}
+          />
+        )}
+      </Stack>
       <PreviewSheet />
       {deleteDialog}
       {discardProduct && (

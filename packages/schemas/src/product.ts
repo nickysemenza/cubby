@@ -27,6 +27,9 @@ import {
   inventoryShortcode,
   locationShortcode,
   productShortcode,
+  projectShortcode,
+  purchaseShortcode,
+  vendorShortcode,
 } from "./identifiers";
 import {
   imageOut,
@@ -340,6 +343,101 @@ export const productFilterFields = {
 
 export const productFiltersSchema = z.object(productFilterFields);
 export type ProductFilters = z.infer<typeof productFiltersSchema>;
+
+export const productMovementKind = z.enum([
+  "acquired",
+  "exited",
+  "discarded",
+  "unknown",
+]);
+export type ProductMovementKind = z.infer<typeof productMovementKind>;
+
+export const productMovementTimelineInput = z
+  .object({
+    filters: productFiltersSchema,
+    movementFrom: plainDate.optional(),
+    movementTo: plainDate.optional(),
+    order: z.enum(["asc", "desc"]).default("desc"),
+  })
+  .refine(
+    ({ movementFrom, movementTo }) =>
+      !movementFrom || !movementTo || movementFrom <= movementTo,
+    { message: "Movement start must not be after movement end" },
+  );
+export type ProductMovementTimelineInput = z.infer<
+  typeof productMovementTimelineInput
+>;
+
+const productMovementProjectOut = z.object({
+  id: projectShortcode,
+  name: z.string(),
+});
+
+const productMovementLineOut = z.object({
+  expenseId: expenseShortcode.nullable(),
+  productId: productShortcode,
+  name: z.string(),
+  kind: productMovementKind,
+  cost: z.number().nullable(),
+  quantity: z.number().int().nullable(),
+  signedQuantity: z.number().int().nullable(),
+  expenseDate: plainDate,
+  chargedTo: productMovementProjectOut.nullable(),
+  provenanceOnly: z.boolean(),
+});
+export type ProductMovementLineOut = z.infer<typeof productMovementLineOut>;
+
+const productMovementPurchaseOut = z.object({
+  id: purchaseShortcode,
+  displayLabel: z.string().nullable(),
+  orderId: z.string().nullable(),
+  date: plainDate.nullable(),
+  vendor: z.object({ id: vendorShortcode, name: z.string() }).nullable(),
+});
+
+const productMovementGroupOut = z.object({
+  key: z.string(),
+  date: plainDate,
+  purchase: productMovementPurchaseOut.nullable(),
+  movements: z.array(productMovementLineOut),
+});
+export type ProductMovementGroupOut = z.infer<typeof productMovementGroupOut>;
+
+const productMovementProductOut = z.object({
+  id: productShortcode,
+  name: z.string(),
+  manufacturer: z.string(),
+  category: productCategory.nullable(),
+  coverImageUrl: z.string().nullable(),
+  usedOnProjects: z.array(productMovementProjectOut),
+  ownershipIntervals: z.array(z.object({ start: plainDate, end: plainDate })),
+  confidenceLostAt: plainDate.nullable(),
+});
+export type ProductMovementProductOut = z.infer<
+  typeof productMovementProductOut
+>;
+
+export const productMovementTimelineOut = z.object({
+  products: z.array(productMovementProductOut),
+  groups: z.array(productMovementGroupOut),
+  summary: z.object({
+    matchingProducts: z.number().int().nonnegative(),
+    productsWithMovements: z.number().int().nonnegative(),
+    movementCount: z.number().int().nonnegative(),
+    spent: z.number(),
+    recovered: z.number().nonnegative(),
+    netCost: z.number(),
+    unknownAmountCount: z.number().int().nonnegative(),
+  }),
+  extent: z.object({ from: plainDate, to: plainDate }).nullable(),
+  omitted: z.object({
+    productsWithoutMovements: z.number().int().nonnegative(),
+    plannedMovements: z.number().int().nonnegative(),
+  }),
+});
+export type ProductMovementTimelineOut = z.infer<
+  typeof productMovementTimelineOut
+>;
 
 export const productSortableFields = [
   "createdAt",

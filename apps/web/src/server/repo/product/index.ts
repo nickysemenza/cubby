@@ -58,3 +58,4 @@ export {
 // is deliberately NOT re-exported here — the lifecycle registry imports it from
 // `./merge` directly, the same way it reaches every other entity's policy.
 export { mergeProducts, previewMergeProducts } from "./merge";
+export { getProductMovementTimeline } from "./movement-timeline";
