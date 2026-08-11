@@ -260,63 +260,78 @@ export async function getProductMovementTimeline(
     return input.order === "asc" ? direction : -direction;
   });
 
+  const productCodesWithMovements = new Set(
+    movementRows.map((row) => row.movement.productId),
+  );
+  const productIdsWithMovements = [...productCodesWithMovements].flatMap(
+    (code) => {
+      const productId = idByCode.get(code);
+      return productId ? [productId] : [];
+    },
+  );
   const markersByProduct = groupBy(actualRows, (row) => row.productId!);
   const provenanceMarkersByProduct = groupBy(
     unitemizedRows,
     (row) => row.productId,
   );
-  const usageRows = await getDb(db)
-    .select({
-      productId: projectToolUsage.productId,
-      projectCode: project.shortcode,
-      projectName: project.name,
-    })
-    .from(projectToolUsage)
-    .innerJoin(
-      project,
-      and(eq(project.id, projectToolUsage.projectId), notDeleted(project)),
-    )
-    .where(
-      and(
-        notDeleted(projectToolUsage),
-        inArray(projectToolUsage.productId, productIds),
-      ),
-    );
+  const usageRows =
+    productIdsWithMovements.length === 0
+      ? []
+      : await getDb(db)
+          .select({
+            productId: projectToolUsage.productId,
+            projectCode: project.shortcode,
+            projectName: project.name,
+          })
+          .from(projectToolUsage)
+          .innerJoin(
+            project,
+            and(
+              eq(project.id, projectToolUsage.projectId),
+              notDeleted(project),
+            ),
+          )
+          .where(
+            and(
+              notDeleted(projectToolUsage),
+              inArray(projectToolUsage.productId, productIdsWithMovements),
+            ),
+          );
   const usagesByProduct = groupBy(usageRows, (row) => row.productId);
   const today = format(new Date(), "yyyy-MM-dd");
-  const products: ProductMovementProductOut[] = cohort.data.map((item) => {
+  const products: ProductMovementProductOut[] = cohort.data.flatMap((item) => {
+    if (!productCodesWithMovements.has(item.id)) return [];
     const privateId = idByCode.get(item.id);
-    const markers = privateId
-      ? [
-          ...(markersByProduct[privateId] ?? []).map((row) => ({
-            date: row.purchaseDate ?? row.expenseDate,
-            signedQuantity: classifyProductMovement(row.cost, row.quantity)
-              .signedQuantity,
-          })),
-          ...(provenanceMarkersByProduct[privateId] ?? []).map((row) => ({
-            date: row.purchaseDate,
-            signedQuantity: null,
-          })),
-        ]
-      : [];
+    if (!privateId) return [];
+    const markers = [
+      ...(markersByProduct[privateId] ?? []).map((row) => ({
+        date: row.purchaseDate ?? row.expenseDate,
+        signedQuantity: classifyProductMovement(row.cost, row.quantity)
+          .signedQuantity,
+      })),
+      ...(provenanceMarkersByProduct[privateId] ?? []).map((row) => ({
+        date: row.purchaseDate,
+        signedQuantity: null,
+      })),
+    ];
     const ownership = buildConfidentOwnershipIntervals(markers, today);
-    return {
-      id: item.id,
-      name: item.name,
-      manufacturer: item.manufacturer,
-      category: item.category,
-      coverImageUrl: item.images[0]?.url ?? null,
-      usedOnProjects: privateId
-        ? (usagesByProduct[privateId] ?? [])
-            .map((row) => ({
-              id: unsafeProjectShortcode(row.projectCode),
-              name: row.projectName,
-            }))
-            .sort((left, right) => left.name.localeCompare(right.name))
-        : [],
-      ownershipIntervals: ownership.intervals,
-      confidenceLostAt: ownership.confidenceLostAt,
-    };
+    return [
+      {
+        id: item.id,
+        name: item.name,
+        manufacturer: item.manufacturer,
+        category: item.category,
+        coverImageUrl: item.images[0]?.url ?? null,
+        usedOnProjects: (usagesByProduct[privateId] ?? [])
+          .map((row) => ({
+            id: unsafeProjectShortcode(row.projectCode),
+            name: row.projectName,
+          }))
+          .sort((left, right) => left.name.localeCompare(right.name)),
+        ownershipIntervals: ownership.intervals,
+        confidenceLostAt: ownership.confidenceLostAt,
+      },
+    ];
   });
 
   const movements = groups.flatMap((group) => group.movements);
@@ -326,10 +341,7 @@ export async function getProductMovementTimeline(
   const recovered = sumBy(movements, (movement) =>
     movement.cost !== null && movement.cost < 0 ? -movement.cost : 0,
   );
-  const productsWithMovementIds = new Set(
-    movements.map((movement) => movement.productId),
-  );
-  const productsWithMovements = productsWithMovementIds.size;
+  const productsWithMovements = productCodesWithMovements.size;
   const dates = groups.map((group) => group.date).sort();
 
   return {

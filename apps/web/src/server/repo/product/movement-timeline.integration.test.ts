@@ -33,6 +33,14 @@ describe("getProductMovementTimeline", () => {
       makeProductInput({ name: "Other Drill", manufacturer: "Other" }),
       ctx.actor,
     );
+    await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Acme Drill Without Movement",
+        manufacturer: "Acme",
+      }),
+      ctx.actor,
+    );
 
     await createExpense(
       ctx.db,
@@ -87,7 +95,7 @@ describe("getProductMovementTimeline", () => {
       ],
     });
     expect(result.summary).toMatchObject({
-      matchingProducts: 1,
+      matchingProducts: 2,
       productsWithMovements: 1,
       movementCount: 1,
       spent: 40,
@@ -95,6 +103,7 @@ describe("getProductMovementTimeline", () => {
       netCost: 40,
       unknownAmountCount: 0,
     });
+    expect(result.omitted.productsWithoutMovements).toBe(1);
   });
 
   it("shows unitemized Purchase provenance once and yields to an itemized Expense", async () => {
@@ -465,6 +474,7 @@ describe("getProductMovementTimeline", () => {
       order: "desc",
     });
     expect(emptyWindow.groups).toEqual([]);
+    expect(emptyWindow.products).toEqual([]);
     expect(emptyWindow.summary.productsWithMovements).toBe(0);
     expect(emptyWindow.omitted.productsWithoutMovements).toBe(1);
   });

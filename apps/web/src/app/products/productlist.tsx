@@ -827,7 +827,7 @@ export function ProductList({
     onGroupedChange,
     totalCount,
     currentFilters,
-  } = useEntityList({
+  } = useEntityList<ProductListItem, ProductFilters>({
     entity: "product",
     queryOptions,
     getMappings: getProductListMappings,
@@ -929,10 +929,7 @@ export function ProductList({
           />
         )}
         {(view === "events" || view === "lifecycles") && (
-          <ProductMovementViews
-            filters={currentFilters as ProductFilters}
-            view={view}
-          />
+          <ProductMovementViews filters={currentFilters} view={view} />
         )}
       </Stack>
       <PreviewSheet />
