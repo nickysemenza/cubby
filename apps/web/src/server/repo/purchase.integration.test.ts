@@ -43,7 +43,7 @@ import type { Database } from "~/server/db";
 import {
   auditLog,
   expense,
-  financialTransactionAllocation,
+  financialTransaction,
   image,
   purchase,
   purchaseImage,
@@ -54,7 +54,7 @@ import {
   initiateDocumentUpload,
 } from "~/server/services/image-storage.service";
 import { getAuditLog } from "./audit-log";
-import { getDb, insertAndReturn, notDeleted } from "./database-helpers";
+import { getDb, insertAndReturn } from "./database-helpers";
 import {
   createExpense,
   deleteExpenses,
@@ -1177,7 +1177,7 @@ describe("purchase repository — mergePurchases", () => {
       notes: null,
     });
     for (const [index, purchaseId] of loserIds.entries()) {
-      await insertSettlementTransaction(ctx.db, {
+      await insertWithShortcode(ctx.db, "financialTransaction", {
         accountId: account.id,
         purchaseId,
         kind: "purchase",
@@ -1199,10 +1199,10 @@ describe("purchase repository — mergePurchases", () => {
     });
     expect(
       preview.changes.find(
-        (item) => item.edgeKey === "FinancialTransactionAllocation.purchaseId",
+        (item) => item.edgeKey === "FinancialTransaction.purchaseId",
       ),
     ).toMatchObject({
-      label: "settlement allocations moved",
+      label: "financial transactions re-pointed",
       total: 2,
       byTargetId: { [loserIds[0]!]: 1, [loserIds[1]!]: 1 },
     });
@@ -1668,41 +1668,36 @@ describe("purchase repository — deletion cascades", () => {
       sourceAliases: [],
       notes: null,
     });
-    const settlementPurchaseId = await purchaseUuid(
+    const transaction = await insertWithShortcode(
       ctx.db,
-      purchaseWithSettlement.id,
+      "financialTransaction",
+      {
+        accountId: account.id,
+        purchaseId: await purchaseUuid(ctx.db, purchaseWithSettlement.id),
+        kind: "purchase",
+        status: "posted",
+        amount: 25,
+        transactionDate: "2024-01-15",
+        postedDate: "2024-01-16",
+        merchant: "Settlement Empty Delete Vendor",
+        rawDescription: null,
+        sourceCategory: null,
+        sourceRefs: [{ source: "statement", externalId: "settlement-only" }],
+        notes: null,
+      },
     );
-    const transaction = await insertSettlementTransaction(ctx.db, {
-      accountId: account.id,
-      purchaseId: settlementPurchaseId,
-      kind: "purchase",
-      status: "posted",
-      amount: 25,
-      transactionDate: "2024-01-15",
-      postedDate: "2024-01-16",
-      merchant: "Settlement Empty Delete Vendor",
-      rawDescription: null,
-      sourceCategory: null,
-      sourceRefs: [{ source: "statement", externalId: "settlement-only" }],
-      notes: null,
-    });
 
     await expect(
       deleteEmptyPurchases(ctx.db, [purchaseWithSettlement.id], ctx.actor),
     ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
 
-    // The refusal must leave the settlement evidence exactly as it was — which
-    // now means its allocation, the mirror column being gone.
-    const [allocationAfter] = await getDb(ctx.db)
-      .select({ purchaseId: financialTransactionAllocation.purchaseId })
-      .from(financialTransactionAllocation)
-      .where(
-        and(
-          eq(financialTransactionAllocation.transactionId, transaction.id),
-          notDeleted(financialTransactionAllocation),
-        ),
-      );
-    expect(allocationAfter?.purchaseId).toBe(settlementPurchaseId);
+    const [transactionAfter] = await getDb(ctx.db)
+      .select({ purchaseId: financialTransaction.purchaseId })
+      .from(financialTransaction)
+      .where(eq(financialTransaction.id, transaction.id));
+    expect(transactionAfter?.purchaseId).toBe(
+      await purchaseUuid(ctx.db, purchaseWithSettlement.id),
+    );
   });
 
   it("NULLS expense.purchaseId (never deletes spend) and soft-deletes its documents", async () => {

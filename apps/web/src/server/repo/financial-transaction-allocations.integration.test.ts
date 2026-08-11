@@ -8,8 +8,10 @@ import type {
   PurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
+import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { getDb } from "./database-helpers";
 import { createFinancialAccount } from "./financial-account";
 import {
   createFinancialTransaction,
@@ -274,6 +276,31 @@ describe("settlement allocations — write path", () => {
     await expect(
       deleteEmptyPurchases(ctx.db, [a.id as PurchaseShortcode], ctx.actor),
     ).rejects.toThrow(/settlement allocations/);
+  });
+
+  it("does not erase a settlement link when a pre-allocation row is edited", async () => {
+    // Regression: syncSettlementMirror derives the mirror from live allocations,
+    // so a row carrying purchaseId with no allocation would derive to NULL and an
+    // unrelated edit — a note, a status — would silently detach real settlement
+    // evidence. The backfill closed this for existing rows, but the write path
+    // must not depend on a script having been run.
+    const account = await mkAccount();
+    const a = await mkPurchase("WN-R");
+    const txn = await mkTransaction(account.id, {
+      purchaseId: a.id,
+      amount: -5,
+    });
+    // Manufacture the pre-allocation state the backfill would have fixed.
+    await getDb(ctx.db).execute(
+      sql`DELETE FROM "FinancialTransactionAllocation" a
+          USING "FinancialTransaction" ft
+          WHERE a."transactionId" = ft.id AND ft.shortcode = ${txn.id}`,
+    );
+
+    await update(txn.id, { notes: "an unrelated edit" });
+
+    expect((await allocationsOf(txn.id))?.purchaseId).toBe(a.id);
+    expect(await findFinancialTransactionAllocationDefects(ctx.db)).toEqual([]);
   });
 
   it("rejects an update whose purchaseId and allocations disagree", async () => {

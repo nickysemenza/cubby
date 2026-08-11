@@ -48,7 +48,7 @@ import { findReferentialLivenessViolations } from "./detectors-integrity";
 /**
  * Regression suite for `findReferentialLivenessViolations` (detectors-integrity.ts)
  * — the audit that finds every LIVE row whose FK points at a SOFT-DELETED target,
- * across the 43 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
+ * across the 44 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
  *
  * The matrix below is driven from `INCOMING_EDGES` × `ENTITY_EDGE_SEMANTICS`
  * themselves (not a hand-copied edge list), so a newly-added `must-target-live`
@@ -172,7 +172,7 @@ const mkRecipeSection = async (db: Database) => {
 };
 
 /** One live-row factory per entity that appears as a `targetEntity` among the
- * 43 must-target-live edges below. */
+ * 44 must-target-live edges below. */
 const TARGET_FACTORIES: Partial<
   Record<Entity, (db: Database) => Promise<{ id: string }>>
 > = {
@@ -514,6 +514,17 @@ const SOURCE_FACTORIES: Record<
     });
   },
 
+  "FinancialTransaction.purchaseId": async (db, targetId) => {
+    const account = await mkFinancialAccount(db);
+    return insertWithShortcode(db, "financialTransaction", {
+      accountId: account.id,
+      purchaseId: unsafePurchaseId(targetId),
+      kind: "purchase",
+      status: "pending",
+      amount: 1,
+    });
+  },
+
   "FinancialTransaction.accountId": (db, targetId) =>
     insertWithShortcode(db, "financialTransaction", {
       accountId: unsafeFinancialAccountId(targetId),
@@ -606,11 +617,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 43 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 44 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(43);
+    expect(derivedMustTargetLiveEdges).toHaveLength(44);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {

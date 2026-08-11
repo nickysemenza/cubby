@@ -1,12 +1,11 @@
 import type { PurchaseId } from "@cubby/schemas/identifiers";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import {
   financialTransaction,
-  financialTransactionAllocation,
   image,
   productExternalId,
   purchaseImage,
@@ -160,17 +159,7 @@ describe("computed purchase and product data quality", () => {
     await getDb(ctx.db)
       .update(financialTransaction)
       .set({ sourceRefs: [{ source: "statement", externalId: "row-1" }] })
-      .where(
-        inArray(
-          financialTransaction.id,
-          getDb(ctx.db)
-            .select({ id: financialTransactionAllocation.transactionId })
-            .from(financialTransactionAllocation)
-            .where(
-              eq(financialTransactionAllocation.purchaseId, seeded.entityId),
-            ),
-        ),
-      );
+      .where(eq(financialTransaction.purchaseId, seeded.entityId));
 
     quality = (await loadPurchaseDataQualities(ctx.db, [seeded.entityId])).get(
       seeded.entityId,

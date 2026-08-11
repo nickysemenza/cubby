@@ -17,7 +17,10 @@ import type {
   FinancialAccountIdentity,
   FinancialAccountSourceAlias,
 } from "@cubby/schemas/financial-account";
-import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction";
+import {
+  type FinancialTransactionSourceRef,
+  purchaseSettlementCheckExpression,
+} from "@cubby/schemas/financial-transaction";
 import type {
   CookbookId,
   ExpenseId,
@@ -1336,6 +1339,9 @@ export const financialTransaction = pgTable(
       .notNull()
       .$type<FinancialAccountId>()
       .references(() => financialAccount.id),
+    purchaseId: uuid("purchaseId")
+      .$type<PurchaseId>()
+      .references(() => purchase.id),
     kind: text("kind").notNull(),
     status: text("status").notNull(),
     amount: doublePrecision("amount").notNull(),
@@ -1355,6 +1361,7 @@ export const financialTransaction = pgTable(
   (table) => [
     shortcodeUnique("FinancialTransaction", table.shortcode),
     index("FinancialTransaction_accountId_idx").on(table.accountId),
+    index("FinancialTransaction_purchaseId_idx").on(table.purchaseId),
     index("FinancialTransaction_kind_idx").on(table.kind),
     index("FinancialTransaction_status_idx").on(table.status),
     index("FinancialTransaction_transactionDate_idx").on(table.transactionDate),
@@ -1366,6 +1373,24 @@ export const financialTransaction = pgTable(
     check(
       "FinancialTransaction_posted_date_check",
       sql`${table.status} <> 'posted' OR ${table.postedDate} IS NOT NULL`,
+    ),
+    // Generated from purchaseSettlementSignRules in
+    // packages/schemas/src/financial-transaction.ts — both the allowlist and the
+    // per-kind sign clauses come from that one table, so this cannot drift from
+    // financialTransactionSettlementViolation.
+    //
+    // NOTE: `drizzle-kit push` does not diff CHECK constraints. Editing this
+    // requires applying the ALTER by hand; push will report "Changes applied"
+    // without touching it.
+    check(
+      "FinancialTransaction_purchase_settlement_check",
+      sql.raw(
+        purchaseSettlementCheckExpression({
+          purchaseId: `"purchaseId"`,
+          kind: `"kind"`,
+          amount: `"amount"`,
+        }),
+      ),
     ),
   ],
 );
@@ -1842,6 +1867,7 @@ export const purchaseRelations = relations(purchase, ({ one, many }) => ({
   expenses: many(expense),
   images: many(purchaseImage),
   products: many(purchaseProduct),
+  financialTransactions: many(financialTransaction),
   settlementAllocations: many(financialTransactionAllocation),
 }));
 
@@ -1851,6 +1877,10 @@ export const financialTransactionRelations = relations(
     account: one(financialAccount, {
       fields: [financialTransaction.accountId],
       references: [financialAccount.id],
+    }),
+    purchase: one(purchase, {
+      fields: [financialTransaction.purchaseId],
+      references: [purchase.id],
     }),
     allocations: many(financialTransactionAllocation),
   }),

@@ -71,6 +71,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   expense,
+  financialTransaction,
   financialTransactionAllocation,
   image,
   purchase,
@@ -175,6 +176,12 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
     description:
       "Product links are soft-deleted with the purchase; the Products themselves are not.",
   },
+  "FinancialTransaction.purchaseId": {
+    code: "clear-live-fk-with-audit",
+    effect: "detach",
+    description:
+      "Deleting a purchase detaches its linked financial settlement entries; financial evidence remains retained on its account.",
+  },
   "FinancialTransactionAllocation.purchaseId": {
     code: "soft-delete-allocations-of-affected-transactions",
     effect: "soft-delete",
@@ -201,6 +208,12 @@ export const PURCHASE_MERGE_EDGE_POLICY = {
     effect: "move-dedupe",
     description:
       "The absorbed purchase's product links move onto the survivor, skipping products already linked there, and the source links are soft-deleted.",
+  },
+  "FinancialTransaction.purchaseId": {
+    code: "rederive-settlement-mirror",
+    effect: "repoint",
+    description:
+      "The single-settlement mirror column is re-derived from the surviving allocations rather than re-pointed directly — a transaction holding a slice of both purchases collapses to one slice on the survivor and becomes singly-linked again, which a plain repoint could never produce.",
   },
   "FinancialTransactionAllocation.purchaseId": {
     code: "move-and-sum-amounts-then-soft-delete-source",
@@ -1842,13 +1855,28 @@ const deletePurchasesWithPolicy = async (
       .from(expense)
       .where(and(inArray(expense.purchaseId, ids), notDeleted(expense)));
 
+    const detachingTransactions = await tx
+      .select({
+        id: financialTransaction.id,
+        purchaseId: financialTransaction.purchaseId,
+      })
+      .from(financialTransaction)
+      .where(
+        and(
+          inArray(financialTransaction.purchaseId, ids),
+          notDeleted(financialTransaction),
+        ),
+      );
+
     // Every transaction holding a slice of any purchase being deleted — the
     // mirror alone would miss a split one, whose mirror is NULL.
     const affectedTransactionIds = await transactionIdsAllocatedTo(tx, ids);
 
     if (
       policy === "require-empty" &&
-      (detaching.length > 0 || affectedTransactionIds.length > 0)
+      (detaching.length > 0 ||
+        detachingTransactions.length > 0 ||
+        affectedTransactionIds.length > 0)
     ) {
       throw createAppError(
         "CONSTRAINT_VIOLATION",
@@ -1867,6 +1895,33 @@ const deletePurchasesWithPolicy = async (
         actor,
         detaching.map((row) => ({
           entityType: "expense" as const,
+          entityId: row.id,
+          action: "update" as const,
+          changes: { purchaseId: { from: row.purchaseId, to: null } },
+        })),
+      );
+
+      // Complementary to the allocation sweep below, not a competing writer of
+      // the mirror. The sweep finds transactions THROUGH their allocations, so a
+      // row whose mirror predates its allocation would be invisible to it and
+      // would be left pointing at a deleted purchase — a referential-liveness
+      // violation. This clears those; for every other row the sweep's
+      // re-derivation independently arrives at the same NULL.
+      await tx
+        .update(financialTransaction)
+        .set({ purchaseId: null })
+        .where(
+          and(
+            inArray(financialTransaction.purchaseId, ids),
+            notDeleted(financialTransaction),
+          ),
+        );
+
+      await logAuditEntries(
+        tx,
+        actor,
+        detachingTransactions.map((row) => ({
+          entityType: "financialTransaction" as const,
           entityId: row.id,
           action: "update" as const,
           changes: { purchaseId: { from: row.purchaseId, to: null } },
@@ -1932,7 +1987,10 @@ const deletePurchasesWithPolicy = async (
       // Union of the mirror and the allocations: a split transaction's mirror is
       // NULL, so the mirror alone would leave its embedding stale — that text
       // carries the vendor and order id resolved through its purchase.
-      financialTransactionIds: affectedTransactionIds,
+      financialTransactionIds: uniq([
+        ...detachingTransactions.map((row) => row.id),
+        ...affectedTransactionIds,
+      ]),
       detachedImageKeys,
     };
   });
@@ -2154,13 +2212,13 @@ export const previewMergePurchases = async (
     }),
     impact({
       disposition:
-        PURCHASE_MERGE_EDGE_POLICY["FinancialTransactionAllocation.purchaseId"],
-      edgeKey: "FinancialTransactionAllocation.purchaseId",
-      label: "settlement allocations moved",
+        PURCHASE_MERGE_EDGE_POLICY["FinancialTransaction.purchaseId"],
+      edgeKey: "FinancialTransaction.purchaseId",
+      label: "financial transactions re-pointed",
       byTargetId: await countByTarget(
         dbClient,
-        financialTransactionAllocation,
-        financialTransactionAllocation.purchaseId,
+        financialTransaction,
+        financialTransaction.purchaseId,
         losers,
       ),
     }),

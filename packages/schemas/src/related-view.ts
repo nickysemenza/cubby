@@ -335,11 +335,7 @@ export const relatedViewRegistry = [
     label: "Financial transactions",
     defaultVisible: false,
     order: "newest",
-    path: [
-      inc("Purchase.vendorId"),
-      inc("FinancialTransactionAllocation.purchaseId"),
-      out("FinancialTransactionAllocation.transactionId"),
-    ],
+    path: [inc("Purchase.vendorId"), inc("FinancialTransaction.purchaseId")],
   },
   {
     key: "purchase.expenses",
@@ -357,10 +353,7 @@ export const relatedViewRegistry = [
     label: "Transactions",
     defaultVisible: true,
     order: "newest",
-    path: [
-      inc("FinancialTransactionAllocation.purchaseId"),
-      out("FinancialTransactionAllocation.transactionId"),
-    ],
+    path: [inc("FinancialTransaction.purchaseId")],
   },
   {
     key: "purchase.products",
@@ -387,11 +380,7 @@ export const relatedViewRegistry = [
     label: "Purchase transactions",
     defaultVisible: false,
     order: "newest",
-    path: [
-      out("Expense.purchaseId"),
-      inc("FinancialTransactionAllocation.purchaseId"),
-      out("FinancialTransactionAllocation.transactionId"),
-    ],
+    path: [out("Expense.purchaseId"), inc("FinancialTransaction.purchaseId")],
   },
   {
     key: "financialAccount.transactions",
@@ -411,8 +400,7 @@ export const relatedViewRegistry = [
     order: "newest",
     path: [
       inc("FinancialTransaction.accountId"),
-      inc("FinancialTransactionAllocation.transactionId"),
-      out("FinancialTransactionAllocation.purchaseId"),
+      out("FinancialTransaction.purchaseId"),
     ],
   },
   {
@@ -424,8 +412,7 @@ export const relatedViewRegistry = [
     order: "alphabetical",
     path: [
       inc("FinancialTransaction.accountId"),
-      inc("FinancialTransactionAllocation.transactionId"),
-      out("FinancialTransactionAllocation.purchaseId"),
+      out("FinancialTransaction.purchaseId"),
       out("Purchase.vendorId"),
     ],
   },
@@ -436,11 +423,7 @@ export const relatedViewRegistry = [
     label: "Vendor",
     defaultVisible: true,
     order: "alphabetical",
-    path: [
-      inc("FinancialTransactionAllocation.transactionId"),
-      out("FinancialTransactionAllocation.purchaseId"),
-      out("Purchase.vendorId"),
-    ],
+    path: [out("FinancialTransaction.purchaseId"), out("Purchase.vendorId")],
   },
   {
     key: "financialTransaction.expenses",
@@ -449,11 +432,7 @@ export const relatedViewRegistry = [
     label: "Expenses",
     defaultVisible: false,
     order: "newest",
-    path: [
-      inc("FinancialTransactionAllocation.transactionId"),
-      out("FinancialTransactionAllocation.purchaseId"),
-      inc("Expense.purchaseId"),
-    ],
+    path: [out("FinancialTransaction.purchaseId"), inc("Expense.purchaseId")],
   },
   {
     key: "financialTransaction.products",
@@ -463,8 +442,7 @@ export const relatedViewRegistry = [
     defaultVisible: false,
     order: "alphabetical",
     path: [
-      inc("FinancialTransactionAllocation.transactionId"),
-      out("FinancialTransactionAllocation.purchaseId"),
+      out("FinancialTransaction.purchaseId"),
       inc("Expense.purchaseId"),
       out("Expense.productId"),
     ],

@@ -12,7 +12,11 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { financialTransactionAllocation, purchase } from "~/server/db/schema";
+import {
+  financialTransaction,
+  financialTransactionAllocation,
+  purchase,
+} from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { touchDataQualityTargets } from "~/server/repo/data-quality";
@@ -89,6 +93,47 @@ export async function readAllocations(
 }
 
 /**
+ * Re-derive `FinancialTransaction.purchaseId` from the live allocations.
+ *
+ * THE ONLY WRITER OF THAT COLUMN. It is a derived mirror of "the sole Purchase
+ * this transaction settled" — non-null only at exactly one live allocation, NULL
+ * for zero or two-or-more — kept transitionally because
+ * `FinancialTransaction_purchase_settlement_check` still reads it and because
+ * every settlement read has not yet moved onto the join table. NULL is truthful
+ * on a split: it says "not exactly one purchase", not "unsettled".
+ *
+ * Reaching for `repointEdge` on this column instead of calling this is the
+ * regression to watch for — a repoint cannot produce the null→non-null move that
+ * happens when two purchases holding slices of one transaction are merged.
+ * `findFinancialTransactionAllocationDefects`' `mirror-drift` reason audits it.
+ */
+async function syncSettlementMirror(
+  tx: DrizzleTransaction,
+  transactionIds: readonly FinancialTransactionId[],
+): Promise<void> {
+  const ids = uniq([...transactionIds]);
+  if (ids.length === 0) return;
+  await tx.execute(sql`
+    UPDATE "FinancialTransaction" ft
+    SET "purchaseId" = derived."purchaseId"
+    FROM (
+      SELECT t.id AS "transactionId",
+        CASE WHEN count(a.id) = 1 THEN min(a."purchaseId"::text)::uuid ELSE NULL END AS "purchaseId"
+      FROM "FinancialTransaction" t
+      LEFT JOIN "FinancialTransactionAllocation" a
+        ON a."transactionId" = t.id AND a."deletedAt" IS NULL
+      WHERE t.id IN (${sql.join(
+        ids.map((id) => sql`${id}`),
+        sql`, `,
+      )})
+      GROUP BY t.id
+    ) derived
+    WHERE ft.id = derived."transactionId"
+      AND ft."purchaseId" IS DISTINCT FROM derived."purchaseId"
+  `);
+}
+
+/**
  * The four follow-ups every allocation change owes, in one place.
  *
  * Callers mutate allocation rows however their operation requires — a whole-set
@@ -118,6 +163,7 @@ export async function applyAllocationChanges(
   if (ids.length === 0)
     return { changedTransactionIds: [], affectedPurchaseIds: [] };
 
+  await syncSettlementMirror(tx, ids);
   const after = await readAllocations(tx, ids);
 
   const changedTransactionIds: FinancialTransactionId[] = [];
@@ -295,6 +341,47 @@ export async function resolveAllocationInputs(
     purchaseId: ids[index] as PurchaseId,
     amount: row.amount,
   }));
+}
+
+/**
+ * Give a pre-allocation row its allocation before anything derives from it.
+ *
+ * `syncSettlementMirror` computes the mirror from live allocations, so a row
+ * carrying `purchaseId` with no allocation would derive to NULL — meaning an
+ * unrelated edit (a note, a status, a merchant) would silently erase a real
+ * settlement link. The backfill closed that window for every row that existed
+ * when it ran, but the write path must not depend on a one-off script having
+ * been run: a fresh environment, a restored dump, or a future import that sets
+ * the column directly would all reopen it.
+ *
+ * Materializing rather than refusing, because the mirror IS the allocation for
+ * such a row — one slice of the full amount — so there is exactly one correct
+ * answer and no judgement to make. Caller must already hold the transaction's
+ * FOR UPDATE lock.
+ */
+export async function materializeLegacyMirror(
+  tx: DrizzleTransaction,
+  transactionId: FinancialTransactionId,
+): Promise<void> {
+  const [row] = await tx
+    .select({
+      purchaseId: financialTransaction.purchaseId,
+      amount: financialTransaction.amount,
+    })
+    .from(financialTransaction)
+    .where(
+      and(
+        eq(financialTransaction.id, transactionId),
+        notDeleted(financialTransaction),
+      ),
+    );
+  if (!row?.purchaseId) return;
+  if ((await countLiveAllocations(tx, transactionId)) > 0) return;
+  await tx.insert(financialTransactionAllocation).values({
+    transactionId,
+    purchaseId: row.purchaseId,
+    amount: Number(row.amount),
+  });
 }
 
 /** Live allocation count per transaction — the "is this split?" question. */

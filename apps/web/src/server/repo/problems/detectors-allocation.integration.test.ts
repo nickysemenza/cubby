@@ -3,7 +3,6 @@ import type {
   PurchaseId,
 } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
-import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import type { Database } from "~/server/db";
@@ -53,21 +52,14 @@ const mkTransaction = async (
     name: uniq("Account"),
     identity: { kind: "cash" },
   });
-  const values = {
+  return insertWithShortcode(db, "financialTransaction", {
     accountId: account.id,
     kind: overrides.kind ?? "refund",
-    status: "posted" as const,
+    status: "posted",
     postedDate: "2026-08-10",
     amount: overrides.amount ?? -16.76,
-  };
-  // Only a transaction that actually settles a purchase gets an allocation;
-  // the rest are unlinked evidence and take the plain insert.
-  return overrides.purchaseId
-    ? insertSettlementTransaction(db, {
-        ...values,
-        purchaseId: overrides.purchaseId,
-      })
-    : insertWithShortcode(db, "financialTransaction", values);
+    purchaseId: overrides.purchaseId ?? null,
+  });
 };
 
 const allocate = (
@@ -98,9 +90,11 @@ describe("findFinancialTransactionAllocationDefects", () => {
 
   it("passes a single allocation whose mirror agrees, and an unallocated transaction", async () => {
     const purchase = await mkPurchase(ctx.db);
-    // mkTransaction allocates when given a purchaseId, so this is already the
-    // ordinary single-allocation shape.
-    await mkTransaction(ctx.db, { amount: -32.55, purchaseId: purchase.id });
+    const linked = await mkTransaction(ctx.db, {
+      amount: -32.55,
+      purchaseId: purchase.id,
+    });
+    await allocate(ctx.db, linked.id, purchase.id, -32.55);
     await mkTransaction(ctx.db, { amount: -5 }); // unlinked evidence, no allocations
 
     expect(await findFinancialTransactionAllocationDefects(ctx.db)).toEqual([]);
@@ -120,6 +114,31 @@ describe("findFinancialTransactionAllocationDefects", () => {
     expect(defect?.allocationCount).toBe(2);
     expect(defect?.allocatedTotal).toBeCloseTo(-15.96, 2);
     expect(defect?.purchaseIds).toHaveLength(2);
+  });
+
+  it("flags a mirror still set while the transaction is split across two purchases", async () => {
+    const [a, b] = await Promise.all([mkPurchase(ctx.db), mkPurchase(ctx.db)]);
+    const txn = await mkTransaction(ctx.db, {
+      amount: -16.76,
+      purchaseId: a.id, // stale: a split transaction's mirror must be NULL
+    });
+    await allocate(ctx.db, txn.id, a.id, -8.96);
+    await allocate(ctx.db, txn.id, b.id, -7.8);
+
+    const [defect] = await findFinancialTransactionAllocationDefects(ctx.db);
+    expect(defect?.reasons).toEqual(["mirror-drift"]);
+  });
+
+  it("flags a mirror pointing at a purchase the allocations do not name", async () => {
+    const [a, b] = await Promise.all([mkPurchase(ctx.db), mkPurchase(ctx.db)]);
+    const txn = await mkTransaction(ctx.db, {
+      amount: -32.55,
+      purchaseId: b.id,
+    });
+    await allocate(ctx.db, txn.id, a.id, -32.55);
+
+    const [defect] = await findFinancialTransactionAllocationDefects(ctx.db);
+    expect(defect?.reasons).toEqual(["mirror-drift"]);
   });
 
   it("flags a non-settlement kind carrying allocations", async () => {
