@@ -207,6 +207,62 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       filters: [{ id: "expectedQuantity", value: "unknown" }],
       columnVisibility: { expectedQuantity: true },
     },
+    {
+      id: "unlocated",
+      label: "Not on a shelf",
+      description: "Bought, never sold, but stocked nowhere",
+      // The other half of `shelf-disagrees`, and the half that view cannot
+      // reach: `quantityVarianceFilter` is scoped to products that are BOTH
+      // stocked and in the ledger, and `onHandUnitsSql` returns NULL for a
+      // zero-entry shelf — so a product the ledger says you own with nothing
+      // on a shelf matches neither "mismatched" nor "matched". It needs no new
+      // server predicate, only these two existing filters combined.
+      //
+      // Deliberately unscoped, and it does NOT converge: inventory never
+      // auto-decrements (a tenet), so every consumable ever bought stays
+      // "owned" here forever — 4,462 products on production, over a third of
+      // them food. No field separates durable from consumable, so rather than
+      // guess with a category predicate this sorts by price and lets the
+      // operator narrow with the live chips. The top of the list is where the
+      // money is; `unlocated-durables` below is the shortcut, not the answer.
+      filters: [
+        { id: "expectedQuantity", value: "positive" },
+        { id: "location", value: [FILTER_NONE] },
+      ],
+      sort: [{ id: "price", desc: true }],
+      // Both halves of the signal: a filled Expected beside an empty Location
+      // is the whole story ("three of these, nowhere"). `quantityVariance` is
+      // deliberately NOT revealed — on-hand units are NULL for this entire
+      // cohort, so it renders `—` on every row, and a dash reads as "unknown"
+      // when the actual fact is "none".
+      columnVisibility: { expectedQuantity: true, location: true },
+    },
+    {
+      id: "unlocated-durables",
+      label: "Durables not on a shelf",
+      description: "Tools and storage the ledger says you own, stocked nowhere",
+      // A fast path into `unlocated`, not an authority over it: same question,
+      // narrowed to the categories whose members are objects you could go find.
+      //
+      // ⚠️ It has real false negatives, because `category` is a weak proxy for
+      // durability. The disappearance that motivated both views — Milwaukee
+      // PACKOUT wall plates, hooks and racks — is categorized `supplies` and
+      // `hardware`, so none of it would appear here. Widening to those two
+      // categories is not the fix: they also carry the screws and shop
+      // consumables this view exists to exclude, and doing so lands you back at
+      // ~1,600 rows. When a count here looks reassuring, check `unlocated`.
+      filters: [
+        { id: "expectedQuantity", value: "positive" },
+        { id: "location", value: [FILTER_NONE] },
+        { id: "category", value: ["tools", "tool-accessories", "storage"] },
+      ],
+      sort: [{ id: "price", desc: true }],
+      columnVisibility: {
+        expectedQuantity: true,
+        location: true,
+        category: true,
+      },
+    },
   ],
   purchase: [
     {
