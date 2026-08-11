@@ -1,12 +1,20 @@
 import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
 import { match } from "ts-pattern";
-import type { CalculateTotalsResult } from "~/lib/recipe-costing";
+import {
+  type CalculateTotalsResult,
+  fromWAmount,
+  toWAmount,
+} from "~/lib/recipe-costing";
+import { wasm } from "~/lib/wasm";
 
-// Recipe scaling is a purely derived, client-side transform: multiply every
+// Recipe scaling is a purely derived, client-side transform: scale every
 // ingredient amount (plus yield/servings) by a factor and feed the resulting
 // RecipeOut through the existing display + costing pipeline. It sits upstream of
 // the TS→WASM costing boundary, so the Rust engine reprices the scaled amounts
 // for free. No DB writes, no persisted-totals invalidation.
+//
+// Which amounts actually scale is the WASM engine's call, not this module's —
+// see `scale_amount`.
 
 /** How the user anchors the scale; each resolves to a single numeric factor. */
 export type ScaleAnchor =
@@ -78,9 +86,11 @@ export const scaleRecipe = (recipe: RecipeOut, factor: number): RecipeOut => {
       ...row,
       amounts: row.amounts.map((a) => ({
         ...a,
-        value: a.value * factor,
-        // Scale the range upper bound too, else "2–3 cups" scales to "4–3 cups".
-        ...(a.upperValue != null ? { upperValue: a.upperValue * factor } : {}),
+        // Multiplying `value` here would resize the pan: a "(9-inch)" crust, a
+        // 350°F oven and a 20-minute rest are amounts too, and none of them
+        // scale. `scale_amount` applies the kind rule (and carries the range
+        // upper bound, else "2–3 cups" would scale to "4–3 cups").
+        ...fromWAmount(wasm.scale_amount(toWAmount(a), factor)),
       })),
     })),
   }));

@@ -304,6 +304,18 @@ pub fn amount_kind(amount: WAmount) -> Result<WAmountKind, String> {
     to_js(&kind.to_str(), "amount kind").map(Into::into)
 }
 
+/// Multiply an amount by a recipe scale factor, leaving non-scalable kinds
+/// (length, time, temperature, money, calories, nutrients) untouched — doubling
+/// a recipe must not turn a 9-inch pan into an 18-inch one.
+///
+/// TS calls this instead of multiplying `value` itself: the scalable-kind rule
+/// lives upstream in `Measure::scale`, and a second copy in TS is exactly the
+/// layering violation CLAUDE.md forbids.
+#[wasm_bindgen]
+pub fn scale_amount(amount: WAmount, factor: f64) -> WAmount {
+    amount.scale(factor)
+}
+
 // Golden tests — drift tripwires for the ingredient crate's unit-conversion
 // surface (pinned by exact git rev). `detect_unit_mapping_islands` and
 // `is_valid_unit` take native types and run
@@ -446,6 +458,22 @@ mod tests {
     fn amount_kind_classification(#[case] unit: &str, #[case] expected: &str) {
         let kind = amt(1.0, unit).to_measure().kind();
         assert_eq!(&*kind.to_str(), expected);
+    }
+
+    /// `scale_amount` takes and returns a plain `WAmount`, so unlike its
+    /// `amount_kind` neighbour the exported fn itself runs natively. The kind
+    /// rule it delegates to is pinned in `amount_scale_tests`; this covers the
+    /// export TS actually calls, including that it leaves a pan/oven/timer alone.
+    #[rstest]
+    #[case("g", 200.0)]
+    #[case("cup", 200.0)]
+    #[case("inch", 100.0)]
+    #[case("min", 100.0)]
+    #[case("°F", 100.0)]
+    fn scale_amount_applies_the_kind_rule(#[case] unit: &str, #[case] expected: f64) {
+        let scaled = scale_amount(amt(100.0, unit), 2.0);
+        assert_eq!(scaled.value, expected);
+        assert_eq!(scaled.unit, unit);
     }
 
     /// The kind-string contract `conv_amount_to_kind` / `conv_amount_explain`

@@ -236,14 +236,6 @@ pub fn yield_verdict(
     yield_fraction(recipe_yield, amounts).ok_or(WNeedsBlockReason::Unscalable)
 }
 
-fn scale_amount(amount: &WAmount, factor: f64) -> WAmount {
-    WAmount {
-        unit: amount.unit.clone(),
-        value: amount.value * factor,
-        upper_value: amount.upper_value.map(|upper| upper * factor),
-    }
-}
-
 #[derive(Clone)]
 struct PartialNeed {
     ingredient_id: String,
@@ -378,7 +370,7 @@ impl<'a> Expander<'a> {
                         out.needs.push(PartialNeed {
                             ingredient_id: need.ingredient_id,
                             name: need.name,
-                            amount: need.amount.map(|a| scale_amount(&a, fraction)),
+                            amount: need.amount.map(|a| a.scale(fraction)),
                             via: prepend(&hop, need.via),
                         });
                     }
@@ -427,7 +419,7 @@ pub fn expand_recipe_needs_impl(input: &WNeedsInput) -> Result<WNeedsResult, Str
             needs.push(WExpandedNeed {
                 ingredient_id: need.ingredient_id,
                 name: need.name,
-                amount: need.amount.map(|a| scale_amount(&a, line.scale)),
+                amount: need.amount.map(|a| a.scale(line.scale)),
                 line_index: line.line_index,
                 via: need.via,
             });
@@ -624,19 +616,5 @@ mod tests {
         });
         assert!(declined.fraction.is_none());
         assert_eq!(declined.reason, Some(WNeedsBlockReason::MissingYield));
-    }
-
-    #[test]
-    fn scales_both_ends_of_a_range() {
-        let scaled = scale_amount(
-            &WAmount {
-                unit: "g".into(),
-                value: 10.0,
-                upper_value: Some(20.0),
-            },
-            2.5,
-        );
-        assert_eq!(scaled.value, 25.0);
-        assert_eq!(scaled.upper_value, Some(50.0));
     }
 }
