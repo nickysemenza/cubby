@@ -460,6 +460,22 @@ mod tests {
         assert_eq!(&*kind.to_str(), expected);
     }
 
+    /// `scale_amount` takes and returns a plain `WAmount`, so unlike its
+    /// `amount_kind` neighbour the exported fn itself runs natively. The kind
+    /// rule it delegates to is pinned in `amount_scale_tests`; this covers the
+    /// export TS actually calls, including that it leaves a pan/oven/timer alone.
+    #[rstest]
+    #[case("g", 200.0)]
+    #[case("cup", 200.0)]
+    #[case("inch", 100.0)]
+    #[case("min", 100.0)]
+    #[case("°F", 100.0)]
+    fn scale_amount_applies_the_kind_rule(#[case] unit: &str, #[case] expected: f64) {
+        let scaled = scale_amount(amt(100.0, unit), 2.0);
+        assert_eq!(scaled.value, expected);
+        assert_eq!(scaled.unit, unit);
+    }
+
     /// The kind-string contract `conv_amount_to_kind` / `conv_amount_explain`
     /// depend on (via `MeasureKind::from_str`). NB it's infallible: a known kind
     /// round-trips and an unknown string falls back to `other:<s>` rather than
