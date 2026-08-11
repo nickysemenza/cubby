@@ -41,7 +41,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   expense,
-  financialTransaction,
+  financialTransactionAllocation,
   purchase,
   purchaseImage,
   vendor,
@@ -814,8 +814,8 @@ export const previewMergeVendors = async (
   );
   const transactionMoveCounts = await countByTarget(
     dbClient,
-    financialTransaction,
-    financialTransaction.purchaseId,
+    financialTransactionAllocation,
+    financialTransactionAllocation.purchaseId,
     foldedPurchaseIds,
   );
 

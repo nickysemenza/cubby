@@ -664,8 +664,6 @@ export const duplicateFinancialAccountSourceAliasSchema = z.object({
 export const financialTransactionAllocationDefectReason = z.enum([
   /** Allocations exist but do not sum to the transaction's own amount. */
   "sum-mismatch",
-  /** The derived `purchaseId` mirror disagrees with the live allocations. Transitional; retires with the column. */
-  "mirror-drift",
   /** A transaction of a non-settlement kind carries allocations. */
   "non-settlement-kind",
   /** The transaction's amount has the wrong sign for its kind. Replaces the DB CHECK, which passes vacuously once the mirror is NULL. */

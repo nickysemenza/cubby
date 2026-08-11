@@ -12,6 +12,7 @@ import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { and, eq, sql } from "drizzle-orm";
+import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import {
@@ -726,7 +727,7 @@ describe("vendor repository — mergeVendors", () => {
       sourceAliases: [],
       notes: null,
     });
-    await insertWithShortcode(ctx.db, "financialTransaction", {
+    await insertSettlementTransaction(ctx.db, {
       accountId: account.id,
       purchaseId: dead,
       kind: "purchase",

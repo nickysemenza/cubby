@@ -30,6 +30,7 @@ import {
   listFinancialTransactions,
   updateFinancialTransaction,
 } from "./financial-transaction";
+import { findFinancialTransactionAllocationDefects } from "./problems/detectors-financial";
 import {
   createPurchase,
   deletePurchases,
@@ -1346,14 +1347,18 @@ describe("financial repositories — critical invariants", () => {
       updateFinancialTransaction(ctx.db, payout.id, { kind: "fee" }, ctx.actor),
     ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
 
-    // The DB CHECK is the last line of defence when app validation is bypassed.
-    // Drizzle wraps the driver error, so the constraint name is on the cause.
-    await expect(
-      getDb(ctx.db).execute(
-        sql`UPDATE "FinancialTransaction" SET "amount" = 140.22 WHERE "shortcode" = ${payout.id}`,
-      ),
-    ).rejects.toMatchObject({
-      cause: { constraint: "FinancialTransaction_purchase_settlement_check" },
-    });
+    // The last line of defence when app validation is bypassed used to be a DB
+    // CHECK. It was dropped with the `purchaseId` column it read: once "is this
+    // linked" became a question about another table, a row-level CHECK could no
+    // longer ask it. So a raw UPDATE now SUCCEEDS — and the detector is what
+    // catches it. That is a real reduction in enforcement, and this asserts the
+    // replacement actually fires rather than quietly assuming it does.
+    await getDb(ctx.db).execute(
+      sql`UPDATE "FinancialTransaction" SET "amount" = 140.22 WHERE "shortcode" = ${payout.id}`,
+    );
+    const defects = await findFinancialTransactionAllocationDefects(ctx.db);
+    expect(
+      defects.find((defect) => defect.id === payout.id)?.reasons,
+    ).toContain("kind-sign-violation");
   });
 });
