@@ -28,16 +28,7 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  inArray,
-  isNull,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -66,6 +57,16 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
+import {
+  type AllocationInput,
+  applyAllocationChanges,
+  assertAllocationSetValid,
+  assertPurchasesLive,
+  countLiveAllocations,
+  readAllocations,
+  resolveAllocationInputs,
+  writeAllocationSet,
+} from "~/server/repo/financial-transaction-allocations";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
@@ -75,6 +76,33 @@ import {
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+
+/** Money comparisons go through cents; `===` on doubles reports phantom drift. */
+const cents = (value: number) => Math.round(value * 100);
+
+/** "This transaction settles at least one Purchase" — allocation-aware. */
+const hasAnyAllocation = () => sql`EXISTS (
+  SELECT 1 FROM "FinancialTransactionAllocation" fta
+  WHERE fta."transactionId" = "FinancialTransaction"."id"
+    AND fta."deletedAt" IS NULL
+)`;
+
+/**
+ * "This transaction settles any of these Purchases" — allocation-aware.
+ *
+ * `IN (…)` over a joined list of bound parameters rather than `= ANY(array)`:
+ * drizzle turns an interpolated JS array into a row constructor, which postgres
+ * rejects outright.
+ */
+const allocatedToAny = (purchaseIds: readonly string[]) => sql`EXISTS (
+  SELECT 1 FROM "FinancialTransactionAllocation" fta
+  WHERE fta."transactionId" = "FinancialTransaction"."id"
+    AND fta."deletedAt" IS NULL
+    AND fta."purchaseId" IN (${sql.join(
+      purchaseIds.map((id) => sql`${id}`),
+      sql`, `,
+    )})
+)`;
 
 const accountName = sql<string | null>`(
   SELECT fa.name FROM "FinancialAccount" fa
@@ -197,11 +225,15 @@ async function whereFor(
         financialTransaction.id,
       ),
       eqAny(financialTransaction.accountId, accountIds),
-      eqAny(financialTransaction.purchaseId, purchaseIds),
+      // Allocations, not the mirror column: a transaction split across two
+      // purchases has a NULL mirror, so filtering on it would hide the split
+      // row from BOTH purchases — including the linked-transactions table on
+      // each purchase's detail page, which is exactly where it must appear.
+      purchaseIds ? allocatedToAny(purchaseIds) : undefined,
       filters.purchasePresenceFilter === "has"
-        ? sql`${financialTransaction.purchaseId} IS NOT NULL`
+        ? hasAnyAllocation()
         : filters.purchasePresenceFilter === "none"
-          ? isNull(financialTransaction.purchaseId)
+          ? sql`NOT ${hasAnyAllocation()}`
           : undefined,
       // `eqAny`, NOT sql`col = ANY(${arr})`: drizzle expands a JS array in a
       // template into a row constructor (`ANY(($1, $2))`), which postgres
@@ -351,8 +383,9 @@ export async function createFinancialTransaction(
       data.sourceRefs.map((ref) => `${ref.source}\0${ref.externalId}`),
     );
     await assertSourceRefsAvailable(tx, data.sourceRefs);
+    const { allocations, ...columns } = data;
     const created = await insertWithShortcode(tx, "financialTransaction", {
-      ...data,
+      ...columns,
       ...foreign,
     });
     await logAuditEntry(tx, actor, {
@@ -360,8 +393,32 @@ export async function createFinancialTransaction(
       entityId: created.id,
       action: "create",
     });
-    if (foreign.purchaseId) {
-      await touchDataQualityTargets(tx, { purchaseIds: [foreign.purchaseId] });
+
+    // `purchaseId` is sugar for one allocation of the full amount; the zod
+    // refinement has already rejected a purchaseId/allocations pair that
+    // disagrees, so either source can be taken verbatim here.
+    const requested: AllocationInput[] =
+      allocations.length > 0
+        ? await resolveAllocationInputs(tx, allocations)
+        : foreign.purchaseId
+          ? [{ purchaseId: foreign.purchaseId, amount: data.amount }]
+          : [];
+    if (requested.length > 0) {
+      await assertPurchasesLive(
+        tx,
+        requested.map((row) => row.purchaseId),
+      );
+      assertAllocationSetValid({
+        transactionAmount: data.amount,
+        kind: data.kind,
+        next: requested,
+      });
+      await writeAllocationSet(tx, created.id, requested, new Map());
+      await applyAllocationChanges(tx, {
+        transactionIds: [created.id],
+        before: new Map(),
+        actor,
+      });
     }
     return created.id;
   });
@@ -376,6 +433,16 @@ export async function updateFinancialTransaction(
 ) {
   const id = await resolveOrThrow(db, "financialTransaction", shortcode);
   await withTransaction(db, async (tx) => {
+    // Lock before reading: the amount and its allocations must move together,
+    // and this is the same row lock setFinancialTransactionAllocations takes,
+    // so the two cannot interleave.
+    await tx
+      .select({ id: financialTransaction.id })
+      .from(financialTransaction)
+      .where(
+        and(eq(financialTransaction.id, id), notDeleted(financialTransaction)),
+      )
+      .for("update");
     const before = await tx.query.financialTransaction.findFirst({
       where: and(
         eq(financialTransaction.id, id),
@@ -415,13 +482,30 @@ export async function updateFinancialTransaction(
         "FINANCIAL_TRANSACTION_POSTED_DATE_REQUIRED",
         "Posted financial transactions require a posted date.",
       );
+    const allocationCount = await countLiveAllocations(tx, id);
     const settlementViolation = financialTransactionSettlementViolation({
-      purchaseId,
+      // A split transaction's mirror is NULL while it is very much linked, so
+      // linkage is the allocation count first and the mirror only as a fallback
+      // for rows this migration has not reached.
+      linked: allocationCount > 0 || purchaseId !== null,
       kind: nextKind as FinancialTransactionCreateInput["kind"],
       amount: nextAmount,
     });
     if (settlementViolation)
       throw createAppError("CONSTRAINT_VIOLATION", settlementViolation.message);
+
+    // The amount and its allocations must stay in agreement. With one allocation
+    // the invariant admits exactly one legal value, so writing it is forced
+    // rather than fabricated — that keeps the ordinary "fix the amount typo"
+    // flow working. With two or more there is no defensible way to redistribute
+    // the difference: proportional rescaling would silently rewrite an evidence
+    // split, which is precisely the fabrication this table exists to end.
+    const amountChanged = cents(nextAmount) !== cents(before.amount);
+    if (amountChanged && allocationCount >= 2)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `This transaction's amount is split across ${allocationCount} purchases. Re-allocate it first, then the amount will follow.`,
+      );
     await tx
       .update(financialTransaction)
       .set(values)
@@ -449,6 +533,49 @@ export async function updateFinancialTransaction(
         action: "update",
         changes,
       });
+
+    // Keep the allocations in step with what just changed, then let the shared
+    // core own the follow-ups. This is the only door for setting a split — there
+    // is deliberately no separate allocations endpoint, because `allocations` is
+    // already part of this input and a second entry point would be a second
+    // place to forget the lock and the invariant. Three triggers, in precedence
+    // order:
+    //   • an explicit `allocations` array — the general case;
+    //   • an explicit `purchaseId` — the single-Purchase sugar, meaning "one
+    //     slice for the whole amount", or clear it;
+    //   • an amount change on a singly-allocated transaction, where the sole
+    //     legal allocation value is the new amount.
+    const allocationsBefore = await readAllocations(tx, [id]);
+    const explicitPurchaseChange =
+      data.purchaseId !== undefined && purchaseId !== before.purchaseId;
+    let nextAllocations: AllocationInput[] | null = null;
+    if (data.allocations !== undefined) {
+      nextAllocations = await resolveAllocationInputs(tx, data.allocations);
+    } else if (explicitPurchaseChange) {
+      nextAllocations = purchaseId ? [{ purchaseId, amount: nextAmount }] : [];
+    } else if (amountChanged && allocationCount === 1) {
+      const sole = allocationsBefore.get(id)?.[0];
+      if (sole)
+        nextAllocations = [{ purchaseId: sole.purchaseId, amount: nextAmount }];
+    }
+    if (nextAllocations !== null) {
+      await assertPurchasesLive(
+        tx,
+        nextAllocations.map((row) => row.purchaseId),
+      );
+      assertAllocationSetValid({
+        transactionAmount: nextAmount,
+        kind: nextKind,
+        next: nextAllocations,
+      });
+      await writeAllocationSet(tx, id, nextAllocations, allocationsBefore);
+    }
+    await applyAllocationChanges(tx, {
+      transactionIds: [id],
+      before: allocationsBefore,
+      actor,
+    });
+
     if (changes) {
       await touchDataQualityTargets(tx, {
         purchaseIds: [before.purchaseId, purchaseId].filter(
