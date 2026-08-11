@@ -450,7 +450,7 @@ function LifecyclesView({
                       render={
                         <span
                           className={cn(
-                            "absolute top-5 size-3 -translate-x-1/2 rounded-full border-2 shadow-sm",
+                            "absolute top-5 size-3 -translate-x-1/2 rounded-full border-2",
                             markerClass(marker.kind),
                           )}
                           style={{ left: `${position(marker.date)}%` }}

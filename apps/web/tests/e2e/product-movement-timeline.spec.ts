@@ -17,7 +17,7 @@ test("Product filters persist while switching movement renderers", async ({
   await expect(page.getByLabel("To", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Events view" }),
-  ).toHaveAttribute("data-state", "on");
+  ).toHaveAttribute("aria-pressed", "true");
 
   await page.getByRole("button", { name: "Lifecycles view" }).click();
   await expect(page).toHaveURL(/view=lifecycles/);
@@ -26,7 +26,7 @@ test("Product filters persist while switching movement renderers", async ({
   );
   await expect(
     page.getByRole("button", { name: "Lifecycles view" }),
-  ).toHaveAttribute("data-state", "on");
+  ).toHaveAttribute("aria-pressed", "true");
 
   await page.getByRole("button", { name: "Table view" }).click();
   await expect(page).not.toHaveURL(/(?:\?|&)view=/);
