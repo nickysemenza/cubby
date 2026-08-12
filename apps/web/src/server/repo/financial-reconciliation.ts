@@ -1,4 +1,5 @@
 import type { FinancialReconciliationSummary } from "@cubby/schemas/financial-reconciliation";
+import { purchaseSettlementKinds } from "@cubby/schemas/financial-transaction";
 import type { PurchaseFinancialAggregate } from "~/server/repo/purchase-financial-aggregates";
 
 /**
@@ -75,6 +76,92 @@ export const settleableUnpricedExpenseCountSql = (purchaseAlias: string) =>
        AND se_e."cost" IS NULL
        AND se_e."deletedAt" IS NULL
        AND se_e."future" = false)`;
+
+/**
+ * `kind = 'refund' AND status = 'posted'` — the atom behind every posted-refund
+ * figure. It had been spelled out five times (two grouped scans, two correlated
+ * scalars, one hand-written detector query), which is exactly the shape of
+ * drift this file exists to prevent.
+ *
+ * **Liveness is the caller's**, because the two shapes handle it differently: a
+ * grouped scan already filters `deletedAt` in its WHERE, so repeating it inside
+ * a `FILTER (WHERE …)` would be noise, while a correlated scalar has no WHERE to
+ * inherit and gets it from `postedRefundTotalSql` below.
+ *
+ * **Deliberately NOT account-liveness-filtered.** `loadPurchaseDataQualities`
+ * used to compute its refund total through an INNER JOIN to a live
+ * `FinancialAccount` while the other four spellings did not. A refund happened
+ * regardless of whether its account row was later retired, so the join is wrong
+ * here and the four unfiltered spellings were right. Invisible until now — there
+ * are zero soft-deleted accounts in production — but it would have surfaced as
+ * two purchase rows disagreeing about the same refund. Coverage is the opposite
+ * case and keeps the join; see `settlementReferencePredicate`.
+ */
+export const postedRefundPredicate = (ftxAlias: string) =>
+  `${ftxAlias}."kind" = 'refund' AND ${ftxAlias}."status" = 'posted'`;
+
+/**
+ * The posted-refund total for one Purchase, as a correlated scalar. Same
+ * raw-string reasoning as `settleableExpenseTotalSql`, and the same contract:
+ * the enclosing query owns Purchase liveness.
+ */
+export const postedRefundTotalSql = (purchaseAlias: string) =>
+  `(SELECT COALESCE(sum(pr_a."amount"), 0)::double precision
+     FROM "FinancialTransactionAllocation" pr_a
+     JOIN "FinancialTransaction" pr_ft ON pr_ft."id" = pr_a."transactionId"
+     WHERE pr_a."purchaseId" = ${purchaseAlias}."id"
+       AND pr_a."deletedAt" IS NULL
+       AND pr_ft."deletedAt" IS NULL
+       AND ${postedRefundPredicate("pr_ft")})`;
+
+/**
+ * What makes a settlement row count as *evidence* for the
+ * `settlement_reference` data-quality check: posted, of a settlement kind, and
+ * carrying either an external source reference or a cash account (cash leaves no
+ * statement to reference, so the account itself is the evidence).
+ *
+ * **Account liveness belongs here**, unlike in `postedRefundPredicate` — the
+ * rule literally reads `identity->>'kind'`, so it cannot be evaluated without a
+ * live account row. Carrying it in the predicate (rather than on each caller's
+ * join) is what lets the grouped scan LEFT JOIN — it needs unfiltered rows for
+ * its refund sum — while still applying the liveness rule to coverage alone.
+ *
+ * `settlementReferenceAbsentSql` repeats the same condition on its JOIN. That
+ * redundancy is deliberate: `scripts/check-soft-delete-filters.mjs` scans raw
+ * SQL text and cannot see through this function call, so without the visible
+ * predicate it fails the build — correctly, since it has no way to prove the
+ * filter exists. Keep both.
+ */
+export const settlementReferencePredicate = (
+  ftxAlias: string,
+  accountAlias: string,
+) =>
+  `${ftxAlias}."status" = 'posted'
+     AND ${ftxAlias}."kind" IN (${purchaseSettlementKinds
+       .map((kind) => `'${kind}'`)
+       .join(", ")})
+     AND ${accountAlias}."deletedAt" IS NULL
+     AND (
+       jsonb_array_length(${ftxAlias}."sourceRefs") > 0
+       OR ${accountAlias}."identity"->>'kind' = 'cash'
+     )`;
+
+/**
+ * "This Purchase has no qualifying settlement evidence" — the `NOT EXISTS` half
+ * of the `settlement_reference` gap, shared by the badge and the list filter so
+ * the two cannot disagree about the same row.
+ */
+export const settlementReferenceAbsentSql = (purchaseAlias: string) =>
+  `NOT EXISTS (
+    SELECT 1 FROM "FinancialTransactionAllocation" sr_a
+    JOIN "FinancialTransaction" sr_ft
+      ON sr_ft."id" = sr_a."transactionId" AND sr_ft."deletedAt" IS NULL
+    JOIN "FinancialAccount" sr_fa
+      ON sr_fa."id" = sr_ft."accountId" AND sr_fa."deletedAt" IS NULL
+    WHERE sr_a."purchaseId" = ${purchaseAlias}."id"
+      AND sr_a."deletedAt" IS NULL
+      AND ${settlementReferencePredicate("sr_ft", "sr_fa")}
+  )`;
 
 const cents = (value: number) => Math.round(value * 100);
 

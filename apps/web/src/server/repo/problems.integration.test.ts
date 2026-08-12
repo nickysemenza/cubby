@@ -23,6 +23,7 @@ import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { UPCLookupResponse } from "@cubby/upc-contract";
 import type { FoodSummary } from "@cubby/usda-schemas";
 import { eq } from "drizzle-orm";
+import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
@@ -2233,7 +2234,7 @@ describe("problems — charges not reconciling", () => {
       sourceAliases: [],
       notes: null,
     });
-    const refund = await insertWithShortcode(ctx.db, "financialTransaction", {
+    const refund = await insertSettlementTransaction(ctx.db, {
       accountId: account.id,
       purchaseId,
       kind: "refund",
@@ -2511,7 +2512,7 @@ describe("problems — purchase financial settlement mismatches", () => {
     const purchaseId = unsafePurchaseId(
       (await resolveLiveShortcode(ctx.db, purchaseShortcode, "purchase"))!,
     );
-    await insertWithShortcode(ctx.db, "financialTransaction", {
+    await insertSettlementTransaction(ctx.db, {
       accountId,
       purchaseId,
       kind: "purchase",

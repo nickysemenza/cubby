@@ -97,11 +97,19 @@ export const isPurchaseSettlementKind = (
   purchaseSettlementKinds.includes(kind as PurchaseSettlementKind);
 
 export const financialTransactionSettlementViolation = (value: {
-  purchaseId: unknown | null;
+  /**
+   * Whether this transaction settles any Purchase at all.
+   *
+   * Explicit rather than derived from a `purchaseId`, because that column is a
+   * transitional mirror that is NULL for a transaction split across several
+   * Purchases — such a row is very much linked, and inferring otherwise would
+   * silently switch this rule off on exactly the rows it most needs to bind to.
+   */
+  linked: boolean;
   kind: FinancialTransactionKind;
   amount: number;
 }): { path: "kind" | "amount"; message: string } | null => {
-  const linked = value.purchaseId !== null;
+  const linked = value.linked;
   if (linked && !isPurchaseSettlementKind(value.kind)) {
     return {
       path: "kind",
@@ -135,13 +143,17 @@ const quoteKinds = (kinds: readonly string[]) =>
   kinds.map((kind) => `'${kind}'`).join(", ");
 
 /**
- * The SQL body of `FinancialTransaction_purchase_settlement_check`, generated
- * from `purchaseSettlementSignRules` so the DB constraint cannot drift from the
- * TypeScript rule above. The CHECK is scoped to linked rows, so `binds` is not
- * consulted here — every rule applies.
+ * "This row's amount has the right sign for its kind" as SQL, generated from
+ * `purchaseSettlementSignRules`. Scoped to rows already known to be LINKED, so
+ * `binds` is not consulted — every rule applies to a linked row.
+ *
+ * Exported because two things need it and neither may hand-write it: the DB
+ * CHECK below, and `findFinancialTransactionAllocationDefects`, which is what
+ * still enforces this rule for a transaction split across several Purchases —
+ * such a row's mirror `purchaseId` is NULL, so the CHECK passes vacuously and
+ * the detector is the only thing left watching.
  */
-export const purchaseSettlementCheckExpression = (columns: {
-  purchaseId: string;
+export const purchaseSettlementSignSatisfiedExpression = (columns: {
   kind: string;
   amount: string;
 }): string => {
@@ -164,10 +176,27 @@ export const purchaseSettlementCheckExpression = (columns: {
       ? [`${columns.kind} IN (${quoteKinds(withSign("any"))})`]
       : []),
   ];
-  return `${columns.purchaseId} IS NULL OR (${columns.kind} IN (${quoteKinds(
-    purchaseSettlementKinds,
-  )}) AND (${clauses.join(" OR ")}))`;
+  return `(${clauses.join(" OR ")})`;
 };
+
+/** `kind IN (<settlement kinds>)` — the allowlist half, same single source. */
+export const purchaseSettlementKindAllowedExpression = (kindColumn: string) =>
+  `${kindColumn} IN (${quoteKinds(purchaseSettlementKinds)})`;
+
+/**
+ * The SQL body of `FinancialTransaction_purchase_settlement_check`, generated
+ * from `purchaseSettlementSignRules` so the DB constraint cannot drift from the
+ * TypeScript rule above. The CHECK is scoped to linked rows, so `binds` is not
+ * consulted here — every rule applies.
+ */
+export const purchaseSettlementCheckExpression = (columns: {
+  purchaseId: string;
+  kind: string;
+  amount: string;
+}): string =>
+  `${columns.purchaseId} IS NULL OR (${purchaseSettlementKindAllowedExpression(
+    columns.kind,
+  )} AND ${purchaseSettlementSignSatisfiedExpression(columns)})`;
 
 export const financialTransactionStatus = z.enum([
   "expected",
@@ -204,6 +233,12 @@ const nonZeroAmount = wholeCentAmount.refine(
 
 const financialTransactionFields = {
   accountId: financialAccountShortcode,
+  /**
+   * DERIVED — the sole Purchase this transaction settled, non-null only when
+   * there is exactly one allocation. NULL both for unlinked evidence and for a
+   * charge split across several Purchases, so read `allocations` for the general
+   * case. As input it is shorthand for one allocation of the full amount.
+   */
   purchaseId: purchaseShortcode.nullable(),
   kind: financialTransactionKind,
   status: financialTransactionStatus,
@@ -217,9 +252,34 @@ const financialTransactionFields = {
   notes: z.string().nullable(),
 };
 
+/** One slice of a transaction's amount, attributed to one Purchase, as read. */
+export const financialTransactionAllocationOut = z.object({
+  purchaseId: purchaseShortcode,
+  amount: wholeCentAmount,
+});
+
+/** One slice of a transaction's amount, attributed to one Purchase. */
+export const financialTransactionAllocationInput = z.object({
+  purchaseId: purchaseShortcode,
+  amount: wholeCentAmount,
+});
+export type FinancialTransactionAllocationInput = z.infer<
+  typeof financialTransactionAllocationInput
+>;
+
 const financialTransactionCreateShape = {
   ...financialTransactionFields,
   purchaseId: purchaseShortcode.nullable().default(null),
+  /**
+   * How this transaction's amount divides across the Purchases it settled, for
+   * the case one card line settles several orders. Must sum to `amount` and
+   * share its sign.
+   *
+   * `purchaseId` is the single-Purchase sugar for exactly one allocation of the
+   * full amount — the overwhelmingly common case, and why it stays. Supplying
+   * both is rejected unless they agree, rather than silently picking a winner.
+   */
+  allocations: z.array(financialTransactionAllocationInput).default([]),
   transactionDate: plainDate.nullable().default(null),
   postedDate: plainDate.nullable().default(null),
   merchant: z.string().nullable().default(null),
@@ -244,11 +304,60 @@ const postedRequiresDate = <T extends z.ZodType>(schema: T) =>
 const validSettlementState = <T extends z.ZodType>(schema: T) =>
   schema.superRefine((value, ctx) => {
     const transaction = value as {
-      purchaseId: unknown | null;
+      purchaseId: string | null;
+      allocations?: FinancialTransactionAllocationInput[];
       kind: FinancialTransactionKind;
       amount: number;
     };
-    const violation = financialTransactionSettlementViolation(transaction);
+    const allocations = transaction.allocations ?? [];
+
+    // `purchaseId` is sugar for one allocation of the full amount. Supplying
+    // both is only coherent when they agree; picking a winner silently would
+    // make the input's meaning depend on which field the writer trusted.
+    if (transaction.purchaseId !== null && allocations.length > 0) {
+      const agrees =
+        allocations.length === 1 &&
+        allocations[0]?.purchaseId === transaction.purchaseId &&
+        Math.round((allocations[0]?.amount ?? 0) * 100) ===
+          Math.round(transaction.amount * 100);
+      if (!agrees)
+        ctx.addIssue({
+          code: "custom",
+          message:
+            "purchaseId and allocations disagree. purchaseId is shorthand for one allocation of the full amount — supply one or the other.",
+          path: ["allocations"],
+        });
+    }
+
+    if (allocations.length > 0) {
+      const total = allocations.reduce(
+        (sum, row) => sum + Math.round(row.amount * 100),
+        0,
+      );
+      if (total !== Math.round(transaction.amount * 100))
+        ctx.addIssue({
+          code: "custom",
+          message: `allocations must sum to the transaction amount: got ${(total / 100).toFixed(2)}, expected ${transaction.amount.toFixed(2)}`,
+          path: ["allocations"],
+        });
+      if (
+        allocations.some(
+          (row) => Math.sign(row.amount) !== Math.sign(transaction.amount),
+        )
+      )
+        ctx.addIssue({
+          code: "custom",
+          message:
+            "every allocation must carry the same sign as its transaction; a charge and a credit are two settlement events",
+          path: ["allocations"],
+        });
+    }
+
+    const violation = financialTransactionSettlementViolation({
+      linked: transaction.purchaseId !== null || allocations.length > 0,
+      kind: transaction.kind,
+      amount: transaction.amount,
+    });
     if (violation) {
       ctx.addIssue({
         code: "custom",
@@ -337,6 +446,13 @@ export const financialTransactionOut = postedRequiresDate(
   z.object({
     id: financialTransactionShortcode,
     ...financialTransactionFields,
+    /**
+     * Every Purchase this transaction settled and how much of it each got.
+     * Empty for unlinked evidence; otherwise sums to `amount` exactly and shares
+     * its sign. Ordered by purchase shortcode so the field is stable across
+     * reads.
+     */
+    allocations: z.array(financialTransactionAllocationOut),
     accountName: z.string().nullable(),
     ...timestampedFields,
   }),

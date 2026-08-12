@@ -1,5 +1,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { ImpactItem } from "@cubby/schemas/entity-integrity";
+import type {
+  ImpactItem,
+  OperationDisposition,
+} from "@cubby/schemas/entity-integrity";
 import type {
   FinancialTransactionCreateInput,
   FinancialTransactionFilters,
@@ -15,7 +18,6 @@ import {
 import {
   type FinancialTransactionId,
   type FinancialTransactionShortcode,
-  type PurchaseId,
   unsafeFinancialAccountShortcode,
   unsafeFinancialTransactionShortcode,
   unsafePurchaseShortcode,
@@ -25,19 +27,14 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  inArray,
-  isNull,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { financialTransaction } from "~/server/db/schema";
+import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import {
+  financialTransaction,
+  financialTransactionAllocation,
+} from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import { touchDataQualityTargets } from "~/server/repo/data-quality";
@@ -59,6 +56,17 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
+import {
+  type AllocationInput,
+  applyAllocationChanges,
+  assertAllocationSetValid,
+  assertPurchasesLive,
+  countLiveAllocations,
+  readAllocations,
+  resolveAllocationInputs,
+  writeAllocationSet,
+} from "~/server/repo/financial-transaction-allocations";
+import { countByTarget, impact, present } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import {
@@ -67,6 +75,33 @@ import {
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+
+/** Money comparisons go through cents; `===` on doubles reports phantom drift. */
+const cents = (value: number) => Math.round(value * 100);
+
+/** "This transaction settles at least one Purchase" — allocation-aware. */
+const hasAnyAllocation = () => sql`EXISTS (
+  SELECT 1 FROM "FinancialTransactionAllocation" fta
+  WHERE fta."transactionId" = "FinancialTransaction"."id"
+    AND fta."deletedAt" IS NULL
+)`;
+
+/**
+ * "This transaction settles any of these Purchases" — allocation-aware.
+ *
+ * `IN (…)` over a joined list of bound parameters rather than `= ANY(array)`:
+ * drizzle turns an interpolated JS array into a row constructor, which postgres
+ * rejects outright.
+ */
+const allocatedToAny = (purchaseIds: readonly string[]) => sql`EXISTS (
+  SELECT 1 FROM "FinancialTransactionAllocation" fta
+  WHERE fta."transactionId" = "FinancialTransaction"."id"
+    AND fta."deletedAt" IS NULL
+    AND fta."purchaseId" IN (${sql.join(
+      purchaseIds.map((id) => sql`${id}`),
+      sql`, `,
+    )})
+)`;
 
 const accountName = sql<string | null>`(
   SELECT fa.name FROM "FinancialAccount" fa
@@ -77,7 +112,6 @@ const columns = {
   id: financialTransaction.id,
   shortcode: financialTransaction.shortcode,
   accountId: financialTransaction.accountId,
-  purchaseId: financialTransaction.purchaseId,
   kind: financialTransaction.kind,
   status: financialTransaction.status,
   amount: financialTransaction.amount,
@@ -91,9 +125,14 @@ const columns = {
   createdAt: financialTransaction.createdAt,
   updatedAt: financialTransaction.updatedAt,
   accountShortcode: sql<string>`(SELECT fa.shortcode FROM "FinancialAccount" fa WHERE fa.id = "FinancialTransaction"."accountId")`,
-  purchaseShortcode: sql<
-    string | null
-  >`(SELECT p.shortcode FROM "Purchase" p WHERE p.id = "FinancialTransaction"."purchaseId")`,
+  // Ordered by shortcode so the field is stable across reads rather than
+  // following whatever order the planner happens to produce.
+  allocations: sql<{ purchaseId: string; amount: number }[]>`COALESCE((
+    SELECT jsonb_agg(jsonb_build_object('purchaseId', ap.shortcode, 'amount', aa."amount") ORDER BY ap.shortcode)
+    FROM "FinancialTransactionAllocation" aa
+    JOIN "Purchase" ap ON ap."id" = aa."purchaseId"
+    WHERE aa."transactionId" = "FinancialTransaction"."id" AND aa."deletedAt" IS NULL
+  ), '[]'::jsonb)`,
   accountName,
 } as const;
 
@@ -102,17 +141,26 @@ type FinancialTransactionRow = Omit<
   "deletedAt"
 > & {
   accountShortcode: string;
-  purchaseShortcode: string | null;
+  allocations: { purchaseId: string; amount: number }[];
   accountName: string | null;
 };
 
-const toOut = (row: FinancialTransactionRow): FinancialTransactionOut =>
-  financialTransactionOut.parse({
+const toOut = (row: FinancialTransactionRow): FinancialTransactionOut => {
+  const allocations = (row.allocations ?? []).map((allocation) => ({
+    purchaseId: unsafePurchaseShortcode(allocation.purchaseId),
+    amount: Number(allocation.amount),
+  }));
+  return financialTransactionOut.parse({
     id: unsafeFinancialTransactionShortcode(row.shortcode),
     accountId: unsafeFinancialAccountShortcode(row.accountShortcode),
-    purchaseId: row.purchaseShortcode
-      ? unsafePurchaseShortcode(row.purchaseShortcode)
-      : null,
+    // DERIVED, not stored: the sole Purchase this transaction settled, or null
+    // when it settled none or several. Kept in the output because 3,445 of
+    // 3,447 transactions have exactly one allocation and every consumer of that
+    // shape reads better for it.
+    purchaseId:
+      allocations.length === 1 && allocations[0]
+        ? allocations[0].purchaseId
+        : null,
     kind: row.kind,
     status: row.status,
     amount: Number(row.amount),
@@ -123,10 +171,12 @@ const toOut = (row: FinancialTransactionRow): FinancialTransactionOut =>
     sourceCategory: row.sourceCategory,
     sourceRefs: row.sourceRefs,
     notes: row.notes,
+    allocations,
     accountName: row.accountName,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });
+};
 
 const refsCondition = (
   sources?: string[],
@@ -189,11 +239,15 @@ async function whereFor(
         financialTransaction.id,
       ),
       eqAny(financialTransaction.accountId, accountIds),
-      eqAny(financialTransaction.purchaseId, purchaseIds),
+      // Allocations, not the mirror column: a transaction split across two
+      // purchases has a NULL mirror, so filtering on it would hide the split
+      // row from BOTH purchases — including the linked-transactions table on
+      // each purchase's detail page, which is exactly where it must appear.
+      purchaseIds ? allocatedToAny(purchaseIds) : undefined,
       filters.purchasePresenceFilter === "has"
-        ? sql`${financialTransaction.purchaseId} IS NOT NULL`
+        ? hasAnyAllocation()
         : filters.purchasePresenceFilter === "none"
-          ? isNull(financialTransaction.purchaseId)
+          ? sql`NOT ${hasAnyAllocation()}`
           : undefined,
       // `eqAny`, NOT sql`col = ANY(${arr})`: drizzle expands a JS array in a
       // template into a row constructor (`ANY(($1, $2))`), which postgres
@@ -324,10 +378,7 @@ async function resolveForeignKeys(
     "financialAccount",
     data.accountId,
   );
-  const purchaseId = data.purchaseId
-    ? await resolveOrThrow(db, "purchase", data.purchaseId)
-    : null;
-  return { accountId, purchaseId };
+  return { accountId };
 }
 
 export async function createFinancialTransaction(
@@ -343,8 +394,9 @@ export async function createFinancialTransaction(
       data.sourceRefs.map((ref) => `${ref.source}\0${ref.externalId}`),
     );
     await assertSourceRefsAvailable(tx, data.sourceRefs);
+    const { allocations, ...columns } = data;
     const created = await insertWithShortcode(tx, "financialTransaction", {
-      ...data,
+      ...columns,
       ...foreign,
     });
     await logAuditEntry(tx, actor, {
@@ -352,8 +404,34 @@ export async function createFinancialTransaction(
       entityId: created.id,
       action: "create",
     });
-    if (foreign.purchaseId) {
-      await touchDataQualityTargets(tx, { purchaseIds: [foreign.purchaseId] });
+
+    // `purchaseId` is sugar for one allocation of the full amount; the zod
+    // refinement has already rejected a purchaseId/allocations pair that
+    // disagrees, so either source can be taken verbatim here.
+    const requested: AllocationInput[] =
+      allocations.length > 0
+        ? await resolveAllocationInputs(tx, allocations)
+        : data.purchaseId
+          ? await resolveAllocationInputs(tx, [
+              { purchaseId: data.purchaseId, amount: data.amount },
+            ])
+          : [];
+    if (requested.length > 0) {
+      await assertPurchasesLive(
+        tx,
+        requested.map((row) => row.purchaseId),
+      );
+      assertAllocationSetValid({
+        transactionAmount: data.amount,
+        kind: data.kind,
+        next: requested,
+      });
+      await writeAllocationSet(tx, created.id, requested, new Map());
+      await applyAllocationChanges(tx, {
+        transactionIds: [created.id],
+        before: new Map(),
+        actor,
+      });
     }
     return created.id;
   });
@@ -368,6 +446,44 @@ export async function updateFinancialTransaction(
 ) {
   const id = await resolveOrThrow(db, "financialTransaction", shortcode);
   await withTransaction(db, async (tx) => {
+    // LOCK ORDER: Purchase rows first, THEN the transaction row. Every purchase
+    // operation locks purchases first (lockAndValidateForDelete, the merge) and
+    // reaches FinancialTransaction afterwards via syncSettlementMirror, so
+    // taking the transaction first here would form an ABBA cycle — updating a
+    // transaction while one of its purchases is being deleted would deadlock and
+    // postgres would abort one of them. Keep this order.
+    //
+    // The set locked here must cover every purchase this update could touch —
+    // the ones it already allocates to AND the ones it is about to. Locking only
+    // the current ones would leave a newly named purchase to be locked after the
+    // transaction, reopening the cycle for exactly the interesting case.
+    //
+    // The pre-lock read is unlocked on purpose and is not a race: nothing adds
+    // an allocation to this transaction without holding its FOR UPDATE lock,
+    // which is taken below, and the set is re-read under that lock before
+    // anything is written.
+    const incomingPurchaseCodes = [
+      ...(data.allocations?.map((row) => row.purchaseId) ?? []),
+      ...(data.purchaseId ? [data.purchaseId] : []),
+    ];
+    await assertPurchasesLive(
+      tx,
+      uniq([
+        ...((await readAllocations(tx, [id]))
+          .get(id)
+          ?.map((row) => row.purchaseId) ?? []),
+        ...(incomingPurchaseCodes.length > 0
+          ? await resolveAllOrThrow(tx, "purchase", incomingPurchaseCodes)
+          : []),
+      ]),
+    );
+    await tx
+      .select({ id: financialTransaction.id })
+      .from(financialTransaction)
+      .where(
+        and(eq(financialTransaction.id, id), notDeleted(financialTransaction)),
+      )
+      .for("update");
     const before = await tx.query.financialTransaction.findFirst({
       where: and(
         eq(financialTransaction.id, id),
@@ -383,12 +499,6 @@ export async function updateFinancialTransaction(
       data.accountId === undefined
         ? before.accountId
         : await resolveOrThrow(tx, "financialAccount", data.accountId);
-    const purchaseId =
-      data.purchaseId === undefined
-        ? before.purchaseId
-        : data.purchaseId === null
-          ? null
-          : await resolveOrThrow(tx, "purchase", data.purchaseId);
     const sourceRefs = data.sourceRefs ?? before.sourceRefs;
     await lockFinancialEvidenceKeys(
       tx,
@@ -396,7 +506,27 @@ export async function updateFinancialTransaction(
       sourceRefs.map((ref) => `${ref.source}\0${ref.externalId}`),
     );
     await assertSourceRefsAvailable(tx, sourceRefs, id);
-    const values = buildPartialUpdateValues({ ...data, accountId, purchaseId });
+
+    // `purchaseId` is input sugar only — there is no such column any more, so it
+    // never reaches the physical update.
+    const { purchaseId: _sugarOnly, ...writableData } = data;
+    const values = buildPartialUpdateValues({ ...writableData, accountId });
+
+    // The create input rejects a purchaseId/allocations pair that disagrees;
+    // deriveUpdateData drops that refinement, so the same check belongs here
+    // rather than silently letting one field win.
+    if (data.purchaseId !== undefined && data.allocations !== undefined) {
+      const single = data.allocations.length === 1 ? data.allocations[0] : null;
+      const agrees =
+        data.purchaseId === null
+          ? data.allocations.length === 0
+          : single?.purchaseId === data.purchaseId;
+      if (!agrees)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "purchaseId and allocations disagree. purchaseId is shorthand for one allocation of the full amount — supply one or the other.",
+        );
+    }
     const nextStatus = data.status ?? before.status;
     const nextKind = data.kind ?? before.kind;
     const nextAmount = data.amount ?? before.amount;
@@ -407,13 +537,34 @@ export async function updateFinancialTransaction(
         "FINANCIAL_TRANSACTION_POSTED_DATE_REQUIRED",
         "Posted financial transactions require a posted date.",
       );
+    const allocationCount = await countLiveAllocations(tx, id);
     const settlementViolation = financialTransactionSettlementViolation({
-      purchaseId,
+      // Linkage is the allocation count, full stop — there is no mirror column
+      // left to infer it from, and inferring it was always the weaker signal.
+      linked:
+        data.allocations !== undefined
+          ? data.allocations.length > 0
+          : data.purchaseId !== undefined
+            ? data.purchaseId !== null
+            : allocationCount > 0,
       kind: nextKind as FinancialTransactionCreateInput["kind"],
       amount: nextAmount,
     });
     if (settlementViolation)
       throw createAppError("CONSTRAINT_VIOLATION", settlementViolation.message);
+
+    // The amount and its allocations must stay in agreement. With one allocation
+    // the invariant admits exactly one legal value, so writing it is forced
+    // rather than fabricated — that keeps the ordinary "fix the amount typo"
+    // flow working. With two or more there is no defensible way to redistribute
+    // the difference: proportional rescaling would silently rewrite an evidence
+    // split, which is precisely the fabrication this table exists to end.
+    const amountChanged = cents(nextAmount) !== cents(before.amount);
+    if (amountChanged && allocationCount >= 2)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `This transaction's amount is split across ${allocationCount} purchases. Re-allocate it first, then the amount will follow.`,
+      );
     await tx
       .update(financialTransaction)
       .set(values)
@@ -422,7 +573,6 @@ export async function updateFinancialTransaction(
       );
     const changes = computeChanges(before, { ...before, ...values }, [
       "accountId",
-      "purchaseId",
       "kind",
       "status",
       "amount",
@@ -441,16 +591,68 @@ export async function updateFinancialTransaction(
         action: "update",
         changes,
       });
-    if (changes) {
-      await touchDataQualityTargets(tx, {
-        purchaseIds: [before.purchaseId, purchaseId].filter(
-          (value): value is PurchaseId => value !== null,
-        ),
-      });
+
+    // Keep the allocations in step with what just changed, then let the shared
+    // core own the follow-ups. This is the only door for setting a split — there
+    // is deliberately no separate allocations endpoint, because `allocations` is
+    // already part of this input and a second entry point would be a second
+    // place to forget the lock and the invariant. Three triggers, in precedence
+    // order:
+    //   • an explicit `allocations` array — the general case;
+    //   • an explicit `purchaseId` — the single-Purchase sugar, meaning "one
+    //     slice for the whole amount", or clear it;
+    //   • an amount change on a singly-allocated transaction, where the sole
+    //     legal allocation value is the new amount.
+    const allocationsBefore = await readAllocations(tx, [id]);
+    let nextAllocations: AllocationInput[] | null = null;
+    if (data.allocations !== undefined) {
+      nextAllocations = await resolveAllocationInputs(tx, data.allocations);
+    } else if (data.purchaseId !== undefined) {
+      nextAllocations = data.purchaseId
+        ? await resolveAllocationInputs(tx, [
+            { purchaseId: data.purchaseId, amount: nextAmount },
+          ])
+        : [];
+    } else if (amountChanged && allocationCount === 1) {
+      const sole = allocationsBefore.get(id)?.[0];
+      if (sole)
+        nextAllocations = [{ purchaseId: sole.purchaseId, amount: nextAmount }];
     }
+    if (nextAllocations !== null) {
+      await assertPurchasesLive(
+        tx,
+        nextAllocations.map((row) => row.purchaseId),
+      );
+      assertAllocationSetValid({
+        transactionAmount: nextAmount,
+        kind: nextKind,
+        next: nextAllocations,
+      });
+      await writeAllocationSet(tx, id, nextAllocations, allocationsBefore);
+    }
+    await applyAllocationChanges(tx, {
+      transactionIds: [id],
+      before: allocationsBefore,
+      actor,
+    });
+
+    // Data-quality targets come from applyAllocationChanges, which knows the
+    // union of before/after purchases; nothing else here can name one.
   });
   return { output: await getFinancialTransactionByID(db, id), entityId: id };
 }
+
+export const FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY = {
+  "FinancialTransactionAllocation.transactionId": {
+    code: "soft-delete-association",
+    effect: "soft-delete",
+    description:
+      "Deleting a settlement transaction soft-deletes the purchase allocations that decompose it. Those Purchases keep their expenses and their identity; they simply lose this piece of settlement evidence.",
+  },
+} as const satisfies IncomingEdgePolicy<
+  "financialTransaction",
+  OperationDisposition
+>;
 
 export async function deleteFinancialTransactions(
   db: Database,
@@ -467,37 +669,69 @@ export async function deleteFinancialTransactions(
       ids,
       "FinancialTransaction",
     );
-    const qualityTargets = await tx.query.financialTransaction.findMany({
-      where: and(
-        inArray(financialTransaction.id, ids),
-        notDeleted(financialTransaction),
-      ),
-      columns: { purchaseId: true },
-    });
+    // Quality targets come from the allocations as well as the mirror: a
+    // transaction split across two purchases has a NULL mirror, so reading only
+    // that column would leave both purchases' data-quality exceptions stale.
+    const allocationTargets =
+      await tx.query.financialTransactionAllocation.findMany({
+        where: and(
+          inArray(financialTransactionAllocation.transactionId, ids),
+          notDeleted(financialTransactionAllocation),
+        ),
+        columns: { purchaseId: true },
+      });
     await removeEntity(tx, {
       entity: "financialTransaction",
       ids,
       removal: "soft",
       actor,
+      children: [
+        {
+          table: financialTransactionAllocation,
+          parentColumns: [financialTransactionAllocation.transactionId],
+          auditKey: "cascadedSettlementAllocations",
+        },
+      ],
     });
     await touchDataQualityTargets(tx, {
-      purchaseIds: qualityTargets
-        .map((row) => row.purchaseId)
-        .filter((value): value is PurchaseId => value !== null),
+      purchaseIds: uniq(allocationTargets.map((row) => row.purchaseId)),
     });
   });
 }
 
-/** Financial transactions have no incoming edges or delete side effects. */
+/**
+ * Nothing refuses a transaction delete — its allocations are parts of it, not
+ * dependents with a claim on it — but they do go with it, so the preview says so.
+ */
 export async function previewDeleteFinancialTransactions(
-  _db: Database,
-  _ids: FinancialTransactionId[],
+  db: Database,
+  ids: FinancialTransactionId[],
 ): Promise<{
   blockers: ImpactItem[];
   changes: ImpactItem[];
   sideEffects: ImpactItem[];
 }> {
-  return { blockers: [], changes: [], sideEffects: [] };
+  const dbClient = getDb(db);
+  return {
+    blockers: [],
+    changes: present([
+      impact({
+        disposition:
+          FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY[
+            "FinancialTransactionAllocation.transactionId"
+          ],
+        edgeKey: "FinancialTransactionAllocation.transactionId",
+        label: "settlement allocations removed",
+        byTargetId: await countByTarget(
+          dbClient,
+          financialTransactionAllocation,
+          financialTransactionAllocation.transactionId,
+          ids,
+        ),
+      }),
+    ]),
+    sideEffects: [],
+  };
 }
 
 /**

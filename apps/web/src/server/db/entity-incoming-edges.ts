@@ -45,6 +45,7 @@ import {
   cookbook,
   expense,
   financialTransaction,
+  financialTransactionAllocation,
   ingredient,
   inventoryEntry,
   location,
@@ -182,8 +183,8 @@ export const INCOMING_EDGES = {
     "Expense.purchaseId": { column: expense.purchaseId },
     "PurchaseImage.purchaseId": { column: purchaseImage.purchaseId },
     "PurchaseProduct.purchaseId": { column: purchaseProduct.purchaseId },
-    "FinancialTransaction.purchaseId": {
-      column: financialTransaction.purchaseId,
+    "FinancialTransactionAllocation.purchaseId": {
+      column: financialTransactionAllocation.purchaseId,
     },
   }),
   financialAccount: edges({
@@ -191,7 +192,11 @@ export const INCOMING_EDGES = {
       column: financialTransaction.accountId,
     },
   }),
-  financialTransaction: edges({}),
+  financialTransaction: edges({
+    "FinancialTransactionAllocation.transactionId": {
+      column: financialTransactionAllocation.transactionId,
+    },
+  }),
   wish: edges({
     "WishCandidate.wishId": { column: wishCandidate.wishId },
   }),

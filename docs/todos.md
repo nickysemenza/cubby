@@ -630,10 +630,91 @@ arbitrary allocation of the deposit across the order's items.
 These are not work implied by a completed historical backfill. Future imports are
 expected to be small and interactive; promote one only on the stated evidence.
 
-- [ ] **`FinancialTransactionAllocation`** — allocate one settlement transaction
+- [x] **`FinancialTransactionAllocation`** — SHIPPED. Allocates one settlement transaction
   across several Purchases. **Trigger**: real one-to-many charges or refunds remain
   operationally unresolved after retaining the transaction unlinked. Allocations are
   settlement evidence only; they never enter spend.
+
+  **The convention that makes this unnecessary already exists — write it down before
+  building anything.** Established 2025-09-04 and re-confirmed 2026-08-11:
+
+  > **Void-aggregate pattern.** Record one refund FTX **per Purchase**, carrying that
+  > Purchase's share, so each `postedRefundTotal` explains its own gap. Let the real
+  > combined statement line import as its own **unlinked** row and set it to
+  > `status: 'void'`, noting which legs it aggregates. The void row holds the monarch
+  > hash so the import dedupes; it contributes no money because void is excluded from
+  > settlement totals.
+
+  Why the void row and not a ref grafted onto a leg: `already_recorded` in
+  `repo/financial-statement-preview.ts` fires on any **non-deleted** transaction
+  carrying the row's `(source, externalId)` — the query filters `notDeleted` only,
+  **not status**, and never compares amounts on that path. So a void row dedupes fine,
+  and the statement hash stays on the row whose amount actually equals the statement
+  line. Grafting it onto a leg also works mechanically but leaves a ref whose amount
+  disagrees with its row, and both legs can't share it anyway:
+  `assertSourceRefsAvailable` enforces global uniqueness of `(source, externalId)` and
+  throws `FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT`.
+
+  Sightings (each is one real card line settling ≥2 Purchases):
+
+  1. **2025-09-04, Amex Blue Cash ····1005, -$34.00.** `FTX-XFP3` -$18.43 (`PUR-6WAQ`,
+     WN26500589) + `FTX-A9R7` -$15.57 (`PUR-DQFV`, WN27945262). Aggregate `FTX-ETH5`
+     voided 2026-08-07. This is where the pattern comes from.
+  2. **2026-08-10, Visa ···2125, -$16.76.** One Home Depot Colma return receipt
+     (invoice 4154955) spanning WN63179429 and WN63446464. Legs `FTX-T2DJ` -$8.96 and
+     `FTX-QSVK` -$7.80; the aggregate row will exist once the credit posts.
+
+  **The sighting count is a floor, not a measurement.** The SQL sweep that finds these
+  matches an unlinked/void aggregate row against pairs of linked legs — so it can only
+  see instances where the aggregate row exists. Any occurrence handled without one is
+  invisible. Treat ≥2 as "this recurs", not as "this has happened exactly twice".
+
+  **TRIGGER MET — promoted 2026-08-11. Build it; the convention is the interim only.**
+  Reversed after an adversarial review (Codex, session `019ff262`). The frequency
+  argument for deferring survived scrutiny and is still true — an independent scan of
+  every current mismatch row against all 33 live unlinked posted/void refund FTXs found
+  **0** undiscovered events, and the all-time floor is 2 events / 4 allocations /
+  $50.76. Frequency simply stopped being the governing criterion:
+
+  - **The stated fan-out trigger was already met and went unnoticed.**
+    `postedRefundTotal` *is* a per-Purchase query of the fan-out
+    (`repo/purchase.ts:249-256`, `repo/purchase-financial-aggregates.ts:27-53`). The
+    convention doesn't avoid querying the fan-out; it fabricates the rows that query
+    reads.
+  - **The legs corrupt the settlement-evidence tier.** They are ordinary `posted` rows
+    with no allocation discriminator, so every consumer reads them as literal card
+    events: the transaction API (`repo/financial-transaction.ts:109-129`), the finance
+    list and detail pages, `linked-transactions.tsx`, data-quality's settlement-reference
+    coverage (`repo/data-quality.ts:720-751`), and MCP — which advertises rows as
+    settlement evidence and states a transaction links to at most one Purchase
+    (`mcp/tools/financial.tools.ts:64-90`). The DB asserts the account posted two
+    credits when it posted one, and prose in `notes` cannot repair a typed field.
+  - **The convention demonstrably does not transmit.** An agent with the purchase-import
+    skill loaded rediscovered the problem and invented a *worse* variant (grafting the
+    statement hash onto a mismatched-amount leg) instead of finding the 2025 precedent.
+
+  Every cheaper alternative was evaluated and rejected. Read-time amount-sum matching
+  fails on real data — the confirmed 2026 event is dated 2026-08-10 against Purchases
+  dated 2026-07-01/02 with unequal gaps, so a strict scan finds it zero times, and a
+  relaxed scan produces false positives (unlinked `FTX-VDZJ` −$10.99 matching three
+  unrelated Amazon gaps across 2015–2023, on a row its own notes prove is not a refund).
+  An association-only join without amounts would have to derive each share from mutable
+  `statedTotal`/Expense totals — circular, and editing paperwork would silently rewrite
+  history. `sourceRefs` is the only jsonb on the table and its shape drives global dedupe
+  uniqueness, so it cannot carry allocations.
+
+  **Build sequence** (additive; follows the repo's expand → backfill → read-switch rule):
+  keep one canonical real FinancialTransaction; add `FinancialTransactionAllocation`
+  (`transactionId`, `purchaseId`, `amount`); backfill one allocation per existing
+  single-linked transaction; enforce `SUM(allocation.amount) = transaction.amount`
+  atomically **in the write path** — do **not** copy `splitExpense`'s parts convention,
+  which validates no such sum and leaves the assertion to the caller; then switch
+  `postedRefundTotal` to read posted refund allocations. Allocations are settlement
+  evidence and must never enter spend — `SUM(Expense.cost)` stays the only spend ledger.
+
+  Until it ships, keep using the void-aggregate convention above: the `void` aggregate
+  row is excluded from reconciliation and is the *less* damaging half; the posted legs
+  are the part being retired.
 - [ ] **`PurchaseEvidenceReference`** — structured Gmail, Drive, or vendor-portal
   evidence pointers. **Trigger**: repeated need to query those references beyond
   Purchase notes and attached documents. It must not turn pasted email text into a

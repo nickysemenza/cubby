@@ -71,7 +71,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   expense,
-  financialTransaction,
+  financialTransactionAllocation,
   image,
   purchase,
   purchaseImage,
@@ -120,9 +120,15 @@ import {
 } from "~/server/repo/expense/helpers";
 import {
   calculateFinancialReconciliation,
+  postedRefundTotalSql,
   settleableExpenseTotalSql,
   settleableUnpricedExpenseCountSql,
 } from "~/server/repo/financial-reconciliation";
+import {
+  applyAllocationChanges,
+  readAllocations,
+  transactionIdsAllocatedTo,
+} from "~/server/repo/financial-transaction-allocations";
 import { detachImagesFromEntity } from "~/server/repo/image";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
@@ -169,11 +175,11 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
     description:
       "Product links are soft-deleted with the purchase; the Products themselves are not.",
   },
-  "FinancialTransaction.purchaseId": {
-    code: "clear-live-fk-with-audit",
-    effect: "detach",
+  "FinancialTransactionAllocation.purchaseId": {
+    code: "soft-delete-allocations-of-affected-transactions",
+    effect: "soft-delete",
     description:
-      "Deleting a purchase detaches its linked financial settlement entries; financial evidence remains retained on its account.",
+      "Deleting a purchase removes its settlement allocations — and, for a transaction that was split across this purchase and others, the sibling slices too, because a partial allocation set is not a legal state: a transaction has either none, or a set summing to its amount. Those transactions revert to unlinked evidence on their accounts; no amount changes. For the ordinary single-allocation transaction this is exactly equivalent to detaching it.",
   },
 } as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
 
@@ -196,11 +202,11 @@ export const PURCHASE_MERGE_EDGE_POLICY = {
     description:
       "The absorbed purchase's product links move onto the survivor, skipping products already linked there, and the source links are soft-deleted.",
   },
-  "FinancialTransaction.purchaseId": {
-    code: "repoint-live-fk-with-audit",
-    effect: "repoint",
+  "FinancialTransactionAllocation.purchaseId": {
+    code: "move-and-sum-amounts-then-soft-delete-source",
+    effect: "move-dedupe",
     description:
-      "Merging purchases re-points their linked financial settlement entries to the surviving purchase.",
+      "The absorbed purchase's settlement allocations move onto the survivor. Where BOTH purchases held a slice of the SAME transaction the two slices are SUMMED into one row rather than one being skipped — unlike images and product links an allocation carries an amount, so dropping the duplicate would destroy evidence and break the transaction's sum-to-amount invariant. The source rows are soft-deleted.",
   },
 } as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
 
@@ -248,12 +254,7 @@ const purchaseSettleableUnpricedExpenseCount = correlated<number>(
 );
 
 const purchasePostedRefundTotal = correlated<number>(
-  `(SELECT COALESCE(sum(ft."amount"), 0)::double precision
-     FROM "FinancialTransaction" ft
-     WHERE ft."purchaseId" = "Purchase"."id"
-       AND ft."kind" = 'refund'
-       AND ft."status" = 'posted'
-       AND ft."deletedAt" IS NULL)`,
+  postedRefundTotalSql('"Purchase"'),
 );
 
 const purchaseDocumentCount = correlated<number>(
@@ -1444,23 +1445,83 @@ export const foldChargeInto = async (
     })),
   );
 
-  const movedTransactions = await repointEdge(
-    tx,
-    "purchase",
-    "FinancialTransaction.purchaseId",
-    { from: [deadId], to: survivorId, liveOnly: true },
+  // Settlement allocations move onto the survivor, and where BOTH purchases held
+  // a slice of the SAME transaction the two slices are SUMMED into one row.
+  //
+  // ⚠️ `onConflictDoNothing` — what the images and product links below correctly
+  // use — is exactly wrong here and must never be copied onto this edge. An
+  // allocation carries an amount, so skipping the duplicate would destroy that
+  // money-shaped evidence and leave the transaction's allocations no longer
+  // summing to its amount.
+  //
+  // The mirror column is deliberately NOT repointed. It is re-derived from the
+  // surviving allocations instead, because a transaction holding a slice of both
+  // purchases collapses to a single slice on the survivor and becomes singly
+  // linked again — a null→non-null move `repointEdge` could never produce.
+  const movingAllocations =
+    await tx.query.financialTransactionAllocation.findMany({
+      where: and(
+        eq(financialTransactionAllocation.purchaseId, deadId),
+        notDeleted(financialTransactionAllocation),
+      ),
+      columns: { id: true, transactionId: true, amount: true },
+    });
+  const survivorAllocations =
+    await tx.query.financialTransactionAllocation.findMany({
+      where: and(
+        eq(financialTransactionAllocation.purchaseId, survivorId),
+        notDeleted(financialTransactionAllocation),
+      ),
+      columns: { id: true, transactionId: true, amount: true },
+    });
+  const survivorByTransaction = new Map(
+    survivorAllocations.map((row) => [row.transactionId, row]),
   );
+  const allocationTransactionIds = uniq(
+    movingAllocations.map((row) => row.transactionId),
+  );
+  const allocationsBefore = await readAllocations(tx, allocationTransactionIds);
 
-  await logAuditEntries(
-    tx,
+  for (const moving of movingAllocations) {
+    const collision = survivorByTransaction.get(moving.transactionId);
+    if (collision) {
+      // Sum, then retire the absorbed row. Order matters: the partial unique
+      // index on (transactionId, purchaseId) would abort the merge if the
+      // repoint below ran while both rows were still live.
+      await tx
+        .update(financialTransactionAllocation)
+        .set({
+          amount: Number(collision.amount) + Number(moving.amount),
+          updatedAt: new Date(),
+        })
+        .where(eq(financialTransactionAllocation.id, collision.id));
+      await tx
+        .update(financialTransactionAllocation)
+        .set({ deletedAt: new Date() })
+        .where(eq(financialTransactionAllocation.id, moving.id));
+      continue;
+    }
+    // Repoint in place rather than insert-then-delete: it is the same slice, so
+    // its row id and createdAt should survive the move.
+    await tx
+      .update(financialTransactionAllocation)
+      .set({ purchaseId: survivorId, updatedAt: new Date() })
+      .where(eq(financialTransactionAllocation.id, moving.id));
+  }
+
+  // Audit entries, the mirror re-derivation, and the data-quality touch all come
+  // from the shared core rather than being written here.
+  //
+  // Its `changedTransactionIds` are deliberately unused: unlike the delete path,
+  // which returns them for the router to refresh after commit, a purchase merge
+  // has never refreshed its transactions' embeddings. Both purchases share a
+  // vendor here, so the embedded vendor/order text rarely moves — but if that is
+  // ever wired up, this is where the ids come from.
+  await applyAllocationChanges(tx, {
+    transactionIds: allocationTransactionIds,
+    before: allocationsBefore,
     actor,
-    movedTransactions.map((id) => ({
-      entityType: "financialTransaction" as const,
-      entityId: id,
-      action: "update" as const,
-      changes: { purchaseId: { from: deadId, to: survivorId } },
-    })),
-  );
+  });
 
   // Documents follow their charge. `onConflictDoNothing` covers the case where
   // the same Image is already filed against the survivor (a statement spanning
@@ -1781,26 +1842,17 @@ const deletePurchasesWithPolicy = async (
       .from(expense)
       .where(and(inArray(expense.purchaseId, ids), notDeleted(expense)));
 
-    const detachingTransactions = await tx
-      .select({
-        id: financialTransaction.id,
-        purchaseId: financialTransaction.purchaseId,
-      })
-      .from(financialTransaction)
-      .where(
-        and(
-          inArray(financialTransaction.purchaseId, ids),
-          notDeleted(financialTransaction),
-        ),
-      );
+    // Every transaction holding a slice of any purchase being deleted — the
+    // mirror alone would miss a split one, whose mirror is NULL.
+    const affectedTransactionIds = await transactionIdsAllocatedTo(tx, ids);
 
     if (
       policy === "require-empty" &&
-      (detaching.length > 0 || detachingTransactions.length > 0)
+      (detaching.length > 0 || affectedTransactionIds.length > 0)
     ) {
       throw createAppError(
         "CONSTRAINT_VIOLATION",
-        "Cannot delete non-empty Purchases through MCP: delete linked Expenses first and unlink or delete linked Financial Transactions.",
+        "Cannot delete non-empty Purchases through MCP: delete linked Expenses first and unlink or delete linked Financial Transactions and their settlement allocations.",
       );
     }
 
@@ -1821,26 +1873,37 @@ const deletePurchasesWithPolicy = async (
         })),
       );
 
-      await tx
-        .update(financialTransaction)
-        .set({ purchaseId: null })
-        .where(
-          and(
-            inArray(financialTransaction.purchaseId, ids),
-            notDeleted(financialTransaction),
-          ),
+      // Drop ALL slices of every affected transaction, not just the slices
+      // belonging to the purchases being deleted. A partial allocation set is
+      // not a legal state — a transaction has either none, or a set summing to
+      // its amount — whereas zero is legal, meaningful and re-enterable
+      // ("unlinked evidence"). So a split transaction losing one of its two
+      // purchases reverts entirely to unlinked rather than being left standing
+      // in permanent violation. For the ordinary single-allocation transaction
+      // this is exactly equivalent to detaching it.
+      if (affectedTransactionIds.length > 0) {
+        const allocationsBefore = await readAllocations(
+          tx,
+          affectedTransactionIds,
         );
-
-      await logAuditEntries(
-        tx,
-        actor,
-        detachingTransactions.map((row) => ({
-          entityType: "financialTransaction" as const,
-          entityId: row.id,
-          action: "update" as const,
-          changes: { purchaseId: { from: row.purchaseId, to: null } },
-        })),
-      );
+        await tx
+          .update(financialTransactionAllocation)
+          .set({ deletedAt: new Date() })
+          .where(
+            and(
+              inArray(
+                financialTransactionAllocation.transactionId,
+                affectedTransactionIds,
+              ),
+              notDeleted(financialTransactionAllocation),
+            ),
+          );
+        await applyAllocationChanges(tx, {
+          transactionIds: affectedTransactionIds,
+          before: allocationsBefore,
+          actor,
+        });
+      }
     }
 
     // `{actor}`, not a caller-owned buffer: the detach `update` entries above
@@ -1866,7 +1929,10 @@ const deletePurchasesWithPolicy = async (
 
     return {
       expenseIds: detaching.map((row) => row.id),
-      financialTransactionIds: detachingTransactions.map((row) => row.id),
+      // Union of the mirror and the allocations: a split transaction's mirror is
+      // NULL, so the mirror alone would leave its embedding stale — that text
+      // carries the vendor and order id resolved through its purchase.
+      financialTransactionIds: affectedTransactionIds,
       detachedImageKeys,
     };
   });
@@ -2088,13 +2154,13 @@ export const previewMergePurchases = async (
     }),
     impact({
       disposition:
-        PURCHASE_MERGE_EDGE_POLICY["FinancialTransaction.purchaseId"],
-      edgeKey: "FinancialTransaction.purchaseId",
-      label: "financial transactions re-pointed",
+        PURCHASE_MERGE_EDGE_POLICY["FinancialTransactionAllocation.purchaseId"],
+      edgeKey: "FinancialTransactionAllocation.purchaseId",
+      label: "settlement allocations moved",
       byTargetId: await countByTarget(
         dbClient,
-        financialTransaction,
-        financialTransaction.purchaseId,
+        financialTransactionAllocation,
+        financialTransactionAllocation.purchaseId,
         losers,
       ),
     }),

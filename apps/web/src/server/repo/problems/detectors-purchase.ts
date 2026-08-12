@@ -33,6 +33,7 @@ import { type SQL, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { expense, product, purchase, vendor } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { postedRefundTotalSql } from "~/server/repo/financial-reconciliation";
 
 /** What the grouped scan yields before the shared verdict is applied. */
 type ChargeSumRow = {
@@ -88,14 +89,7 @@ export const findPurchasesNotReconciling = async (
       ${lineTotal} AS "expenseTotal",
       count(e.id)::int AS "expenseCount",
       count(e.id) FILTER (WHERE e.cost IS NULL)::int AS "unpricedExpenseCount",
-      COALESCE((
-        SELECT sum(ft.amount)
-        FROM "FinancialTransaction" ft
-        WHERE ft."purchaseId" = p.id
-          AND ft.kind = 'refund'
-          AND ft.status = 'posted'
-          AND ft."deletedAt" IS NULL
-      ), 0)::double precision AS "postedRefundTotal"
+      ${sql.raw(postedRefundTotalSql("p"))} AS "postedRefundTotal"
     FROM ${purchase} p
     LEFT JOIN ${vendor} v
       ON v.id = p."vendorId" AND v."deletedAt" IS NULL

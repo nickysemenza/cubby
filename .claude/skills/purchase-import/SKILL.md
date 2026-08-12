@@ -13,7 +13,7 @@ identity or cost allocation, destructive cleanup, and inventory receiving.
 ## Read this model first
 
 ```text
-Expense → Purchase ← FinancialTransaction → FinancialAccount
+Expense → Purchase ← Allocation → FinancialTransaction → FinancialAccount
           ↑
         Vendor
 ```
@@ -70,6 +70,15 @@ Expense → Purchase ← FinancialTransaction → FinancialAccount
 - A `FinancialTransaction` is settlement evidence: a charge, refund,
   installment, or split tender. Matching paperwork or Expense totals does not
   prove payment.
+- **One real card line can settle SEVERAL Purchases** — a return desk processing
+  two orders onto one receipt, a statement posting one line for several same-day
+  refunds. Record it as ONE transaction with an `allocations` array
+  (`[{purchaseId, amount}]`) that sums to its amount and shares its sign.
+  `purchaseId` remains shorthand for one allocation of the full amount.
+  **Never fabricate one posted transaction per Purchase to fake a split.** That
+  makes the database assert card events that never occurred: every consumer —
+  the finance list, MCP, `postedRefundTotal` — reads those rows as literal
+  settlement evidence, and no note can repair a typed field.
 - Inventory is separate. Creating a Product or linking an Expense never
   receives it into inventory; receiving requires explicit user authorization.
 - Public IDs are shortcodes (`EXP-`, `PUR-`, `PRD-`, `FAC-`, `FTX-`), never

@@ -25,8 +25,17 @@ sometimes wears three different names across layers.
   or a service; tax, shipping, discount, fee, tip, and `other_adjustment` remain
   real productless spend lines rather than categories of merchandise.
 - A **FinancialTransaction** is settlement evidence (a statement charge, refund,
-  payment, or adjustment), never a spend-ledger row. It may link to one Purchase;
-  one Purchase may have many settlement entries.
+  payment, or adjustment), never a spend-ledger row. It relates to Purchases
+  many-to-many through **Allocations**: one Purchase may have many settlement
+  entries, and one real card line may settle several Purchases — a return desk
+  processing two orders onto one receipt, or a statement posting one line for
+  several same-day refunds.
+- An **Allocation** (`FinancialTransactionAllocation`) is how much of one
+  transaction settled one Purchase. Evidence only: its amount never enters spend.
+  A transaction has either no allocations (unlinked evidence) or a set that sums
+  to its amount exactly and shares its sign. Recording a split as two *posted
+  transactions* instead is what this replaced — that made the database assert
+  card events that never occurred.
 
 ---
 
@@ -51,7 +60,8 @@ sometimes wears three different names across layers.
 | Purchase | "Purchase" | `Purchase` / `purchase` | `Purchase` | One vendor order/receipt event: identity (`vendorId` + optional `orderId`), vendor date, literal never-summed `statedTotal`, and documents. ⚠️ Renamed meaning — see below. |
 | Expense | "Expense" | `Expense` / `expense` | `Expense` | A spend-ledger line (actual, or planned via `future`), optionally inside a Project. **All money lives here.** |
 | Financial account | "Account" | `FinancialAccount` / `financialAccount` | `FinancialAccount` | A statement/receipt account identity, possibly provisional, with source aliases. |
-| Financial transaction | "Transaction" | `FinancialTransaction` / `financialTransaction` | `FinancialTransaction` | Settlement evidence with a signed amount and optional Purchase link. Never spend. |
+| Financial transaction | "Transaction" | `FinancialTransaction` / `financialTransaction` | `FinancialTransaction` | Settlement evidence with a signed amount, allocated across zero or more Purchases. Never spend. |
+| Allocation | "Allocation" | `FinancialTransactionAllocation` | `FinancialTransactionAllocation` | How much of one transaction settled one Purchase. Evidence only; never spend. |
 | Image | "Image" / "Photo" | `Image` / `image` | `Image` | An R2-backed image linked to a product, location, recipe, project, or purchase (such as its invoice). |
 
 ---
@@ -164,7 +174,7 @@ Vendor ──< Purchase ──< Expense
 Settlement is a separate axis:
 
 ```
-FinancialAccount ──< FinancialTransaction >──o Purchase
+FinancialAccount ──< FinancialTransaction >──< Allocation >──< Purchase
 ```
 
 - **Vendor** (`Vendor`) — the roster of places money goes. Name is uniquely

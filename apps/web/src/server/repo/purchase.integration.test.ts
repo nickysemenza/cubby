@@ -38,11 +38,12 @@ vi.mock("~/server/utils/s3", async (importOriginal) => ({
   deleteS3Object: vi.fn(async () => undefined),
 }));
 
+import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import type { Database } from "~/server/db";
 import {
   auditLog,
   expense,
-  financialTransaction,
+  financialTransactionAllocation,
   image,
   purchase,
   purchaseImage,
@@ -53,7 +54,7 @@ import {
   initiateDocumentUpload,
 } from "~/server/services/image-storage.service";
 import { getAuditLog } from "./audit-log";
-import { getDb, insertAndReturn } from "./database-helpers";
+import { getDb, insertAndReturn, notDeleted } from "./database-helpers";
 import {
   createExpense,
   deleteExpenses,
@@ -1176,7 +1177,7 @@ describe("purchase repository — mergePurchases", () => {
       notes: null,
     });
     for (const [index, purchaseId] of loserIds.entries()) {
-      await insertWithShortcode(ctx.db, "financialTransaction", {
+      await insertSettlementTransaction(ctx.db, {
         accountId: account.id,
         purchaseId,
         kind: "purchase",
@@ -1198,10 +1199,10 @@ describe("purchase repository — mergePurchases", () => {
     });
     expect(
       preview.changes.find(
-        (item) => item.edgeKey === "FinancialTransaction.purchaseId",
+        (item) => item.edgeKey === "FinancialTransactionAllocation.purchaseId",
       ),
     ).toMatchObject({
-      label: "financial transactions re-pointed",
+      label: "settlement allocations moved",
       total: 2,
       byTargetId: { [loserIds[0]!]: 1, [loserIds[1]!]: 1 },
     });
@@ -1667,36 +1668,41 @@ describe("purchase repository — deletion cascades", () => {
       sourceAliases: [],
       notes: null,
     });
-    const transaction = await insertWithShortcode(
+    const settlementPurchaseId = await purchaseUuid(
       ctx.db,
-      "financialTransaction",
-      {
-        accountId: account.id,
-        purchaseId: await purchaseUuid(ctx.db, purchaseWithSettlement.id),
-        kind: "purchase",
-        status: "posted",
-        amount: 25,
-        transactionDate: "2024-01-15",
-        postedDate: "2024-01-16",
-        merchant: "Settlement Empty Delete Vendor",
-        rawDescription: null,
-        sourceCategory: null,
-        sourceRefs: [{ source: "statement", externalId: "settlement-only" }],
-        notes: null,
-      },
+      purchaseWithSettlement.id,
     );
+    const transaction = await insertSettlementTransaction(ctx.db, {
+      accountId: account.id,
+      purchaseId: settlementPurchaseId,
+      kind: "purchase",
+      status: "posted",
+      amount: 25,
+      transactionDate: "2024-01-15",
+      postedDate: "2024-01-16",
+      merchant: "Settlement Empty Delete Vendor",
+      rawDescription: null,
+      sourceCategory: null,
+      sourceRefs: [{ source: "statement", externalId: "settlement-only" }],
+      notes: null,
+    });
 
     await expect(
       deleteEmptyPurchases(ctx.db, [purchaseWithSettlement.id], ctx.actor),
     ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
 
-    const [transactionAfter] = await getDb(ctx.db)
-      .select({ purchaseId: financialTransaction.purchaseId })
-      .from(financialTransaction)
-      .where(eq(financialTransaction.id, transaction.id));
-    expect(transactionAfter?.purchaseId).toBe(
-      await purchaseUuid(ctx.db, purchaseWithSettlement.id),
-    );
+    // The refusal must leave the settlement evidence exactly as it was — which
+    // now means its allocation, the mirror column being gone.
+    const [allocationAfter] = await getDb(ctx.db)
+      .select({ purchaseId: financialTransactionAllocation.purchaseId })
+      .from(financialTransactionAllocation)
+      .where(
+        and(
+          eq(financialTransactionAllocation.transactionId, transaction.id),
+          notDeleted(financialTransactionAllocation),
+        ),
+      );
+    expect(allocationAfter?.purchaseId).toBe(settlementPurchaseId);
   });
 
   it("NULLS expense.purchaseId (never deletes spend) and soft-deletes its documents", async () => {
@@ -1991,7 +1997,7 @@ describe("purchase repository — purchase worklist filters", () => {
     const refundPurchaseId = unsafePurchaseId(
       (await resolveLiveShortcode(ctx.db, refundAdjusted, "purchase"))!,
     );
-    await insertWithShortcode(ctx.db, "financialTransaction", {
+    await insertSettlementTransaction(ctx.db, {
       accountId: account.id,
       purchaseId: refundPurchaseId,
       kind: "refund",
@@ -2009,7 +2015,7 @@ describe("purchase repository — purchase worklist filters", () => {
     const expectedPurchaseId = unsafePurchaseId(
       (await resolveLiveShortcode(ctx.db, expectedOnly, "purchase"))!,
     );
-    await insertWithShortcode(ctx.db, "financialTransaction", {
+    await insertSettlementTransaction(ctx.db, {
       accountId: account.id,
       purchaseId: expectedPurchaseId,
       kind: "refund",
@@ -2027,7 +2033,7 @@ describe("purchase repository — purchase worklist filters", () => {
     const nonRefundPurchaseId = unsafePurchaseId(
       (await resolveLiveShortcode(ctx.db, nonRefund, "purchase"))!,
     );
-    await insertWithShortcode(ctx.db, "financialTransaction", {
+    await insertSettlementTransaction(ctx.db, {
       accountId: account.id,
       purchaseId: nonRefundPurchaseId,
       kind: "adjustment",
