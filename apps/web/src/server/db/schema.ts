@@ -1359,6 +1359,14 @@ export const financialTransaction = pgTable(
     index("FinancialTransaction_status_idx").on(table.status),
     index("FinancialTransaction_transactionDate_idx").on(table.transactionDate),
     index("FinancialTransaction_postedDate_idx").on(table.postedDate),
+    // Serves the `sourceRefs @> '[{source,externalId}]'` containment probes that
+    // every statement-import write and every reconciliation read performs.
+    // Plain jsonb_ops, matching Product_aliases_gin_idx — naming an opclass here
+    // produces perpetual `db:push` drift.
+    index("FinancialTransaction_sourceRefs_gin_idx").using(
+      "gin",
+      table.sourceRefs,
+    ),
     check(
       "FinancialTransaction_amount_whole_cent_check",
       sql`${table.amount} <> 0 AND abs(${table.amount} * 100 - round(${table.amount} * 100)) < 0.0000001`,

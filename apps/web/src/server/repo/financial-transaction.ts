@@ -27,7 +27,7 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import { and, asc, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -49,7 +49,6 @@ import {
   formatSearchTerm,
   getDb,
   lockAndValidateForDelete,
-  matchesStringValues,
   notDeleted,
   unwrapDb,
   withTransaction,
@@ -178,18 +177,39 @@ const toOut = (row: FinancialTransactionRow): FinancialTransactionOut => {
   });
 };
 
+/**
+ * Containment (`@>`), not a `jsonb_array_elements` subquery, so the GIN index on
+ * sourceRefs serves the filter instead of a sequential scan.
+ *
+ * Supplying both lists yields their cross product, because "source and
+ * externalId on the *same* ref" is what one containment operand expresses —
+ * OR-ing two independent groups would match a transaction that took its source
+ * from one ref and its externalId from another. Both lists come from UI filter
+ * state, so the product stays small.
+ *
+ * The `jsonb_typeof` guard the subquery needed is gone: `@>` against a scalar or
+ * non-array jsonb returns false rather than erroring.
+ */
 const refsCondition = (
   sources?: string[],
   externalIds?: string[],
 ): SQL | undefined => {
   if (!sources && !externalIds) return undefined;
-  return sql`EXISTS (
-    SELECT 1 FROM jsonb_array_elements(CASE
-      WHEN jsonb_typeof("FinancialTransaction"."sourceRefs") = 'array'
-      THEN "FinancialTransaction"."sourceRefs" ELSE '[]'::jsonb END) ref
-    WHERE ${matchesStringValues(sql`ref->>'source'`, sources)}
-      AND ${matchesStringValues(sql`ref->>'externalId'`, externalIds)}
-  )`;
+  const operands = (sources ?? [undefined]).flatMap((source) =>
+    (externalIds ?? [undefined]).map((externalId) =>
+      JSON.stringify([
+        {
+          ...(source === undefined ? {} : { source }),
+          ...(externalId === undefined ? {} : { externalId }),
+        },
+      ]),
+    ),
+  );
+  return or(
+    ...operands.map(
+      (operand) => sql`${financialTransaction.sourceRefs} @> ${operand}::jsonb`,
+    ),
+  );
 };
 
 // These are filters built from user-supplied codes, not a write target: a
@@ -353,11 +373,18 @@ async function assertSourceRefsAvailable(
   exceptId?: FinancialTransactionId,
 ) {
   for (const ref of refs) {
+    // Containment (`@>`) rather than unnesting every row's refs: this is the
+    // global uniqueness guarantee that lets readers join on
+    // (source, externalId) without a DISTINCT, and it ran as a sequential scan
+    // on every write. `@>` against a scalar or non-array jsonb returns false
+    // instead of erroring, so the old `jsonb_typeof` guard is unnecessary.
+    const operand = JSON.stringify([
+      { source: ref.source, externalId: ref.externalId },
+    ]);
     const result = await unwrapDb(db).execute<{ id: string }>(sql`
       SELECT ft.id::text AS id FROM "FinancialTransaction" ft
-      CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(ft."sourceRefs") = 'array' THEN ft."sourceRefs" ELSE '[]'::jsonb END) r
       WHERE ft."deletedAt" IS NULL
-        AND r->>'source' = ${ref.source} AND r->>'externalId' = ${ref.externalId}
+        AND ft."sourceRefs" @> ${operand}::jsonb
         ${exceptId ? sql`AND ft.id <> ${exceptId}` : sql``}
       LIMIT 1
     `);

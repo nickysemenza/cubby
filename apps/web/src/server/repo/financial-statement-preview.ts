@@ -17,35 +17,19 @@ import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { financialAccount, financialTransaction } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import { statementRowExternalId } from "~/server/repo/statement-row-identity";
 
+/**
+ * Deliberately *not* the identity module's canonicalizer, despite being the
+ * same two lines: this one only sniffs a descriptor for a network name or last
+ * four, so it must stay free to change. Sharing it would let a
+ * descriptor-matching tweak silently re-hash every stored source ref.
+ */
 const canonical = (value: string) =>
   value.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
 
+/** Compare money as integers, so 10.1 and 10.10 are the same amount. */
 const cents = (value: number) => Math.round(value * 100);
-
-const toHex = (value: ArrayBuffer) =>
-  [...new Uint8Array(value)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-
-async function sourceExternalId(
-  row: FinancialStatementImportPreviewInput["rows"][number],
-) {
-  // These are provider-origin fields, deliberately excluding mutable cleanup
-  // metadata such as Monarch's merchant/category labels and export filename.
-  const payload = [
-    "monarch:v1",
-    canonical(row.account),
-    row.date,
-    String(cents(row.amount)),
-    canonical(row.originalStatement),
-  ].join("\u0000");
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(payload),
-  );
-  return `v1:${toHex(digest)}`;
-}
 
 const networkFromDescriptor = (descriptor: string) => {
   const normalized = canonical(descriptor);
@@ -98,17 +82,26 @@ export async function previewFinancialStatementImport(
   db: Database,
   input: FinancialStatementImportPreviewInput,
 ): Promise<FinancialStatementImportPreviewOut> {
-  const sourceRefIds = await Promise.all(input.rows.map(sourceExternalId));
+  const sourceRefIds = await Promise.all(
+    input.rows.map((row) => statementRowExternalId(row)),
+  );
   const dates = uniq(input.rows.map((row) => row.date));
-  const sourceRefLookup = sql`EXISTS (
-    SELECT 1
-    FROM jsonb_array_elements(${financialTransaction.sourceRefs}) AS "sourceRef"
-    WHERE "sourceRef"->>'source' = 'monarch'
-      AND "sourceRef"->>'externalId' IN (${sql.join(
-        sourceRefIds.map((ref) => sql`${ref}`),
-        sql`, `,
-      )})
-  )`;
+  // Containment rather than a `jsonb_array_elements` subquery, so the GIN index
+  // on sourceRefs serves the probe instead of a per-ref sequential scan. One
+  // clause per pair: a multi-element containment operand means "contains all of
+  // these", not "any of these". The source comes from the row rather than a
+  // literal, so a non-monarch export looks itself up rather than nothing.
+  const sourceRefLookup = or(
+    ...uniq(
+      input.rows.map((row, index) =>
+        JSON.stringify([
+          { source: row.source, externalId: sourceRefIds[index]! },
+        ]),
+      ),
+    ).map(
+      (operand) => sql`${financialTransaction.sourceRefs} @> ${operand}::jsonb`,
+    ),
+  );
   const [accounts, transactions] = await Promise.all([
     unwrapDb(db)
       .select({
