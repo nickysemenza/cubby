@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { externalIdSource } from "./external-id";
+import { createSortPaginationFields } from "./pagination";
 import {
   financialAccountShortcode,
   financialTransactionShortcode,
@@ -60,7 +61,6 @@ export const statementRowMatchState = z.enum([
 export type StatementRowMatchState = z.infer<typeof statementRowMatchState>;
 
 export const statementImportOut = z.object({
-  id: z.string(),
   source: z.string(),
   label: z.string(),
   fingerprint: z.string(),
@@ -75,10 +75,12 @@ export const statementImportOut = z.object({
 export type StatementImportOut = z.infer<typeof statementImportOut>;
 
 export const statementRowOut = z.object({
-  id: z.string(),
-  batchId: z.string(),
+  // A statement row's public identity is (source, externalId) — the content
+  // hash — not its uuid primary key, which stays inside the repo layer.
   source: z.string(),
   externalId: z.string(),
+  /** The export this row came from, by its client-supplied fingerprint. */
+  importFingerprint: z.string(),
 
   accountDescriptor: z.string(),
   statementDate: plainDate,
@@ -108,8 +110,8 @@ export type StatementRowOut = z.infer<typeof statementRowOut>;
 
 export const statementRowFilters = z.object({
   source: z.string().optional(),
-  batchId: z.string().optional(),
-  accountId: z.string().optional(),
+  importFingerprint: z.string().optional(),
+  accountId: financialAccountShortcode.optional(),
   matchState: statementRowMatchState.optional(),
   disposition: statementRowDisposition.optional(),
   dispositionReason: statementRowDispositionReason.optional(),
@@ -121,13 +123,13 @@ export const statementRowFilters = z.object({
 });
 export type StatementRowFilters = z.infer<typeof statementRowFilters>;
 
-export const statementRowSortableFields = z.enum([
+export const statementRowSortableFields = [
   "statementDate",
   "amount",
   "accountDescriptor",
   "rawDescription",
   "createdAt",
-]);
+] as const;
 
 /**
  * Rows per `record_statement_rows` call. Higher than the preview's 200 because
@@ -183,11 +185,38 @@ export const recordStatementRowsOut = z.object({
 });
 
 /**
+ * Which rows a bulk write addresses.
+ *
+ * Two shapes because triage has two scales. Naming ids is right for a handful
+ * of judged rows; a filter is the only workable shape for the bulk of the
+ * backlog, where roughly 9,000 of 15,386 rows are consumer spend that will
+ * never match and dispositioning them one id at a time is not practical.
+ *
+ * `filter` deliberately reuses the list filters, so what you select is exactly
+ * what you were just looking at. An empty filter is refused rather than treated
+ * as "everything" — the one case where "unrestricted" is the wrong default,
+ * since here it would silently rewrite the whole ledger's judgments.
+ */
+export const statementRowSelector = z.union([
+  z.strictObject({
+    source: externalIdSource,
+    externalIds: z.array(z.string()).min(1).max(500),
+  }),
+  z.strictObject({
+    filter: statementRowFilters.refine(
+      (value) => Object.values(value).some((field) => field !== undefined),
+      "filter must restrict something; an empty filter would address every row",
+    ),
+  }),
+]);
+export type StatementRowSelector = z.infer<typeof statementRowSelector>;
+
+/**
  * Only the judgment fields. Provider evidence is immutable after ingest, which
  * is enforced by this schema's shape rather than by convention.
  */
 export const statementRowUpdateData = z.strictObject({
-  accountId: z.string().nullable().optional(),
+  accountId: financialAccountShortcode.nullable().optional(),
   disposition: statementRowDisposition.optional(),
   dispositionReason: statementRowDispositionReason.nullable().optional(),
   dispositionNote: z.string().nullable().optional(),
@@ -196,3 +225,54 @@ export const statementRowUpdateData = z.strictObject({
   notes: z.string().nullable().optional(),
 });
 export type StatementRowUpdateData = z.infer<typeof statementRowUpdateData>;
+
+export const updateStatementRowsInput = z.strictObject({
+  selector: statementRowSelector,
+  data: statementRowUpdateData,
+});
+export type UpdateStatementRowsInput = z.infer<typeof updateStatementRowsInput>;
+
+export const deleteStatementRowsInput = z.strictObject({
+  selector: statementRowSelector,
+});
+
+export const statementRowWriteOut = z.object({
+  affected: z.number().int(),
+});
+
+/** Shared by the tRPC list procedure and the MCP tool, so they cannot drift. */
+export const listStatementRowsInput = z.object({
+  filters: statementRowFilters.optional(),
+  ...createSortPaginationFields({
+    sortableFields: statementRowSortableFields,
+    defaultSort: "statementDate",
+  }),
+});
+
+export const statementRowSummaryInput = z.object({
+  filters: statementRowFilters.optional(),
+});
+
+export const listStatementImportsInput = z.object({
+  source: externalIdSource.optional(),
+});
+
+export const statementRowListOut = z.object({
+  data: z.array(statementRowOut),
+  count: z.number().int(),
+});
+
+export const statementRowSummaryOut = z.object({
+  total: z.number().int(),
+  matched: z.number().int(),
+  unmatched: z.number().int(),
+  ignored: z.number().int(),
+  superseded: z.number().int(),
+  amountTotal: z.number(),
+  unmatchedAmount: z.number(),
+});
+
+export const statementImportListOut = z.object({
+  data: z.array(statementImportOut),
+  count: z.number().int(),
+});

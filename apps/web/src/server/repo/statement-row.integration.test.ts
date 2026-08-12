@@ -1,5 +1,6 @@
 import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
+import { unsafeFinancialAccountShortcode } from "@cubby/schemas/identifiers";
 import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -254,19 +255,21 @@ describe("statement row ledger", () => {
     // never inferred, and keeps the evidence that the pending row existed.
     await updateStatementRows(
       ctx.db,
-      [pendingRow.externalId],
-      "monarch",
-      { supersededByExternalId: postedRow.externalId },
+      {
+        selector: { source: "monarch", externalIds: [pendingRow.externalId] },
+        data: { supersededByExternalId: postedRow.externalId },
+      },
       ctx.actor,
     );
     await updateStatementRows(
       ctx.db,
-      [noiseRow.externalId],
-      "monarch",
       {
-        disposition: "ignored",
-        dispositionReason: "not_modeled",
-        dispositionNote: "Consumer spend; Cubby does not model it.",
+        selector: { source: "monarch", externalIds: [noiseRow.externalId] },
+        data: {
+          disposition: "ignored",
+          dispositionReason: "not_modeled",
+          dispositionNote: "Consumer spend; Cubby does not model it.",
+        },
       },
       ctx.actor,
     );
@@ -304,9 +307,10 @@ describe("statement row ledger", () => {
     await expect(
       updateStatementRows(
         ctx.db,
-        [row!.externalId],
-        "monarch",
-        { disposition: "ignored" },
+        {
+          selector: { source: "monarch", externalIds: [row!.externalId] },
+          data: { disposition: "ignored" },
+        },
         ctx.actor,
       ),
     ).rejects.toThrow();
@@ -343,7 +347,9 @@ describe("statement row ledger", () => {
     await record(ctx.db, ctx.actor, [rowInput()], {
       fingerprint: "fp-account",
     });
-    const unknown = await listStatementRows(ctx.db, { accountId: "FAC-ZZZZ" });
+    const unknown = await listStatementRows(ctx.db, {
+      accountId: unsafeFinancialAccountShortcode("FAC-ZZZZ"),
+    });
     expect(unknown.count).toBe(0);
   });
 

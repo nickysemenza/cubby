@@ -9,9 +9,13 @@ import type {
   RecordStatementRowsInput,
   StatementRowFilters,
   StatementRowOut,
-  StatementRowUpdateData,
+  StatementRowSelector,
+  UpdateStatementRowsInput,
 } from "@cubby/schemas/statement-row";
-import { statementRowOut } from "@cubby/schemas/statement-row";
+import {
+  statementImportOut,
+  statementRowOut,
+} from "@cubby/schemas/statement-row";
 import { and, asc, desc, eq, type SQL, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -89,9 +93,12 @@ const supersededByExternalId = sql<string | null>`(
   WHERE successor.id = "StatementRow"."supersededByRowId"
 )`;
 
+const importFingerprint = sql<string>`(
+  SELECT si.fingerprint FROM "StatementImport" si
+  WHERE si.id = "StatementRow"."batchId"
+)`;
+
 const columns = {
-  id: statementRow.id,
-  batchId: statementRow.batchId,
   source: statementRow.source,
   externalId: statementRow.externalId,
   accountDescriptor: statementRow.accountDescriptor,
@@ -113,6 +120,7 @@ const columns = {
   accountShortcode,
   accountName: accountNameSql,
   supersededBy: supersededByExternalId,
+  importFingerprint,
   matchState: matchStateSql,
   transactionShortcode: matchedTransaction,
 } as const;
@@ -137,8 +145,16 @@ const toOut = (row: StatementRowRow): StatementRowOut =>
 const buildConditions = (filters: StatementRowFilters): SQL[] => {
   const conditions: SQL[] = [notDeleted(statementRow)];
   if (filters.source) conditions.push(eq(statementRow.source, filters.source));
-  if (filters.batchId)
-    conditions.push(eq(statementRow.batchId, filters.batchId));
+  // Addressed by the export's client-supplied fingerprint, never its uuid: a
+  // uuid must not reach a URL or an MCP payload.
+  if (filters.importFingerprint)
+    conditions.push(
+      sql`${statementRow.batchId} = (
+        SELECT si.id FROM "StatementImport" si
+        WHERE si.fingerprint = ${filters.importFingerprint}
+          AND si.source = "StatementRow"."source" AND si."deletedAt" IS NULL
+      )`,
+    );
   // Filtered by the account's public shortcode, resolved inline. An unknown
   // code yields NULL and therefore matches nothing, rather than widening to an
   // unfiltered query.
@@ -340,16 +356,36 @@ export async function recordStatementRows(
 }
 
 /**
- * Write agent judgments onto rows addressed by their provider identity. Accepts
- * only judgment fields — provider evidence is immutable after ingest.
+ * Resolve a selector to the SQL that addresses its rows.
+ *
+ * Both shapes route through `buildConditions`, so a filtered bulk write
+ * addresses exactly the rows the same filter would have listed — there is no
+ * second, subtly different notion of "which rows" to drift out of sync.
+ */
+const selectorConditions = (selector: StatementRowSelector): SQL => {
+  if ("externalIds" in selector)
+    return and(
+      notDeleted(statementRow),
+      eq(statementRow.source, selector.source),
+      sql`${statementRow.externalId} IN (${sql.join(
+        selector.externalIds.map((id) => sql`${id}`),
+        sql`, `,
+      )})`,
+    )!;
+  return and(...buildConditions(selector.filter))!;
+};
+
+/**
+ * Write agent judgments onto the selected rows. Accepts only judgment fields —
+ * provider evidence is immutable after ingest, enforced by the input schema's
+ * shape rather than by convention.
  */
 export async function updateStatementRows(
   db: Database,
-  externalIds: string[],
-  source: string,
-  data: StatementRowUpdateData,
+  input: UpdateStatementRowsInput,
   _actor: ActorContext,
 ) {
+  const { data, selector } = input;
   return withTransaction(db, async (tx) => {
     const values: Record<string, unknown> = {};
     if (data.disposition !== undefined) values.disposition = data.disposition;
@@ -384,12 +420,20 @@ export async function updateStatementRows(
     if (data.supersededByExternalId !== undefined) {
       if (data.supersededByExternalId === null) values.supersededByRowId = null;
       else {
+        // Superseding is inherently per-row: the successor is a specific row,
+        // so pointing a filtered batch at one successor would be a claim about
+        // every row in it. Require the explicit shape.
+        if (!("externalIds" in selector))
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "supersededByExternalId requires an explicit source/externalIds selector.",
+          );
         const [successor] = await unwrapDb(tx)
           .select({ id: statementRow.id })
           .from(statementRow)
           .where(
             and(
-              eq(statementRow.source, source),
+              eq(statementRow.source, selector.source),
               eq(statementRow.externalId, data.supersededByExternalId),
               notDeleted(statementRow),
             ),
@@ -398,28 +442,71 @@ export async function updateStatementRows(
         if (!successor)
           throw createAppError(
             "REFERENCED_RECORD_MISSING",
-            `No ${source} statement row ${data.supersededByExternalId} to supersede with.`,
+            `No ${selector.source} statement row ${data.supersededByExternalId} to supersede with.`,
           );
         values.supersededByRowId = successor.id;
       }
     }
 
-    if (Object.keys(values).length === 0) return { updated: 0 };
+    if (Object.keys(values).length === 0) return { affected: 0 };
 
     const updated = await unwrapDb(tx)
       .update(statementRow)
       .set(values)
-      .where(
-        and(
-          eq(statementRow.source, source),
-          sql`${statementRow.externalId} IN (${sql.join(
-            externalIds.map((id) => sql`${id}`),
-            sql`, `,
-          )})`,
-          notDeleted(statementRow),
-        ),
-      )
+      .where(selectorConditions(selector))
       .returning({ id: statementRow.id });
-    return { updated: updated.length };
+    return { affected: updated.length };
   });
+}
+
+/**
+ * Soft-delete the selected rows. Rare by design: a row that will never match is
+ * `ignored` with its reasoning, which keeps the evidence. Deletion is for rows
+ * that should never have been recorded — a mis-parsed export.
+ */
+export async function deleteStatementRows(
+  db: Database,
+  selector: StatementRowSelector,
+  _actor: ActorContext,
+) {
+  return withTransaction(db, async (tx) => {
+    const deleted = await unwrapDb(tx)
+      .update(statementRow)
+      .set({ deletedAt: new Date() })
+      .where(selectorConditions(selector))
+      .returning({ id: statementRow.id });
+    return { affected: deleted.length };
+  });
+}
+
+/** The recorded exports, newest first, with what actually landed for each. */
+export async function listStatementImports(db: Database, source?: string) {
+  const rows = await unwrapDb(db)
+    .select({
+      id: statementImport.id,
+      source: statementImport.source,
+      label: statementImport.label,
+      fingerprint: statementImport.fingerprint,
+      dateKind: statementImport.dateKind,
+      rowCountDeclared: statementImport.rowCountDeclared,
+      notes: statementImport.notes,
+      createdAt: statementImport.createdAt,
+      updatedAt: statementImport.updatedAt,
+      rowCountStored: sql<number>`(
+        SELECT count(*)::int FROM "StatementRow" sr
+        WHERE sr."batchId" = "StatementImport"."id" AND sr."deletedAt" IS NULL
+      )`,
+    })
+    .from(statementImport)
+    .where(
+      and(
+        notDeleted(statementImport),
+        source ? eq(statementImport.source, source) : undefined,
+      ),
+    )
+    .orderBy(desc(statementImport.createdAt));
+  return {
+    data: rows.map((row) => statementImportOut.parse(row)),
+    count: rows.length,
+  };
 }
