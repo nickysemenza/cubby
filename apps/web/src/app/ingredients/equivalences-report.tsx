@@ -1,5 +1,6 @@
 import type { CandidateEquivalence } from "@cubby/schemas/equivalences";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { useMemo } from "react";
 import { Row, Stack } from "~/components/layout";
@@ -22,6 +23,7 @@ import {
 import { useTRPC } from "~/integrations/trpc/react";
 import { cn } from "~/lib/utils";
 import { EntityInlineLink } from "../_components/EntityInlineLink";
+import { equivalenceWorkbenchSearch } from "./equivalence-workbench-link";
 
 // Format a ratio compactly: a few significant figures, no trailing noise.
 const fmtRatio = (n: number): string =>
@@ -40,13 +42,14 @@ const spreadLabel = (c: CandidateEquivalence): string => {
 };
 
 /**
- * Read-only report of candidate unit equivalences harvested from recipe lines that
+ * Report of candidate unit equivalences harvested from recipe lines that
  * carry a parenthetical secondary measure (e.g. "1 bunch kale (about 5 cups)" →
  * "1 bunch ≈ 5 cups" for kale). These are ingredient-scoped facts the conversion
  * engine can't derive on its own (cross-dimension: density / count / package
  * ratios). Runs automatically on load (with a Rescan button); rows are grouped by
- * ingredient. Surfacing only for now; promoting a candidate into a live conversion
- * edge is a follow-up (it needs an ingredient-level mapping store).
+ * ingredient. Each row opens the ingredient workbench with the proposed
+ * conversion prefilled; the user still chooses the concrete Product whose
+ * UnitMapping will store it and explicitly saves the write.
  */
 export function EquivalencesReport() {
   const api = useTRPC();
@@ -119,6 +122,7 @@ export function EquivalencesReport() {
               <TableHead className="text-right">Seen</TableHead>
               <TableHead>Spread</TableHead>
               <TableHead>Examples</TableHead>
+              <TableHead>Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -190,6 +194,20 @@ export function EquivalencesReport() {
                         </li>
                       ))}
                     </Stack>
+                  </TableCell>
+                  <TableCell className="align-top">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      render={
+                        <Link
+                          to="/ingredients/workbench"
+                          search={equivalenceWorkbenchSearch(c)}
+                        />
+                      }
+                    >
+                      {c.existingRatio == null ? "Review" : "Resolve conflict"}
+                    </Button>
                   </TableCell>
                 </TableRow>
               )),

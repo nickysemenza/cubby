@@ -139,12 +139,15 @@ export type ConvRow = {
   toUnit: string;
 };
 let convRowSeq = 0;
-export const blankConvRow = (fromUnit = ""): ConvRow => ({
+export const blankConvRow = (
+  fromUnit = "",
+  seed?: { fromValue: number; toValue: number; toUnit: string },
+): ConvRow => ({
   id: `c${convRowSeq++}`,
-  fromQty: "1",
+  fromQty: String(seed?.fromValue ?? 1),
   fromUnit,
-  toQty: "",
-  toUnit: "g",
+  toQty: seed ? String(seed.toValue) : "",
+  toUnit: seed?.toUnit ?? "g",
 });
 
 /** Whether any of the row's products already resolves to a USDA food. */
@@ -319,13 +322,17 @@ export const buildProductWrite = (
     food,
     eachPrice,
     newMappings,
+    productId,
   }: {
     food: FoodSummaryWithLinkedProducts | null;
     eachPrice: number | null;
     newMappings: UnitMappingInput[];
+    productId?: string;
   },
 ): ProductWrite => {
-  const product = row.product[0] ?? null;
+  const product = productId
+    ? (row.product.find((candidate) => candidate.id === productId) ?? null)
+    : (row.product[0] ?? null);
 
   if (product == null) {
     return {

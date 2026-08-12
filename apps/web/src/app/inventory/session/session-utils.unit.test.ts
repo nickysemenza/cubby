@@ -38,30 +38,29 @@ function loc(
 }
 
 describe("inventory session utils", () => {
-  it("flattens every descendant at any depth", () => {
-    const bin = loc(
-      "00000000-0000-4000-8000-000000000004",
-      "Bin A",
-      "tote-27gal",
-    );
-    const shelf = loc(
-      "00000000-0000-4000-8000-000000000003",
-      "Shelf 1",
-      "shelf",
-      [bin],
-    );
-    const area = loc(
-      "00000000-0000-4000-8000-000000000002",
-      "North Wall",
-      "area",
-      [shelf],
-    );
-    const garage = loc(
-      "00000000-0000-4000-8000-000000000001",
-      "Garage",
-      "room",
-      [area],
-    );
+  it("flattens stocked descendants at any depth", () => {
+    const bin = {
+      ...loc("00000000-0000-4000-8000-000000000004", "Bin A", "tote-27gal"),
+      directItemCount: 1,
+      totalItemCount: 1,
+    };
+    const shelf = {
+      ...loc("00000000-0000-4000-8000-000000000003", "Shelf 1", "shelf", [bin]),
+      directItemCount: 1,
+      totalItemCount: 2,
+    };
+    const area = {
+      ...loc("00000000-0000-4000-8000-000000000002", "North Wall", "area", [
+        shelf,
+      ]),
+      directItemCount: 1,
+      totalItemCount: 3,
+    };
+    const garage = {
+      ...loc("00000000-0000-4000-8000-000000000001", "Garage", "room", [area]),
+      directItemCount: 1,
+      totalItemCount: 4,
+    };
 
     const flattened = flattenAuditableLocations(garage);
 
@@ -77,6 +76,41 @@ describe("inventory session utils", () => {
       "Shelf 1",
       "Bin A",
     ]);
+  });
+
+  it("omits empty descendants from a recount sweep", () => {
+    const emptyBin = loc(
+      "00000000-0000-4000-8000-000000000104",
+      "Empty Bin",
+      "tote-27gal",
+    );
+    const stockedBin = {
+      ...loc(
+        "00000000-0000-4000-8000-000000000103",
+        "Stocked Bin",
+        "tote-27gal",
+      ),
+      directItemCount: 2,
+      totalItemCount: 2,
+    };
+    const emptyShelf = {
+      ...loc("00000000-0000-4000-8000-000000000102", "Empty Shelf", "shelf", [
+        emptyBin,
+      ]),
+      totalItemCount: 0,
+    };
+    const garage = {
+      ...loc("00000000-0000-4000-8000-000000000101", "Garage", "room", [
+        stockedBin,
+        emptyShelf,
+      ]),
+      directItemCount: 1,
+      totalItemCount: 3,
+    };
+
+    expect(
+      flattenAuditableLocations(garage).map((location) => location.name),
+    ).toEqual(["Garage", "Stocked Bin"]);
   });
 
   it("finds locations and recognizes descendants", () => {

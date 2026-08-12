@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
+import { StaticPicker } from "~/app/_components/combobox/static-picker";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { ConversionCapabilities } from "~/app/_components/units/ConversionCapabilities";
 import { UnitMappingGraph } from "~/app/_components/units/unit-mapping-graph";
@@ -28,6 +29,7 @@ import {
 } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
+import type { EquivalenceDraft } from "./equivalence-workbench-link";
 import {
   analyzeGaps,
   blankConvRow,
@@ -304,6 +306,7 @@ export function EnrichmentEditor({
   row,
   initialFood = null,
   initialPriceUnit,
+  initialConversion,
   onSaved,
   onUnitChange,
   slots,
@@ -314,6 +317,8 @@ export function EnrichmentEditor({
   initialFood?: FoodSummaryWithLinkedProducts | null;
   /** Seed the price unit (Queue carries the last-used unit across cards). */
   initialPriceUnit?: string;
+  /** Candidate carried from the equivalences report; the user still saves it. */
+  initialConversion?: EquivalenceDraft;
   onSaved?: () => void;
   onUnitChange?: (unit: string) => void;
   slots: EnrichmentEditorSlots;
@@ -323,6 +328,9 @@ export function EnrichmentEditor({
   const api = useTRPC();
   const gaps = useMemo(() => analyzeGaps(row), [row]);
   const product = row.product[0] ?? null;
+  const [mappingProductId, setMappingProductId] = useState<string | null>(
+    product?.id ?? null,
+  );
 
   const [food, setFood] = useState<FoodSummaryWithLinkedProducts | null>(
     initialFood,
@@ -333,7 +341,13 @@ export function EnrichmentEditor({
   );
   const [price, setPrice] = useState("");
   const [convRows, setConvRows] = useState<ConvRow[]>([
-    blankConvRow(gaps.islandedUnit ?? ""),
+    initialConversion
+      ? blankConvRow(initialConversion.fromUnit, {
+          fromValue: initialConversion.fromValue,
+          toValue: initialConversion.toValue,
+          toUnit: initialConversion.toUnit,
+        })
+      : blankConvRow(gaps.islandedUnit ?? ""),
   ]);
 
   const setPriceUnit = (u: string) => {
@@ -412,7 +426,12 @@ export function EnrichmentEditor({
       toast.error("Link a USDA food, set a price, or add a conversion first");
       return;
     }
-    const write = buildProductWrite(row, { food, eachPrice, newMappings });
+    const write = buildProductWrite(row, {
+      food,
+      eachPrice,
+      newMappings,
+      productId: mappingProductId ?? undefined,
+    });
     if (write.kind === "create") createProduct.mutate(write.input);
     else updateProduct.mutate({ id: write.id, data: write.data });
   }, [
@@ -422,6 +441,7 @@ export function EnrichmentEditor({
     priceQty,
     priceUnit,
     convRows,
+    mappingProductId,
     createProduct,
     updateProduct,
   ]);
@@ -451,6 +471,26 @@ export function EnrichmentEditor({
           <span className="font-medium text-warning">Still missing:</span>{" "}
           {gaps.missingKinds.join(", ")}
         </p>
+      )}
+
+      {initialConversion && row.product.length > 1 && (
+        <Stack gap="xs">
+          <p className="font-medium text-xs">Store this conversion on</p>
+          <StaticPicker
+            items={row.product.map((candidate) => ({
+              value: candidate.id,
+              label: candidate.name,
+            }))}
+            value={mappingProductId}
+            onValueChange={setMappingProductId}
+            label="product"
+            placeholder="Choose a product"
+          />
+          <Description size="xs">
+            Unit mappings belong to a concrete product, not the abstract
+            ingredient.
+          </Description>
+        </Stack>
       )}
 
       {!gaps.usdaLinked && (
