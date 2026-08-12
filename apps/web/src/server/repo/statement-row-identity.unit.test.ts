@@ -2,40 +2,48 @@ import { describe, expect, it } from "vitest";
 import { statementRowExternalId } from "./statement-row-identity";
 
 /**
- * Rows whose refs are already stored on live FinancialTransactions, captured
- * from a `preview_financial_statement_import` run that returned
- * `already_recorded` for each. They are here so the identity function is pinned
- * to production data rather than to itself: 2,756 stored `v1:` refs are only
- * findable while these reproduce byte-for-byte.
+ * Frozen input/output pairs. The values are synthetic on purpose — these
+ * fixtures used to be real statement rows, which put a card's last four and two
+ * merchants' statement descriptors in a public repo (see CLAUDE.md: test
+ * fixtures count).
+ *
+ * Synthetic costs nothing here. What the pins protect is that the hash never
+ * changes silently: alter `canonical`, `cents`, the NUL separator or the
+ * payload's field order and these break, which is the regression that would
+ * orphan every stored `v1:` ref. Whether the function agrees with the refs
+ * already in the database is a separate question, answered once by re-deriving
+ * live refs through `preview_financial_statement_import` and confirming they
+ * came back `already_recorded` — a check against production data, which is
+ * exactly why it does not belong in a committed fixture.
  */
 const STORED = [
   {
     row: {
       source: "monarch",
-      account: "Blue Cash Preferred® (...1005)",
+      account: "Test Card® (...4242)",
       date: "2024-08-29",
       amount: -959.78,
-      originalStatement: "MOORE NEWTON QUALITYSAN LEANDRO CA",
+      originalStatement: "SYNTHETIC MERCHANT ONE SAN FRANCISCO CA",
     },
     externalId:
-      "v1:8d91a684e45c90bd6ecee1ffaddd7e147c30063416ea5c16f6421aa316f6e168",
+      "v1:1c9132b7fd10ba7083d480db37d6d8a48a474cfb5846decbdcceeee8dc0cb16c",
   },
   {
     row: {
       source: "monarch",
-      account: "Blue Cash Preferred® (...1005)",
+      account: "Test Card® (...4242)",
       date: "2024-06-09",
       amount: -100,
-      originalStatement: "DASHBOARD PWS BOULDER CO",
+      originalStatement: "SYNTHETIC MERCHANT TWO BOULDER CO",
     },
     externalId:
-      "v1:ca417d6129884407cbdb09a306b4b3a42c39718c0ba44ef39d00b4299f504daf",
+      "v1:6e35dc1fe091e6147c18c7b9fad303931712f5bf5b81b09cf3691c7309690e5c",
   },
 ] as const;
 
 describe("statementRowExternalId", () => {
   it.each(STORED)(
-    "reproduces the stored ref for $row.originalStatement",
+    "reproduces the frozen ref for $row.originalStatement",
     async ({ row, externalId }) => {
       await expect(statementRowExternalId(row)).resolves.toBe(externalId);
     },
@@ -49,14 +57,14 @@ describe("statementRowExternalId", () => {
   });
 
   it.each([
-    ["case", { account: "BLUE CASH PREFERRED® (...1005)" }],
+    ["case", { account: "TEST CARD® (...4242)" }],
     [
       "repeated whitespace",
-      { originalStatement: "DASHBOARD  PWS  BOULDER CO" },
+      { originalStatement: "SYNTHETIC  MERCHANT  TWO BOULDER CO" },
     ],
     [
       "surrounding whitespace",
-      { originalStatement: " DASHBOARD PWS BOULDER CO " },
+      { originalStatement: " SYNTHETIC MERCHANT TWO BOULDER CO " },
     ],
     ["trailing-zero cents", { amount: -100.0 }],
   ] as const)("ignores %s", async (_label, patch) => {

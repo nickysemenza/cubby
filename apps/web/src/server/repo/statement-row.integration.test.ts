@@ -32,7 +32,7 @@ const importInput = (overrides: Record<string, unknown> = {}) => ({
 });
 
 const rowInput = (overrides: Record<string, unknown> = {}) => ({
-  accountDescriptor: "Blue Cash Preferred (...1005)",
+  accountDescriptor: "Test Card (...4242)",
   statementDate: "2026-05-04",
   providerAmount: -128.5,
   merchant: "Acme Supply",
@@ -119,12 +119,12 @@ describe("statement row ledger", () => {
       await createFinancialAccount(
         ctx.db,
         financialAccountCreateInput.parse({
-          name: "Blue Cash Preferred",
+          name: "Test Card",
           identity: {
             kind: "credit_card",
             issuer: null,
             network: "amex",
-            last4: "1005",
+            last4: "4242",
           },
           sourceAliases: [],
         }),
@@ -192,7 +192,7 @@ describe("statement row ledger", () => {
             kind: "credit_card",
             issuer: null,
             network: "amex",
-            last4: "1005",
+            last4: "4242",
           },
           sourceAliases: [],
         }),
@@ -518,7 +518,7 @@ describe("statement row ledger", () => {
             kind: "credit_card",
             issuer: null,
             network: "amex",
-            last4: "1005",
+            last4: "4242",
           },
           sourceAliases: [],
         }),
