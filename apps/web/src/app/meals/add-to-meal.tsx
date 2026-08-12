@@ -3,8 +3,9 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
 import { CalendarPlus } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { StaticPicker } from "~/app/_components/combobox/static-picker";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
@@ -44,10 +45,21 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
   const [date, setDate] = useState(today);
   const [target, setTarget] = useState(NEW_MEAL);
   const dateInputId = useId();
-  const targetInputId = useId();
 
   const existingMeals = useQuery(
     api.meal.getByDateRange.queryOptions({ from: date, to: date }),
+  );
+  const mealOptions = useMemo(
+    () => [
+      { value: NEW_MEAL, label: "Create a new meal" },
+      ...(existingMeals.data?.map((meal) => ({
+        value: meal.id,
+        label: `${mealLabel(meal)} (${meal.recipes.length} recipe${
+          meal.recipes.length === 1 ? "" : "s"
+        })`,
+      })) ?? []),
+    ],
+    [existingMeals.data],
   );
 
   const onSuccess = (meal: { id: string; date: string }) => {
@@ -119,22 +131,14 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
               />
             </Stack>
             <Stack gap="xs">
-              <Label htmlFor={targetInputId}>Meal slot</Label>
-              <select
-                id={targetInputId}
+              <Label>Meal slot</Label>
+              <StaticPicker
+                items={mealOptions}
                 value={target}
                 disabled={existingMeals.isLoading}
-                className="rounded-md border bg-input/20 px-2 py-1 text-sm disabled:cursor-wait"
-                onChange={(event) => setTarget(event.target.value)}
-              >
-                <option value={NEW_MEAL}>Create a new meal</option>
-                {existingMeals.data?.map((meal) => (
-                  <option key={meal.id} value={meal.id}>
-                    {mealLabel(meal)} ({meal.recipes.length} recipe
-                    {meal.recipes.length === 1 ? "" : "s"})
-                  </option>
-                ))}
-              </select>
+                onValueChange={(value) => setTarget(value ?? NEW_MEAL)}
+                label="meal slot"
+              />
             </Stack>
           </Stack>
           <DialogFooter>

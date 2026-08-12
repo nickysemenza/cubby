@@ -79,13 +79,11 @@ describe("AddToMeal", () => {
         to: expect.any(String),
       }),
     );
-    expect(
+    const slot = screen.getByRole("combobox", { name: "meal slot" });
+    fireEvent.keyDown(slot, { key: "ArrowDown" });
+    fireEvent.click(
       screen.getByRole("option", { name: "Tuesday dinner (1 recipe)" }),
-    ).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText("Meal slot"), {
-      target: { value: "MEL-4K7M" },
-    });
+    );
     fireEvent.click(
       screen.getByRole("button", { name: "Add to selected meal" }),
     );
