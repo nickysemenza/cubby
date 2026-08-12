@@ -117,7 +117,44 @@ original statement), so it is only stable for a row that has settled. Do not
 attach one to a `pending` credit: pending rows can post on a later date, the
 hash changes with the date, and the row then fails to match its own statement
 line on the next import — the exact duplicate this field exists to prevent.
-Attach it when the row posts.
+Attach it when the row posts. The pending row and the row that replaces it are
+two distinct `StatementRow`s, linked with `supersededByExternalId` — written by
+an agent, never inferred — which drops the predecessor off the worklist without
+discarding the evidence that it existed.
+
+## The statement ledger
+
+Provider rows are recorded verbatim with `record_statement_rows`, and drift is a
+query rather than a pipeline rebuilt each session. It is not an importer: it
+resolves no account, links no Purchase, creates no transaction, and makes no
+match.
+
+`list_statement_rows({matchState:"unmatched"})` is the worklist — a provider row
+with no live transaction carrying its source ref. To close one, append that ref
+to the right transaction with `update_financial_transaction` (read–merge–write
+on `sourceRefs`); the row flips to `matched` on the next read, with no write to
+the row itself. `update_statement_rows` takes a `{filter}` selector for the long
+tail that will never match; `disposition: "ignored"` requires BOTH a reason and
+a note, enforced by a CHECK.
+
+Three traps, each found the hard way:
+
+- **Submit `providerAmount` charges-negative, always.** Monarch signs charges
+  negative, but Copilot signs them positive, Mint leaves them unsigned with the
+  sign in a `Transaction Type` column, and Apple Card signs them positive. The
+  identity hash is computed over `providerAmount`, so submitting an
+  un-normalized export does not merely flip a sign — it mints a second identity
+  for a charge already recorded.
+- **Account aliases resolve per source.** A `copilot` row will not resolve
+  against an account carrying only a `monarch` alias. Add the provider's aliases
+  before ingesting it, or every row lands unresolved.
+- **Never bulk-load rows through a model.** Transcribing evidence corrupts it:
+  one pass silently rewrote `🪝` (U+1FA9D) as `🦝` (U+1F99D) — same byte length,
+  different hash — storing a fabricated statement line beside the real one. Use
+  a script that reads the file directly (`apps/web/scripts/ingest-statement-rows.ts`)
+  and reconcile afterwards against the source
+  (`apps/web/scripts/audit-statement-rows.ts`); a row present in the ledger but
+  absent from every export is the signature.
 
 ## Purchases and refunds
 
