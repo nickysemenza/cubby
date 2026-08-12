@@ -25,18 +25,16 @@ needs multi-surface verification.
 
 | Order | Work | Why now | Shape |
 |---:|---|---|---|
-| 1 | [Empty locations stall a recount](#inventory--recount-2026-07-audit-residue) | Breaks a core inventory-maintenance flow; bounded fix | S |
-| 2 | [Close the equivalences-report loop](#recipe-scaling--density-coverage-phase-2) | Turns an existing report into the data-repair path the costing model expects | M |
-| 3 | [Persist imported recipe times](#recipe--cookbook-ux-2026-07-audit) | Stops dropping already-extracted data and adds the best weeknight decision axis | M |
-| 4 | [Add a recipe to an existing meal](#meal-planning-v2) | Prevents one day/slot from fragmenting into duplicate meals | S–M |
+| 1 | [Root-cause the E2E workerd crash](#architecture--engineering) | Intermittently blocks every merge; the diagnostic artifact is now shipped, so the next crash should expose the native assertion | M |
 
 ### Next
 
 Ordered within each domain only; choose based on which surface is seeing real use.
 
-- **Recipe data:** ingredient editing parity, then macro-aware nutrition. The
-  portion solver stays behind nutrition and real evidence that agent iteration is
-  painful.
+- **Recipe data:** decide the persisted shape for imported times, then carry them
+  through import/detail/list sorting and filtering. Follow with ingredient editing
+  parity, then macro-aware nutrition. The portion solver stays behind nutrition and
+  real evidence that agent iteration is painful.
 - **Shopping:** split Shopping list v1.5 into independently shippable slices:
   (1) manual items + durable check-off, (2) shopper units + pack rounding,
   (3) estimated cost, then (4) URL exclusions + text/print export.
@@ -46,6 +44,9 @@ Ordered within each domain only; choose based on which surface is seeing real us
 - **Small UX batch:** recipe clone, recipe QR labels, compare-page picker, and
   product bulk label printing. These may travel together only if their shared
   implementation surface makes the batch smaller than separate changes.
+- **Engineering:** close the three coverage/exhaustiveness gaps, then document
+  test-placement criteria. Keep symmetry-only refactors behind live correctness
+  or maintenance work.
 
 ### Promote only when triggered
 
@@ -53,12 +54,15 @@ These are recorded options, not latent obligations. Their detailed entries name
 the evidence required before promotion.
 
 - UPC duplicate collapsing, aggregate-range materiality, Sentry lazy-init,
-  selection-control consolidation, and all three additional MCP Apps.
+  selective-SSR expansion, selection-control consolidation, budget-aware MCP
+  pagination, and all three additional MCP Apps.
 - `PurchaseLine`, `ExpenseProduct`, the service/product advisory, and
   repeat-purchase ranking.
 - Product external-id collisions are **already queryable** through
   `product.externalIdCollisions`; revisit a broader Problems surface only if an
   auto-minting import creates a persistent operator worklist.
+- Fix the meals table's client-side filtering on the next meals-table touch;
+  codegen the eager-route filter mirrors only if a third mirror appears.
 - The before-drywall spatial-memory capture is the exception: promote it
   immediately when construction timing makes that deadline real.
 
@@ -105,12 +109,6 @@ done; bare "salt" stays aliased to Diamond Crystal.
 Parked: pan-size scaling, a global density reference table/seed, interactive
 parse-clarification, and the baker's-% compare "X-ray".
 
-- [ ] **Close the equivalences-report loop** (2026-07 audit):
-  `/ingredients/equivalences` harvests candidates and flags contradictions with
-  existing mappings, then offers zero actions — no apply, no open-in-workbench,
-  no dismiss, not even a link to the conflicting product. Give it the same
-  `gapFixLinkProps` → workbench treatment the coverage popover has; that *is*
-  the "fix density data organically" mechanism this section prescribes.
 - [ ] **Ingredient detail editing parity** (2026-07 audit): the detail page
   can't do what the workbench can — no `naKinds` toggles, no inline USDA link,
   no price entry; "Appears In Recipes" shows parse drift with no per-line
@@ -141,6 +139,9 @@ decision value.
   is extracted then dropped. Persist, render on detail, sort/filter the list by
   total time (the #1 weeknight decision axis; gives meal planning an effort
   axis). `meta.page` is the natural cross-reference for a physical cookbook.
+  This starts with a persisted-data-shape decision and migration; it is L across
+  schema, import/upsert, detail, list filters, and sorting rather than a small
+  import-adapter patch.
 - [ ] **Recipe clone/duplicate** — still no `duplicate` in recipe crud.
 - [ ] **Recipe QR labels**: shortcodes are minted on every create and
   `$shortcode.tsx` resolves `R-XXXX`, but the detail page never shows the code
@@ -164,6 +165,12 @@ decision value.
   loses the selection; add an on-page picker.
 - [ ] **Notion importer hygiene**: `staleTime: 0` full-DB refetch on every
   visit, every row runs WASM parses, no status filter/search/virtualization.
+- [ ] **EPUB recipe hero photos**: `recipe-epub` already identifies an in-archive
+  hero `ImageRef` (`path` + `mime`), but recipebridge emits `None` and
+  `importRecipeSchema` models only public scraper image URLs. Emit the reference,
+  materialize the referenced EPUB bytes into R2 during the watched import, and
+  attach the resulting image to the recipe. Keep this synchronous with the rest
+  of cookbook import; it does not justify a queue under tenet 3.
 
 ---
 
@@ -235,11 +242,10 @@ runtime CDN) are all shipped. Target is iOS Safari only. Remaining:
 
 - [ ] **C3 — residual N+1 audit**: sweep products/recipes/inventory-detail for per-row
   query fans and batch them the way `getByLocationIds` did. Network panel should show a
-  constant query count regardless of row count. Timeboxed. Flagship instance
-  (2026-07 audit): `location-gallery.tsx` calls `useAllInventoryItems()`, which
-  auto-paginates the **entire inventory table** to the client on the default
-  Locations view — `location.makeTree` counts + `location.valuation` +
-  `inventory.getCountsByLocations` already provide the data server-side.
+  constant query count regardless of row count. Timeboxed; only promote a concrete
+  fan-out found in a fresh network trace. The former flagship instance is closed:
+  `location-gallery.tsx` has derived its inventory projection from
+  `location.makeTree` since #639 and no longer calls `useAllInventoryItems()`.
 - [ ] **Sentry lazy-init (optional)**: init in `router.tsx` is already client-only with
   dev tracing/replay disabled and replay prod-only; if ever picked up, run a temporary
   `rollup-plugin-visualizer` treemap first to confirm it's still the biggest
@@ -263,10 +269,6 @@ runtime CDN) are all shipped. Target is iOS Safari only. Remaining:
   Expense at all (a provenance gap, not a counting one). The variance filter
   already excludes that second group; the first is ordinary data entry, with
   `scripts/report-product-quantity-backfill.ts` as the evidence manifest.
-- [ ] **Empty locations stall a sweep**: `flattenAuditableLocations` includes
-  every descendant regardless of content, so a room of 15 empty bins is 15
-  zero-row "Save recount" stops. Bulk "mark remaining empty bins verified" or
-  auto-advance.
 - [ ] **Problems detectors for meals + cookbooks**: partially-imported cookbooks
   (`sourceRecipeCount > recipeCount` — visible only if you open that book),
   empty meals, meals whose recipes have no totals, recipes with zero
@@ -296,11 +298,6 @@ it never writes it. Deferred:
   "1360 g flour"); durable check-off state (today localStorage keyed by exact
   date range — nudging the range wipes mid-shop progress, and it doesn't follow
   desktop→phone); excluded-meal toggles into the URL; copy-as-text/print.
-- [ ] **"Add to meal" should join an existing meal**: `add-to-meal.tsx` always
-  `meal.create`s, so adding two recipes to Tuesday dinner makes two meals. Offer
-  the day's existing meals (and a slot/name) before creating. Related unused
-  affordances: `Meal.sortOrder`/`MealRecipe.sortOrder` are written and ordered
-  by but no UI reorders; no meal-type concept beyond free-text `name`.
 - [ ] **Calendar ergonomics**: move a meal to another day / duplicate / copy
   last week without a detail-page round-trip; a phone agenda view (the week grid
   degrades to seven stacked `min-h-32` cards); "+ Meal" shouldn't navigate away
@@ -584,7 +581,8 @@ lives on the `PurchaseProduct` link instead.
 
 - [ ] **`servicesWithProduct` advisory detector** — mirrors `purchasesNotReconciling` in shape
   (soft worklist, not an error list). The 2026-07 audit found **zero** live rows, so any row
-  appearing is a real regression rather than a backlog. Deliberately **not** a CHECK
+  appearing is a real regression rather than a backlog. **Trigger**: the first observed
+  row, or repeated import behavior that can create one. Deliberately **not** a CHECK
   constraint: `costType` is an operator-assigned *reporting* dimension that is sometimes an
   **estimate** rather than a fact (`countertop deposit` is materials, `2nd half of
   countertop` is services — same vendor, same amount, same slab, because the installment
@@ -630,91 +628,6 @@ arbitrary allocation of the deposit across the order's items.
 These are not work implied by a completed historical backfill. Future imports are
 expected to be small and interactive; promote one only on the stated evidence.
 
-- [x] **`FinancialTransactionAllocation`** — SHIPPED. Allocates one settlement transaction
-  across several Purchases. **Trigger**: real one-to-many charges or refunds remain
-  operationally unresolved after retaining the transaction unlinked. Allocations are
-  settlement evidence only; they never enter spend.
-
-  **The convention that makes this unnecessary already exists — write it down before
-  building anything.** Established 2025-09-04 and re-confirmed 2026-08-11:
-
-  > **Void-aggregate pattern.** Record one refund FTX **per Purchase**, carrying that
-  > Purchase's share, so each `postedRefundTotal` explains its own gap. Let the real
-  > combined statement line import as its own **unlinked** row and set it to
-  > `status: 'void'`, noting which legs it aggregates. The void row holds the monarch
-  > hash so the import dedupes; it contributes no money because void is excluded from
-  > settlement totals.
-
-  Why the void row and not a ref grafted onto a leg: `already_recorded` in
-  `repo/financial-statement-preview.ts` fires on any **non-deleted** transaction
-  carrying the row's `(source, externalId)` — the query filters `notDeleted` only,
-  **not status**, and never compares amounts on that path. So a void row dedupes fine,
-  and the statement hash stays on the row whose amount actually equals the statement
-  line. Grafting it onto a leg also works mechanically but leaves a ref whose amount
-  disagrees with its row, and both legs can't share it anyway:
-  `assertSourceRefsAvailable` enforces global uniqueness of `(source, externalId)` and
-  throws `FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT`.
-
-  Sightings (each is one real card line settling ≥2 Purchases):
-
-  1. **2025-09-04, Amex Blue Cash ····1005, -$34.00.** `FTX-XFP3` -$18.43 (`PUR-6WAQ`,
-     WN26500589) + `FTX-A9R7` -$15.57 (`PUR-DQFV`, WN27945262). Aggregate `FTX-ETH5`
-     voided 2026-08-07. This is where the pattern comes from.
-  2. **2026-08-10, Visa ···2125, -$16.76.** One Home Depot Colma return receipt
-     (invoice 4154955) spanning WN63179429 and WN63446464. Legs `FTX-T2DJ` -$8.96 and
-     `FTX-QSVK` -$7.80; the aggregate row will exist once the credit posts.
-
-  **The sighting count is a floor, not a measurement.** The SQL sweep that finds these
-  matches an unlinked/void aggregate row against pairs of linked legs — so it can only
-  see instances where the aggregate row exists. Any occurrence handled without one is
-  invisible. Treat ≥2 as "this recurs", not as "this has happened exactly twice".
-
-  **TRIGGER MET — promoted 2026-08-11. Build it; the convention is the interim only.**
-  Reversed after an adversarial review (Codex, session `019ff262`). The frequency
-  argument for deferring survived scrutiny and is still true — an independent scan of
-  every current mismatch row against all 33 live unlinked posted/void refund FTXs found
-  **0** undiscovered events, and the all-time floor is 2 events / 4 allocations /
-  $50.76. Frequency simply stopped being the governing criterion:
-
-  - **The stated fan-out trigger was already met and went unnoticed.**
-    `postedRefundTotal` *is* a per-Purchase query of the fan-out
-    (`repo/purchase.ts:249-256`, `repo/purchase-financial-aggregates.ts:27-53`). The
-    convention doesn't avoid querying the fan-out; it fabricates the rows that query
-    reads.
-  - **The legs corrupt the settlement-evidence tier.** They are ordinary `posted` rows
-    with no allocation discriminator, so every consumer reads them as literal card
-    events: the transaction API (`repo/financial-transaction.ts:109-129`), the finance
-    list and detail pages, `linked-transactions.tsx`, data-quality's settlement-reference
-    coverage (`repo/data-quality.ts:720-751`), and MCP — which advertises rows as
-    settlement evidence and states a transaction links to at most one Purchase
-    (`mcp/tools/financial.tools.ts:64-90`). The DB asserts the account posted two
-    credits when it posted one, and prose in `notes` cannot repair a typed field.
-  - **The convention demonstrably does not transmit.** An agent with the purchase-import
-    skill loaded rediscovered the problem and invented a *worse* variant (grafting the
-    statement hash onto a mismatched-amount leg) instead of finding the 2025 precedent.
-
-  Every cheaper alternative was evaluated and rejected. Read-time amount-sum matching
-  fails on real data — the confirmed 2026 event is dated 2026-08-10 against Purchases
-  dated 2026-07-01/02 with unequal gaps, so a strict scan finds it zero times, and a
-  relaxed scan produces false positives (unlinked `FTX-VDZJ` −$10.99 matching three
-  unrelated Amazon gaps across 2015–2023, on a row its own notes prove is not a refund).
-  An association-only join without amounts would have to derive each share from mutable
-  `statedTotal`/Expense totals — circular, and editing paperwork would silently rewrite
-  history. `sourceRefs` is the only jsonb on the table and its shape drives global dedupe
-  uniqueness, so it cannot carry allocations.
-
-  **Build sequence** (additive; follows the repo's expand → backfill → read-switch rule):
-  keep one canonical real FinancialTransaction; add `FinancialTransactionAllocation`
-  (`transactionId`, `purchaseId`, `amount`); backfill one allocation per existing
-  single-linked transaction; enforce `SUM(allocation.amount) = transaction.amount`
-  atomically **in the write path** — do **not** copy `splitExpense`'s parts convention,
-  which validates no such sum and leaves the assertion to the caller; then switch
-  `postedRefundTotal` to read posted refund allocations. Allocations are settlement
-  evidence and must never enter spend — `SUM(Expense.cost)` stays the only spend ledger.
-
-  Until it ships, keep using the void-aggregate convention above: the `void` aggregate
-  row is excluded from reconciliation and is the *less* damaging half; the posted legs
-  are the part being retired.
 - [ ] **`PurchaseEvidenceReference`** — structured Gmail, Drive, or vendor-portal
   evidence pointers. **Trigger**: repeated need to query those references beyond
   Purchase notes and attached documents. It must not turn pasted email text into a
@@ -859,14 +772,11 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
     ([workerd#3119](https://github.com/cloudflare/workerd/issues/3119),
     [workerd#1401](https://github.com/cloudflare/workerd/issues/1401)); pinned
     version here is workerd 1.20260801.1.
-  - **Next step — a one-line CI change that is NOT yet merged.** The E2E failure
-    artifact uploads only `playwright-report/` (the `upload-artifact` step in
-    `test-e2e`), so wrangler's crash log dies with the runner and every
-    occurrence stays unfalsifiable after the fact — which is why these got
-    re-run instead of diagnosed. Add an `if: failure()` upload of
-    `/github/home/.config/.wrangler/logs/` with `if-no-files-found: ignore`,
-    then read it on the next red shard: it holds the assertion workerd actually
-    died on. Pushing that edit needs `workflow` token scope.
+  - **Next step:** CI now uploads each failed shard's Wrangler log directory as
+    a seven-day artifact. Read that artifact on the next red shard; it should
+    contain the native assertion workerd died on. Do not change the dashboard or
+    USDA harness until that evidence distinguishes an abandoned subrequest from
+    a broader workerd cancellation defect.
   - **Candidate fixes, once that log confirms the cause:** stub USDA with a
     local server returning valid empty JSON instead of a dead port, or make the
     harness fail fast with a clear message when the server dies rather than
@@ -891,7 +801,9 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
   async, single/multi, selected-first, nested-menu, and max-selection paths should
   converge on Base UI behavior before deleting its manual keyboard handling.
   Command palette and action menus are different interaction types and remain separate.
-- [ ] **Budget-aware cursor pagination for wide MCP tool results.** MCP's native
+- [ ] **Budget-aware cursor pagination for wide MCP tool results.** **Trigger**: a
+  real tool result hits a host/output limit or is measurably too large for routine
+  use; no such failure is recorded yet. MCP's native
   opaque-cursor pagination covers discovery operations such as `tools/list`, not
   arbitrary `tools/call` results, and `CallToolResult` carries no host context-window
   budget. Add tool-level `cursor` / `nextCursor` fields to the shared list plumbing,
@@ -911,26 +823,6 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
   down (absent uuid rather than unresolvable code), so nothing is unguarded —
   this is about removing the asymmetry, not a live bug. Resolve in the repo
   like everyone else, then delete the list.
-- [ ] **TS re-derives Rust unit conversion** (2026-07 audit):
-  `_components/recipe/recipe-tree.ts`'s `MASS_TO_GRAMS` (14 entries —
-  mg/g/gram(s)/kg/kilogram(s)/oz/ounce(s)/lb/lbs/pound(s)) hand-copies the
-  mass-to-grams table `recipebridge/src/costing/engine.rs`'s
-  `sub_recipe_pairs` already owns, which the
-  [layering rule](../CLAUDE.md#where-logic-lives-layering) forbids — TS should
-  call WASM, not reimplement it. The two currently agree (factors verified
-  identical), so this is latent desync risk rather than a live bug today: e.g.
-  `"kgs"`, which upstream's `singular()` handles and the 14-entry TS table does
-  not. Fix by exposing the conversion through WASM rather than widening the TS
-  table.
-- [ ] **`meal-format.ts` hand-rolls amount formatting instead of calling
-  WASM.** `formatAmount` (`apps/web/src/app/meals/meal-format.ts`) does
-  `Math.round(value * 100) / 100` plus string concat for the shopping list's
-  need/have/shortfall amounts, bypassing `tryFormatAmount`
-  (`_components/inventory/format-amount.tsx`), which calls
-  `wasm.format_amount` for range/`upperValue` support and `"each"` handling.
-  Same [layering violation](../CLAUDE.md#where-logic-lives-layering) as the
-  entry above; shopping-list amounts render by a different rule than every
-  other amount surface in the app.
 - [ ] **Duplicate `getByID`/`getByShortcode` read paths, no shared cache
   key.** All 15 shortcode entities (`shortcodeEntities`,
   `packages/schemas/src/entity-manifest.ts`) get two CRUD-factory procedures
@@ -1055,10 +947,6 @@ workflows, honest infinite-list URL state, one server-list query path, and share
 project-tree expansion. The old ingredient `presenceCondition` item was stale; that
 implementation now uses `idSetPresence`.
 
-- [x] **History filtering/over-fetch.** Completed projects and tasks are
-      ordinary saved filters. Projects Data uses paginated server lists;
-      embedded Tasks and Expenses use an explicit matching-project scope and
-      exclude unassigned rows.
 - [ ] **Meals `?view=table` still fetches-all-and-filters-in-React.**
       `meal-table.tsx` pulls `MEAL_TABLE_PAGE_SIZE = 500` rows in one
       `meal.list` call and hands them to `useClientEntityList`

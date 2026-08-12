@@ -290,14 +290,26 @@ const merge = protectedProcedure
 // The enrichment workbench worklist: recipe-used ingredients that aren't fully
 // costable, with coverage + recommended fix computed server-side.
 const enrichmentWorkbench = protectedProcedure
-  .input(z.object({ recipeId: recipeShortcode.optional() }).optional())
+  .input(
+    z
+      .object({
+        recipeId: recipeShortcode.optional(),
+        focusId: ingredientShortcode.optional(),
+      })
+      .optional(),
+  )
   .output(strictOutput(enrichmentRowsOut))
   .query(async ({ ctx, input }) => {
     const recipeId = input?.recipeId
       ? await resolveOrThrow(ctx.db, "recipe", input.recipeId)
       : undefined;
+    const focusId = input?.focusId
+      ? await resolveOrThrow(ctx.db, "ingredient", input.focusId)
+      : undefined;
     return await enrichmentWorkbenchService(ctx.db, ctx.usdaClient, {
       recipeId,
+      focusId,
+      focusShortcode: input?.focusId,
     });
   });
 

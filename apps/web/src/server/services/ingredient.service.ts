@@ -1,5 +1,9 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
+import type {
+  IngredientId,
+  IngredientShortcode,
+  RecipeId,
+} from "@cubby/schemas/identifiers";
 import type {
   EnrichmentRow,
   IngredientWithFoodLeanOut,
@@ -120,6 +124,8 @@ export const enrichmentWorkbench = async (
   usdaClient: USDAClient,
   opts?: {
     recipeId?: RecipeId;
+    focusId?: IngredientId;
+    focusShortcode?: IngredientShortcode;
   },
 ): Promise<EnrichmentRow[]> => {
   // Optional recipe scope: restrict the worklist to the leaf ingredients of one
@@ -127,7 +133,9 @@ export const enrichmentWorkbench = async (
   // pass below only touches the ingredients that block that recipe's totals.
   const restrictToIds = opts?.recipeId
     ? await recipeTreeLeafIngredientIds(db, opts.recipeId)
-    : undefined;
+    : opts?.focusId
+      ? [opts.focusId]
+      : undefined;
   // Lean fetch: recipe-used ingredients + products + recipeCount/cookbookOnly
   // scalars (no per-usage recipe bodies). The footer loads usages on demand.
   const candidates = await enrichmentWorkbenchIngredientsRepo(db, {
@@ -170,7 +178,12 @@ export const enrichmentWorkbench = async (
 
   // Trigram near-duplicate hints (one self-join query; we look up only the
   // rows we show). Suggestion-only — the UI confirms before merging.
-  const worklist = rows.filter((r) => r.recommendedFix !== "done");
+  // A report deep-link may intentionally focus a fully-covered row whose
+  // existing graph conflicts with recipe-derived evidence. Keep that one row
+  // visible even though ordinary browsing remains a gaps-only worklist.
+  const worklist = rows.filter(
+    (r) => r.recommendedFix !== "done" || r.id === opts?.focusShortcode,
+  );
   const fuzzy = await findFuzzyMergeCandidates(db);
   return worklist.map((r) => ({
     ...r,

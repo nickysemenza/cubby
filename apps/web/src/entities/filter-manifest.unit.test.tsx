@@ -1053,11 +1053,10 @@ describe("every server filter field is reachable from the manifest", () => {
   /**
    * Fields no spec can reach, each with the reason it is unreachable ON PURPOSE.
    *
-   * Entries starting with `TODO:` are NOT purposeful — they are real missing UI
-   * controls, parked here so the guard stays green while the gap stays named and
-   * countable. Both kinds are held to the same hygiene below: an entry naming a
-   * field that no longer exists is stale, and one that has since become
-   * reachable must be deleted rather than left to rot.
+   * Every entry is held to the same hygiene below: one naming a field that no
+   * longer exists is stale, and one that has since become reachable must be
+   * deleted rather than left to rot. A real missing control belongs in the
+   * canonical backlog, not this by-design allowlist.
    */
   const UNREACHABLE_BY_DESIGN: Record<string, string> = {
     // Contextual scope a surrounding page imposes — never user-chosen state, so

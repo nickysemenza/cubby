@@ -725,6 +725,17 @@ jobs:
           name: playwright-report-shard-${{ matrix.shard }}
           path: apps/web/playwright-report/
           retention-days: 7
+      # workerd writes the native assertion stack after Wrangler has already
+      # stopped serving requests. Keep it with the failing shard: the
+      # Playwright report only shows the downstream connection refusals.
+      - name: Upload Wrangler crash logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: wrangler-logs-shard-${{ matrix.shard }}
+          path: /github/home/.config/.wrangler/logs/
+          if-no-files-found: ignore
+          retention-days: 7
 
   report-coverage:
     name: Report complete coverage
