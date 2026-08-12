@@ -150,11 +150,12 @@ Three traps, each found the hard way:
   before ingesting it, or every row lands unresolved.
 - **Never bulk-load rows through a model.** Transcribing evidence corrupts it:
   one pass silently rewrote `🪝` (U+1FA9D) as `🦝` (U+1F99D) — same byte length,
-  different hash — storing a fabricated statement line beside the real one. Use
-  a script that reads the file directly (`apps/web/scripts/ingest-statement-rows.ts`)
-  and reconcile afterwards against the source
-  (`apps/web/scripts/audit-statement-rows.ts`); a row present in the ledger but
-  absent from every export is the signature.
+  different hash — storing a fabricated statement line beside the real one. MCP
+  is the write path for ordinary imports, where a few hundred rows is
+  unremarkable; a backfill big enough that a model cannot carry it is a one-off
+  migration script, not a reason to fork the write path permanently. Reconcile
+  afterwards either way with `apps/web/scripts/audit-statement-rows.ts` — a row
+  present in the ledger but absent from every export is the signature.
 
 ## Purchases and refunds
 

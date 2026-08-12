@@ -10,6 +10,28 @@ The **[Tenets](README.md#tenets)** there are binding on design proposals: invent
 - For change, build, and fix requests, make the requested in-scope changes and validate them proportionally. Run targeted checks first; run `pnpm run check` plus relevant tests for broad or cross-layer changes.
 - Open pull requests ready for review by default. Use a draft PR only when the user explicitly requests one or the published work is intentionally incomplete.
 
+## Never put real data in outward-facing text
+
+Commit messages, PR titles and descriptions, review comments, and issue text are
+**public and permanent** — this repo is public, and GitHub keeps a PR body's
+previous revisions in its edit history where an edit cannot remove them. Only
+GitHub Support can.
+
+So none of them may contain real rows, values, or identifiers: no third-party
+names, card last-four digits, account descriptors, transaction descriptions,
+amounts tied to a person, addresses, or order numbers. This applies to output
+pasted from a production query, which is the usual way it happens.
+
+Describe the shape instead, and use a placeholder — `<payee>`, `····NNNN`,
+`<merchant>`. A worked example almost never needs the real value to make its
+point: "a description where `U+1FA9D` was transcribed as `U+1F99D` — same byte
+length, different hash" carries the whole lesson, where the actual Venmo payee's
+name carried it no better and published a private individual's name (#693).
+
+Screenshots, `EXPLAIN` output, and test fixtures are the same rule. Internal
+shortcodes (`PUR-4K7M`, `FTX-9H64`) are fine — they name a row without
+disclosing its contents.
+
 ## Comments
 
 Comments explain **why a constraint exists**, not what the next line already says.
