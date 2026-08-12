@@ -67,6 +67,12 @@ const NON_ENTITY_FK_TARGETS: Record<string, string> = {
   session: "Better-Auth's own table (login sessions)",
   oauth_client: "OAuth 2.1 provider table (registered MCP clients)",
   oauth_refresh_token: "OAuth 2.1 provider table (issued refresh tokens)",
+  // The provider-statement ledger: verbatim evidence Cubby is compared
+  // against, deliberately not entities. At 15k+ rows they would swamp global
+  // semantic search, and they carry no shortcode because nothing links to a
+  // statement line by public id.
+  StatementImport: "provider export bookkeeping, not a domain entity",
+  StatementRow: "verbatim statement evidence, not a domain entity",
 };
 
 interface IntrospectedEdge {

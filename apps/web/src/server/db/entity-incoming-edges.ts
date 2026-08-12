@@ -66,6 +66,7 @@ import {
   recipeImage,
   recipeSection,
   recipeSectionIngredient,
+  statementRow,
   task,
   taskDependency,
   wishCandidate,
@@ -191,6 +192,7 @@ export const INCOMING_EDGES = {
     "FinancialTransaction.accountId": {
       column: financialTransaction.accountId,
     },
+    "StatementRow.accountId": { column: statementRow.accountId },
   }),
   financialTransaction: edges({
     "FinancialTransactionAllocation.transactionId": {

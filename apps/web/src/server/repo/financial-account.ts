@@ -59,6 +59,12 @@ export const FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY = {
     description:
       "An account cannot be deleted while live financial transactions still retain settlement evidence against it.",
   },
+  "StatementRow.accountId": {
+    code: "block-live-statement-rows",
+    effect: "block",
+    description:
+      "An account cannot be deleted while live statement rows are assigned to it. The column is nullable, so detaching would succeed silently — and it would discard the triage judgment that put the row on this account while leaving the row looking untriaged.",
+  },
 } as const satisfies IncomingEdgePolicy<
   "financialAccount",
   OperationDisposition
