@@ -25,8 +25,6 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
-  countWhere,
-  executeListQueryWithCount,
   formatSearchTerm,
   notDeleted,
   unwrapDb,
@@ -35,27 +33,41 @@ import {
 import { statementRowExternalId } from "~/server/repo/statement-row-identity";
 
 /**
- * Whether a live transaction claims this row's `(source, externalId)` pair.
+ * Every live `(source, externalId)` pair, unnested ONCE.
  *
- * LOAD-BEARING DEPENDENCY, and it lives in another file: this is a plain
- * correlated lookup with no DISTINCT because `assertSourceRefsAvailable`
- * (repo/financial-transaction.ts) guarantees the pair is globally unique across
- * live transactions. Weakening that guarantee makes this fan out silently.
+ * This was a correlated `sourceRefs @> jsonb_build_array(...)` probe per row,
+ * and that is why this comment is long. The containment operand is built from
+ * the outer row, so it is not a constant and the planner cannot use
+ * `FinancialTransaction_sourceRefs_gin_idx` — it fell back to a sequential scan
+ * of every transaction FOR EVERY ROW. Measured on 33,681 live rows with only
+ * two of the summary's six aggregates: 231 seconds and 13.9M buffer hits.
+ * Unnesting once and hash-joining is O(refs + rows), so cost scales with
+ * FinancialTransaction (~3.4k refs) rather than with StatementRow.
  *
- * Cost scales with FinancialTransaction (~3.4k refs), not with StatementRow, and
- * the containment probe is served by FinancialTransaction_sourceRefs_gin_idx.
+ * LOAD-BEARING, and the guarantee lives in another file: joining without
+ * DISTINCT is safe only because `assertSourceRefsAvailable`
+ * (repo/financial-transaction.ts) makes `(source, externalId)` globally unique
+ * across live transactions. Two transactions claiming one ref would fan this
+ * join out and silently duplicate rows.
  */
-const matchedTransaction = sql<string | null>`(
-  SELECT ft.shortcode FROM "FinancialTransaction" ft
+const LIVE_REFS = sql`(
+  SELECT r->>'source' AS source, r->>'externalId' AS "externalId", ft.shortcode
+  FROM "FinancialTransaction" ft
+  CROSS JOIN LATERAL jsonb_array_elements(ft."sourceRefs") r
   WHERE ft."deletedAt" IS NULL
-    AND ft."sourceRefs" @> jsonb_build_array(
-      jsonb_build_object(
-        'source', "StatementRow"."source",
-        'externalId', "StatementRow"."externalId"
-      )
-    )
-  LIMIT 1
 )`;
+
+/**
+ * The table plus its match evidence. Every read goes through this so the join —
+ * and therefore the meaning of `matchState` — cannot differ between the list,
+ * the count and the summary.
+ */
+const FROM_WITH_REFS = sql`FROM "StatementRow"
+  LEFT JOIN ${LIVE_REFS} lr
+    ON lr.source = "StatementRow"."source"
+   AND lr."externalId" = "StatementRow"."externalId"`;
+
+const matchedTransaction = sql<string | null>`lr.shortcode`;
 
 /**
  * Four states, computed in SQL so filtering and pagination stay server-side.
@@ -65,7 +77,7 @@ const matchedTransaction = sql<string | null>`(
 const matchStateSql = sql<string>`CASE
   WHEN ${statementRow.disposition} = 'ignored' THEN 'ignored'
   WHEN ${statementRow.supersededByRowId} IS NOT NULL THEN 'superseded'
-  WHEN ${matchedTransaction} IS NOT NULL THEN 'matched'
+  WHEN lr.shortcode IS NOT NULL THEN 'matched'
   ELSE 'unmatched'
 END`;
 
@@ -129,9 +141,29 @@ type StatementRowRow = {
   [K in keyof typeof columns]: unknown;
 };
 
+/**
+ * The reads run as raw SQL, so values arrive as the pg driver types them rather
+ * than as drizzle's column modes: timestamps and `date` columns come back as
+ * Date objects, numerics as strings. Coerce here so the output contract is the
+ * same whichever way a row was fetched.
+ */
+const asDate = (value: unknown): Date =>
+  value instanceof Date ? value : new Date(String(value));
+
+/** pg builds a `date` at LOCAL midnight, so read the local parts back out. */
+const asPlainDate = (value: unknown): string => {
+  if (!(value instanceof Date)) return String(value).slice(0, 10);
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${value.getFullYear()}-${month}-${day}`;
+};
+
 const toOut = (row: StatementRowRow): StatementRowOut =>
   statementRowOut.parse({
     ...row,
+    statementDate: asPlainDate(row.statementDate),
+    createdAt: asDate(row.createdAt),
+    updatedAt: asDate(row.updatedAt),
     amount: Number(row.amount),
     providerAmount: Number(row.providerAmount),
     accountId: row.accountShortcode
@@ -213,39 +245,71 @@ export async function listStatementRows(
             ? statementRow.createdAt
             : statementRow.statementDate;
 
-  const { data, count } = await executeListQueryWithCount(
-    unwrapDb(db)
-      .select(columns)
-      .from(statementRow)
-      .where(where)
-      // Tie-broken by id: statementDate alone is not unique, and an unstable
-      // sort silently repeats or skips rows across pages.
-      .orderBy(direction(orderColumn), asc(statementRow.id))
-      .limit(take)
-      .offset(skip),
-    countWhere(db, statementRow, where),
+  // Raw SQL rather than the drizzle builder because both the projection and the
+  // WHERE may reference `lr`, and the count has to see the same join — a count
+  // taken without it would disagree with the page whenever `matchState` filters.
+  const projection = sql.join(
+    Object.entries(columns).map(
+      (entry) => sql`${entry[1]} AS ${sql.identifier(entry[0])}`,
+    ),
+    sql`, `,
   );
-  return { data: data.map((row) => toOut(row)), count };
+  const [data, counted] = await Promise.all([
+    unwrapDb(db).execute<StatementRowRow>(sql`
+      SELECT ${projection}
+      ${FROM_WITH_REFS}
+      WHERE ${where}
+      -- Tie-broken by id: statementDate alone is not unique, and an unstable
+      -- sort silently repeats or skips rows across pages.
+      ORDER BY ${direction(orderColumn)}, ${asc(statementRow.id)}
+      LIMIT ${take} OFFSET ${skip}
+    `),
+    unwrapDb(db).execute<{ count: number }>(sql`
+      SELECT count(*)::int AS count ${FROM_WITH_REFS} WHERE ${where}
+    `),
+  ]);
+  return {
+    data: data.rows.map((row) => toOut(row)),
+    count: Number(counted.rows[0]?.count ?? 0),
+  };
 }
 
-/** Header summary for the active filter, computed in one pass. */
+/**
+ * Header summary for the active filter, in one pass.
+ *
+ * `matchState` is computed once per row in a subselect and the aggregates read
+ * that column, rather than each FILTER re-deriving it. With the old correlated
+ * probe that repetition was the difference between one scan and six.
+ */
 export async function getStatementRowSummary(
   db: Database,
   filters: StatementRowFilters,
 ) {
   const where = and(...buildConditions(filters))!;
-  const [row] = await unwrapDb(db)
-    .select({
-      total: sql<number>`count(*)::int`,
-      matched: sql<number>`count(*) FILTER (WHERE ${matchStateSql} = 'matched')::int`,
-      unmatched: sql<number>`count(*) FILTER (WHERE ${matchStateSql} = 'unmatched')::int`,
-      ignored: sql<number>`count(*) FILTER (WHERE ${matchStateSql} = 'ignored')::int`,
-      superseded: sql<number>`count(*) FILTER (WHERE ${matchStateSql} = 'superseded')::int`,
-      amountTotal: sql<number>`COALESCE(sum(${statementRow.amount}), 0)`,
-      unmatchedAmount: sql<number>`COALESCE(sum(${statementRow.amount}) FILTER (WHERE ${matchStateSql} = 'unmatched'), 0)`,
-    })
-    .from(statementRow)
-    .where(where);
+  const { rows } = await unwrapDb(db).execute<{
+    total: number;
+    matched: number;
+    unmatched: number;
+    ignored: number;
+    superseded: number;
+    amountTotal: string;
+    unmatchedAmount: string;
+  }>(sql`
+    SELECT
+      count(*)::int AS total,
+      count(*) FILTER (WHERE ms = 'matched')::int AS matched,
+      count(*) FILTER (WHERE ms = 'unmatched')::int AS unmatched,
+      count(*) FILTER (WHERE ms = 'ignored')::int AS ignored,
+      count(*) FILTER (WHERE ms = 'superseded')::int AS superseded,
+      COALESCE(sum(amount), 0) AS "amountTotal",
+      COALESCE(sum(amount) FILTER (WHERE ms = 'unmatched'), 0) AS "unmatchedAmount"
+    FROM (
+      SELECT ${matchStateSql} AS ms, ${statementRow.amount} AS amount
+      ${FROM_WITH_REFS}
+      WHERE ${where}
+    ) t
+  `);
+  const row = rows[0];
   return {
     total: Number(row?.total ?? 0),
     matched: Number(row?.matched ?? 0),

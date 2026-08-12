@@ -1613,6 +1613,15 @@ export const statementRow = pgTable(
       sql`(${table.disposition} = 'open' AND ${table.dispositionReason} IS NULL AND ${table.dispositionNote} IS NULL)
           OR (${table.disposition} = 'ignored' AND ${table.dispositionReason} IS NOT NULL AND ${table.dispositionNote} IS NOT NULL)`,
     ),
+    // The enum is enforced by zod at the router/MCP boundary, but the bulk
+    // disposition scripts write this column over raw SQL and bypass that. A
+    // typo would store cleanly and then throw on the read path, 500ing the list
+    // for the whole source — so the vocabulary is pinned here too.
+    check(
+      "StatementRow_dispositionReason_check",
+      sql`${table.dispositionReason} IS NULL OR ${table.dispositionReason} IN
+          ('not_modeled', 'not_a_purchase', 'duplicate_of_other_source', 'pre_cubby', 'other')`,
+    ),
     check(
       "StatementRow_externalId_format_check",
       sql`${table.externalId} ~ '^v1:[0-9a-f]{64}$'`,
