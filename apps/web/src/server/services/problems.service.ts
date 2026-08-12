@@ -79,6 +79,7 @@ import {
   findEmptyLocations,
   findEntitiesMissingEmbeddings,
   findFinancialTransactionAllocationDefects,
+  findIncompleteStatementImports,
   findIngredientsWithoutProduct,
   findIngredientsWithUnusedAliases,
   findInvalidFinancialJson,
@@ -559,10 +560,10 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       financialTransactionAllocationDefects: () =>
         findFinancialTransactionAllocationDefects(scoped),
       invalidFinancialJson: () => findInvalidFinancialJson(scoped),
-      // Two UNION ALL queries over 34 indexed FK joins. Sits in this group
-      // rather than its own because the cost is I/O, not the CPU the other
-      // groups exist to isolate — and it shares this fan-out's single
-      // connection.
+      // One grouped scan of the (small) import roster with a LEFT JOIN count.
+      // The ONLY statement-ledger detector: unmatched rows are the drift
+      // worklist, not defects, and 15k of them would make Problems unusable.
+      incompleteStatementImports: () => findIncompleteStatementImports(scoped),
       referentialLivenessViolations: () =>
         findReferentialLivenessViolations(scoped),
     }),
@@ -608,6 +609,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     financialTransactionAllocationDefects:
       r.financialTransactionAllocationDefects,
     invalidFinancialJson: r.invalidFinancialJson,
+    incompleteStatementImports: r.incompleteStatementImports,
     referentialLivenessViolations: r.referentialLivenessViolations,
   };
 };

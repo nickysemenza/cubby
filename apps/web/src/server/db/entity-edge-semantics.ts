@@ -352,6 +352,13 @@ export const ENTITY_EDGE_SEMANTICS = {
         "A settlement-side event recorded by this financial account.",
       liveness: { kind: "must-target-live" },
     },
+    "StatementRow.accountId": {
+      role: "reference",
+      label: "statement rows",
+      description:
+        "A provider statement line an agent judged to belong to this account. Evidence Cubby is reconciled against, not a settlement event: the row is what the export said, and assigning it an account is a human judgment rather than something the import derived.",
+      liveness: { kind: "must-target-live" },
+    },
   },
   financialTransaction: {
     "FinancialTransactionAllocation.transactionId": {

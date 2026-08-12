@@ -1459,6 +1459,12 @@ describe("listMcpToolCatalog", () => {
       // shortcode half keeps a real prefix alternation, and the uuid half is
       // there for `image`, the one entity with no shortcode. Which prefix
       // applies is enforced against `entity` in the schema's refine.
+      // A statement row is addressed by its content hash (`v1:<sha256>`), which
+      // is the provider row's identity — there is no shortcode to carry a
+      // prefix, and minting one would imply the ledger is an entity.
+      "update_statement_rows.selector.externalIds",
+      "update_statement_rows.data.supersededByExternalId",
+      "delete_statement_rows.selector.externalIds",
       "preview_entity_operation.ids",
       "preview_entity_operation.mergeIds",
       "preview_entity_operation.keepId",

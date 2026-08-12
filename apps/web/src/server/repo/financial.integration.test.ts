@@ -369,6 +369,60 @@ describe("financial repositories — critical invariants", () => {
     ]);
   });
 
+  // `oneOrMany`'s array branch has no `.min(1)`, so `[]` is valid filter input
+  // and reaches the repo. It must mean "no constraint on that field" — never
+  // "no constraint at all", which is what an empty cross-product silently
+  // produced when it collapsed `or()` to undefined.
+  it("keeps the other source-ref filter when one list is empty", async () => {
+    const acct = (
+      await createFinancialAccount(
+        ctx.db,
+        account("Empty Filter Visa"),
+        ctx.actor,
+      )
+    ).output;
+    const mk = (externalId: string, amount: number) =>
+      createFinancialTransaction(
+        ctx.db,
+        financialTransactionCreateInput.parse({
+          accountId: acct.id,
+          kind: "purchase",
+          status: "pending",
+          amount,
+          sourceRefs: [{ source: "monarch", externalId }],
+        }),
+        ctx.actor,
+      );
+    const wanted = (await mk("wanted-ref", 11)).output;
+    await mk("other-ref", 22);
+
+    const page = { pageIndex: 0, pageSize: 100 };
+    const byExternalId = await listFinancialTransactions(
+      ctx.db,
+      { accountId: acct.id, source: [], externalId: ["wanted-ref"] },
+      [],
+      page,
+    );
+    expect(byExternalId.data.map((row) => row.id)).toEqual([wanted.id]);
+
+    const bySource = await listFinancialTransactions(
+      ctx.db,
+      { accountId: acct.id, source: ["monarch"], externalId: [] },
+      [],
+      page,
+    );
+    expect(bySource.count).toBe(2);
+
+    // Both empty is genuinely unrestricted, not "has at least one ref".
+    const neither = await listFinancialTransactions(
+      ctx.db,
+      { accountId: acct.id, source: [], externalId: [] },
+      [],
+      page,
+    );
+    expect(neither.count).toBe(2);
+  });
+
   it("previews client-parsed Monarch snapshots idempotently without writing", async () => {
     const createdAccount = (
       await createFinancialAccount(
@@ -376,6 +430,14 @@ describe("financial repositories — critical invariants", () => {
         account("Monarch Visa", [
           {
             source: "monarch",
+            alias: "Citi Double Cash (...1702)",
+            externalAccountId: null,
+          },
+          // The same card as a second provider labels it. Alias resolution is
+          // per-source, so without this a copilot row for this account resolves
+          // to nothing.
+          {
+            source: "copilot",
             alias: "Citi Double Cash (...1702)",
             externalAccountId: null,
           },
@@ -540,6 +602,52 @@ describe("financial repositories — critical invariants", () => {
         identity: { kind: "credit_card", network: "visa", last4: "9998" },
       },
     });
+
+    // The identical charge as a *second* provider sees it. The ref is namespaced
+    // by source, so this is a distinguishable row rather than a false
+    // `already_recorded` — 19% of charges present in two exports carry different
+    // dates, so collapsing them would destroy the cross-corroboration that makes
+    // "absent from both" usable evidence.
+    const otherProvider = await previewFinancialStatementImport(ctx.db, {
+      rows: [{ ...row, key: "copilot-view", source: "copilot" }],
+    });
+    expect(otherProvider.rows[0]?.status).toBe("ready_to_create");
+    expect(otherProvider.rows[0]?.proposed.sourceRef).toMatchObject({
+      source: "copilot",
+    });
+    expect(otherProvider.rows[0]?.proposed.sourceRef.externalId).not.toBe(
+      proposed.sourceRef.externalId,
+    );
+
+    // Both providers' refs can live on one transaction: uniqueness is per
+    // (source, externalId) pair, not per externalId.
+    const merged = await updateFinancialTransaction(
+      ctx.db,
+      createdEvidence.output.id,
+      {
+        sourceRefs: [
+          proposed.sourceRef,
+          otherProvider.rows[0]!.proposed.sourceRef,
+        ],
+      },
+      ctx.actor,
+    );
+    expect(merged.output.sourceRefs).toHaveLength(2);
+
+    const bothRecorded = await previewFinancialStatementImport(ctx.db, {
+      rows: [
+        { ...row, key: "monarch-again" },
+        { ...row, key: "copilot-again", source: "copilot" },
+      ],
+    });
+    expect(bothRecorded.rows.map((item) => item.status)).toEqual([
+      "already_recorded",
+      "already_recorded",
+    ]);
+    // One transaction carrying two matching refs must still be reported once.
+    expect(bothRecorded.rows[0]?.existingTransactionIds).toEqual([
+      createdEvidence.output.id,
+    ]);
   });
 
   it("batches distinct purchase previews and filters linked finance data", async () => {
