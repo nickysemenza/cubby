@@ -1,0 +1,552 @@
+import type {
+  StatementRowDisposition,
+  StatementRowFilters,
+  StatementRowMatchState,
+  StatementRowOut,
+} from "@cubby/schemas/statement-row";
+import { statementRowSortableFields } from "@cubby/schemas/statement-row";
+import { useDebouncedValue } from "@tanstack/react-pacer";
+import { useQuery } from "@tanstack/react-query";
+import { getRouteApi, Link } from "@tanstack/react-router";
+import { createColumnHelper } from "@tanstack/react-table";
+import { uniq } from "es-toolkit";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ErrorDisplay } from "~/components/feedback/error-display";
+import { Grid, Row, Stack } from "~/components/layout";
+import { usePageCount } from "~/components/page/Page";
+import { Badge, type BadgeVariant } from "~/components/ui/badge";
+import { Input } from "~/components/ui/input";
+import { NoneValue } from "~/components/ui/none-value";
+import { Skeleton } from "~/components/ui/skeleton";
+import { StatTile } from "~/components/ui/stat-tile";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
+import { useTRPC } from "~/integrations/trpc/react";
+import { formatCurrency } from "~/lib/utils";
+import {
+  createCurrencyColumn,
+  createPlainDateColumn,
+} from "../data-table/columnHelpers";
+import RTable from "../data-table/Table";
+import { useTableConfig } from "../data-table/useTableConfig";
+import { useTableState } from "../data-table/useTableState";
+
+const route = getRouteApi("/_authenticated/statement-rows/");
+
+/** Client-only sentinel meaning "no matchState filter" — see the route file. */
+type MatchStateSearchValue = StatementRowMatchState | "all";
+
+// Stable defaults — a fresh `[]`/`{}` per render would destabilize every
+// memo downstream while a query is loading (apps/web/CLAUDE.md's
+// `unstable-hook-default` rule).
+const NO_ROWS: StatementRowOut[] = [];
+const NO_SOURCES: string[] = [];
+
+const MATCH_STATE_LABELS: Record<StatementRowMatchState, string> = {
+  matched: "Matched",
+  unmatched: "Unmatched",
+  superseded: "Superseded",
+  ignored: "Ignored",
+};
+
+const MATCH_STATE_BADGE_VARIANT: Record<StatementRowMatchState, BadgeVariant> =
+  {
+    matched: "positive",
+    unmatched: "warning",
+    superseded: "slate",
+    ignored: "secondary",
+  };
+
+const DISPOSITION_LABELS: Record<StatementRowDisposition, string> = {
+  open: "Open",
+  ignored: "Ignored",
+};
+
+const DISPOSITION_BADGE_VARIANT: Record<StatementRowDisposition, BadgeVariant> =
+  {
+    open: "outline",
+    ignored: "secondary",
+  };
+
+const selectClassName = "h-8 rounded-md border bg-background px-2 text-sm";
+
+/** Route search → server filters. `"all"` never reaches the wire — it's the
+ * client-only way to say "no matchState filter" (see the route file). */
+function buildFilters(search: {
+  matchState?: MatchStateSearchValue;
+  disposition?: StatementRowDisposition;
+  source?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  q?: string;
+}): StatementRowFilters {
+  const matchState = search.matchState ?? "unmatched";
+  return {
+    matchState: matchState === "all" ? undefined : matchState,
+    disposition: search.disposition,
+    source: search.source,
+    dateFrom: search.dateFrom,
+    dateTo: search.dateTo,
+    search: search.q,
+  };
+}
+
+/** Debounced search box — writes to the URL 400ms after typing stops, rather
+ * than on every keystroke (this filter is server-side, unlike the client-side
+ * `HeaderFilter` debounce it mirrors). */
+function SearchBox({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [text, setText] = useState(value);
+  const [debounced] = useDebouncedValue(text, { wait: 400 });
+  const lastRef = useRef(value);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: onChange is the navigate callback, stable per render cycle; including it would refire on every parent render
+  useEffect(() => {
+    if (debounced === lastRef.current) return;
+    lastRef.current = debounced;
+    onChange(debounced);
+  }, [debounced]);
+
+  // External reset (e.g. a "Clear filters" action) — sync without fighting
+  // the user's in-flight typing.
+  if (value !== lastRef.current && value !== text) {
+    lastRef.current = value;
+    setText(value);
+  }
+
+  return (
+    <Input
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      placeholder="Search description..."
+      className="max-w-xs"
+    />
+  );
+}
+
+function SummarySkeleton() {
+  return (
+    <Grid cols="summary">
+      {["total", "matched", "unmatched", "ignored", "amount"].map((key) => (
+        <Skeleton key={key} className="h-14 w-full" />
+      ))}
+    </Grid>
+  );
+}
+
+/**
+ * Total / matched / unmatched / ignored counts plus the unmatched dollar
+ * amount, computed over the active filters MINUS matchState — so the tiles
+ * show the full breakdown regardless of which state the table is currently
+ * showing, and each tile is a one-click way to switch to it (mirroring
+ * TasksStatsStrip).
+ */
+function StatementRowSummary({
+  filters,
+  matchState,
+  onSelectMatchState,
+}: {
+  filters: StatementRowFilters;
+  matchState: MatchStateSearchValue;
+  onSelectMatchState: (value: MatchStateSearchValue) => void;
+}) {
+  const api = useTRPC();
+  const summaryFilters = useMemo<StatementRowFilters>(
+    () => ({ ...filters, matchState: undefined }),
+    [filters],
+  );
+  const { data, isLoading, error } = useQuery(
+    api.statementRow.summary.queryOptions({ filters: summaryFilters }),
+  );
+
+  // A settled query with no data means it errored — `isLoading` alone would
+  // leave this stuck on the skeleton forever instead of surfacing the error.
+  if (error) return <ErrorDisplay error={error} />;
+  if (isLoading || !data) return <SummarySkeleton />;
+
+  const tile = (
+    label: string,
+    value: number,
+    target: MatchStateSearchValue,
+  ) => (
+    <button
+      type="button"
+      onClick={() => onSelectMatchState(target)}
+      className="text-left transition-colors hover:text-foreground"
+      aria-current={matchState === target || undefined}
+    >
+      <StatTile label={label}>{value}</StatTile>
+    </button>
+  );
+
+  return (
+    <Grid cols="summary">
+      {tile("Total", data.total, "all")}
+      {tile("Matched", data.matched, "matched")}
+      {tile("Unmatched", data.unmatched, "unmatched")}
+      {tile("Ignored", data.ignored, "ignored")}
+      <StatTile label="Unmatched $">
+        {formatCurrency(data.unmatchedAmount)}
+      </StatTile>
+    </Grid>
+  );
+}
+
+function StatementRowFilterBar({
+  search,
+  onUpdate,
+}: {
+  search: {
+    matchState?: MatchStateSearchValue;
+    disposition?: StatementRowDisposition;
+    source?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    q?: string;
+  };
+  onUpdate: (
+    patch: Partial<{
+      matchState: MatchStateSearchValue;
+      disposition: StatementRowDisposition | undefined;
+      source: string | undefined;
+      dateFrom: string | undefined;
+      dateTo: string | undefined;
+      q: string | undefined;
+    }>,
+  ) => void;
+}) {
+  const api = useTRPC();
+  const importsQuery = useQuery(api.statementRow.imports.queryOptions({}));
+  const sourceOptions = useMemo(
+    () =>
+      importsQuery.data
+        ? uniq(importsQuery.data.data.map((imp) => imp.source)).sort()
+        : NO_SOURCES,
+    [importsQuery.data],
+  );
+
+  return (
+    <Row gap="sm" wrap align="center">
+      <SearchBox
+        value={search.q ?? ""}
+        onChange={(q) => onUpdate({ q: q || undefined })}
+      />
+      <select
+        aria-label="Match state"
+        value={search.matchState ?? "unmatched"}
+        onChange={(e) =>
+          onUpdate({ matchState: e.target.value as MatchStateSearchValue })
+        }
+        className={selectClassName}
+      >
+        <option value="unmatched">Unmatched</option>
+        <option value="matched">Matched</option>
+        <option value="superseded">Superseded</option>
+        <option value="ignored">Ignored</option>
+        <option value="all">All</option>
+      </select>
+      <select
+        aria-label="Disposition"
+        value={search.disposition ?? ""}
+        onChange={(e) =>
+          onUpdate({
+            disposition: e.target.value
+              ? (e.target.value as StatementRowDisposition)
+              : undefined,
+          })
+        }
+        className={selectClassName}
+      >
+        <option value="">Any disposition</option>
+        <option value="open">Open</option>
+        <option value="ignored">Ignored</option>
+      </select>
+      <select
+        aria-label="Source"
+        value={search.source ?? ""}
+        onChange={(e) => onUpdate({ source: e.target.value || undefined })}
+        className={selectClassName}
+      >
+        <option value="">All sources</option>
+        {sourceOptions.map((source) => (
+          <option key={source} value={source}>
+            {source}
+          </option>
+        ))}
+      </select>
+      <Row align="center" gap="xs" className="text-muted-foreground text-sm">
+        <span>From</span>
+        <input
+          type="date"
+          aria-label="Statement date from"
+          value={search.dateFrom ?? ""}
+          onChange={(e) => onUpdate({ dateFrom: e.target.value || undefined })}
+          className={selectClassName}
+        />
+        <span>to</span>
+        <input
+          type="date"
+          aria-label="Statement date to"
+          value={search.dateTo ?? ""}
+          onChange={(e) => onUpdate({ dateTo: e.target.value || undefined })}
+          className={selectClassName}
+        />
+      </Row>
+    </Row>
+  );
+}
+
+const columnHelper = createColumnHelper<StatementRowOut>();
+
+type StatementRowSortField = (typeof statementRowSortableFields)[number];
+
+// Match `statementRowSortableFields` exactly — a column id outside this set
+// would sort client-side visuals only, since the server only understands
+// these five (see listStatementRows' orderColumn switch).
+const SORTABLE: ReadonlySet<StatementRowSortField> = new Set(
+  statementRowSortableFields,
+);
+
+export function StatementRowList() {
+  const api = useTRPC();
+  const search = route.useSearch();
+  const navigate = route.useNavigate();
+
+  const updateFilter = useCallback(
+    (
+      patch: Partial<{
+        matchState: MatchStateSearchValue;
+        disposition: StatementRowDisposition | undefined;
+        source: string | undefined;
+        dateFrom: string | undefined;
+        dateTo: string | undefined;
+        q: string | undefined;
+      }>,
+    ) => {
+      void navigate({ search: (prev) => ({ ...prev, ...patch }) });
+    },
+    [navigate],
+  );
+
+  // Sort + pagination are local UI state, not URL-synced — mirroring
+  // usdafoodlist.tsx, the referenced non-entity RTable model. Only the filter
+  // state (above) needs to be linkable.
+  const tableState = useTableState({ initialSort: "statementDate" });
+
+  const filters = useMemo(() => buildFilters(search), [search]);
+
+  // Filters aren't routed through TanStack's columnFilters (they're custom
+  // URL state, not header-column filters), so they miss useTableState's
+  // built-in "reset to page 1 on filter change" behavior — do it explicitly,
+  // or switching filters mid-page-3 strands the user on a stale/empty page.
+  const filtersKey = JSON.stringify(filters);
+  const previousFiltersKey = useRef(filtersKey);
+  const { setPagination } = tableState;
+  useEffect(() => {
+    if (previousFiltersKey.current === filtersKey) return;
+    previousFiltersKey.current = filtersKey;
+    setPagination((p) => (p.pageIndex === 0 ? p : { ...p, pageIndex: 0 }));
+  }, [filtersKey, setPagination]);
+
+  const sortParams = tableState.getSortParams();
+  const sort: { orderBy: StatementRowSortField; direction: "asc" | "desc" } =
+    SORTABLE.has(sortParams.orderBy as StatementRowSortField)
+      ? {
+          orderBy: sortParams.orderBy as StatementRowSortField,
+          direction: sortParams.direction,
+        }
+      : { orderBy: "statementDate", direction: sortParams.direction };
+
+  const listQuery = useQuery(
+    api.statementRow.list.queryOptions({
+      filters,
+      sort,
+      pagination: tableState.pagination,
+    }),
+  );
+  usePageCount(listQuery.data?.count);
+
+  // The amount column's footer would otherwise sum only the loaded PAGE
+  // (createCurrencyColumn falls back to a client-side reduction) — a second,
+  // cheap aggregate query over the same (matchState-inclusive) filters gives
+  // it the true full-filtered-set total instead.
+  const footerTotalsQuery = useQuery(
+    api.statementRow.summary.queryOptions({ filters }),
+  );
+
+  const columns = useMemo(
+    () => [
+      createPlainDateColumn(columnHelper, "statementDate", {
+        header: "Date",
+        className: "w-24",
+      }),
+      columnHelper.accessor("accountDescriptor", {
+        id: "accountDescriptor",
+        header: "Account",
+        enableSorting: true,
+        meta: { className: "w-48" },
+        cell: (info) => {
+          const row = info.row.original;
+          return (
+            <Stack gap="tight" className="min-w-0">
+              <span className="block truncate" title={row.accountDescriptor}>
+                {row.accountDescriptor}
+              </span>
+              {row.accountName && (
+                <span
+                  className="block truncate text-2xs text-muted-foreground"
+                  title={row.accountName}
+                >
+                  {row.accountName}
+                </span>
+              )}
+            </Stack>
+          );
+        },
+      }),
+      columnHelper.accessor("rawDescription", {
+        id: "rawDescription",
+        header: "Description",
+        enableSorting: true,
+        meta: { className: "w-72" },
+        cell: (info) => (
+          <Tooltip>
+            <TooltipTrigger render={<span className="block truncate" />}>
+              {info.getValue()}
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs">
+              {info.getValue()}
+            </TooltipContent>
+          </Tooltip>
+        ),
+      }),
+      columnHelper.accessor("merchant", {
+        id: "merchant",
+        header: "Merchant",
+        enableSorting: false,
+        meta: { className: "w-40" },
+        cell: (info) => {
+          const value = info.getValue();
+          return value ? (
+            <span className="block truncate">{value}</span>
+          ) : (
+            <NoneValue />
+          );
+        },
+      }),
+      createCurrencyColumn(columnHelper, "amount", {
+        header: "Amount",
+        className: "w-24",
+        signedTone: true,
+        zeroAsEmpty: false,
+      }),
+      columnHelper.accessor("matchState", {
+        id: "matchState",
+        header: "Match",
+        enableSorting: false,
+        meta: { className: "w-28" },
+        cell: (info) => {
+          const state = info.getValue();
+          return (
+            <Badge variant={MATCH_STATE_BADGE_VARIANT[state]}>
+              {MATCH_STATE_LABELS[state]}
+            </Badge>
+          );
+        },
+      }),
+      columnHelper.accessor("source", {
+        id: "source",
+        header: "Source",
+        enableSorting: false,
+        meta: { className: "w-24", mono: true },
+        cell: (info) => info.getValue(),
+      }),
+      columnHelper.accessor("disposition", {
+        id: "disposition",
+        header: "Disposition",
+        enableSorting: false,
+        meta: { className: "w-32" },
+        cell: (info) => {
+          const row = info.row.original;
+          return (
+            <Badge
+              variant={DISPOSITION_BADGE_VARIANT[row.disposition]}
+              title={row.dispositionReason ?? undefined}
+            >
+              {DISPOSITION_LABELS[row.disposition]}
+            </Badge>
+          );
+        },
+      }),
+      columnHelper.accessor("transactionId", {
+        id: "transactionId",
+        header: "Transaction",
+        enableSorting: false,
+        meta: { className: "w-28" },
+        // financialTransaction has no EntityInlineLink/hover-preview case (see
+        // apps/web/CLAUDE.md), so this is the plain truncated-link-with-title
+        // shape rather than EntityInlineLink.
+        cell: (info) => {
+          const transactionId = info.getValue();
+          if (!transactionId) return <NoneValue />;
+          return (
+            <Link
+              to="/financial-transactions/$shortcode"
+              params={{ shortcode: transactionId }}
+              title={transactionId}
+              className="block truncate font-mono text-primary hover:underline"
+            >
+              {transactionId}
+            </Link>
+          );
+        },
+      }),
+    ],
+    [],
+  );
+
+  const totalCount = listQuery.data?.count ?? 0;
+  const amountTotal = footerTotalsQuery.data?.amountTotal;
+  const serverTotals = useMemo(
+    () =>
+      amountTotal === undefined
+        ? undefined
+        : { totalCount, sums: { amount: amountTotal } },
+    [totalCount, amountTotal],
+  );
+
+  const table = useTableConfig({
+    data: listQuery.data?.data ?? NO_ROWS,
+    columns,
+    tableState,
+    totalCount,
+    getRowId: (row) => `${row.source}:${row.externalId}`,
+    serverTotals,
+  });
+
+  return (
+    <Stack gap="md">
+      <StatementRowSummary
+        filters={filters}
+        matchState={search.matchState ?? "unmatched"}
+        onSelectMatchState={(matchState) => updateFilter({ matchState })}
+      />
+      <StatementRowFilterBar search={search} onUpdate={updateFilter} />
+      <RTable
+        table={table}
+        isLoading={listQuery.isLoading}
+        error={listQuery.error}
+        ariaLabel="Statement Rows Table"
+        sizingKey="statementRow"
+      />
+    </Stack>
+  );
+}

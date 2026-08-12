@@ -650,6 +650,23 @@ export const duplicateFinancialTransactionSourceRefSchema = z.object({
   transactionIds: z.array(financialTransactionShortcode),
 });
 
+/**
+ * A provider export whose stored rows fall short of the count the client
+ * declared — a chunked ingest that stopped partway.
+ *
+ * This is deliberately the ONLY statement-ledger detector. "Every unmatched row"
+ * is not a defect list: it is the drift worklist, 15k rows at its widest, and
+ * putting it here would make `list_problems` unusable. Unmatched rows are read
+ * through `list_statement_rows({matchState:"unmatched"})` instead.
+ */
+export const incompleteStatementImportSchema = z.object({
+  source: z.string(),
+  label: z.string(),
+  fingerprint: z.string(),
+  rowCountDeclared: z.number().int(),
+  rowCountStored: z.number().int(),
+});
+
 export const duplicateFinancialAccountSourceAliasSchema = z.object({
   source: z.string(),
   externalAccountId: z.string(),
@@ -752,6 +769,7 @@ const problemsFastShape = {
   // 34 indexed FK joins), so it belongs in `fast` rather than earning its own
   // cost group: the expense is I/O, not the CPU the other groups isolate.
   referentialLivenessViolations: z.array(referentialLivenessViolationSchema),
+  incompleteStatementImports: z.array(incompleteStatementImportSchema),
 };
 
 // DB-only detectors — cheap, no WASM/network.
@@ -972,6 +990,7 @@ export const PROBLEM_CLASS = {
   duplicateFinancialAccountSourceAliases: "defect",
   financialTransactionAllocationDefects: "defect",
   invalidFinancialJson: "defect",
+  incompleteStatementImports: "defect",
 } as const satisfies Record<ProblemKey, ProblemClass>;
 
 export type ProblemClass = "defect" | "coverage";
@@ -1168,6 +1187,9 @@ export type FinancialTransactionAllocationDefect = z.infer<
   typeof financialTransactionAllocationDefectSchema
 >;
 export type InvalidFinancialJson = z.infer<typeof invalidFinancialJsonSchema>;
+export type IncompleteStatementImport = z.infer<
+  typeof incompleteStatementImportSchema
+>;
 export type EntityMissingEmbedding = z.infer<
   typeof entityMissingEmbeddingSchema
 >;
