@@ -122,8 +122,9 @@ Attach it when the row posts.
 ## Purchases and refunds
 
 Link truthful charge, installment, split-tender, and refund transactions to the
-original Purchase. A refund document number is evidence, not a new order.
-Transactions spanning several Purchases remain unlinked until allocation exists.
+original Purchase. A refund document number is evidence, not a new order. One
+that settles several Purchases carries an `allocations` array — see "One card
+line, several Purchases" above.
 
 Keep refund Expenses on the original Purchase. Preserve the vendor's original
 stated total and record refund settlement separately. A reconciliation mismatch
@@ -168,5 +169,20 @@ payout id. The Seller Hub payout-detail page does itemize, and Payments →
 Earnings lists per-order earnings directly; prefer those over reconstructing
 composition from dates and ratios.
 
-A payout that settles several Purchases stays unlinked (see above) with its
-verified per-order arithmetic in the note.
+A payout that settles several Purchases carries one `allocations` row per order
+(see above), each amount being that order's own earnings, alongside the verified
+per-order arithmetic in the note.
+
+**Resolve a payout's orders by `Purchase.orderId`, not by note prose.** eBay sale
+Purchases are keyed by the eBay order number, which is exactly what a payout note
+cites, so the order id is a direct lookup. Older notes assert a sale is "NOT
+recorded in Cubby"; most of those are stale — 31 of 33 order ids cited across
+FAC-4KED resolve to live Purchases. Check the id before believing the sentence,
+and correct it when you touch the row.
+
+A label bought against an already-open payout is deducted from a *different*
+payout than the one carrying its order. Where eBay charged that leg to the bank
+separately it is its own transaction and allocates cleanly. Where it was netted
+inside the payout, the truthful split needs an opposite-signed allocation, which
+the same-sign rule forbids — leave that payout unallocated rather than putting the
+whole amount on one order, which over-settles it and under-settles the other.
