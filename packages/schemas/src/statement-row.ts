@@ -204,7 +204,14 @@ export const statementRowSelector = z.union([
   }),
   z.strictObject({
     filter: statementRowFilters.refine(
-      (value) => Object.values(value).some((field) => field !== undefined),
+      // `!== undefined` is not enough: a supplied-but-empty string is defined,
+      // and the repo's filter builder skips falsy strings, so `{search: ""}`
+      // would pass this check and then restrict nothing. The repo re-checks the
+      // conditions it actually built — this is the early, better-worded reject.
+      (value) =>
+        Object.values(value).some((field) =>
+          typeof field === "string" ? field !== "" : field !== undefined,
+        ),
       "filter must restrict something; an empty filter would address every row",
     ),
   }),

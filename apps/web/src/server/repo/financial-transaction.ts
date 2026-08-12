@@ -189,14 +189,23 @@ const toOut = (row: FinancialTransactionRow): FinancialTransactionOut => {
  *
  * The `jsonb_typeof` guard the subquery needed is gone: `@>` against a scalar or
  * non-array jsonb returns false rather than erroring.
+ *
+ * Emptiness is normalized on `.length`, NOT nullishness: `oneOrMany`'s array
+ * branch has no `.min(1)`, so `[]` is valid input and is not nullish. Letting it
+ * through collapses the cross-product to zero operands, which makes `or()`
+ * return undefined and silently drops the *other* field's constraint — turning
+ * "externalId = X" into a whole-table match. An empty list means "no constraint
+ * on that field", never "no constraint at all".
  */
 const refsCondition = (
   sources?: string[],
   externalIds?: string[],
 ): SQL | undefined => {
-  if (!sources && !externalIds) return undefined;
-  const operands = (sources ?? [undefined]).flatMap((source) =>
-    (externalIds ?? [undefined]).map((externalId) =>
+  const src = sources?.length ? sources : undefined;
+  const ext = externalIds?.length ? externalIds : undefined;
+  if (!src && !ext) return undefined;
+  const operands = (src ?? [undefined]).flatMap((source) =>
+    (ext ?? [undefined]).map((externalId) =>
       JSON.stringify([
         {
           ...(source === undefined ? {} : { source }),

@@ -13,6 +13,7 @@ import {
   updateFinancialTransaction,
 } from "./financial-transaction";
 import {
+  deleteStatementRows,
   getStatementRowSummary,
   listStatementRows,
   recordStatementRows,
@@ -321,6 +322,71 @@ describe("statement row ledger", () => {
         VALUES ('Monarch', 'bad-slug.csv', 'fp-bad-slug')
       `),
     ).rejects.toThrow();
+  });
+
+  it("refuses a bulk write whose filter restricts nothing", async () => {
+    await record(
+      ctx.db,
+      ctx.actor,
+      [rowInput(), rowInput({ providerAmount: -5 })],
+      {
+        fingerprint: "fp-empty-filter",
+      },
+    );
+    const before = await listStatementRows(ctx.db, {});
+    expect(before.count).toBe(2);
+
+    // `""` is *supplied*, so a `!== undefined` check passes it — but the filter
+    // builder skips falsy strings, leaving only `notDeleted`. Addressing every
+    // row is never what a bulk disposition meant.
+    for (const filter of [{ search: "" }, { source: "" }] as const) {
+      await expect(
+        updateStatementRows(
+          ctx.db,
+          {
+            selector: { filter },
+            data: {
+              disposition: "ignored",
+              dispositionReason: "not_modeled",
+              dispositionNote: "should never apply",
+            },
+          },
+          ctx.actor,
+        ),
+      ).rejects.toThrow();
+      await expect(
+        deleteStatementRows(ctx.db, { filter }, ctx.actor),
+      ).rejects.toThrow();
+    }
+
+    const after = await listStatementRows(ctx.db, {});
+    expect(after.count).toBe(2);
+    expect(after.data.every((row) => row.disposition === "open")).toBe(true);
+  });
+
+  it("applies a bulk write that genuinely restricts", async () => {
+    await record(
+      ctx.db,
+      ctx.actor,
+      [rowInput({ rawDescription: "COFFEE SHOP" }), rowInput()],
+      { fingerprint: "fp-bulk-ok" },
+    );
+    const result = await updateStatementRows(
+      ctx.db,
+      {
+        selector: { filter: { search: "COFFEE" } },
+        data: {
+          disposition: "ignored",
+          dispositionReason: "not_modeled",
+          dispositionNote: "Consumer spend.",
+        },
+      },
+      ctx.actor,
+    );
+    expect(result.affected).toBe(1);
+    expect(
+      (await listStatementRows(ctx.db, { disposition: "ignored" })).count,
+    ).toBe(1);
   });
 
   it("excludes soft-deleted rows from every read", async () => {

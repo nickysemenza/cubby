@@ -372,7 +372,21 @@ const selectorConditions = (selector: StatementRowSelector): SQL => {
         sql`, `,
       )})`,
     )!;
-  return and(...buildConditions(selector.filter))!;
+  const conditions = buildConditions(selector.filter);
+  // The schema's non-empty refine is a fast reject, not the guarantee: it can
+  // only see whether a field was *supplied*, while `buildConditions` decides
+  // whether a field actually *restricts* — and the two disagree on a supplied
+  // but falsy value (`{search: ""}` is defined, yet skipped below). Checking the
+  // produced conditions instead of a parallel notion of emptiness is what makes
+  // this un-driftable: `buildConditions` always contributes `notDeleted`, so a
+  // length of one means nothing narrowed it, and a bulk write addressing every
+  // row is never what the caller meant.
+  if (conditions.length <= 1)
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Selector filter restricts nothing; it would address every statement row.",
+    );
+  return and(...conditions)!;
 };
 
 /**

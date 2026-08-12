@@ -369,6 +369,60 @@ describe("financial repositories — critical invariants", () => {
     ]);
   });
 
+  // `oneOrMany`'s array branch has no `.min(1)`, so `[]` is valid filter input
+  // and reaches the repo. It must mean "no constraint on that field" — never
+  // "no constraint at all", which is what an empty cross-product silently
+  // produced when it collapsed `or()` to undefined.
+  it("keeps the other source-ref filter when one list is empty", async () => {
+    const acct = (
+      await createFinancialAccount(
+        ctx.db,
+        account("Empty Filter Visa"),
+        ctx.actor,
+      )
+    ).output;
+    const mk = (externalId: string, amount: number) =>
+      createFinancialTransaction(
+        ctx.db,
+        financialTransactionCreateInput.parse({
+          accountId: acct.id,
+          kind: "purchase",
+          status: "pending",
+          amount,
+          sourceRefs: [{ source: "monarch", externalId }],
+        }),
+        ctx.actor,
+      );
+    const wanted = (await mk("wanted-ref", 11)).output;
+    await mk("other-ref", 22);
+
+    const page = { pageIndex: 0, pageSize: 100 };
+    const byExternalId = await listFinancialTransactions(
+      ctx.db,
+      { accountId: acct.id, source: [], externalId: ["wanted-ref"] },
+      [],
+      page,
+    );
+    expect(byExternalId.data.map((row) => row.id)).toEqual([wanted.id]);
+
+    const bySource = await listFinancialTransactions(
+      ctx.db,
+      { accountId: acct.id, source: ["monarch"], externalId: [] },
+      [],
+      page,
+    );
+    expect(bySource.count).toBe(2);
+
+    // Both empty is genuinely unrestricted, not "has at least one ref".
+    const neither = await listFinancialTransactions(
+      ctx.db,
+      { accountId: acct.id, source: [], externalId: [] },
+      [],
+      page,
+    );
+    expect(neither.count).toBe(2);
+  });
+
   it("previews client-parsed Monarch snapshots idempotently without writing", async () => {
     const createdAccount = (
       await createFinancialAccount(
