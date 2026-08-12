@@ -153,18 +153,23 @@ export function flattenAuditableLocations(
 
   const visit = (node: InfLocation, path: string[], depth: number) => {
     const nextPath = [...path, node.name];
-    out.push({
-      id: node.id,
-      name: node.name,
-      type: node.type,
-      shortcode: node.id,
-      lastBulkInventory: node.lastBulkInventory,
-      aiDescription: node.aiDescription,
-      imageCount: node.images?.length ?? 0,
-      path: nextPath,
-      depth,
-      location: node,
-    });
+    // A recount reconciles an expected inventory snapshot. An empty location
+    // has no snapshot to confirm, so it is not a stop and receives no implicit
+    // audit stamp. Its stocked descendants still remain independent stops.
+    if ((node.directItemCount ?? 0) > 0) {
+      out.push({
+        id: node.id,
+        name: node.name,
+        type: node.type,
+        shortcode: node.id,
+        lastBulkInventory: node.lastBulkInventory,
+        aiDescription: node.aiDescription,
+        imageCount: node.images?.length ?? 0,
+        path: nextPath,
+        depth,
+        location: node,
+      });
+    }
 
     for (const child of node.children ?? []) {
       visit(child, nextPath, depth + 1);
