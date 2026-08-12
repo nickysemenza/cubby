@@ -46,9 +46,10 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
   const [target, setTarget] = useState(NEW_MEAL);
   const dateInputId = useId();
 
-  const existingMeals = useQuery(
-    api.meal.getByDateRange.queryOptions({ from: date, to: date }),
-  );
+  const existingMeals = useQuery({
+    ...api.meal.getByDateRange.queryOptions({ from: date, to: date }),
+    enabled: open,
+  });
   const mealOptions = useMemo(
     () => [
       { value: NEW_MEAL, label: "Create a new meal" },

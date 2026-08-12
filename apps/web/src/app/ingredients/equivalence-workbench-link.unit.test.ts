@@ -1,6 +1,7 @@
 import { unsafeIngredientShortcode } from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
 import {
+  enrichmentWorkbenchQueryInput,
   equivalenceDraftFromSearch,
   equivalenceWorkbenchSearch,
 } from "./equivalence-workbench-link";
@@ -61,5 +62,30 @@ describe("equivalence workbench deep link", () => {
     expect(
       equivalenceDraftFromSearch({ equivalenceFromUnit: "cup" }),
     ).toBeUndefined();
+  });
+
+  it("restricts the server worklist only for equivalence intent", () => {
+    const initialConversion = {
+      fromValue: 1,
+      fromUnit: "cup",
+      toValue: 127.25,
+      toUnit: "g",
+    };
+    expect(
+      enrichmentWorkbenchQueryInput({
+        focus: "ING-4K7M",
+        initialConversion,
+      }),
+    ).toEqual({ focusId: "ING-4K7M" });
+    expect(
+      enrichmentWorkbenchQueryInput({ focus: "ING-4K7M" }),
+    ).toBeUndefined();
+    expect(
+      enrichmentWorkbenchQueryInput({
+        focus: "ING-4K7M",
+        recipeId: "RCP-4K7M",
+        initialConversion,
+      }),
+    ).toEqual({ recipeId: "RCP-4K7M" });
   });
 });

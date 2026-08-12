@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   getByDateRange: vi.fn(),
   invalidate: vi.fn(),
   navigate: vi.fn(),
+  useQuery: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -21,16 +22,19 @@ vi.mock("@tanstack/react-query", () => ({
         : mocks.addRecipe,
     isPending: false,
   }),
-  useQuery: () => ({
-    data: [
-      {
-        id: unsafeMealShortcode("MEL-4K7M"),
-        name: "Tuesday dinner",
-        recipes: [{ recipe: { name: "Soup" } }],
-      },
-    ],
-    isLoading: false,
-  }),
+  useQuery: (options: { enabled?: boolean }) => {
+    mocks.useQuery(options);
+    return {
+      data: [
+        {
+          id: unsafeMealShortcode("MEL-4K7M"),
+          name: "Tuesday dinner",
+          recipes: [{ recipe: { name: "Soup" } }],
+        },
+      ],
+      isLoading: false,
+    };
+  },
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -41,7 +45,10 @@ vi.mock("~/integrations/trpc/react", () => ({
   useTRPC: () => ({
     meal: {
       getByDateRange: {
-        queryOptions: mocks.getByDateRange,
+        queryOptions: (input: unknown) => {
+          mocks.getByDateRange(input);
+          return { queryKey: ["meal-range"] };
+        },
       },
       create: {
         mutationOptions: () => ({ mutationFn: mocks.createMeal }),
@@ -71,7 +78,15 @@ describe("AddToMeal", () => {
   it("offers existing meal slots for the selected day and adds to the selected slot", () => {
     render(<AddToMeal recipeId={recipeId} />);
 
+    expect(mocks.useQuery).toHaveBeenLastCalledWith(
+      expect.objectContaining({ enabled: false }),
+    );
+
     fireEvent.click(screen.getByRole("button", { name: "Add to meal" }));
+
+    expect(mocks.useQuery).toHaveBeenLastCalledWith(
+      expect.objectContaining({ enabled: true }),
+    );
 
     expect(mocks.getByDateRange).toHaveBeenCalledWith(
       expect.objectContaining({

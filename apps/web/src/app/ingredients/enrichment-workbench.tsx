@@ -30,7 +30,10 @@ import {
 } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
-import type { EquivalenceDraft } from "./equivalence-workbench-link";
+import {
+  type EquivalenceDraft,
+  enrichmentWorkbenchQueryInput,
+} from "./equivalence-workbench-link";
 import { ReviewQueue } from "./review-queue";
 import { SuggestionReviewTray } from "./suggestion-review-tray";
 import {
@@ -91,7 +94,7 @@ export function EnrichmentWorkbench({
   const { data, isLoading, error } = useQuery(
     // Pass no input when unscoped so the query key matches the plain worklist.
     api.ingredient.enrichmentWorkbench.queryOptions(
-      recipeId || focus ? { recipeId, focusId: focus } : undefined,
+      enrichmentWorkbenchQueryInput({ focus, recipeId, initialConversion }),
     ),
   );
 
