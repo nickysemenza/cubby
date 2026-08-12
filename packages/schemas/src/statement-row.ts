@@ -115,6 +115,13 @@ export const statementRowFilters = z.object({
   matchState: statementRowMatchState.optional(),
   disposition: statementRowDisposition.optional(),
   dispositionReason: statementRowDispositionReason.optional(),
+  /**
+   * The provider's own category, verbatim. The triage lever that matters: the
+   * bulk of any statement import is spend Cubby does not model, and the
+   * provider already classified it — so dispositioning "every Restaurants row"
+   * is one filtered write rather than thousands of ids.
+   */
+  sourceCategory: z.string().optional(),
   dateFrom: plainDate.optional(),
   dateTo: plainDate.optional(),
   amountMin: z.number().optional(),
@@ -157,7 +164,17 @@ export type StatementImportInput = z.infer<typeof statementImportInput>;
 export const statementRowInput = z.strictObject({
   accountDescriptor: z.string().min(1),
   statementDate: plainDate,
-  /** The export's own signed figure; Monarch signs charges negative. */
+  /**
+   * The charge as the export stated it, normalized to CHARGES-NEGATIVE.
+   *
+   * Providers disagree — Monarch signs charges negative, Copilot signs them
+   * positive, Mint leaves them unsigned with the sign in a separate column, and
+   * Apple Card signs them positive — so the client must normalize before
+   * submitting. This is load-bearing rather than cosmetic: the row's identity
+   * hash is computed over this value, so submitting an un-normalized export
+   * does not merely flip a sign, it mints a SECOND identity for a charge
+   * already recorded and the row can never match.
+   */
   providerAmount: z.number().refine((value) => value !== 0, {
     message: "providerAmount must be non-zero",
   }),
@@ -182,6 +199,17 @@ export const recordStatementRowsOut = z.object({
   /** Already present under the same `(source, externalId)` — re-ingest is a no-op. */
   unchanged: z.number().int(),
   rowCountStored: z.number().int(),
+  /**
+   * Set when the batch looks un-normalized — the signature of a Copilot or
+   * Apple Card export submitted verbatim.
+   *
+   * Advisory, never fatal: a payroll or refund batch is legitimately
+   * all-positive, so rejecting on sign would block correct imports. The rows
+   * are already written by the time this is read, which is the point — it tells
+   * you to check before submitting the next 30 chunks, when the damage is 500
+   * mis-identified rows rather than 15,000.
+   */
+  signWarning: z.string().nullable().default(null),
 });
 
 /**

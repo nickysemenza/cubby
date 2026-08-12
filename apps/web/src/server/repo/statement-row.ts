@@ -197,6 +197,8 @@ const buildConditions = (filters: StatementRowFilters): SQL[] => {
         WHERE fa.shortcode = ${filters.accountId} AND fa."deletedAt" IS NULL
       )`,
     );
+  if (filters.sourceCategory)
+    conditions.push(eq(statementRow.sourceCategory, filters.sourceCategory));
   if (filters.disposition)
     conditions.push(eq(statementRow.disposition, filters.disposition));
   if (filters.dispositionReason)
@@ -409,12 +411,26 @@ export async function recordStatementRows(
       })
       .returning({ id: statementRow.id });
 
+    // Advisory only. An un-normalized Copilot or Apple Card export is almost
+    // entirely positive here, and every one of its rows will have hashed to a
+    // fresh identity that can never match. Warning after the write is still
+    // worth it: it surfaces the mistake at 500 rows instead of 15,000.
+    const positive = rows.filter((row) => row.providerAmount > 0).length;
+    const mostlyPositive = rows.length >= 20 && positive / rows.length > 0.9;
+
     return {
       batchId,
       batchCreated: !existingBatch,
       inserted: inserted.length,
       unchanged: rows.length - inserted.length,
       rowCountStored: before + inserted.length,
+      signWarning: mostlyPositive
+        ? `${positive} of ${rows.length} rows have a positive providerAmount. ` +
+          "Charges must be submitted negative — if this export signs them " +
+          "positive (Copilot, Apple Card), the rows just recorded carry " +
+          "identities that can never match a transaction. Legitimate if this " +
+          "batch really is income or refunds."
+        : null,
     };
   });
 }

@@ -9,7 +9,7 @@ import {
 } from "./financial-transaction";
 
 const account = {
-  name: "Visa ····3692",
+  name: "Visa ····4242",
   identity: {
     kind: "credit_card" as const,
     issuer: null,
