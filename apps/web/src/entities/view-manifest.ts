@@ -176,6 +176,39 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       ],
       sort: [{ id: "cost", desc: true }],
     },
+    {
+      id: "unknown-quantities",
+      label: "Missing quantities",
+      description: "Product-linked lines that prove a cost but not a count",
+      // The editable half of the product list's view of the same name: that one
+      // names the affected Products, this one selects the rows that actually
+      // carry the writable field. It's the backlog behind the `+N?` cue on the
+      // relationship summary tables, whose `unknownAcquisitionQuantityCount`
+      // counts exactly these lines.
+      //
+      // No `lineKind`/`lineBasis`/`costType` narrowing, unlike `goods-no-product`
+      // above — `product: has` already does that work. A quantity is only
+      // meaningful once a line names a Product, and the tax/shipping/fee lines
+      // those filters exist to exclude never carry one (every product-linked
+      // Expense in the ledger is `principal`). Restating it would imply a
+      // distinction the data doesn't have.
+      filters: [
+        { id: "product", value: "has" },
+        { id: "productQuantity", value: "none" },
+        // A planned line has no count yet by construction, not by omission —
+        // and the `+N?` cue skips it for the same reason.
+        { id: "future", value: "false" },
+      ],
+      // Deliberately NOT mirroring the cue's `cost > 0`: no cost preset
+      // expresses it (the closest, `credits`, is `costMax: 0`). The divergence
+      // is refunds and $0 lines, which are worth quantifying too — so this view
+      // is a superset of the cue, never a subset that hides work.
+      sort: [{ id: "cost", desc: true }],
+      // Visible by default, but visibility persists per user — someone who has
+      // hidden Quantity would otherwise land on a list selected on an invisible
+      // signal, with the one field they came to edit missing.
+      columnVisibility: { productQuantity: true },
+    },
   ],
   product: [
     {
