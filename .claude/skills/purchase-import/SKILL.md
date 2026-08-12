@@ -248,8 +248,8 @@ Two paths, for two different jobs. `preview_financial_statement_import` proposes
 transactions to create from a handful of rows. `record_statement_rows` persists
 the rows themselves as evidence, so "which statement lines have no Cubby
 counterpart?" stays answerable — see `references/financial-settlement.md` for the
-worklist, the charges-negative rule, and why bulk loads belong in a script rather
-than a model's context.
+worklist, the charges-negative rule, and when a backfill is large enough to
+warrant a one-off script instead.
 
 1. Send normalized Monarch rows to `preview_financial_statement_import` in
    batches of at most 200.
