@@ -16,6 +16,7 @@ import { TableCell, TableRow } from "~/components/ui/table";
 import { useTRPC } from "~/integrations/trpc/react";
 import { cn } from "~/lib/utils";
 import { EnrichmentEditor } from "./enrichment-editor";
+import type { EquivalenceDraft } from "./equivalence-workbench-link";
 import { fixBadgeLabel } from "./workbench-fix-label";
 
 /** An AI USDA suggestion for one row, kept at the table level for bulk review. */
@@ -69,6 +70,7 @@ export function WorkbenchRow({
   mergeSuggestion,
   onRequestMerge,
   defaultOpen = false,
+  initialConversion,
   rowRef,
 }: {
   row: EnrichmentRow;
@@ -85,6 +87,7 @@ export function WorkbenchRow({
   }) => void;
   /** Start expanded (deep-link focus from the Problems page). */
   defaultOpen?: boolean;
+  initialConversion?: EquivalenceDraft;
   /** Ref on the row's first <tr>, so the parent can scroll it into view. */
   rowRef?: Ref<HTMLTableRowElement>;
 }) {
@@ -200,6 +203,7 @@ export function WorkbenchRow({
             <WorkbenchEditor
               row={row}
               initialFood={suggestion?.food ?? null}
+              initialConversion={initialConversion}
               onDone={() => setOpen(false)}
             />
           </TableCell>
@@ -218,10 +222,12 @@ export function WorkbenchRow({
 function WorkbenchEditor({
   row,
   initialFood,
+  initialConversion,
   onDone,
 }: {
   row: EnrichmentRow;
   initialFood: FoodSummaryWithLinkedProducts | null;
+  initialConversion?: EquivalenceDraft;
   onDone: () => void;
 }) {
   const api = useTRPC();
@@ -238,6 +244,7 @@ function WorkbenchEditor({
     <EnrichmentEditor
       row={row}
       initialFood={initialFood}
+      initialConversion={initialConversion}
       onSaved={onDone}
       layout="compact"
       slots={{
