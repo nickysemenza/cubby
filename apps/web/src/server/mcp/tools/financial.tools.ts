@@ -80,7 +80,7 @@ export function registerFinancialTools(server: McpServer) {
       list: "List Financial Accounts. IDs are FAC- shortcodes. Accounts identify statement and receipt sources; they never hold Cubby spend. Filter by search, identity kind, provisional status, last four, source, or external account ID.",
       get: "Get a Financial Account by FAC- shortcode. Identity and sourceAliases are complete replacement values on update: read, merge locally, then write the full array/object.",
       create:
-        "Create a Financial Account, including provisional accounts such as Visa ····3692. Source aliases are evidence, not finance-provider synchronization.",
+        "Create a Financial Account, including provisional accounts such as Visa ····NNNN. Source aliases are evidence, not finance-provider synchronization.",
       update:
         "Update a Financial Account. `identity` and `sourceAliases` replace their complete values; read–merge–write to preserve existing evidence.",
       delete:

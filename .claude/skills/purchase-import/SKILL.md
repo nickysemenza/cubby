@@ -254,7 +254,7 @@ warrant a one-off script instead.
 1. Send normalized Monarch rows to `preview_financial_statement_import` in
    batches of at most 200.
 2. Create Financial Accounts only when approved; use a truthful provisional
-   Account when evidence identifies only something like `Visa ····3692`.
+   Account when evidence identifies only something like `Visa ····NNNN`.
 3. Before submitting, read each proposed row back and confirm `kind` is
    `purchase` for charges and `refund` for credits. A wrong-signed row previews
    as a clean `ready_to_create` with tying amounts, so a totals check will not

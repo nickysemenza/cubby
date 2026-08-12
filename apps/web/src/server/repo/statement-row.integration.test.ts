@@ -389,6 +389,77 @@ describe("statement row ledger", () => {
     ).toBe(1);
   });
 
+  it("filters by the provider's own category, and bulk-dispositions by it", async () => {
+    await record(
+      ctx.db,
+      ctx.actor,
+      [
+        rowInput({
+          sourceCategory: "Restaurants & Bars",
+          rawDescription: "A CAFE",
+        }),
+        rowInput({
+          sourceCategory: "Restaurants & Bars",
+          rawDescription: "B CAFE",
+          providerAmount: -22,
+        }),
+        rowInput({
+          sourceCategory: "Home Improvement",
+          rawDescription: "A HARDWARE STORE",
+        }),
+      ],
+      { fingerprint: "fp-category" },
+    );
+
+    expect(
+      (
+        await listStatementRows(ctx.db, {
+          sourceCategory: "Restaurants & Bars",
+        })
+      ).count,
+    ).toBe(2);
+
+    // The lever the backlog actually needs: the provider already classified the
+    // spend, so taking a whole category off the worklist is one filtered write.
+    const swept = await updateStatementRows(
+      ctx.db,
+      {
+        selector: { filter: { sourceCategory: "Restaurants & Bars" } },
+        data: {
+          disposition: "ignored",
+          dispositionReason: "not_modeled",
+          dispositionNote: "Consumer spend; Cubby does not model it.",
+        },
+      },
+      ctx.actor,
+    );
+    expect(swept.affected).toBe(2);
+
+    const remaining = await listStatementRows(ctx.db, {
+      matchState: "unmatched",
+    });
+    expect(remaining.count).toBe(1);
+    expect(remaining.data[0]?.sourceCategory).toBe("Home Improvement");
+  });
+
+  it("warns when a batch looks submitted with the wrong sign", async () => {
+    // 24 positive rows: the signature of a Copilot export passed through
+    // verbatim, where every identity is unmatched-forever.
+    const wrongWay = Array.from({ length: 24 }, (_, i) =>
+      rowInput({ providerAmount: 10 + i, rawDescription: `POSITIVE ROW ${i}` }),
+    );
+    const flagged = await record(ctx.db, ctx.actor, wrongWay, {
+      fingerprint: "fp-sign",
+    });
+    expect(flagged.signWarning).toContain("24 of 24");
+
+    // A normal charges-negative batch says nothing.
+    const fine = await record(ctx.db, ctx.actor, [rowInput()], {
+      fingerprint: "fp-sign-ok",
+    });
+    expect(fine.signWarning).toBeNull();
+  });
+
   it("excludes soft-deleted rows from every read", async () => {
     await record(ctx.db, ctx.actor, [rowInput()], {
       fingerprint: "fp-deleted",
