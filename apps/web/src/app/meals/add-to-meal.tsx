@@ -1,96 +1,157 @@
 import type { RecipeShortcode } from "@cubby/schemas/identifiers";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { addDays, format, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { CalendarPlus } from "lucide-react";
+import { useId, useState } from "react";
 import { toast } from "sonner";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { Description } from "~/components/ui/description";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
+import { Label } from "~/components/ui/label";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { useInvalidateMeals } from "./use-meal-mutations";
 
+const NEW_MEAL = "new";
+
+const today = () => format(new Date(), "yyyy-MM-dd");
+
+const mealLabel = (meal: {
+  name: string | null;
+  recipes: { recipe: { name: string } }[];
+}) =>
+  meal.name ||
+  meal.recipes.map((recipe) => recipe.recipe.name).join(", ") ||
+  "Untitled meal";
+
 /**
- * "Add to Meal ▾" — plans the current recipe onto a day. Creates a new meal on
- * the chosen date containing this recipe at 1×. Lives on the recipe detail page.
+ * Plans the current recipe onto a day, either by extending one of that day's
+ * existing named slots or by creating a new meal. Lives on recipe detail pages.
  */
 export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
   const api = useTRPC();
   const navigate = useNavigate();
   const invalidate = useInvalidateMeals();
+  const [open, setOpen] = useState(false);
+  const [date, setDate] = useState(today);
+  const [target, setTarget] = useState(NEW_MEAL);
+  const dateInputId = useId();
+  const targetInputId = useId();
 
-  const createMeal = useMutation(
-    api.meal.create.mutationOptions({
-      onSuccess: (meal) => {
-        invalidate();
-        toast.success(
-          `Added to a meal on ${format(parseISO(meal.date), "EEE, MMM d")}`,
-          {
-            action: {
-              label: "View",
-              onClick: () =>
-                void navigate({
-                  to: entities.meal.routes.detail,
-                  params: entityDetailParams(meal.id),
-                }),
-            },
-          },
-        );
-      },
-    }),
+  const existingMeals = useQuery(
+    api.meal.getByDateRange.queryOptions({ from: date, to: date }),
   );
 
-  // Accepts a plain "YYYY-MM-DD" string so there's no Date round-trip (and no
-  // UTC-midnight timezone shift).
-  const addOn = (dateStr: string) =>
-    createMeal.mutate({ date: dateStr, recipes: [{ recipeId, scale: 1 }] });
+  const onSuccess = (meal: { id: string; date: string }) => {
+    invalidate();
+    setOpen(false);
+    toast.success(
+      `Added to a meal on ${format(parseISO(meal.date), "EEE, MMM d")}`,
+      {
+        action: {
+          label: "View",
+          onClick: () =>
+            void navigate({
+              to: entities.meal.routes.detail,
+              params: entityDetailParams(meal.id),
+            }),
+        },
+      },
+    );
+  };
+
+  const createMeal = useMutation(
+    api.meal.create.mutationOptions({ onSuccess }),
+  );
+  const addRecipe = useMutation(
+    api.meal.addRecipe.mutationOptions({ onSuccess }),
+  );
+  const isPending = createMeal.isPending || addRecipe.isPending;
+
+  const submit = () => {
+    if (target === NEW_MEAL) {
+      createMeal.mutate({ date, recipes: [{ recipeId, scale: 1 }] });
+      return;
+    }
+    addRecipe.mutate({ mealId: target, recipeId, scale: 1 });
+  };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={<Button type="button" variant="outline" size="sm" />}
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => setOpen(true)}
       >
         <CalendarPlus className="size-4" />
         Add to meal
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Plan for…</DropdownMenuLabel>
-          <DropdownMenuItem
-            onClick={() => addOn(format(new Date(), "yyyy-MM-dd"))}
-          >
-            Today
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => addOn(format(addDays(new Date(), 1), "yyyy-MM-dd"))}
-          >
-            Tomorrow
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <div className="px-2 py-2">
-          <Description as="span" size="xs" className="mb-1 block">
-            Pick a date
-          </Description>
-          <input
-            type="date"
-            className="w-full rounded-md border bg-input/20 px-2 py-1 text-sm"
-            onChange={(e) => {
-              // <input type="date"> value is already YYYY-MM-DD — use it directly.
-              if (e.target.value) addOn(e.target.value);
-            }}
-          />
-        </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent size="md">
+          <DialogHeader>
+            <DialogTitle>Add to meal</DialogTitle>
+            <DialogDescription>
+              Choose a day and meal slot, or create a separate meal for this
+              recipe.
+            </DialogDescription>
+          </DialogHeader>
+          <Stack gap="sm">
+            <Stack gap="xs">
+              <Label htmlFor={dateInputId}>Day</Label>
+              <input
+                id={dateInputId}
+                type="date"
+                value={date}
+                className="rounded-md border bg-input/20 px-2 py-1 text-sm"
+                onChange={(event) => {
+                  setDate(event.target.value);
+                  setTarget(NEW_MEAL);
+                }}
+              />
+            </Stack>
+            <Stack gap="xs">
+              <Label htmlFor={targetInputId}>Meal slot</Label>
+              <select
+                id={targetInputId}
+                value={target}
+                disabled={existingMeals.isLoading}
+                className="rounded-md border bg-input/20 px-2 py-1 text-sm disabled:cursor-wait"
+                onChange={(event) => setTarget(event.target.value)}
+              >
+                <option value={NEW_MEAL}>Create a new meal</option>
+                {existingMeals.data?.map((meal) => (
+                  <option key={meal.id} value={meal.id}>
+                    {mealLabel(meal)} ({meal.recipes.length} recipe
+                    {meal.recipes.length === 1 ? "" : "s"})
+                  </option>
+                ))}
+              </select>
+            </Stack>
+          </Stack>
+          <DialogFooter>
+            <Row gap="sm">
+              <Button variant="outline" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                disabled={isPending || existingMeals.isLoading}
+                onClick={submit}
+              >
+                {target === NEW_MEAL ? "Create meal" : "Add to selected meal"}
+              </Button>
+            </Row>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
