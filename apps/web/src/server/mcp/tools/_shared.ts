@@ -486,7 +486,10 @@ export const slimLocation = defineSlim(locationMcpOut, (locRow: Row) => {
   };
 });
 
-type InventoryRow = Pick<InventoryMcpOut, "amount" | "valuation"> & {
+type InventoryRow = Pick<
+  InventoryMcpOut,
+  "amount" | "valuation" | "placement"
+> & {
   id: InventoryMcpOut["id"];
   product?: {
     id: ProductMcpOut["id"];
@@ -507,6 +510,7 @@ export const slimInventory = defineSlim(inventoryMcpOut, (entryRow: Row) => {
     id: entry.id,
     amount: entry.amount,
     valuation: entry.valuation,
+    placement: entry.placement,
     product: entry.product
       ? {
           id: entry.product.id,

@@ -392,6 +392,9 @@ export const inventoryMcpOut = z.object({
   id: inventoryShortcode,
   amount,
   valuation: z.number().nullable(),
+  // Without this an agent can SET placement but never see it, so it cannot tell
+  // a fixture from stock when deciding what to recount, move, or discard.
+  placement: inventoryPlacement,
   product: z.object(inventoryMcpProductFields).nullable(),
   location: z.object(inventoryMcpLocationFields).nullable(),
 });

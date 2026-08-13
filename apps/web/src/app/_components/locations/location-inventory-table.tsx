@@ -7,7 +7,13 @@ import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { Link } from "@tanstack/react-router";
 import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ArrowRightLeft, ImageIcon, PackageMinus, Trash } from "lucide-react";
+import {
+  ArrowRightLeft,
+  ImageIcon,
+  PackageMinus,
+  Trash,
+  Wrench,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { z } from "zod";
 import type { TRPCQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
@@ -106,6 +112,11 @@ export function LocationInventoryTable({
     entryId: InventoryShortcode;
   } | null>(null);
 
+  // `updateMutation` is intentionally absent from the dep array: useMutation
+  // returns a new object every render, but the closure captures mutateAsync
+  // correctly and it is functionally stable — same reasoning as the columns
+  // memo below.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mutation identity churns every render
   const bulkActions = useMemo(
     () => ({
       actions: [
@@ -135,10 +146,32 @@ export function LocationInventoryTable({
             return { success: true };
           },
         },
+        {
+          // Marking is inherently a multi-select job — you sweep a room's
+          // appliances in one pass — so it's a bulk action rather than a
+          // per-row toggle. It does NOT move anything: the row keeps its
+          // location and simply stops being counted.
+          id: "placement",
+          label: placement === "installed" ? "Mark as stock" : "Mark installed",
+          icon: <Wrench className="size-4" />,
+          minSelection: 1,
+          onExecute: async (rows: Row<InventoryItem>[]) => {
+            const next = placement === "installed" ? "stock" : "installed";
+            await Promise.all(
+              rows.map((r) =>
+                updateMutation.mutateAsync({
+                  id: r.original.id,
+                  data: { placement: next },
+                }),
+              ),
+            );
+            return { success: true };
+          },
+        },
       ],
-      clearSelectionOnComplete: false,
+      clearSelectionOnComplete: true,
     }),
-    [],
+    [placement],
   );
 
   // Memoize columns to prevent recreating on every render. updateMutation is
