@@ -3,7 +3,6 @@ import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import { Link } from "@tanstack/react-router";
 import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
-import { formatDistanceToNow } from "date-fns";
 import { ArrowRightLeft, PackageMinus, Trash } from "lucide-react";
 import { type FC, useMemo, useState } from "react";
 import {
@@ -16,6 +15,7 @@ import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { DeleteInventoryDialog } from "~/app/_components/inventory/delete-inventory-dialog";
 import { MoveInventoryDialog } from "~/app/_components/inventory/move-inventory-dialog";
+import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { useTRPC } from "~/integrations/trpc/react";
 import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
@@ -97,10 +97,13 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
       helper.accessor("verifiedAt", {
         header: "Verified",
         meta: { className: "w-32" },
-        cell: (info) =>
-          info.getValue()
-            ? formatDistanceToNow(info.getValue()!, { addSuffix: true })
-            : "—",
+        cell: (info) => (
+          <AuditedHint
+            at={info.getValue()}
+            label="verified"
+            placement={info.row.original.placement}
+          />
+        ),
       }),
     ],
     [helper, product.unitMappings],

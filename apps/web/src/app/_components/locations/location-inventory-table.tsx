@@ -48,11 +48,20 @@ type InventoryItem = z.infer<typeof inventoryListItemOut>;
 export const locationInventoryListInput = (locationId: LocationShortcode) => ({
   sort: [{ orderBy: "createdAt", direction: "desc" as const }],
   pagination: { pageIndex: 0, pageSize: 100 },
-  filters: { locationIdFilter: locationId },
+  // Stock only. Installed fixtures are disclosed separately by
+  // LocationContents rather than dropped — hiding them here without saying so
+  // would make the shelf read as complete when it is not.
+  filters: { locationIdFilter: locationId, placementFilter: "stock" as const },
 });
 
 interface LocationInventoryTableProps {
   locationId: LocationShortcode;
+  /**
+   * Which half of the shelf this table shows. Defaults to movable stock — the
+   * browse contract. `LocationContents` renders a second instance with
+   * "installed" so fixtures are disclosed rather than silently dropped.
+   */
+  placement?: "stock" | "installed";
   /** Shelf/table switch — owned by the parent (LocationContents) toolbar. */
   view: ShelfView;
 }
@@ -70,6 +79,7 @@ const NO_TABLE_FILTERS = () => ({}) as Record<string, never>;
 export function LocationInventoryTable({
   locationId,
   view,
+  placement = "stock",
 }: LocationInventoryTableProps) {
   const api = useTRPC();
   const columnHelper = useMemo(() => createColumnHelper<InventoryItem>(), []);
@@ -184,9 +194,9 @@ export function LocationInventoryTable({
         api.inventory.list.queryOptions({
           sort: params.sort,
           pagination: params.pagination,
-          filters: { locationIdFilter: locationId },
+          filters: { locationIdFilter: locationId, placementFilter: placement },
         }),
-      [api, locationId],
+      [api, locationId, placement],
     );
 
   const { table, data, isLoading, error, bulkActionBar } = useEntityList<

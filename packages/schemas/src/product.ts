@@ -1,4 +1,8 @@
-import { productCategoryValues, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import {
+  inventoryPlacementValues,
+  productCategoryValues,
+  UNSPECIFIED_MANUFACTURER,
+} from "@cubby/shared";
 import { fdcId, foodSummary, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { productRelatedFilterFields } from "./related-view";
@@ -713,6 +717,11 @@ const productInventoryFields = {
   // including a price-driven valuation recompute — so it can't stand in for
   // "when was this count last confirmed".
   verifiedAt: z.date().nullable(),
+  // Included on purpose: "where does this product live" is an ownership
+  // question, so the dimmer wired into the kitchen wall belongs in this list.
+  // Carrying placement is what lets the row say "installed" instead of
+  // reporting a verification age a fixture can never have.
+  placement: z.enum(inventoryPlacementValues),
   ...timestampedFields,
 };
 

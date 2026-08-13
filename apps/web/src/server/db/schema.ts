@@ -39,7 +39,6 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { imageStatusValues } from "@cubby/schemas/image";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
-import { inventoryPlacementValues } from "@cubby/schemas/inventory";
 import type { LocationValuation } from "@cubby/schemas/location";
 import type { BaseKind } from "@cubby/schemas/problems";
 import { productCategoryValues } from "@cubby/schemas/product";
@@ -64,6 +63,7 @@ import type {
   McpToolCallOutcome,
   McpToolCallSurface,
 } from "@cubby/schemas/telemetry";
+import { inventoryPlacementValues } from "@cubby/shared";
 import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
