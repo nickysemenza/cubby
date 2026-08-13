@@ -4,6 +4,7 @@ import {
   unsafeFinancialTransactionShortcode,
   unsafeUserId,
 } from "@cubby/schemas/identifiers";
+import { sql } from "drizzle-orm";
 import { db } from "../src/server/db";
 import { getDb } from "../src/server/repo/database-helpers";
 import {
@@ -85,14 +86,20 @@ type Pair = {
 };
 
 async function findPairs(): Promise<Pair[]> {
-  const { rows } = await getDb(db).execute<Pair>(`
+  // `--source` is bound, not concatenated: it is the documented knob for reusing
+  // this on another provider, and a knob that string-builds SQL is a bad shape
+  // to leave lying around. GENERIC is a module constant and MIN_SIM is through
+  // Number(), so those stay inlined via sql.raw — binding them changed the
+  // parameter types enough to alter the result set, which is a far worse bug
+  // than the tidiness it was buying.
+  const { rows } = await getDb(db).execute<Pair>(sql`
     WITH work AS (
       SELECT sr."externalId", sr.merchant, sr.amount, sr."statementDate",
              sr."rawDescription"
       FROM "StatementRow" sr
       WHERE sr."deletedAt" IS NULL AND sr.disposition = 'open'
-        AND sr.source = '${SOURCE}' AND sr.amount > 0 AND sr.merchant IS NOT NULL
-        AND lower(sr.merchant) NOT IN (${GENERIC.map((g) => `'${g}'`).join(",")})
+        AND sr.source = ${SOURCE} AND sr.amount > 0 AND sr.merchant IS NOT NULL
+        AND lower(sr.merchant) NOT IN (${sql.raw(GENERIC.map((g) => `'${g}'`).join(","))})
         AND NOT EXISTS (
           SELECT 1 FROM "FinancialTransaction" ft
           WHERE ft."deletedAt" IS NULL
@@ -104,6 +111,9 @@ async function findPairs(): Promise<Pair[]> {
            round(w.amount::numeric, 2)::text AS amount
     FROM work w
     CROSS JOIN LATERAL (
+      -- count(*) OVER () is computed over every WHERE-matched row BEFORE the
+      -- LIMIT applies, so n is the true candidate count and the LIMIT is only a
+      -- cap on what is returned.
       SELECT ft.shortcode, ft.merchant AS txn_merchant,
              similarity(lower(w.merchant), lower(COALESCE(ft.merchant, ''))) AS sim,
              count(*) OVER () AS n
@@ -114,7 +124,7 @@ async function findPairs(): Promise<Pair[]> {
             BETWEEN w."statementDate"::date - 5 AND w."statementDate"::date + 5
       LIMIT 2
     ) c
-    WHERE c.n = 1 AND c.sim >= ${MIN_SIM}
+    WHERE c.n = 1 AND c.sim >= ${sql.raw(String(MIN_SIM))}
   `);
   return rows;
 }
