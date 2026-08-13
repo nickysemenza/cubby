@@ -156,6 +156,13 @@ const productCreateShape = {
     .nullable()
     .optional()
     .describe("no USDA food exists — expect manual weight/volume/calories"),
+  stockTracked: z
+    .boolean()
+    .nullable()
+    .optional()
+    .describe(
+      "whether shelf records are kept for this kind of thing: null = undecided, false = reviewed/no shelf claim, true = tracked",
+    ),
   pendingImageIds: z.array(z.uuid()).optional(),
 };
 
@@ -623,6 +630,7 @@ const productTopLevelFields = {
     ),
   pricing: productPricingOut,
   usdaUnavailable: z.boolean().nullable(),
+  stockTracked: z.boolean().nullable(),
   dataQuality,
   ...timestampedFields,
 };
@@ -984,6 +992,13 @@ export const mcpProductCreateInput = z.object({
     .nullable()
     .optional()
     .describe("no USDA food exists — expect manual weight/volume/calories"),
+  stockTracked: z
+    .boolean()
+    .nullable()
+    .optional()
+    .describe(
+      "whether shelf records are kept for this kind of thing: null = undecided, false = reviewed/no shelf claim, true = tracked",
+    ),
 });
 
 export const mcpProductUpdateInput = z.object({
@@ -1031,6 +1046,13 @@ export const mcpProductUpdateInput = z.object({
       "Complete replacement set of conversion/price mappings; an empty array clears all mappings.",
     ),
   usdaUnavailable: z.boolean().nullable().optional(),
+  stockTracked: z
+    .boolean()
+    .nullable()
+    .optional()
+    .describe(
+      "whether shelf records are kept for this kind of thing: null = undecided, false = reviewed/no shelf claim, true = tracked",
+    ),
   removeImageIds: z
     .array(z.uuid())
     .optional()
@@ -1062,6 +1084,7 @@ const productMcpFields = {
   // USDA FoodData Central id — declared exception, not a cubby shortcode.
   fdc_id: fdcId.nullable(),
   usdaUnavailable: z.boolean().nullable(),
+  stockTracked: z.boolean().nullable(),
   externalIds: z.array(
     z.object({
       source: externalIdSource,

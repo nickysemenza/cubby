@@ -76,6 +76,7 @@ const baseProduct = {
   category: "food" as const,
   price: 4.5,
   usdaUnavailable: null,
+  stockTracked: null,
   expenseCount: 0,
   expenseTotal: 42.5,
   purchaseDate: null,
@@ -238,6 +239,7 @@ describe("product mappers", () => {
           locationId: LOCATION_ID,
           valuation: 9,
           verifiedAt: null,
+          placement: "stock" as const,
           location: activeLocation,
         },
         {
@@ -251,6 +253,7 @@ describe("product mappers", () => {
           locationId: deletedLocation.id,
           valuation: 4.5,
           verifiedAt: null,
+          placement: "stock" as const,
           location: deletedLocation,
         },
       ],
@@ -349,6 +352,7 @@ describe("product mappers", () => {
           locationId: LOCATION_ID,
           valuation: 9,
           verifiedAt: null,
+          placement: "stock" as const,
           location: {
             ...activeLocation,
             deletedAt: DELETED_AT,

@@ -42,6 +42,7 @@ const baseProduct = {
   category: "food" as const,
   price: 4.5,
   usdaUnavailable: null,
+  stockTracked: null,
 };
 
 const baseLocation = {
@@ -69,6 +70,7 @@ const baseInventoryEntry = {
   locationId: LOCATION_ID,
   valuation: 9,
   verifiedAt: null,
+  placement: "stock" as const,
 };
 
 describe("inventory mappers", () => {
@@ -181,6 +183,7 @@ describe("inventory mappers", () => {
       amount: { value: 2, unit: "each" },
       valuation: 9,
       verifiedAt: null,
+      placement: "stock" as const,
       createdAt: CREATED_AT,
       updatedAt: UPDATED_AT,
       location: {
@@ -211,6 +214,7 @@ describe("inventory mappers", () => {
         ],
         price: 4.5,
         usdaUnavailable: null,
+        stockTracked: null,
         name: "Flour",
         upc: null,
         fdc_id: null,
