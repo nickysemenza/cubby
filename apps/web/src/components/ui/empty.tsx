@@ -97,19 +97,6 @@ function EmptyDescription({ className, ...props }: React.ComponentProps<"p">) {
   );
 }
 
-function EmptyContent({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="empty-content"
-      className={cn(
-        "flex w-full max-w-sm min-w-0 flex-col items-center gap-2 text-xs/relaxed text-balance",
-        className,
-      )}
-      {...props}
-    />
-  );
-}
-
 /** Wrapper for action buttons in empty state */
 function EmptyActions({ className, ...props }: React.ComponentProps<"div">) {
   return (
@@ -141,7 +128,6 @@ export {
   EmptyHeader,
   EmptyTitle,
   EmptyDescription,
-  EmptyContent,
   EmptyMedia,
   EmptyActions,
   EmptyIcon,

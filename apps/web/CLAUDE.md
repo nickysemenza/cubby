@@ -2,6 +2,8 @@
 
 Loaded when working under `apps/web`. Repo-wide rules live in the root [CLAUDE.md](../../CLAUDE.md).
 
+Visual intent, named design rules, palette roles, typography, shape language, and component character live in [DESIGN.md](DESIGN.md). This file keeps implementation contracts, guard-enforced conventions, and failure-prevention guidance; do not duplicate visual philosophy here.
+
 ## React Hooks: Preventing Infinite Render Loops
 
 **CRITICAL**: Never pass inline object literals, arrays, or functions to hooks with dependencies. This creates new references on every render, triggering infinite loops.
@@ -75,10 +77,8 @@ const { data, isLoading } = useQueries({
 
 ## Colors / Design Tokens
 
-- Never hardcode colors (hex/oklch) in components. Use the tokens in `apps/web/src/styles.css` — the warm chart ramp (`--chart-1..8`) and semantic tokens (`--plum`, `--positive`, `--warning`, …). Map green→`positive`, red→`destructive`, amber/yellow→`warning` (one tone — don't reintroduce a `text-amber-600/700/800` shade ladder). This is **enforced** by `scripts/check-conventions.mjs` (run via `pnpm check`); the only exempt surfaces are `design-gallery.tsx`/`design.tsx` (swatches), `IsometricPantry.tsx` (`<canvas>` paint), and `theme-color`/chart-lib fallbacks.
+- Never hardcode colors (hex/oklch) in components. Use the tokens in `apps/web/src/styles.css` — the chart ramp (`--chart-1..8`) and semantic tokens (`--plum`, `--positive`, `--warning`, …). Map green→`positive`, red→`destructive`, amber/yellow→`warning`. This is **enforced** by `scripts/check-conventions.mjs` (run via `pnpm check`); the only exemptions are `IsometricPantry.tsx` (`<canvas>` paint) and `theme-color`/chart-lib fallbacks.
 - A new semantic color gets a `--token` in `:root` **and** a `--color-*` mirror in `@theme inline` (the `--plum` / `--color-plum` pattern), so both `var(--token)` and Tailwind utilities (`text-foo`) work. e.g. `--ingredient-amount/name/modifier`. **Composite shadow/text-shadow tokens** (`--shadow-chunky*`, `--shadow-inset-gloss`, `--shadow-scan-flash`, `--text-shadow-chart`) need **no** `@theme` mirror — use via `shadow-[var(--token)]` or `style={{ boxShadow: "var(--token)" }}`. Don't inline `rgba()` shadows in components; add a token.
-- **Density north star: McMaster-Carr, not a SaaS marketing site.** Crisp, high-information-density, technical. Separate with hairline rules (`border border-[var(--border)]`), not whitespace or airy floating cards. A dense repeated list is bordered rows, not a stack of padded `Card`s; reach for `Card` only for a genuinely bounded surface (the detail spec-plate, a titled panel), never as a per-row wrapper.
-- **Text hierarchy is exactly 3 levels** — `text-foreground` (primary), `text-muted-foreground` (secondary), `text-slate` (mono micro-labels / eyebrows). Don't invent a 4th tier with opacity (`text-muted-foreground/70`, `text-foreground/60`): snap readable text to the nearest solid level. Semantic tones (`positive`/`warning`/`destructive`/`plum`/`primary`) are **not** hierarchy — leave them.
 - **Icon sizes: `size-3.5` (14px) for inline/nav glyphs, `size-5` (20px) for card/tile/hero icons.** Use the `size-N` shorthand, never `h-N w-N` (guard-enforced, rule `hw-pair-shorthand`). Micro-indicators (sort arrows, dense badges) stay `size-3`; the interactive ui primitives (Button/DropdownMenu/Command/Tabs/Toggle) already default their icon slot to `size-3.5`, so an explicit size on a glyph inside them is an override — usually unwanted.
 - **Badge is the canonical categorical chip** — a mono-uppercase stamp (`font-mono uppercase tracking-wider`, the default). Free-form prose in a badge (product names, user text) opts out with `font-sans normal-case tracking-normal`. Don't hand-roll pill styling.
 
@@ -91,7 +91,7 @@ const { data, isLoading } = useQueries({
 ## Spacing
 
 - **Guard-enforced scale.** `gap`/`space-x|y`/`p*`/`m*` use the doublings `{0,1,2,4,6}` plus the legit large steps `{8,12,16,20}` (wide gutters, big touch targets, hero/clearance padding). The odd/half **rhythm drift** (`1.5, 2.5, 3, 5, 7, 9, 10, 11, 13, 14`) FAILS `scripts/check-conventions.mjs` (runs in `pnpm check`) — that's the long tail we killed. Named keys `xs/sm/md/lg` on the layout cvas in `apps/web/src/styles/layouts.ts` map to `1/2/4/6`.
-- **Exemptions:** `components/ui/**` (shadcn primitives — their `px-3` etc. is the design system's own component padding), the `/design` gallery, and the rare genuinely-dense sub-scale spot (`gap-0.5` optical nudges, dense calendar cells) marked with an inline `/* tight */`. Use `/* tight */` sparingly — and prefer encapsulating density in a component over scattering the marker.
+- **Exemptions:** `components/ui/**` (shadcn primitives — their `px-3` etc. is the design system's own component padding) and the rare genuinely-dense sub-scale spot (`gap-0.5` optical nudges, dense calendar cells) marked with an inline `/* tight */`. Use `/* tight */` sparingly — and prefer encapsulating density in a component over scattering the marker.
 - `gap-*` for flex/grid containers (siblings laid out by the parent); `space-y-*` only for plain block stacks with no flex/grid context.
 
 ## Layout primitives

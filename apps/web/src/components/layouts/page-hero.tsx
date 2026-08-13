@@ -239,7 +239,7 @@ interface PageHeroProps extends VariantProps<typeof heroVariants> {
  * an entity-inked accent bar. The canonical renderer for every non-detail page
  * heading. The unified {@link PageHeader} delegates list rendering here.
  */
-export function PageHero({
+function PageHero({
   title,
   eyebrow,
   meta,

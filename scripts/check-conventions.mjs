@@ -12,7 +12,7 @@
  *     stay in the Rust/WASM crate (recipebridge), never reimplemented in TS.
  *  3. Off-scale Tailwind spacing — gap/space/padding/margin must use the strict
  *     {1,2,4,6} scale. Exempts components/ui (design-system primitives), the
- *     /design gallery, and any line marked `/* tight *\/` (intentional density).
+ *     UI primitives and any line marked `/* tight *\/` (intentional density).
  *  4. Response schema sidecars — list/detail/hydrated variants live in owning
  *     entity modules; do not reintroduce *-responses.ts files.
  *  5. Schema contract derivation — schema contract modules must not compose
@@ -137,10 +137,8 @@ function listFiles() {
   }
 }
 
-// Files allowed to use raw chromatic colors (design surfaces / illustrations).
+// Files allowed to use raw chromatic colors for authored illustration paint.
 const COLOR_EXCLUDE_BASENAMES = new Set([
-  "design-gallery.tsx",
-  "design.tsx",
   "IsometricPantry.tsx",
 ]);
 
@@ -795,7 +793,7 @@ function scan(files) {
       }
 
       // Rule 10: bg-gradient-to-* surface washes (tsx only). Exempts the shared
-      // color/design surfaces plus the audit-log timeline fade connector.
+      // authored illustration paint plus the audit-log timeline fade connector.
       if (
         isTsx &&
         !isUiPrimitive(file) &&

@@ -11,7 +11,10 @@ const markdownFiles = execFileSync(
 )
   .trim()
   .split("\n")
-  .filter(Boolean);
+  .filter(Boolean)
+  // `git ls-files` includes tracked files deleted in the working tree. Skip the
+  // missing source itself; links to it from remaining documents still fail.
+  .filter((file) => existsSync(resolve(repositoryRoot, file)));
 
 const failures = [];
 const markdownLink = /!?\[[^\]]*\]\(([^)]+)\)/g;

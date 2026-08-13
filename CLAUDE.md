@@ -202,4 +202,4 @@ A uuid PK is an implementation detail of the repo layer. The **shortcode** (`PRD
 
 ## apps/web UI conventions
 
-React hook rules (render-loop traps, stable defaults, `useQueries` combine), design tokens, spacing, layout primitives, tables, and the page shell live in [apps/web/CLAUDE.md](apps/web/CLAUDE.md) — loaded automatically when working under that directory.
+Visual intent and normative tokens live in [apps/web/DESIGN.md](apps/web/DESIGN.md). React hook rules, token implementation constraints, spacing, layout primitives, tables, and the page shell live in [apps/web/CLAUDE.md](apps/web/CLAUDE.md) — loaded automatically when working under that directory.

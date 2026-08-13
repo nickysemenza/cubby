@@ -62,7 +62,7 @@ const usdaCrossLink = (fdcId: number): CrossLink => ({
 // declarative ManifestCardProps the shared <ManifestCard> renders. The fetch
 // wrappers (*PreviewContent) fetch via tRPC getByID (React-Query cached, only
 // mounts while the hovercard is open) and feed the view-model in. The view-model
-// types are the shared contract reused by the /design gallery's static samples.
+// Shared preview contracts keep hover-card renderers aligned across entities.
 
 export function EntityPreviewContent({
   entity,
