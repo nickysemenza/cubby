@@ -15,6 +15,14 @@
       "rationale": "Follow-up to GHSA-mh99-v99m-4gvg: the same brace-expansion DoS, re-reported because the CVE-2026-14257 mitigation can be bypassed via unbounded intermediate arrays. Same module, same two prod paths, same analysis as that entry — @sentry/vite-plugin's glob (build-time, our own patterns) and the OTel GCP resource detector's transitive rimraf/glob (OTel is dev-only; production disables it per README). No runtime path feeds an attacker-controlled glob/brace pattern to brace-expansion, so the bypass changes reachability not at all. Patched in >=2.1.4 / >=5.0.9; still not overridable in isolation for the reason documented on the other two entries (forcing it re-resolves the lockfile and pulls in NEW critical advisories), so it is deferred to the same dedicated dependency-bump PR and shares their 2026-10-15 deadline. Published after this branch was cut and unrelated to it — it turned every PR in the repo red at once.",
       "reviewedAt": "2026-08-03",
       "expires": "2026-10-15"
+    },
+    {
+      "advisory": "GHSA-2v37-7h3g-55p8",
+      "module": "nanoid",
+      "reachability": "low",
+      "rationale": "nanoid's customAlphabet loops forever when asked for a zero-length id. cubby has exactly one first-party call site — `customAlphabet(SHORTCODE_CHARS, 4)` in packages/shared/src/shortcode.ts:223 — and its returned generator is invoked as `shortcodeBody()` with no argument, so the size is the baked-in literal 4 on every call. No caller can pass a size at all, let alone one derived from user input, so there is no path that reaches the zero-size loop. nanoid is also not a transitive dependency of anything else in the workspace. Published after this branch was cut and unrelated to it — it turned every PR in the repo red at once, the same way GHSA-rgw5-rvv9-x895 did. Deferred to the same dedicated dependency-bump PR and sharing its 2026-10-15 deadline.",
+      "reviewedAt": "2026-08-13",
+      "expires": "2026-10-15"
     }
   ]
 }
