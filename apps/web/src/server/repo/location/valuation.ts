@@ -44,6 +44,7 @@ export const getLocationValuationInputs = async (
     .select({
       locationId: inventoryEntry.locationId,
       valuation: inventoryEntry.valuation,
+      placement: inventoryEntry.placement,
       productName: product.name,
     })
     .from(inventoryEntry)

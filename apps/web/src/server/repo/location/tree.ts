@@ -31,6 +31,7 @@ import {
   relations,
   unwrapDb,
 } from "~/server/repo/database-helpers";
+import { stockOnly } from "~/server/repo/inventory/placement";
 
 import { buildLocationWithChildren } from "./helpers";
 import type { LocationWithParentChild } from "./internal-types";
@@ -117,6 +118,10 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
             and(
               inArray(inventoryEntry.locationId, locationIds),
               notDeleted(inventoryEntry),
+              // Installed fixtures aren't stock you can walk over and count —
+              // the audit-session root picker must not show "kitchen: 17"
+              // then offer 3 rows to count.
+              stockOnly(),
             ),
           )
           .orderBy(product.name)

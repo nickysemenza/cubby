@@ -13,6 +13,11 @@ const item = (
   productName = "Olive oil",
 ) => ({ locationId: unsafeLocationId(locationId), valuation, productName });
 
+const fixture = (locationId: string, valuation: number | null) => ({
+  ...item(locationId, valuation, "Rotary dimmer"),
+  placement: "installed" as const,
+});
+
 describe("rollupLocationValuations", () => {
   it("buckets direct items into priced / missing / misc", () => {
     const result = rollupLocationValuations(
@@ -63,6 +68,36 @@ describe("rollupLocationValuations", () => {
     expect(get("house").totalValuation).toBe(170); // 0 + (130 + 40)
     expect(get("house").totalItemCount).toBe(3);
     expect(get("house").directItemCount).toBe(0);
+  });
+
+  it("keeps fixtures out of the countable figures and rolls them up apart", () => {
+    const result = rollupLocationValuations(
+      [item("kitchen", 50), fixture("kitchen", 730), fixture("kitchen", null)],
+      [loc("kitchen")],
+    );
+    const k = result.get(unsafeLocationId("kitchen"))!;
+
+    // The headline figures answer "what could I walk over and count".
+    expect(k.directValuation).toBe(50);
+    expect(k.directItemCount).toBe(1);
+    // An unpriced fixture must not land in missingPricing — that nudge is not
+    // actionable by walking to a shelf, and it would cap coverage forever.
+    expect(k.direct).toEqual({ priced: 1, missingPricing: 0, miscNoPrice: 0 });
+
+    expect(k.installed?.directValuation).toBe(730);
+    expect(k.installed?.directItemCount).toBe(2);
+  });
+
+  it("rolls installed value up the tree independently of stock", () => {
+    const result = rollupLocationValuations(
+      [item("kitchen", 50), fixture("kitchen", 730), fixture("pantry", 20)],
+      [loc("house"), loc("kitchen", "house"), loc("pantry", "kitchen")],
+    );
+    const house = result.get(unsafeLocationId("house"))!;
+    expect(house.totalValuation).toBe(50);
+    expect(house.totalItemCount).toBe(1);
+    expect(house.installed?.totalValuation).toBe(750);
+    expect(house.installed?.totalItemCount).toBe(2);
   });
 
   it("rounds float dust to two decimals", () => {

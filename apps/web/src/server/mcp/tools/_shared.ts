@@ -555,6 +555,7 @@ export const slimProduct = defineSlim(productMcpOut, (pRow: Row) => {
     coverImageUrl: displayImages[0]?.url ?? null,
     fdc_id: p.fdc_id ?? null,
     usdaUnavailable: p.usdaUnavailable ?? null,
+    stockTracked: p.stockTracked ?? null,
     externalIds: p.externalIds,
     usdaFdcId: p.food?.fdc_id ?? null,
     ingredientId: p.ingredient?.id ?? null,

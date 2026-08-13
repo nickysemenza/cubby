@@ -102,6 +102,16 @@ const pricingCounts = z.object({
  * (location.valuation), recomputed eagerly like recipe.totals.
  * `direct*` = items placed at this location; `total*` = direct + all descendants.
  */
+/**
+ * The four headline figures are STOCK ONLY — what you could walk over and
+ * count. Fixed installations roll up separately in `installed`, because
+ * "what's on this shelf" and "what is this room worth" are different questions
+ * and a dimmer wired into the wall answers only the second.
+ *
+ * `installed` is optional so rows persisted before placement existed still
+ * parse; the rollup always emits it, so a missing key means the location has
+ * not been recomputed since.
+ */
 export const locationValuation = z.object({
   directValuation: z.number(),
   totalValuation: z.number(),
@@ -109,6 +119,14 @@ export const locationValuation = z.object({
   totalItemCount: z.number().int().nonnegative(),
   direct: pricingCounts,
   total: pricingCounts,
+  installed: z
+    .object({
+      directValuation: z.number(),
+      totalValuation: z.number(),
+      directItemCount: z.number().int().nonnegative(),
+      totalItemCount: z.number().int().nonnegative(),
+    })
+    .optional(),
 });
 export type LocationValuation = z.infer<typeof locationValuation>;
 

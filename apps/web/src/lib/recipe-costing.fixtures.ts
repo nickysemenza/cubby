@@ -70,6 +70,7 @@ export const makeProduct = (
     partial: false,
   },
   usdaUnavailable: null,
+  stockTracked: null,
   images: [],
   externalIds: [],
   dataQuality: {

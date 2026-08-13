@@ -1,4 +1,8 @@
-import { productCategoryValues, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import {
+  inventoryPlacementValues,
+  productCategoryValues,
+  UNSPECIFIED_MANUFACTURER,
+} from "@cubby/shared";
 import { fdcId, foodSummary, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { productRelatedFilterFields } from "./related-view";
@@ -156,6 +160,13 @@ const productCreateShape = {
     .nullable()
     .optional()
     .describe("no USDA food exists — expect manual weight/volume/calories"),
+  stockTracked: z
+    .boolean()
+    .nullable()
+    .optional()
+    .describe(
+      "whether shelf records are kept for this kind of thing: null = undecided, false = reviewed/no shelf claim, true = tracked",
+    ),
   pendingImageIds: z.array(z.uuid()).optional(),
 };
 
@@ -343,6 +354,15 @@ export const productFilterFields = {
   ),
   unitMappingPresenceFilter: presenceFilter.describe(
     "Filter to products that do / don't have at least one unit mapping (conversion edge).",
+  ),
+  /**
+   * `product.stockTracked` is a nullable column on the root table (like
+   * `pricePresenceFilter`): `null` = undecided (the review worklist),
+   * `false`/`true` = reviewed either way. `"none"` is the undecided worklist;
+   * `"has"` means reviewed, regardless of which way it was decided.
+   */
+  stockTrackedPresenceFilter: presenceFilter.describe(
+    "Filter to products whose stockTracked decision is undecided (none) or has been made either way (has).",
   ),
 };
 
@@ -623,6 +643,7 @@ const productTopLevelFields = {
     ),
   pricing: productPricingOut,
   usdaUnavailable: z.boolean().nullable(),
+  stockTracked: z.boolean().nullable(),
   dataQuality,
   ...timestampedFields,
 };
@@ -696,6 +717,11 @@ const productInventoryFields = {
   // including a price-driven valuation recompute — so it can't stand in for
   // "when was this count last confirmed".
   verifiedAt: z.date().nullable(),
+  // Included on purpose: "where does this product live" is an ownership
+  // question, so the dimmer wired into the kitchen wall belongs in this list.
+  // Carrying placement is what lets the row say "installed" instead of
+  // reporting a verification age a fixture can never have.
+  placement: z.enum(inventoryPlacementValues),
   ...timestampedFields,
 };
 
@@ -984,6 +1010,13 @@ export const mcpProductCreateInput = z.object({
     .nullable()
     .optional()
     .describe("no USDA food exists — expect manual weight/volume/calories"),
+  stockTracked: z
+    .boolean()
+    .nullable()
+    .optional()
+    .describe(
+      "whether shelf records are kept for this kind of thing: null = undecided, false = reviewed/no shelf claim, true = tracked",
+    ),
 });
 
 export const mcpProductUpdateInput = z.object({
@@ -1031,6 +1064,13 @@ export const mcpProductUpdateInput = z.object({
       "Complete replacement set of conversion/price mappings; an empty array clears all mappings.",
     ),
   usdaUnavailable: z.boolean().nullable().optional(),
+  stockTracked: z
+    .boolean()
+    .nullable()
+    .optional()
+    .describe(
+      "whether shelf records are kept for this kind of thing: null = undecided, false = reviewed/no shelf claim, true = tracked",
+    ),
   removeImageIds: z
     .array(z.uuid())
     .optional()
@@ -1062,6 +1102,7 @@ const productMcpFields = {
   // USDA FoodData Central id — declared exception, not a cubby shortcode.
   fdc_id: fdcId.nullable(),
   usdaUnavailable: z.boolean().nullable(),
+  stockTracked: z.boolean().nullable(),
   externalIds: z.array(
     z.object({
       source: externalIdSource,

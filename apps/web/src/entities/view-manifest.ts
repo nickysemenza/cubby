@@ -249,26 +249,34 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       // stocked and in the ledger, and `onHandUnitsSql` returns NULL for a
       // zero-entry shelf — so a product the ledger says you own with nothing
       // on a shelf matches neither "mismatched" nor "matched". It needs no new
-      // server predicate, only these two existing filters combined.
+      // server predicate beyond `stockTracked`, only these filters combined.
       //
-      // Deliberately unscoped, and it does NOT converge: inventory never
-      // auto-decrements (a tenet), so every consumable ever bought stays
-      // "owned" here forever — 4,462 products on production, over a third of
-      // them food. No field separates durable from consumable, so rather than
-      // guess with a category predicate this sorts by price and lets the
-      // operator narrow with the live chips. The top of the list is where the
-      // money is; `unlocated-durables` below is the shortcut, not the answer.
+      // Converges by decision, not by category guessing: `stockTracked: null`
+      // is the undecided worklist, so a product leaves this view the moment
+      // it's reviewed — marked `false` (no shelf claim wanted: bananas,
+      // software) or `true` (shelf records are kept). Without that filter
+      // every consumable ever bought stayed "owned" here forever, because
+      // inventory never auto-decrements (a tenet); with it, the view shrinks
+      // as the operator works through the backlog instead of refilling on
+      // every grocery purchase. Still sorted by price so the money surfaces
+      // first while the backlog is large; `unlocated-durables` below is the
+      // shortcut, not the answer.
       filters: [
         { id: "expectedQuantity", value: "positive" },
         { id: "location", value: [FILTER_NONE] },
+        { id: "stockTracked", value: "none" },
       ],
       sort: [{ id: "price", desc: true }],
-      // Both halves of the signal: a filled Expected beside an empty Location
-      // is the whole story ("three of these, nowhere"). `quantityVariance` is
+      // All three halves of the signal: a filled Expected beside an empty
+      // Location, still undecided on stock tracking. `quantityVariance` is
       // deliberately NOT revealed — on-hand units are NULL for this entire
       // cohort, so it renders `—` on every row, and a dash reads as "unknown"
       // when the actual fact is "none".
-      columnVisibility: { expectedQuantity: true, location: true },
+      columnVisibility: {
+        expectedQuantity: true,
+        location: true,
+        stockTracked: true,
+      },
     },
     {
       id: "unlocated-durables",
@@ -287,12 +295,14 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       filters: [
         { id: "expectedQuantity", value: "positive" },
         { id: "location", value: [FILTER_NONE] },
+        { id: "stockTracked", value: "none" },
         { id: "category", value: ["tools", "tool-accessories", "storage"] },
       ],
       sort: [{ id: "price", desc: true }],
       columnVisibility: {
         expectedQuantity: true,
         location: true,
+        stockTracked: true,
         category: true,
       },
     },

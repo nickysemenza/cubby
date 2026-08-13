@@ -15,6 +15,7 @@ import { and, eq, isNull, lt, notExists, or, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { inventoryEntry, location, locationImage } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { stockOnly } from "~/server/repo/inventory/placement";
 
 // EmptyLocation is re-exported from the package barrel for the Problems-page
 // components that import it from there.
@@ -63,6 +64,8 @@ export const findEmptyLocations = async (
     .where(
       and(
         notDeleted(location),
+        // A location holding only installed fixtures reads as empty here —
+        // there's no browsable stock, only a wired-in dimmer or faucet.
         notExists(
           dbClient
             .select({ id: sql`1` })
@@ -71,6 +74,7 @@ export const findEmptyLocations = async (
               and(
                 eq(inventoryEntry.locationId, location.id),
                 notDeleted(inventoryEntry),
+                stockOnly(),
               ),
             ),
         ),
@@ -119,11 +123,14 @@ export const findStaleLocations = async (
     })
     .from(location)
     // INNER join = "non-empty" (locations with no live entry drop out).
+    // stockOnly() must match findEmptyLocations's notExists, or a
+    // fixture-only location gets flagged as both empty AND stale.
     .innerJoin(
       inventoryEntry,
       and(
         eq(inventoryEntry.locationId, location.id),
         notDeleted(inventoryEntry),
+        stockOnly(),
       ),
     )
     .where(

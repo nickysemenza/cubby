@@ -1285,6 +1285,20 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       options: presenceFilterOptions("mappings"),
     },
     {
+      // Hand-written options, not `presenceFilterOptions("stock tracking")`:
+      // that helper emits "Has X"/"No X", and "Has stock tracking" would be a
+      // lie for a product whose stockTracked was reviewed and set to false.
+      // "none" is the undecided worklist; "has" is reviewed either way.
+      columnId: "stockTracked",
+      field: "stockTrackedPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter stock tracking...",
+      options: [
+        { value: "none", label: "Undecided" },
+        { value: "has", label: "Reviewed" },
+      ],
+    },
+    {
       // Compatibility/grouping tags — the same value sits on a tool and on the
       // consumables that fit it, so this answers "what's in the 4.5in grinder
       // ecosystem". Options come from `product.tagOptions` at runtime (free
@@ -1416,6 +1430,21 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       placeholder: "Filter verification date...",
       options: [...presenceFilterOptions("verification"), ...dateRangeOptions],
       expand: resolveVerifiedDate,
+    },
+    {
+      // Tri-state on purpose, and the server defaults an omitted value to
+      // "stock" rather than treating it as unrestricted — see
+      // `inventoryPlacementFilter` in @cubby/schemas/inventory. The chip is how
+      // you get back to the fixtures the browse contract hides.
+      columnId: "placement",
+      field: "placementFilter",
+      kind: "select",
+      placeholder: "Filter placement...",
+      options: [
+        { value: "stock", label: "Stock" },
+        { value: "installed", label: "Installed" },
+        { value: "all", label: "Stock and installed" },
+      ],
     },
   ],
 

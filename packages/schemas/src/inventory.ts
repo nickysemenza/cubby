@@ -1,3 +1,4 @@
+import { inventoryPlacementValues } from "@cubby/shared";
 import { fdcId, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { inventoryRelatedFilterFields } from "./related-view";
@@ -24,6 +25,39 @@ import { unitMappingOut } from "./unitmapping";
 
 export { positiveAmount } from "./codec";
 
+/**
+ * Whether an entry is movable stock or a fixed installation.
+ *
+ * `installed` is a record you want to keep and never want to see: the dimmer
+ * wired into the kitchen wall, the recessed cans in the ceiling, the faucet on
+ * the sink. It is excluded from browsing, counting, auditing and staleness —
+ * you cannot walk over and recount a fixture — but INCLUDED everywhere the
+ * question is ownership, provenance, pricing, identity, move or merge, because
+ * you still own the faucet and its purchase Expense is still in the ledger.
+ *
+ * The grain is deliberate. A `durable|consumable` flag on Product could never
+ * work, because "these units got installed" is a fact about a particular
+ * placement, not about a product type — the same 150-pack of wire nuts is
+ * stock in the garage and consumed in the wall.
+ */
+export { inventoryPlacementValues } from "@cubby/shared";
+export type { InventoryPlacement } from "@cubby/shared";
+export const inventoryPlacement = z.enum(inventoryPlacementValues);
+
+/**
+ * Tri-state, and explicitly NOT `inventoryPlacement.optional()`.
+ *
+ * "Empty filter field means unrestricted" is the repo-wide rule, so an omitted
+ * two-value filter would hand the UI the stock set while MCP `list_inventory`
+ * and any direct tRPC caller got the unfiltered one — the two disagreeing
+ * silently is the exact class of bug this whole change exists to remove. The
+ * default lives server-side in `inventoryentryList`.
+ */
+export const inventoryPlacementFilter = z.enum([
+  ...inventoryPlacementValues,
+  "all",
+]);
+
 // Filters accepted by the inventory list endpoint.
 export const inventoryFilterFields = {
   ...auditDateFilterFields,
@@ -49,6 +83,11 @@ export const inventoryFilterFields = {
   categoryFilter: oneOrMany(productCategory)
     .optional()
     .describe("Filter by product category"),
+  placementFilter: inventoryPlacementFilter
+    .optional()
+    .describe(
+      "Filter by placement. Omitted defaults to 'stock' (movable stock only); 'installed' returns fixtures; 'all' returns both.",
+    ),
   verifiedPresenceFilter: z.enum(["has", "none"]).optional(),
   verifiedFrom: plainDate.optional(),
   verifiedTo: plainDate.optional(),
@@ -83,6 +122,9 @@ export const inventoryEntryFields = {
     .date()
     .nullable()
     .describe("When last verified in an audit session (null = never)"),
+  placement: inventoryPlacement.describe(
+    "'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits",
+  ),
   ...timestampedFields,
 };
 
@@ -191,6 +233,11 @@ export const inventoryUpdatePayloadData = z.object({
   amount: positiveAmount.optional(),
   productId: productShortcode.optional(),
   locationId: locationShortcode.optional(),
+  placement: inventoryPlacement
+    .optional()
+    .describe(
+      "Flip between movable stock and a fixed installation. Installing something does not move it — the row keeps its location, it just stops being counted.",
+    ),
 });
 
 // Input schema for updating inventory entries
@@ -205,6 +252,9 @@ export const inventoryCreatePayloadData = z.object({
   productId: productShortcode,
   locationId: locationShortcode,
   amount: positiveAmount,
+  placement: inventoryPlacement
+    .optional()
+    .describe("Defaults to 'stock'; pass 'installed' for a fixed fixture."),
 });
 
 // Schema for bulk inventory operations
@@ -316,6 +366,12 @@ export const inventoryFindDuplicatesInput = z.object({
 
 export const inventoryLocationIdsInput = z.object({
   locationIds: z.array(locationShortcode),
+  // Defaults to "all" rather than the browse default, because the two callers
+  // want opposite things: an audit session passes "stock" (a recount cannot
+  // include fixtures, and its predicate must match the snapshot queries in
+  // reconcileLocationSession or the stale guard compares two populations), and
+  // the location card grid wants everything it has always had.
+  placement: inventoryPlacementFilter.optional(),
 });
 
 const inventoryMcpProductFields = {

@@ -75,6 +75,7 @@ import {
   assertQuantitySignMatchesCost,
   dbExpenseToAPI,
   type ExpenseRow,
+  resolveDefaultProjectId,
 } from "./helpers";
 
 /** `expenseUpdateData` has no standalone type export — derive it from the input. */
@@ -642,12 +643,19 @@ export const createExpense = async (
     const purchaseId =
       explicitPurchaseId ?? (await resolveCharge(tx, actor, data)) ?? null;
 
-    const projectId = data.projectId
+    const explicitProjectId = data.projectId
       ? await resolveLiveProjectId(tx, data.projectId)
       : null;
     const productId = data.productId
       ? await resolveLiveProductId(tx, data.productId)
       : null;
+    // Import-time triage default: an untriaged food line lands on Household
+    // instead of the inbox. `updateExpense`/`moveExpenses` deliberately skip
+    // this — see `resolveDefaultProjectId`'s own doc comment for why.
+    const projectId = await resolveDefaultProjectId(tx, {
+      projectId: explicitProjectId,
+      productId,
+    });
     const lineKind =
       data.lineKind ?? inferExpenseLineKind({ name: data.name, productId });
     if (lineKind !== "principal" && productId !== null) {

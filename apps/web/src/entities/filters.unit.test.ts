@@ -367,6 +367,17 @@ describe("summarizeListState", () => {
       options: presenceFilterOptions("UPC"),
     },
     {
+      // Hand-written options (not `presenceFilterOptions`), same as the real
+      // product manifest entry — "Reviewed" isn't a "Has X" noun, so this
+      // pins what the summarizer actually derives from a non-conforming label.
+      columnId: "stockTracked",
+      kind: "presence",
+      options: [
+        { value: "none", label: "Undecided" },
+        { value: "has", label: "Reviewed" },
+      ],
+    },
+    {
       columnId: "location",
       kind: "idMulti",
       nullable: { field: "inventoryPresenceFilter", label: "inventory" },
@@ -422,6 +433,13 @@ describe("summarizeListState", () => {
     // "UPC", not the "Upc" a humanized column id would produce.
     expect(summarize({ upcPresence: "has" })).toBe("Has UPC");
     expect(summarize({ upcPresence: "none" })).toBe("No UPC");
+  });
+
+  it("renders a presence filter with hand-written, non-'Has X' option labels", () => {
+    // The noun comes from the "has" option's label with any leading "has "
+    // stripped — "Reviewed" has no such prefix, so it passes through whole.
+    expect(summarize({ stockTracked: "has" })).toBe("Has Reviewed");
+    expect(summarize({ stockTracked: "none" })).toBe("No Reviewed");
   });
 
   it("renders nullable sentinels rather than leaking the raw token", () => {

@@ -28,6 +28,7 @@ describe("productMcpOut", () => {
       coverImageUrl: "https://images.example.test/2744-20.webp",
       fdc_id: null,
       usdaUnavailable: null,
+      stockTracked: null,
       externalIds: [],
       usdaFdcId: null,
       ingredientId: null,

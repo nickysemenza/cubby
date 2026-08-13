@@ -96,6 +96,8 @@ const candidateRowsForWishes = async (
       manufacturer: product.manufacturer,
       model: product.model,
       price: product.price,
+      // includes-installed: excluding installed rows would make the wish
+      // list recommend re-buying a product already installed in the wall.
       inventoried: sql<boolean>`EXISTS (
         SELECT 1 FROM "InventoryEntry" ie
         WHERE ie."productId" = ${product.id} AND ie."deletedAt" IS NULL

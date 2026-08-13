@@ -14,6 +14,16 @@ export const productCategoryValues = [
 export type ProductCategory = (typeof productCategoryValues)[number];
 
 /**
+ * Whether an inventory entry is movable stock or a fixed installation.
+ *
+ * Lives here rather than in @cubby/schemas/inventory because both the inventory
+ * schema and the product schema need it, and inventory already imports product
+ * — putting it in either one closes a cycle.
+ */
+export const inventoryPlacementValues = ["stock", "installed"] as const;
+export type InventoryPlacement = (typeof inventoryPlacementValues)[number];
+
+/**
  * The only food category. Everything else (tools, hardware, household, …) is a
  * non-food household/garage item that has no meaning for recipe costing —
  * weight/volume/price/calorie unit coverage doesn't apply. A `null`/unset

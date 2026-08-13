@@ -467,6 +467,17 @@ export function ProductList({
         meta: { className: "w-24" },
         cell: (info) => (info.getValue() ? "Has notes" : <NoneValue />),
       }),
+      columnHelper.accessor((row) => row.stockTracked, {
+        id: "stockTracked",
+        header: "Stock tracking",
+        enableSorting: false,
+        meta: { className: "w-28" },
+        cell: (info) => {
+          const value = info.getValue();
+          if (value === null) return <NoneValue />;
+          return value ? "Tracked" : "Not tracked";
+        },
+      }),
       columnHelper.accessor((row) => row.dataQuality.status, {
         id: "dataQuality",
         header: "Data quality",
@@ -853,6 +864,7 @@ export function ProductList({
       modelPresence: false,
       upcPresence: false,
       notesPresence: false,
+      stockTracked: false,
     },
     groupConfig,
   });
