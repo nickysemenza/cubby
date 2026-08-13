@@ -1,74 +1,13 @@
-# Test jobs publish coverage as workflow artifacts. report-coverage downloads
-# every report and sends them to Codecov from one place, so status/comment
-# calculation never sees a partial commit (the old mid-CI red flapping source).
-# It sends two flagged uploads rather than one — see `flag_management`.
-codecov:
-  notify:
-    # Still 1, deliberately, even though the happy path now sends two uploads:
-    # a Rust-inert PR legitimately sends only the `js` one, and a literal 2 would
-    # leave those PRs with no status at all. `wait_for_ci` is what actually
-    # prevents a premature status — both uploads come from the same final job,
-    # back to back.
-    after_n_builds: 1
-    wait_for_ci: true
-
-# Rust coverage is not re-measured on every PR: test-rust runs `cargo llvm-cov`
-# only when the PR touches a Rust-relevant path (its own classifier), so a
-# TypeScript-only PR produces no recipebridge lcov at all. That is correct — it
-# saves an instrumented rebuild for a crate the PR cannot have changed — but
-# without carryforward the head report then measures ~2.3k FEWER lines than the
-# base, all of them from a crate that sits around 91% covered. The project
-# percentage drops ~2% on arithmetic alone and the status goes red on a PR that
-# added no uncovered code (first seen on #635, which was 100% patch-covered).
-#
-# `carryforward: true` makes Codecov reuse the base commit's `rust` flag
-# measurements when a commit uploads none, so the two reports stay comparable.
-# `js` is NOT carried forward: those suites run on every PR, so a missing `js`
-# upload is a real failure and should look like one.
-flag_management:
-  individual_flags:
-    - name: rust
-      carryforward: true
-    - name: js
-      carryforward: false
-
-# The threshold absorbs small legitimate project-wide drift; patch coverage
-# remains the signal for changed code.
+# Coverage is produced once a week (and on manual coverage runs), aggregated
+# into one complete upload by CI. It is intentionally not a PR or deploy gate.
 coverage:
   status:
     project:
       default:
         threshold: 2%
-    # Informational: ci.yaml documents Codecov as a soft gate (it doesn't block
-    # deploy or merge in this single-user repo), and patch coverage on a small
-    # PR is noisy — a one-line non-code change or a hard-to-unit-test branch
-    # can legitimately miss a strict target. `target: auto` compares the patch
-    # against the base commit's coverage instead of a fixed number, and
-    # `informational: true` keeps the check from ever showing red — it's
-    # signal, not a gate.
-    patch:
-      default:
-        target: auto
-        threshold: 5%
-        informational: true
 
-comment:
-  after_n_builds: 1
-
-# Paths are relative to the REPO ROOT and are not implicitly prefix-matched, so
-# every entry needs `**` to reach into a workspace. The list inherited from the
-# dead .github/codecov.yml was written against a single-app layout, so every
-# bare entry silently stopped matching once it moved here: `scripts` missed
-# `apps/web/scripts`, `src/components/ui` missed the only real
-# `apps/web/src/components/ui`, and `tooling` missed `apps/web/tooling`.
-#
-# `apps/web/tooling` earns its place for a second reason: vitest v4 dropped
-# `coverage.all`, so only files that actually EXECUTE are measured — and these
-# are the harness that executes on every single suite (`globalSetup` /
-# `setupFiles` in apps/web/vitest.config.ts). Left in, ~16KB of test plumbing
-# lands in the coverage denominator as if it were app code.
 ignore:
   - "**/*.config.*"
   - "**/scripts/**"
-  - "apps/web/src/components/ui/**" # shadcn/ui — vendored primitives, not our code
-  - "apps/web/tooling/**" # test harness (globalSetup/setupFiles), not app code
+  - "apps/web/src/components/ui/**"
+  - "apps/web/tooling/**"

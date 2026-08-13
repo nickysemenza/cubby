@@ -38,6 +38,13 @@
       ],
       "groupName": "Playwright runtime",
       "groupSlug": "playwright-runtime"
+    },
+    {
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["ingredient", "recipe-scraper", "recipe-epub"],
+      "enabled": true,
+      "groupName": "ingredient-parser upstream",
+      "groupSlug": "ingredient-parser-upstream"
     }
   ]
 }

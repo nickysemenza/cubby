@@ -34,19 +34,7 @@ export default defineConfig({
   /* Run tests with 2 workers on CI for faster execution. */
   workers: process.env.CI ? 2 : undefined,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: isCI
-    ? [
-        ["github"],
-        [
-          "junit",
-          {
-            outputFile: "test-results/junit.xml",
-            embedAnnotationsAsProperties: true,
-          },
-        ],
-        ["html"],
-      ]
-    : "html",
+  reporter: isCI ? [["github"], ["html"]] : "html",
   expect: {
     // Allow a bit more time on CI for client-side navigations
     timeout: isCI ? 15000 : 5000,
