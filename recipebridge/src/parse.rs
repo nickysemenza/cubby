@@ -259,7 +259,7 @@ impl From<Decomposition> for WDecomposition {
         // each labeled span, then the span itself, then the trailing gap.
         //
         // Slice via `get` (not `[..]`): the spans are upstream byte ranges from a
-        // parser pinned to a moving `branch = main`. A range that's out of bounds,
+        // parser pinned to an upstream commit. A range that's out of bounds,
         // overlapping (`start < prev_end`), or lands mid-UTF-8 would panic an
         // index — `get` yields `None` and we skip that gap instead of trapping.
         let mut segments = Vec::new();
@@ -776,7 +776,7 @@ mod tests {
         );
     }
 
-    /// Defensive: the spans are upstream byte ranges from a parser pinned to a
+    /// Defensive: the spans are upstream byte ranges from a parser pinned to an
     /// moving `branch = main`. A range landing mid-UTF-8 (here byte 1 of the
     /// 2-byte 'é') must not panic the gap slice — pre-fix `source[0..1]` did.
     #[test]

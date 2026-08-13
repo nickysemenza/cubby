@@ -1,20 +1,8 @@
 name: Preview Deploy
 
-# Preview deployment is deliberately separate from CI. A Cloudflare deployment
-# job can take several minutes to acknowledge cancellation; keeping it here
-# prevents that platform delay from holding a replacement CI run in pending.
-#
-# CI's `build-cf` job dispatches this workflow as soon as the bundle is built,
-# rather than this waiting on CI's overall conclusion. Two reasons: the preview
-# is producible ~45s into a run but CI's pole (E2E) lands at ~190s, and none of
-# those tests exercise the uploaded version anyway — E2E runs its own local
-# build. Because `build-cf` has no `needs`, this also means a PR with failing
-# lint or tests still gets a preview, which is often exactly when you want one.
-#
-# A preview is a non-routed `wrangler versions upload`, so shipping one from
-# unverified code cannot affect what prod serves. It does inherit prod bindings
-# (Hyperdrive + secrets) — writes from a preview hit prod data, which was true
-# under the old test-gated trigger too.
+# CI dispatches this workflow after publishing the same bundle used by E2E.
+# Keeping Cloudflare cancellation outside CI lets replacement PR runs start
+# immediately. Preview versions are not routed, but inherit production bindings.
 on:
   workflow_dispatch:
     inputs:
@@ -46,9 +34,6 @@ jobs:
         with:
           ref: ${{ inputs.head_sha }}
 
-      # Tolerated rather than fatal: `build-cf` uploads with
-      # `if-no-files-found: ignore`, so a build that produces no dist leaves no
-      # artifact. That is a CI failure to read in CI, not a red X to duplicate here.
       - name: Download CF build artifact
         id: artifact
         continue-on-error: true

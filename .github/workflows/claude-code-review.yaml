@@ -2,9 +2,15 @@ name: Claude Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize]
-    # Optionally scope to certain paths:
-    # paths: ["apps/**/*.ts", "apps/**/*.tsx", "packages/**/*.ts"]
+    types: [opened, synchronize, ready_for_review]
+    paths-ignore:
+      - "**/*.md"
+      - ".agents/**"
+      - ".claude/**"
+      - ".codex/**"
+      - ".vscode/**"
+      - "cubby.code-workspace"
+      - "LICENSE"
 
 # A fresh push supersedes the review of the old SHA. Keeping this independent
 # from CI means a slow remote cancellation cannot hold verification in pending.
@@ -22,6 +28,7 @@ jobs:
       github.event.pull_request.draft == false &&
       !endsWith(github.actor, '[bot]')
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       pull-requests: write

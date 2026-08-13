@@ -8,7 +8,7 @@
     "dev": "pnpm -r dev",
     "dev:log": "pnpm -r --reporter append-only dev",
     "build": "pnpm -r build",
-    "check": "biome check --error-on-warnings && pnpm typecheck && pnpm types:check && pnpm openapi:check && pnpm knip && pnpm dedupe:check && pnpm audit:security && node scripts/check-conventions.mjs && node scripts/check-soft-delete-filters.mjs",
+    "check": "biome check --error-on-warnings && pnpm typecheck && pnpm types:check && pnpm openapi:check && pnpm knip && pnpm dedupe:check && pnpm audit:security && node --test scripts/ci-scope.test.mjs && node scripts/check-conventions.mjs && node scripts/check-soft-delete-filters.mjs",
     "typecheck": "pnpm -r --parallel typecheck",
     "types:check": "pnpm --filter @cubby/web --filter @cubby/upc-lookup --filter @cubby/usda-api --parallel types:check",
     "openapi:check": "pnpm --filter @cubby/usda-api generate:openapi:check",

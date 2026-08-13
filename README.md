@@ -348,6 +348,10 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
 | `pnpm run test:e2e` | Playwright E2E (uses IntegresQL) |
 | `pnpm --filter @cubby/web run db:push` | Push the web Drizzle schema to the configured Postgres DB |
 | `pnpm --filter @cubby/web run build:cf` | Build only the main web Worker |
+
+See [docs/ci.md](docs/ci.md) for CI scoping, artifact provenance, scheduled
+coverage, deployment behavior, and the measured optimizations that should not
+be reintroduced.
 | `pnpm --filter @cubby/web run preview:cf` | Run the Workers build locally |
 | `pnpm --filter @cubby/web run deploy:cf` | Deploy to Cloudflare Workers |
 | `pnpm run wasm` | Rebuild `@cubby/recipebridge` from Rust source |
