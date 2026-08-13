@@ -123,24 +123,31 @@ function formatLedgerValue(
  * were left out — the omitted count is the disclosure that keeps a one-line
  * renderer honest about being a projection of the full diff.
  */
-function summarizeChanges(
+export function summarizeChanges(
   changes: AuditLogEntry["changes"],
 ): { shown: LedgerField[]; omitted: number } | null {
   if (!changes) return null;
-  const fields = Object.entries(changes)
+  const changed = Object.entries(changes);
+  const renderable = changed
     .map(([field, diff]) => ({
       field,
       from: formatLedgerValue(diff.from),
       to: formatLedgerValue(diff.to),
     }))
     .filter((entry) => entry.from !== null || entry.to !== null);
-  if (fields.length === 0) return null;
+  if (renderable.length === 0) return null;
 
-  const ranked = sortBy(fields, [
+  const ranked = sortBy(renderable, [
     (entry) => (LOW_SIGNAL_CHANGE_FIELDS.has(entry.field) ? 1 : 0),
   ]);
   const shown = ranked.slice(0, LEDGER_MAX_FIELDS);
-  return { shown, omitted: fields.length - shown.length };
+  // Counted against every changed field, not just the renderable ones. A
+  // field with no glanceable rendering (an object-valued `totals`/`valuation`
+  // diff, which is exactly what a recompute-style update touches) is dropped
+  // from the line — but dropping it from the count too would let the row claim
+  // it changed less than it did, which is the one thing this disclosure exists
+  // to prevent.
+  return { shown, omitted: changed.length - shown.length };
 }
 
 type LedgerField = {
