@@ -130,7 +130,18 @@ export function Page(props: PageProps) {
           }
         >
           <PageCountContext.Provider value={setCount}>
-            <Suspense fallback={<ListLoadingSkeleton />}>{children}</Suspense>
+            <Suspense fallback={<ListLoadingSkeleton />}>
+              {/* List pages that render several top-level regions (the home
+                  dashboard) previously stacked them flush — every region
+                  boundary measured 0px, so five separate arguments read as one
+                  run-on sentence. DESIGN.md reserves the 2rem step for major
+                  region clearance. A no-op for the usual single-child list
+                  page, which is why this sits on the children and not on the
+                  wrapper the header shares. */}
+              <div className={variant === "list" ? "space-y-8" : undefined}>
+                {children}
+              </div>
+            </Suspense>
           </PageCountContext.Provider>
         </PageDetailContext.Provider>
       </div>

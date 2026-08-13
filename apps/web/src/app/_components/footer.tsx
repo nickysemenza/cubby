@@ -1,37 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
 import { GitGraph } from "lucide-react";
 import { Row } from "~/components/layout";
-import { useTRPC } from "~/integrations/trpc/react";
-import { authClient } from "~/lib/auth-client";
 import { formatBuildDate } from "~/lib/utils";
 
 const buildDate = formatBuildDate(__BUILD_DATE__);
-
-function EntityCounts() {
-  const api = useTRPC();
-  const session = authClient.useSession();
-  const isAuthenticated = !!session.data?.user;
-
-  // The footer renders on every page; reuse the homepage's single
-  // dashboard.counts query (shared key → one cheap fetch, deduped) rather than
-  // four `list({pageSize:1})` calls whose product.list fired discarded USDA
-  // enrichment app-wide.
-  const { data: counts, isLoading } = useQuery({
-    ...api.dashboard.counts.queryOptions(),
-    enabled: isAuthenticated,
-  });
-
-  if (!isAuthenticated || isLoading || !counts) return null;
-
-  const parts = [
-    `${counts.product} products`,
-    `${counts.location} locations`,
-    `${counts.recipe} recipes`,
-    `${counts.ingredient} ingredients`,
-  ];
-
-  return <span>{parts.join(" · ")}</span>;
-}
 
 export function AppFooter() {
   return (
@@ -46,9 +17,6 @@ export function AppFooter() {
           <span>
             {buildDate} · <span>{__GIT_BRANCH__}</span>@
             <span title={__GIT_COMMIT_MSG__}>{__GIT_COMMIT__}</span>
-          </span>
-          <span className="hidden sm:inline">
-            <EntityCounts />
           </span>
         </Row>
         <Row align="center" gap="sm">
@@ -65,7 +33,7 @@ export function AppFooter() {
             href="https://github.com/nickysemenza/cubby"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-muted-foreground transition-colors hover:text-foreground"
+            className="-m-2 inline-flex min-h-11 min-w-11 items-center justify-center p-2 text-muted-foreground transition-colors hover:text-foreground sm:m-0 sm:min-h-0 sm:min-w-0 sm:p-0"
             aria-label="GitHub repository"
           >
             <GitGraph className="size-3.5" />

@@ -43,22 +43,37 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
 function CardTitle({
   className,
   icon: Icon,
+  as: Comp = "div",
   children,
   ...props
-}: React.ComponentProps<"div"> & { icon?: LucideIcon }) {
+}: React.ComponentProps<"div"> & {
+  icon?: LucideIcon;
+  /**
+   * Render as a real heading where the card is a named region of the page
+   * rather than incidental chrome. A card title looks like a heading and is
+   * read as one, but defaulted to `div` — so a dashboard of ten cards exposed
+   * zero of them to heading navigation. Pass the level that fits the page's
+   * outline; the visual treatment is identical either way.
+   */
+  as?: "div" | "h2" | "h3" | "h4";
+}) {
   return (
-    <div
+    <Comp
       data-slot="card-title"
       // Ledger-style section label — cards are "ledger blocks" and their titles
       // read as mono eyebrows (INGREDIENTS, HISTORY, ...). Pass `icon` for the
       // common eyebrow-with-leading-icon header. The one sanctioned className
       // override is a size bump for "numeral-as-title" stat cards (text-2xl).
-      className={cn("flex items-center gap-2 font-medium", EYEBROW_CLASS, className)}
+      className={cn(
+        "flex items-center gap-2 font-medium",
+        EYEBROW_CLASS,
+        className,
+      )}
       {...props}
     >
       {Icon && <Icon className="size-3.5 shrink-0" />}
       {children}
-    </div>
+    </Comp>
   );
 }
 

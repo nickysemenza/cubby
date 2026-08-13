@@ -3,7 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Hammer } from "lucide-react";
 import { Grid } from "~/components/layout";
-import { DashboardCard } from "~/components/layout/dashboard-card";
+import {
+  CardActionLink,
+  DashboardCard,
+} from "~/components/layout/dashboard-card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { StatTile } from "~/components/ui/stat-tile";
 import { useHydrated } from "~/hooks/useHydrated";
@@ -57,14 +60,7 @@ export function HouseCard() {
       icon={Hammer}
       title="House"
       description="Open work across the house tracker"
-      action={
-        <Link
-          to="/projects"
-          className="font-mono text-2xs text-muted-foreground uppercase transition-colors hover:text-foreground"
-        >
-          Projects
-        </Link>
-      }
+      action={<CardActionLink to="/projects">Projects</CardActionLink>}
     >
       <Grid cols="summary" gap="sm">
         {STATS.map((stat) => (

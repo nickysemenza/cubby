@@ -49,16 +49,20 @@ export default function EntityCount() {
   });
   const counts = countsQuery.data;
 
-  // One cell per countable entity (manifest-driven, so meal/cookbook and any
-  // future entity appear automatically) plus the USDA total. usda-food has no
-  // local table, so its count comes from the separate `usdaFoods` field.
-  const cards: { entity: Entity; count: number | undefined }[] = [
-    ...countableEntities.map((entity: CountableEntity) => ({
+  // One cell per countable entity, manifest-driven so meal/cookbook and any
+  // future entity appear automatically.
+  //
+  // USDA foods are deliberately NOT here. The strip answers "what does this
+  // household have on record"; the USDA total counts rows in a third-party
+  // reference database the household neither owns nor maintains — and at ~2.1M
+  // it was by an order of magnitude the largest number on the page. Dropping it
+  // also restores the exact 8/4/2-column rows the grid below is built for: the
+  // 17th cell had been stranding a full row of dead space at every breakpoint.
+  const cards: { entity: Entity; count: number | undefined }[] =
+    countableEntities.map((entity: CountableEntity) => ({
       entity,
       count: counts?.[entity],
-    })),
-    { entity: "usda-food" as Entity, count: counts?.usdaFoods },
-  ];
+    }));
 
   // While auth is still resolving the query is disabled (isLoading false), so
   // treat the pre-auth window as loading to keep the skeleton up rather than

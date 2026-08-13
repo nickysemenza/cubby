@@ -17,14 +17,20 @@ export function RecentActivityFeed({ limit = 5 }: RecentActivityFeedProps) {
   return (
     <DashboardCard
       icon={Clock}
-      title="Recent Activity"
+      title="Recent activity"
       action={
-        <Link to="/activity">
-          <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs">
-            View all
-            <ArrowRight className="size-3" />
-          </Button>
-        </Link>
+        // `render` keeps this one element — a <button> inside an <a> is
+        // invalid HTML and produced two tab stops for one destination.
+        <Button
+          render={<Link to="/activity" />}
+          nativeButton={false}
+          variant="ghost"
+          size="sm"
+          className="h-11 gap-1 text-xs sm:h-7"
+        >
+          View all
+          <ArrowRight className="size-3" />
+        </Button>
       }
     >
       <AuditLogList limit={limit} showEntityLink variant="ledger" />

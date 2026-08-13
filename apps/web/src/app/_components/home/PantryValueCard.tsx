@@ -1,23 +1,29 @@
 import type { InfLocation } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
 import { Wallet } from "lucide-react";
 import { useMemo } from "react";
 import { Row } from "~/components/layout";
-import { DashboardCard } from "~/components/layout/dashboard-card";
+import {
+  CardActionLink,
+  DashboardCard,
+} from "~/components/layout/dashboard-card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useHydrated } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 import { authClient } from "~/lib/auth-client";
 import { formatCurrency } from "~/lib/utils";
 
+// Ink ladder, not the accent. Rank here is already carried by bar height and
+// left-to-right order, so painting the tallest bar ultramarine spent the
+// interaction color on information the chart had already conveyed — and this
+// panel sits beside the spend chart, which owns the page's one loud value.
 const BAR_COLORS = [
-  "var(--chart-1)",
   "var(--chart-2)",
   "var(--chart-3)",
   "var(--chart-4)",
-  "var(--chart-8)",
+  "var(--chart-5)",
+  "var(--chart-6)",
 ];
 
 /**
@@ -55,12 +61,7 @@ export function PantryValueCard() {
   }, [data]);
 
   const inventoryAction = (
-    <Link
-      to="/inventory"
-      className="font-mono text-2xs text-muted-foreground uppercase transition-colors hover:text-foreground"
-    >
-      Inventory
-    </Link>
+    <CardActionLink to="/inventory">Inventory</CardActionLink>
   );
 
   if (!isAuthenticated || isLoading) {
