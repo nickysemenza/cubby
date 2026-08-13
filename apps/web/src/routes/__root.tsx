@@ -22,11 +22,13 @@ import {
 } from "~/app/_components/command-menu-loader";
 import { AppFooter } from "~/app/_components/footer";
 import { MainNav } from "~/app/_components/MainNav";
+import { AuthenticatedAppShell } from "~/app/_components/navigation/authenticated-app-shell";
 import { BottomNav } from "~/app/_components/navigation/bottom-nav";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { RouteNotFound } from "~/components/lazy-route-not-found";
 import { Toaster } from "~/components/ui/sonner";
 import { useDebug } from "~/hooks/useDebug";
+import { useNavAuthed } from "~/hooks/useNavAuthed";
 import type { TRPCRouter } from "~/integrations/trpc/router";
 import { getClientAuthed, getGuardSession } from "~/lib/auth-guard";
 import { useFlag } from "~/lib/flags";
@@ -216,6 +218,13 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const authed = useNavAuthed();
+  const isWorkspaceRoute = useRouterState({
+    select: (state) =>
+      state.matches.some(
+        (match) => match.routeId === "/_authenticated" || match.routeId === "/",
+      ),
+  });
   const [commandMenuOpen, setCommandMenuOpen] = React.useState(false);
   // Only mount (and thus fetch the chunk for) the command menu once it's first
   // requested. `mounted` latches true so it stays mounted after the first open.
@@ -251,23 +260,36 @@ function RootComponent() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [commandMenuOpen]);
 
+  const routeContent = (
+    // biome-ignore lint/correctness/useUniqueElementIds: React <Profiler> id, not a DOM id
+    <PerfProfiler id="route">
+      <Outlet />
+    </PerfProfiler>
+  );
+
   return (
     <Provider queryClient={queryClient}>
-      <div className="flex min-h-dvh flex-col">
-        <div className="sticky top-0 z-40 border-b-[3px] border-b-foreground bg-card print:hidden">
-          <div className="mx-auto flex h-12 w-full max-w-7xl items-center px-2 md:px-6">
-            <MainNav className="mx-0" onSearchClick={openCommandMenu} />
+      {authed && isWorkspaceRoute ? (
+        <AuthenticatedAppShell
+          onSearchClick={openCommandMenu}
+          navigationProgress={<NavigationProgress />}
+        >
+          {routeContent}
+        </AuthenticatedAppShell>
+      ) : (
+        <div className="flex min-h-dvh flex-col">
+          <div className="sticky top-0 z-40 border-b-[3px] border-b-foreground bg-card print:hidden">
+            <div className="mx-auto flex h-12 w-full max-w-7xl items-center px-2 md:px-6">
+              <MainNav className="mx-0" onSearchClick={openCommandMenu} />
+            </div>
+            <NavigationProgress />
           </div>
-          <NavigationProgress />
+          <main className="w-full flex-1 px-2 pt-4 pb-20 md:px-6 md:pb-4">
+            {routeContent}
+          </main>
+          <AppFooter />
         </div>
-        <main className="w-full flex-1 px-2 pt-4 pb-20 md:px-6 md:pb-4">
-          {/* biome-ignore lint/correctness/useUniqueElementIds: React <Profiler> id, not a DOM id */}
-          <PerfProfiler id="route">
-            <Outlet />
-          </PerfProfiler>
-        </main>
-        <AppFooter />
-      </div>
+      )}
       <BottomNav />
       {commandMenuMounted && (
         <React.Suspense fallback={null}>

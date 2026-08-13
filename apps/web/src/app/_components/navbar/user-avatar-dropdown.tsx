@@ -44,7 +44,10 @@ export const UserAvatarDropdown = () => {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="focus:outline-none">
+      <DropdownMenuTrigger
+        className="focus:outline-none"
+        aria-label="Account menu"
+      >
         <Avatar size="sm">
           {user.image && <AvatarImage src={user.image} alt={user.name ?? ""} />}
           <AvatarFallback>{getInitials(user.name)}</AvatarFallback>

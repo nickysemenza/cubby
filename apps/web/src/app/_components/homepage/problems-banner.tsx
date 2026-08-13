@@ -27,10 +27,12 @@ export function ProblemsBanner() {
   return (
     <Link
       to="/problems"
-      className="flex items-center gap-2 border border-destructive/60 bg-destructive/10 px-4 py-2 text-destructive transition-colors hover:bg-destructive/20"
+      className="flex items-center gap-2 border border-destructive/60 bg-destructive/10 px-2 py-1 text-destructive transition-colors hover:bg-destructive/20"
     >
-      <span className="font-mono font-semibold tabular-nums">{count}</span>
-      <span className="text-sm">problems need attention →</span>
+      <span className="font-mono font-semibold text-xs tabular-nums">
+        {count}
+      </span>
+      <span className="text-xs">problems need attention →</span>
     </Link>
   );
 }

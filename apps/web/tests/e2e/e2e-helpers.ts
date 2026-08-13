@@ -127,6 +127,11 @@ export async function fillCellEditor(page: Page, value: string) {
  */
 export async function openCommandPalette(page: Page): Promise<Locator> {
   await expect(page.locator('[data-slot="dialog-overlay"]')).toHaveCount(0);
+  // The account trigger replaces its SSR placeholder only after hydration,
+  // so it is a reliable shell-wide signal that click handlers are attached.
+  await expect(
+    page.getByRole("button", { name: "Account menu" }),
+  ).toBeVisible();
   const trigger = page.getByRole("button", { name: "Search", exact: true });
   await expect(trigger).toBeEnabled();
   await trigger.click();
