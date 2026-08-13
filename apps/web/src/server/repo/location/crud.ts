@@ -84,6 +84,7 @@ import {
   present,
   sideEffect,
 } from "~/server/repo/impact";
+import { stockOnly } from "~/server/repo/inventory/placement";
 import { loadProductPricing } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
@@ -684,7 +685,9 @@ export const locationList = async (
       product,
       and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
     )
-    .where(notDeleted(inventoryEntry));
+    // Installed fixtures aren't browsable stock — an "has inventory" filter
+    // must not match a location whose only item is wired into the wall.
+    .where(and(notDeleted(inventoryEntry), stockOnly()));
   // Joins Image so this matches what the thumbnail cell actually renders — it
   // drops PDF attachments, and Image is separately soft-deletable from
   // LocationImage.
@@ -703,7 +706,7 @@ export const locationList = async (
       product,
       and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
     )
-    .where(notDeleted(inventoryEntry))
+    .where(and(notDeleted(inventoryEntry), stockOnly()))
     .groupBy(inventoryEntry.locationId)
     .having(sql`count(*) >= ${filters.directItemCountMin ?? 0}`);
   const locationIdsExceedingInventoryMaximum = getDb(db)
@@ -713,7 +716,7 @@ export const locationList = async (
       product,
       and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
     )
-    .where(notDeleted(inventoryEntry))
+    .where(and(notDeleted(inventoryEntry), stockOnly()))
     .groupBy(inventoryEntry.locationId)
     .having(sql`count(*) > ${filters.directItemCountMax ?? 0}`);
 
@@ -774,10 +777,14 @@ export const locationList = async (
           ];
         if (s.orderBy === "inventoryEntries")
           return [
+            // Matches locationIdsMeetingInventoryMinimum/ExceedingMaximum's
+            // stockOnly() filter — otherwise sort and filter disagree on
+            // whether an installed fixture counts.
             sql.raw(
               `(SELECT count(*) FROM "InventoryEntry" ie ` +
                 `INNER JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL ` +
-                `WHERE ie."locationId" = "location"."id" AND ie."deletedAt" IS NULL) ${dirSql}`,
+                `WHERE ie."locationId" = "location"."id" AND ie."deletedAt" IS NULL ` +
+                `AND ie."placement" = 'stock') ${dirSql}`,
             ),
           ];
         // Joined parent name — a correlated subquery keeps this a relational
@@ -905,7 +912,9 @@ const locationRosterPage = async (
       product,
       and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
     )
-    .where(notDeleted(inventoryEntry));
+    // Installed fixtures aren't browsable stock — a location picker's "has
+    // inventory" filter must not match on a wired-in fixture alone.
+    .where(and(notDeleted(inventoryEntry), stockOnly()));
 
   const whereClause = buildSearchConditions(
     location,
@@ -1147,6 +1156,9 @@ export const getLocationById = async (
           and(
             notDeleted(inventoryEntry),
             inArray(inventoryEntry.locationId, childIds),
+            // Rollup feeds directItemCount, a browse/count surface — an
+            // installed fixture doesn't belong in a child's item count.
+            stockOnly(),
           ),
         )
         .groupBy(inventoryEntry.locationId),

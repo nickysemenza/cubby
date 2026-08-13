@@ -116,6 +116,11 @@ export const expectedQuantitySql = (productAlias = '"product"') =>
  * The zero-entry case returns NULL for the same reason (the mapper does too),
  * though the filters also gate on `productIdsWithLiveInventory` and never see
  * it.
+ *
+ * includes-installed: `expectedQuantitySql` sums Expense rows unconditionally,
+ * and a fixture's purchase Expense is one of them — excluding installed rows
+ * here would manufacture a permanent negative variance and light "Shelf
+ * disagrees" forever on every fixture in the house.
  */
 const onHandUnitsSql = (productAlias = '"product"') =>
   `(SELECT CASE
@@ -134,6 +139,8 @@ const onHandUnitsSql = (productAlias = '"product"') =>
  * no ledger is trivially zero, which is why the *filters* pair this with an
  * "is stocked" predicate rather than treating every untouched product as
  * reconciled.
+ *
+ * includes-installed: inherited from `onHandUnitsSql` — see that doc.
  */
 export const quantityVarianceSql = (productAlias = '"product"') =>
   `(${onHandUnitsSql(productAlias)} - ${expectedQuantitySql(productAlias)})`;
@@ -165,6 +172,8 @@ export const expectedQuantityFilterSql = (productId: AnyColumn) =>
  * Same predicates as {@link onHandUnitsSql} — the live-Location join AND the
  * mixed-unit/zero-entry NULLs. Keep the two in step; they are the filter and
  * the sort halves of one rule.
+ *
+ * includes-installed: inherited from `onHandUnitsSql` — see that doc.
  */
 export const onHandUnitsFilterSql = (productId: AnyColumn) =>
   sql`(SELECT CASE

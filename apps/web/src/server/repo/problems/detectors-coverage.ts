@@ -28,6 +28,7 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { stockOnly } from "~/server/repo/inventory/placement";
 
 const COUNT = sql<number>`count(*)::int`;
 
@@ -75,6 +76,8 @@ export const findCoverageTotals = async (
     );
 
   // Matches findStaleLocations' INNER join: locations holding live stock.
+  // Leaving installed fixtures in here would permanently cap this meter below
+  // 100% — a fixture never gets recounted, so it can never be "covered".
   const stockedLocations = await dbClient
     .select({ count: COUNT })
     .from(location)
@@ -89,16 +92,19 @@ export const findCoverageTotals = async (
               and(
                 eq(inventoryEntry.locationId, location.id),
                 notDeleted(inventoryEntry),
+                stockOnly(),
               ),
             ),
         ),
       ),
     );
 
+  // Matches findNeverVerifiedInventory's population — same reasoning as
+  // stockedLocations above.
   const inventoryEntries = await dbClient
     .select({ count: COUNT })
     .from(inventoryEntry)
-    .where(notDeleted(inventoryEntry));
+    .where(and(notDeleted(inventoryEntry), stockOnly()));
 
   // Matches findIngredientsWithoutProduct's population: ingredients used by at
   // least one live NON-cookbook recipe, excluding sub-recipe ingredients. The

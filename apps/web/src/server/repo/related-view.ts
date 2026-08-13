@@ -92,6 +92,8 @@ const SQL_RELATED_VIEWS = {
     `t."name"`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
+  // includes-installed: this is a related-records view keyed off product
+  // identity — a fixture must stay listed among "this product's inventory".
   "product.inventory": dated(
     "Product",
     `JOIN "InventoryEntry" t ON t."productId" = s."id" AND t."deletedAt" IS NULL`,
@@ -122,6 +124,8 @@ const SQL_RELATED_VIEWS = {
     `JOIN "MealRecipe" mr ON mr."mealId" = s."id" AND mr."deletedAt" IS NULL JOIN "Recipe" t ON t."id" = mr."recipeId" AND t."deletedAt" IS NULL`,
     "recipe",
   ),
+  // includes-installed: identity/relation views, not a browse/count surface
+  // — a fixture's related ingredient must stay reachable either direction.
   "location.ingredients": named(
     "Location",
     `JOIN "InventoryEntry" ie ON ie."locationId" = s."id" AND ie."deletedAt" IS NULL JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL JOIN "Ingredient" t ON t."id" = p."ingredientId" AND t."deletedAt" IS NULL`,

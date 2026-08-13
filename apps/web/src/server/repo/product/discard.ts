@@ -123,6 +123,8 @@ export const discardProductUnits = async (
 
     let inventory: DiscardProductResult["inventory"] = null;
     if (input.inventoryEntryId !== null) {
+      // includes-installed: caller names an exact entry by id — an
+      // installed fixture must be dischargeable the same as shelf stock.
       const entry = await tx.query.inventoryEntry.findFirst({
         where: and(
           eq(inventoryEntry.id, input.inventoryEntryId),

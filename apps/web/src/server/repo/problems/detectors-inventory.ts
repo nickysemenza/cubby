@@ -25,6 +25,7 @@ import {
   notDeleted,
   parseInventoryAmount,
 } from "~/server/repo/database-helpers";
+import { stockOnly } from "~/server/repo/inventory/placement";
 import { isGlobalUnknownLocation } from "~/server/repo/location";
 
 /**
@@ -64,7 +65,16 @@ export const findNeverVerifiedInventory = async (
       location,
       and(eq(inventoryEntry.locationId, location.id), notDeleted(location)),
     )
-    .where(and(notDeleted(inventoryEntry), isNull(inventoryEntry.verifiedAt)))
+    .where(
+      and(
+        notDeleted(inventoryEntry),
+        isNull(inventoryEntry.verifiedAt),
+        // Installed fixtures never get a verifiedAt (nobody recounts a
+        // wired-in dimmer), so including them makes this list permanently
+        // undrainable.
+        stockOnly(),
+      ),
+    )
     .orderBy(asc(inventoryEntry.createdAt));
 
   return rows.map((r) => ({
@@ -86,6 +96,9 @@ export const findNeverVerifiedInventory = async (
  * Live entries parked in the global "Unknown" location — each one is a filing
  * decision a capture/import deferred. Uncapped: this bin should be drained to
  * empty, so the true count is the signal.
+ *
+ * includes-installed: a fixture parked in "Unknown" is still an unfiled
+ * record — installation doesn't excuse it from needing a real location.
  */
 export const findUnknownParkedItems = async (
   db: Database,
