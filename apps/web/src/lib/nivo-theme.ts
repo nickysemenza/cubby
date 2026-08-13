@@ -37,13 +37,31 @@ export const nivoChartTheme = {
   },
 };
 
+/**
+ * Nivo animates via react-spring, which interpolates colors by parsing numbers
+ * out of each keyframe string — and it cannot parse `oklch()`. Our ramp mixes
+ * both formats (`--chart-1` resolves to a hex brand token → 4 rgba numbers;
+ * `--chart-2..8` are oklch → 3 numbers), so any chart whose series span the two
+ * throws "The arity of each output value must be equal" on every transition.
+ *
+ * Turning the animation off is the fix rather than a workaround: DESIGN.md asks
+ * for flat charts that "favor comparison over spectacle" and motion that is
+ * short and mechanical, so a spring-tweened bar was never the intended register.
+ * It also keeps the ramp authored in oklch, which is what the contrast math for
+ * the slice labels is computed against.
+ *
+ * Spread into any nivo chart: <ResponsiveLine {...nivoMotion} />.
+ */
+export const nivoMotion = { animate: false } as const;
+
 // Bar chrome shared by the nivo bar charts — hairline outline and square
-// corners so bars read as flat printed figures, not stickers. Spread into
-// <ResponsiveBar {...nivoBarChrome}>.
+// corners so bars read as flat printed figures, not stickers. Carries
+// `nivoMotion`. Spread into <ResponsiveBar {...nivoBarChrome}>.
 export const nivoBarChrome = {
   borderWidth: 1,
   borderColor: "var(--border)",
   borderRadius: 0,
+  ...nivoMotion,
 } as const;
 
 const compactUsd = new Intl.NumberFormat("en-US", {

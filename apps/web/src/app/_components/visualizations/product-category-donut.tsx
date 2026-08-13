@@ -42,6 +42,33 @@ export default function ProductCategoryDonut() {
   return <DonutChart data={data} />;
 }
 
+// getCategoryColor reserves --chart-1 (Live Ultramarine) for "food" — but food
+// is almost always the majority slice here, so painting the dominant wedge in
+// the interaction accent breaks the One Loud Thing rule (DESIGN.md: ultramarine
+// marks an action/focus/one live value, not decorates a whole panel). Route it
+// to the darkest ink tone instead; every other category keeps the shared ramp.
+function sliceFillColor(category: ProductCategory | null): string {
+  return category === "food" ? "var(--chart-2)" : getCategoryColor(category);
+}
+
+// Which slice fills need light-on-dark labels vs dark-on-light labels, sized
+// against the actual WCAG contrast ratios for these tokens: chart-2/3/4 clear
+// 4.5:1 only against white (chart-4 vs the paper token lands at 4.42:1, just
+// under), while chart-5 and up clear 4.5:1 against ink. Not a lightness
+// threshold you can compute from the CSS custom property at render time —
+// derived once against the known oklch values in styles.css.
+const DARK_SLICE_FILLS = new Set([
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+]);
+
+function sliceLabelColor(fill: string): string {
+  return DARK_SLICE_FILLS.has(fill)
+    ? "var(--primary-foreground)"
+    : "var(--foreground)";
+}
+
 interface DonutChartProps {
   data: CategoryData[];
 }
@@ -59,6 +86,20 @@ function DonutChart({ data }: DonutChartProps) {
     () => sumBy(data, (d) => d.productCount),
     [data],
   );
+
+  // `data` arrives sorted desc by productCount (see getCategoryDistribution),
+  // so the first entries are already the chart's leading values.
+  const chartSummary = useMemo(() => {
+    const top = data
+      .slice(0, 3)
+      .map(
+        (d) =>
+          `${formatCategoryLabel(d.category)} ${d.productCount.toLocaleString()}`,
+      )
+      .join("; ");
+    const categoryWord = data.length === 1 ? "category" : "categories";
+    return `Products by category: ${top}; ${data.length} ${categoryWord} total`;
+  }, [data]);
 
   const radius = Math.min(dimensions.width, dimensions.height) / 2;
   const innerRadius = radius * 0.55;
@@ -127,10 +168,11 @@ function DonutChart({ data }: DonutChartProps) {
   return (
     <div
       ref={containerRef}
-      className="relative h-100 w-full overflow-hidden rounded-md border border-[var(--border)]"
+      className="relative h-100 w-full overflow-hidden border border-[var(--border)]"
     >
       <svg
-        aria-hidden="true"
+        role="img"
+        aria-label={chartSummary}
         width={dimensions.width}
         height={dimensions.height}
       >
@@ -141,12 +183,15 @@ function DonutChart({ data }: DonutChartProps) {
             const isHovered = hoveredSlice?.category === slice.category;
             const labelPos = getLabelPosition(slice.startAngle, slice.endAngle);
             const showLabel = shouldShowLabel(slice.startAngle, slice.endAngle);
+            const fill = sliceFillColor(slice.category);
+            const categoryLabel = formatCategoryLabel(slice.category);
 
             return (
               <g key={slice.category ?? "uncategorized"}>
                 <Link
                   to="/products"
                   search={{ category: slice.category ?? "" }}
+                  aria-label={`${categoryLabel}: ${slice.productCount.toLocaleString()} product${slice.productCount !== 1 ? "s" : ""}`}
                 >
                   {/* biome-ignore lint/a11y/noStaticElementInteractions: D3 donut chart hover interaction */}
                   <path
@@ -156,7 +201,7 @@ function DonutChart({ data }: DonutChartProps) {
                       isHovered ? innerRadius - 4 : innerRadius,
                       isHovered ? outerRadius + 4 : outerRadius,
                     )}
-                    fill={getCategoryColor(slice.category)}
+                    fill={fill}
                     stroke={isHovered ? "var(--primary)" : "var(--background)"}
                     strokeWidth={isHovered ? 2 : 1}
                     className="cursor-pointer transition-all duration-150"
@@ -170,9 +215,10 @@ function DonutChart({ data }: DonutChartProps) {
                     y={labelPos.y}
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    className="pointer-events-none fill-background font-medium text-xs capitalize"
+                    fill={sliceLabelColor(fill)}
+                    className="pointer-events-none font-medium text-xs capitalize"
                   >
-                    {formatCategoryLabel(slice.category)}
+                    {categoryLabel}
                   </text>
                 )}
               </g>
@@ -211,8 +257,8 @@ function HoverTooltip({ slice }: { slice: CategoryData }) {
     <VizTooltip>
       <div className="flex items-center gap-2 font-medium">
         <div
-          className="size-3 rounded-full"
-          style={{ backgroundColor: getCategoryColor(slice.category) }}
+          className="size-3"
+          style={{ backgroundColor: sliceFillColor(slice.category) }}
         />
         <span className="capitalize">
           {formatCategoryLabel(slice.category)}

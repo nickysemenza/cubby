@@ -195,6 +195,19 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
     [hoveredNode],
   );
 
+  // Top nodes by recipe count, for the chart's aria-label summary.
+  const chartSummary = useMemo(() => {
+    const top = [...nodes]
+      .sort((a, b) => b.recipeCount - a.recipeCount)
+      .slice(0, 3)
+      .map(
+        (n) =>
+          `${n.name} ${n.recipeCount} recipe${n.recipeCount !== 1 ? "s" : ""}`,
+      )
+      .join("; ");
+    return `Ingredient co-occurrence network: ${top}; ${nodes.length} ingredients, ${edges.length} connections`;
+  }, [nodes, edges]);
+
   // Check if a node is connected to hovered node
   const isNodeConnected = useCallback(
     (node: NetworkNode) => {
@@ -218,12 +231,13 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
     // biome-ignore lint/a11y/noStaticElementInteractions: D3 force-directed graph visualization interaction
     <div
       ref={containerRef}
-      className="relative h-[400px] w-full overflow-hidden rounded-md border border-[var(--border)]"
+      className="relative h-[400px] w-full overflow-hidden border border-[var(--border)]"
       onClick={() => setSelectedLinkKey(null)}
     >
       <svg
         ref={svgRef}
-        aria-hidden="true"
+        role="img"
+        aria-label={chartSummary}
         width={dimensions.width}
         height={dimensions.height}
       >

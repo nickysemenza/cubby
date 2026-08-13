@@ -36,13 +36,17 @@ export function IngredientUsageChart({
         layout="horizontal"
         margin={{ top: 10, right: 40, bottom: 32, left: 200 }}
         padding={0.25}
-        colors={() => "var(--chart-1)"}
+        // --chart-1 is Live Ultramarine, reserved for one live/interactive
+        // value (DESIGN.md "One Loud Thing" rule) — a bar chart with every
+        // series in the accent decorates the whole panel instead. --chart-2
+        // is the darkest neutral ink tone, matching open-tasks-by-project.tsx.
+        colors={() => "var(--chart-2)"}
         {...nivoBarChrome}
         axisBottom={{ tickSize: 0, tickPadding: 8 }}
         axisLeft={{ tickSize: 0, tickPadding: 8 }}
         label={(d) => (d.value ? String(d.value) : "")}
         labelSkipWidth={24}
-        labelTextColor="white"
+        labelTextColor="var(--background)"
         enableGridX
         enableGridY={false}
         tooltip={({ value, indexValue }) => (

@@ -5,6 +5,7 @@ import { sumBy } from "es-toolkit";
 import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
 import { Stack } from "~/components/layout";
+import { nivoMotion } from "~/lib/nivo-theme";
 import { formatCurrency } from "~/lib/utils";
 import { sumByKey } from "~/misc/array-helpers";
 import { capitalize, getCostTypeColor } from "../shared";
@@ -127,6 +128,7 @@ export function ExpenseDonut({
         className={onCostTypeClick ? "[&_path]:cursor-pointer" : undefined}
       >
         <ResponsivePie
+          {...nivoMotion}
           data={data}
           colors={(d) => d.data.color}
           onClick={

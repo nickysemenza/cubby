@@ -6,6 +6,7 @@ import { useMemo } from "react";
 import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import { capitalize } from "~/app/projects/project-formatting";
+import { nivoMotion } from "~/lib/nivo-theme";
 import { getCostTypeColor } from "~/lib/status-colors";
 import { formatCurrency } from "~/lib/utils";
 
@@ -69,6 +70,7 @@ export function CostTypeDonut({
       className={onSelect ? "[&_path]:cursor-pointer" : undefined}
     >
       <ResponsivePie
+        {...nivoMotion}
         data={data}
         colors={(d) => d.data.color}
         onClick={onSelect ? (d) => onSelect(String(d.id)) : undefined}

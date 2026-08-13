@@ -8,6 +8,7 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
+import { nivoMotion } from "~/lib/nivo-theme";
 import { formatCurrency } from "~/lib/utils";
 import {
   getCostTypeColor,
@@ -224,6 +225,7 @@ function TotalSpend({
   return (
     <div className="h-[300px]">
       <ResponsiveLine
+        {...nivoMotion}
         data={data}
         margin={{ top: 20, right: 30, bottom: 50, left: 70 }}
         xScale={{ type: "time", format: "%Y-%m-%d", precision: "day" }}

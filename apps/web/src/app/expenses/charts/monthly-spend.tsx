@@ -60,6 +60,19 @@ export function MonthlySpend({
     .map((d) => d.label)
     .filter((_, i) => i % stride === 0);
 
+  // On the home dashboard this chart sits beside four other panels, so every
+  // bar in the accent made the accent mean nothing (DESIGN.md's One Loud Thing
+  // rule). Compact mode paints the ink ladder and spends the ultramarine on the
+  // single current month — which is also the figure the card headlines, and
+  // which one outlier month's y-axis otherwise renders as an unfindable sliver.
+  // The full-page chart is its own page's subject and keeps the accent.
+  const currentMonth = data.at(-1)?.month;
+  const barColor = ({ data: d }: { data: MonthDatum }) => {
+    if (d.net < 0) return "var(--chart-negative)";
+    if (!compact) return "var(--chart-1)";
+    return d.month === currentMonth ? "var(--chart-1)" : "var(--chart-2)";
+  };
+
   return (
     <div className={compact ? "h-40" : "h-[300px]"}>
       <ResponsiveBar
@@ -72,9 +85,7 @@ export function MonthlySpend({
             : { top: 10, right: 20, bottom: 50, left: 70 }
         }
         padding={0.3}
-        colors={({ data: d }) =>
-          d.net < 0 ? "var(--chart-negative)" : "var(--chart-1)"
-        }
+        colors={barColor}
         {...nivoBarChrome}
         axisBottom={{
           tickSize: 0,

@@ -1,5 +1,6 @@
 import { ResponsiveLine } from "@nivo/line";
 import type { ComponentProps } from "react";
+import { nivoMotion } from "~/lib/nivo-theme";
 import { formatCurrency } from "~/lib/utils";
 import { nivoChartTheme } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
@@ -35,6 +36,7 @@ export function CurrencyTrend({
   return (
     <div className="h-[300px]">
       <ResponsiveLine
+        {...nivoMotion}
         axisLeft={{ format: (value: number) => formatCurrency(value, 0) }}
         enableArea
         pointSize={5}
