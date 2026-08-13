@@ -92,7 +92,9 @@ function Home() {
       }
       fullWidth
     >
-      {/* Alert bar — only rendered when problems > 0. */}
+      {/* Status bar — absent only when there is nothing outstanding at all.
+          It carries the destructive tone for real defects and a quiet one for
+          a coverage-only backlog, which is why it can render either way. */}
       <ProblemsBanner />
 
       {/* What to act on leads the page. The ordering rule for this route is
