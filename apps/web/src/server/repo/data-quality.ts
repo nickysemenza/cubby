@@ -152,6 +152,8 @@ const productHasExpenses = sql`EXISTS (
   WHERE dq_e."productId" = ${product.id} AND dq_e."deletedAt" IS NULL
 )`;
 
+// includes-installed: a fixture is in-scope for quality checks (price,
+// model, image) the same as any other stocked product.
 const productHasInventory = sql`EXISTS (
   SELECT 1 FROM "InventoryEntry" dq_inventory
   WHERE dq_inventory."productId" = ${product.id}
@@ -453,6 +455,8 @@ export const loadProductDataQualities = async (
       })
       .from(product)
       .where(and(inArray(product.id, uniqueIds), notDeleted(product))),
+    // includes-installed: a fixture is still in scope for the same quality
+    // checks (price, model, image) as any stocked product.
     unwrapDb(db)
       .selectDistinct({ productId: inventoryEntry.productId })
       .from(inventoryEntry)

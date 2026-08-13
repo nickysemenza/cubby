@@ -450,6 +450,8 @@ export async function projectToolMatrix(
             ),
           )
           .groupBy(expense.projectId, expense.trade),
+    // includes-installed: same reasoning as project/tools.ts — an installed
+    // tool (e.g. a bench-mounted vise) is still owned and still available.
     rowIds.length === 0
       ? []
       : dbc

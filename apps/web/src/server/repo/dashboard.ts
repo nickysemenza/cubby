@@ -24,6 +24,7 @@ import {
   wish,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { stockOnly } from "~/server/repo/inventory/placement";
 
 // The table + count predicate for every countable entity. `satisfies
 // Record<CountableEntity, …>` ties this to the entity manifest: adding a
@@ -43,7 +44,12 @@ const COUNT_SOURCES = {
   },
   cookbook: { table: cookbook, where: notDeleted(cookbook) },
   location: { table: location, where: notDeleted(location) },
-  inventory: { table: inventoryEntry, where: notDeleted(inventoryEntry) },
+  // Mirrors inventoryentryList's empty-filter population, which now defaults
+  // to stock — an installed fixture shouldn't inflate the homepage count.
+  inventory: {
+    table: inventoryEntry,
+    where: and(notDeleted(inventoryEntry), stockOnly()),
+  },
   meal: { table: meal, where: notDeleted(meal) },
   project: { table: project, where: notDeleted(project) },
   task: { table: task, where: notDeleted(task) },

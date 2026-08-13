@@ -133,6 +133,8 @@ const searchQueries = {
           price: sql<number | null>`${sql.raw(
             effectiveProductPriceSql('"Product"'),
           )}`.as("price"),
+          // includes-installed: a fixture is still an owned unit of the
+          // product and must count toward how many you have.
           stockCount: sql<number>`(
             SELECT COUNT(*)::int FROM "InventoryEntry" ie
             WHERE ie."productId" = "Product"."id" AND ie."deletedAt" IS NULL
@@ -263,9 +265,12 @@ const searchQueries = {
           typeHint: location.type,
           imageUrl: imageUrl("LocationImage", "locationId").as("imageUrl"),
           createdAt: location.createdAt,
+          // Matches the location count everywhere else (tree/list rollups) —
+          // an installed fixture isn't stock you can browse or count.
           itemCount: sql<number>`(
             SELECT COUNT(*)::int FROM "InventoryEntry" ie
             WHERE ie."locationId" = "Location"."id" AND ie."deletedAt" IS NULL
+              AND ie."placement" = 'stock'
           )`.as("itemCount"),
           childCount: sql<number>`(
             SELECT COUNT(*)::int FROM "Location" child
@@ -278,6 +283,8 @@ const searchQueries = {
         (LocationSearchResult & { entityId: string })[]
       >,
   },
+  // includes-installed: this is direct search for the InventoryEntry record
+  // itself (identity), and an installed fixture must stay findable.
   inventory: {
     lexicalCondition: (query) =>
       or(

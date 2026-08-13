@@ -144,6 +144,8 @@ const resolveProductSort = (sort: SortParams) => {
     sort.direction === "asc" ? "asc nulls last" : "desc nulls last";
 
   if (sort.orderBy === "location") {
+    // includes-installed: identity/location sort, not a browse/count
+    // surface — a fixture's location still sorts the row.
     return [
       sql.raw(
         `(SELECT min(l."name") FROM "InventoryEntry" ie ` +

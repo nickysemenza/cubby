@@ -1145,6 +1145,8 @@ export async function suggestProjectTools(
         product.name,
         product.manufacturer,
       ),
+    // includes-installed: a bench-mounted vise is installed and still a tool
+    // you own — this feeds "which tools are available", not a count/browse.
     dbc
       .selectDistinct({ productId: inventoryEntry.productId })
       .from(inventoryEntry)

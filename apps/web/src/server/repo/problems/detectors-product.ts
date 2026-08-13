@@ -129,6 +129,7 @@ export const findDuplicateInventoryProducts = async (
         columns: {
           id: true,
           locationId: true,
+          placement: true,
         },
         with: {
           location: {
@@ -144,9 +145,19 @@ export const findDuplicateInventoryProducts = async (
   });
 
   return duplicates
-    .filter(
-      (prod) => prod.expectedQuantity === 1 && prod.inventoryEntry.length > 1,
-    )
+    .filter((prod) => {
+      if (prod.expectedQuantity !== 1) return false;
+      // Compare within placement only: a spare on the shelf plus one
+      // installed in the wall is the normal correct state for a
+      // single-unit product, not a duplicate.
+      const stockEntries = prod.inventoryEntry.filter(
+        (entry) => entry.placement === "stock",
+      );
+      const installedEntries = prod.inventoryEntry.filter(
+        (entry) => entry.placement === "installed",
+      );
+      return stockEntries.length > 1 || installedEntries.length > 1;
+    })
     .map((prod) => ({
       id: unsafeProductShortcode(prod.shortcode),
       name: prod.name,
@@ -329,6 +340,8 @@ export const findProductsMissingPrice = async (
 }> => {
   const dbClient = getDb(db);
 
+  // includes-installed: a fixture still needs a price — pricing/enrichment
+  // scope, not a browse/count surface.
   const stockedWithoutPrice = await dbClient.query.product.findMany({
     where: and(
       notDeleted(product),
@@ -650,6 +663,9 @@ export const findSoldButStillStocked = async (
     ),
   );
 
+  // includes-installed: sold-but-still-stocked is an ownership/identity
+  // question — a fixture the ledger says was sold is exactly as wrong as a
+  // shelf item, and should still surface here.
   const candidates = await dbClient.query.product.findMany({
     where: and(notDeleted(product), inArray(product.id, [...byProduct.keys()])),
     columns: { id: true, name: true, manufacturer: true, shortcode: true },
