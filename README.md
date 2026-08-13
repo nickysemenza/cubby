@@ -548,7 +548,8 @@ queue.
 ## 📚 Further Docs
 
 - [CLAUDE.md](CLAUDE.md) — agent rules, anti-patterns, required helpers
-- [docs/style-guide.md](docs/style-guide.md) — Tailwind/CSS conventions
+- [apps/web/DESIGN.md](apps/web/DESIGN.md) — visual system, normative tokens, and design guardrails
+- [apps/web/CLAUDE.md](apps/web/CLAUDE.md) — web implementation conventions and failure-prevention rules
 - [docs/todos.md](docs/todos.md) — the canonical backlog: goals + load-bearing design decisions + rejected alternatives
 - [docs/terminology.md](docs/terminology.md) — glossary disambiguating UI / code / DB names per concept
 - [docs/inventory-audit.md](docs/inventory-audit.md) — inventory audit/session flow: purpose, current behavior, known gaps, redesign direction

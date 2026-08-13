@@ -275,7 +275,6 @@ export const moreNavSections: NavSection[] = [
 export const publicNavItems: NavItem[] = [
   homeNavItem,
   { to: "/docs", label: "Docs", icon: FileText },
-  { to: "/design", label: "Design", icon: Palette },
 ];
 
 /**

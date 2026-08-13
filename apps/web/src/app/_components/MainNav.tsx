@@ -68,12 +68,6 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
           >
             Docs
           </Link>
-          <Link
-            to="/design"
-            className="font-medium text-muted-foreground text-sm"
-          >
-            Design
-          </Link>
         </nav>
       ) : null}
 
