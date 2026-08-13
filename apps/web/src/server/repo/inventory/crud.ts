@@ -6,6 +6,7 @@ import type {
   LocationId,
   ProductId,
 } from "@cubby/schemas/identifiers";
+import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import { inventorySortableFields } from "@cubby/schemas/inventory";
 import {
   buildTakeSkip,
@@ -59,6 +60,7 @@ import {
   dbInventoryEntryToListAPI,
   requireLoadedProductPricing,
 } from "./mappers";
+import { placementCondition, stockOnly } from "./placement";
 import type {
   CreateInventoryEntryData,
   InventoryEntryDeepDB,
@@ -150,9 +152,13 @@ export const checkUniqueProductDuplicate = async (
 
   if (productData?.expectedQuantity === 1) {
     const existingEntry = await getDb(db).query.inventoryEntry.findFirst({
+      // Scoped to stock. A spare faucet on the shelf plus one wired into the
+      // wall is the normal correct state for a single-unit product, not a
+      // duplicate worth warning about.
       where: and(
         eq(inventoryEntry.productId, productId),
         not(eq(inventoryEntry.locationId, locationId)),
+        stockOnly(),
         notDeleted(inventoryEntry),
       ),
       with: {
@@ -218,6 +224,7 @@ interface InventoryFilters {
   verifiedPresenceFilter?: "has" | "none";
   verifiedFrom?: string;
   verifiedTo?: string;
+  placementFilter?: InventoryPlacement | "all";
 }
 
 /**
@@ -241,6 +248,9 @@ export const getInventoryCountsByLocations = async (
     .where(
       and(
         notDeleted(inventoryEntry),
+        // The only caller is the per-location count badge, which answers "how
+        // many things are here to count" — a fixture is not one of them.
+        stockOnly(),
         inArray(inventoryEntry.locationId, locationIds),
       ),
     )
@@ -320,6 +330,11 @@ export const inventoryentryList = async (
       filters.verifiedTo
         ? sql`${inventoryEntry.verifiedAt} < (${filters.verifiedTo}::date + interval '1 day')`
         : undefined,
+      // The browse contract: an omitted filter means movable stock, NOT
+      // everything. Defaulted here rather than in zod so the UI, MCP
+      // `list_inventory`, and any direct tRPC caller cannot disagree about what
+      // an empty filter means — pass "all" to opt back in.
+      placementCondition(filters.placementFilter ?? "stock"),
     ],
   );
 
@@ -531,9 +546,20 @@ export const createInventoryEntry = async (
  * Get inventory entries for multiple locations (batch query to avoid N+1).
  * Returns all inventory entries with product and location relations for the given location IDs.
  */
+/**
+ * Two callers with opposite needs, so placement is a parameter and the default
+ * is "all" rather than the browse default.
+ *
+ * The audit session passes "stock" — a recount cannot include fixtures, and the
+ * predicate it uses here MUST match the snapshot queries inside
+ * `reconcileLocationSession`, or the stale guard compares two different
+ * populations and throws INVENTORY_STALE on every commit. The location card
+ * grid passes nothing and keeps its existing behaviour.
+ */
 export const getInventoryByLocationIds = async (
   db: Database,
   locationIds: LocationId[],
+  options: { placement?: InventoryPlacement | "all" } = {},
 ) => {
   if (locationIds.length === 0) return [];
 
@@ -541,6 +567,7 @@ export const getInventoryByLocationIds = async (
   const results = await dbClient.query.inventoryEntry.findMany({
     where: and(
       notDeleted(inventoryEntry),
+      placementCondition(options.placement ?? "all"),
       inArray(inventoryEntry.locationId, locationIds),
     ),
     ...relations.inventory.full,

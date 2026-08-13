@@ -5,7 +5,10 @@ import type {
   ProductId,
 } from "@cubby/schemas/identifiers";
 import { unsafeInventoryId } from "@cubby/schemas/identifiers";
-import type { InventoryBulkOperationItem } from "@cubby/schemas/inventory";
+import type {
+  InventoryBulkOperationItem,
+  InventoryPlacement,
+} from "@cubby/schemas/inventory";
 import { and, eq, inArray, max } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import { match } from "ts-pattern";
@@ -31,6 +34,7 @@ import { cascadeRemoval } from "~/server/repo/removal";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { assertLiveTargets } from "./helpers";
 import { dbInventoryEntryToAPI, requireLoadedProductPricing } from "./mappers";
+import { stockOnly } from "./placement";
 import type { InventoryEntryDeepDB } from "./types";
 
 type ResolvedInventoryBulkOperationItem = Omit<
@@ -354,9 +358,20 @@ export type ResolvedMoveInventoryEntriesPayload = {
   }>;
 };
 
-/** A row's identity in the partial unique index `(productId, locationId)`. */
-const slotKey = (productId: ProductId, locationId: LocationId) =>
-  `${productId}:${locationId}`;
+/**
+ * A row's identity in the partial unique index
+ * `(productId, locationId, placement)`.
+ *
+ * Placement is part of the key because a spare on the shelf and one wired into
+ * the wall are two legitimate rows for one product in one room. Drop it and the
+ * planner collapses them into a single slot, so a move silently folds stock
+ * into the fixture and hard-deletes the source — no error, no audit trail.
+ */
+const slotKey = (
+  productId: ProductId,
+  locationId: LocationId,
+  placement: InventoryPlacement,
+) => `${productId}:${locationId}:${placement}`;
 
 /**
  * The in-memory ledger a move plans against before it writes anything.
@@ -375,6 +390,7 @@ type PlannedRow = {
   id: InventoryId | null;
   productId: ProductId;
   locationId: LocationId;
+  placement: InventoryPlacement;
   value: number;
   unit: string;
   /** The row as loaded, for `computeChanges`. Null for a row this move creates. */
@@ -468,12 +484,13 @@ export const moveInventoryEntries = async (
       const plannedBySlot = new Map<string, PlannedRow>();
       const plan = (entry: InventoryEntryDeepDB) => {
         const parsed = parseInventoryAmount(entry.amount, entry.id);
-        const key = slotKey(entry.productId, entry.locationId);
+        const key = slotKey(entry.productId, entry.locationId, entry.placement);
         if (plannedBySlot.has(key)) return;
         plannedBySlot.set(key, {
           id: entry.id,
           productId: entry.productId,
           locationId: entry.locationId,
+          placement: entry.placement,
           value: parsed.value,
           unit: parsed.unit,
           original: entry,
@@ -486,7 +503,10 @@ export const moveInventoryEntries = async (
       // its row to the destination slot, so a later item naming the same entry
       // has to follow it rather than look at where it started.
       const slotByEntryId = new Map<InventoryId, string>(
-        sourceEntries.map((e) => [e.id, slotKey(e.productId, e.locationId)]),
+        sourceEntries.map((e) => [
+          e.id,
+          slotKey(e.productId, e.locationId, e.placement),
+        ]),
       );
       // Destination slots in request order — the response echoes the rows the
       // caller asked to fill, deduped, not every row the plan touched.
@@ -517,7 +537,14 @@ export const moveInventoryEntries = async (
           );
         }
 
-        const targetSlot = slotKey(source.productId, item.targetLocationId);
+        // A move carries its placement with it: relocating the kitchen dimmer
+        // to the garage leaves it an installed fixture, and it must not merge
+        // into a stock row of the same product sitting there.
+        const targetSlot = slotKey(
+          source.productId,
+          item.targetLocationId,
+          source.placement,
+        );
         const existingAtTarget = plannedBySlot.get(targetSlot);
 
         // Summing `each` into `lb` produces a number that means nothing.
@@ -565,6 +592,10 @@ export const moveInventoryEntries = async (
               id: null,
               productId: source.productId,
               locationId: item.targetLocationId,
+              // A partial move mints a row of the SAME placement as its source:
+              // splitting a box of spare dimmers off the shelf yields more
+              // stock, never a fixture.
+              placement: source.placement,
               value: moveQuantity,
               unit: movingUnit,
               original: null,
@@ -590,7 +621,7 @@ export const moveInventoryEntries = async (
       const occupantBySlot = new Map<string, InventoryId>();
       for (const entry of [...sourceEntries, ...destinationEntries]) {
         occupantBySlot.set(
-          slotKey(entry.productId, entry.locationId),
+          slotKey(entry.productId, entry.locationId, entry.placement),
           entry.id,
         );
       }
@@ -604,7 +635,9 @@ export const moveInventoryEntries = async (
         if (hardDeletedSourceIds.includes(entry.id)) continue;
         await tx.delete(inventoryEntry).where(eq(inventoryEntry.id, entry.id));
         hardDeletedSourceIds.push(entry.id);
-        occupantBySlot.delete(slotKey(entry.productId, entry.locationId));
+        occupantBySlot.delete(
+          slotKey(entry.productId, entry.locationId, entry.placement),
+        );
       }
 
       // One write and one audit entry per affected row, regardless of how many
@@ -638,6 +671,7 @@ export const moveInventoryEntries = async (
             const created = await insertWithShortcode(tx, "inventory", {
               productId: row.productId,
               locationId: row.locationId,
+              placement: row.placement,
               amount: { value: row.value, unit: row.unit },
               valuation,
             });
@@ -664,7 +698,11 @@ export const moveInventoryEntries = async (
             eq(inventoryEntry.id, row.id),
           );
           occupantBySlot.delete(
-            slotKey(original.productId, original.locationId),
+            slotKey(
+              original.productId,
+              original.locationId,
+              original.placement,
+            ),
           );
           occupantBySlot.set(key, row.id);
           const changes = computeChanges(original, updated, [
@@ -801,9 +839,22 @@ export const reconcileLocationSession = async (
       // Read the complete live snapshot in the transaction. Id-set equality
       // catches add/remove/move races; max(updatedAt) catches quantity/product
       // edits that leave the ids unchanged.
+      //
+      // BOTH queries are stock-only, and they must stay that way TOGETHER.
+      // Installed fixtures are outside a recount's jurisdiction, so the client
+      // never counts them (`getInventoryByLocationIds` with placement "stock").
+      // If `existing` were narrowed and this `max(updatedAt)` were not, merely
+      // editing a fixture's amount would raise the server's watermark above the
+      // client's and throw INVENTORY_STALE on every recount at that location,
+      // with no visible cause and no way for the operator to clear it.
+      //
+      // The converse — flipping a row stock→installed mid-session — SHOULD
+      // throw: the row leaves `liveIds` while still in `expectedIds`, so the
+      // snapshot genuinely changed. That is asserted, not accidental.
       const existing = await tx.query.inventoryEntry.findMany({
         where: and(
           eq(inventoryEntry.locationId, locationId),
+          stockOnly(),
           notDeleted(inventoryEntry),
         ),
         ...relations.inventory.full,
@@ -814,6 +865,7 @@ export const reconcileLocationSession = async (
         .where(
           and(
             eq(inventoryEntry.locationId, locationId),
+            stockOnly(),
             notDeleted(inventoryEntry),
           ),
         );
@@ -881,6 +933,7 @@ export const reconcileLocationSession = async (
                 id: inventoryEntry.id,
                 productId: inventoryEntry.productId,
                 locationId: inventoryEntry.locationId,
+                placement: inventoryEntry.placement,
                 amount: inventoryEntry.amount,
               })
               .from(inventoryEntry)
@@ -892,9 +945,12 @@ export const reconcileLocationSession = async (
                 ),
               )
           : [];
+      // Keyed by placement too, or a relocate folds a stock row into a fixture
+      // of the same product at the destination and hard-deletes the source —
+      // silent data loss with no error.
       const targetRowsByLocationProduct = new Map(
         targetRows.map((entry) => [
-          `${entry.locationId}:${entry.productId}`,
+          `${entry.locationId}:${entry.productId}:${entry.placement}`,
           entry,
         ]),
       );
@@ -954,7 +1010,7 @@ export const reconcileLocationSession = async (
           })
           .with({ kind: "relocate" }, async ({ targetLocationId }) => {
             const sourceAmount = parseInventoryAmount(before.amount, before.id);
-            const targetKey = `${targetLocationId}:${before.productId}`;
+            const targetKey = `${targetLocationId}:${before.productId}:${before.placement}`;
             const target = targetRowsByLocationProduct.get(targetKey);
             const productPrice = priceMap.get(before.productId) ?? null;
 
@@ -998,6 +1054,7 @@ export const reconcileLocationSession = async (
                 id: updatedTarget.id,
                 productId: updatedTarget.productId,
                 locationId: updatedTarget.locationId,
+                placement: updatedTarget.placement,
                 amount: updatedTarget.amount,
               });
             } else {
@@ -1019,6 +1076,7 @@ export const reconcileLocationSession = async (
                 id: updated.id,
                 productId: updated.productId,
                 locationId: updated.locationId,
+                placement: updated.placement,
                 amount: updated.amount,
               });
             }
