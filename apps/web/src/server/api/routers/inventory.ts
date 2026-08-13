@@ -549,6 +549,7 @@ const getByLocationIds = protectedProcedure
       input.locationIds.map((shortcode) =>
         unsafeLocationId(resolved.get(shortcode)!),
       ),
+      { placement: input.placement },
     );
   });
 

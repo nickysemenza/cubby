@@ -112,8 +112,15 @@ export function InventorySessionWorkbench({
     return ids;
   }, [sessionLocations, unknownLocation, unknownChildLocations]);
 
+  // Stock only: a recount is a walk-over-and-count exercise and a fixture is
+  // not a thing you can count. This MUST match the snapshot predicate inside
+  // `reconcileLocationSession`, or the stale guard compares two different
+  // populations and every commit throws INVENTORY_STALE.
   const inventoryQuery = useQuery({
-    ...api.inventory.getByLocationIds.queryOptions({ locationIds }),
+    ...api.inventory.getByLocationIds.queryOptions({
+      locationIds,
+      placement: "stock",
+    }),
     enabled: locationIds.length > 0,
   });
 

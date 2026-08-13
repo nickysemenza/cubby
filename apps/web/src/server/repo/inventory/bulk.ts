@@ -166,9 +166,18 @@ export const bulkProcessInventoryEntries = async (
         }
       }
 
+      // Stock only, because this reconcile is DELETE-ON-OMIT: anything at the
+      // location that the caller did not resubmit gets removed. A fixture is
+      // outside this flow's jurisdiction — the bulk-capture UI never shows one,
+      // so every submission would silently omit it and delete it.
+      //
+      // Deliberately asymmetric with the max(updatedAt) scan above, which stays
+      // wide (it even includes soft-deleted rows on purpose). Over-broad there
+      // costs a spurious refresh; over-narrow here costs the fixture.
       const existingItems = await tx.query.inventoryEntry.findMany({
         where: and(
           eq(inventoryEntry.locationId, locationId),
+          stockOnly(),
           notDeleted(inventoryEntry),
         ),
         ...relations.inventory.full,

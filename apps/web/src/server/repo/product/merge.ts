@@ -75,6 +75,7 @@ import {
   type ProductShortcode,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
+import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import type { MergeProductsInput } from "@cubby/schemas/product";
 import { and, eq, inArray } from "drizzle-orm";
 import { sumBy, uniq } from "es-toolkit";
@@ -244,8 +245,13 @@ type InventoryRow = {
   id: InventoryId;
   productId: ProductId;
   locationId: string;
+  placement: InventoryPlacement;
   amount: Amount;
 };
+
+/** `(locationId, placement)` — the shelf slot two rows must share to fold. */
+const inventorySlot = (row: { locationId: string; placement: string }) =>
+  `${row.locationId}\u0000${row.placement}`;
 
 /**
  * The same-location fold, computed without writing so both the mutation and
@@ -257,10 +263,13 @@ const planInventoryFold = (args: {
   keeperRows: InventoryRow[];
   loserRows: InventoryRow[];
 }) => {
+  // Keyed by placement as well as location: the loser's spare on the shelf and
+  // the keeper's unit wired into the wall are the same product in the same room
+  // and still must not fold into one another.
   const plan = planSlotCollisions({
     keeperRows: args.keeperRows,
     loserRows: args.loserRows,
-    slotKey: (row) => row.locationId,
+    slotKey: inventorySlot,
   });
   const mismatches = plan.absorb.flatMap(({ into, rows }) =>
     rows
@@ -341,7 +350,13 @@ export const mergeProducts = async (
         inArray(inventoryEntry.productId, [keepId, ...loserIds]),
         notDeleted(inventoryEntry),
       ),
-      columns: { id: true, productId: true, locationId: true, amount: true },
+      columns: {
+        id: true,
+        productId: true,
+        locationId: true,
+        placement: true,
+        amount: true,
+      },
     })) as InventoryRow[];
     const inventoryPlan = planInventoryFold({
       keeperRows: inventoryRows.filter((row) => row.productId === keepId),
@@ -693,7 +708,13 @@ export const previewMergeProducts = async (
       inArray(inventoryEntry.productId, [keepId, ...losers]),
       notDeleted(inventoryEntry),
     ),
-    columns: { id: true, productId: true, locationId: true, amount: true },
+    columns: {
+      id: true,
+      productId: true,
+      locationId: true,
+      placement: true,
+      amount: true,
+    },
   })) as InventoryRow[];
   const inventoryPlan = planInventoryFold({
     keeperRows: inventoryRows.filter((row) => row.productId === keepId),
