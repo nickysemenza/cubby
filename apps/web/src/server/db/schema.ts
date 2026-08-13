@@ -783,8 +783,12 @@ export const inventoryEntry = pgTable(
   },
   (table) => [
     shortcodeUnique("InventoryEntry", table.shortcode),
+    // Placement is part of the key so a spare on the shelf and one wired into
+    // the wall can coexist in the same room — the normal state, not a duplicate.
+    // Strictly more permissive than the old two-column form, so the CREATE can
+    // never fail on existing data.
     uniqueIndex("InventoryEntry_productId_locationId_key")
-      .on(table.productId, table.locationId)
+      .on(table.productId, table.locationId, table.placement)
       .where(sql`${table.deletedAt} IS NULL`),
     index("InventoryEntry_productId_idx").on(table.productId),
     index("InventoryEntry_locationId_idx").on(table.locationId),
