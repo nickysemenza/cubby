@@ -39,6 +39,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { imageStatusValues } from "@cubby/schemas/image";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
+import { inventoryPlacementValues } from "@cubby/schemas/inventory";
 import type { LocationValuation } from "@cubby/schemas/location";
 import type { BaseKind } from "@cubby/schemas/problems";
 import { productCategoryValues } from "@cubby/schemas/product";
@@ -137,6 +138,10 @@ export {
 // Enums - values derived from Zod schemas
 export const recipeSourceEnum = pgEnum("RecipeSource", recipeSourceValues);
 export const imageStatusEnum = pgEnum("ImageStatus", imageStatusValues);
+export const inventoryPlacementEnum = pgEnum(
+  "InventoryPlacement",
+  inventoryPlacementValues,
+);
 export const imageRenderStatusEnum = pgEnum("ImageRenderStatus", [
   "unverified",
   "verified",
@@ -558,6 +563,13 @@ export const product = pgTable(
     // weight/volume/calories instead. Does not suppress the problem — the card
     // stays flagged until those are filled manually.
     usdaUnavailable: boolean("usdaUnavailable"),
+    // Whether shelf records are kept for this KIND of thing — an operator
+    // bookkeeping decision, not a claim about the world. null = undecided (the
+    // "Not on a shelf" worklist), false = reviewed, no shelf claim wanted
+    // (bananas, software), true = tracked. Nullable on purpose: the whole point
+    // is that the undecided state is representable, so the worklist converges
+    // by decision rather than refilling on every grocery run.
+    stockTracked: boolean("stockTracked"),
     dataExceptions: jsonb("dataExceptions")
       .notNull()
       .$type<DataException[]>()
@@ -762,6 +774,12 @@ export const inventoryEntry = pgTable(
     // Durable record of when this entry was last verified in an audit session
     // (set on session "Done"). Nullable: null = never verified.
     verifiedAt: timestamp("verifiedAt", { mode: "date" }),
+    // Movable stock vs a fixed installation — see `inventoryPlacementValues`
+    // in @cubby/schemas/inventory for the full semantics. A pgEnum rather than
+    // text + check(): `drizzle-kit push` does not diff CHECK constraints, so a
+    // check here would exist in the test template (built via pushSchema) and
+    // never in production.
+    placement: inventoryPlacementEnum("placement").notNull().default("stock"),
   },
   (table) => [
     shortcodeUnique("InventoryEntry", table.shortcode),

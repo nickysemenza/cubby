@@ -31,6 +31,7 @@ type InventoryEntryBaseDB = Pick<
   | "amount"
   | "valuation"
   | "verifiedAt"
+  | "placement"
   | "createdAt"
   | "updatedAt"
 >;
@@ -40,6 +41,7 @@ const inventoryEntryBaseShape = (entry: InventoryEntryBaseDB) => ({
   amount: parseInventoryAmount(entry.amount, entry.id),
   valuation: entry.valuation,
   verifiedAt: entry.verifiedAt,
+  placement: entry.placement,
   createdAt: entry.createdAt,
   updatedAt: entry.updatedAt,
 });

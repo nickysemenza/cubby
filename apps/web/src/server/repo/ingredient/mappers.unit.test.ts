@@ -54,6 +54,7 @@ const baseProduct = {
   category: "food" as const,
   price: 4.5,
   usdaUnavailable: null,
+  stockTracked: null,
 };
 
 const baseIngredient = {

@@ -30,6 +30,7 @@ function makeInventoryItem(params: {
     amount: { value: 1, unit: "each" },
     valuation: params.valuation,
     verifiedAt: null,
+    placement: "stock" as const,
     location: {
       id: unsafeLocationShortcode("LOC-2345"),
       name: "Test Location",

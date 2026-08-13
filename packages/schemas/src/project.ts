@@ -1337,6 +1337,19 @@ export type ExpenseAnalyticsOut = z.infer<typeof expenseAnalyticsOut>;
  */
 export const HOUSE_TAX_RATE = 0.08625;
 
+/**
+ * The standing bucket for spend that is life rather than project work —
+ * groceries, shampoo, dog treats. It exists so `projectId IS NULL` carries
+ * exactly one meaning ("not yet triaged") instead of two, which is what let
+ * the Unassigned view finally converge.
+ *
+ * A literal shortcode rather than a settings row: `appSettings` has no reader,
+ * and resolving by `name` would let a rename silently disable the import-time
+ * default. Note the shortcode alphabet excludes O/I/L/0/1, so `PRJ-HOME` and
+ * `PRJ-HOUS` are both unparseable.
+ */
+export const HOUSEHOLD_PROJECT_SHORTCODE = "PRJ-HSHD";
+
 export const MATCH_TOLERANCE_LOW = 0.1;
 export const MATCH_TOLERANCE_HIGH = 0.15;
 /** Dollars. Below this, a relative band is too narrow to be useful. */

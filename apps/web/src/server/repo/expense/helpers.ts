@@ -8,17 +8,25 @@ import type {
 import {
   unsafeExpenseShortcode,
   unsafeProductShortcode,
+  unsafeProjectId,
   unsafeProjectShortcode,
   unsafePurchaseShortcode,
   unsafeVendorShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ExpenseOut } from "@cubby/schemas/project";
+import { HOUSEHOLD_PROJECT_SHORTCODE } from "@cubby/schemas/project";
 import { purchaseOrderUrl } from "@cubby/schemas/vendor";
+import { FOOD_CATEGORY } from "@cubby/shared";
+import { and, eq } from "drizzle-orm";
+import type { DrizzleTransaction } from "~/server/db";
+import { product } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
+  notDeleted,
   resolveLiveJoinName,
   resolveLiveJoinShortcode,
 } from "~/server/repo/database-helpers";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 /**
  * Reject a negative quantity on a positive-cost line.
@@ -158,4 +166,50 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+};
+
+/**
+ * The import-time triage default: a food line with no project belongs to
+ * Household.
+ *
+ * This is an IMPORT-TIME default and nothing more. `updateExpense` and
+ * `moveExpenses` deliberately do NOT call it — an update is an explicit
+ * statement about one row the operator is looking at, and `moveExpenses` is
+ * the bulk move-to-inbox undo. Re-defaulting in either would make "clear the
+ * project on this food line" impossible, bouncing every clear straight back to
+ * Household with no error and no audit diff to explain it. Automation triages,
+ * humans override, an override is never re-triaged.
+ *
+ * Returns `null` when no Household project exists, so a database that has not
+ * been backfilled (every existing test, any fresh dev DB) behaves exactly as it
+ * did before. Absence degrades, it never throws.
+ *
+ * Scope is `category === 'food'` on purpose. The other backfilled cohort —
+ * household/supplies repurchased three or more times — is a retrospective
+ * aggregate over a product's history; evaluating it per-insert would cost a
+ * grouped query on every create and would triage the third bottle of shampoo
+ * while leaving the first two behind.
+ */
+export const resolveDefaultProjectId = async (
+  tx: DrizzleTransaction,
+  args: { projectId: ProjectId | null; productId: ProductId | null },
+): Promise<ProjectId | null> => {
+  // An explicitly chosen project always wins. Note `expenseCreateShape.projectId`
+  // is `.nullable().default(null)`, so post-parse an omitted field and an
+  // explicit null are indistinguishable — there is no "caller was silent" case
+  // to honour, and pretending otherwise would buy a rule that never fires.
+  if (args.projectId !== null || args.productId === null) return args.projectId;
+
+  const linked = await tx.query.product.findFirst({
+    where: and(eq(product.id, args.productId), notDeleted(product)),
+    columns: { category: true },
+  });
+  if (linked?.category !== FOOD_CATEGORY) return null;
+
+  const householdId = await resolveLiveShortcode(
+    tx,
+    HOUSEHOLD_PROJECT_SHORTCODE,
+    "project",
+  );
+  return householdId ? unsafeProjectId(householdId) : null;
 };
