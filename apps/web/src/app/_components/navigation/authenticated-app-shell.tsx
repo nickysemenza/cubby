@@ -9,6 +9,7 @@ import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { cn } from "~/lib/utils";
 import {
   desktopNav,
+  getSidebarGroupItems,
   homeNavItem,
   isNavGroup,
   type NavGroup,
@@ -32,6 +33,11 @@ const ShellAccount = lazy(() =>
 const RailGroupFlyout = lazy(() =>
   import("./sidebar-rail-group").then((module) => ({
     default: module.SidebarRailGroup,
+  })),
+);
+const RailLeaf = lazy(() =>
+  import("./sidebar-rail-group").then((module) => ({
+    default: module.SidebarRailLeaf,
   })),
 );
 
@@ -199,10 +205,12 @@ function SidebarUtilityLinks({
   return (
     <div className="mb-1 border-border border-b pb-1">
       <div className={cn("md:block", expanded && "lg:hidden")}>
-        <SidebarRailLeaf
-          item={settingsNavItem}
-          active={activeTo === settingsNavItem.to}
-        />
+        <Suspense fallback={<SidebarRailLeafFallback item={settingsNavItem} />}>
+          <RailLeaf
+            item={settingsNavItem}
+            active={activeTo === settingsNavItem.to}
+          />
+        </Suspense>
         <div className="flex size-10 items-center justify-center">
           <Suspense fallback={<div className="size-7" aria-hidden="true" />}>
             <ShellAccount />
@@ -237,7 +245,9 @@ function SidebarHome({
   return (
     <>
       <div className={cn("md:block", expanded && "lg:hidden")}>
-        <SidebarRailLeaf item={homeNavItem} active={active} />
+        <Suspense fallback={<SidebarRailLeafFallback item={homeNavItem} />}>
+          <RailLeaf item={homeNavItem} active={active} />
+        </Suspense>
       </div>
       {expanded && (
         <div className="hidden lg:block">
@@ -257,9 +267,7 @@ function SidebarGroup({
   expanded: boolean;
   activeTo: string | undefined;
 }) {
-  const children = group.children.filter(
-    (item) => item.to !== settingsNavItem.to,
-  );
+  const children = getSidebarGroupItems(group);
   return (
     <>
       <div className={cn("md:block", expanded && "lg:hidden")}>
@@ -318,22 +326,17 @@ function SidebarFullLeaf({ item, active }: { item: NavItem; active: boolean }) {
   );
 }
 
-function SidebarRailLeaf({ item, active }: { item: NavItem; active: boolean }) {
+function SidebarRailLeafFallback({ item }: { item: NavItem }) {
   const Icon = item.icon;
   return (
-    <Link
-      to={item.to}
-      preload="intent"
-      preloadDelay={40}
-      className={cn(
-        "mb-1 flex size-10 items-center justify-center border border-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-        active && "border-border bg-background text-foreground",
-      )}
-      aria-current={active ? "page" : undefined}
+    <button
+      type="button"
+      className="mb-1 flex size-10 items-center justify-center border border-transparent text-muted-foreground"
       aria-label={item.label}
       title={item.label}
+      disabled
     >
       <Icon className="size-3.5" />
-    </Link>
+    </button>
   );
 }

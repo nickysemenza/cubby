@@ -6,6 +6,7 @@ import {
   desktopNav,
   findActiveTo,
   getEntityNavGroup,
+  getSidebarGroupItems,
   homeNavItem,
   isNavGroup,
   settingsNavItem,
@@ -29,6 +30,17 @@ describe("workspace navigation contract", () => {
     ["/products-extra", undefined],
   ])("matches %s to its longest navigation target", (pathname, expected) => {
     expect(findActiveTo(pathname)).toBe(expected);
+  });
+
+  it("keeps Settings in the manifest while reserving it for the sidebar footer", () => {
+    const more = desktopNav.find(
+      (node) => isNavGroup(node) && node.label === "More",
+    );
+    expect(more && isNavGroup(more)).toBe(true);
+    if (!more || !isNavGroup(more)) return;
+
+    expect(more.children).toContain(settingsNavItem);
+    expect(getSidebarGroupItems(more)).not.toContain(settingsNavItem);
   });
 });
 

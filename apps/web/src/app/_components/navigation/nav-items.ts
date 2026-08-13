@@ -89,6 +89,11 @@ export const settingsNavItem: NavItem = {
   icon: Settings,
 };
 
+/** Sidebar groups omit Settings because the workspace footer owns it. */
+export function getSidebarGroupItems(group: NavGroup): NavItem[] {
+  return group.children.filter((item) => item.to !== settingsNavItem.to);
+}
+
 /**
  * The signed-in desktop bar, top to bottom — the single source of truth for the
  * authed IA. Dropdowns nest their leaves and own their trigger icon. Active

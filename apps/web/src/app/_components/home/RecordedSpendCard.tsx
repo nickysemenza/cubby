@@ -62,11 +62,11 @@ export function RecordedSpendCard() {
   const session = authClient.useSession();
   const hydrated = useHydrated();
   const isAuthenticated = hydrated && !!session.data?.user;
-  const window = useMemo(() => {
+  const spendWindow = useMemo(() => {
     const now = hydrated ? new Date() : new Date(0);
     return getRecordedSpendWindow(now);
   }, [hydrated]);
-  const { months, filters } = window;
+  const { months, filters } = spendWindow;
   const query = useQuery({
     ...api.expense.analytics.queryOptions(filters),
     enabled: isAuthenticated,

@@ -2,7 +2,7 @@ import type { InfLocation } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
-import { ArrowRight, Wallet } from "lucide-react";
+import { Wallet } from "lucide-react";
 import { useMemo } from "react";
 import { Row } from "~/components/layout";
 import { DashboardCard } from "~/components/layout/dashboard-card";
@@ -54,9 +54,22 @@ export function PantryValueCard() {
     return { total, bars };
   }, [data]);
 
+  const inventoryAction = (
+    <Link
+      to="/inventory"
+      className="font-mono text-2xs text-muted-foreground uppercase transition-colors hover:text-foreground"
+    >
+      Inventory
+    </Link>
+  );
+
   if (!isAuthenticated || isLoading) {
     return (
-      <DashboardCard icon={Wallet} title="Pantry value">
+      <DashboardCard
+        icon={Wallet}
+        title="Pantry value"
+        action={inventoryAction}
+      >
         <Skeleton className="h-7 w-24" />
         <Skeleton className="mt-4 h-24 w-full" />
       </DashboardCard>
@@ -65,7 +78,11 @@ export function PantryValueCard() {
 
   if (isError) {
     return (
-      <DashboardCard icon={Wallet} title="Pantry value">
+      <DashboardCard
+        icon={Wallet}
+        title="Pantry value"
+        action={inventoryAction}
+      >
         <p className="text-muted-foreground text-sm">
           Pantry value is unavailable right now.
         </p>
@@ -78,14 +95,7 @@ export function PantryValueCard() {
       <DashboardCard
         icon={Wallet}
         title="Pantry value"
-        action={
-          <Link
-            to="/inventory"
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <ArrowRight className="size-4" />
-          </Link>
-        }
+        action={inventoryAction}
       >
         <p className="text-muted-foreground text-sm">
           Add inventory to see where its value lives.
@@ -100,14 +110,7 @@ export function PantryValueCard() {
       icon={Wallet}
       title="Pantry value"
       description="Current value by location"
-      action={
-        <Link
-          to="/inventory"
-          className="font-mono text-2xs text-muted-foreground uppercase transition-colors hover:text-foreground"
-        >
-          Inventory
-        </Link>
-      }
+      action={inventoryAction}
     >
       <div className="font-mono font-semibold text-xl tabular-nums">
         {formatCurrency(total)}

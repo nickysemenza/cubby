@@ -40,6 +40,11 @@ test("workspace shell responds from phone navigation through desktop sidebar", a
 
   await page.setViewportSize({ width: 768, height: 900 });
   await expect.poll(async () => (await sidebar.boundingBox())?.width).toBe(56);
+  const home = sidebar.getByRole("link", { name: "Home", exact: true });
+  await sidebar.locator('a[href="/"]').first().focus();
+  await page.keyboard.press("Tab");
+  await expect(home).toBeFocused();
+  await expect(page.getByRole("tooltip")).toHaveText("Home");
   const cook = page.getByRole("button", { name: "Cook" });
   await expect(cook).toBeEnabled();
   await cook.click();

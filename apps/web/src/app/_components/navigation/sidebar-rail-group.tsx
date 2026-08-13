@@ -7,8 +7,13 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
-import { type NavGroup, type NavItem, settingsNavItem } from "./nav-items";
+import { getSidebarGroupItems, type NavGroup, type NavItem } from "./nav-items";
 
 export function SidebarRailGroup({
   group,
@@ -17,30 +22,36 @@ export function SidebarRailGroup({
   group: NavGroup;
   activeTo: string | undefined;
 }) {
-  const children = group.children.filter(
-    (item) => item.to !== settingsNavItem.to,
-  );
+  const children = getSidebarGroupItems(group);
   const active = children.some((item) => item.to === activeTo);
   const Icon = group.icon;
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <button
-            type="button"
-            className={cn(
-              "mb-1 flex size-10 items-center justify-center border border-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none",
-              active && "border-border bg-background text-foreground",
-            )}
-            aria-label={group.label}
-            aria-current={active ? "page" : undefined}
-            title={group.label}
-          />
-        }
-      >
-        <Icon className="size-3.5" />
-      </DropdownMenuTrigger>
+      <Tooltip lazy={false}>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  className={cn(
+                    "mb-1 flex size-10 items-center justify-center border border-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none",
+                    active && "border-border bg-background text-foreground",
+                  )}
+                  aria-label={group.label}
+                  aria-current={active ? "page" : undefined}
+                />
+              }
+            />
+          }
+        >
+          <Icon className="size-3.5" />
+        </TooltipTrigger>
+        <TooltipContent side="right" role="tooltip">
+          {group.label}
+        </TooltipContent>
+      </Tooltip>
       <DropdownMenuContent side="right" align="start" className="w-52">
         <DropdownMenuGroup>
           <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
@@ -54,6 +65,40 @@ export function SidebarRailGroup({
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+export function SidebarRailLeaf({
+  item,
+  active,
+}: {
+  item: NavItem;
+  active: boolean;
+}) {
+  const Icon = item.icon;
+  return (
+    <Tooltip lazy={false}>
+      <TooltipTrigger
+        render={
+          <Link
+            to={item.to}
+            preload="intent"
+            preloadDelay={40}
+            className={cn(
+              "mb-1 flex size-10 items-center justify-center border border-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+              active && "border-border bg-background text-foreground",
+            )}
+            aria-current={active ? "page" : undefined}
+            aria-label={item.label}
+          />
+        }
+      >
+        <Icon className="size-3.5" />
+      </TooltipTrigger>
+      <TooltipContent side="right" role="tooltip">
+        {item.label}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
