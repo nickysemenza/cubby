@@ -40,9 +40,17 @@ import {
  *   # 1. Review. This is the default — no flag writes anything.
  *   pnpm --filter @cubby/web exec tsx scripts/backfill-statement-source-refs.ts
  *
- *   # 2. Write, naming the pair count you reviewed. A mismatch aborts.
+ *   # 2. Write, naming the count the dry run just printed. A mismatch aborts.
  *   pnpm --filter @cubby/web exec tsx scripts/backfill-statement-source-refs.ts \
- *     --write --confirm-count=2052
+ *     --write --confirm-count=<n>
+ *
+ * Take the count from the dry run you just did rather than from anywhere else:
+ * it falls as rows get matched, so a number copied from a previous run is stale
+ * by construction (the guard aborts rather than writing the wrong set).
+ *
+ * ALREADY RUN for `copilot` (1,102 + 944 refs). It is idempotent, so re-running
+ * is a no-op, and `--source=monarch` has not been tried — that is the reason
+ * this file is still here rather than deleted with the one-off ingest scripts.
  */
 
 const arg = (name: string) =>
