@@ -1,3 +1,4 @@
+import { inventoryPlacementValues } from "@cubby/shared";
 import { fdcId, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { inventoryRelatedFilterFields } from "./related-view";
@@ -39,9 +40,9 @@ export { positiveAmount } from "./codec";
  * placement, not about a product type — the same 150-pack of wire nuts is
  * stock in the garage and consumed in the wall.
  */
-export const inventoryPlacementValues = ["stock", "installed"] as const;
+export { inventoryPlacementValues } from "@cubby/shared";
+export type { InventoryPlacement } from "@cubby/shared";
 export const inventoryPlacement = z.enum(inventoryPlacementValues);
-export type InventoryPlacement = (typeof inventoryPlacementValues)[number];
 
 /**
  * Tri-state, and explicitly NOT `inventoryPlacement.optional()`.

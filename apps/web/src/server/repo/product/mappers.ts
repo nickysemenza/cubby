@@ -271,6 +271,7 @@ export const dbProductToListAPI = (
       amount: parseInventoryAmount(entry.amount, entry.id),
       valuation: entry.valuation,
       verifiedAt: entry.verifiedAt,
+      placement: entry.placement,
       createdAt: entry.createdAt,
       updatedAt: entry.updatedAt,
       location: dbLocationToProductListInventoryShape(entry.location),
@@ -318,6 +319,7 @@ export const dbProductToAPI = (
     amount: parseInventoryAmount(entry.amount, entry.id),
     valuation: entry.valuation,
     verifiedAt: entry.verifiedAt,
+    placement: entry.placement,
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt,
     location: {

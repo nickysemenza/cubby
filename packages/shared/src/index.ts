@@ -52,6 +52,7 @@ export {
 export type { AppErrorReason } from "./error-utils";
 
 export {
+  inventoryPlacementValues,
   productCategoryValues,
   categoryColors,
   getCategoryColor,
@@ -59,7 +60,10 @@ export {
   FOOD_CATEGORY,
   isNonFoodCategory,
 } from "./category-theme";
-export type { ProductCategory } from "./category-theme";
+export type {
+  InventoryPlacement,
+  ProductCategory,
+} from "./category-theme";
 
 export {
   locationTypeValues,

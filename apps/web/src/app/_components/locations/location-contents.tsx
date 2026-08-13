@@ -179,6 +179,22 @@ function ValuationBreakdown({ location }: { location: InfLocation }) {
   );
 }
 
+/**
+ * The fixtures companion to `locationInventoryListInput`.
+ *
+ * Its own explicit input, NOT a spread of the stock one: they must land on
+ * separate React Query cache entries, and sharing a shape is exactly how two
+ * lists end up serving each other's rows.
+ */
+const locationFixturesListInput = (locationId: InfLocation["id"]) => ({
+  sort: [{ orderBy: "createdAt", direction: "desc" as const }],
+  pagination: { pageIndex: 0, pageSize: 100 },
+  filters: {
+    locationIdFilter: locationId,
+    placementFilter: "installed" as const,
+  },
+});
+
 export function LocationContents({ location }: { location: InfLocation }) {
   const api = useTRPC();
   const queryClient = useQueryClient();
@@ -199,6 +215,14 @@ export function LocationContents({ location }: { location: InfLocation }) {
   );
   const itemCount = itemsData?.meta.totalCount ?? location.directItemCount ?? 0;
   const hasItems = itemCount > 0;
+
+  // Fixtures are excluded from the list above, so they have to be disclosed
+  // rather than silently dropped — otherwise the shelf reads as complete when
+  // it isn't. Zero fixtures renders nothing at all.
+  const { data: fixturesData } = useQuery(
+    api.inventory.list.queryOptions(locationFixturesListInput(location.id)),
+  );
+  const fixtureCount = fixturesData?.meta.totalCount ?? 0;
 
   // Flat grid sorted so like types sit adjacent (the badge carries the type
   // signal) — replaces the old Grouped/All toggle + per-type sub-headers.
@@ -347,6 +371,25 @@ export function LocationContents({ location }: { location: InfLocation }) {
               />
             )}
           </Stack>
+
+          {fixtureCount > 0 && (
+            <details>
+              <summary className="cursor-pointer text-muted-foreground text-sm">
+                Installed fixtures · {fixtureCount}
+              </summary>
+              <Stack gap="sm" className="pt-2">
+                <p className="text-muted-foreground text-sm">
+                  Wired or plumbed in. Kept as a record, never counted during a
+                  recount.
+                </p>
+                <LocationInventoryTable
+                  locationId={location.id}
+                  view={view}
+                  placement="installed"
+                />
+              </Stack>
+            </details>
+          )}
         </>
       )}
 
