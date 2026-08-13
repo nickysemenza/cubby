@@ -157,19 +157,26 @@ export function LocationInventoryTable({
           minSelection: 1,
           onExecute: async (rows: Row<InventoryItem>[]) => {
             const next = placement === "installed" ? "stock" : "installed";
-            await Promise.all(
-              rows.map((r) =>
-                updateMutation.mutateAsync({
-                  id: r.original.id,
-                  data: { placement: next },
-                }),
-              ),
-            );
+            // Sequential, NOT Promise.all. The slot is
+            // `(productId, locationId, placement)`, so flipping a stock row
+            // whose installed twin already sits in this room is refused — a
+            // legitimate state, which is why the key allows the pair. In
+            // parallel that rejection lands after its siblings have already
+            // been written, leaving a partial apply; serially it stops at the
+            // offending row with everything before it durably done.
+            for (const row of rows) {
+              await updateMutation.mutateAsync({
+                id: row.original.id,
+                data: { placement: next },
+              });
+            }
             return { success: true };
           },
         },
       ],
-      clearSelectionOnComplete: true,
+      // Selection survives on purpose: if a flip is refused mid-batch, the rows
+      // stay selected so it's visible which ones were being acted on.
+      clearSelectionOnComplete: false,
     }),
     [placement],
   );
