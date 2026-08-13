@@ -20,6 +20,9 @@ interface DirectAgg {
   priced: number;
   missingPricing: number;
   miscNoPrice: number;
+  /** Fixed installations, tallied apart from the countable figures above. */
+  installedValuation: number;
+  installedItemCount: number;
 }
 
 const emptyAgg = (): DirectAgg => ({
@@ -28,6 +31,8 @@ const emptyAgg = (): DirectAgg => ({
   priced: 0,
   missingPricing: 0,
   miscNoPrice: 0,
+  installedValuation: 0,
+  installedItemCount: 0,
 });
 
 /**
@@ -39,6 +44,7 @@ export function rollupLocationValuations(
   entries: {
     locationId: LocationId;
     valuation: number | null;
+    placement?: "stock" | "installed";
     productName: string;
   }[],
   locations: { id: LocationId; parentId: LocationId | null }[],
@@ -50,6 +56,16 @@ export function rollupLocationValuations(
     if (!agg) {
       agg = emptyAgg();
       direct.set(e.locationId, agg);
+    }
+    // Fixtures never reach the countable tallies, including the pricing
+    // breakdown: a "missing price" nudge you cannot act on by walking to a
+    // shelf is noise, and it would cap the pricing coverage meter forever.
+    if (e.placement === "installed") {
+      agg.installedItemCount += 1;
+      if (e.valuation != null && e.valuation > 0) {
+        agg.installedValuation += e.valuation;
+      }
+      continue;
     }
     agg.itemCount += 1;
     if (e.valuation != null && e.valuation > 0) {
@@ -83,6 +99,8 @@ export function rollupLocationValuations(
     let tPriced = d.priced;
     let tMissing = d.missingPricing;
     let tMisc = d.miscNoPrice;
+    let totalInstalledValuation = d.installedValuation;
+    let totalInstalledItemCount = d.installedItemCount;
     if (!visiting.has(id)) {
       // Guard against a malformed parent cycle (wouldCreateParentCycle should
       // prevent these, but never recurse forever on bad data).
@@ -94,6 +112,8 @@ export function rollupLocationValuations(
         tPriced += ct.total.priced;
         tMissing += ct.total.missingPricing;
         tMisc += ct.total.miscNoPrice;
+        totalInstalledValuation += ct.installed?.totalValuation ?? 0;
+        totalInstalledItemCount += ct.installed?.totalItemCount ?? 0;
       }
       visiting.delete(id);
     }
@@ -108,6 +128,12 @@ export function rollupLocationValuations(
         miscNoPrice: d.miscNoPrice,
       },
       total: { priced: tPriced, missingPricing: tMissing, miscNoPrice: tMisc },
+      installed: {
+        directValuation: round2(d.installedValuation),
+        totalValuation: round2(totalInstalledValuation),
+        directItemCount: d.installedItemCount,
+        totalItemCount: totalInstalledItemCount,
+      },
     };
     rollups.set(id, v);
     return v;
