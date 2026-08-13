@@ -23,6 +23,7 @@ import { purchaseRouter } from "./routers/purchase";
 import { recipeRouter } from "./routers/recipe";
 import { relatedDataRouter } from "./routers/related-data";
 import { searchRouter } from "./routers/search";
+import { statementRowRouter } from "./routers/statement-row";
 import { suggestionsRouter } from "./routers/suggestions";
 import { taskRouter } from "./routers/task";
 import { upcRouter } from "./routers/upc";
@@ -58,6 +59,7 @@ export const domainRouterRecord = {
   upc: upcRouter,
   image: imageRouter,
   problems: problemsRouter,
+  statementRow: statementRowRouter,
   entityIntegrity: entityIntegrityRouter,
   auditLog: auditLogRouter,
   search: searchRouter,

@@ -80,6 +80,7 @@ import { Route as AuthenticatedRecipesImportRouteImport } from './routes/_authen
 import { Route as AuthenticatedRecipesNewRouteImport } from './routes/_authenticated/recipes.new'
 import { Route as AuthenticatedSearchIndexRouteImport } from './routes/_authenticated/search.index'
 import { Route as AuthenticatedSearchDebugRouteImport } from './routes/_authenticated/search.debug'
+import { Route as AuthenticatedStatementRowsIndexRouteImport } from './routes/_authenticated/statement-rows.index'
 import { Route as AuthenticatedTasksIndexRouteImport } from './routes/_authenticated/tasks.index'
 import { Route as AuthenticatedTasksShortcodeRouteImport } from './routes/_authenticated/tasks.$shortcode'
 import { Route as AuthenticatedUsdaIndexRouteImport } from './routes/_authenticated/usda.index'
@@ -499,6 +500,12 @@ const AuthenticatedSearchDebugRoute =
     path: '/search/debug',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedStatementRowsIndexRoute =
+  AuthenticatedStatementRowsIndexRouteImport.update({
+    id: '/statement-rows/',
+    path: '/statement-rows/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedTasksIndexRoute = AuthenticatedTasksIndexRouteImport.update({
   id: '/tasks/',
   path: '/tasks/',
@@ -668,6 +675,7 @@ export interface FileRoutesByFullPath {
   '/purchases/': typeof AuthenticatedPurchasesIndexRoute
   '/recipes/': typeof AuthenticatedRecipesIndexRoute
   '/search/': typeof AuthenticatedSearchIndexRoute
+  '/statement-rows/': typeof AuthenticatedStatementRowsIndexRoute
   '/tasks/': typeof AuthenticatedTasksIndexRoute
   '/usda/': typeof AuthenticatedUsdaIndexRoute
   '/vendors/': typeof AuthenticatedVendorsIndexRoute
@@ -755,6 +763,7 @@ export interface FileRoutesByTo {
   '/purchases': typeof AuthenticatedPurchasesIndexRoute
   '/recipes': typeof AuthenticatedRecipesIndexRoute
   '/search': typeof AuthenticatedSearchIndexRoute
+  '/statement-rows': typeof AuthenticatedStatementRowsIndexRoute
   '/tasks': typeof AuthenticatedTasksIndexRoute
   '/usda': typeof AuthenticatedUsdaIndexRoute
   '/vendors': typeof AuthenticatedVendorsIndexRoute
@@ -845,6 +854,7 @@ export interface FileRoutesById {
   '/_authenticated/purchases/': typeof AuthenticatedPurchasesIndexRoute
   '/_authenticated/recipes/': typeof AuthenticatedRecipesIndexRoute
   '/_authenticated/search/': typeof AuthenticatedSearchIndexRoute
+  '/_authenticated/statement-rows/': typeof AuthenticatedStatementRowsIndexRoute
   '/_authenticated/tasks/': typeof AuthenticatedTasksIndexRoute
   '/_authenticated/usda/': typeof AuthenticatedUsdaIndexRoute
   '/_authenticated/vendors/': typeof AuthenticatedVendorsIndexRoute
@@ -935,6 +945,7 @@ export interface FileRouteTypes {
     | '/purchases/'
     | '/recipes/'
     | '/search/'
+    | '/statement-rows/'
     | '/tasks/'
     | '/usda/'
     | '/vendors/'
@@ -1022,6 +1033,7 @@ export interface FileRouteTypes {
     | '/purchases'
     | '/recipes'
     | '/search'
+    | '/statement-rows'
     | '/tasks'
     | '/usda'
     | '/vendors'
@@ -1111,6 +1123,7 @@ export interface FileRouteTypes {
     | '/_authenticated/purchases/'
     | '/_authenticated/recipes/'
     | '/_authenticated/search/'
+    | '/_authenticated/statement-rows/'
     | '/_authenticated/tasks/'
     | '/_authenticated/usda/'
     | '/_authenticated/vendors/'
@@ -1637,6 +1650,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSearchDebugRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/statement-rows/': {
+      id: '/_authenticated/statement-rows/'
+      path: '/statement-rows'
+      fullPath: '/statement-rows/'
+      preLoaderRoute: typeof AuthenticatedStatementRowsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/tasks/': {
       id: '/_authenticated/tasks/'
       path: '/tasks'
@@ -1816,6 +1836,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedPurchasesIndexRoute: typeof AuthenticatedPurchasesIndexRoute
   AuthenticatedRecipesIndexRoute: typeof AuthenticatedRecipesIndexRoute
   AuthenticatedSearchIndexRoute: typeof AuthenticatedSearchIndexRoute
+  AuthenticatedStatementRowsIndexRoute: typeof AuthenticatedStatementRowsIndexRoute
   AuthenticatedTasksIndexRoute: typeof AuthenticatedTasksIndexRoute
   AuthenticatedUsdaIndexRoute: typeof AuthenticatedUsdaIndexRoute
   AuthenticatedVendorsIndexRoute: typeof AuthenticatedVendorsIndexRoute
@@ -1897,6 +1918,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedPurchasesIndexRoute: AuthenticatedPurchasesIndexRoute,
   AuthenticatedRecipesIndexRoute: AuthenticatedRecipesIndexRoute,
   AuthenticatedSearchIndexRoute: AuthenticatedSearchIndexRoute,
+  AuthenticatedStatementRowsIndexRoute: AuthenticatedStatementRowsIndexRoute,
   AuthenticatedTasksIndexRoute: AuthenticatedTasksIndexRoute,
   AuthenticatedUsdaIndexRoute: AuthenticatedUsdaIndexRoute,
   AuthenticatedVendorsIndexRoute: AuthenticatedVendorsIndexRoute,

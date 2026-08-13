@@ -1377,6 +1377,14 @@ export const financialTransaction = pgTable(
     index("FinancialTransaction_status_idx").on(table.status),
     index("FinancialTransaction_transactionDate_idx").on(table.transactionDate),
     index("FinancialTransaction_postedDate_idx").on(table.postedDate),
+    // Serves the `sourceRefs @> '[{source,externalId}]'` containment probes that
+    // every statement-import write and every reconciliation read performs.
+    // Plain jsonb_ops, matching Product_aliases_gin_idx — naming an opclass here
+    // produces perpetual `db:push` drift.
+    index("FinancialTransaction_sourceRefs_gin_idx").using(
+      "gin",
+      table.sourceRefs,
+    ),
     check(
       "FinancialTransaction_amount_whole_cent_check",
       sql`${table.amount} <> 0 AND abs(${table.amount} * 100 - round(${table.amount} * 100)) < 0.0000001`,
@@ -1455,6 +1463,186 @@ export const financialTransactionAllocation = pgTable(
     check(
       "FinancialTransactionAllocation_amount_whole_cent_check",
       sql`${table.amount} <> 0 AND abs(${table.amount} * 100 - round(${table.amount} * 100)) < 0.0000001`,
+    ),
+  ],
+);
+
+/**
+ * One provider export, as submitted.
+ *
+ * Cubby holds one side of a two-sided comparison; this and `StatementRow` are
+ * the other side. They are evidence, not decisions: nothing here resolves an
+ * account, links a Purchase, or declares two rows the same charge.
+ */
+export const statementImport = pgTable(
+  "StatementImport",
+  {
+    id: pkUuid(),
+    source: text("source").notNull(),
+    /** The export's own filename or a human label: "copilot-2026-08-11.csv". */
+    label: text("label").notNull(),
+    /** Client hash of the whole export — the find-or-create key. */
+    fingerprint: text("fingerprint").notNull(),
+    /**
+     * Which date the provider's rows carry. Recorded, never resolved: one export
+     * has one convention, and 19% of charges present in both Copilot and Monarch
+     * are dated differently because the providers disagree on posting vs
+     * transaction date. Stating it beats guessing per row.
+     */
+    dateKind: text("dateKind").notNull().default("unknown"),
+    /**
+     * Rows the client says the export contains. Compared against rows actually
+     * stored, a partial or abandoned chunked ingest becomes visible rather than
+     * looking like a complete import that happens to be short.
+     */
+    rowCountDeclared: integer("rowCountDeclared"),
+    notes: text("notes"),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    uniqueIndex("StatementImport_source_fingerprint_key")
+      .on(table.source, table.fingerprint)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("StatementImport_source_idx").on(table.source),
+    check(
+      "StatementImport_source_slug_check",
+      sql`${table.source} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND ${table.source} = lower(trim(${table.source}))`,
+    ),
+    check(
+      "StatementImport_dateKind_check",
+      sql`${table.dateKind} IN ('posted', 'transaction', 'unknown')`,
+    ),
+    check(
+      "StatementImport_rowCountDeclared_check",
+      sql`${table.rowCountDeclared} IS NULL OR ${table.rowCountDeclared} >= 0`,
+    ),
+  ],
+);
+
+/**
+ * One verbatim row from a provider export.
+ *
+ * Match state is **derived**, not stored: a row is matched when a live
+ * `FinancialTransaction.sourceRefs` contains its `(source, externalId)` pair.
+ * That join needs no DISTINCT only because `assertSourceRefsAvailable`
+ * guarantees the pair is globally unique across live transactions — a
+ * guarantee that lives in `repo/financial-transaction.ts`, so weakening it
+ * there fans this out.
+ *
+ * The provider columns are immutable after ingest; the only mutable fields are
+ * the judgments an agent explicitly writes (`accountId`, `disposition*`,
+ * `supersededByRowId`, `notes`).
+ */
+export const statementRow = pgTable(
+  "StatementRow",
+  {
+    id: pkUuid(),
+    batchId: uuid("batchId")
+      .notNull()
+      .references(() => statementImport.id),
+    source: text("source").notNull(),
+    /** `v1:<sha256>`, server-derived from the provider fields below. */
+    externalId: text("externalId").notNull(),
+
+    // Verbatim provider evidence.
+    accountDescriptor: text("accountDescriptor").notNull(),
+    statementDate: date("statementDate", { mode: "string" }).notNull(),
+    /** Cubby convention: outflow positive. */
+    amount: doublePrecision("amount").notNull(),
+    /**
+     * The export's own signed figure. Earns its bytes: with it,
+     * (source, accountDescriptor, statementDate, providerAmount,
+     * rawDescription) reproduces the hash payload exactly, so the ledger can
+     * audit its own identity function. Without it `externalId` is an
+     * unverifiable opaque token — and that hash is the whole matching mechanism.
+     */
+    providerAmount: doublePrecision("providerAmount").notNull(),
+    merchant: text("merchant"),
+    rawDescription: text("rawDescription").notNull(),
+    sourceCategory: text("sourceCategory"),
+    providerStatus: text("providerStatus"),
+    providerNotes: text("providerNotes"),
+
+    // Agent-written judgments.
+    accountId: uuid("accountId")
+      .$type<FinancialAccountId>()
+      .references(() => financialAccount.id),
+    disposition: text("disposition").notNull().default("open"),
+    dispositionReason: text("dispositionReason"),
+    dispositionNote: text("dispositionNote"),
+    /**
+     * A pending row that posts on a different date is a *different* row — the
+     * export really did contain two. This link is agent-written, never
+     * inferred, and drops the predecessor from the worklist without deleting
+     * the evidence that it existed.
+     */
+    supersededByRowId: uuid("supersededByRowId").references(
+      (): AnyPgColumn => statementRow.id,
+    ),
+    notes: text("notes"),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    uniqueIndex("StatementRow_source_externalId_key")
+      .on(table.source, table.externalId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("StatementRow_batchId_idx").on(table.batchId),
+    index("StatementRow_accountId_idx").on(table.accountId),
+    index("StatementRow_statementDate_idx").on(table.statementDate),
+    // The worklist: open, unsuperseded rows, newest first.
+    index("StatementRow_worklist_idx")
+      .on(table.statementDate.desc())
+      .where(
+        sql`${table.deletedAt} IS NULL AND ${table.disposition} = 'open' AND ${table.supersededByRowId} IS NULL`,
+      ),
+    index("StatementRow_account_date_amount_idx").on(
+      table.accountId,
+      table.statementDate,
+      table.amount,
+    ),
+    index("StatementRow_rawDescription_gin_idx").using(
+      "gin",
+      sql`${table.rawDescription} gin_trgm_ops`,
+    ),
+    check(
+      "StatementRow_source_slug_check",
+      sql`${table.source} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND ${table.source} = lower(trim(${table.source}))`,
+    ),
+    // Same whole-cent rule as FinancialTransaction.amount, on both figures. A
+    // zero-amount statement row is not evidence of anything.
+    check(
+      "StatementRow_amount_whole_cent_check",
+      sql`${table.amount} <> 0 AND abs(${table.amount} * 100 - round(${table.amount} * 100)) < 0.0000001`,
+    ),
+    check(
+      "StatementRow_providerAmount_whole_cent_check",
+      sql`${table.providerAmount} <> 0 AND abs(${table.providerAmount} * 100 - round(${table.providerAmount} * 100)) < 0.0000001`,
+    ),
+    check(
+      "StatementRow_providerStatus_check",
+      sql`${table.providerStatus} IS NULL OR ${table.providerStatus} IN ('posted', 'pending')`,
+    ),
+    // Ignoring a row is a judgment and must carry its reasoning; leaving it open
+    // is the default and needs none.
+    check(
+      "StatementRow_disposition_check",
+      sql`(${table.disposition} = 'open' AND ${table.dispositionReason} IS NULL AND ${table.dispositionNote} IS NULL)
+          OR (${table.disposition} = 'ignored' AND ${table.dispositionReason} IS NOT NULL AND ${table.dispositionNote} IS NOT NULL)`,
+    ),
+    // The enum is enforced by zod at the router/MCP boundary, but the bulk
+    // disposition scripts write this column over raw SQL and bypass that. A
+    // typo would store cleanly and then throw on the read path, 500ing the list
+    // for the whole source — so the vocabulary is pinned here too.
+    check(
+      "StatementRow_dispositionReason_check",
+      sql`${table.dispositionReason} IS NULL OR ${table.dispositionReason} IN
+          ('not_modeled', 'not_a_purchase', 'duplicate_of_other_source', 'pre_cubby', 'other')`,
+    ),
+    check(
+      "StatementRow_externalId_format_check",
+      sql`${table.externalId} ~ '^v1:[0-9a-f]{64}$'`,
     ),
   ],
 );

@@ -117,6 +117,36 @@ describe("expense views produce the filters their old tabs pinned", () => {
     const view = viewsForEntity("expense").find((v) => v.id === "unattached");
     expect(view?.filters).toEqual([{ id: "vendor", value: [FILTER_NONE] }]);
   });
+
+  it("unknown-quantities pins the two presence sentinels plus already-made", () => {
+    // `productQuantityPresenceFilter: none` is the whole point — a *bound*
+    // (`productQuantityMin/Max`) would silently exclude the null rows this view
+    // exists to find, since a comparison against NULL is never true.
+    expect(build("unknown-quantities")).toEqual({
+      productPresenceFilter: "has",
+      productQuantityPresenceFilter: "none",
+      future: false,
+    });
+  });
+
+  it("unknown-quantities narrows by product presence rather than line taxonomy", () => {
+    // Guards the reasoning in the view's comment: `product: has` is what makes
+    // the lineKind/lineBasis/costType trio redundant here. If a non-principal
+    // line ever becomes able to carry a product, this view starts selecting
+    // rows a quantity can't describe — and this assertion is the note saying so.
+    const view = viewsForEntity("expense").find(
+      (candidate) => candidate.id === "unknown-quantities",
+    );
+    const ids = (view?.filters ?? []).map((filter) => filter.id);
+    expect(ids).toEqual(["product", "productQuantity", "future"]);
+  });
+
+  it("reveals the column it exists to have you edit", () => {
+    const view = viewsForEntity("expense").find(
+      (candidate) => candidate.id === "unknown-quantities",
+    );
+    expect(view?.columnVisibility).toEqual({ productQuantity: true });
+  });
 });
 
 describe("project and task saved views use ordinary server filters", () => {

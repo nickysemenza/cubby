@@ -79,6 +79,7 @@ const PROBLEM_LABELS: Record<
   financialTransactionAllocationDefects: (n) =>
     pl(n, "broken settlement allocation"),
   invalidFinancialJson: (n) => `${n} invalid financial record`,
+  incompleteStatementImports: (n) => `${n} incomplete statement import`,
   referentialLivenessViolations: (n) => pl(n, "dangling reference"),
 };
 

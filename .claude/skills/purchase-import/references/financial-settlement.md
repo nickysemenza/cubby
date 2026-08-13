@@ -117,13 +117,52 @@ original statement), so it is only stable for a row that has settled. Do not
 attach one to a `pending` credit: pending rows can post on a later date, the
 hash changes with the date, and the row then fails to match its own statement
 line on the next import — the exact duplicate this field exists to prevent.
-Attach it when the row posts.
+Attach it when the row posts. The pending row and the row that replaces it are
+two distinct `StatementRow`s, linked with `supersededByExternalId` — written by
+an agent, never inferred — which drops the predecessor off the worklist without
+discarding the evidence that it existed.
+
+## The statement ledger
+
+Provider rows are recorded verbatim with `record_statement_rows`, and drift is a
+query rather than a pipeline rebuilt each session. It is not an importer: it
+resolves no account, links no Purchase, creates no transaction, and makes no
+match.
+
+`list_statement_rows({matchState:"unmatched"})` is the worklist — a provider row
+with no live transaction carrying its source ref. To close one, append that ref
+to the right transaction with `update_financial_transaction` (read–merge–write
+on `sourceRefs`); the row flips to `matched` on the next read, with no write to
+the row itself. `update_statement_rows` takes a `{filter}` selector for the long
+tail that will never match; `disposition: "ignored"` requires BOTH a reason and
+a note, enforced by a CHECK.
+
+Three traps, each found the hard way:
+
+- **Submit `providerAmount` charges-negative, always.** Monarch signs charges
+  negative, but Copilot signs them positive, Mint leaves them unsigned with the
+  sign in a `Transaction Type` column, and Apple Card signs them positive. The
+  identity hash is computed over `providerAmount`, so submitting an
+  un-normalized export does not merely flip a sign — it mints a second identity
+  for a charge already recorded.
+- **Account aliases resolve per source.** A `copilot` row will not resolve
+  against an account carrying only a `monarch` alias. Add the provider's aliases
+  before ingesting it, or every row lands unresolved.
+- **Never bulk-load rows through a model.** Transcribing evidence corrupts it:
+  one pass silently rewrote `🪝` (U+1FA9D) as `🦝` (U+1F99D) — same byte length,
+  different hash — storing a fabricated statement line beside the real one. MCP
+  is the write path for ordinary imports, where a few hundred rows is
+  unremarkable; a backfill big enough that a model cannot carry it is a one-off
+  migration script, not a reason to fork the write path permanently. Reconcile
+  afterwards either way with `apps/web/scripts/audit-statement-rows.ts` — a row
+  present in the ledger but absent from every export is the signature.
 
 ## Purchases and refunds
 
 Link truthful charge, installment, split-tender, and refund transactions to the
-original Purchase. A refund document number is evidence, not a new order.
-Transactions spanning several Purchases remain unlinked until allocation exists.
+original Purchase. A refund document number is evidence, not a new order. One
+that settles several Purchases carries an `allocations` array — see "One card
+line, several Purchases" above.
 
 Keep refund Expenses on the original Purchase. Preserve the vendor's original
 stated total and record refund settlement separately. A reconciliation mismatch
@@ -168,5 +207,40 @@ payout id. The Seller Hub payout-detail page does itemize, and Payments →
 Earnings lists per-order earnings directly; prefer those over reconstructing
 composition from dates and ratios.
 
-A payout that settles several Purchases stays unlinked (see above) with its
-verified per-order arithmetic in the note.
+A payout that settles several Purchases carries one `allocations` row per order
+(see above), alongside the verified per-order arithmetic in the note. Each amount
+is that order's **contribution to this transaction** — which equals its earnings
+only when no label crossed a payout boundary. Allocate the contribution, not the
+earnings: where a label settled in a different transaction, that transaction
+carries its own slice and the Purchase reconciles across both.
+
+FTX-SZ2R is the worked example. Its two orders earned -$44.58 and -$41.90, but
+the payout is -$96.87, because the edging plate's $10.39 label was charged to the
+bank separately. Allocating earnings gives -$86.48 and is rejected. The truthful
+set is the contributions -$54.97 and -$41.90; the label leg (FTX-SSVR, +$10.39)
+then allocates to PUR-TUXP, whose two slices net to its -$44.58 earnings.
+
+**Resolve a payout's orders by `Purchase.orderId`, not by note prose.** eBay sale
+Purchases are keyed by the eBay order number, which is exactly what a payout note
+cites, so the order id is a direct lookup. Older notes assert a sale is "NOT
+recorded in Cubby"; most of those are stale — 31 of 33 order ids cited across
+FAC-4KED resolve to live Purchases. Check the id before believing the sentence,
+and correct it when you touch the row.
+
+A label bought against an already-open payout is deducted from a *different*
+payout than the one carrying its order. Where eBay charged that leg to the bank
+separately it is its own transaction and allocates cleanly. Where it was netted
+inside the payout, the truthful split needs an opposite-signed allocation, which
+the same-sign rule forbids — leave that payout unallocated rather than putting the
+whole amount on one order, which over-settles it and under-settles the other.
+
+Six FAC-4KED payouts predate that rule and are already allocated whole to one
+order: FTX-RR5W/PUR-QF9Y, FTX-4QU2/PUR-KS4H, FTX-FBUP/PUR-JJWT, FTX-8C9F/PUR-YTQV,
+FTX-P94H/PUR-EXXD, FTX-DWRR/PUR-3NHY. **Leave them.** Each delta is a stray label
+(-6.90, -6.87, -6.68, +6.68, -1.38, -1.22) and no separate bank leg exists for any
+of them, so there is nothing to allocate the offset to. The allocation is still
+true as a statement of what the bank moved toward that order; the mismatch is the
+gap between bank movement and final earnings, which diverge precisely when a label
+settles elsewhere. Do not "fix" these by fitting numbers, and do not unallocate
+them — that would destroy a true fact to quiet a detector. They are expected to
+show in the settlement-mismatch Problems section permanently.

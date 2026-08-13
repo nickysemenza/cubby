@@ -41,7 +41,10 @@ test.describe("tab titles", () => {
 
     // Client-side navigation, not page.goto — a full load always got this right,
     // which is exactly why the bug survived so long.
-    await page.getByRole("link", { name: "Products", exact: true }).click();
+    await page
+      .getByTestId("detail-spec-plate")
+      .getByRole("link", { name: "Products", exact: true })
+      .click();
     await expect(page).toHaveURL(/\/products$/, { timeout: 15000 });
     await expect(page).toHaveTitle("Products | cubby", { timeout: 15000 });
 

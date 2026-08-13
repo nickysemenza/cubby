@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { EnrichmentWorkbench } from "~/app/ingredients/enrichment-workbench";
+import { equivalenceDraftFromSearch } from "~/app/ingredients/equivalence-workbench-link";
 import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";
 
@@ -11,6 +12,9 @@ import { pageTitle } from "~/lib/page-title";
 const workbenchSearch = z.object({
   focus: z.string().optional(),
   recipe: z.string().optional(),
+  equivalenceFromUnit: z.string().optional(),
+  equivalenceToUnit: z.string().optional(),
+  equivalenceToValue: z.coerce.number().positive().optional(),
 });
 
 export const Route = createFileRoute("/_authenticated/ingredients/workbench")({
@@ -20,10 +24,14 @@ export const Route = createFileRoute("/_authenticated/ingredients/workbench")({
 });
 
 function IngredientWorkbenchPage() {
-  const { focus, recipe } = Route.useSearch();
+  const search = Route.useSearch();
   return (
     <Page variant="list" title="Ingredient Workbench" fullWidth>
-      <EnrichmentWorkbench focus={focus} recipeId={recipe} />
+      <EnrichmentWorkbench
+        focus={search.focus}
+        recipeId={search.recipe}
+        initialConversion={equivalenceDraftFromSearch(search)}
+      />
     </Page>
   );
 }

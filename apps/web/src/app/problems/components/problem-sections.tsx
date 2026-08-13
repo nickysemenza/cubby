@@ -1684,6 +1684,25 @@ const DECLARED_SECTIONS = [
       details: [item.message],
     }),
   }),
+  section({
+    id: "incomplete-statement-imports",
+    label: "Incomplete statement imports",
+    select: (p) => p.incompleteStatementImports,
+    entity: "financialAccount",
+    title: "Statement imports missing rows",
+    description:
+      "Fewer rows were stored than the export declared, so a chunked ingest stopped partway. Re-submitting the whole export is safe: rows already recorded are a no-op.",
+    emptyMessage: "Every recorded export stored the rows it declared.",
+    renderItem: (item) => ({
+      title: `${item.source} · ${item.label}`,
+      subtitle: item.fingerprint,
+      details: [
+        `${item.rowCountStored} of ${item.rowCountDeclared} rows stored — ${
+          item.rowCountDeclared - item.rowCountStored
+        } missing`,
+      ],
+    }),
+  }),
 ];
 
 export const PROBLEM_SECTIONS: SectionsClaimingEveryCoverageKey<

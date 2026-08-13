@@ -17,6 +17,7 @@ import type {
   DuplicateFinancialAccountSourceAlias,
   DuplicateFinancialTransactionSourceRef,
   FinancialTransactionAllocationDefect,
+  IncompleteStatementImport,
   InvalidFinancialJson,
   PurchaseFinancialSettlementMismatch,
 } from "@cubby/schemas/problems";
@@ -273,4 +274,41 @@ export async function findPurchaseFinancialSettlementMismatches(
       },
     ];
   });
+}
+
+/**
+ * Provider exports whose stored rows fall short of what the client declared —
+ * a chunked ingest that stopped partway, which otherwise looks exactly like a
+ * complete import that happened to be short.
+ *
+ * Deliberately the only statement-ledger detector: unmatched rows are the drift
+ * worklist, not defects, and 15k of them here would make Problems unusable.
+ */
+export async function findIncompleteStatementImports(
+  db: Database,
+): Promise<IncompleteStatementImport[]> {
+  const result = await getDb(db).execute<{
+    source: string;
+    label: string;
+    fingerprint: string;
+    rowCountDeclared: number;
+    rowCountStored: number;
+  }>(sql`
+    SELECT si.source, si.label, si.fingerprint,
+           si."rowCountDeclared" AS "rowCountDeclared",
+           count(sr.id)::int AS "rowCountStored"
+    FROM "StatementImport" si
+    LEFT JOIN "StatementRow" sr
+      ON sr."batchId" = si.id AND sr."deletedAt" IS NULL
+    WHERE si."deletedAt" IS NULL AND si."rowCountDeclared" IS NOT NULL
+    GROUP BY si.id, si.source, si.label, si.fingerprint, si."rowCountDeclared"
+    HAVING count(sr.id) < si."rowCountDeclared"
+  `);
+  return result.rows.map((row) => ({
+    source: row.source,
+    label: row.label,
+    fingerprint: row.fingerprint,
+    rowCountDeclared: Number(row.rowCountDeclared),
+    rowCountStored: Number(row.rowCountStored),
+  }));
 }

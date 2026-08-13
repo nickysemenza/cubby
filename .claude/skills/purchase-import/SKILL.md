@@ -244,10 +244,17 @@ a fuzzy or generic name is not.
 For statements, parse files in the MCP client. Never send a CSV path, upload,
 or raw file contents to Cubby.
 
+Two paths, for two different jobs. `preview_financial_statement_import` proposes
+transactions to create from a handful of rows. `record_statement_rows` persists
+the rows themselves as evidence, so "which statement lines have no Cubby
+counterpart?" stays answerable — see `references/financial-settlement.md` for the
+worklist, the charges-negative rule, and when a backfill is large enough to
+warrant a one-off script instead.
+
 1. Send normalized Monarch rows to `preview_financial_statement_import` in
    batches of at most 200.
 2. Create Financial Accounts only when approved; use a truthful provisional
-   Account when evidence identifies only something like `Visa ····3692`.
+   Account when evidence identifies only something like `Visa ····NNNN`.
 3. Before submitting, read each proposed row back and confirm `kind` is
    `purchase` for charges and `refund` for credits. A wrong-signed row previews
    as a clean `ready_to_create` with tying amounts, so a totals check will not

@@ -33,8 +33,11 @@ type MonthDatum = {
  */
 export function MonthlySpend({
   monthly,
+  compact = false,
 }: {
   monthly: ExpenseMonthlyAggregate[];
+  /** Home dashboards need the same honest aggregate in a shorter, quieter frame. */
+  compact?: boolean;
 }) {
   const data = useMemo(
     (): MonthDatum[] =>
@@ -58,12 +61,16 @@ export function MonthlySpend({
     .filter((_, i) => i % stride === 0);
 
   return (
-    <div className="h-[300px]">
+    <div className={compact ? "h-40" : "h-[300px]"}>
       <ResponsiveBar
         data={data}
         keys={["net"]}
         indexBy="label"
-        margin={{ top: 10, right: 20, bottom: 50, left: 70 }}
+        margin={
+          compact
+            ? { top: 8, right: 8, bottom: 28, left: 46 }
+            : { top: 10, right: 20, bottom: 50, left: 70 }
+        }
         padding={0.3}
         colors={({ data: d }) =>
           d.net < 0 ? "var(--chart-negative)" : "var(--chart-1)"
@@ -71,8 +78,8 @@ export function MonthlySpend({
         {...nivoBarChrome}
         axisBottom={{
           tickSize: 0,
-          tickPadding: 8,
-          tickRotation: -45,
+          tickPadding: compact ? 5 : 8,
+          tickRotation: compact ? 0 : -45,
           tickValues: monthTicks,
         }}
         axisLeft={nivoCurrencyAxis}

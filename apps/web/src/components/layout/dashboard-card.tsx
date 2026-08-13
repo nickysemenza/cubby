@@ -32,7 +32,7 @@ export function DashboardCard({
 }: DashboardCardProps) {
   return (
     <Card className="flex flex-col">
-      <CardHeader className="pb-2">
+      <CardHeader className="border-border border-b pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Icon className="size-3.5 text-slate" />

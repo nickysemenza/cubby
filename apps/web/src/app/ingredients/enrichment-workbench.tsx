@@ -30,6 +30,10 @@ import {
 } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
+import {
+  type EquivalenceDraft,
+  enrichmentWorkbenchQueryInput,
+} from "./equivalence-workbench-link";
 import { ReviewQueue } from "./review-queue";
 import { SuggestionReviewTray } from "./suggestion-review-tray";
 import {
@@ -52,9 +56,11 @@ type FilterKey = "all" | "no-product" | "partial" | "no-usda";
 export function EnrichmentWorkbench({
   focus,
   recipeId,
+  initialConversion,
 }: {
   focus?: string;
   recipeId?: string;
+  initialConversion?: EquivalenceDraft;
 }) {
   const api = useTRPC();
   const [filter, setFilter] = useState<FilterKey>("all");
@@ -88,7 +94,7 @@ export function EnrichmentWorkbench({
   const { data, isLoading, error } = useQuery(
     // Pass no input when unscoped so the query key matches the plain worklist.
     api.ingredient.enrichmentWorkbench.queryOptions(
-      recipeId ? { recipeId } : undefined,
+      enrichmentWorkbenchQueryInput({ focus, recipeId, initialConversion }),
     ),
   );
 
@@ -509,6 +515,9 @@ export function EnrichmentWorkbench({
                     mergeSuggestion={mergeSuggestions[row.id] ?? null}
                     onRequestMerge={requestMerge}
                     defaultOpen={row.id === focus}
+                    initialConversion={
+                      row.id === focus ? initialConversion : undefined
+                    }
                     rowRef={row.id === focus ? focusRowRef : undefined}
                   />
                 ))}

@@ -15,7 +15,7 @@ export const PageWrapper = ({
   return (
     <div
       className={cn(
-        "w-full",
+        "w-full min-w-0",
         // Cap content for readable line-lengths, but let very large displays
         // breathe instead of stranding a 1280px column in an ocean of margin.
         !fullWidth && "mx-auto max-w-7xl 2xl:max-w-[90rem]",

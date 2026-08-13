@@ -30,6 +30,7 @@ import {
 } from "./pagination";
 import { plainDate } from "./project";
 import { wholeCentAmount } from "./money";
+import { externalIdSource } from "./external-id";
 
 export const financialTransactionKind = z.enum([
   "purchase",
@@ -469,12 +470,34 @@ export type FinancialTransactionListResponse = z.infer<
 export const FINANCIAL_STATEMENT_IMPORT_MAX_ROWS = 200;
 
 /**
- * One already-parsed Monarch row. Cubby accepts data, never a CSV path or
+ * Provider slugs seen in the wild. Advisory only — `source` is an open slug, not
+ * an enum, because the stored `sourceRefs` already carry sixteen free-form slugs
+ * and `financialAccountSourceAlias.source` is likewise unconstrained. A closed
+ * enum here would be the only closed member of the family and would reject the
+ * next export format on the day it is needed.
+ */
+export const KNOWN_STATEMENT_SOURCES = [
+  "monarch",
+  "copilot",
+  "mint",
+  "apple-card",
+] as const;
+
+/**
+ * One already-parsed statement row. Cubby accepts data, never a CSV path or
  * upload: parsing and export handling belong to the MCP client.
  */
 export const financialStatementImportRow = z.strictObject({
   key: z.string().min(1),
-  source: z.literal("monarch").default("monarch"),
+  /**
+   * Namespaces the derived source reference, so the same charge rendered by two
+   * providers stays two distinguishable rows. See `statement-row-identity.ts`.
+   */
+  source: externalIdSource
+    .default("monarch")
+    .describe(
+      `Provider slug, conventionally one of ${KNOWN_STATEMENT_SOURCES.join(", ")}. Any slug is accepted; a new one simply namespaces its own refs.`,
+    ),
   account: z.string().min(1),
   date: plainDate,
   /** Monarch signs charges negative and credits positive. */
