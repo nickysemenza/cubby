@@ -208,8 +208,17 @@ Earnings lists per-order earnings directly; prefer those over reconstructing
 composition from dates and ratios.
 
 A payout that settles several Purchases carries one `allocations` row per order
-(see above), each amount being that order's own earnings, alongside the verified
-per-order arithmetic in the note.
+(see above), alongside the verified per-order arithmetic in the note. Each amount
+is that order's **contribution to this transaction** — which equals its earnings
+only when no label crossed a payout boundary. Allocate the contribution, not the
+earnings: where a label settled in a different transaction, that transaction
+carries its own slice and the Purchase reconciles across both.
+
+FTX-SZ2R is the worked example. Its two orders earned -$44.58 and -$41.90, but
+the payout is -$96.87, because the edging plate's $10.39 label was charged to the
+bank separately. Allocating earnings gives -$86.48 and is rejected. The truthful
+set is the contributions -$54.97 and -$41.90; the label leg (FTX-SSVR, +$10.39)
+then allocates to PUR-TUXP, whose two slices net to its -$44.58 earnings.
 
 **Resolve a payout's orders by `Purchase.orderId`, not by note prose.** eBay sale
 Purchases are keyed by the eBay order number, which is exactly what a payout note
@@ -224,3 +233,14 @@ separately it is its own transaction and allocates cleanly. Where it was netted
 inside the payout, the truthful split needs an opposite-signed allocation, which
 the same-sign rule forbids — leave that payout unallocated rather than putting the
 whole amount on one order, which over-settles it and under-settles the other.
+
+Six FAC-4KED payouts predate that rule and are already allocated whole to one
+order: FTX-RR5W/PUR-QF9Y, FTX-4QU2/PUR-KS4H, FTX-FBUP/PUR-JJWT, FTX-8C9F/PUR-YTQV,
+FTX-P94H/PUR-EXXD, FTX-DWRR/PUR-3NHY. **Leave them.** Each delta is a stray label
+(-6.90, -6.87, -6.68, +6.68, -1.38, -1.22) and no separate bank leg exists for any
+of them, so there is nothing to allocate the offset to. The allocation is still
+true as a statement of what the bank moved toward that order; the mismatch is the
+gap between bank movement and final earnings, which diverge precisely when a label
+settles elsewhere. Do not "fix" these by fitting numbers, and do not unallocate
+them — that would destroy a true fact to quiet a detector. They are expected to
+show in the settlement-mismatch Problems section permanently.
