@@ -145,7 +145,7 @@ function WorkspaceSidebar({
       )}
       aria-label="Workspace navigation"
     >
-      <div className="flex h-12 items-center border-border border-b px-3">
+      <div className="flex h-12 items-center border-border border-b px-2">
         <Link to="/" className="flex min-w-0 items-center gap-2">
           <img src={LOGO_SRC} alt="" className="size-6 shrink-0" />
           {expanded && (
@@ -157,7 +157,7 @@ function WorkspaceSidebar({
       </div>
 
       <nav
-        className="min-h-0 flex-1 overflow-y-auto px-2 py-3"
+        className="min-h-0 flex-1 overflow-y-auto px-2 py-2"
         aria-label="Cubby"
       >
         <SidebarHome active={activeTo === homeNavItem.to} expanded={expanded} />
