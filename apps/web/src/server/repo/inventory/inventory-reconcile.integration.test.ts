@@ -13,6 +13,7 @@ import { getDb } from "~/server/repo/database-helpers";
 import {
   bulkMoveInventoryEntries,
   createInventoryEntry,
+  getInventoryByLocationIds,
   reconcileLocationSession,
 } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
@@ -84,6 +85,108 @@ describe("reconcileLocationSession", () => {
     getDb(ctx.db).query.location.findFirst({
       where: eq(locationTable.id, id),
     });
+
+  // The whole point of this test is that B is updated AFTER A, so B holds the
+  // max(updatedAt) at the location. If the stale guard's max() scan is left
+  // watching fixtures while the row snapshot is stock-only, the two watermarks
+  // disagree and every recount in a room containing a fixture throws
+  // INVENTORY_STALE forever. Without the ordering, this passes with the bug in.
+  it("an installed entry is neither counted nor trips the stale guard", async () => {
+    const { locEntityId, entry, entryEntityId } = await seedEntry("Wall");
+
+    const fixtureProduct = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Rotary dimmer" }),
+      TEST_ACTOR,
+    );
+    const fixture = await createInventoryEntry(
+      ctx.db,
+      {
+        productId: unsafeProductId(
+          await requireResolvedId(fixtureProduct.id, "product"),
+        ),
+        locationId: locEntityId,
+        amount,
+        placement: "installed",
+      },
+      TEST_ACTOR,
+    );
+    const fixtureEntityId = unsafeInventoryId(
+      await requireResolvedId(fixture.id, "inventory"),
+    );
+
+    // Bump the fixture so it, not the stock row, holds the location watermark.
+    await getDb(ctx.db)
+      .update(inventoryEntry)
+      .set({ amount: { value: 5, unit: "each" } })
+      .where(eq(inventoryEntry.id, fixtureEntityId));
+
+    const counted = await getInventoryByLocationIds(ctx.db, [locEntityId], {
+      placement: "stock",
+    });
+    expect(counted.map((row) => row.id)).toEqual([entry.id]);
+
+    const { items } = await reconcileLocationSession(
+      ctx.db,
+      {
+        locationId: locEntityId,
+        expectedInventoryEntryIds: [entryEntityId],
+        snapshotUpdatedAt: entry.updatedAt,
+        resolutions: [{ kind: "verify", inventoryEntryId: entryEntityId }],
+      },
+      TEST_ACTOR,
+    );
+    expect(items).toHaveLength(1);
+
+    const fixtureAfter = await readEntry(fixtureEntityId);
+    expect(fixtureAfter?.verifiedAt).toBeNull();
+    expect(fixtureAfter?.deletedAt).toBeNull();
+  });
+
+  // The converse must still throw: flipping a row into the counted population
+  // mid-session genuinely changes the snapshot.
+  it("flipping a fixture back to stock mid-session throws INVENTORY_STALE", async () => {
+    const { locEntityId, entry, entryEntityId } = await seedEntry("Ceiling");
+
+    const canProduct = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Recessed can" }),
+      TEST_ACTOR,
+    );
+    const can = await createInventoryEntry(
+      ctx.db,
+      {
+        productId: unsafeProductId(
+          await requireResolvedId(canProduct.id, "product"),
+        ),
+        locationId: locEntityId,
+        amount,
+        placement: "installed",
+      },
+      TEST_ACTOR,
+    );
+    const canEntityId = unsafeInventoryId(
+      await requireResolvedId(can.id, "inventory"),
+    );
+
+    await getDb(ctx.db)
+      .update(inventoryEntry)
+      .set({ placement: "stock" })
+      .where(eq(inventoryEntry.id, canEntityId));
+
+    await expect(
+      reconcileLocationSession(
+        ctx.db,
+        {
+          locationId: locEntityId,
+          expectedInventoryEntryIds: [entryEntityId],
+          snapshotUpdatedAt: entry.updatedAt,
+          resolutions: [{ kind: "verify", inventoryEntryId: entryEntityId }],
+        },
+        TEST_ACTOR,
+      ),
+    ).rejects.toThrow(/changed during the recount/);
+  });
 
   it("verify stamps verifiedAt + lastBulkInventory, no delete, no recompute", async () => {
     const { locEntityId, entry, entryEntityId } = await seedEntry("Shelf");

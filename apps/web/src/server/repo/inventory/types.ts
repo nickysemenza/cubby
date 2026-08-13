@@ -1,5 +1,6 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
+import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import type {
   inventoryEntry,
   location,
@@ -39,10 +40,12 @@ export interface UpdateInventoryEntryData {
   amount?: Amount;
   productId?: ProductId;
   locationId?: LocationId;
+  placement?: InventoryPlacement;
 }
 
 export interface CreateInventoryEntryData {
   amount: Amount;
   productId: ProductId;
   locationId: LocationId;
+  placement?: InventoryPlacement;
 }

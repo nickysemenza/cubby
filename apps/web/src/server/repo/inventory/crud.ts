@@ -444,6 +444,10 @@ export const updateInventoryEntry = async (
     amount: data.amount,
     productId: data.productId,
     locationId: data.locationId,
+    // Flipping placement is how something becomes (or stops being) a fixture.
+    // It does NOT move the row — the dimmer stays in the kitchen, it just stops
+    // being counted, audited, and browsed.
+    placement: data.placement,
     valuation,
   });
 
@@ -459,6 +463,10 @@ export const updateInventoryEntry = async (
       "amount",
       "productId",
       "locationId",
+      // A placement flip changes what every count, audit and browse surface
+      // reports about this row, so it belongs in the audit trail even though
+      // nothing about the physical object moved.
+      "placement",
     ]);
     if (changes) {
       await logAuditEntry(db, actor, {
@@ -514,6 +522,7 @@ export const createInventoryEntry = async (
     productId: data.productId,
     locationId: data.locationId,
     amount: data.amount,
+    ...(data.placement ? { placement: data.placement } : {}),
     valuation,
   });
 

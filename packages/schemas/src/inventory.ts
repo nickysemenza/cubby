@@ -232,6 +232,11 @@ export const inventoryUpdatePayloadData = z.object({
   amount: positiveAmount.optional(),
   productId: productShortcode.optional(),
   locationId: locationShortcode.optional(),
+  placement: inventoryPlacement
+    .optional()
+    .describe(
+      "Flip between movable stock and a fixed installation. Installing something does not move it — the row keeps its location, it just stops being counted.",
+    ),
 });
 
 // Input schema for updating inventory entries
@@ -246,6 +251,9 @@ export const inventoryCreatePayloadData = z.object({
   productId: productShortcode,
   locationId: locationShortcode,
   amount: positiveAmount,
+  placement: inventoryPlacement
+    .optional()
+    .describe("Defaults to 'stock'; pass 'installed' for a fixed fixture."),
 });
 
 // Schema for bulk inventory operations
@@ -357,6 +365,12 @@ export const inventoryFindDuplicatesInput = z.object({
 
 export const inventoryLocationIdsInput = z.object({
   locationIds: z.array(locationShortcode),
+  // Defaults to "all" rather than the browse default, because the two callers
+  // want opposite things: an audit session passes "stock" (a recount cannot
+  // include fixtures, and its predicate must match the snapshot queries in
+  // reconcileLocationSession or the stale guard compares two populations), and
+  // the location card grid wants everything it has always had.
+  placement: inventoryPlacementFilter.optional(),
 });
 
 const inventoryMcpProductFields = {
