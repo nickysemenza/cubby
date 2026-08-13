@@ -25,6 +25,8 @@
     "db:studio": "drizzle-kit studio",
     "db:cleanup-unreferenced-images": "tsx scripts/cleanup-unreferenced-images.ts",
     "db:backfill-settlement-allocations": "tsx scripts/backfill-settlement-allocations.ts",
+    "db:backfill-household-project": "tsx scripts/backfill-household-project.ts",
+    "db:backfill-stock-tracked": "tsx scripts/backfill-stock-tracked.ts",
     "db:report-product-quantities": "tsx scripts/report-product-quantity-backfill.ts",
     "regenerate": "pnpm run db:rebuild",
     "knip": "knip",
