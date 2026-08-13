@@ -8,10 +8,14 @@ import { cn } from "~/lib/utils";
  * sending those shortcodes through the legacy UUID-oriented name resolver.
  *
  * The name leads and the code trails as a quiet mono stamp: a feed of rows
- * reading only "Inventory Item INV-KZYZ" told the reader nothing about which
- * thing moved. `name` is absent for entities that have no name-shaped column
- * (inventory entries, most purchases), which is why the type-plus-code shape
- * survives as the fallback rather than being replaced.
+ * reading only the entity type and its code told the reader nothing about
+ * which thing moved.
+ *
+ * `name` is optional rather than required because resolution can genuinely
+ * come back empty — a purchase whose only name-shaped column is unset, or a
+ * row whose name source no longer resolves (an inventory entry is named by a
+ * product+location join, so a dangling side leaves nothing to render). The
+ * type-plus-code shape survives as that fallback rather than being replaced.
  */
 export function AuditEntityLink({
   entityType,
