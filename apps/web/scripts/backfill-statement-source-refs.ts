@@ -78,12 +78,17 @@ type Pair = {
   shortcode: string;
   merchant: string;
   txnMerchant: string;
+  /** Together these identify the CHARGE, independent of how it was labelled. */
+  statementDate: string;
+  rawDescription: string;
+  amount: string;
 };
 
 async function findPairs(): Promise<Pair[]> {
   const { rows } = await getDb(db).execute<Pair>(`
     WITH work AS (
-      SELECT sr."externalId", sr.merchant, sr.amount, sr."statementDate"
+      SELECT sr."externalId", sr.merchant, sr.amount, sr."statementDate",
+             sr."rawDescription"
       FROM "StatementRow" sr
       WHERE sr."deletedAt" IS NULL AND sr.disposition = 'open'
         AND sr.source = '${SOURCE}' AND sr.amount > 0 AND sr.merchant IS NOT NULL
@@ -94,7 +99,9 @@ async function findPairs(): Promise<Pair[]> {
             AND ft."sourceRefs" @> jsonb_build_array(
                   jsonb_build_object('source', sr.source, 'externalId', sr."externalId")))
     )
-    SELECT w."externalId", c.shortcode, w.merchant, c.txn_merchant AS "txnMerchant"
+    SELECT w."externalId", c.shortcode, w.merchant, c.txn_merchant AS "txnMerchant",
+           w."statementDate"::text AS "statementDate", w."rawDescription",
+           round(w.amount::numeric, 2)::text AS amount
     FROM work w
     CROSS JOIN LATERAL (
       SELECT ft.shortcode, ft.merchant AS txn_merchant,
@@ -115,17 +122,26 @@ async function findPairs(): Promise<Pair[]> {
 async function main() {
   const candidates = await findPairs();
 
-  // The pairing must be one-to-one in BOTH directions. `findPairs` already
-  // requires a statement row to have exactly one candidate transaction; this
-  // drops the reverse case, where several rows point at the same transaction.
-  // Those are real and common — four separate $0.01 Amazon rows, two same-day
-  // $16.36 Prime charges — and appending all of them would assert that one card
-  // line was several statement lines. Which row is the true one cannot be
-  // decided from amount and date, so none of them is claimed.
-  const claims = new Map<string, number>();
-  for (const p of candidates)
-    claims.set(p.shortcode, (claims.get(p.shortcode) ?? 0) + 1);
-  const pairs = candidates.filter((p) => claims.get(p.shortcode) === 1);
+  // Several rows pointing at one transaction is usually NOT a conflict. Copilot
+  // relabels historical rows with the account's CURRENT last four, so the two
+  // exports describe one 2022 charge under `Platinum Card® (...2002)` and
+  // `(...3000)` — different descriptors, so different hashes, so two rows for
+  // one charge. Measured: 944 of 950 such rows. Appending both refs is right;
+  // that is what `sourceRefs` being an array is for.
+  //
+  // The real conflict is a group holding more than one distinct CHARGE — four
+  // separate $0.01 Amazon rows on different days. There, amount and date cannot
+  // say which row the transaction settled, so none of them is claimed.
+  const charge = (p: Pair) =>
+    `${p.statementDate}\u0000${p.rawDescription}\u0000${p.amount}`;
+  const groups = new Map<string, Pair[]>();
+  for (const p of candidates) {
+    if (!groups.has(p.shortcode)) groups.set(p.shortcode, []);
+    groups.get(p.shortcode)!.push(p);
+  }
+  const pairs = [...groups.values()]
+    .filter((g) => new Set(g.map(charge)).size === 1)
+    .flat();
   const contested = candidates.length - pairs.length;
 
   const byTxn = new Map<string, Pair[]>();
@@ -134,7 +150,8 @@ async function main() {
     byTxn.get(p.shortcode)!.push(p);
   }
   console.log(
-    `${pairs.length} one-to-one pairs (source=${SOURCE}, min-similarity=${MIN_SIM}); ` +
+    `${pairs.length} refs across ${byTxn.size} transactions ` +
+      `(source=${SOURCE}, min-similarity=${MIN_SIM}); ` +
       `${contested} skipped as contested`,
   );
   for (const p of pairs.slice(0, 5)) {
