@@ -34,9 +34,9 @@ export function Section({
       {...props}
     >
       {hasHeader && (
-        <Stack gap="tight">
+        <Stack gap="tight" className="border-border border-b pb-1">
           {title && (
-            <h2 className="font-heading font-semibold text-lg">{title}</h2>
+            <h2 className="font-heading font-semibold text-sm">{title}</h2>
           )}
           {description && (
             <p className="text-muted-foreground text-xs">{description}</p>

@@ -1,10 +1,12 @@
 import type { InfLocation } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
-import { Wallet } from "lucide-react";
+import { ArrowRight, Wallet } from "lucide-react";
 import { useMemo } from "react";
 import { Row } from "~/components/layout";
 import { DashboardCard } from "~/components/layout/dashboard-card";
+import { Skeleton } from "~/components/ui/skeleton";
 import { useHydrated } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 import { authClient } from "~/lib/auth-client";
@@ -31,7 +33,7 @@ export function PantryValueCard() {
   // render identical, and stops the query from firing Unauthorized on the
   // public home page.
   const isAuthenticated = useHydrated() && !!session.data?.user;
-  const { data } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     ...api.location.makeTree.queryOptions(),
     enabled: isAuthenticated,
   });
@@ -52,11 +54,61 @@ export function PantryValueCard() {
     return { total, bars };
   }, [data]);
 
-  if (bars.length === 0) return null;
+  if (!isAuthenticated || isLoading) {
+    return (
+      <DashboardCard icon={Wallet} title="Pantry value">
+        <Skeleton className="h-7 w-24" />
+        <Skeleton className="mt-4 h-24 w-full" />
+      </DashboardCard>
+    );
+  }
+
+  if (isError) {
+    return (
+      <DashboardCard icon={Wallet} title="Pantry value">
+        <p className="text-muted-foreground text-sm">
+          Pantry value is unavailable right now.
+        </p>
+      </DashboardCard>
+    );
+  }
+
+  if (bars.length === 0) {
+    return (
+      <DashboardCard
+        icon={Wallet}
+        title="Pantry value"
+        action={
+          <Link
+            to="/inventory"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <ArrowRight className="size-4" />
+          </Link>
+        }
+      >
+        <p className="text-muted-foreground text-sm">
+          Add inventory to see where its value lives.
+        </p>
+      </DashboardCard>
+    );
+  }
   const max = bars[0]!.value;
 
   return (
-    <DashboardCard icon={Wallet} title="Pantry value by location">
+    <DashboardCard
+      icon={Wallet}
+      title="Pantry value"
+      description="Current value by location"
+      action={
+        <Link
+          to="/inventory"
+          className="font-mono text-2xs text-muted-foreground uppercase transition-colors hover:text-foreground"
+        >
+          Inventory
+        </Link>
+      }
+    >
       <div className="font-mono font-semibold text-xl tabular-nums">
         {formatCurrency(total)}
       </div>

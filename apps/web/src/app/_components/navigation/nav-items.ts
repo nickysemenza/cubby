@@ -66,7 +66,8 @@ export const isNavGroup = (node: NavNode): node is NavGroup =>
 // The handful of leaves shared across surfaces that aren't derived from the
 // desktop tree (top-level desktop + bottom tabs / public bar). Everything else
 // is inlined where it's used.
-const home: NavItem = { to: "/", label: "Home", icon: Home };
+/** Home is a direct workspace destination rather than a grouped leaf. */
+export const homeNavItem: NavItem = { to: "/", label: "Home", icon: Home };
 const recipes: NavItem = {
   to: "/recipes",
   label: "Recipes",
@@ -81,6 +82,11 @@ const inventory: NavItem = {
   to: "/inventory",
   label: "Inventory",
   icon: entities.inventory.lucideIcon,
+};
+export const settingsNavItem: NavItem = {
+  to: "/settings",
+  label: "Settings",
+  icon: Settings,
 };
 
 /**
@@ -198,7 +204,7 @@ export const desktopNav: NavNode[] = [
       { to: "/labels", label: "Labels", icon: QrCode },
       { to: "/ask", label: "Ask AI", icon: Bot },
       { to: "/search", label: "Search", icon: Search },
-      { to: "/settings", label: "Settings", icon: Settings },
+      settingsNavItem,
     ],
   },
   {
@@ -250,7 +256,7 @@ export type NavSection = { title: string; items: NavItem[] };
  * desktop dropdowns can't drift apart.
  */
 export const moreNavSections: NavSection[] = [
-  { title: "Home", items: [home] },
+  { title: "Home", items: [homeNavItem] },
   ...desktopNav
     .filter(isNavGroup)
     .map((group) => ({
@@ -262,7 +268,7 @@ export const moreNavSections: NavSection[] = [
 
 /** Signed-out bar / bottom tabs — always flat leaves (no dropdowns). */
 export const publicNavItems: NavItem[] = [
-  home,
+  homeNavItem,
   { to: "/docs", label: "Docs", icon: FileText },
   { to: "/design", label: "Design", icon: Palette },
 ];
@@ -304,7 +310,7 @@ const allTargets: string[] = uniq(
  * (`"/" + "/"` never prefixes a subpath), so no per-leaf match logic is needed.
  * Returns the matching `to`; consumers compare their own `to` against it.
  */
-function findActiveTo(pathname: string): string | undefined {
+export function findActiveTo(pathname: string): string | undefined {
   let best: string | undefined;
   for (const to of allTargets) {
     if (

@@ -7,6 +7,7 @@ import { MealsCard } from "~/app/_components/home/MealsCard";
 import { PantryValueCard } from "~/app/_components/home/PantryValueCard";
 import { QuickActionsCard } from "~/app/_components/home/QuickActionsCard";
 import { RecentActivityFeed } from "~/app/_components/home/RecentActivityFeed";
+import { RecordedSpendCard } from "~/app/_components/home/RecordedSpendCard";
 import EntityCount from "~/app/_components/homepage/entitycount";
 import { ProblemsBanner } from "~/app/_components/homepage/problems-banner";
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
@@ -95,18 +96,33 @@ function Home() {
       {/* Red alert bar — only rendered when problems > 0. */}
       <ProblemsBanner />
 
-      {/* Entity count ledger strip */}
-      <EntityCount />
+      {/* The household's two live operating signals lead the page. Mobile
+          puts pantry first because it is the physical, daily-use check. */}
+      <Section
+        title="Household signals"
+        description="The state of what is on hand and what has been spent."
+      >
+        <Grid cols="pair" gap="md">
+          <div className="lg:order-2">
+            <PantryValueCard />
+          </div>
+          <div className="lg:order-1">
+            <RecordedSpendCard />
+          </div>
+        </Grid>
+      </Section>
 
-      {/* Two-column layout: activity ledger on the left, actions + pantry
-          value chart on the right. On mobile, create-actions surface first
-          (order-2 on lg pushes them back to the right column). */}
+      <Section title="Current position">
+        <EntityCount />
+      </Section>
+
+      {/* Activity and the practical next actions stay immediately after the
+          signals. The heavier relationship views remain lazy below. */}
       <Grid cols="pair" gap="md">
         <Stack className="lg:order-2">
           <QuickActionsCard />
           <MealsCard />
           <HouseCard />
-          <PantryValueCard />
         </Stack>
         <div className="lg:order-1">
           <RecentActivityFeed limit={6} />

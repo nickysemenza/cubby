@@ -1,7 +1,36 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { describe, expect, it } from "vitest";
 import { entities } from "~/entities/entities";
-import { desktopNav, getEntityNavGroup, isNavGroup } from "./nav-items";
+import {
+  desktopLeaves,
+  desktopNav,
+  findActiveTo,
+  getEntityNavGroup,
+  homeNavItem,
+  isNavGroup,
+  settingsNavItem,
+} from "./nav-items";
+
+describe("workspace navigation contract", () => {
+  it("contains every desktop destination exactly once", () => {
+    const targets = [homeNavItem, ...desktopLeaves].map((item) => item.to);
+    expect(new Set(targets).size).toBe(targets.length);
+    expect(targets.filter((target) => target === settingsNavItem.to)).toEqual([
+      "/settings",
+    ]);
+  });
+
+  it.each([
+    ["/", "/"],
+    ["/expenses", "/expenses"],
+    ["/expenses/EXP-42", "/expenses"],
+    ["/ingredients/workbench", "/ingredients/workbench"],
+    ["/ingredients/ING-42", "/ingredients"],
+    ["/products-extra", undefined],
+  ])("matches %s to its longest navigation target", (pathname, expected) => {
+    expect(findActiveTo(pathname)).toBe(expected);
+  });
+});
 
 // This is the regression test for the drift `getEntityNavGroup` replaced: a
 // hand-kept `Partial<Record<Entity, string>>` map in page-hero.tsx that fell
