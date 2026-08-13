@@ -1,4 +1,5 @@
-import type { AuditEntityType } from "@cubby/schemas/audit";
+import type { AuditEntityType, AuditJsonValue } from "@cubby/schemas/audit";
+import { sortBy } from "es-toolkit";
 import { Bot, ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { Row, Stack } from "~/components/layout";
@@ -31,6 +32,169 @@ function formatChangeValue(value: unknown): string {
   return str.length > 500 ? `${str.slice(0, 500)}...` : str;
 }
 
+/**
+ * Fields whose diffs are bookkeeping rather than news. They aren't hidden — the
+ * ledger falls back to them when nothing more interesting changed — they just
+ * lose the fight for the one line a row gets.
+ */
+const LOW_SIGNAL_CHANGE_FIELDS = new Set([
+  "SourceData",
+  "dataExceptions",
+  "embedding",
+  "notionPageId",
+  "sortOrder",
+  "sourceRefs",
+  "totals",
+  "updatedAt",
+  "valuation",
+]);
+
+/** Column names whose camel-case split still doesn't read as English. */
+const CHANGE_FIELD_LABELS: Record<string, string> = {
+  displayLabel: "label",
+  postedDate: "posted",
+  productQuantity: "quantity",
+  rawDescription: "description",
+  sourceCategory: "category",
+  statedTotal: "total",
+  transactionDate: "date",
+  verifiedAt: "verified",
+};
+
+function humanizeChangeField(field: string): string {
+  return (
+    CHANGE_FIELD_LABELS[field] ??
+    field
+      // A resolved FK reads as the thing it points at ("location", not
+      // "location id") — the id itself is already rendered as a shortcode.
+      .replace(/Id$/u, "")
+      .replace(/([a-z\d])([A-Z])/gu, "$1 $2")
+      .toLowerCase()
+  );
+}
+
+const LEDGER_SHORTCODE = /^[A-Z]{2,4}-[A-Z\d]{4}$/u;
+const LEDGER_VALUE_CHARS = 22;
+const LEDGER_MAX_FIELDS = 2;
+
+/** `mono` carries the Three Voices Rule: measures and codes get the mono face. */
+type LedgerValue = { text: string; mono: boolean };
+
+const formatLedgerNumber = (value: number): string =>
+  Number.isInteger(value) ? String(value) : value.toFixed(2);
+
+/**
+ * One side of a diff, compressed to something that fits on a ledger line.
+ * Returns null for values with no glanceable rendering (empty, or a nested
+ * object that isn't an `Amount`), which drops the field from the summary.
+ */
+function formatLedgerValue(
+  value: AuditJsonValue | undefined,
+): LedgerValue | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value === "boolean") {
+    return { text: value ? "yes" : "no", mono: false };
+  }
+  if (typeof value === "number") {
+    return { text: formatLedgerNumber(value), mono: true };
+  }
+  if (typeof value === "string") {
+    return {
+      text:
+        value.length > LEDGER_VALUE_CHARS
+          ? `${value.slice(0, LEDGER_VALUE_CHARS)}\u2026`
+          : value,
+      mono: LEDGER_SHORTCODE.test(value),
+    };
+  }
+  if (Array.isArray(value)) {
+    return { text: `${value.length} items`, mono: true };
+  }
+  // `Amount` is by far the most common object diff on the home feed — an
+  // inventory quantity change is unreadable as raw JSON and obvious as "3 ea".
+  const { value: quantity, unit } = value;
+  return typeof quantity === "number" && typeof unit === "string"
+    ? { text: `${formatLedgerNumber(quantity)} ${unit}`, mono: true }
+    : null;
+}
+
+/**
+ * Rank a `changes` map down to the 1–2 fields worth a glance, plus how many
+ * were left out — the omitted count is the disclosure that keeps a one-line
+ * renderer honest about being a projection of the full diff.
+ */
+export function summarizeChanges(
+  changes: AuditLogEntry["changes"],
+): { shown: LedgerField[]; omitted: number } | null {
+  if (!changes) return null;
+  const changed = Object.entries(changes);
+  const renderable = changed
+    .map(([field, diff]) => ({
+      field,
+      from: formatLedgerValue(diff.from),
+      to: formatLedgerValue(diff.to),
+    }))
+    .filter((entry) => entry.from !== null || entry.to !== null);
+  if (renderable.length === 0) return null;
+
+  const ranked = sortBy(renderable, [
+    (entry) => (LOW_SIGNAL_CHANGE_FIELDS.has(entry.field) ? 1 : 0),
+  ]);
+  const shown = ranked.slice(0, LEDGER_MAX_FIELDS);
+  // Counted against every changed field, not just the renderable ones. A
+  // field with no glanceable rendering (an object-valued `totals`/`valuation`
+  // diff, which is exactly what a recompute-style update touches) is dropped
+  // from the line — but dropping it from the count too would let the row claim
+  // it changed less than it did, which is the one thing this disclosure exists
+  // to prevent.
+  return { shown, omitted: changed.length - shown.length };
+}
+
+type LedgerField = {
+  field: string;
+  from: LedgerValue | null;
+  to: LedgerValue | null;
+};
+
+function LedgerChangeSummary({
+  shown,
+  omitted,
+}: {
+  shown: LedgerField[];
+  omitted: number;
+}) {
+  return (
+    <Row align="baseline" gap="sm" className="min-w-0 text-xs">
+      {shown.map(({ field, from, to }) => (
+        <Row key={field} align="baseline" gap="tight" className="min-w-0">
+          <span className="shrink-0 font-mono text-2xs text-slate uppercase">
+            {humanizeChangeField(field)}
+          </span>
+          {from && (
+            <span
+              className={cn(
+                "truncate text-muted-foreground",
+                from.mono && "font-mono",
+              )}
+            >
+              {from.text}
+            </span>
+          )}
+          <span className="shrink-0 text-slate">&rarr;</span>
+          <span className={cn("truncate", to?.mono && "font-mono")}>
+            {to ? to.text : "(empty)"}
+          </span>
+        </Row>
+      ))}
+      {omitted > 0 && (
+        <span className="shrink-0 font-mono text-2xs text-slate">
+          +{omitted}
+        </span>
+      )}
+    </Row>
+  );
+}
+
 function ChangesList({
   changes,
 }: {
@@ -57,8 +221,10 @@ interface AuditLogEntryProps {
   showEntityLink?: boolean;
   step: number;
   /**
-   * "ledger" renders a glanceable single line (pill + action ... time) with no
-   * avatar, timeline, or change details — used on the home feed.
+   * "ledger" renders a glanceable single line (name + one-line diff ... time)
+   * with no avatar, timeline, or expandable change detail — the home feed. The
+   * diff is a projection: it shows at most two fields and discloses the rest as
+   * an omitted count.
    */
   variant?: "default" | "ledger";
 }
@@ -76,17 +242,30 @@ export function AuditLogEntryComponent({
   const action = getStatusBadgeProps("audit", entry.action);
 
   if (variant === "ledger") {
+    // A create or delete has no interesting "from" side, so its verb IS the
+    // news; an update's verb is the one thing the reader can already assume.
+    const summary =
+      entry.action === "update" ? summarizeChanges(entry.changes) : null;
+
     return (
       <TimelineItem step={step} className="not-last:pb-2">
         <TimelineIndicator className="size-2 border-0 bg-primary ring-2 ring-background" />
         <TimelineSeparator className="left-[-1.5rem] h-[calc(100%-0.5rem)] translate-y-2 bg-border" />
         <TimelineContent>
-          <Row align="center" justify="between" gap="sm" className="min-h-7">
+          {/* Desktop keeps the dense 28px ledger row; phones raise it to the
+              44px floor, since each row is a link to the entity it names. */}
+          <Row
+            align="center"
+            justify="between"
+            gap="sm"
+            className="min-h-11 sm:min-h-7"
+          >
             <Row align="center" gap="sm" className="min-w-0">
               {showEntityLink && entry.entityId ? (
                 <AuditEntityLink
                   entityType={entry.entityType}
                   entityId={entry.entityId}
+                  name={entry.entityName}
                   compact
                 />
               ) : (
@@ -97,16 +276,23 @@ export function AuditLogEntryComponent({
                     className="size-4 flex-shrink-0"
                   />
                   <span className="truncate font-medium text-sm">
-                    {entityConfig.label}
+                    {entry.entityName ?? entityConfig.label}
                   </span>
                 </>
               )}
-              <Badge
-                variant="secondary"
-                className={cn("text-2xs", action.className)}
-              >
-                {action.label}
-              </Badge>
+              {summary ? (
+                <LedgerChangeSummary
+                  shown={summary.shown}
+                  omitted={summary.omitted}
+                />
+              ) : (
+                <Badge
+                  variant="secondary"
+                  className={cn("text-2xs", action.className)}
+                >
+                  {action.label}
+                </Badge>
+              )}
             </Row>
             <span className="shrink-0 text-muted-foreground">
               <HoverableTimestamp timestamp={entry.createdAt} />
@@ -156,6 +342,7 @@ export function AuditLogEntryComponent({
                   <AuditEntityLink
                     entityType={entry.entityType}
                     entityId={entry.entityId}
+                    name={entry.entityName}
                     compact
                   />
                 ) : (
@@ -166,7 +353,7 @@ export function AuditLogEntryComponent({
                       className="size-4 flex-shrink-0"
                     />
                     <span className="font-medium text-sm">
-                      {entityConfig.label}
+                      {entry.entityName ?? entityConfig.label}
                     </span>
                   </>
                 )}

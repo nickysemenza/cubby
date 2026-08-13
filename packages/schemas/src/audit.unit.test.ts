@@ -134,6 +134,7 @@ const entry = (source: string) => ({
   entryKey: `test:${source}`,
   entityType: "product" as const,
   entityId: "PRD-2CRC",
+  entityName: "Track Saw Rail",
   action: "update" as const,
   changes: { tags: { from: [], to: ["fs-rail"] } },
   userId: "user-1",

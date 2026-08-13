@@ -4,13 +4,21 @@ import { useProblemsData } from "~/app/problems/use-problems-data";
 import { useHydrated } from "~/hooks/useHydrated";
 import { useIdle } from "~/hooks/useIdle";
 import { authClient } from "~/lib/auth-client";
+import { cn } from "~/lib/utils";
 
 /**
- * Red alert bar shown only when the data-problems count is > 0. Ports the
+ * Data-problems bar, shown only when something is outstanding. Ports the
  * deferred-fetch gate from the retired ProblemsStatCard: the 5 cost-grouped
  * detectors aren't needed for the page to be interactive, so `useIdle` keeps
  * them off the first-paint critical path (combined with the auth+hydration
  * gate, which also keeps SSR markup stable).
+ *
+ * `total` is already defect-only — `PROBLEM_CLASS` keeps coverage rows out of
+ * it precisely because a count that can never reach zero makes a permanent red
+ * badge nobody can act on. So the two are reported side by side rather than
+ * summed: the defect count carries the destructive tone and the coverage
+ * backlog trails it as quiet context, which is the difference between "this is
+ * wrong" and "this hasn't been filed yet".
  */
 export function ProblemsBanner() {
   const session = authClient.useSession();
@@ -20,19 +28,40 @@ export function ProblemsBanner() {
     staleTime: 5 * 60 * 1000,
     enabled: enabled && idle,
   });
-  const count = countProblems(problems).total;
+  const { total: defects, coverageTotal } = countProblems(problems);
 
-  if (isLoading || count === 0) return null;
+  if (isLoading || (defects === 0 && coverageTotal === 0)) return null;
 
   return (
     <Link
       to="/problems"
-      className="flex items-center gap-2 border border-destructive/60 bg-destructive/10 px-2 py-1 text-destructive transition-colors hover:bg-destructive/20"
+      className={cn(
+        "flex min-h-11 items-center gap-2 border px-2 py-1 transition-colors sm:min-h-0",
+        defects > 0
+          ? "border-destructive/60 bg-destructive/10 text-destructive hover:bg-destructive/20"
+          : "border-border bg-muted/40 text-muted-foreground hover:bg-muted",
+      )}
     >
-      <span className="font-mono font-semibold text-xs tabular-nums">
-        {count}
+      {defects > 0 ? (
+        <>
+          <span className="font-mono font-semibold text-xs tabular-nums">
+            {defects.toLocaleString()}
+          </span>
+          <span className="text-xs">
+            {defects === 1 ? "problem needs" : "problems need"} attention
+          </span>
+        </>
+      ) : (
+        <span className="text-xs">Everything checks out.</span>
+      )}
+      {coverageTotal > 0 && (
+        <span className="ml-auto truncate font-mono text-2xs uppercase opacity-70">
+          {coverageTotal.toLocaleString()} coverage gaps
+        </span>
+      )}
+      <span aria-hidden="true" className="shrink-0 text-xs">
+        →
       </span>
-      <span className="text-xs">problems need attention →</span>
     </Link>
   );
 }

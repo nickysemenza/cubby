@@ -15,9 +15,8 @@ import { CookbookSelect } from "~/app/_components/recipe/cookbook-select";
 import IngredientNetwork from "~/app/_components/visualizations/ingredient-network";
 import LocationSunburst from "~/app/_components/visualizations/location-sunburst";
 import ProductCategoryDonut from "~/app/_components/visualizations/product-category-donut";
-import { Grid, Section, Stack } from "~/components/layout";
+import { CollapsibleSection, Grid, Section, Stack } from "~/components/layout";
 import { DashboardCard } from "~/components/layout/dashboard-card";
-import { LazyMount } from "~/components/lazy-mount";
 import { Page } from "~/components/page/Page";
 import { authClient } from "~/lib/auth-client";
 
@@ -93,11 +92,29 @@ function Home() {
       }
       fullWidth
     >
-      {/* Red alert bar — only rendered when problems > 0. */}
+      {/* Status bar — absent only when there is nothing outstanding at all.
+          It carries the destructive tone for real defects and a quiet one for
+          a coverage-only backlog, which is why it can render either way. */}
       <ProblemsBanner />
 
-      {/* The household's two live operating signals lead the page. Mobile
-          puts pantry first because it is the physical, daily-use check. */}
+      {/* What to act on leads the page. The ordering rule for this route is
+          "does this number change what I do in the next ten minutes" — open
+          work and this week's meals do; a valuation total does not, so the
+          signals region now sits below rather than above. On a phone this
+          also means the first viewport is work, not net worth. */}
+      <Section
+        title="On deck"
+        description="Open work and what is planned to cook."
+      >
+        <Grid cols="pair" gap="md">
+          <HouseCard />
+          <MealsCard />
+        </Grid>
+      </Section>
+
+      {/* The household's two operating signals — state of what is on hand and
+          what has been spent. Mobile puts pantry first because it is the
+          physical, daily-use check. */}
       <Section
         title="Household signals"
         description="The state of what is on hand and what has been spent."
@@ -112,71 +129,66 @@ function Home() {
         </Grid>
       </Section>
 
-      <Section title="Current position">
+      <Section
+        title="Current position"
+        description="Everything the household has on record."
+      >
         <EntityCount />
       </Section>
 
-      {/* Activity and the practical next actions stay immediately after the
-          signals. The heavier relationship views remain lazy below. */}
-      <Grid cols="pair" gap="md">
-        <Stack className="lg:order-2">
-          <QuickActionsCard />
-          <MealsCard />
-          <HouseCard />
-        </Stack>
-        <div className="lg:order-1">
+      {/* Named region: this pair was previously an untitled bare grid between
+          two titled sections, which is exactly where the reading order
+          stumbled. Equal columns — the feed used to be twice the width of the
+          actions beside it while carrying less. */}
+      <Section title="Activity">
+        <Grid cols="pair" gap="md">
           <RecentActivityFeed limit={6} />
-        </div>
-      </Grid>
+          <QuickActionsCard />
+        </Grid>
+      </Section>
 
       {/* Insights — the visualization panels folded in from the retired
-          /insights page. All sit below the fold, so each is LazyMount-gated:
-          its queries fire only when scrolled near (home is the most-visited
-          route, and the co-occurrence/usage queries are the heaviest reads —
-          don't pay them on every landing). */}
-      <Section title="Insights">
+          /insights page. Exploration, not operation: they are the heaviest
+          reads on the most-visited route and the least likely to change what
+          anyone does next, so the whole region is collapsed by default.
+          The disclosure IS the gate — CollapsibleSection mounts its body only
+          while open, so a closed region runs no queries at all, and the panels
+          need no per-panel scroll-gating of their own. */}
+      <CollapsibleSection title="Insights" summary="Four exploratory views">
         <Grid cols="pair" gap="md">
           <DashboardCard
             icon={PieChart}
-            title="Products by Category"
+            title="Products by category"
             description="Distribution across categories — click a slice to view products."
           >
-            <LazyMount>
-              <ProductCategoryDonut />
-            </LazyMount>
+            <ProductCategoryDonut />
           </DashboardCard>
 
           <DashboardCard
             icon={MapPin}
-            title="Inventory by Location"
+            title="Inventory by location"
             description="Where inventory value sits across your locations."
           >
-            <LazyMount>
-              <LocationSunburst />
-            </LazyMount>
+            <LocationSunburst />
           </DashboardCard>
 
           <DashboardCard
             icon={Share2}
-            title="Ingredient Relationships"
+            title="Ingredient relationships"
             description="Ingredients that co-occur across recipes; larger nodes are used more."
           >
-            <LazyMount>
-              <IngredientNetwork />
-            </LazyMount>
+            <IngredientNetwork />
           </DashboardCard>
 
           <DashboardCard
             icon={ListChecks}
-            title="Ingredient Usage"
+            title="Ingredient usage"
             description="How many recipes use each ingredient; scope by cookbook."
           >
-            <LazyMount>
-              <IngredientUsageSection />
-            </LazyMount>
+            <IngredientUsageSection />
           </DashboardCard>
         </Grid>
-      </Section>
+      </CollapsibleSection>
     </Page>
   );
 }

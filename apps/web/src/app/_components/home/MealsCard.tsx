@@ -4,7 +4,10 @@ import { addDays, format, isSameDay, parseISO } from "date-fns";
 import { UtensilsCrossed } from "lucide-react";
 import { formatMealCost } from "~/app/meals/meal-format";
 import { Row, Stack } from "~/components/layout";
-import { DashboardCard } from "~/components/layout/dashboard-card";
+import {
+  CardActionLink,
+  DashboardCard,
+} from "~/components/layout/dashboard-card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useHydrated } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -44,14 +47,7 @@ export function MealsCard() {
       icon={UtensilsCrossed}
       title="Meals"
       description="Planned for the next 7 days"
-      action={
-        <Link
-          to="/meals"
-          className="font-mono text-2xs text-muted-foreground uppercase transition-colors hover:text-foreground"
-        >
-          Calendar
-        </Link>
-      }
+      action={<CardActionLink to="/meals">Calendar</CardActionLink>}
     >
       <Stack gap="xs">
         {isLoading || !data ? (
@@ -60,9 +56,19 @@ export function MealsCard() {
             <Skeleton className="h-5 w-3/4" />
           </>
         ) : meals.length === 0 ? (
-          <span className="text-muted-foreground text-xs">
-            Nothing planned this week.
-          </span>
+          // An empty week states the absence and offers the one thing the
+          // footer links below can't: somewhere to start. "What can I make?"
+          // is deliberately not repeated here — it already sits directly
+          // beneath, and an empty card showing the same link twice reads as a
+          // rendering fault.
+          <Stack gap="sm" className="py-1">
+            <span className="text-muted-foreground text-xs">
+              Nothing planned this week.
+            </span>
+            <Row gap="md">
+              <CardActionLink to="/calendar">Plan a meal</CardActionLink>
+            </Row>
+          </Stack>
         ) : (
           meals.map((meal) => {
             const date = parseISO(meal.date);
@@ -95,19 +101,13 @@ export function MealsCard() {
         )}
       </Stack>
 
-      <Row gap="md" className="mt-4">
-        <Link
-          to="/meals/suggestions"
-          className="font-mono text-2xs text-muted-foreground uppercase transition-colors hover:text-foreground"
-        >
+      {/* Tighter on phones: the links there carry their own 44px touch height,
+          so a full 1rem on top of it reads as a hole in the card. */}
+      <Row gap="md" className="mt-1 sm:mt-4">
+        <CardActionLink to="/meals/suggestions">
           What can I make?
-        </Link>
-        <Link
-          to="/meals/shopping-list"
-          className="font-mono text-2xs text-muted-foreground uppercase transition-colors hover:text-foreground"
-        >
-          Shopping list
-        </Link>
+        </CardActionLink>
+        <CardActionLink to="/meals/shopping-list">Shopping list</CardActionLink>
       </Row>
     </DashboardCard>
   );

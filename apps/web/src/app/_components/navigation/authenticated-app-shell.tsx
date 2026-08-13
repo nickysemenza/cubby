@@ -124,7 +124,7 @@ function DesktopCommandHeader({
       >
         <Search className="size-3.5" />
         Search Cubby
-        <span className="ml-auto font-mono text-3xs">⌘K</span>
+        <span className="ml-auto font-mono text-2xs">⌘K</span>
       </Button>
       <Suspense fallback={<div className="ml-2 h-8 w-28" aria-hidden="true" />}>
         <ShellControls />

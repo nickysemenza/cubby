@@ -1,10 +1,19 @@
 import { randomUUID } from "node:crypto";
 import type { AuditEntityType } from "@cubby/schemas/audit";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { auditLog } from "~/server/db/schema";
+import { auditLog, product } from "~/server/db/schema";
 import { getAuditLog } from "~/server/repo/audit-log";
-import { insertAndReturn } from "./database-helpers";
+import { insertAndReturn, withTransaction } from "./database-helpers";
+import {
+  createInventoryFixture as createInventoryEntry,
+  createLocationFixture as createLocation,
+  createProductFixture as createProduct,
+  makeLocationInput,
+  makeProductInput,
+} from "./repo.fixtures";
+import { insertWithShortcode } from "./shortcode-utils";
 
 /**
  * `getAuditLog` (PR 6, Phase 6) gained `source` and a `createdAtFrom`/
@@ -134,5 +143,105 @@ describe("getAuditLog — source + time window", () => {
 
     expect(entryKeys).toHaveLength(7);
     expect(new Set(entryKeys).size).toBe(7);
+  });
+});
+
+/**
+ * The home feed renders one line per entry, so an entry that resolves to a
+ * bare type + shortcode ("Inventory Item INV-KZYZ") carries no information.
+ * `entityName` is resolved at read time — from a display column for most
+ * entities, and from a product+location join for inventory, whose identity is
+ * relational. These pin each outcome that resolution can produce.
+ */
+describe("getAuditLog — entityName", () => {
+  const ctx = withTestDb();
+
+  const auditRowFor = (entityType: AuditEntityType, entityId: string) =>
+    insertAndReturn(ctx.db, auditLog, {
+      entityType,
+      entityId,
+      action: "update",
+      userId: ctx.actor.userId,
+      source: "ui",
+    });
+
+  it("resolves the display name of an entity that has one", async () => {
+    const row = await insertWithShortcode(ctx.db, "product", {
+      name: "Festool Track Saw Rail",
+      manufacturer: "Festool",
+    });
+    await auditRowFor("product", row.id);
+
+    const { entries } = await getAuditLog(ctx.db, {
+      limit: 50,
+      entityType: "product",
+    });
+    expect(entries[0]?.entityName).toBe("Festool Track Saw Rail");
+  });
+
+  it("still names a row that was soft-deleted after the entry was written", async () => {
+    const row = await insertWithShortcode(ctx.db, "product", {
+      name: "Retired Blade",
+      manufacturer: "ACME",
+    });
+    await auditRowFor("product", row.id);
+    await withTransaction(ctx.db, (tx) =>
+      tx
+        .update(product)
+        .set({ deletedAt: new Date() })
+        .where(eq(product.id, row.id)),
+    );
+
+    const { entries } = await getAuditLog(ctx.db, {
+      limit: 50,
+      entityType: "product",
+    });
+    expect(entries[0]?.entityName).toBe("Retired Blade");
+  });
+
+  it("names an inventory entry compositely, by its product and location", async () => {
+    // Inventory is the one shortcode entity with no name-shaped column of its
+    // own — its identity is relational, so the label is a join. Pinned because
+    // the home feed is mostly inventory rows, and a bare code there is the
+    // exact failure this resolution exists to prevent.
+    const loc = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Garage" }),
+      ctx.actor,
+    );
+    const prod = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Cast Iron Skillet" }),
+      ctx.actor,
+    );
+    const entry = await createInventoryEntry(
+      ctx.db,
+      {
+        productId: prod.id,
+        locationId: loc.id,
+        amount: { value: 1, unit: "ea" },
+      },
+      ctx.actor,
+    );
+    await auditRowFor("inventory", entry.entityId);
+
+    const { entries } = await getAuditLog(ctx.db, {
+      limit: 50,
+      entityType: "inventory",
+    });
+    expect(entries[0]?.entityName).toBe("Cast Iron Skillet · Garage");
+  });
+
+  it("returns null when the referenced row cannot be named", async () => {
+    // A dangling id, not a statement about the entity type: the composite join
+    // above finds nothing, so the caller falls back to type-plus-shortcode.
+    await auditRowFor("inventory", randomUUID());
+
+    const { entries } = await getAuditLog(ctx.db, {
+      limit: 50,
+      entityType: "inventory",
+    });
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.entityName).toBeNull();
   });
 });

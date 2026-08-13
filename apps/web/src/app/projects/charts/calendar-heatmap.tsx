@@ -1,6 +1,7 @@
 import { ResponsiveCalendar } from "@nivo/calendar";
 import type { ComponentProps, ReactNode } from "react";
 import { useState } from "react";
+import { nivoMotion } from "~/lib/nivo-theme";
 
 interface CalendarHeatmapProps<T> {
   data: Array<{ day: string; value: number }>;
@@ -31,6 +32,7 @@ export function CalendarHeatmap<T>({
     <div className="space-y-2">
       <div style={{ height: Math.max(180, yearSpan * 160) }}>
         <ResponsiveCalendar
+          {...nivoMotion}
           data={data}
           from={from}
           to={to}

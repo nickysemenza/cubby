@@ -13,6 +13,18 @@ import { LocationIcon } from "../locations/location-icons";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizTooltip } from "./viz-overlay";
 
+// Which ring fills need light-on-dark labels vs dark-on-light labels, sized
+// against the actual WCAG contrast ratios for these tokens: chart-2/3/4 clear
+// 4.5:1 only against white (chart-4 vs the paper token lands at 4.42:1, just
+// under), while chart-5/6 clear 4.5:1 against ink. See the identical table in
+// product-category-donut.tsx, derived once against the known oklch values in
+// styles.css rather than a runtime lightness read.
+const DARK_RING_FILLS = new Set([
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+]);
+
 export default function LocationSunburst() {
   const { data, isLoading } = useLocationHierarchy({
     valuationMode: "itemCount",
@@ -100,28 +112,37 @@ function Sunburst({ data }: SunburstProps) {
     [],
   );
 
-  // Sequential ink ramp (paper -> ultramarine) by depth: the root ring burns
-  // deepest and each nested ring lightens toward paper. Empty locations sit out
-  // in muted.
+  // Sequential ink ramp (dark ink -> light ink) by depth: the root ring reads
+  // heaviest and each nested ring lightens. The old ramp (--chart-seq-1..5)
+  // is an ultramarine tint sequence, so it painted the whole hierarchy in the
+  // interaction accent — the One Loud Thing rule (DESIGN.md) reserves that
+  // color for a single live/interactive value, not a whole panel. Empty
+  // locations sit out in muted.
   const getNodeColor = useCallback(
     (node: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>) => {
       if (node.data.totalCount === 0) return "var(--muted)";
       const ramp = [
-        "var(--chart-seq-5)",
-        "var(--chart-seq-4)",
-        "var(--chart-seq-3)",
-        "var(--chart-seq-2)",
-        "var(--chart-seq-1)",
+        "var(--chart-2)",
+        "var(--chart-3)",
+        "var(--chart-4)",
+        "var(--chart-5)",
+        "var(--chart-6)",
       ];
-      return ramp[Math.min(node.depth - 1, ramp.length - 1)] ?? ramp[0];
+      // Fallback is unreachable (index is clamped into range) but keeps the
+      // return type a definite `string` for DARK_RING_FILLS.has() below.
+      return (
+        ramp[Math.min(node.depth - 1, ramp.length - 1)] ?? "var(--chart-6)"
+      );
     },
     [],
   );
-  // Deep rings need paper-colored ink; shallow rings read with the foreground.
-  const isDeepRing = useCallback(
+  // Which rings need paper/white-colored ink vs. the foreground — derived from
+  // the fill itself (DARK_RING_FILLS) rather than depth, since chart-4 needs
+  // white specifically (see the table above getNodeColor / DARK_RING_FILLS).
+  const isDarkRing = useCallback(
     (node: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>) =>
-      node.data.totalCount > 0 && node.depth <= 2,
-    [],
+      node.data.totalCount > 0 && DARK_RING_FILLS.has(getNodeColor(node)),
+    [getNodeColor],
   );
 
   const getLabelPosition = useCallback(
@@ -150,13 +171,26 @@ function Sunburst({ data }: SunburstProps) {
     [],
   );
 
+  // Top-level locations arrive pre-sorted desc by value (hierarchy.sort in the
+  // useMemo above), so the first few depth-1 nodes are already the chart's
+  // leading values.
+  const chartSummary = useMemo(() => {
+    const top = nodes
+      .filter((n) => n.depth === 1)
+      .slice(0, 3)
+      .map((n) => `${n.data.name} ${n.data.totalCount}`)
+      .join("; ");
+    return `Inventory by location: ${top}; ${data.totalCount} items total`;
+  }, [nodes, data.totalCount]);
+
   return (
     <div
       ref={containerRef}
-      className="relative h-[500px] w-full overflow-hidden rounded-md border border-[var(--border)]"
+      className="relative h-[500px] w-full overflow-hidden border border-[var(--border)]"
     >
       <svg
-        aria-hidden="true"
+        role="img"
+        aria-label={chartSummary}
         width={dimensions.width}
         height={dimensions.height}
       >
@@ -190,8 +224,8 @@ function Sunburst({ data }: SunburstProps) {
                     fill={
                       node.data.totalCount === 0
                         ? "var(--muted-foreground)"
-                        : isDeepRing(node)
-                          ? "var(--background)"
+                        : isDarkRing(node)
+                          ? "var(--primary-foreground)"
                           : "var(--foreground)"
                     }
                   >

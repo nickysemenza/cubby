@@ -1,12 +1,14 @@
 import type { ExpenseMonthlyAggregate } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { addMonths, endOfMonth, format, startOfMonth } from "date-fns";
 import { ChartNoAxesColumnIncreasing } from "lucide-react";
 import { useMemo } from "react";
 import { MonthlySpend } from "~/app/expenses/charts/monthly-spend";
 import { Row } from "~/components/layout";
-import { DashboardCard } from "~/components/layout/dashboard-card";
+import {
+  CardActionLink,
+  DashboardCard,
+} from "~/components/layout/dashboard-card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useHydrated } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -84,14 +86,7 @@ export function RecordedSpendCard() {
       icon={ChartNoAxesColumnIncreasing}
       title="Recorded spend"
       description="Last six calendar months · actual expenses only"
-      action={
-        <Link
-          to="/expenses"
-          className="font-mono text-2xs text-muted-foreground uppercase transition-colors hover:text-foreground"
-        >
-          Ledger
-        </Link>
-      }
+      action={<CardActionLink to="/expenses">Ledger</CardActionLink>}
     >
       {!isAuthenticated || query.isLoading ? (
         <>

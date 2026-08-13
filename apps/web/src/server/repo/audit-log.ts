@@ -15,6 +15,7 @@ import { auditLog } from "~/server/db/schema";
 import { eqAny, unwrapDb } from "~/server/repo/database-helpers";
 import {
   type EntityRef,
+  lookupEntityLabels,
   lookupShortcodes,
   refKey,
 } from "~/server/repo/shortcode-resolver";
@@ -390,16 +391,23 @@ export async function getAuditLog(
       : undefined
     : undefined;
 
-  // One batched round-trip covers both the top-level `entityId` AND every
-  // FK-shaped value inside each entry's `changes` diff — never a per-row query.
-  const shortcodeByRef = await lookupShortcodes(db, [
-    ...returnEntries.map((entry) => ({
-      entity: entry.entityType,
-      id: entry.entityId,
-    })),
-    ...returnEntries.flatMap((entry) =>
-      collectChangeRefs(entry.entityType, entry.changes),
-    ),
+  const entryRefs: EntityRef[] = returnEntries.map((entry) => ({
+    entity: entry.entityType,
+    id: entry.entityId,
+  }));
+
+  // Both lookups are batched per entity type — never a per-row query — and run
+  // together so the name resolution costs no extra round-trip latency. The
+  // shortcode side additionally covers every FK-shaped value inside each
+  // entry's `changes` diff; a name is only wanted for the entry's own subject.
+  const [shortcodeByRef, nameByRef] = await Promise.all([
+    lookupShortcodes(db, [
+      ...entryRefs,
+      ...returnEntries.flatMap((entry) =>
+        collectChangeRefs(entry.entityType, entry.changes),
+      ),
+    ]),
+    lookupEntityLabels(db, entryRefs),
   ]);
 
   return {
@@ -407,6 +415,7 @@ export async function getAuditLog(
       ...entry,
       entryKey: encodeAuditCursor({ id, createdAt: entry.createdAt }),
       entityId: shortcodeByRef.get(refKey(entry.entityType, entityId)) ?? null,
+      entityName: nameByRef.get(refKey(entry.entityType, entityId)) ?? null,
       changes: remapChangeShortcodes(entry.entityType, changes, shortcodeByRef),
     })),
     nextCursor,

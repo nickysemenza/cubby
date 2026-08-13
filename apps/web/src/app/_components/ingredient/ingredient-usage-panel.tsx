@@ -97,7 +97,7 @@ function UsageTable({
 }) {
   return (
     <Table
-      containerClassName="overflow-hidden rounded-lg border border-[var(--border)]"
+      containerClassName="overflow-hidden border border-[var(--border)]"
       className="table-auto"
     >
       <TableHeader>

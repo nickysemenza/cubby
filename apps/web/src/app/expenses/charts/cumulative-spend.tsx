@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import { monthLabel } from "~/app/projects/project-formatting";
-import { nivoChartTheme } from "~/lib/nivo-theme";
+import { nivoChartTheme, nivoMotion } from "~/lib/nivo-theme";
 import { formatCurrency } from "~/lib/utils";
 
 /**
@@ -39,6 +39,7 @@ export function CumulativeSpend({
   return (
     <div className="h-[300px]">
       <ResponsiveLine
+        {...nivoMotion}
         data={[{ id: "Cumulative net", data: points }]}
         margin={{ top: 20, right: 30, bottom: 50, left: 70 }}
         xScale={{ type: "point" }}

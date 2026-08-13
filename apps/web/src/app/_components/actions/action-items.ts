@@ -7,6 +7,8 @@ import {
   Plus,
   Printer,
   ScanBarcode,
+  ShoppingCart,
+  Sparkles,
 } from "lucide-react";
 import { entities } from "~/entities/entities";
 
@@ -19,7 +21,8 @@ import { entities } from "~/entities/entities";
 export type ActionSurface =
   | "navbar-create"
   | "palette-quick"
-  | "inventory-page";
+  | "inventory-page"
+  | "home-quick";
 
 /**
  * A single quick action. `entity` marks an entity-create action whose `name`
@@ -78,19 +81,45 @@ function entityCreate(
  * out of every create surface (dev-level, not a headline create).
  */
 export const actionItems: ActionItem[] = [
+  // `home-quick` leads with the household's recurring verbs — recount, cook,
+  // shop, triage — before any create form. The home card previously rendered
+  // the navbar's create-only slice, which offers eight ways to add a record on
+  // a database that is already populated; the daily job there is acting on
+  // what exists. Order in this array is the order each surface renders.
   {
     id: "recount",
     name: "Recount",
     path: "/inventory/session",
     icon: ScanBarcode,
     keywords: ["barcode", "scan", "inventory", "add", "garage", "audit"],
-    surfaces: ["navbar-create", "palette-quick", "inventory-page"],
+    surfaces: [
+      "navbar-create",
+      "palette-quick",
+      "inventory-page",
+      "home-quick",
+    ],
+  },
+  {
+    id: "what-can-i-make",
+    name: "What can I make?",
+    path: "/meals/suggestions",
+    icon: Sparkles,
+    keywords: ["cook", "tonight", "recipe", "available", "pantry", "dinner"],
+    surfaces: ["palette-quick", "home-quick"],
+  },
+  {
+    id: "shopping-list",
+    name: "Shopping list",
+    path: "/meals/shopping-list",
+    icon: ShoppingCart,
+    keywords: ["shop", "buy", "groceries", "needs", "meal plan"],
+    surfaces: ["palette-quick", "home-quick"],
   },
   entityCreate(
     "product",
     "add-product",
     Plus,
-    ["navbar-create", "palette-quick"],
+    ["navbar-create", "palette-quick", "home-quick"],
     ["create", "new", "item"],
   ),
   entityCreate(
@@ -117,7 +146,7 @@ export const actionItems: ActionItem[] = [
     search: { create: true },
     icon: entities.task.lucideIcon,
     keywords: ["create", "new", "todo", "house", "chore"],
-    surfaces: ["navbar-create", "palette-quick"],
+    surfaces: ["navbar-create", "palette-quick", "home-quick"],
   },
   {
     id: "add-project",
@@ -135,7 +164,7 @@ export const actionItems: ActionItem[] = [
     search: { create: true },
     icon: entities.expense.lucideIcon,
     keywords: ["create", "new", "expense", "receipt", "spend", "cost"],
-    surfaces: ["navbar-create", "palette-quick"],
+    surfaces: ["navbar-create", "palette-quick", "home-quick"],
   },
   {
     id: "bulk-move",
@@ -151,7 +180,7 @@ export const actionItems: ActionItem[] = [
     path: "/problems",
     icon: AlertTriangle,
     keywords: ["issues", "errors", "warnings", "audit"],
-    surfaces: ["palette-quick"],
+    surfaces: ["palette-quick", "home-quick"],
   },
   {
     id: "bulk-edit",
