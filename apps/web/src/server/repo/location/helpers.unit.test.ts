@@ -219,7 +219,6 @@ describe("location mappers", () => {
           category: "food",
           price: 4.5,
           usdaUnavailable: null,
-          stockTracked: null,
           createdAt: CREATED_AT,
           updatedAt: UPDATED_AT,
         },

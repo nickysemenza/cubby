@@ -351,6 +351,15 @@ export const productFilterFields = {
   unitMappingPresenceFilter: presenceFilter.describe(
     "Filter to products that do / don't have at least one unit mapping (conversion edge).",
   ),
+  /**
+   * `product.stockTracked` is a nullable column on the root table (like
+   * `pricePresenceFilter`): `null` = undecided (the review worklist),
+   * `false`/`true` = reviewed either way. `"none"` is the undecided worklist;
+   * `"has"` means reviewed, regardless of which way it was decided.
+   */
+  stockTrackedPresenceFilter: presenceFilter.describe(
+    "Filter to products whose stockTracked decision is undecided (none) or has been made either way (has).",
+  ),
 };
 
 export const productFiltersSchema = z.object(productFilterFields);

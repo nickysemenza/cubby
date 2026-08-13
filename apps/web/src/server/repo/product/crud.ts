@@ -721,6 +721,10 @@ export const productList = async (
       presenceCondition(product.model, filters.modelPresenceFilter),
       presenceCondition(product.upc, filters.upcPresenceFilter),
       presenceCondition(product.notes, filters.notesPresenceFilter),
+      presenceCondition(
+        product.stockTracked,
+        filters.stockTrackedPresenceFilter,
+      ),
       filters.manufacturerExact
         ? inArray(product.manufacturer, [filters.manufacturerExact].flat())
         : undefined,

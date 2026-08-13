@@ -214,7 +214,6 @@ describe("inventory mappers", () => {
         ],
         price: 4.5,
         usdaUnavailable: null,
-        stockTracked: null,
         name: "Flour",
         upc: null,
         fdc_id: null,

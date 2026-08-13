@@ -354,10 +354,11 @@ describe("the unlocated views stay one question at two widths", () => {
   const broad = productViews.find((v) => v.id === "unlocated");
   const durables = productViews.find((v) => v.id === "unlocated-durables");
 
-  it("selects on expected-quantity and inventory-presence", () => {
+  it("selects on expected-quantity, inventory-presence, and undecided stock tracking", () => {
     expect(broad?.filters).toEqual([
       { id: "expectedQuantity", value: "positive" },
       { id: "location", value: [FILTER_NONE] },
+      { id: "stockTracked", value: "none" },
     ]);
   });
 
