@@ -98,6 +98,14 @@ export const auditLogEntryOut = z.object({
   entryKey: z.string(),
   entityType: auditEntitySchema,
   entityId: auditableEntityIdSchema.nullable(),
+  /**
+   * The subject's human display name, resolved at read time (never stored on
+   * the row, which only ever held ids). Null when the entity has no name-shaped
+   * column at all — an inventory entry is identified by its product and
+   * location, a purchase by its vendor and date — or when the referenced row is
+   * gone. Distinct from `user.name`, which names the actor, not the subject.
+   */
+  entityName: z.string().nullable(),
   action: auditLogActionSchema,
   changes: z.record(z.string(), auditLogChangeSchema).nullable(),
   userId: z.string(),

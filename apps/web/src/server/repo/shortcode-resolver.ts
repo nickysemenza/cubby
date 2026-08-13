@@ -22,8 +22,26 @@ import {
 } from "@cubby/schemas/identifiers";
 import { type ParsedShortcode, parseShortcode } from "@cubby/shared";
 import { and, eq, inArray } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import {
+  cookbook,
+  expense,
+  financialAccount,
+  financialTransaction,
+  ingredient,
+  inventoryEntry,
+  location,
+  meal,
+  product,
+  project,
+  purchase,
+  recipe,
+  task,
+  vendor,
+  wish,
+} from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 
 import { notDeleted, unwrapDb } from "./database-helpers";
@@ -282,6 +300,143 @@ export async function lookupShortcodes(
     }),
   );
   return codes;
+}
+
+/**
+ * Which column carries an entity's human display name, or `null` where the
+ * entity genuinely has none.
+ *
+ * `ShortcodeTable` only guarantees `id`/`shortcode`/`deletedAt`, so the display
+ * column can't be derived structurally — it is declared here once. The
+ * `satisfies Record<ShortcodeEntity, …>` is the point: a new shortcode entity
+ * fails to compile until someone decides what names it, rather than silently
+ * rendering as a bare code.
+ *
+ * `null` is not "unnameable" — it means *no single column names it*. An
+ * inventory entry is "N of a product on a shelf": its identity is relational,
+ * so it is named by {@link inventoryEntryLabels} below instead. A purchase is
+ * identified by its vendor + date, and `displayLabel` is its only name-shaped
+ * column; it stays a plain column read because it is usually set when it
+ * matters.
+ */
+const DISPLAY_NAME_COLUMN = {
+  cookbook: cookbook.name,
+  expense: expense.name,
+  financialAccount: financialAccount.name,
+  financialTransaction: financialTransaction.merchant,
+  ingredient: ingredient.name,
+  inventory: null,
+  location: location.name,
+  meal: meal.name,
+  product: product.name,
+  project: project.name,
+  purchase: purchase.displayLabel,
+  recipe: recipe.name,
+  task: task.name,
+  vendor: vendor.name,
+  wish: wish.name,
+} as const satisfies Record<ShortcodeEntity, PgColumn | null>;
+
+/**
+ * uuid → human display name, batched per entity type — the sibling of
+ * {@link lookupShortcodes} for surfaces that must render *what* a row is, not
+ * just address it. The home activity feed is the motivating caller: a row
+ * reading only "Inventory Item INV-KZYZ" carries no information.
+ *
+ * Deliberately separate from `lookupShortcodes` rather than folded into it:
+ * that function's shape is shared with the MCP output projections, and most of
+ * its callers want an id, not a label.
+ *
+ * Refs whose entity has no display column, or whose row has a null/empty one,
+ * are simply absent from the map. Keyed by {@link refKey}, same as
+ * `lookupShortcodes`.
+ */
+export async function lookupEntityLabels(
+  db: Database | DrizzleTransaction,
+  refs: readonly EntityRef[],
+): Promise<Map<string, string>> {
+  const byEntity = new Map<ShortcodeEntity, Set<string>>();
+  for (const ref of refs) {
+    const bucket = byEntity.get(ref.entity);
+    if (bucket) bucket.add(ref.id);
+    else byEntity.set(ref.entity, new Set([ref.id]));
+  }
+
+  const names = new Map<string, string>();
+  await Promise.all(
+    [...byEntity].map(async ([entity, ids]) => {
+      if (entity === "inventory") {
+        for (const [id, label] of await inventoryEntryLabels(db, ids)) {
+          names.set(refKey(entity, id), label);
+        }
+        return;
+      }
+      const nameColumn: PgColumn | null = DISPLAY_NAME_COLUMN[entity];
+      if (!nameColumn) return;
+      const table: ShortcodeTable = SHORTCODE_TABLE[entity];
+      // includes-deleted: same reasoning as `lookupShortcodes` — an audit row
+      // or other assembled payload can legitimately name a row deleted after
+      // the fact, and its (past) name is what makes that entry readable.
+      const rows = (await unwrapDb(db)
+        .select({ id: table.id, name: nameColumn })
+        .from(table)
+        .where(inArray(table.id, [...ids]))) as {
+        id: string;
+        name: string | null;
+      }[];
+      for (const row of rows) {
+        if (row.name) names.set(refKey(entity, row.id), row.name);
+      }
+    }),
+  );
+  return names;
+}
+
+/**
+ * Inventory entries, named compositely as `product · location`.
+ *
+ * An inventory row is the one shortcode entity whose identity is relational —
+ * "N of a product on a shelf" — so it is named by a join rather than a column.
+ * The pair is the same one global search already projects for these rows
+ * (product as the title, location as the subtitle, see `repo/search.ts`);
+ * flattening it to one string keeps the two surfaces naming a row the same way
+ * instead of inventing a second definition. Location is what disambiguates two
+ * entries of the same product, which is exactly the case an activity feed shows.
+ *
+ * includes-deleted on the entry itself (see {@link lookupEntityLabels}), but
+ * the joins are inner: a row whose product or location is gone has no readable
+ * composite left, so it falls back to the caller's type-plus-code shape.
+ */
+async function inventoryEntryLabels(
+  db: Database | DrizzleTransaction,
+  ids: ReadonlySet<string>,
+): Promise<Map<string, string>> {
+  const rows = await unwrapDb(db)
+    .select({
+      id: inventoryEntry.id,
+      productName: product.name,
+      locationName: location.name,
+    })
+    .from(inventoryEntry)
+    .innerJoin(product, eq(inventoryEntry.productId, product.id))
+    .innerJoin(location, eq(inventoryEntry.locationId, location.id))
+    // Branded column, and `refs` carry ids as plain strings across the
+    // entity-agnostic boundary above — this is that boundary.
+    .where(
+      inArray(inventoryEntry.id, [...ids].map(unsafeIdForEntity.inventory)),
+    );
+
+  const labels = new Map<string, string>();
+  for (const row of rows) {
+    if (!row.productName) continue;
+    labels.set(
+      row.id,
+      row.locationName
+        ? `${row.productName} · ${row.locationName}`
+        : row.productName,
+    );
+  }
+  return labels;
 }
 
 /** The key `lookupShortcodes` returns results under. */
