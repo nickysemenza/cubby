@@ -3,6 +3,7 @@ import {
   inventoryMcpBulkMoveOut,
   inventoryMcpListOut,
   inventoryMcpOut,
+  inventoryPlacement,
   moveInventoryEntriesPayload,
 } from "@cubby/schemas/inventory";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -37,6 +38,11 @@ export function registerInventoryTools(server: McpServer) {
       locationId: idParam("location"),
       value: z.number().positive().describe("Quantity value (must be > 0)"),
       unit: z.string().describe("Unit (e.g. 'each', 'lb', 'oz', 'cup')"),
+      placement: inventoryPlacement
+        .optional()
+        .describe(
+          "Defaults to 'stock'. Pass 'installed' for a fixture wired or plumbed in — the row is kept but excluded from browsing, counting and recounts.",
+        ),
     },
     updateShape: {
       value: z
@@ -51,6 +57,11 @@ export function registerInventoryTools(server: McpServer) {
       locationId: idParam("location")
         .optional()
         .describe("Move the entry to this location"),
+      placement: inventoryPlacement
+        .optional()
+        .describe(
+          "'stock' = movable; 'installed' = a fixed installation. Flipping this does NOT move the entry — it stays at its location and simply stops being counted.",
+        ),
     },
     filterFields: inventoryFilterFields,
     mcpListOut: inventoryMcpListOut,
@@ -63,7 +74,7 @@ export function registerInventoryTools(server: McpServer) {
       create:
         "Add a product to a location. Use search_products and list_locations first to get IDs.",
       update:
-        "Update an inventory entry's amount, product, or location. When updating amount, both value and unit must be provided together.",
+        "Update an inventory entry's amount, product, location, or placement. When updating amount, both value and unit must be provided together.",
       delete: "Soft-delete inventory entries by IDs.",
     },
     create: (caller, params) =>
@@ -71,6 +82,7 @@ export function registerInventoryTools(server: McpServer) {
         productId: params.productId,
         locationId: params.locationId,
         amount: { value: params.value, unit: params.unit },
+        ...(params.placement ? { placement: params.placement } : {}),
       }),
     // The generic update handler hands `data` everything but `id`; fold the
     // flat `value`/`unit` pair the tool advertises into the `amount` object

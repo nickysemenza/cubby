@@ -440,6 +440,44 @@ export const updateInventoryEntry = async (
     }
   }
 
+  // Pre-check the slot rather than letting the partial unique index raise a
+  // raw 23505 — nothing maps that to an AppError, so it would surface as an
+  // untranslated Postgres error. Same reasoning as the charge pre-check in
+  // `purchase.ts`.
+  //
+  // The slot is `(productId, locationId, placement)`, so ANY of the three can
+  // collide: re-pointing an entry at a product/location that already has one,
+  // or — newly reachable since placement joined the key — marking a stock row
+  // installed when an installed row of that product already sits in that room.
+  // That pair is legitimate, which is exactly why the key allows it, so this is
+  // reachable by design rather than a corrupt state.
+  if (
+    before &&
+    (data.productId !== undefined ||
+      data.locationId !== undefined ||
+      data.placement !== undefined)
+  ) {
+    const targetProductId = data.productId ?? before.productId;
+    const targetLocationId = data.locationId ?? before.locationId;
+    const targetPlacement = data.placement ?? before.placement;
+    const occupant = await getDb(db).query.inventoryEntry.findFirst({
+      where: and(
+        eq(inventoryEntry.productId, targetProductId),
+        eq(inventoryEntry.locationId, targetLocationId),
+        eq(inventoryEntry.placement, targetPlacement),
+        not(eq(inventoryEntry.id, id)),
+        notDeleted(inventoryEntry),
+      ),
+      columns: { shortcode: true },
+    });
+    if (occupant) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `Another ${targetPlacement} entry for this product already sits at this location (${occupant.shortcode}). Merge them by moving one onto the other instead.`,
+      );
+    }
+  }
+
   const updateValues = buildPartialUpdateValues({
     amount: data.amount,
     productId: data.productId,

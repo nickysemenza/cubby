@@ -2646,6 +2646,7 @@ describe("update_inventory_entry value/unit pairing guard", () => {
       id: ENTRY_CODE,
       amount: { value: 3, unit: "each" },
       valuation: null,
+      placement: "stock" as const,
       product: null,
       location: null,
     };
@@ -2676,6 +2677,7 @@ describe("update_inventory_entry value/unit pairing guard", () => {
       id: ENTRY_CODE,
       amount: { value: 1, unit: "each" },
       valuation: null,
+      placement: "stock" as const,
       product: null,
       location: null,
     };

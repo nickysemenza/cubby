@@ -1,4 +1,8 @@
-import { unsafeLocationId, unsafeProductId } from "@cubby/schemas/identifiers";
+import {
+  unsafeInventoryId,
+  unsafeLocationId,
+  unsafeProductId,
+} from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -7,6 +11,7 @@ import { getDb } from "~/server/repo/database-helpers";
 import {
   createInventoryEntry,
   inventoryentryList,
+  updateInventoryEntry,
 } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
 import { createProduct } from "~/server/repo/product";
@@ -27,7 +32,7 @@ describe("inventoryentryList product-attribute filters", () => {
 
   const requireResolvedId = async (
     shortcode: string,
-    entity: "location" | "product",
+    entity: "location" | "product" | "inventory",
   ) => {
     const entityId = await resolveLiveShortcode(ctx.db, shortcode, entity);
     if (!entityId) throw new Error(`Failed to resolve ${entity} ${shortcode}`);
@@ -58,6 +63,56 @@ describe("inventoryentryList product-attribute filters", () => {
       [{ orderBy: "createdAt", direction: "asc" }],
       { pageSize: 50, pageIndex: 0 },
     );
+
+  // The slot is `(productId, locationId, placement)`, so a spare on the shelf
+  // and one wired into the wall legitimately coexist — which is exactly what
+  // makes this collision reachable rather than a corrupt state. Without a
+  // pre-check the partial unique index raises a raw 23505 and nothing maps that
+  // to an AppError, so the operator sees an untranslated Postgres error.
+  it("refuses a placement flip that would collide with an existing slot", async () => {
+    const locationId = await createTestLocation(
+      makeLocationInput({ name: "Kitchen" }),
+    );
+    const { entityId: productId } = await createTestProduct(
+      makeProductInput({ name: "Poetto faucet" }),
+    );
+
+    const spare = await createInventoryEntry(
+      ctx.db,
+      { productId, locationId, amount: { value: 1, unit: "each" } },
+      TEST_ACTOR,
+    );
+    await createInventoryEntry(
+      ctx.db,
+      {
+        productId,
+        locationId,
+        amount: { value: 1, unit: "each" },
+        placement: "installed",
+      },
+      TEST_ACTOR,
+    );
+
+    const spareId = unsafeInventoryId(
+      await requireResolvedId(spare.id, "inventory"),
+    );
+
+    await expect(
+      updateInventoryEntry(
+        ctx.db,
+        spareId,
+        { placement: "installed" },
+        TEST_ACTOR,
+      ),
+    ).rejects.toThrow(/already sits at this location/);
+
+    // And the refusal is clean: the spare is untouched, not half-written.
+    const rows = await list({
+      locationIdFilter: locationId,
+      placementFilter: "all",
+    });
+    expect(rows.data).toHaveLength(2);
+  });
 
   it("manufacturerFilter matches case-insensitively on a substring", async () => {
     const locationId = await createTestLocation(
