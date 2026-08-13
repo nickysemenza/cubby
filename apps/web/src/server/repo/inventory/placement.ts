@@ -1,5 +1,5 @@
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
-import { eq, type SQL, sql } from "drizzle-orm";
+import { eq, type SQL } from "drizzle-orm";
 import { inventoryEntry } from "~/server/db/schema";
 
 /**
@@ -33,17 +33,13 @@ import { inventoryEntry } from "~/server/db/schema";
  * Same reason as `notDeleted()`: `inventoryentryList` is 2 of ~24 read paths and
  * none of the 3 that can destroy data, ~9 surfaces must genuinely include
  * installed rows, and a single default would make the change merely *look*
- * done. Every site is greppable for `placement`, and `scripts/check-placement-filters.mjs`
- * fails any query over `inventoryEntry` carrying neither a predicate from here
- * nor an `// includes-installed: <reason>` comment.
+ * done. Every site is greppable for `placement`, and each query that
+ * deliberately keeps fixtures carries an `// includes-installed: <reason>`
+ * comment so the decision is visible rather than assumed.
  */
 
 /** Movable stock only — the browse/count/audit contract. */
 export const stockOnly = (): SQL => eq(inventoryEntry.placement, "stock");
-
-/** Fixed installations only — the disclosed "+N installed" companion query. */
-export const installedOnly = (): SQL =>
-  eq(inventoryEntry.placement, "installed");
 
 /**
  * Apply a tri-state filter value. `"all"` returns undefined (unrestricted),
@@ -59,15 +55,3 @@ export const placementCondition = (
   if (filter === undefined || filter === "all") return undefined;
   return eq(inventoryEntry.placement, filter);
 };
-
-/**
- * Raw-SQL counterpart for the ~7 surfaces that hand-write their own
- * `"InventoryEntry"` SQL rather than going through Drizzle conditions
- * (`quantity-ledger.ts`, the location rollups, `makeTree`).
- *
- * `alias` is the SQL identifier the surrounding query gave the table, already
- * quoted — e.g. `'"InventoryEntry"'` or `'ie'`. Emitted as a bare predicate so
- * it can be `AND`-ed into an existing `WHERE`.
- */
-export const stockOnlySqlFor = (alias: string): SQL =>
-  sql.raw(`${alias}."placement" = 'stock'`);

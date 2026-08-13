@@ -17,6 +17,7 @@ import { isDocumentFile } from "@cubby/schemas/image";
 import {
   type ExpenseOut,
   expenseCreateInput,
+  HOUSEHOLD_PROJECT_SHORTCODE,
   projectCreateInput,
 } from "@cubby/schemas/project";
 import {
@@ -45,6 +46,7 @@ import {
   expense,
   financialTransactionAllocation,
   image,
+  project,
   purchase,
   purchaseImage,
   vendor,
@@ -1045,6 +1047,94 @@ describe("purchase repository — splitExpense", () => {
         ctx.actor,
       ),
     ).rejects.toMatchObject({ cause: { reason: "PURCHASE_NOT_FOUND" } });
+  });
+
+  it("defaults a food-linked part with no explicit project to Household, leaving explicit parts untouched", async () => {
+    // `createProject` always mints its own shortcode, so the only way to stand
+    // up the specific `HOUSEHOLD_PROJECT_SHORTCODE` row `resolveDefaultProjectId`
+    // looks up is to create a project and overwrite its shortcode directly.
+    const { entityId: householdEntityId } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "Household" }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(project)
+      .set({ shortcode: HOUSEHOLD_PROJECT_SHORTCODE })
+      .where(eq(project.id, householdEntityId));
+
+    const { output: explicitProject } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "split explicit project" }),
+      ctx.actor,
+    );
+    const foodProduct = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "split food product", category: "food" }),
+      ctx.actor,
+    );
+    const toolsProduct = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "split tools product", category: "tools" }),
+      ctx.actor,
+    );
+
+    const { output: original } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "grocery receipt",
+          cost: 90,
+          vendor: "Split Household Vendor",
+          orderId: "SPLIT-HOUSEHOLD-1",
+        }),
+      ),
+      ctx.actor,
+    );
+
+    const { items: parts } = await splitExpense(
+      ctx.db,
+      splitExpenseInput.parse({
+        expenseId: original.id,
+        parts: [
+          {
+            // No explicit projectId: a food productId with an untriaged split
+            // part is the exact "five lines off one receipt" case the default
+            // exists for.
+            name: "food part",
+            cost: 30,
+            costType: "materials",
+            trade: "other",
+            productId: foodProduct.id,
+          },
+          {
+            // Same absent-project shape, but a non-food product — stays null.
+            name: "tools part",
+            cost: 30,
+            costType: "tools",
+            trade: "other",
+            productId: toolsProduct.id,
+          },
+          {
+            // An explicit project on a food part is never overridden.
+            name: "explicit part",
+            cost: 30,
+            costType: "materials",
+            trade: "other",
+            productId: foodProduct.id,
+            projectId: explicitProject.id,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+
+    const foodPart = parts.find((p) => p.name === "food part");
+    const toolsPart = parts.find((p) => p.name === "tools part");
+    const explicitPart = parts.find((p) => p.name === "explicit part");
+    expect(foodPart?.projectId).toBe(HOUSEHOLD_PROJECT_SHORTCODE);
+    expect(toolsPart?.projectId).toBeNull();
+    expect(explicitPart?.projectId).toBe(explicitProject.id);
   });
 });
 

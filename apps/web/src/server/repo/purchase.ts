@@ -117,6 +117,7 @@ import {
 import {
   assertQuantitySignMatchesCost,
   dbExpenseToAPI,
+  resolveDefaultProjectId,
 } from "~/server/repo/expense/helpers";
 import {
   calculateFinancialReconciliation,
@@ -1189,13 +1190,20 @@ export const splitExpense = async (
 
       const inserted: ExpenseId[] = [];
       for (const part of parts) {
-        let projectId = null;
-        if (part.projectId) {
-          projectId = await resolveOrThrow(tx, "project", part.projectId);
-        }
         const productId = part.productId
           ? (productIds.get(part.productId) ?? null)
           : null;
+        const explicitProjectId = part.projectId
+          ? await resolveOrThrow(tx, "project", part.projectId)
+          : null;
+        // Same import-time triage default `createExpense` applies: a split
+        // part carrying a food productId with no explicit project lands on
+        // Household rather than minting an untriaged line. See
+        // `resolveDefaultProjectId`'s doc comment for why updates/moves skip it.
+        const projectId = await resolveDefaultProjectId(tx, {
+          projectId: explicitProjectId,
+          productId,
+        });
         const lineKind =
           part.lineKind ?? inferExpenseLineKind({ name: part.name, productId });
         if (lineKind !== "principal" && productId !== null) {

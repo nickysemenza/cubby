@@ -18,6 +18,7 @@ import {
   type ExpenseOut,
   expenseCreateInput,
   expenseMatchInput,
+  HOUSEHOLD_PROJECT_SHORTCODE,
   projectCreateInput,
 } from "@cubby/schemas/project";
 import { eq } from "drizzle-orm";
@@ -26,7 +27,7 @@ import { describe, expect, it } from "vitest";
 import { expenseRouter } from "~/server/api/routers/expense";
 import { createTestCaller } from "~/server/api/trpc";
 import type { Database } from "~/server/db";
-import { expense as expenseTable, product } from "~/server/db/schema";
+import { expense as expenseTable, product, project } from "~/server/db/schema";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { getDb } from "~/server/repo/database-helpers";
 import { findOrphanedEntityEmbeddings } from "~/server/repo/entity-embedding";
@@ -4370,5 +4371,161 @@ describe("expense repository — matchExpenses", () => {
     // "milwaukee", "packout", "rolling" — "tool"/"box" vs "toolbox" is the
     // compound-word gap the description warns about, not something scored away.
     expect(hit?.tokenOverlap).toBe(3);
+  });
+});
+
+describe("expense repository — food-line default project", () => {
+  const ctx = withTestDb();
+
+  /**
+   * `createProject` always mints its own shortcode, so the only way to stand
+   * up the specific `HOUSEHOLD_PROJECT_SHORTCODE` row `resolveDefaultProjectId`
+   * looks up is to create a project and overwrite its shortcode directly.
+   */
+  const seedHousehold = async () => {
+    const { entityId } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "Household" }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(project)
+      .set({ shortcode: HOUSEHOLD_PROJECT_SHORTCODE })
+      .where(eq(project.id, entityId));
+  };
+
+  const foodProduct = () =>
+    createProduct(
+      ctx.db,
+      makeProductInput({ name: "default-project food", category: "food" }),
+      ctx.actor,
+    );
+
+  const toolsProduct = () =>
+    createProduct(
+      ctx.db,
+      makeProductInput({ name: "default-project tool", category: "tools" }),
+      ctx.actor,
+    );
+
+  it("defaults a food product with no explicit project to Household", async () => {
+    await seedHousehold();
+    const prod = await foodProduct();
+
+    const created = await unwrap(
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({ productId: prod.id, projectId: null }),
+        ),
+        ctx.actor,
+      ),
+    );
+
+    expect(created.projectId).toBe(HOUSEHOLD_PROJECT_SHORTCODE);
+  });
+
+  it("leaves a non-food (tools) product's null project untouched — pins the rule's scope", async () => {
+    await seedHousehold();
+    const prod = await toolsProduct();
+
+    const created = await unwrap(
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({ productId: prod.id, projectId: null }),
+        ),
+        ctx.actor,
+      ),
+    );
+
+    expect(created.projectId).toBeNull();
+  });
+
+  it("never overrides an explicitly chosen project", async () => {
+    await seedHousehold();
+    const prod = await foodProduct();
+    const { output: explicitProject } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "explicit food project" }),
+      ctx.actor,
+    );
+
+    const created = await unwrap(
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({
+            productId: prod.id,
+            projectId: explicitProject.id,
+          }),
+        ),
+        ctx.actor,
+      ),
+    );
+
+    expect(created.projectId).toBe(explicitProject.id);
+  });
+
+  // The test that protects the entire pre-existing suite: absence of a
+  // Household project must degrade to today's behavior exactly, never throw.
+  it("stays null when no Household project has been seeded", async () => {
+    const prod = await foodProduct();
+
+    const created = await unwrap(
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({ productId: prod.id, projectId: null }),
+        ),
+        ctx.actor,
+      ),
+    );
+
+    expect(created.projectId).toBeNull();
+  });
+
+  it("updateExpense clearing the project on a Household food line stays cleared", async () => {
+    await seedHousehold();
+    const prod = await foodProduct();
+    const created = await unwrap(
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({ productId: prod.id, projectId: null }),
+        ),
+        ctx.actor,
+      ),
+    );
+    expect(created.projectId).toBe(HOUSEHOLD_PROJECT_SHORTCODE);
+
+    const updated = await unwrap(
+      updateExpense(ctx.db, created.id, { projectId: null }, ctx.actor),
+    );
+
+    expect(updated.projectId).toBeNull();
+  });
+
+  it("moveExpenses to the inbox is never re-triaged back to Household", async () => {
+    await seedHousehold();
+    const prod = await foodProduct();
+    const created = await unwrap(
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({ productId: prod.id, projectId: null }),
+        ),
+        ctx.actor,
+      ),
+    );
+    expect(created.projectId).toBe(HOUSEHOLD_PROJECT_SHORTCODE);
+
+    const moved = await moveExpenses(
+      ctx.db,
+      { ids: [created.id], projectId: null },
+      ctx.actor,
+    );
+
+    expect(moved.map((e) => e.projectId)).toEqual([null]);
   });
 });
