@@ -65,7 +65,6 @@ const searchDefaults = { format: undefined, scale: undefined } as const;
 export const Route = createFileRoute(
   "/_authenticated/recipes/$shortcode_/export",
 )({
-  ssr: false,
   validateSearch: searchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   loader: async ({ params, context }) => {

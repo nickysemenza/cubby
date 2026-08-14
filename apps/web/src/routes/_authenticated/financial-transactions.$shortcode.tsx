@@ -7,7 +7,6 @@ import { shortcodeHead } from "~/lib/page-title";
 export const Route = createFileRoute(
   "/_authenticated/financial-transactions/$shortcode",
 )({
-  ssr: false,
   loader: async ({ params, context }) => {
     const item = await context.queryClient.ensureQueryData(
       context.trpc.financialTransaction.getByShortcode.queryOptions({

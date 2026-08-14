@@ -19,7 +19,6 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { shortcodeHead } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/projects/$shortcode")({
-  ssr: false,
   loader: async ({ params, context }) => {
     const data = await context.queryClient.ensureQueryData(
       context.trpc.project.getByShortcode.queryOptions({

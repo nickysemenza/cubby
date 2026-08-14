@@ -8,7 +8,7 @@ import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import superjson from "superjson";
-import { createTRPCTransportLink } from "~/integrations/tanstack-query/trpc-transport";
+import { createTransportLink } from "~/integrations/tanstack-query/trpc-transport-isomorphic";
 import { TRPCProvider } from "~/integrations/trpc/react";
 import type { TRPCRouter } from "~/integrations/trpc/router";
 import { authClient } from "~/lib/auth-client";
@@ -53,14 +53,6 @@ function deferToastError(error: unknown) {
   setTimeout(() => toast.error(getErrorMessage(error)), 0);
 }
 
-function getUrl() {
-  const base = (() => {
-    if (typeof window !== "undefined") return "";
-    return `http://localhost:${process.env.PORT ?? 3000}`;
-  })();
-  return `${base}/api/trpc`;
-}
-
 const trpcClient = createTRPCClient<TRPCRouter>({
   links: [
     loggerLink({
@@ -71,7 +63,9 @@ const trpcClient = createTRPCClient<TRPCRouter>({
         (getFlag("queryLogger") ||
           (op.direction === "down" && op.result instanceof Error)),
     }),
-    createTRPCTransportLink({ url: getUrl() }),
+    // Browser: batched HTTP to /api/trpc. Server render: an in-process link,
+    // never a self-fetch — see trpc-transport-isomorphic.
+    createTransportLink(),
   ],
 });
 

@@ -6,7 +6,6 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { shortcodeHead } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/meals/$shortcode")({
-  ssr: false,
   // The raw route param is validated by the query input schema; the loaded
   // meal then carries the branded public MealShortcode used by the page.
   loader: async ({ params, context }) => {

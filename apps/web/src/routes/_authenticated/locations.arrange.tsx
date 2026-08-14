@@ -12,13 +12,13 @@ const searchSchema = z.object({
 
 export const Route = createFileRoute("/_authenticated/locations/arrange")({
   validateSearch: searchSchema,
-  // Client-only: ArrangeSurface suspends on `location.makeTree`, so the server
-  // render fetches it through the SSR tRPC client — which self-fetches
-  // `http://localhost:PORT/api/trpc`. That is unauthenticated in dev and, on CF
-  // Workers, never reaches the app at all: the edge answers with the plain-text
-  // body `error code: 1003`, so parsing the response throws
-  // `Unexpected token 'e' ... is not valid JSON` into the route error boundary
-  // on any direct load of this URL. Matches every other suspense-query route.
+  // Client-only for *cost*, not correctness — the local-link transport made the
+  // server render work here, but this board dehydrates the whole location
+  // forest: measured at 844 KB of HTML against 84 KB client-only, the largest
+  // in the app by 2x. It is an interactive drag-and-drop surface behind auth
+  // with no SEO value, reached mostly by in-app navigation (which skips SSR
+  // anyway), so a skeleton-then-data cold load is the better trade. Revisit
+  // with a CF CPU-time measurement if the board ever needs a faster first paint.
   ssr: false,
   component: ArrangePage,
   head: () => ({ meta: [{ title: pageTitle("Arrange") }] }),
