@@ -33,6 +33,12 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   /* Run tests with 2 workers on CI for faster execution. */
   workers: process.env.CI ? 2 : undefined,
+  /* Backstop for a dead dev server, which fails every remaining test
+     identically (see the exit handler in e2e-global-setup.ts): uncapped, that
+     is ~20 tests x 3 attempts of ECONNREFUSED burying the one line that
+     explains the run. Kept loose enough that a genuine multi-test regression
+     still reports most of its failures in one go. */
+  maxFailures: isCI ? 6 : 0,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: isCI ? [["github"], ["html"]] : "html",
   expect: {

@@ -35,6 +35,46 @@ const remapDBConfig = (
   return databaseConfig;
 };
 
+// wrangler's crash log ends with the entry that killed it, but every entry
+// carries the whole worker bundle as "contextual data" — hundreds of KB. Keep
+// the short error entries; drop the dumps.
+function readWranglerCrashEntries(logPath: string | undefined): string[] {
+  if (!logPath) {
+    return ["(no wrangler log path was printed to stderr)"];
+  }
+  let contents: string;
+  try {
+    contents = readFileSync(logPath, "utf8");
+  } catch {
+    return [`(could not read the wrangler log at ${logPath})`];
+  }
+  const entries = contents
+    .split(/^--- /m)
+    .filter((entry) => /Error in \w+Controller/.test(entry))
+    .filter((entry) => entry.length < 2_000)
+    .map((entry) =>
+      entry
+        .split("\n")
+        // The stack is all wrangler-internal frames; dropping them is what
+        // leaves room for the `cause`, which is the part that names the fault.
+        .filter((line) => !/^\s*at /.test(line))
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 300),
+    );
+  // wrangler logs the same failure twice (DevEnv's listener and the handler);
+  // key on the text without its timestamp so only distinct faults are shown.
+  const distinct = new Map<string, string>();
+  for (const entry of entries) {
+    const key = entry.replace(/^\S+Z \w+ /, "");
+    if (!distinct.has(key)) {
+      distinct.set(key, entry);
+    }
+  }
+  return [...distinct.values()].slice(-2);
+}
+
 async function waitForServer(url: string, timeoutMs: number): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
@@ -159,8 +199,46 @@ async function globalSetup(config: FullConfig): Promise<void> {
     }
   });
 
+  // wrangler prints its crash-log path on the way out; remember it so an
+  // unexpected exit can quote the real cause. The fatal line wrangler leaves in
+  // the job log is an ERROR with an *empty* message (it wraps a non-Error cause
+  // in a blank Error), so on its own it explains nothing.
+  let wranglerLogPath: string | undefined;
+
   serverProcess.stderr?.on("data", (data: Buffer) => {
-    console.error(`[Server Error] ${data.toString().trim()}`);
+    const text = data.toString().trim();
+    wranglerLogPath =
+      /Logs were written to "([^"]+)"/.exec(text)?.[1] ?? wranglerLogPath;
+    console.error(`[Server Error] ${text}`);
+  });
+
+  // `wrangler dev` treats some transient proxy errors as fatal and exits the
+  // whole process (see patches/wrangler@4.120.0.patch). When that happens every
+  // remaining test fails with a bare ECONNREFUSED against a dead port, which
+  // reads as 20 broken tests instead of one dead server — so say so here, once,
+  // at the moment it happens.
+  serverProcess.on("exit", (code, signal) => {
+    const state = globalThis as Record<string, unknown>;
+    if (state.__E2E_STOPPING__) {
+      return;
+    }
+    const detail = `code=${code ?? "null"} signal=${signal ?? "null"}`;
+    state.__E2E_SERVER_DIED__ = detail;
+    const rule = "=".repeat(72);
+    console.error(
+      [
+        "",
+        rule,
+        `[E2E] wrangler dev exited unexpectedly (${detail}).`,
+        "[E2E] Every test after this point fails with ECONNREFUSED on :3001.",
+        "[E2E] That is this exit, not a broken app. Last wrangler error:",
+        ...readWranglerCrashEntries(wranglerLogPath).map(
+          (entry) => `[E2E]   ${entry}`,
+        ),
+        rule,
+        "",
+      ].join("\n"),
+    );
   });
 
   // Store for teardown

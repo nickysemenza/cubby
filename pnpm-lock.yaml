@@ -24,6 +24,11 @@ overrides:
 
 packageExtensionsChecksum: sha256-L15hUdzOxX1LWRB3GSD+h4NcMKHABUwMYjMGPpPZ/IM=
 
+patchedDependencies:
+  wrangler@4.120.0:
+    hash: c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85
+    path: patches/wrangler@4.120.0.patch
+
 importers:
 
   .:
@@ -91,7 +96,7 @@ importers:
         version: 0.11.11(hono@4.13.0)
       '@sentry/cloudflare':
         specifier: ^10.66.0
-        version: 10.69.0(@cloudflare/workers-types@5.20260808.1)(wrangler@4.120.0(@cloudflare/workers-types@5.20260808.1))
+        version: 10.69.0(@cloudflare/workers-types@5.20260808.1)(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260808.1))
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@5.20260808.1)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@13.0.1)(kysely@0.29.3)(pg@8.22.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))
@@ -110,7 +115,7 @@ importers:
     devDependencies:
       '@cloudflare/vite-plugin':
         specifier: 1.51.1
-        version: 1.51.1(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0))(wrangler@4.120.0(@cloudflare/workers-types@5.20260808.1))
+        version: 1.51.1(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0))(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260808.1))
       '@cloudflare/workers-types':
         specifier: ^5.20260719.1
         version: 5.20260808.1
@@ -131,7 +136,7 @@ importers:
         version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@30.0.0(@noble/hashes@2.2.0))(msw@2.12.9(@types/node@26.2.0)(typescript@7.0.2))(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0))
       wrangler:
         specifier: 4.120.0
-        version: 4.120.0(@cloudflare/workers-types@5.20260808.1)
+        version: 4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260808.1)
 
   apps/usda-api:
     dependencies:
@@ -152,7 +157,7 @@ importers:
         version: 0.11.11(hono@4.13.0)
       '@sentry/cloudflare':
         specifier: ^10.66.0
-        version: 10.69.0(@cloudflare/workers-types@5.20260808.1)(wrangler@4.120.0(@cloudflare/workers-types@5.20260808.1))
+        version: 10.69.0(@cloudflare/workers-types@5.20260808.1)(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260808.1))
       better-sqlite3:
         specifier: ^13.0.0
         version: 13.0.1
@@ -198,7 +203,7 @@ importers:
         version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@30.0.0(@noble/hashes@2.2.0))(msw@2.12.9(@types/node@26.2.0)(typescript@7.0.2))(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0))
       wrangler:
         specifier: 4.120.0
-        version: 4.120.0(@cloudflare/workers-types@5.20260808.1)
+        version: 4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260808.1)
 
   apps/web:
     dependencies:
@@ -315,7 +320,7 @@ importers:
         version: 1.43.0
       '@sentry/cloudflare':
         specifier: ^10.66.0
-        version: 10.69.0(@cloudflare/workers-types@5.20260808.1)(wrangler@4.120.0(@cloudflare/workers-types@5.20260808.1))
+        version: 10.69.0(@cloudflare/workers-types@5.20260808.1)(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260808.1))
       '@sentry/tanstackstart-react':
         specifier: ^10.66.0
         version: 10.69.0(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@opentelemetry/exporter-trace-otlp-http@0.220.0(@opentelemetry/api@1.9.1))(react@19.2.7)(rollup@4.62.2)
@@ -514,7 +519,7 @@ importers:
         version: 2.5.4
       '@cloudflare/vite-plugin':
         specifier: 1.51.1
-        version: 1.51.1(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0))(wrangler@4.120.0(@cloudflare/workers-types@5.20260808.1))
+        version: 1.51.1(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0))(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260808.1))
       '@devoxa/integresql-client':
         specifier: ^2.1.2
         version: 2.1.2
@@ -613,7 +618,7 @@ importers:
         version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@30.0.0(@noble/hashes@2.2.0))(msw@2.12.9(@types/node@26.2.0)(typescript@7.0.2))(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0))
       wrangler:
         specifier: 4.120.0
-        version: 4.120.0(@cloudflare/workers-types@5.20260808.1)
+        version: 4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260808.1)
 
   packages/design-tokens: {}
 
@@ -9525,14 +9530,14 @@ snapshots:
     optionalDependencies:
       workerd: 1.20260801.1
 
-  '@cloudflare/vite-plugin@1.51.1(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0))(wrangler@4.120.0(@cloudflare/workers-types@5.20260808.1))':
+  '@cloudflare/vite-plugin@1.51.1(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0))(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260808.1))':
     dependencies:
       '@cloudflare/unenv-preset': 2.16.1(unenv@2.0.0-rc.24)(workerd@1.20260801.1)
       miniflare: 5.20260801.1-alpha
       unenv: 2.0.0-rc.24
       vite: 8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0)
       workerd: 1.20260801.1
-      wrangler: 4.120.0(@cloudflare/workers-types@5.20260808.1)
+      wrangler: 4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260808.1)
       ws: 8.21.0
     transitivePeerDependencies:
       - bufferutil
@@ -12558,7 +12563,7 @@ snapshots:
       - encoding
       - supports-color
 
-  '@sentry/cloudflare@10.69.0(@cloudflare/workers-types@5.20260808.1)(wrangler@4.120.0(@cloudflare/workers-types@5.20260808.1))':
+  '@sentry/cloudflare@10.69.0(@cloudflare/workers-types@5.20260808.1)(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260808.1))':
     dependencies:
       '@opentelemetry/api': 1.9.1
       '@sentry/core': 10.69.0
@@ -12566,7 +12571,7 @@ snapshots:
       magic-string: 0.30.21
     optionalDependencies:
       '@cloudflare/workers-types': 5.20260808.1
-      wrangler: 4.120.0(@cloudflare/workers-types@5.20260808.1)
+      wrangler: 4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260808.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -17477,7 +17482,7 @@ snapshots:
       '@cloudflare/workerd-linux-arm64': 1.20260801.1
       '@cloudflare/workerd-windows-64': 1.20260801.1
 
-  wrangler@4.120.0(@cloudflare/workers-types@5.20260808.1):
+  wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260808.1):
     dependencies:
       '@cloudflare/kv-asset-handler': 0.5.0
       '@cloudflare/unenv-preset': 2.16.1(unenv@2.0.0-rc.24)(workerd@1.20260801.1)
