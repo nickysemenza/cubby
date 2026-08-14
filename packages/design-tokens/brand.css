@@ -45,7 +45,11 @@
   /* Semantic tones, all kept off the blue accent axis so nothing competes with
      ultramarine for "this is the live value". */
   --positive: oklch(0.5 0.1 150); /* positive / money */
-  --warning: oklch(0.62 0.13 65); /* matte amber */
+  /* L=0.52 to sit with its siblings (positive 0.5, destructive 0.45, slate
+     0.5). At 0.62 it was the one semantic tone never brought into the ledger's
+     ink-adjacent band, and it failed contrast as small text on paper — a
+     10px status stamp measured 3.42:1 while carrying real meaning. */
+  --warning: oklch(0.52 0.13 65); /* matte amber */
   --destructive: oklch(0.45 0.18 25); /* matte deep red */
   --slate: oklch(0.5 0.008 80); /* mono micro-labels / eyebrows */
 

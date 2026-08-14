@@ -227,6 +227,7 @@ function EditableDisplay({
           onStartEdit={onStartEdit}
           clipboard={clipboard}
           hidePencilIcon
+          editOnClick
           aria-label="Edit value"
           className="shrink-0 p-1 opacity-40 pointer-coarse:opacity-100 transition-opacity focus-visible:opacity-100 group-hover/editable:opacity-100"
         >

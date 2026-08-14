@@ -105,6 +105,7 @@ export function EditableEntityCell<TId extends string>({
           onStartEdit={edit.open}
           clipboard={edit.clipboard}
           hidePencilIcon
+          editOnClick
           aria-label={`Edit ${label}`}
           className="shrink-0 p-1 opacity-40 pointer-coarse:opacity-100 transition-opacity focus-visible:opacity-100 group-hover/pencil:opacity-100"
         >

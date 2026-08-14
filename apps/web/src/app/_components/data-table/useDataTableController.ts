@@ -202,7 +202,15 @@ export function useDataTableController<TItem>({
       "overflow-hidden",
       verticalAlign === "top" ? "align-top" : "align-middle",
     ),
-    row: cn(dConfig.rowClass, "table-row-hover border-border border-b"),
+    // `table-row-base` (not a `bg-*` utility) is what makes the pinned columns
+    // possible: a sticky cell takes `bg-inherit`, and a transparent row would
+    // let scrolled content slide under it. It sits in the components layer
+    // ahead of the zebra rule — a utility outranks the stripe and silently
+    // flattens it, which is exactly what happened when this was `bg-background`.
+    row: cn(
+      dConfig.rowClass,
+      "table-row-base table-row-hover border-border border-b",
+    ),
     sortIcon: "h-3 w-3",
   };
 

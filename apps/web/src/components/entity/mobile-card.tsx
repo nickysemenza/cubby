@@ -1,8 +1,11 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, type LucideIcon } from "lucide-react";
-import { Fragment, type HTMLAttributes, type ReactNode } from "react";
-import type { MobileMetaValue } from "~/app/_components/data-table/useMobileListModel";
+import { Fragment, type HTMLAttributes, type ReactNode, useState } from "react";
+import {
+  MOBILE_SPEC_BUDGET,
+  type MobileMetaValue,
+} from "~/app/_components/data-table/useMobileListModel";
 import { Row, Stack } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
@@ -259,7 +262,21 @@ export function MobileCard({
     : "border-l-primary";
 
   const isRow = variant === "row";
-  const specValues = metaValues ?? [];
+  const allSpecValues = metaValues ?? [];
+  // A card that prints every declared value runs nine rows and ~490px, so a
+  // list of thousands shows under two records a screen. Three is the reading
+  // budget; the rest stay one tap away rather than being dropped, because a
+  // silent cap is what this model already reverted once — a fixed budget of
+  // two rendered two of six with nothing saying four were missing.
+  const [specExpanded, setSpecExpanded] = useState(false);
+  const hiddenSpecCount = Math.max(
+    0,
+    allSpecValues.length - MOBILE_SPEC_BUDGET,
+  );
+  const specValues =
+    specExpanded || hiddenSpecCount === 0
+      ? allSpecValues
+      : allSpecValues.slice(0, MOBILE_SPEC_BUDGET);
   const hasIdentityLine = Boolean(subtitle || rightValues?.length);
   const hasSpec = specValues.length > 0;
 
@@ -338,6 +355,21 @@ export function MobileCard({
                 </Fragment>
               ))}
             </dl>
+          )}
+          {hiddenSpecCount > 0 && (
+            // Names the count so the omission is legible, per the repo's rule
+            // that a renderer-intrinsic omission is disclosed rather than
+            // silently applied.
+            <button
+              type="button"
+              className="-my-1 flex min-h-11 items-center font-mono text-2xs text-muted-foreground uppercase tracking-wider hover:text-foreground"
+              onClick={(event) => {
+                event.stopPropagation();
+                setSpecExpanded((open) => !open);
+              }}
+            >
+              {specExpanded ? "Show less" : `+${hiddenSpecCount} more`}
+            </button>
           )}
         </Stack>
       ) : undefined;

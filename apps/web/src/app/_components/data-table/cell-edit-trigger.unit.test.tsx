@@ -1,4 +1,4 @@
-import { fireEvent, render } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -108,5 +108,49 @@ describe("CellEditTrigger click model", () => {
     getByRole("button").dispatchEvent(new CustomEvent(CELL_EDIT_EVENT));
     expect(onStartEdit).toHaveBeenLastCalledWith(undefined);
     unmount();
+  });
+});
+
+/**
+ * In cell-selection mode a click on a cell only selects it — edit opens on
+ * double-click or Enter, the spreadsheet contract. A pencil-shaped trigger is
+ * the exception: the glyph's whole meaning is "click me to edit", and making
+ * it need a second gesture it never advertised is a signifier that lies.
+ */
+function renderInSelectionMode(node: React.ReactNode) {
+  return render(
+    <CellSelectionContext.Provider value={true}>
+      {node}
+    </CellSelectionContext.Provider>,
+  );
+}
+
+describe("CellEditTrigger in cell-selection mode", () => {
+  it("edits on a single click when the trigger is the pencil", () => {
+    const onStartEdit = vi.fn();
+    renderInSelectionMode(
+      <CellEditTrigger onStartEdit={onStartEdit} editOnClick aria-label="Edit">
+        <span>pencil</span>
+      </CellEditTrigger>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+
+    expect(onStartEdit).toHaveBeenCalledTimes(1);
+  });
+
+  it("still only selects when the whole cell is the trigger", () => {
+    const onStartEdit = vi.fn();
+    renderInSelectionMode(
+      <CellEditTrigger onStartEdit={onStartEdit} aria-label="Cell">
+        <span>value</span>
+      </CellEditTrigger>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Cell" }));
+    expect(onStartEdit).not.toHaveBeenCalled();
+
+    fireEvent.doubleClick(screen.getByRole("button", { name: "Cell" }));
+    expect(onStartEdit).toHaveBeenCalledTimes(1);
   });
 });

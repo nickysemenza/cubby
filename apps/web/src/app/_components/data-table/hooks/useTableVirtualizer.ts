@@ -158,11 +158,27 @@ export function useTableVirtualizer({
     const el = paneWrapperRef.current;
     if (!el) return;
     const measure = () => {
-      const top = el.getBoundingClientRect().top + window.scrollY;
+      const rect = el.getBoundingClientRect();
+      const top = rect.top + window.scrollY;
+      // Chrome the shell renders BELOW the pane (the app footer). Read from
+      // the element, not derived from document height: `scrollHeight` never
+      // reports less than the viewport, so once the page fit, a derived value
+      // grew every time the pane shrank and the pane starved itself.
+      //
+      // Hardcoding it instead left the document 23px taller than the viewport
+      // on every list page, and consuming that scrap slid the toolbar (count,
+      // View, Filter, New) up behind the sticky command header.
+      const footer = document.querySelector("[data-app-footer]");
+      const belowWrapper = footer
+        ? Math.round(footer.getBoundingClientRect().height)
+        : 0;
       // A floor keeps the table usable on a short viewport (or a tall page
       // header) instead of collapsing to a couple of rows.
-      setPaneMaxHeight(Math.max(320, Math.round(window.innerHeight - top - 8)));
+      setPaneMaxHeight(
+        Math.max(320, Math.round(window.innerHeight - top - belowWrapper)),
+      );
     };
+
     measure();
     window.addEventListener("resize", measure);
     const ro = new ResizeObserver(measure);

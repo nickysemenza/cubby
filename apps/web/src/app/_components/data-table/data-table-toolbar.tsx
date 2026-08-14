@@ -41,15 +41,17 @@ interface DataTableToolbarProps<TData> {
  *
  * `h1` because this IS the page heading once the header block above is gone —
  * folding the title into the bar must not cost the document its top-level
- * landmark. Space Grotesk at title scale (not display) so it sits on the bar's
- * 28px control rhythm, with the count in mono as a measurement.
+ * landmark. Headline size (not a smaller one) because DESIGN.md specifies
+ * Headline for "standard list-page headings", and a folded page must not read
+ * as a different rank from an unfolded one. The count rides in mono as a
+ * measurement.
  */
 function ToolbarIdentity() {
   const identity = usePageIdentity();
   if (!identity) return null;
   return (
     <Row align="baseline" gap="sm" className="min-w-0 shrink">
-      <h1 className="min-w-0 truncate font-bold font-heading text-base tracking-tight">
+      <h1 className="min-w-0 truncate font-bold font-heading text-2xl tracking-tight">
         {identity.title}
       </h1>
       {identity.count !== undefined && (

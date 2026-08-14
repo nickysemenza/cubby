@@ -846,7 +846,14 @@ export function createActionsColumnBase<T>(
     header: "",
     enableSorting: false,
     meta: {
-      className: "w-10",
+      // Pinned to the pane's right edge. Declared column widths routinely
+      // exceed the pane (81px over on one list at 1280px), and this column is
+      // the ONLY route to per-row operations — unpinned it scrolls out of
+      // reach with no cue, because macOS overlay scrollbars show nothing.
+      // `bg-inherit` takes the row's own background, so zebra, hover and
+      // selection all follow the pinned cell for free.
+      className:
+        "w-10 sticky right-0 z-20 bg-inherit border-l border-[var(--table-grid)]",
       mobile: { slot: "actions", priority: 100 },
     },
     cell: (info) => {

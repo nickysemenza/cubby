@@ -20,8 +20,11 @@ const heroVariants = cva(
       variant: {
         // List identity is the eyebrow/count/accent bar, not whitespace — the
         // hero sits tight so the table starts higher (McMaster-Carr density).
-        list: "mb-2",
-        compact: "mb-2",
+        // `px-2` matches the table's own cell padding, so an unfolded page
+        // title starts on the same x as a folded one (which is inset by the
+        // toolbar) and as the column text below it.
+        list: "mb-2 px-2",
+        compact: "mb-2 px-2",
       },
     },
     defaultVariants: { variant: "list" },

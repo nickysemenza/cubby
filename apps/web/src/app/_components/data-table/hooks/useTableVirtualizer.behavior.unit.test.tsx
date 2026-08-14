@@ -54,16 +54,30 @@ function Harness() {
 
 describe("useTableVirtualizer pane scrolling", () => {
   let wrapperTop = 220;
+  let belowChrome = 0;
   let rectSpy: ReturnType<typeof vi.spyOn>;
+  let scrollHeightSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     wrapperTop = 220;
+    belowChrome = 0;
     TestResizeObserver.instances = [];
     mocks.latestOptions = null;
     mocks.scrollToIndex.mockClear();
 
     vi.stubGlobal("ResizeObserver", TestResizeObserver);
     window.innerHeight = 900;
+
+    // The wrapper's bottom plus whatever the shell renders under it. The hook
+    // derives the bottom chrome from these two, so the test drives both.
+    // The hook measures the shell's footer element directly.
+    const footer = document.createElement("div");
+    footer.setAttribute("data-app-footer", "");
+    footer.getBoundingClientRect = () => ({ height: belowChrome }) as DOMRect;
+    document.body.appendChild(footer);
+    scrollHeightSpy = { mockRestore: () => footer.remove() } as ReturnType<
+      typeof vi.spyOn
+    >;
 
     rectSpy = vi
       .spyOn(HTMLElement.prototype, "getBoundingClientRect")
@@ -84,6 +98,7 @@ describe("useTableVirtualizer pane scrolling", () => {
   });
 
   afterEach(() => {
+    scrollHeightSpy.mockRestore();
     rectSpy.mockRestore();
     vi.unstubAllGlobals();
   });
@@ -111,10 +126,10 @@ describe("useTableVirtualizer pane scrolling", () => {
   it("bounds the pane to the viewport left beneath the wrapper", () => {
     render(<Harness />);
 
-    // 900 viewport - 220 wrapper top - 8 gutter.
+    // 900 viewport - 220 wrapper top - 0 chrome below it.
     expect(screen.getByTestId("pane")).toHaveAttribute(
       "data-max-height",
-      "672",
+      "680",
     );
   });
 
@@ -134,11 +149,24 @@ describe("useTableVirtualizer pane scrolling", () => {
 
     expect(screen.getByTestId("pane")).toHaveAttribute(
       "data-max-height",
-      "492",
+      "500",
     );
 
     unmount();
     expect(wrapperObserver?.disconnect).toHaveBeenCalledOnce();
+  });
+
+  it("subtracts the chrome the shell renders below the pane", () => {
+    // A hardcoded gutter left every list page 23px taller than the viewport,
+    // so one flick slid the whole toolbar behind the sticky command header.
+    belowChrome = 51;
+    render(<Harness />);
+
+    // 900 - 220 - 51: the page is exactly as tall as the viewport, not taller.
+    expect(screen.getByTestId("pane")).toHaveAttribute(
+      "data-max-height",
+      "629",
+    );
   });
 
   it("keeps a usable height on a short viewport", () => {

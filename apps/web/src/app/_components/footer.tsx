@@ -6,7 +6,7 @@ const buildDate = formatBuildDate(__BUILD_DATE__);
 
 export function AppFooter() {
   return (
-    <footer className="safe-bottom border-t print:hidden">
+    <footer data-app-footer className="safe-bottom border-t print:hidden">
       <Row
         align="center"
         justify="between"

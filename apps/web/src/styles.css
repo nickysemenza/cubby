@@ -47,6 +47,16 @@
     border-color: var(--color-gray-200, currentColor);
   }
 
+  /* Tailwind's preflight sets `::placeholder` to
+     `color-mix(in oklab, currentcolor 50%, transparent)`, so every input in the
+     app rendered its placeholder at HALF the token it was given — measured
+     2.04:1 while the class said `placeholder:text-muted-foreground`. Nothing in
+     app code asked for that, and no app code disclosed it. Restore the token at
+     full strength; a `placeholder:text-*` utility still overrides this. */
+  ::placeholder {
+    color: var(--muted-foreground);
+  }
+
   /* headings from
   https://ui.shadcn.com/docs/components/typography
   https://tailwindcss.com/docs/adding-custom-styles#adding-base-styles
@@ -480,6 +490,17 @@
   .table-grid-lines th:not(:last-child),
   .table-grid-lines td:not(:last-child) {
     border-right: 1px solid var(--table-grid);
+  }
+
+  /* Opaque row base. Declared BEFORE .table-row-zebra in the same layer so the
+     stripe still wins, which a `bg-background` utility would not have — that
+     silently flattened the zebra when it was tried.
+
+     It exists so the pinned columns work: a sticky cell takes `bg-inherit`, and
+     a transparent row would let scrolled content slide underneath it. Opaque
+     here equals the canvas, so nothing changes visually. */
+  .table-row-base {
+    background: var(--background);
   }
 
   /* Zebra stripe - components layer on purpose: hover (same layer, :hover

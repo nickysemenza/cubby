@@ -58,3 +58,53 @@ describe("useMobileListModel", () => {
     expect(screen.getByText("<vendor name>")).toBeInTheDocument();
   });
 });
+
+describe("title slot", () => {
+  it("falls back to the accessor value when the cell renders an element", () => {
+    // Every identity column renders a link, not a bare string. When the slot
+    // only accepted strings the override silently failed and the card fell
+    // through to `extractEntityTitle`, which answers "Unknown" for an entity
+    // with no `name` — so an entire list of purchase cards was titled that.
+    const column = {
+      id: "purchase",
+      columnDef: {
+        header: "Purchase",
+        cell: () => "unused",
+        meta: { mobile: { slot: "title" } },
+      },
+      accessorFn: (row: unknown) => row,
+    };
+    const table = {
+      getVisibleLeafColumns: () => [column],
+      getRowModel: () => ({
+        rows: [
+          {
+            id: "row-1",
+            // No `name`: this is what sends extractEntityTitle to its fallback.
+            original: { id: "PUR-TEST" },
+            getVisibleCells: () => [
+              {
+                column: {
+                  ...column,
+                  columnDef: {
+                    ...column.columnDef,
+                    // An element, exactly as a real identity column renders.
+                    cell: () => ({ type: "a", props: {}, key: null }),
+                  },
+                },
+                getContext: () => ({}),
+                getValue: () => "<identity>",
+              },
+            ],
+          },
+        ],
+      }),
+    } as unknown as Table<TestRow>;
+
+    const { result } = renderHook(() =>
+      useMobileListModel({ table, rowContentVersion: {} }),
+    );
+
+    expect(result.current[0]?.title).toBe("<identity>");
+  });
+});

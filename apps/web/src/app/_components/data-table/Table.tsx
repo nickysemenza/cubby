@@ -485,7 +485,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                   actions={actions}
                   bulkActionBar={bulkActionBar}
                   isTransitioning={isTransitioning}
-                  className="px-4 py-1"
+                  className="px-2 py-1"
                 />
               </div>
             )}

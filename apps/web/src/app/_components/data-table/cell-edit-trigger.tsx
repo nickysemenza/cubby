@@ -26,6 +26,14 @@ interface CellEditTriggerProps
   clipboard?: CellClipboardSpec;
   /** Hide the trailing hover pencil (e.g. icon-only pencil triggers). */
   hidePencilIcon?: boolean;
+  /**
+   * This trigger IS the pencil, so a single click edits even in cell-selection
+   * mode. Without it a dedicated pencil button inherited the cell contract
+   * (click selects, double-click edits) — the most universally understood
+   * "click to edit" glyph in the UI, needing a gesture it never advertised.
+   * The cell body keeps select-then-edit; only the glyph is a shortcut.
+   */
+  editOnClick?: boolean;
 }
 
 /**
@@ -44,6 +52,7 @@ export function CellEditTrigger({
   onStartEdit,
   clipboard,
   hidePencilIcon,
+  editOnClick,
   className,
   children,
   ...rest
@@ -124,7 +133,8 @@ export function CellEditTrigger({
         e.currentTarget.focus();
         // Cell-selection mode: click only focuses/selects; edit opens on
         // double-click or Enter. Otherwise keep the original click-to-edit.
-        if (!cellSelectionMode) onStartEdit();
+        // A pencil-shaped trigger always edits — see `editOnClick`.
+        if (!cellSelectionMode || editOnClick) onStartEdit();
       }}
       onDoubleClick={cellSelectionMode ? () => onStartEdit() : undefined}
       // In cell-selection mode the container owns Enter and printable keys.

@@ -272,6 +272,16 @@ export function useMobileListModel<TItem>({
           if (slot === "title") {
             if (typeof rendered === "string" && rendered.trim().length > 0) {
               title = rendered;
+            } else {
+              // The cell rendered an element, not a string — every identity
+              // column does, because the name is a link. Without this the
+              // override silently failed and the card fell back to
+              // `extractEntityTitle`, which answers "Unknown" for any entity
+              // with no `name` column. Every purchase card was titled that.
+              const raw = cell.getValue();
+              if (typeof raw === "string" && raw.trim().length > 0) {
+                title = raw;
+              }
             }
             continue;
           }
@@ -394,6 +404,17 @@ const specBlockHeight = (count: number, interactiveCount: number): number =>
  * during a fast scroll. This knows an expense missing its project renders one
  * fewer line, so `measureElement` corrects by a few px instead of ~100.
  */
+/**
+ * Spec rows a phone card shows before it offers to expand. Three is the reading
+ * budget: printing every declared value ran cards to ~490px, under two records
+ * a screen. The rest are disclosed with a "+N more" control rather than
+ * dropped — a silent cap is what this model reverted once already.
+ */
+export const MOBILE_SPEC_BUDGET = 3;
+
+/** Height of the "+N more" disclosure row when the card holds values back. */
+const SPEC_DISCLOSURE_ROW = 20;
+
 export function estimateMobileRowHeight(
   model?: Pick<
     MobileListRowModel<unknown>,
@@ -411,10 +432,17 @@ export function estimateMobileRowHeight(
       ? IDENTITY_LINE +
         (model.rightValueInteractive.some(Boolean) ? TOUCH_ROW_EXTRA * 2 : 0)
       : 0;
-  const spec = specBlockHeight(
-    model.metaValues.length,
-    model.metaValues.filter((item) => item.interactive).length,
-  );
+  // The card renders at most `MOBILE_SPEC_BUDGET` spec rows at rest, plus a
+  // one-line "+N more" disclosure when it holds back. Estimating the full set
+  // would reserve height for rows that are not painted, which reads as ragged
+  // gaps while the virtualizer scrolls.
+  const shownSpec = Math.min(model.metaValues.length, MOBILE_SPEC_BUDGET);
+  const spec =
+    specBlockHeight(
+      shownSpec,
+      model.metaValues.slice(0, shownSpec).filter((item) => item.interactive)
+        .length,
+    ) + (model.metaValues.length > shownSpec ? SPEC_DISCLOSURE_ROW : 0);
   // Floor: the 44px thumbnail gutter (plus padding) sets a minimum a short row
   // can't undercut — reserved or filled, it occupies the same height.
   const hasThumbGutter = model.reserveImageSlot || Boolean(model.imageSlot);
