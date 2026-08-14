@@ -806,6 +806,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
         <MobileListScreen
           table={table}
           entity={entity}
+          ownsPageIdentity={!embedded}
           additionalToolbarContent={additionalToolbarContent}
           actions={actions}
           bulkActionBar={bulkActionBar}

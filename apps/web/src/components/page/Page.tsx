@@ -99,8 +99,12 @@ interface PageListProps extends PageBaseProps {
    * rendered, and the title, eyebrow, count and actions travel down through
    * {@link PageIdentityContext} for the toolbar to lay out on one bar.
    *
-   * Only for a page whose body owns a page-level table — a page without one
-   * would render no identity at all.
+   * Only for a page whose body renders a page-level table in EVERY state and
+   * at EVERY viewport. The header is dropped at all widths, so a body that
+   * renders its table only past a breakpoint, only once a query exists, or
+   * only in one of several view modes leaves the page with no name and no
+   * `<h1>` — and nothing on screen says so. `header-in-toolbar.unit.test.ts`
+   * holds the reviewed list.
    */
   headerInToolbar?: boolean;
 }
