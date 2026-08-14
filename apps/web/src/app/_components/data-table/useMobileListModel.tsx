@@ -412,8 +412,14 @@ const specBlockHeight = (count: number, interactiveCount: number): number =>
  */
 export const MOBILE_SPEC_BUDGET = 3;
 
-/** Height of the "+N more" disclosure row when the card holds values back. */
-const SPEC_DISCLOSURE_ROW = 20;
+/**
+ * Vertical footprint of the "+N more" disclosure when the card holds values
+ * back: a 44px touch-floor button pulled in by `-my-1`, so 44 - 4 - 4. Not the
+ * ~20px the text alone occupies — under-estimating it by 16px per capped card
+ * is more than `measureElement` is meant to trim, so `getTotalSize()` lurches
+ * on a fast scroll.
+ */
+const SPEC_DISCLOSURE_ROW = 36;
 
 export function estimateMobileRowHeight(
   model?: Pick<
