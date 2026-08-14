@@ -321,7 +321,7 @@ function SidebarFullLeaf({ item, active }: { item: NavItem; active: boolean }) {
       aria-current={active ? "page" : undefined}
     >
       <Icon className="size-3.5 shrink-0" />
-      <span className="truncate">{item.label}</span>
+      <span className="truncate">{item.railLabel ?? item.label}</span>
     </Link>
   );
 }

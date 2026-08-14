@@ -41,6 +41,14 @@ export type NavItem = {
   /** Static search params — only the scanner shortcut needs these today. */
   search?: Record<string, unknown>;
   label: string;
+  /**
+   * Shorter text for the 144px sidebar rail only. The rail is a compact index
+   * and its width is set by the longest label, but `label` is also what the
+   * command palette lists AND what cmdk filters on — shortening it there would
+   * delete the search terms ("background" would stop finding the jobs page).
+   * So the rail reads this and everything else keeps `label`.
+   */
+  railLabel?: string;
   icon: React.ComponentType<{ className?: string }>;
 };
 
@@ -122,7 +130,12 @@ export const desktopNav: NavNode[] = [
         label: "Equivalences",
         icon: ArrowLeftRight,
       },
-      { to: "/meals/suggestions", label: "Cookable", icon: Sparkles },
+      {
+        to: "/meals/suggestions",
+        label: "What can I make?",
+        railLabel: "Cookable",
+        icon: Sparkles,
+      },
     ],
   },
   {
@@ -176,7 +189,8 @@ export const desktopNav: NavNode[] = [
       },
       {
         to: "/statement-rows",
-        label: "Statements",
+        label: "Statement Rows",
+        railLabel: "Statements",
         icon: Receipt,
       },
     ],
@@ -220,7 +234,12 @@ export const desktopNav: NavNode[] = [
       { to: "/ai-smoke-test", label: "AI smoke test", icon: Sparkles },
       { to: "/ai-usage", label: "AI usage", icon: Bot },
       { to: "/search/debug", label: "Search debug", icon: Search },
-      { to: "/background-jobs", label: "Jobs", icon: Database },
+      {
+        to: "/background-jobs",
+        label: "Background jobs",
+        railLabel: "Jobs",
+        icon: Database,
+      },
       { to: "/mcp", label: "MCP tools", icon: Plug },
     ],
   },
