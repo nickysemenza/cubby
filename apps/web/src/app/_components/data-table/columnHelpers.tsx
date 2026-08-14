@@ -1034,12 +1034,28 @@ export function createCurrencyColumn<
       ? (row, v) => options.editable!.onSave(v, row)
       : undefined,
   );
+  // Widest realistic formatted value is "-$NNN,NNN.NN" (12 chars, JetBrains
+  // Mono); w-20 (80px) clipped it mid-digit with no ellipsis and no way to
+  // recover the real number short of opening the row (verified P0). w-32
+  // (128px) is the smallest Tailwind step that fits.
+  const defaultClassName = "w-32";
+  // `truncate` adds the ellipsis the shared cell class doesn't: it clips with
+  // `text-overflow: clip`, which silently drops digits with no visual signal.
+  // A `title` on the rendered value is the hover backstop either way.
+  const renderValue = (v: number | null | undefined) =>
+    isEmpty(v) ? (
+      <NoneValue />
+    ) : (
+      <span className={toneClass(v)} title={formatCurrency(v, decimals)}>
+        {formatCurrency(v, decimals)}
+      </span>
+    );
   return columnHelper.accessor((row) => row[accessor] as number | null, {
     id: String(accessor),
     header: options?.header,
     meta: {
       numeric: true,
-      className: options?.className ?? "w-20",
+      className: cn(options?.className ?? defaultClassName, "truncate"),
       mobile: options?.mobile,
       cellData,
     },
@@ -1076,23 +1092,12 @@ export function createCurrencyColumn<
             }
             clipboard={specFromCellData(cellData, info.row.original)}
             config={{ type: "currency" }}
-            renderValue={(v) =>
-              isEmpty(v) ? (
-                <NoneValue />
-              ) : (
-                <span className={toneClass(v)}>
-                  {formatCurrency(v, decimals)}
-                </span>
-              )
-            }
+            renderValue={renderValue}
           />
         );
       }
 
-      if (isEmpty(val)) return <NoneValue />;
-      return (
-        <span className={toneClass(val)}>{formatCurrency(val, decimals)}</span>
-      );
+      return renderValue(val);
     },
   });
 }

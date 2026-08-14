@@ -24,6 +24,7 @@ export const Route = createFileRoute("/_authenticated/financial-transactions/")(
     component: () => (
       <Page
         variant="list"
+        headerInToolbar
         title="Transactions"
         entity="financialTransaction"
         fullWidth

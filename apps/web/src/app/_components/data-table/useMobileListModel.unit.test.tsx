@@ -11,7 +11,19 @@ interface TestRow {
 describe("useMobileListModel", () => {
   it("rebuilds pre-rendered cells when external row content changes", () => {
     let preview = "…";
+    const column = {
+      id: "related:product.vendors",
+      columnDef: {
+        header: "Vendors",
+        cell: () => preview,
+        meta: { mobile: { slot: "meta" } },
+      },
+      accessorFn: undefined,
+    };
     const table = {
+      // `mobileListShape` reads this to decide whether the list reserves a
+      // thumbnail gutter, so a row-model-only stub no longer satisfies the hook.
+      getVisibleLeafColumns: () => [column],
       getRowModel: () => ({
         rows: [
           {
@@ -19,15 +31,7 @@ describe("useMobileListModel", () => {
             original: { id: "PRD-TEST", name: "Test product" },
             getVisibleCells: () => [
               {
-                column: {
-                  id: "related:product.vendors",
-                  columnDef: {
-                    header: "Vendors",
-                    cell: () => preview,
-                    meta: { mobile: { slot: "meta" } },
-                  },
-                  accessorFn: undefined,
-                },
+                column,
                 getContext: () => ({}),
                 getValue: () => undefined,
               },
@@ -48,9 +52,9 @@ describe("useMobileListModel", () => {
       result.current[0]?.metaValues[0]?.value ?? null,
     );
     expect(screen.getByText("…")).toBeInTheDocument();
-    preview = "Moore Newton";
+    preview = "<vendor name>";
     rerender({ rowContentVersion: {} });
     rerenderCell(result.current[0]?.metaValues[0]?.value ?? null);
-    expect(screen.getByText("Moore Newton")).toBeInTheDocument();
+    expect(screen.getByText("<vendor name>")).toBeInTheDocument();
   });
 });

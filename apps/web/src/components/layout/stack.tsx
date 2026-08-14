@@ -13,8 +13,14 @@ interface StackProps extends React.HTMLAttributes<HTMLElement>, StackVariants {
 }
 
 /**
- * Vertical block stack — the canonical replacement for `space-y-*`. Maps to
- * `space-y-*` under the hood (a 1:1 swap with no display-model change).
+ * Vertical stack — the canonical replacement for `space-y-*`. Renders
+ * `flex flex-col` + `space-y-*` rather than a plain block `div`: `space-y-*`
+ * spaces children with `margin-top`, which inline children (`span`, `a`, …)
+ * ignore, so a plain-block stack of two inline elements renders them
+ * concatenated on one line with no gap. `flex-col` blockifies every child so
+ * the line break actually happens. See `stackVariants` in `~/styles/layouts`
+ * for the full trade-off (it stretches an unsized `inline-flex`/`inline-block`
+ * child to the container's width, where block layout let it shrink to fit).
  */
 export const Stack = ({
   as: Comp = "div",

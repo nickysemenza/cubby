@@ -103,3 +103,29 @@ describe("getEntityNavGroup", () => {
     }
   });
 });
+
+describe("railLabel", () => {
+  it("never replaces the label the command palette searches", () => {
+    // `command-menu` lists `leaf.label` and cmdk filters on that visible text,
+    // so a leaf whose only text was the rail's short form would lose its search
+    // terms — typing "background" would stop finding the jobs page. The rail
+    // reads `railLabel`; every other surface keeps `label`.
+    const shortened = desktopLeaves.filter((leaf) => leaf.railLabel);
+
+    expect(shortened.length).toBeGreaterThan(0);
+    for (const leaf of shortened) {
+      expect(leaf.label, leaf.to as string).not.toBe(leaf.railLabel);
+      expect(leaf.label.length, leaf.to as string).toBeGreaterThan(
+        (leaf.railLabel as string).length,
+      );
+    }
+  });
+
+  it("keeps the full wording for the shortened leaves", () => {
+    const byRoute = new Map(desktopLeaves.map((leaf) => [leaf.to, leaf.label]));
+
+    expect(byRoute.get("/background-jobs")).toBe("Background jobs");
+    expect(byRoute.get("/statement-rows")).toBe("Statement Rows");
+    expect(byRoute.get("/meals/suggestions")).toBe("What can I make?");
+  });
+});

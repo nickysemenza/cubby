@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-virtual", () => ({
-  useWindowVirtualizer: (options: Record<string, unknown>) => {
+  useVirtualizer: (options: Record<string, unknown>) => {
     mocks.latestOptions = options;
     return {
       getVirtualItems: () => [],
@@ -42,46 +42,33 @@ function Harness() {
   });
 
   return (
-    <div
-      ref={virtualizer.tableContainerRef}
-      data-table-anchor="true"
-      data-testid="table-anchor"
-      data-scroll-margin={virtualizer.scrollMargin}
-    />
+    <div ref={virtualizer.paneWrapperRef} data-pane-wrapper="true">
+      <div
+        ref={virtualizer.tableContainerRef}
+        data-testid="pane"
+        data-max-height={virtualizer.paneMaxHeight ?? ""}
+      />
+    </div>
   );
 }
 
-describe("useTableVirtualizer document offset tracking", () => {
-  let tableDocumentTop = 600;
+describe("useTableVirtualizer pane scrolling", () => {
+  let wrapperTop = 220;
   let rectSpy: ReturnType<typeof vi.spyOn>;
-  let animationFrames: FrameRequestCallback[];
-
-  const flushAnimationFrames = () => {
-    const pending = animationFrames.splice(0);
-    for (const callback of pending) callback(0);
-  };
 
   beforeEach(() => {
-    tableDocumentTop = 600;
-    animationFrames = [];
+    wrapperTop = 220;
     TestResizeObserver.instances = [];
     mocks.latestOptions = null;
     mocks.scrollToIndex.mockClear();
 
     vi.stubGlobal("ResizeObserver", TestResizeObserver);
-    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
-      animationFrames.push(callback);
-      return animationFrames.length;
-    });
-    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    window.innerHeight = 900;
 
     rectSpy = vi
       .spyOn(HTMLElement.prototype, "getBoundingClientRect")
       .mockImplementation(function (this: HTMLElement) {
-        const top =
-          this.dataset.tableAnchor === "true"
-            ? tableDocumentTop - window.scrollY
-            : 0;
+        const top = this.dataset.paneWrapper === "true" ? wrapperTop : 0;
         return {
           x: 0,
           y: top,
@@ -101,47 +88,69 @@ describe("useTableVirtualizer document offset tracking", () => {
     vi.unstubAllGlobals();
   });
 
-  it("remeasures after preceding content changes the document layout", () => {
-    const { unmount } = render(<Harness />);
+  it("scrolls the pane rather than the window", () => {
+    render(<Harness />);
 
-    expect(screen.getByTestId("table-anchor")).toHaveAttribute(
-      "data-scroll-margin",
-      "600",
-    );
-    expect(mocks.latestOptions?.scrollMargin).toBe(600);
+    // The scroll element is the table's own pane. If this regresses to window
+    // virtualization, a wide table drags the whole page sideways and the nav
+    // rail, page header and column header all leave the viewport.
+    const options = mocks.latestOptions;
+    expect(options).not.toBeNull();
+    const getScrollElement = options?.getScrollElement as
+      | (() => HTMLElement | null)
+      | undefined;
+    expect(typeof getScrollElement).toBe("function");
+    expect(getScrollElement?.()).toBe(screen.getByTestId("pane"));
 
-    const bodyObserver = TestResizeObserver.instances[0];
-    expect(bodyObserver?.observe).toHaveBeenCalledWith(document.body);
-
-    tableDocumentTop = 2600;
-    act(() => {
-      bodyObserver?.callback([], bodyObserver as unknown as ResizeObserver);
-      flushAnimationFrames();
-    });
-
-    expect(screen.getByTestId("table-anchor")).toHaveAttribute(
-      "data-scroll-margin",
-      "2600",
-    );
-    expect(mocks.latestOptions?.scrollMargin).toBe(2600);
-
-    unmount();
-    expect(bodyObserver?.disconnect).toHaveBeenCalledOnce();
+    // scrollMargin is a window-virtualization concept: the table's distance
+    // from the top of the document. A pane's own scrollTop is already the
+    // right origin, so passing one would double-count the offset.
+    expect(mocks.latestOptions).not.toHaveProperty("scrollMargin");
   });
 
-  it("remeasures on scroll when total document height does not change", () => {
+  it("bounds the pane to the viewport left beneath the wrapper", () => {
     render(<Harness />);
-    tableDocumentTop = 3100;
 
+    // 900 viewport - 220 wrapper top - 8 gutter.
+    expect(screen.getByTestId("pane")).toHaveAttribute(
+      "data-max-height",
+      "672",
+    );
+  });
+
+  it("remeasures when the wrapper moves", () => {
+    const { unmount } = render(<Harness />);
+
+    const wrapperObserver = TestResizeObserver.instances[0];
+    expect(wrapperObserver?.observe).toHaveBeenCalled();
+
+    wrapperTop = 400;
     act(() => {
-      window.dispatchEvent(new Event("scroll"));
-      flushAnimationFrames();
+      wrapperObserver?.callback(
+        [],
+        wrapperObserver as unknown as ResizeObserver,
+      );
     });
 
-    expect(screen.getByTestId("table-anchor")).toHaveAttribute(
-      "data-scroll-margin",
-      "3100",
+    expect(screen.getByTestId("pane")).toHaveAttribute(
+      "data-max-height",
+      "492",
     );
-    expect(mocks.latestOptions?.scrollMargin).toBe(3100);
+
+    unmount();
+    expect(wrapperObserver?.disconnect).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a usable height on a short viewport", () => {
+    window.innerHeight = 300;
+    wrapperTop = 260;
+    render(<Harness />);
+
+    // Floor, not `300 - 260 - 8 = 32`: a couple of visible rows is worse than
+    // a pane that overflows a cramped viewport.
+    expect(screen.getByTestId("pane")).toHaveAttribute(
+      "data-max-height",
+      "320",
+    );
   });
 });

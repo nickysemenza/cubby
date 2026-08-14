@@ -24,6 +24,14 @@ interface MobileCardProps {
   titleIcon?: LucideIcon;
   subtitle?: ReactNode;
   imageSlot?: ReactNode;
+  /**
+   * Keep the thumbnail gutter even when this row has no image, so every title
+   * in the list starts at the same x. Decided per list — see
+   * `MobileListRowModel.reserveImageSlot`. The reserved slot stays empty
+   * rather than showing a placeholder glyph: alignment is the goal, and a
+   * repeated icon would be decoration charged at 44px a row.
+   */
+  reserveImageSlot?: boolean;
   entity?: Entity;
   onClick?: () => void;
   onTouchStart?: () => void;
@@ -55,6 +63,26 @@ interface MobileCardProps {
 }
 
 /**
+ * Grows an editable cell's trigger to the phone touch floor from the OUTSIDE.
+ *
+ * The trigger's own box is tuned to the desktop compact row (24px, and 20px
+ * for the icon-only pencil that sits beside a link), and that sizing is
+ * correct there — so the card stretches it rather than the trigger shrinking
+ * the desktop. This is the control that WRITES: a mis-tap edits a real record,
+ * which is why it gets the 44pt floor before anything else on the card does.
+ *
+ * The `:has(>svg:only-child)` half is what separates the two trigger shapes: a
+ * pencil-only trigger's lone child is the glyph, while a full-cell trigger
+ * wraps text (plus a hover pencil), and centring THAT would pull the value
+ * column off its left edge.
+ */
+const TOUCH_TRIGGER_CLASS = cn(
+  "[&_[data-cell-edit-trigger]]:min-h-11",
+  "[&_[data-cell-edit-trigger]:has(>svg:only-child)]:min-w-11",
+  "[&_[data-cell-edit-trigger]:has(>svg:only-child)]:justify-center",
+);
+
+/**
  * A single right-aligned value in the compact row variant's second line.
  * Plain values get the dense, truncating mono-2xs treatment; `interactive`
  * values (an editable cell's edit-trigger, a quick-edit pencil, …) render
@@ -74,8 +102,18 @@ function RightValueSlot({
     // The cell's own markup already nests a `min-w-0 truncate` text span next
     // to a `shrink-0` pencil, so bounding just the outer box lets flexbox
     // shrink the text and keep the pencil at full size.
+    //
+    // Height is the tap target, and this one WRITES: a 24px trigger on the
+    // identity line is the control that edits production data, so the slot
+    // carries a 44px box and the trigger stretches to fill it. `-my-1` spends
+    // the row's own padding rather than growing the card by the full 20px.
     return (
-      <span className="flex min-w-0 max-w-32 items-center overflow-hidden text-2xs text-muted-foreground">
+      <span
+        className={cn(
+          "-my-1 flex min-h-11 min-w-0 max-w-32 items-center overflow-hidden text-2xs text-muted-foreground",
+          TOUCH_TRIGGER_CLASS,
+        )}
+      >
         {node}
       </span>
     );
@@ -148,7 +186,19 @@ export function MobileRowShell({
         </div>
       ))}
       {title}
-      <div className={cn(span, align)}>{actions}</div>
+      <div
+        className={cn(
+          span,
+          align,
+          // The overflow menu ships as a 24px desktop trigger; the phone needs
+          // 44. `-my-1` spends the row's existing vertical padding so the taller
+          // target doesn't push the row down with it.
+          actions != null &&
+            "-my-1 flex min-h-11 min-w-11 items-center justify-center [&_[data-slot=button]]:size-11 [&_button]:size-11",
+        )}
+      >
+        {actions}
+      </div>
       {content}
       {/* Explicit placement — auto-placed children landed in the checkbox
           column's 44px gutter. */}
@@ -160,9 +210,15 @@ export function MobileRowShell({
 /**
  * The spec grid: a mono label gutter + value column. Exported so the skeleton
  * reproduces the exact geometry.
+ *
+ * The gutter is 6.5rem because the label is the half that must survive: at
+ * 4.5rem a two-word header clipped to `PURCHASE D…` / `USED ON PR…`, cutting
+ * the word that explains the number while the value beside it still had room.
+ * Labels now wrap inside the gutter instead of truncating (see the `dt`), and
+ * the value is the side that clamps.
  */
 export const MOBILE_SPEC_GRID_CLASS =
-  "grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-x-2 gap-y-1";
+  "grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-2 gap-y-1";
 
 /**
  * A mobile-friendly card component with optional selection checkbox.
@@ -187,6 +243,7 @@ export function MobileCard({
   titleIcon: TitleIcon,
   subtitle,
   imageSlot,
+  reserveImageSlot = false,
   entity,
   onClick,
   onTouchStart,
@@ -216,7 +273,13 @@ export function MobileCard({
                 <Description
                   as="span"
                   size="xs"
-                  className="block min-w-0 flex-1 truncate"
+                  // The subtitle slot carries an editable cell on several
+                  // lists (a product's category chip), so it needs the same
+                  // phone touch floor as the value and spec slots.
+                  className={cn(
+                    "block min-w-0 flex-1 truncate",
+                    TOUCH_TRIGGER_CLASS,
+                  )}
                 >
                   {subtitle}
                 </Description>
@@ -242,7 +305,10 @@ export function MobileCard({
             <dl className={MOBILE_SPEC_GRID_CLASS}>
               {specValues.map((item) => (
                 <Fragment key={item.id}>
-                  <Eyebrow as="dt" className="truncate">
+                  {/* No `truncate`: a clipped label leaves a number with
+                      nothing naming it. Wrapping costs a line at most, and
+                      only for the longest headers. */}
+                  <Eyebrow as="dt" className="break-words">
                     {item.label}
                   </Eyebrow>
                   <dd
@@ -254,7 +320,14 @@ export function MobileCard({
                           // wrapper's whole width, starving the sibling
                           // `min-w-0 truncate` value span to 0px — the value
                           // was in the DOM and invisible on screen.
-                          "flex min-h-8 items-center [&>*]:w-full"
+                          //
+                          // `-my-1` pays for most of the 32→44px growth out of
+                          // the grid's own row gap, so the 44pt target costs
+                          // the card ~4px rather than 12px.
+                          cn(
+                            "-my-1 flex min-h-11 items-center [&>*]:w-full",
+                            TOUCH_TRIGGER_CLASS,
+                          )
                         : // Room to wrap now, and hiding data is the bug being
                           // fixed — so clamp rather than truncate.
                           "line-clamp-2 text-muted-foreground",
@@ -307,8 +380,11 @@ export function MobileCard({
               />
             </div>
           ) : null,
-          imageSlot ? (
-            <div key="image" className="size-11 overflow-hidden rounded">
+          imageSlot || reserveImageSlot ? (
+            // Reserved-but-empty stays empty (no border, no glyph): the slot
+            // exists to hold the left scan line, not to announce a missing
+            // photo.
+            <div key="image" className="size-11 overflow-hidden">
               {imageSlot}
             </div>
           ) : null,
@@ -413,11 +489,19 @@ export function MobileCard({
               </div>
             )}
             {(detailsHref || actions) && (
-              <Row align="center" gap="xs" className="shrink-0">
+              // Same phone touch floor the compact variant's actions cell
+              // gets: the overflow menu ships as a 24px desktop trigger, which
+              // is roughly half a fingertip on the control that opens a row's
+              // destructive actions.
+              <Row
+                align="center"
+                gap="xs"
+                className="shrink-0 [&_[data-slot=button]]:size-11 [&_button]:size-11"
+              >
                 {detailsHref && (
                   <Link
                     to={detailsHref}
-                    className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    className="flex size-11 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                     aria-label="View details"
                   >
                     <ChevronRight className="size-4" />

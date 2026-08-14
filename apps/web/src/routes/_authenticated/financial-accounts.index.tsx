@@ -23,6 +23,7 @@ export const Route = createFileRoute("/_authenticated/financial-accounts/")({
   component: () => (
     <Page
       variant="list"
+      headerInToolbar
       title="Accounts"
       entity="financialAccount"
       fullWidth

@@ -295,6 +295,10 @@ export function ConversionDialog({
                 <Button
                   variant="ghost"
                   size={compact ? "icon-sm" : "sm"}
+                  // Compact mode drops the "Convert" text, leaving only the
+                  // icon — the tooltip below doesn't supply an accessible
+                  // name, so mirror its wording here.
+                  aria-label={compact ? "Open unit converter" : undefined}
                   className="flex items-center gap-1 text-muted-foreground"
                 />
               }

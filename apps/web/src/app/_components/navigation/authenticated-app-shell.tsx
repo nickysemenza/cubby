@@ -82,9 +82,11 @@ export function AuthenticatedAppShell({
           onSearchClick={onSearchClick}
           navigationProgress={navigationProgress}
         />
-        <main className="min-w-0 flex-1 px-2 pt-4 pb-20 md:px-6 md:pb-4">
-          {children}
-        </main>
+        {/* Flush to the rail and the command header: the table's own border
+            is the page edge, so main spends no gutter. The 5rem bottom stays
+            for the phone's fixed bottom nav, which would otherwise cover the
+            last rows. */}
+        <main className="min-w-0 flex-1 pb-20 md:pb-0">{children}</main>
         <AppFooter />
       </div>
     </div>
@@ -147,7 +149,7 @@ function WorkspaceSidebar({
     <aside
       className={cn(
         "sticky top-0 hidden h-dvh shrink-0 border-border border-r bg-card md:flex md:w-14 md:flex-col lg:transition-[width] lg:duration-150 print:hidden",
-        expanded ? "lg:w-56" : "lg:w-14",
+        expanded ? "lg:w-36" : "lg:w-14",
       )}
       aria-label="Workspace navigation"
     >
@@ -161,7 +163,6 @@ function WorkspaceSidebar({
           )}
         </Link>
       </div>
-
       <nav
         className="min-h-0 flex-1 overflow-y-auto px-2 py-2"
         aria-label="Cubby"
@@ -176,7 +177,6 @@ function WorkspaceSidebar({
           />
         ))}
       </nav>
-
       <div className="border-border border-t p-2">
         <SidebarUtilityLinks expanded={expanded} activeTo={activeTo} />
         <Button
@@ -321,7 +321,7 @@ function SidebarFullLeaf({ item, active }: { item: NavItem; active: boolean }) {
       aria-current={active ? "page" : undefined}
     >
       <Icon className="size-3.5 shrink-0" />
-      <span className="truncate">{item.label}</span>
+      <span className="truncate">{item.railLabel ?? item.label}</span>
     </Link>
   );
 }

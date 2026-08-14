@@ -49,6 +49,10 @@ export function ViewSwitcher<T extends string>({
             key={opt.value}
             value={opt.value}
             aria-label={`${opt.label} view`}
+            // Phone-only touch floor. DESIGN.md keeps desktop controls compact
+            // (28px) but requires 40–48px on phones, and the `sm` toggle size
+            // is 24px — well under half a finger.
+            className="min-h-11 md:min-h-0"
           >
             {Icon && <Icon className="mr-2 size-4" />}
             {opt.label}
