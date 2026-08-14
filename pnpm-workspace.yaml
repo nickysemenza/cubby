@@ -2,6 +2,10 @@ packages:
   - apps/*
   - packages/*
 
+onlyBuiltDependencies:
+  - better-sqlite3
+  - esbuild
+
 overrides:
   # The 2026-08-01 workerd pulled by newer Cloudflare tooling crashes under the
   # parallel Playwright CI load. Keep the last green toolchain until upstream
@@ -37,13 +41,23 @@ packageExtensions:
     peerDependencies:
       zod: ^4.0.0
 
+# `DevEnv.handleErrorEvent` tolerates exactly two transient ProxyController
+# reasons; everything else — including a ProxyWorker reporting a client that
+# hung up mid-request ("Network connection lost.") — is re-emitted as fatal and
+# exits `wrangler dev`. Playwright aborts requests routinely, so this killed the
+# server mid-run and wiped whole E2E shards with ECONNREFUSED. The patch adds
+# that one cause to the existing allowlist; genuine ProxyWorker failures stay
+# fatal. Still present on workers-sdk main as of 4.123.0, so a bump won't drop
+# this — re-check `handleErrorEvent` when the pin moves.
+patchedDependencies:
+  wrangler@4.120.0: patches/wrangler@4.120.0.patch
+
 # Upstream peer ranges lag the versions Cubby validates in both TypeScript
 # engines. Keep these exceptions narrow and remove them when Triplit and Sentry
 # publish compatible ranges.
 peerDependencyRules:
   allowedVersions:
     "@cloudflare/workers-types": ">=4 <6"
-    typescript: ">=5 <8"
     # @cloudflare/tanstack-ai 0.2.1 bundles grok/gemini/openrouter/openai
     # adapters peering @tanstack/ai ^0.40; cubby only imports the anthropic
     # adapter, whose @tanstack/ai-anthropic peer requires ^0.41.
@@ -51,7 +65,4 @@ peerDependencyRules:
     # @better-auth/api-key (inside better-auth-ui) peers better-call 1.3.7
     # while better-auth-ui resolves 2.x; cubby uses no API-key features.
     better-call: "2"
-
-onlyBuiltDependencies:
-  - better-sqlite3
-  - esbuild
+    typescript: ">=5 <8"
