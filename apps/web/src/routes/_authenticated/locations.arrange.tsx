@@ -12,6 +12,14 @@ const searchSchema = z.object({
 
 export const Route = createFileRoute("/_authenticated/locations/arrange")({
   validateSearch: searchSchema,
+  // Client-only: ArrangeSurface suspends on `location.makeTree`, so the server
+  // render fetches it through the SSR tRPC client — which self-fetches
+  // `http://localhost:PORT/api/trpc`. That is unauthenticated in dev and, on CF
+  // Workers, never reaches the app at all: the edge answers with the plain-text
+  // body `error code: 1003`, so parsing the response throws
+  // `Unexpected token 'e' ... is not valid JSON` into the route error boundary
+  // on any direct load of this URL. Matches every other suspense-query route.
+  ssr: false,
   component: ArrangePage,
   head: () => ({ meta: [{ title: pageTitle("Arrange") }] }),
 });
