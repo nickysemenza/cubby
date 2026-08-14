@@ -36,7 +36,6 @@ const searchSchema = z.object({
 });
 
 export const Route = createFileRoute("/_authenticated/cookbooks/$shortcode")({
-  ssr: false,
   validateSearch: searchSchema,
   head: shortcodeHead,
   component: CookbookDetailPage,

@@ -10,7 +10,6 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/usda/$id")({
-  ssr: false,
   loader: async ({ params, context }) => {
     const data = await context.queryClient.ensureQueryData(
       context.trpc.usda.getByID.queryOptions({ id: parseInt(params.id, 10) }),

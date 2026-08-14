@@ -28,7 +28,6 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { shortcodeHead } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/$shortcode")({
-  ssr: false,
   loader: async ({ params, context }) => {
     const parsed = parseShortcode(params.shortcode);
     if (!parsed) throw notFound();

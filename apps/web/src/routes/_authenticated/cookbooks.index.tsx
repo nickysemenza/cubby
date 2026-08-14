@@ -6,9 +6,6 @@ import { Button } from "~/components/ui/button";
 import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/cookbooks/")({
-  // Client-only: CookbookList suspends on a protected query that needs the auth
-  // cookie, which isn't present during SSR (matches the recipe detail route).
-  ssr: false,
   component: CookbooksPage,
   head: () => ({ meta: [{ title: pageTitle("Cookbooks") }] }),
 });

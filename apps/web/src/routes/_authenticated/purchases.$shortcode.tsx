@@ -11,7 +11,6 @@ import { shortcodeHead } from "~/lib/page-title";
 import { purchaseLabel } from "~/lib/purchase-label";
 
 export const Route = createFileRoute("/_authenticated/purchases/$shortcode")({
-  ssr: false,
   loader: async ({ params, context }) => {
     const data = await context.queryClient.ensureQueryData(
       context.trpc.purchase.getByShortcode.queryOptions({

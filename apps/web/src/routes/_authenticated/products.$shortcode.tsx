@@ -8,30 +8,18 @@ import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
 import { shortcodeHead } from "~/lib/page-title";
-import { getProductDetailForSsr } from "~/lib/product-detail-server";
 
 const PRODUCT_SSR_TIMING = "cubby-product-ssr";
 
 export const Route = createFileRoute("/_authenticated/products/$shortcode")({
   loader: async ({ params, context }) => {
     const startedAt = import.meta.env.SSR ? performance.now() : null;
-    const queryOptions = context.trpc.product.getByShortcode.queryOptions({
-      shortcode: params.shortcode,
-    });
+    // No SSR-only transport swap needed: the shared tRPC client already uses
+    // the in-process link during a server render (trpc-transport-isomorphic).
     const data = await context.queryClient.ensureQueryData(
-      import.meta.env.SSR
-        ? {
-            ...queryOptions,
-            // Keep the exact tRPC query key while replacing only the server's
-            // transport. The result dehydrates through the existing SuperJSON
-            // Query integration, so hydration sees a fresh cache hit and does
-            // not repeat the detail request in the browser.
-            queryFn: () =>
-              getProductDetailForSsr({
-                data: { shortcode: params.shortcode },
-              }),
-          }
-        : queryOptions,
+      context.trpc.product.getByShortcode.queryOptions({
+        shortcode: params.shortcode,
+      }),
     );
     if (!data) throw notFound();
 

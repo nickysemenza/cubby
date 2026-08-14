@@ -101,6 +101,36 @@ function formatKiB(bytes: number): string {
   return `${(bytes / 1024).toFixed(1)} KiB`;
 }
 
+/**
+ * Markers that must never appear in a client asset.
+ *
+ * The server render uses an in-process tRPC link over the domain router
+ * (`trpc-transport-server.ts`), selected by `createIsomorphicFn()` in
+ * `trpc-transport-isomorphic.ts`. That split is what keeps the router — and the
+ * database driver behind it — out of the browser. The Start plugin strips the
+ * `.server()` branch at build time, but nothing in the type system enforces it:
+ * an ordinary top-level import of server code from shared client code would
+ * silently ship the whole server to every visitor. This is the enforcement.
+ */
+const SERVER_ONLY_MARKERS = ["unstable_localLink", "drizzle-orm", "HYPERDRIVE"];
+
+export function assertNoServerCodeInClient(assetsDir: string): void {
+  const leaks: Array<string> = [];
+  for (const file of readdirSync(assetsDir)) {
+    if (!file.endsWith(".js")) continue;
+    const code = readFileSync(resolve(assetsDir, file), "utf8");
+    for (const marker of SERVER_ONLY_MARKERS) {
+      if (code.includes(marker)) leaks.push(`${file} contains "${marker}"`);
+    }
+  }
+  if (leaks.length > 0) {
+    throw new Error(
+      `Server-only code leaked into the client bundle:\n  ${leaks.join("\n  ")}\n` +
+        "The isomorphic transport split in trpc-transport-isomorphic.ts is not being stripped.",
+    );
+  }
+}
+
 export function runBundleAnalysis(check: boolean): ClientBundleReport {
   const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   const assetsDir = resolve(appRoot, "dist/client/assets");
@@ -118,8 +148,11 @@ export function runBundleAnalysis(check: boolean): ClientBundleReport {
     console.log(`${formatKiB(file.gzipBytes).padStart(10)}  ${file.file}`);
   }
 
-  if (check && !report.withinBudget) {
-    throw new Error(`Client eager bundle exceeds budget; see ${reportPath}`);
+  if (check) {
+    assertNoServerCodeInClient(assetsDir);
+    if (!report.withinBudget) {
+      throw new Error(`Client eager bundle exceeds budget; see ${reportPath}`);
+    }
   }
   return report;
 }
