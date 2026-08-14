@@ -10,6 +10,13 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/usda/$id")({
+  // Client-only for latency: this is the one de-flagged route whose loader
+  // blocks on an upstream rather than our own DB. `usda.getByID` reaches
+  // usda-api over a service binding whose internal work runs ~500ms-1s (see
+  // the abort ceiling in server/clients/usda.ts), and server-rendering it
+  // holds the whole document for that long. A skeleton that fills in beats a
+  // blank wait on a rarely-visited detail route.
+  ssr: false,
   loader: async ({ params, context }) => {
     const data = await context.queryClient.ensureQueryData(
       context.trpc.usda.getByID.queryOptions({ id: parseInt(params.id, 10) }),

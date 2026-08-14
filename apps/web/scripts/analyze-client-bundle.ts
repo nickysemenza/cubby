@@ -112,7 +112,16 @@ function formatKiB(bytes: number): string {
  * an ordinary top-level import of server code from shared client code would
  * silently ship the whole server to every visitor. This is the enforcement.
  */
-const SERVER_ONLY_MARKERS = ["unstable_localLink", "drizzle-orm", "HYPERDRIVE"];
+const SERVER_ONLY_MARKERS = [
+  // String literals, not identifiers — a minifier renames bindings but must
+  // preserve these verbatim, so they are the teeth of this check.
+  "No procedure found on path", // @trpc/server's router: the leak that matters
+  "drizzle-orm",
+  "HYPERDRIVE",
+  // An import binding, so a minifier could rename it. Kept as a cheap extra
+  // signal; never the only thing standing between the server and the client.
+  "unstable_localLink",
+];
 
 export function assertNoServerCodeInClient(assetsDir: string): void {
   const leaks: Array<string> = [];
