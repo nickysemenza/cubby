@@ -30,7 +30,7 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
   const canAnalyze = hasImages;
 
   return (
-    <Stack gap="md">
+    <Stack className="items-start" gap="md">
       <Button
         variant="outline"
         size="sm"

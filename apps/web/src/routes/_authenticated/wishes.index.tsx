@@ -39,7 +39,13 @@ export const Route = createFileRoute("/_authenticated/wishes/")({
 
 function WishesPage() {
   return (
-    <Page variant="list" entity="wish" title="Wishlist" fullWidth>
+    <Page
+      variant="list"
+      headerInToolbar
+      entity="wish"
+      title="Wishlist"
+      fullWidth
+    >
       <WishList />
     </Page>
   );

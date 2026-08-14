@@ -95,7 +95,10 @@ export function GalleryHeader({
         align="center"
         gap="sm"
         wrap
-        className="bg-background/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+        // Opaque paper surface + hairline rule, not glass: DESIGN.md's
+        // "Paper, Not Glass Rule" forbids translucency/blur on sticky chrome.
+        // Matches the sticky table header's treatment (Table.tsx).
+        className="bg-card px-4 py-2 shadow-[0_1px_0_var(--border)]"
       >
         {/* Search Input */}
         <div className="relative min-w-[180px] flex-1 md:max-w-xs">

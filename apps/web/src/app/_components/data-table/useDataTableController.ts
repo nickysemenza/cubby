@@ -69,6 +69,7 @@ export function useDataTableController<TItem>({
     [fetchNextPage, hasNextPage, isFetchingNextPage, isTransitioning],
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: tableContainerRef.current is read when the sentinel mounts; a ref mutation never re-renders, so listing it would be inert.
   const setDesktopInfiniteSentinel = useCallback(
     (sentinel: HTMLDivElement | null) => {
       desktopInfiniteObserverRef.current?.disconnect();
@@ -76,9 +77,14 @@ export function useDataTableController<TItem>({
       if (isMobile || !hasInfiniteScroll || isTransitioning || !sentinel)
         return;
 
+      // Root is the scroll pane, not the viewport: the rows scroll inside the
+      // pane, and against the default root the pane's overflow clip would hide
+      // the sentinel until it was actually on screen — defeating the 600px
+      // prefetch margin and stalling infinite scroll into a visible hitch.
       const observer = new IntersectionObserver(
         handleDesktopInfiniteIntersect,
         {
+          root: tableContainerRef.current,
           rootMargin: "600px",
         },
       );
@@ -103,13 +109,12 @@ export function useDataTableController<TItem>({
   // Desktop group detection (server trusts ordering)
   const groupedItems = useDesktopGroupedRows(rows, groupConfig, grouped);
 
-  // Window virtualization: body/toolbar refs + measurement, the virtualizer
+  // Pane virtualization: pane/toolbar refs + measurement, the virtualizer
   // instance, and the grouped-vs-flat index math.
   const {
     tableContainerRef,
-    toolbarRef,
-    toolbarHeight,
-    scrollMargin,
+    paneWrapperRef,
+    paneMaxHeight,
     virtualRows,
     totalSize,
     resolveIndex,
@@ -234,12 +239,11 @@ export function useDataTableController<TItem>({
     resolveIndex,
     rows,
     rowContentVersion,
-    scrollMargin,
     setDesktopInfiniteSentinel,
     styles,
     tableContainerRef,
-    toolbarHeight,
-    toolbarRef,
+    paneWrapperRef,
+    paneMaxHeight,
     totalSize,
     virtualRows,
   };

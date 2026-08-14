@@ -12,7 +12,7 @@ export const Route = createFileRoute("/_authenticated/recipes/")({
 
 function RecipesPage() {
   return (
-    <Page variant="list" title="Recipes" fullWidth>
+    <Page variant="list" headerInToolbar title="Recipes" fullWidth>
       <RecipeList
         actions={
           <>

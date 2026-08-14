@@ -74,7 +74,7 @@ export function IdentifyProductButton<
   }
 
   return (
-    <Stack gap="sm">
+    <Stack className="items-start" gap="sm">
       <Button
         type="button"
         variant="outline"

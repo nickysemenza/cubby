@@ -8,8 +8,10 @@ import {
 import { fireEvent, render, screen } from "@testing-library/react";
 import { type ReactNode, useMemo } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { formatCurrency } from "~/lib/utils";
 import {
   createActionsColumn,
+  createCurrencyColumn,
   createImageColumn,
   createParentLinkColumn,
 } from "./columnHelpers";
@@ -365,5 +367,56 @@ describe("createActionsColumn", () => {
 
     expect(screen.getByRole("link", { name: /View Details/ })).toBeVisible();
     expect(screen.queryByRole("button", { name: /Copy/ })).toBeNull();
+  });
+});
+
+type MoneyRow = { amount: number | null };
+
+const moneyColumn = (): ColumnDef<MoneyRow, number | null> =>
+  createCurrencyColumn(createColumnHelper<MoneyRow>(), "amount");
+
+// Only the steps a money column could plausibly land on. Widening this table
+// isn't the point of the test — pulling the real px value for whatever `w-*`
+// class ships is.
+const TAILWIND_WIDTH_PX: Record<string, number> = {
+  "w-16": 64,
+  "w-20": 80,
+  "w-24": 96,
+  "w-28": 112,
+  "w-32": 128,
+  "w-40": 160,
+};
+
+describe("createCurrencyColumn", () => {
+  it("declares a width wide enough for the widest formatted value", () => {
+    const className = moneyColumn().meta?.className ?? "";
+    const widthClass = className.split(" ").find((c) => c in TAILWIND_WIDTH_PX);
+    expect(widthClass).toBeDefined();
+    const widthPx = TAILWIND_WIDTH_PX[widthClass as string];
+
+    // Measured in-browser: "-$999,999.99" (the widest sign+dollar amount this
+    // column formats) renders at 128-144px in JetBrains Mono at the table's
+    // cell font size. The old w-20 default (80px) clipped it mid-digit with
+    // no ellipsis and no `title`, so a truncated number still looked complete.
+    expect(widthPx).toBeGreaterThanOrEqual(128);
+  });
+
+  it("clips overflow with an ellipsis instead of a hard clip", () => {
+    const className = moneyColumn().meta?.className ?? "";
+    expect(className).toContain("truncate");
+  });
+
+  it("carries the fully formatted value in a title attribute", () => {
+    renderColumn(moneyColumn(), { amount: -999999.99 });
+
+    const formatted = formatCurrency(-999999.99);
+    expect(screen.getByTitle(formatted)).toHaveTextContent(formatted);
+  });
+
+  it("omits the title for an empty cell", () => {
+    renderColumn(moneyColumn(), { amount: null });
+
+    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(document.querySelector("[title]")).toBeNull();
   });
 });

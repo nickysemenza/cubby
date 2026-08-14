@@ -216,7 +216,7 @@ export function MobileCardView<TItem>({
           data={row.original}
           title={`Debug Data - Row ${row.id}`}
           trigger={
-            <Button variant="ghost" size="icon-sm">
+            <Button variant="ghost" size="icon-sm" className="size-11">
               <Bug className="size-3" />
               <span className="sr-only">Debug row data</span>
             </Button>
@@ -235,6 +235,7 @@ export function MobileCardView<TItem>({
         // repeated down every row is decoration, not information, and it costs
         // the same 44px the real thumbnails use.
         imageSlot={model.imageSlot}
+        reserveImageSlot={model.reserveImageSlot}
         rightValues={model.rightValues}
         rightValueInteractive={model.rightValueInteractive}
         metaValues={model.metaValues}

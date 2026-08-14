@@ -23,6 +23,34 @@ const PageCountContext = createContext<
   ((count: number | undefined) => void) | null
 >(null);
 
+/**
+ * Page identity handed DOWN to a page-level table so its toolbar can carry the
+ * page's name, count and actions instead of a separate header block above it.
+ *
+ * Provided at render time rather than registered by the table in an effect: a
+ * table that claimed the header after paint would make the H1 appear and then
+ * vanish on every navigation. `headerInToolbar` is therefore the route's
+ * explicit statement, and the pages without a table keep their header.
+ */
+export interface PageIdentity {
+  title: ReactNode;
+  eyebrow?: ReactNode;
+  entity?: Entity;
+  count?: number;
+  actions?: ReactNode;
+}
+
+const PageIdentityContext = createContext<PageIdentity | null>(null);
+
+/**
+ * Read the page's identity from a page-level table's toolbar. `null` on an
+ * embedded table, on a page whose route did not opt in, and outside `<Page>` —
+ * every consumer must treat that as "render no identity".
+ */
+export function usePageIdentity(): PageIdentity | null {
+  return useContext(PageIdentityContext);
+}
+
 /** Detail-only context keeps shared body sections aware of their owner. */
 const PageDetailContext = createContext<
   { entity: Entity; rawData: unknown } | undefined
@@ -66,6 +94,15 @@ interface PageListProps extends PageBaseProps {
   entity?: Entity;
   compact?: boolean;
   decoration?: "accent" | "none";
+  /**
+   * Fold the page header into the body's table toolbar: no header block is
+   * rendered, and the title, eyebrow, count and actions travel down through
+   * {@link PageIdentityContext} for the toolbar to lay out on one bar.
+   *
+   * Only for a page whose body owns a page-level table — a page without one
+   * would render no identity at all.
+   */
+  headerInToolbar?: boolean;
 }
 
 interface PageDetailProps extends PageBaseProps {
@@ -104,46 +141,54 @@ export function Page(props: PageProps) {
   // Reported by a descendant list via usePageCount; undefined until a client
   // effect fires (or on pages with no list, or non-list variants).
   const [count, setCount] = useState<number | undefined>(undefined);
+  const headerInToolbar = list?.headerInToolbar === true;
+  const identity: PageIdentity | null = headerInToolbar
+    ? { title, eyebrow, entity, count, actions }
+    : null;
   return (
     <PageWrapper fullWidth={fullWidth}>
       <div className={variant === "detail" ? "space-y-2" : undefined}>
-        <PageHeader
-          variant={variant}
-          title={title}
-          eyebrow={eyebrow}
-          entity={entity}
-          actions={actions}
-          compact={list?.compact}
-          decoration={list?.decoration}
-          heroStamp={detail?.heroStamp}
-          heroStats={detail?.heroStats}
-          heroNo={detail?.heroNo}
-          heroImages={detail?.heroImages}
-          rawData={detail?.rawData}
-          count={variant === "list" ? count : undefined}
-        />
-        <PageDetailContext.Provider
-          value={
-            detail
-              ? { entity: detail.entity, rawData: detail.rawData }
-              : undefined
-          }
-        >
-          <PageCountContext.Provider value={setCount}>
-            <Suspense fallback={<ListLoadingSkeleton />}>
-              {/* List pages that render several top-level regions (the home
+        {!headerInToolbar && (
+          <PageHeader
+            variant={variant}
+            title={title}
+            eyebrow={eyebrow}
+            entity={entity}
+            actions={actions}
+            compact={list?.compact}
+            decoration={list?.decoration}
+            heroStamp={detail?.heroStamp}
+            heroStats={detail?.heroStats}
+            heroNo={detail?.heroNo}
+            heroImages={detail?.heroImages}
+            rawData={detail?.rawData}
+            count={variant === "list" ? count : undefined}
+          />
+        )}
+        <PageIdentityContext.Provider value={identity}>
+          <PageDetailContext.Provider
+            value={
+              detail
+                ? { entity: detail.entity, rawData: detail.rawData }
+                : undefined
+            }
+          >
+            <PageCountContext.Provider value={setCount}>
+              <Suspense fallback={<ListLoadingSkeleton />}>
+                {/* List pages that render several top-level regions (the home
                   dashboard) previously stacked them flush — every region
                   boundary measured 0px, so five separate arguments read as one
                   run-on sentence. DESIGN.md reserves the 2rem step for major
                   region clearance. A no-op for the usual single-child list
                   page, which is why this sits on the children and not on the
                   wrapper the header shares. */}
-              <div className={variant === "list" ? "space-y-8" : undefined}>
-                {children}
-              </div>
-            </Suspense>
-          </PageCountContext.Provider>
-        </PageDetailContext.Provider>
+                <div className={variant === "list" ? "space-y-8" : undefined}>
+                  {children}
+                </div>
+              </Suspense>
+            </PageCountContext.Provider>
+          </PageDetailContext.Provider>
+        </PageIdentityContext.Provider>
       </div>
     </PageWrapper>
   );

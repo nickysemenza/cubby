@@ -23,7 +23,13 @@ export const Route = createFileRoute("/_authenticated/search/")({
 function SearchPageRoute() {
   const search = Route.useSearch();
   return (
-    <Page variant="list" title="Search" compact decoration="none">
+    <Page
+      variant="list"
+      headerInToolbar
+      title="Search"
+      compact
+      decoration="none"
+    >
       <SearchPage
         query={search.q}
         type={(search.type ?? "all") as SearchType}

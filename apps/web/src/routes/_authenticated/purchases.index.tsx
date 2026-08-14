@@ -64,6 +64,7 @@ function PurchasesPage() {
   return (
     <Page
       variant="list"
+      headerInToolbar
       title="Purchases"
       fullWidth
       actions={<CreateDialogAction Dialog={CreatePurchaseDialog} />}

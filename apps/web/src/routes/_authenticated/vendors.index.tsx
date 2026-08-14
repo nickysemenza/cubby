@@ -44,6 +44,7 @@ function VendorsPage() {
   return (
     <Page
       variant="list"
+      headerInToolbar
       title="Vendors"
       fullWidth
       actions={

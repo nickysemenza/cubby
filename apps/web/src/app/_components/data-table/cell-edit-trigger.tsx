@@ -111,7 +111,7 @@ export function CellEditTrigger({
         // `select-none` replaces what <button> gave for free: double-click is
         // the edit gesture in cell-selection mode, and on a selectable span it
         // would paint a native word selection under the editor.
-        "group inline-flex select-none items-center gap-1 rounded px-2 py-1 text-left hover:bg-muted",
+        "group inline-flex select-none items-center gap-1 px-2 py-1 text-left hover:bg-muted",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         "data-[clipboard-flash]:ring-2 data-[clipboard-flash]:ring-ring",
         className,

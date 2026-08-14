@@ -64,7 +64,9 @@ export function BulkActionBar<TData>({
     <LayoutRow
       align="center"
       gap="sm"
-      className="rounded-md bg-primary/10 px-4 py-2"
+      // Square, paper-and-rule surface (hairline border + Paper Surface tone)
+      // — the ledger has no rounded, tinted slabs.
+      className="border bg-card px-4 py-2"
     >
       <span className="font-medium text-sm">{selectedCount} selected</span>
 
@@ -89,7 +91,12 @@ export function BulkActionBar<TData>({
         {actions.map((action) => (
           <Button
             key={action.id}
-            variant="ghost"
+            // `BulkAction` (bulk-actions.types.ts) has no `destructive` flag,
+            // and every destructive bulk action in the app is minted by
+            // useOptimisticDelete with this fixed id — the one place that
+            // mints a second destructive action would need a real flag on
+            // the type instead of this convention.
+            variant={action.id === "delete" ? "destructive" : "ghost"}
             size="sm"
             onClick={() => handleActionClick(action)}
             disabled={disabled || isExecuting}

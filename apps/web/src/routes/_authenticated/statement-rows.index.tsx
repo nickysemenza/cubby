@@ -46,6 +46,7 @@ export const Route = createFileRoute("/_authenticated/statement-rows/")({
   component: () => (
     <Page
       variant="list"
+      headerInToolbar
       title="Statement Rows"
       fullWidth
       compact

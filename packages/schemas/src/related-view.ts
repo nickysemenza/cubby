@@ -51,7 +51,12 @@ export const relatedViewRegistry = [
     source: "product",
     target: "vendor",
     label: "Vendors",
-    defaultVisible: true,
+    // Off by default: each of these relational previews is a wide column that
+    // renders the no-value placeholder on most products, and three of them
+    // together spent ~768px of a 1280px viewport — the single largest cause of
+    // the products list scrolling sideways. Reachable from the View menu for
+    // the rows that do have them.
+    defaultVisible: false,
     order: "alphabetical",
     path: [
       inc("Expense.productId"),
@@ -65,7 +70,12 @@ export const relatedViewRegistry = [
     source: "product",
     target: "project",
     label: "Projects",
-    defaultVisible: true,
+    // Off by default: each of these relational previews is a wide column that
+    // renders the no-value placeholder on most products, and three of them
+    // together spent ~768px of a 1280px viewport — the single largest cause of
+    // the products list scrolling sideways. Reachable from the View menu for
+    // the rows that do have them.
+    defaultVisible: false,
     order: "alphabetical",
     path: [inc("Expense.productId"), out("Expense.projectId")],
     inverseKey: "project.purchasedProducts",
@@ -75,7 +85,12 @@ export const relatedViewRegistry = [
     source: "product",
     target: "project",
     label: "Used on projects",
-    defaultVisible: true,
+    // Off by default: each of these relational previews is a wide column that
+    // renders the no-value placeholder on most products, and three of them
+    // together spent ~768px of a 1280px viewport — the single largest cause of
+    // the products list scrolling sideways. Reachable from the View menu for
+    // the rows that do have them.
+    defaultVisible: false,
     order: "alphabetical",
     path: [
       inc("ProjectToolUsage.productId"),

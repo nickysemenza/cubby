@@ -1,14 +1,17 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { Table as ITable } from "@tanstack/react-table";
 import { LayoutList, List } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useRef } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skeleton";
 import { Button } from "~/components/ui/button";
 import { PullToRefresh } from "~/components/ui/pull-to-refresh";
+import { useHydrated } from "~/hooks/useHydrated";
+import { cn } from "~/lib/utils";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { DataTableToolbar } from "./data-table-toolbar";
 import { MobileCardView } from "./MobileCardView";
+import { MobileSortSheet } from "./MobileSortSheet";
 import type { GroupConfig } from "./useGroupedList";
 import { mobileListShape } from "./useMobileListModel";
 
@@ -54,12 +57,20 @@ export function MobileListScreen<TItem>({
   isTransitioning = false,
   rowContentVersion,
 }: MobileListScreenProps<TItem>) {
+  const listRef = useRef<HTMLDivElement>(null);
+  // `useIsMobile` reports false until hydration (its server snapshot has to, to
+  // keep SSR markup stable), so before that the only mobile-correct thing this
+  // component can render is the shape of the list to come — see the `md:hidden`
+  // gate below, which is what keeps it off desktop while JS is still catching
+  // up. Without it a phone's first paint is a clipped desktop table.
+  const hydrated = useHydrated();
+
   const groupToggle =
     groupConfig && onGroupedChange ? (
       <Button
         variant="ghost"
         size="icon-lg"
-        className="shrink-0"
+        className="size-11 shrink-0"
         onClick={() => onGroupedChange(!grouped)}
         aria-label={grouped ? "Show flat list" : "Show grouped list"}
       >
@@ -81,7 +92,16 @@ export function MobileListScreen<TItem>({
   );
 
   return (
-    <div className="overflow-x-hidden lg:hidden">
+    <div
+      ref={listRef}
+      className={cn(
+        "overflow-x-hidden lg:hidden",
+        // Pre-hydration this renders on EVERY viewport (the desktop path is
+        // still the JS default), so the breakpoint — not `useIsMobile` — has to
+        // be what hides it from desktop for that one pass.
+        !hydrated && "md:hidden",
+      )}
+    >
       <DataTableToolbar
         table={table}
         additionalContent={toolbarContent}
@@ -92,7 +112,7 @@ export function MobileListScreen<TItem>({
         isTransitioning={isTransitioning}
       />
 
-      {isLoading ? (
+      {isLoading || !hydrated ? (
         <MobileCardSkeletonList {...mobileListShape(table)} />
       ) : error ? (
         <div className="py-6">
@@ -124,6 +144,14 @@ export function MobileListScreen<TItem>({
           );
         })()
       )}
+
+      {/* After the list, so the trigger is the last thing in tab order rather
+          than something a keyboard user crosses on the way into the rows. */}
+      <MobileSortSheet
+        table={table}
+        listRef={listRef}
+        disabled={isLoading || !hydrated || Boolean(error) || isTransitioning}
+      />
     </div>
   );
 }

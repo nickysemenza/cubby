@@ -1,7 +1,4 @@
-import {
-  useWindowVirtualizer,
-  type VirtualItem,
-} from "@tanstack/react-virtual";
+import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 // Estimated height for section headers (smaller than data rows).
@@ -104,14 +101,15 @@ interface UseTableVirtualizerArgs {
 }
 
 interface UseTableVirtualizerResult {
-  /** Anchor for the table body; supplies the virtualizer's scrollMargin. */
+  /** The scroll pane the virtualizer measures and the rows scroll inside. */
   tableContainerRef: React.RefObject<HTMLDivElement | null>;
-  /** Sticky-toolbar measurement target (its height shifts the body down). */
-  toolbarRef: React.RefObject<HTMLDivElement | null>;
-  /** Measured sticky-toolbar height. */
-  toolbarHeight: number;
-  /** Document-top offset of the table body, used as scrollMargin. */
-  scrollMargin: number;
+  /** The bordered wrapper the pane is bounded inside. */
+  paneWrapperRef: React.RefObject<HTMLDivElement | null>;
+  /**
+   * Pixel ceiling for the pane so it ends at the bottom of the viewport, or
+   * null before the first measurement (and on mobile).
+   */
+  paneMaxHeight: number | null;
   /** Currently virtualized rows. */
   virtualRows: VirtualItem[];
   /** Total scroll height the spacer rows must fill. */
@@ -125,10 +123,15 @@ interface UseTableVirtualizerResult {
 }
 
 /**
- * Owns the window-virtualizer setup for the desktop data table: body/toolbar
- * refs, document-offset (scrollMargin) and toolbar-height measurement, the
- * virtualizer instance, and the grouped-vs-flat index math. Pure mechanical
- * extraction from `Table.tsx` — no behavior change.
+ * Owns the virtualizer setup for the desktop data table: pane/toolbar refs,
+ * toolbar-height measurement, the virtualizer instance, and the grouped-vs-flat
+ * index math.
+ *
+ * The rows scroll inside the table's own pane, not the window. That is what
+ * lets the column header stay put on a HORIZONTAL scroll (a window-scrolled
+ * table drags the whole page sideways, taking the nav rail and header with it)
+ * — and it also removes the document-offset bookkeeping window virtualization
+ * needs, since the pane's own scrollTop is already the right origin.
  */
 export function useTableVirtualizer({
   rowCount,
@@ -141,70 +144,34 @@ export function useTableVirtualizer({
   // Ref for virtualization scroll container
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
-  // The list scrolls with the whole page (window virtualization), so the
-  // virtualizer needs the table body's distance from the top of the document as
-  // its scrollMargin. Re-measured on resize and whenever the toolbar height
-  // changes (the toolbar sits above the body, so it shifts the body down).
-  const [scrollMargin, setScrollMargin] = useState(0);
-
-  // The sticky column header pins *below* the sticky toolbar, whose height is
-  // dynamic (filter row, bulk-action bar). Measure it so the header's sticky
-  // offset tracks it instead of using a hardcoded value.
-  const toolbarRef = useRef<HTMLDivElement>(null);
-  const [toolbarHeight, setToolbarHeight] = useState(0);
+  // The pane is bounded to whatever is left of the viewport beneath it, so the
+  // rows scroll inside the table instead of the page. Measured from the
+  // wrapper's own top rather than a hardcoded chrome height, because the page
+  // header above it differs per route. No scroll listener is needed: once the
+  // pane fits the viewport the page itself stops scrolling, so this offset only
+  // moves on resize.
+  const paneWrapperRef = useRef<HTMLDivElement>(null);
+  const [paneMaxHeight, setPaneMaxHeight] = useState<number | null>(null);
 
   useEffect(() => {
-    const el = toolbarRef.current;
-    if (!el || isMobile) return;
-    setToolbarHeight(el.offsetHeight);
-    const ro = new ResizeObserver(() => setToolbarHeight(el.offsetHeight));
+    if (isMobile) return;
+    const el = paneWrapperRef.current;
+    if (!el) return;
+    const measure = () => {
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      // A floor keeps the table usable on a short viewport (or a tall page
+      // header) instead of collapsing to a couple of rows.
+      setPaneMaxHeight(Math.max(320, Math.round(window.innerHeight - top - 8)));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    return () => ro.disconnect();
-  }, [isMobile]);
-
-  const measureScrollMargin = useCallback(() => {
-    const el = tableContainerRef.current;
-    if (!el || isMobile) return;
-    // Round away sub-pixel noise from browser zoom. The table's document
-    // offset is stable while scrolling, so a fractional wobble must not drive
-    // a render on every scroll frame.
-    const next = Math.round(el.getBoundingClientRect().top + window.scrollY);
-    setScrollMargin((current) => (current === next ? current : next));
-  }, [isMobile]);
-
-  // A lower table can be pushed down after it has mounted when an async table
-  // above it replaces a loading row with its real virtualized height. Watching
-  // only this element (or window resize) misses that position-only layout
-  // shift, so observe the document body and remeasure on the next frame. The
-  // scroll listener is a fallback for offset changes that preserve the body's
-  // total height (for example, one preceding section grows while another
-  // shrinks).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: rowCount and toolbarHeight deliberately retrigger the document-offset measurement after this table's own async layout changes.
-  useEffect(() => {
-    const el = tableContainerRef.current;
-    if (!el || isMobile) return;
-    let frame: number | null = null;
-    const scheduleMeasure = () => {
-      if (frame !== null) return;
-      frame = requestAnimationFrame(() => {
-        frame = null;
-        measureScrollMargin();
-      });
-    };
-
-    measureScrollMargin();
-    window.addEventListener("resize", scheduleMeasure);
-    window.addEventListener("scroll", scheduleMeasure, { passive: true });
-    const bodyObserver = new ResizeObserver(scheduleMeasure);
-    bodyObserver.observe(document.body);
-
     return () => {
-      window.removeEventListener("resize", scheduleMeasure);
-      window.removeEventListener("scroll", scheduleMeasure);
-      bodyObserver.disconnect();
-      if (frame !== null) cancelAnimationFrame(frame);
+      window.removeEventListener("resize", measure);
+      ro.disconnect();
     };
-  }, [isMobile, measureScrollMargin, rowCount, toolbarHeight]);
+  }, [isMobile]);
 
   // Always virtualize for consistent rendering
   const baseCount = groupedItems ? groupedItems.length : rowCount;
@@ -219,7 +186,8 @@ export function useTableVirtualizer({
       tableVirtualItemKey(index, rowKeys, groupedItems, trailingSentinel),
     [groupedItems, rowKeys, trailingSentinel],
   );
-  const rowVirtualizer = useWindowVirtualizer({
+  const rowVirtualizer = useVirtualizer({
+    getScrollElement: () => tableContainerRef.current,
     count: virtualizerCount,
     getItemKey,
     estimateSize: (index) => {
@@ -232,7 +200,6 @@ export function useTableVirtualizer({
       return rowHeight;
     },
     overscan,
-    scrollMargin,
   });
 
   const virtualRows = rowVirtualizer.getVirtualItems();
@@ -240,9 +207,8 @@ export function useTableVirtualizer({
 
   return {
     tableContainerRef,
-    toolbarRef,
-    toolbarHeight,
-    scrollMargin,
+    paneWrapperRef,
+    paneMaxHeight,
     virtualRows,
     totalSize,
     resolveIndex: (index) =>

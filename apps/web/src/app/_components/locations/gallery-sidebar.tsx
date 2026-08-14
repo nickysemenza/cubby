@@ -264,8 +264,18 @@ function SidebarTreeNode({
           <button
             type="button"
             onClick={handleExpandClick}
+            // Only real toggles (hasChildren) get a name/state; leaf-node
+            // buttons stay unlabeled — they're `invisible` (visibility:
+            // hidden), which already drops them from the tab order, so
+            // labeling them would just add noise to the a11y tree.
+            aria-label={
+              hasChildren
+                ? `${isExpanded ? "Collapse" : "Expand"} ${location.name}`
+                : undefined
+            }
+            aria-expanded={hasChildren ? isExpanded : undefined}
             className={cn(
-              "flex size-5 items-center justify-center rounded transition-transform duration-150 hover:bg-muted-foreground/20",
+              "flex size-5 items-center justify-center transition-transform duration-150 hover:bg-muted-foreground/20",
               !hasChildren && "invisible",
               isExpanded && "rotate-0",
             )}

@@ -50,12 +50,6 @@ import { useDataTableController } from "./useDataTableController";
 import type { GroupConfig } from "./useGroupedList";
 import { useTableColumnSizing } from "./useTableColumnSizing";
 
-// Sticky top nav height: the h-12 (48px) nav bar + its 3px ink bottom-rule =
-// 51px (see __root.tsx). The sticky toolbar pins flush below it; if these drift
-// apart a sliver of scrolled rows peeks through the seam. Keep `top-[51px]` on
-// the toolbar in sync with this constant.
-const NAV_HEIGHT = 51;
-
 // Faint row guides every `rowHeight` px so the virtualized spacer (the gap the
 // renderer hasn't filled yet on a fast scroll) reads as empty table rows
 // instead of stark white. Uses the table's border token at low alpha; no
@@ -193,15 +187,14 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     isFetchingNextPage,
     isTransitioning,
     isMobile,
+    paneWrapperRef,
+    paneMaxHeight,
     resolveIndex,
     rows,
     rowContentVersion,
-    scrollMargin,
     setDesktopInfiniteSentinel,
     styles,
     tableContainerRef,
-    toolbarHeight,
-    toolbarRef,
     totalSize,
     virtualRows,
   } = useDataTableController({
@@ -230,25 +223,21 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     );
   const showPagination = !embedded || table.getPageCount() > 1;
 
-  const renderStatusRow = (content: ReactNode, height = "h-16") => (
-    <TableRow>
-      <TableCell colSpan={colSpan} className={cn("text-center", height)}>
-        {content}
-      </TableCell>
-    </TableRow>
-  );
+  // Loading / error / empty content, or null when real rows should render.
+  //
+  // This deliberately does NOT render inside a `<td colSpan>`. A full-width
+  // cell is as wide as the table's SCROLL width, so `text-center` centres
+  // against ~2288px on a wide list and lands the headline — and the only
+  // "Clear filters" escape from a zero-result dead end — past the right edge
+  // of a 1280px viewport. Status is page state, not row data, so it renders as
+  // a block outside the table where the container's width bounds it.
+  const renderStatusContent = (): ReactNode => {
+    if (isLoading || !hydrated) return <SimpleLoading />;
 
-  const renderTableBody = () => {
-    if (isLoading || !hydrated) {
-      return renderStatusRow(<SimpleLoading />);
-    }
-
-    if (error) {
-      return renderStatusRow(<ErrorDisplay error={error} />);
-    }
+    if (error) return <ErrorDisplay error={error} />;
 
     if (!rows.length) {
-      if (emptyState) return renderStatusRow(emptyState, "h-24");
+      if (emptyState) return emptyState;
       const state = table.getState();
       // Narrowed-ness and clearability part ways when a URL-only scope is on:
       // the copy must say "no matches", but only column filters are resettable
@@ -259,7 +248,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
             table.resetColumnFilters();
           }
         : undefined;
-      const emptyContent = entity ? (
+      return entity ? (
         <EntityEmptyState
           entity={entity}
           isFiltered={isFiltered}
@@ -273,12 +262,20 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           onClearFilters={clearFilters}
         />
       );
-      return renderStatusRow(emptyContent, "h-24");
     }
 
+    return null;
+  };
+
+  const statusContent = renderStatusContent();
+
+  const renderTableBody = () => {
+    // Status is rendered as a block below the table (see renderStatusContent),
+    // so the body stays empty rather than holding a full-scroll-width cell.
+    if (statusContent !== null) return null;
+
     // Always use virtualized rendering for consistent behavior
-    const topSpacerHeight =
-      virtualRows.length > 0 ? virtualRows[0]!.start - scrollMargin : 0;
+    const topSpacerHeight = virtualRows.length > 0 ? virtualRows[0]!.start : 0;
     const bottomSpacerHeight =
       virtualRows.length > 0
         ? Math.max(
@@ -292,9 +289,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
     return (
       <>
-        {/* Top padding row for scroll position. Window-virtualizer offsets are
-            measured from the document top, so subtract the table's scrollMargin
-            to get the gap within the table body. */}
+        {/* Top padding row for scroll position. Offsets are relative to the
+            table's own scroll pane, so `start` is already the gap. */}
         {topSpacerHeight > 0 && (
           <tr>
             <td
@@ -412,33 +408,47 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
       {!isMobile && (
         <CellSelectionContext.Provider value={cellSelectionEnabled}>
           <div
-            className="border border-[var(--border)]"
+            ref={paneWrapperRef}
+            // `hidden md:flex` rather than JS alone: before hydration
+            // `useIsMobile` must report false (the server has no viewport), so
+            // both branches render on that first pass and the breakpoint — not
+            // JS — decides. Without it a phone paints the clipped desktop
+            // table under the mobile skeleton until hydration flips.
+            //
+            // A bounded flex column: toolbar and pager are fixed-height ends and
+            // the pane between them takes the rest, so both stay on screen
+            // without `position: sticky` and the rows scroll inside the table.
+            className={cn(
+              "hidden flex-col border-[var(--border)] md:flex",
+              // A page-level table now sits flush against the rail and the
+              // command header (the shell spends no gutter), so its own left
+              // and top borders would double the rail's border and the
+              // header's 3px ink rule. Drop them and let the page chrome BE
+              // the table's edge; an embedded table floats in a section and
+              // still needs all four.
+              embedded ? "border" : "border-r border-b",
+            )}
             style={
               {
                 ...(entity ? { "--row-accent": ENTITY_ACCENTS[entity] } : {}),
-                // Header pins below the nav + the (dynamic) sticky toolbar.
-                // Embedded tables aren't sticky at all, so the var is moot.
-                ...(embedded
-                  ? {}
-                  : {
-                      "--table-header-top": `${NAV_HEIGHT + toolbarHeight}px`,
-                    }),
+                // Embedded tables sit in a scrolling detail page, so they take a
+                // fixed ceiling instead of claiming the rest of the viewport.
+                maxHeight: embedded
+                  ? "60vh"
+                  : paneMaxHeight != null
+                    ? `${paneMaxHeight}px`
+                    : undefined,
               } as React.CSSProperties
             }
           >
-            {/* Sticky toolbar — pins just below the top nav. Holds view options,
+            {/* Toolbar — the column's fixed top end. Holds view options,
               filters reset, the bulk-action bar, and a page-size control. */}
             {showToolbar && (
-              <div
-                ref={toolbarRef}
-                className={cn(
-                  "border-border border-b bg-background",
-                  !embedded && "sticky top-[51px] z-40",
-                )}
-              >
+              <div className="shrink-0 border-border border-b bg-background">
                 <DataTableToolbar
                   table={table}
                   entity={entity}
+                  ownsPageIdentity={!embedded}
                   onResetColumnWidths={
                     resetAllColumnSizes && Object.keys(columnSizing).length > 0
                       ? resetAllColumnSizes
@@ -480,13 +490,19 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               </div>
             )}
 
-            {/* Table wrapper. No longer scrolls (the window does) — kept as the
-              scrollMargin anchor and the focus target for keyboard cell nav.
+            {/* The scroll pane: the virtualizer's scroll element, the focus
+              target for keyboard cell nav, and the box the rows scroll inside
+              on BOTH axes. Scrolling here rather than on the window is what
+              keeps the nav rail, page header, toolbar and column header in
+              place when a wide table is scrolled sideways.
+              `min-h-0` is required — a flex child's default `min-height: auto`
+              refuses to shrink below its content, which would push the pane
+              past the wrapper's ceiling and hand the scroll back to the page.
               Cell selection (keyboard + mouse) is wired via containerProps;
               data-[cell-dragging] suppresses native text selection mid-drag. */}
             <div
               ref={tableContainerRef}
-              className="outline-none data-[cell-dragging]:select-none"
+              className="min-h-0 flex-1 overflow-auto outline-none data-[cell-dragging]:select-none"
               // biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard cell navigation requires focusable container
               tabIndex={0}
               {...cellSelectionContainerProps}
@@ -495,23 +511,14 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                 aria-label={ariaLabel}
                 aria-busy={isTransitioning}
                 className={cn(styles.table)}
-                // Page-level tables must not clip their sticky header, so they
-                // keep `overflow-visible` and let the window scroll. An
-                // embedded table's header isn't sticky and its host is often a
-                // narrow aside card, so it keeps the primitive's own
-                // `overflow-x-auto`: declared column widths that exceed the
-                // card then scroll inside it instead of being cut off.
-                containerClassName={embedded ? undefined : "overflow-visible"}
+                // The pane above owns scrolling for both axes; the primitive's
+                // own `overflow-x-auto` here would nest a second scroller and
+                // re-bind the sticky header to it.
+                containerClassName="overflow-visible"
               >
-                <TableHeader
-                  className={cn(
-                    "bg-card shadow-[0_1px_0_var(--border)] [&_th]:bg-card [&_tr]:border-b-0",
-                    !embedded && "sticky z-30",
-                  )}
-                  style={
-                    embedded ? undefined : { top: "var(--table-header-top)" }
-                  }
-                >
+                {/* Sticks to the pane's own top, so there is no offset to keep
+                  in sync with the nav and toolbar heights. */}
+                <TableHeader className="sticky top-0 z-30 bg-card shadow-[0_1px_0_var(--border)] [&_th]:bg-card [&_tr]:border-b-0">
                   {table.getHeaderGroups().map((headerGroup) => {
                     // Check if any column has a filter config
                     const hasAnyFilters = headerGroup.headers.some(
@@ -668,6 +675,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                           <TableHead
                             data-spacer
                             aria-hidden
+                            scope={undefined}
                             className={cn(styles.header, "w-0")}
                           />
                         </TableRow>
@@ -685,6 +693,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                               return (
                                 <TableHead
                                   key={`${header.id}-filter`}
+                                  scope={undefined}
                                   colSpan={header.colSpan}
                                   className={cn(
                                     header.column.columnDef.meta?.className,
@@ -701,11 +710,15 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                               );
                             })}
                             {isDebugEnabled && (
-                              <TableHead className={cn(styles.filterRow)} />
+                              <TableHead
+                                scope={undefined}
+                                className={cn(styles.filterRow)}
+                              />
                             )}
                             <TableHead
                               data-spacer
                               aria-hidden
+                              scope={undefined}
                               className={styles.filterRow}
                             />
                           </TableRow>
@@ -762,13 +775,34 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                     );
                   })()}
               </Table>
+              {/* Status block. Sits outside <table> so its width is the
+                container's, not the table's scroll width — that is what keeps
+                the empty state's "Clear filters" reachable on a list wide
+                enough to scroll. `sticky left-0` holds it in view if the page
+                is already scrolled right when the rows empty out. */}
+              {statusContent !== null && (
+                <div className="sticky left-0 flex min-h-24 w-full items-center justify-center overflow-hidden px-2 py-4">
+                  {statusContent}
+                </div>
+              )}
             </div>
+
+            {/* The column's fixed bottom end. Page-size and page nav stay put
+              while the pane scrolls between the two ends, so neither needs
+              `position: sticky` to stay reachable. */}
+            {!infiniteScroll && showPagination && (
+              <div className="shrink-0 border-[var(--border)] border-t bg-background px-2 py-1">
+                <DataTablePagination table={table} timing={timing} />
+              </div>
+            )}
           </div>
         </CellSelectionContext.Provider>
       )}
 
-      {/* Mobile List View */}
-      {isMobile && (
+      {/* Mobile List View. Also rendered pre-hydration (see the desktop
+          wrapper's breakpoint comment) so a phone's first paint is the
+          shape-matched skeleton rather than a clipped desktop table. */}
+      {(isMobile || !hydrated) && (
         <MobileListScreen
           table={table}
           entity={entity}
@@ -785,19 +819,6 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           isTransitioning={isTransitioning}
           rowContentVersion={rowContentVersion}
         />
-      )}
-
-      {/* Desktop: persistent pagination/status bar pinned to the viewport
-          bottom (page-size + page nav stay reachable without scrolling). */}
-      {!isMobile && !infiniteScroll && showPagination && (
-        <div
-          className={cn(
-            "border-[var(--border)] border-t bg-background px-2 py-1",
-            !embedded && "sticky bottom-0 z-30",
-          )}
-        >
-          <DataTablePagination table={table} timing={timing} />
-        </div>
       )}
 
       {/* Mobile keeps the inline pager, hidden when infinite scroll is active */}

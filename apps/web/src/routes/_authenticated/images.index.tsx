@@ -12,7 +12,7 @@ export const Route = createFileRoute("/_authenticated/images/")({
 
 function ImagesPage() {
   return (
-    <Page variant="list" title="Images" fullWidth>
+    <Page variant="list" headerInToolbar title="Images" fullWidth>
       <Suspense fallback={<SimpleLoading text="Loading images..." />}>
         <ImageList />
       </Suspense>

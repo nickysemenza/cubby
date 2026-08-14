@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import {
+  type Column,
   flexRender,
   type Table as ITable,
   type Row,
@@ -57,6 +58,16 @@ export interface MobileListRowModel<TItem> {
    */
   metaValues: MobileMetaValue[];
   detailsHref?: string;
+  /**
+   * Whether the row renders a thumbnail gutter even with no image.
+   *
+   * Decided per LIST, not per row: in a list whose table has an image column,
+   * every card reserves the 44px slot so every title starts on the same left
+   * edge. A row-by-row decision put consecutive titles at two different x's,
+   * which is what makes a long list unscannable. Lists with no image column
+   * reserve nothing — there is no scan line to keep.
+   */
+  reserveImageSlot: boolean;
 }
 
 /** `costType` → `Cost Type`. Fallback when a column's header isn't a string. */
@@ -65,6 +76,21 @@ function humanizeColumnId(colId: string): string {
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/[_-]+/g, " ")
     .replace(/^./, (c) => c.toUpperCase());
+}
+
+/**
+ * The name a column goes by on a phone: the spec grid's gutter label and the
+ * sort sheet's option label. Shared so a column can't be called two different
+ * things by the two surfaces.
+ */
+export function mobileColumnLabel<TItem>(
+  column: Column<TItem, unknown>,
+): string {
+  const meta = column.columnDef.meta as MobileCellMeta | undefined;
+  const header = column.columnDef.header;
+  if (meta?.mobile?.label) return meta.mobile.label;
+  if (typeof header === "string" && header.trim().length > 0) return header;
+  return humanizeColumnId(column.id);
 }
 
 /**
@@ -84,14 +110,48 @@ function isEmptyCellValue(value: unknown): boolean {
   return false;
 }
 
-function hasRenderableContent(content: ReactNode): boolean {
-  if (content === null || content === undefined) return false;
-  if (typeof content === "string") {
-    const trimmed = content.trim();
-    return trimmed !== "" && trimmed !== "—";
+/**
+ * How deep the blank walk descends before giving up and calling a node
+ * renderable. Bounded because a cell's element tree is caller-supplied and a
+ * pathological one would otherwise be walked per cell, per row, per render.
+ */
+const BLANK_WALK_DEPTH = 4;
+
+/**
+ * Whether a rendered cell says nothing — the em-dash "no value" placeholder,
+ * an empty string, or `NoneValue`.
+ *
+ * The walk into children is what makes this useful: cells rarely return a bare
+ * `<NoneValue />`, they return it wrapped (a tooltip, a link column's span, an
+ * editable cell's display shell). A top-level-only check let those through, so
+ * a card spent a full 30px labeled spec row stating that a field is empty —
+ * which is the opposite of the card's job, and why a list of thousands fit two
+ * records per screen. An element whose children prop is absent is treated as
+ * renderable: its output is a component's business, not ours to guess.
+ */
+function isBlankNode(node: ReactNode, depth = 0): boolean {
+  if (node === null || node === undefined || node === false || node === true) {
+    return true;
   }
-  if (isValidElement(content) && content.type === NoneValue) return false;
-  return true;
+  if (typeof node === "string") {
+    const trimmed = node.trim();
+    return trimmed === "" || trimmed === "—" || trimmed === "–";
+  }
+  if (typeof node === "number") return false;
+  if (Array.isArray(node))
+    return node.every((child) => isBlankNode(child, depth));
+  if (isValidElement(node)) {
+    if (node.type === NoneValue) return true;
+    if (depth >= BLANK_WALK_DEPTH) return false;
+    const { children } = node.props as { children?: ReactNode };
+    if (children === undefined) return false;
+    return isBlankNode(children, depth + 1);
+  }
+  return false;
+}
+
+function hasRenderableContent(content: ReactNode): boolean {
+  return !isBlankNode(content);
 }
 
 /** Whether a row carries a real image, vs. the cell's placeholder glyph. */
@@ -151,6 +211,8 @@ export function useMobileListModel<TItem>({
 }): MobileListRowModel<TItem>[] {
   const rows = table.getRowModel().rows;
   const basePath = entity ? entities[entity].basePath : undefined;
+  // Per-list, not per-row: see `MobileListRowModel.reserveImageSlot`.
+  const reserveImageSlot = mobileListShape(table).hasImage;
 
   return useMemo(
     () =>
@@ -216,15 +278,7 @@ export function useMobileListModel<TItem>({
 
           const priority = getPriority(meta, 50);
           const interactive = meta?.mobile?.interactive;
-          // The spec grid's gutter is much narrower than a desktop header
-          // cell, so an explicit `mobile.label` wins; otherwise reuse the
-          // column's own string header (every meta column that matters has
-          // one) and fall back to humanizing the id.
-          const header = cell.column.columnDef.header;
-          const label =
-            meta?.mobile?.label ??
-            (typeof header === "string" ? header : undefined) ??
-            humanizeColumnId(colId);
+          const label = mobileColumnLabel(cell.column);
           const entry: SlotValue = {
             priority,
             value: rendered,
@@ -297,28 +351,39 @@ export function useMobileListModel<TItem>({
           rightValueInteractive,
           metaValues: specValues,
           detailsHref,
+          reserveImageSlot,
         };
       }),
-    [basePath, entity, rowContentVersion, rows],
+    [basePath, entity, reserveImageSlot, rowContentVersion, rows],
   );
 }
 
 //
 // Measured in the browser against real rows, not derived from the type scale:
 // spec rows come out at 28-32px, not the ~16px a bare text line would suggest,
-// because most values are chunky (badges, entity links) and the interactive
-// ones carry `min-h-8`. An expense with 5 spec rows measures 226px total.
+// because most values are chunky (badges, entity links). An expense with 5
+// spec rows measures 226px total.
 //   py-2 x2 (16) + title (~19) + hairline (1)        = 36
 //   identity line                                     = 24
 //   spec block: 2 + n*30 + (n-1)*4
+//
+// A row carrying an editable cell is taller by `TOUCH_ROW_EXTRA`: those
+// controls are held at the 44pt phone floor (`min-h-11` with `-my-1` clawing
+// back the row's own padding), which nets +6px over a read-only line.
 const ROW_CHROME = 36;
 const IDENTITY_LINE = 24;
 const SPEC_ROW = 30;
 const SPEC_GAP = 4;
+const TOUCH_ROW_EXTRA = 6;
 
 /** Height of one spec grid, or 0 when there is none. */
-const specBlockHeight = (count: number): number =>
-  count ? 2 + count * SPEC_ROW + (count - 1) * SPEC_GAP : 0;
+const specBlockHeight = (count: number, interactiveCount: number): number =>
+  count
+    ? 2 +
+      count * SPEC_ROW +
+      interactiveCount * TOUCH_ROW_EXTRA +
+      (count - 1) * SPEC_GAP
+    : 0;
 
 /**
  * Per-row height estimate for the virtualizer.
@@ -332,16 +397,28 @@ const specBlockHeight = (count: number): number =>
 export function estimateMobileRowHeight(
   model?: Pick<
     MobileListRowModel<unknown>,
-    "subtitle" | "rightValues" | "metaValues" | "imageSlot"
+    | "subtitle"
+    | "rightValues"
+    | "rightValueInteractive"
+    | "metaValues"
+    | "imageSlot"
+    | "reserveImageSlot"
   >,
 ): number {
   if (!model) return 56;
   const identity =
-    model.subtitle || model.rightValues.length ? IDENTITY_LINE : 0;
-  const spec = specBlockHeight(model.metaValues.length);
-  // Floor: the 44px image (plus padding) sets a minimum a short row can't
-  // undercut.
-  return Math.max(ROW_CHROME + identity + spec, model.imageSlot ? 61 : 41);
+    model.subtitle || model.rightValues.length
+      ? IDENTITY_LINE +
+        (model.rightValueInteractive.some(Boolean) ? TOUCH_ROW_EXTRA * 2 : 0)
+      : 0;
+  const spec = specBlockHeight(
+    model.metaValues.length,
+    model.metaValues.filter((item) => item.interactive).length,
+  );
+  // Floor: the 44px thumbnail gutter (plus padding) sets a minimum a short row
+  // can't undercut — reserved or filled, it occupies the same height.
+  const hasThumbGutter = model.reserveImageSlot || Boolean(model.imageSlot);
+  return Math.max(ROW_CHROME + identity + spec, hasThumbGutter ? 61 : 41);
 }
 
 /**

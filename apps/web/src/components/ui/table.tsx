@@ -84,6 +84,11 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
   return (
     <th
       data-slot="table-head"
+      // Column headers must name the column they head for a screen reader
+      // walking cells. Spread last so the non-column `<th>`s that share this
+      // primitive — the filter row and the width-slack spacer — can pass
+      // `scope={undefined}` rather than claiming to head a column.
+      scope="col"
       className={cn(
         "text-slate h-10 px-2 text-left align-middle font-mono text-2xs font-semibold tracking-wider uppercase whitespace-nowrap [&:has([role=checkbox])]:pr-0",
         className,

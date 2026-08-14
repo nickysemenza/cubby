@@ -27,9 +27,7 @@ function MobileCardSkeleton({
   return (
     <MobileRowShell
       tall={metaLines > 0}
-      leading={
-        hasImage ? [<Skeleton key="image" className="size-11 rounded" />] : []
-      }
+      leading={hasImage ? [<Skeleton key="image" className="size-11" />] : []}
       title={<Skeleton className="h-3.5 w-3/4" />}
       content={
         <Stack gap="tight" className="min-w-0">
@@ -47,7 +45,7 @@ function MobileCardSkeleton({
           )}
         </Stack>
       }
-      actions={<Skeleton className="size-8 rounded" />}
+      actions={<Skeleton className="size-11" />}
     />
   );
 }

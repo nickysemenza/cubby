@@ -122,7 +122,7 @@ export const desktopNav: NavNode[] = [
         label: "Equivalences",
         icon: ArrowLeftRight,
       },
-      { to: "/meals/suggestions", label: "What can I make?", icon: Sparkles },
+      { to: "/meals/suggestions", label: "Cookable", icon: Sparkles },
     ],
   },
   {
@@ -176,7 +176,7 @@ export const desktopNav: NavNode[] = [
       },
       {
         to: "/statement-rows",
-        label: "Statement Rows",
+        label: "Statements",
         icon: Receipt,
       },
     ],
@@ -220,7 +220,7 @@ export const desktopNav: NavNode[] = [
       { to: "/ai-smoke-test", label: "AI smoke test", icon: Sparkles },
       { to: "/ai-usage", label: "AI usage", icon: Bot },
       { to: "/search/debug", label: "Search debug", icon: Search },
-      { to: "/background-jobs", label: "Background jobs", icon: Database },
+      { to: "/background-jobs", label: "Jobs", icon: Database },
       { to: "/mcp", label: "MCP tools", icon: Plug },
     ],
   },

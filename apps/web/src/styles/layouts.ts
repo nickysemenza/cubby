@@ -76,10 +76,23 @@ export const gridVariants = cva("grid", {
 });
 
 /**
- * Vertical block stack. Keeps `space-y-*` under the hood (a 1:1 swap for raw
- * `space-y-N` with no display-model change). Defaults to `space-y-4` (md).
+ * Vertical stack. `flex flex-col` + `space-y-*` (not `gap-*`, to keep the
+ * named `gap` scale's classes stable) — the base can't be plain block: a bare
+ * `div` with `space-y-*` only inserts `margin-top` on non-first children,
+ * and inline elements (`span`, `a`, …) ignore vertical margin, so two inline
+ * children run together on one line with no visible separation. `flex-col`
+ * blockifies every child (per CSS flex-item blockification), which is what
+ * actually forces the line break; `space-y-*` still works unmodified on
+ * blockified children since margins apply normally to flex items. Defaults
+ * to `space-y-4` (md). Already-block children (`div`, `p`, `Row`, …) that
+ * relied on filling the container's width are unaffected — they already did
+ * under plain block layout, and `flex-col`'s default `align-items: stretch`
+ * reproduces that. The exception is a child whose own `display` is
+ * `inline-flex`/`inline-block` with no explicit width (a bare `Button`,
+ * `EntityInlineLink`, …) — it now stretches to the container's width instead
+ * of shrinking to its content, where before it kept its natural size.
  */
-export const stackVariants = cva("", {
+export const stackVariants = cva("flex flex-col", {
   variants: {
     gap: {
       tight: "space-y-0.5",
