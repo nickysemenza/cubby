@@ -61,6 +61,7 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 - One month view for meals, due tasks, expenses, and multi-day project spans
 - Source and project-kind filters, date drawers with daily totals, and quick-add flows
 - Drag-to-reschedule for meals, tasks, and planned expenses; actual expenses and project spans stay read-only
+- Published iCalendar feeds (`webcal://…/api/calendar/<token>/{all,meals,tasks}.ics`) for meals and open task due dates, subscribable from macOS/iOS Calendar; read-only, and the URL's token is the only credential
 
 **USDA**
 - Full USDA FoodData Central database loaded into a sibling service

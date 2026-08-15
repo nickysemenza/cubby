@@ -97,6 +97,7 @@ import { Route as DotwellKnownOauthProtectedResourceApiMcpRouteImport } from './
 import { Route as AuthenticatedRecipesShortcodeExportRouteImport } from './routes/_authenticated/recipes.$shortcode_.export'
 import { Route as AuthenticatedUsdaNdbCodeRouteImport } from './routes/_authenticated/usda.ndb.$code'
 import { Route as AuthenticatedUsdaUpcCodeRouteImport } from './routes/_authenticated/usda.upc.$code'
+import { Route as ApiCalendarTokenFeedRouteImport } from './routes/api/calendar.$token.$feed'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -596,6 +597,11 @@ const AuthenticatedUsdaUpcCodeRoute =
     path: '/usda/upc/$code',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const ApiCalendarTokenFeedRoute = ApiCalendarTokenFeedRouteImport.update({
+  id: '/api/calendar/$token/$feed',
+  path: '/api/calendar/$token/$feed',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -685,6 +691,7 @@ export interface FileRoutesByFullPath {
   '/recipes/$shortcode/export': typeof AuthenticatedRecipesShortcodeExportRoute
   '/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
   '/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
+  '/api/calendar/$token/$feed': typeof ApiCalendarTokenFeedRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -773,6 +780,7 @@ export interface FileRoutesByTo {
   '/recipes/$shortcode/export': typeof AuthenticatedRecipesShortcodeExportRoute
   '/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
   '/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
+  '/api/calendar/$token/$feed': typeof ApiCalendarTokenFeedRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -864,6 +872,7 @@ export interface FileRoutesById {
   '/_authenticated/recipes/$shortcode_/export': typeof AuthenticatedRecipesShortcodeExportRoute
   '/_authenticated/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
   '/_authenticated/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
+  '/api/calendar/$token/$feed': typeof ApiCalendarTokenFeedRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -955,6 +964,7 @@ export interface FileRouteTypes {
     | '/recipes/$shortcode/export'
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
+    | '/api/calendar/$token/$feed'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -1043,6 +1053,7 @@ export interface FileRouteTypes {
     | '/recipes/$shortcode/export'
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
+    | '/api/calendar/$token/$feed'
   id:
     | '__root__'
     | '/'
@@ -1133,6 +1144,7 @@ export interface FileRouteTypes {
     | '/_authenticated/recipes/$shortcode_/export'
     | '/_authenticated/usda/ndb/$code'
     | '/_authenticated/usda/upc/$code'
+    | '/api/calendar/$token/$feed'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1148,6 +1160,7 @@ export interface RootRouteChildren {
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiDebugTimingRoute: typeof ApiDebugTimingRoute
   ApiTrpcSplatRoute: typeof ApiTrpcSplatRoute
+  ApiCalendarTokenFeedRoute: typeof ApiCalendarTokenFeedRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1768,6 +1781,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsdaUpcCodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/api/calendar/$token/$feed': {
+      id: '/api/calendar/$token/$feed'
+      path: '/api/calendar/$token/$feed'
+      fullPath: '/api/calendar/$token/$feed'
+      preLoaderRoute: typeof ApiCalendarTokenFeedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -1991,6 +2011,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiDebugTimingRoute: ApiDebugTimingRoute,
   ApiTrpcSplatRoute: ApiTrpcSplatRoute,
+  ApiCalendarTokenFeedRoute: ApiCalendarTokenFeedRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

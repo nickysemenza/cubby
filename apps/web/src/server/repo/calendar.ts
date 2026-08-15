@@ -1,6 +1,7 @@
 import type {
   CalendarDaySummary,
   CalendarItem,
+  CalendarItemKind,
   CalendarRangeInput,
   CalendarRangeOut,
 } from "@cubby/schemas/calendar";
@@ -50,43 +51,60 @@ export async function getCalendarRange(
   input: CalendarRangeInput,
 ): Promise<CalendarRangeOut> {
   const endInclusive = shiftPlainDate(input.endDateExclusive, -1);
+  // Omitted `kinds` means all four, so the in-app calendar is unchanged. A
+  // narrowed request skips whole reads rather than filtering after the fact —
+  // the ICS feed asks for meals + tasks, and the project branch it drops is a
+  // full subtree walk it would otherwise pay for on every poll.
+  const wants = (kind: CalendarItemKind) =>
+    !input.kinds || input.kinds.includes(kind);
   const [meals, taskRows, expenseRows, projectRows, projectRollups] =
     await Promise.all([
-      getMealsByDateRange(db, input.startDate, endInclusive),
-      getDb(db).query.task.findMany({
-        where: and(
-          notDeleted(task),
-          or(isNotNull(task.dueDate), isNotNull(task.dueEndDate)),
-          lte(sql`coalesce(${task.dueDate}, ${task.dueEndDate})`, endInclusive),
-          gte(
-            sql`coalesce(${task.dueEndDate}, ${task.dueDate})`,
-            input.startDate,
-          ),
-        ),
-        orderBy: (row, { asc }) => [asc(row.dueDate), asc(row.name)],
-        ...relations.task.withProject,
-      }),
-      getDb(db).query.expense.findMany({
-        where: and(
-          notDeleted(expense),
-          isNotNull(expense.date),
-          gte(expense.date, input.startDate),
-          lte(expense.date, endInclusive),
-        ),
-        orderBy: (row, { asc }) => [asc(row.date), asc(row.name)],
-        ...relations.expense.withProject,
-      }),
-      getDb(db)
-        .select({
-          id: project.id,
-          shortcode: project.shortcode,
-          name: project.name,
-          status: project.status,
-          kind: project.kind,
-        })
-        .from(project)
-        .where(notDeleted(project)),
-      loadProjectSubtreeRollups(db),
+      wants("meal")
+        ? getMealsByDateRange(db, input.startDate, endInclusive)
+        : [],
+      wants("task")
+        ? getDb(db).query.task.findMany({
+            where: and(
+              notDeleted(task),
+              or(isNotNull(task.dueDate), isNotNull(task.dueEndDate)),
+              lte(
+                sql`coalesce(${task.dueDate}, ${task.dueEndDate})`,
+                endInclusive,
+              ),
+              gte(
+                sql`coalesce(${task.dueEndDate}, ${task.dueDate})`,
+                input.startDate,
+              ),
+            ),
+            orderBy: (row, { asc }) => [asc(row.dueDate), asc(row.name)],
+            ...relations.task.withProject,
+          })
+        : [],
+      wants("expense")
+        ? getDb(db).query.expense.findMany({
+            where: and(
+              notDeleted(expense),
+              isNotNull(expense.date),
+              gte(expense.date, input.startDate),
+              lte(expense.date, endInclusive),
+            ),
+            orderBy: (row, { asc }) => [asc(row.date), asc(row.name)],
+            ...relations.expense.withProject,
+          })
+        : [],
+      wants("project")
+        ? getDb(db)
+            .select({
+              id: project.id,
+              shortcode: project.shortcode,
+              name: project.name,
+              status: project.status,
+              kind: project.kind,
+            })
+            .from(project)
+            .where(notDeleted(project))
+        : [],
+      wants("project") ? loadProjectSubtreeRollups(db) : null,
     ]);
 
   const items: CalendarItem[] = [];
@@ -144,7 +162,7 @@ export async function getCalendarRange(
   }
 
   for (const row of projectRows) {
-    const window = projectRollups.dateWindows.get(row.id);
+    const window = projectRollups?.dateWindows.get(row.id);
     const firstDate = window?.effectiveStart ?? window?.effectiveEnd;
     const lastDate = window?.effectiveEnd ?? window?.effectiveStart;
     const startDate =
