@@ -8,6 +8,7 @@
  * the contents right below, and a single tap through to the full detail page.
  */
 
+import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { InfLocation } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, Camera, PackagePlus, ScanBarcode } from "lucide-react";
@@ -112,7 +113,9 @@ export function LocationScanLanding({ location }: { location: InfLocation }) {
             ) : (
               <Camera className="mr-2 size-4" />
             )}
-            {location.images.length > 0 ? "Retake photo" : "Photo"}
+            {location.images.some(isDisplayableImageFile)
+              ? "Retake photo"
+              : "Photo"}
           </Button>
           <Link
             to="/inventory/session"
