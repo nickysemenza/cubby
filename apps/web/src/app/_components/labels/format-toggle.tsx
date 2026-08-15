@@ -1,3 +1,5 @@
+import { ChoiceSwitcher } from "~/components/ui/view-switcher";
+
 export function FormatToggle({
   format,
   onChange,
@@ -11,21 +13,11 @@ export function FormatToggle({
     { value: "ptouch" as const, label: "P-Touch" },
   ];
   return (
-    <div className="flex rounded-md border border-[var(--border)]">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          className={`px-2 py-2 text-sm transition-colors ${
-            format === opt.value
-              ? "bg-primary text-primary-foreground"
-              : "hover:bg-muted"
-          }`}
-          onClick={() => onChange(opt.value)}
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
+    <ChoiceSwitcher
+      ariaLabel="Label format"
+      options={options}
+      value={format}
+      onValueChange={onChange}
+    />
   );
 }

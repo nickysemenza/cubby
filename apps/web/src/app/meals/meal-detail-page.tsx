@@ -246,7 +246,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
             <Row
               align="center"
               gap="sm"
-              className="rounded-lg border border-[var(--border)] p-2 opacity-60"
+              className="border border-[var(--border)] p-2 opacity-60"
             >
               <span className="flex-1 truncate font-medium text-sm">
                 Adding recipe…
@@ -383,11 +383,7 @@ function RecipeRow({
   };
 
   return (
-    <Row
-      align="center"
-      gap="sm"
-      className="rounded-lg border border-[var(--border)] p-2"
-    >
+    <Row align="center" gap="sm" className="border border-[var(--border)] p-2">
       <Link
         {...entityDetailLink("recipe", mr.recipe.id)}
         className="flex-1 truncate font-medium text-sm hover:underline"

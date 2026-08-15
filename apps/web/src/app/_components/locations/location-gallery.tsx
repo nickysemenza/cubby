@@ -501,7 +501,7 @@ export function LocationGallery() {
 
   return (
     <ProductImageSummariesProvider productIds={inventoryProductIds}>
-      <div className="flex h-[calc(100vh-12rem)] overflow-hidden rounded-lg border border-[var(--border)] bg-background">
+      <div className="flex h-[calc(100vh-12rem)] overflow-hidden border border-[var(--border)] bg-background">
         {/* Sidebar */}
         <GallerySidebar
           locations={displayLocations}

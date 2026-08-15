@@ -4,11 +4,11 @@ import {
   type ExpenseTradeCostAggregate,
   type Trade,
 } from "@cubby/schemas/project";
-import { ResponsiveBar } from "@nivo/bar";
 import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
 import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
+import { HorizontalBarChart } from "~/app/projects/charts/horizontal-bar-chart";
 import { pivotTradeCostContributions } from "~/app/projects/charts/trade-cost-pivot";
 import { capitalize, TRADE_LABELS } from "~/app/projects/project-formatting";
 import { CrossTabTable } from "~/components/matrix/cross-tab-table";
@@ -76,52 +76,49 @@ export function TradeBarsAggregate({
     return <ChartEmpty icon={ShoppingBag} title="No expense data." />;
   }
 
-  const chartHeight = Math.max(300, rows.length * 32 + 60);
   const tradeLabel = (value: string) => TRADE_LABELS[value as Trade] ?? value;
 
   return (
     <div className="flex flex-col gap-1">
-      <div style={{ height: chartHeight }}>
-        <ResponsiveBar
-          data={rows}
-          keys={[...COST_KEYS]}
-          indexBy="trade"
-          layout="horizontal"
-          margin={{ top: 10, right: 60, bottom: 40, left: 200 }}
-          padding={0.25}
-          colors={(bar) => getCostTypeColor(bar.id as string)}
-          {...nivoBarChrome}
-          axisBottom={nivoCurrencyAxis}
-          axisLeft={{ tickSize: 0, tickPadding: 8, format: tradeLabel }}
-          label={(d) =>
-            d.value && d.value > 0 ? formatCurrency(d.value, 0) : ""
-          }
-          labelSkipWidth={40}
-          labelTextColor="var(--background)"
-          enableGridX
-          enableGridY={false}
-          tooltip={({ id, value, indexValue, color }) => (
-            <ChartTooltip>
-              <strong>{tradeLabel(String(indexValue))}</strong> — {id}:{" "}
-              <span style={{ color }}>{formatCurrency(value, 0)}</span>
-            </ChartTooltip>
-          )}
-          legends={[
-            {
-              dataFrom: "keys",
-              anchor: "bottom",
-              direction: "row",
-              translateY: 40,
-              itemWidth: 100,
-              itemHeight: 20,
-              symbolSize: 12,
-              symbolShape: "circle",
-              itemTextColor: "var(--muted-foreground)",
-            },
-          ]}
-          theme={nivoChartTheme}
-        />
-      </div>
+      <HorizontalBarChart
+        data={rows}
+        minHeight={300}
+        keys={[...COST_KEYS]}
+        indexBy="trade"
+        margin={{ top: 10, right: 60, bottom: 40, left: 200 }}
+        padding={0.25}
+        colors={(bar) => getCostTypeColor(bar.id as string)}
+        {...nivoBarChrome}
+        axisBottom={nivoCurrencyAxis}
+        axisLeft={{ tickSize: 0, tickPadding: 8, format: tradeLabel }}
+        label={(d) =>
+          d.value && d.value > 0 ? formatCurrency(d.value, 0) : ""
+        }
+        labelSkipWidth={40}
+        labelTextColor="var(--background)"
+        enableGridX
+        enableGridY={false}
+        tooltip={({ id, value, indexValue, color }) => (
+          <ChartTooltip>
+            <strong>{tradeLabel(String(indexValue))}</strong> — {id}:{" "}
+            <span style={{ color }}>{formatCurrency(value, 0)}</span>
+          </ChartTooltip>
+        )}
+        legends={[
+          {
+            dataFrom: "keys",
+            anchor: "bottom",
+            direction: "row",
+            translateY: 40,
+            itemWidth: 100,
+            itemHeight: 20,
+            symbolSize: 12,
+            symbolShape: "circle",
+            itemTextColor: "var(--muted-foreground)",
+          },
+        ]}
+        theme={nivoChartTheme}
+      />
       {hiddenCount > 0 && (
         <p className="text-muted-foreground text-xs">
           {hiddenCount} trade{hiddenCount === 1 ? "" : "s"} with net ≤ $0 hidden

@@ -68,7 +68,7 @@ interface FilterableComboboxProps {
    * that part writes the *store's* input value, but this component controls
    * `<Combobox.Input>` with local React state, so the store write is a no-op
    * on what the user sees. (Its `visible` logic also requires `Combobox.Chips`
-   * in multiple mode, which doesn't fit a dense filter row.)
+   * in multiple mode, which doesn't fit a compact filter control.)
    */
   clearable?: boolean;
 }
@@ -331,7 +331,7 @@ interface MultiFilterableComboboxProps {
  *
  * Collapsed it reads `Drywall +2`: the first selection by name plus a count of
  * the rest. Chips (Base UI's `Combobox.Chips`) would be richer but can't fit
- * the dense table filter row, and `Combobox.Clear` is unusable here for the
+ * compact filter control, and `Combobox.Clear` is unusable here for the
  * same reason — in multiple mode it only renders when chips are present.
  */
 export function MultiFilterableCombobox({

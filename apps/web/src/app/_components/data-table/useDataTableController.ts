@@ -196,7 +196,6 @@ export function useDataTableController<TItem>({
       "table-grid-lines border-separate border-spacing-0 text-sm leading-tight tabular-nums",
     header:
       "h-8 bg-card px-2 py-1 text-2xs font-mono font-semibold uppercase tracking-wider text-slate border-b-[3px] border-b-foreground",
-    filterRow: "h-7 bg-card px-2 py-0.5 border-b border-border" /* tight */,
     cell: cn(
       dConfig.cellClass,
       "overflow-hidden",

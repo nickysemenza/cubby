@@ -213,7 +213,7 @@ export function RecipeTotalsCoverageButton({
     <Popover>
       <PopoverTrigger
         className={cn(
-          "inline-flex items-center gap-2 rounded-md border border-warning/40 px-2 py-1 text-warning text-xs hover:bg-warning/10",
+          "inline-flex items-center gap-2 border border-warning/40 px-2 py-1 text-warning text-xs hover:bg-warning/10",
         )}
       >
         <TriangleAlert className="size-3.5" />

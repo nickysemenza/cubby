@@ -230,7 +230,7 @@ function LivePanels({
       {(linkedFoods.length > 0 || currentMappings.length > 0) && (
         <Stack
           gap="xs"
-          className="rounded-md border border-[var(--border)] bg-background/60 p-2 text-xs"
+          className="border border-[var(--border)] bg-background/60 p-2 text-xs"
         >
           {linkedFoods.length > 0 && (
             <Row as="p" align="center" gap="xs">
@@ -257,7 +257,7 @@ function LivePanels({
         <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
           Coverage (live)
         </p>
-        <div className="rounded-md border border-[var(--border)] bg-background/60 p-2">
+        <div className="border border-[var(--border)] bg-background/60 p-2">
           <ConversionCapabilities
             mappings={previewMappings}
             kinds={row.coverage.applicable}
@@ -506,7 +506,7 @@ export function EnrichmentEditor({
       )}
 
       {gaps.priceIslanded && (
-        <p className="rounded-md border bg-warning/10 px-2 py-2 text-warning text-xs">
+        <p className="border bg-warning/10 px-2 py-2 text-warning text-xs">
           Already priced, but “{gaps.islandedUnit}” isn’t linked to a weight —
           so the price can’t be reached from a recipe measure. Connect it below
           (e.g. 1 {gaps.islandedUnit} = N&nbsp;g) instead of adding a new price.

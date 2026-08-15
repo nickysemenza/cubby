@@ -2,34 +2,33 @@ import type { LucideIcon } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import { cn } from "~/lib/utils";
 
-export interface ViewSwitcherOption<T extends string = string> {
+export interface ChoiceSwitcherOption<T extends string = string> {
   value: T;
   label: string;
   icon?: LucideIcon;
 }
 
-interface ViewSwitcherProps<T extends string> {
-  options: ViewSwitcherOption<T>[];
+interface ChoiceSwitcherProps<T extends string> {
+  options: readonly ChoiceSwitcherOption<T>[];
   value: T;
   onValueChange: (value: T) => void;
   className?: string;
-  /** Accessible label for the switcher group. */
-  ariaLabel?: string;
+  ariaLabel: string;
+  optionAriaLabel?: (option: ChoiceSwitcherOption<T>) => string;
 }
 
 /**
- * Single, consistent control for switching how the same data is displayed
- * (e.g. recipe Magazine/NYT/Table/Charts, locations Gallery/Table/Visualizations).
- * Presentational + controlled — the caller owns the state (local or URL) and
- * renders the view content itself.
+ * Canonical single-choice segmented control. Presentational + controlled — the
+ * caller owns whether the choice changes a view, filter, basis, or format.
  */
-export function ViewSwitcher<T extends string>({
+export function ChoiceSwitcher<T extends string>({
   options,
   value,
   onValueChange,
   className,
-  ariaLabel = "Switch view",
-}: ViewSwitcherProps<T>) {
+  ariaLabel,
+  optionAriaLabel = (option) => option.label,
+}: ChoiceSwitcherProps<T>) {
   return (
     <ToggleGroup
       aria-label={ariaLabel}
@@ -48,7 +47,7 @@ export function ViewSwitcher<T extends string>({
           <ToggleGroupItem
             key={opt.value}
             value={opt.value}
-            aria-label={`${opt.label} view`}
+            aria-label={optionAriaLabel(opt)}
             // Phone-only touch floor. DESIGN.md keeps desktop controls compact
             // (28px) but requires 40–48px on phones, and the `sm` toggle size
             // is 24px — well under half a finger.
@@ -60,5 +59,23 @@ export function ViewSwitcher<T extends string>({
         );
       })}
     </ToggleGroup>
+  );
+}
+
+export type ViewSwitcherOption<T extends string = string> =
+  ChoiceSwitcherOption<T>;
+
+/** View-specific name retained for the dominant renderer-switching use case. */
+export function ViewSwitcher<T extends string>(
+  props: Omit<ChoiceSwitcherProps<T>, "ariaLabel" | "optionAriaLabel"> & {
+    ariaLabel?: string;
+  },
+) {
+  return (
+    <ChoiceSwitcher
+      {...props}
+      ariaLabel={props.ariaLabel ?? "Switch view"}
+      optionAriaLabel={(option) => `${option.label} view`}
+    />
   );
 }

@@ -56,7 +56,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
         </React.Suspense>
       ) : !authed ? (
         <nav
-          className="hidden items-center space-x-4 md:flex lg:space-x-6"
+          className="ml-6 hidden items-center space-x-4 md:flex lg:space-x-6"
           {...props}
         >
           <Link to="/" className="font-medium text-muted-foreground text-sm">

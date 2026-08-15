@@ -32,7 +32,6 @@ import {
   entityTypeMap,
   getEnrichmentText,
   getSearchMatchText,
-  getSearchResultEntity,
   getSearchResultRoute,
   groupSearchResults,
   rememberSearchResult,
@@ -88,8 +87,8 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
   };
 
   // The type filter is CONTROLLED by the `?type=` param rather than seeded
-  // into initialState. As initial-only state the desktop Filter/HeaderFilter
-  // wrote `columnFilters` and never the URL, so the two diverged: the chip said
+  // into initialState. As initial-only state the desktop filter control wrote
+  // `columnFilters` and never the URL, so the two diverged: the chip said
   // "Product" while the URL still said `all`, and a reload or share-link threw
   // the filter away. `entityType` is the only column with a `filterConfig`, so
   // it's the only thing that can appear here.
@@ -115,8 +114,8 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
   );
 
   // Route every filter write back through the URL. The select filter hands
-  // back either a bare value or a single-element array depending on which
-  // control wrote it (HeaderFilter's combobox vs the toolbar's Filter chip).
+  // back either a bare value or a single-element array depending on the
+  // toolbar's select control or Filter chip.
   const onColumnFiltersChange: OnChangeFn<ColumnFiltersState> = useCallback(
     (updater) => {
       const next =
@@ -199,7 +198,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
               params: entityDetailParams(conversion.ingredientShortcode),
             });
           }}
-          className="w-full rounded-lg border border-[var(--border)] bg-card px-4 py-4 text-left transition-colors hover:bg-muted/50"
+          className="w-full border border-[var(--border)] bg-card px-4 py-4 text-left transition-colors hover:bg-muted/50"
         >
           <Equal className="size-4 shrink-0 text-primary" />
           <span className="truncate font-mono font-semibold text-sm tabular-nums">
@@ -400,7 +399,6 @@ function MobileSearchResults({
                   rightValues={[enrichment, matchText].filter(
                     (value): value is string => Boolean(value),
                   )}
-                  entity={getSearchResultEntity(item)}
                   onClick={() => {
                     rememberSearchResult(item);
                     navigate(getSearchResultRoute(item));

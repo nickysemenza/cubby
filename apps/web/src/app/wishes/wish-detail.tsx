@@ -4,7 +4,7 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Check, Heart, Info, Pencil } from "lucide-react";
+import { Check, Heart, Info } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
@@ -13,6 +13,7 @@ import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -234,9 +235,7 @@ export function WishDetail({ wish }: { wish: WishOut }) {
       heroStats={heroStats}
       actions={
         <>
-          <Button variant="outline" onClick={() => setEditing(true)}>
-            <Pencil /> Edit
-          </Button>
+          <DetailEditAction onClick={() => setEditing(true)} />
           <Button
             variant="outline"
             onClick={toggleAcquired}

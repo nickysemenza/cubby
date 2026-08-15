@@ -49,7 +49,7 @@ export function ShoppingTable({
 
   return (
     <Table
-      containerClassName="hidden overflow-hidden rounded-lg border border-[var(--border)] sm:block"
+      containerClassName="hidden overflow-hidden border border-[var(--border)] sm:block"
       className="table-auto"
     >
       <TableHeader>

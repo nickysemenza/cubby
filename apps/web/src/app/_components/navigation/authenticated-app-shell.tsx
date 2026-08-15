@@ -14,6 +14,7 @@ import {
   isNavGroup,
   type NavGroup,
   type NavItem,
+  navItemLinkProps,
   settingsNavItem,
   useActiveTo,
 } from "./nav-items";
@@ -310,15 +311,12 @@ function SidebarFullLeaf({ item, active }: { item: NavItem; active: boolean }) {
   const Icon = item.icon;
   return (
     <Link
-      to={item.to}
-      preload="intent"
-      preloadDelay={40}
+      {...navItemLinkProps(item, active)}
       className={cn(
         "mb-1 flex h-8 items-center gap-2 border border-transparent px-2 text-xs transition-colors hover:bg-muted hover:text-foreground",
         !active && "text-muted-foreground",
         active && "border-border bg-background font-medium text-foreground",
       )}
-      aria-current={active ? "page" : undefined}
     >
       <Icon className="size-3.5 shrink-0" />
       <span className="truncate">{item.railLabel ?? item.label}</span>

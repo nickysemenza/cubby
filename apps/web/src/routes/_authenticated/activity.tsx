@@ -14,6 +14,7 @@ import { z } from "zod";
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
+import { NativeSelect } from "~/components/ui/native-select";
 import { entities } from "~/entities/entities";
 import { pageTitle } from "~/lib/page-title";
 
@@ -69,8 +70,7 @@ function EntityTypeFilter({
   return (
     <Row as="label" align="center" gap="sm" className="w-fit text-sm">
       <span className="text-muted-foreground">Entity</span>
-      <select
-        className="h-8 rounded-md border bg-background px-2 text-sm"
+      <NativeSelect
         value={value ?? ""}
         onChange={(e) =>
           onChange(
@@ -84,7 +84,7 @@ function EntityTypeFilter({
             {entities[entity].pluralLabel}
           </option>
         ))}
-      </select>
+      </NativeSelect>
     </Row>
   );
 }
@@ -105,8 +105,7 @@ function SourceFilter({
   return (
     <Row as="label" align="center" gap="sm" className="w-fit text-sm">
       <span className="text-muted-foreground">Source</span>
-      <select
-        className="h-8 rounded-md border bg-background px-2 text-sm"
+      <NativeSelect
         value={value ?? ""}
         onChange={(e) =>
           onChange(e.target.value ? (e.target.value as AuditSource) : undefined)
@@ -118,7 +117,7 @@ function SourceFilter({
             {source}
           </option>
         ))}
-      </select>
+      </NativeSelect>
     </Row>
   );
 }

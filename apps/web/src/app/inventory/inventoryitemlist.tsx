@@ -8,6 +8,7 @@ import { Row as FlexRow, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { NoneValue } from "~/components/ui/none-value";
+import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { multiSelectFilterFn } from "~/entities/filters";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -19,7 +20,7 @@ import {
   createTimestampColumn,
 } from "../_components/data-table/columnHelpers";
 import {
-  ShelfTableToggle,
+  SHELF_VIEW_OPTIONS,
   type ShelfView,
 } from "../_components/data-table/shelf";
 import RTable from "../_components/data-table/Table";
@@ -298,7 +299,11 @@ export function InventoryItemList() {
             />
           )}
         </div>
-        <ShelfTableToggle value={view} onChange={setView} />
+        <ViewSwitcher
+          options={SHELF_VIEW_OPTIONS}
+          value={view}
+          onValueChange={setView}
+        />
       </FlexRow>
       {view === "shelf" ? (
         <InventoryShelf

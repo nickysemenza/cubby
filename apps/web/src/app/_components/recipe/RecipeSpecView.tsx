@@ -380,7 +380,7 @@ export const RecipeSpecView = memo(function RecipeSpecView({
   const missingWeight = tree.costing?.totals.missingByType.weight ?? [];
 
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-card px-6 py-6">
+    <div className="border border-[var(--border)] bg-card px-6 py-6">
       <header className="mb-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
         <h2 className="my-0 font-heading font-semibold text-2xl tracking-tight">
           {recipe.name}

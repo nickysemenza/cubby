@@ -20,7 +20,7 @@ export function ErrorDisplay({ error, className }: ErrorDisplayProps) {
     <div
       role="alert"
       className={cn(
-        "flex flex-wrap items-center gap-4 rounded-lg border border-[var(--border)] bg-card px-4 py-4",
+        "flex flex-wrap items-center gap-4 border border-[var(--border)] bg-card px-4 py-4",
         className,
       )}
     >

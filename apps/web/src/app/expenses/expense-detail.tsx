@@ -588,7 +588,7 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
       }}
       heroStats={heroStats}
       actions={
-        <Row align="center" gap="sm">
+        <>
           {/* A split files its parts under this line's PURCHASE, so a line with no
               purchase has nothing to file them under — `splitExpense` refuses with
               "record its vendor first". Disabled with that explanation rather
@@ -611,7 +611,7 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
             </Button>
           </span>
           {deleteButton}
-        </Row>
+        </>
       }
     >
       <DetailSections sections={sections} rawData={expense} />

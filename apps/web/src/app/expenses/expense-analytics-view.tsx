@@ -4,7 +4,6 @@ import { getRouteApi } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
 import { Grid, Section, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
-import { StatTile } from "~/components/ui/stat-tile";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import {
   buildFiltersFromManifest,
@@ -23,6 +22,7 @@ import {
   TradeCostMatrixAggregate,
 } from "./charts/trade-cost-aggregate";
 import { VendorBreakdown } from "./charts/vendor-breakdown";
+import { ExpenseSummaryStrip } from "./expense-summary-strip";
 
 const route = getRouteApi("/_authenticated/expenses/");
 
@@ -89,11 +89,7 @@ export function ExpenseAnalyticsView() {
   if (isLoading || !data) {
     return (
       <Stack gap="lg">
-        <Grid cols="summary">
-          {["actual", "committed", "credits", "net", "count"].map((key) => (
-            <Skeleton key={key} className="h-14 w-full" />
-          ))}
-        </Grid>
+        <ExpenseSummaryStrip loading />
         <Skeleton className="h-[300px] w-full" />
       </Stack>
     );
@@ -112,20 +108,7 @@ export function ExpenseAnalyticsView() {
 
   return (
     <Stack gap="lg">
-      <Grid cols="summary">
-        <StatTile label="Actual">{formatCurrency(summary.actual, 0)}</StatTile>
-        <StatTile label="Committed">
-          {formatCurrency(summary.committed, 0)}
-        </StatTile>
-        <StatTile label="Credits">
-          {formatCurrency(summary.credits, 0)}
-        </StatTile>
-        <StatTile label="Net">{formatCurrency(summary.net, 0)}</StatTile>
-        <StatTile label="Purchase adjustments">
-          {formatCurrency(adjustments.net, 0)}
-        </StatTile>
-        <StatTile label="Count">{summary.count}</StatTile>
-      </Grid>
+      <ExpenseSummaryStrip summary={summary} adjustmentsNet={adjustments.net} />
 
       <Grid cols="pair">
         <Section

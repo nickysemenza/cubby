@@ -1,6 +1,6 @@
 import type { ExpenseOut } from "@cubby/schemas/project";
-import type { CSSProperties, ReactNode } from "react";
-import { cn, formatCurrency } from "~/lib/utils";
+import { VizTooltip } from "~/app/_components/visualizations/viz-overlay";
+import { formatCurrency } from "~/lib/utils";
 
 /**
  * The shared nivo/chart tooltip surface. Warm-Paper Ledger separation idiom:
@@ -11,27 +11,7 @@ import { cn, formatCurrency } from "~/lib/utils";
  * Pass `className` for per-site needs (e.g. the positioned overlay in
  * location-treemap); a later class wins via twMerge.
  */
-export function ChartTooltip({
-  children,
-  className,
-  style,
-}: {
-  children: ReactNode;
-  className?: string;
-  style?: CSSProperties;
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-md bg-popover px-4 py-2 text-sm ring-1 ring-border",
-        className,
-      )}
-      style={style}
-    >
-      {children}
-    </div>
-  );
-}
+export const ChartTooltip = VizTooltip;
 
 /**
  * The top 3 expenses behind a donut slice / bar segment (by cost desc) with a

@@ -19,13 +19,7 @@ import { ComboboxFieldWithSearch } from "~/app/_components/form-utils/combobox-f
 import { QuickInventoryAdd } from "~/app/_components/inventory/quick-inventory-add";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
+import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 
 const formSchema = z.object({ location: optionalLocationField });
 
@@ -66,32 +60,30 @@ export const ProductAddToInventoryDialog: FC<
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent size="md">
-        <DialogHeader>
-          <DialogTitle>Add to Inventory</DialogTitle>
-          <DialogDescription>
-            Stock "{product.name}" at a location.
-          </DialogDescription>
-        </DialogHeader>
-        <Stack gap="md">
-          <ComboboxFieldWithSearch
-            form={form}
-            name="location"
-            label="Location"
-            searchType="location"
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      size="md"
+      title="Add to Inventory"
+      description={`Stock "${product.name}" at a location.`}
+    >
+      <Stack gap="md">
+        <ComboboxFieldWithSearch
+          form={form}
+          name="location"
+          label="Location"
+          searchType="location"
+        />
+        {locationId ? (
+          <QuickInventoryAdd
+            locationId={locationId}
+            initialProduct={initialProduct}
+            onSuccess={() => handleOpenChange(false)}
           />
-          {locationId ? (
-            <QuickInventoryAdd
-              locationId={locationId}
-              initialProduct={initialProduct}
-              onSuccess={() => handleOpenChange(false)}
-            />
-          ) : (
-            <Description>Pick a location to stock this product.</Description>
-          )}
-        </Stack>
-      </DialogContent>
-    </Dialog>
+        ) : (
+          <Description>Pick a location to stock this product.</Description>
+        )}
+      </Stack>
+    </ResponsiveDialog>
   );
 };

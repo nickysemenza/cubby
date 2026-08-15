@@ -4,16 +4,10 @@ import type { ComponentProps, ReactNode } from "react";
 import { IngredientForm } from "~/app/_components/ingredients/ingredient-form";
 import { LocationForm } from "~/app/_components/locations/location-form";
 import { ProductForm } from "~/app/_components/products/product-form";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
+import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 
 /**
- * Common dialog wrapper that prevents closing when clicking on Popover contents.
- * Used by all Create*Dialog components.
+ * Common responsive shell used by all Create*Dialog components.
  */
 function CreateEntityDialogWrapper({
   isOpen,
@@ -26,17 +20,17 @@ function CreateEntityDialogWrapper({
   onOpenChange: (open: boolean) => void;
   title: string;
   children: ReactNode;
-  size?: ComponentProps<typeof DialogContent>["size"];
+  size?: ComponentProps<typeof ResponsiveDialog>["size"];
 }) {
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent size={size}>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        {children}
-      </DialogContent>
-    </Dialog>
+    <ResponsiveDialog
+      open={isOpen}
+      onOpenChange={onOpenChange}
+      title={title}
+      size={size}
+    >
+      {children}
+    </ResponsiveDialog>
   );
 }
 

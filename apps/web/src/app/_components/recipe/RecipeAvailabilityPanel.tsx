@@ -13,7 +13,7 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { useTRPC } from "~/integrations/trpc/react";
 import { cn } from "~/lib/utils";
 
-const SHELL = "rounded-lg border border-[var(--border)] px-4 py-2 print:hidden";
+const SHELL = "border border-[var(--border)] px-4 py-2 print:hidden";
 
 /** Name + status colour; links through to the ingredient when the row resolved
  * to one (sub-recipe rows carry no ingredient id). */

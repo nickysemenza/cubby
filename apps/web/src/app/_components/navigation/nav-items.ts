@@ -71,6 +71,15 @@ type NavNode = NavItem | NavGroup;
 export const isNavGroup = (node: NavNode): node is NavGroup =>
   "children" in node;
 
+export function navItemLinkProps(item: NavItem, active: boolean) {
+  return {
+    to: item.to,
+    preload: "intent" as const,
+    preloadDelay: 40,
+    "aria-current": active ? ("page" as const) : undefined,
+  };
+}
+
 // The handful of leaves shared across surfaces that aren't derived from the
 // desktop tree (top-level desktop + bottom tabs / public bar). Everything else
 // is inlined where it's used.

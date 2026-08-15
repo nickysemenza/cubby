@@ -296,7 +296,7 @@ function AutoFixableGroup({
 
   return (
     <Collapsible open={open} onOpenChange={onOpenChange}>
-      <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md border border-border px-4 py-2 text-left text-sm transition-colors hover:bg-muted/50">
+      <CollapsibleTrigger className="flex w-full items-center gap-2 border border-border px-4 py-2 text-left text-sm transition-colors hover:bg-muted/50">
         <ChevronRight
           className={`size-3.5 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
         />

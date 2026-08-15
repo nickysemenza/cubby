@@ -13,7 +13,12 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
-import { getSidebarGroupItems, type NavGroup, type NavItem } from "./nav-items";
+import {
+  getSidebarGroupItems,
+  type NavGroup,
+  type NavItem,
+  navItemLinkProps,
+} from "./nav-items";
 
 export function SidebarRailGroup({
   group,
@@ -81,14 +86,11 @@ export function SidebarRailLeaf({
       <TooltipTrigger
         render={
           <Link
-            to={item.to}
-            preload="intent"
-            preloadDelay={40}
+            {...navItemLinkProps(item, active)}
             className={cn(
               "mb-1 flex size-10 items-center justify-center border border-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
               active && "border-border bg-background text-foreground",
             )}
-            aria-current={active ? "page" : undefined}
             aria-label={item.label}
           />
         }
@@ -112,7 +114,7 @@ function SidebarFlyoutItem({
   const Icon = item.icon;
   return (
     <DropdownMenuItem
-      render={<Link to={item.to} preload="intent" preloadDelay={40} />}
+      render={<Link {...navItemLinkProps(item, active)} />}
       className={cn("gap-2", active && "bg-accent")}
     >
       <Icon className="size-3.5" />

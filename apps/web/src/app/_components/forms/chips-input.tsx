@@ -15,6 +15,7 @@ import { Input } from "~/components/ui/input";
 import { cn } from "~/lib/utils";
 
 export interface ChipsInputProps {
+  id?: string;
   value: string[] | null;
   onChange: (values: string[]) => void;
   className?: string;
@@ -74,6 +75,7 @@ const defaultNormalize = (raw: string) => raw.trim();
  * implementation. See `recipe-form/tag-input.tsx` for the themed wrapper.
  */
 export const ChipsInput: FC<ChipsInputProps> = ({
+  id,
   value,
   onChange,
   className,
@@ -169,6 +171,7 @@ export const ChipsInput: FC<ChipsInputProps> = ({
       <div className="relative">
         <Row gap="sm">
           <Input
+            id={id}
             ref={inputRef}
             autoFocus={autoFocus}
             value={inputValue}
@@ -193,7 +196,7 @@ export const ChipsInput: FC<ChipsInputProps> = ({
         </Row>
 
         {showSuggestions && suggestions.length > 0 && (
-          <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover p-1">
+          <div className="absolute z-50 mt-1 w-full border bg-popover p-1">
             {suggestions.map((suggestion) => (
               <Row
                 as="button"

@@ -69,7 +69,7 @@ function VitalsPanel({
   return (
     <aside className="w-full lg:w-[230px] lg:self-start lg:justify-self-end">
       {show ? (
-        <div className="rounded-xl border border-[var(--border)] bg-card p-4">
+        <div className="border border-[var(--border)] bg-card p-4">
           <Row align="center" justify="between" className="mb-2">
             <span className="eyebrow">{stats.basisLabel}</span>
             <button

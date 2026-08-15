@@ -70,9 +70,9 @@ const EVENT_CALENDAR_COLORS: Array<{ name: string; value: string }> = [
  *   a cursor-following validation hint.
  */
 const EVENT_CALENDAR_GHOST = {
-  move: "rounded-sm border border-dashed border-(--ec-event-color)/50 bg-(--ec-event-color)/8",
+  move: "border border-dashed border-(--ec-event-color)/50 bg-(--ec-event-color)/8",
   resize:
-    "rounded-sm border border-dashed border-(--ec-event-color)/70 overflow-hidden",
+    "border border-dashed border-(--ec-event-color)/70 overflow-hidden",
   invalid: "border-destructive/70 bg-destructive/10",
   invalidResize: "border-destructive/70",
   /** Applied to the clone inside an invalid resize ghost. */

@@ -1,11 +1,11 @@
 import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
-import { Clock, Info, Pencil } from "lucide-react";
+import { Clock, Info } from "lucide-react";
 import { useState } from "react";
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { BasicInfo } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
-import { Button } from "~/components/ui/button";
+import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { financialTransactionMutationInvalidateKeys } from "~/lib/query-keys";
@@ -40,10 +40,7 @@ export function FinancialTransactionDetail({
       rawData={transaction}
       actions={
         <>
-          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-            <Pencil />
-            Edit
-          </Button>
+          <DetailEditAction onClick={() => setEditOpen(true)} />
           {deleteButton}
         </>
       }

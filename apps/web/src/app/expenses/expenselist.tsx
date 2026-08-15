@@ -18,16 +18,14 @@ import {
   expenseVendorColumn,
 } from "~/app/projects/shared";
 import { VendorMark } from "~/components/entity/vendor-cell";
-import { Grid, Row } from "~/components/layout";
+import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
-import { StatTile } from "~/components/ui/stat-tile";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
-import { formatCurrency } from "~/lib/utils";
 import {
   createProductLinkColumn,
   createProjectLinkColumn,
@@ -50,6 +48,7 @@ import {
   createExpenseProductImageColumn,
   ExpenseProductImages,
 } from "./expense-product-image-column";
+import { ExpenseSummaryStrip } from "./expense-summary-strip";
 import { SettleExpenseDialog } from "./settle-expense-dialog";
 
 // Scoped rather than a plain `useNavigate()` so `search` stays typed to this
@@ -472,22 +471,11 @@ export function ExpenseList() {
 
   return (
     <div>
-      <Grid cols="summary" className="mb-4">
-        <StatTile label="Actual">
-          {formatCurrency(summary?.actual ?? 0, 0)}
-        </StatTile>
-        <StatTile label="Committed">
-          {formatCurrency(summary?.committed ?? 0, 0)}
-        </StatTile>
-        <StatTile label="Credits">
-          {formatCurrency(summary?.credits ?? 0, 0)}
-        </StatTile>
-        <StatTile label="Net">{formatCurrency(summary?.net ?? 0, 0)}</StatTile>
-        <StatTile label="Purchase adjustments">
-          {formatCurrency(analyticsQuery.data?.adjustments.net ?? 0, 0)}
-        </StatTile>
-        <StatTile label="Count">{summary?.count ?? 0}</StatTile>
-      </Grid>
+      <ExpenseSummaryStrip
+        summary={summary}
+        adjustmentsNet={analyticsQuery.data?.adjustments.net}
+        className="mb-4"
+      />
       <ExpenseProductImages rows={data}>
         <RTable
           table={table}

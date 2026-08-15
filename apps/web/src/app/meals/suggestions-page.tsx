@@ -87,7 +87,7 @@ function RecipeCoverageCard({ recipe }: { recipe: RecipeAvailability }) {
   return (
     <Stack
       gap="sm"
-      className="rounded-lg border border-[var(--border)] p-4 transition-colors hover:bg-accent"
+      className="border border-[var(--border)] p-4 transition-colors hover:bg-accent"
     >
       <Link
         {...entityDetailLink("recipe", recipe.recipeId)}

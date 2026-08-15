@@ -186,7 +186,7 @@ export function EntityReferenceGraph({
   return (
     <div
       ref={containerRef}
-      className="relative h-[420px] w-full overflow-hidden rounded-md border border-[var(--border)]"
+      className="relative h-[420px] w-full overflow-hidden border border-[var(--border)]"
     >
       <svg
         aria-label="Entity reference graph"

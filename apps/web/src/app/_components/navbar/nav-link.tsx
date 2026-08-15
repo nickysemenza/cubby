@@ -1,6 +1,10 @@
 import { Link } from "@tanstack/react-router";
 import { cn } from "~/lib/utils";
-import { type NavItem, useActiveTo } from "../navigation/nav-items";
+import {
+  type NavItem,
+  navItemLinkProps,
+  useActiveTo,
+} from "../navigation/nav-items";
 
 /**
  * A single top-level desktop nav link. The label is hidden below `lg` so the
@@ -12,14 +16,11 @@ export const NavLink = ({ item }: { item: NavItem }) => {
 
   return (
     <Link
-      to={item.to}
-      preload="intent"
-      preloadDelay={40}
+      {...navItemLinkProps(item, active)}
       className={cn(
         "nav-link-animated inline-flex items-center gap-2 font-medium text-sm transition-colors hover:text-primary",
         !active && "text-muted-foreground",
       )}
-      aria-current={active ? "page" : undefined}
       data-status={active ? "active" : undefined}
       title={item.label}
     >

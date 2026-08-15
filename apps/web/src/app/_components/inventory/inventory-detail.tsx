@@ -2,13 +2,13 @@ import type {
   InventoryUpdateInput,
   inventoryWithLocationAndProductOut,
 } from "@cubby/schemas/inventory";
-import { ArrowRightLeft, Package, Pencil } from "lucide-react";
+import { ArrowRightLeft, Package } from "lucide-react";
 import type { FC } from "react";
 import { useState } from "react";
 import type { z } from "zod";
-import { Row } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
+import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { useTRPC } from "~/integrations/trpc/react";
 import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
@@ -70,16 +70,8 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
   // while a delete is in flight so the row reads as "deleting" before the
   // redirect lands.
   const actions = (
-    <Row align="center" gap="sm">
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={editMode.startEditing}
-        disabled={isPending}
-      >
-        <Pencil />
-        Edit
-      </Button>
+    <>
+      <DetailEditAction onClick={editMode.startEditing} disabled={isPending} />
       <Button
         variant="outline"
         size="sm"
@@ -90,7 +82,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
         Move
       </Button>
       {deleteButton}
-    </Row>
+    </>
   );
 
   return (

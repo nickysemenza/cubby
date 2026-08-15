@@ -13,7 +13,7 @@ import {
   LayoutList,
   List,
 } from "lucide-react";
-import { Fragment, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Stack } from "~/components/layout";
@@ -42,7 +42,6 @@ import {
   hasActiveFilters,
   isNarrowed,
 } from "./entity-empty-states";
-import { HeaderFilter } from "./HeaderFilter";
 import { MobileListScreen } from "./MobileListScreen";
 import { RowsPerPageSelect } from "./rows-per-page-select";
 import { SectionHeader } from "./SectionHeader";
@@ -212,14 +211,20 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   // Embedded tables drop chrome that would carry no information: a toolbar
   // holding only the View menu + page-size control, and a pager for a list that
   // fits on one page (the rule mobile already applies to its inline pager).
-  // `showColumnMenu` is the opt-out: a table with optional columns needs the
-  // View menu at rest, not only once rows are selected (`bulkActionBar` is null
-  // until then, which is what made those columns unreachable).
+  // A table with optional columns or filters needs its toolbar at rest, not
+  // only once rows are selected (`bulkActionBar` is null until then).
+  const hasFilterConfig = table
+    .getAllLeafColumns()
+    .some((column) => column.columnDef.meta?.filterConfig);
   const showToolbar =
     !embedded ||
     showColumnMenu ||
     Boolean(
-      actions ?? bulkActionBar ?? additionalToolbarContent ?? groupConfig,
+      actions ??
+        bulkActionBar ??
+        additionalToolbarContent ??
+        groupConfig ??
+        hasFilterConfig,
     );
   const showPagination = !embedded || table.getPageCount() > 1;
 
@@ -519,146 +524,136 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                 {/* Sticks to the pane's own top, so there is no offset to keep
                   in sync with the nav and toolbar heights. */}
                 <TableHeader className="sticky top-0 z-30 bg-card shadow-[0_1px_0_var(--border)] [&_th]:bg-card [&_tr]:border-b-0">
-                  {table.getHeaderGroups().map((headerGroup) => {
-                    // Check if any column has a filter config
-                    const hasAnyFilters = headerGroup.headers.some(
-                      (h) => h.column.columnDef.meta?.filterConfig,
-                    );
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <TableRow
+                      key={headerGroup.id}
+                      className="border-border/50 border-b"
+                    >
+                      {headerGroup.headers.map((header) => {
+                        const sortDirection = header.column.getIsSorted();
+                        const canSort = header.column.getCanSort();
+                        const numeric =
+                          header.column.columnDef.meta?.numeric ?? false;
+                        const sortingArrows =
+                          sortDirection === "desc" ? (
+                            <ArrowDown
+                              className={styles.sortIcon}
+                              aria-hidden="true"
+                            />
+                          ) : sortDirection === "asc" ? (
+                            <ArrowUp
+                              className={styles.sortIcon}
+                              aria-hidden="true"
+                            />
+                          ) : canSort ? (
+                            <ArrowUpDown
+                              className={cn(
+                                styles.sortIcon,
+                                "opacity-40 group-hover:opacity-100",
+                              )}
+                              aria-hidden="true"
+                            />
+                          ) : null;
 
-                    return (
-                      <Fragment key={headerGroup.id}>
-                        {/* Title Row */}
-                        <TableRow
-                          className={cn(
-                            "border-border/50 border-b-0",
-                            !hasAnyFilters && "border-b",
-                          )}
-                        >
-                          {headerGroup.headers.map((header) => {
-                            const sortDirection = header.column.getIsSorted();
-                            const canSort = header.column.getCanSort();
-                            const numeric =
-                              header.column.columnDef.meta?.numeric ?? false;
-                            const sortingArrows =
-                              sortDirection === "desc" ? (
-                                <ArrowDown
-                                  className={styles.sortIcon}
-                                  aria-hidden="true"
-                                />
-                              ) : sortDirection === "asc" ? (
-                                <ArrowUp
-                                  className={styles.sortIcon}
-                                  aria-hidden="true"
-                                />
-                              ) : canSort ? (
-                                <ArrowUpDown
-                                  className={cn(
-                                    styles.sortIcon,
-                                    "opacity-40 group-hover:opacity-100",
-                                  )}
-                                  aria-hidden="true"
-                                />
-                              ) : null;
-
-                            const titleContent = (
-                              <>
-                                {header.isPlaceholder
-                                  ? null
-                                  : flexRender(
-                                      header.column.columnDef.header,
-                                      header.getContext(),
-                                    )}
-                                {sortingArrows}
-                                {/* Sort-stack position (1-based) — only shown
+                        const titleContent = (
+                          <>
+                            {header.isPlaceholder
+                              ? null
+                              : flexRender(
+                                  header.column.columnDef.header,
+                                  header.getContext(),
+                                )}
+                            {sortingArrows}
+                            {/* Sort-stack position (1-based) — only shown
                                   when 2+ columns are stacked via shift-click */}
-                                {sortDirection &&
-                                  table.getState().sorting.length > 1 && (
-                                    <span className="text-3xs text-muted-foreground tabular-nums">
-                                      {header.column.getSortIndex() + 1}
-                                    </span>
-                                  )}
-                              </>
-                            );
+                            {sortDirection &&
+                              table.getState().sorting.length > 1 && (
+                                <span className="text-3xs text-muted-foreground tabular-nums">
+                                  {header.column.getSortIndex() + 1}
+                                </span>
+                              )}
+                          </>
+                        );
 
-                            // User-resized width (persisted): under table-fixed,
-                            // sizing the header cell drives the whole column.
-                            const resizedWidth = columnSizing[header.column.id];
-                            const isResizable =
-                              header.column.id !== "select" &&
-                              header.column.id !== "actions";
-                            return (
-                              <TableHead
-                                key={header.id}
-                                colSpan={header.colSpan}
-                                aria-sort={
-                                  sortDirection === "asc"
-                                    ? "ascending"
-                                    : sortDirection === "desc"
-                                      ? "descending"
-                                      : "none"
-                                }
+                        // User-resized width (persisted): under table-fixed,
+                        // sizing the header cell drives the whole column.
+                        const resizedWidth = columnSizing[header.column.id];
+                        const isResizable =
+                          header.column.id !== "select" &&
+                          header.column.id !== "actions";
+                        return (
+                          <TableHead
+                            key={header.id}
+                            colSpan={header.colSpan}
+                            aria-sort={
+                              sortDirection === "asc"
+                                ? "ascending"
+                                : sortDirection === "desc"
+                                  ? "descending"
+                                  : "none"
+                            }
+                            className={cn(
+                              // group/th: the resize handle only inks up
+                              // when its own header is hovered.
+                              "group/th relative",
+                              styles.header,
+                              numeric && "text-right",
+                              header.column.columnDef.meta?.className,
+                              sortDirection && "bg-muted/50",
+                            )}
+                            style={
+                              resizedWidth
+                                ? {
+                                    width: resizedWidth,
+                                    minWidth: resizedWidth,
+                                    maxWidth: resizedWidth,
+                                  }
+                                : undefined
+                            }
+                          >
+                            {canSort ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
                                 className={cn(
-                                  // group/th: the resize handle only inks up
-                                  // when its own header is hovered.
-                                  "group/th relative",
-                                  styles.header,
-                                  numeric && "text-right",
-                                  header.column.columnDef.meta?.className,
-                                  sortDirection && "bg-muted/50",
+                                  // select-none: shift-click (multi-sort) must
+                                  // not start a text selection
+                                  "group h-6 select-none gap-1 px-2 font-semibold text-2xs uppercase tracking-wider hover:bg-muted/60",
+                                  // Mirror the cell's right-align: pull the label
+                                  // to the column's right edge for numeric cols,
+                                  // else keep the left-edge compensation.
+                                  numeric
+                                    ? "-mr-2 justify-end"
+                                    : "-ml-2 justify-start",
                                 )}
-                                style={
-                                  resizedWidth
-                                    ? {
-                                        width: resizedWidth,
-                                        minWidth: resizedWidth,
-                                        maxWidth: resizedWidth,
-                                      }
-                                    : undefined
-                                }
+                                // Canonical TanStack handler: routes
+                                // shift-click through isMultiSortEvent so
+                                // stacked sorts work without custom logic.
+                                onClick={header.column.getToggleSortingHandler()}
                               >
-                                {canSort ? (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className={cn(
-                                      // select-none: shift-click (multi-sort) must
-                                      // not start a text selection
-                                      "group h-6 select-none gap-1 px-2 font-semibold text-2xs uppercase tracking-wider hover:bg-muted/60",
-                                      // Mirror the cell's right-align: pull the label
-                                      // to the column's right edge for numeric cols,
-                                      // else keep the left-edge compensation.
-                                      numeric
-                                        ? "-mr-2 justify-end"
-                                        : "-ml-2 justify-start",
-                                    )}
-                                    // Canonical TanStack handler: routes
-                                    // shift-click through isMultiSortEvent so
-                                    // stacked sorts work without custom logic.
-                                    onClick={header.column.getToggleSortingHandler()}
-                                  >
-                                    {titleContent}
-                                  </Button>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1">
-                                    {titleContent}
-                                  </span>
-                                )}
-                                {isResizable && (
-                                  <ColumnResizeHandle
-                                    columnId={header.column.id}
-                                    onCommit={setColumnSize}
-                                    onReset={resetColumnSize}
-                                  />
-                                )}
-                              </TableHead>
-                            );
-                          })}
-                          {isDebugEnabled && (
-                            <TableHead className={cn(styles.header)}>
-                              Debug
-                            </TableHead>
-                          )}
-                          {/* Trailing gutter, pinned to zero so the COLUMNS get
+                                {titleContent}
+                              </Button>
+                            ) : (
+                              <span className="inline-flex items-center gap-1">
+                                {titleContent}
+                              </span>
+                            )}
+                            {isResizable && (
+                              <ColumnResizeHandle
+                                columnId={header.column.id}
+                                onCommit={setColumnSize}
+                                onReset={resetColumnSize}
+                              />
+                            )}
+                          </TableHead>
+                        );
+                      })}
+                      {isDebugEnabled && (
+                        <TableHead className={cn(styles.header)}>
+                          Debug
+                        </TableHead>
+                      )}
+                      {/* Trailing gutter, pinned to zero so the COLUMNS get
                             the table's leftover width. Left unsized it's the
                             only auto cell under `table-fixed`, so it swallows
                             every surplus pixel and the columns sit at exactly
@@ -672,60 +667,14 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                             table-fixed the first row sizes every column, so the
                             body spacer (DesktopDataRow) stays untouched and row
                             memoization is unaffected. */}
-                          <TableHead
-                            data-spacer
-                            aria-hidden
-                            scope={undefined}
-                            className={cn(styles.header, "w-0")}
-                          />
-                        </TableRow>
-
-                        {/* Filter Row - only render if any column has filters */}
-                        {hasAnyFilters && (
-                          <TableRow
-                            key={`${headerGroup.id}-filters`}
-                            className={styles.filterRow}
-                          >
-                            {headerGroup.headers.map((header) => {
-                              const filterConfig =
-                                header.column.columnDef.meta?.filterConfig;
-
-                              return (
-                                <TableHead
-                                  key={`${header.id}-filter`}
-                                  scope={undefined}
-                                  colSpan={header.colSpan}
-                                  className={cn(
-                                    header.column.columnDef.meta?.className,
-                                    styles.filterRow,
-                                  )}
-                                >
-                                  {filterConfig && (
-                                    <HeaderFilter
-                                      column={header.column}
-                                      filterConfig={filterConfig}
-                                    />
-                                  )}
-                                </TableHead>
-                              );
-                            })}
-                            {isDebugEnabled && (
-                              <TableHead
-                                scope={undefined}
-                                className={cn(styles.filterRow)}
-                              />
-                            )}
-                            <TableHead
-                              data-spacer
-                              aria-hidden
-                              scope={undefined}
-                              className={styles.filterRow}
-                            />
-                          </TableRow>
-                        )}
-                      </Fragment>
-                    );
-                  })}
+                      <TableHead
+                        data-spacer
+                        aria-hidden
+                        scope={undefined}
+                        className={cn(styles.header, "w-0")}
+                      />
+                    </TableRow>
+                  ))}
                 </TableHeader>
                 <TableBody
                   inert={isTransitioning ? true : undefined}

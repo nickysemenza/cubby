@@ -143,7 +143,7 @@ export function ShoppingMatrix({
   const shortCount = rows.filter((r) => (r.shortfall ?? 0) > 0).length;
 
   return (
-    <div className="hidden overflow-hidden rounded-lg border border-[var(--border)] sm:block">
+    <div className="hidden overflow-hidden border border-[var(--border)] sm:block">
       <CrossTabTable<ShoppingRow, ShoppingLineColumn>
         cornerLabel="Ingredient"
         surface="background"

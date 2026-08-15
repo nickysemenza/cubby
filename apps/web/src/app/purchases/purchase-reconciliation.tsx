@@ -20,18 +20,14 @@ import { formatCurrency } from "~/lib/utils";
  * `@cubby/schemas/purchase`, never re-derived here, so the list column, the
  * detail cue and the server's `notReconciling` worklist can't disagree.
  */
-const TONE: Record<PurchaseReconciliation, BadgeVariant> = {
-  unknown: "slate",
-  match: "positive",
-  refund_adjusted: "slate",
-  mismatch: "warning",
-};
-
-const LABEL: Record<PurchaseReconciliation, string> = {
-  unknown: "No stated total",
-  match: "Reconciles",
-  refund_adjusted: "Refund-adjusted",
-  mismatch: "Needs review",
+const STATUS_PRESENTATION: Record<
+  PurchaseReconciliation,
+  { label: string; variant: BadgeVariant }
+> = {
+  unknown: { label: "No stated total", variant: "slate" },
+  match: { label: "Reconciles", variant: "positive" },
+  refund_adjusted: { label: "Refund-adjusted", variant: "slate" },
+  mismatch: { label: "Needs review", variant: "warning" },
 };
 
 type ReconciliationPurchase = {
@@ -73,11 +69,12 @@ export const ReconciliationBadge: FC<{
   const status = purchaseReconciliationStatus(purchase);
   const delta = reconciliationDelta(purchase);
 
+  const presentation = STATUS_PRESENTATION[status];
   return (
-    <Badge variant={TONE[status]}>
+    <Badge variant={presentation.variant}>
       {(status === "mismatch" || status === "refund_adjusted") && delta !== null
-        ? `${LABEL[status]} ${formatCurrency(delta)}`
-        : LABEL[status]}
+        ? `${presentation.label} ${formatCurrency(delta)}`
+        : presentation.label}
     </Badge>
   );
 };

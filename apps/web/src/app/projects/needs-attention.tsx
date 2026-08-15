@@ -88,7 +88,7 @@ export function NeedsAttention({ items }: { items: ProjectAttentionItem[] }) {
   }
 
   return (
-    <Stack className="rounded-lg border border-warning/40 bg-warning/10 p-4">
+    <Stack className="border border-warning/40 bg-warning/10 p-4">
       <Row align="center" gap="sm" className="font-medium text-sm text-warning">
         <AlertTriangle className="size-4" />
         Needs Attention ({items.length})

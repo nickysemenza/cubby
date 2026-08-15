@@ -58,6 +58,7 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
+import { NativeSelect } from "~/components/ui/native-select";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -490,7 +491,7 @@ export function ToolMatrixPage({
           />
           <Row align="center" gap="sm">
             <span className="eyebrow">Completed</span>
-            <select
+            <NativeSelect
               aria-label="Filter projects by completion year"
               value={search.completed ?? ""}
               onChange={(event) =>
@@ -499,7 +500,7 @@ export function ToolMatrixPage({
                   page: undefined,
                 })
               }
-              className="h-7 rounded border border-[var(--border)] bg-background px-2 font-mono text-2xs"
+              className="font-mono text-2xs"
             >
               <option value="">All</option>
               {data.filterOptions.completionYears.map((year) => (
@@ -507,7 +508,7 @@ export function ToolMatrixPage({
                   {year}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </Row>
           <Row align="center" gap="xs" className="ml-auto">
             <button
