@@ -50,12 +50,22 @@ async function handler({ request }: { request: Request }) {
   const feed = rawFeed ? FEEDS[rawFeed] : undefined;
   if (!feed || !rawToken) return notFound();
 
+  let token: string;
+  try {
+    token = decodeURIComponent(rawToken);
+  } catch {
+    // decodeURIComponent throws URIError on a malformed %-sequence (`%ZZ`).
+    // Unguarded that escapes as a 5xx, and any status other than 404 tells a
+    // prober the route parsed this far. Note this is runtime-dependent: the
+    // Node dev server rejects such a URL at the HTTP layer before the handler
+    // runs, so it only reaches here on workerd. Same hazard `safeDecode` guards
+    // in lib/sentry-scrub.ts.
+    return notFound();
+  }
+
   // A miss is a 404, not a 401: a 401 would confirm to anyone probing that this
   // URL shape is real and that only the token is wrong.
-  const userId = await findUserByCalendarFeedToken(
-    db,
-    decodeURIComponent(rawToken),
-  );
+  const userId = await findUserByCalendarFeedToken(db, token);
   if (!userId) return notFound();
 
   const now = new Date();
