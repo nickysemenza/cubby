@@ -26,6 +26,7 @@ import {
   type ShoppingListContribution,
   shoppingListOut,
 } from "@cubby/schemas/meal";
+import { contributesToShoppingList } from "@cubby/schemas/meal-classification";
 import { createAppError } from "~/server/errors/app-error";
 import {
   addRecipeToMeal,
@@ -190,7 +191,24 @@ const getShoppingList = protectedProcedure
       ShoppingListContribution,
       "needValue" | "lineIndex" | "via"
     >[] = [];
-    for (const m of meals) {
+    // A meal you aren't cooking contributes nothing to buy: an eating-out
+    // night has no recipes to aggregate, and a leftovers night's ingredients
+    // were already bought when the meal was first cooked — counting them again
+    // would double the shopping list. Partitioned rather than filtered so the
+    // omission can be disclosed instead of silently vanishing.
+    const cookedMeals = meals.filter((m) =>
+      contributesToShoppingList(m.mealKind),
+    );
+    const omittedMeals = meals
+      .filter((m) => !contributesToShoppingList(m.mealKind))
+      .map((m) => ({
+        id: m.id,
+        name: m.name,
+        date: m.date,
+        mealKind: m.mealKind,
+      }));
+
+    for (const m of cookedMeals) {
       for (const mr of m.recipes) {
         publicLines.push({ recipeId: mr.recipeId, scale: mr.scale });
         lineMeta.push({
@@ -246,7 +264,8 @@ const getShoppingList = protectedProcedure
     return {
       from: input.from,
       to: input.to,
-      meals: meals.map((m) => ({ id: m.id, name: m.name, date: m.date })),
+      meals: cookedMeals.map((m) => ({ id: m.id, name: m.name, date: m.date })),
+      omittedMeals,
       items,
       // Attribute each un-expandable sub-recipe back to the meal that asked
       // for it, so the disclosure can name where the gap is.

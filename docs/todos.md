@@ -271,7 +271,9 @@ runtime CDN) are all shipped. Target is iOS Safari only. Remaining:
   `scripts/report-product-quantity-backfill.ts` as the evidence manifest.
 - [ ] **Problems detectors for meals + cookbooks**: partially-imported cookbooks
   (`sourceRecipeCount > recipeCount` — visible only if you open that book),
-  empty meals, meals whose recipes have no totals, recipes with zero
+  empty meals — now writable, since `mealKind` distinguishes an unfinished
+  cooked meal from a deliberately recipe-less eating-out one — meals whose
+  recipes have no totals, recipes with zero
   instructions.
 - [ ] **Products list bulk print-labels**: locations table has the bulk action,
   products has per-row only, and the `/labels` empty state promises both.
@@ -288,8 +290,9 @@ v1 shipped — calendar (week + table), per-meal scaling, and a display-only sho
 list (need vs. on-hand). The shopping list stays **display-only**: it reads inventory,
 it never writes it. Deferred:
 
-- [ ] Meal labels, recurring meals, meal templates, nutrition goals (each its own
-  future slice).
+- [ ] Recurring meals, meal templates, nutrition goals (each its own future
+  slice). Meal labels shipped as the `mealType` (slot) + `mealKind` (cooked /
+  leftovers / eating out / takeout) enum pair.
 - [ ] **Shopping list v1.5** (2026-07 audit — all display-layer, tenet-safe):
   manual/ad-hoc items ("milk, paper towels" — without them it can't be *the*
   list you take to the store); estimated trip cost (the costing engine's most

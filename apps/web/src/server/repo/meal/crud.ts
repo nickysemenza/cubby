@@ -7,8 +7,10 @@ import type { MealId, MealRecipeId } from "@cubby/schemas/identifiers";
 import type {
   MealCreateInput,
   MealFilters,
+  MealKind,
   MealOut,
   MealRecipeInput,
+  MealType,
 } from "@cubby/schemas/meal";
 import { mealSortableFields } from "@cubby/schemas/meal";
 import {
@@ -26,6 +28,8 @@ import {
   auditDateWhereConditions,
   buildOrderBy,
   countWhere,
+  eqAny,
+  eqAnyOrPresence,
   executeListQueryWithCount,
   getDb,
   insertAndReturn,
@@ -118,6 +122,14 @@ export const mealList = async (
     // the manifest renders its control — omitting this is the #588 drift, where
     // the UI sends a filter the server silently ignores.
     ...relatedWhereConditions("meal", filters, meal.id),
+    // OR-ed, not narrowed: "unslotted" is a value of the same picker, so
+    // selecting it alongside `dinner` means "dinner or unslotted".
+    eqAnyOrPresence(
+      meal.mealType,
+      filters.mealType,
+      filters.mealTypePresenceFilter,
+    ),
+    eqAny(meal.mealKind, filters.mealKind),
     filters.from ? gte(meal.date, filters.from) : undefined,
     filters.to ? lte(meal.date, filters.to) : undefined,
   );
@@ -146,6 +158,10 @@ export const createMealWithEntityId = async (
       date: data.date,
       name: data.name ?? null,
       sortOrder: data.sortOrder ?? null,
+      mealType: data.mealType ?? null,
+      // Omitted rather than coalesced — let the column default supply "cooked"
+      // in one place instead of restating it here.
+      ...(data.mealKind !== undefined ? { mealKind: data.mealKind } : {}),
     });
     if (data.recipes?.length) {
       // `resolveAllOrThrow` returns ids positionally, one per input code, so
@@ -183,7 +199,13 @@ export const createMeal = async (
 export const updateMeal = async (
   db: Database,
   id: MealId,
-  data: { date?: string; name?: string | null; sortOrder?: number | null },
+  data: {
+    date?: string;
+    name?: string | null;
+    sortOrder?: number | null;
+    mealType?: MealType | null;
+    mealKind?: MealKind;
+  },
   actor: ActorContext,
 ): Promise<MealOut> => {
   // Mutation + audit in one transaction so the change is never left unrecorded.
@@ -195,6 +217,8 @@ export const updateMeal = async (
         ...(data.date !== undefined ? { date: data.date } : {}),
         ...(data.name !== undefined ? { name: data.name } : {}),
         ...(data.sortOrder !== undefined ? { sortOrder: data.sortOrder } : {}),
+        ...(data.mealType !== undefined ? { mealType: data.mealType } : {}),
+        ...(data.mealKind !== undefined ? { mealKind: data.mealKind } : {}),
       },
       id,
     );

@@ -38,6 +38,11 @@ const meal = (overrides: DeepPartial<MealItem> = {}): MealItem =>
       cost: 12.5,
       calories: 820,
       nutritionPending: false,
+      // Pinned, not generated: `mock` would otherwise pick a random slot/kind
+      // per seed, and a non-cooked kind adds a DESCRIPTION line that every
+      // other assertion here would have to account for.
+      mealType: "dinner",
+      mealKind: "cooked",
       ...overrides,
     },
   });

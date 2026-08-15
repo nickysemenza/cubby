@@ -658,6 +658,8 @@ export const slimMeal = defineSlim(mealMcpOut, (mRow: Row) => {
     date: m.date,
     name: m.name,
     sortOrder: m.sortOrder,
+    mealType: m.mealType,
+    mealKind: m.mealKind,
     totals: m.totals,
     recipes: (m.recipes ?? []).map((mr) => ({
       // mealRecipe row id — declared exception, no shortcode; stays uuid.

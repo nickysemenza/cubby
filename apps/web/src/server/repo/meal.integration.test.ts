@@ -99,3 +99,87 @@ describe("mealList related-recipe filters", () => {
     expect(none.data.map((row) => row.name)).toEqual(["Nothing planned"]);
   });
 });
+
+describe("mealList classification filters", () => {
+  const ctx = withTestDb();
+
+  const seed = async () => {
+    const dinnerOut = await createMeal(
+      ctx.db,
+      mealCreateInput.parse({
+        date: "2026-03-01",
+        name: "Anniversary",
+        mealType: "dinner",
+        mealKind: "eating_out",
+      }),
+      ctx.actor,
+    );
+    const dinnerCooked = await createMeal(
+      ctx.db,
+      mealCreateInput.parse({
+        date: "2026-03-02",
+        name: "Roast",
+        mealType: "dinner",
+      }),
+      ctx.actor,
+    );
+    const unslotted = await createMeal(
+      ctx.db,
+      mealCreateInput.parse({ date: "2026-03-03", name: "Whenever" }),
+      ctx.actor,
+    );
+    return { dinnerOut, dinnerCooked, unslotted };
+  };
+
+  it("defaults mealKind to cooked and leaves mealType null", async () => {
+    const { unslotted } = await seed();
+    expect(unslotted.mealKind).toBe("cooked");
+    expect(unslotted.mealType).toBeNull();
+  });
+
+  it("narrows on mealType and on mealKind", async () => {
+    const { dinnerOut, dinnerCooked } = await seed();
+
+    const dinners = await mealList(
+      ctx.db,
+      { mealType: "dinner" },
+      [],
+      pagination,
+    );
+    expect(dinners.data.map((row) => row.id).sort()).toEqual(
+      [dinnerOut.id, dinnerCooked.id].sort(),
+    );
+
+    const out = await mealList(
+      ctx.db,
+      { mealKind: "eating_out" },
+      [],
+      pagination,
+    );
+    expect(out.data.map((row) => row.id)).toEqual([dinnerOut.id]);
+  });
+
+  it("ORs the mealType presence sentinel with the value list", async () => {
+    const { dinnerOut, dinnerCooked, unslotted } = await seed();
+
+    const none = await mealList(
+      ctx.db,
+      { mealTypePresenceFilter: "none" },
+      [],
+      pagination,
+    );
+    expect(none.data.map((row) => row.id)).toEqual([unslotted.id]);
+
+    // "dinner OR unslotted" — the sentinel widens the picker rather than
+    // narrowing it, which is what makes it a value of the same control.
+    const both = await mealList(
+      ctx.db,
+      { mealType: "dinner", mealTypePresenceFilter: "none" },
+      [],
+      pagination,
+    );
+    expect(both.data.map((row) => row.id).sort()).toEqual(
+      [dinnerOut.id, dinnerCooked.id, unslotted.id].sort(),
+    );
+  });
+});

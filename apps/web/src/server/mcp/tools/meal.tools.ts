@@ -34,12 +34,12 @@ export function registerMealTools(server: McpServer) {
     slim: slimMeal,
     sort: { orderBy: "date", direction: "desc" },
     descriptions: {
-      list: "List meals (planned eating occasions), most recent first, optionally bounded by a date range.",
+      list: "List meals (planned eating occasions), most recent first, optionally bounded by a date range. Filter by mealType (breakfast/lunch/dinner/...) or mealKind (cooked/eating_out/...).",
       get: "Get a single meal by ID, including its planned recipes and cost/calorie totals.",
       create:
-        "Create a meal on a calendar day. Optionally include recipes (by recipe shortcode) to plan in one call; use list_recipes/get_recipe to resolve shortcodes.",
+        "Create a meal on a calendar day. Optionally include recipes (by recipe shortcode) to plan in one call; use list_recipes/get_recipe to resolve shortcodes. A meal with mealKind eating_out/takeout is expected to have NO recipes — that is a complete record, not an incomplete one.",
       update:
-        "Update a meal's date, name, or sort order. Recipes are managed via add/update/remove_meal_recipe.",
+        "Update a meal's date, name, sort order, meal type, or kind. Recipes are managed via add/update/remove_meal_recipe.",
       delete:
         "Soft-delete meals by IDs. Cascades to the meal's planned recipes.",
     },

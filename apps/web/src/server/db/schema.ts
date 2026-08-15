@@ -40,6 +40,10 @@ import type {
 import { imageStatusValues } from "@cubby/schemas/image";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { LocationValuation } from "@cubby/schemas/location";
+import {
+  mealKindValues,
+  mealTypeValues,
+} from "@cubby/schemas/meal-classification";
 import type { BaseKind } from "@cubby/schemas/problems";
 import { productCategoryValues } from "@cubby/schemas/product";
 import {
@@ -477,6 +481,20 @@ export const meal = pgTable(
     date: date("date", { mode: "string" }).notNull(),
     name: text("name"),
     sortOrder: integer("sortOrder"),
+    // Which eating occasion of the day. Nullable: a meal planned before this
+    // column existed is genuinely unslotted, and defaulting it to "dinner"
+    // would invent a fact. The planning calendar orders a day by declaration
+    // order in mealTypeValues, unslotted last.
+    mealType: text("mealType", { enum: mealTypeValues }),
+    // How the meal is eaten. NOT NULL default "cooked" — true of every meal
+    // that predates the column, so it's a real value rather than a stand-in
+    // for "unknown". This is what distinguishes an intentionally recipe-less
+    // meal (eating out) from one whose recipes just haven't been added yet;
+    // both were always legal, neither was previously expressible. Only
+    // "cooked" feeds the shopping list.
+    mealKind: text("mealKind", { enum: mealKindValues })
+      .notNull()
+      .default("cooked"),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },

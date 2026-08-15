@@ -176,4 +176,67 @@ describe("calendar repository", () => {
       actualSpend: 0,
     });
   });
+  it("orders a day's meals by slot, not by title", async () => {
+    // The exact case that was wrong before mealType existed: sorting fell
+    // through to the title, so a breakfast named "Oatmeal" landed after a
+    // dinner named "Chili".
+    await createMeal(
+      ctx.db,
+      mealCreateInput.parse({
+        date: "2026-10-05",
+        name: "Chili",
+        mealType: "dinner",
+      }),
+      ctx.actor,
+    );
+    await createMeal(
+      ctx.db,
+      mealCreateInput.parse({
+        date: "2026-10-05",
+        name: "Oatmeal",
+        mealType: "breakfast",
+      }),
+      ctx.actor,
+    );
+    // Unslotted sorts last regardless of where its title falls alphabetically.
+    await createMeal(
+      ctx.db,
+      mealCreateInput.parse({ date: "2026-10-05", name: "Anytime" }),
+      ctx.actor,
+    );
+
+    const { items } = await getCalendarRange(ctx.db, {
+      startDate: "2026-10-05",
+      endDateExclusive: "2026-10-06",
+      kinds: ["meal"],
+    });
+
+    expect(items.map((item) => item.title)).toEqual([
+      "Oatmeal",
+      "Chili",
+      "Anytime",
+    ]);
+  });
+
+  it("titles an unnamed meal by its slot", async () => {
+    await createMeal(
+      ctx.db,
+      mealCreateInput.parse({ date: "2026-10-06", mealType: "breakfast" }),
+      ctx.actor,
+    );
+    await createMeal(
+      ctx.db,
+      mealCreateInput.parse({ date: "2026-10-07" }),
+      ctx.actor,
+    );
+
+    const { items } = await getCalendarRange(ctx.db, {
+      startDate: "2026-10-06",
+      endDateExclusive: "2026-10-08",
+      kinds: ["meal"],
+    });
+
+    // Unslotted keeps the old generic fallback — there is nothing better to say.
+    expect(items.map((item) => item.title)).toEqual(["Breakfast", "Meal"]);
+  });
 });

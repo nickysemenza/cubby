@@ -1,4 +1,4 @@
-import type { UnexpandedSubRecipe } from "@cubby/schemas/meal";
+import type { ShoppingListOut, UnexpandedSubRecipe } from "@cubby/schemas/meal";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
@@ -13,6 +13,7 @@ import {
 
 /** Module-level so the empty case doesn't allocate a new array each render. */
 const NO_GAPS: UnexpandedSubRecipe[] = [];
+const NO_OMITTED: ShoppingListOut["omittedMeals"] = [];
 
 /**
  * The shopping list's query + interaction state, owned above the renderer
@@ -82,6 +83,9 @@ export function useShoppingList(from?: string, to?: string) {
     columns,
     groups,
     unexpanded,
+    // Not exclusion-aware: these meals were never eligible to be excluded —
+    // the server never offered them as columns in the first place.
+    omittedMeals: data?.omittedMeals ?? NO_OMITTED,
     excluded: excludedKeys,
     toggleExcluded,
     checked,

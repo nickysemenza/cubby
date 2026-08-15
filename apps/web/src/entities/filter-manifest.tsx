@@ -51,6 +51,7 @@ import {
   amountRangeOptions,
   resolveAmountFilter,
 } from "~/app/finance/financial-transaction-options";
+import { mealKindOptions, mealTypeOptions } from "~/app/meals/meal-options";
 import {
   PROJECT_STATUS_OPTIONS,
   projectKindOptions,
@@ -1312,6 +1313,21 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     },
   ],
 
+  meal: [
+    {
+      columnId: "mealType",
+      kind: "multiselect",
+      placeholder: "Filter by meal type...",
+      options: mealTypeOptions,
+      nullable: { field: "mealTypePresenceFilter", label: "meal type" },
+    },
+    {
+      columnId: "mealKind",
+      kind: "multiselect",
+      placeholder: "Filter by kind...",
+      options: mealKindOptions,
+    },
+  ],
   recipe: [
     {
       columnId: "name",

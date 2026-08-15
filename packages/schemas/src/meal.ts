@@ -17,14 +17,30 @@ import {
   mealShortcode,
   recipeShortcode,
 } from "./identifiers";
+import { mealKindSchema, mealTypeSchema } from "./meal-classification";
 import { mealDate, mealScale } from "./meal-shared";
-import { createPaginatedResponseSchema } from "./pagination";
+import {
+  createPaginatedResponseSchema,
+  oneOrMany,
+  presenceFilter,
+} from "./pagination";
 import {
   costCalorieTotals,
   recipeTotals,
   recipeYieldSchema,
 } from "./recipe-shared";
 
+export {
+  MEAL_KIND_LABELS,
+  MEAL_TYPE_LABELS,
+  type MealKind,
+  mealKindSchema,
+  mealKindValues,
+  type MealType,
+  mealTypeRank,
+  mealTypeSchema,
+  mealTypeValues,
+} from "./meal-classification";
 export { mealDate, mealDateRange, mealScale } from "./meal-shared";
 
 export const mealSortableFields = ["date", "createdAt", "updatedAt"] as const;
@@ -55,6 +71,17 @@ const mealCreateShape = {
   date: mealDate,
   name: z.string().nullable().optional(),
   sortOrder: z.number().int().nullable().optional(),
+  mealType: mealTypeSchema
+    .nullable()
+    .optional()
+    .describe(
+      "Which eating occasion of the day this is. Null when unslotted; the planning calendar orders a day's meals by it.",
+    ),
+  mealKind: mealKindSchema
+    .optional()
+    .describe(
+      "How the meal is eaten. Defaults to `cooked`. Use `eating_out`/`takeout` for a placeholder meal that intentionally has no recipes; only `cooked` meals feed the shopping list.",
+    ),
   // Optional: create a meal with its recipes in one call.
   recipes: z.array(mealRecipeInput).optional(),
 };
@@ -95,6 +122,14 @@ export const mealRecipeIdInput = z.object({
 
 export const mealFilterFields = {
   ...auditDateFilterFields,
+  mealType: oneOrMany(mealTypeSchema).optional(),
+  /**
+   * `meal.mealType` is nullable, so `"none"` is the unslotted worklist. OR-ed
+   * with `mealType` rather than narrowing it (see
+   * `taskFilterFields.projectPresenceFilter`).
+   */
+  mealTypePresenceFilter: presenceFilter,
+  mealKind: oneOrMany(mealKindSchema).optional(),
   from: mealDate.optional().describe("Only meals on or after this day"),
   to: mealDate.optional().describe("Only meals on or before this day"),
   ...mealRelatedFilterFields,
@@ -144,6 +179,8 @@ export const mealOut = z.object({
   date: mealDate,
   name: z.string().nullable(),
   sortOrder: z.number().int().nullable(),
+  mealType: mealTypeSchema.nullable(),
+  mealKind: mealKindSchema,
   recipes: z.array(mealRecipeOut),
   totals: mealTotals,
   ...timestampedFields,
@@ -165,6 +202,8 @@ export const mealMcpOut = z.object({
   date: mealDate,
   name: z.string().nullable(),
   sortOrder: z.number().int().nullable(),
+  mealType: mealTypeSchema.nullable(),
+  mealKind: mealKindSchema,
   totals: mealTotals,
   recipes: z.array(z.object(mealMcpRecipeFields)),
 });
@@ -251,5 +290,20 @@ export const shoppingListOut = z.object({
   items: z.array(shoppingListItem),
   /** Sub-recipes whose ingredients this list could NOT account for. */
   unexpanded: z.array(unexpandedSubRecipeOut),
+  /**
+   * Meals inside the range that contribute nothing because of their
+   * `mealKind` — you aren't shopping for a night you're eating out, and a
+   * leftovers night's ingredients were bought when the meal was first cooked.
+   * Disclosed rather than silently dropped: a renderer-intrinsic omission has
+   * to be visible, or the list reads as complete when it isn't.
+   */
+  omittedMeals: z.array(
+    z.object({
+      id: mealShortcode,
+      name: z.string().nullable(),
+      date: mealDate,
+      mealKind: mealKindSchema,
+    }),
+  ),
 });
 export type ShoppingListOut = z.infer<typeof shoppingListOut>;

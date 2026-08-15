@@ -93,6 +93,64 @@ describe("mealRouter", () => {
     await expect(mealCaller().getByID({ id: meal.id })).rejects.toThrow();
   });
 
+  it("omits non-cooked meals from the shopping list and discloses them", async () => {
+    // The double-count this prevents: a leftovers night still points at the
+    // recipe it was cooked from, so counting it would buy the ingredients a
+    // second time.
+    const flour = await seedFlourWithStock({ value: 0, unit: "g" });
+    const recipe = await createRecipe("Pancakes", flour.shortcode, {
+      value: 1,
+      unit: "cup",
+    }); // 120 g
+
+    const cooked = await mealCaller().create({
+      date: "2026-11-02",
+      name: "Sunday pancakes",
+    });
+    await mealCaller().addRecipe({
+      mealId: cooked.id,
+      recipeId: recipe.id,
+      scale: 1,
+    });
+
+    const leftovers = await mealCaller().create({
+      date: "2026-11-03",
+      name: "Round two",
+      mealKind: "leftovers",
+    });
+    await mealCaller().addRecipe({
+      mealId: leftovers.id,
+      recipeId: recipe.id,
+      scale: 1,
+    });
+
+    const out = await mealCaller().create({
+      date: "2026-11-04",
+      name: "Anniversary",
+      mealKind: "eating_out",
+    });
+
+    const list = await mealCaller().getShoppingList({
+      from: "2026-11-01",
+      to: "2026-11-05",
+    });
+
+    // Only the cooked meal is a column.
+    expect(list.meals.map((m) => m.id)).toEqual([cooked.id]);
+    // 120 g, not 240 — the leftovers night contributed nothing.
+    expect(list.items).toHaveLength(1);
+    expect(list.items[0]!.needValue).toBeCloseTo(120, 1);
+    expect(list.items[0]!.perMeal).toHaveLength(1);
+
+    // Omitted, not silently dropped — both kinds are named.
+    expect(list.omittedMeals.map((m) => [m.id, m.mealKind]).sort()).toEqual(
+      [
+        [leftovers.id, "leftovers"],
+        [out.id, "eating_out"],
+      ].sort(),
+    );
+  });
+
   it("shopping list sums needs across meals but counts inventory ONCE", async () => {
     // 500 g flour on hand. Two recipes, each using flour, in two meals.
     const flour = await seedFlourWithStock({ value: 500, unit: "g" });

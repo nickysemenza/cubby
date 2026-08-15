@@ -5,6 +5,7 @@ import {
   expenseShortcode,
   taskShortcode,
 } from "./identifiers";
+import { mealKindSchema, mealTypeSchema } from "./meal-classification";
 import {
   plainDate,
   projectKindSchema,
@@ -44,6 +45,10 @@ export const calendarMealItem = z.object({
   ...calendarItemDates,
   interaction: z.literal("move"),
   sortOrder: z.number().int().nullable(),
+  // `mealType`/`mealKind`, not `type`/`kind` — `kind` is already this union's
+  // discriminant.
+  mealType: mealTypeSchema.nullable(),
+  mealKind: mealKindSchema,
   recipeNames: z.array(z.string()),
   cost: z.number(),
   calories: z.number(),

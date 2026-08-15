@@ -10,6 +10,11 @@ import {
   unsafeProjectShortcode,
   unsafeTaskShortcode,
 } from "@cubby/schemas/identifiers";
+import {
+  MEAL_TYPE_LABELS,
+  type MealType,
+  mealTypeRank,
+} from "@cubby/schemas/meal-classification";
 import { addDays } from "date-fns";
 import { and, gte, isNotNull, lte, or, sql } from "drizzle-orm";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
@@ -41,6 +46,16 @@ const itemOrder: Record<CalendarItem["kind"], number> = {
   meal: 2,
   expense: 3,
 };
+
+/** How an unnamed meal names itself: its slot, or the generic fallback. */
+const mealTypeTitle = (mealType: MealType | null): string =>
+  mealType ? MEAL_TYPE_LABELS[mealType] : "Meal";
+
+/** Slot ordering, applied only when both items are meals. */
+const mealSlotDelta = (a: CalendarItem, b: CalendarItem): number =>
+  a.kind === "meal" && b.kind === "meal"
+    ? mealTypeRank(a.mealType) - mealTypeRank(b.mealType)
+    : 0;
 
 /**
  * One bounded read for the unified planning calendar. Date-only comparisons
@@ -113,11 +128,16 @@ export async function getCalendarRange(
     items.push({
       kind: "meal",
       id: meal.id,
-      title: meal.name || "Meal",
+      // An unnamed meal now identifies itself by its slot ("Dinner") instead
+      // of the bare literal "Meal" — this title is what the calendar chip and
+      // the iCalendar SUMMARY both render.
+      title: meal.name || mealTypeTitle(meal.mealType),
       startDate: meal.date,
       endDateExclusive: shiftPlainDate(meal.date, 1),
       interaction: "move",
       sortOrder: meal.sortOrder,
+      mealType: meal.mealType,
+      mealKind: meal.mealKind,
       recipeNames: meal.recipes.map((recipe) => recipe.recipe.name),
       cost: meal.totals.costTotal,
       calories: meal.totals.caloriesTotal,
@@ -193,6 +213,11 @@ export async function getCalendarRange(
     (a, b) =>
       a.startDate.localeCompare(b.startDate) ||
       itemOrder[a.kind] - itemOrder[b.kind] ||
+      // Within a day, meals run in slot order — breakfast before dinner
+      // regardless of what they're called. Before this, a breakfast named
+      // "Oatmeal" sorted after a dinner named "Chili". Unslotted meals rank
+      // last and keep their alphabetical order among themselves.
+      mealSlotDelta(a, b) ||
       a.title.localeCompare(b.title),
   );
 

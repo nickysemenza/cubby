@@ -4,7 +4,13 @@ import {
   unsafeMealShortcode,
   unsafeRecipeShortcode,
 } from "@cubby/schemas/identifiers";
-import type { MealOut, MealRecipeOut, MealTotals } from "@cubby/schemas/meal";
+import type {
+  MealKind,
+  MealOut,
+  MealRecipeOut,
+  MealTotals,
+  MealType,
+} from "@cubby/schemas/meal";
 import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
 
 /**
@@ -75,6 +81,8 @@ type MealRow = {
   date: string; // "YYYY-MM-DD" (date column, mode:"string")
   name: string | null;
   sortOrder: number | null;
+  mealType: MealType | null;
+  mealKind: MealKind;
   createdAt: Date;
   updatedAt: Date;
   recipes: Array<{
@@ -133,6 +141,8 @@ export const dbMealToAPI = (row: MealRow): MealOut => {
     date: row.date,
     name: row.name,
     sortOrder: row.sortOrder,
+    mealType: row.mealType,
+    mealKind: row.mealKind,
     recipes,
     totals: rollupMealTotals(recipes),
     createdAt: row.createdAt,
