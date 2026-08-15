@@ -55,26 +55,6 @@ export const auth = betterAuth({
     // open it (e.g. adding a second account), then unset.
     disableSignUp: env.ALLOW_SIGNUP !== "true",
   },
-  user: {
-    additionalFields: {
-      // The iCalendar feed secret. Declared here so it rides on `session.user`
-      // and the Subscribe dialog can render the feed URL without a round trip.
-      //
-      // `input: false` keeps it out of better-auth's own updateUser endpoint —
-      // it's a bearer credential, and repo/calendar-feed.ts is the only thing
-      // that mints it. Note the `session.cookieCache` below means `session.user`
-      // can serve a *stale* token for up to maxAge after a rotate, which is why
-      // the rotate mutation returns the new value for the UI to render.
-      //
-      // MIGRATE BEFORE DEPLOY. Declaring the field here puts calendar_feed_token
-      // into the SELECT better-auth issues on *every* session lookup, so if this
-      // code reaches an environment whose `user` table lacks the column, all auth
-      // 500s with `column "calendar_feed_token" does not exist` — not just the
-      // calendar feature. This is the mirror image of the usual expand/contract
-      // rule: db:push first, then deploy.
-      calendarFeedToken: { type: "string", required: false, input: false },
-    },
-  },
   session: {
     // Read session validity from a short-lived signed cookie instead of hitting
     // the DB on every getSession. Removes the serialized session+user lookups
