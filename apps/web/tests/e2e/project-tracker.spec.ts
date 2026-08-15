@@ -123,7 +123,7 @@ test.describe("Project tracker", () => {
     await page.goto(`/tasks?q=${encodeURIComponent(name)}`);
     await page.waitForLoadState("networkidle");
 
-    await expect(page.getByPlaceholder("Search tasks...")).toHaveValue(name);
+    await expect(page.getByPlaceholder("Filter name…")).toHaveValue(name);
     await expect(page.getByText(name).first()).toBeVisible({
       timeout: 10000,
     });
@@ -179,7 +179,7 @@ test.describe("Project tracker", () => {
     await page.goto(`/expenses?q=${encodeURIComponent(name)}`);
     await page.waitForLoadState("networkidle");
 
-    await expect(page.getByPlaceholder("Search expenses...")).toHaveValue(name);
+    await expect(page.getByPlaceholder("Filter name…")).toHaveValue(name);
     await expect(page.getByText(name).first()).toBeVisible({
       timeout: 10000,
     });

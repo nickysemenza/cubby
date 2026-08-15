@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import { cn } from "~/lib/utils";
 
-export interface ChoiceSwitcherOption<T extends string = string> {
+interface ChoiceSwitcherOption<T extends string = string> {
   value: T;
   label: string;
   icon?: LucideIcon;
