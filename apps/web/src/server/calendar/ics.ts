@@ -9,9 +9,10 @@ import type { CalendarItem } from "@cubby/schemas/calendar";
  * the wire format (CRLF, octet folding, TEXT escaping), which is what most of
  * this file is.
  *
- * Pure: no DB, no ambient clock, no origin constant — `now` and `origin` are
- * caller-supplied. The origin comes from the request rather than APP_ORIGIN so a
- * preview deploy emits links back to *itself* instead of to production.
+ * Pure: no DB, no ambient clock — `now` and `origin` are caller-supplied. The
+ * origin comes from the request so a preview deploy links back to *itself*
+ * rather than to production. Note that this applies to `URL:` only, never to
+ * UIDs — see UID_DOMAIN.
  */
 
 /** RFC 5545 §3.1: content lines are delimited by CRLF, not LF. */
@@ -19,6 +20,18 @@ const CRLF = "\r\n";
 
 /** RFC 5545 §3.1: lines are folded at 75 *octets*, excluding the CRLF. */
 const MAX_LINE_OCTETS = 75;
+
+/**
+ * Fixed UID namespace — deliberately NOT the serving origin.
+ *
+ * A UID identifies an event for the lifetime of a subscription, so it has to be
+ * the same string no matter which host served the feed. Deriving it from the
+ * request origin meant subscribing via localhost or a preview deploy and later
+ * switching to production changed every UID, and Calendar.app treats a changed
+ * UID as a brand-new event — so every meal and task would silently duplicate
+ * instead of updating in place.
+ */
+const UID_DOMAIN = "cubby.nickysemenza.com";
 
 export type IcsFeed = "meals" | "tasks" | "all";
 
@@ -146,7 +159,7 @@ function toEvent(item: CalendarItem, opts: IcsOptions): string[] {
   // (not even on merge), which is exactly the guarantee a UID needs.
   const lines = [
     "BEGIN:VEVENT",
-    `UID:${item.id}@${new URL(opts.origin).host}`,
+    `UID:${item.id}@${UID_DOMAIN}`,
     `DTSTAMP:${icsTimestamp(opts.now)}`,
     `DTSTART;VALUE=DATE:${icsDate(item.startDate)}`,
     `DTEND;VALUE=DATE:${icsDate(item.endDateExclusive)}`,

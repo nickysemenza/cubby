@@ -47,6 +47,18 @@ export async function rotateCalendarFeedToken(
   return token;
 }
 
+/** This user's current feed token, or null if they have never minted one. */
+export async function getCalendarFeedToken(
+  db: Database,
+  userId: UserId,
+): Promise<string | null> {
+  const row = await getDb(db).query.user.findFirst({
+    columns: { calendarFeedToken: true },
+    where: eq(user.id, userId),
+  });
+  return row?.calendarFeedToken ?? null;
+}
+
 /**
  * Resolve a feed token to its owner, or null if it matches no one.
  *

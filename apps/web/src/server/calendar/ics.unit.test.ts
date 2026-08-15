@@ -127,10 +127,24 @@ describe("renderIcs events", () => {
     expect(lines).toContain("DTEND;VALUE=DATE:20260824");
   });
 
-  it("scopes the UID to the serving host", () => {
-    expect(unfold(render([meal()]))).toContain(
-      "UID:MEL-4K7M@cubby.example.com",
+  it("keeps the UID independent of the serving origin", () => {
+    // A UID that followed the origin would make every event duplicate when a
+    // subscription moves between localhost, a preview deploy, and production.
+    const fromProd = unfold(
+      renderIcs([meal()], { feed: "all", now: NOW, origin: ORIGIN }),
     );
+    const fromLocal = unfold(
+      renderIcs([meal()], {
+        feed: "all",
+        now: NOW,
+        origin: "http://localhost:3000",
+      }),
+    );
+    const uid = (lines: string[]) => lines.find((l) => l.startsWith("UID:"));
+    expect(uid(fromProd)).toBe(uid(fromLocal));
+    expect(uid(fromProd)).not.toContain("localhost");
+    // The URL, by contrast, must follow the origin it was served from.
+    expect(fromLocal).toContain("URL:http://localhost:3000/meals/MEL-4K7M");
   });
 
   it("derives a stable UID from the shortcode so edits update in place", () => {

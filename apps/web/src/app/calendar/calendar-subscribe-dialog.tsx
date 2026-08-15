@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row, Stack } from "~/components/layout";
@@ -12,7 +13,6 @@ import {
 } from "~/components/ui/dialog";
 import { StatusText } from "~/components/ui/status-text";
 import { useTRPC } from "~/integrations/trpc/react";
-import { authClient } from "~/lib/auth-client";
 import { copyText } from "~/lib/clipboard";
 import { cn } from "~/lib/utils";
 
@@ -43,51 +43,58 @@ function FeedRow({
 }) {
   const url = feedUrl(origin, token, file);
   return (
-    <Row
-      align="center"
-      justify="between"
-      gap="sm"
-      className="rounded border border-border px-4 py-2"
-    >
-      <Stack gap="tight" className="min-w-0">
+    <Stack gap="xs" className="rounded border border-border px-4 py-2">
+      <Row align="center" justify="between" gap="sm">
         <span className="font-medium">{label}</span>
-        <span
-          className="truncate font-mono text-muted-foreground text-xs"
-          title={url}
-        >
-          {url}
-        </span>
-      </Stack>
-      <Row gap="xs" className="shrink-0">
-        <Button variant="outline" size="sm" onClick={() => void copyText(url)}>
-          Copy
-        </Button>
-        <a
-          href={url}
-          className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}
-        >
-          Subscribe
-        </a>
+        <Row gap="xs" className="shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void copyText(url)}
+          >
+            Copy
+          </Button>
+          <a
+            href={url}
+            className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}
+          >
+            Subscribe
+          </a>
+        </Row>
       </Row>
-    </Row>
+      {/* `break-all`, not `truncate`: a 43-char token makes these URLs far wider
+          than the dialog, and truncating on one line pushed the buttons out of
+          reach. Wrapping keeps the whole URL selectable for a manual copy. */}
+      <span className="break-all font-mono text-muted-foreground text-xs">
+        {url}
+      </span>
+    </Stack>
   );
 }
 
 export function CalendarSubscribeDialog() {
   const api = useTRPC();
-  const session = authClient.useSession();
-  // The freshly-minted token wins over the session copy: `session.cookieCache`
-  // serves `user` from a signed cookie for up to 5 minutes, so straight after a
-  // rotate the session still carries the token that just stopped working.
+  // Deliberately NOT `session.user.calendarFeedToken`: that copy comes from the
+  // signed cookie cache and lags by up to 5 minutes, so a just-created feed
+  // still reads as null there — and the empty state's "Create feed" button
+  // rotates, which would break a subscription the user had already added.
+  const feed = useQuery(api.calendar.getFeed.queryOptions());
   const [rotated, setRotated] = useState<string | null>(null);
+
+  const hadFeed = (feed.data?.token ?? null) !== null;
 
   const rotate = useActionMutation({
     mutationFn: api.calendar.rotateFeed.mutationOptions,
-    success: "Calendar feed URLs regenerated",
+    // Without this the cache still holds the previous token, so closing and
+    // reopening the dialog would offer a URL that has already stopped working.
+    invalidateKeys: [api.calendar.getFeed.queryKey()],
+    success: hadFeed
+      ? "Calendar feed URLs regenerated"
+      : "Calendar feed created",
     onSuccess: (data) => setRotated(data.token),
   });
 
-  const token = rotated ?? session.data?.user.calendarFeedToken ?? null;
+  const token = rotated ?? feed.data?.token ?? null;
   const origin = typeof window === "undefined" ? "" : window.location.origin;
 
   return (
@@ -135,6 +142,8 @@ export function CalendarSubscribeDialog() {
               </Button>
             </Row>
           </Stack>
+        ) : feed.isPending ? (
+          <StatusText>Loading…</StatusText>
         ) : (
           <Stack gap="sm">
             <StatusText>No feed has been created yet.</StatusText>
