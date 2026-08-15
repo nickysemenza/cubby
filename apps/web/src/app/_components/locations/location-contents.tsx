@@ -32,14 +32,15 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
+import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { useTRPC } from "~/integrations/trpc/react";
 import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
 import { cn, formatCurrency } from "~/lib/utils";
 import {
+  SHELF_VIEW_OPTIONS,
   ShelfCard,
   ShelfEmpty,
   ShelfGrid,
-  ShelfTableToggle,
   type ShelfView,
 } from "../data-table/shelf";
 import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
@@ -319,7 +320,12 @@ export function LocationContents({ location }: { location: InfLocation }) {
             </Button>
           </>
         )}
-        <ShelfTableToggle value={view} onChange={setView} className="ml-auto" />
+        <ViewSwitcher
+          options={SHELF_VIEW_OPTIONS}
+          value={view}
+          onValueChange={setView}
+          className="ml-auto"
+        />
       </Row>
 
       {/* Quick-add rides collapsed behind the toolbar's Add item button. */}

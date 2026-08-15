@@ -114,7 +114,7 @@ function AskPage() {
                     setQuery(prompt);
                     agent.ask(prompt);
                   }}
-                  className="flex items-center gap-2 rounded-md border border-border/50 px-2 py-2 text-left text-sm transition-colors hover:bg-muted/50 active:bg-muted/70"
+                  className="flex items-center gap-2 border border-border/50 px-2 py-2 text-left text-sm transition-colors hover:bg-muted/50 active:bg-muted/70"
                 >
                   <Search className="size-4 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1">{prompt}</span>
@@ -147,14 +147,14 @@ function AskPage() {
                   type="button"
                   key={`${source.entityType}-${source.id}`}
                   onClick={() => goToSource(source)}
-                  className="flex items-center gap-2 rounded-md border border-border/50 px-2 py-2 text-left transition-colors hover:bg-muted/50"
+                  className="flex items-center gap-2 border border-border/50 px-2 py-2 text-left transition-colors hover:bg-muted/50"
                 >
                   <AgentSourceContent source={source} />
                 </button>
               )}
               toolCalls={
                 toolCalls.length > 0 ? (
-                  <details className="rounded-md border border-border/50 px-2 py-2">
+                  <details className="border border-border/50 px-2 py-2">
                     <summary className="eyebrow cursor-pointer">
                       {toolCalls.length} tool call
                       {toolCalls.length === 1 ? "" : "s"}

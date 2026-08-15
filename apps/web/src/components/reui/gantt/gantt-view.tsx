@@ -2513,7 +2513,7 @@ function GanttView({
           {viewConfig.zoomControl && (
             <div
               data-slot="gantt-zoom"
-              className="bg-background absolute end-3 bottom-5 z-40 flex flex-col rounded-md border shadow-sm"
+              className="bg-background absolute end-3 bottom-5 z-40 flex flex-col border shadow-sm"
             >
               {/* aria-disabled instead of disabled: the not-allowed cursor
                   must still show at the zoom limits */}
@@ -3492,7 +3492,7 @@ const GanttTimelineRow = memo(function GanttTimelineRow({
               // faint drop-target placeholder (the smooth cursor clone carries
               // the visual); resize shows the event at its new size in its own
               // color with just a dashed border.
-              "pointer-events-none absolute z-40 h-5 rounded-sm border border-dashed font-medium",
+              "pointer-events-none absolute z-40 h-5 border border-dashed font-medium",
               !ghost.valid &&
                 "border-destructive bg-destructive/10 text-destructive",
               ghost.valid &&
@@ -3532,7 +3532,7 @@ const GanttTimelineRow = memo(function GanttTimelineRow({
             // the bar it is going under - as a tint that read as a smudge over
             // the bar's own label. Punched out of the backdrop it reads as a
             // distinct object sliding underneath, which is what it is.
-            className="border-primary bg-background pointer-events-none absolute z-40 overflow-hidden rounded-sm border border-dashed"
+            className="border-primary bg-background pointer-events-none absolute z-40 overflow-hidden border border-dashed"
             style={{
               insetInlineStart: `${draft.from * 100}%`,
               width: `${Math.max((draft.to - draft.from) * 100, 0.5)}%`,

@@ -41,10 +41,7 @@ export function SuggestionReviewTray({
   const suggestionCount = Object.keys(suggestions).length;
 
   return (
-    <Stack
-      gap="sm"
-      className="rounded-lg border border-[var(--border)] bg-muted/20 p-4"
-    >
+    <Stack gap="sm" className="border border-[var(--border)] bg-muted/20 p-4">
       <Row align="center" justify="between" gap="sm">
         <span className="font-medium text-sm">
           Review {suggestionCount} USDA suggestion

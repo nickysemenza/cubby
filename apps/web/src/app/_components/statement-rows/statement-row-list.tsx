@@ -12,13 +12,13 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { uniq } from "es-toolkit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
-import { Grid, Row, Stack } from "~/components/layout";
+import { Row, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
+import { DrilldownMetricStrip } from "~/components/ui/drilldown-metric-strip";
 import { Input } from "~/components/ui/input";
+import { NativeSelect } from "~/components/ui/native-select";
 import { NoneValue } from "~/components/ui/none-value";
-import { Skeleton } from "~/components/ui/skeleton";
-import { StatTile } from "~/components/ui/stat-tile";
 import {
   Tooltip,
   TooltipContent,
@@ -45,33 +45,23 @@ type MatchStateSearchValue = StatementRowMatchState | "all";
 const NO_ROWS: StatementRowOut[] = [];
 const NO_SOURCES: string[] = [];
 
-const MATCH_STATE_LABELS: Record<StatementRowMatchState, string> = {
-  matched: "Matched",
-  unmatched: "Unmatched",
-  superseded: "Superseded",
-  ignored: "Ignored",
+const MATCH_STATE_PRESENTATION: Record<
+  StatementRowMatchState,
+  { label: string; variant: BadgeVariant }
+> = {
+  matched: { label: "Matched", variant: "positive" },
+  unmatched: { label: "Unmatched", variant: "warning" },
+  superseded: { label: "Superseded", variant: "slate" },
+  ignored: { label: "Ignored", variant: "secondary" },
 };
 
-const MATCH_STATE_BADGE_VARIANT: Record<StatementRowMatchState, BadgeVariant> =
-  {
-    matched: "positive",
-    unmatched: "warning",
-    superseded: "slate",
-    ignored: "secondary",
-  };
-
-const DISPOSITION_LABELS: Record<StatementRowDisposition, string> = {
-  open: "Open",
-  ignored: "Ignored",
+const DISPOSITION_PRESENTATION: Record<
+  StatementRowDisposition,
+  { label: string; variant: BadgeVariant }
+> = {
+  open: { label: "Open", variant: "outline" },
+  ignored: { label: "Ignored", variant: "secondary" },
 };
-
-const DISPOSITION_BADGE_VARIANT: Record<StatementRowDisposition, BadgeVariant> =
-  {
-    open: "outline",
-    ignored: "secondary",
-  };
-
-const selectClassName = "h-8 rounded-md border bg-background px-2 text-sm";
 
 /** Route search → server filters. `"all"` never reaches the wire — it's the
  * client-only way to say "no matchState filter" (see the route file). */
@@ -95,8 +85,7 @@ function buildFilters(search: {
 }
 
 /** Debounced search box — writes to the URL 400ms after typing stops, rather
- * than on every keystroke (this filter is server-side, unlike the client-side
- * `HeaderFilter` debounce it mirrors). */
+ * than on every keystroke (this filter is server-side, unlike table filters). */
 function SearchBox({
   value,
   onChange,
@@ -132,16 +121,6 @@ function SearchBox({
   );
 }
 
-function SummarySkeleton() {
-  return (
-    <Grid cols="summary">
-      {["total", "matched", "unmatched", "ignored", "amount"].map((key) => (
-        <Skeleton key={key} className="h-14 w-full" />
-      ))}
-    </Grid>
-  );
-}
-
 /**
  * Total / matched / unmatched / ignored counts plus the unmatched dollar
  * amount, computed over the active filters MINUS matchState — so the tiles
@@ -170,33 +149,32 @@ function StatementRowSummary({
   // A settled query with no data means it errored — `isLoading` alone would
   // leave this stuck on the skeleton forever instead of surfacing the error.
   if (error) return <ErrorDisplay error={error} />;
-  if (isLoading || !data) return <SummarySkeleton />;
+  if (isLoading || !data) return <DrilldownMetricStrip loadingCount={5} />;
 
-  const tile = (
+  const selectable = (
     label: string,
     value: number,
     target: MatchStateSearchValue,
-  ) => (
-    <button
-      type="button"
-      onClick={() => onSelectMatchState(target)}
-      className="text-left transition-colors hover:text-foreground"
-      aria-current={matchState === target || undefined}
-    >
-      <StatTile label={label}>{value}</StatTile>
-    </button>
-  );
+  ) => ({
+    label,
+    value,
+    active: matchState === target,
+    onSelect: () => onSelectMatchState(target),
+  });
 
   return (
-    <Grid cols="summary">
-      {tile("Total", data.total, "all")}
-      {tile("Matched", data.matched, "matched")}
-      {tile("Unmatched", data.unmatched, "unmatched")}
-      {tile("Ignored", data.ignored, "ignored")}
-      <StatTile label="Unmatched $">
-        {formatCurrency(data.unmatchedAmount)}
-      </StatTile>
-    </Grid>
+    <DrilldownMetricStrip
+      metrics={[
+        selectable("Total", data.total, "all"),
+        selectable("Matched", data.matched, "matched"),
+        selectable("Unmatched", data.unmatched, "unmatched"),
+        selectable("Ignored", data.ignored, "ignored"),
+        {
+          label: "Unmatched $",
+          value: formatCurrency(data.unmatchedAmount),
+        },
+      ]}
+    />
   );
 }
 
@@ -239,21 +217,20 @@ function StatementRowFilterBar({
         value={search.q ?? ""}
         onChange={(q) => onUpdate({ q: q || undefined })}
       />
-      <select
+      <NativeSelect
         aria-label="Match state"
         value={search.matchState ?? "unmatched"}
         onChange={(e) =>
           onUpdate({ matchState: e.target.value as MatchStateSearchValue })
         }
-        className={selectClassName}
       >
         <option value="unmatched">Unmatched</option>
         <option value="matched">Matched</option>
         <option value="superseded">Superseded</option>
         <option value="ignored">Ignored</option>
         <option value="all">All</option>
-      </select>
-      <select
+      </NativeSelect>
+      <NativeSelect
         aria-label="Disposition"
         value={search.disposition ?? ""}
         onChange={(e) =>
@@ -263,17 +240,15 @@ function StatementRowFilterBar({
               : undefined,
           })
         }
-        className={selectClassName}
       >
         <option value="">Any disposition</option>
         <option value="open">Open</option>
         <option value="ignored">Ignored</option>
-      </select>
-      <select
+      </NativeSelect>
+      <NativeSelect
         aria-label="Source"
         value={search.source ?? ""}
         onChange={(e) => onUpdate({ source: e.target.value || undefined })}
-        className={selectClassName}
       >
         <option value="">All sources</option>
         {sourceOptions.map((source) => (
@@ -281,23 +256,23 @@ function StatementRowFilterBar({
             {source}
           </option>
         ))}
-      </select>
+      </NativeSelect>
       <Row align="center" gap="xs" className="text-muted-foreground text-sm">
         <span>From</span>
-        <input
+        <Input
           type="date"
           aria-label="Statement date from"
           value={search.dateFrom ?? ""}
           onChange={(e) => onUpdate({ dateFrom: e.target.value || undefined })}
-          className={selectClassName}
+          className="w-auto"
         />
         <span>to</span>
-        <input
+        <Input
           type="date"
           aria-label="Statement date to"
           value={search.dateTo ?? ""}
           onChange={(e) => onUpdate({ dateTo: e.target.value || undefined })}
-          className={selectClassName}
+          className="w-auto"
         />
       </Row>
     </Row>
@@ -455,10 +430,9 @@ export function StatementRowList() {
         meta: { className: "w-28" },
         cell: (info) => {
           const state = info.getValue();
+          const presentation = MATCH_STATE_PRESENTATION[state];
           return (
-            <Badge variant={MATCH_STATE_BADGE_VARIANT[state]}>
-              {MATCH_STATE_LABELS[state]}
-            </Badge>
+            <Badge variant={presentation.variant}>{presentation.label}</Badge>
           );
         },
       }),
@@ -476,12 +450,13 @@ export function StatementRowList() {
         meta: { className: "w-32" },
         cell: (info) => {
           const row = info.row.original;
+          const presentation = DISPOSITION_PRESENTATION[row.disposition];
           return (
             <Badge
-              variant={DISPOSITION_BADGE_VARIANT[row.disposition]}
+              variant={presentation.variant}
               title={row.dispositionReason ?? undefined}
             >
-              {DISPOSITION_LABELS[row.disposition]}
+              {presentation.label}
             </Badge>
           );
         },

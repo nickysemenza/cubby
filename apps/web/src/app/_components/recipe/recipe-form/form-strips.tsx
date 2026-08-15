@@ -8,10 +8,10 @@ import {
   useWatch,
 } from "react-hook-form";
 import { Row, Stack } from "~/components/layout";
-import { Field, FieldLabel } from "~/components/ui/field";
 import { InkStamp } from "~/components/ui/ink-stamp";
 import { Input } from "~/components/ui/input";
 import { NullableNumericField, SideBySideFields } from "../../form-utils";
+import { FormFieldGroup } from "../../forms/form-field-group";
 import type { RecipeFormValues } from "./types";
 
 // Yield and Servings fields with smart hide behavior
@@ -37,15 +37,14 @@ export const YieldServingsFields: FC<{
           control={form.control}
           name="yield.unit"
           render={({ field }) => (
-            <Field>
-              <FieldLabel htmlFor={yieldUnitId}>Yield Unit</FieldLabel>
+            <FormFieldGroup htmlFor={yieldUnitId} label="Yield Unit">
               <Input
                 id={yieldUnitId}
                 placeholder="e.g., cookies, servings, cups"
                 value={field.value ?? ""}
                 onChange={(e) => field.onChange(e.target.value || null)}
               />
-            </Field>
+            </FormFieldGroup>
           )}
         />
       </SideBySideFields>

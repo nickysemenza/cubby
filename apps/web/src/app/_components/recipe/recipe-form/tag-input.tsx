@@ -12,6 +12,7 @@ import {
 } from "../tag-theme";
 
 interface TagInputProps {
+  id?: string;
   value: string[] | null;
   onChange: (tags: string[]) => void;
   className?: string;
@@ -32,6 +33,7 @@ interface TagInputProps {
  * before the `ChipsInput` extraction.
  */
 export const TagInput: FC<TagInputProps> = ({
+  id,
   value,
   onChange,
   className,
@@ -71,6 +73,7 @@ export const TagInput: FC<TagInputProps> = ({
 
   return (
     <ChipsInput
+      id={id}
       value={value}
       onChange={onChange}
       className={className}

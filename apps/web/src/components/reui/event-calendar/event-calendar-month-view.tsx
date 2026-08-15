@@ -837,7 +837,7 @@ function EventCalendarMonthCell({
       data-slot="event-calendar-drop-placeholder"
       data-drop-invalid={!inlineDrop.valid || undefined}
       className={cn(
-        "shrink-0 rounded-sm border border-dashed",
+        "shrink-0 border border-dashed",
         inlineDrop.valid
           ? "border-(--ec-event-color)/50 bg-(--ec-event-color)/8"
           : "border-destructive/70 bg-destructive/10",

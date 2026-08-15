@@ -170,7 +170,7 @@ function LabelsPage() {
                       },
                     })
                   }
-                  className="h-7 w-14 rounded-md border border-border bg-input/20 px-2 text-center text-sm"
+                  className="h-7 w-14 border border-border bg-input/20 px-2 text-center text-sm"
                 />
               </label>
             )}
@@ -191,7 +191,7 @@ function LabelsPage() {
                     },
                   })
                 }
-                className="h-8 w-14 rounded-md border border-input bg-background px-2 text-center text-sm"
+                className="h-8 w-14 border border-input bg-background px-2 text-center text-sm"
               />
             </label>
             {format !== "ptouch" ? (

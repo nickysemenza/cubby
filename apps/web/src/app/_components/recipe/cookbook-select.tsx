@@ -2,6 +2,7 @@ import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import { unsafeCookbookShortcode } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import { Row } from "~/components/layout";
+import { NativeSelect } from "~/components/ui/native-select";
 import { useTRPC } from "~/integrations/trpc/react";
 
 interface CookbookSelectProps {
@@ -21,8 +22,7 @@ export function CookbookSelect({ value, onChange }: CookbookSelectProps) {
   return (
     <Row as="label" align="center" gap="sm" className="w-fit text-sm">
       <span className="text-muted-foreground">Cookbook</span>
-      <select
-        className="h-8 rounded-md border bg-background px-2 text-sm"
+      <NativeSelect
         value={value ?? ""}
         onChange={(e) =>
           onChange(
@@ -38,7 +38,7 @@ export function CookbookSelect({ value, onChange }: CookbookSelectProps) {
             {c.book}
           </option>
         ))}
-      </select>
+      </NativeSelect>
     </Row>
   );
 }

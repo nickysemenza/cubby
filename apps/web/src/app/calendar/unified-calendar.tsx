@@ -504,7 +504,7 @@ export function UnifiedCalendar({
           showOutsideDays
           showDayAddButton
           scrollMode="page"
-          className="min-h-[620px] overflow-hidden rounded-md border"
+          className="min-h-[620px] overflow-hidden border"
           classNames={CALENDAR_CLASS_NAMES}
           renderEvent={CalendarChip}
           onEventsChange={setEvents}

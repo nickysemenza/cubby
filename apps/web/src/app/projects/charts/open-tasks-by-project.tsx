@@ -1,5 +1,4 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
-import { ResponsiveBar } from "@nivo/bar";
 import { useNavigate } from "@tanstack/react-router";
 import { ListChecks } from "lucide-react";
 import { useMemo } from "react";
@@ -9,6 +8,7 @@ import { ProjectChartLabel, ProjectChartTick } from "../project-mark";
 import { nivoBarChrome, nivoChartTheme } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
+import { HorizontalBarChart } from "./horizontal-bar-chart";
 
 /**
  * The Analytics tab's "Open Tasks by Project" — `data` is
@@ -62,58 +62,54 @@ export function OpenTasksByProject({
     return <ChartEmpty icon={ListChecks} title="No open tasks." />;
   }
 
-  const chartHeight = Math.max(220, data.length * 32 + 60);
-
   return (
-    <div style={{ height: chartHeight }}>
-      <ResponsiveBar
-        data={data}
-        keys={["count"]}
-        indexBy="id"
-        layout="horizontal"
-        margin={{ top: 10, right: 30, bottom: 30, left: 180 }}
-        padding={0.3}
-        colors={["var(--chart-2)"]}
-        {...nivoBarChrome}
-        axisBottom={{
-          tickSize: 0,
-          tickPadding: 8,
-          format: (v: number) => `${v}`,
-        }}
-        axisLeft={{
-          tickSize: 0,
-          tickPadding: 8,
-          renderTick: (tick) => (
-            <ProjectChartTick {...tick} identityById={identityById} />
-          ),
-        }}
-        label={(d) => `${d.value ?? 0}`}
-        labelSkipWidth={16}
-        labelTextColor="var(--background)"
-        enableGridX
-        enableGridY={false}
-        onClick={(bar) => {
-          const id = bar.data.id;
-          if (id) navigate(entityDetailLink("project", String(id)));
-        }}
-        tooltip={({ data: row, value }) => (
-          <ChartTooltip>
-            <strong>
-              <ProjectChartLabel
-                identity={
-                  identityById.get(String(row.id)) ?? {
-                    name: String(row.name),
-                    icon: null,
-                  }
+    <HorizontalBarChart
+      data={data}
+      minHeight={220}
+      keys={["count"]}
+      indexBy="id"
+      margin={{ top: 10, right: 30, bottom: 30, left: 180 }}
+      padding={0.3}
+      colors={["var(--chart-2)"]}
+      {...nivoBarChrome}
+      axisBottom={{
+        tickSize: 0,
+        tickPadding: 8,
+        format: (v: number) => `${v}`,
+      }}
+      axisLeft={{
+        tickSize: 0,
+        tickPadding: 8,
+        renderTick: (tick) => (
+          <ProjectChartTick {...tick} identityById={identityById} />
+        ),
+      }}
+      label={(d) => `${d.value ?? 0}`}
+      labelSkipWidth={16}
+      labelTextColor="var(--background)"
+      enableGridX
+      enableGridY={false}
+      onClick={(bar) => {
+        const id = bar.data.id;
+        if (id) navigate(entityDetailLink("project", String(id)));
+      }}
+      tooltip={({ data: row, value }) => (
+        <ChartTooltip>
+          <strong>
+            <ProjectChartLabel
+              identity={
+                identityById.get(String(row.id)) ?? {
+                  name: String(row.name),
+                  icon: null,
                 }
-              />
-            </strong>
-            : {value} open task
-            {value !== 1 ? "s" : ""}
-          </ChartTooltip>
-        )}
-        theme={nivoChartTheme}
-      />
-    </div>
+              }
+            />
+          </strong>
+          : {value} open task
+          {value !== 1 ? "s" : ""}
+        </ChartTooltip>
+      )}
+      theme={nivoChartTheme}
+    />
   );
 }

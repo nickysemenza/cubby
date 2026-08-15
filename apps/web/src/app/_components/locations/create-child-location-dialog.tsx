@@ -1,13 +1,7 @@
 import type { LocationCreateInput, LocationOut } from "@cubby/schemas/location";
 import type { FC } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
+import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
@@ -46,27 +40,25 @@ export const CreateChildLocationDialog: FC<CreateChildLocationDialogProps> = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="md">
-        <DialogHeader>
-          <DialogTitle>Create Child Location</DialogTitle>
-          <DialogDescription>
-            Create a new location inside "{parentLocation.name}"
-          </DialogDescription>
-        </DialogHeader>
-        <LocationForm
-          mode="create"
-          onCreate={handleCreate}
-          isPending={createMutation.isPending}
-          error={
-            createMutation.error
-              ? getErrorMessage(createMutation.error)
-              : undefined
-          }
-          onCancel={() => onOpenChange(false)}
-          initialParent={parentLocation}
-        />
-      </DialogContent>
-    </Dialog>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      size="md"
+      title="Create Child Location"
+      description={`Create a new location inside "${parentLocation.name}"`}
+    >
+      <LocationForm
+        mode="create"
+        onCreate={handleCreate}
+        isPending={createMutation.isPending}
+        error={
+          createMutation.error
+            ? getErrorMessage(createMutation.error)
+            : undefined
+        }
+        onCancel={() => onOpenChange(false)}
+        initialParent={parentLocation}
+      />
+    </ResponsiveDialog>
   );
 };

@@ -1,5 +1,4 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
-import { ResponsiveBar } from "@nivo/bar";
 import { Hammer } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
@@ -11,6 +10,7 @@ import {
 } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
+import { HorizontalBarChart } from "./horizontal-bar-chart";
 
 type Datum = {
   trade: string;
@@ -63,59 +63,56 @@ export function TradeActivity({
     );
   }
 
-  const chartHeight = Math.max(220, data.length * 40 + 60);
-
   return (
     <div>
-      <div style={{ height: chartHeight }}>
-        <ResponsiveBar
-          data={data}
-          keys={["actual", "committed"]}
-          indexBy="trade"
-          layout="horizontal"
-          groupMode="stacked"
-          margin={{ top: 10, right: 30, bottom: 40, left: 140 }}
-          padding={0.3}
-          colors={({ id }) =>
-            id === "actual" ? "var(--chart-1)" : "var(--chart-7)"
-          }
-          {...nivoBarChrome}
-          axisBottom={nivoCurrencyAxis}
-          axisLeft={{
-            tickSize: 0,
-            tickPadding: 8,
-          }}
-          label={(d) =>
-            d.value && d.value > 0 ? formatCurrency(d.value, 0) : ""
-          }
-          labelSkipWidth={40}
-          labelTextColor="var(--background)"
-          enableGridX
-          enableGridY={false}
-          legendLabel={(d) => (d.id === "actual" ? "Actual" : "Committed")}
-          legends={[
-            {
-              dataFrom: "keys",
-              anchor: "bottom",
-              direction: "row",
-              translateY: 40,
-              itemWidth: 90,
-              itemHeight: 20,
-              symbolSize: 12,
-              symbolShape: "circle",
-              itemTextColor: "var(--muted-foreground)",
-            },
-          ]}
-          tooltip={({ id, value, indexValue, color }) => (
-            <ChartTooltip>
-              <strong>{indexValue}</strong> —{" "}
-              {id === "actual" ? "Actual" : "Committed"}:{" "}
-              <span style={{ color }}>{formatCurrency(value, 0)}</span>
-            </ChartTooltip>
-          )}
-          theme={nivoChartTheme}
-        />
-      </div>
+      <HorizontalBarChart
+        data={data}
+        rowHeight={40}
+        minHeight={220}
+        keys={["actual", "committed"]}
+        indexBy="trade"
+        groupMode="stacked"
+        margin={{ top: 10, right: 30, bottom: 40, left: 140 }}
+        padding={0.3}
+        colors={({ id }) =>
+          id === "actual" ? "var(--chart-1)" : "var(--chart-7)"
+        }
+        {...nivoBarChrome}
+        axisBottom={nivoCurrencyAxis}
+        axisLeft={{
+          tickSize: 0,
+          tickPadding: 8,
+        }}
+        label={(d) =>
+          d.value && d.value > 0 ? formatCurrency(d.value, 0) : ""
+        }
+        labelSkipWidth={40}
+        labelTextColor="var(--background)"
+        enableGridX
+        enableGridY={false}
+        legendLabel={(d) => (d.id === "actual" ? "Actual" : "Committed")}
+        legends={[
+          {
+            dataFrom: "keys",
+            anchor: "bottom",
+            direction: "row",
+            translateY: 40,
+            itemWidth: 90,
+            itemHeight: 20,
+            symbolSize: 12,
+            symbolShape: "circle",
+            itemTextColor: "var(--muted-foreground)",
+          },
+        ]}
+        tooltip={({ id, value, indexValue, color }) => (
+          <ChartTooltip>
+            <strong>{indexValue}</strong> —{" "}
+            {id === "actual" ? "Actual" : "Committed"}:{" "}
+            <span style={{ color }}>{formatCurrency(value, 0)}</span>
+          </ChartTooltip>
+        )}
+        theme={nivoChartTheme}
+      />
       {adjustments !== 0 ? (
         <p className="mt-2 text-center text-muted-foreground text-xs">
           Total spend also includes {formatCurrency(adjustments, 0)} in purchase

@@ -446,7 +446,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
       }
       heroStats={heroStats}
       actions={
-        <Row align="center" gap="sm">
+        <>
           <Button
             variant="outline"
             size="sm"
@@ -456,7 +456,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
             Merge purchases
           </Button>
           {deleteButton}
-        </Row>
+        </>
       }
     >
       <DetailSections sections={sections} rawData={purchase} />

@@ -10,13 +10,7 @@ import { EditableAmountCell } from "~/app/_components/data-table/editable-cell";
 import { EditableEntityCell } from "~/app/_components/data-table/editable-entity-cell";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { Row, Stack } from "~/components/layout";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
+import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
 import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 
@@ -59,57 +53,53 @@ export function InventoryEntriesQuickEditDialog({
   });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="md">
-        <DialogHeader>
-          <DialogTitle>Edit Inventory</DialogTitle>
-          <DialogDescription>
-            Amounts and locations for "{productName}". Changes save immediately.
-          </DialogDescription>
-        </DialogHeader>
-        <Stack gap="xs">
-          {entries.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              No inventory entries.
-            </p>
-          ) : (
-            entries.map((entry) => (
-              <Row key={entry.id} align="center" gap="sm" wrap>
-                <EditableAmountCell
-                  amount={entry.amount}
-                  onSave={async (newAmount) => {
-                    await updateInventoryMutation.mutateAsync({
-                      id: entry.id,
-                      data: { amount: newAmount },
-                    });
-                  }}
-                />
-                <span className="text-muted-foreground/50">@</span>
-                <EditableEntityCell
-                  value={buildLocationComboboxItem(entry.location)}
-                  label="location"
-                  SearchProvider={WithLocationSearch}
-                  onSave={async (newLocationId) => {
-                    if (!newLocationId) return;
-                    await updateInventoryMutation.mutateAsync({
-                      id: entry.id,
-                      data: { locationId: newLocationId },
-                    });
-                  }}
-                  renderValue={(v) =>
-                    v ? (
-                      <Row as="span" align="center" gap="xs">
-                        {v.icon}
-                        <span className="truncate">{v.name}</span>
-                      </Row>
-                    ) : null
-                  }
-                />
-              </Row>
-            ))
-          )}
-        </Stack>
-      </DialogContent>
-    </Dialog>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      size="md"
+      title="Edit Inventory"
+      description={`Amounts and locations for "${productName}". Changes save immediately.`}
+    >
+      <Stack gap="xs">
+        {entries.length === 0 ? (
+          <p className="text-muted-foreground text-sm">No inventory entries.</p>
+        ) : (
+          entries.map((entry) => (
+            <Row key={entry.id} align="center" gap="sm" wrap>
+              <EditableAmountCell
+                amount={entry.amount}
+                onSave={async (newAmount) => {
+                  await updateInventoryMutation.mutateAsync({
+                    id: entry.id,
+                    data: { amount: newAmount },
+                  });
+                }}
+              />
+              <span className="text-muted-foreground/50">@</span>
+              <EditableEntityCell
+                value={buildLocationComboboxItem(entry.location)}
+                label="location"
+                SearchProvider={WithLocationSearch}
+                onSave={async (newLocationId) => {
+                  if (!newLocationId) return;
+                  await updateInventoryMutation.mutateAsync({
+                    id: entry.id,
+                    data: { locationId: newLocationId },
+                  });
+                }}
+                renderValue={(v) =>
+                  v ? (
+                    <Row as="span" align="center" gap="xs">
+                      {v.icon}
+                      <span className="truncate">{v.name}</span>
+                    </Row>
+                  ) : null
+                }
+              />
+            </Row>
+          ))
+        )}
+      </Stack>
+    </ResponsiveDialog>
   );
 }

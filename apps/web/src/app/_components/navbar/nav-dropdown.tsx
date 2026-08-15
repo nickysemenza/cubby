@@ -7,7 +7,11 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { cn } from "~/lib/utils";
-import { type NavGroup, useActiveTo } from "../navigation/nav-items";
+import {
+  type NavGroup,
+  navItemLinkProps,
+  useActiveTo,
+} from "../navigation/nav-items";
 
 export const NavDropdown = ({ group }: { group: NavGroup }) => {
   const { label, icon: Icon, children } = group;
@@ -34,7 +38,9 @@ export const NavDropdown = ({ group }: { group: NavGroup }) => {
           return (
             <DropdownMenuItem
               key={item.to}
-              render={<Link to={item.to} preload="intent" preloadDelay={40} />}
+              render={
+                <Link {...navItemLinkProps(item, item.to === activeTo)} />
+              }
               className={cn("gap-2", item.to === activeTo && "bg-accent")}
             >
               <ItemIcon className="size-3.5" />

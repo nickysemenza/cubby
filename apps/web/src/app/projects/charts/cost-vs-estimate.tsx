@@ -1,5 +1,4 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
-import { ResponsiveBar } from "@nivo/bar";
 import { DollarSign } from "lucide-react";
 import { useMemo } from "react";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
@@ -8,6 +7,7 @@ import { ProjectChartLabel, ProjectChartTick } from "../project-mark";
 import { nivoBarChrome, nivoChartTheme } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
+import { HorizontalBarChart } from "./horizontal-bar-chart";
 
 type Datum = {
   id: string;
@@ -85,76 +85,73 @@ export function CostVsEstimate({
     return <ChartEmpty icon={DollarSign} title="No cost data." />;
   }
 
-  const chartHeight = Math.max(250, data.length * 40 + 60);
-
   return (
-    <div style={{ height: chartHeight }}>
-      <ResponsiveBar
-        data={data}
-        keys={["percent"]}
-        indexBy="id"
-        layout="horizontal"
-        margin={{ top: 10, right: 30, bottom: 40, left: 180 }}
-        padding={0.3}
-        colors={({ data: d }) =>
-          Number(d.percent) > 100
-            ? "var(--chart-negative)"
-            : "var(--chart-positive)"
-        }
-        {...nivoBarChrome}
-        axisBottom={{
-          tickSize: 0,
-          tickPadding: 8,
-          tickValues: 5,
-          format: (v: number) => `${Math.round(v)}%`,
-        }}
-        axisLeft={{
-          tickSize: 0,
-          tickPadding: 8,
-          renderTick: (tick) => (
-            <ProjectChartTick {...tick} identityById={identityById} />
-          ),
-        }}
-        label={(d) => `${Math.round(d.value ?? 0)}%`}
-        labelSkipWidth={28}
-        labelTextColor="var(--background)"
-        enableGridX
-        enableGridY={false}
-        markers={[
-          {
-            axis: "x",
-            value: 100,
-            lineStyle: {
-              stroke: "var(--foreground)",
-              strokeWidth: 1,
-              strokeDasharray: "4 4",
-            },
-            legend: "100% of estimate",
-            legendPosition: "top",
-            textStyle: { fill: "var(--muted-foreground)", fontSize: 10 },
+    <HorizontalBarChart
+      data={data}
+      minHeight={250}
+      rowHeight={40}
+      keys={["percent"]}
+      indexBy="id"
+      margin={{ top: 10, right: 30, bottom: 40, left: 180 }}
+      padding={0.3}
+      colors={({ data: d }) =>
+        Number(d.percent) > 100
+          ? "var(--chart-negative)"
+          : "var(--chart-positive)"
+      }
+      {...nivoBarChrome}
+      axisBottom={{
+        tickSize: 0,
+        tickPadding: 8,
+        tickValues: 5,
+        format: (v: number) => `${Math.round(v)}%`,
+      }}
+      axisLeft={{
+        tickSize: 0,
+        tickPadding: 8,
+        renderTick: (tick) => (
+          <ProjectChartTick {...tick} identityById={identityById} />
+        ),
+      }}
+      label={(d) => `${Math.round(d.value ?? 0)}%`}
+      labelSkipWidth={28}
+      labelTextColor="var(--background)"
+      enableGridX
+      enableGridY={false}
+      markers={[
+        {
+          axis: "x",
+          value: 100,
+          lineStyle: {
+            stroke: "var(--foreground)",
+            strokeWidth: 1,
+            strokeDasharray: "4 4",
           },
-        ]}
-        tooltip={({ data: d }) => (
-          <ChartTooltip>
-            <strong>
-              <ProjectChartLabel
-                identity={
-                  identityById.get(String(d.id)) ?? {
-                    name: String(d.name),
-                    icon: null,
-                  }
+          legend: "100% of estimate",
+          legendPosition: "top",
+          textStyle: { fill: "var(--muted-foreground)", fontSize: 10 },
+        },
+      ]}
+      tooltip={({ data: d }) => (
+        <ChartTooltip>
+          <strong>
+            <ProjectChartLabel
+              identity={
+                identityById.get(String(d.id)) ?? {
+                  name: String(d.name),
+                  icon: null,
                 }
-              />
-            </strong>{" "}
-            — {Math.round(Number(d.percent))}% of estimate
-            <div className="mt-1 text-muted-foreground text-xs">
-              {formatCurrency(Number(d.actual), 0)} actual /{" "}
-              {formatCurrency(Number(d.estimate), 0)} estimate
-            </div>
-          </ChartTooltip>
-        )}
-        theme={nivoChartTheme}
-      />
-    </div>
+              }
+            />
+          </strong>{" "}
+          — {Math.round(Number(d.percent))}% of estimate
+          <div className="mt-1 text-muted-foreground text-xs">
+            {formatCurrency(Number(d.actual), 0)} actual /{" "}
+            {formatCurrency(Number(d.estimate), 0)} estimate
+          </div>
+        </ChartTooltip>
+      )}
+      theme={nivoChartTheme}
+    />
   );
 }

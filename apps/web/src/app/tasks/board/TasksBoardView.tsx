@@ -62,7 +62,7 @@ export function TasksBoardView({ filters }: { filters: TaskFilters }) {
 
   // Local state gives instant filtering while typing; the `q` URL param
   // (shared with the list view's deep-link seed) syncs on a debounce so
-  // keystrokes don't flood router history — mirrors HeaderFilter's pattern.
+  // keystrokes don't flood router history — mirrors the list toolbar's pattern.
   const [searchValue, setSearchValue] = useState(search.q ?? "");
   const [debouncedSearch] = useDebouncedValue(searchValue, { wait: 500 });
 

@@ -9,7 +9,7 @@ import {
   Plus,
   Trash,
 } from "lucide-react";
-import { type FC, useEffect, useMemo, useRef, useState } from "react";
+import { type FC, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { Row, Stack } from "~/components/layout";
@@ -25,7 +25,6 @@ import {
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
-import { Field, FieldLabel } from "~/components/ui/field";
 import { Textarea } from "~/components/ui/textarea";
 import { useImageState } from "~/hooks/useImageState";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -36,6 +35,7 @@ import {
   getSubmitButtonText,
   UnifiedTextField,
 } from "../../form-utils";
+import { FormFieldGroup } from "../../forms/form-field-group";
 import { PendingImageUpload } from "../../PendingImageUpload";
 import {
   recipeFormValuesToCreateInput,
@@ -60,6 +60,8 @@ import {
 
 export const RecipeForm: FC<RecipeFormProps> = (props) => {
   const { mode, isPending, error, onCancel } = props;
+  const tagsId = useId();
+  const notesId = useId();
   const api = useTRPC();
   const {
     handlePendingImagesChange,
@@ -434,27 +436,31 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                 control={form.control}
                 name="tags"
                 render={({ field }) => (
-                  <Field>
-                    <FieldLabel htmlFor="tags">Tags (Optional)</FieldLabel>
-                    <TagInput value={field.value} onChange={field.onChange} />
-                  </Field>
+                  <FormFieldGroup htmlFor={tagsId} label="Tags (Optional)">
+                    <TagInput
+                      id={tagsId}
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
+                  </FormFieldGroup>
                 )}
               />
               <Controller
                 control={form.control}
                 name="notes"
                 render={({ field }) => (
-                  <Field>
-                    <FieldLabel htmlFor="notes">
-                      Notes (Optional, Markdown)
-                    </FieldLabel>
+                  <FormFieldGroup
+                    htmlFor={notesId}
+                    label="Notes (Optional, Markdown)"
+                  >
                     <Textarea
+                      id={notesId}
                       placeholder="Headnote, do-ahead tips, serving suggestions…"
                       value={field.value ?? ""}
                       onChange={(e) => field.onChange(e.target.value || null)}
                       rows={4}
                     />
-                  </Field>
+                  </FormFieldGroup>
                 )}
               />
             </CardContent>
@@ -490,7 +496,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
               <Stack
                 key={sectionField.id}
                 gap="sm"
-                className="rounded-lg border border-[var(--border)] bg-card p-4"
+                className="border border-[var(--border)] bg-card p-4"
               >
                 <Row align="center" justify="between">
                   <h4 className="my-0 font-heading font-semibold text-sm">
@@ -587,7 +593,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
 
         {/* Live page preview — the cookbook spread builds as you type */}
         <aside className="hidden xl:sticky xl:top-20 xl:block">
-          <div className="max-h-[75vh] overflow-y-auto rounded-lg border border-[var(--border)] bg-card p-4">
+          <div className="max-h-[75vh] overflow-y-auto border border-[var(--border)] bg-card p-4">
             <p className="eyebrow mb-2">Live preview</p>
             <RecipeLivePreview control={form.control} />
           </div>

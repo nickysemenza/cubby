@@ -2,6 +2,7 @@ import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { FoodPortion, NutrientsPer100 } from "@cubby/usda-schemas";
 import { useMemo, useState } from "react";
 import { Stack } from "~/components/layout";
+import { ChoiceSwitcher } from "~/components/ui/view-switcher";
 import { safeConvertAmount } from "~/lib/recipe-costing";
 import { NutritionLabel } from "./NutritionLabel";
 
@@ -75,22 +76,15 @@ export function ProductNutritionLabel({
   return (
     <Stack gap="sm">
       {basis && (
-        <div className="inline-flex rounded-md border p-1 text-sm">
-          {(["per100", "serving"] as const).map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setView(v)}
-              className={`rounded px-2 py-1 transition-colors ${
-                view === v
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {v === "per100" ? "Per 100 g" : `Per ${basis.label}`}
-            </button>
-          ))}
-        </div>
+        <ChoiceSwitcher
+          ariaLabel="Nutrition basis"
+          options={[
+            { value: "per100", label: "Per 100 g" },
+            { value: "serving", label: `Per ${basis.label}` },
+          ]}
+          value={view}
+          onValueChange={setView}
+        />
       )}
       <NutritionLabel
         nutrients={showServing && basis ? scaled : nutrients}

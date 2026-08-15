@@ -6,16 +6,10 @@ import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
+import { DialogFooter } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { Textarea } from "~/components/ui/textarea";
 import { useTRPC } from "~/integrations/trpc/react";
 import { wishMutationInvalidateKeys } from "~/lib/query-keys";
@@ -136,102 +130,97 @@ export function WishFormDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="lg">
-        <DialogHeader>
-          <DialogTitle>
-            {wish ? "Edit wishlist item" : "New wishlist item"}
-          </DialogTitle>
-          <DialogDescription>
-            Add one desired outcome, then optionally list the Tool products you
-            would consider.
-          </DialogDescription>
-        </DialogHeader>
-        <Stack as="form" gap="md" onSubmit={submit}>
-          <Stack gap="snug">
-            <Label htmlFor={nameInputId}>What do you want?</Label>
-            <Input
-              id={nameInputId}
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="e.g. Metal milling machine"
-              autoFocus
-            />
-          </Stack>
-          <Stack gap="snug">
-            <Label htmlFor={notesInputId}>Notes</Label>
-            <Textarea
-              id={notesInputId}
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              placeholder="Why it would be useful or fun, constraints, future project ideas…"
-            />
-          </Stack>
-          <Stack gap="sm">
-            <Label htmlFor={productSearchInputId}>Tool alternatives</Label>
-            <Input
-              id={productSearchInputId}
-              value={productSearch}
-              onChange={(event) => setProductSearch(event.target.value)}
-              placeholder="Filter your Tool products…"
-            />
-            <Stack className="max-h-48 overflow-y-auto border p-2" gap="xs">
-              {productOptions.map((product) => {
-                const checked = candidateIds.includes(product.id);
-                const candidateInputId = `${idPrefix}-${product.id}`;
-                return (
-                  <Row
-                    key={product.id}
-                    align="center"
-                    gap="sm"
-                    className="p-1 hover:bg-muted"
-                  >
-                    <Checkbox
-                      id={candidateInputId}
-                      checked={checked}
-                      onCheckedChange={(value) =>
-                        toggleCandidate(product, value === true)
-                      }
-                    />
-                    <Label
-                      htmlFor={candidateInputId}
-                      className="min-w-0 cursor-pointer normal-case tracking-normal"
-                    >
-                      <span className="block truncate font-medium">
-                        {product.name}
-                      </span>
-                      <span className="block truncate text-muted-foreground">
-                        {product.manufacturer}
-                      </span>
-                    </Label>
-                  </Row>
-                );
-              })}
-              {!productsQuery.isLoading && productOptions.length === 0 && (
-                <p className="p-1 text-muted-foreground">
-                  No matching Tool products yet.
-                </p>
-              )}
-            </Stack>
-            <p className="text-muted-foreground">
-              Choose any number of alternatives. They mean “pick one,” not a
-              shopping cart.
-            </p>
-          </Stack>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isPending || !name.trim()}>
-              {wish ? "Save changes" : "Create wish"}
-            </Button>
-          </DialogFooter>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      size="lg"
+      title={wish ? "Edit wishlist item" : "New wishlist item"}
+      description="Add one desired outcome, then optionally list the Tool products you would consider."
+    >
+      <Stack as="form" gap="md" onSubmit={submit}>
+        <Stack gap="snug">
+          <Label htmlFor={nameInputId}>What do you want?</Label>
+          <Input
+            id={nameInputId}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="e.g. Metal milling machine"
+            autoFocus
+          />
         </Stack>
-      </DialogContent>
-    </Dialog>
+        <Stack gap="snug">
+          <Label htmlFor={notesInputId}>Notes</Label>
+          <Textarea
+            id={notesInputId}
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+            placeholder="Why it would be useful or fun, constraints, future project ideas…"
+          />
+        </Stack>
+        <Stack gap="sm">
+          <Label htmlFor={productSearchInputId}>Tool alternatives</Label>
+          <Input
+            id={productSearchInputId}
+            value={productSearch}
+            onChange={(event) => setProductSearch(event.target.value)}
+            placeholder="Filter your Tool products…"
+          />
+          <Stack className="max-h-48 overflow-y-auto border p-2" gap="xs">
+            {productOptions.map((product) => {
+              const checked = candidateIds.includes(product.id);
+              const candidateInputId = `${idPrefix}-${product.id}`;
+              return (
+                <Row
+                  key={product.id}
+                  align="center"
+                  gap="sm"
+                  className="p-1 hover:bg-muted"
+                >
+                  <Checkbox
+                    id={candidateInputId}
+                    checked={checked}
+                    onCheckedChange={(value) =>
+                      toggleCandidate(product, value === true)
+                    }
+                  />
+                  <Label
+                    htmlFor={candidateInputId}
+                    className="min-w-0 cursor-pointer normal-case tracking-normal"
+                  >
+                    <span className="block truncate font-medium">
+                      {product.name}
+                    </span>
+                    <span className="block truncate text-muted-foreground">
+                      {product.manufacturer}
+                    </span>
+                  </Label>
+                </Row>
+              );
+            })}
+            {!productsQuery.isLoading && productOptions.length === 0 && (
+              <p className="p-1 text-muted-foreground">
+                No matching Tool products yet.
+              </p>
+            )}
+          </Stack>
+          <p className="text-muted-foreground">
+            Choose any number of alternatives. They mean “pick one,” not a
+            shopping cart.
+          </p>
+        </Stack>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isPending || !name.trim()}>
+            {wish ? "Save changes" : "Create wish"}
+          </Button>
+        </DialogFooter>
+      </Stack>
+    </ResponsiveDialog>
   );
 }

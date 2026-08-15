@@ -79,7 +79,7 @@ import {
 /**
  * The filter manifest: what each entity's list table can be filtered by.
  *
- * One entry drives the header filter control, the server filter field, and
+ * One entry drives the toolbar filter control, the server filter field, and
  * (via `kind`) how the column's state is shaped. The pure builders that
  * consume it live in `./filters`, kept separate so they're unit-testable.
  *
@@ -88,7 +88,7 @@ import {
  * `tradeOptions` lives in a leaf module rather than in `app/projects/shared.tsx`.
  */
 export interface FilterSpec extends FilterSpecCore {
-  /** Full placeholder. `HeaderFilter` shortens it for select controls. */
+  /** Full placeholder. The toolbar shortens it for select controls. */
   placeholder: string;
   /** Static options. Mutually exclusive with `optionsKey`. */
   options?: FilterableComboboxItem[];

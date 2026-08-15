@@ -4,10 +4,18 @@ import { CalendarDays, ShoppingCart, Table as TableIcon } from "lucide-react";
 import { UnifiedCalendar } from "~/app/calendar/unified-calendar";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import {
+  ViewSwitcher,
+  type ViewSwitcherOption,
+} from "~/components/ui/view-switcher";
 import type { MealCalendarView } from "./meal-search";
 import { MealTable } from "./meal-table";
 
 const MEAL_KINDS: CalendarItemKind[] = ["meal"];
+const VIEW_OPTIONS: ViewSwitcherOption<MealCalendarView>[] = [
+  { value: "calendar", label: "Calendar", icon: CalendarDays },
+  { value: "table", label: "Table", icon: TableIcon },
+];
 
 interface MealCalendarPageProps {
   view: MealCalendarView;
@@ -31,24 +39,11 @@ export function MealCalendarPage({
   return (
     <Stack>
       <Row align="center" gap="xs">
-        <div className="inline-flex overflow-hidden rounded-md border">
-          <button
-            type="button"
-            onClick={() => onViewChange("calendar")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 text-sm ${view === "calendar" ? "bg-accent font-medium" : "text-muted-foreground"}`} /* tight: segmented toggle icon+label */
-          >
-            <CalendarDays className="size-4" />
-            Calendar
-          </button>
-          <button
-            type="button"
-            onClick={() => onViewChange("table")}
-            className={`flex items-center gap-1.5 border-l px-2.5 py-1 text-sm ${view === "table" ? "bg-accent font-medium" : "text-muted-foreground"}`} /* tight: segmented toggle icon+label */
-          >
-            <TableIcon className="size-4" />
-            Table
-          </button>
-        </div>
+        <ViewSwitcher
+          options={VIEW_OPTIONS}
+          value={view}
+          onValueChange={onViewChange}
+        />
         <Link to="/meals/shopping-list" className="ml-auto">
           <Button type="button" variant="outline" size="sm">
             <ShoppingCart className="size-4" />

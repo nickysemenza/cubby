@@ -118,7 +118,7 @@ export function ServingAliasField({
       align="end"
       gap="sm"
       wrap
-      className="rounded-md border border-border border-dashed p-2"
+      className="border border-border border-dashed p-2"
     >
       <div className="w-28">
         <Label htmlFor={unitFieldId}>Unit</Label>

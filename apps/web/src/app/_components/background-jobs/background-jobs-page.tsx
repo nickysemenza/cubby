@@ -17,6 +17,7 @@ import { useMemo, useState } from "react";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { NativeSelect } from "~/components/ui/native-select";
 import { Spinner } from "~/components/ui/spinner";
 import { useTRPC } from "~/integrations/trpc/react";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
@@ -169,10 +170,10 @@ export function BackgroundJobsPage({
           placeholder="Filter source, entity, or id"
           className="max-w-sm"
         />
-        <select
+        <NativeSelect
+          aria-label="Filter background jobs by kind"
           value={kindFilter}
           onChange={(event) => setKindFilter(event.target.value)}
-          className="border border-input bg-background px-2 py-1 text-sm"
         >
           <option value={ALL_FILTER_VALUE}>All kinds</option>
           {backgroundJobKinds.map((kind) => (
@@ -180,11 +181,11 @@ export function BackgroundJobsPage({
               {kind}
             </option>
           ))}
-        </select>
-        <select
+        </NativeSelect>
+        <NativeSelect
+          aria-label="Filter background jobs by source"
           value={sourceFilter}
           onChange={(event) => setSourceFilter(event.target.value)}
-          className="border border-input bg-background px-2 py-1 text-sm"
         >
           <option value={ALL_FILTER_VALUE}>All sources</option>
           {backgroundBatchSources.map((source) => (
@@ -192,11 +193,11 @@ export function BackgroundJobsPage({
               {source}
             </option>
           ))}
-        </select>
-        <select
+        </NativeSelect>
+        <NativeSelect
+          aria-label="Filter background jobs by processor"
           value={processorFilter}
           onChange={(event) => setProcessorFilter(event.target.value)}
-          className="border border-input bg-background px-2 py-1 text-sm"
         >
           <option value={ALL_FILTER_VALUE}>All processors</option>
           {backgroundBatchProcessors.map((processor) => (
@@ -204,11 +205,11 @@ export function BackgroundJobsPage({
               {processor}
             </option>
           ))}
-        </select>
-        <select
+        </NativeSelect>
+        <NativeSelect
+          aria-label="Filter background jobs by status"
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value)}
-          className="border border-input bg-background px-2 py-1 text-sm"
         >
           <option value={ALL_FILTER_VALUE}>All statuses</option>
           {backgroundBatchStatuses.map((status) => (
@@ -216,7 +217,7 @@ export function BackgroundJobsPage({
               {status}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </Row>
       {scopedSet ? (
         <Row align="center" gap="sm" className="text-muted-foreground text-sm">

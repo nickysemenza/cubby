@@ -4,6 +4,7 @@ import { ChefHat, Equal, X } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { stickyRowHeaderCard } from "~/components/matrix/matrix-chrome";
 import { Image } from "~/components/ui/image";
+import { ChoiceSwitcher } from "~/components/ui/view-switcher";
 import {
   formatCurrencyRange,
   formatNumberRange,
@@ -296,24 +297,17 @@ export const RecipeCompareGrid: React.FC<{
   );
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-[var(--border)] bg-card">
+    <div className="overflow-x-auto border border-[var(--border)] bg-card">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b px-2 py-2">
-        <div className="inline-flex rounded-md border p-1 text-sm">
-          {(["gram", "baker"] as const).map((b) => (
-            <button
-              key={b}
-              type="button"
-              onClick={() => setBasisOverride(b)}
-              className={`rounded px-2 py-1 transition-colors ${
-                basis === b
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {b === "gram" ? "Grams" : "Baker's %"}
-            </button>
-          ))}
-        </div>
+        <ChoiceSwitcher
+          ariaLabel="Comparison basis"
+          options={[
+            { value: "gram", label: "Grams" },
+            { value: "baker", label: "Baker's %" },
+          ]}
+          value={basis}
+          onValueChange={setBasisOverride}
+        />
         <span className="flex items-center gap-2 text-muted-foreground text-xs">
           <span
             className="inline-block size-2 rounded-full"

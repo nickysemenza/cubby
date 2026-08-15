@@ -68,7 +68,7 @@ export function CookbookList() {
                   <Link
                     to={entities.cookbook.routes.detail}
                     params={entityDetailParams(id)}
-                    className="block rounded-sm border border-[var(--border)] bg-card p-2 transition-colors hover:bg-muted/50"
+                    className="block border border-[var(--border)] bg-card p-2 transition-colors hover:bg-muted/50"
                   >
                     {coverUrl ? (
                       <Image

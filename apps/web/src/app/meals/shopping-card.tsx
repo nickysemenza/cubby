@@ -21,7 +21,7 @@ export function ShoppingCard({
       gap="sm"
       onClick={onToggleCheck}
       className={cn(
-        "w-full rounded-lg border border-[var(--border)] p-4 text-left",
+        "w-full border border-[var(--border)] p-4 text-left",
         isChecked && "opacity-60",
       )}
     >

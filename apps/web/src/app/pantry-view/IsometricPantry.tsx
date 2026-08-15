@@ -15,7 +15,7 @@ import { useIsometricPantry } from "./use-isometric-pantry";
 
 function CategoryLegend() {
   return (
-    <div className="absolute bottom-4 left-4 rounded-lg border border-[var(--border)] bg-card/90 px-2 py-2 backdrop-blur-sm">
+    <div className="absolute bottom-4 left-4 border border-[var(--border)] bg-card/90 px-2 py-2 backdrop-blur-sm">
       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
         {productCategoryValues.map((cat) => (
           <div key={cat} className="flex items-center gap-2">

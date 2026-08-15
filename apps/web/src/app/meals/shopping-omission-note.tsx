@@ -31,7 +31,7 @@ export function ShoppingOmissionNote({
   return (
     <Stack
       gap="tight"
-      className="rounded-lg border border-warning/40 bg-warning/5 px-2 py-2 text-2xs"
+      className="border border-warning/40 bg-warning/5 px-2 py-2 text-2xs"
     >
       <Row gap="xs" align="center" className="text-warning">
         <TriangleAlert className="size-3" />

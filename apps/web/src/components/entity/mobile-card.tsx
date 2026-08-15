@@ -1,4 +1,3 @@
-import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, type LucideIcon } from "lucide-react";
 import { Fragment, type HTMLAttributes, type ReactNode } from "react";
@@ -7,7 +6,6 @@ import { Row, Stack } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
 import { Eyebrow } from "~/components/ui/eyebrow";
-import { entities } from "~/entities/entities";
 import { useLongPress } from "~/hooks/useLongPress";
 import { cn } from "~/lib/utils";
 
@@ -32,7 +30,6 @@ interface MobileCardProps {
    * repeated icon would be decoration charged at 44px a row.
    */
   reserveImageSlot?: boolean;
-  entity?: Entity;
   onClick?: () => void;
   onTouchStart?: () => void;
   /**
@@ -43,7 +40,7 @@ interface MobileCardProps {
   onLongPress?: () => void;
   /**
    * Display variant:
-   * - "card" (default): bordered card with shadow, used by LocationCardGrid, ProblemSection
+   * - "card" (default): bordered card, used by LocationCardGrid, ProblemSection
    * - "row": compact row with bottom divider, used by MobileCardView for dense lists
    */
   variant?: "card" | "row";
@@ -244,7 +241,6 @@ export function MobileCard({
   subtitle,
   imageSlot,
   reserveImageSlot = false,
-  entity,
   onClick,
   onTouchStart,
   variant = "card",
@@ -254,10 +250,6 @@ export function MobileCard({
   onLongPress,
 }: MobileCardProps) {
   const longPress = useLongPress(onLongPress);
-  const borderColor = entity
-    ? entities[entity].color.border
-    : "border-l-primary";
-
   const isRow = variant === "row";
   const specValues = metaValues ?? [];
   const hasIdentityLine = Boolean(subtitle || rightValues?.length);
@@ -428,7 +420,7 @@ export function MobileCard({
     );
   }
 
-  // Card layout: original bordered card style
+  // Card layout: the same neutral border used by other compact surfaces.
   return (
     <Row
       align="start"
@@ -436,8 +428,7 @@ export function MobileCard({
       className={cn(
         // No mount fade-in: the mobile list is virtualized, so a per-card
         // fade-in replays every time a card scrolls back into view (flicker).
-        "rounded-lg border border-[var(--border)] border-l-4 bg-card p-2",
-        borderColor,
+        "border border-[var(--border)] bg-card p-2",
         // Touch devices have no :hover — give a pressed state so taps register.
         onClick && "cursor-pointer active:bg-muted/40",
         className,

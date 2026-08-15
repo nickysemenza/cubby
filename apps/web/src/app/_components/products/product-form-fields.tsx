@@ -518,7 +518,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
 
   if (compact) {
     return (
-      <Stack className="rounded-lg border border-border/50 bg-muted/30 p-4">
+      <Stack className="border border-border/50 bg-muted/30 p-4">
         {content}
       </Stack>
     );

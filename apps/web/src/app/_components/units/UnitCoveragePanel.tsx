@@ -134,7 +134,7 @@ export function UnitCoveragePanel({
               )}
               <Suspense
                 fallback={
-                  <div className="h-[260px] animate-pulse rounded-md border bg-muted/30" />
+                  <div className="h-[260px] animate-pulse border bg-muted/30" />
                 }
               >
                 <UnitMappingGraph

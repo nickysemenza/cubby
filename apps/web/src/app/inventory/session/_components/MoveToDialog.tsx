@@ -7,14 +7,8 @@ import {
   useDestinationLocationForm,
 } from "~/app/_components/inventory/destination-location-picker";
 import { Button } from "~/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
+import { DialogFooter } from "~/components/ui/dialog";
+import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { Spinner } from "~/components/ui/spinner";
 
 /**
@@ -79,33 +73,32 @@ export function MoveToDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={close}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Move {title}</DialogTitle>
-          <DialogDescription>
-            {commit === "done"
-              ? "Pick where this belongs. The move will be committed with the rest of this recount."
-              : "Pick where this belongs — it moves there now (undo from the toast)."}
-          </DialogDescription>
-        </DialogHeader>
-        <FormProvider {...form}>
-          <DestinationLocationField
-            form={form}
-            label="Destination"
-            error={error}
-          />
-        </FormProvider>
-        <DialogFooter>
-          <Button variant="outline" type="button" onClick={() => close(false)}>
-            Cancel
-          </Button>
-          <Button type="button" onClick={submit} disabled={pending}>
-            {pending ? <Spinner /> : null}
-            {commit === "done" ? "Stage move" : "Move"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={close}
+      title={`Move ${title}`}
+      description={
+        commit === "done"
+          ? "Pick where this belongs. The move will be committed with the rest of this recount."
+          : "Pick where this belongs — it moves there now (undo from the toast)."
+      }
+    >
+      <FormProvider {...form}>
+        <DestinationLocationField
+          form={form}
+          label="Destination"
+          error={error}
+        />
+      </FormProvider>
+      <DialogFooter>
+        <Button variant="outline" type="button" onClick={() => close(false)}>
+          Cancel
+        </Button>
+        <Button type="button" onClick={submit} disabled={pending}>
+          {pending ? <Spinner /> : null}
+          {commit === "done" ? "Stage move" : "Move"}
+        </Button>
+      </DialogFooter>
+    </ResponsiveDialog>
   );
 }

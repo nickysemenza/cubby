@@ -1,14 +1,14 @@
 import { ClipboardList, Code, Import, Link2 } from "lucide-react";
-import type { Control } from "react-hook-form";
-import { Controller } from "react-hook-form";
+import { type Control, Controller } from "react-hook-form";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
-import { Field, FieldLabel } from "~/components/ui/field";
+import { FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import { cn } from "~/lib/utils";
+import { FormFieldGroup } from "../../forms/form-field-group";
 import { formatRichText } from "../richtext";
 import {
   IngredientPreviewTable,
@@ -120,12 +120,11 @@ export function ImportToolsPanel({
       {/* Scrape panel (kept mounted so in-flight scrapes aren't lost) */}
       <div
         className={cn(
-          "rounded-lg border border-[var(--border)] bg-card p-4",
+          "border border-[var(--border)] bg-card p-4",
           openTool !== "scrape" && "hidden",
         )}
       >
-        <Field>
-          <FieldLabel>URL (Optional)</FieldLabel>
+        <FormFieldGroup label="URL (Optional)">
           <Row gap="sm">
             <Controller
               control={control}
@@ -160,28 +159,27 @@ export function ImportToolsPanel({
               Resolving ingredients {progress.done}/{progress.total}…
             </Description>
           )}
-        </Field>
+        </FormFieldGroup>
       </div>
 
       {/* Paste-text panel */}
       <Stack
         gap="sm"
         className={cn(
-          "rounded-lg border border-[var(--border)] bg-card p-4",
+          "border border-[var(--border)] bg-card p-4",
           openTool !== "text" && "hidden",
         )}
       >
         {/* Ingredients: textarea + pills preview */}
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-          <Field>
-            <FieldLabel>Ingredients (one per line)</FieldLabel>
+          <FormFieldGroup label="Ingredients (one per line)">
             <Textarea
               placeholder="1 cup flour&#10;2 eggs&#10;1/2 tsp salt"
               value={textImportIngredients}
               onChange={(e) => onTextImportIngredientsChange(e.target.value)}
               rows={6}
             />
-          </Field>
+          </FormFieldGroup>
           <div>
             <FieldLabel>Parsed Ingredients</FieldLabel>
             <div className="mt-2 min-h-[120px] rounded border border-[var(--border)] bg-muted/30 p-2">
@@ -192,15 +190,14 @@ export function ImportToolsPanel({
 
         {/* Instructions: textarea + preview */}
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-          <Field>
-            <FieldLabel>Instructions (one per line)</FieldLabel>
+          <FormFieldGroup label="Instructions (one per line)">
             <Textarea
               placeholder="Preheat oven to 350°F&#10;Mix dry ingredients&#10;Add wet ingredients"
               value={textImportInstructions}
               onChange={(e) => onTextImportInstructionsChange(e.target.value)}
               rows={6}
             />
-          </Field>
+          </FormFieldGroup>
           <div>
             <FieldLabel>Instructions Preview</FieldLabel>
             <div className="mt-2 min-h-[120px] rounded border border-[var(--border)] bg-muted/30 p-2">
@@ -264,12 +261,11 @@ export function ImportToolsPanel({
       <Stack
         gap="sm"
         className={cn(
-          "rounded-lg border border-[var(--border)] bg-card p-4",
+          "border border-[var(--border)] bg-card p-4",
           openTool !== "html" && "hidden",
         )}
       >
-        <Field>
-          <FieldLabel>Source URL</FieldLabel>
+        <FormFieldGroup label="Source URL">
           <Controller
             control={control}
             name="meta.url"
@@ -281,9 +277,8 @@ export function ImportToolsPanel({
               />
             )}
           />
-        </Field>
-        <Field>
-          <FieldLabel>Page HTML</FieldLabel>
+        </FormFieldGroup>
+        <FormFieldGroup label="Page HTML">
           <Textarea
             placeholder="Paste the full page HTML here (open the recipe in your browser → View Source → Copy All)"
             value={htmlInput}
@@ -291,7 +286,7 @@ export function ImportToolsPanel({
             rows={8}
             className="font-mono text-xs"
           />
-        </Field>
+        </FormFieldGroup>
         <Row align="center" justify="between" gap="sm">
           <Description size="xs">
             The source URL is saved with the recipe and used to resolve relative

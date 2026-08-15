@@ -8,15 +8,10 @@ import { toast } from "sonner";
 import { StaticPicker } from "~/app/_components/combobox/static-picker";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
+import { DialogFooter } from "~/components/ui/dialog";
+import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { useInvalidateMeals } from "./use-meal-mutations";
@@ -108,55 +103,51 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
         <CalendarPlus className="size-4" />
         Add to meal
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent size="md">
-          <DialogHeader>
-            <DialogTitle>Add to meal</DialogTitle>
-            <DialogDescription>
-              Choose a day and meal slot, or create a separate meal for this
-              recipe.
-            </DialogDescription>
-          </DialogHeader>
-          <Stack gap="sm">
-            <Stack gap="xs">
-              <Label htmlFor={dateInputId}>Day</Label>
-              <input
-                id={dateInputId}
-                type="date"
-                value={date}
-                className="rounded-md border bg-input/20 px-2 py-1 text-sm"
-                onChange={(event) => {
-                  setDate(event.target.value);
-                  setTarget(NEW_MEAL);
-                }}
-              />
-            </Stack>
-            <Stack gap="xs">
-              <Label>Meal slot</Label>
-              <StaticPicker
-                items={mealOptions}
-                value={target}
-                disabled={existingMeals.isLoading}
-                onValueChange={(value) => setTarget(value ?? NEW_MEAL)}
-                label="meal slot"
-              />
-            </Stack>
+      <ResponsiveDialog
+        open={open}
+        onOpenChange={setOpen}
+        size="md"
+        title="Add to meal"
+        description="Choose a day and meal slot, or create a separate meal for this recipe."
+      >
+        <Stack gap="sm">
+          <Stack gap="xs">
+            <Label htmlFor={dateInputId}>Day</Label>
+            <Input
+              id={dateInputId}
+              type="date"
+              value={date}
+              onChange={(event) => {
+                setDate(event.target.value);
+                setTarget(NEW_MEAL);
+              }}
+            />
           </Stack>
-          <DialogFooter>
-            <Row gap="sm">
-              <Button variant="outline" onClick={() => setOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                disabled={isPending || existingMeals.isLoading}
-                onClick={submit}
-              >
-                {target === NEW_MEAL ? "Create meal" : "Add to selected meal"}
-              </Button>
-            </Row>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <Stack gap="xs">
+            <Label>Meal slot</Label>
+            <StaticPicker
+              items={mealOptions}
+              value={target}
+              disabled={existingMeals.isLoading}
+              onValueChange={(value) => setTarget(value ?? NEW_MEAL)}
+              label="meal slot"
+            />
+          </Stack>
+        </Stack>
+        <DialogFooter>
+          <Row gap="sm">
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={isPending || existingMeals.isLoading}
+              onClick={submit}
+            >
+              {target === NEW_MEAL ? "Create meal" : "Add to selected meal"}
+            </Button>
+          </Row>
+        </DialogFooter>
+      </ResponsiveDialog>
     </>
   );
 }

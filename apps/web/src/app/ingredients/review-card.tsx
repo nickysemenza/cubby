@@ -106,7 +106,7 @@ function QueueUsdaPicker({
       )}
 
       {food && (
-        <div className="rounded-md border border-positive/40 bg-positive/5 p-2">
+        <div className="border border-positive/40 bg-positive/5 p-2">
           <p className="mb-1 font-medium text-2xs text-positive uppercase tracking-wide">
             Selected
           </p>
@@ -129,7 +129,7 @@ function QueueUsdaPicker({
               <Spinner className="size-3" /> Searching…
             </Row>
           ) : (
-            <div className="divide-y rounded-md border border-[var(--border)]">
+            <div className="divide-y border border-[var(--border)]">
               {alternatives.map((alt) => (
                 <button
                   key={alt.food.fdc_id}
@@ -205,7 +205,7 @@ export function ReviewCard({
   const usdaLinked = hasUsdaLink(row);
 
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-background p-4">
+    <div className="border border-[var(--border)] bg-background p-4">
       <EnrichmentEditor
         ref={editorRef}
         row={row}
@@ -258,7 +258,7 @@ export function ReviewCard({
                   <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
                     Possible duplicate{mergeOptions.length === 1 ? "" : "s"}
                   </p>
-                  <div className="divide-y rounded-md border border-dashed">
+                  <div className="divide-y border border-dashed">
                     {mergeOptions.map((opt, i) => (
                       <Row
                         key={opt.id}

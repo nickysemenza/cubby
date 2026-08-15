@@ -100,7 +100,7 @@ function Treemap({ data }: TreemapProps) {
   return (
     <div
       ref={containerRef}
-      className="relative h-[500px] w-full overflow-hidden rounded-md border border-[var(--border)]"
+      className="relative h-[500px] w-full overflow-hidden border border-[var(--border)]"
     >
       <svg
         aria-hidden="true"

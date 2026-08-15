@@ -1,14 +1,8 @@
-import { Bug, BugOff } from "lucide-react";
-import { Row } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { useDebug } from "~/hooks/useDebug";
+import { AuthenticatedShellControls } from "~/app/_components/navigation/authenticated-shell-controls";
 import { cn } from "~/lib/utils";
 import { desktopNav, isNavGroup } from "../navigation/nav-items";
 import { NavDropdown } from "./nav-dropdown";
 import { NavLink } from "./nav-link";
-import { ProblemsBadge } from "./problems-badge";
-import { QuickActionsMenu } from "./quick-actions-menu";
-import { UserAvatarDropdown } from "./user-avatar-dropdown";
 
 type MainNavEnhancementsProps = React.HTMLAttributes<HTMLElement>;
 
@@ -21,8 +15,6 @@ export function MainNavEnhancements({
   className,
   ...props
 }: MainNavEnhancementsProps) {
-  const { isDebugEnabled, toggleDebug } = useDebug();
-
   return (
     <>
       <nav
@@ -41,28 +33,10 @@ export function MainNavEnhancements({
         )}
       </nav>
 
-      <Row align="center" gap="sm">
-        <QuickActionsMenu />
-        <ProblemsBadge />
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={toggleDebug}
-          className={cn(
-            "hidden h-8 px-2 md:flex",
-            isDebugEnabled && "bg-warning/30 text-accent-foreground",
-          )}
-          title={isDebugEnabled ? "Disable debug mode" : "Enable debug mode"}
-        >
-          {isDebugEnabled ? (
-            <BugOff className="size-3.5" />
-          ) : (
-            <Bug className="size-3.5" />
-          )}
-          <span className="sr-only">Toggle debug mode</span>
-        </Button>
-        <UserAvatarDropdown />
-      </Row>
+      <AuthenticatedShellControls
+        debugClassName="hidden h-8 px-2 md:flex"
+        includeAccount
+      />
     </>
   );
 }

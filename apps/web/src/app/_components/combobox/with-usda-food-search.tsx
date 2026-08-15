@@ -5,9 +5,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { Field, FieldLabel } from "~/components/ui/field";
 import { Spinner } from "~/components/ui/spinner";
 import {
   Tooltip,
@@ -174,8 +174,7 @@ export function UsdaFoodSearchField({
   const canSuggest = !!initialQuery?.trim();
 
   return (
-    <Field>
-      <FieldLabel>{label}</FieldLabel>
+    <FormFieldGroup label={label}>
       <Row gap="xs">
         {SCOPES.map((s) => (
           <Button
@@ -256,6 +255,6 @@ export function UsdaFoodSearchField({
           <p className="mt-1 text-muted-foreground">{suggestion.reasoning}</p>
         </div>
       )}
-    </Field>
+    </FormFieldGroup>
   );
 }

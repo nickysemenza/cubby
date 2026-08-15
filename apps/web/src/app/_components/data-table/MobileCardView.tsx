@@ -256,7 +256,6 @@ export function MobileCardView<TItem>({
             : undefined
         }
         actions={model.actionsContent}
-        entity={entity}
         onClick={
           // In selection mode a tap toggles the row rather than navigating —
           // the iOS convention, and otherwise picking a second row means

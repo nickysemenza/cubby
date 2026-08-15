@@ -16,8 +16,9 @@ import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { buttonVariants } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
+import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { cn } from "~/lib/utils";
-import { ShelfTableToggle, type ShelfView } from "../data-table/shelf";
+import { SHELF_VIEW_OPTIONS, type ShelfView } from "../data-table/shelf";
 import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
 import { LocationBreadcrumb } from "./location-breadcrumb";
 import { LocationCardGrid } from "./location-card-grid";
@@ -103,7 +104,11 @@ export function LocationScanLanding({ location }: { location: InfLocation }) {
             <h2 className="my-0 font-heading font-semibold text-sm">
               Items here
             </h2>
-            <ShelfTableToggle value={view} onChange={setView} />
+            <ViewSwitcher
+              options={SHELF_VIEW_OPTIONS}
+              value={view}
+              onValueChange={setView}
+            />
           </Row>
           <LocationInventoryTable
             key={refreshKey}

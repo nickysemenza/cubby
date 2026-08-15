@@ -1,5 +1,4 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
-import { ResponsiveBar } from "@nivo/bar";
 import { useNavigate } from "@tanstack/react-router";
 import { Wallet } from "lucide-react";
 import { useMemo } from "react";
@@ -10,6 +9,7 @@ import { ProjectChartLabel, ProjectChartTick } from "../project-mark";
 import { nivoBarChrome, nivoChartTheme, nivoCurrencyAxis } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
+import { HorizontalBarChart } from "./horizontal-bar-chart";
 
 /**
  * `data` is `portfolioAnalytics`'s `spendingByProject` — subtree `spent`
@@ -56,56 +56,49 @@ export function SpendingByProject({
     return <ChartEmpty icon={Wallet} title="No spending data." />;
   }
 
-  const chartHeight = Math.max(250, data.length * 32 + 60);
-
   return (
-    <div style={{ height: chartHeight }}>
-      <ResponsiveBar
-        data={data}
-        keys={["cost"]}
-        indexBy="id"
-        layout="horizontal"
-        margin={{ top: 10, right: 80, bottom: 30, left: 180 }}
-        padding={0.3}
-        colors={["var(--chart-1)"]}
-        {...nivoBarChrome}
-        axisBottom={nivoCurrencyAxis}
-        axisLeft={{
-          tickSize: 0,
-          tickPadding: 8,
-          renderTick: (tick) => (
-            <ProjectChartTick {...tick} identityById={identityById} />
-          ),
-        }}
-        label={(d) =>
-          d.value && d.value > 0 ? formatCurrency(d.value, 0) : ""
-        }
-        labelSkipWidth={50}
-        labelTextColor="var(--background)"
-        enableGridX
-        enableGridY={false}
-        onClick={(bar) => {
-          const shortcode = bar.data.id;
-          if (shortcode)
-            navigate(entityDetailLink("project", String(shortcode)));
-        }}
-        tooltip={({ data: row, value }) => (
-          <ChartTooltip>
-            <strong>
-              <ProjectChartLabel
-                identity={
-                  identityById.get(String(row.id)) ?? {
-                    name: String(row.name),
-                    icon: null,
-                  }
+    <HorizontalBarChart
+      data={data}
+      minHeight={250}
+      keys={["cost"]}
+      indexBy="id"
+      margin={{ top: 10, right: 80, bottom: 30, left: 180 }}
+      padding={0.3}
+      colors={["var(--chart-1)"]}
+      {...nivoBarChrome}
+      axisBottom={nivoCurrencyAxis}
+      axisLeft={{
+        tickSize: 0,
+        tickPadding: 8,
+        renderTick: (tick) => (
+          <ProjectChartTick {...tick} identityById={identityById} />
+        ),
+      }}
+      label={(d) => (d.value && d.value > 0 ? formatCurrency(d.value, 0) : "")}
+      labelSkipWidth={50}
+      labelTextColor="var(--background)"
+      enableGridX
+      enableGridY={false}
+      onClick={(bar) => {
+        const shortcode = bar.data.id;
+        if (shortcode) navigate(entityDetailLink("project", String(shortcode)));
+      }}
+      tooltip={({ data: row, value }) => (
+        <ChartTooltip>
+          <strong>
+            <ProjectChartLabel
+              identity={
+                identityById.get(String(row.id)) ?? {
+                  name: String(row.name),
+                  icon: null,
                 }
-              />
-            </strong>
-            : {formatCurrency(value, 0)}
-          </ChartTooltip>
-        )}
-        theme={nivoChartTheme}
-      />
-    </div>
+              }
+            />
+          </strong>
+          : {formatCurrency(value, 0)}
+        </ChartTooltip>
+      )}
+      theme={nivoChartTheme}
+    />
   );
 }

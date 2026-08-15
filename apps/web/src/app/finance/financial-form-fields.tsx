@@ -6,6 +6,7 @@ import {
 import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
 import { ArrayFieldManager } from "~/components/forms/array-field-manager";
 import { Input } from "~/components/ui/input";
+import { NativeSelect } from "~/components/ui/native-select";
 
 /** Small structured editors for finance evidence.  These deliberately expose
  * source-owned fields rather than a JSON textarea: array updates replace the
@@ -143,8 +144,8 @@ export function SelectField<T extends FieldValues>({
           invalid={fieldState.invalid}
           error={fieldState.error}
         >
-          <select
-            className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
+          <NativeSelect
+            className="w-full"
             value={field.value ?? ""}
             onChange={(event) => field.onChange(event.target.value)}
           >
@@ -154,7 +155,7 @@ export function SelectField<T extends FieldValues>({
                 {value.replaceAll("_", " ")}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </FormFieldGroup>
       )}
     />

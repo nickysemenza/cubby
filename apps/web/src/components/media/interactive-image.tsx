@@ -5,7 +5,7 @@ import { cn } from "~/lib/utils";
 
 const interactiveImageVariants = cva(
   [
-    "relative overflow-hidden rounded-md border border-[var(--border)]",
+    "relative overflow-hidden border border-[var(--border)]",
     "transition-colors",
   ],
   {

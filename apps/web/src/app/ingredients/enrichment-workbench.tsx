@@ -388,7 +388,7 @@ export function EnrichmentWorkbench({
           align="center"
           wrap
           gap="sm"
-          className="rounded-lg border border-[var(--border)] bg-muted/40 px-4 py-2 text-sm"
+          className="border border-[var(--border)] bg-muted/40 px-4 py-2 text-sm"
         >
           <Badge variant="secondary">Scoped</Badge>
           <span className="text-muted-foreground">
@@ -493,7 +493,7 @@ export function EnrichmentWorkbench({
           {visible.length > 0 && (
             <Table
               className="table-auto"
-              containerClassName="overflow-hidden rounded-lg border border-[var(--border)]"
+              containerClassName="overflow-hidden border border-[var(--border)]"
             >
               <TableHeader>
                 <TableRow>
@@ -536,7 +536,7 @@ export function EnrichmentWorkbench({
               align="center"
               wrap
               gap="sm"
-              className="sticky bottom-4 rounded-lg border border-[var(--border)] bg-background/95 px-4 py-2 backdrop-blur"
+              className="sticky bottom-4 border border-[var(--border)] bg-background/95 px-4 py-2 backdrop-blur"
             >
               <span className="font-medium text-sm">
                 {selected.size} selected

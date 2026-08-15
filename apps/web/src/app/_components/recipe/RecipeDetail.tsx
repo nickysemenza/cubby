@@ -262,7 +262,7 @@ const RecipeDetailInner: React.FC<{
                   : "Keep screen awake while cooking"
               }
               className={cn(
-                "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs",
+                "inline-flex items-center gap-1 border px-2 py-1 text-xs",
                 wakeLock.enabled
                   ? "border-primary/40 bg-primary/10 text-primary"
                   : "border-border text-muted-foreground hover:text-foreground",
@@ -446,7 +446,7 @@ const RecipeDetailInner: React.FC<{
           the prep sheet's shopping list. Independent of view mode: shows
           whenever the costing engine has produced nutrient totals. */}
       {nutritionNutrients && (
-        <details className="group rounded-lg border border-border bg-muted/30 px-4 py-2 print:hidden">
+        <details className="group border border-border bg-muted/30 px-4 py-2 print:hidden">
           <summary className="eyebrow cursor-pointer marker:content-none">
             <Apple className="mr-2 inline size-3 align-[-2px]" />
             Nutrition

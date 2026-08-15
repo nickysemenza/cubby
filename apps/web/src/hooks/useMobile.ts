@@ -34,11 +34,13 @@ export function useIsMobile(): boolean {
 // handle each call is both correct and cheap. (A cached one would also outlive
 // a test's stubbed `matchMedia`.)
 const subscribe = (onStoreChange: () => void): (() => void) => {
+  if (!window.matchMedia) return () => {};
   const query = window.matchMedia(MOBILE_QUERY);
   query.addEventListener("change", onStoreChange);
   return () => query.removeEventListener("change", onStoreChange);
 };
 
-const getSnapshot = (): boolean => window.matchMedia(MOBILE_QUERY).matches;
+const getSnapshot = (): boolean =>
+  window.matchMedia?.(MOBILE_QUERY).matches ?? false;
 
 const getServerSnapshot = (): boolean => false;

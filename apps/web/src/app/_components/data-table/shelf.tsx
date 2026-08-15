@@ -3,53 +3,23 @@ import { Link } from "@tanstack/react-router";
 import { LayoutGrid, LayoutList } from "lucide-react";
 import type { ReactNode } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
-import { Button } from "~/components/ui/button";
 import { Image } from "~/components/ui/image";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Spinner } from "~/components/ui/spinner";
+import type { ViewSwitcherOption } from "~/components/ui/view-switcher";
 import { EntityIcon } from "~/entities/entities";
-import { cn } from "~/lib/utils";
 import { useInfiniteScrollSentinel } from "../hooks/useInfiniteScrollSentinel";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 
 export type ShelfView = "shelf" | "table";
 
+export const SHELF_VIEW_OPTIONS: ViewSwitcherOption<ShelfView>[] = [
+  { value: "shelf", label: "Shelf", icon: LayoutGrid },
+  { value: "table", label: "Table", icon: LayoutList },
+];
+
 const SHELF_GRID_CLASS =
   "grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6";
-
-/** Shelf/Table view switch. Pair with ShelfGrid to make any list photo-first. */
-export function ShelfTableToggle({
-  value,
-  onChange,
-  className,
-}: {
-  value: ShelfView;
-  onChange: (value: ShelfView) => void;
-  className?: string;
-}) {
-  return (
-    <div className={cn("flex items-center gap-1", className)}>
-      {(
-        [
-          { view: "shelf", icon: LayoutGrid, label: "Shelf" },
-          { view: "table", icon: LayoutList, label: "Table" },
-        ] as const
-      ).map(({ view, icon: Icon, label }) => (
-        <Button
-          key={view}
-          variant={value === view ? "secondary" : "ghost"}
-          size="default"
-          className={cn(value !== view && "text-muted-foreground")}
-          onClick={() => onChange(view)}
-          aria-pressed={value === view}
-        >
-          <Icon className="size-3.5" />
-          {label}
-        </Button>
-      ))}
-    </div>
-  );
-}
 
 /** A single image-led card: square photo (with graceful fallback) + caption. */
 export function ShelfCard({
@@ -76,7 +46,7 @@ export function ShelfCard({
     <Link
       to={to}
       params={params}
-      className="flex flex-col overflow-hidden rounded-lg border border-[var(--border)] bg-card transition-colors duration-150 hover:bg-muted/50"
+      className="flex flex-col overflow-hidden border border-[var(--border)] bg-card transition-colors duration-150 hover:bg-muted/50"
     >
       <div className="relative aspect-square w-full overflow-hidden bg-muted/20">
         <Image
@@ -137,7 +107,7 @@ function ShelfSkeleton() {
         <div
           // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length placeholders
           key={i}
-          className="overflow-hidden rounded-lg border border-[var(--border)]"
+          className="overflow-hidden border border-[var(--border)]"
         >
           <Skeleton className="aspect-square w-full rounded-none" />
           <div className="space-y-2 px-2 py-2">
@@ -153,7 +123,7 @@ function ShelfSkeleton() {
 /**
  * Photo-first "shelf" grid with loading / empty / error states and optional
  * infinite-scroll. The reusable half of the Shelf/Table pattern — feed it items
- * and a `renderCard` (use ShelfCard) and pair it with ShelfTableToggle.
+ * and a `renderCard` (use ShelfCard) and pair it with `ViewSwitcher`.
  */
 export function ShelfGrid<T>({
   items,

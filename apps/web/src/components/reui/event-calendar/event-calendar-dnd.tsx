@@ -745,7 +745,7 @@ function beginGesture<TData>(config: BeginGestureConfig<TData>) {
       // coordinates, so a logical start-0 anchor would fling it off-screen
       // in RTL documents
       hintEl.className =
-        "bg-background text-destructive border-destructive/40 pointer-events-none fixed top-0 left-0 z-100 rounded-md border px-2 py-0.5 text-xs font-medium shadow-sm" +
+        "bg-background text-destructive border-destructive/40 pointer-events-none fixed top-0 left-0 z-100 border px-2 py-0.5 text-xs font-medium shadow-sm" +
         (ui?.dropHint ? " " + ui.dropHint : "");
       hintEl.textContent = settings.i18n.labels.dropNotAllowed;
       document.body.appendChild(hintEl);

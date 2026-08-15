@@ -153,10 +153,10 @@ export function LedgerFilters<TData>({ table }: { table: Table<TData> }) {
   }
 
   useEffect(() => {
-    // Header filters, saved views, reset, and URL restoration can advance the
-    // table while this hook's debounced value still represents its previous
-    // draft. Only a debounce that has caught up to the latest local draft may
-    // write back; otherwise it would immediately undo the external change.
+    // Saved views, reset, and URL restoration can advance the table while this
+    // hook's debounced value still represents its previous draft. Only a
+    // debounce that has caught up to the latest local draft may write back;
+    // otherwise it would immediately undo the external change.
     if (debouncedDraftKey !== draftKey) return;
 
     // ReUI creates text filters with an empty value so their focused input can

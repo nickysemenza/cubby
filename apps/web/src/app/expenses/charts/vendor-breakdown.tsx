@@ -1,9 +1,9 @@
 import type { ExpenseVendorAggregate } from "@cubby/schemas/project";
-import { ResponsiveBar } from "@nivo/bar";
 import { Store } from "lucide-react";
 import { useMemo } from "react";
 import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
+import { HorizontalBarChart } from "~/app/projects/charts/horizontal-bar-chart";
 import {
   nivoBarChrome,
   nivoChartTheme,
@@ -39,40 +39,36 @@ export function VendorBreakdown({
     return <ChartEmpty icon={Store} title="No vendor-linked expenses." />;
   }
 
-  const chartHeight = Math.max(240, data.length * 32 + 60);
-
   return (
-    <div style={{ height: chartHeight }}>
-      <ResponsiveBar
-        data={data}
-        keys={["net"]}
-        indexBy="vendor"
-        layout="horizontal"
-        margin={{ top: 10, right: 40, bottom: 40, left: 160 }}
-        padding={0.25}
-        colors={({ data: d }) =>
-          d.net < 0 ? "var(--chart-negative)" : "var(--chart-1)"
-        }
-        {...nivoBarChrome}
-        axisBottom={nivoCurrencyAxis}
-        axisLeft={{ tickSize: 0, tickPadding: 8 }}
-        enableLabel={false}
-        enableGridX
-        enableGridY={false}
-        tooltip={({ data: d }) => (
-          <ChartTooltip>
-            <strong>{d.vendor}</strong> —{" "}
-            <span
-              style={{
-                color: d.net < 0 ? "var(--chart-negative)" : "var(--chart-1)",
-              }}
-            >
-              {formatCurrency(d.net, 0)}
-            </span>
-          </ChartTooltip>
-        )}
-        theme={nivoChartTheme}
-      />
-    </div>
+    <HorizontalBarChart
+      data={data}
+      minHeight={240}
+      keys={["net"]}
+      indexBy="vendor"
+      margin={{ top: 10, right: 40, bottom: 40, left: 160 }}
+      padding={0.25}
+      colors={({ data: d }) =>
+        d.net < 0 ? "var(--chart-negative)" : "var(--chart-1)"
+      }
+      {...nivoBarChrome}
+      axisBottom={nivoCurrencyAxis}
+      axisLeft={{ tickSize: 0, tickPadding: 8 }}
+      enableLabel={false}
+      enableGridX
+      enableGridY={false}
+      tooltip={({ data: d }) => (
+        <ChartTooltip>
+          <strong>{d.vendor}</strong> —{" "}
+          <span
+            style={{
+              color: d.net < 0 ? "var(--chart-negative)" : "var(--chart-1)",
+            }}
+          >
+            {formatCurrency(d.net, 0)}
+          </span>
+        </ChartTooltip>
+      )}
+      theme={nivoChartTheme}
+    />
   );
 }

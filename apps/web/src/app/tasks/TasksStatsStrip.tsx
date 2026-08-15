@@ -1,55 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
-import { Grid } from "~/components/layout";
-import { Skeleton } from "~/components/ui/skeleton";
-import { StatTile } from "~/components/ui/stat-tile";
+import { DrilldownMetricStrip } from "~/components/ui/drilldown-metric-strip";
 import { useTRPC } from "~/integrations/trpc/react";
 
 const route = getRouteApi("/_authenticated/tasks/");
-
-const SKELETON_TILES = [
-  "total",
-  "next",
-  "later",
-  "inbox",
-  "overdue",
-  "week",
-  "blocked",
-] as const;
-
-function StatsSkeleton() {
-  return (
-    <Grid cols="summary">
-      {SKELETON_TILES.map((key) => (
-        <Skeleton key={key} className="h-14 w-full" />
-      ))}
-    </Grid>
-  );
-}
-
-/**
- * One clickable stat — navigates (merge, not replace, so `q`/table-search
- * params survive) to the view that surfaces the underlying tasks.
- */
-function StatLink({
-  label,
-  value,
-  onClick,
-}: {
-  label: string;
-  value: number;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="text-left transition-colors hover:text-foreground"
-    >
-      <StatTile label={label}>{value}</StatTile>
-    </button>
-  );
-}
 
 /**
  * Compact counts strip above the Tasks page's `ViewSwitcher` — backed by the
@@ -62,7 +16,7 @@ export function TasksStatsStrip() {
   const navigate = route.useNavigate();
   const { data, isLoading } = useQuery(api.task.summary.queryOptions());
 
-  if (isLoading || !data) return <StatsSkeleton />;
+  if (isLoading || !data) return <DrilldownMetricStrip loadingCount={7} />;
 
   const goToNext = () =>
     navigate({ search: (prev) => ({ ...prev, view: "next" }) });
@@ -83,18 +37,20 @@ export function TasksStatsStrip() {
     });
 
   return (
-    <Grid cols="summary">
-      <StatLink label="Total open" value={data.totalOpen} onClick={goToNext} />
-      <StatLink label="Next" value={data.next} onClick={goToNext} />
-      <StatLink label="Someday" value={data.later} onClick={goToNext} />
-      <StatLink label="Inbox" value={data.inbox} onClick={goToInbox} />
-      <StatLink label="Overdue" value={data.overdue} onClick={goToNext} />
-      <StatLink
-        label="Due in 7 days"
-        value={data.dueThisWeek}
-        onClick={goToNext}
-      />
-      <StatLink label="Blocked" value={data.blocked} onClick={goToNext} />
-    </Grid>
+    <DrilldownMetricStrip
+      metrics={[
+        { label: "Total open", value: data.totalOpen, onSelect: goToNext },
+        { label: "Next", value: data.next, onSelect: goToNext },
+        { label: "Someday", value: data.later, onSelect: goToNext },
+        { label: "Inbox", value: data.inbox, onSelect: goToInbox },
+        { label: "Overdue", value: data.overdue, onSelect: goToNext },
+        {
+          label: "Due in 7 days",
+          value: data.dueThisWeek,
+          onSelect: goToNext,
+        },
+        { label: "Blocked", value: data.blocked, onSelect: goToNext },
+      ]}
+    />
   );
 }

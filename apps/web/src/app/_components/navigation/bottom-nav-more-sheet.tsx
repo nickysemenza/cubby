@@ -1,6 +1,4 @@
 import { Link } from "@tanstack/react-router";
-import { Bug, BugOff } from "lucide-react";
-import { Button } from "~/components/ui/button";
 import {
   Sheet,
   SheetClose,
@@ -8,8 +6,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from "~/components/ui/sheet";
-import { useDebug } from "~/hooks/useDebug";
 import { cn, formatBuildDate } from "~/lib/utils";
+import { DebugToggleButton } from "./debug-toggle-button";
 import { moreNavSections } from "./nav-items";
 
 const buildDate = formatBuildDate(__BUILD_DATE__);
@@ -30,8 +28,6 @@ export function BottomNavMoreSheet({
   open,
   onOpenChange,
 }: BottomNavMoreSheetProps) {
-  const { isDebugEnabled, toggleDebug } = useDebug();
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -42,24 +38,10 @@ export function BottomNavMoreSheet({
           <SheetTitle>More</SheetTitle>
         </SheetHeader>
         <div className="safe-bottom flex flex-1 flex-col gap-1 overflow-y-auto px-4 pb-6">
-          <Button
-            variant="ghost"
-            onClick={() => {
-              toggleDebug();
-              onOpenChange(false);
-            }}
-            className={cn(
-              "min-h-[44px] justify-start px-2 py-2 text-sm",
-              isDebugEnabled && "bg-warning/30 text-accent-foreground",
-            )}
-          >
-            {isDebugEnabled ? (
-              <BugOff className="mr-2 size-3.5" />
-            ) : (
-              <Bug className="mr-2 size-3.5" />
-            )}
-            {isDebugEnabled ? "Disable Debug" : "Enable Debug"}
-          </Button>
+          <DebugToggleButton
+            compact={false}
+            onAfterToggle={() => onOpenChange(false)}
+          />
 
           {moreNavSections.map((section) => (
             <div key={section.title} className="flex flex-col gap-1">
