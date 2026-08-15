@@ -1,6 +1,6 @@
 import type { ExpenseOut } from "@cubby/schemas/project";
-import { VizTooltip } from "~/app/_components/visualizations/viz-overlay";
-import { formatCurrency } from "~/lib/utils";
+import type { CSSProperties, ReactNode } from "react";
+import { cn, formatCurrency } from "~/lib/utils";
 
 /**
  * The shared nivo/chart tooltip surface. Warm-Paper Ledger separation idiom:
@@ -8,10 +8,30 @@ import { formatCurrency } from "~/lib/utils";
  * as the ledger rule that lifts the tooltip off the chart. Owns the surface so
  * padding/size/elevation can't drift across the 12+ chart call sites.
  *
- * Pass `className` for per-site needs (e.g. the positioned overlay in
- * location-treemap); a later class wins via twMerge.
+ * This component deliberately stays in normal flow: nivo owns cursor tracking,
+ * measurement, and edge flipping in the wrapper around this surface.
  */
-export const ChartTooltip = VizTooltip;
+export function ChartTooltip({
+  children,
+  className,
+  style,
+}: {
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-md bg-popover px-4 py-2 text-sm ring-1 ring-border",
+        className,
+      )}
+      style={style}
+    >
+      {children}
+    </div>
+  );
+}
 
 /**
  * The top 3 expenses behind a donut slice / bar segment (by cost desc) with a
