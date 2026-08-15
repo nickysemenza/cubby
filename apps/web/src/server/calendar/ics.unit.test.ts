@@ -1,5 +1,9 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
-import { calendarMealItem, calendarTaskItem } from "@cubby/schemas/calendar";
+import {
+  calendarItemKind,
+  calendarMealItem,
+  calendarTaskItem,
+} from "@cubby/schemas/calendar";
 import {
   unsafeMealShortcode,
   unsafeTaskShortcode,
@@ -184,5 +188,30 @@ describe("kindsForFeed", () => {
     expect(kindsForFeed("meals")).toEqual(["meal"]);
     expect(kindsForFeed("tasks")).toEqual(["task"]);
     expect(kindsForFeed("all")).toEqual(["meal", "task"]);
+  });
+
+  it("only ever names kinds the query layer can actually return", () => {
+    // A feed asking for a kind outside the union would silently yield nothing:
+    // `kinds` is passed straight through to getCalendarRange.
+    const known = new Set<string>(calendarItemKind.options);
+    for (const feed of ["meals", "tasks", "all"] as const) {
+      for (const kind of kindsForFeed(feed)) {
+        expect(known.has(kind)).toBe(true);
+      }
+    }
+  });
+
+  it("drops kinds the requested feed does not publish", () => {
+    // Defence behind the query's `kinds` filter: even handed a task, a
+    // meals-only feed must not emit it.
+    const mealsOnly = renderIcs([task()], {
+      feed: "meals",
+      now: NOW,
+      origin: ORIGIN,
+    });
+    expect(mealsOnly).not.toContain("BEGIN:VEVENT");
+    expect(
+      renderIcs([task()], { feed: "tasks", now: NOW, origin: ORIGIN }),
+    ).toContain("BEGIN:VEVENT");
   });
 });

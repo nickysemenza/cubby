@@ -105,55 +105,109 @@ const icsDate = (plain: string) => plain.replace(/-/g, "");
 const icsTimestamp = (at: Date) =>
   `${at.toISOString().replace(/[-:]/g, "").split(".")[0]}Z`;
 
-function detailPath(item: CalendarItem): string {
-  // `CalendarItem.id` is a shortcode brand (`mealShortcode` / `taskShortcode`,
-  // see packages/schemas/src/calendar.ts), never a uuid — shortcodes are the
-  // public id, so these paths are safe by construction.
-  const shortcode = item.id;
-  return item.kind === "meal" ? `/meals/${shortcode}` : `/tasks/${shortcode}`;
-}
-
-function describe(item: CalendarItem): string | null {
-  if (item.kind === "meal") {
-    const parts = [...item.recipeNames];
-    const stats: string[] = [];
-    if (item.calories > 0) stats.push(`${Math.round(item.calories)} kcal`);
-    if (item.cost > 0) stats.push(`$${item.cost.toFixed(2)}`);
-    if (item.nutritionPending) stats.push("nutrition pending");
-    if (stats.length > 0) parts.push(stats.join(" · "));
-    return parts.length > 0 ? parts.join("\n") : null;
-  }
-  if (item.kind === "task") {
-    const parts = [`Status: ${item.status.replace(/_/g, " ")}`];
-    if (item.trade) parts.push(`Trade: ${item.trade}`);
-    if (item.projectName) parts.push(`Project: ${item.projectName}`);
-    return parts.join("\n");
-  }
-  return null;
-}
-
-function summarize(item: CalendarItem): string {
-  if (item.kind === "task" && item.projectName) {
-    return `${item.projectName}: ${item.title}`;
-  }
-  return item.title;
-}
+type ItemOfKind<K extends CalendarItem["kind"]> = Extract<
+  CalendarItem,
+  { kind: K }
+>;
 
 /**
- * Whether an item belongs in the feed at all.
+ * How one calendar kind becomes an event.
  *
- * Only meals and tasks are published today; expenses and projects are dropped
- * here as a second line of defence behind the `kinds` filter on the query.
- * Completed tasks are omitted — a done task on a calendar is noise, and the
- * feed is a plan, not a log.
+ * The whole per-kind surface lives here, so adding a kind to a feed is this
+ * entry plus a `FEED_KINDS` membership — not an edit to five separate `kind ===`
+ * branches scattered through the serializer, which is what this replaced.
+ *
+ * Note what is deliberately NOT here: which date columns an entity contributes,
+ * and how they are read. Those stay in repo/calendar.ts, because they do not
+ * generalize — a meal has one date, a task a two-column range, and a project's
+ * window is derived from its subtree rather than stored at all.
  */
-function isPublishable(item: CalendarItem): boolean {
-  if (item.kind === "meal") return true;
-  if (item.kind === "task") return item.status !== "done";
-  return false;
+interface CalendarKindSpec<K extends CalendarItem["kind"]> {
+  /**
+   * Detail-route prefix; the item's shortcode is appended. Shortcodes are the
+   * public id (`CalendarItem.id` is a shortcode brand), so no uuid reaches a URL.
+   */
+  detailBase: string;
+  /**
+   * Per-item filter *within* a kind — not feed membership, which `FEED_KINDS`
+   * owns. This is where "a done task is noise on a calendar" lives.
+   */
+  includes: (item: ItemOfKind<K>) => boolean;
+  summary: (item: ItemOfKind<K>) => string;
+  description: (item: ItemOfKind<K>) => string | null;
+}
+
+const KIND_SPECS: {
+  [K in CalendarItem["kind"]]: CalendarKindSpec<K>;
+} = {
+  meal: {
+    detailBase: "/meals",
+    includes: () => true,
+    summary: (item) => item.title,
+    description: (item) => {
+      const parts = [...item.recipeNames];
+      const stats: string[] = [];
+      if (item.calories > 0) stats.push(`${Math.round(item.calories)} kcal`);
+      if (item.cost > 0) stats.push(`$${item.cost.toFixed(2)}`);
+      if (item.nutritionPending) stats.push("nutrition pending");
+      if (stats.length > 0) parts.push(stats.join(" · "));
+      return parts.length > 0 ? parts.join("\n") : null;
+    },
+  },
+  task: {
+    detailBase: "/tasks",
+    // The feed is a plan, not a log.
+    includes: (item) => item.status !== "done",
+    summary: (item) =>
+      item.projectName ? `${item.projectName}: ${item.title}` : item.title,
+    description: (item) => {
+      const parts = [`Status: ${item.status.replace(/_/g, " ")}`];
+      if (item.trade) parts.push(`Trade: ${item.trade}`);
+      if (item.projectName) parts.push(`Project: ${item.projectName}`);
+      return parts.join("\n");
+    },
+  },
+  // Reachable by `getCalendarRange` but published by no feed today — add the
+  // kind to a FEED_KINDS entry to turn either on.
+  expense: {
+    detailBase: "/expenses",
+    includes: () => true,
+    summary: (item) =>
+      item.vendor ? `${item.vendor}: ${item.title}` : item.title,
+    description: (item) => {
+      const parts = [item.future ? "Planned" : "Actual"];
+      if (item.cost !== null) parts.push(`$${item.cost.toFixed(2)}`);
+      if (item.projectName) parts.push(`Project: ${item.projectName}`);
+      return parts.join("\n");
+    },
+  },
+  project: {
+    detailBase: "/projects",
+    includes: () => true,
+    summary: (item) => item.title,
+    description: (item) => `Status: ${item.status.replace(/_/g, " ")}`,
+  },
+};
+
+/**
+ * The spec for an item's kind.
+ *
+ * The cast is the single place the correlation between `item.kind` and its
+ * spec's parameter type is asserted — TypeScript cannot follow that through an
+ * index into a mapped type. Confining it here is the point: one asserted line
+ * instead of a `kind ===` ladder repeated per property.
+ */
+const specFor = (item: CalendarItem) =>
+  KIND_SPECS[item.kind] as CalendarKindSpec<CalendarItem["kind"]>;
+
+/** Whether this feed publishes the item: kind membership, then the kind's own filter. */
+function isPublishable(item: CalendarItem, feed: IcsFeed): boolean {
+  const kinds: readonly CalendarItem["kind"][] = FEED_KINDS[feed];
+  return kinds.includes(item.kind) && specFor(item).includes(item);
 }
 
 function toEvent(item: CalendarItem, opts: IcsOptions): string[] {
+  const spec = specFor(item);
   // UID must be stable across polls so an edit updates the event in place
   // rather than duplicating it. Shortcodes are permanent and never reassigned
   // (not even on merge), which is exactly the guarantee a UID needs.
@@ -163,11 +217,11 @@ function toEvent(item: CalendarItem, opts: IcsOptions): string[] {
     `DTSTAMP:${icsTimestamp(opts.now)}`,
     `DTSTART;VALUE=DATE:${icsDate(item.startDate)}`,
     `DTEND;VALUE=DATE:${icsDate(item.endDateExclusive)}`,
-    `SUMMARY:${escapeText(summarize(item))}`,
-    `URL:${opts.origin}${detailPath(item)}`,
+    `SUMMARY:${escapeText(spec.summary(item))}`,
+    `URL:${opts.origin}${spec.detailBase}/${item.id}`,
     "TRANSP:TRANSPARENT",
   ];
-  const description = describe(item);
+  const description = spec.description(item);
   if (description) lines.push(`DESCRIPTION:${escapeText(description)}`);
   lines.push("END:VEVENT");
   return lines;
@@ -203,7 +257,7 @@ export function renderIcs(items: CalendarItem[], opts: IcsOptions): string {
   ];
 
   for (const item of items) {
-    if (!isPublishable(item)) continue;
+    if (!isPublishable(item, opts.feed)) continue;
     lines.push(...toEvent(item, opts));
   }
 
