@@ -92,8 +92,13 @@ const icsDate = (plain: string) => plain.replace(/-/g, "");
 const icsTimestamp = (at: Date) =>
   `${at.toISOString().replace(/[-:]/g, "").split(".")[0]}Z`;
 
-const detailPath = (item: CalendarItem) =>
-  item.kind === "meal" ? `/meals/${item.id}` : `/tasks/${item.id}`;
+function detailPath(item: CalendarItem): string {
+  // `CalendarItem.id` is a shortcode brand (`mealShortcode` / `taskShortcode`,
+  // see packages/schemas/src/calendar.ts), never a uuid — shortcodes are the
+  // public id, so these paths are safe by construction.
+  const shortcode = item.id;
+  return item.kind === "meal" ? `/meals/${shortcode}` : `/tasks/${shortcode}`;
+}
 
 function describe(item: CalendarItem): string | null {
   if (item.kind === "meal") {
