@@ -96,6 +96,13 @@ export const calendarRangeInput = z
   .object({
     startDate: plainDate,
     endDateExclusive: plainDate,
+    /**
+     * Which item kinds to read. Omitted means all four — the in-app calendar
+     * wants everything, so that stays the default. Narrowing it lets a caller
+     * skip whole queries: asking for meals alone avoids the expense read and
+     * the project subtree rollup entirely (see repo/calendar.ts).
+     */
+    kinds: z.array(calendarItemKind).nonempty().optional(),
   })
   .refine((value) => value.startDate < value.endDateExclusive, {
     message: "endDateExclusive must be after startDate",

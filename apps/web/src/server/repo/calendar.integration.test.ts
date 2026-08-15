@@ -115,4 +115,65 @@ describe("calendar repository", () => {
       false,
     );
   });
+
+  it("narrows to the requested kinds", async () => {
+    const { output: project } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "Deck rebuild",
+        kind: "renovation",
+        startDate: "2026-09-01",
+        endDate: "2026-09-05",
+      }),
+      ctx.actor,
+    );
+    await createMeal(
+      ctx.db,
+      mealCreateInput.parse({ date: "2026-09-02", name: "Chili" }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        name: "Stain boards",
+        trade: "finishes",
+        projectId: project.id,
+        dueDate: "2026-09-03",
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        name: "Lumber",
+        date: "2026-09-02",
+        cost: 40,
+        trade: "building",
+        costType: "materials",
+      }),
+      ctx.actor,
+    );
+
+    const range = { startDate: "2026-09-01", endDateExclusive: "2026-09-10" };
+    const all = await getCalendarRange(ctx.db, range);
+    expect(new Set(all.items.map((item) => item.kind))).toEqual(
+      new Set(["meal", "task", "expense", "project"]),
+    );
+
+    // What the ICS feed asks for: the expense and project reads are skipped
+    // entirely, not filtered out afterwards.
+    const feed = await getCalendarRange(ctx.db, {
+      ...range,
+      kinds: ["meal", "task"],
+    });
+    expect(new Set(feed.items.map((item) => item.kind))).toEqual(
+      new Set(["meal", "task"]),
+    );
+    expect(feed.days["2026-09-02"]).toMatchObject({
+      mealCount: 1,
+      expenseCount: 0,
+      projectCount: 0,
+      actualSpend: 0,
+    });
+  });
 });

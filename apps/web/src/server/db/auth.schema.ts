@@ -14,6 +14,12 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
+  // Bearer secret for the read-only iCalendar feed (routes/api/calendar.$token.$feed.ts).
+  // Calendar.app sends no cookie and can't do OAuth, so the URL itself carries
+  // the credential. Unique so the feed route can resolve a user from the token
+  // in one indexed read; nullable because a user has no feed until they mint one
+  // (Postgres allows many NULLs under a unique index).
+  calendarFeedToken: text("calendar_feed_token").unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

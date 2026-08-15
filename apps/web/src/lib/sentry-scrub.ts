@@ -11,13 +11,24 @@
 // leaves the process.
 //
 // Kept param-agnostic to `event.request.url` and `event.request.query_string`,
-// the two places the SDK serializes the request URL.
+// the two places the SDK serializes the request URL. The calendar feed puts its
+// credential in the *path*, so paths are scrubbed too.
 
 const REDACTED = "[REDACTED]";
 
 // Query params whose values are (or could be) credentials. Matched
 // case-insensitively.
 const SENSITIVE_QUERY_PARAMS = new Set(["key", "apikey", "api_key", "token"]);
+
+// Paths that carry a credential as a *path segment* rather than a query param.
+// The published calendar feed is /api/calendar/<token>/<feed>.ics — Calendar.app
+// can send neither a cookie nor a bearer header, so the token has to live in the
+// URL, and the URL is what Sentry attaches to every event from that route.
+const SENSITIVE_PATH_SEGMENT = /(\/api\/calendar\/)[^/]+/g;
+
+function redactPath(path: string): string {
+  return path.replace(SENSITIVE_PATH_SEGMENT, `$1${REDACTED}`);
+}
 
 function redactUrl(url: string): string {
   // Split off the query string manually — the URL may be relative (no origin),
@@ -27,9 +38,9 @@ function redactUrl(url: string): string {
   const withoutFragment = hashIdx >= 0 ? url.slice(0, hashIdx) : url;
 
   const queryIdx = withoutFragment.indexOf("?");
-  if (queryIdx < 0) return url;
+  if (queryIdx < 0) return `${redactPath(withoutFragment)}${fragment}`;
 
-  const path = withoutFragment.slice(0, queryIdx);
+  const path = redactPath(withoutFragment.slice(0, queryIdx));
   const query = withoutFragment.slice(queryIdx + 1);
 
   const scrubbed = redactQueryString(query);

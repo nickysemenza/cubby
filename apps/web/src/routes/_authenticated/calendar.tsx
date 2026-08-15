@@ -7,6 +7,7 @@ import {
   calendarSearchDefaults,
   calendarSearchSchema,
 } from "~/app/calendar/calendar-search";
+import { CalendarSubscribeDialog } from "~/app/calendar/calendar-subscribe-dialog";
 import { UnifiedCalendar } from "~/app/calendar/unified-calendar";
 import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";
@@ -23,7 +24,12 @@ function CalendarRoute() {
   const navigate = useNavigate({ from: Route.fullPath });
 
   return (
-    <Page variant="list" title="Calendar" fullWidth>
+    <Page
+      variant="list"
+      title="Calendar"
+      fullWidth
+      actions={<CalendarSubscribeDialog />}
+    >
       <UnifiedCalendar
         date={search.date}
         day={search.day}
