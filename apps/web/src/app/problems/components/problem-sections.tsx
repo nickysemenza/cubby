@@ -38,6 +38,7 @@ import { match } from "ts-pattern";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
+import { mealDateLabel } from "~/app/meals/meal-format";
 import { formatDate } from "~/app/projects/project-formatting";
 import {
   ReconciliationBadge,
@@ -1365,6 +1366,22 @@ const DECLARED_SECTIONS = [
       title: recipe.name,
       route: entityDetailLink("recipe", recipe.id),
       editLabel: "Open recipe",
+    }),
+  }),
+  section({
+    id: "empty-cooked-meals",
+    label: "Empty meals",
+    select: (p) => p.emptyCookedMeals,
+    entity: "meal",
+    title: "Cooked meals with nothing planned",
+    description:
+      "Meals on the calendar whose kind says you'll cook them, but which carry no live planned recipe — a plan you started and didn't finish. Meals kinded as eating out, takeout, or leftovers are deliberately excluded: a recipe-less record is correct for those, and they contribute nothing to the shopping list either. Two valid fixes and only you know which: plan a recipe, or re-kind the meal to what it actually was. A meal whose only recipe was since deleted counts as empty here, matching how it already renders.",
+    emptyMessage: "Every cooked meal has at least one recipe planned.",
+    renderItem: (meal) => ({
+      title: meal.name ?? mealDateLabel(meal),
+      subtitle: meal.name ? mealDateLabel(meal) : undefined,
+      route: entityDetailLink("meal", meal.id),
+      editLabel: "Open meal",
     }),
   }),
   section({

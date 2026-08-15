@@ -2,9 +2,24 @@ import {
   MEAL_KIND_LABELS,
   MEAL_TYPE_LABELS,
   type MealKind,
+  type MealType,
   mealKindValues,
   mealTypeValues,
 } from "@cubby/schemas/meal-classification";
+import {
+  CircleDashed,
+  Cookie,
+  CookingPot,
+  Croissant,
+  IceCreamCone,
+  type LucideIcon,
+  Moon,
+  Refrigerator,
+  ShoppingBag,
+  Sun,
+  Sunrise,
+  UtensilsCrossed,
+} from "lucide-react";
 import type { BadgeVariant } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { buildSelectOptions } from "~/lib/select-options";
@@ -42,3 +57,45 @@ export const mealKindBadgeVariant: Record<MealKind, BadgeVariant> = {
   takeout: "default",
   other: "outline",
 };
+
+/**
+ * Slot glyphs for tight surfaces — the calendar chip, where the label is
+ * either already the title or has no room. Breakfast/lunch/dinner take the
+ * time-of-day triad because they *are* the day's anchors; the three minor
+ * slots take food glyphs. Monochrome Lucide on `currentColor`, never emoji
+ * (same rule as `TRADE_ICONS`).
+ */
+const MEAL_TYPE_ICONS: Record<MealType, LucideIcon> = {
+  breakfast: Sunrise,
+  brunch: Croissant,
+  lunch: Sun,
+  dinner: Moon,
+  snack: Cookie,
+  dessert: IceCreamCone,
+};
+
+/** What an unslotted meal shows — the generic glyph the calendar used for all meals. */
+const UNSLOTTED_MEAL_ICON: LucideIcon = CookingPot;
+
+/**
+ * Kind glyphs, and `cooked` is deliberately absent.
+ *
+ * Nearly every meal is cooked, so marking it would put a glyph on everything
+ * and distinguish nothing — the marker only earns its place on the exception.
+ * Same rule as `mealKindBadgeVariant`'s neutral `cooked` tone and the ICS
+ * description, which likewise names the kind only when it isn't `cooked`.
+ */
+const MEAL_KIND_ICONS: Record<Exclude<MealKind, "cooked">, LucideIcon> = {
+  leftovers: Refrigerator,
+  eating_out: UtensilsCrossed,
+  takeout: ShoppingBag,
+  other: CircleDashed,
+};
+
+/** The slot glyph, or the generic pot when unslotted. */
+export const mealTypeIcon = (mealType: MealType | null): LucideIcon =>
+  mealType ? MEAL_TYPE_ICONS[mealType] : UNSLOTTED_MEAL_ICON;
+
+/** The kind glyph, or null for `cooked` — see `MEAL_KIND_ICONS`. */
+export const mealKindIcon = (mealKind: MealKind): LucideIcon | null =>
+  mealKind === "cooked" ? null : MEAL_KIND_ICONS[mealKind];

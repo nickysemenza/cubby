@@ -54,7 +54,7 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 
 **Meals**
 - Plan recipes onto a shared month calendar (plus a table view), scaled per meal
-- Classify each meal by slot (breakfast → dessert, ordering the calendar day) and by kind — a `eating out` / `takeout` meal is a recipe-less placeholder on purpose, and only `cooked` meals feed the shopping list
+- Classify each meal by slot (breakfast → dessert, ordering the calendar day) and by kind — a `eating out` / `takeout` meal is a recipe-less placeholder on purpose, and only `cooked` meals feed the shopping list. Calendar chips carry the slot as their glyph; non-cooked meals read as dashed
 - Shopping list — aggregated need vs. on-hand inventory, with a per-meal breakdown (display-only; see [Tenets](#tenets))
 - Suggestions — *"what can I make tonight?"* from what's on hand
 

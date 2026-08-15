@@ -1,5 +1,6 @@
 import type { IngredientAvailabilityStatus } from "@cubby/schemas/availability";
 import type { MealTotals } from "@cubby/schemas/meal";
+import { format, parseISO } from "date-fns";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { formatCurrency } from "~/lib/utils";
 import type { ShoppingRow } from "./shopping-model";
@@ -19,6 +20,14 @@ import type { ShoppingRow } from "./shopping-model";
  */
 export const formatAmount = (value: number, unit: string | null): string =>
   tryFormatAmount({ value, unit: unit || "whole" });
+
+/**
+ * How an unnamed meal identifies itself — by its day. Shared so the table's
+ * Name column, its delete dialog, and the Problems section can't disagree
+ * about what a nameless row is called.
+ */
+export const mealDateLabel = (meal: { date: string }): string =>
+  format(parseISO(meal.date), "EEE, MMM d");
 
 /** Meal/day cost rollup as a short string; "—" when no recipe has totals. */
 export const formatMealCost = (totals: MealTotals): string => {

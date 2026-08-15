@@ -271,10 +271,8 @@ runtime CDN) are all shipped. Target is iOS Safari only. Remaining:
   `scripts/report-product-quantity-backfill.ts` as the evidence manifest.
 - [ ] **Problems detectors for meals + cookbooks**: partially-imported cookbooks
   (`sourceRecipeCount > recipeCount` — visible only if you open that book),
-  empty meals — now writable, since `mealKind` distinguishes an unfinished
-  cooked meal from a deliberately recipe-less eating-out one — meals whose
-  recipes have no totals, recipes with zero
-  instructions.
+  meals whose recipes have no totals, recipes with zero instructions. The
+  empty-meals detector shipped as `emptyCookedMeals`.
 - [ ] **Products list bulk print-labels**: locations table has the bulk action,
   products has per-row only, and the `/labels` empty state promises both.
 - [ ] **AiSearchBar on inventory is thinner than the plain filters**: it can
@@ -950,14 +948,6 @@ workflows, honest infinite-list URL state, one server-list query path, and share
 project-tree expansion. The old ingredient `presenceCondition` item was stale; that
 implementation now uses `idSetPresence`.
 
-- [ ] **Meals `?view=table` still fetches-all-and-filters-in-React.**
-      `meal-table.tsx` pulls `MEAL_TABLE_PAGE_SIZE = 500` rows in one
-      `meal.list` call and hands them to `useClientEntityList`
-      (`manualPagination: false`), which sorts/filters/paginates client-side
-      with no server total and no omitted-count disclosure past 500 — the
-      exact violation this section closed everywhere else. **Production has 1
-      meal today**, nowhere near the ceiling; fix opportunistically alongside
-      the next meals-table touch, not as a standalone trigger.
 - [ ] **Codegen the two eager-route filter mirrors.** `entities/sortable-fields.ts`
       and `entities/filter-search-fields.ts` re-describe what
       `packages/schemas/src/*.ts` already declares. They are hand-kept on
