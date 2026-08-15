@@ -346,6 +346,8 @@ async function getMealEmbeddingTexts(
       id: meal.id,
       name: meal.name,
       date: meal.date,
+      mealType: meal.mealType,
+      mealKind: meal.mealKind,
       recipeNames: sql<
         string[]
       >`array_remove(array_agg(DISTINCT ${recipe.name}), NULL)`.as(

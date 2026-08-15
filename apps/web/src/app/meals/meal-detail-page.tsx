@@ -1,5 +1,11 @@
 import type { MealShortcode } from "@cubby/schemas/identifiers";
 import type { MealRecipeOut } from "@cubby/schemas/meal";
+import {
+  MEAL_KIND_LABELS,
+  MEAL_TYPE_LABELS,
+  type MealKind,
+  type MealType,
+} from "@cubby/schemas/meal-classification";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -17,11 +23,13 @@ import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
+import { NoneValue } from "~/components/ui/none-value";
 import { entityDetailLink } from "~/entities/entities";
 import { type RouterOutputs, useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -30,6 +38,12 @@ import {
   mealMutationInvalidateKeys,
 } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
+import { EditableCell } from "../_components/data-table/editable-cell";
+import {
+  mealKindBadgeVariant,
+  mealKindOptions,
+  mealTypeOptions,
+} from "./meal-options";
 import { useInvalidateMeals } from "./use-meal-mutations";
 
 type MealDetail = NonNullable<RouterOutputs["meal"]["getByShortcode"]>;
@@ -227,11 +241,58 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
               }}
             />
           </Stack>
+          <Stack gap="sm">
+            <EditableCell
+              value={meal.mealType}
+              config={{ type: "select", options: mealTypeOptions }}
+              onSave={async (mealType) => {
+                // Nullable on purpose — clearing it means "unslotted", which
+                // is a real state, not a rejected edit.
+                await updateMeal.mutateAsync({
+                  id: mealId,
+                  data: { mealType: (mealType as MealType | null) || null },
+                });
+              }}
+              renderValue={(value) =>
+                value ? (
+                  <Badge variant="outline">
+                    {MEAL_TYPE_LABELS[value as MealType]}
+                  </Badge>
+                ) : (
+                  <NoneValue />
+                )
+              }
+            />
+            <EditableCell
+              value={meal.mealKind}
+              config={{ type: "select", options: mealKindOptions }}
+              onSave={async (mealKind) => {
+                // NOT NULL — a cleared select is a no-op, not a null write.
+                if (!mealKind) return;
+                await updateMeal.mutateAsync({
+                  id: mealId,
+                  data: { mealKind: mealKind as MealKind },
+                });
+              }}
+              renderValue={(value) => (
+                <Badge variant={mealKindBadgeVariant[value as MealKind]}>
+                  {MEAL_KIND_LABELS[value as MealKind]}
+                </Badge>
+              )}
+            />
+          </Stack>
         </Row>
 
         <Stack gap="sm">
           {meal.recipes.length === 0 ? (
-            <Description>No recipes yet — add one below.</Description>
+            // A meal you aren't cooking is COMPLETE with no recipes — telling
+            // someone to add one would be wrong, and it's also why this meal
+            // contributes nothing to the shopping list.
+            <Description>
+              {meal.mealKind === "cooked"
+                ? "No recipes yet — add one below."
+                : `${MEAL_KIND_LABELS[meal.mealKind]} — no recipes needed.`}
+            </Description>
           ) : (
             meal.recipes.map((mr) => (
               <RecipeRow

@@ -97,6 +97,8 @@ const filterSearchKeys = {
     "updatedAt",
   ],
   meal: [
+    "mealType",
+    "mealKind",
     "related-recipe",
     "recipeId",
     "recipePresenceFilter",

@@ -1,4 +1,5 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
+import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
 
 /**
  * RFC 5545 serializer for the published calendar feed.
@@ -146,6 +147,12 @@ const KIND_SPECS: {
     summary: (item) => item.title,
     description: (item) => {
       const parts = [...item.recipeNames];
+      // An eating-out meal carries no recipes and no cost, so without this it
+      // produced an empty DESCRIPTION and the subscriber saw a bare title with
+      // no hint of why nothing was planned.
+      if (item.mealKind !== "cooked") {
+        parts.push(MEAL_KIND_LABELS[item.mealKind]);
+      }
       const stats: string[] = [];
       if (item.calories > 0) stats.push(`${Math.round(item.calories)} kcal`);
       if (item.cost > 0) stats.push(`$${item.cost.toFixed(2)}`);

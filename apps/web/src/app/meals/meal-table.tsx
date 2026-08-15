@@ -1,12 +1,21 @@
 import type { MealOut } from "@cubby/schemas/meal";
+import {
+  MEAL_KIND_LABELS,
+  MEAL_TYPE_LABELS,
+  type MealKind,
+  type MealType,
+} from "@cubby/schemas/meal-classification";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
 import { format, parseISO } from "date-fns";
 import { useMemo } from "react";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
+import { Badge } from "~/components/ui/badge";
+import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
 import { mealMutationInvalidateKeys } from "~/lib/query-keys";
 import {
+  createFilterableSelectColumn,
   createNameColumn,
   createPlainDateColumn,
 } from "../_components/data-table/columnHelpers";
@@ -16,6 +25,11 @@ import { useClientEntityList } from "../_components/hooks/useClientEntityList";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { formatMealCost } from "./meal-format";
+import {
+  mealKindBadgeVariant,
+  mealKindOptions,
+  mealTypeOptions,
+} from "./meal-options";
 
 /** Stable empty default — never a fresh `[]` per render (would churn memos). */
 const NO_MEALS: MealOut[] = [];
@@ -109,6 +123,49 @@ export function MealTable() {
         // Same fallback the meal detail page's title uses for an unnamed
         // meal — an unnamed meal is identified by its date.
         emptyLabel: mealDateLabel,
+      }),
+      createFilterableSelectColumn(columnHelper, "mealType", {
+        header: "Type",
+        placeholder: "Filter by meal type...",
+        selectOptions: mealTypeOptions,
+        className: "w-28",
+        mobile: { slot: "meta", priority: 30 },
+        filterConfig: manifestFilterConfig("meal", "mealType"),
+        renderCell: (value) =>
+          value ? (
+            <Badge variant="outline">
+              {MEAL_TYPE_LABELS[value as MealType]}
+            </Badge>
+          ) : null,
+        editable: {
+          onSave: async (newValue, meal) => {
+            await updateMealMutation.mutateAsync({
+              id: meal.id,
+              data: { mealType: newValue },
+            });
+          },
+        },
+      }),
+      createFilterableSelectColumn(columnHelper, "mealKind", {
+        header: "Kind",
+        placeholder: "Filter by kind...",
+        selectOptions: mealKindOptions,
+        className: "w-28",
+        mobile: { slot: "meta", priority: 40 },
+        filterConfig: manifestFilterConfig("meal", "mealKind"),
+        renderCell: (value) => (
+          <Badge variant={mealKindBadgeVariant[value as MealKind]}>
+            {MEAL_KIND_LABELS[value as MealKind]}
+          </Badge>
+        ),
+        editable: {
+          onSave: async (newValue, meal) => {
+            await updateMealMutation.mutateAsync({
+              id: meal.id,
+              data: { mealKind: newValue },
+            });
+          },
+        },
       }),
       columnHelper.accessor(
         (row) =>

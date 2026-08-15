@@ -30,6 +30,7 @@
     "./location": "./src/location.ts",
     "./inventory": "./src/inventory.ts",
     "./meal": "./src/meal.ts",
+    "./meal-classification": "./src/meal-classification.ts",
     "./meal-shared": "./src/meal-shared.ts",
     "./mcp": "./src/mcp.ts",
     "./problems": "./src/problems.ts",

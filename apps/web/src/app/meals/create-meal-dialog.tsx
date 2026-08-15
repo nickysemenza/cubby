@@ -1,11 +1,20 @@
 import { mealDate } from "@cubby/schemas/meal";
+import {
+  mealKindSchema,
+  mealTypeSchema,
+} from "@cubby/schemas/meal-classification";
 import { format, parseISO } from "date-fns";
 import { useMemo } from "react";
 import { z } from "zod";
 import { QuickAddDialog } from "~/app/_components/forms/quick-add-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
 import { mealMutationInvalidateKeys } from "~/lib/query-keys";
-import { PlainDateField, UnifiedTextField } from "../_components/form-utils";
+import {
+  PlainDateField,
+  SelectField,
+  UnifiedTextField,
+} from "../_components/form-utils";
+import { mealKindOptions, mealTypeOptions } from "./meal-options";
 
 // `name` stays a plain (non-nullable) string here — quick capture allows an
 // unnamed meal (identified by its date, same as everywhere else in the meal
@@ -14,6 +23,8 @@ import { PlainDateField, UnifiedTextField } from "../_components/form-utils";
 const quickAddMealSchema = z.object({
   date: mealDate,
   name: z.string(),
+  mealType: mealTypeSchema.nullable(),
+  mealKind: mealKindSchema,
 });
 type QuickAddMealValues = z.infer<typeof quickAddMealSchema>;
 
@@ -23,6 +34,10 @@ type QuickAddMealValues = z.infer<typeof quickAddMealSchema>;
 const defaultValues = (): QuickAddMealValues => ({
   date: format(new Date(), "yyyy-MM-dd"),
   name: "",
+  // Unslotted by default — quick capture shouldn't invent a slot the user
+  // didn't pick, and null is a first-class value of this column.
+  mealType: null,
+  mealKind: "cooked",
 });
 
 interface CreateMealDialogProps {
@@ -63,6 +78,8 @@ export function CreateMealDialog({
       buildPayload={(values) => ({
         date: values.date,
         name: values.name.trim() || null,
+        mealType: values.mealType,
+        mealKind: values.mealKind,
       })}
     >
       {(form) => (
@@ -74,6 +91,21 @@ export function CreateMealDialog({
             label="Name"
             placeholder="Meal name (optional)"
             autoFocus
+          />
+          <SelectField
+            form={form}
+            name="mealType"
+            label="Meal type"
+            options={mealTypeOptions}
+            placeholder="Which meal of the day?"
+            nullable
+          />
+          <SelectField
+            form={form}
+            name="mealKind"
+            label="Kind"
+            options={mealKindOptions}
+            description="Eating out or ordering in? Leave the recipes empty — that's a complete record, not an unfinished one."
           />
         </>
       )}

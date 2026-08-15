@@ -155,6 +155,8 @@ export function buildCookbookEmbeddingText(cookbook: CookbookSearchTextInput) {
 const mealSearchTextInputSchema = z.object({
   name: nullableText,
   date: nullableText,
+  mealType: nullableText,
+  mealKind: nullableText,
   recipeNames: nullableTextList,
 });
 type MealSearchTextInput = z.infer<typeof mealSearchTextInputSchema>;
@@ -164,6 +166,10 @@ export function buildMealEmbeddingText(meal: MealSearchTextInput) {
   return joinFields([
     field("meal", parsed.name),
     field("date", parsed.date),
+    field("type", parsed.mealType),
+    // Only the exceptional kinds. "cooked" is true of nearly every meal, so
+    // embedding it adds a constant to every vector and distinguishes nothing.
+    field("kind", parsed.mealKind === "cooked" ? null : parsed.mealKind),
     listField("recipes", parsed.recipeNames),
   ]);
 }
