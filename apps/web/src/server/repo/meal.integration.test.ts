@@ -183,3 +183,74 @@ describe("mealList classification filters", () => {
     );
   });
 });
+
+describe("mealList sorting", () => {
+  const ctx = withTestDb();
+
+  const makeMeal = (date: string, overrides: Record<string, unknown> = {}) =>
+    createMeal(
+      ctx.db,
+      mealCreateInput.parse({ date, ...overrides }),
+      ctx.actor,
+    );
+
+  it("sorts mealType by slot, not alphabetically", async () => {
+    // The regression this pins: "dessert" < "dinner" as text, so a plain
+    // column sort would put dessert first. Slot order is what the calendar
+    // uses and what a reader expects.
+    await makeMeal("2026-05-01", { name: "D", mealType: "dessert" });
+    await makeMeal("2026-05-02", { name: "B", mealType: "breakfast" });
+    await makeMeal("2026-05-03", { name: "N", mealType: "dinner" });
+
+    const { data } = await mealList(
+      ctx.db,
+      {},
+      [{ orderBy: "mealType", direction: "asc" }],
+      pagination,
+    );
+
+    expect(data.map((row) => row.mealType)).toEqual([
+      "breakfast",
+      "dinner",
+      "dessert",
+    ]);
+  });
+
+  it("sorts unslotted meals last in both directions", async () => {
+    await makeMeal("2026-05-04", { name: "Slotted", mealType: "lunch" });
+    await makeMeal("2026-05-05", { name: "Unslotted" });
+
+    for (const direction of ["asc", "desc"] as const) {
+      const { data } = await mealList(
+        ctx.db,
+        {},
+        [{ orderBy: "mealType", direction }],
+        pagination,
+      );
+      expect(data.at(-1)?.name).toBe("Unslotted");
+    }
+  });
+
+  it("orders unnamed meals by date within the name-sort NULL block", async () => {
+    // An unnamed meal displays as its date, so the tie-breaker makes the NULL
+    // block read the way its labels do instead of by insertion order.
+    await makeMeal("2026-05-06");
+    await makeMeal("2026-05-08");
+    await makeMeal("2026-05-07");
+    await makeMeal("2026-05-09", { name: "Named" });
+
+    const { data } = await mealList(
+      ctx.db,
+      {},
+      [{ orderBy: "name", direction: "asc" }],
+      pagination,
+    );
+
+    expect(data[0]?.name).toBe("Named");
+    expect(data.slice(1).map((row) => row.date)).toEqual([
+      "2026-05-08",
+      "2026-05-07",
+      "2026-05-06",
+    ]);
+  });
+});

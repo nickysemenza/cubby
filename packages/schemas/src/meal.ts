@@ -43,7 +43,20 @@ export {
 } from "./meal-classification";
 export { mealDate, mealDateRange, mealScale } from "./meal-shared";
 
-export const mealSortableFields = ["date", "createdAt", "updatedAt"] as const;
+/**
+ * `mealType` sorts by SLOT, not alphabetically — the repo resolves it through
+ * `mealTypeValues`' declaration order, because a raw text sort would put
+ * dessert before dinner. Cost is deliberately absent: it's a read-time rollup
+ * of `recipe.totals x scale` with a `pending` flag, so any SQL ordering would
+ * rank a pending meal by a number the page never shows.
+ */
+export const mealSortableFields = [
+  "date",
+  "name",
+  "mealType",
+  "createdAt",
+  "updatedAt",
+] as const;
 
 export type MealSortField = (typeof mealSortableFields)[number];
 

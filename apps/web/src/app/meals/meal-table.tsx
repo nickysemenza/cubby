@@ -1,15 +1,12 @@
-import type { MealOut } from "@cubby/schemas/meal";
+import type { MealFilters, MealOut } from "@cubby/schemas/meal";
 import {
   MEAL_KIND_LABELS,
   MEAL_TYPE_LABELS,
   type MealKind,
   type MealType,
 } from "@cubby/schemas/meal-classification";
-import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
-import { format, parseISO } from "date-fns";
 import { useMemo } from "react";
-import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Badge } from "~/components/ui/badge";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -21,22 +18,15 @@ import {
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import { EntityInlineLinkList } from "../_components/EntityInlineLinkList";
-import { useClientEntityList } from "../_components/hooks/useClientEntityList";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
+import { useEntityList } from "../_components/hooks/useEntityList";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
-import { formatMealCost } from "./meal-format";
+import { formatMealCost, mealDateLabel } from "./meal-format";
 import {
   mealKindBadgeVariant,
   mealKindOptions,
   mealTypeOptions,
 } from "./meal-options";
-
-/** Stable empty default — never a fresh `[]` per render (would churn memos). */
-const NO_MEALS: MealOut[] = [];
-
-/** Single-user scale, like the task inbox: one bounded fetch, no server
- * pagination — `useClientEntityList` sorts/paginates client-side. */
-const MEAL_TABLE_PAGE_SIZE = 500;
 
 /**
  * The `/meals?view=table` surface — the CRUD-complete sibling of the
@@ -44,30 +34,16 @@ const MEAL_TABLE_PAGE_SIZE = 500;
  * `/meals` header "New" action (wired in meals.index.tsx)
  * that the calendar-only "+ Meal" affordance never covered.
  *
- * `useClientEntityList`, not `useEntityList`: `meal.list`'s `orderBy` types
- * as a `z.enum(mealSortableFields)` (`["date","createdAt"]`), so a
- * server-sorted table would 400 the instant someone clicks the Name or Cost
- * header. Client-side sorting sidesteps that entirely.
+ * Server-side list/sort/filter/paginate. This used to fetch 500 rows and sort
+ * them in React because `mealSortableFields` lacked `name`, so the very first
+ * click on the Name header would 400 — `createNameColumn` sets
+ * `enableSorting: true` unconditionally. Adding `name` (and `mealType`, ranked
+ * by slot rather than by slug) removed that blocker. Cost stays unsortable on
+ * purpose: see the column below.
  */
-/**
- * How an unnamed meal identifies itself — matching the detail page's title
- * fallback. Shared by the Name column and the delete dialog so the two can't
- * disagree about what a row is called.
- */
-const mealDateLabel = (row: { date: string }) =>
-  format(parseISO(row.date), "EEE, MMM d");
-
 export function MealTable() {
   const api = useTRPC();
   const columnHelper = useMemo(() => createColumnHelper<MealOut>(), []);
-
-  const { data, isLoading } = useQuery(
-    api.meal.list.queryOptions({
-      filters: {},
-      pagination: { pageIndex: 0, pageSize: MEAL_TABLE_PAGE_SIZE },
-    }),
-  );
-  const meals = data?.items ?? NO_MEALS;
 
   const updateMealMutation = useUpdateMutation({
     mutationFn: api.meal.update.mutationOptions,
@@ -188,6 +164,12 @@ export function MealTable() {
           ),
         },
       ),
+      // Not sortable, and not an oversight: cost is a read-time rollup of
+      // `recipe.totals x scale` summed in JS, carrying a `pending` flag for
+      // recipes that have no totals yet. A SQL ORDER BY would have to
+      // COALESCE those to 0 and rank a pending meal as the cheapest — sorting
+      // by a number that isn't the one on screen. It resolves to
+      // `enableSorting: false` via the `mealSortableFields` allowlist.
       columnHelper.accessor((row) => row.totals.costTotal, {
         id: "cost",
         header: "Cost",
@@ -206,9 +188,21 @@ export function MealTable() {
     [columnHelper, nameEditable],
   );
 
-  const { table, bulkActionBar, deleteDialog } = useClientEntityList({
+  // Neither `buildFilters` nor `filters` is passed: the `meal` entry in
+  // `entities/filter-manifest.tsx` drives the Type/Kind header controls, the
+  // server `MealFilters` object, and the URL round-trip at once.
+  const {
+    table,
+    isLoading,
+    error,
+    timing,
+    bulkActionBar,
+    deleteDialog,
+    infiniteScroll,
+    refreshControls,
+  } = useEntityList<MealOut, MealFilters>({
     entity: "meal",
-    data: meals,
+    queryOptions: api.meal.list.queryOptions,
     columns,
     deletable: deletableConfig,
     // Same fallback the Name column uses, so the confirm dialog names an
@@ -216,15 +210,18 @@ export function MealTable() {
     deleteEmptyLabel: mealDateLabel,
   });
 
-  if (isLoading) return <SimpleLoading text="Loading meals..." />;
-
   return (
     <div>
       <RTable
         table={table}
+        isLoading={isLoading}
+        error={error}
+        timing={timing}
         ariaLabel="Meals Table"
         entity="meal"
         bulkActionBar={bulkActionBar}
+        infiniteScroll={infiniteScroll}
+        refreshControls={refreshControls}
       />
       {deleteDialog}
     </div>

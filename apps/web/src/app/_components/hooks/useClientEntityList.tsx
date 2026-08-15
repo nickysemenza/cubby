@@ -56,6 +56,7 @@ type SharedListOptions<TData extends BaseListRow> = Pick<
   | "tableStateOptions"
   | "initialColumnVisibility"
   | "columnVisibilityScope"
+  | "deleteEmptyLabel"
 >;
 
 interface UseClientEntityListOptions<TData extends BaseListRow>
@@ -73,13 +74,6 @@ interface UseClientEntityListOptions<TData extends BaseListRow>
    * every render.
    */
   bulkActions?: BulkActionsConfig<TData>;
-  /**
-   * Names a row in the delete confirm dialog when its `name` is null/empty.
-   * Pass the same function given to `createNameColumn`'s `emptyLabel` so the
-   * dialog and the table agree — otherwise the dialog falls back to the raw
-   * UUID, which tells the user nothing about what they're deleting.
-   */
-  deleteEmptyLabel?: (row: TData) => string;
 }
 
 /** Subset of `useEntityList`'s return relevant to the client-data variant. */

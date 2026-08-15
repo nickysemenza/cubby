@@ -7,6 +7,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { unsafePurchaseId } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
+import { mealCreateInput } from "@cubby/schemas/meal";
 import {
   countProblems,
   PROBLEM_CLASS,
@@ -51,14 +52,17 @@ import { createExpense, deleteExpenses } from "./expense";
 import { createIngredient, getIngredientByName } from "./ingredient";
 import { deleteInventoryEntries } from "./inventory";
 import { ensureGlobalUnknownLocation } from "./location";
+import { addRecipeToMeal, updateMeal } from "./meal";
 import { findCoverageTotals, findStaleIngredientParses } from "./problems";
 import { deleteProducts, updateProduct } from "./product";
 import { createProject, deleteProjects } from "./project";
 import { detachProjectResources } from "./project/tools";
 import { updatePurchase } from "./purchase";
+import { deleteRecipes } from "./recipe";
 import {
   createInventoryFixture as createInventoryEntry,
   createLocationFixture as createLocation,
+  createMealFixture,
   createProductFixture as createProduct,
   createRecipeFixture as createRecipe,
   ingredientRef,
@@ -2013,6 +2017,93 @@ describe("problems — duplicate vendors", () => {
 
     const after = await findFastProblems(ctx.db);
     expect(after.duplicateVendors).toEqual([]);
+  });
+});
+
+describe("problems — cooked meals with nothing planned", () => {
+  const ctx = withTestDb();
+
+  const makeMeal = (date: string, overrides: Record<string, unknown> = {}) =>
+    createMealFixture(
+      ctx.db,
+      mealCreateInput.parse({ date, ...overrides }),
+      ctx.actor,
+    );
+
+  it("flags a cooked meal with no recipes and classes it a defect", async () => {
+    await makeMeal("2026-04-01", { name: "Thursday" });
+
+    const { emptyCookedMeals } = await findFastProblems(ctx.db);
+
+    expect(emptyCookedMeals.map((row) => row.name)).toEqual(["Thursday"]);
+    expect(emptyCookedMeals[0]).toMatchObject({ date: "2026-04-01" });
+    expect(PROBLEM_CLASS.emptyCookedMeals).toBe("defect");
+  });
+
+  it("never flags a meal that is deliberately recipe-less", async () => {
+    // The whole reason this detector became writable: these are complete
+    // records, not gaps, and flagging them would argue with the stated intent.
+    await makeMeal("2026-04-02", { mealKind: "eating_out" });
+    await makeMeal("2026-04-03", { mealKind: "takeout" });
+    await makeMeal("2026-04-04", { mealKind: "leftovers" });
+
+    const { emptyCookedMeals } = await findFastProblems(ctx.db);
+
+    expect(emptyCookedMeals).toEqual([]);
+  });
+
+  it("clears once a recipe is planned, and again once re-kinded", async () => {
+    const recipe = await createRecipe(
+      ctx.db,
+      makeRecipeInput({ name: "Chili" }),
+      ctx.actor,
+    );
+    const planned = await makeMeal("2026-04-05", { name: "Planned" });
+    const rekinded = await makeMeal("2026-04-06", { name: "Rekinded" });
+
+    expect((await findFastProblems(ctx.db)).emptyCookedMeals).toHaveLength(2);
+
+    await addRecipeToMeal(
+      ctx.db,
+      planned.entityId,
+      { recipeId: recipe.id, scale: 1 },
+      ctx.actor,
+    );
+    await updateMeal(
+      ctx.db,
+      rekinded.entityId,
+      { mealKind: "eating_out" },
+      ctx.actor,
+    );
+
+    expect((await findFastProblems(ctx.db)).emptyCookedMeals).toEqual([]);
+  });
+
+  it("still flags a meal whose only recipe was deleted", async () => {
+    // The two-guard case. Unplanning soft-deletes the LINK; deleting the
+    // recipe leaves the link intact. `dbMealToAPI` filters on both, so this
+    // meal renders as empty — a detector checking only the link would leave it
+    // unflagged while the page shows nothing planned.
+    const recipe = await createRecipe(
+      ctx.db,
+      makeRecipeInput({ name: "Doomed" }),
+      ctx.actor,
+    );
+    const meal = await makeMeal("2026-04-07", { name: "Orphaned" });
+    await addRecipeToMeal(
+      ctx.db,
+      meal.entityId,
+      { recipeId: recipe.id, scale: 1 },
+      ctx.actor,
+    );
+
+    expect((await findFastProblems(ctx.db)).emptyCookedMeals).toEqual([]);
+
+    await deleteRecipes(ctx.db, [recipe.entityId], ctx.actor);
+
+    expect(
+      (await findFastProblems(ctx.db)).emptyCookedMeals.map((r) => r.name),
+    ).toEqual(["Orphaned"]);
   });
 });
 

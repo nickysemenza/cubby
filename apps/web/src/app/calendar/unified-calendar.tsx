@@ -3,6 +3,7 @@ import type {
   CalendarItem,
   CalendarItemKind,
 } from "@cubby/schemas/calendar";
+import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
 import { projectKindValues } from "@cubby/schemas/project";
 import { TZDate } from "@date-fns/tz";
 import { useQuery } from "@tanstack/react-query";
@@ -34,6 +35,7 @@ import {
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { CreateExpenseDialog } from "~/app/expenses/create-expense-dialog";
 import { CreateMealDialog } from "~/app/meals/create-meal-dialog";
+import { mealKindIcon, mealTypeIcon } from "~/app/meals/meal-options";
 import { CreateProjectDialog } from "~/app/projects/create-project-dialog";
 import { capitalize } from "~/app/projects/project-formatting";
 import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
@@ -148,6 +150,12 @@ const eventClassName = (item: CalendarItem, today: string) => {
   if (item.kind === "project") {
     return "bg-muted py-1 hover:bg-muted dark:bg-muted dark:hover:bg-muted";
   }
+  // A meal you aren't cooking reads as provisional at a glance, the same way a
+  // not-yet-real expense does directly below. Dashed, not recolored: the fill
+  // still has to say "meal" against tasks and expenses.
+  if (item.kind === "meal" && item.mealKind !== "cooked") {
+    return "border border-dashed border-positive";
+  }
   if (item.kind === "expense" && item.future) {
     return item.startDate < today
       ? "border border-dashed border-destructive bg-destructive/10 hover:bg-destructive/15 dark:bg-destructive/10 dark:hover:bg-destructive/15"
@@ -188,18 +196,36 @@ const toEvent = (
   data: item,
 });
 
+/**
+ * The leading glyph. Meals resolve to their slot (breakfast → dinner) rather
+ * than the generic per-kind pot: the slot is the meal's primary
+ * classification, it already orders the day, and the icon costs no width the
+ * title could have used.
+ */
+const itemIcon = (item: CalendarItem) =>
+  item.kind === "meal" ? mealTypeIcon(item.mealType) : KIND_ICONS[item.kind];
+
 function CalendarChip({
   occurrence,
 }: EventCalendarRenderEventProps<CalendarItem>) {
   const item = occurrence.event.data;
   if (!item) return occurrence.event.title;
-  const Icon = KIND_ICONS[item.kind];
+  const Icon = itemIcon(item);
+  // Only non-cooked meals get one — see MEAL_KIND_ICONS.
+  const kind = item.kind === "meal" ? item.mealKind : null;
+  const KindIcon = kind ? mealKindIcon(kind) : null;
   return (
     <>
       <Icon className="size-3 shrink-0" aria-hidden />
       <span className="truncate" title={item.title}>
         {item.title}
       </span>
+      {KindIcon && kind && (
+        <KindIcon
+          className="ml-auto size-3 shrink-0"
+          aria-label={MEAL_KIND_LABELS[kind]}
+        />
+      )}
       {item.kind === "expense" && item.cost != null && (
         <span className="ml-auto shrink-0 tabular-nums">
           {formatCurrency(item.cost, 0)}
@@ -656,7 +682,7 @@ function SummaryValue({ label, value }: { label: string; value: string }) {
 }
 
 function CalendarItemLink({ item }: { item: CalendarItem }) {
-  const Icon = KIND_ICONS[item.kind];
+  const Icon = itemIcon(item);
   const content: ReactNode = (
     <>
       <Icon className="size-3.5 shrink-0" aria-hidden />

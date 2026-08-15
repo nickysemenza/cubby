@@ -13,12 +13,13 @@ import type {
   MealType,
 } from "@cubby/schemas/meal";
 import { mealSortableFields } from "@cubby/schemas/meal";
+import { mealTypeValues } from "@cubby/schemas/meal-classification";
 import {
   buildTakeSkip,
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, lte, type SQL, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { meal, mealRecipe } from "~/server/db/schema";
@@ -112,7 +113,29 @@ export const mealList = async (
   sorts: SortParams[],
   pagination: PaginationParams,
 ): Promise<{ data: MealOut[]; count: number }> => {
-  const orderByArray = buildOrderBy(meal, sorts, [...mealSortableFields]);
+  // `mealType` must sort by slot, not by slug: a plain text ordering puts
+  // dessert before dinner, which reads as a broken table. `mealTypeValues`
+  // declaration order IS the slot order (the calendar sorts a day by it), so
+  // `array_position` over that tuple is the same ranking `mealTypeRank`
+  // applies client-side. Unslotted meals sort last in both directions.
+  const resolveMealSort = (s: SortParams): SQL[] | null => {
+    if (s.orderBy !== "mealType") return null;
+    const rank = sql`array_position(${sql.raw(
+      `ARRAY[${mealTypeValues.map((v) => `'${v}'`).join(",")}]::text[]`,
+    )}, ${meal.mealType})`;
+    return [
+      s.direction === "asc"
+        ? sql`${rank} asc nulls last`
+        : sql`${rank} desc nulls last`,
+    ];
+  };
+  const orderByArray = buildOrderBy(meal, sorts, [...mealSortableFields], {
+    resolve: resolveMealSort,
+    // An unnamed meal displays as its date, so a name sort would otherwise
+    // dump every one of them into an arbitrarily-ordered NULL block. This
+    // orders that block the way its visible label reads.
+    tieBreaker: sql`${meal.date} desc`,
+  });
   const { take, skip } = buildTakeSkip(pagination);
 
   const whereCondition = and(

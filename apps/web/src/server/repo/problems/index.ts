@@ -16,6 +16,8 @@
  *                                            unused ingredients, alias pruning)
  *   LOCATION    → `detectors-location.ts`   (empty leaves, missing AI description,
  *                                            stocked bins overdue for a recount)
+ *   MEAL        → `detectors-meal.ts`       (cooked meals with nothing planned —
+ *                                            eating-out placeholders excluded)
  *   INVENTORY   → `detectors-inventory.ts`  (never-verified entries, items parked
  *                                            in the global "Unknown" location)
  *   COVERAGE    → `detectors-coverage.ts`   (population denominators for the
@@ -86,6 +88,8 @@ export {
   findLocationsWithoutAiDescription,
   findStaleLocations,
 } from "./detectors-location";
+// Meal-centric detectors
+export { findEmptyCookedMeals } from "./detectors-meal";
 // Product-centric detectors (+ ProductWithBetterUpcData type re-export)
 export {
   findDuplicateInventoryProducts,

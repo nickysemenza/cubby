@@ -10,6 +10,7 @@ import {
   ingredientShortcode,
   inventoryShortcode,
   locationShortcode,
+  mealShortcode,
   productShortcode,
   projectShortcode,
   purchaseShortcode,
@@ -493,6 +494,20 @@ export const staleParentRecipeSchema = z.object({
   name: z.string(),
 });
 
+// A meal planned to be COOKED but carrying no live planned recipe — the
+// half-finished state: you put it on the calendar and never chose what to make.
+// Deliberately scoped to `cooked`: a recipe-less `eating_out`/`takeout` meal is
+// a complete record, not a gap, and flagging one would make the detector argue
+// with the meal's own stated intent. Counts a recipe as gone when either the
+// link or the recipe itself is soft-deleted, matching what `dbMealToAPI`
+// renders — a meal whose only recipe was deleted looks empty on the page, so
+// the detector has to agree or it reports a population the UI can't show.
+export const emptyCookedMealSchema = z.object({
+  id: mealShortcode,
+  name: z.string().nullable(),
+  date: plainDate,
+});
+
 export const staleIngredientParseSchema = z.object({
   // A RecipeSectionIngredient row id — an internal child row, not one of the
   // shortcode entities, so it stays a plain uuid string.
@@ -743,6 +758,7 @@ const problemsFastShape = {
   unreferencedImages: z.array(unreferencedImageSchema),
   entitiesMissingEmbeddings: z.array(entityMissingEmbeddingSchema),
   staleParentRecipes: z.array(staleParentRecipeSchema),
+  emptyCookedMeals: z.array(emptyCookedMealSchema),
   staleLocations: z.array(staleLocationSchema),
   neverVerifiedInventory: z.array(neverVerifiedInventorySchema),
   unknownParkedItems: z.array(unknownParkedItemSchema),
@@ -936,6 +952,12 @@ export const PROBLEM_CLASS = {
   unreferencedImages: "defect",
   entitiesMissingEmbeddings: "defect",
   staleParentRecipes: "defect",
+  // A cooked meal with nothing planned is unfinished, and it converges to zero
+  // two ways: plan a recipe, or re-kind it to what it actually was. Not
+  // `coverage` — there is no denominator and no backlog being worked through,
+  // just a row that is either finished or mislabelled. No auto-fix: only the
+  // cook knows which of the two resolutions is true.
+  emptyCookedMeals: "defect",
   unknownParkedItems: "defect",
   manufacturerSpellingVariants: "defect",
   // Two roster rows for one real vendor is simply wrong — that vendor's spend is
@@ -1165,6 +1187,7 @@ export type LocationWithoutAiDescription = z.infer<
 >;
 export type StaleIngredientParse = z.infer<typeof staleIngredientParseSchema>;
 export type StaleParentRecipe = z.infer<typeof staleParentRecipeSchema>;
+export type EmptyCookedMeal = z.infer<typeof emptyCookedMealSchema>;
 export type ProductWithBetterUpcData = z.infer<
   typeof productWithBetterUpcDataSchema
 >;

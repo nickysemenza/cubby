@@ -182,6 +182,13 @@ export interface UseEntityListOptions<
     /** Entity slug for the operation-impact preview fetched while the confirm dialog is open. */
     entity: PreviewDeleteEntity;
   };
+  /**
+   * Names a row in the delete confirm dialog when its `name` is null/empty.
+   * Pass the same function given to `createNameColumn`'s `emptyLabel` so the
+   * dialog and the table agree — otherwise the dialog falls back to the raw
+   * id, which tells the user nothing about what they're deleting.
+   */
+  deleteEmptyLabel?: (row: TData) => string;
 }
 
 export interface UseEntityListReturn<TData, TFilters = unknown, TRow = TData> {
@@ -257,6 +264,7 @@ export function useEntityList<
   bulkActions,
   extraActions,
   deletable,
+  deleteEmptyLabel,
   initialColumnVisibility,
   columnVisibilityScope,
   nameClassName,
@@ -292,7 +300,11 @@ export function useEntityList<
     combinedExtraActions,
     deleteDialog,
     requestDelete,
-  } = useOptimisticDelete<TData>({ deletable, extraActions });
+  } = useOptimisticDelete<TData>({
+    deletable,
+    extraActions,
+    emptyLabel: deleteEmptyLabel,
+  });
 
   const listBulkActions = useListBulkActions({
     entity,
