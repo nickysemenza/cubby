@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { LocationScanButton } from "~/app/_components/locations/location-scan-button";
 import { Row, Stack } from "~/components/layout";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -21,7 +22,6 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { LocationReviewPane } from "./_components/LocationReviewPane";
 import { MoveToDialog } from "./_components/MoveToDialog";
 import { ParentPicker } from "./_components/ParentPicker";
-import { LocationScanButton } from "./_components/QrJumpButton";
 import {
   LocationWorkbenchSidebar,
   MobileLocationSwitcher,

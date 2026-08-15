@@ -5,7 +5,7 @@ import type {
 import { getLocationTypeColor } from "@cubby/shared";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
-import { FolderInput, Printer, ScanBarcode } from "lucide-react";
+import { Camera, FolderInput, Printer, ScanBarcode } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { usePageCount } from "~/components/page/Page";
@@ -229,6 +229,14 @@ export function LocationList() {
         >
           <ScanBarcode className="mr-2 size-4" />
           Recount
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          render={
+            <Link to="/locations/photo-pass" search={{ parent: row.id }} />
+          }
+        >
+          <Camera className="mr-2 size-4" />
+          Photo pass
         </DropdownMenuItem>
         {row.id && typeSupportsQrCode(row.type) && (
           <DropdownMenuItem

@@ -3,6 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   AlertTriangle,
   ArrowRightLeft,
+  Camera,
   ClipboardCheck,
   Plus,
   Printer,
@@ -98,6 +99,14 @@ export const actionItems: ActionItem[] = [
       "inventory-page",
       "home-quick",
     ],
+  },
+  {
+    id: "photo-pass",
+    name: "Photo pass",
+    path: "/locations/photo-pass",
+    icon: Camera,
+    keywords: ["photo", "camera", "picture", "location", "bin", "shelf"],
+    surfaces: ["palette-quick"],
   },
   {
     id: "what-can-i-make",

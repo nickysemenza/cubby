@@ -1,8 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
-import {
-  type LocationShortcode,
-  locationShortcode,
-} from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 
 export interface SessionLocation {
@@ -224,28 +221,6 @@ export function buildBulkMovePayloadItems<
     inventoryEntryId: item.id,
     quantity: item.amount,
   }));
-}
-
-export function parseLocationIdFromInput(
-  raw: string,
-): LocationShortcode | null {
-  const trimmed = raw.trim();
-  const candidates = [trimmed];
-
-  try {
-    const url = new URL(trimmed);
-    const lastSegment = url.pathname.split("/").filter(Boolean).pop();
-    if (lastSegment) candidates.push(lastSegment);
-  } catch {
-    // Plain shortcode/UUID input is expected most of the time.
-  }
-
-  for (const candidate of candidates) {
-    const parsed = locationShortcode.safeParse(candidate);
-    if (parsed.success) return parsed.data;
-  }
-
-  return null;
 }
 
 export function locationTypeNoun(type: string): string {

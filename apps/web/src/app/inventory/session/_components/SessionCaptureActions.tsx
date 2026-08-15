@@ -39,6 +39,7 @@ import {
   PersistentScanner,
   type ScanFeedbackEntry,
 } from "~/app/_components/inventory/persistent-scanner";
+import { useLocationPhotoCapture } from "~/app/_components/locations/use-location-photo-capture";
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -151,15 +152,12 @@ export function SessionCaptureActions({
   };
 
   const uploadImage = useMutation(api.image.uploadImage.mutationOptions());
-  const updateLocation = useMutation(
-    api.location.update.mutationOptions({
-      onSuccess: (data) => {
-        invalidateCapture(data);
-        toast.success("Photo attached and description updated.");
-      },
-      onError: (error) => toast.error(getErrorMessage(error)),
-    }),
-  );
+  // Location photos go through the shared capture hook rather than a local
+  // upload→attach pair: it also invalidates `location.makeTree`, which this
+  // workbench reads for every stop's `imageCount`. The old local path only
+  // invalidated `location.list`, so a photo taken here left the sidebar's
+  // photo count stale until the pass was remounted.
+  const { capture: captureLocationPhoto } = useLocationPhotoCapture();
   const detectItems = useMutation(
     api.ai.detectInventoryItems.mutationOptions({
       onSuccess: (data) => {
@@ -218,22 +216,9 @@ export function SessionCaptureActions({
 
   const handleFile = async (file: File) => {
     try {
-      const init = await uploadImage.mutateAsync({
-        filename: file.name,
-        contentType: file.type as AllowedImageType,
-        size: file.size,
-        entityType: "LOCATION",
-      });
-      const put = await fetch(init.uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
-      });
-      if (!put.ok) throw new Error("Image upload failed");
-      await updateLocation.mutateAsync({
-        id: location.id,
-        data: { pendingImageIds: [init.imageId] },
-      });
+      await captureLocationPhoto(location.id, file);
+      invalidateCapture();
+      toast.success("Photo attached and description updated.");
     } catch (error) {
       toast.error(`Photo failed: ${getErrorMessage(error)}`);
     }

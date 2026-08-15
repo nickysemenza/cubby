@@ -10,24 +10,48 @@
 
 import type { InfLocation } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, PackagePlus, ScanBarcode } from "lucide-react";
-import { useState } from "react";
+import { ArrowRight, Camera, PackagePlus, ScanBarcode } from "lucide-react";
+import { useRef, useState } from "react";
+import { toast } from "sonner";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
-import { buttonVariants } from "~/components/ui/button";
+import { Button, buttonVariants } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
+import { Spinner } from "~/components/ui/spinner";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
+import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 import { SHELF_VIEW_OPTIONS, type ShelfView } from "../data-table/shelf";
 import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
 import { LocationBreadcrumb } from "./location-breadcrumb";
 import { LocationCardGrid } from "./location-card-grid";
 import { LocationInventoryTable } from "./location-inventory-table";
+import { useLocationPhotoCapture } from "./use-location-photo-capture";
 
 export function LocationScanLanding({ location }: { location: InfLocation }) {
   // Bump a key to force the inventory list to refetch after a quick add.
   const [refreshKey, setRefreshKey] = useState(0);
   const [view, setView] = useState<ShelfView>("shelf");
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const { capture, discardCapture, isCapturing } = useLocationPhotoCapture();
+
+  const takePhoto = async (file: File) => {
+    try {
+      const imageId = await capture(location.id, file);
+      toast.success("Photo attached.", {
+        action: {
+          label: "Retake",
+          onClick: () => {
+            void discardCapture(location.id, imageId).catch((error: unknown) =>
+              toast.error(`Retake failed: ${getErrorMessage(error)}`),
+            );
+          },
+        },
+      });
+    } catch (error) {
+      toast.error(`Photo failed: ${getErrorMessage(error)}`);
+    }
+  };
 
   return (
     <Page
@@ -58,8 +82,38 @@ export function LocationScanLanding({ location }: { location: InfLocation }) {
           </CardContent>
         </Card>
 
-        {/* Secondary quick actions: recount + jump to full detail. */}
+        {/* Secondary quick actions: photo, recount, jump to full detail. The
+            photo button is here because standing at the bin is the only moment
+            the shot can be taken — a new frame becomes the cover and keeps the
+            rest, and re-runs this location's AI description. */}
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          hidden
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            // Clear first so re-picking the same file still fires `change`.
+            event.target.value = "";
+            if (file) void takePhoto(file);
+          }}
+        />
         <Row gap="sm" wrap>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-12 flex-1 text-sm"
+            disabled={isCapturing}
+            onClick={() => cameraInputRef.current?.click()}
+          >
+            {isCapturing ? (
+              <Spinner className="mr-2 size-4" />
+            ) : (
+              <Camera className="mr-2 size-4" />
+            )}
+            {location.images.length > 0 ? "Retake photo" : "Photo"}
+          </Button>
           <Link
             to="/inventory/session"
             search={{ parent: location.id }}
