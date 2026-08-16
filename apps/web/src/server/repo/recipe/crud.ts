@@ -665,6 +665,105 @@ export const createRecipe = async (
 };
 
 /**
+ * Duplicate a recipe: reshape the source graph into a fresh `RecipeCreateInput`
+ * (section/line ids dropped, so the graph insert mints new ones for every row)
+ * and write it — plus a same-image join-row copy — in one transaction. Named
+ * "<name> (copy)". This is the pattern for entity duplication in this repo;
+ * no other entity has a clone/duplicate operation yet.
+ */
+export const duplicateRecipe = async (
+  db: Database,
+  id: RecipeId,
+  actor: ActorContext,
+): Promise<RecipeOut> => {
+  const source = await getRecipeByID(db, id);
+  if (!source) {
+    throw createAppError("RECIPE_NOT_FOUND", `Recipe with ID ${id} not found`);
+  }
+
+  const input: RecipeCreateInput = {
+    name: `${source.name} (copy)`,
+    meta: source.meta,
+    yield: source.yield,
+    servings: source.servings,
+    tags: source.tags,
+    notes: source.notes,
+    sections: source.sections.map((section) => ({
+      name: section.name,
+      instructions: section.instructions.map((inst) => ({
+        instruction: inst.instruction,
+      })),
+      ingredients: section.ingredients.map((ing) =>
+        ing.type === "ingredient"
+          ? {
+              type: "ingredient" as const,
+              ingredientId: ing.ingredient.id,
+              recipeId: null,
+              amounts: ing.amounts,
+              rawLine: ing.rawLine,
+              modifier: ing.modifier,
+            }
+          : {
+              type: "recipe" as const,
+              recipeId: ing.recipe.id,
+              ingredientId: null,
+              amounts: ing.amounts,
+              rawLine: ing.rawLine,
+              modifier: ing.modifier,
+            },
+      ),
+    })),
+  };
+
+  const newRecipeId = await withTransaction(db, async (tx) => {
+    const createdRecipe = await insertWithShortcode(tx, "recipe", {
+      name: input.name,
+      ...recipeSourceToColumns(webProvenance(input.meta?.url ?? null)),
+      yield: input.yield ?? null,
+      servings: input.servings ?? null,
+      tags: input.tags ?? null,
+      notes: input.notes ?? null,
+    });
+
+    for (const [i, section] of input.sections.entries()) {
+      await createSectionWithIngredients(tx, createdRecipe.id, section, i);
+    }
+
+    // RecipeImage is a plain (recipeId, imageId) join table, so cloning it
+    // means inserting new join rows that point at the SAME Image row — no R2
+    // copy, no new Image row. Two recipes sharing an Image row is expected and
+    // harmless: Image lifetime is governed by its own reference count (how
+    // many join rows still point at it), not by recipe ownership.
+    if (source.images.length > 0) {
+      await tx.insert(recipeImage).values(
+        source.images.map((img, i) => ({
+          recipeId: createdRecipe.id,
+          imageId: img.id,
+          sortOrder: i,
+        })),
+      );
+    }
+
+    await logAuditEntry(tx, actor, {
+      entityType: "recipe",
+      entityId: createdRecipe.id,
+      action: "create",
+    });
+
+    return createdRecipe.id;
+  });
+
+  const duplicated = await getRecipeByID(db, newRecipeId);
+  if (!duplicated) {
+    throw createAppError(
+      "RECIPE_NOT_FOUND",
+      "Failed to retrieve duplicated recipe",
+    );
+  }
+  return duplicated;
+};
+
+/**
  * Shared upsert core: find an existing recipe with `matchWhere`; if found,
  * refresh its provenance and replace its sections; otherwise create it. The two
  * public upserts differ only in how they identify "the same recipe" and what
