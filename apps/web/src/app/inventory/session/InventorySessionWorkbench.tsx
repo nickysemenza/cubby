@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { LocationScanButton } from "~/app/_components/locations/location-scan-button";
+import { QueuePassResumePrompt } from "~/app/_components/queue-pass/QueuePassProgress";
 import { Row, Stack } from "~/components/layout";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -173,21 +174,6 @@ export function InventorySessionWorkbench({
     mutationFn: api.location.update.mutationOptions,
     invalidateKeys: sessionInvalidateKeys,
   });
-  // Advance to the next location that still needs attention. "Settled" is saved
-  // *or* skipped, so a deferred bin isn't handed straight back.
-  const advanceToOutstanding = (settled: ReadonlySet<string>) => {
-    setCurrentIndex((idx) => {
-      const after = sessionLocations.findIndex(
-        (location, index) => index > idx && !settled.has(location.id),
-      );
-      if (after >= 0) return after;
-      const wrapped = sessionLocations.findIndex(
-        (location) => !settled.has(location.id),
-      );
-      return wrapped >= 0 ? wrapped : idx;
-    });
-  };
-
   // "Done" commits the staged diff for the current bin. On success the committed
   // resolutions leave the staged map (read from `variables`, so it's never the
   // stale closure) and we advance to the next bin.
@@ -201,14 +187,8 @@ export function InventorySessionWorkbench({
             next.delete(r.inventoryEntryId);
           return next;
         });
+        // Settles the bin and moves to the next one outstanding.
         recordLocationComplete(variables.locationId, variables.resolutions);
-        advanceToOutstanding(
-          new Set([
-            ...completedLocationIds,
-            ...skippedLocationIds,
-            variables.locationId,
-          ]),
-        );
         toast.success("Bin recount saved.");
       },
       onError: (error) => {
@@ -423,27 +403,16 @@ export function InventorySessionWorkbench({
   const handleToggleSkip = () => {
     if (!currentLocation) return;
     const wasSkipped = skippedLocationIds.has(currentLocation.id);
+    // Settling advances; un-skipping puts the cursor back on the bin.
     toggleLocationSkipped(currentLocation.id);
     if (wasSkipped) return;
-    advanceToOutstanding(
-      new Set([
-        ...completedLocationIds,
-        ...skippedLocationIds,
-        currentLocation.id,
-      ]),
-    );
     toast.success(
       `Skipped ${currentLocation.name} — come back to it any time.`,
     );
   };
 
-  const revisitSkipped = () => {
-    clearSkippedLocations();
-    const next = sessionLocations.findIndex(
-      (location) => !completedLocationIds.has(location.id),
-    );
-    if (next >= 0) setCurrentIndex(next);
-  };
+  // Clears every deferral and lands on the first bin that is outstanding again.
+  const revisitSkipped = clearSkippedLocations;
 
   const selectParent = (shortcode: LocationShortcode) => {
     void navigate({
@@ -497,12 +466,18 @@ export function InventorySessionWorkbench({
 
   if (resumeCandidate) {
     return (
-      <ResumeSessionPrompt
-        parentName={parent.name}
-        startedAt={resumeCandidate.startedAt}
-        completedCount={resumeCandidate.completedCount}
-        skippedCount={resumeCandidate.skippedCount}
-        totalCount={sessionLocations.length}
+      <QueuePassResumePrompt
+        candidate={{
+          ...resumeCandidate,
+          // A pass stored before totalCount was persisted reports 0; the live
+          // tree is the better answer in that case.
+          totalCount: resumeCandidate.totalCount || sessionLocations.length,
+        }}
+        title={`Resume ${parent.name} recount?`}
+        itemNoun="locations"
+        detail="Staged choices are still waiting on this device."
+        resumeLabel="Resume recount"
+        startOverLabel="Start new recount"
         onResume={resumePass}
         onStartNew={startNewPass}
       />
@@ -628,56 +603,6 @@ export function InventorySessionWorkbench({
         />
       )}
     </Stack>
-  );
-}
-
-function ResumeSessionPrompt({
-  parentName,
-  startedAt,
-  completedCount,
-  skippedCount,
-  totalCount,
-  onResume,
-  onStartNew,
-}: {
-  parentName: string;
-  startedAt: number;
-  completedCount: number;
-  skippedCount: number;
-  totalCount: number;
-  onResume: () => void;
-  onStartNew: () => void;
-}) {
-  return (
-    <Card className="mx-auto w-full max-w-xl">
-      <CardHeader>
-        <CardTitle>Resume {parentName} recount?</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Stack gap="md">
-          <Description>
-            Started {formatDistanceToNow(startedAt, { addSuffix: true })}. You
-            completed {completedCount} of {totalCount} locations
-            {skippedCount > 0 ? ` (${skippedCount} skipped)` : ""}; staged
-            choices are still waiting on this device.
-          </Description>
-          <Row gap="sm" wrap>
-            <Button type="button" className="min-h-12" onClick={onResume}>
-              Resume recount
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-12"
-              onClick={onStartNew}
-            >
-              <RotateCcw />
-              Start new recount
-            </Button>
-          </Row>
-        </Stack>
-      </CardContent>
-    </Card>
   );
 }
 

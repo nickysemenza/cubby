@@ -164,19 +164,6 @@ function TasksPage() {
 
         {view === "list" && <TaskList initialSearch={q} />}
       </Stack>
-
-      {/* Deep-linked quick capture: open state is read straight off the URL and
-          cleared (replace) on close, so a refresh or back-nav can't reopen it. */}
-      <CreateTaskDialog
-        open={search.create === true}
-        onOpenChange={(open) => {
-          if (!open)
-            navigate({
-              search: (prev) => ({ ...prev, create: undefined }),
-              replace: true,
-            });
-        }}
-      />
     </Page>
   );
 }

@@ -171,6 +171,12 @@ const TEXT_PX_RE = /\btext-\[[0-9]+px\]/;
 const HW_PAIR_RE =
   /\bh-(\d+(?:\.\d+)?)\s+w-\1\b|\bw-(\d+(?:\.\d+)?)\s+h-\2\b/;
 
+// An icon glyph inside a DropdownMenuItem carrying its own margin/size. The
+// primitive supplies gap-2 and a size-3.5 icon default, so these only ever
+// duplicate the gap or enlarge the glyph past what the shared row-action
+// column renders.
+const MENU_ITEM_ICON_RE = /className="(?:mr-2 size-4|size-4 mr-2|mr-2)"/;
+
 // Hand-rolled `&& ${arr}` array-overlap in a raw `sql` template — drizzle
 // interpolates a JS array into raw SQL as a ROW CONSTRUCTOR (`&& ($1, $2)`),
 // not a `text[]`, so this silently matches nothing at every input size. This
@@ -553,6 +559,9 @@ function scan(files) {
       continue;
     }
     const lines = content.split("\n");
+    // Reset per file: the icon rule below only fires between a
+    // <DropdownMenuItem and its closing tag.
+    let dropdownItemDepth = 0;
 
     // Rule (untransformed-image): an <Image> that never declares its rendered
     // width. Content-level — the prop list spans lines.
@@ -849,6 +858,28 @@ function scan(files) {
         });
       }
 
+      // Rule (menu-item-icon-override): an explicit icon size/margin on a glyph
+      // inside a DropdownMenuItem. The primitive already sets gap-2 and a
+      // size-3.5 icon default, so `mr-2 size-4` is redundant AND larger than
+      // the shared row-action column renders — which is exactly how the
+      // bespoke per-entity row menus drifted away from `createActionsColumn`.
+      if (isTsx && line.includes("<DropdownMenuItem")) dropdownItemDepth += 1;
+      if (
+        isTsx &&
+        dropdownItemDepth > 0 &&
+        !isCommentLine(line) &&
+        MENU_ITEM_ICON_RE.test(line)
+      ) {
+        violations.push({
+          file,
+          line: i + 1,
+          snippet: line.trim(),
+          rule: "menu-item-icon-override",
+        });
+      }
+      if (isTsx && line.includes("</DropdownMenuItem>") && dropdownItemDepth > 0)
+        dropdownItemDepth -= 1;
+
       // Rule (uuid-entity-href): a detail-page link keyed on a uuid rather than
       // the entity's shortcode. Applies everywhere, including the server —
       // `attention.ts` builds hrefs as plain strings, which no typed router
@@ -935,6 +966,8 @@ const byRule = {
     "Adjacent equal h-N/w-N pair — use the `size-N` shorthand (e.g. `h-4 w-4` → `size-4`) so icon sizing stays single-token (CLAUDE.md Colors / Design Tokens).",
   "untransformed-image":
     "<Image> without `displayWidth` — the Cloudflare Image Transformation is opt-in, so an omitted width serves the full-size R2 original into the rendered box (multi-MB photos into 32px tiles). Pass the rendered CSS width; `srcSet` handles retina, and it's a harmless no-op on non-bucket URLs.",
+  "menu-item-icon-override":
+    "Icon size/margin override inside a DropdownMenuItem — the primitive already applies gap-2 and a size-3.5 icon default, so `mr-2 size-4` both duplicates the gap and renders larger than the shared row-action column (CLAUDE.md Colors / Design Tokens). Drop the className.",
   "uuid-entity-href":
     "Entity link keyed on a uuid — shortcodes are the public id, so a detail-page URL is `/products/$shortcode`, never `/products/$id` or a `/tasks/${row.id}` template. Route through `entities[e].routes.detail` + `entityDetailParams`.",
   "hand-rolled-array-overlap":

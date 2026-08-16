@@ -132,7 +132,7 @@ export function ExpenseList() {
               setSettleTarget(row);
             }}
           >
-            <CheckCircle2 className="mr-2 size-4" />
+            <CheckCircle2 />
             Mark purchased
           </DropdownMenuItem>
           <DropdownMenuItem
@@ -141,7 +141,7 @@ export function ExpenseList() {
               setMoveTarget(row);
             }}
           >
-            <ArrowRightLeft className="mr-2 size-4" />
+            <ArrowRightLeft />
             Move to project...
           </DropdownMenuItem>
         </>

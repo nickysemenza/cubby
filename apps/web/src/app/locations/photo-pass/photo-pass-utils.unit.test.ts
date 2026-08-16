@@ -2,12 +2,7 @@ import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { describe, expect, it } from "vitest";
-import {
-  advanceToOutstanding,
-  flattenPhotoStops,
-  isPassComplete,
-  needsPhoto,
-} from "./photo-pass-utils";
+import { flattenPhotoStops, needsPhoto } from "./photo-pass-utils";
 
 function img(overrides: Partial<ImageOut> = {}): ImageOut {
   return {
@@ -146,50 +141,5 @@ describe("flattenPhotoStops", () => {
       loc("FFFF", "Attic", "room"),
     ]);
     expect(stops.map((s) => s.name)).toEqual(["Basement", "Attic"]);
-  });
-});
-
-describe("advanceToOutstanding", () => {
-  const stops = flattenPhotoStops([
-    loc("AAAA", "A", "shelf"),
-    loc("BBBB", "B", "shelf"),
-    loc("CCCC", "C", "shelf"),
-  ]);
-  const id = (name: string) => stops.find((s) => s.name === name)?.id ?? "";
-
-  it("scans forward to the next outstanding stop", () => {
-    expect(advanceToOutstanding(stops, 0, new Set([id("A")]))).toBe(1);
-  });
-
-  it("skips settled stops on the way forward", () => {
-    expect(advanceToOutstanding(stops, 0, new Set([id("A"), id("B")]))).toBe(2);
-  });
-
-  it("wraps to an earlier outstanding stop", () => {
-    expect(advanceToOutstanding(stops, 2, new Set([id("B"), id("C")]))).toBe(0);
-  });
-
-  it("holds position when everything is settled", () => {
-    const all = new Set([id("A"), id("B"), id("C")]);
-    expect(advanceToOutstanding(stops, 1, all)).toBe(1);
-  });
-});
-
-describe("isPassComplete", () => {
-  const stops = flattenPhotoStops([loc("AAAA", "A", "shelf")]);
-
-  it("is false while a stop is outstanding", () => {
-    expect(isPassComplete(stops, new Set())).toBe(false);
-  });
-
-  it("is true once every stop is settled", () => {
-    expect(isPassComplete(stops, new Set([stops[0]?.id ?? ""]))).toBe(true);
-  });
-
-  // An empty queue is "nothing to do", which the workbench renders as its own
-  // empty state — reporting it as a completed pass would show a summary for a
-  // pass that never ran.
-  it("is false for an empty queue", () => {
-    expect(isPassComplete([], new Set())).toBe(false);
   });
 });

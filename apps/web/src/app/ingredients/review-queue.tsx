@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { IngredientMergeDialog } from "~/app/_components/ingredient/ingredient-merge-dialog";
+import { useQueuePass } from "~/app/_components/queue-pass/useQueuePass";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Empty, EmptyActions, EmptyDescription } from "~/components/ui/empty";
@@ -21,6 +22,13 @@ import { hasUsdaLink } from "./workbench-editor-core";
 // How many rows ahead of the cursor to pre-compute. Bounds AI spend to roughly
 // (rows reviewed + LOOKAHEAD) — we never precompute far past where the user is.
 const LOOKAHEAD = 5;
+
+/**
+ * The queue's scope never changes while mounted — entering review IS the scope,
+ * and exiting unmounts. A constant key freezes membership once, on the first
+ * render that has rows.
+ */
+const REVIEW_SCOPE = "review";
 
 type MergePair = { id: string; name: string };
 
@@ -41,14 +49,22 @@ export function ReviewQueue({
   const api = useTRPC();
   const cache = useProposalCache();
 
-  const [processed, setProcessed] = useState<Set<string>>(() => new Set());
-  const queue = useMemo(
-    () => rows.filter((r) => !processed.has(r.id)),
-    [rows, processed],
+  // Membership is frozen for the life of this review session and the cursor is
+  // stable, so handling a row no longer removes it and renumbers everything
+  // after it. The component unmounts on exit, so re-entering review re-freezes
+  // against the browse filter as it stands then.
+  const stopsById = useMemo(
+    () => new Map<string, EnrichmentRow>(rows.map((r) => [r.id, r])),
+    [rows],
   );
-  const [cursor, setCursor] = useState(0);
-  const idx = Math.min(cursor, Math.max(0, queue.length - 1));
-  const current = queue[idx] ?? null;
+  const candidateIds = useMemo(() => rows.map((r) => r.id), [rows]);
+  const pass = useQueuePass<EnrichmentRow>({
+    scopeKey: REVIEW_SCOPE,
+    candidateIds,
+    stopsById,
+  });
+  const { counts, current, currentIndex: idx } = pass;
+  const queue = pass.stops;
 
   const editorRef = useRef<EnrichmentEditorHandle>(null);
   const [mergeConfirm, setMergeConfirm] = useState<MergePair[] | null>(null);
@@ -57,7 +73,7 @@ export function ReviewQueue({
 
   const markProcessed = (id: string | null) => {
     if (!id) return;
-    setProcessed((prev) => new Set(prev).add(id));
+    pass.settle(id, "completed");
   };
 
   // Keep the lookahead window pre-computed as the cursor advances. Linked rows
@@ -67,7 +83,9 @@ export function ReviewQueue({
     if (queue.length === 0) return;
     ensureProposals(
       queue
-        .slice(idx, idx + LOOKAHEAD + 1)
+        .slice(idx)
+        .filter((r) => !pass.settled.has(r.id))
+        .slice(0, LOOKAHEAD + 1)
         .map((r) => ({
           id: r.id,
           name: r.name,
@@ -76,7 +94,7 @@ export function ReviewQueue({
         }))
         .filter((it) => it.wantUsda || it.wantMerge),
     );
-  }, [idx, queue, ensureProposals]);
+  }, [idx, queue, ensureProposals, pass.settled]);
 
   const markNoUsdaMut = useActionMutation({
     mutationFn: api.product.update.mutationOptions,
@@ -95,7 +113,9 @@ export function ReviewQueue({
 
   const busy = markNoUsdaMut.isPending || mergeMutation.isPending;
 
-  const skip = () => current && markProcessed(current.id);
+  // A skip defers rather than discards: the row keeps its place and the cursor
+  // wraps back to it once everything else is settled.
+  const skip = () => current && pass.settle(current.id, "skipped");
 
   const canMarkNoUsda =
     !!current && current.product.length > 0 && !hasUsdaLink(current);
@@ -160,8 +180,8 @@ export function ReviewQueue({
     skip,
     openMerge,
     markNoUsda,
-    next: () => setCursor((c) => Math.min(queue.length - 1, c + 1)),
-    prev: () => setCursor((c) => Math.max(0, c - 1)),
+    next: () => pass.jumpTo(Math.min(queue.length - 1, idx + 1)),
+    prev: () => pass.jumpTo(Math.max(0, idx - 1)),
     mergeOpen: mergeConfirm != null,
     exit: onExit,
   };
@@ -222,17 +242,34 @@ export function ReviewQueue({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const reviewedThisSession = processed.size;
+  const reviewedThisSession = counts.completed;
 
   if (queue.length === 0) {
     return (
       <Empty>
+        <EmptyDescription>Nothing to review in this filter.</EmptyDescription>
+        <EmptyActions>
+          <Button variant="outline" size="sm" onClick={onExit}>
+            Back to browse
+          </Button>
+        </EmptyActions>
+      </Empty>
+    );
+  }
+
+  if (pass.complete) {
+    return (
+      <Empty>
         <EmptyDescription>
-          {reviewedThisSession > 0
-            ? `Reviewed ${reviewedThisSession} this session — nothing left in this filter.`
-            : "Nothing to review in this filter."}
+          Reviewed {reviewedThisSession} this session
+          {counts.skipped > 0 && `, skipped ${counts.skipped}`}.
         </EmptyDescription>
         <EmptyActions>
+          {counts.skipped > 0 && (
+            <Button variant="outline" size="sm" onClick={pass.revisitSkipped}>
+              Revisit skipped
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={onExit}>
             Back to browse
           </Button>
@@ -252,7 +289,8 @@ export function ReviewQueue({
         className="text-muted-foreground text-xs"
       >
         <span>
-          {queue.length} left · {reviewedThisSession} reviewed
+          {counts.outstanding} left · {reviewedThisSession} reviewed
+          {counts.skipped > 0 && ` · ${counts.skipped} skipped`}
         </span>
         <Row as="span" align="center" gap="sm">
           <span>
@@ -290,7 +328,7 @@ export function ReviewQueue({
           onMerge={openMerge}
           canMarkNoUsda={canMarkNoUsda}
           onMarkNoUsda={markNoUsda}
-          position={{ index: idx, total: queue.length }}
+          position={{ index: idx, total: counts.total }}
         />
       )}
 

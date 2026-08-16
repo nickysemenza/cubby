@@ -1,7 +1,10 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
-import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
+import {
+  CreateDialogAction,
+  createDialogSearchField,
+} from "~/app/_components/forms/create-dialog-action";
 import { CreateFinancialTransactionDialog } from "~/app/finance/create-financial-transaction-dialog";
 import { FinancialTransactionList } from "~/app/finance/financial-transaction-list";
 import { Page } from "~/components/page/Page";
@@ -13,9 +16,10 @@ const searchSchema = z.object({
   ...entityFilterSearchFields("financialTransaction"),
   q: urlStringParam,
   ...tableSearchFields,
+  ...createDialogSearchField,
 });
 
-const searchDefaults = { q: undefined } as const;
+const searchDefaults = { q: undefined, create: undefined } as const;
 
 export const Route = createFileRoute("/_authenticated/financial-transactions/")(
   {

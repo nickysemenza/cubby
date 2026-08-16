@@ -8,7 +8,10 @@
 // read-only suggesters above and links/merges NOTHING. The user reviews and
 // commits every write in the UI.
 
-import type { IngredientId } from "@cubby/schemas/identifiers";
+import type {
+  IngredientId,
+  IngredientShortcode,
+} from "@cubby/schemas/identifiers";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
 import type { Database } from "~/server/db";
 import type { USDAService } from "~/server/services/usda.service";
@@ -20,7 +23,13 @@ import { suggestUsdaFood, type UsdaFoodSuggestion } from "./usda-match";
 
 /** One ingredient's pre-computed proposals, streamed as a `BulkProgressEvent` payload. */
 export interface EnrichmentProposal {
-  id: IngredientId;
+  /**
+   * The **shortcode**, matching what the client sent and what its cache is
+   * keyed by. Returning the uuid here silently guaranteed a cache miss on every
+   * proposal even once the input validated, so the review queue would still
+   * have shown "precomputed 0/0".
+   */
+  id: IngredientShortcode;
   usda: UsdaFoodSuggestion;
   /** Null when merge wasn't requested for this row (no trigram candidate). */
   merge: IngredientMergeSuggestion | null;
@@ -37,7 +46,10 @@ export async function* precomputeEnrichmentProposals(
   usdaService: USDAService,
   db: Database,
   items: {
-    id: IngredientId;
+    /** Public id; echoed back as the proposal's key. */
+    id: IngredientShortcode;
+    /** Resolved by the router — the suggesters need the real row id. */
+    ingredientId: IngredientId;
     name: string;
     wantUsda: boolean;
     wantMerge: boolean;
@@ -61,11 +73,14 @@ export async function* precomputeEnrichmentProposals(
         const [usda, merge] = await Promise.all([
           item.wantUsda
             ? suggestUsdaFood(usdaService, db, item.name, {
-                ingredientId: item.id,
+                ingredientId: item.ingredientId,
               })
             : Promise.resolve(skippedUsda),
           item.wantMerge
-            ? suggestIngredientMerge(db, { id: item.id, name: item.name })
+            ? suggestIngredientMerge(db, {
+                id: item.ingredientId,
+                name: item.name,
+              })
             : Promise.resolve(null),
         ]);
         return { id: item.id, usda, merge };

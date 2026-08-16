@@ -12,6 +12,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { sortBy } from "es-toolkit";
 import {
+  Camera,
   ChevronDown,
   ClipboardCheck,
   FolderPlus,
@@ -295,6 +296,14 @@ export function LocationContents({ location }: { location: InfLocation }) {
         >
           <ScanBarcode className="mr-2 size-4" />
           Recount
+        </Link>
+        <Link
+          to="/locations/photo-pass"
+          search={{ parent: location.id }}
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+        >
+          <Camera className="mr-2 size-4" />
+          Photo pass
         </Link>
         <Link
           to="/inventory/bulk-edit"

@@ -23,7 +23,14 @@ export type ActionSurface =
   | "navbar-create"
   | "palette-quick"
   | "inventory-page"
-  | "home-quick";
+  | "home-quick"
+  /**
+   * A list's empty state. Declaring the create here is what lets an entity
+   * whose create is a dialog offer a call-to-action at all — see
+   * {@link createActionFor}. Nothing renders this slice directly; the empty
+   * state resolves through the entity.
+   */
+  | "empty-state";
 
 /**
  * A single quick action. `entity` marks an entity-create action whose `name`
@@ -106,7 +113,10 @@ export const actionItems: ActionItem[] = [
     path: "/locations/photo-pass",
     icon: Camera,
     keywords: ["photo", "camera", "picture", "location", "bin", "shelf"],
-    surfaces: ["palette-quick"],
+    // Same recurring-verb slot as Recount: both are passes you walk the house
+    // with. Palette-only left the newest of the three queue passes reachable
+    // from three places where recount had seven.
+    surfaces: ["palette-quick", "home-quick"],
   },
   {
     id: "what-can-i-make",
@@ -145,11 +155,13 @@ export const actionItems: ActionItem[] = [
     ["navbar-create", "palette-quick"],
     ["create", "new", "place", "room"],
   ),
-  // House-domain quick capture. No `entity` (that variant renders "New {label}"
-  // pointing at `routes.new`, which these three deliberately don't have) — the
-  // create dialog is opened by the `create` search param on each index page.
+  // Dialog-created entities: no `/new` route, so the create is deep-linked with
+  // `?create=true` on the index page. They still carry `entity` — the surfaces
+  // read `path`/`search` off the item, so `entity` only supplies the icon and
+  // the "New {label}" wording, and `createActionFor` can find them.
   {
     id: "add-task",
+    entity: "task",
     name: "Add Task",
     path: entities.task.routes.list,
     search: { create: true },
@@ -159,6 +171,7 @@ export const actionItems: ActionItem[] = [
   },
   {
     id: "add-project",
+    entity: "project",
     name: "Add Project",
     path: entities.project.routes.list,
     search: { create: true },
@@ -168,12 +181,71 @@ export const actionItems: ActionItem[] = [
   },
   {
     id: "add-expense",
+    entity: "expense",
     name: "Add Expense",
     path: entities.expense.routes.list,
     search: { create: true },
     icon: entities.expense.lucideIcon,
     keywords: ["create", "new", "expense", "receipt", "spend", "cost"],
     surfaces: ["navbar-create", "palette-quick", "home-quick"],
+  },
+  {
+    id: "add-meal",
+    entity: "meal",
+    name: "Add Meal",
+    path: entities.meal.routes.list,
+    search: { create: true },
+    icon: entities.meal.lucideIcon,
+    keywords: ["create", "new", "plan", "dinner", "calendar"],
+    surfaces: ["navbar-create", "palette-quick"],
+  },
+  // Dialog-created, but deliberately not offered in the navbar or palette —
+  // these are created in the flow of working a list, not from a global menu.
+  // They are here so the list empty states have somewhere to point.
+  {
+    id: "add-vendor",
+    entity: "vendor",
+    name: "Add Vendor",
+    path: entities.vendor.routes.list,
+    search: { create: true },
+    icon: entities.vendor.lucideIcon,
+    surfaces: ["empty-state"],
+  },
+  {
+    id: "add-purchase",
+    entity: "purchase",
+    name: "Add Purchase",
+    path: entities.purchase.routes.list,
+    search: { create: true },
+    icon: entities.purchase.lucideIcon,
+    surfaces: ["empty-state"],
+  },
+  {
+    id: "add-financial-account",
+    entity: "financialAccount",
+    name: "Add Account",
+    path: entities.financialAccount.routes.list,
+    search: { create: true },
+    icon: entities.financialAccount.lucideIcon,
+    surfaces: ["empty-state"],
+  },
+  {
+    id: "add-financial-transaction",
+    entity: "financialTransaction",
+    name: "Add Transaction",
+    path: entities.financialTransaction.routes.list,
+    search: { create: true },
+    icon: entities.financialTransaction.lucideIcon,
+    surfaces: ["empty-state"],
+  },
+  {
+    id: "add-wish",
+    entity: "wish",
+    name: "Add Wish",
+    path: entities.wish.routes.list,
+    search: { create: true },
+    icon: entities.wish.lucideIcon,
+    surfaces: ["empty-state"],
   },
   {
     id: "bulk-move",
@@ -220,4 +292,27 @@ export const actionItems: ActionItem[] = [
 /** The ordered slice of actions that a given surface renders. */
 export function actionsForSurface(surface: ActionSurface): ActionItem[] {
   return actionItems.filter((action) => action.surfaces.includes(surface));
+}
+
+/** Where an entity's create affordance lives, as typed navigation. */
+export interface CreateTarget {
+  to: string;
+  search?: Record<string, unknown>;
+}
+
+/**
+ * The canonical create destination for an entity, or null if it has none.
+ *
+ * Registry first, `routes.new` second. That order is the point: an entity whose
+ * create is a dialog (`?create=true`) has no `/new` route, so anything reading
+ * `routes.new` alone concludes it can't be created and silently drops its
+ * call-to-action. That is exactly what the list empty states did — meal,
+ * project and task each carried an `actionLabel` that could never render,
+ * because the button was gated on a route they deliberately don't have.
+ */
+export function createActionFor(entity: Entity): CreateTarget | null {
+  const action = actionItems.find((item) => item.entity === entity);
+  if (action) return { to: action.path, search: action.search };
+  const newRoute = entities[entity].routes.new;
+  return newRoute ? { to: newRoute } : null;
 }

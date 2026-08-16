@@ -104,11 +104,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
     : meal
       ? format(parseISO(meal.date), "EEE, MMM d")
       : "";
-  const {
-    deleteDialog,
-    openDeleteDialog,
-    isPending: isDeleting,
-  } = useEntityDelete({
+  const { deleteDialog, deleteButton } = useEntityDelete({
     id: mealId,
     name: mealName,
     entityLabel: "Meal",
@@ -187,19 +183,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
         label: format(parseISO(meal.date), "EEE, MMM d"),
         tone: "ink",
       }}
-      actions={
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="text-destructive"
-          disabled={isDeleting}
-          onClick={openDeleteDialog}
-        >
-          <Trash2 />
-          Delete meal
-        </Button>
-      }
+      actions={deleteButton}
     >
       {deleteDialog}
       <Card>

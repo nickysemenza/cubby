@@ -89,33 +89,3 @@ export function flattenPhotoStops(
 
   return out;
 }
-
-/**
- * The next stop that still needs attention: scan forward from `currentIndex`,
- * then wrap to the first outstanding stop before it. Returns `currentIndex`
- * when everything is settled, so the caller's "pass complete" check stays a
- * separate, explicit test rather than a sentinel.
- *
- * Callers must pass a `settled` set that already includes the stop they just
- * finished — the React state holding it has not flushed yet at call time.
- */
-export function advanceToOutstanding(
-  stops: readonly PhotoStop[],
-  currentIndex: number,
-  settled: ReadonlySet<string>,
-): number {
-  const after = stops.findIndex(
-    (stop, index) => index > currentIndex && !settled.has(stop.id),
-  );
-  if (after >= 0) return after;
-  const wrapped = stops.findIndex((stop) => !settled.has(stop.id));
-  return wrapped >= 0 ? wrapped : currentIndex;
-}
-
-/** True once every stop has been photographed or skipped. */
-export function isPassComplete(
-  stops: readonly PhotoStop[],
-  settled: ReadonlySet<string>,
-): boolean {
-  return stops.length > 0 && stops.every((stop) => settled.has(stop.id));
-}

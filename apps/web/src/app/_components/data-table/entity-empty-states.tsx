@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
 import type { Table } from "@tanstack/react-table";
+import { createActionFor } from "~/app/_components/actions/action-items";
 import { IconPattern } from "~/components/common/icon-pattern";
 import { Button } from "~/components/ui/button";
 import {
@@ -141,11 +142,13 @@ export function EntityEmptyState({
     return <FilteredEmptyState />;
   }
 
-  // The create link comes from the typed, optional route registry — not a
-  // string synthesized from basePath. Entities without a "new" route (meal,
-  // cookbook, usda-food, image) degrade to a description-only empty state
-  // instead of rendering a Link to a nonexistent /entity/new (404).
-  const newRoute = entityDef.routes.new;
+  // The create target comes from the action registry, which knows both shapes:
+  // a `/new` route and a `?create=true` dialog. Reading `routes.new` directly
+  // is what made meal/project/task render no button at all despite each
+  // declaring an `actionLabel` — their create is a dialog, so the route is
+  // absent by design. Entities with genuinely no create (cookbook, usda-food,
+  // image) still degrade to a description-only empty state.
+  const createTarget = createActionFor(entity);
 
   return (
     <Empty variant="warm" className="relative isolate overflow-hidden py-6">
@@ -156,9 +159,9 @@ export function EntityEmptyState({
       </EmptyMedia>
       <EmptyTitle>{config.title}</EmptyTitle>
       <EmptyDescription>{config.description}</EmptyDescription>
-      {config.actionLabel && newRoute && (
+      {config.actionLabel && createTarget && (
         <EmptyActions>
-          <Link to={newRoute}>
+          <Link to={createTarget.to} search={createTarget.search}>
             <Button size="sm">{config.actionLabel}</Button>
           </Link>
         </EmptyActions>
@@ -215,3 +218,10 @@ export function isNarrowed<TData>(table: Table<TData>): boolean {
     (table.options.meta?.urlScopeCount ?? 0) > 0
   );
 }
+
+/**
+ * Exposed for the drift guard in `actions/action-items.unit.test.tsx`, which
+ * asserts every declared `actionLabel` resolves somewhere to click. Not for
+ * rendering — read the config through this module's components.
+ */
+export const entityEmptyConfigForTest = entityEmptyConfig;

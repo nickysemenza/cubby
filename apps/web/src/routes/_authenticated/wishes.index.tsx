@@ -1,6 +1,7 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
+import { createDialogSearchField } from "~/app/_components/forms/create-dialog-action";
 import { WishList } from "~/app/wishes/wish-list";
 import { Page } from "~/components/page/Page";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
@@ -24,10 +25,12 @@ const searchSchema = z.object({
   // plain string schema would reinstate the hole `urlStringParam` closes.
   q: urlStringParam,
   ...tableSearchFields,
+  ...createDialogSearchField,
 });
 
 const searchDefaults = {
   q: undefined,
+  create: undefined,
 } as const;
 
 export const Route = createFileRoute("/_authenticated/wishes/")({

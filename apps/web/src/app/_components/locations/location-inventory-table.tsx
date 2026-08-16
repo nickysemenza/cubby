@@ -17,7 +17,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { z } from "zod";
 import type { TRPCQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
-import { Button } from "~/components/ui/button";
+import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { useTRPC } from "~/integrations/trpc/react";
 import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 import {
@@ -255,22 +255,22 @@ export function LocationInventoryTable({
     // this table is embedded alongside its other content.
     tableStateOptions: EMBEDDED_TABLE_STATE,
     columns,
+    // DropdownMenuItem, not Button: these render inside the row kebab's
+    // DropdownMenuContent, where a raw Button gets none of the menu's
+    // keyboard roving, typeahead, or item styling. Icons inherit the menu's
+    // size-3.5 default — an explicit size here is an unwanted override.
     extraActions: (item) => (
       <>
-        <Button
-          variant="ghost"
-          size="sm"
+        <DropdownMenuItem
           onClick={() => setDialogState({ type: "move", items: [item] })}
         >
-          <ArrowRightLeft className="mr-2 size-4" />
+          <ArrowRightLeft />
           Move to...
-        </Button>
+        </DropdownMenuItem>
         {/* Discard writes a ledger row and can clear the shelf in the same
             transaction — the honest verb for "used it up", where Delete just
             says the entry should never have existed. */}
-        <Button
-          variant="ghost"
-          size="sm"
+        <DropdownMenuItem
           onClick={() =>
             setDiscardTarget({
               productId: item.product.id,
@@ -278,18 +278,16 @@ export function LocationInventoryTable({
             })
           }
         >
-          <PackageMinus className="mr-2 size-4" />
+          <PackageMinus />
           Discard...
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-destructive"
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          variant="destructive"
           onClick={() => setDialogState({ type: "delete", items: [item] })}
         >
-          <Trash className="mr-2 size-4" />
+          <Trash />
           Delete
-        </Button>
+        </DropdownMenuItem>
       </>
     ),
     bulkActions,

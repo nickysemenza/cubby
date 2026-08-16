@@ -1,0 +1,335 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  advanceToOutstanding,
+  clearSkipped,
+  emptyPassProgress,
+  isPassComplete,
+  outstandingAfterUnsettling,
+  type PassCounts,
+  type PassProgress,
+  passCounts,
+  type QueueStop,
+  resolveStops,
+  type StopDisposition,
+  settledIds,
+  settleStop,
+  unsettleStop,
+} from "./queue-pass";
+
+/**
+ * The canonical persisted shape of an in-flight pass.
+ *
+ * `extra` is an opaque per-flow blob — the recount session parks its staged
+ * item resolutions and running summary there, while the photo pass has nothing
+ * to add. Keeping it opaque is what lets one hook persist three flows without
+ * knowing any of their domains.
+ */
+export interface StoredQueuePass<TExtra> {
+  version: number;
+  startedAt: number;
+  updatedAt: number;
+  currentIndex: number;
+  completed: string[];
+  skipped: string[];
+  totalCount: number;
+  extra?: TExtra;
+}
+
+export interface QueuePassPersistence<TExtra> {
+  /** Full localStorage key for a scope, e.g. `cubby:audit-session:LOC-4K7M`. */
+  storageKey: (scopeKey: string) => string;
+  version: number;
+  /**
+   * Read a stored blob this flow wrote under an older shape.
+   *
+   * Tried only when the canonical parse fails, so a flow that changed its
+   * persisted layout keeps honoring passes already sitting on someone's phone.
+   * Bumping a version without one silently discards every in-flight pass on the
+   * device.
+   */
+  readLegacy?: (parsed: unknown) => StoredQueuePass<TExtra> | null;
+}
+
+export interface QueuePassResumeCandidate<TExtra> {
+  startedAt: number;
+  updatedAt: number;
+  completedCount: number;
+  skippedCount: number;
+  totalCount: number;
+  extra: TExtra | undefined;
+}
+
+interface UseQueuePassOptions<TStop extends QueueStop, TExtra> {
+  /**
+   * Identity of the current scope. A change here — and only a change here — is
+   * the boundary that re-freezes membership and restarts the pass. Query
+   * refetches must not wipe an active pass, so this must not vary with them.
+   * `null` means "no scope chosen yet".
+   */
+  scopeKey: string | null;
+  /** Queue membership for the scope, evaluated at entry and then frozen. */
+  candidateIds: readonly string[];
+  /** Live content for every id in scope, including ones already handled. */
+  stopsById: ReadonlyMap<string, TStop>;
+  /** Omit for an ephemeral pass; supply to make it resumable. */
+  persistence?: QueuePassPersistence<TExtra>;
+  /**
+   * Per-flow state to persist alongside the queue bookkeeping.
+   *
+   * Must be referentially stable (memoized) — it is an effect dependency, and
+   * a fresh object literal every render would rewrite localStorage every
+   * render. Same rule as every other config object passed into a hook here.
+   */
+  extra?: TExtra;
+}
+
+function parseStoredPass<TExtra>(
+  raw: string,
+  persistence: QueuePassPersistence<TExtra>,
+): StoredQueuePass<TExtra> | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  const candidate = parsed as Partial<StoredQueuePass<TExtra>>;
+  if (
+    candidate.version === persistence.version &&
+    typeof candidate.startedAt === "number" &&
+    typeof candidate.currentIndex === "number" &&
+    Array.isArray(candidate.completed) &&
+    Array.isArray(candidate.skipped)
+  ) {
+    return {
+      version: candidate.version,
+      startedAt: candidate.startedAt,
+      updatedAt: candidate.updatedAt ?? candidate.startedAt,
+      currentIndex: candidate.currentIndex,
+      completed: candidate.completed,
+      skipped: candidate.skipped,
+      totalCount: candidate.totalCount ?? 0,
+      extra: candidate.extra,
+    };
+  }
+
+  return persistence.readLegacy?.(parsed) ?? null;
+}
+
+/**
+ * State for a flow that walks a queue of items one at a time: the cursor, the
+ * settle bookkeeping, frozen membership, and optional resumable persistence.
+ *
+ * The semantics it fixes are documented on `queue-pass.ts`. The one worth
+ * repeating: **membership is frozen per scope**. `candidateIds` is captured
+ * when the scope changes and never recomputed, so handling an item cannot drop
+ * it from the queue and renumber every position after it. Adjusting state
+ * during render is the documented React pattern for this; the guard on a
+ * non-empty candidate list keeps an in-flight query from freezing an empty
+ * queue.
+ */
+export function useQueuePass<TStop extends QueueStop, TExtra = undefined>({
+  scopeKey,
+  candidateIds,
+  stopsById,
+  persistence,
+  extra,
+}: UseQueuePassOptions<TStop, TExtra>) {
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [progress, setProgress] = useState<PassProgress>(emptyPassProgress);
+  const [resumeCandidate, setResumeCandidate] =
+    useState<StoredQueuePass<TExtra> | null>(null);
+  const [frozen, setFrozen] = useState<{ key: string; ids: string[] }>({
+    key: "",
+    ids: [],
+  });
+
+  const lastScopeKey = useRef<string | null>(null);
+  // Referenced from the scope effect, which must run on a scope change only —
+  // a caller passing a fresh config literal must not restart their pass.
+  const persistenceRef = useRef(persistence);
+  persistenceRef.current = persistence;
+
+  // Freeze membership and clear the previous scope's progress in one render, so
+  // no frame shows old counts against a new queue.
+  if (scopeKey !== null && frozen.key !== scopeKey && candidateIds.length > 0) {
+    setFrozen({ key: scopeKey, ids: [...candidateIds] });
+    setCurrentIndex(0);
+    setProgress(emptyPassProgress());
+  }
+
+  // Scope change is the only initialization boundary for persistence.
+  useEffect(() => {
+    if (scopeKey === lastScopeKey.current) return;
+    lastScopeKey.current = scopeKey;
+    setResumeCandidate(null);
+
+    const config = persistenceRef.current;
+    if (!scopeKey || !config) {
+      setStartedAt(scopeKey ? Date.now() : null);
+      return;
+    }
+
+    let raw: string | null = null;
+    try {
+      raw = localStorage.getItem(config.storageKey(scopeKey));
+    } catch {
+      // Private mode / quota failures must not block starting a pass.
+    }
+    const restored = raw ? parseStoredPass(raw, config) : null;
+    if (!restored) {
+      setStartedAt(Date.now());
+      return;
+    }
+
+    // Stale work is gated behind an explicit Resume / Start new choice, so a
+    // half-finished pass from days ago never silently becomes the live one.
+    setStartedAt(null);
+    setResumeCandidate(restored);
+  }, [scopeKey]);
+
+  const stops = useMemo(
+    () => resolveStops(frozen.ids, stopsById),
+    [frozen, stopsById],
+  );
+  const settled = useMemo(() => settledIds(progress), [progress]);
+  const counts = useMemo(
+    (): PassCounts => passCounts(stops, progress),
+    [stops, progress],
+  );
+  const complete = isPassComplete(stops, settled);
+  const current = stops[currentIndex] ?? null;
+
+  // Persist on every change once the pass is live. Skipped while a resume
+  // choice is pending, so rendering the prompt cannot overwrite the very blob
+  // the user is being offered.
+  useEffect(() => {
+    const config = persistenceRef.current;
+    if (!config || !scopeKey || startedAt === null || resumeCandidate) return;
+    const payload: StoredQueuePass<TExtra> = {
+      version: config.version,
+      startedAt,
+      updatedAt: Date.now(),
+      currentIndex,
+      completed: [...progress.completed],
+      skipped: [...progress.skipped],
+      totalCount: stops.length,
+      extra,
+    };
+    try {
+      localStorage.setItem(
+        config.storageKey(scopeKey),
+        JSON.stringify(payload),
+      );
+    } catch {
+      // Best effort: a failed write must not block the pass.
+    }
+  }, [
+    scopeKey,
+    startedAt,
+    resumeCandidate,
+    currentIndex,
+    progress,
+    stops.length,
+    extra,
+  ]);
+
+  const settle = useCallback(
+    (id: string, disposition: StopDisposition) => {
+      const next = settleStop(progress, id, disposition);
+      setProgress(next);
+      setCurrentIndex(
+        advanceToOutstanding(stops, currentIndex, settledIds(next)),
+      );
+    },
+    [progress, stops, currentIndex],
+  );
+
+  /** Return a stop to the queue and put the cursor back on it. */
+  const unsettle = useCallback(
+    (id: string) => {
+      setProgress(unsettleStop(progress, id));
+      setCurrentIndex(outstandingAfterUnsettling(stops, currentIndex, id));
+    },
+    [progress, stops, currentIndex],
+  );
+
+  /** Undo every deferral and land on the first of them. */
+  const revisitSkipped = useCallback(() => {
+    const next = clearSkipped(progress);
+    setProgress(next);
+    setCurrentIndex(advanceToOutstanding(stops, -1, settledIds(next)));
+  }, [progress, stops]);
+
+  const jumpTo = useCallback((index: number) => setCurrentIndex(index), []);
+
+  const startNewPass = useCallback(() => {
+    setResumeCandidate(null);
+    setStartedAt(Date.now());
+    setCurrentIndex(0);
+    setProgress(emptyPassProgress());
+  }, []);
+
+  /**
+   * Adopt the stored pass, returning its `extra` so the caller can restore its
+   * own staged state in the same interaction.
+   */
+  const resumePass = useCallback((): TExtra | undefined => {
+    if (!resumeCandidate) return undefined;
+    setProgress({
+      completed: new Set(resumeCandidate.completed),
+      skipped: new Set(resumeCandidate.skipped),
+    });
+    setCurrentIndex(Math.max(0, resumeCandidate.currentIndex));
+    setStartedAt(resumeCandidate.startedAt);
+    setResumeCandidate(null);
+    return resumeCandidate.extra;
+  }, [resumeCandidate]);
+
+  const resume = useMemo(
+    (): QueuePassResumeCandidate<TExtra> | null =>
+      resumeCandidate
+        ? {
+            startedAt: resumeCandidate.startedAt,
+            updatedAt: resumeCandidate.updatedAt,
+            completedCount: resumeCandidate.completed.length,
+            skippedCount: resumeCandidate.skipped.length,
+            totalCount: resumeCandidate.totalCount,
+            extra: resumeCandidate.extra,
+          }
+        : null,
+    [resumeCandidate],
+  );
+
+  return {
+    stops,
+    current,
+    currentIndex,
+    progress,
+    settled,
+    counts,
+    complete,
+    startedAt,
+    settle,
+    unsettle,
+    revisitSkipped,
+    jumpTo,
+    resumeCandidate: resume,
+    resumePass,
+    startNewPass,
+  };
+}
+
+/** Remove a scope's stored pass — call once its work is committed. */
+export function clearStoredQueuePass<TExtra>(
+  persistence: QueuePassPersistence<TExtra>,
+  scopeKey: string,
+): void {
+  try {
+    localStorage.removeItem(persistence.storageKey(scopeKey));
+  } catch {
+    // Best effort, as with the write.
+  }
+}
