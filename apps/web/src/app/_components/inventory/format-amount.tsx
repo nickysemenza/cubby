@@ -46,14 +46,10 @@ export const showAmountAndPrice = (
 };
 
 /**
- * Safely formats a measure, returning error string on failure.
- * Re-attaches "each" - WASM renders bare counts (Unit::Whole) unit-less.
- */
-/**
  * Same as {@link tryFormatAmount}, but ladders the base units the availability
  * engine reconciles in into what you'd read at a shop — "1360 g" becomes
- * "3 lb". Shopping-list surfaces only; everywhere else should keep showing the
- * unit the data is actually in.
+ * "3 lb". Shopping-list surfaces only, and there only for the shortfall;
+ * everywhere else should keep showing the unit the data is actually in.
  */
 export const tryFormatAmountShopper = (
   amount: ReadonlyDeep<{
@@ -79,6 +75,10 @@ export const tryFormatAmountShopper = (
   }
 };
 
+/**
+ * Safely formats a measure, returning error string on failure.
+ * Re-attaches "each" - WASM renders bare counts (Unit::Whole) unit-less.
+ */
 export const tryFormatAmount = (
   // Accepts both the engine's WAmount (snake `upper_value`) and the persisted
   // Amount (camel `upperValue`) so the written-amount cell and the resolved
