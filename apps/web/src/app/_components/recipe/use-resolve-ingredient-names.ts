@@ -5,6 +5,14 @@ import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
 import type { IngredientMatch } from "./use-ingredient-matches";
 
 /**
+ * Cache key for a requested ingredient name. Must match how the server keys the
+ * names it was handed (`resolveOrCreateIngredients` trims, then lowercases) —
+ * a client that keyed on the raw name would miss the result for anything the
+ * server normalized differently, and the miss aborts the whole import.
+ */
+export const ingredientNameKey = (name: string) => name.trim().toLowerCase();
+
+/**
  * Resolve ingredient names to DB rows via the server's batch resolve-or-create,
  * in one round-trip for the whole list.
  *
@@ -29,8 +37,8 @@ export function useResolveIngredientNames() {
     names: string[],
   ): Promise<Map<string, IngredientMatch>> => {
     const unique = uniqBy(
-      names.filter((name) => name.length > 0),
-      (name) => name.toLowerCase(),
+      names.map((name) => name.trim()).filter((name) => name.length > 0),
+      ingredientNameKey,
     );
     if (unique.length === 0) return new Map();
 
@@ -45,7 +53,7 @@ export function useResolveIngredientNames() {
     // may be a casing variant of it, or one of its aliases.
     return new Map(
       results.map((result) => [
-        result.name.toLowerCase(),
+        ingredientNameKey(result.name),
         { id: result.id, name: result.canonicalName, aliases: result.aliases },
       ]),
     );
@@ -58,7 +66,7 @@ export function useResolveIngredientNames() {
 export function useResolveIngredientName() {
   const { resolveNames, isResolving } = useResolveIngredientNames();
   const resolveName = async (name: string): Promise<IngredientMatch> => {
-    const match = (await resolveNames([name])).get(name.toLowerCase());
+    const match = (await resolveNames([name])).get(ingredientNameKey(name));
     if (!match) throw new Error(`Failed to resolve ingredient: ${name}`);
     return match;
   };

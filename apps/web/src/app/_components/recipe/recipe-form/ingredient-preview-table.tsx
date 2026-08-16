@@ -31,7 +31,10 @@ import {
   type IngredientMatch,
   useIngredientMatches,
 } from "../use-ingredient-matches";
-import { useResolveIngredientNames } from "../use-resolve-ingredient-names";
+import {
+  ingredientNameKey,
+  useResolveIngredientNames,
+} from "../use-resolve-ingredient-names";
 import {
   type ParsedIngredientLine,
   parsedIngredientNames,
@@ -358,7 +361,7 @@ export function useIngredientImport(ingredientLines: string[]) {
     const matches = await resolveNames(parsedIngredientNames(rows));
 
     return rows.map((p) => {
-      const match = matches.get(p.parsed.name.toLowerCase());
+      const match = matches.get(ingredientNameKey(p.parsed.name));
       if (!match) {
         throw new Error(`No match found for ingredient: ${p.parsed.name}`);
       }
@@ -409,7 +412,7 @@ export function useIngredientResolver() {
     setProgress({ done: uniqueNames.length, total: uniqueNames.length });
 
     return resolveParsedIngredientGroups(parsedGroups, async (name) => {
-      const match = matches.get(name.toLowerCase());
+      const match = matches.get(ingredientNameKey(name));
       if (!match) {
         throw new Error(`Failed to resolve ingredient: ${name}`);
       }
