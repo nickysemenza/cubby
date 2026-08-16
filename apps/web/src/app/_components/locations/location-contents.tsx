@@ -11,18 +11,10 @@ import type { InfLocation } from "@cubby/schemas/location";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { sortBy } from "es-toolkit";
-import {
-  Camera,
-  ChevronDown,
-  ClipboardCheck,
-  FolderPlus,
-  Plus,
-  Printer,
-  ScanBarcode,
-  SquarePen,
-} from "lucide-react";
+import { ChevronDown, FolderPlus, Plus } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { VerbButton } from "~/app/_components/actions/action-verb-ui";
 import { Row, Stack } from "~/components/layout";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { Collapsible, CollapsibleContent } from "~/components/ui/collapsible";
@@ -289,44 +281,36 @@ export function LocationContents({ location }: { location: InfLocation }) {
           <FolderPlus className="mr-2 size-4" />
           Add child
         </Button>
-        <Link
-          to="/inventory/session"
-          search={{ parent: location.id }}
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-        >
-          <ScanBarcode className="mr-2 size-4" />
-          Recount
-        </Link>
-        <Link
-          to="/locations/photo-pass"
-          search={{ parent: location.id }}
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-        >
-          <Camera className="mr-2 size-4" />
-          Photo pass
-        </Link>
-        <Link
-          to="/inventory/bulk-edit"
-          search={{ locationId: location.id }}
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-        >
-          <SquarePen className="mr-2 size-4" />
-          Bulk edit
-        </Link>
+        <VerbButton
+          verb="recount"
+          render={
+            <Link to="/inventory/session" search={{ parent: location.id }} />
+          }
+        />
+        <VerbButton
+          verb="photoPass"
+          render={
+            <Link to="/locations/photo-pass" search={{ parent: location.id }} />
+          }
+        />
+        <VerbButton
+          verb="bulkEdit"
+          render={
+            <Link
+              to="/inventory/bulk-edit"
+              search={{ locationId: location.id }}
+            />
+          }
+        />
         {hasChildren && (
           <>
-            <Link
-              to="/problems"
-              search={{ validateParent: location.id }}
-              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-            >
-              <ClipboardCheck className="mr-2 size-4" />
-              Validate
-            </Link>
-            <Button variant="outline" size="sm" onClick={handlePrintLabels}>
-              <Printer className="mr-2 size-4" />
-              Print labels
-            </Button>
+            <VerbButton
+              verb="validate"
+              render={
+                <Link to="/problems" search={{ validateParent: location.id }} />
+              }
+            />
+            <VerbButton verb="printLabels" onClick={handlePrintLabels} />
           </>
         )}
         <ViewSwitcher

@@ -4,7 +4,7 @@ import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
+import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { useTRPC } from "~/integrations/trpc/react";
 import { locationMutationInvalidateKeys } from "~/lib/query-keys";
 import { EntityInlineLink } from "../EntityInlineLink";
@@ -81,7 +81,7 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
           // Contents operations (recount, bulk edit) live on the Contents
           // toolbar now — this cluster is location-record actions only.
           <Row gap="sm" wrap>
-            <Button onClick={onEdit}>Edit</Button>
+            <DetailEditAction onClick={onEdit} />
             {typeSupportsQrCode(location.type) && (
               <PrintLabelButton shortcode={location.id} />
             )}

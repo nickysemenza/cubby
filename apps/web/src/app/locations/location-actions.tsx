@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { LayoutDashboard, Plus, Tags } from "lucide-react";
+import { LayoutDashboard, Plus } from "lucide-react";
+import { VerbButton } from "~/app/_components/actions/action-verb-ui";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 
@@ -12,12 +13,11 @@ export function LocationActions() {
           Arrange
         </Button>
       </Link>
-      <Link to="/labels">
-        <Button variant="outline" className="gap-1">
-          <Tags className="size-4" />
-          Print labels
-        </Button>
-      </Link>
+      <VerbButton
+        verb="printLabels"
+        render={<Link to="/labels" />}
+        className="gap-1"
+      />
       <Link to="/locations/new">
         <Button className="gap-1">
           <Plus className="size-4" />

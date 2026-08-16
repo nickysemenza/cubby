@@ -5,11 +5,13 @@ import type {
 import { getLocationTypeColor } from "@cubby/shared";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
-import { Camera, FolderInput, Printer, ScanBarcode } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
+import {
+  VerbMenuItem,
+  verbBulkAction,
+} from "~/app/_components/actions/action-verb-ui";
 import { usePageCount } from "~/components/page/Page";
-import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { useTRPC } from "~/integrations/trpc/react";
 import { locationMutationInvalidateKeys } from "~/lib/query-keys";
 import {
@@ -172,14 +174,10 @@ export function LocationList() {
   const bulkActions = useMemo(
     () => ({
       actions: [
-        {
+        verbBulkAction<LocationListItemOut>("printLabels", {
           id: "print-labels",
-          label: "Print Labels",
-          icon: <Printer className="size-4" />,
           minSelection: 1,
-          onExecute: async (
-            rows: import("@tanstack/react-table").Row<LocationListItemOut>[],
-          ) => {
+          onExecute: async (rows) => {
             const eligible = rows.filter((r) =>
               typeSupportsQrCode(r.original.type),
             );
@@ -202,19 +200,15 @@ export function LocationList() {
             navigate({ to: "/labels", search: { codes } });
             return { success: true };
           },
-        },
-        {
+        }),
+        verbBulkAction<LocationListItemOut>("moveUnder", {
           id: "move-parent",
-          label: "Move under...",
-          icon: <FolderInput className="size-4" />,
           minSelection: 1,
-          onExecute: async (
-            rows: import("@tanstack/react-table").Row<LocationListItemOut>[],
-          ) => {
+          onExecute: async (rows) => {
             setReparentLocations(rows.map((r) => r.original));
             return { success: true };
           },
-        },
+        }),
       ],
       clearSelectionOnComplete: false,
     }),
@@ -224,27 +218,21 @@ export function LocationList() {
   const extraActions = useCallback(
     (row: LocationListItemOut) => (
       <>
-        <DropdownMenuItem
+        <VerbMenuItem
+          verb="recount"
           render={<Link to="/inventory/session" search={{ parent: row.id }} />}
-        >
-          <ScanBarcode />
-          Recount
-        </DropdownMenuItem>
-        <DropdownMenuItem
+        />
+        <VerbMenuItem
+          verb="photoPass"
           render={
             <Link to="/locations/photo-pass" search={{ parent: row.id }} />
           }
-        >
-          <Camera />
-          Photo pass
-        </DropdownMenuItem>
+        />
         {row.id && typeSupportsQrCode(row.type) && (
-          <DropdownMenuItem
+          <VerbMenuItem
+            verb="printLabel"
             render={<Link to="/labels" search={{ codes: row.id }} />}
-          >
-            <Printer />
-            Print Label
-          </DropdownMenuItem>
+          />
         )}
       </>
     ),

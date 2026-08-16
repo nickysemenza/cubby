@@ -3,8 +3,9 @@ import type { RecipeListItem } from "@cubby/schemas/recipe";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
-import { RotateCcw, Scale } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
+import { verbBulkAction } from "~/app/_components/actions/action-verb-ui";
 import { Row, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
@@ -488,17 +489,14 @@ export function RecipeList({
     hiddenFilterColumns,
     bulkActions: {
       actions: [
-        {
-          id: "compare",
-          label: "Compare",
-          icon: <Scale className="size-4" />,
+        verbBulkAction<RecipeListItem>("compare", {
           minSelection: 2,
           onExecute: (rows) => {
             const ids = rows.map((r) => r.original.id).join(",");
             navigate({ to: "/recipes/compare", search: { ids } });
             return Promise.resolve({ success: true });
           },
-        },
+        }),
       ],
       clearSelectionOnComplete: false, // Don't clear selection after navigating
     },

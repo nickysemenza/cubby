@@ -6,7 +6,7 @@ import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
+import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -241,7 +241,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
           // Add to Inventory lives on the Stocked At section header now —
           // this cluster is product-record actions only.
           <Row gap="sm">
-            <Button onClick={onEdit}>Edit</Button>
+            <DetailEditAction onClick={onEdit} />
             <PrintLabelButton shortcode={product.id} />
             {deleteButton}
           </Row>

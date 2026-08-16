@@ -219,7 +219,7 @@ function nameColumnParams(
   return { shortcode: String(row.id) };
 }
 
-/** Where a row's name and its "View Details" action point. */
+/** Where a row's name and its "View details" action point. */
 type EntityRowLink = {
   to: EntityDetailRoute;
   // `{ id }` covers `image`, the one entity `EntityDetailRoute` includes that
@@ -805,11 +805,11 @@ export function createInventoryEntriesColumn<
 }
 
 interface ActionsColumnOptions<T> {
-  /** Additional actions to render after "View Details" */
+  /** Additional actions to render after "View details" */
   extraActions?: (row: T) => ReactNode;
   /**
    * Per-row detail link, for rows that aren't all `entity`. Keep it the same
-   * resolver the name column got, or "View Details" opens something other than
+   * resolver the name column got, or "View details" opens something other than
    * the row the user clicked.
    */
   rowLink?: RowLinkResolver<T>;
@@ -817,7 +817,7 @@ interface ActionsColumnOptions<T> {
 
 /**
  * Creates a standard actions column with a dropdown menu.
- * Includes "View Details" link by default, with optional extra actions.
+ * Includes "View details" link by default, with optional extra actions.
  */
 export function createActionsColumn<T extends { id: string | number }>(
   columnHelper: ColumnHelper<T>,
@@ -883,15 +883,15 @@ export function createActionsColumnBase<T>(
               <DropdownMenuItem
                 render={<Link to={linkProps.to} params={linkProps.params} />}
               >
-                <Eye className="mr-2 size-3.5" />
-                View Details
+                <Eye />
+                View details
               </DropdownMenuItem>
             )}
             {shortcode && (
               <DropdownMenuItem
                 onClick={() => void copyShortcodes([shortcode])}
               >
-                <ClipboardCopy className="mr-2 size-3.5" />
+                <ClipboardCopy />
                 Copy {shortcode}
               </DropdownMenuItem>
             )}

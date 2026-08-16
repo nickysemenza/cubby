@@ -175,7 +175,32 @@ const HW_PAIR_RE =
 // primitive supplies gap-2 and a size-3.5 icon default, so these only ever
 // duplicate the gap or enlarge the glyph past what the shared row-action
 // column renders.
-const MENU_ITEM_ICON_RE = /className="(?:mr-2 size-4|size-4 mr-2|mr-2)"/;
+const MENU_ITEM_ICON_RE =
+  /className="(?:mr-2 size-[\d.]+|size-[\d.]+ mr-2|mr-2|size-[\d.]+)"/;
+
+/**
+ * Labels declared in the action-verb registry, read from source so the guard
+ * can't fall behind it. A verb whose wording lives in one place is the whole
+ * point — Print Label previously shipped in three casings with four icons.
+ */
+const ACTION_VERBS_PATH = "apps/web/src/app/_components/actions/action-verbs.ts";
+const actionVerbLabelSet = (() => {
+  try {
+    const src = readFileSync(join(repoRoot, ACTION_VERBS_PATH), "utf8");
+    const body = src.slice(src.indexOf("export const actionVerbs"));
+    return new Set(
+      [...body.matchAll(/label:\s*"([^"]+)"/g)].map((m) =>
+        m[1].replace(/\.\.\.$/, "").trim().toLowerCase(),
+      ),
+    );
+  } catch (error) {
+    // Not a soft failure: an empty set makes the rule below match nothing and
+    // pass vacuously, which is exactly how a guard rots unnoticed.
+    throw new Error(
+      `check-conventions: could not read action verbs from ${ACTION_VERBS_PATH}: ${error}`,
+    );
+  }
+})();
 
 // Hand-rolled `&& ${arr}` array-overlap in a raw `sql` template — drizzle
 // interpolates a JS array into raw SQL as a ROW CONSTRUCTOR (`&& ($1, $2)`),
@@ -877,6 +902,28 @@ function scan(files) {
           rule: "menu-item-icon-override",
         });
       }
+      // Rule (hand-rolled-verb-label): a menu item whose text is a registered
+      // verb, written out by hand instead of rendered from the registry. This
+      // is how the same operation ended up spelled three ways across row menus
+      // — and twice within a single file, once on the row and once on the bulk
+      // bar. `VerbMenuItem` / `verbBulkAction` render the canonical wording.
+      if (
+        isTsx &&
+        dropdownItemDepth > 0 &&
+        !isCommentLine(line) &&
+        !file.endsWith("action-verb-ui.tsx") &&
+        actionVerbLabelSet.has(
+          line.trim().replace(/\.\.\.$/, "").trim().toLowerCase(),
+        )
+      ) {
+        violations.push({
+          file,
+          line: i + 1,
+          snippet: line.trim(),
+          rule: "hand-rolled-verb-label",
+        });
+      }
+
       if (isTsx && line.includes("</DropdownMenuItem>") && dropdownItemDepth > 0)
         dropdownItemDepth -= 1;
 
@@ -966,6 +1013,8 @@ const byRule = {
     "Adjacent equal h-N/w-N pair — use the `size-N` shorthand (e.g. `h-4 w-4` → `size-4`) so icon sizing stays single-token (CLAUDE.md Colors / Design Tokens).",
   "untransformed-image":
     "<Image> without `displayWidth` — the Cloudflare Image Transformation is opt-in, so an omitted width serves the full-size R2 original into the rendered box (multi-MB photos into 32px tiles). Pass the rendered CSS width; `srcSet` handles retina, and it's a harmless no-op on non-bucket URLs.",
+  "hand-rolled-verb-label":
+    "Hand-written label inside a DropdownMenuItem that duplicates a registered action verb — render it with `VerbMenuItem` (or `verbBulkAction` / `VerbButton`) so one operation keeps one wording and one icon everywhere it is offered (apps/web/src/app/_components/actions/action-verbs.ts).",
   "menu-item-icon-override":
     "Icon size/margin override inside a DropdownMenuItem — the primitive already applies gap-2 and a size-3.5 icon default, so `mr-2 size-4` both duplicates the gap and renders larger than the shared row-action column (CLAUDE.md Colors / Design Tokens). Drop the className.",
   "uuid-entity-href":

@@ -4,18 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { uniq } from "es-toolkit";
-import {
-  CalendarRange,
-  Clock3,
-  Package,
-  PackageX,
-  Pencil,
-  Printer,
-  Rows3,
-  Table2,
-} from "lucide-react";
+import { CalendarRange, Clock3, Rows3, Table2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import {
   ProductFoodSummariesProvider,
   useHydratedProductFood,
@@ -25,7 +17,6 @@ import { Row, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
-import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { NoneValue } from "~/components/ui/none-value";
 import { OptionalStatusText, StatusText } from "~/components/ui/status-text";
 import {
@@ -775,25 +766,23 @@ export function ProductList({
   const extraActions = useCallback(
     (row: ProductListItem) => (
       <>
-        <DropdownMenuItem onClick={() => setQuickEditProductId(row.id)}>
-          <Pencil />
-          Edit locations
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setDiscardProductId(row.id)}>
-          <PackageX />
-          Discard
-        </DropdownMenuItem>
-        <DropdownMenuItem render={<Link to="/inventory/session" />}>
-          <Package />
-          Add to Inventory
-        </DropdownMenuItem>
+        <VerbMenuItem
+          verb="editLocations"
+          onSelect={() => setQuickEditProductId(row.id)}
+        />
+        <VerbMenuItem
+          verb="discard"
+          onSelect={() => setDiscardProductId(row.id)}
+        />
+        <VerbMenuItem
+          verb="addToInventory"
+          render={<Link to="/inventory/session" />}
+        />
         {row.id && (
-          <DropdownMenuItem
+          <VerbMenuItem
+            verb="printLabel"
             render={<Link to="/labels" search={{ codes: row.id }} />}
-          >
-            <Printer />
-            Print Label
-          </DropdownMenuItem>
+          />
         )}
       </>
     ),

@@ -3,8 +3,9 @@ import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
 import { taskStatusValues } from "@cubby/schemas/project";
 import { useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { Ban, EllipsisVertical, Trash } from "lucide-react";
+import { Ban, EllipsisVertical } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { todayPlain } from "~/app/projects/charts/gantt/gantt-date";
 import { formatDateRange } from "~/app/projects/project-formatting";
@@ -219,16 +220,13 @@ export function TaskCard({
                 </DropdownMenuGroup>
                 {/* Outside the group on purpose — Delete isn't a status. */}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onClick={(e) => {
+                <VerbMenuItem
+                  verb="delete"
+                  onSelect={(e) => {
                     e.stopPropagation();
                     onRequestDelete(task);
                   }}
-                >
-                  <Trash />
-                  Delete
-                </DropdownMenuItem>
+                />
               </DropdownMenuContent>
             </DropdownMenu>
           </Row>

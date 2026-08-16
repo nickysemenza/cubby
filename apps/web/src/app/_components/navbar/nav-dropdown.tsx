@@ -43,7 +43,7 @@ export const NavDropdown = ({ group }: { group: NavGroup }) => {
               }
               className={cn("gap-2", item.to === activeTo && "bg-accent")}
             >
-              <ItemIcon className="size-3.5" />
+              <ItemIcon />
               {item.label}
             </DropdownMenuItem>
           );

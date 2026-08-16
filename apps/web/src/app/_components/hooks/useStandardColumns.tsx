@@ -96,7 +96,7 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
    * Per-row detail link for a table whose rows aren't all `entity` — a tree
    * whose children are a different entity than its parents (the wishlist's
    * candidate Products under a Wish). Applied to BOTH the name column and the
-   * actions column's "View Details", so they can't disagree. Defaults to
+   * actions column's "View details", so they can't disagree. Defaults to
    * `entity`'s detail route keyed by `row.id`.
    */
   rowLink?: RowLinkResolver<TData>;

@@ -91,12 +91,7 @@ export function BulkActionBar<TData>({
         {actions.map((action) => (
           <Button
             key={action.id}
-            // `BulkAction` (bulk-actions.types.ts) has no `destructive` flag,
-            // and every destructive bulk action in the app is minted by
-            // useOptimisticDelete with this fixed id — the one place that
-            // mints a second destructive action would need a real flag on
-            // the type instead of this convention.
-            variant={action.id === "delete" ? "destructive" : "ghost"}
+            variant={action.tone === "destructive" ? "destructive" : "ghost"}
             size="sm"
             onClick={() => handleActionClick(action)}
             disabled={disabled || isExecuting}

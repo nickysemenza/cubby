@@ -53,16 +53,12 @@ export const QuickActionsMenu = () => {
             >
               {action.entity ? (
                 <>
-                  <EntityIcon
-                    entity={action.entity}
-                    className="size-4"
-                    colored
-                  />
+                  <EntityIcon entity={action.entity} colored />
                   <span>New {entities[action.entity].label}</span>
                 </>
               ) : (
                 <>
-                  <action.icon className="size-4" />
+                  <action.icon />
                   <span>{action.name}</span>
                 </>
               )}
