@@ -2035,11 +2035,21 @@ export const projectDashboardSummaryOut = z.object({
     committedSpend: z.number(),
     /**
      * Sum of each scoped project's own SUBTREE `costEstimate` (portfolio
-     * equivalent of `BudgetStrip`'s "Estimate" figure) — a project with no
-     * estimate contributes 0, not null, so an all-unestimated portfolio reads
-     * as $0 rather than needing a separate "no data" state.
+     * equivalent of `BudgetStrip`'s "Estimate" figure) — over ONLY the
+     * projects that have one. `costEstimate` is nullable end-to-end (an
+     * unestimated subtree is UNKNOWN, not zero — see `helpers.ts`'s
+     * `EMPTY_PROJECT_SUBTREE_ROLLUP` doc comment), so summing a missing
+     * estimate as 0 would understate the total for the wrong reason. Null
+     * when NO scoped project has an estimate; a caller MUST pair this with
+     * `estimateCoverage` and disclose the population ("across N of M
+     * projects") rather than presenting a partial sum as a complete total.
      */
-    estimateTotal: z.number(),
+    estimateTotal: z.number().nullable(),
+    /** How many of the scoped projects `estimateTotal` actually covers. */
+    estimateCoverage: z.object({
+      projectsWithEstimate: z.number().int(),
+      projectsInScope: z.number().int(),
+    }),
     /**
      * Forward-looking committed (future, unpaid) spend, cumulative by day
      * window — `in90Days` includes everything `in30Days` does. Each window

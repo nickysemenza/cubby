@@ -2221,6 +2221,74 @@ describe("project dashboard — attention detector + summary", () => {
     expect(live.summary.actualSpend).toBe(liveActual);
     expect(live.summary.committedSpend).toBe(liveCommitted);
   });
+
+  /**
+   * `costEstimate` is nullable end-to-end — an unestimated project is
+   * UNKNOWN, not $0 (see `helpers.ts`'s `EMPTY_PROJECT_SUBTREE_ROLLUP` doc
+   * comment). `estimateTotal` must sum only the projects that have one AND
+   * report which slice of the scoped set that is, rather than silently
+   * treating "no estimate" as "zero estimate" (that would understate the
+   * total for the wrong reason — see dashboard-summary.ts).
+   */
+  it("sums estimateTotal over only estimated projects and reports coverage", async () => {
+    await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "estimate coverage estimated",
+        costEstimate: 500,
+      }),
+      ctx.actor,
+    );
+    const { output: alsoEstimated } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "estimate coverage also estimated",
+        costEstimate: 250,
+      }),
+      ctx.actor,
+    );
+    const { output: unestimated } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "estimate coverage unestimated" }),
+      ctx.actor,
+    );
+
+    const mixed = await projectDashboardSummary(ctx.db, {
+      search: "estimate coverage",
+    });
+    expect(mixed.projects.map((p) => p.name)).toEqual([
+      "estimate coverage also estimated",
+      "estimate coverage estimated",
+      "estimate coverage unestimated",
+    ]);
+    expect(mixed.summary.estimateTotal).toBe(750);
+    expect(mixed.summary.estimateCoverage).toEqual({
+      projectsWithEstimate: 2,
+      projectsInScope: 3,
+    });
+
+    // Scoped down to ONLY the unestimated project: the sum must be null, not
+    // 0 — there is nothing to sum, which is a different fact than "$0 of
+    // planned work".
+    const noneEstimated = await projectDashboardSummary(ctx.db, {
+      search: unestimated.name,
+    });
+    expect(noneEstimated.summary.estimateTotal).toBeNull();
+    expect(noneEstimated.summary.estimateCoverage).toEqual({
+      projectsWithEstimate: 0,
+      projectsInScope: 1,
+    });
+
+    // Scoped down to ONLY the estimated projects: full coverage, real sum.
+    const bothEstimated = await projectDashboardSummary(ctx.db, {
+      search: alsoEstimated.name,
+    });
+    expect(bothEstimated.summary.estimateTotal).toBe(250);
+    expect(bothEstimated.summary.estimateCoverage).toEqual({
+      projectsWithEstimate: 1,
+      projectsInScope: 1,
+    });
+  });
 });
 
 describe("project dashboard — summary scope filters", () => {

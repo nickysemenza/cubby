@@ -432,9 +432,23 @@ function OverviewView({
             : undefined,
       },
       {
+        // `estimateTotal` is null when NOTHING in scope has a `costEstimate`
+        // (nullable end-to-end — see dashboard-summary.ts) — "—", not "$0",
+        // for the same reason a per-project BudgetStrip never shows a $0
+        // estimate it doesn't have. A PARTIAL population still sums (real
+        // money from the projects that DO have one) but discloses which
+        // slice of the portfolio that is, rather than presenting it as a
+        // complete total.
         label: "Estimate",
-        value: data.summary.estimateTotal,
-        formatter: (v) => formatCurrency(Number(v), 0),
+        value:
+          data.summary.estimateTotal != null
+            ? formatCurrency(data.summary.estimateTotal, 0)
+            : "—",
+        caption:
+          data.summary.estimateCoverage.projectsWithEstimate <
+          data.summary.estimateCoverage.projectsInScope
+            ? `across ${data.summary.estimateCoverage.projectsWithEstimate} of ${data.summary.estimateCoverage.projectsInScope} projects`
+            : undefined,
       },
       {
         // Portfolio equivalent of the per-project BudgetStrip's "Committed"

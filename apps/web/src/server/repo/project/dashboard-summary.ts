@@ -334,10 +334,28 @@ export async function projectDashboardSummary(
     subtreeRollups.get(id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP;
   const actualSpend = sumBy(ids, (id) => subtreeOf(id).actualSpent);
   const committedSpend = sumBy(ids, (id) => subtreeOf(id).committedSpent);
-  // Missing per-project estimates contribute 0, same as the zero rollup does
-  // for actual/committedSpend — an unestimated project doesn't widen the
-  // portfolio total, it just adds nothing to it.
-  const estimateTotal = sumBy(ids, (id) => subtreeOf(id).costEstimate ?? 0);
+  // `costEstimate` is nullable end-to-end on purpose (see helpers.ts's
+  // `EMPTY_PROJECT_SUBTREE_ROLLUP` doc comment) — an unestimated subtree is
+  // UNKNOWN, not zero. Unlike actual/committedSpend (where "no expenses" really
+  // does mean zero spend), collapsing a missing estimate to 0 and summing it in
+  // would understate the total for the wrong reason: measured on production,
+  // 26 of 69 live projects (38%) have no estimate. So this tracks coverage
+  // alongside the sum — `estimateTotal` is null when NOTHING in scope has an
+  // estimate, and the covered/total counts let the UI disclose the population
+  // ("across N of M projects") instead of silently presenting a partial sum as
+  // if it were complete. Same "footnote, don't exclude" convention as the
+  // allocation-estimate caveat in docs/todos.md.
+  const projectsWithEstimate = ids.filter(
+    (id) => subtreeOf(id).costEstimate !== null,
+  );
+  const estimateTotal =
+    projectsWithEstimate.length > 0
+      ? sumBy(projectsWithEstimate, (id) => subtreeOf(id).costEstimate ?? 0)
+      : null;
+  const estimateCoverage = {
+    projectsWithEstimate: projectsWithEstimate.length,
+    projectsInScope: ids.length,
+  };
   const forwardCommittedSpend = forwardCommittedRows[0] ?? {
     in30Days: 0,
     in60Days: 0,
@@ -410,6 +428,7 @@ export async function projectDashboardSummary(
       actualSpend,
       committedSpend,
       estimateTotal,
+      estimateCoverage,
       forwardCommittedSpend,
     },
     projects,
