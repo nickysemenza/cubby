@@ -249,6 +249,13 @@ export function useSessionProgress(
   return {
     startedAt: pass.startedAt,
     currentIndex: pass.currentIndex,
+    // The pass's own resolved queue and cursor. Deriving either from the live
+    // location list instead would put the caller in a different index space
+    // than the one `settle`/`advance` maintain.
+    stops: pass.stops,
+    current: pass.current,
+    complete: pass.complete,
+    jumpToId: pass.jumpToId,
     setCurrentIndex: pass.jumpTo,
     itemResolutions,
     setItemResolutions,

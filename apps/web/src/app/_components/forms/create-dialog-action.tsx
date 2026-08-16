@@ -1,6 +1,6 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import type { ComponentType, ReactNode } from "react";
+import { type ComponentType, type ReactNode, useState } from "react";
 import { z } from "zod";
 import { Button } from "~/components/ui/button";
 
@@ -49,13 +49,26 @@ export function CreateDialogAction({
     replace?: boolean;
   }) => void;
   const search = useSearch({ strict: false }) as { create?: boolean };
-  const open = search.create === true;
+  const openedFromUrl = search.create === true;
+  // Two sources, deliberately. The button opens through local state so a click
+  // is instant and needs nothing from the router — routing the click through a
+  // navigation made opening depend on the router being ready, a needless
+  // failure mode for a button. The URL is the *other* way in, for the action
+  // registry and the empty-state call-to-action, which can only express a
+  // destination.
+  const [openedByClick, setOpenedByClick] = useState(false);
+  const open = openedByClick || openedFromUrl;
 
   const setOpen = (next: boolean) => {
-    navigate({
-      search: (prev) => ({ ...prev, create: next ? true : undefined }),
-      replace: true,
-    });
+    setOpenedByClick(next);
+    // Only touch the URL to clear a deep link, so clicking the button doesn't
+    // rewrite the address bar for a purely local interaction.
+    if (!next && openedFromUrl) {
+      navigate({
+        search: (prev) => ({ ...prev, create: undefined }),
+        replace: true,
+      });
+    }
   };
 
   return (

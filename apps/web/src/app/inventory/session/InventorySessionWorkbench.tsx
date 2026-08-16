@@ -82,7 +82,11 @@ export function InventorySessionWorkbench({
   const {
     startedAt,
     currentIndex,
-    setCurrentIndex,
+    stops: passLocations,
+    current: currentLocation,
+    complete: passComplete,
+    jumpToId,
+    counts,
     itemResolutions,
     setItemResolutions,
     completedLocationIds,
@@ -96,7 +100,6 @@ export function InventorySessionWorkbench({
     clearSkippedLocations,
   } = useSessionProgress(rootId, sessionLocations);
 
-  const currentLocation = sessionLocations[currentIndex] ?? null;
   const unknownLocation = ensureUnknown.data ?? null;
   const unknownTreeLocation = useMemo(
     () => findLocationInTree(tree, unknownLocation?.id) ?? unknownLocation,
@@ -421,14 +424,8 @@ export function InventorySessionWorkbench({
     });
   };
 
-  const jumpToLocation = (locationId: string) => {
-    const index = sessionLocations.findIndex((loc) => loc.id === locationId);
-    if (index >= 0) {
-      setCurrentIndex(index);
-      return true;
-    }
-    return false;
-  };
+  // Resolved by the pass, against the queue the cursor actually indexes.
+  const jumpToLocation = jumpToId;
 
   if (treeLoading) {
     return (
@@ -493,16 +490,9 @@ export function InventorySessionWorkbench({
   }
 
   // A skipped location settles the pass too — otherwise one unreachable bin
-  // keeps the summary out of reach forever.
-  const skippedInCurrentTree = sessionLocations.filter((location) =>
-    skippedLocationIds.has(location.id),
-  ).length;
-  const settledInCurrentTree = sessionLocations.filter(
-    (location) =>
-      completedLocationIds.has(location.id) ||
-      skippedLocationIds.has(location.id),
-  ).length;
-  const passComplete = settledInCurrentTree >= sessionLocations.length;
+  // keeps the summary out of reach forever. Both counts come from the pass, so
+  // they are measured against the same queue the cursor walks.
+  const skippedInCurrentTree = counts.skipped;
   if (passComplete) {
     return (
       <SessionComplete
@@ -524,7 +514,7 @@ export function InventorySessionWorkbench({
     >
       <MobileLocationSwitcher
         parent={parent}
-        locations={sessionLocations}
+        locations={passLocations}
         currentId={currentLocation?.id ?? null}
         currentIndex={currentIndex}
         inventoryByLocation={inventoryByLocation}
@@ -543,7 +533,7 @@ export function InventorySessionWorkbench({
       <div className="grid min-h-[calc(100dvh-10rem)] min-w-0 gap-4 lg:grid-cols-[20rem_minmax(0,1fr)] lg:items-start">
         <LocationWorkbenchSidebar
           parent={parent}
-          locations={sessionLocations}
+          locations={passLocations}
           currentId={currentLocation?.id ?? null}
           inventoryByLocation={inventoryByLocation}
           itemResolutions={itemResolutions}

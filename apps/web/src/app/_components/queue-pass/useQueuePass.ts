@@ -299,6 +299,23 @@ export function useQueuePass<TStop extends QueueStop, TExtra = undefined>({
 
   const jumpTo = useCallback((index: number) => setCurrentIndex(index), []);
 
+  /**
+   * Move the cursor to a stop by id, reporting whether the queue holds it.
+   *
+   * Resolving here rather than at the call site is the point: the cursor is an
+   * index into the *frozen* queue, so a caller that looked the id up in its own
+   * live list would be handing over an index from a different space.
+   */
+  const jumpToId = useCallback(
+    (id: string) => {
+      const index = stops.findIndex((stop) => stop.id === id);
+      if (index < 0) return false;
+      setCurrentIndex(index);
+      return true;
+    },
+    [stops],
+  );
+
   const startNewPass = useCallback(() => {
     setResumeCandidate(null);
     setStartedAt(Date.now());
@@ -339,6 +356,7 @@ export function useQueuePass<TStop extends QueueStop, TExtra = undefined>({
     unsettle,
     revisitSkipped,
     jumpTo,
+    jumpToId,
     resumeCandidate: resume,
     resumePass,
     startNewPass,
