@@ -32,7 +32,17 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import { and, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import { parseWithContext } from "~/lib/zod-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -71,6 +81,7 @@ import {
   mapImages,
   nextImageSortOrder,
   notDeleted,
+  presenceCondition,
   relations,
   unwrapDb,
   updateLiveAndReturn,
@@ -691,6 +702,15 @@ export const locationList = async (
   // Joins Image so this matches what the thumbnail cell actually renders — it
   // drops PDF attachments, and Image is separately soft-deletable from
   // LocationImage.
+  // Aliased because this reads the SAME table the outer query selects from.
+  // Uncorrelated — it names every location that is somebody's parent — but the
+  // alias keeps the inner reference unambiguous rather than relying on Postgres
+  // shadowing the outer `Location`.
+  const childLocation = alias(location, "child_location");
+  const locationIdsWithChildren = getDb(db)
+    .select({ parentId: childLocation.parentId })
+    .from(childLocation)
+    .where(and(notDeleted(childLocation), isNotNull(childLocation.parentId)));
   const locationIdsWithImages = getDb(db)
     .select({ locationId: locationImage.locationId })
     .from(locationImage)
@@ -742,6 +762,15 @@ export const locationList = async (
         location.id,
         filters.imagePresenceFilter,
         locationIdsWithImages,
+      ),
+      presenceCondition(
+        location.aiDescription,
+        filters.aiDescriptionPresenceFilter,
+      ),
+      idSetPresence(
+        location.id,
+        filters.childPresenceFilter,
+        locationIdsWithChildren,
       ),
       filters.directItemCountMin !== undefined
         ? inArray(location.id, locationIdsMeetingInventoryMinimum)

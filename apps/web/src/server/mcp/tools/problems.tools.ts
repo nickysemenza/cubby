@@ -40,13 +40,14 @@ export function registerProblemsTools(server: McpServer) {
     annotations: READ_ONLY_CLOSED,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
-      const [fast, coverage, upc, tracker] = await Promise.all([
+      const [fast, coverage, upc, tracker, views] = await Promise.all([
         caller.problems.getFast(),
         caller.problems.getCoverage(),
         caller.problems.getUpc(),
         caller.problems.getTracker(),
+        caller.problems.getViews(),
       ]);
-      const all = assembleAllProblems({ fast, coverage, upc, tracker });
+      const all = assembleAllProblems({ fast, coverage, upc, tracker, views });
       if (params.countsOnly) {
         // Counts are just array lengths — no need to resolve shortcodes for
         // a response that skips the rows themselves.
@@ -63,7 +64,13 @@ export function registerProblemsTools(server: McpServer) {
         if (!Array.isArray(slice)) {
           throw new Error(`Problem type '${params.type}' is not a list`);
         }
-        return { type: params.type, items: slice };
+        // `total`, not `slice.length`: a view-backed section ships a page, and
+        // an agent has no way to tell a short list from a truncated one.
+        return {
+          type: params.type,
+          items: slice,
+          total: all.sectionTotals[params.type] ?? slice.length,
+        };
       }
       return all;
     },

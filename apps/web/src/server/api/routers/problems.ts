@@ -1,3 +1,4 @@
+import type { IngredientShortcode } from "@cubby/schemas/identifiers";
 import {
   cleanupOrphanedEntityEmbeddingsInput,
   cleanupOrphanedEntityEmbeddingsOut,
@@ -11,12 +12,17 @@ import {
   problemsFastSchema,
   problemsTrackerSchema,
   problemsUpcSchema,
+  problemsViewsSchema,
   recipeUsageByProductInput,
   recipeUsageByProductOut,
 } from "@cubby/schemas/problems";
 import { streamProgress } from "~/lib/bulk-progress";
 import { recipeUsageCountsByProduct } from "~/server/repo/problems";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
+import {
+  findAllViewProblemIds,
+  findViewProblems,
+} from "~/server/services/problem-views.service";
 import {
   cleanupOrphanedEntityEmbeddings,
   deleteUnusedIngredients,
@@ -47,6 +53,19 @@ import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 const getFast = protectedProcedure
   .output(strictOutput(problemsFastSchema))
   .query(async ({ ctx }) => findFastProblems(ctx.db));
+
+/**
+ * Group: sections backed by a saved view.
+ *
+ * Its own group, not folded into `getFast`, for the same CPU-budget reason the
+ * four-way split exists at all: these run the entity list procedures, which do
+ * strictly more work than the single-SELECT detectors they replaced (relation
+ * embeds, a count query per section). Sharing an invocation with `getFast`
+ * would rebuild exactly the pressure that killed `getAllProblems`.
+ */
+const getViews = protectedProcedure
+  .output(strictOutput(problemsViewsSchema))
+  .query(async ({ ctx }) => findViewProblems(ctx.db));
 
 // Group: USDA-coverage (one shared product scan + enrichment).
 // No `.input()` — takes no argument; the `input={"json":null,...}` superjson
@@ -135,11 +154,14 @@ const deleteUnused = protectedProcedure
   .input(deleteUnusedIngredientsInput)
   .output(strictOutput(deleteUnusedIngredientsOut))
   .mutation(async ({ ctx, input }) => {
-    const entityIds = await resolveAllOrThrow(
-      ctx.db,
-      "ingredient",
-      input.ingredientIds,
-    );
+    // `allFromProblem` re-runs the section's own view filters here rather than
+    // trusting the rows the card rendered — see the input schema.
+    const shortcodes = (input.ingredientIds ??
+      (await findAllViewProblemIds(
+        ctx.db,
+        input.allFromProblem as string,
+      ))) as IngredientShortcode[];
+    const entityIds = await resolveAllOrThrow(ctx.db, "ingredient", shortcodes);
     const result = await deleteUnusedIngredients(
       ctx.db,
       entityIds,
@@ -147,10 +169,7 @@ const deleteUnused = protectedProcedure
       ctx.actorContext,
     );
     const shortcodeByEntityId = new Map(
-      input.ingredientIds.map((shortcode, index) => [
-        entityIds[index],
-        shortcode,
-      ]),
+      shortcodes.map((shortcode, index) => [entityIds[index], shortcode]),
     );
     return {
       deleted: result.deleted,
@@ -170,6 +189,7 @@ const cleanupOrphanedEmbeddings = protectedProcedure
 
 export const problemsRouter = createTRPCRouter({
   getFast,
+  getViews,
   getCoverage,
   getUpc,
   getTracker,

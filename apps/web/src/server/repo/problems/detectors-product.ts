@@ -23,7 +23,6 @@ import {
 import type {
   DuplicateProductIdentity,
   DuplicateUniqueProduct,
-  NegativeExpectedQuantity,
   OrphanedProduct,
   ProductMissingPrice,
   ProductWithBetterUpcData,
@@ -89,7 +88,6 @@ import {
   effectiveProductPriceSql,
   loadProductPricing,
 } from "~/server/repo/product/pricing";
-import { expenseSignedUnitsSql } from "~/server/repo/product/quantity-ledger";
 import { loadProjectDateWindows } from "~/server/repo/project/subtree";
 import { buildTimelineGates } from "~/server/repo/project/tools";
 
@@ -171,6 +169,22 @@ export const findDuplicateInventoryProducts = async (
     }));
 };
 
+/**
+ * NOT convertible to a saved view, and the reason is the safety property rather
+ * than the predicate.
+ *
+ * The predicate itself is expressible — it's six `notExists` over incoming
+ * edges, and the product list already carries presence filters for most of
+ * them. What a view cannot carry is the weld: `PRODUCT_RETAINING_NOT_EXISTS` is
+ * a `Record<ProductRetainingEdgeKey, ...>` derived from `PRODUCT_EDGE_ROLES`,
+ * so adding a retaining edge is a COMPILE ERROR until it is wired in here. A
+ * view's `filters` array is plain data — a new retaining edge would simply not
+ * be checked, and this section is the one that offers a one-click Delete.
+ * Over-reporting here is executable data loss, not noise.
+ *
+ * Converting would trade a compile-time guarantee for a filter list somebody
+ * has to remember to update. Keep the detector.
+ */
 /**
  * Correlated `notExists` builder per retaining edge, keyed off
  * `ProductRetainingEdgeKey` (derived from `PRODUCT_EDGE_ROLES`, see
@@ -390,87 +404,6 @@ export const findProductsMissingPrice = async (
   }
 
   return { real, buckets };
-};
-
-// Find products whose ledger says more units left than ever arrived.
-//
-// You cannot sell, return, or throw away something you never acquired, so a
-// negative expected quantity is a contradiction rather than a shortfall —
-// something is missing or mis-entered, and there is a specific row to go fix.
-//
-// The predicate is deliberately LOOSER than `findSoldButStillStocked` below,
-// which keys on disposal Purchases. That is not an inconsistency: the two ask
-// different questions. "Was this sold off entirely?" treats a refund as
-// innocent noise, which on live data it usually is. "Do the units balance?"
-// treats a return of 8 outlet boxes as 8 real units going back to the store —
-// and 218 of the 335 negative lines in this ledger are exactly that, sitting
-// inside a Purchase that nets positive. Requiring a disposal Purchase here
-// would miss 348 of the 492 exited units.
-//
-// The unknown-quantity counts ride along because they change what the row
-// means. A product with unquantified acquisition lines is data-entry debt (the
-// missing count almost certainly explains the gap); one with a fully
-// quantified ledger is a genuine contradiction. Reporting the bare number would
-// flatten those into the same red row.
-export const findProductsWithNegativeExpectedQuantity = async (
-  db: Database,
-): Promise<NegativeExpectedQuantity[]> => {
-  const dbClient = getDb(db);
-  const signedUnits = sql.raw(expenseSignedUnitsSql('"Expense"'));
-
-  const rows = await dbClient
-    .select({
-      productId: expense.productId,
-      acquiredUnits: sql<number>`COALESCE(sum(GREATEST(${signedUnits}, 0)), 0)::int`,
-      exitedUnits: sql<number>`COALESCE(sum(-LEAST(${signedUnits}, 0)), 0)::int`,
-      unknownAcquisitionLines: sql<number>`count(*) FILTER (WHERE ${expense.productQuantity} IS NULL AND (${expense.cost} IS NULL OR ${expense.cost} >= 0))::int`,
-      unknownExitLines: sql<number>`count(*) FILTER (WHERE ${expense.productQuantity} IS NULL AND ${expense.cost} < 0)::int`,
-    })
-    .from(expense)
-    .where(
-      and(
-        notDeleted(expense),
-        eq(expense.future, false),
-        isNotNull(expense.productId),
-      ),
-    )
-    .groupBy(expense.productId)
-    .having(sql`COALESCE(sum(${signedUnits}), 0) < 0`);
-
-  if (rows.length === 0) return [];
-
-  const products = await dbClient.query.product.findMany({
-    where: and(
-      notDeleted(product),
-      inArray(
-        product.id,
-        rows.flatMap((row) => (row.productId ? [row.productId] : [])),
-      ),
-    ),
-    columns: { id: true, name: true, manufacturer: true, shortcode: true },
-  });
-  const byId = new Map(products.map((prod) => [prod.id, prod]));
-
-  return rows.flatMap((row) => {
-    // A soft-deleted product is not a live defect: nothing points at it, and
-    // there is no row left worth going to correct.
-    const prod = row.productId ? byId.get(row.productId) : undefined;
-    if (!prod) return [];
-    const acquiredUnits = Number(row.acquiredUnits);
-    const exitedUnits = Number(row.exitedUnits);
-    return [
-      {
-        id: unsafeProductShortcode(prod.shortcode),
-        name: prod.name,
-        manufacturer: prod.manufacturer,
-        expectedQuantity: acquiredUnits - exitedUnits,
-        acquiredUnits,
-        exitedUnits,
-        unknownAcquisitionLines: Number(row.unknownAcquisitionLines),
-        unknownExitLines: Number(row.unknownExitLines),
-      },
-    ];
-  });
 };
 
 // Find disposal lines that name no product — the exact inverse of

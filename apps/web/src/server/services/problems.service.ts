@@ -77,7 +77,6 @@ import {
   findDuplicateSpendCandidates,
   findDuplicateVendors,
   findEmptyCookedMeals,
-  findEmptyLocations,
   findEntitiesMissingEmbeddings,
   findFinancialTransactionAllocationDefects,
   findIncompleteStatementImports,
@@ -85,13 +84,10 @@ import {
   findIngredientsWithUnusedAliases,
   findInvalidFinancialJson,
   findLinkedProductIds,
-  findLocationsWithoutAiDescription,
   findManufacturerSpellingVariants,
-  findNeverVerifiedInventory,
   findOrphanedProducts,
   findParentRecipesWithDeletedSubRecipes,
   findProductsMissingPrice,
-  findProductsWithNegativeExpectedQuantity,
   findProductsWithoutMappings,
   findProductsWithUpcGaps,
   findPurchaseFinancialSettlementMismatches,
@@ -106,7 +102,6 @@ import {
   findUnderstatedCostMeals,
   findUnknownParkedItems,
   findUnlinkedExitExpenses,
-  findUnusedIngredients,
   findVendorsWithoutLogos,
   loadProductsForCoverage,
   pruneUnusedAliases,
@@ -124,6 +119,10 @@ import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
+import {
+  countViewProblem,
+  findViewProblems,
+} from "~/server/services/problem-views.service";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
 import { traceAll, traceAllSeq } from "~/server/tracing";
 
@@ -399,7 +398,8 @@ export const findMaintenanceCounts = async (
   const r = await traceAll({
     productsWithNoImages: () =>
       findProductsWithNoImages(db, { excludeIngredients: true }),
-    locationsWithoutAiDescription: () => findLocationsWithoutAiDescription(db),
+    locationsWithoutAiDescription: () =>
+      countViewProblem(db, "locationsWithoutAiDescription"),
     staleRecipeTotals: () => countStaleRecipeTotals(db),
     cullablePendingImages: () =>
       countCullablePendingImages(db, CULL_PENDING_IMAGES_DEFAULT_HOURS),
@@ -413,7 +413,7 @@ export const findMaintenanceCounts = async (
     // this counts just those. Same canonical key, intentionally narrower number.
     productsWithNoImages: r.productsWithNoImages.filter((p) => p.upc != null)
       .length,
-    locationsWithoutAiDescription: r.locationsWithoutAiDescription.length,
+    locationsWithoutAiDescription: r.locationsWithoutAiDescription,
     staleRecipeTotals: r.staleRecipeTotals,
     cullablePendingImages: r.cullablePendingImages,
     unreferencedImages: r.unreferencedImages,
@@ -518,20 +518,14 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       purchaselessExitExpenses: () => findPurchaselessExitExpenses(scoped),
       // One grouped scan of the product-linked Expense rows, filtered down to
       // the offenders by a HAVING rather than in JS.
-      negativeExpectedQuantity: () =>
-        findProductsWithNegativeExpectedQuantity(scoped),
       // One scan of the ~90 usage edges plus the whole-tree date fold. Cheap
       // enough for this group and it shares its single connection; the fold is
       // the same two queries `projectToolMatrix` already runs per page load.
       toolsUsedOutsideOwnership: () => findToolsUsedOutsideOwnership(scoped),
       productsWithoutMappings: () => findProductsWithoutMappings(scoped),
       ingredientsWithoutProduct: () => findIngredientsWithoutProduct(scoped),
-      unusedIngredients: () => findUnusedIngredients(scoped),
-      emptyLocations: () => findEmptyLocations(scoped),
       productsWithNoImages: () =>
         findProductsWithNoImages(scoped, { excludeIngredients: true }),
-      locationsWithoutAiDescription: () =>
-        findLocationsWithoutAiDescription(scoped),
       orphanedEntityEmbeddings: () => findOrphanedEntityEmbeddings(scoped),
       // Six index-only scans of the small join tables plus one Image scan. Sits
       // in this group for the same reason `referentialLivenessViolations` does:
@@ -543,7 +537,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       understatedCostMeals: () => findUnderstatedCostMeals(scoped),
       recipesWithoutInstructions: () => findRecipesWithoutInstructions(scoped),
       staleLocations: () => findStaleLocations(scoped),
-      neverVerifiedInventory: () => findNeverVerifiedInventory(scoped),
       unknownParkedItems: () => findUnknownParkedItems(scoped),
       manufacturerSpellingVariants: () =>
         findManufacturerSpellingVariants(scoped),
@@ -587,18 +580,13 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     soldButStillStocked: r.soldButStillStocked,
     unlinkedExitExpenses: r.unlinkedExitExpenses,
     purchaselessExitExpenses: r.purchaselessExitExpenses,
-    negativeExpectedQuantity: r.negativeExpectedQuantity,
     toolsUsedOutsideOwnership: r.toolsUsedOutsideOwnership,
     productsWithoutMappings: r.productsWithoutMappings,
     ingredientsWithoutProduct: r.ingredientsWithoutProduct,
-    unusedIngredientsWithProduct: r.unusedIngredients.withProduct,
-    unusedIngredientsWithoutProduct: r.unusedIngredients.withoutProduct,
-    emptyLocations: r.emptyLocations,
     productsWithNoImages: r.productsWithNoImages.map((p) => ({
       ...p,
       id: unsafeProductShortcode(p.shortcode),
     })),
-    locationsWithoutAiDescription: r.locationsWithoutAiDescription,
     orphanedEntityEmbeddings: r.orphanedEntityEmbeddings,
     unreferencedImages: r.unreferencedImages,
     entitiesMissingEmbeddings: r.entitiesMissingEmbeddings,
@@ -607,7 +595,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     understatedCostMeals: r.understatedCostMeals,
     recipesWithoutInstructions: r.recipesWithoutInstructions,
     staleLocations: r.staleLocations,
-    neverVerifiedInventory: r.neverVerifiedInventory,
     unknownParkedItems: r.unknownParkedItems,
     manufacturerSpellingVariants: r.manufacturerSpellingVariants,
     duplicateVendors: r.duplicateVendors,
@@ -757,6 +744,7 @@ export const findAllProblems = async (
     coverage: () => findCoverageProblems(db, usdaClient),
     upc: () => findUpcProblems(db, upcLookupClient),
     tracker: () => findTrackerProblems(db),
+    views: () => findViewProblems(db),
   });
   return assembleAllProblems(groups);
 };

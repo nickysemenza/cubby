@@ -66,16 +66,12 @@ export {
 export {
   findIngredientsWithoutProduct,
   findIngredientsWithUnusedAliases,
-  findUnusedIngredients,
   pruneUnusedAliases,
 } from "./detectors-ingredient";
 // Schema-wide referential-liveness audit
 export { findReferentialLivenessViolations } from "./detectors-integrity";
 // Inventory-centric detectors (recount staleness)
-export {
-  findNeverVerifiedInventory,
-  findUnknownParkedItems,
-} from "./detectors-inventory";
+export { findUnknownParkedItems } from "./detectors-inventory";
 // Name drift (one name, two spellings) — free-text manufacturer + vendor roster
 export {
   findDuplicateVendors,
@@ -84,8 +80,6 @@ export {
 // Location-centric detectors (+ EmptyLocation type re-export)
 export {
   type EmptyLocation,
-  findEmptyLocations,
-  findLocationsWithoutAiDescription,
   findStaleLocations,
 } from "./detectors-location";
 // Meal-centric detectors
@@ -100,7 +94,6 @@ export {
   findLinkedProductIds,
   findOrphanedProducts,
   findProductsMissingPrice,
-  findProductsWithNegativeExpectedQuantity,
   findProductsWithoutMappings,
   findProductsWithUpcGaps,
   findPurchaselessExitExpenses,
