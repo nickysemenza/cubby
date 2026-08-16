@@ -57,6 +57,7 @@ type SharedListOptions<TData extends BaseListRow> = Pick<
   | "initialColumnVisibility"
   | "columnVisibilityScope"
   | "deleteEmptyLabel"
+  | "hiddenFilterColumns"
 >;
 
 interface UseClientEntityListOptions<TData extends BaseListRow>
@@ -98,6 +99,7 @@ export function useClientEntityList<TData extends BaseListRow>({
   data,
   columns: customColumns,
   filters,
+  hiddenFilterColumns,
   deletable,
   extraActions,
   nameEditable,
@@ -229,6 +231,7 @@ export function useClientEntityList<TData extends BaseListRow>({
     columnHelper,
     customColumns: combinedCustomColumns,
     filters: filters ?? NO_FILTERS,
+    hiddenFilterColumns,
     enableRowSelection: listBulkActions.enableRowSelection,
     combinedExtraActions,
     mappingsMap: null,
