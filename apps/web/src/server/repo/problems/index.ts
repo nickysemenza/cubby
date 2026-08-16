@@ -83,10 +83,7 @@ export {
   findStaleLocations,
 } from "./detectors-location";
 // Meal-centric detectors
-export {
-  findEmptyCookedMeals,
-  findUnderstatedCostMeals,
-} from "./detectors-meal";
+export { findUnderstatedCostMeals } from "./detectors-meal";
 // Product-centric detectors (+ ProductWithBetterUpcData type re-export)
 export {
   findDuplicateInventoryProducts,

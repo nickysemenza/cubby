@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { SortParams } from "@cubby/schemas/pagination";
 import type {
+  EmptyCookedMeal,
   EmptyLocation,
   LocationWithoutAiDescription,
   NegativeExpectedQuantity,
@@ -171,6 +172,11 @@ const toNegativeExpectedQuantity = (row: ListRow): NegativeExpectedQuantity => {
   };
 };
 
+const toEmptyCookedMeal = (row: ListRow): EmptyCookedMeal => {
+  const r = row as unknown as EmptyCookedMeal;
+  return { id: r.id, name: r.name, date: r.date };
+};
+
 export const findViewProblems = async (
   db: Database,
 ): Promise<ProblemsViewsOut> => {
@@ -235,6 +241,9 @@ export const findViewProblems = async (
     negativeExpectedQuantity: (
       results.negativeExpectedQuantity?.data ?? []
     ).map(toNegativeExpectedQuantity),
+    emptyCookedMeals: (results.emptyCookedMeals?.data ?? []).map(
+      toEmptyCookedMeal,
+    ),
     sectionTotals,
   };
 };

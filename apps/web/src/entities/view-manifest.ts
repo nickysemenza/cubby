@@ -546,6 +546,35 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       columnVisibility: { children: true, inventoryEntries: true },
     },
   ],
+  meal: [
+    {
+      id: "empty-cooked",
+      label: "Nothing cooked",
+      description: "Cooked meals with no recipe recorded",
+      filters: [
+        { id: "mealKind", value: ["cooked"] },
+        { id: "related:meal.recipes", value: "none" },
+      ],
+      // Soonest first: an empty meal three days out is the one worth fixing.
+      sort: [{ id: "date", desc: false }],
+      problem: {
+        key: "emptyCookedMeals",
+        title: "Cooked meals with no recipes",
+        description:
+          "A meal marked cooked but carrying no recipe — either the plan was never filled in, or its recipe was deleted.",
+        emptyMessage: "Every cooked meal names at least one recipe.",
+        // `SQL_RELATED_VIEWS["meal.recipes"]` carries BOTH soft-delete guards
+        // the detector spelled out by hand: unplanning soft-deletes the
+        // MealRecipe link, while deleting the recipe leaves the link intact,
+        // and `dbMealToAPI` drops either — so a meal whose only recipe was
+        // deleted renders empty and must filter as empty too.
+        serverFilters: { mealKind: ["cooked"], recipePresenceFilter: "none" },
+      },
+      // The Recipes column is defaultVisible:false, so reveal the signal this
+      // view selects on.
+      columnVisibility: { "related:meal.recipes": true },
+    },
+  ],
   inventory: [
     {
       id: "never-verified",

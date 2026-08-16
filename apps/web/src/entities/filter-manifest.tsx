@@ -1788,6 +1788,35 @@ const relatedFilterSpecs = Object.fromEntries(
         );
         continue;
       }
+      if (view.key === "meal.recipes") {
+        // Column-backed presence rather than the generated free-text trio.
+        // `partitionFilterSpecs` keeps `urlOnly` specs out of `columnFilters`,
+        // so the generated `recipePresenceFilter` could never be pinned by a
+        // saved view — which is what the `meal/empty-cooked` view needs.
+        //
+        // A plain `presence` kind, not the `idMulti` + `nullable` shape
+        // `recipe.ingredients` uses: that one carries an `optionsKey` roster,
+        // and `MealTable` passes no `filterOptions` at all, so a roster-backed
+        // picker would render empty. Same shape as `ingredient.appearsInRecipes`.
+        generated.push({
+          columnId: `related:${view.key}`,
+          field: `${prefix}PresenceFilter`,
+          urlKey: `related-${prefix}`,
+          kind: "presence",
+          placeholder: "Filter recipes...",
+          options: presenceFilterOptions("recipes"),
+        });
+        // The deep-link scope, kept so existing links still resolve. No
+        // matching presence scope — the column above already writes that field,
+        // and a second URL writer for one server field is a conflict.
+        generated.push({
+          columnId: `${prefix}Id`,
+          urlOnly: true,
+          kind: "idMulti",
+          placeholder: "Filter by related recipe id...",
+        });
+        continue;
+      }
       if (view.key === "recipe.ingredients") {
         generated.push({
           columnId: `related:${view.key}`,

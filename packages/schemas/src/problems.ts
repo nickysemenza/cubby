@@ -806,7 +806,6 @@ const problemsFastShape = {
   unreferencedImages: z.array(unreferencedImageSchema),
   entitiesMissingEmbeddings: z.array(entityMissingEmbeddingSchema),
   staleParentRecipes: z.array(staleParentRecipeSchema),
-  emptyCookedMeals: z.array(emptyCookedMealSchema),
   understatedCostMeals: z.array(understatedCostMealSchema),
   recipesWithoutInstructions: z.array(recipeWithoutInstructionsSchema),
   staleLocations: z.array(staleLocationSchema),
@@ -900,6 +899,7 @@ export type SectionTotals = z.infer<typeof sectionTotalsSchema>;
  * These rows are a PAGE, not the population — see `sectionTotals`.
  */
 const problemsViewsShape = {
+  emptyCookedMeals: z.array(emptyCookedMealSchema),
   neverVerifiedInventory: z.array(neverVerifiedInventorySchema),
   locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
   emptyLocations: z.array(emptyLocationSchema),

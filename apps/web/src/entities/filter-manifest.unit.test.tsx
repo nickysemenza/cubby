@@ -1098,6 +1098,8 @@ describe("every server filter field is reachable from the manifest", () => {
       "the Projects related column upgraded to an exact project roster (projectId, ?related-project=)",
     "recipe.ingredientSearch":
       "the Ingredients related column upgraded to an exact ingredient roster (ingredientId, ?related-ingredient=)",
+    "meal.recipeSearch":
+      "the Recipes related column spends its slot on the has/none presence control, which is what the meal/empty-cooked saved view pins — a view can only pin column-backed filters, and the generated presence spec was urlOnly. Substring search over recipe names does not compose with it, and the calendar (not this table) is how meals are usually found",
     "product.taskSearch":
       "the Tasks related column spends its slot on the status/due range control (resolveProductTaskFilter); a substring match over task names does not compose with it",
     "wish.productSearch":

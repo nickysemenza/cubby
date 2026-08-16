@@ -103,7 +103,6 @@ const filterSearchKeys = {
     "mealKind",
     "related-recipe",
     "recipeId",
-    "recipePresenceFilter",
     "createdAt",
     "updatedAt",
   ],

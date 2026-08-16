@@ -1441,6 +1441,7 @@ const DECLARED_SECTIONS = [
     id: "empty-cooked-meals",
     label: "Empty meals",
     select: (p) => p.emptyCookedMeals,
+    totalKey: "emptyCookedMeals",
     entity: "meal",
     title: "Cooked meals with nothing planned",
     description:

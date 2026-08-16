@@ -2197,7 +2197,7 @@ describe("problems — cooked meals with nothing planned", () => {
   it("flags a cooked meal with no recipes and classes it a defect", async () => {
     await makeMeal("2026-04-01", { name: "Thursday" });
 
-    const { emptyCookedMeals } = await findFastProblems(ctx.db);
+    const { emptyCookedMeals } = await findViewProblems(ctx.db);
 
     expect(emptyCookedMeals.map((row) => row.name)).toEqual(["Thursday"]);
     expect(emptyCookedMeals[0]).toMatchObject({ date: "2026-04-01" });
@@ -2211,7 +2211,7 @@ describe("problems — cooked meals with nothing planned", () => {
     await makeMeal("2026-04-03", { mealKind: "takeout" });
     await makeMeal("2026-04-04", { mealKind: "leftovers" });
 
-    const { emptyCookedMeals } = await findFastProblems(ctx.db);
+    const { emptyCookedMeals } = await findViewProblems(ctx.db);
 
     expect(emptyCookedMeals).toEqual([]);
   });
@@ -2225,7 +2225,7 @@ describe("problems — cooked meals with nothing planned", () => {
     const planned = await makeMeal("2026-04-05", { name: "Planned" });
     const rekinded = await makeMeal("2026-04-06", { name: "Rekinded" });
 
-    expect((await findFastProblems(ctx.db)).emptyCookedMeals).toHaveLength(2);
+    expect((await findViewProblems(ctx.db)).emptyCookedMeals).toHaveLength(2);
 
     await addRecipeToMeal(
       ctx.db,
@@ -2240,7 +2240,7 @@ describe("problems — cooked meals with nothing planned", () => {
       ctx.actor,
     );
 
-    expect((await findFastProblems(ctx.db)).emptyCookedMeals).toEqual([]);
+    expect((await findViewProblems(ctx.db)).emptyCookedMeals).toEqual([]);
   });
 
   it("still flags a meal whose only recipe was deleted", async () => {
@@ -2261,12 +2261,12 @@ describe("problems — cooked meals with nothing planned", () => {
       ctx.actor,
     );
 
-    expect((await findFastProblems(ctx.db)).emptyCookedMeals).toEqual([]);
+    expect((await findViewProblems(ctx.db)).emptyCookedMeals).toEqual([]);
 
     await deleteRecipes(ctx.db, [recipe.entityId], ctx.actor);
 
     expect(
-      (await findFastProblems(ctx.db)).emptyCookedMeals.map((r) => r.name),
+      (await findViewProblems(ctx.db)).emptyCookedMeals.map((r) => r.name),
     ).toEqual(["Orphaned"]);
   });
 });
