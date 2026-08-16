@@ -40,12 +40,7 @@ import {
   wish,
   wishCandidate,
 } from "~/server/db/schema";
-import {
-  getDb,
-  insertAndReturn,
-  notDeleted,
-  updateAndReturn,
-} from "~/server/repo/database-helpers";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { solePurchaseForTransaction } from "~/server/repo/financial-transaction-allocations";
 import type { SemanticEmbeddingConfig } from "~/server/semantic/config";
 import { embeddingTextHash } from "~/server/semantic/hash";
@@ -125,17 +120,21 @@ export async function upsertEntityEmbedding(
     deletedAt: null,
   };
 
+  // Deliberately NOT `updateAndReturn`/`insertAndReturn`: those `RETURNING *`,
+  // which ships the 1536-float vector back over the wire and re-parses it into
+  // a JS array via `pgVector.fromDriver` (~30 KB per write) — and this function
+  // returns void, so every byte of it is discarded. Writes here are already the
+  // hot path: each one rewrites a 258 MB HNSW entry. The driver-level
+  // `traceQuery` span in db.ts still covers these, so no observability is lost.
   if (existing) {
-    await updateAndReturn(
-      db,
-      entityEmbedding,
-      values,
-      eq(entityEmbedding.id, existing.id),
-    );
+    await getDb(db)
+      .update(entityEmbedding)
+      .set(values)
+      .where(eq(entityEmbedding.id, existing.id));
     return;
   }
 
-  await insertAndReturn(db, entityEmbedding, values);
+  await getDb(db).insert(entityEmbedding).values(values);
 }
 
 async function getProductEmbeddingTexts(
