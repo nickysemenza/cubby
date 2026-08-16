@@ -82,7 +82,7 @@ export function InventoryItemList() {
           setMoveTarget(row);
         }}
       >
-        <ArrowRightLeft className="mr-2 size-4" />
+        <ArrowRightLeft />
         Move to...
       </DropdownMenuItem>
     ),

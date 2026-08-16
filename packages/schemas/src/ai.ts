@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import {
-  ingredientId,
   ingredientShortcode,
   inventoryShortcode,
   locationShortcode,
@@ -218,7 +217,11 @@ export const enrichmentProposalPrecomputeInput = z.object({
   items: z
     .array(
       z.object({
-        id: ingredientId,
+        // The public id, like every other tRPC boundary — the router resolves
+        // it to a uuid. This took `ingredientId` (a uuid brand) while the only
+        // caller reads `enrichmentRowOut.id`, a shortcode, so every precompute
+        // request failed input validation with "Invalid UUID".
+        id: ingredientShortcode,
         name: z.string().min(1),
         wantUsda: z.boolean(),
         wantMerge: z.boolean(),

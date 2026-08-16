@@ -227,7 +227,7 @@ export function LocationList() {
         <DropdownMenuItem
           render={<Link to="/inventory/session" search={{ parent: row.id }} />}
         >
-          <ScanBarcode className="mr-2 size-4" />
+          <ScanBarcode />
           Recount
         </DropdownMenuItem>
         <DropdownMenuItem
@@ -235,14 +235,14 @@ export function LocationList() {
             <Link to="/locations/photo-pass" search={{ parent: row.id }} />
           }
         >
-          <Camera className="mr-2 size-4" />
+          <Camera />
           Photo pass
         </DropdownMenuItem>
         {row.id && typeSupportsQrCode(row.type) && (
           <DropdownMenuItem
             render={<Link to="/labels" search={{ codes: row.id }} />}
           >
-            <Printer className="mr-2 size-4" />
+            <Printer />
             Print Label
           </DropdownMenuItem>
         )}

@@ -22,7 +22,8 @@ export const Route = createFileRoute("/_authenticated/meals/")({
 });
 
 function MealsIndexRoute() {
-  const { view, week } = Route.useSearch();
+  const search = Route.useSearch();
+  const { view, week } = search;
   const navigate = useNavigate({ from: Route.fullPath });
   const routeView = view ?? "calendar";
 

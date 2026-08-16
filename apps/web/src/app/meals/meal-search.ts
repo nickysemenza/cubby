@@ -18,12 +18,17 @@ export type MealCalendarView = "calendar" | "table";
 export const mealCalendarSearchSchema = z.object({
   view: z.enum(["calendar", "table"]).optional().catch(undefined),
   week: dateParamSchema,
+  // Meals have no /meals/new route — the create is a dialog, opened by this
+  // param. That makes it deep-linkable, which is what lets the action registry
+  // and the empty-state CTA point at it (they can only express a destination).
+  create: z.boolean().optional().catch(undefined),
   ...tableSearchFields,
 });
 
 export const mealCalendarSearchDefaults = {
   view: undefined,
   week: undefined,
+  create: undefined,
 } as const;
 
 /** A renderer, not a view: both draw the same server-selected set. */

@@ -25,6 +25,7 @@ import {
   usdaFoodSuggestionInput,
   usdaFoodSuggestionOut,
 } from "@cubby/schemas/ai";
+import { unsafeIngredientId } from "@cubby/schemas/identifiers";
 import { streamProgress } from "~/lib/bulk-progress";
 import {
   CATEGORY_DESCRIPTIONS,
@@ -35,6 +36,7 @@ import { getLocationNames } from "~/server/repo/location/crud";
 import { getProductSummaryForAudit } from "~/server/repo/product";
 import {
   resolveAllOrThrow,
+  resolveLiveShortcodes,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { suggestIngredientMergeBatch } from "~/server/services/ai-enrichment/ingredient-merge";
@@ -193,11 +195,21 @@ export const aiRouter = createTRPCRouter({
   precomputeEnrichmentProposals: protectedProcedure
     .input(enrichmentProposalPrecomputeInput)
     .mutation(async function* ({ ctx, input }) {
-      yield* precomputeEnrichmentProposals(
-        ctx.usdaService,
+      // The suggesters need real row ids, but the wire carries shortcodes. A
+      // code that no longer resolves is dropped rather than thrown: this is a
+      // read-only lookahead, and 404-ing the page would stall the queue over one
+      // ingredient the user deleted mid-pass.
+      const resolved = await resolveLiveShortcodes(
         ctx.db,
-        input.items,
+        input.items.map((item) => item.id),
+        "ingredient",
       );
+      const items = input.items.flatMap((item) => {
+        const id = resolved.get(item.id);
+        return id ? [{ ...item, ingredientId: unsafeIngredientId(id) }] : [];
+      });
+      if (items.length === 0) return;
+      yield* precomputeEnrichmentProposals(ctx.usdaService, ctx.db, items);
     }),
   parseSearch: protectedProcedure
     .input(parseSearchInput)

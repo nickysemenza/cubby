@@ -1,7 +1,10 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
-import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
+import {
+  CreateDialogAction,
+  createDialogSearchField,
+} from "~/app/_components/forms/create-dialog-action";
 import { CreatePurchaseDialog } from "~/app/purchases/create-purchase-dialog";
 import { PurchaseList } from "~/app/purchases/purchaselist";
 import { Page } from "~/components/page/Page";
@@ -33,9 +36,11 @@ const searchSchema = z.object({
   lineTotalMin: urlStringParam,
   lineTotalMax: urlStringParam,
   ...tableSearchFields,
+  ...createDialogSearchField,
 });
 
 const searchDefaults = {
+  create: undefined,
   q: undefined,
   label: undefined,
   vendor: undefined,

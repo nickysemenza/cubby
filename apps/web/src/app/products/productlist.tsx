@@ -776,22 +776,22 @@ export function ProductList({
     (row: ProductListItem) => (
       <>
         <DropdownMenuItem onClick={() => setQuickEditProductId(row.id)}>
-          <Pencil className="mr-2 size-4" />
+          <Pencil />
           Edit locations
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => setDiscardProductId(row.id)}>
-          <PackageX className="mr-2 size-4" />
+          <PackageX />
           Discard
         </DropdownMenuItem>
         <DropdownMenuItem render={<Link to="/inventory/session" />}>
-          <Package className="mr-2 size-4" />
+          <Package />
           Add to Inventory
         </DropdownMenuItem>
         {row.id && (
           <DropdownMenuItem
             render={<Link to="/labels" search={{ codes: row.id }} />}
           >
-            <Printer className="mr-2 size-4" />
+            <Printer />
             Print Label
           </DropdownMenuItem>
         )}

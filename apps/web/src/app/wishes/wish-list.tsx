@@ -2,9 +2,10 @@ import type { WishFilters, WishOut } from "@cubby/schemas/wish";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
 import { uniq } from "es-toolkit";
-import { ImageIcon, Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ImageIcon } from "lucide-react";
+import { useMemo } from "react";
 import RTable from "~/app/_components/data-table/Table";
+import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
@@ -16,7 +17,6 @@ import {
 import { ImageThumbnail } from "~/app/_components/table/ImageThumbnail";
 import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
@@ -62,7 +62,6 @@ const WISH_TREE_CONFIG = {
 export function WishList() {
   const api = useTRPC();
   const columnHelper = useMemo(() => createColumnHelper<WishRow>(), []);
-  const [open, setOpen] = useState(false);
 
   const deletableConfig = useDeletableConfig({
     mutationFn: api.wish.delete.mutationOptions,
@@ -295,14 +294,13 @@ export function WishList() {
           infiniteScroll={infiniteScroll}
           refreshControls={refreshControls}
           actions={
-            <Button onClick={() => setOpen(true)}>
-              <Plus /> New wish
-            </Button>
+            <CreateDialogAction Dialog={WishFormDialog}>
+              New wish
+            </CreateDialogAction>
           }
         />
       </ProductImageSummariesProvider>
       {deleteDialog}
-      <WishFormDialog open={open} onOpenChange={setOpen} />
     </div>
   );
 }

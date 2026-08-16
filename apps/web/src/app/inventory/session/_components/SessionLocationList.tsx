@@ -3,6 +3,7 @@ import type { InfLocation } from "@cubby/schemas/location";
 import pluralize from "pluralize";
 import { useState } from "react";
 import { LocationTreeRow } from "~/app/_components/locations/location-tree-row";
+import { passCounts } from "~/app/_components/queue-pass/queue-pass";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -26,9 +27,9 @@ type SessionLocationListProps = {
   currentId: LocationShortcode | null;
   inventoryByLocation: Map<string, InventoryItem[]>;
   itemResolutions: Map<string, ItemResolution>;
-  completedLocationIds: Set<string>;
+  completedLocationIds: ReadonlySet<string>;
   /** Deferred this pass — settled for progress, but nothing was written. */
-  skippedLocationIds: Set<string>;
+  skippedLocationIds: ReadonlySet<string>;
   onSelect: (locationId: LocationShortcode) => void;
   onScanJump: (locationId: string) => void;
   parentLocation: InfLocation;
@@ -58,12 +59,10 @@ function SessionLocationList({
   const visible = showCompleted
     ? locations
     : locations.filter((location) => !completedLocationIds.has(location.id));
-  const completed = locations.filter((location) =>
-    completedLocationIds.has(location.id),
-  ).length;
-  const skipped = locations.filter((location) =>
-    skippedLocationIds.has(location.id),
-  ).length;
+  const { completed, skipped } = passCounts(locations, {
+    completed: completedLocationIds,
+    skipped: skippedLocationIds,
+  });
 
   return (
     <>
@@ -164,12 +163,10 @@ export function MobileLocationSwitcher({
     completedLocationIds,
     skippedLocationIds,
   } = listProps;
-  const completed = locations.filter((location) =>
-    completedLocationIds.has(location.id),
-  ).length;
-  const skipped = locations.filter((location) =>
-    skippedLocationIds.has(location.id),
-  ).length;
+  const { completed, skipped } = passCounts(locations, {
+    completed: completedLocationIds,
+    skipped: skippedLocationIds,
+  });
 
   return (
     <div className="sticky top-0 z-20 bg-background pb-2 lg:hidden">

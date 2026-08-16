@@ -5,6 +5,7 @@ import { GitMerge, Search } from "lucide-react";
 import { type Ref, useEffect, useMemo, useRef, useState } from "react";
 import { ConfidenceReasoningCard } from "~/app/_components/ai/ai-suggest";
 import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
+import { QueuePassPosition } from "~/app/_components/queue-pass/QueuePassProgress";
 import { UsdaFoodResultRow } from "~/app/_components/usda/usda-food-result-row";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -220,9 +221,10 @@ export function ReviewCard({
                   {row.product.length > 0 && " · has product"}
                 </div>
               </div>
-              <div className="text-right text-muted-foreground text-xs">
-                {position.index + 1} of {position.total}
-              </div>
+              <QueuePassPosition
+                index={position.index}
+                total={position.total}
+              />
             </Row>
           ),
           usdaPicker: ({ food, setFood }) => (

@@ -6,12 +6,17 @@
  *  - **house** — the whole forest's missing-photo backlog (`location.makeTree`)
  *  - **scan** — no queue; a QR scan names the stop, then the scanner reopens
  *
- * Unlike the recount session there is nothing staged and nothing to resume:
- * every photo commits the moment it is taken, so progress lives in memory and
- * the source of truth is the data itself. That is also why the queue's
- * *membership* is frozen per scope (see `frozenQueue` below) while its
- * *contents* stay live — without the freeze, photographing a location would
- * drop it from the default filter mid-pass and renumber everything after it.
+ * Nothing is staged — every photo commits the moment it is taken, so the source
+ * of truth is the data itself. The pass position is still worth keeping: walking
+ * a house is long enough that a backgrounded phone or a stray reload used to
+ * cost the whole walk, so `useQueuePass` persists the cursor per scope and
+ * offers resume-or-restart on the way back in.
+ *
+ * Queue *membership* is frozen per scope while its *contents* stay live —
+ * without the freeze, photographing a location would drop it from the default
+ * filter mid-pass and renumber everything after it. That rule, the settle
+ * bookkeeping, and the advance cursor all live in `_components/queue-pass`,
+ * shared with the recount session and the ingredient review queue.
  */
 
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
@@ -26,22 +31,24 @@ import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { WithLocationSearch } from "~/app/_components/combobox/with-search-hook";
 import { LocationScanButton } from "~/app/_components/locations/location-scan-button";
 import { useLocationPhotoCapture } from "~/app/_components/locations/use-location-photo-capture";
+import {
+  QueuePassProgress,
+  QueuePassResumePrompt,
+} from "~/app/_components/queue-pass/QueuePassProgress";
+import {
+  type QueuePassPersistence,
+  useQueuePass,
+} from "~/app/_components/queue-pass/useQueuePass";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { Progress } from "~/components/ui/progress";
 import { Spinner } from "~/components/ui/spinner";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { PhotoPassStop } from "./PhotoPassStop";
-import {
-  advanceToOutstanding,
-  flattenPhotoStops,
-  isPassComplete,
-  type PhotoStop,
-} from "./photo-pass-utils";
+import { flattenPhotoStops, type PhotoStop } from "./photo-pass-utils";
 
 export interface PhotoPassSearch {
   parent?: LocationShortcode;
@@ -51,6 +58,16 @@ export interface PhotoPassSearch {
 }
 
 const EMPTY_ROOTS: InfLocation[] = [];
+
+/**
+ * Scope-keyed resume storage. The key carries the parent, the retake flag and
+ * the type filter, so switching scope starts a fresh pass rather than resuming
+ * a different queue's cursor into it.
+ */
+const PHOTO_PASS_PERSISTENCE: QueuePassPersistence<undefined> = {
+  storageKey: (scopeKey) => `cubby:photo-pass:${scopeKey}`,
+  version: 1,
+};
 
 export function PhotoPassWorkbench(search: PhotoPassSearch) {
   const { parent, scope } = search;
@@ -256,96 +273,48 @@ function QueuePass({ parent, all, type }: PhotoPassSearch) {
   const roots = (parent ? subtreeQuery.data : treeQuery.data) ?? EMPTY_ROOTS;
   const isLoading = parent ? subtreeQuery.isLoading : treeQuery.isLoading;
 
-  const [photographed, setPhotographed] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-  const [skipped, setSkipped] = useState<ReadonlySet<string>>(() => new Set());
-  const [currentIndex, setCurrentIndex] = useState(0);
-
   // Every location in scope, keyed by id — the live content behind each stop.
   // Built unfiltered so a location that has just been photographed (and would
   // now fail the default filter) can still be looked up for the rest of the pass.
   const stopsById = useMemo(() => {
     const everyStop = flattenPhotoStops(roots, { includePhotographed: true });
-    return new Map(everyStop.map((stop) => [stop.id, stop]));
+    return new Map<string, PhotoStop>(everyStop.map((stop) => [stop.id, stop]));
   }, [roots]);
 
   const scopeKey = `${parent ?? "house"}|${includePhotographed}|${(type ?? []).join(",")}`;
   const candidateIds = useMemo(
     () =>
       flattenPhotoStops(roots, { includePhotographed, types: type }).map(
-        (stop) => stop.id,
+        (stop) => stop.id as string,
       ),
     [roots, includePhotographed, type],
   );
 
-  // Freeze the queue's membership for the scope. Adjusting state during render
-  // is the documented React pattern for this; the guard on `length > 0` keeps
-  // an in-flight query from freezing an empty queue.
-  const [frozenQueue, setFrozenQueue] = useState<{
-    key: string;
-    ids: LocationShortcode[];
-  }>({ key: "", ids: [] });
-  if (frozenQueue.key !== scopeKey && candidateIds.length > 0) {
-    setFrozenQueue({ key: scopeKey, ids: candidateIds });
-    setPhotographed(new Set());
-    setSkipped(new Set());
-    setCurrentIndex(0);
-  }
+  const pass = useQueuePass<PhotoStop>({
+    scopeKey,
+    candidateIds,
+    stopsById,
+    persistence: PHOTO_PASS_PERSISTENCE,
+  });
+  const { stops, current, counts, complete } = pass;
 
-  const stops = useMemo(
-    () =>
-      frozenQueue.ids.flatMap((id) => {
-        const stop = stopsById.get(id);
-        return stop ? [stop] : [];
-      }),
-    [frozenQueue, stopsById],
-  );
-
-  const settled = useMemo(
-    () => new Set([...photographed, ...skipped]),
-    [photographed, skipped],
-  );
-  const current = stops[currentIndex] ?? null;
-  const complete = isPassComplete(stops, settled);
-
-  const settle = (stopId: string, markPhotographed: boolean) => {
-    const next = new Set([...settled, stopId]);
-    if (markPhotographed) {
-      setPhotographed((prev) => new Set(prev).add(stopId));
-    } else {
-      setSkipped((prev) => new Set(prev).add(stopId));
-    }
-    setCurrentIndex(advanceToOutstanding(stops, currentIndex, next));
-  };
-
-  const handleRetake = async (
-    stop: PhotoStop,
-    imageId: string,
-    index: number,
-  ) => {
+  const handleRetake = async (stop: PhotoStop, imageId: string) => {
     try {
       await discardCapture(stop.id, imageId);
-      setPhotographed((prev) => {
-        const next = new Set(prev);
-        next.delete(stop.id);
-        return next;
-      });
-      setCurrentIndex(index);
+      pass.unsettle(stop.id);
     } catch (error) {
       toast.error(`Retake failed: ${getErrorMessage(error)}`);
     }
   };
 
   const handleCapture = async (stop: PhotoStop, file: File) => {
-    const index = currentIndex;
     try {
       const imageId = await capture(stop.id, file);
-      settle(stop.id, true);
+      pass.settle(stop.id, "completed");
       toast.success(`Photographed ${stop.name}`, {
         action: {
           label: "Retake",
-          onClick: () => void handleRetake(stop, imageId, index),
+          onClick: () => void handleRetake(stop, imageId),
         },
       });
     } catch (error) {
@@ -358,6 +327,18 @@ function QueuePass({ parent, all, type }: PhotoPassSearch) {
       <Row justify="center" className="py-12">
         <Spinner />
       </Row>
+    );
+  }
+
+  if (pass.resumeCandidate) {
+    return (
+      <QueuePassResumePrompt
+        candidate={pass.resumeCandidate}
+        title="Resume this photo pass?"
+        itemNoun="locations"
+        onResume={() => pass.resumePass()}
+        onStartNew={pass.startNewPass}
+      />
     );
   }
 
@@ -408,48 +389,35 @@ function QueuePass({ parent, all, type }: PhotoPassSearch) {
 
   return (
     <Stack gap="md">
-      <Card>
-        <CardContent className="px-4 py-2">
-          <Stack gap="xs">
-            <Row align="center" justify="between" gap="sm">
-              <Description>
-                {photographed.size} photographed
-                {skipped.size > 0 && `, ${skipped.size} skipped`} of{" "}
-                {stops.length}
-              </Description>
-              <Link
-                to="/locations/photo-pass"
-                search={{}}
-                className="shrink-0 text-muted-foreground text-sm underline decoration-dotted underline-offset-2"
-              >
-                Change scope
-              </Link>
-            </Row>
-            <Progress value={(settled.size / stops.length) * 100} />
-          </Stack>
-        </CardContent>
-      </Card>
+      <QueuePassProgress
+        counts={counts}
+        noun="photographed"
+        trailing={
+          <Link
+            to="/locations/photo-pass"
+            search={{}}
+            className="shrink-0 text-muted-foreground text-sm underline decoration-dotted underline-offset-2"
+          >
+            Change scope
+          </Link>
+        }
+      />
 
       {complete || !current ? (
         <Empty>
           <Check className="size-8 text-muted-foreground" />
           <EmptyTitle>Pass complete</EmptyTitle>
           <EmptyDescription>
-            {photographed.size} photographed
-            {skipped.size > 0 && `, ${skipped.size} skipped`}. AI descriptions
-            refresh in the background.
+            {counts.completed} photographed
+            {counts.skipped > 0 && `, ${counts.skipped} skipped`}. AI
+            descriptions refresh in the background.
           </EmptyDescription>
           <Row gap="sm" className="mt-4">
             <Button
               type="button"
               variant="outline"
-              onClick={() => {
-                setSkipped(new Set());
-                setCurrentIndex(
-                  advanceToOutstanding(stops, -1, new Set(photographed)),
-                );
-              }}
-              disabled={skipped.size === 0}
+              onClick={pass.revisitSkipped}
+              disabled={counts.skipped === 0}
             >
               <Camera className="mr-2 size-4" />
               Revisit skipped
@@ -467,11 +435,11 @@ function QueuePass({ parent, all, type }: PhotoPassSearch) {
         <PhotoPassStop
           key={current.id}
           stop={current}
-          position={settled.size + 1}
-          total={stops.length}
+          position={counts.settled + 1}
+          total={counts.total}
           isCapturing={isCapturing}
           onCapture={(file) => void handleCapture(current, file)}
-          onSkip={() => settle(current.id, false)}
+          onSkip={() => pass.settle(current.id, "skipped")}
         />
       )}
     </Stack>

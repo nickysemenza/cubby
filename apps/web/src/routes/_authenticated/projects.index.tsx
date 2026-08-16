@@ -1,12 +1,7 @@
 import { projectKindSchema, projectStatusSchema } from "@cubby/schemas/project";
-import {
-  createFileRoute,
-  stripSearchParams,
-  useNavigate,
-} from "@tanstack/react-router";
+import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
-import { CreateProjectDialog } from "~/app/projects/create-project-dialog";
 import { ProjectsDashboard } from "~/app/projects/projects-dashboard";
 import { Page } from "~/components/page/Page";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
@@ -91,25 +86,9 @@ export const Route = createFileRoute("/_authenticated/projects/")({
 });
 
 function ProjectsPage() {
-  const { create } = Route.useSearch();
-  const navigate = useNavigate({ from: Route.fullPath });
-
   return (
     <Page variant="list" title="Projects" fullWidth>
       <ProjectsDashboard />
-
-      {/* Deep-linked quick capture: open state is read straight off the URL and
-          cleared (replace) on close, so a refresh or back-nav can't reopen it. */}
-      <CreateProjectDialog
-        open={create === true}
-        onOpenChange={(open) => {
-          if (!open)
-            navigate({
-              search: (prev) => ({ ...prev, create: undefined }),
-              replace: true,
-            });
-        }}
-      />
     </Page>
   );
 }

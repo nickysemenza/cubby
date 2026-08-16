@@ -1,5 +1,7 @@
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { type ComponentType, type ReactNode, useState } from "react";
+import { z } from "zod";
 import { Button } from "~/components/ui/button";
 
 type CreateDialog = ComponentType<{
@@ -7,7 +9,29 @@ type CreateDialog = ComponentType<{
   onOpenChange: (open: boolean) => void;
 }>;
 
-/** Shared list-toolbar trigger for entities created in a dialog. */
+/**
+ * The `?create=true` search param this component reads.
+ *
+ * A list route whose `validateSearch` is a strict `z.object` must merge this
+ * fragment, or the router strips the key the moment the dialog writes it. Same
+ * contract as `tableSearchFields`.
+ */
+export const createDialogSearchField = {
+  create: z.boolean().optional().catch(undefined),
+};
+
+/**
+ * Shared list-toolbar trigger for entities created in a dialog.
+ *
+ * Open state lives in the URL, not component state, which is what makes a
+ * dialog-created entity addressable at all. Entities like meal, task and vendor
+ * have no `/new` route by design, so before this the *only* way to reach their
+ * create form was clicking this button — the action registry and the list empty
+ * states can express a destination but not a click, so their call-to-action
+ * silently rendered nothing. `createActionFor` now points at `?create=true`.
+ *
+ * Cleared with `replace` on close so a refresh or back-nav can't reopen it.
+ */
 export function CreateDialogAction({
   Dialog,
   children = "New",
@@ -15,7 +39,37 @@ export function CreateDialogAction({
   Dialog: CreateDialog;
   children?: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  // Both hooks are route-agnostic on purpose: this button renders on a dozen
+  // list routes, and each declares `create` via `createDialogSearchField`
+  // rather than through a shared route type. `useNavigate`'s search reducer is
+  // typed per-route, so a component that works on all of them can't satisfy it
+  // — the cast is that boundary, not a shortcut around a real type error.
+  const navigate = useNavigate() as unknown as (opts: {
+    search: (prev: Record<string, unknown>) => Record<string, unknown>;
+    replace?: boolean;
+  }) => void;
+  const search = useSearch({ strict: false }) as { create?: boolean };
+  const openedFromUrl = search.create === true;
+  // Two sources, deliberately. The button opens through local state so a click
+  // is instant and needs nothing from the router — routing the click through a
+  // navigation made opening depend on the router being ready, a needless
+  // failure mode for a button. The URL is the *other* way in, for the action
+  // registry and the empty-state call-to-action, which can only express a
+  // destination.
+  const [openedByClick, setOpenedByClick] = useState(false);
+  const open = openedByClick || openedFromUrl;
+
+  const setOpen = (next: boolean) => {
+    setOpenedByClick(next);
+    // Only touch the URL to clear a deep link, so clicking the button doesn't
+    // rewrite the address bar for a purely local interaction.
+    if (!next && openedFromUrl) {
+      navigate({
+        search: (prev) => ({ ...prev, create: undefined }),
+        replace: true,
+      });
+    }
+  };
 
   return (
     <>

@@ -1,7 +1,10 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
-import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
+import {
+  CreateDialogAction,
+  createDialogSearchField,
+} from "~/app/_components/forms/create-dialog-action";
 import { CreateVendorDialog } from "~/app/vendors/create-vendor-dialog";
 import { VendorList } from "~/app/vendors/vendorlist";
 import { Page } from "~/components/page/Page";
@@ -27,9 +30,11 @@ const searchSchema = z.object({
   // (`?q=486242`) arrives as a number and a `z.string()` would drop it.
   q: urlStringParam,
   ...tableSearchFields,
+  ...createDialogSearchField,
 });
 
 const searchDefaults = {
+  create: undefined,
   q: undefined,
 } as const;
 
