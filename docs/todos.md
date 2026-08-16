@@ -281,6 +281,33 @@ runtime CDN) are all shipped. Target is iOS Safari only. Remaining:
   only set `productName`/`locationName` — the two substring filters already on
   screen. Either teach it quantity/category/valuation/verified-before/subtree
   filters or drop it from that surface.
+- [ ] **Placement pass — "where does this live?" for the unlocated backlog**:
+  the `unlocated` view converges by marking `stockTracked` false or true, but
+  the ledger shows 1,635 products marked false and **zero** marked true — "yes,
+  I keep shelf records for this" is unreachable in practice, because nothing
+  lets you say *where* in the same breath. Add a session-shaped pass over that
+  worklist: one product at a time, with three answers — not tracked
+  (`stockTracked: false`, today's only option), here (pick a location, create
+  the entry, set `stockTracked: true`), or skip. Reuse the pieces that exist:
+  `MoveToDialog`'s tree picker, the immediate-write pattern from the Unknown
+  tray's pull-from-Unknown, and the view's own price-desc sort so money
+  surfaces first. Scale: 2,764 undecided-and-unlocated products, but only 626
+  durables and 25 worth $50+ — so cap the pass by value or category rather than
+  offering a 2,764-item queue. This is the mirror of the Unknown tray: that
+  drains items filed in the wrong place, this files items that were never
+  placed at all.
+- [ ] **Surface shelf-vs-ledger variance inside the session**: the review pane's
+  "Expected contents" is the *shelf* record; the ledger's net-units figure never
+  appears, so the one signal that says "this bin is probably wrong" is invisible
+  exactly when you are standing in front of it. Two slices, independently
+  shippable: (1) show the ledger figure on a row when it disagrees, reusing the
+  `quantityVariance` scalar the products list already renders; (2) seed a pass
+  from the variance worklist rather than a location subtree, so a walk visits
+  the disagreeing products wherever they live. Scale check: 606 entries are
+  unverified but only 22 products actually disagree, so an untargeted sweep
+  spends most of its time confirming what two independent sources already agree
+  on. Slice (2) needs a session root that is a product set rather than a
+  location — the bigger half; slice (1) is display-only.
 
 ---
 
