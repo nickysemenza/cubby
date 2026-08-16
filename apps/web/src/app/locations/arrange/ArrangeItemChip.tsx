@@ -65,7 +65,11 @@ export function ArrangeItemChip({
       <ArrangeThumb
         images={images}
         alt={item.productName}
-        size={24}
+        size={32}
+        fill
+        // -my cancels the chip's own py so the cover is full-bleed. The name is
+        // line-clamped to two lines, so the tile follows a two-line chip up.
+        className="-my-1"
         fallback={<Package className="size-3" />}
         to="/products/$shortcode"
         shortcode={item.productId}

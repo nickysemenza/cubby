@@ -286,7 +286,21 @@ export function EntityPicker<TId extends string>({
                       style={{ backgroundColor: item.color }}
                     />
                   )}
-                  {item.icon && <span className="shrink-0">{item.icon}</span>}
+                  {item.icon && (
+                    <span
+                      className={cn(
+                        "flex shrink-0",
+                        // Full-bleed leading slot: -my-2 cancels the row's py-2
+                        // so an image tile meets the row's top and bottom
+                        // edges. Glyph icons stay vertically centered. Custom
+                        // rows (renderItem) opt out — they are top-aligned and
+                        // multi-line, so a stretched slot would move the glyph.
+                        !renderItem && "-my-2 items-center self-stretch",
+                      )}
+                    >
+                      {item.icon}
+                    </span>
+                  )}
                   {renderItem ? (
                     <span className="min-w-0 flex-1">{renderItem(item)}</span>
                   ) : (

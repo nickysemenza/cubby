@@ -148,7 +148,10 @@ export function AddLabelsPopover({
             locations.map((loc) => (
               <div
                 key={loc.id}
-                className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm" /* tight */
+                // No vertical padding: the thumbnail is full-bleed and its
+                // own min-height sets the row height, matching the location
+                // combobox rows.
+                className="flex items-center gap-2 rounded-sm px-2 text-sm"
               >
                 <LocationPickerThumb
                   imageUrl={loc.coverImage?.url}

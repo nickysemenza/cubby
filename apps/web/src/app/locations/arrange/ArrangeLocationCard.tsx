@@ -110,7 +110,10 @@ export function ArrangeLocationCard({
         <ArrangeThumb
           images={node.images}
           alt={node.name}
-          size={24}
+          size={32}
+          fill
+          // -my cancels the card's own py so the cover is full-bleed.
+          className="-my-1.5" /* tight: matches the card's py-1.5 */
           fallback={<LocationIcon type={node.type} size={14} />}
           to="/locations/$shortcode"
           shortcode={node.id}

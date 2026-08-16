@@ -43,6 +43,13 @@ export interface ImageWithPreviewProps {
    * nothing is cut off. The hover-preview popup always uses `contain`.
    */
   fit?: "cover" | "contain";
+  /**
+   * Classes for the preview popup's positioner — the element carrying the
+   * stacking context. Needed only when the thumbnail lives inside another
+   * portalled popup that would otherwise paint over the preview (e.g. the
+   * combobox popup at `z-[200]`).
+   */
+  previewPositionerClassName?: string;
 }
 
 /**
@@ -65,6 +72,7 @@ export function ImageWithPreview({
   // multi-MB original into a 32px tile".
   displayWidth = size,
   fit = "cover",
+  previewPositionerClassName,
 }: ImageWithPreviewProps) {
   const thumbnailClasses = cn(
     "bg-background relative flex-shrink-0 overflow-hidden rounded-none border transition-transform hover:scale-105",
@@ -100,9 +108,14 @@ export function ImageWithPreview({
       </TooltipTrigger>
       <TooltipContent
         side={previewSide}
+        positionerClassName={previewPositionerClassName}
         // max-w-none: the tooltip popup's default max-w-xs (320px) silently
         // clips any previewSize above 320 — the "weird crop".
-        className="bg-popover max-w-none border-[var(--border)] overflow-hidden rounded-none border p-0"
+        // pointer-events-none: the popup is purely a look at the image, and it
+        // is portalled over whatever surface the thumbnail sits in — on the
+        // arrange board that surface is a drag-and-drop hit-test area, and on a
+        // combobox it is the option list.
+        className="bg-popover pointer-events-none max-w-none border-[var(--border)] overflow-hidden rounded-none border p-0"
       >
         <div
           className="relative"
