@@ -1,15 +1,14 @@
 import type { Amount } from "@cubby/schemas/codec";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
-import { useTRPC } from "~/integrations/trpc/react";
 import { computeParseDrift, hasDrift } from "~/lib/parse-drift";
 import { wasm } from "~/lib/wasm";
 import { formatAmounts } from "../../inventory/format-amount";
 import { DriftIndicator } from "../../parse-drift-indicator";
+import { useResolveIngredientName } from "../use-resolve-ingredient-names";
 import type { IngItem, RecipeFormValues } from "./types";
 
 /**
@@ -33,9 +32,7 @@ export function IngredientReparse({
   // path doesn't re-sync useFieldArray).
   onApply: (row: IngItem) => void;
 }) {
-  const api = useTRPC();
-  const queryClient = useQueryClient();
-  const createMutation = useMutation(api.ingredient.create.mutationOptions());
+  const { resolveName } = useResolveIngredientName();
   const [applying, setApplying] = useState(false);
 
   const rawLine = form.watch(
@@ -90,13 +87,11 @@ export function IngredientReparse({
   const apply = async () => {
     setApplying(true);
     try {
-      // Find-or-create the freshly-parsed ingredient (mirrors the combobox's
-      // WithIngredientSearch flow) so the row points at a real ingredient id.
-      const resolved =
-        (await queryClient.fetchQuery(
-          api.ingredient.getByName.queryOptions({ nameFilter: fresh.name }),
-        )) ??
-        (await createMutation.mutateAsync({ name: fresh.name, aliases: [] }));
+      // Server-side find-or-create, so the row points at a real ingredient id.
+      // Not a cached getByName + create: that lookup can report "missing" for a
+      // name the import path created moments ago, and the create then fails on
+      // the lower(name) unique index.
+      const resolved = await resolveName(fresh.name);
 
       const current = form.getValues(
         `sections.${sectionIndex}.ingredients.${ingredientIndex}`,

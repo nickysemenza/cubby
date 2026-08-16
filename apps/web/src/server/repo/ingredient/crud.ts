@@ -162,6 +162,10 @@ type ResolvedIngredient = {
   name: string;
   id: IngredientShortcode;
   entityId: IngredientId;
+  /** The row's own name/aliases — not the requested name, which may be a
+   * casing variant or an alias of it. */
+  canonicalName: string;
+  aliases: string[];
   matched: boolean;
   created: boolean;
 };
@@ -179,7 +183,13 @@ export const resolveOrCreateIngredients = async (
 ): Promise<ResolvedIngredient[]> => {
   const resolved = new Map<
     string,
-    { id: IngredientId; shortcode: IngredientShortcode; created: boolean }
+    {
+      id: IngredientId;
+      shortcode: IngredientShortcode;
+      canonicalName: string;
+      aliases: string[];
+      created: boolean;
+    }
   >();
   const requested = new Set<string>();
 
@@ -205,6 +215,8 @@ export const resolveOrCreateIngredients = async (
       const entry = {
         id: row.id,
         shortcode: unsafeIngredientShortcode(row.shortcode),
+        canonicalName: row.name,
+        aliases: row.aliases,
         created: false,
       };
       for (const matchName of [row.name, ...row.aliases]) {
@@ -227,6 +239,8 @@ export const resolveOrCreateIngredients = async (
     resolved.set(key, {
       id: row.id,
       shortcode: unsafeIngredientShortcode(row.shortcode),
+      canonicalName: row.name,
+      aliases: row.aliases,
       created,
     });
   }
@@ -239,6 +253,8 @@ export const resolveOrCreateIngredients = async (
       name: rawName,
       id: entry.shortcode,
       entityId: entry.id,
+      canonicalName: entry.canonicalName,
+      aliases: entry.aliases,
       matched: !entry.created,
       created: entry.created,
     });
