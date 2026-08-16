@@ -1412,6 +1412,45 @@ const DECLARED_SECTIONS = [
     }),
   }),
   section({
+    id: "understated-cost-meals",
+    label: "Understated cost",
+    select: (p) => p.understatedCostMeals,
+    entity: "meal",
+    title: "Meals whose cost is understated",
+    description:
+      "These meals plan a recipe that was costed and came back with unpriced ingredients, so the meal's cost is lower than the real one and will stay that way. Not the same as a meal waiting on the costing queue — that clears itself and is counted under maintenance. Open a recipe and give its unpriced ingredients a price path (a product, a per-item price, or a purchase mapping).",
+    emptyMessage: "Every planned meal's cost accounts for all its ingredients.",
+    renderItem: (meal) => ({
+      title: meal.name ?? mealDateLabel(meal),
+      subtitle: `${mealDateLabel(meal)} · ${meal.recipeCount} recipe${
+        meal.recipeCount === 1 ? "" : "s"
+      } with unpriced ingredients`,
+      route: entityDetailLink("meal", meal.id),
+      editLabel: "Open meal",
+    }),
+  }),
+  section({
+    id: "recipes-without-instructions",
+    label: "No instructions",
+    select: (p) => p.recipesWithoutInstructions,
+    entity: "recipe",
+    title: "Recipes you can't cook from",
+    description:
+      "Live recipes whose sections carry no instruction text at all — usually a half-finished entry or an import that captured only the ingredients. Book- and Notion-sourced recipes are excluded: those legitimately have none, because the instructions are in the book.",
+    emptyMessage: "Every typed-in recipe has instructions.",
+    renderItem: (recipe) => ({
+      title: recipe.name,
+      subtitle:
+        recipe.sectionCount === 0
+          ? "No sections"
+          : `${recipe.sectionCount} section${
+              recipe.sectionCount === 1 ? "" : "s"
+            }, none with instructions`,
+      route: entityDetailLink("recipe", recipe.id),
+      editLabel: "Open recipe",
+    }),
+  }),
+  section({
     id: "referential-liveness",
     label: "Dangling refs",
     select: (p) => p.referentialLivenessViolations,

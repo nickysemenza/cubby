@@ -55,11 +55,11 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 **Meals**
 - Plan recipes onto a shared month calendar (plus a table view), scaled per meal
 - Classify each meal by slot (breakfast → dessert, ordering the calendar day) and by kind — a `eating out` / `takeout` meal is a recipe-less placeholder on purpose, and only `cooked` meals feed the shopping list. Calendar chips carry the slot as their glyph; non-cooked meals read as dashed
-- Shopping list — aggregated need vs. on-hand inventory, with a per-meal breakdown (display-only; see [Tenets](#tenets))
+- Shopping list — aggregated need vs. on-hand inventory, with a per-meal breakdown, estimated trip cost, and shop-friendly units (display-only; see [Tenets](#tenets))
 - Suggestions — *"what can I make tonight?"* from what's on hand
 
 **Planning calendar**
-- One month view for meals, due tasks, expenses, and multi-day project spans
+- One month view for meals, due tasks, expenses, and multi-day project spans — a ruled day-by-day agenda on phones, where a seven-column grid can't be read
 - Source and project-kind filters, date drawers with daily totals, and quick-add flows
 - Drag-to-reschedule for meals, tasks, and planned expenses; actual expenses and project spans stay read-only
 - Published iCalendar feeds (`webcal://…/api/calendar/<token>/{all,meals,tasks}.ics`) for meals and open task due dates, subscribable from macOS/iOS Calendar; read-only, and the URL's token is the only credential

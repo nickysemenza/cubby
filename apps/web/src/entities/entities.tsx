@@ -169,10 +169,12 @@ const entityDefinitions = {
     pluralLabel: "Meals",
     basePath: "meals",
     lucideIcon: CalendarDays,
+    // Tracks ENTITY_ACCENTS.meal — see the note there for why a meal is no
+    // longer amber.
     color: entityColor("meal", {
-      bg: "bg-warning/20",
-      text: "text-warning",
-      border: "border-l-warning",
+      bg: "bg-slate/20",
+      text: "text-slate",
+      border: "border-l-slate",
     }),
     routes: {
       detail: "/meals/$shortcode",

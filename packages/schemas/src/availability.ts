@@ -60,6 +60,15 @@ export const aggregatedNeedOut = z.object({
   status: ingredientAvailabilityStatus,
   /** `need - have`, floored at zero. Null when on-hand isn't known. */
   shortfall: z.number().nullable(),
+  /**
+   * What the shortfall would cost, in dollars.
+   *
+   * Null whenever the answer isn't known — no product, no price, or no unit
+   * path from the ingredient's basis unit to money. Deliberately NOT zero: a
+   * zero would sum into a trip total and quietly understate it, which is the
+   * same lie `shortfall: null` exists to avoid.
+   */
+  estimatedCost: z.number().nullable(),
   sources: z.array(
     z.object({
       lineIndex: z.number().int(),

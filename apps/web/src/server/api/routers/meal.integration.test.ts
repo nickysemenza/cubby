@@ -1,9 +1,15 @@
 import type { Amount } from "@cubby/schemas/codec";
+import { unsafeIngredientShortcode } from "@cubby/schemas/identifiers";
+import { manualUnitMapping } from "@cubby/schemas/unitmapping";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import { getMealsByDateRange } from "~/server/repo/meal";
-import { seedIngredientWithStock } from "~/server/repo/repo.fixtures";
+import {
+  createProductFixture,
+  makeProductInput,
+  seedIngredientWithStock,
+} from "~/server/repo/repo.fixtures";
 import { createTestCaller } from "../trpc";
 import { mealRouter } from "./meal";
 import { recipeRouter } from "./recipe";
@@ -91,6 +97,56 @@ describe("mealRouter", () => {
     const after = await getMealsByDateRange(ctx.db, "2026-06-14", "2026-06-16");
     expect(after).toHaveLength(0);
     await expect(mealCaller().getByID({ id: meal.id })).rejects.toThrow();
+  });
+
+  it("prices the shortfall from the product's money edge", async () => {
+    // A price only reaches the shopping list when the product carries a unit
+    // path to money. A bare per-each price cannot cost a gram shortfall —
+    // there is no grams-per-each edge to cross — so the money edge is the
+    // fixture, and its absence is exactly what `estimatedCost: null` reports.
+    const flour = await findOrCreateIngredient(ctx.db, "flour");
+    await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Priced flour",
+        ingredientId: unsafeIngredientShortcode(flour.shortcode),
+        unitMappings: [
+          manualUnitMapping(
+            { value: 1, unit: "cup" },
+            { value: 120, unit: "g" },
+          ),
+          manualUnitMapping(
+            { value: 120, unit: "g" },
+            { value: 6, unit: "dollar" },
+          ),
+        ],
+        price: 6,
+      }),
+      ctx.actor,
+    );
+
+    const recipe = await createRecipe("Bread", flour.shortcode, {
+      value: 2,
+      unit: "cup",
+    }); // 240 g needed, nothing on hand
+
+    const meal = await mealCaller().create({ date: "2026-12-01" });
+    await mealCaller().addRecipe({
+      mealId: meal.id,
+      recipeId: recipe.id,
+      scale: 1,
+    });
+
+    const list = await mealCaller().getShoppingList({
+      from: "2026-11-30",
+      to: "2026-12-02",
+    });
+
+    const item = list.items.find((i) => i.name === "flour");
+    // 240 g at $6 per 120 g.
+    expect(item?.estimatedCost).toBeCloseTo(12, 2);
+    expect(list.pricedItems).toBe(1);
+    expect(list.estimatedTotal).toBeCloseTo(12, 2);
   });
 
   it("omits non-cooked meals from the shopping list and discloses them", async () => {

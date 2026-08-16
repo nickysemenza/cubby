@@ -23,6 +23,8 @@ use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
+use ingredient::unit::Measure;
+
 use crate::WAmount;
 
 mirror_enum! {
@@ -331,6 +333,66 @@ pub fn format_amount(amount: WAmount) -> String {
     amount.to_measure().to_string()
 }
 
+/// Grams per pound — the same factor the parser normalizes weights with,
+/// restated here because it is private upstream.
+const GRAM_TO_LB: f64 = 28.3495 * 16.0;
+const ML_TO_L: f64 = 1000.0;
+
+/// Pick a shopping-friendly unit and value for a base-unit measure.
+///
+/// Returns `None` when the caller should just use the normal formatter.
+///
+/// One step per kind, at the threshold where the base unit stops being how
+/// anyone talks about the quantity. Deliberately NOT a full ladder: an
+/// intermediate ounce tier would rewrite "300 g" as "10.58 oz", which is not
+/// friendlier — it is just a different number to reconcile against a recipe
+/// that said grams. A pound is where the shelf label changes; below it, grams
+/// are already the answer.
+fn shopper_unit(unit: &str, value: f64) -> Option<(&'static str, f64)> {
+    match unit {
+        // The availability engine reconciles weights in grams, so a big
+        // shortfall arrives as "1360 g" — true, and useless at a shelf.
+        "g" if value >= GRAM_TO_LB => Some(("lb", value / GRAM_TO_LB)),
+        // Volume already ladders tsp -> tbsp -> cup upstream; only the metric
+        // base stays put, so this is just the litre step.
+        "ml" if value >= ML_TO_L => Some(("l", value / ML_TO_L)),
+        _ => None,
+    }
+}
+
+/// Format an amount the way it would be read off a shopping list rather than
+/// out of the conversion graph.
+///
+/// `format_amount` renders the measure as stored, and `Measure::denormalize`
+/// (which it does not call) ladders teaspoons and cents but deliberately leaves
+/// `Gram` and `Milliliter` untouched. That is exactly the pair the shopping
+/// list produces, which is why a flour shortfall prints as "1360 g" instead of
+/// "3 lb".
+///
+/// Kept here rather than upstream in `ingredient` only to avoid a cross-repo
+/// rev bump; the ladder is generic unit formatting with no cubby domain in it,
+/// so it belongs in the parser crate eventually — same migration the TODO in
+/// `reconcile.rs` describes.
+#[wasm_bindgen]
+pub fn format_amount_shopper(amount: WAmount) -> String {
+    let denormalized = amount.to_measure().denormalize();
+    let value = denormalized.value();
+
+    // Nothing better to say — fall back to the normal rendering rather than
+    // inventing a unit.
+    let Some((target, scaled)) = shopper_unit(&denormalized.unit().to_str(), value) else {
+        return denormalized.to_string();
+    };
+
+    match denormalized.upper_value() {
+        // Both ends scale by the same factor so the range stays true. `value`
+        // is non-zero here: every `shopper_unit` arm requires it to clear a
+        // positive threshold first.
+        Some(upper) => Measure::with_range(target, scaled, upper * (scaled / value)).to_string(),
+        None => Measure::new(target, scaled).to_string(),
+    }
+}
+
 /// Render a quantity float as an *editable* ASCII fraction for the recipe editor's
 /// quantity cell: `0.333… → "1/3"`, `1.5 → "1 1/2"`, `34 → "34"`, decimal fallback for
 /// non-fractions (`0.37 → "0.37"`). The inverse of `parse_quantity`.
@@ -438,6 +500,52 @@ pub fn parse_rich_text(text: String, ingredient_names: Vec<String>) -> Result<WR
 mod tests {
     use super::*;
     use rstest::rstest;
+
+    fn amount(unit: &str, value: f64) -> WAmount {
+        WAmount {
+            unit: unit.to_string(),
+            value,
+            upper_value: None,
+        }
+    }
+
+    /// The shopping-list ladder. `format_amount` renders the base unit the
+    /// availability engine reconciles in, which is why a flour shortfall used
+    /// to read "1360 g" on a surface meant to be carried to a shop.
+    #[rstest]
+    #[case("g", 1360.0, "3 lb")]
+    #[case("g", 500.0, "1.1 lb")]
+    // Below a pound, grams ARE the answer — an ounce tier would just be a
+    // different number to reconcile against a recipe that said grams.
+    #[case("g", 300.0, "300 g")]
+    #[case("g", 100.0, "100 g")]
+    #[case("g", 12.0, "12 g")]
+    // Fractions render as glyphs — the parser's own quantity formatting.
+    #[case("ml", 1500.0, "1\u{00bd} l")]
+    #[case("ml", 250.0, "250 ml")]
+    // Volume already ladders upstream via `denormalize`; this must not undo it.
+    #[case("tsp", 48.0, "1 cup")]
+    // Non-weight, non-volume units pass through untouched.
+    #[case("whole", 3.0, "3")]
+    fn shopper_amounts(#[case] unit: &str, #[case] value: f64, #[case] expected: &str) {
+        assert_eq!(format_amount_shopper(amount(unit, value)), expected);
+    }
+
+    /// A range scales by one factor, so both ends stay in the same unit.
+    #[test]
+    fn shopper_amount_keeps_ranges_together() {
+        let ranged = WAmount {
+            unit: "g".to_string(),
+            value: 1000.0,
+            upper_value: Some(2000.0),
+        };
+        let formatted = format_amount_shopper(ranged);
+        assert!(formatted.contains("lb"), "expected pounds, got {formatted}");
+        assert!(
+            !formatted.contains('g'),
+            "range should not mix units: {formatted}"
+        );
+    }
 
     /// One line per `WIngredientUsage` variant: the `IngredientUsage` drift
     /// tripwire. A parser change that drops or reclassifies a role would silently

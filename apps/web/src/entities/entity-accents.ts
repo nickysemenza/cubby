@@ -18,7 +18,11 @@ export const ENTITY_ACCENTS: Record<Entity, string> = {
   cookbook: "var(--primary)",
   ingredient: "var(--slate)",
   location: "var(--slate)",
-  meal: "var(--warning)",
+  // Neutral, not amber: this file reserves the status ramp for entities whose
+  // accent encodes state, and a meal's encodes none. Amber is also already
+  // spent on overdue/planned expenses inside the same planning calendar, so a
+  // meal wearing it read as a warning about nothing.
+  meal: "var(--slate)",
   project: "var(--plum)",
   task: "var(--slate)",
   // A quiet roster, not a live money surface — same neutral as location/task.

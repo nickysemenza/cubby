@@ -7,7 +7,6 @@ import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
 import { projectKindValues } from "@cubby/schemas/project";
 import { TZDate } from "@date-fns/tz";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import {
   addDays,
   addMonths,
@@ -16,26 +15,12 @@ import {
   startOfMonth,
   startOfWeek,
 } from "date-fns";
-import {
-  CalendarRange,
-  CheckSquare,
-  ChevronLeft,
-  ChevronRight,
-  CircleDollarSign,
-  CookingPot,
-  Plus,
-} from "lucide-react";
-import {
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { CreateExpenseDialog } from "~/app/expenses/create-expense-dialog";
 import { CreateMealDialog } from "~/app/meals/create-meal-dialog";
-import { mealKindIcon, mealTypeIcon } from "~/app/meals/meal-options";
+import { mealKindIcon } from "~/app/meals/meal-options";
 import { CreateProjectDialog } from "~/app/projects/create-project-dialog";
 import { capitalize } from "~/app/projects/project-formatting";
 import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
@@ -59,7 +44,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "~/components/ui/sheet";
-import { entityDetailLink } from "~/entities/entities";
+import { ENTITY_ACCENTS } from "~/entities/entity-accents";
 import { useTRPC } from "~/integrations/trpc/react";
 import { householdLocalDate } from "~/lib/household-date";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
@@ -68,7 +53,9 @@ import {
   mealMutationInvalidateKeys,
   taskMutationInvalidateKeys,
 } from "~/lib/query-keys";
-import { cn, formatCurrency } from "~/lib/utils";
+import { formatCurrency } from "~/lib/utils";
+import { CalendarAgenda } from "./calendar-agenda";
+import { CalendarItemLink, itemIcon, KIND_ICONS } from "./calendar-item-row";
 
 const HOUSEHOLD_TIME_ZONE = "America/Los_Angeles";
 const CALENDAR_VIEWS: CalendarView[] = ["month"];
@@ -97,19 +84,11 @@ const KIND_LABELS: Record<CalendarItemKind, string> = {
   project: "Projects",
 };
 
-const KIND_ICONS: Record<CalendarItemKind, typeof CookingPot> = {
-  meal: CookingPot,
-  task: CheckSquare,
-  expense: CircleDollarSign,
-  project: CalendarRange,
-};
-
-const KIND_COLORS: Record<CalendarItemKind, string> = {
-  meal: "var(--positive)",
-  task: "var(--plum)",
-  expense: "var(--primary)",
-  project: "var(--slate)",
-};
+// No second color map. A calendar chip and the entity's own chrome are the
+// same claim about the same record, and keeping two hand-written maps let them
+// drift: before this, `task` and `project` were exactly swapped between them
+// and only `expense` agreed. DESIGN.md sanctions one categorical hue channel
+// (the project Gantt); this is the entity accent ladder, not a second one.
 
 type CreateKind = CalendarItemKind | null;
 
@@ -154,7 +133,7 @@ const eventClassName = (item: CalendarItem, today: string) => {
   // not-yet-real expense does directly below. Dashed, not recolored: the fill
   // still has to say "meal" against tasks and expenses.
   if (item.kind === "meal" && item.mealKind !== "cooked") {
-    return "border border-dashed border-positive";
+    return "border border-dashed border-slate";
   }
   if (item.kind === "expense" && item.future) {
     return item.startDate < today
@@ -191,19 +170,10 @@ const toEvent = (
       ? item.startDate < today
         ? "var(--destructive)"
         : "var(--warning)"
-      : KIND_COLORS[item.kind],
+      : ENTITY_ACCENTS[item.kind],
   className: eventClassName(item, today),
   data: item,
 });
-
-/**
- * The leading glyph. Meals resolve to their slot (breakfast → dinner) rather
- * than the generic per-kind pot: the slot is the meal's primary
- * classification, it already orders the day, and the icon costs no width the
- * title could have used.
- */
-const itemIcon = (item: CalendarItem) =>
-  item.kind === "meal" ? mealTypeIcon(item.mealType) : KIND_ICONS[item.kind];
 
 function CalendarChip({
   occurrence,
@@ -516,6 +486,31 @@ export function UnifiedCalendar({
           </Description>
         )}
 
+        {/* Both trees render; the BREAKPOINT decides, not JS. `useIsMobile`
+            reports false on the server, so a JS-only switch would paint the
+            seven-column grid on a phone until hydration — the same trap
+            `RTable` documents at length. */}
+        <div className="md:hidden">
+          <CalendarAgenda
+            items={visibleItems}
+            includesDay={itemIncludesDay}
+            today={today}
+            emptyMessage={
+              <Description>
+                Nothing planned this month.{" "}
+                <button
+                  type="button"
+                  className="underline hover:text-primary"
+                  onClick={() => setCreateKind(activeKinds[0] ?? "meal")}
+                >
+                  Add something
+                </button>
+                .
+              </Description>
+            }
+          />
+        </div>
+
         <EventCalendar<CalendarItem>
           events={events}
           view="month"
@@ -530,7 +525,7 @@ export function UnifiedCalendar({
           showOutsideDays
           showDayAddButton
           scrollMode="page"
-          className="min-h-[620px] overflow-hidden border"
+          className="hidden min-h-[620px] overflow-hidden border md:block"
           classNames={CALENDAR_CLASS_NAMES}
           renderEvent={CalendarChip}
           onEventsChange={setEvents}
@@ -678,53 +673,5 @@ function SummaryValue({ label, value }: { label: string; value: string }) {
       </div>
       <div className="font-semibold tabular-nums">{value}</div>
     </div>
-  );
-}
-
-function CalendarItemLink({ item }: { item: CalendarItem }) {
-  const Icon = itemIcon(item);
-  const content: ReactNode = (
-    <>
-      <Icon className="size-3.5 shrink-0" aria-hidden />
-      <span className="min-w-0 flex-1 truncate" title={item.title}>
-        {item.title}
-      </span>
-      {item.kind === "expense" && item.cost != null && (
-        <span className="shrink-0 tabular-nums">
-          {formatCurrency(item.cost)}
-        </span>
-      )}
-    </>
-  );
-  const className = cn(
-    "flex items-center gap-2 border-b py-2 text-sm last:border-b-0 hover:text-primary",
-    item.kind === "expense" && item.future && "text-warning",
-  );
-
-  if (item.kind === "meal") {
-    return (
-      <Link {...entityDetailLink("meal", item.id)} className={className}>
-        {content}
-      </Link>
-    );
-  }
-  if (item.kind === "task") {
-    return (
-      <Link {...entityDetailLink("task", item.id)} className={className}>
-        {content}
-      </Link>
-    );
-  }
-  if (item.kind === "expense") {
-    return (
-      <Link {...entityDetailLink("expense", item.id)} className={className}>
-        {content}
-      </Link>
-    );
-  }
-  return (
-    <Link {...entityDetailLink("project", item.id)} className={className}>
-      {content}
-    </Link>
   );
 }

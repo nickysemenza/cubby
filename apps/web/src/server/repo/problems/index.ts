@@ -89,7 +89,10 @@ export {
   findStaleLocations,
 } from "./detectors-location";
 // Meal-centric detectors
-export { findEmptyCookedMeals } from "./detectors-meal";
+export {
+  findEmptyCookedMeals,
+  findUnderstatedCostMeals,
+} from "./detectors-meal";
 // Product-centric detectors (+ ProductWithBetterUpcData type re-export)
 export {
   findDuplicateInventoryProducts,
@@ -117,6 +120,7 @@ export {
 // Recipe-centric detectors (derived-data-on-removal guardrail)
 export {
   findParentRecipesWithDeletedSubRecipes,
+  findRecipesWithoutInstructions,
   type StaleParentRecipe,
 } from "./detectors-recipe";
 // Optional vendor presentation coverage

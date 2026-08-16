@@ -11,8 +11,12 @@
  * means a removal path skipped staleness propagation.
  */
 
-import type { StaleParentRecipe } from "@cubby/schemas/problems";
-import { sql } from "drizzle-orm";
+import { unsafeRecipeShortcode } from "@cubby/schemas/identifiers";
+import type {
+  RecipeWithoutInstructions,
+  StaleParentRecipe,
+} from "@cubby/schemas/problems";
+import { and, count, eq, notExists, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   ingredient,
@@ -20,7 +24,7 @@ import {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
 // StaleParentRecipe is the canonical Zod-derived shape from @cubby/schemas/problems
 // (re-exported from the package barrel for the Problems-page components).
@@ -55,4 +59,65 @@ export const findParentRecipesWithDeletedSubRecipes = async (
       AND sub."deletedAt" IS NOT NULL
   `);
   return res.rows;
+};
+
+/**
+ * Live recipes with no instruction text anywhere.
+ *
+ * Instructions are a jsonb array ON the section, not a child table, so "has no
+ * instructions" is `jsonb_array_length(...) = 0` across every live section
+ * rather than an absent row. The column is `NOT NULL DEFAULT '[]'`, so no
+ * COALESCE is needed.
+ *
+ * Book- and Notion-sourced recipes are excluded rather than flagged: a cookbook
+ * import legitimately has none, because the instructions are in the book. The
+ * recipe-name trigram index in schema.ts excludes the same two sources for the
+ * same reason. A NULL SourceType is a legacy hand-entered row and DOES count —
+ * `IS DISTINCT FROM` keeps those in.
+ *
+ * Blank-string instruction entries (`{ text: "" }`) are deliberately not
+ * chased: that needs a `jsonb_array_elements` scan per section, and this
+ * detector rides the fast group, which is cheap-by-contract.
+ */
+export const findRecipesWithoutInstructions = async (
+  db: Database,
+): Promise<RecipeWithoutInstructions[]> => {
+  const rows = await getDb(db)
+    .select({
+      shortcode: recipe.shortcode,
+      name: recipe.name,
+      sectionCount: count(recipeSection.id),
+    })
+    .from(recipe)
+    .leftJoin(
+      recipeSection,
+      and(eq(recipeSection.recipeId, recipe.id), notDeleted(recipeSection)),
+    )
+    .where(
+      and(
+        notDeleted(recipe),
+        sql`${recipe.SourceType} IS DISTINCT FROM 'Book'`,
+        sql`${recipe.SourceType} IS DISTINCT FROM 'Notion'`,
+        notExists(
+          getDb(db)
+            .select({ one: recipeSection.id })
+            .from(recipeSection)
+            .where(
+              and(
+                eq(recipeSection.recipeId, recipe.id),
+                notDeleted(recipeSection),
+                sql`jsonb_array_length(${recipeSection.instructions}) > 0`,
+              ),
+            ),
+        ),
+      ),
+    )
+    .groupBy(recipe.id, recipe.shortcode, recipe.name)
+    .orderBy(sql`${recipe.name} asc`);
+
+  return rows.map((row) => ({
+    id: unsafeRecipeShortcode(row.shortcode),
+    name: row.name,
+    sectionCount: row.sectionCount,
+  }));
 };

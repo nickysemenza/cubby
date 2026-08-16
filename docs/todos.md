@@ -269,10 +269,12 @@ runtime CDN) are all shipped. Target is iOS Safari only. Remaining:
   Expense at all (a provenance gap, not a counting one). The variance filter
   already excludes that second group; the first is ordinary data entry, with
   `scripts/report-product-quantity-backfill.ts` as the evidence manifest.
-- [ ] **Problems detectors for meals + cookbooks**: partially-imported cookbooks
-  (`sourceRecipeCount > recipeCount` — visible only if you open that book),
-  meals whose recipes have no totals, recipes with zero instructions. The
-  empty-meals detector shipped as `emptyCookedMeals`.
+- [ ] **Problems detectors for cookbooks**: partially-imported cookbooks
+  (`sourceRecipeCount > recipeCount` — visible only if you open that book).
+  The meal/recipe ones shipped: `emptyCookedMeals`, `understatedCostMeals`
+  (`costCovered < ingredientCount`, deliberately not `totals IS NULL` — that
+  self-clears and `staleRecipeTotals` already owns it), and
+  `recipesWithoutInstructions` (Book/Notion sources excluded).
 - [ ] **Products list bulk print-labels**: locations table has the bulk action,
   products has per-row only, and the `/labels` empty state promises both.
 - [ ] **AiSearchBar on inventory is thinner than the plain filters**: it can
@@ -291,18 +293,20 @@ it never writes it. Deferred:
 - [ ] Recurring meals, meal templates, nutrition goals (each its own future
   slice). Meal labels shipped as the `mealType` (slot) + `mealKind` (cooked /
   leftovers / eating out / takeout) enum pair.
-- [ ] **Shopping list v1.5** (2026-07 audit — all display-layer, tenet-safe):
-  manual/ad-hoc items ("milk, paper towels" — without them it can't be *the*
-  list you take to the store); estimated trip cost (the costing engine's most
-  glaring absence — `shoppingListItem` carries need/have/shortfall but no
-  price); shopper-friendly units + pack rounding (raw `basisUnit` prints
-  "1360 g flour"); durable check-off state (today localStorage keyed by exact
-  date range — nudging the range wipes mid-shop progress, and it doesn't follow
-  desktop→phone); excluded-meal toggles into the URL; copy-as-text/print.
-- [ ] **Calendar ergonomics**: move a meal to another day / duplicate / copy
-  last week without a detail-page round-trip; a phone agenda view (the week grid
-  degrades to seven stacked `min-h-32` cards); "+ Meal" shouldn't navigate away
-  from the calendar mid-layout.
+- [ ] **Shopping list v1.6** — what's left of the v1.5 bullet, and note the
+  original "all display-layer" claim was wrong: two of these **write**, and the
+  units item needed Rust. Shipped: estimated trip cost, shopper-friendly units
+  (`format_amount_shopper`), excluded-meal toggles in the URL, copy-as-text +
+  print, and the check-off key no longer keyed by date range. Remaining:
+  manual/ad-hoc items ("milk, paper towels" — a new table, and the first write
+  on this surface); pack rounding (needs pack size off the product's purchase
+  mapping); cross-device check-off (server-persisted, also a write).
+- [ ] **Calendar ergonomics**: duplicate a meal / copy last week without a
+  detail-page round-trip. The rest of this bullet is done or stale — drag-to-
+  reschedule shipped, "+ Meal" opens in place, the week grid and its
+  `min-h-32` cards are gone (the month grid is `min-h-24 sm:min-h-28`), and the
+  phone agenda shipped as `calendar-agenda.tsx` (app-side: reui advertises an
+  agenda view but only the month view was ever vendored).
 - [ ] **Suggestions page follow-ups**: make cards actionable (link missing
   ingredients to their fix surface, "add the missing 2 to the shopping list");
   reachable from inventory, not just the nav dropdown (home already links to it).
