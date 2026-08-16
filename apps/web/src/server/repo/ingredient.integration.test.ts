@@ -203,6 +203,19 @@ describe("ingredient", () => {
     expect(result[2]!.matched).toBe(false);
     expect(result[2]!.created).toBe(true);
 
+    // The resolved row's OWN name and aliases come back, not the requested
+    // name — the recipe importer builds form rows from these, and an alias hit
+    // that echoed the request would label the row "scallion" and leave its
+    // aliases empty (which the Re-parse drift check reads as drift).
+    expect(result[1]).toMatchObject({
+      canonicalName: "Allium",
+      aliases: ["Scallion"],
+    });
+    expect(result[2]).toMatchObject({
+      canonicalName: "jasmine rice",
+      aliases: [],
+    });
+
     // Only the one new row was added (Allium + jasmine rice = 2 total).
     const [rows] = await getDb(ctx.db)
       .select({ count: count() })

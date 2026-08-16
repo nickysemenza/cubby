@@ -28,14 +28,21 @@ export const parseIngredientLines = (
   const parsed = wasm.parse_ingredient_lines(filtered);
   return filtered
     .map((line, i) => ({ raw: line, parsed: parsed[i]! }))
-    .filter((item) => !options.requireName || item.parsed.name.length > 0);
+    .filter(
+      // Trimmed: a whitespace-only name is no more an ingredient than an empty
+      // one, and the server drops it (it keys on the trimmed name) — a row kept
+      // here would find no match and abort the whole import.
+      (item) => !options.requireName || item.parsed.name.trim().length > 0,
+    );
 };
 
 export const parsedIngredientNames = (
   parsed: readonly ParsedIngredientLine[],
 ): string[] =>
   uniq(
-    parsed.map((item) => item.parsed.name).filter((name) => name.length > 0),
+    parsed
+      .map((item) => item.parsed.name)
+      .filter((name) => name.trim().length > 0),
   );
 
 // Carry `aliases` onto the row so the Re-parse drift check treats an alias hit

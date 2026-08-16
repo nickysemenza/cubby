@@ -187,16 +187,19 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
   // section names and boundaries (auto-creates missing ingredients). Shared by
   // both the URL scrape and the pasted-HTML fallback.
   const applyImportResult = async (result: ImportRecipe) => {
+    // Resolve each section's ingredient lines into structured form ingredients
+    // BEFORE writing anything to the form: this is the only step that can fail,
+    // and a half-applied import (recipe name set, no sections) reads as a
+    // successful scrape of an empty recipe.
+    const ingredientGroups = await resolveGroups(
+      result.sections.map((section) => section.ingredients),
+    );
+
     // Set recipe name if empty
     if (!form.getValues("name")) {
       form.setValue("name", result.meta.title);
     }
 
-    // Resolve each section's ingredient lines into structured form
-    // ingredients, then replace the section editor with the imported sections.
-    const ingredientGroups = await resolveGroups(
-      result.sections.map((section) => section.ingredients),
-    );
     replaceSections(
       result.sections.map((section, i) => ({
         name: section.name ?? null,

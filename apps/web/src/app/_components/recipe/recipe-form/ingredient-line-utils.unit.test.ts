@@ -28,6 +28,16 @@ describe("ingredient line helpers", () => {
     expect(parsedForImport).toEqual([]);
   });
 
+  // The server keys resolve-or-create on the TRIMMED name and drops blanks, so a
+  // whitespace-only parsed name must not reach it: it would come back absent from
+  // the results and the missing-match throw would abort the whole import.
+  it("treats a whitespace-only parsed name as no name", () => {
+    const [base] = parseIngredientLines(["1 cup flour"]);
+    const blank = { ...base!, parsed: { ...base!.parsed, name: "  " } };
+
+    expect(parsedIngredientNames([blank])).toEqual([]);
+  });
+
   it("resolves grouped lines once per unique ingredient name", async () => {
     const calls: string[] = [];
     const parsedGroups = [
