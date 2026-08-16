@@ -17,7 +17,7 @@ import { EntityInlineLink } from "../EntityInlineLink";
  * rather than assumed, because a package's weight is never derivable from the
  * USDA nutrient record alone. Null when no such edge exists in `mappings`.
  */
-function resolveGramsPerEach(mappings: UnitMapping[]): number | null {
+export function resolveGramsPerEach(mappings: UnitMapping[]): number | null {
   const result = safeConvertAmount(
     { value: 1, unit: "each" },
     mappings,
@@ -32,6 +32,38 @@ function resolveGramsPerEach(mappings: UnitMapping[]): number | null {
     return result.value.value;
   }
   return null;
+}
+
+export interface NutrientDensityFigures {
+  proteinDensity: number | null;
+  costPerGramProtein: number | null;
+  /** Price exists but the unit-mapping graph has no "1 each = X g" edge yet. */
+  needsWeightMapping: boolean;
+}
+
+/**
+ * Pure composition behind {@link NutrientDensityStats} — split out so the
+ * price/weight-basis resolution (the part that can silently regress into a
+ * wrong number, or a swallowed omission, rather than the explicit
+ * "needs a weight mapping" state) is unit-testable without rendering React.
+ */
+export function computeNutrientDensityFigures(
+  nutrients: NutrientsPer100,
+  mappings: UnitMapping[],
+  price: number | null,
+): NutrientDensityFigures {
+  const kcal = getNutrientValueByKey(nutrients, "kcal");
+  const protein = getNutrientValueByKey(nutrients, "protein");
+  const proteinDensity = proteinPer100Kcal(protein, kcal);
+
+  const gramsPerEach = resolveGramsPerEach(mappings);
+  const proteinGramsPerEach =
+    gramsPerEach != null ? (protein * gramsPerEach) / 100 : null;
+  const costPerGramProtein =
+    price != null ? costPerNutrient(price, proteinGramsPerEach) : null;
+  const needsWeightMapping = price != null && gramsPerEach == null;
+
+  return { proteinDensity, costPerGramProtein, needsWeightMapping };
 }
 
 /**
@@ -59,16 +91,8 @@ export function NutrientDensityStats({
    * "needs a weight mapping" nudge to where a human fixes it. */
   mappingProduct: { id: string; name: string; manufacturer?: string };
 }) {
-  const kcal = getNutrientValueByKey(nutrients, "kcal");
-  const protein = getNutrientValueByKey(nutrients, "protein");
-  const proteinDensity = proteinPer100Kcal(protein, kcal);
-
-  const gramsPerEach = resolveGramsPerEach(mappings);
-  const proteinGramsPerEach =
-    gramsPerEach != null ? (protein * gramsPerEach) / 100 : null;
-  const costPerGramProtein =
-    price != null ? costPerNutrient(price, proteinGramsPerEach) : null;
-  const needsWeightMapping = price != null && gramsPerEach == null;
+  const { proteinDensity, costPerGramProtein, needsWeightMapping } =
+    computeNutrientDensityFigures(nutrients, mappings, price);
 
   if (proteinDensity == null && price == null) return null;
 

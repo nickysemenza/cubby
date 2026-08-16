@@ -2,6 +2,7 @@ import type {
   IngredientUpdateInput,
   IngredientWithFoodOut,
 } from "@cubby/schemas/ingredient";
+import type { ProductWithMappingsAndFoodOut } from "@cubby/schemas/product";
 import { uniqBy } from "es-toolkit";
 import {
   Apple,
@@ -39,6 +40,22 @@ interface IngredientDetailProps {
   ingredient: IngredientWithFoodOut;
 }
 
+/**
+ * Nutrition and cost-per-nutrient must share one product's basis — pricing
+ * one product's protein off a different product's nutrients would silently
+ * misattribute cost. Deliberately pick the product carrying both (falling
+ * back to nutrition alone when none has a price), rather than the previous
+ * "any product with nutritionInfo" pick that left price unaccounted for.
+ */
+export function selectNutritionProduct(
+  products: ProductWithMappingsAndFoodOut[],
+): ProductWithMappingsAndFoodOut | undefined {
+  return (
+    products.find((p) => p.food?.nutritionInfo && p.price != null) ??
+    products.find((p) => p.food?.nutritionInfo)
+  );
+}
+
 export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
   const api = useTRPC();
   const [isEnriching, setIsEnriching] = useState(false);
@@ -54,14 +71,9 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
     getMappings: getIngredientMappings,
   });
 
-  // Nutrition and cost-per-nutrient must share one product's basis — pricing
-  // one product's protein off a different product's nutrients would silently
-  // misattribute cost. Deliberately pick the product carrying both (falling
-  // back to nutrition alone when none has a price), rather than the previous
-  // "any product with nutritionInfo" pick that left price unaccounted for.
-  const nutritionProduct =
-    ingredient.product.find((p) => p.food?.nutritionInfo && p.price != null) ??
-    ingredient.product.find((p) => p.food?.nutritionInfo);
+  // See selectNutritionProduct for why nutrition and price must come from
+  // the same product.
+  const nutritionProduct = selectNutritionProduct(ingredient.product);
   const nutritionInfo = nutritionProduct?.food?.nutritionInfo;
   const nutritionMappings = nutritionProduct
     ? getAllUnitMappingsFromProduct(nutritionProduct)
