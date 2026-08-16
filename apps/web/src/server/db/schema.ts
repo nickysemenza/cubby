@@ -300,11 +300,8 @@ export const recipe = pgTable(
       .where(
         sql`${table.deletedAt} IS NULL AND ${table.SourceType} = 'Notion'`,
       ),
-    index("Recipe_createdAt_idx").on(table.createdAt),
     index("Recipe_SourceType_idx").on(table.SourceType),
     index("Recipe_cookbookId_idx").on(table.cookbookId),
-    // GIN index for full-text search on name
-    index("Recipe_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
     index("Recipe_created_at_desc_idx").on(table.createdAt.desc()),
     // Partial index for soft delete queries
     index("Recipe_name_active_idx")
@@ -441,7 +438,6 @@ export const ingredient = pgTable(
       "gin",
       sql`${table.name} gin_trgm_ops`,
     ),
-    index("Ingredient_aliases_gin_idx").using("gin", table.aliases),
     // Partial index for soft delete queries
     index("Ingredient_name_active_idx")
       .on(table.name)
@@ -628,7 +624,10 @@ export const product = pgTable(
     index("Product_name_idx").on(table.name),
     // GIN indexes for full-text search
     index("Product_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
-    index("Product_aliases_gin_idx").using("gin", table.aliases),
+    // No GIN on `aliases` (here, Ingredient, or Location): every alias filter
+    // is `unnest(aliases) ILIKE`, which an array GIN cannot serve — those
+    // index @>/&&/= ANY. EXPLAIN confirms a seq scan with a per-row SubPlan
+    // either way, so the index was pure write cost.
     index("Product_manufacturer_gin_idx").using(
       "gin",
       sql`${table.manufacturer} gin_trgm_ops`,
@@ -729,7 +728,6 @@ export const location = pgTable(
       "gin",
       sql`${table.name} gin_trgm_ops`,
     ),
-    index("Location_aliases_gin_idx").using("gin", table.aliases),
     index("Location_type_name_idx").on(table.type, table.name),
     // Partial indexes for soft delete queries
     index("Location_name_active_idx")
@@ -773,7 +771,6 @@ export const entityEmbedding = pgTable(
       table.model,
       table.dimensions,
     ),
-    index("EntityEmbedding_hash_idx").on(table.embeddingHash),
     // HNSW nearest-neighbor index. The column is untyped `vector` (dimensions
     // vary per model config row — prod uses 1536, tests seed 3), and pgvector
     // only indexes fixed-dimension expressions. So index the cast, and:
@@ -1116,7 +1113,6 @@ export const wish = pgTable(
   },
   (table) => [
     shortcodeUnique("Wish", table.shortcode),
-    index("Wish_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
     index("Wish_createdAt_idx").on(table.createdAt),
     index("Wish_acquiredAt_idx").on(table.acquiredAt),
   ],
@@ -1197,7 +1193,6 @@ export const task = pgTable(
     index("Task_status_idx").on(table.status),
     index("Task_dueDate_idx").on(table.dueDate),
     index("Task_parentTaskId_idx").on(table.parentTaskId),
-    index("Task_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
   ],
 );
 
@@ -1258,7 +1253,6 @@ export const vendor = pgTable(
     uniqueIndex("Vendor_name_key")
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
-    index("Vendor_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
   ],
 );
 
@@ -1466,8 +1460,8 @@ export const financialTransaction = pgTable(
     index("FinancialTransaction_postedDate_idx").on(table.postedDate),
     // Serves the `sourceRefs @> '[{source,externalId}]'` containment probes that
     // every statement-import write and every reconciliation read performs.
-    // Plain jsonb_ops, matching Product_aliases_gin_idx — naming an opclass here
-    // produces perpetual `db:push` drift.
+    // Plain jsonb_ops — naming an opclass here produces perpetual `db:push`
+    // drift.
     index("FinancialTransaction_sourceRefs_gin_idx").using(
       "gin",
       table.sourceRefs,
