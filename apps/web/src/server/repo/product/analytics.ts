@@ -177,8 +177,13 @@ export const getProductManufacturerOptions = async (
  *
  * Returns each sibling's full `tags` so the caller can group by the shared tag
  * without a second round trip. Intersecting in the component rather than
- * pivoting in SQL keeps this a single flat query, and the sets are tiny (the
- * largest tag group is 7 products).
+ * pivoting in SQL keeps this a single flat query.
+ *
+ * Ecosystem tags ARE tiny (`M18` is 6 products), but provenance tags are not —
+ * `home-depot-import` is 536 and `amazon` 324, so this is a few hundred scalar
+ * rows on the widest tag, not the handful an ecosystem tag suggests. Still one
+ * indexed scan and no pivot; sizing decisions here should use the provenance
+ * numbers rather than the ecosystem ones.
  *
  * Empty tags short-circuits: `arrayOverlaps` against `'{}'` matches nothing, so
  * the query would be a guaranteed-empty scan.
@@ -272,9 +277,17 @@ export interface TagSiblingStorage {
  * be server-enforced and disclosed; `omittedLocationCount` is that disclosure.
  *
  * Pivoting per tag in TS rather than `unnest`-ing tags in SQL matches
- * `getProductsSharingTags` (the sets are tiny) and keeps `notDeleted` /
- * `stockOnly` as ordinary helpers — a hand-rolled `t.tag = ANY(${tags})` would
- * be the row-constructor trap.
+ * `getProductsSharingTags` and keeps `notDeleted` / `stockOnly` as ordinary
+ * helpers — a hand-rolled `t.tag = ANY(${tags})` would be the row-constructor
+ * trap.
+ *
+ * There is no SQL `LIMIT`: the cap is per tag, and which locations survive it
+ * is only known after the fold. What bounds the scan is that this reads
+ * INVENTORY, not products — a tag's stocked entries, not its membership. The
+ * widest tags are provenance ones, and they are the sparsely-stocked ones:
+ * `home-depot-import` spans 536 products but only ~49 stocked entries,
+ * `amazon` 324 for ~106. A tag that is both very popular AND densely stocked
+ * would break that, and is the case to re-measure before assuming this holds.
  */
 export const getTagSiblingStorage = async (
   db: Database,
