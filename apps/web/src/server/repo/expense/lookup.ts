@@ -300,9 +300,9 @@ export const buildExpenseWhereClause = async (
       filters.future !== undefined
         ? eq(expense.future, filters.future)
         : undefined,
-      // Rows with a null `date` (common on `future` expenses — nothing to
-      // date yet) fall out of any date window by plain SQL comparison
-      // semantics; that's intended, not a bug to work around.
+      // `expense.date` is NOT NULL (since #553 enforced the finance
+      // invariants), so unlike `cost` below there is no null-row case to
+      // reason about here — every row lands inside or outside the window.
       filters.dateFrom ? gte(expense.date, filters.dateFrom) : undefined,
       filters.dateTo ? lte(expense.date, filters.dateTo) : undefined,
       // `!== undefined`, NOT the truthiness guard the two date lines above use.
@@ -310,8 +310,9 @@ export const buildExpenseWhereClause = async (
       // items") and `costMax: 0` is the credits-only worklist — a truthiness
       // check would silently drop both. Follows `future`'s guard style instead.
       //
-      // Null-cost rows fall out of either bound by SQL semantics, same as
-      // null-date rows do above; `costPresenceFilter: "none"` is the filter for
+      // `cost` IS nullable — `cost IS NULL` is the Unclassified predicate — and
+      // those rows fall out of either bound by plain SQL comparison semantics;
+      // that's intended. `costPresenceFilter: "none"` is the filter for
       // "no cost recorded".
       filters.costMin !== undefined
         ? gte(expense.cost, filters.costMin)
