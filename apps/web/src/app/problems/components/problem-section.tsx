@@ -120,6 +120,19 @@ type ProblemSectionProps<T> = {
   title: string;
   description: string;
   items: T[];
+  /**
+   * How many rows the section really covers, when `items` is only a page of
+   * them. Defaults to `items.length`, which is correct for every section that
+   * returns its whole population.
+   *
+   * Load-bearing for view-backed sections: their rows come from page one of an
+   * entity list, so every count on this card — the badge, the progress bar, the
+   * "N of M · K remaining" line — would otherwise describe the page. With 178
+   * never-verified of 212 that reads "200 of 212 verified · 12 remaining"
+   * instead of "34 of 212 · 178 remaining", which is the same lie the sampling
+   * was introduced to avoid telling at the badge.
+   */
+  count?: number;
   emptyMessage: string;
   renderItem: (item: T) => RenderedProblemItem;
   groupBy?: (items: T[]) => { [key: string]: T[] };
@@ -139,9 +152,12 @@ export function ProblemSection<T>({
   groupBy,
   headerAction,
   coverage,
+  count,
 }: ProblemSectionProps<T>) {
   const hasItems = items.length > 0;
   const meter = coverage?.meter;
+  // Every COUNT below is about the population; `items` is only what we render.
+  const total = count ?? items.length;
   // Coverage sections never go red: an un-photographed tool isn't an error, and
   // a permanently-destructive section is exactly what made the old page unreadable.
   const iconColor =
@@ -189,12 +205,10 @@ export function ProblemSection<T>({
               // either permanently (unvalued buckets) or until its denominators
               // land — just never in the defect red.
               <Badge variant="secondary">
-                {meter
-                  ? `${meter.total - items.length} / ${meter.total}`
-                  : items.length}
+                {meter ? `${meter.total - total} / ${meter.total}` : total}
               </Badge>
             ) : (
-              <Badge variant="destructive">{items.length}</Badge>
+              <Badge variant="destructive">{total}</Badge>
             )}
           </CardTitle>
           {headerAction && (
@@ -203,8 +217,8 @@ export function ProblemSection<T>({
                 {headerAction}
               </TooltipTrigger>
               <TooltipContent>
-                Fixes all {items.length} detected{" "}
-                {items.length === 1 ? "item" : "items"} in this section
+                Fixes all {total} detected {total === 1 ? "item" : "items"} in
+                this section
               </TooltipContent>
             </Tooltip>
           )}
@@ -212,11 +226,11 @@ export function ProblemSection<T>({
         <CardDescription>{description}</CardDescription>
         {meter && (
           <Stack gap="xs" className="pt-2">
-            <Progress value={meter.total - items.length} max={meter.total} />
+            <Progress value={meter.total - total} max={meter.total} />
             <span className="font-mono text-slate text-xs uppercase tracking-wider">
-              {meter.total - items.length} of {meter.total} {meter.doneLabel}
+              {meter.total - total} of {meter.total} {meter.doneLabel}
               {" · "}
-              {items.length} remaining
+              {total} remaining
             </span>
           </Stack>
         )}

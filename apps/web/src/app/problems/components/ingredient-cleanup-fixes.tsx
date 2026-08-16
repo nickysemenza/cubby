@@ -134,11 +134,22 @@ function ConfirmHeaderButton({
 }
 
 /** Bulk "Delete all" for both unused-ingredient sections. */
+/**
+ * "Delete every unused ingredient in this section."
+ *
+ * Takes a COUNT and a section key, never the rendered rows: the section shows a
+ * page of the view's results, so acting on what it rendered would delete twelve
+ * and call it all. The server re-runs the view's own filters to resolve the set.
+ */
 export function DeleteAllUnusedButton({
-  ids,
+  count,
+  problemKey,
   alsoDeleteProducts,
 }: {
-  ids: string[];
+  count: number;
+  problemKey:
+    | "unusedIngredientsWithProduct"
+    | "unusedIngredientsWithoutProduct";
   alsoDeleteProducts: boolean;
 }) {
   const api = useTRPC();
@@ -156,16 +167,16 @@ export function DeleteAllUnusedButton({
 
   return (
     <ConfirmHeaderButton
-      label={`Delete all (${ids.length})`}
+      label={`Delete all (${count})`}
       title="Delete all unused ingredients?"
       body={
         alsoDeleteProducts
-          ? `This deletes ${pluralize("ingredient", ids.length, true)} and their linked products. Any whose product still has inventory will be skipped.`
-          : `This deletes ${pluralize("ingredient", ids.length, true)}.`
+          ? `This deletes ${pluralize("ingredient", count, true)} and their linked products. Any whose product still has inventory will be skipped.`
+          : `This deletes ${pluralize("ingredient", count, true)}.`
       }
       isPending={remove.isPending}
       onConfirm={() =>
-        remove.mutate({ ingredientIds: ids, alsoDeleteProducts })
+        remove.mutate({ allFromProblem: problemKey, alsoDeleteProducts })
       }
     />
   );

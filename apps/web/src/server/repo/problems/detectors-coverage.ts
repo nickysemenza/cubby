@@ -54,7 +54,7 @@ export const findCoverageTotals = async (
     .from(product)
     .where(and(notDeleted(product), isNull(product.ingredientId)));
 
-  // Matches findEmptyLocations' leaf test: no live child location.
+  // Matches the `location/empty-leaves` view' leaf test: no live child location.
   const leafLocations = await dbClient
     .select({ count: COUNT })
     .from(location)
@@ -99,7 +99,7 @@ export const findCoverageTotals = async (
       ),
     );
 
-  // Matches findNeverVerifiedInventory's population — same reasoning as
+  // Matches the `neverVerifiedInventory` view's population — same reasoning as
   // stockedLocations above.
   const inventoryEntries = await dbClient
     .select({ count: COUNT })

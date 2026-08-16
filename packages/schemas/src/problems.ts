@@ -798,15 +798,10 @@ const problemsFastShape = {
   soldButStillStocked: z.array(soldButStillStockedSchema),
   unlinkedExitExpenses: z.array(unlinkedExitExpenseSchema),
   purchaselessExitExpenses: z.array(purchaselessExitExpenseSchema),
-  negativeExpectedQuantity: z.array(negativeExpectedQuantitySchema),
   toolsUsedOutsideOwnership: z.array(toolUsedOutsideOwnershipSchema),
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
   ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
-  unusedIngredientsWithProduct: z.array(unusedIngredientSchema),
-  unusedIngredientsWithoutProduct: z.array(unusedIngredientSchema),
-  emptyLocations: z.array(emptyLocationSchema),
   productsWithNoImages: z.array(productWithNoImagesSchema),
-  locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
   orphanedEntityEmbeddings: z.array(orphanedEntityEmbeddingSchema),
   unreferencedImages: z.array(unreferencedImageSchema),
   entitiesMissingEmbeddings: z.array(entityMissingEmbeddingSchema),
@@ -815,7 +810,6 @@ const problemsFastShape = {
   understatedCostMeals: z.array(understatedCostMealSchema),
   recipesWithoutInstructions: z.array(recipeWithoutInstructionsSchema),
   staleLocations: z.array(staleLocationSchema),
-  neverVerifiedInventory: z.array(neverVerifiedInventorySchema),
   unknownParkedItems: z.array(unknownParkedItemSchema),
   manufacturerSpellingVariants: z.array(labelVariantSchema),
   duplicateVendors: z.array(duplicateVendorSchema),
@@ -869,6 +863,58 @@ export const problemsUpcSchema = z.object(problemsUpcShape);
 // like every other detector; the Problems page merges them back into one
 // section with a subsection per rule. Cheap SQL — no WASM, no network — but its
 // own cost group so it runs in its own Worker invocation like the rest.
+/**
+ * True population size for any section whose rows are a SAMPLE rather than the
+ * whole set — keyed by `ProblemKey`, absent for a section that returns
+ * everything.
+ *
+ * A view-backed section renders page 1 of the entity's list, so `items.length`
+ * is the page size, not the answer. Every count downstream (the badge, the
+ * homepage banner, `totalProblems`, and the coverage meters' "N of M") has to
+ * read the total instead, or a 212-row backlog reports as 12.
+ *
+ * It's a sibling map rather than a richer per-section value on purpose:
+ * `allProblemArrayFields` must stay arrays-only, because `byTypeShape`,
+ * `EMPTY_PROBLEM_ARRAYS`, and `countProblems` are all mechanically derived from
+ * its keys and would break on a non-array member.
+ */
+export const sectionTotalsSchema = z.record(z.string(), z.number().int());
+export type SectionTotals = z.infer<typeof sectionTotalsSchema>;
+
+/**
+ * Sections backed by a saved view rather than a bespoke detector.
+ *
+ * The rows come from the entity's ordinary list procedure. Each key keeps the
+ * row schema it already had, because the list-item shape is a strict SUPERSET
+ * of it — `inventoryListItemOut` carries the `id`, `amount`, `createdAt`,
+ * `product` and `location` that `neverVerifiedInventorySchema` declares, plus
+ * `valuation`, `verifiedAt` and `placement` it doesn't — so the service narrows
+ * rather than the card widening.
+ *
+ * Keeping the narrow schema is also what avoids an import cycle: `inventory.ts`
+ * and `product.ts` both import FROM this module, so referencing their list
+ * shapes here would make module init order load-bearing. If a card ever needs a
+ * field only the list row has, widen that one schema; don't reach for the list
+ * shape.
+ *
+ * These rows are a PAGE, not the population — see `sectionTotals`.
+ */
+const problemsViewsShape = {
+  neverVerifiedInventory: z.array(neverVerifiedInventorySchema),
+  locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
+  emptyLocations: z.array(emptyLocationSchema),
+  negativeExpectedQuantity: z.array(negativeExpectedQuantitySchema),
+  unusedIngredientsWithProduct: z.array(unusedIngredientSchema),
+  unusedIngredientsWithoutProduct: z.array(unusedIngredientSchema),
+};
+
+export const problemsViewsSchema = z.object({
+  ...problemsViewsShape,
+  /** True population per key; the page above is only what the card shows. */
+  sectionTotals: sectionTotalsSchema,
+});
+export type ProblemsViewsOut = z.infer<typeof problemsViewsSchema>;
+
 const problemsTrackerShape = {
   overdueTasks: z.array(projectAttentionItemSchema),
   stalledProjects: z.array(projectAttentionItemSchema),
@@ -905,12 +951,30 @@ const allProblemArrayFields = {
   ...problemsCoverageShape,
   ...problemsUpcShape,
   ...problemsTrackerShape,
+  ...problemsViewsShape,
 };
 
 export const allProblemsSchema = z.object({
   ...allProblemArrayFields,
+  sectionTotals: sectionTotalsSchema.default({}),
   totalProblems: z.number(),
 });
+
+/** Stable empty totals — shared identity, for the same memo-churn reason as
+ *  {@link EMPTY_PROBLEM_ARRAYS}. */
+export const EMPTY_SECTION_TOTALS: SectionTotals = Object.freeze({});
+
+/**
+ * How many rows a section really covers: its declared total when it reports a
+ * sample, else the rows it returned. The single definition, so a caller can't
+ * accidentally count a page.
+ */
+export const sectionSize = (
+  /** Absent for a section that returns its whole population. */
+  key: string | undefined,
+  items: readonly unknown[],
+  totals: SectionTotals | undefined,
+): number => (key ? (totals?.[key] ?? items.length) : items.length);
 
 export type ProblemKey = keyof typeof allProblemArrayFields;
 
@@ -1115,10 +1179,13 @@ const isDefectKey = (key: string): boolean =>
 export const sumProblemSections = (
   sections: Record<string, readonly unknown[]>,
   problemClass: "defect" | "coverage",
+  totals?: SectionTotals,
 ): number =>
   Object.entries(sections).reduce(
     (n, [key, items]) =>
-      isDefectKey(key) === (problemClass === "defect") ? n + items.length : n,
+      isDefectKey(key) === (problemClass === "defect")
+        ? n + sectionSize(key, items, totals)
+        : n,
     0,
   );
 
@@ -1177,15 +1244,20 @@ export type ProblemsCount = z.infer<typeof problemsCountSchema>;
 // becomes its length. The single source of truth for badge/count consumers, so
 // they assemble the five cost-grouped queries and count locally (no re-scan).
 export const countProblems = (all: AllProblems): ProblemsCount => {
-  const { totalProblems, ...arrays } = all;
+  // `sectionTotals` must come OUT of the rest — it is not a detector section,
+  // and leaving it in would put a non-array into `byType`.
+  const { totalProblems, sectionTotals, ...arrays } = all;
   const byType = Object.fromEntries(
-    Object.entries(arrays).map(([key, items]) => [key, items.length]),
+    Object.entries(arrays).map(([key, items]) => [
+      key,
+      sectionSize(key, items, sectionTotals),
+    ]),
   ) as ProblemsCount["byType"];
   // `byType` stays the FULL roster (coverage keys included) so per-detector
   // consumers and the MCP `type` slices keep working; only the totals split.
   return {
     total: totalProblems,
-    coverageTotal: sumProblemSections(arrays, "coverage"),
+    coverageTotal: sumProblemSections(arrays, "coverage", sectionTotals),
     byType,
   };
 };
@@ -1200,16 +1272,23 @@ export const assembleAllProblems = (groups: {
   coverage: ProblemsCoverage;
   upc: ProblemsUpc;
   tracker: ProblemsTracker;
+  /** View-backed sections: sampled rows plus the totals that describe them.
+   *  Required, so a caller can't silently drop a converted section. */
+  views: ProblemsViewsOut;
 }): AllProblems => {
+  const { sectionTotals, ...viewSections } = groups.views;
   const sections = {
     ...groups.fast,
     ...groups.coverage,
     ...groups.upc,
     ...groups.tracker,
+    ...viewSections,
   };
   return {
     ...sections,
-    totalProblems: sumProblemSections(sections, "defect"),
+    sectionTotals,
+    // Counts the true population of a sampled section, not its page.
+    totalProblems: sumProblemSections(sections, "defect", sectionTotals),
   };
 };
 
@@ -1356,10 +1435,31 @@ export const recipeUsageByProductInput = z.object({
  */
 export const recipeUsageByProductOut = z.record(z.string(), z.number());
 
-export const deleteUnusedIngredientsInput = z.object({
-  ingredientIds: z.array(ingredientShortcode),
-  alsoDeleteProducts: z.boolean(),
-});
+export const deleteUnusedIngredientsInput = z
+  .object({
+    /** Explicit rows — what a per-card "Delete" acts on. */
+    ingredientIds: z.array(ingredientShortcode).optional(),
+    /**
+     * Act on every row the named view-backed section selects, resolved
+     * SERVER-side.
+     *
+     * A view-backed card renders a page, so a "Delete all" wired to the rows it
+     * was handed would delete the page and call it all. Naming the section and
+     * letting the server re-run its filters is what keeps the label true —
+     * membership belongs on the server, not in the component that happened to
+     * render twelve of them.
+     */
+    allFromProblem: z
+      .enum(["unusedIngredientsWithProduct", "unusedIngredientsWithoutProduct"])
+      .optional(),
+    alsoDeleteProducts: z.boolean(),
+  })
+  .refine(
+    (input) =>
+      (input.ingredientIds === undefined) !==
+      (input.allFromProblem === undefined),
+    { message: "Provide exactly one of ingredientIds or allFromProblem" },
+  );
 
 export const deleteUnusedIngredientsOut = z.object({
   deleted: z.number(),

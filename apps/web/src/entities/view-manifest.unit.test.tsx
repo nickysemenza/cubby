@@ -382,3 +382,50 @@ describe("the unlocated views stay one question at two widths", () => {
     }
   });
 });
+
+describe("problem-backed views", () => {
+  const backed = Object.entries(viewManifest).flatMap(([entity, views]) =>
+    (views ?? [])
+      .filter((view) => view.problem)
+      .map((view) => ({ entity: entity as Entity, view })),
+  );
+
+  it.each(backed)(
+    "$entity/$view.id resolves to exactly its declared serverFilters",
+    ({ entity, view }) => {
+      // THE anti-divergence guard. `serverFilters` is a projection of
+      // `filters`, not an independent statement of it — it exists only because
+      // the server can't cheaply run this resolver itself (the manifest reaches
+      // into `~/app/**` for icon-bearing option lists). Resolving the view the
+      // same way the table does and demanding equality is what keeps the two
+      // from becoming two different questions, which is the exact failure this
+      // whole mechanism exists to prevent.
+      const values = new Map(view.filters.map((f) => [f.id, f.value]));
+      expect(
+        buildFiltersFromManifest(getEntityFilters(entity), (columnId) =>
+          values.get(columnId),
+        ),
+      ).toEqual(view.problem?.serverFilters);
+    },
+  );
+
+  it("never pins a filter the repo layer would receive unresolved", () => {
+    // The tRPC routers resolve public shortcodes into uuids in their `list`
+    // callback BEFORE the repo sees them (`resolveLocationId` in
+    // routers/inventory.ts is the canonical example). The Problems service
+    // calls the repo list functions directly, on one pinned connection, so it
+    // skips that step — which is fine only while no view declares an id filter.
+    //
+    // A view that pinned `locationIdFilter` would hand a `LOC-` code to code
+    // expecting a uuid: it would match nothing and the section would silently
+    // read zero. Fail here instead, loudly, at the moment someone declares one.
+    for (const { entity, view } of backed) {
+      for (const field of Object.keys(view.problem?.serverFilters ?? {})) {
+        expect(
+          /Id$|IdFilter$/.test(field),
+          `view "${entity}/${view.id}" pins "${field}", which the repo expects already resolved — teach the service to resolve it first`,
+        ).toBe(false);
+      }
+    }
+  });
+});

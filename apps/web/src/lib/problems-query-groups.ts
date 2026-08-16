@@ -3,6 +3,7 @@
 // exports (knip).
 const PROBLEMS_HOT_PATH_PROCEDURES = [
   "getFast",
+  "getViews",
   "getCoverage",
   "getUpc",
   "getTracker",

@@ -1473,6 +1473,24 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       options: presenceFilterOptions("image"),
     },
     {
+      // "none" is the leaf-location worklist; with `inventoryEntries: none`
+      // it's an empty leaf — nothing in it, and not a shelf for other bins.
+      columnId: "children",
+      field: "childPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter children...",
+      options: presenceFilterOptions("children"),
+    },
+    {
+      // "none" alongside `image: has` is the describable backlog — there's
+      // nothing to describe about a location with no photo.
+      columnId: "aiDescription",
+      field: "aiDescriptionPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter descriptions...",
+      options: presenceFilterOptions("description"),
+    },
+    {
       columnId: "name",
       field: "nameFilter",
       kind: "text",

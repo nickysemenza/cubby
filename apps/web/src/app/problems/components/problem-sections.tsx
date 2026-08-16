@@ -6,10 +6,12 @@ import {
   type CoverageTotals,
   type LabelVariant,
   type NegativeExpectedQuantity,
+  type ProblemKey,
   type ProductMissingPrice,
   type PurchaselessExitExpense,
   type PurchaseNotReconciling,
   type SoldButStillStocked,
+  sectionSize,
   type ToolUsedOutsideOwnership,
   TRACKER_PROBLEM_KEY_BY_TYPE,
   type UnlinkedExitExpense,
@@ -167,6 +169,13 @@ function section<T, K extends CoverageProblemKey = never>(config: {
   id: string;
   label: string;
   select: (problems: AllProblems) => readonly T[];
+  /**
+   * Set when `select` returns a PAGE rather than the whole set — i.e. for a
+   * view-backed section, whose rows come from page one of an entity list.
+   * Names the `sectionTotals` entry carrying the real population, so the chip
+   * count and the card's meter describe the backlog instead of the page.
+   */
+  totalKey?: ProblemKey;
   title: string;
   description: string;
   emptyMessage: string;
@@ -174,8 +183,14 @@ function section<T, K extends CoverageProblemKey = never>(config: {
   entity?: Entity;
   renderItem: (item: T) => RenderedProblemItem;
   groupBy?: (items: T[]) => Record<string, T[]>;
-  /** A static "fix all" node, or one built from the current items (for bulk delete). */
-  headerAction?: ReactNode | ((items: T[]) => ReactNode);
+  /**
+   * A static "fix all" node, or one built from the section's contents.
+   *
+   * The builder gets the true `count` alongside the rendered `items`, because a
+   * view-backed section renders only a page — a bulk action wired to `items`
+   * would act on twelve and label itself "all".
+   */
+  headerAction?: ReactNode | ((items: T[], count: number) => ReactNode);
   coverage?: ProblemSectionDeclaredCoverage<K>;
 }): ProblemSectionEntry<K> {
   const iconProp: IconProp = config.entity
@@ -189,9 +204,15 @@ function section<T, K extends CoverageProblemKey = never>(config: {
     // meter (node reads `config` directly) while the section itself sat in the
     // defect list — a mismatch the meter hides rather than reveals.
     coverage: config.coverage,
-    count: (problems) => config.select(problems).length,
+    count: (problems) =>
+      sectionSize(
+        config.totalKey,
+        config.select(problems),
+        problems.sectionTotals,
+      ),
     node: (problems, totals) => {
       const items = [...config.select(problems)];
+      const count = sectionSize(config.totalKey, items, problems.sectionTotals);
       return (
         <ProblemSection
           {...iconProp}
@@ -199,12 +220,13 @@ function section<T, K extends CoverageProblemKey = never>(config: {
           description={config.description}
           emptyMessage={config.emptyMessage}
           items={items}
+          count={count}
           renderItem={config.renderItem}
           groupBy={config.groupBy}
           coverage={resolveCoverage(config.coverage, totals)}
           headerAction={
             typeof config.headerAction === "function"
-              ? config.headerAction(items)
+              ? config.headerAction(items, count)
               : config.headerAction
           }
         />
@@ -218,22 +240,30 @@ function customSection<T, K extends CoverageProblemKey = never>(def: {
   id: string;
   label: string;
   select: (problems: AllProblems) => readonly T[];
+  /** See `section`'s `totalKey` — set when `select` returns a page. */
+  totalKey?: ProblemKey;
   render: (
     items: T[],
     coverage: ProblemSectionCoverage | undefined,
+    count: number,
   ) => ReactNode;
   coverage?: ProblemSectionDeclaredCoverage<K>;
 }): ProblemSectionEntry<K> {
+  const sizeOf = (problems: AllProblems, items: readonly unknown[]) =>
+    sectionSize(def.totalKey, items, problems.sectionTotals);
   return {
     id: def.id,
     label: def.label,
     coverage: def.coverage,
-    count: (problems) => def.select(problems).length,
-    node: (problems, totals) =>
-      def.render(
-        [...def.select(problems)],
+    count: (problems) => sizeOf(problems, def.select(problems)),
+    node: (problems, totals) => {
+      const items = [...def.select(problems)];
+      return def.render(
+        items,
         resolveCoverage(def.coverage, totals),
-      ),
+        sizeOf(problems, items),
+      );
+    },
   };
 }
 
@@ -903,6 +933,7 @@ const DECLARED_SECTIONS = [
     id: "negative-expected-quantity",
     label: "Negative expected",
     select: (p) => p.negativeExpectedQuantity,
+    totalKey: "negativeExpectedQuantity",
     entity: "product",
     title: "Sold More Than Was Bought",
     description:
@@ -1007,13 +1038,18 @@ const DECLARED_SECTIONS = [
     id: "unused-with-product",
     label: "Unused (has product)",
     select: (p) => p.unusedIngredientsWithProduct,
+    totalKey: "unusedIngredientsWithProduct",
     entity: "ingredient",
     title: "Unused ingredients linked to a product",
     description:
       "Ingredients used in no recipe but still linked to a product. Deleting removes the ingredient and its product(s) — skipped if a product still has inventory.",
     emptyMessage: "No unused product-linked ingredients.",
-    headerAction: (items) => (
-      <DeleteAllUnusedButton ids={items.map((i) => i.id)} alsoDeleteProducts />
+    headerAction: (_items, count) => (
+      <DeleteAllUnusedButton
+        count={count}
+        problemKey="unusedIngredientsWithProduct"
+        alsoDeleteProducts
+      />
     ),
     renderItem: (ing) => ({
       title: ing.name,
@@ -1052,14 +1088,16 @@ const DECLARED_SECTIONS = [
     id: "unused-no-product",
     label: "Unused",
     select: (p) => p.unusedIngredientsWithoutProduct,
+    totalKey: "unusedIngredientsWithoutProduct",
     entity: "ingredient",
     title: "Unused ingredients",
     description:
       "Ingredients used in no recipe and linked to no product — safe to delete.",
     emptyMessage: "No unused ingredients.",
-    headerAction: (items) => (
+    headerAction: (_items, count) => (
       <DeleteAllUnusedButton
-        ids={items.map((i) => i.id)}
+        count={count}
+        problemKey="unusedIngredientsWithoutProduct"
         alsoDeleteProducts={false}
       />
     ),
@@ -1084,12 +1122,13 @@ const DECLARED_SECTIONS = [
     id: "locations",
     label: "Locations",
     select: (p) => p.emptyLocations,
+    totalKey: "emptyLocations",
     coverage: {
       keys: ["emptyLocations"],
       meter: { total: (t) => t.emptyLocations, doneLabel: "itemized" },
     },
-    render: (items, coverage) => (
-      <EmptyLocationsList locations={items} coverage={coverage} />
+    render: (items, coverage, count) => (
+      <EmptyLocationsList locations={items} coverage={coverage} count={count} />
     ),
   }),
   section({
@@ -1132,6 +1171,8 @@ const DECLARED_SECTIONS = [
     id: "never-verified",
     label: "Never verified",
     select: (p) => p.neverVerifiedInventory,
+    // Rows are page one of the inventory list; the meter must not read them.
+    totalKey: "neverVerifiedInventory",
     coverage: {
       keys: ["neverVerifiedInventory"],
       meter: { total: (t) => t.neverVerifiedInventory, doneLabel: "verified" },
@@ -1291,6 +1332,7 @@ const DECLARED_SECTIONS = [
     id: "ai-descriptions",
     label: "AI Descriptions",
     select: (p) => p.locationsWithoutAiDescription ?? [],
+    totalKey: "locationsWithoutAiDescription",
     icon: Sparkles,
     title: "Missing AI Descriptions",
     description:

@@ -1,97 +1,27 @@
 /**
  * Location-centric Problems detectors.
- * Empty leaf locations (no inventory, no children), image-bearing locations
- * that still lack an AI description, and stocked locations overdue for a
- * recount.
+ *
+ * Only recount staleness lives here now. Empty leaves and the missing-AI-
+ * description backlog became saved views (`location/empty-leaves`,
+ * `location/undescribed`) — both were plain column predicates the location list
+ * could already express, and routing them through it also dropped a pair of
+ * hand-written correlated image subqueries.
+ *
+ * This one stays because its cutoff is relative to now, which a static view
+ * declaration can't carry.
  */
 
 import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
-import type {
-  EmptyLocation,
-  LocationWithoutAiDescription,
-  StaleLocation,
-} from "@cubby/schemas/problems";
-import { and, eq, isNull, lt, notExists, or, sql } from "drizzle-orm";
+import type { EmptyLocation, StaleLocation } from "@cubby/schemas/problems";
+import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
-import { inventoryEntry, location, locationImage } from "~/server/db/schema";
+import { inventoryEntry, location, product } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { stockOnly } from "~/server/repo/inventory/placement";
 
 // EmptyLocation is re-exported from the package barrel for the Problems-page
 // components that import it from there.
 export type { EmptyLocation };
-
-export const findEmptyLocations = async (
-  db: Database,
-): Promise<EmptyLocation[]> => {
-  const dbClient = getDb(db);
-
-  const childLocation = dbClient
-    .$with("child_location")
-    .as(
-      dbClient
-        .select({ parentId: location.parentId })
-        .from(location)
-        .where(notDeleted(location)),
-    );
-
-  const emptyLocations = await dbClient
-    .with(childLocation)
-    .select({
-      id: location.id,
-      shortcode: location.shortcode,
-      name: location.name,
-      type: location.type,
-      createdAt: location.createdAt,
-      lastBulkInventory: location.lastBulkInventory,
-      aiDescription: location.aiDescription,
-      firstImageUrl: sql<string | null>`(
-        SELECT "Image"."url" FROM "LocationImage"
-        JOIN "Image" ON "Image"."id" = "LocationImage"."imageId"
-        WHERE "LocationImage"."locationId" = "Location"."id"
-        ORDER BY "LocationImage"."createdAt" ASC
-        LIMIT 1
-      )`,
-      firstImageId: sql<string | null>`(
-        SELECT "Image"."id" FROM "LocationImage"
-        JOIN "Image" ON "Image"."id" = "LocationImage"."imageId"
-        WHERE "LocationImage"."locationId" = "Location"."id"
-        ORDER BY "LocationImage"."createdAt" ASC
-        LIMIT 1
-      )`,
-    })
-    .from(location)
-    .where(
-      and(
-        notDeleted(location),
-        // A location holding only installed fixtures reads as empty here —
-        // there's no browsable stock, only a wired-in dimmer or faucet.
-        notExists(
-          dbClient
-            .select({ id: sql`1` })
-            .from(inventoryEntry)
-            .where(
-              and(
-                eq(inventoryEntry.locationId, location.id),
-                notDeleted(inventoryEntry),
-                stockOnly(),
-              ),
-            ),
-        ),
-        notExists(
-          dbClient
-            .select({ id: sql`1` })
-            .from(childLocation)
-            .where(eq(childLocation.parentId, location.id)),
-        ),
-      ),
-    );
-
-  return emptyLocations.map((row) => ({
-    ...row,
-    id: unsafeLocationShortcode(row.shortcode),
-  }));
-};
 
 /**
  * How long a stocked bin may go without a deliberate recount before its counts
@@ -104,7 +34,7 @@ const STALE_RECOUNT_DAYS = 60;
 /**
  * Locations holding stock whose last recount is missing or older than
  * STALE_RECOUNT_DAYS. Empty locations are out of scope — they have no counts to
- * be wrong, and `findEmptyLocations` already covers them.
+ * be wrong, and the `location/empty-leaves` saved view already covers them.
  */
 export const findStaleLocations = async (
   db: Database,
@@ -123,8 +53,13 @@ export const findStaleLocations = async (
     })
     .from(location)
     // INNER join = "non-empty" (locations with no live entry drop out).
-    // stockOnly() must match findEmptyLocations's notExists, or a
-    // fixture-only location gets flagged as both empty AND stale.
+    //
+    // All three guards must match how the `location/empty-leaves` view resolves
+    // emptiness, or a location lands in both sections at once. That view goes
+    // through `locationList`'s `directItemCountMax: 0`, which counts entries
+    // whose PRODUCT is live too (`locationIdsExceedingInventoryMaximum`) — so
+    // without `notDeleted(product)` here, a shelf holding only entries on
+    // soft-deleted products reads as empty there and non-empty here.
     .innerJoin(
       inventoryEntry,
       and(
@@ -132,6 +67,10 @@ export const findStaleLocations = async (
         notDeleted(inventoryEntry),
         stockOnly(),
       ),
+    )
+    .innerJoin(
+      product,
+      and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
     )
     .where(
       and(
@@ -156,32 +95,5 @@ export const findStaleLocations = async (
     ...r,
     id: unsafeLocationShortcode(r.shortcode),
     itemCount: Number(r.itemCount),
-  }));
-};
-
-// Find locations that have images but no AI description
-export const findLocationsWithoutAiDescription = async (
-  db: Database,
-): Promise<LocationWithoutAiDescription[]> => {
-  const dbClient = getDb(db);
-
-  const results = await dbClient
-    .select({
-      id: location.id,
-      shortcode: location.shortcode,
-      name: location.name,
-      type: location.type,
-      imageCount: sql<number>`count(${locationImage.id})`,
-    })
-    .from(location)
-    .innerJoin(locationImage, eq(locationImage.locationId, location.id))
-    .where(and(notDeleted(location), isNull(location.aiDescription)))
-    .groupBy(location.id, location.shortcode, location.name, location.type);
-
-  return results.map((r) => ({
-    id: unsafeLocationShortcode(r.shortcode),
-    name: r.name,
-    type: r.type,
-    imageCount: Number(r.imageCount),
   }));
 };
