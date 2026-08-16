@@ -460,9 +460,14 @@ export function GlobalCommandMenu({
                             </div>
                           )}
                         </div>
-                        <span className="shrink-0 self-start pt-1 font-mono text-2xs text-slate uppercase tracking-wider">
-                          {item.entityType}
-                        </span>
+                        <div className="max-w-28 shrink-0 self-start pt-1 text-right">
+                          <span className="block truncate font-mono text-2xs text-slate uppercase tracking-wider">
+                            {entities[entityTypeMap[item.entityType]].label}
+                          </span>
+                          <span className="block truncate font-mono text-2xs text-muted-foreground tabular-nums">
+                            {item.id}
+                          </span>
+                        </div>
                       </CommandItem>
                     );
                   })}

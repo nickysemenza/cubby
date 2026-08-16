@@ -135,7 +135,7 @@ interface TTableProps<TItem> {
   /**
    * localStorage key for this table's persisted column widths. Defaults to
    * `entity`, which covers every list page; pass it explicitly for a table with
-   * no single entity (the global search table) or for a second table over the
+   * no single entity (a relationship summary) or for a second table over the
    * same entity with a different column set (`"task:embedded"`). A table with
    * neither `entity` nor `sizingKey` simply isn't resizable.
    */

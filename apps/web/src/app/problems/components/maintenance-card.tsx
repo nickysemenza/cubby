@@ -3,7 +3,7 @@ import type { MaintenanceCounts } from "@cubby/schemas/problems";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import pluralize from "pluralize";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -257,6 +257,68 @@ function PruneAliasesAction() {
   );
 }
 
+// Full catalog integrity is intentionally on demand: rebuilding canonical
+// semantic text for every searchable entity is too expensive for the Problems
+// page/navbar hot path. Once checked, the query stays active so background-batch
+// invalidation refreshes the summary when queued repairs finish.
+function SearchDocumentsAction() {
+  const trpc = useTRPC();
+  const [enabled, setEnabled] = useState(false);
+  const health = useQuery({
+    ...trpc.search.documentHealth.queryOptions(),
+    enabled,
+    staleTime: 30_000,
+  });
+  const repair = useActionMutation({
+    mutationFn: trpc.search.repairDocuments.mutationOptions,
+    invalidateKeys: [queryKeys.search.all],
+    success: (result) =>
+      result.queued > 0 ? (
+        <span>
+          Queued {pluralize("search document", result.queued, true)} for repair.{" "}
+          {result.retired > 0 ? `Retired ${result.retired} orphaned. ` : ""}
+          {result.batchId ? (
+            <Link
+              to="/background-jobs"
+              search={{ batchId: result.batchId }}
+              className="underline decoration-border decoration-dotted underline-offset-2 hover:decoration-primary"
+            >
+              View progress
+            </Link>
+          ) : null}
+        </span>
+      ) : result.retired > 0 ? (
+        `Retired ${pluralize("orphaned search document", result.retired, true)}.`
+      ) : (
+        "Search index is already healthy."
+      ),
+  });
+  const summary = health.data
+    ? health.data.total === 0
+      ? "Index healthy"
+      : `${health.data.missing} missing · ${health.data.orphaned} orphaned · ${health.data.stale} stale`
+    : null;
+
+  return (
+    <MaintenanceDryRunRow
+      summary={summary}
+      onDryRun={() => {
+        if (enabled) void health.refetch();
+        else setEnabled(true);
+      }}
+      dryRunPending={health.isFetching}
+      backfill={
+        <ProblemActionButton
+          onClick={() => repair.mutate(undefined)}
+          isPending={repair.isPending}
+          idleLabel="Repair index"
+          pendingLabel="Enqueuing…"
+        />
+      }
+    />
+  );
+}
+
 // Delete abandoned uploads: PENDING image rows with no entity association that
 // are older than the cull threshold, plus their R2 objects. Plain (non-streamed)
 // mutation, so it uses useActionMutation rather than the BackfillButton stream.
@@ -361,6 +423,12 @@ const MAINTENANCE_TOOLS: {
     description:
       "Strip aliases that no recipe line matches (or that duplicate the ingredient's name) from every ingredient. The ingredients themselves stay.",
     action: <PruneAliasesAction />,
+  },
+  {
+    label: "Check search index",
+    description:
+      "Compare the indexed catalog with every live searchable record. Retire orphaned rows and durably rebuild missing or stale documents.",
+    action: <SearchDocumentsAction />,
   },
   {
     label: "Fetch UPC images",
