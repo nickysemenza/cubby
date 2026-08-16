@@ -27,6 +27,7 @@ import { eq } from "drizzle-orm";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { viewProblemDeclarations } from "~/entities/view-manifest";
 import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
 import { VENDOR_LOGO_BY_SHORTCODE } from "~/lib/vendor-logos.generated";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
@@ -41,6 +42,7 @@ import {
   projectToolUsage,
   vendor as vendorTable,
 } from "~/server/db/schema";
+import { findViewProblems } from "../services/problem-views.service";
 import {
   findAllProblems,
   findFastProblems,
@@ -50,7 +52,7 @@ import {
 import { getDb } from "./database-helpers";
 import { createExpense, deleteExpenses } from "./expense";
 import { createIngredient, getIngredientByName } from "./ingredient";
-import { deleteInventoryEntries } from "./inventory";
+import { deleteInventoryEntries, inventoryentryList } from "./inventory";
 import { ensureGlobalUnknownLocation } from "./location";
 import { addRecipeToMeal, updateMeal } from "./meal";
 import { findCoverageTotals, findStaleIngredientParses } from "./problems";
@@ -1696,6 +1698,22 @@ describe("problems service — recount staleness", () => {
     expect(ids).not.toContain(emptied.loc.id);
   });
 
+  /**
+   * The `inventory/never-verified` saved view's own server filters.
+   *
+   * Read from the manifest so these tests exercise the predicate the app ships.
+   * A test that retyped `{ verifiedPresenceFilter: "none" }` would keep passing
+   * if the view were edited to mean something else — which is the exact class of
+   * drift this whole conversion exists to remove.
+   */
+  const neverVerifiedView = () => {
+    const declaration = viewProblemDeclarations().find(
+      (d) => d.problem.key === "neverVerifiedInventory",
+    );
+    if (!declaration) throw new Error("neverVerifiedInventory view is gone");
+    return declaration.problem;
+  };
+
   it("lists never-verified entries, and drops them once verified or deleted", async () => {
     const unverified = await seedStocked("Unverified bin");
     const verified = await seedStocked("Verified bin");
@@ -1706,16 +1724,41 @@ describe("problems service — recount staleness", () => {
       .where(eq(inventoryEntry.id, verified.entry.entityId));
     await deleteInventoryEntries(ctx.db, [removed.entry.entityId], ctx.actor);
 
-    const { neverVerifiedInventory } = await findFastProblems(ctx.db);
-    const ids = neverVerifiedInventory.map((i) => i.id);
+    // Drives the SAVED VIEW's own declared filters through the ordinary list
+    // path — this is the parity assertion that let the detector be deleted.
+    // Taking `serverFilters` from the manifest rather than retyping it here is
+    // the point: a test that restated the predicate could agree with itself
+    // while disagreeing with what the app actually runs.
+    const { data } = await inventoryentryList(
+      ctx.db,
+      {
+        ...neverVerifiedView().serverFilters,
+        // Scopes to this test's fixtures; the describe shares one database, and
+        // the predicate is what's under test, not the pagination. Filters by
+        // NAME rather than id because the repo takes resolved uuids while the
+        // view speaks shortcodes — see the guard in view-manifest.unit.test.tsx.
+        locationNameFilter: "Unverified bin",
+      },
+      [],
+      { pageIndex: 0, pageSize: 100 },
+    );
+    const ids = data.map((i) => i.id);
     expect(ids).toContain(unverified.entry.id);
-    expect(ids).not.toContain(verified.entry.id);
     expect(ids).not.toContain(removed.entry.id);
 
+    const verifiedRows = await inventoryentryList(
+      ctx.db,
+      {
+        ...neverVerifiedView().serverFilters,
+        locationNameFilter: "Verified bin",
+      },
+      [],
+      { pageIndex: 0, pageSize: 100 },
+    );
+    expect(verifiedRows.data.map((i) => i.id)).not.toContain(verified.entry.id);
+
     // Rows carry both refs so the card can link product AND location.
-    expect(
-      neverVerifiedInventory.find((i) => i.id === unverified.entry.id),
-    ).toMatchObject({
+    expect(data.find((i) => i.id === unverified.entry.id)).toMatchObject({
       product: { id: unverified.product.id },
       location: { id: unverified.loc.id, name: "Unverified bin" },
     });
@@ -1751,11 +1794,13 @@ describe("problems service — recount staleness", () => {
     expect(after.unknownParkedItems.map((i) => i.id)).not.toContain(parked.id);
   });
 
-  // The detector used to `.limit(25)`, which reported 25 for a real population
-  // of 178 — a number that was both wrong and impossible to drive to zero.
-  // Uncapping is safe because the section is coverage, not a defect: it's a
-  // meter, and rendering is bounded by SectionGroup's show-all toggle.
-  it("returns every never-verified entry, not a capped sample", async () => {
+  // The original detector `.limit(25)`d, reporting 25 for a real population of
+  // 178 — a number both wrong and impossible to drive to zero. Uncapping fixed
+  // it. The view-backed section reintroduces a page cap ON THE ROWS, so the
+  // count has to come from somewhere else: `sectionTotals`, computed as the
+  // list's own `countWhere`. This test is what keeps that honest — if the
+  // meter ever went back to reading `rows.length`, it would read 12 of 212.
+  it("reports the true population even though the rows are a page", async () => {
     const loc = await createLocation(
       ctx.db,
       makeLocationInput({ name: "Uncapped bin" }),
@@ -1777,11 +1822,21 @@ describe("problems service — recount staleness", () => {
       );
     }
 
-    const { neverVerifiedInventory } = await findFastProblems(ctx.db);
-    const inBin = neverVerifiedInventory.filter(
-      (i) => i.location.id === loc.id,
+    const { neverVerifiedInventory, sectionTotals } = await findViewProblems(
+      ctx.db,
     );
-    expect(inBin).toHaveLength(seeded);
+    // The rows are a page and are allowed to be.
+    expect(neverVerifiedInventory.length).toBeLessThanOrEqual(
+      sectionTotals.neverVerifiedInventory ?? 0,
+    );
+    // The count is not. It must see past the page to the whole population —
+    // this describe shares a database, so the total is at least what we seeded.
+    expect(sectionTotals.neverVerifiedInventory ?? 0).toBeGreaterThanOrEqual(
+      seeded,
+    );
+    expect(sectionTotals.neverVerifiedInventory).toBeGreaterThan(
+      neverVerifiedInventory.length,
+    );
   });
 });
 

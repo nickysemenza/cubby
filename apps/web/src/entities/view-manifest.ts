@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { ProblemKey } from "@cubby/schemas/problems";
 import {
   LIVE_PROJECT_STATUSES,
   taskStatusValues,
@@ -37,6 +38,46 @@ interface ViewFilter {
   value: string | string[];
 }
 
+/**
+ * Marks a view as ALSO being a Problems section, so one declaration produces
+ * the saved view, the shareable URL, and the Problems card.
+ *
+ * This is the anti-divergence move. Several detectors used to re-write in SQL a
+ * predicate the entity's list already expressed as filters — and the schemas
+ * said so out loud: `productFilterFields.expectedQuantityMax` documents
+ * `-1` as "the 'sold or returned more than was ever bought' worklist", which
+ * is exactly what `findProductsWithNegativeExpectedQuantity` re-derived with a
+ * grouped HAVING scan. Two implementations of one question, two places to drift.
+ *
+ * The card's rows come from the entity's ordinary list procedure, whose output
+ * shape is a SUPERSET of the row schema the detector used to return (a
+ * location list row carries `images[]` and `inventoryEntries[]`, which is where
+ * the old hand-written `firstImageUrl` subquery and `itemCount` rollup came
+ * from). So converting deletes SQL rather than moving it.
+ */
+interface ViewProblem {
+  /** Keeps `PROBLEM_CLASS` exhaustive — the class itself stays on the schema
+   *  side, because defect-vs-coverage is about meaning, not about selection. */
+  key: ProblemKey;
+  title: string;
+  description: string;
+  emptyMessage: string;
+  /**
+   * The same predicate in the server's `*Filters` vocabulary.
+   *
+   * A projection of `filters`, never an independent statement of it:
+   * `view-manifest.unit.test.tsx` resolves `filters` through the real manifest
+   * with `buildFiltersFromManifest` and asserts deep equality with this, so the
+   * two cannot drift — a mismatch fails with the exact expected object.
+   *
+   * It exists because the server needs these filters and the resolver's input,
+   * `filter-manifest.tsx`, reaches into `~/app/**` for its icon-bearing option
+   * lists. Importing that graph into the Worker to re-derive fourteen static
+   * objects is a worse trade than a mechanically-pinned projection.
+   */
+  serverFilters: Record<string, unknown>;
+}
+
 export interface ViewDefinition {
   id: string;
   label: string;
@@ -61,6 +102,7 @@ export interface ViewDefinition {
    * navigation, which is a worse surprise than an extra column.
    */
   columnVisibility?: Record<string, boolean>;
+  problem?: ViewProblem;
 }
 
 /** Saved views select records; renderer tabs never do. */
@@ -356,6 +398,63 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       sort: [{ id: "postedDate", desc: true }],
     },
   ],
+  // Both ingredient views are deliberately NOT yet problem-backed. The
+  // predicate is an exact match for `findUnusedIngredients` (verified: the list
+  // applies `isNull(ingredient.recipeId)` unconditionally and resolves recipe
+  // usage through the same three-level soft-delete-guarded subquery), so
+  // converting them is cheap — but their Problems sections carry a
+  // "Delete all (N)" bulk button whose label and body are derived from the rows
+  // it was handed. Backed by a sampled section it would read "Delete all (12)"
+  // of a larger set: it deletes exactly the twelve it names, so nothing extra
+  // is destroyed, but calling twelve "all" is a lie the button shouldn't tell.
+  // Convert once it takes the filter rather than a row list.
+  ingredient: [
+    {
+      id: "unused-with-product",
+      label: "Unused (has product)",
+      description: "Used in no recipe, but still linked to a product",
+      // `appearsInRecipes: none` already excludes recipe-as-ingredient pointer
+      // rows — `ingredientList` applies `isNull(ingredient.recipeId)`
+      // unconditionally — so a hit really is an ingredient no live recipe
+      // references, which is what the detector's own NOT EXISTS meant.
+      filters: [
+        { id: "appearsInRecipes", value: "none" },
+        { id: "product", value: "has" },
+      ],
+    },
+    {
+      id: "unused-no-product",
+      label: "Unused",
+      description: "Used in no recipe and linked to no product",
+      filters: [
+        { id: "appearsInRecipes", value: "none" },
+        { id: "product", value: "none" },
+      ],
+    },
+  ],
+  inventory: [
+    {
+      id: "never-verified",
+      label: "Never verified",
+      description: "Entries whose count has never been checked against a shelf",
+      // No placement filter, deliberately: the inventory list defaults an
+      // omitted `placementFilter` to `"stock"`, which is exactly the
+      // `stockOnly()` guard the detector carried. Installed fixtures never get
+      // a `verifiedAt` (nobody recounts a wired-in dimmer), so including them
+      // would make this list permanently undrainable.
+      filters: [{ id: "verifiedAt", value: "none" }],
+      // Oldest first — the longest-unverified entries lead.
+      sort: [{ id: "createdAt", desc: false }],
+      problem: {
+        key: "neverVerifiedInventory",
+        title: "Inventory never confirmed by a recount",
+        description:
+          "Entries whose count has never been checked against the shelf (oldest first). Recount the location they live in to clear them. `verifiedAt` only started being stamped when audit sessions landed, so most of the inventory starts here — this is a backlog to work down, not a list of mistakes.",
+        emptyMessage: "Every inventory entry has been verified at least once.",
+        serverFilters: { verifiedPresenceFilter: "none" },
+      },
+    },
+  ],
   wish: [
     {
       id: "hide-acquired",
@@ -365,6 +464,37 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
     },
   ],
 };
+
+/** A view that also declares a Problems section, paired with its entity. */
+export interface ViewProblemDeclaration {
+  entity: Entity;
+  viewId: string;
+  sort: ViewDefinition["sort"];
+  problem: ViewProblem;
+}
+
+/**
+ * Every problem-backed view, flattened.
+ *
+ * The single roster the Problems service iterates to run its list queries and
+ * the pinning test iterates to prove each `serverFilters` really is the
+ * projection of its `filters`. Derived from `viewManifest` rather than
+ * hand-listed, so declaring a view IS declaring the section — there is no
+ * second place to register it and therefore no way for the two to disagree.
+ */
+export function viewProblemDeclarations(): ViewProblemDeclaration[] {
+  return Object.entries(viewManifest).flatMap(([entity, views]) =>
+    (views ?? [])
+      .filter((view) => view.problem)
+      .map((view) => ({
+        entity: entity as Entity,
+        viewId: view.id,
+        sort: view.sort,
+        // Narrowed by the filter above; the predicate can't tell TS that.
+        problem: view.problem as ViewProblem,
+      })),
+  );
+}
 
 export function viewsForEntity(entity: Entity | undefined): ViewDefinition[] {
   return (entity && viewManifest[entity]) ?? [];

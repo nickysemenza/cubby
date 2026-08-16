@@ -72,10 +72,7 @@ export {
 // Schema-wide referential-liveness audit
 export { findReferentialLivenessViolations } from "./detectors-integrity";
 // Inventory-centric detectors (recount staleness)
-export {
-  findNeverVerifiedInventory,
-  findUnknownParkedItems,
-} from "./detectors-inventory";
+export { findUnknownParkedItems } from "./detectors-inventory";
 // Name drift (one name, two spellings) — free-text manufacturer + vendor roster
 export {
   findDuplicateVendors,

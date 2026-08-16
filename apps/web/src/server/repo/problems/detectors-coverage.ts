@@ -99,7 +99,7 @@ export const findCoverageTotals = async (
       ),
     );
 
-  // Matches findNeverVerifiedInventory's population — same reasoning as
+  // Matches the `neverVerifiedInventory` view's population — same reasoning as
   // stockedLocations above.
   const inventoryEntries = await dbClient
     .select({ count: COUNT })

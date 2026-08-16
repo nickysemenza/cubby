@@ -87,7 +87,6 @@ import {
   findLinkedProductIds,
   findLocationsWithoutAiDescription,
   findManufacturerSpellingVariants,
-  findNeverVerifiedInventory,
   findOrphanedProducts,
   findParentRecipesWithDeletedSubRecipes,
   findProductsMissingPrice,
@@ -124,6 +123,7 @@ import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
+import { findViewProblems } from "~/server/services/problem-views.service";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
 import { traceAll, traceAllSeq } from "~/server/tracing";
 
@@ -543,7 +543,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       understatedCostMeals: () => findUnderstatedCostMeals(scoped),
       recipesWithoutInstructions: () => findRecipesWithoutInstructions(scoped),
       staleLocations: () => findStaleLocations(scoped),
-      neverVerifiedInventory: () => findNeverVerifiedInventory(scoped),
       unknownParkedItems: () => findUnknownParkedItems(scoped),
       manufacturerSpellingVariants: () =>
         findManufacturerSpellingVariants(scoped),
@@ -607,7 +606,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     understatedCostMeals: r.understatedCostMeals,
     recipesWithoutInstructions: r.recipesWithoutInstructions,
     staleLocations: r.staleLocations,
-    neverVerifiedInventory: r.neverVerifiedInventory,
     unknownParkedItems: r.unknownParkedItems,
     manufacturerSpellingVariants: r.manufacturerSpellingVariants,
     duplicateVendors: r.duplicateVendors,
@@ -757,6 +755,7 @@ export const findAllProblems = async (
     coverage: () => findCoverageProblems(db, usdaClient),
     upc: () => findUpcProblems(db, upcLookupClient),
     tracker: () => findTrackerProblems(db),
+    views: () => findViewProblems(db),
   });
   return assembleAllProblems(groups);
 };
