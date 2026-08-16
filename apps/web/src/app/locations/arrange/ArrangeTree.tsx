@@ -1,7 +1,7 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { ChevronRight, CornerDownRight } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { useAutoScroll } from "~/app/_components/hooks/use-auto-scroll";
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
@@ -17,6 +17,9 @@ interface ArrangeTreeProps {
   /** Max levels of children rendered below the zoom root before collapsing. */
   depth: number;
   unknownRoot: InfLocation | null;
+  /** The zoomed-to location, from the URL. Undefined = Home. */
+  at?: LocationShortcode;
+  onSelect: (at: LocationShortcode | undefined) => void;
 }
 
 /**
@@ -24,19 +27,26 @@ interface ArrangeTreeProps {
  * (as opposed to the Board's Miller columns) with a breadcrumb trail and a
  * docked "Unknown" staging panel. Drag/drop mutations are dispatched globally
  * by `useArrangeDnd`'s monitor (registered by the parent) — this component
- * only registers draggables/drop targets and local UI state (zoom, hover).
+ * only registers draggables/drop targets and hover state; the zoom lives in
+ * the URL, shared with the Board's column path.
  */
-export function ArrangeTree({ roots, depth, unknownRoot }: ArrangeTreeProps) {
-  const [zoom, setZoom] = useState<LocationShortcode[]>([]);
+export function ArrangeTree({
+  roots,
+  depth,
+  unknownRoot,
+  at,
+  onSelect,
+}: ArrangeTreeProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   useAutoScroll(scrollRef);
 
-  // Resolve the zoom path to actual nodes, bailing out if the tree changed
-  // underneath us (e.g. the zoomed-into location was moved/deleted).
+  // The URL carries only the zoomed-to node; its ancestors are whatever the
+  // live tree says they are, so a location moved underneath us stays zoomed
+  // (under its new parent) and a deleted one resolves to Home.
   const ancestors: InfLocation[] = [];
   {
     let level = roots;
-    for (const id of zoom) {
+    for (const id of at ? pathToNode(roots, at) : []) {
       const node = level.find((n) => n.id === id);
       if (!node) break;
       ancestors.push(node);
@@ -51,14 +61,6 @@ export function ArrangeTree({ roots, depth, unknownRoot }: ArrangeTreeProps) {
   ).filter((n) => !unknownRoot || n.id !== unknownRoot.id);
   const zoomItems = zoomRoot?.inventoryItems ?? [];
 
-  // Zoom to the clicked node's FULL root→node path. The drill button and the
-  // spring-load-on-hover both fire at any rendered depth (grandchildren render
-  // before the collapse cap), so appending the id would skip intermediate
-  // ancestors and break zoom resolution — resolve the whole chain instead.
-  function handleDrill(id: LocationShortcode) {
-    setZoom(pathToNode(roots, id));
-  }
-
   return (
     <Row gap="md" className="min-w-0 flex-1 flex-col lg:flex-row">
       <Stack gap="sm" className="min-w-0 flex-1">
@@ -68,7 +70,7 @@ export function ArrangeTree({ roots, depth, unknownRoot }: ArrangeTreeProps) {
             locationId={null}
             roots={roots}
             active={resolvedZoom.length === 0}
-            onClick={() => setZoom([])}
+            onClick={() => onSelect(undefined)}
           />
           {ancestors.map((node, i) => (
             <Row key={node.id} align="center" gap="xs">
@@ -78,7 +80,7 @@ export function ArrangeTree({ roots, depth, unknownRoot }: ArrangeTreeProps) {
                 locationId={node.id}
                 roots={roots}
                 active={i === ancestors.length - 1}
-                onClick={() => setZoom(resolvedZoom.slice(0, i + 1))}
+                onClick={() => onSelect(node.id)}
               />
             </Row>
           ))}
@@ -110,7 +112,7 @@ export function ArrangeTree({ roots, depth, unknownRoot }: ArrangeTreeProps) {
               roots={roots}
               level={0}
               maxDepth={depth}
-              onDrill={handleDrill}
+              onDrill={onSelect}
             />
           )}
         </div>

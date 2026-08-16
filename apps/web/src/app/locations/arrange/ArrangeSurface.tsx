@@ -1,3 +1,4 @@
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import {
   useMutation,
   useQueryClient,
@@ -47,9 +48,17 @@ function readDepth(): number {
 interface ArrangeSurfaceProps {
   view: ArrangeView;
   onViewChange: (view: ArrangeView) => void;
+  /** The drilled-to location, from the URL. Undefined = Home. */
+  at?: LocationShortcode;
+  onSelect: (at: LocationShortcode | undefined) => void;
 }
 
-export function ArrangeSurface({ view, onViewChange }: ArrangeSurfaceProps) {
+export function ArrangeSurface({
+  view,
+  onViewChange,
+  at,
+  onSelect,
+}: ArrangeSurfaceProps) {
   const api = useTRPC();
   const queryClient = useQueryClient();
   const { data: roots } = useSuspenseQuery(
@@ -132,9 +141,21 @@ export function ArrangeSurface({ view, onViewChange }: ArrangeSurfaceProps) {
 
       <ProductImageSummariesProvider productIds={productIds}>
         {view === "board" ? (
-          <ArrangeBoard roots={roots} depth={depth} unknownRoot={unknownRoot} />
+          <ArrangeBoard
+            roots={roots}
+            depth={depth}
+            unknownRoot={unknownRoot}
+            at={at}
+            onSelect={onSelect}
+          />
         ) : (
-          <ArrangeTree roots={roots} depth={depth} unknownRoot={unknownRoot} />
+          <ArrangeTree
+            roots={roots}
+            depth={depth}
+            unknownRoot={unknownRoot}
+            at={at}
+            onSelect={onSelect}
+          />
         )}
       </ProductImageSummariesProvider>
     </Stack>

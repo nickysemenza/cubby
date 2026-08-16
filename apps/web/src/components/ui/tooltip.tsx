@@ -64,6 +64,7 @@ function TooltipTrigger({ ...props }: TooltipPrimitive.Trigger.Props) {
 
 function TooltipContent({
   className,
+  positionerClassName,
   side = "top",
   sideOffset = 4,
   align = "center",
@@ -74,7 +75,15 @@ function TooltipContent({
   Pick<
     TooltipPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset"
-  >) {
+  > & {
+    /**
+     * Classes for the *positioner*, which is where the stacking context lives
+     * (`isolate z-50`). A tooltip opened from inside another portalled popup
+     * needs this to clear it — the combobox popup sits at `z-[200]`, so a
+     * z-index passed via `className` (the popup element) can't win.
+     */
+    positionerClassName?: string;
+  }) {
   const lazyContext = useContext(TooltipLazyContext);
   if (lazyContext?.lazy && !lazyContext.enabled) {
     return null;
@@ -87,7 +96,7 @@ function TooltipContent({
         alignOffset={alignOffset}
         side={side}
         sideOffset={sideOffset}
-        className="isolate z-50"
+        className={cn("isolate z-50", positionerClassName)}
       >
         <TooltipPrimitive.Popup
           data-slot="tooltip-content"

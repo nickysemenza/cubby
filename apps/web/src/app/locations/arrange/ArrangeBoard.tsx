@@ -1,17 +1,20 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { ChevronRight, Home } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useAutoScroll } from "~/app/_components/hooks/use-auto-scroll";
 import { cn } from "~/lib/utils";
 import { ArrangeColumn } from "./ArrangeColumn";
-import { findNode } from "./arrange-tree-utils";
+import { findNode, pathToNode } from "./arrange-tree-utils";
 import { useArrangeDropTarget } from "./use-arrange-drop-target";
 
 interface ArrangeBoardProps {
   roots: InfLocation[];
   depth: number;
   unknownRoot: InfLocation | null;
+  /** The drilled-to location, from the URL. Undefined = Home. */
+  at?: LocationShortcode;
+  onSelect: (at: LocationShortcode | undefined) => void;
 }
 
 interface ColumnModel {
@@ -22,8 +25,13 @@ interface ColumnModel {
   activeChildId: LocationShortcode | null;
 }
 
-export function ArrangeBoard({ roots, depth, unknownRoot }: ArrangeBoardProps) {
-  const [columnPath, setColumnPath] = useState<LocationShortcode[]>([]);
+export function ArrangeBoard({
+  roots,
+  depth,
+  unknownRoot,
+  at,
+  onSelect,
+}: ArrangeBoardProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   useAutoScroll(scrollRef);
 
@@ -32,16 +40,15 @@ export function ArrangeBoard({ roots, depth, unknownRoot }: ArrangeBoardProps) {
     [roots, unknownRoot],
   );
 
-  // Drop any path segment that no longer resolves (e.g. after a move relocated
-  // a location out from under an open column).
-  const validPath = useMemo(() => {
-    const out: LocationShortcode[] = [];
-    for (const id of columnPath) {
-      if (findNode(roots, id)) out.push(id);
-      else break;
-    }
-    return out;
-  }, [columnPath, roots]);
+  // The URL carries only the drilled-to leaf; the columns to its left are
+  // whatever the live tree says its ancestors are. That resolves itself against
+  // every mutation for free — a location dragged elsewhere keeps its column
+  // open under its new parent, where the old stored-path walk would have
+  // truncated — and a location that's gone resolves to `[]`, i.e. Home.
+  const validPath = useMemo(
+    () => (at ? pathToNode(roots, at) : []),
+    [at, roots],
+  );
 
   const columns = useMemo<ColumnModel[]>(() => {
     const cols: ColumnModel[] = [
@@ -69,10 +76,6 @@ export function ArrangeBoard({ roots, depth, unknownRoot }: ArrangeBoardProps) {
     return cols;
   }, [rootsMain, roots, validPath]);
 
-  const openChildAt = (columnIndex: number, childId: LocationShortcode) => {
-    setColumnPath([...validPath.slice(0, columnIndex), childId]);
-  };
-
   // Show only the rightmost `depth` columns; the breadcrumb reaches the rest.
   const hiddenLeft = Math.max(0, columns.length - depth);
   const visibleColumns = columns.slice(hiddenLeft);
@@ -91,15 +94,13 @@ export function ArrangeBoard({ roots, depth, unknownRoot }: ArrangeBoardProps) {
       <BoardBreadcrumb
         roots={roots}
         path={validPath}
-        onJump={(prefixLength) =>
-          setColumnPath(validPath.slice(0, prefixLength))
-        }
+        onJump={(prefixLength) => onSelect(validPath[prefixLength - 1])}
       />
       <div
         ref={scrollRef}
         className="flex min-h-[24rem] flex-1 gap-2 overflow-x-auto pb-2"
       >
-        {visibleColumns.map((col, i) => (
+        {visibleColumns.map((col) => (
           <ArrangeColumn
             key={col.locationId ?? "__home__"}
             locationId={col.locationId}
@@ -108,7 +109,7 @@ export function ArrangeBoard({ roots, depth, unknownRoot }: ArrangeBoardProps) {
             items={col.items ?? []}
             activeChildId={col.activeChildId}
             roots={roots}
-            onOpenChild={(childId) => openChildAt(hiddenLeft + i, childId)}
+            onOpenChild={onSelect}
           />
         ))}
         {unknownRoot && (

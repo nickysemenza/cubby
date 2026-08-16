@@ -6,6 +6,9 @@ import { match } from "ts-pattern";
 import { isValidItemDrop, isValidLocationDrop } from "./arrange-tree-utils";
 import { asDragData, asDropData, type ItemDragData } from "./arrange-types";
 
+/** Also referenced by `ArrangeThumb`'s hover-preview suppression variant. */
+const DRAGGING_CLASS = "arrange-dragging";
+
 interface UseArrangeDndArgs {
   /** Current tree roots — read live so the monitor never needs re-registering. */
   roots: InfLocation[];
@@ -36,7 +39,16 @@ export function useArrangeDnd({
 
   useEffect(() => {
     return monitorForElements({
+      // A body class, not React state: flipping state on drag start would
+      // re-render the whole forest mid-drag. `arrange-dragging` is what
+      // suppresses the cover tiles' hover previews (see ArrangeThumb) — a
+      // preview must not open, or stay open, over the board's drop targets.
+      onDragStart() {
+        document.body.classList.add(DRAGGING_CLASS);
+      },
       onDrop({ source, location }) {
+        // pdnd fires onDrop at the end of every drag, cancels included.
+        document.body.classList.remove(DRAGGING_CLASS);
         const drag = asDragData(source.data);
         if (!drag) return;
         // Innermost drop target under the pointer.
@@ -70,4 +82,11 @@ export function useArrangeDnd({
       },
     });
   }, []);
+
+  useEffect(
+    () => () => {
+      document.body.classList.remove(DRAGGING_CLASS);
+    },
+    [],
+  );
 }
