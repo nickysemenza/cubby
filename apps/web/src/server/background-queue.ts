@@ -1,5 +1,9 @@
 import { backgroundJobPayloadSchema } from "@cubby/schemas/background-jobs";
-import { unsafeLocationId, unsafeRecipeId } from "@cubby/schemas/identifiers";
+import {
+  unsafeIngredientId,
+  unsafeLocationId,
+  unsafeRecipeId,
+} from "@cubby/schemas/identifiers";
 import { match } from "ts-pattern";
 import type { Database } from "~/server/db";
 import {
@@ -28,6 +32,7 @@ import {
   detectInventoryItems,
   isLocationHasNoImagesToAnalyzeError,
 } from "./services/ai-enrichment/location-vision";
+import { retryUsdaMatch } from "./services/ai-enrichment/usda-match";
 import { LocationValuationService } from "./services/location-valuation.service";
 
 export async function processBackgroundQueueMessage(
@@ -171,6 +176,12 @@ async function runBackgroundJobPayload(
     })
     .with({ kind: "location-valuation.recompute" }, async () => {
       await new LocationValuationService(db).recompute();
+      return "succeeded" as const;
+    })
+    .with({ kind: "usda-match.retry" }, async (p) => {
+      // Real failures propagate (no catch here) — failOrRetryBackgroundJob is
+      // what turns those into the queue's own attempts/backoff.
+      await retryUsdaMatch(db, unsafeIngredientId(p.payload.ingredientId));
       return "succeeded" as const;
     })
     .exhaustive();

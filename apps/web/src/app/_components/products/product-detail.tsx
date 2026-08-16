@@ -4,7 +4,6 @@ import type {
   ProductWithFoodOut,
 } from "@cubby/schemas/product";
 import { isNonFoodCategory } from "@cubby/shared";
-import { getNutrientUnitString } from "@cubby/usda-schemas";
 import { uniq } from "es-toolkit";
 import {
   Apple,
@@ -27,16 +26,13 @@ import { type FC, useCallback, useState } from "react";
 import { CreateExpenseDialog } from "~/app/expenses/create-expense-dialog";
 import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
 import { Row, Stack } from "~/components/layout";
-import { MutedBox } from "~/components/layout/muted-box";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { OptionalStatusText, StatusText } from "~/components/ui/status-text";
 import { useTRPC } from "~/integrations/trpc/react";
-import { safeConvertAmount } from "~/lib/recipe-costing";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
-import { formatCurrency } from "~/lib/utils";
 import {
   DocumentViewerList,
   type DocumentViewTarget,
@@ -45,11 +41,12 @@ import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { tryFormatAmount } from "../inventory/format-amount";
+import { FullNutrientBreakdown } from "../nutrition/FullNutrientBreakdown";
+import { NutrientDensityStats } from "../nutrition/NutrientDensityStats";
 import { ProductNutritionLabel } from "../nutrition/ProductNutritionLabel";
 import { RecipeUsagesTable } from "../recipe/recipe-usages-table";
 import { RelationshipSummaryTable } from "../relationships/relationship-summary-table";
 import { UnitCoveragePanel } from "../units/UnitCoveragePanel";
-import { NutritionInfoTable } from "../usda/nutrition";
 import { ProductAddToInventoryDialog } from "./product-add-to-inventory-dialog";
 import { ProductBasicInfo } from "./product-basic-info";
 import { ProductDiscardDialog } from "./product-discard-dialog";
@@ -79,27 +76,6 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   });
 
   const isNonFood = isNonFoodCategory(product.category);
-
-  // Cost per gram of protein, via the same WASM graph conversion the costing
-  // engine uses: "1 g protein" resolved to kind "money" against this
-  // product's full synthesized mappings (stored + food + price edges — same
-  // graph UnitCoveragePanel below renders). A single-product graph carries at
-  // most one `each → dollar` price edge, so it never hits the dormant
-  // multi-priced-product collision documented in
-  // recipebridge/src/costing/engine.rs (that hazard is about an *ingredient's*
-  // merged multi-product graph, not a lone product's). Hidden entirely when
-  // the product has no price or no protein edge — there's no path to convert.
-  const proteinCost = safeConvertAmount(
-    { value: 1, unit: getNutrientUnitString("protein") },
-    mappings,
-    "money",
-  );
-  const costPerGramProtein =
-    proteinCost.isOk() &&
-    Number.isFinite(proteinCost.value.value) &&
-    proteinCost.value.value > 0
-      ? proteinCost.value.value
-      : null;
 
   // PDF manuals share the images relation — hero/gallery get only real
   // images; documents render in their own Manuals section.
@@ -274,11 +250,12 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
           },
         ]
       : []),
-    // Custom section: Nutrition (only if available) — the raw USDA nutrient
-    // table plus an FDA-style label view (per 100g, toggling to per-serving
-    // when a serving basis resolves — a custom "1 serving = X g" alias, a
-    // branded serving edge, or the food's USDA household portion), side by
-    // side so both readings of the same data coexist.
+    // Custom section: Nutrition (only if available) — an FDA-style label view
+    // (per 100g, toggling to per-serving when a serving basis resolves — a
+    // custom "1 serving = X g" alias, a branded serving edge, or the food's
+    // USDA household portion) leads, with the full raw USDA nutrient join
+    // behind a disclosure so non-tier-1 nutrients stay reachable without
+    // competing with the label for attention.
     ...(product.food?.nutritionInfo
       ? [
           {
@@ -291,9 +268,19 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
                   mappings={mappings}
                   portions={product.food.portionInfoRaw}
                 />
-                <MutedBox>
-                  <NutritionInfoTable n={product.food.nutritionInfo} />
-                </MutedBox>
+                <NutrientDensityStats
+                  nutrients={product.food.nutritionInfo.nutrientsPer100}
+                  mappings={mappings}
+                  price={product.pricing.effectivePrice ?? product.price}
+                  mappingProduct={{
+                    id: product.id,
+                    name: product.name,
+                    manufacturer: product.manufacturer,
+                  }}
+                />
+                <FullNutrientBreakdown
+                  nutritionInfo={product.food.nutritionInfo}
+                />
               </Stack>
             ),
           },
@@ -324,11 +311,6 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
             zone: "main" as const,
             content: (
               <Stack gap="sm">
-                {costPerGramProtein != null && (
-                  <Description>
-                    {formatCurrency(costPerGramProtein)} / g protein
-                  </Description>
-                )}
                 <UnitCoveragePanel
                   mappings={mappings}
                   showCoverage={!isNonFood}

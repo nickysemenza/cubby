@@ -12,9 +12,11 @@ import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { type DataType, dataTypeEnum } from "@cubby/usda-schemas";
 import { chat, maxIterations, toolDefinition } from "@tanstack/ai";
 import { DEFAULT_CHAT_MODEL } from "~/server/ai/models";
+import { dispatchBackgroundJobs } from "~/server/background-dispatch";
 import { aiGatewayUsageMiddleware } from "~/server/clients/ai-gateway-usage";
 import { getAnthropicClient } from "~/server/clients/anthropic";
 import type { Database } from "~/server/db";
+import { getIngredientByID } from "~/server/repo/ingredient";
 import type { USDAService } from "~/server/services/usda.service";
 import { drainChat, IS_CF_WORKERS } from "./shared";
 
@@ -209,33 +211,85 @@ interface UsdaFoodBatchSuggestion extends UsdaFoodSuggestion {
  * selected" action. Read-only — returns one suggestion per name for the user to
  * review and commit; it never links anything. Each name is its own agent loop
  * (several USDA searches), so concurrency is bounded and the batch is capped.
+ *
+ * A per-item `Promise.allSettled` rejection is an infrastructure failure
+ * (network blip, AI gateway hiccup) — indistinguishable, to this function's
+ * caller, from "the model genuinely found no match". The degraded
+ * `{food: null, reasoning: "Lookup failed."}` entry still returns immediately
+ * so the batch doesn't stall, but the failure ALSO dispatches a
+ * `usda-match.retry` background job for that ingredient, so the queue's own
+ * backoff/attempts absorb a transient blip instead of the human having to
+ * notice a "Lookup failed" row and manually retry (Tenet 3: this is exactly
+ * the unattended-retry work the queue exists for, unlike the interactive
+ * search loop above it).
  */
 export async function suggestUsdaFoodBatch(
   usdaService: USDAService,
   db: Database,
-  names: string[],
+  ingredients: { id: IngredientId; name: string }[],
 ): Promise<UsdaFoodBatchSuggestion[]> {
-  const capped = names.slice(0, 20);
+  const capped = ingredients.slice(0, 20);
   const out: UsdaFoodBatchSuggestion[] = [];
   for (let i = 0; i < capped.length; i += 5) {
     const batch = capped.slice(i, i + 5);
     const results = await Promise.allSettled(
-      batch.map((name) => suggestUsdaFood(usdaService, db, name)),
+      batch.map((item) => suggestUsdaFood(usdaService, db, item.name)),
     );
-    results.forEach((result, j) => {
-      const name = batch[j]!;
+    for (const [j, result] of results.entries()) {
+      const item = batch[j]!;
       if (result.status === "fulfilled") {
-        out.push({ name, ...result.value });
+        out.push({ name: item.name, ...result.value });
       } else {
-        console.error(`[suggestUsdaFoodBatch] ${name} failed:`, result.reason);
+        console.error(
+          `[suggestUsdaFoodBatch] ${item.name} failed:`,
+          result.reason,
+        );
         out.push({
-          name,
+          name: item.name,
           food: null,
           confidence: "low",
           reasoning: "Lookup failed.",
         });
+        await dispatchBackgroundJobs(db, {
+          kind: "usda-match.retry",
+          source: "mutation",
+          jobs: [
+            {
+              kind: "usda-match.retry",
+              dedupeKey: `usda-match.retry:${item.id}`,
+              payload: { ingredientId: item.id },
+            },
+          ],
+        });
       }
-    });
+    }
   }
   return out;
+}
+
+/**
+ * Background-job retry for a `suggestUsdaFoodBatch` item that failed at the
+ * infra level (see that function's doc comment). Re-fetches the ingredient's
+ * current name — the dispatching batch may be stale by the time this job
+ * runs — and re-attempts the single-item lookup directly, bypassing
+ * `suggestUsdaFoodBatch`'s swallow-and-degrade catch so a real failure here
+ * throws and lets `processBackgroundJob`'s retry/backoff take over.
+ *
+ * Deliberately read-only, same as `suggestUsdaFood` itself: it does not set
+ * `product.usdaUnavailable` (that column is a human's "I checked, no USDA
+ * food exists" assertion — conflating it with an automated retry, successful
+ * or not, would misrepresent what a person decided) and does not link a
+ * product to this food. Tenet 2's `ingredient → product → fdc_id` commit
+ * stays a deliberate, reviewed write in the interactive workbench; a
+ * successful retry's only visible effect is the job finishing "succeeded"
+ * rather than "failed", confirming the transient failure has cleared.
+ */
+export async function retryUsdaMatch(
+  db: Database,
+  ingredientId: IngredientId,
+): Promise<void> {
+  const { buildCrudServices } = await import("~/server/api/trpc");
+  const { usdaService } = buildCrudServices(db);
+  const ingredient = await getIngredientByID(db, ingredientId);
+  await suggestUsdaFood(usdaService, db, ingredient.name, { ingredientId });
 }

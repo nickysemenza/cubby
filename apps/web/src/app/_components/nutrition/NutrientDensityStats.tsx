@@ -1,0 +1,95 @@
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import {
+  getNutrientValueByKey,
+  type NutrientsPer100,
+} from "@cubby/usda-schemas";
+import { Row } from "~/components/layout";
+import { Description } from "~/components/ui/description";
+import { costPerNutrient, proteinPer100Kcal } from "~/lib/nutrition-intel";
+import { safeConvertAmount } from "~/lib/recipe-costing";
+import { formatCurrency } from "~/lib/utils";
+import { EntityInlineLink } from "../EntityInlineLink";
+
+/**
+ * Grams-per-each — the basis a per-each `price` needs to become a per-gram
+ * figure. Resolved via the WASM unit-mapping graph (a stored "1 each = X g"
+ * product mapping, same as `ProductNutritionLabel`'s `resolveServingBasis`)
+ * rather than assumed, because a package's weight is never derivable from the
+ * USDA nutrient record alone. Null when no such edge exists in `mappings`.
+ */
+function resolveGramsPerEach(mappings: UnitMapping[]): number | null {
+  const result = safeConvertAmount(
+    { value: 1, unit: "each" },
+    mappings,
+    "weight",
+  );
+  if (
+    result.isOk() &&
+    result.value.unit === "g" &&
+    Number.isFinite(result.value.value) &&
+    result.value.value > 0
+  ) {
+    return result.value.value;
+  }
+  return null;
+}
+
+/**
+ * Nutrient-density intel — protein-per-100-kcal (same-basis division, always
+ * available once both figures exist) and cost-per-gram-protein (needs the
+ * per-each price converted to a per-gram basis first). Shared by product,
+ * ingredient, and USDA food detail so "cost per g protein" reads identically
+ * everywhere it appears.
+ *
+ * When a price exists but no weight mapping resolves, that renders as an
+ * explicit "needs a weight mapping" nudge rather than silently omitting the
+ * figure — a missing mapping is a gap to fill, not a reason to guess.
+ */
+export function NutrientDensityStats({
+  nutrients,
+  mappings,
+  price,
+  mappingProduct,
+}: {
+  nutrients: NutrientsPer100;
+  mappings: UnitMapping[];
+  /** Per-each price to convert, or null when nothing is priced (nothing to show). */
+  price: number | null;
+  /** The product whose weight mapping would resolve the basis — links the
+   * "needs a weight mapping" nudge to where a human fixes it. */
+  mappingProduct: { id: string; name: string; manufacturer?: string };
+}) {
+  const kcal = getNutrientValueByKey(nutrients, "kcal");
+  const protein = getNutrientValueByKey(nutrients, "protein");
+  const proteinDensity = proteinPer100Kcal(protein, kcal);
+
+  const gramsPerEach = resolveGramsPerEach(mappings);
+  const proteinGramsPerEach =
+    gramsPerEach != null ? (protein * gramsPerEach) / 100 : null;
+  const costPerGramProtein =
+    price != null ? costPerNutrient(price, proteinGramsPerEach) : null;
+  const needsWeightMapping = price != null && gramsPerEach == null;
+
+  if (proteinDensity == null && price == null) return null;
+
+  return (
+    <Row gap="md" wrap align="baseline">
+      {proteinDensity != null && (
+        <Description>
+          {proteinDensity.toFixed(1)} g protein / 100 kcal
+        </Description>
+      )}
+      {costPerGramProtein != null ? (
+        <Description>
+          {formatCurrency(costPerGramProtein)} / g protein
+        </Description>
+      ) : needsWeightMapping ? (
+        <Description>
+          Needs a weight mapping on{" "}
+          <EntityInlineLink entity="product" data={mappingProduct} compact /> to
+          price per gram protein
+        </Description>
+      ) : null}
+    </Row>
+  );
+}

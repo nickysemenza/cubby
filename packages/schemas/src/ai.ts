@@ -182,8 +182,14 @@ const usdaFoodSuggestionFields = {
 
 export const usdaFoodSuggestionOut = z.object(usdaFoodSuggestionFields);
 
+// `id` alongside `name` lets a per-item infra failure (as opposed to a
+// genuine no-match) dispatch a background retry keyed on the real ingredient
+// — see `suggestUsdaFoodBatch`'s `Promise.allSettled` catch.
 export const usdaFoodSuggestionBatchInput = z.object({
-  ingredientNames: z.array(z.string().min(1)).min(1).max(20),
+  ingredients: z
+    .array(z.object({ id: ingredientShortcode, name: z.string().min(1) }))
+    .min(1)
+    .max(20),
 });
 
 export const usdaFoodSuggestionBatchOut = z.array(

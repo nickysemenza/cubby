@@ -193,18 +193,14 @@ follow-ups:
   review card) inside the MCP tool handler. **Not** a SQL dedupe in usda-api: the
   list query's `count` and `data` come from different FROM clauses and are never
   reconciled, and that count drives the `/usda` table's pager.
-- [ ] **Replace `NutritionInfoTable` with `NutritionLabel`** on the USDA food pages —
-  the FDA-style label (with %DV) now coexists with the raw nutrient table on
-  product detail; decide whether the raw table still earns its place. (2026-07
-  audit: ingredient detail is a *third* raw-table instance.)
-- [ ] **USDA food detail is a read-only dead end** (2026-07 audit): no page
-  actions at all — add "create product from this food" / "link to an
-  ingredient", since the food page is where the `ingredient → product → fdc_id`
-  hop naturally closes.
-- [ ] **Nutrient-density intel beyond recipes**: `nutrition-intel.ts`
-  (`costPerNutrient`, `proteinPer100Kcal`) renders only in magazine view +
-  compare; product/ingredient/USDA pages — where "cost per g protein" drives
-  the buying decision — don't show it.
+- **Decided: `NutritionLabel` leads, `NutritionInfoTable` demoted to a disclosure.**
+  The raw nutrient table stays — it's the only surface for non-tier-1 nutrients
+  (B-vitamin variants, fatty-acid breakdowns, amino acids, sugars), and a straight
+  swap to `NutritionLabel` would silently drop all of them. Resolved by leading
+  with `NutritionLabel` and collapsing `NutritionInfoTable` behind a "Full
+  nutrient breakdown" disclosure (`FullNutrientBreakdown`), applied uniformly on
+  USDA food, ingredient, and product detail — closing the 2026-07 audit's "third
+  raw-table instance" note on ingredient detail.
 - [ ] **`parse_scraped_recipe` could return parsed lines**: today it returns raw
   ingredient strings and the import path batch-parses them separately; folding the
   parse into the scrape export would save one boundary crossing on import.
@@ -229,9 +225,6 @@ follow-ups:
   `short_description`, `brand_name`, and `brand_owner`. Before the next full USDA
   rebuild, decide whether food-name-focused search is intentional or add those
   fields to restore brand-search parity.
-- [ ] **Retry USDA enrichment instead of silently degrading to `null`** when usda-api
-  is down — a small job kind on the background queue that already exists
-  (`server/background-queue.ts`), not new infrastructure.
 
 ---
 

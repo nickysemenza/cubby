@@ -156,6 +156,15 @@ interface CreateProductFormProps extends CreateModeProps<ProductCreateInput> {
   initialExpectedQuantity?: number | null;
   /** Pre-link the new product to an ingredient (used by the enrichment queue). */
   initialIngredient?: ComboboxItem | null;
+  /**
+   * USDA-food-derived prefill (the food-detail page's "create product" /
+   * "link to an ingredient" actions). `initialCategory` is deliberately not
+   * offered — `category` self-corrects server-side via `hasFoodIndicators`
+   * once `fdc_id` is set, so prefilling it here would just race that logic.
+   */
+  initialManufacturer?: string;
+  initialUpc?: string | null;
+  initialFdcId?: number | null;
   /** Rendered inside a modal — use a plain inline footer instead of the page sticky bar. */
   embedded?: boolean;
 }
@@ -209,6 +218,10 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
     mode === "create" ? props.initialExpectedQuantity : undefined;
   const initialIngredient =
     mode === "create" ? props.initialIngredient : undefined;
+  const initialManufacturer =
+    mode === "create" ? props.initialManufacturer : undefined;
+  const initialUpc = mode === "create" ? props.initialUpc : undefined;
+  const initialFdcId = mode === "create" ? props.initialFdcId : undefined;
 
   // Initialize form with default values or existing product data
   const form = useForm<ProductFormValues>({
@@ -217,12 +230,14 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       name: product ? product.name : (initialName ?? ""),
       aliases: product?.aliases ?? [],
       tags: product?.tags ?? [],
-      manufacturer: product ? product.manufacturer : UNSPECIFIED_MANUFACTURER,
+      manufacturer: product
+        ? product.manufacturer
+        : (initialManufacturer ?? UNSPECIFIED_MANUFACTURER),
       model: product ? product.model : null,
       notes: product ? product.notes : null,
       category: product?.category ?? null,
-      upc: product ? product.upc : null,
-      fdc_id: product ? product.fdc_id : null,
+      upc: product ? product.upc : (initialUpc ?? null),
+      fdc_id: product ? product.fdc_id : (initialFdcId ?? null),
       expectedQuantity: product
         ? product.expectedQuantity
         : (initialExpectedQuantity ?? null),
