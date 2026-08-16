@@ -41,7 +41,11 @@ import {
   ImageStatus,
   ImageStorageStatus,
 } from "./image";
-import { locationListRefOut, locationOut } from "./location";
+import {
+  locationAncestorOut,
+  locationListRefOut,
+  locationOut,
+} from "./location";
 import {
   createPaginatedResponseSchema,
   oneOrMany,
@@ -908,20 +912,47 @@ export type ProductManufacturerOptionsOut = z.infer<
 >;
 
 /**
- * Products sharing a tag with the one being viewed. Each row carries its own
- * full `tags` so the client can group by the shared tag — `category` is what
- * tells you which side of the pairing a sibling is on (the tool or the
- * consumable), which is why the tag itself needs no direction.
+ * "Fits With" — the products sharing a tag with the one being viewed, plus
+ * where each tag's family is stored.
+ *
+ * Each sibling carries its own full `tags` so the client can group by the
+ * shared tag — `category` is what tells you which side of the pairing a
+ * sibling is on (the tool or the consumable), which is why the tag itself
+ * needs no direction.
+ *
+ * `tagStorage` is keyed by the same tags, so the two halves render as one
+ * grouped list from a single round trip.
  */
-export const productTagSiblingsOut = z.array(
-  z.object({
-    id: productShortcode,
-    name: z.string(),
-    manufacturer: z.string(),
-    category: productCategory.nullable(),
-    tags: z.array(z.string()),
-  }),
-);
+export const productTagSiblingsOut = z.object({
+  siblings: z.array(
+    z.object({
+      id: productShortcode,
+      name: z.string(),
+      manufacturer: z.string(),
+      category: productCategory.nullable(),
+      tags: z.array(z.string()),
+    }),
+  ),
+  tagStorage: z.array(
+    z.object({
+      tag: z.string(),
+      locations: z.array(
+        z.object({
+          id: locationShortcode,
+          name: z.string(),
+          /** Root → immediate parent. Empty for a top-level location. */
+          ancestors: z.array(locationAncestorOut),
+          /** Distinct sibling products stocked here, never the viewed one. */
+          productCount: z.number().int().positive(),
+          /** The viewed product is stocked here too. */
+          holdsSource: z.boolean(),
+        }),
+      ),
+      /** Locations the server truncated away, for visible disclosure. */
+      omittedLocationCount: z.number().int().nonnegative(),
+    }),
+  ),
+});
 export type ProductTagSiblingsOut = z.infer<typeof productTagSiblingsOut>;
 
 export const productCategoryDistributionOut = z.array(

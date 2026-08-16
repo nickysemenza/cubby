@@ -79,6 +79,7 @@ import {
   getProductsByShortcodes,
   getProductsSharingTags,
   getProductTagOptions,
+  getTagSiblingStorage,
   mergeProducts,
   patchProductExternalIds,
   productList as productListRepo,
@@ -474,28 +475,37 @@ const externalIdSourceOptions = protectedProcedure
   .query(({ ctx }) => getProductExternalIdSourceOptions(ctx.db));
 
 /**
- * "Fits with this" — every other product sharing a tag. Separate from
- * `getByID` so the detail page's main payload doesn't grow a join that only
- * one section reads, and so it re-fetches on its own when tags change.
+ * "Fits with this" — every other product sharing a tag, and where each tag's
+ * family is stocked. Separate from `getByID` so the detail page's main payload
+ * doesn't grow a join that only one section reads, and so it re-fetches on its
+ * own when tags change.
+ *
+ * Both halves in one procedure because they're one panel: the roster and its
+ * storage rollup are grouped by the same tags and would otherwise cost two
+ * round trips to render a single sidebar section.
  */
 const tagSiblings = protectedProcedure
   .input(productShortcode)
   .output(strictOutput(productTagSiblingsOut))
   .query(async ({ ctx, input }) => {
-    const siblings = await getProductsSharingTags(
-      ctx.db,
-      await resolveProductId(ctx.db, input),
-    );
+    const id = await resolveProductId(ctx.db, input);
+    const [siblings, tagStorage] = await Promise.all([
+      getProductsSharingTags(ctx.db, id),
+      getTagSiblingStorage(ctx.db, id),
+    ]);
 
-    return siblings.map(
-      ({ shortcode, name, manufacturer, category, tags }) => ({
-        id: unsafeProductShortcode(shortcode),
-        name,
-        manufacturer,
-        category,
-        tags,
-      }),
-    );
+    return {
+      siblings: siblings.map(
+        ({ shortcode, name, manufacturer, category, tags }) => ({
+          id: unsafeProductShortcode(shortcode),
+          name,
+          manufacturer,
+          category,
+          tags,
+        }),
+      ),
+      tagStorage,
+    };
   });
 
 const externalIdCollisions = protectedProcedure

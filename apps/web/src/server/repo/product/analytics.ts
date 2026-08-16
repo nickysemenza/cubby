@@ -3,19 +3,32 @@
  * Category distribution, duplicate detection, and backfill operations.
  */
 
-import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
+import type {
+  LocationId,
+  LocationShortcode,
+  ProductId,
+} from "@cubby/schemas/identifiers";
+import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
+import type { LocationAncestorOut } from "@cubby/schemas/location";
 import type { ProductCategory } from "@cubby/schemas/product";
 import { and, arrayOverlaps, eq, isNull, ne, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   image,
   inventoryEntry,
+  location,
   product,
   productExternalId,
   productImage,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
+import { stockOnly } from "~/server/repo/inventory/placement";
+// Deep import, not the `~/server/repo/location` barrel: that barrel pulls in
+// `location/crud`, which imports `product/pricing` — a product module going
+// through it would close an import cycle. `location/tree` imports no product
+// code.
+import { loadLocationAncestors } from "~/server/repo/location/tree";
 
 export const findDuplicateUniqueProducts = async (
   db: Database,
@@ -164,8 +177,13 @@ export const getProductManufacturerOptions = async (
  *
  * Returns each sibling's full `tags` so the caller can group by the shared tag
  * without a second round trip. Intersecting in the component rather than
- * pivoting in SQL keeps this a single flat query, and the sets are tiny (the
- * largest tag group is 7 products).
+ * pivoting in SQL keeps this a single flat query.
+ *
+ * Ecosystem tags ARE tiny (`M18` is 6 products), but provenance tags are not —
+ * `home-depot-import` is 536 and `amazon` 324, so this is a few hundred scalar
+ * rows on the widest tag, not the handful an ecosystem tag suggests. Still one
+ * indexed scan and no pivot; sizing decisions here should use the provenance
+ * numbers rather than the ecosystem ones.
  *
  * Empty tags short-circuits: `arrayOverlaps` against `'{}'` matches nothing, so
  * the query would be a guaranteed-empty scan.
@@ -210,6 +228,182 @@ export const getProductsSharingTags = async (
       ),
     )
     .orderBy(product.name);
+};
+
+/** Locations shown per tag before the list is truncated. */
+const TAG_STORAGE_LOCATION_LIMIT = 4;
+
+export interface TagSiblingStorage {
+  tag: string;
+  locations: Array<{
+    id: LocationShortcode;
+    name: string;
+    /** Root → immediate parent. Empty for a top-level location. */
+    ancestors: LocationAncestorOut[];
+    /** Distinct sibling products stocked here — never counts `id` itself. */
+    productCount: number;
+    /** `id` is stocked here too, so the family already has this product. */
+    holdsSource: boolean;
+  }>;
+  /** Locations past {@link TAG_STORAGE_LOCATION_LIMIT}, for disclosure. */
+  omittedLocationCount: number;
+}
+
+/**
+ * Where each of `id`'s tags is stored — the put-away half of "Fits With".
+ *
+ * The roster (`getProductsSharingTags`) answers what else is in an ecosystem;
+ * this answers where that ecosystem lives, so a new M18 battery in hand can be
+ * put where the rest of the M18 kit already sits without opening four siblings.
+ *
+ * ## Counting
+ *
+ * A location's count is **distinct sibling products** — "3 M18 things live
+ * here" is the signal, not how many rows record them. Today the two coincide,
+ * because the partial unique index on
+ * `(productId, locationId, placement) WHERE deletedAt IS NULL` already permits
+ * only one live stock row per pair; counting products keeps the number meaning
+ * what the panel says it means if that ever loosens.
+ *
+ * The source product is deliberately part of the query but never part of a
+ * count. Its rows only raise `holdsSource`, which is what lets the panel
+ * distinguish "the family lives here, and so do you" from "the family lives
+ * here, you don't" — the whole point of showing this next to the roster. One
+ * query covers both signals.
+ *
+ * ## Truncation
+ *
+ * Capped here rather than in JSX because a renderer-intrinsic omission has to
+ * be server-enforced and disclosed; `omittedLocationCount` is that disclosure.
+ *
+ * Pivoting per tag in TS rather than `unnest`-ing tags in SQL matches
+ * `getProductsSharingTags` and keeps `notDeleted` / `stockOnly` as ordinary
+ * helpers — a hand-rolled `t.tag = ANY(${tags})` would be the row-constructor
+ * trap.
+ *
+ * There is no SQL `LIMIT`: the cap is per tag, and which locations survive it
+ * is only known after the fold. What bounds the scan is that this reads
+ * INVENTORY, not products — a tag's stocked entries, not its membership. The
+ * widest tags are provenance ones, and they are the sparsely-stocked ones:
+ * `home-depot-import` spans 536 products but only ~49 stocked entries,
+ * `amazon` 324 for ~106. A tag that is both very popular AND densely stocked
+ * would break that, and is the case to re-measure before assuming this holds.
+ */
+export const getTagSiblingStorage = async (
+  db: Database,
+  id: ProductId,
+): Promise<TagSiblingStorage[]> => {
+  const source = await getDb(db)
+    .select({ tags: product.tags })
+    .from(product)
+    .where(and(eq(product.id, id), notDeleted(product)))
+    .limit(1);
+
+  const tags = source[0]?.tags ?? [];
+  if (tags.length === 0) return [];
+
+  // One row per (product, entry) for every product sharing a tag, the source
+  // included. `stockOnly()` because this is a countable browse surface — a
+  // fixture wired into a wall is not somewhere to put a spare battery.
+  const rows = await getDb(db)
+    .select({
+      productId: product.id,
+      productTags: product.tags,
+      locationId: location.id,
+      locationShortcode: location.shortcode,
+      locationName: location.name,
+    })
+    .from(inventoryEntry)
+    .innerJoin(product, eq(product.id, inventoryEntry.productId))
+    .innerJoin(location, eq(location.id, inventoryEntry.locationId))
+    .where(
+      and(
+        notDeleted(inventoryEntry),
+        stockOnly(),
+        notDeleted(product),
+        notDeleted(location),
+        arrayOverlaps(product.tags, tags),
+      ),
+    );
+
+  interface Tally {
+    locationId: LocationId;
+    shortcode: string;
+    name: string;
+    productIds: Set<ProductId>;
+    holdsSource: boolean;
+  }
+  const byTag = new Map<string, Map<LocationId, Tally>>();
+  const sourceTags = new Set(tags);
+
+  for (const row of rows) {
+    for (const tag of row.productTags) {
+      // A sibling carries its own unrelated tags too; only the viewed
+      // product's tags are groups the panel will ever render.
+      if (!sourceTags.has(tag)) continue;
+
+      let locations = byTag.get(tag);
+      if (!locations) {
+        locations = new Map();
+        byTag.set(tag, locations);
+      }
+
+      let tally = locations.get(row.locationId);
+      if (!tally) {
+        tally = {
+          locationId: row.locationId,
+          shortcode: row.locationShortcode,
+          name: row.locationName,
+          productIds: new Set(),
+          holdsSource: false,
+        };
+        locations.set(row.locationId, tally);
+      }
+
+      // The Set is what makes the count distinct-by-product across entries.
+      if (row.productId === id) tally.holdsSource = true;
+      else tally.productIds.add(row.productId);
+    }
+  }
+
+  const ranked = tags.flatMap((tag) => {
+    const tallies = [...(byTag.get(tag)?.values() ?? [])]
+      // A location holding only the source product tells you nothing about
+      // where the family lives — that is just this product's own Stocked At.
+      .filter((t) => t.productIds.size > 0)
+      .sort(
+        (a, b) =>
+          b.productIds.size - a.productIds.size || a.name.localeCompare(b.name),
+      );
+    if (tallies.length === 0) return [];
+    return [
+      {
+        tag,
+        tallies: tallies.slice(0, TAG_STORAGE_LOCATION_LIMIT),
+        omittedLocationCount: Math.max(
+          0,
+          tallies.length - TAG_STORAGE_LOCATION_LIMIT,
+        ),
+      },
+    ];
+  });
+
+  // One batched CTE for every surviving location across all tags.
+  const ancestorsById = await loadLocationAncestors(db, [
+    ...new Set(ranked.flatMap((g) => g.tallies.map((t) => t.locationId))),
+  ]);
+
+  return ranked.map(({ tag, tallies, omittedLocationCount }) => ({
+    tag,
+    omittedLocationCount,
+    locations: tallies.map((t) => ({
+      id: unsafeLocationShortcode(t.shortcode),
+      name: t.name,
+      ancestors: ancestorsById.get(t.locationId) ?? [],
+      productCount: t.productIds.size,
+      holdsSource: t.holdsSource,
+    })),
+  }));
 };
 
 export const getCategoryDistribution = async (

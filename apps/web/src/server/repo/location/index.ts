@@ -44,6 +44,13 @@ export {
 // Tree and hierarchy operations
 // `loadLocationAncestors` / `wouldCreateParentCycle` stay module-internal —
 // they're inputs to the reads below, not operations of their own.
+//
+// `loadLocationAncestors` has one caller outside this module
+// (product/analytics.ts's tag-sibling storage rollup), which deep-imports
+// `./tree` rather than going through this barrel: `./crud` imports
+// product/pricing, so a product module importing this barrel closes an import
+// cycle. Same reason crud.ts deep-imports `product/pricing` instead of the
+// product barrel.
 export { buildLocationTree } from "./tree";
 // Valuation rollup persistence
 export {
