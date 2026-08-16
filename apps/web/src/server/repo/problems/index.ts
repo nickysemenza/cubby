@@ -81,7 +81,6 @@ export {
 export {
   type EmptyLocation,
   findEmptyLocations,
-  findLocationsWithoutAiDescription,
   findStaleLocations,
 } from "./detectors-location";
 // Meal-centric detectors

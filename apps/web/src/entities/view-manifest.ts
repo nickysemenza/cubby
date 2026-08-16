@@ -444,6 +444,30 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       },
     },
   ],
+  location: [
+    {
+      id: "undescribed",
+      label: "No AI description",
+      description: "Locations with photos that haven't been described yet",
+      // `image: has` is not decoration: describing a location with no photo
+      // isn't possible, so without it this selects a backlog nothing can drain.
+      filters: [
+        { id: "image", value: "has" },
+        { id: "aiDescription", value: "none" },
+      ],
+      problem: {
+        key: "locationsWithoutAiDescription",
+        title: "Missing AI Descriptions",
+        description:
+          "Locations with photos that haven't been analyzed by AI yet. Run backfill to generate descriptions for all.",
+        emptyMessage: "All locations with photos have AI descriptions.",
+        serverFilters: {
+          imagePresenceFilter: "has",
+          aiDescriptionPresenceFilter: "none",
+        },
+      },
+    },
+  ],
   inventory: [
     {
       id: "never-verified",

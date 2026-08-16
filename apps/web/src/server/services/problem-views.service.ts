@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { SortParams } from "@cubby/schemas/pagination";
 import type {
+  LocationWithoutAiDescription,
   NeverVerifiedInventory,
   ProblemsViewsOut,
   SectionTotals,
@@ -110,6 +111,22 @@ const toUnusedIngredient = (row: ListRow): UnusedIngredient => {
   };
 };
 
+const toLocationWithoutAiDescription = (
+  row: ListRow,
+): LocationWithoutAiDescription => {
+  const r = row as unknown as LocationWithoutAiDescription & {
+    images: unknown[];
+  };
+  return {
+    id: r.id,
+    name: r.name,
+    type: r.type,
+    // The list's `images` is already the displayable, live set — stricter than
+    // the detector's unguarded join, which counted detached rows and PDFs.
+    imageCount: r.images.length,
+  };
+};
+
 export const findViewProblems = async (
   db: Database,
 ): Promise<ProblemsViewsOut> => {
@@ -167,6 +184,9 @@ export const findViewProblems = async (
     unusedIngredientsWithoutProduct: (
       results.unusedIngredientsWithoutProduct?.data ?? []
     ).map(toUnusedIngredient),
+    locationsWithoutAiDescription: (
+      results.locationsWithoutAiDescription?.data ?? []
+    ).map(toLocationWithoutAiDescription),
     sectionTotals,
   };
 };
@@ -210,4 +230,35 @@ export const findAllViewProblemIds = async (
     ids.push(...data.map((row) => row.id));
     if (data.length === 0 || ids.length >= count) return ids;
   }
+};
+
+/**
+ * How many rows a view-backed section selects, without fetching any of them.
+ *
+ * For callers that only ever render a number — the Settings → Maintenance card
+ * — so they don't pay for a page of relation-embedded rows to call `.length` on
+ * it. `executeListQueryWithCount` runs the count as its own query, so a
+ * `pageSize: 1` page is nearly free.
+ */
+export const countViewProblem = async (
+  db: Database,
+  key: string,
+): Promise<number> => {
+  const declaration = viewProblemDeclarations().find(
+    (candidate) => candidate.problem.key === key,
+  );
+  if (!declaration) throw new Error(`No view declares problem "${key}"`);
+  const list = LIST_FN[declaration.entity];
+  if (!list) {
+    throw new Error(
+      `No list function registered for entity "${declaration.entity}"`,
+    );
+  }
+  const { count } = await list(
+    db,
+    declaration.problem.serverFilters as never,
+    [],
+    { pageIndex: 0, pageSize: 1 },
+  );
+  return count;
 };

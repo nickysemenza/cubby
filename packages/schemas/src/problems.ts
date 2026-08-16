@@ -804,7 +804,6 @@ const problemsFastShape = {
   ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
   emptyLocations: z.array(emptyLocationSchema),
   productsWithNoImages: z.array(productWithNoImagesSchema),
-  locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
   orphanedEntityEmbeddings: z.array(orphanedEntityEmbeddingSchema),
   unreferencedImages: z.array(unreferencedImageSchema),
   entitiesMissingEmbeddings: z.array(entityMissingEmbeddingSchema),
@@ -904,6 +903,7 @@ export type SectionTotals = z.infer<typeof sectionTotalsSchema>;
  */
 const problemsViewsShape = {
   neverVerifiedInventory: z.array(neverVerifiedInventorySchema),
+  locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
   unusedIngredientsWithProduct: z.array(unusedIngredientSchema),
   unusedIngredientsWithoutProduct: z.array(unusedIngredientSchema),
 };

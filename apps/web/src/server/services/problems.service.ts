@@ -85,7 +85,6 @@ import {
   findIngredientsWithUnusedAliases,
   findInvalidFinancialJson,
   findLinkedProductIds,
-  findLocationsWithoutAiDescription,
   findManufacturerSpellingVariants,
   findOrphanedProducts,
   findParentRecipesWithDeletedSubRecipes,
@@ -122,7 +121,10 @@ import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
-import { findViewProblems } from "~/server/services/problem-views.service";
+import {
+  countViewProblem,
+  findViewProblems,
+} from "~/server/services/problem-views.service";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
 import { traceAll, traceAllSeq } from "~/server/tracing";
 
@@ -398,7 +400,8 @@ export const findMaintenanceCounts = async (
   const r = await traceAll({
     productsWithNoImages: () =>
       findProductsWithNoImages(db, { excludeIngredients: true }),
-    locationsWithoutAiDescription: () => findLocationsWithoutAiDescription(db),
+    locationsWithoutAiDescription: () =>
+      countViewProblem(db, "locationsWithoutAiDescription"),
     staleRecipeTotals: () => countStaleRecipeTotals(db),
     cullablePendingImages: () =>
       countCullablePendingImages(db, CULL_PENDING_IMAGES_DEFAULT_HOURS),
@@ -412,7 +415,7 @@ export const findMaintenanceCounts = async (
     // this counts just those. Same canonical key, intentionally narrower number.
     productsWithNoImages: r.productsWithNoImages.filter((p) => p.upc != null)
       .length,
-    locationsWithoutAiDescription: r.locationsWithoutAiDescription.length,
+    locationsWithoutAiDescription: r.locationsWithoutAiDescription,
     staleRecipeTotals: r.staleRecipeTotals,
     cullablePendingImages: r.cullablePendingImages,
     unreferencedImages: r.unreferencedImages,
@@ -528,8 +531,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       emptyLocations: () => findEmptyLocations(scoped),
       productsWithNoImages: () =>
         findProductsWithNoImages(scoped, { excludeIngredients: true }),
-      locationsWithoutAiDescription: () =>
-        findLocationsWithoutAiDescription(scoped),
       orphanedEntityEmbeddings: () => findOrphanedEntityEmbeddings(scoped),
       // Six index-only scans of the small join tables plus one Image scan. Sits
       // in this group for the same reason `referentialLivenessViolations` does:
@@ -593,7 +594,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       ...p,
       id: unsafeProductShortcode(p.shortcode),
     })),
-    locationsWithoutAiDescription: r.locationsWithoutAiDescription,
     orphanedEntityEmbeddings: r.orphanedEntityEmbeddings,
     unreferencedImages: r.unreferencedImages,
     entitiesMissingEmbeddings: r.entitiesMissingEmbeddings,

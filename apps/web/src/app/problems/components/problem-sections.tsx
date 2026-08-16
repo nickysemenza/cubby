@@ -1322,6 +1322,7 @@ const DECLARED_SECTIONS = [
     id: "ai-descriptions",
     label: "AI Descriptions",
     select: (p) => p.locationsWithoutAiDescription ?? [],
+    totalKey: "locationsWithoutAiDescription",
     icon: Sparkles,
     title: "Missing AI Descriptions",
     description:

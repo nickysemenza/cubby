@@ -6,14 +6,10 @@
  */
 
 import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
-import type {
-  EmptyLocation,
-  LocationWithoutAiDescription,
-  StaleLocation,
-} from "@cubby/schemas/problems";
+import type { EmptyLocation, StaleLocation } from "@cubby/schemas/problems";
 import { and, eq, isNull, lt, notExists, or, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
-import { inventoryEntry, location, locationImage } from "~/server/db/schema";
+import { inventoryEntry, location } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { stockOnly } from "~/server/repo/inventory/placement";
 
@@ -156,32 +152,5 @@ export const findStaleLocations = async (
     ...r,
     id: unsafeLocationShortcode(r.shortcode),
     itemCount: Number(r.itemCount),
-  }));
-};
-
-// Find locations that have images but no AI description
-export const findLocationsWithoutAiDescription = async (
-  db: Database,
-): Promise<LocationWithoutAiDescription[]> => {
-  const dbClient = getDb(db);
-
-  const results = await dbClient
-    .select({
-      id: location.id,
-      shortcode: location.shortcode,
-      name: location.name,
-      type: location.type,
-      imageCount: sql<number>`count(${locationImage.id})`,
-    })
-    .from(location)
-    .innerJoin(locationImage, eq(locationImage.locationId, location.id))
-    .where(and(notDeleted(location), isNull(location.aiDescription)))
-    .groupBy(location.id, location.shortcode, location.name, location.type);
-
-  return results.map((r) => ({
-    id: unsafeLocationShortcode(r.shortcode),
-    name: r.name,
-    type: r.type,
-    imageCount: Number(r.imageCount),
   }));
 };
