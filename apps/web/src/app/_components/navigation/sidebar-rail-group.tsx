@@ -117,7 +117,7 @@ function SidebarFlyoutItem({
       render={<Link {...navItemLinkProps(item, active)} />}
       className={cn("gap-2", active && "bg-accent")}
     >
-      <Icon className="size-3.5" />
+      <Icon />
       {item.label}
     </DropdownMenuItem>
   );

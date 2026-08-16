@@ -1,11 +1,11 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { BookOpen, EllipsisVertical, Trash } from "lucide-react";
+import { BookOpen, EllipsisVertical } from "lucide-react";
+import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { Empty, EmptyDescription, EmptyIcon } from "~/components/ui/empty";
@@ -113,15 +113,12 @@ export function CookbookList() {
                         <EllipsisVertical />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() =>
+                        <VerbMenuItem
+                          verb="delete"
+                          onSelect={() =>
                             requestDelete({ id, name, recipeCount })
                           }
-                        >
-                          <Trash />
-                          Delete
-                        </DropdownMenuItem>
+                        />
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>

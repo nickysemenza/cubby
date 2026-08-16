@@ -2,8 +2,8 @@ import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ArrowRightLeft, CheckCircle2 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
+import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import { ExternalLinkIcon } from "~/app/_components/ExternalLink";
 import {
   expenseCostColumn,
@@ -21,7 +21,6 @@ import { VendorMark } from "~/components/entity/vendor-cell";
 import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
-import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseLabel } from "~/lib/purchase-label";
@@ -126,24 +125,20 @@ export function ExpenseList() {
     (row: ExpenseOut) =>
       row.future ? (
         <>
-          <DropdownMenuItem
-            onClick={(e) => {
+          <VerbMenuItem
+            verb="markPurchased"
+            onSelect={(e) => {
               e.stopPropagation();
               setSettleTarget(row);
             }}
-          >
-            <CheckCircle2 />
-            Mark purchased
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={(e) => {
+          />
+          <VerbMenuItem
+            verb="moveToProject"
+            onSelect={(e) => {
               e.stopPropagation();
               setMoveTarget(row);
             }}
-          >
-            <ArrowRightLeft />
-            Move to project...
-          </DropdownMenuItem>
+          />
         </>
       ) : null,
     [],

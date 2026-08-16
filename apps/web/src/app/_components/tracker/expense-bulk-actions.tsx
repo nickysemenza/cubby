@@ -1,12 +1,11 @@
 import type { CostType, ExpenseOut, Trade } from "@cubby/schemas/project";
-import type { Row } from "@tanstack/react-table";
-import { ArrowRightLeft, Tag, Wrench } from "lucide-react";
 import { useMemo, useState } from "react";
 import { costTypeOptions } from "~/app/expenses/expense-options";
 import { tradeOptions } from "~/app/projects/trade-options";
 import { useTRPC } from "~/integrations/trpc/react";
 import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+import { verbBulkAction } from "../actions/action-verb-ui";
 import type {
   BulkAction,
   BulkActionsConfig,
@@ -29,36 +28,28 @@ export function useExpenseBulkActions({
   const config = useMemo<BulkActionsConfig<ExpenseOut>>(
     () => ({
       actions: [
-        {
+        verbBulkAction<ExpenseOut>("moveToProject", {
           id: "move",
-          label: "Move to project...",
-          icon: <ArrowRightLeft className="size-4" />,
           minSelection: 1,
-          onExecute: async (rows: Row<ExpenseOut>[]) => {
+          onExecute: async (rows) => {
             setMoveItems(rows.map((row) => row.original));
             return { success: true };
           },
-        },
-        {
-          id: "set-trade",
-          label: "Set trade...",
-          icon: <Wrench className="size-4" />,
+        }),
+        verbBulkAction<ExpenseOut>("setTrade", {
           minSelection: 1,
-          onExecute: async (rows: Row<ExpenseOut>[]) => {
+          onExecute: async (rows) => {
             setTradeItems(rows.map((row) => row.original));
             return { success: true };
           },
-        },
-        {
-          id: "set-cost-type",
-          label: "Set cost type...",
-          icon: <Tag className="size-4" />,
+        }),
+        verbBulkAction<ExpenseOut>("setCostType", {
           minSelection: 1,
-          onExecute: async (rows: Row<ExpenseOut>[]) => {
+          onExecute: async (rows) => {
             setCostTypeItems(rows.map((row) => row.original));
             return { success: true };
           },
-        },
+        }),
         ...extraActions,
       ],
       clearSelectionOnComplete: false,

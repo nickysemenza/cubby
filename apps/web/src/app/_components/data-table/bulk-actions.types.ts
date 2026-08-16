@@ -14,6 +14,12 @@ export interface BulkAction<TData> {
   label: string;
   /** Icon component to display */
   icon?: ReactNode;
+  /**
+   * Renders destructive. Replaces the old `id === "delete"` convention in
+   * `BulkActionBar`, which quietly assumed one destructive action existed and
+   * that it was always minted by `useOptimisticDelete`.
+   */
+  tone?: "destructive";
   /** Minimum number of selected rows required (default: 1) */
   minSelection?: number;
   /** Maximum number of selected rows allowed (default: unlimited) */

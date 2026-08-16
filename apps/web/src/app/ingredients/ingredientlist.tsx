@@ -3,9 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { uniq } from "es-toolkit";
-import { Merge, Scale, Sparkles } from "lucide-react";
+import { Scale, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { verbBulkAction } from "~/app/_components/actions/action-verb-ui";
 import { IngredientMergeDialog } from "~/app/_components/ingredient/ingredient-merge-dialog";
 import {
   ProductFoodSummariesProvider,
@@ -262,10 +263,7 @@ export function IngredientList() {
     columns,
     bulkActions: {
       actions: [
-        {
-          id: "merge",
-          label: "Merge",
-          icon: <Merge className="size-4" />,
+        verbBulkAction<IngredientListItem>("merge", {
           minSelection: 2,
           // No built-in confirmation: `onExecute` only opens the shared
           // IngredientMergeDialog (below) and returns `success: false` so the
@@ -276,7 +274,7 @@ export function IngredientList() {
             setMergeRows(rows.map((r) => r.original));
             return { success: false };
           },
-        },
+        }),
       ],
     },
     deletable: deletableConfig,

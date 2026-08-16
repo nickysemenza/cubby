@@ -5,19 +5,15 @@ import type {
 } from "@cubby/schemas/identifiers";
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { Link } from "@tanstack/react-router";
-import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
-import {
-  ArrowRightLeft,
-  ImageIcon,
-  PackageMinus,
-  Trash,
-  Wrench,
-} from "lucide-react";
+import { ImageIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { z } from "zod";
+import {
+  VerbMenuItem,
+  verbBulkAction,
+} from "~/app/_components/actions/action-verb-ui";
 import type { TRPCQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
-import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { useTRPC } from "~/integrations/trpc/react";
 import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 import {
@@ -120,59 +116,56 @@ export function LocationInventoryTable({
   const bulkActions = useMemo(
     () => ({
       actions: [
-        {
+        verbBulkAction<InventoryItem>("moveTo", {
           id: "move",
-          label: "Move",
-          icon: <ArrowRightLeft className="size-4" />,
           minSelection: 1,
-          onExecute: async (rows: Row<InventoryItem>[]) => {
+          onExecute: async (rows) => {
             setDialogState({
               type: "move",
               items: rows.map((r) => r.original),
             });
             return { success: true };
           },
-        },
-        {
-          id: "delete",
-          label: "Delete",
-          icon: <Trash className="size-4" />,
+        }),
+        verbBulkAction<InventoryItem>("delete", {
           minSelection: 1,
-          onExecute: async (rows: Row<InventoryItem>[]) => {
+          onExecute: async (rows) => {
             setDialogState({
               type: "delete",
               items: rows.map((r) => r.original),
             });
             return { success: true };
           },
-        },
-        {
-          // Marking is inherently a multi-select job — you sweep a room's
-          // appliances in one pass — so it's a bulk action rather than a
-          // per-row toggle. It does NOT move anything: the row keeps its
-          // location and simply stops being counted.
-          id: "placement",
-          label: placement === "installed" ? "Mark as stock" : "Mark installed",
-          icon: <Wrench className="size-4" />,
-          minSelection: 1,
-          onExecute: async (rows: Row<InventoryItem>[]) => {
-            const next = placement === "installed" ? "stock" : "installed";
-            // Sequential, NOT Promise.all. The slot is
-            // `(productId, locationId, placement)`, so flipping a stock row
-            // whose installed twin already sits in this room is refused — a
-            // legitimate state, which is why the key allows the pair. In
-            // parallel that rejection lands after its siblings have already
-            // been written, leaving a partial apply; serially it stops at the
-            // offending row with everything before it durably done.
-            for (const row of rows) {
-              await updateMutation.mutateAsync({
-                id: row.original.id,
-                data: { placement: next },
-              });
-            }
-            return { success: true };
+        }),
+        // Marking is inherently a multi-select job — you sweep a room's
+        // appliances in one pass — so it's a bulk action rather than a
+        // per-row toggle. It does NOT move anything: the row keeps its
+        // location and simply stops being counted. The verb flips with the
+        // current placement, which is why this one is chosen rather than fixed.
+        verbBulkAction<InventoryItem>(
+          placement === "installed" ? "markAsStock" : "markInstalled",
+          {
+            id: "placement",
+            minSelection: 1,
+            onExecute: async (rows) => {
+              const next = placement === "installed" ? "stock" : "installed";
+              // Sequential, NOT Promise.all. The slot is
+              // `(productId, locationId, placement)`, so flipping a stock row
+              // whose installed twin already sits in this room is refused — a
+              // legitimate state, which is why the key allows the pair. In
+              // parallel that rejection lands after its siblings have already
+              // been written, leaving a partial apply; serially it stops at
+              // the offending row with everything before it durably done.
+              for (const row of rows) {
+                await updateMutation.mutateAsync({
+                  id: row.original.id,
+                  data: { placement: next },
+                });
+              }
+              return { success: true };
+            },
           },
-        },
+        ),
       ],
       // Selection survives on purpose: if a flip is refused mid-batch, the rows
       // stay selected so it's visible which ones were being acted on.
@@ -255,39 +248,28 @@ export function LocationInventoryTable({
     // this table is embedded alongside its other content.
     tableStateOptions: EMBEDDED_TABLE_STATE,
     columns,
-    // DropdownMenuItem, not Button: these render inside the row kebab's
-    // DropdownMenuContent, where a raw Button gets none of the menu's
-    // keyboard roving, typeahead, or item styling. Icons inherit the menu's
-    // size-3.5 default — an explicit size here is an unwanted override.
     extraActions: (item) => (
       <>
-        <DropdownMenuItem
-          onClick={() => setDialogState({ type: "move", items: [item] })}
-        >
-          <ArrowRightLeft />
-          Move to...
-        </DropdownMenuItem>
+        <VerbMenuItem
+          verb="moveTo"
+          onSelect={() => setDialogState({ type: "move", items: [item] })}
+        />
         {/* Discard writes a ledger row and can clear the shelf in the same
             transaction — the honest verb for "used it up", where Delete just
             says the entry should never have existed. */}
-        <DropdownMenuItem
-          onClick={() =>
+        <VerbMenuItem
+          verb="discard"
+          onSelect={() =>
             setDiscardTarget({
               productId: item.product.id,
               entryId: item.id,
             })
           }
-        >
-          <PackageMinus />
-          Discard...
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          variant="destructive"
-          onClick={() => setDialogState({ type: "delete", items: [item] })}
-        >
-          <Trash />
-          Delete
-        </DropdownMenuItem>
+        />
+        <VerbMenuItem
+          verb="delete"
+          onSelect={() => setDialogState({ type: "delete", items: [item] })}
+        />
       </>
     ),
     bulkActions,

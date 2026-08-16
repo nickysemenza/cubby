@@ -116,7 +116,7 @@ export function DataTableViewOptions<TData>({
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem onClick={onResetColumnWidths}>
-                <Columns3 className="mr-2 size-3.5" />
+                <Columns3 />
                 Reset column widths
               </DropdownMenuItem>
             </DropdownMenuGroup>
@@ -139,7 +139,7 @@ export function DataTableViewOptions<TData>({
             />
           </div>
           <DropdownMenuItem onClick={() => table.setColumnVisibility({})}>
-            <RotateCcw className="mr-2 size-3.5" />
+            <RotateCcw />
             Reset to default
           </DropdownMenuItem>
           <DropdownMenuSeparator />

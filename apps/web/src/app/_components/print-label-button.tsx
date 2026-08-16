@@ -1,9 +1,8 @@
 import { Link } from "@tanstack/react-router";
-import { Printer } from "lucide-react";
-import { Button } from "~/components/ui/button";
+import { VerbButton } from "./actions/action-verb-ui";
 
 /**
- * The "Print Label" action: an outline button linking to /labels for a single
+ * The Print label action: an outline button linking to /labels for a single
  * shortcode. Renders nothing when there's no shortcode. Shared by the product
  * and location info views (callers apply any extra gating, e.g. QR support).
  */
@@ -14,13 +13,9 @@ export function PrintLabelButton({
 }) {
   if (!shortcode) return null;
   return (
-    <Button
-      variant="outline"
+    <VerbButton
+      verb="printLabel"
       render={<Link to="/labels" search={{ codes: shortcode }} />}
-      nativeButton={false}
-    >
-      <Printer className="mr-2 size-4" />
-      Print Label
-    </Button>
+    />
   );
 }

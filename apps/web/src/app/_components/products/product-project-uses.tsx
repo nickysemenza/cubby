@@ -2,8 +2,9 @@ import type { ProjectShortcode } from "@cubby/schemas/identifiers";
 import type { ProductProjectUsesOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
-import { Pencil, Search, X } from "lucide-react";
+import { Pencil, Search } from "lucide-react";
 import { useMemo, useState } from "react";
+import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import {
   createCurrencyColumn,
   createTimestampColumn,
@@ -25,7 +26,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import {
   Empty,
   EmptyDescription,
@@ -157,16 +157,14 @@ export function ProductProjectUses({ productId }: { productId: string }) {
       columnVisibilityScope: "product-uses",
       initialColumnVisibility: HIDDEN_RELATED_COLUMNS,
       extraActions: (row) => (
-        <DropdownMenuItem
+        <VerbMenuItem
+          verb="removeFromProject"
           disabled={detach.isPending}
-          onClick={(event) => {
+          onSelect={(event) => {
             event.stopPropagation();
             detach.mutate({ projectId: row.id, productId, used: false });
           }}
-        >
-          <X />
-          Remove from project
-        </DropdownMenuItem>
+        />
       ),
     });
 

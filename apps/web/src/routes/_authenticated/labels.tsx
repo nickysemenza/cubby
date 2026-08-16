@@ -120,7 +120,7 @@ function LabelsPage() {
 
   if (shortcodes.length === 0) {
     return (
-      <Page variant="list" title="Print Labels">
+      <Page variant="list" title="Print labels">
         <Card>
           <CardContent className="flex flex-col items-center gap-4 py-6 text-center">
             <p className="text-muted-foreground">
@@ -138,7 +138,7 @@ function LabelsPage() {
     <>
       <Page
         variant="list"
-        title="Print Labels"
+        title="Print labels"
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => router.history.back()}>

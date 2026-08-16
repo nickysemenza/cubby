@@ -137,7 +137,7 @@ export interface UseEntityListOptions<
   tableStateOptions?: Parameters<typeof useTableState>[0];
   /** Bulk actions configuration - automatically enables row selection */
   bulkActions?: BulkActionsConfig<TData>;
-  /** Extra actions to render in the row action menu (after "View Details") */
+  /** Extra actions to render in the row action menu (after "View details") */
   extraActions?: (row: TData) => ReactNode;
   /** Columns hidden by default (user can toggle via View menu) */
   initialColumnVisibility?: Record<string, boolean>;

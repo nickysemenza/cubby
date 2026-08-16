@@ -47,7 +47,7 @@ export function InventoryActions() {
             {bulkEdit.name}
           </DropdownMenuItem>
           <DropdownMenuItem render={<Link to={singleItem.path} />}>
-            <Plus className="size-4" />
+            <Plus />
             {singleItem.name}
           </DropdownMenuItem>
         </DropdownMenuContent>

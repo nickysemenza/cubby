@@ -1,9 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import type { Row, Table } from "@tanstack/react-table";
-import { ClipboardCopy } from "lucide-react";
 import { useMemo } from "react";
 import { copyShortcodes } from "~/lib/clipboard";
+import { verbBulkAction } from "../actions/action-verb-ui";
 import {
   BulkActionBar,
   type BulkActionBarProps,
@@ -35,15 +35,14 @@ function useCopyShortcodesAction<TData extends { id: string }>(
 ): BulkAction<TData> | null {
   return useMemo(() => {
     if (!(shortcodeEntities as readonly Entity[]).includes(entity)) return null;
-    return {
+    return verbBulkAction<TData>("copyCodes", {
+      // The id predates the registry and is the one every list already ships.
       id: "copy-shortcodes",
-      label: "Copy codes",
-      icon: <ClipboardCopy className="size-3.5" />,
       preserveSelection: true,
       onExecute: async (rows) => ({
         success: await copyShortcodes(rows.map((row) => row.original.id)),
       }),
-    };
+    });
   }, [entity]);
 }
 

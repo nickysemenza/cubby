@@ -1,7 +1,6 @@
 import type { PreviewDeleteEntity } from "@cubby/schemas/entity-integrity";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Trash } from "lucide-react";
 import pluralize from "pluralize";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -11,15 +10,13 @@ import {
   useOperationPreview,
 } from "~/app/_components/impact/operation-impact";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
-import {
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "~/components/ui/dropdown-menu";
+import { DropdownMenuSeparator } from "~/components/ui/dropdown-menu";
 import {
   cancelTRPCQueries,
   invalidateTRPCQueries,
   normalizeTRPCQueryKey,
 } from "~/lib/query-keys";
+import { VerbMenuItem, verbBulkAction } from "../actions/action-verb-ui";
 import type { BulkAction } from "../data-table/bulk-actions.types";
 
 interface DeletableConfig {
@@ -278,16 +275,13 @@ export function useOptimisticDelete<
   const deleteBulkAction = useMemo((): BulkAction<TData> | null => {
     if (!deletable) return null;
 
-    return {
-      id: "delete" as const,
-      label: "Delete",
-      icon: <Trash className="size-4" />,
-      onExecute: (selectedRows: { original: TData }[]) =>
+    return verbBulkAction<TData>("delete", {
+      onExecute: (selectedRows) =>
         new Promise<{ success: boolean }>((resolve) => {
           bulkResolveRef.current = resolve;
           setDeleteTargets(selectedRows.map((row) => row.original));
         }),
-    };
+    });
   }, [deletable]);
 
   // Combine user's extra actions with delete action if deletable is provided
@@ -300,16 +294,13 @@ export function useOptimisticDelete<
         {deletable && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={(e) => {
+            <VerbMenuItem
+              verb="delete"
+              onSelect={(e) => {
                 e.stopPropagation();
                 requestDelete(row);
               }}
-            >
-              <Trash />
-              Delete
-            </DropdownMenuItem>
+            />
           </>
         )}
       </>

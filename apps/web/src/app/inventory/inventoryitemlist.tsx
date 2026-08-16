@@ -1,12 +1,15 @@
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ArrowRightLeft, ImageIcon } from "lucide-react";
+import { ImageIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import type { z } from "zod";
+import {
+  VerbMenuItem,
+  verbBulkAction,
+} from "~/app/_components/actions/action-verb-ui";
 import { Row as FlexRow, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
-import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { NoneValue } from "~/components/ui/none-value";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { entities, entityDetailParams } from "~/entities/entities";
@@ -76,15 +79,13 @@ export function InventoryItemList() {
 
   const extraActions = useCallback(
     (row: InventoryListItem) => (
-      <DropdownMenuItem
-        onClick={(e) => {
+      <VerbMenuItem
+        verb="moveTo"
+        onSelect={(e) => {
           e.stopPropagation();
           setMoveTarget(row);
         }}
-      >
-        <ArrowRightLeft />
-        Move to...
-      </DropdownMenuItem>
+      />
     ),
     [],
   );
@@ -100,18 +101,14 @@ export function InventoryItemList() {
   const bulkActions = useMemo(
     () => ({
       actions: [
-        {
+        verbBulkAction<InventoryListItem>("moveTo", {
           id: "move",
-          label: "Move to...",
-          icon: <ArrowRightLeft className="size-4" />,
           minSelection: 1,
-          onExecute: async (
-            rows: import("@tanstack/react-table").Row<InventoryListItem>[],
-          ) => {
+          onExecute: async (rows) => {
             setBulkMoveItems(rows.map((r) => r.original));
             return { success: true };
           },
-        },
+        }),
       ],
       clearSelectionOnComplete: false,
     }),

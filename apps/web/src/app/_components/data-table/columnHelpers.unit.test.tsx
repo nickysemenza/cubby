@@ -365,7 +365,7 @@ describe("createActionsColumn", () => {
       id: "3f6c1e0a-0000-4000-8000-000000000000",
     });
 
-    expect(screen.getByRole("link", { name: /View Details/ })).toBeVisible();
+    expect(screen.getByRole("link", { name: /View details/ })).toBeVisible();
     expect(screen.queryByRole("button", { name: /Copy/ })).toBeNull();
   });
 });

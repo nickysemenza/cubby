@@ -338,7 +338,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                             )
                           }
                         >
-                          <ExternalLink className="mr-2 size-3.5" />
+                          <ExternalLink />
                           Open{" "}
                           {row.type === "ingredient" ? "ingredient" : "recipe"}
                         </DropdownMenuItem>
@@ -348,7 +348,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                         variant="destructive"
                         onClick={() => remove(ingredientIndex)}
                       >
-                        <Trash className="mr-2 size-3.5" />
+                        <Trash />
                         Delete row
                       </DropdownMenuItem>
                     </DropdownMenuContent>

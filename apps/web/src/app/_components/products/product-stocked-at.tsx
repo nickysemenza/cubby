@@ -1,10 +1,12 @@
 import type { InventoryShortcode } from "@cubby/schemas/identifiers";
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import { Link } from "@tanstack/react-router";
-import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ArrowRightLeft, PackageMinus, Trash } from "lucide-react";
 import { type FC, useMemo, useState } from "react";
+import {
+  VerbMenuItem,
+  verbBulkAction,
+} from "~/app/_components/actions/action-verb-ui";
 import {
   createCurrencyColumn,
   createEditableAmountColumn,
@@ -16,7 +18,6 @@ import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { DeleteInventoryDialog } from "~/app/_components/inventory/delete-inventory-dialog";
 import { MoveInventoryDialog } from "~/app/_components/inventory/move-inventory-dialog";
 import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
-import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { useTRPC } from "~/integrations/trpc/react";
 import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 import { ShelfEmpty } from "../data-table/shelf";
@@ -112,29 +113,24 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
   const bulkActions = useMemo(
     () => ({
       actions: [
-        {
+        verbBulkAction<StockedRow>("moveTo", {
           id: "move",
-          label: "Move",
-          icon: <ArrowRightLeft className="size-4" />,
           minSelection: 1,
-          onExecute: async (selected: Row<StockedRow>[]) => {
+          onExecute: async (selected) => {
             setDialog({ type: "move", items: selected.map((r) => r.original) });
             return { success: true };
           },
-        },
-        {
-          id: "delete",
-          label: "Delete",
-          icon: <Trash className="size-4" />,
+        }),
+        verbBulkAction<StockedRow>("delete", {
           minSelection: 1,
-          onExecute: async (selected: Row<StockedRow>[]) => {
+          onExecute: async (selected) => {
             setDialog({
               type: "delete",
               items: selected.map((r) => r.original),
             });
             return { success: true };
           },
-        },
+        }),
       ],
       clearSelectionOnComplete: false,
     }),
@@ -152,37 +148,30 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
     bulkActions,
     extraActions: (entry) => (
       <>
-        <DropdownMenuItem
-          onClick={(event) => {
+        <VerbMenuItem
+          verb="moveTo"
+          onSelect={(event) => {
             event.stopPropagation();
             setDialog({ type: "move", items: [entry] });
           }}
-        >
-          <ArrowRightLeft />
-          Move to...
-        </DropdownMenuItem>
+        />
         {/* Discard writes a ledger row and can clear the shelf in the same
             transaction — the honest verb for "used it up", where Delete just
             says the entry should never have existed. */}
-        <DropdownMenuItem
-          onClick={(event) => {
+        <VerbMenuItem
+          verb="discard"
+          onSelect={(event) => {
             event.stopPropagation();
             setDialog({ type: "discard", entryId: entry.id });
           }}
-        >
-          <PackageMinus />
-          Discard...
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className="text-destructive focus:text-destructive"
-          onClick={(event) => {
+        />
+        <VerbMenuItem
+          verb="delete"
+          onSelect={(event) => {
             event.stopPropagation();
             setDialog({ type: "delete", items: [entry] });
           }}
-        >
-          <Trash />
-          Delete
-        </DropdownMenuItem>
+        />
       </>
     ),
   });

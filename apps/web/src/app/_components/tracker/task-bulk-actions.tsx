@@ -1,18 +1,11 @@
 import type { TaskShortcode } from "@cubby/schemas/identifiers";
 import type { TaskOut, Trade } from "@cubby/schemas/project";
-import type { Row } from "@tanstack/react-table";
-import {
-  ArrowRightLeft,
-  CalendarClock,
-  ListChecks,
-  Sparkles,
-  Wrench,
-} from "lucide-react";
 import { useMemo, useState } from "react";
 import { tradeOptions } from "~/app/projects/trade-options";
 import { useTRPC } from "~/integrations/trpc/react";
 import { taskMutationInvalidateKeys } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+import { verbBulkAction } from "../actions/action-verb-ui";
 import type {
   BulkAction,
   BulkActionsConfig,
@@ -42,62 +35,49 @@ export function useTaskBulkActions({
   const config = useMemo<BulkActionsConfig<TaskOut>>(
     () => ({
       actions: [
-        {
+        verbBulkAction<TaskOut>("moveToProject", {
           id: "move",
-          label: "Move to project...",
-          icon: <ArrowRightLeft className="size-4" />,
           minSelection: 1,
-          onExecute: async (rows: Row<TaskOut>[]) => {
+          onExecute: async (rows) => {
             setMoveItems(rows.map((row) => row.original));
             return { success: true };
           },
-        },
-        {
-          id: "set-status",
-          label: "Set status...",
-          icon: <ListChecks className="size-4" />,
+        }),
+        verbBulkAction<TaskOut>("setStatus", {
           minSelection: 1,
-          onExecute: async (rows: Row<TaskOut>[]) => {
+          onExecute: async (rows) => {
             setStatusItems(rows.map((row) => row.original));
             return { success: true };
           },
-        },
-        {
-          id: "set-trade",
-          label: "Set trade...",
-          icon: <Wrench className="size-4" />,
+        }),
+        verbBulkAction<TaskOut>("setTrade", {
           minSelection: 1,
-          onExecute: async (rows: Row<TaskOut>[]) => {
+          onExecute: async (rows) => {
             setTradeItems(rows.map((row) => row.original));
             return { success: true };
           },
-        },
+        }),
         ...(includeDueDate
           ? [
-              {
-                id: "set-due-date",
-                label: "Set due date...",
-                icon: <CalendarClock className="size-4" />,
+              verbBulkAction<TaskOut>("setDueDate", {
                 minSelection: 1,
-                onExecute: async (rows: Row<TaskOut>[]) => {
+                onExecute: async (rows) => {
                   setDueDateItems(rows.map((row) => row.original));
                   return { success: true };
                 },
-              },
+              }),
             ]
           : []),
         ...(onCreateProject
           ? [
-              {
+              verbBulkAction<TaskOut>("createProjectFrom", {
                 id: "create-project",
-                label: "Create project from selected...",
-                icon: <Sparkles className="size-4" />,
                 minSelection: 1,
-                onExecute: async (rows: Row<TaskOut>[]) => {
+                onExecute: async (rows) => {
                   onCreateProject(rows.map((row) => row.original.id));
                   return { success: true };
                 },
-              },
+              }),
             ]
           : []),
         ...extraActions,

@@ -71,15 +71,15 @@ export const UserAvatarDropdown = () => {
               />
             }
           >
-            <User className="size-4" />
+            <User />
             <span>Account</span>
           </DropdownMenuItem>
           <DropdownMenuItem render={<Link to="/account/connected-apps" />}>
-            <Plug className="size-4" />
+            <Plug />
             <span>Connected apps</span>
           </DropdownMenuItem>
           <DropdownMenuItem render={<Link to="/settings" />}>
-            <Settings className="size-4" />
+            <Settings />
             <span>Settings</span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
@@ -88,7 +88,7 @@ export const UserAvatarDropdown = () => {
           onClick={() => authClient.signOut()}
           variant="destructive"
         >
-          <LogOut className="size-4" />
+          <LogOut />
           <span>Sign out</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
