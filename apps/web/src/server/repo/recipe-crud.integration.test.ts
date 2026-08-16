@@ -4,17 +4,20 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createTestTRPCContext } from "~/server/api/trpc";
 import {
   auditLog,
+  image,
   ingredient,
   mealRecipe,
   recipe,
+  recipeImage,
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
 import { upsertCookbook } from "./cookbook";
-import { getDb, notDeleted } from "./database-helpers";
+import { getDb, insertAndReturn, notDeleted } from "./database-helpers";
 import { deleteMeals, getMealByID } from "./meal";
 import {
   deleteRecipes,
+  duplicateRecipe,
   getRecipeByID,
   recipeList,
   updateRecipe,
@@ -234,6 +237,208 @@ describe("recipe crud repo", () => {
         )
         .limit(1);
       expect(entry?.changes?.cascadedMealRecipes).toEqual({ from: 1, to: 0 });
+    });
+  });
+
+  describe("duplicateRecipe", () => {
+    it("clones the graph into a fresh '<name> (copy)' recipe without touching the source", async () => {
+      const sugar = await createIngredient(
+        ctx.db,
+        { name: "Sugar", aliases: [] },
+        ctx.actor,
+      );
+      const subRecipe = await createRecipe(
+        ctx.db,
+        makeRecipeInput({ name: "Sauce" }),
+        ctx.actor,
+      );
+      const source = await createRecipe(
+        ctx.db,
+        makeRecipeInput({
+          name: "Original",
+          tags: ["dinner"],
+          sections: [
+            {
+              name: "Main",
+              instructions: [{ instruction: "Mix" }],
+              ingredients: [
+                ingredientRef(sugar.id, {
+                  amounts: [{ value: 1, unit: "cup" }],
+                }),
+                {
+                  type: "recipe",
+                  recipeId: subRecipe.id,
+                  ingredientId: null,
+                  amounts: [{ value: 1, unit: "each" }],
+                },
+              ],
+            },
+          ],
+        }),
+        ctx.actor,
+      );
+
+      const duplicated = await duplicateRecipe(
+        ctx.db,
+        source.entityId,
+        ctx.actor,
+      );
+
+      expect(duplicated.id).not.toBe(source.id);
+      expect(duplicated.name).toBe("Original (copy)");
+      expect(duplicated.tags).toEqual(["dinner"]);
+      expect(duplicated.sections).toHaveLength(1);
+      const section = duplicated.sections[0]!;
+      // Fresh section id — dropped, not copied, from the source.
+      expect(section.id).not.toBe(source.sections[0]!.id);
+      expect(section.instructions).toEqual([{ instruction: "Mix" }]);
+      const ingredientNames = section.ingredients.flatMap((i) =>
+        i.type === "ingredient" ? [i.ingredient.name] : [],
+      );
+      expect(ingredientNames).toEqual(["Sugar"]);
+      // The sub-recipe (type: "recipe") ingredient branch is also reshaped
+      // correctly — it's the less obvious half of the discriminated union.
+      const subRecipeLinks = section.ingredients.flatMap((i) =>
+        i.type === "recipe" ? [i.recipe.id] : [],
+      );
+      expect(subRecipeLinks).toEqual([subRecipe.id]);
+
+      // The source recipe is untouched by the clone.
+      const stillSource = await getRecipeByID(ctx.db, source.entityId);
+      expect(stillSource?.name).toBe("Original");
+    });
+
+    it("copies image associations as new join rows pointing at the SAME Image row", async () => {
+      const cover = await insertAndReturn(ctx.db, image, {
+        key: "test-recipes/cover.png",
+        url: "https://example.com/cover.png",
+        filename: "cover.png",
+        contentType: "image/png",
+        size: 10,
+        status: "UPLOADED",
+      });
+      const source = await createRecipe(
+        ctx.db,
+        {
+          ...makeRecipeInput({ name: "Illustrated" }),
+          pendingImageIds: [cover.id],
+        },
+        ctx.actor,
+      );
+
+      const duplicated = await duplicateRecipe(
+        ctx.db,
+        source.entityId,
+        ctx.actor,
+      );
+
+      // No new Image row was minted — the duplicate's cover is the SAME row.
+      expect(duplicated.images).toHaveLength(1);
+      expect(duplicated.images[0]!.id).toBe(cover.id);
+
+      // Both recipes now carry their own live RecipeImage join row for it.
+      const joinRows = await getDb(ctx.db)
+        .select({ recipeId: recipeImage.recipeId })
+        .from(recipeImage)
+        .where(and(eq(recipeImage.imageId, cover.id), notDeleted(recipeImage)));
+      expect(joinRows).toHaveLength(2);
+      expect(joinRows.map((r) => r.recipeId)).toContain(source.entityId);
+    });
+
+    // Regression guard: a hardcoded `webProvenance(meta.url)` fallback silently
+    // coerced every duplicate to SourceType='Website', dropping `cookbookId` —
+    // meta.url is null for anything but a Website recipe. Book recipes are 94%
+    // of live recipes on production, so this is the case that matters most.
+    it("carries Book provenance — cookbookId, SourceType, SourceData — through to the duplicate", async () => {
+      const {
+        entityId: cookbookId,
+        output: { id: cookbookShortcode },
+      } = await upsertCookbook(
+        ctx.db,
+        {
+          name: "Duplicate Test Book",
+          rawJson: [],
+          sourceLabel: "Duplicate Test Book",
+        },
+        ctx.actor,
+      );
+      const source = await upsertCookbookRecipe(
+        makeRecipeInput({ name: "Book Original" }),
+        { id: cookbookId, name: "Duplicate Test Book" },
+        ctx.db,
+        ctx.actor,
+      );
+
+      const duplicated = await duplicateRecipe(ctx.db, source.id, ctx.actor);
+
+      expect(duplicated.name).toBe("Book Original (copy)");
+      expect(duplicated.source).toEqual({
+        type: "book",
+        book: "Duplicate Test Book",
+        cookbookId: cookbookShortcode,
+      });
+
+      // The raw columns, not just the reshaped `source` union — this is what
+      // the `webProvenance` fallback silently dropped.
+      const [row] = await getDb(ctx.db)
+        .select({
+          SourceType: recipe.SourceType,
+          SourceData: recipe.SourceData,
+          cookbookId: recipe.cookbookId,
+        })
+        .from(recipe)
+        .where(eq(recipe.shortcode, duplicated.id));
+      expect(row).toEqual({
+        SourceType: "Book",
+        SourceData: "Duplicate Test Book",
+        cookbookId,
+      });
+
+      // `Recipe_book_title_key` is unique on (name, SourceData) where
+      // SourceType='Book' — the " (copy)" suffix keeps the duplicate's name
+      // distinct from the source's, so this doesn't collide even though
+      // SourceData (the book name) is identical.
+    });
+
+    // Recipe_notion_page_key is unique on SourceData ALONE (no name component)
+    // wherever SourceType='Notion' — a page id must resolve to exactly one live
+    // recipe. Carrying the source's page id through to the duplicate would
+    // violate that index (both rows are live, and the name differs, so nothing
+    // else stops the collision the way Recipe_book_title_key's name column
+    // does for Book). duplicateRecipe deliberately drops a Notion duplicate to
+    // "Other" instead.
+    it("drops a Notion duplicate to 'Other' rather than collide on Recipe_notion_page_key", async () => {
+      const pageId = "notion-page-duplicate-test";
+      const source = await upsertNotionRecipe(
+        makeRecipeInput({ name: "Notion Original" }),
+        pageId,
+        ctx.db,
+        ctx.actor,
+      );
+
+      const duplicated = await duplicateRecipe(ctx.db, source.id, ctx.actor);
+
+      expect(duplicated.source).toEqual({ type: "other" });
+
+      const [row] = await getDb(ctx.db)
+        .select({
+          SourceType: recipe.SourceType,
+          SourceData: recipe.SourceData,
+        })
+        .from(recipe)
+        .where(eq(recipe.shortcode, duplicated.id));
+      expect(row).toEqual({ SourceType: "Other", SourceData: null });
+
+      // The source recipe still owns the page id — untouched by the duplicate,
+      // and still the sole target `upsertNotionRecipe` would re-import into.
+      const [sourceRow] = await getDb(ctx.db)
+        .select({
+          SourceType: recipe.SourceType,
+          SourceData: recipe.SourceData,
+        })
+        .from(recipe)
+        .where(eq(recipe.id, source.id));
+      expect(sourceRow).toEqual({ SourceType: "Notion", SourceData: pageId });
     });
   });
 

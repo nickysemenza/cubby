@@ -22,6 +22,7 @@ export {
   createRecipe,
   deleteRecipes,
   deleteRecipesByCookbookTx,
+  duplicateRecipe,
   getCookbookRecipeIdsByTitle,
   getCookbookRecipesForDiff,
   getCookbookRecipeTitles,

@@ -18,6 +18,7 @@ import {
   recipeCreateInput,
   recipeFiltersSchema,
   recipeGraphListOut,
+  recipeIdInput,
   recipeIdsInput,
   recipeListItemOut,
   recipeOut,
@@ -31,6 +32,7 @@ import { createAppError } from "~/server/errors/app-error";
 import {
   createRecipe,
   deleteRecipes,
+  duplicateRecipe,
   getAllTags,
   getRecipeByID,
   getRecipeByShortcode,
@@ -253,6 +255,41 @@ const getAllTagsEndpoint = protectedProcedure
     return await getAllTags(ctx.db);
   });
 
+// Clone a recipe's whole graph (sections, ingredients, images) as a new
+// recipe named "<name> (copy)". Mirrors `create`'s post-write side effects
+// (recompute + mutation side effects) since it's a fresh recipe by another
+// name.
+const duplicate = protectedProcedure
+  .input(recipeIdInput)
+  .output(strictOutput(recipeWithSideEffectsOut))
+  .mutation(async ({ ctx, input }) => {
+    const sourceId = await resolveRecipeEntityId(ctx.db, input.id);
+    const duplicated = await duplicateRecipe(
+      ctx.db,
+      sourceId,
+      ctx.actorContext,
+    );
+    const entityId = await resolveRecipeEntityId(ctx.db, duplicated.id);
+    const recipeBatches = await ctx.services.recipeCosting.dispatchRecompute(
+      [entityId],
+      {
+        source: "recipe.duplicate",
+        entity: { entityType: "recipe", entityId },
+      },
+    );
+    const backgroundBatches = await runMutationSideEffects(ctx.db, {
+      action: "created",
+      entity: { entityType: "recipe", entityId },
+      source: "recipe.duplicate",
+    });
+    return {
+      ...duplicated,
+      sideEffects: {
+        backgroundBatches: [...recipeBatches, ...backgroundBatches],
+      },
+    };
+  });
+
 export const recipeCrudProcedures = {
   getByID,
   getByShortcode,
@@ -260,6 +297,7 @@ export const recipeCrudProcedures = {
   list,
   create,
   update,
+  duplicate,
   delete: deleteItem,
   getAllTags: getAllTagsEndpoint,
 };

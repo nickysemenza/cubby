@@ -44,6 +44,7 @@ import {
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { alias } from "drizzle-orm/pg-core";
 import { countBy, sum, uniq } from "es-toolkit";
+import { match, P } from "ts-pattern";
 import { collectSubRecipeIds } from "~/lib/recipe-graph";
 import { recipeOutSignature } from "~/lib/recipe-signature";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -92,6 +93,7 @@ import { removeEntity } from "~/server/repo/removal";
 import {
   resolveAllPresent,
   resolveLiveShortcode,
+  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { TraceNames, withTrace } from "~/server/tracing";
@@ -589,12 +591,21 @@ export type CookbookRef = { id: CookbookId; name: string };
  * sections + ingredients + images + audit) runs in one transaction; unlike
  * {@link createRecipe} it skips the heavy {@link getRecipeByID} re-read — callers
  * that only need the id (every upsert path) avoid a wasted full-graph join.
+ *
+ * `withinTransaction`, when given, runs after images are associated and before
+ * the audit entry is written — same transaction, so a caller with extra rows to
+ * insert (e.g. {@link duplicateRecipe}'s image-join-row copy) doesn't have to
+ * hand-roll a second insert path just to keep them atomic with the graph.
  */
 const createRecipeReturningId = async (
   db: Database,
   recipeInput: RecipeCreateInput,
   actor: ActorContext,
   provenance?: RecipeProvenance,
+  withinTransaction?: (
+    tx: DrizzleTransaction,
+    createdRecipeId: RecipeId,
+  ) => Promise<void>,
 ): Promise<UpsertedRecipe> => {
   const sourceColumns = recipeSourceToColumns(
     provenance ?? webProvenance(recipeInput.meta?.url ?? null),
@@ -625,6 +636,10 @@ const createRecipeReturningId = async (
         createdRecipe.id,
         pendingImageIds,
       );
+    }
+
+    if (withinTransaction) {
+      await withinTransaction(tx, createdRecipeId);
     }
 
     await logAuditEntry(tx, actor, {
@@ -662,6 +677,155 @@ export const createRecipe = async (
     );
   }
   return fullRecipe;
+};
+
+/**
+ * Provenance for a recipe duplicate, derived from the source's strong
+ * `RecipeOut.source` union — NOT re-derived from `meta.url`, which is null for
+ * anything but a Website recipe (see `dbRecipeToTopLevelShape`). Using
+ * `webProvenance(meta.url)` unconditionally silently coerced every duplicate to
+ * `SourceType: 'Website'`, dropping `cookbookId` for Book recipes — 94% of live
+ * recipes on production.
+ *
+ * Book and Website provenance carry straight through: a duplicate's name always
+ * gets " (copy)" appended, so it can't collide with `Recipe_book_title_key`
+ * (unique on `name, SourceData` where SourceType='Book') or `Recipe_name_key`
+ * (unique on `name` alone, for Website/Other).
+ *
+ * Notion is the one case that can't carry through. `Recipe_notion_page_key` is
+ * unique on `SourceData` ALONE (no name component) wherever SourceType='Notion'
+ * — a Notion page id identifies exactly one live recipe, the row
+ * `upsertNotionRecipe` re-imports into on every sync. Reusing the source's page
+ * id on the duplicate would violate that index outright; the alternative isn't
+ * better, since it would hand two rows the same "this IS page X" identity, and
+ * the next sync could then land on either one nondeterministically. So a Notion
+ * duplicate deliberately drops to a plain, unsynced "Other" copy rather than
+ * risk either.
+ */
+const duplicateProvenance = async (
+  db: Database,
+  source: RecipeOut,
+): Promise<RecipeProvenance> => {
+  const src = source.source;
+  const otherProvenance: RecipeProvenance = {
+    sourceType: "Other",
+    sourceData: null,
+  };
+  // Resolved up front (only meaningful for "book") so the match arms below stay
+  // synchronous.
+  const cookbookId =
+    src?.type === "book" && src.cookbookId
+      ? await resolveOrThrow(db, "cookbook", src.cookbookId)
+      : null;
+
+  return match(src)
+    .with(
+      { type: "book" },
+      (book): RecipeProvenance => ({
+        sourceType: "Book",
+        sourceData: book.book,
+        cookbookId,
+        cookbookShortcode: book.cookbookId ?? null,
+      }),
+    )
+    .with(
+      { type: "website" },
+      (website): RecipeProvenance => ({
+        sourceType: "Website",
+        sourceData: website.url,
+      }),
+    )
+    .with({ type: "notion" }, () => otherProvenance)
+    .with({ type: "other" }, () => otherProvenance)
+    .with(P.nullish, () => otherProvenance)
+    .exhaustive();
+};
+
+/**
+ * Duplicate a recipe: reshape the source graph into a fresh `RecipeCreateInput`
+ * (section/line ids dropped, so the graph insert mints new ones for every row)
+ * and write it — plus a same-image join-row copy — in one transaction, via
+ * {@link createRecipeReturningId} (one insert path, not a hand-rolled second
+ * one). Named "<name> (copy)". This is the pattern for entity duplication in
+ * this repo; no other entity has a clone/duplicate operation yet.
+ */
+export const duplicateRecipe = async (
+  db: Database,
+  id: RecipeId,
+  actor: ActorContext,
+): Promise<RecipeOut> => {
+  const source = await getRecipeByID(db, id);
+  if (!source) {
+    throw createAppError("RECIPE_NOT_FOUND", `Recipe with ID ${id} not found`);
+  }
+
+  const provenance = await duplicateProvenance(db, source);
+
+  const input: RecipeCreateInput = {
+    name: `${source.name} (copy)`,
+    meta: source.meta,
+    yield: source.yield,
+    servings: source.servings,
+    tags: source.tags,
+    notes: source.notes,
+    sections: source.sections.map((section) => ({
+      name: section.name,
+      instructions: section.instructions.map((inst) => ({
+        instruction: inst.instruction,
+      })),
+      ingredients: section.ingredients.map((ing) =>
+        ing.type === "ingredient"
+          ? {
+              type: "ingredient" as const,
+              ingredientId: ing.ingredient.id,
+              recipeId: null,
+              amounts: ing.amounts,
+              rawLine: ing.rawLine,
+              modifier: ing.modifier,
+            }
+          : {
+              type: "recipe" as const,
+              recipeId: ing.recipe.id,
+              ingredientId: null,
+              amounts: ing.amounts,
+              rawLine: ing.rawLine,
+              modifier: ing.modifier,
+            },
+      ),
+    })),
+  };
+
+  const { id: newRecipeId } = await createRecipeReturningId(
+    db,
+    input,
+    actor,
+    provenance,
+    async (tx, createdRecipeId) => {
+      // RecipeImage is a plain (recipeId, imageId) join table, so cloning it
+      // means inserting new join rows that point at the SAME Image row — no R2
+      // copy, no new Image row. Two recipes sharing an Image row is expected
+      // and harmless: Image lifetime is governed by its own reference count
+      // (how many join rows still point at it), not by recipe ownership.
+      if (source.images.length > 0) {
+        await tx.insert(recipeImage).values(
+          source.images.map((img, i) => ({
+            recipeId: createdRecipeId,
+            imageId: img.id,
+            sortOrder: i,
+          })),
+        );
+      }
+    },
+  );
+
+  const duplicated = await getRecipeByID(db, newRecipeId);
+  if (!duplicated) {
+    throw createAppError(
+      "RECIPE_NOT_FOUND",
+      "Failed to retrieve duplicated recipe",
+    );
+  }
+  return duplicated;
 };
 
 /**

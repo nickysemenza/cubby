@@ -41,9 +41,6 @@ Ordered within each domain only; choose based on which surface is seeing real us
 - **House:** recurring maintenance; then the tracker data gaps as separate
   changes (`completedAt`, portfolio figures, mobile renderer, activity
   filter), not one omnibus PR.
-- **Small UX batch:** recipe clone, recipe QR labels, compare-page picker, and
-  product bulk label printing. These may travel together only if their shared
-  implementation surface makes the batch smaller than separate changes.
 - **Engineering:** close the three coverage/exhaustiveness gaps, then document
   test-placement criteria. Keep symmetry-only refactors behind live correctness
   or maintenance work.
@@ -142,11 +139,6 @@ decision value.
   This starts with a persisted-data-shape decision and migration; it is L across
   schema, import/upsert, detail, list filters, and sorting rather than a small
   import-adapter patch.
-- [ ] **Recipe clone/duplicate** — still no `duplicate` in recipe crud.
-- [ ] **Recipe QR labels**: shortcodes are minted on every create and
-  `$shortcode.tsx` resolves `R-XXXX`, but the detail page never shows the code
-  and `use-shortcode-lookups.ts` only knows location/product, so `/labels`
-  can't print recipe QRs. Completes an already-shipped mechanic.
 - [ ] **Cookbook lifecycle**: no rename/metadata edit (a mangled OPF title is
   permanent); identity is keyed on `name` (same-title books collide, a re-titled
   EPUB forks a duplicate — needs merge/re-point); `subjects` renders only as a
@@ -161,8 +153,6 @@ decision value.
   flow (all spec- or diagram-flavored, the last an AI-assembled step flow chart)
   but no plain recipe-as-a-page format (`RecipeMagazineView` would drop in); no
   multi-recipe/cookbook export.
-- [ ] **Compare page picker**: "Add Another Recipe" navigates to `/recipes` and
-  loses the selection; add an on-page picker.
 - [ ] **Notion importer hygiene**: `staleTime: 0` full-DB refetch on every
   visit, every row runs WASM parses, no status filter/search/virtualization.
 - [ ] **EPUB recipe hero photos**: `recipe-epub` already identifies an in-archive
@@ -171,6 +161,17 @@ decision value.
   materialize the referenced EPUB bytes into R2 during the watched import, and
   attach the resulting image to the recipe. Keep this synchronous with the rest
   of cookbook import; it does not justify a queue under tenet 3.
+
+### Rejected
+
+- **Recipe QR labels.** `sheet-layouts.ts`'s `LabelItem.entityType` is
+  documented as "Locations and products only, deliberately" — a QR label is a
+  physical sticker that belongs on a bin or a thing you own, not on a recipe.
+  Widening `entityType`, adding `recipe.getByShortcodes`, or putting
+  `PrintLabelButton` on the recipe detail page would all fight that comment.
+  The recipe detail page instead shows its shortcode copyable via the
+  standard `heroNo` breadcrumb (matching product/location) — the id is
+  reachable without treating the recipe as a label target.
 
 ---
 
@@ -275,8 +276,6 @@ runtime CDN) are all shipped. Target is iOS Safari only. Remaining:
   (`costCovered < ingredientCount`, deliberately not `totals IS NULL` — that
   self-clears and `staleRecipeTotals` already owns it), and
   `recipesWithoutInstructions` (Book/Notion sources excluded).
-- [ ] **Products list bulk print-labels**: locations table has the bulk action,
-  products has per-row only, and the `/labels` empty state promises both.
 - [ ] **AiSearchBar on inventory is thinner than the plain filters**: it can
   only set `productName`/`locationName` — the two substring filters already on
   screen. Either teach it quantity/category/valuation/verified-before/subtree
