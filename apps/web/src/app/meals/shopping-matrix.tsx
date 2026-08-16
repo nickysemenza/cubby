@@ -265,7 +265,9 @@ export function ShoppingMatrix({
           const value = cell?.values.get(column.key);
           if (value == null) return null;
           // Same WASM formatter the Need column uses, so a cell and its row
-          // total can never render by different rules.
+          // total can never render by different rules. Deliberately NOT the
+          // shopper ladder: that is scoped to the shortfall, so these stay in
+          // the basis unit the Need total is in.
           const text = formatAmount(value, row.item.basisUnit);
           // Marked when the value arrived entirely through a sub-recipe — the
           // chain itself is in the cell's title.

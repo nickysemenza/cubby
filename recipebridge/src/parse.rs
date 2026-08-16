@@ -333,38 +333,29 @@ pub fn format_amount(amount: WAmount) -> String {
     amount.to_measure().to_string()
 }
 
-/// Grams per ounce / ounces per pound — the same factors the parser normalizes
-/// weights with, restated here because they are private upstream.
-const GRAM_TO_OZ: f64 = 28.3495;
-const OZ_TO_LB: f64 = 16.0;
+/// Grams per pound — the same factor the parser normalizes weights with,
+/// restated here because it is private upstream.
+const GRAM_TO_LB: f64 = 28.3495 * 16.0;
 const ML_TO_L: f64 = 1000.0;
 
 /// Pick a shopping-friendly unit and value for a base-unit measure.
 ///
 /// Returns `None` when the caller should just use the normal formatter.
+///
+/// One step per kind, at the threshold where the base unit stops being how
+/// anyone talks about the quantity. Deliberately NOT a full ladder: an
+/// intermediate ounce tier would rewrite "300 g" as "10.58 oz", which is not
+/// friendlier — it is just a different number to reconcile against a recipe
+/// that said grams. A pound is where the shelf label changes; below it, grams
+/// are already the answer.
 fn shopper_unit(unit: &str, value: f64) -> Option<(&'static str, f64)> {
     match unit {
-        // The availability engine reconciles weights in grams, so a shortfall
-        // arrives as "1360 g" — true, and useless at a shelf. Ounces below a
-        // pound, pounds above it.
-        "g" => {
-            if value >= GRAM_TO_OZ * OZ_TO_LB {
-                Some(("lb", value / (GRAM_TO_OZ * OZ_TO_LB)))
-            } else if value >= GRAM_TO_OZ {
-                Some(("oz", value / GRAM_TO_OZ))
-            } else {
-                None
-            }
-        }
+        // The availability engine reconciles weights in grams, so a big
+        // shortfall arrives as "1360 g" — true, and useless at a shelf.
+        "g" if value >= GRAM_TO_LB => Some(("lb", value / GRAM_TO_LB)),
         // Volume already ladders tsp -> tbsp -> cup upstream; only the metric
         // base stays put, so this is just the litre step.
-        "ml" => {
-            if value >= ML_TO_L {
-                Some(("l", value / ML_TO_L))
-            } else {
-                None
-            }
-        }
+        "ml" if value >= ML_TO_L => Some(("l", value / ML_TO_L)),
         _ => None,
     }
 }
@@ -524,8 +515,10 @@ mod tests {
     #[rstest]
     #[case("g", 1360.0, "3 lb")]
     #[case("g", 500.0, "1.1 lb")]
-    #[case("g", 100.0, "3.53 oz")]
-    // Below an ounce there is no friendlier unit; grams are already the answer.
+    // Below a pound, grams ARE the answer — an ounce tier would just be a
+    // different number to reconcile against a recipe that said grams.
+    #[case("g", 300.0, "300 g")]
+    #[case("g", 100.0, "100 g")]
     #[case("g", 12.0, "12 g")]
     // Fractions render as glyphs — the parser's own quantity formatting.
     #[case("ml", 1500.0, "1\u{00bd} l")]

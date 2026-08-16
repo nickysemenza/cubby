@@ -30,9 +30,13 @@ export const formatAmount = (value: number, unit: string | null): string =>
 
 /**
  * The shopping-list spelling of an amount: the same WASM formatter, laddered
- * into shop units. `basisUnit` is whatever the availability engine reconciled
- * in — grams, almost always — so the raw form reads "1360 g flour" on the one
- * surface that gets carried to a store.
+ * into shop units.
+ *
+ * Reserved for the SHORTFALL — the quantity you actually carry to a shop.
+ * Need, have, and the per-meal cells stay in the engine's basis unit on
+ * purpose: the ladder is a per-value threshold, so laddering them too would
+ * let one row read "need 300 g / have 1.1 lb", trading a unit that's merely
+ * unfriendly for two that disagree.
  */
 const formatShopperAmount = (value: number, unit: string | null): string =>
   tryFormatAmountShopper({ value, unit: unit || "whole" });
@@ -91,12 +95,12 @@ export const statusClass = (status: IngredientAvailabilityStatus): string => {
 // slightly different rules.
 
 export const needText = (row: ShoppingRow): string =>
-  formatShopperAmount(row.need, row.item.basisUnit);
+  formatAmount(row.need, row.item.basisUnit);
 
 export const haveText = (row: ShoppingRow): string =>
   row.item.haveValue == null
     ? "—"
-    : formatShopperAmount(row.item.haveValue, row.item.basisUnit);
+    : formatAmount(row.item.haveValue, row.item.basisUnit);
 
 /** "?" when on-hand is unknown — distinct from a real, covered zero ("✓"). */
 export const shortText = (row: ShoppingRow): string => {

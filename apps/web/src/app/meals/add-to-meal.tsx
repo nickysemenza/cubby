@@ -248,7 +248,7 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
               disabled={isPending || existingMeals.isLoading}
               onClick={() => void submit()}
             >
-              {target === NEW_MEAL ? "Create meal" : "Add to meal"}
+              {target === NEW_MEAL ? "Create meal" : "Add to selected meal"}
             </Button>
           </Row>
         </DialogFooter>
