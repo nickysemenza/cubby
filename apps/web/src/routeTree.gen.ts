@@ -61,6 +61,7 @@ import { Route as AuthenticatedLocationsIndexRouteImport } from './routes/_authe
 import { Route as AuthenticatedLocationsShortcodeRouteImport } from './routes/_authenticated/locations.$shortcode'
 import { Route as AuthenticatedLocationsArrangeRouteImport } from './routes/_authenticated/locations.arrange'
 import { Route as AuthenticatedLocationsNewRouteImport } from './routes/_authenticated/locations.new'
+import { Route as AuthenticatedLocationsPhotoPassRouteImport } from './routes/_authenticated/locations.photo-pass'
 import { Route as AuthenticatedMealsIndexRouteImport } from './routes/_authenticated/meals.index'
 import { Route as AuthenticatedMealsShortcodeRouteImport } from './routes/_authenticated/meals.$shortcode'
 import { Route as AuthenticatedMealsShoppingListRouteImport } from './routes/_authenticated/meals.shopping-list'
@@ -389,6 +390,12 @@ const AuthenticatedLocationsNewRoute =
     path: '/locations/new',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedLocationsPhotoPassRoute =
+  AuthenticatedLocationsPhotoPassRouteImport.update({
+    id: '/locations/photo-pass',
+    path: '/locations/photo-pass',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedMealsIndexRoute = AuthenticatedMealsIndexRouteImport.update({
   id: '/meals/',
   path: '/meals/',
@@ -647,6 +654,7 @@ export interface FileRoutesByFullPath {
   '/locations/$shortcode': typeof AuthenticatedLocationsShortcodeRoute
   '/locations/arrange': typeof AuthenticatedLocationsArrangeRoute
   '/locations/new': typeof AuthenticatedLocationsNewRoute
+  '/locations/photo-pass': typeof AuthenticatedLocationsPhotoPassRoute
   '/meals/$shortcode': typeof AuthenticatedMealsShortcodeRoute
   '/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
@@ -736,6 +744,7 @@ export interface FileRoutesByTo {
   '/locations/$shortcode': typeof AuthenticatedLocationsShortcodeRoute
   '/locations/arrange': typeof AuthenticatedLocationsArrangeRoute
   '/locations/new': typeof AuthenticatedLocationsNewRoute
+  '/locations/photo-pass': typeof AuthenticatedLocationsPhotoPassRoute
   '/meals/$shortcode': typeof AuthenticatedMealsShortcodeRoute
   '/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
@@ -828,6 +837,7 @@ export interface FileRoutesById {
   '/_authenticated/locations/$shortcode': typeof AuthenticatedLocationsShortcodeRoute
   '/_authenticated/locations/arrange': typeof AuthenticatedLocationsArrangeRoute
   '/_authenticated/locations/new': typeof AuthenticatedLocationsNewRoute
+  '/_authenticated/locations/photo-pass': typeof AuthenticatedLocationsPhotoPassRoute
   '/_authenticated/meals/$shortcode': typeof AuthenticatedMealsShortcodeRoute
   '/_authenticated/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/_authenticated/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
@@ -920,6 +930,7 @@ export interface FileRouteTypes {
     | '/locations/$shortcode'
     | '/locations/arrange'
     | '/locations/new'
+    | '/locations/photo-pass'
     | '/meals/$shortcode'
     | '/meals/shopping-list'
     | '/meals/suggestions'
@@ -1009,6 +1020,7 @@ export interface FileRouteTypes {
     | '/locations/$shortcode'
     | '/locations/arrange'
     | '/locations/new'
+    | '/locations/photo-pass'
     | '/meals/$shortcode'
     | '/meals/shopping-list'
     | '/meals/suggestions'
@@ -1100,6 +1112,7 @@ export interface FileRouteTypes {
     | '/_authenticated/locations/$shortcode'
     | '/_authenticated/locations/arrange'
     | '/_authenticated/locations/new'
+    | '/_authenticated/locations/photo-pass'
     | '/_authenticated/meals/$shortcode'
     | '/_authenticated/meals/shopping-list'
     | '/_authenticated/meals/suggestions'
@@ -1529,6 +1542,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedLocationsNewRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/locations/photo-pass': {
+      id: '/_authenticated/locations/photo-pass'
+      path: '/locations/photo-pass'
+      fullPath: '/locations/photo-pass'
+      preLoaderRoute: typeof AuthenticatedLocationsPhotoPassRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/meals/': {
       id: '/_authenticated/meals/'
       path: '/meals'
@@ -1825,6 +1845,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedLocationsShortcodeRoute: typeof AuthenticatedLocationsShortcodeRoute
   AuthenticatedLocationsArrangeRoute: typeof AuthenticatedLocationsArrangeRoute
   AuthenticatedLocationsNewRoute: typeof AuthenticatedLocationsNewRoute
+  AuthenticatedLocationsPhotoPassRoute: typeof AuthenticatedLocationsPhotoPassRoute
   AuthenticatedMealsShortcodeRoute: typeof AuthenticatedMealsShortcodeRoute
   AuthenticatedMealsShoppingListRoute: typeof AuthenticatedMealsShoppingListRoute
   AuthenticatedMealsSuggestionsRoute: typeof AuthenticatedMealsSuggestionsRoute
@@ -1906,6 +1927,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedLocationsShortcodeRoute: AuthenticatedLocationsShortcodeRoute,
   AuthenticatedLocationsArrangeRoute: AuthenticatedLocationsArrangeRoute,
   AuthenticatedLocationsNewRoute: AuthenticatedLocationsNewRoute,
+  AuthenticatedLocationsPhotoPassRoute: AuthenticatedLocationsPhotoPassRoute,
   AuthenticatedMealsShortcodeRoute: AuthenticatedMealsShortcodeRoute,
   AuthenticatedMealsShoppingListRoute: AuthenticatedMealsShoppingListRoute,
   AuthenticatedMealsSuggestionsRoute: AuthenticatedMealsSuggestionsRoute,

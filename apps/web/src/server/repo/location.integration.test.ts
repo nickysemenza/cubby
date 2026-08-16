@@ -654,3 +654,155 @@ describe("locationList imagePresenceFilter", () => {
     expect(detachedRow?.images).toEqual([]);
   });
 });
+
+/**
+ * The photo pass and the scan landing attach a new photo as the location's
+ * COVER while keeping the old ones. `updateLocation` applies `imageOrder`
+ * before `associatePendingImages`, so a pending id cannot be ordered in the
+ * same call — the client sends a second, order-only update once the join row
+ * exists (see `useLocationPhotoCapture`). These assert that sequence really
+ * lands the new photo first.
+ */
+describe("attaching a photo as the new cover", () => {
+  const ctx = withTestDb();
+
+  const pendingImage = async (name: string) =>
+    await insertAndReturn(ctx.db, image, {
+      key: `cover-${name}`,
+      url: `https://example.com/cover-${name}.png`,
+      filename: `${name}.png`,
+      contentType: "image/png",
+      size: 100,
+      status: "PENDING",
+    });
+
+  /** Attach `imageId` and make it the cover, exactly as the capture hook does. */
+  const captureAsCover = async (
+    shortcode: LocationShortcode,
+    imageId: string,
+  ) => {
+    const id = unsafeLocationId(
+      (await resolveLiveShortcode(ctx.db, shortcode, "location"))!,
+    );
+    const { location: attached } = await updateLocation(
+      ctx.db,
+      id,
+      { pendingImageIds: [imageId] },
+      ctx.actor,
+    );
+    const otherIds = attached.images
+      .map((img) => img.id)
+      .filter((existing) => existing !== imageId);
+    if (otherIds.length > 0) {
+      await updateLocation(
+        ctx.db,
+        id,
+        { imageOrder: [imageId, ...otherIds] },
+        ctx.actor,
+      );
+    }
+    return await getLocationById(ctx.db, id);
+  };
+
+  it("puts a first photo on a location that had none", async () => {
+    const shelf = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Bare Shelf" }),
+      ctx.actor,
+    );
+    const img = await pendingImage("first");
+
+    const after = await captureAsCover(shelf.id, img.id);
+
+    expect(after?.images.map((i) => i.id)).toEqual([img.id]);
+    // The attach is what flips PENDING → UPLOADED; without it the row is culled.
+    expect(after?.images[0]?.status).toBe("UPLOADED");
+  });
+
+  it("prepends a retake as the cover and keeps every earlier photo", async () => {
+    const shelf = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Stocked Shelf" }),
+      ctx.actor,
+    );
+    const older = await pendingImage("older");
+    const middle = await pendingImage("middle");
+    await captureAsCover(shelf.id, older.id);
+    await captureAsCover(shelf.id, middle.id);
+
+    const newest = await pendingImage("newest");
+    const after = await captureAsCover(shelf.id, newest.id);
+
+    expect(after?.images[0]?.id).toBe(newest.id);
+    expect(after?.images.map((i) => i.id)).toEqual([
+      newest.id,
+      middle.id,
+      older.id,
+    ]);
+  });
+
+  /**
+   * Every location in production carries join rows still at the `sortOrder = 0`
+   * default. That is the case where an incomplete `imageOrder` silently loses:
+   * an id left out of the list keeps its old `0`, TIES the new cover, and the
+   * relation's `createdAt` tiebreak hands the cover back to the older photo.
+   * Ordering off the attach response (rather than a client-held snapshot) is
+   * what keeps the list complete.
+   */
+  it("wins the cover on legacy rows that all share sortOrder 0", async () => {
+    const shelf = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Legacy Shelf" }),
+      ctx.actor,
+    );
+    const locationId = unsafeLocationId(
+      (await resolveLiveShortcode(ctx.db, shelf.id, "location"))!,
+    );
+
+    const legacy = [];
+    for (const name of ["legacy-a", "legacy-b", "legacy-c"]) {
+      const img = await pendingImage(name);
+      await insertAndReturn(ctx.db, locationImage, {
+        locationId,
+        imageId: img.id,
+        sortOrder: 0,
+      });
+      legacy.push(img.id);
+    }
+
+    const newest = await pendingImage("legacy-newest");
+    const after = await captureAsCover(shelf.id, newest.id);
+
+    expect(after?.images[0]?.id).toBe(newest.id);
+    expect(after?.images).toHaveLength(4);
+    for (const id of legacy) {
+      expect(after?.images.map((i) => i.id)).toContain(id);
+    }
+  });
+
+  it("restores the previous cover when the new frame is discarded", async () => {
+    const shelf = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Retaken Shelf" }),
+      ctx.actor,
+    );
+    const keeper = await pendingImage("keeper");
+    await captureAsCover(shelf.id, keeper.id);
+
+    const badFrame = await pendingImage("bad-frame");
+    await captureAsCover(shelf.id, badFrame.id);
+
+    const locationId = unsafeLocationId(
+      (await resolveLiveShortcode(ctx.db, shelf.id, "location"))!,
+    );
+    await updateLocation(
+      ctx.db,
+      locationId,
+      { removeImageIds: [badFrame.id] },
+      ctx.actor,
+    );
+
+    const after = await getLocationById(ctx.db, locationId);
+    expect(after?.images.map((i) => i.id)).toEqual([keeper.id]);
+  });
+});

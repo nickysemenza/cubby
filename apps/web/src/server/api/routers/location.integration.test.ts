@@ -61,6 +61,55 @@ describe("location.create AI-description side-effect", () => {
     expect(kinds).not.toContain("location-ai.description.refresh");
     expect(kinds).not.toContain("location-ai.inventory.refresh");
   });
+
+  /**
+   * The photo-capture path attaches, then sends a SECOND order-only update to
+   * make the new photo the cover (see `useLocationPhotoCapture`). That second
+   * call must not re-enqueue vision analysis, or every retake bills twice.
+   * `locationImagesChanged` is computed from `pendingImageIds`/`removeImageIds`
+   * and deliberately excludes `imageOrder` — this is what pins that.
+   */
+  it("does NOT re-enqueue analysis for an imageOrder-only update", async () => {
+    const caller = createTestCaller(locationRouter, ctx.db);
+    const first = await createUploadedImageRecord(ctx.db, {
+      key: "loc-order-a.jpg",
+      url: "https://example.com/loc-order-a.jpg",
+      filename: "loc-order-a.jpg",
+      contentType: "image/jpeg",
+      size: 123,
+    });
+    const second = await createUploadedImageRecord(ctx.db, {
+      key: "loc-order-b.jpg",
+      url: "https://example.com/loc-order-b.jpg",
+      filename: "loc-order-b.jpg",
+      contentType: "image/jpeg",
+      size: 123,
+    });
+    const created = await caller.create(
+      makeLocationInput({
+        name: "Reordered only",
+        pendingImageIds: [first.id, second.id],
+      }),
+    );
+    const entityId = await resolveLiveShortcode(ctx.db, created.id, "location");
+    const visionKinds = async () =>
+      (await kindsForLocation(ctx.db, entityId!)).filter((kind) =>
+        kind.startsWith("location-ai."),
+      );
+    // The create attached photos, so it legitimately enqueued one round.
+    const before = await visionKinds();
+    expect(before.length).toBeGreaterThan(0);
+
+    await caller.update({
+      id: created.id,
+      data: { imageOrder: [second.id, first.id] },
+    });
+
+    // Counting only `location-ai.*`: a reorder still refreshes the location's
+    // own embedding, which is free — it is the paid vision pass that must not
+    // repeat.
+    expect(await visionKinds()).toHaveLength(before.length);
+  });
 });
 
 describe("location.bulkUpdateParent", () => {

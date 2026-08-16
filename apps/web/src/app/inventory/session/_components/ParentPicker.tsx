@@ -5,6 +5,7 @@ import { ChevronRight, Search, X } from "lucide-react";
 import pluralize from "pluralize";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { LocationScanButton } from "~/app/_components/locations/location-scan-button";
 import { LocationTreeRow } from "~/app/_components/locations/location-tree-row";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -26,7 +27,6 @@ import {
   listStoredSessionPasses,
   type StoredSessionPass,
 } from "../useSessionProgress";
-import { LocationScanButton } from "./QrJumpButton";
 
 const NO_STORED_PASSES: StoredSessionPass[] = [];
 
