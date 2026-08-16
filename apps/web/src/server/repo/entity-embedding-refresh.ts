@@ -735,14 +735,21 @@ export async function getEmbeddingTextsForEntityTypes(
   return limit == null ? rows : rows.slice(0, limit);
 }
 
-export async function getEmbeddingTextForEntity(
+/**
+ * One loader call per entity type for a whole set of ids. This replaced a
+ * per-entity form that issued a single-id SELECT for every row in a refresh
+ * wave — 3,945 of them in one production sample.
+ */
+export async function getEmbeddingTextsForRefs(
   db: Database,
-  entityType: SearchableEntity,
-  entityId: string,
-): Promise<SearchableEntityText | null> {
-  const [row] = await embeddingTextLoaders[entityType](db, {
-    ids: [entityId],
-    limit: 1,
-  });
-  return row ?? null;
+  idsByType: ReadonlyMap<SearchableEntity, string[]>,
+): Promise<SearchableEntityText[]> {
+  const chunks = await Promise.all(
+    [...idsByType].map(([entityType, ids]) =>
+      ids.length === 0
+        ? Promise.resolve<SearchableEntityText[]>([])
+        : embeddingTextLoaders[entityType](db, { ids }),
+    ),
+  );
+  return chunks.flat();
 }
