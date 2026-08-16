@@ -18,6 +18,7 @@ export {
   applyImageOrder,
   associatePendingImages,
   batchUpdateWithCaseWhen,
+  FindOrCreateConflictError,
   findOrCreate,
   insertAndReturn,
   nextImageSortOrder,

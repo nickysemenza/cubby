@@ -407,9 +407,19 @@ export const ingredient = pgTable(
     // and "flour" race past the matcher and both insert. The display value keeps
     // its original casing (first writer wins via ON CONFLICT); only the key is
     // lowercased. See findOrCreateIngredient's ON CONFLICT (lower(name)).
+    //
+    // `recipeId IS NULL` is the other half of that agreement: buildIngredientWhere
+    // only ever considers STANDALONE ingredients, so a name key spanning the
+    // recipe-link rows too constrains rows the matcher can't return. Sub-recipe
+    // links are named `Recipe: <title>` and identified by recipeId
+    // (Ingredient_recipeId_key), and Recipe_name_key deliberately exempts Book
+    // and Notion recipes — so one title can legitimately exist as a cookbook, a
+    // Notion and a web recipe, and each needs its own link row. Spanning them,
+    // the second link insert conflicted on an index its `where` couldn't see and
+    // reported as "3 shortcode collisions" (#716 follow-up).
     uniqueIndex("Ingredient_name_key")
       .on(sql`lower(${table.name})`)
-      .where(sql`${table.deletedAt} IS NULL`),
+      .where(sql`${table.deletedAt} IS NULL AND ${table.recipeId} IS NULL`),
     uniqueIndex("Ingredient_recipeId_key")
       .on(table.recipeId)
       .where(sql`${table.deletedAt} IS NULL`),

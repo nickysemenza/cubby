@@ -57,8 +57,13 @@ const findOrCreateRecipeLinkIngredient = async (
   // unique index (partial, WHERE deletedAt IS NULL) backs the race and the match
   // predicate. The name lookup is deferred to the create path via the values
   // thunk. See findOrCreate for the race it closes.
+  //
+  // `notDeleted` is what makes the predicate MATCH that partial index rather
+  // than merely resemble it. Without it a soft-deleted link row is "found" and
+  // reused, re-pointing a live section at a deleted ingredient — a referential
+  // liveness violation — even though the index would happily accept a fresh row.
   const { row } = await findOrCreateWithShortcode(db, "ingredient", {
-    where: eq(ingredient.recipeId, recipeId),
+    where: and(eq(ingredient.recipeId, recipeId), notDeleted(ingredient)),
     values: async () => {
       const recipeRecord = await unwrapDb(db).query.recipe.findFirst({
         where: eq(recipe.id, recipeId),

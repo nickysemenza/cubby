@@ -193,6 +193,28 @@ describe("insertWithShortcode", () => {
     expect(row.shortcode).not.toBe(squatter.id);
   });
 
+  it("blames the right index when the conflict is not the shortcode", async () => {
+    // Same silent-insert symptom as the case above, different cause: the values
+    // violate a unique index the `where` cannot see (here `Location_name_key`,
+    // while `where` keys on the type). Retrying is pointless — a fresh code
+    // changes nothing — and reporting it as a shortcode collision sends the
+    // reader hunting the wrong index, which is exactly what happened to the
+    // sub-recipe link ingredient. The minted code is verified before retrying,
+    // so this reports the real shape instead.
+    await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Occupied Bin" }),
+      ctx.actor,
+    );
+
+    await expect(
+      findOrCreateWithShortcode(ctx.db, "location", {
+        where: eq(location.type, "freezer"),
+        values: () => ({ name: "Occupied Bin", type: "shelf" as const }),
+      }),
+    ).rejects.toThrow(/unique index that `where` does not cover/);
+  });
+
   it("survives a collision inside an open transaction via its savepoint", async () => {
     // Without the SAVEPOINT the 23505 aborts the CALLER's transaction, and every
     // later statement in it fails with "current transaction is aborted" — the
