@@ -23,8 +23,10 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
 import type { RecipeGraphOut } from "@cubby/schemas/recipe";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { uniq } from "es-toolkit";
 import {
+  convertAmountToPrice,
   evaluateAvailability,
   expandRecipeNeeds,
   fromWAmount,
@@ -32,6 +34,7 @@ import {
   toWProductInput,
 } from "~/lib/recipe-costing";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
+import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { getInventoryForProducts } from "~/server/repo/inventory";
@@ -108,6 +111,12 @@ type EvaluatedNeeds = {
   groups: NeedGroup[];
   blocked: BlockedSubRecipe[];
   rootsByShortcode: Map<RecipeShortcode, RecipeGraphOut>;
+  /**
+   * Per ingredient, the money-reaching unit mappings of the first product that
+   * carries a price. Absent means "nothing here can be priced", which callers
+   * must report as unknown rather than as zero.
+   */
+  pricedMappings: Map<IngredientShortcode, UnitMapping[]>;
 };
 
 const toWNeedsRecipe = (recipe: RecipeGraphOut): WNeedsRecipe => ({
@@ -169,6 +178,7 @@ export class AvailabilityService {
       groups: [],
       blocked: [],
       rootsByShortcode: new Map(),
+      pricedMappings: new Map(),
     };
     if (lines.length === 0) return empty;
 
@@ -219,7 +229,12 @@ export class AvailabilityService {
     }));
 
     if (contributions.length === 0) {
-      return { groups: [], blocked, rootsByShortcode };
+      return {
+        groups: [],
+        blocked,
+        rootsByShortcode,
+        pricedMappings: new Map<IngredientShortcode, UnitMapping[]>(),
+      };
     }
 
     // Load each distinct ingredient (food-enriched, for density mappings) + one
@@ -272,6 +287,30 @@ export class AvailabilityService {
       }),
     );
 
+    /**
+     * Per ingredient, the unit mappings of the first product that can actually
+     * price it — the "which product do we buy this as" decision, made once.
+     *
+     * `unitMappings` alone never reaches money: a product's price is a separate
+     * field, so this runs the same synthesis the costing engine does
+     * (`getAllUnitMappingsFromProduct`), which adds the price edge. Ingredients
+     * with no priced product simply don't appear.
+     */
+    const pricedMappings = new Map<IngredientShortcode, UnitMapping[]>();
+    for (const [ingredientId, products] of ingMap) {
+      for (const product of products.product) {
+        if (product.pricing.effectivePrice == null) continue;
+        pricedMappings.set(
+          ingredientId,
+          getAllUnitMappingsFromProduct({
+            ...product,
+            price: product.pricing.effectivePrice,
+          }),
+        );
+        break;
+      }
+    }
+
     const groupsInput: WAvailabilityGroup[] = evaluable
       .filter((g) => g.withAmount.length > 0)
       .map((g) => ({
@@ -302,6 +341,7 @@ export class AvailabilityService {
       })),
       blocked,
       rootsByShortcode,
+      pricedMappings,
     };
   }
 
@@ -398,7 +438,37 @@ export class AvailabilityService {
     needs: AggregatedNeed[];
     unexpanded: BlockedSubRecipe[];
   }> {
-    const { groups, blocked } = await this.evaluateNeeds(lines);
+    const { groups, blocked, pricedMappings } = await this.evaluateNeeds(lines);
+
+    /**
+     * What the shortfall would cost, using the first product that can actually
+     * price it.
+     *
+     * `unitMappings` alone can't reach money — the product's price is a
+     * separate field — so this goes through `getAllUnitMappingsFromProduct`,
+     * the same synthesis the costing engine uses, which adds the price edge.
+     * Returns null rather than 0 whenever any step is unknown: a zero would sum
+     * into the trip total and understate it.
+     */
+    const estimateCost = (
+      ingredientId: IngredientShortcode | null,
+      basisUnit: string | null,
+      shortfall: number | null,
+    ): number | null => {
+      if (ingredientId == null || basisUnit == null) return null;
+      if (shortfall == null || shortfall <= 0) return null;
+
+      const mappings = pricedMappings.get(ingredientId);
+      if (!mappings) return null;
+
+      const priced = convertAmountToPrice(
+        { value: shortfall, unit: basisUnit },
+        mappings,
+      );
+      // No unit path from the basis unit to money — a real "unknown", not a
+      // zero. Reporting 0 here would understate the trip total.
+      return priced.isOk() ? priced.value.value : null;
+    };
 
     const needs = groups.flatMap((g): AggregatedNeed[] => {
       // An ingredient mentioned only without an amount contributes no need to
@@ -414,6 +484,11 @@ export class AvailabilityService {
           haveValue: g.result?.have_value ?? null,
           status: g.result?.status ?? "missing",
           shortfall: g.result?.shortfall ?? null,
+          estimatedCost: estimateCost(
+            g.ingredientId,
+            g.result?.basis_unit ?? first?.amount.unit ?? null,
+            g.result?.shortfall ?? null,
+          ),
           // `evaluate_group` builds `sources` positionally 1:1 with the needs
           // it was handed (including under an incoherent basis, which zeroes
           // the values but keeps the vector), so zip by INDEX. lineIndex is no

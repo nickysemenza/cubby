@@ -8,8 +8,11 @@
  */
 
 import { unsafeMealShortcode } from "@cubby/schemas/identifiers";
-import type { EmptyCookedMeal } from "@cubby/schemas/problems";
-import { and, asc, eq, notExists } from "drizzle-orm";
+import type {
+  EmptyCookedMeal,
+  UnderstatedCostMeal,
+} from "@cubby/schemas/problems";
+import { and, asc, count, eq, notExists, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { meal, mealRecipe, recipe } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -66,5 +69,56 @@ export const findEmptyCookedMeals = async (
     id: unsafeMealShortcode(row.shortcode),
     name: row.name,
     date: row.date,
+  }));
+};
+
+/**
+ * Planned meals whose cost rollup is knowingly incomplete — some live recipe
+ * was costed and came back with fewer priced ingredients than it has.
+ *
+ * The predicate is `costCovered < ingredientCount` inside `recipe.totals`, NOT
+ * `totals IS NULL`. A null `totals` only means the costing queue hasn't reached
+ * that recipe; it clears itself on the next drain and `staleRecipeTotals`
+ * already owns it. This set stays put until an ingredient gains a price path,
+ * which is what makes it worth a row on the Problems page.
+ *
+ * Same two soft-delete guards as above: the link and the recipe both have to be
+ * live, or a meal is judged on a recipe it no longer shows.
+ */
+export const findUnderstatedCostMeals = async (
+  db: Database,
+): Promise<UnderstatedCostMeal[]> => {
+  const rows = await getDb(db)
+    .select({
+      shortcode: meal.shortcode,
+      name: meal.name,
+      date: meal.date,
+      recipeCount: count(mealRecipe.id),
+    })
+    .from(meal)
+    .innerJoin(
+      mealRecipe,
+      and(eq(mealRecipe.mealId, meal.id), notDeleted(mealRecipe)),
+    )
+    .innerJoin(
+      recipe,
+      and(eq(recipe.id, mealRecipe.recipeId), notDeleted(recipe)),
+    )
+    .where(
+      and(
+        notDeleted(meal),
+        // `->>` yields text; both sides cast so this is a numeric comparison
+        // rather than a lexicographic one ("9" > "10" as text).
+        sql`(${recipe.totals} ->> 'costCovered')::int < (${recipe.totals} ->> 'ingredientCount')::int`,
+      ),
+    )
+    .groupBy(meal.id, meal.shortcode, meal.name, meal.date)
+    .orderBy(asc(meal.date));
+
+  return rows.map((row) => ({
+    id: unsafeMealShortcode(row.shortcode),
+    name: row.name,
+    date: row.date,
+    recipeCount: row.recipeCount,
   }));
 };

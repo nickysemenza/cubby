@@ -27,6 +27,7 @@ import {
   shoppingListOut,
 } from "@cubby/schemas/meal";
 import { contributesToShoppingList } from "@cubby/schemas/meal-classification";
+import { sumBy } from "es-toolkit";
 import { createAppError } from "~/server/errors/app-error";
 import {
   addRecipeToMeal,
@@ -235,6 +236,7 @@ const getShoppingList = protectedProcedure
           haveValue: n.haveValue,
           shortfall: n.shortfall,
           status: n.status,
+          estimatedCost: n.estimatedCost,
           perMeal: n.sources.flatMap((s) => {
             const meta = lineMeta[s.lineIndex];
             return meta
@@ -267,6 +269,11 @@ const getShoppingList = protectedProcedure
       meals: cookedMeals.map((m) => ({ id: m.id, name: m.name, date: m.date })),
       omittedMeals,
       items,
+      // Sum of what CAN be priced, plus how many rows that was. A total over
+      // half the list must be readable as such, so the count travels with it
+      // rather than the UI guessing from nulls.
+      estimatedTotal: sumBy(items, (i) => i.estimatedCost ?? 0),
+      pricedItems: items.filter((i) => i.estimatedCost != null).length,
       // Attribute each un-expandable sub-recipe back to the meal that asked
       // for it, so the disclosure can name where the gap is.
       unexpanded: unexpanded.flatMap((b) => {

@@ -6,6 +6,7 @@ import type {
 } from "@cubby/schemas/meal";
 import { sumBy } from "es-toolkit";
 import { availabilityStatusFor } from "~/lib/recipe-costing";
+import { shortText } from "./meal-format";
 
 // The shared model behind every shopping-list renderer (desktop table, mobile
 // cards, matrix). Membership, per-row need, status and order are decided here
@@ -173,6 +174,38 @@ export const toggleInSet = (
   return next;
 };
 
-/** Check-off state is per date-range, so a return trip keeps what you grabbed. */
-export const shoppingCheckedStorageKey = (from: string, to: string): string =>
-  `cubby:shopping-checked:${from}:${to}`;
+/**
+ * One check-off bucket, deliberately NOT keyed by date range.
+ *
+ * It used to be `…:${from}:${to}`, which meant nudging either end of the range
+ * mid-shop silently swapped in an empty set and lost every tick — the one
+ * moment the list is actually in use. Row keys are `ingredientId ?? name`
+ * (`shoppingRowKey`), which don't depend on the range at all, so a single
+ * bucket restores the ticks whatever window you land on. Ticks persist until
+ * cleared explicitly; that's what `clear checked` is for.
+ */
+export const SHOPPING_CHECKED_STORAGE_KEY = "cubby:shopping-checked";
+
+/**
+ * The list as plain text, for the clipboard or a message.
+ *
+ * A pure function of the same rows the renderers draw, so the copied list and
+ * the on-screen one can't diverge. Checked rows are kept and marked rather than
+ * dropped: the point of copying mid-shop is to hand someone the whole list,
+ * including what's already in the cart.
+ */
+export const shoppingRowsToText = (
+  rows: readonly ShoppingRow[],
+  range: { from: string; to: string },
+): string => {
+  const lines = rows.map((row) => {
+    const box = row.isChecked ? "[x]" : "[ ]";
+    const short = shortText(row);
+    // "✓" means covered — a quantity would imply you still need to buy some.
+    const amount = short === "✓" ? "have enough" : short;
+    return `${box} ${row.item.name} — ${amount}`;
+  });
+  return [`Shopping list · ${range.from} to ${range.to}`, "", ...lines].join(
+    "\n",
+  );
+};

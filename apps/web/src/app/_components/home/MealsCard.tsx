@@ -1,12 +1,9 @@
-import {
-  MEAL_KIND_LABELS,
-  MEAL_TYPE_LABELS,
-} from "@cubby/schemas/meal-classification";
+import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { addDays, format, isSameDay, parseISO } from "date-fns";
 import { UtensilsCrossed } from "lucide-react";
-import { formatMealCost } from "~/app/meals/meal-format";
+import { formatMealCost, mealListLabel } from "~/app/meals/meal-format";
 import { mealKindIcon, mealTypeIcon } from "~/app/meals/meal-options";
 import { Row, Stack } from "~/components/layout";
 import {
@@ -78,14 +75,7 @@ export function MealsCard() {
           meals.map((meal) => {
             const date = parseISO(meal.date);
             const isToday = hydrated && isSameDay(date, today);
-            const mealLabel =
-              meal.name ||
-              meal.recipes.map((r) => r.recipe.name).join(", ") ||
-              // An unnamed, recipe-less meal is usually an eating-out night,
-              // and its slot names it better than "Untitled" does. Same
-              // fallback order the calendar title uses.
-              (meal.mealType ? MEAL_TYPE_LABELS[meal.mealType] : null) ||
-              "Untitled meal";
+            const mealLabel = mealListLabel(meal);
             const SlotIcon = mealTypeIcon(meal.mealType);
             const KindIcon = mealKindIcon(meal.mealKind);
             return (

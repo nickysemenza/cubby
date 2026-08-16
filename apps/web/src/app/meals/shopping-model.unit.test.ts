@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildShoppingColumns,
   buildShoppingRows,
+  SHOPPING_CHECKED_STORAGE_KEY,
+  shoppingRowsToText,
   toggleInSet,
 } from "./shopping-model";
 
@@ -322,5 +324,43 @@ describe("toggleInSet", () => {
     expect([...toggleInSet(original, "b")].sort()).toEqual(["a", "b"]);
     expect([...toggleInSet(original, "a")]).toEqual([]);
     expect([...original]).toEqual(["a"]);
+  });
+});
+
+describe("shoppingRowsToText", () => {
+  const rangeLabel = { from: "2026-03-01", to: "2026-03-07" };
+
+  it("keeps checked rows and marks them", () => {
+    // Copying mid-shop should hand over the whole list, cart included —
+    // dropping ticked rows would silently shorten someone else's errand.
+    const rows = buildShoppingRows(
+      [item({ name: "flour", haveValue: 0, perMeal: [contribution()] })],
+      NONE,
+      // Rows key on `ingredientId ?? name`, so the check-off key is the id.
+      new Set(["ING-1"]),
+    );
+
+    const text = shoppingRowsToText(rows, rangeLabel);
+    expect(text).toContain("2026-03-01 to 2026-03-07");
+    expect(text).toContain("[x] flour");
+  });
+
+  it("says 'have enough' rather than printing a quantity to buy", () => {
+    const rows = buildShoppingRows(
+      [item({ name: "flour", haveValue: 9999, perMeal: [contribution()] })],
+      NONE,
+      NONE,
+    );
+
+    expect(shoppingRowsToText(rows, rangeLabel)).toContain("have enough");
+  });
+});
+
+describe("check-off storage key", () => {
+  it("does not vary with the date range", () => {
+    // The regression this pins: the key used to interpolate from/to, so
+    // nudging either end mid-shop swapped in an empty bucket and lost every
+    // tick. Row keys never depended on the range, only the storage key did.
+    expect(SHOPPING_CHECKED_STORAGE_KEY).not.toMatch(/\d{4}-\d{2}-\d{2}/);
   });
 });

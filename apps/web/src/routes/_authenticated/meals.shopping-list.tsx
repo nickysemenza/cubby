@@ -5,7 +5,9 @@ import {
 } from "@tanstack/react-router";
 import { Grid3x3, List } from "lucide-react";
 import {
+  parseExcludedMeals,
   type ShoppingListView,
+  serializeExcludedMeals,
   shoppingListSearchDefaults,
   shoppingListSearchSchema,
 } from "~/app/meals/meal-search";
@@ -30,7 +32,7 @@ export const Route = createFileRoute("/_authenticated/meals/shopping-list")({
 });
 
 function ShoppingListRoute() {
-  const { view, from, to } = Route.useSearch();
+  const { view, from, to, excluded } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
 
   return (
@@ -62,6 +64,20 @@ function ShoppingListRoute() {
         view={view ?? "list"}
         from={from}
         to={to}
+        excluded={parseExcludedMeals(excluded)}
+        onExcludedChange={(next) =>
+          void navigate({
+            to: "/meals/shopping-list",
+            search: (prev) => ({
+              ...prev,
+              // Empty maps to undefined so stripSearchParams keeps `?excluded=`
+              // out of a link where nothing is hidden.
+              excluded:
+                next.size === 0 ? undefined : serializeExcludedMeals(next),
+            }),
+            replace: true,
+          })
+        }
         onRangeChange={(range) =>
           void navigate({
             to: "/meals/shopping-list",

@@ -286,6 +286,8 @@ export const shoppingListItem = z.object({
    */
   shortfall: z.number().nullable(),
   status: ingredientAvailabilityStatus,
+  /** Cost of the shortfall; null when no price path exists. See `aggregatedNeedOut`. */
+  estimatedCost: z.number().nullable(),
   perMeal: z.array(shoppingListContribution),
 });
 export type ShoppingListItem = z.infer<typeof shoppingListItem>;
@@ -301,6 +303,12 @@ export const shoppingListOut = z.object({
     }),
   ),
   items: z.array(shoppingListItem),
+  /**
+   * Sum of the priced shortfalls. `pricedItems` vs `items.length` is what makes
+   * it honest — a total over half the list must not read as the trip's cost.
+   */
+  estimatedTotal: z.number(),
+  pricedItems: z.number().int(),
   /** Sub-recipes whose ingredients this list could NOT account for. */
   unexpanded: z.array(unexpandedSubRecipeOut),
   /**

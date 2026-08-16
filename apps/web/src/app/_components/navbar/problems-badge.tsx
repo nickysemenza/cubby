@@ -59,6 +59,8 @@ const PROBLEM_LABELS: Record<
   entitiesMissingEmbeddings: (n) => `${n} missing a search embedding`,
   staleParentRecipes: (n) => pl(n, "deleted sub-recipe reference"),
   emptyCookedMeals: (n) => pl(n, "cooked meal with nothing planned"),
+  understatedCostMeals: (n) => pl(n, "meal with an understated cost"),
+  recipesWithoutInstructions: (n) => pl(n, "recipe without instructions"),
   productsWithBetterUpcData: (n) => pl(n, "UPC update"),
   overdueTasks: (n) => pl(n, "overdue task"),
   blockedWorkProjects: (n) => `${n} blocked with no next action`,

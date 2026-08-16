@@ -1,7 +1,14 @@
 import type { IngredientAvailabilityStatus } from "@cubby/schemas/availability";
 import type { MealTotals } from "@cubby/schemas/meal";
+import {
+  MEAL_TYPE_LABELS,
+  type MealType,
+} from "@cubby/schemas/meal-classification";
 import { format, parseISO } from "date-fns";
-import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
+import {
+  tryFormatAmount,
+  tryFormatAmountShopper,
+} from "~/app/_components/inventory/format-amount";
 import { formatCurrency } from "~/lib/utils";
 import type { ShoppingRow } from "./shopping-model";
 
@@ -22,12 +29,41 @@ export const formatAmount = (value: number, unit: string | null): string =>
   tryFormatAmount({ value, unit: unit || "whole" });
 
 /**
+ * The shopping-list spelling of an amount: the same WASM formatter, laddered
+ * into shop units. `basisUnit` is whatever the availability engine reconciled
+ * in — grams, almost always — so the raw form reads "1360 g flour" on the one
+ * surface that gets carried to a store.
+ */
+const formatShopperAmount = (value: number, unit: string | null): string =>
+  tryFormatAmountShopper({ value, unit: unit || "whole" });
+
+/**
  * How an unnamed meal identifies itself — by its day. Shared so the table's
  * Name column, its delete dialog, and the Problems section can't disagree
  * about what a nameless row is called.
  */
 export const mealDateLabel = (meal: { date: string }): string =>
   format(parseISO(meal.date), "EEE, MMM d");
+
+/**
+ * How a meal names itself in a list: its own name, else what's planned in it,
+ * else its slot, else the day.
+ *
+ * The slot step is why this is shared rather than re-inlined. Three surfaces
+ * had grown their own version ending in a bare "Untitled meal", which is
+ * exactly wrong for the common recipe-less case — an eating-out dinner is not
+ * untitled, it's dinner. Matches the calendar title's own fallback order.
+ */
+export const mealListLabel = (meal: {
+  name: string | null;
+  date: string;
+  mealType: MealType | null;
+  recipes?: { recipe: { name: string } }[];
+}): string =>
+  meal.name ||
+  (meal.recipes ?? []).map((r) => r.recipe.name).join(", ") ||
+  (meal.mealType ? MEAL_TYPE_LABELS[meal.mealType] : "") ||
+  mealDateLabel(meal);
 
 /** Meal/day cost rollup as a short string; "—" when no recipe has totals. */
 export const formatMealCost = (totals: MealTotals): string => {
@@ -55,18 +91,18 @@ export const statusClass = (status: IngredientAvailabilityStatus): string => {
 // slightly different rules.
 
 export const needText = (row: ShoppingRow): string =>
-  formatAmount(row.need, row.item.basisUnit);
+  formatShopperAmount(row.need, row.item.basisUnit);
 
 export const haveText = (row: ShoppingRow): string =>
   row.item.haveValue == null
     ? "—"
-    : formatAmount(row.item.haveValue, row.item.basisUnit);
+    : formatShopperAmount(row.item.haveValue, row.item.basisUnit);
 
 /** "?" when on-hand is unknown — distinct from a real, covered zero ("✓"). */
 export const shortText = (row: ShoppingRow): string => {
   if (row.shortfall == null) return "?";
   return row.shortfall > 0
-    ? formatAmount(row.shortfall, row.item.basisUnit)
+    ? formatShopperAmount(row.shortfall, row.item.basisUnit)
     : "✓";
 };
 

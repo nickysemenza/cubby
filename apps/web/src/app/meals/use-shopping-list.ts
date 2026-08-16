@@ -1,18 +1,21 @@
 import type { ShoppingListOut, UnexpandedSubRecipe } from "@cubby/schemas/meal";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getDefaultShoppingRange } from "./meal-search";
 import {
   buildShoppingColumns,
   buildShoppingRows,
-  shoppingCheckedStorageKey,
+  SHOPPING_CHECKED_STORAGE_KEY,
   toggleInSet,
 } from "./shopping-model";
 
 /** Module-level so the empty case doesn't allocate a new array each render. */
 const NO_GAPS: UnexpandedSubRecipe[] = [];
+/** Stable empty default — a fresh `[]` here would churn every memo downstream. */
+const NO_CHECKED: string[] = [];
+const NO_EXCLUDED: readonly string[] = [];
 const NO_OMITTED: ShoppingListOut["omittedMeals"] = [];
 
 /**
@@ -20,20 +23,28 @@ const NO_OMITTED: ShoppingListOut["omittedMeals"] = [];
  * switch so the table, the mobile cards and the matrix all read the same rows
  * and share one set of check marks.
  */
-export function useShoppingList(from?: string, to?: string) {
+export function useShoppingList(
+  from?: string,
+  to?: string,
+  // Controlled from the URL so a filtered list is shareable and survives a
+  // reload — the same reason `from`/`to` live there.
+  excluded?: readonly string[],
+  onExcludedChange?: (next: ReadonlySet<string>) => void,
+) {
   const api = useTRPC();
 
   const defaultRange = useMemo(() => getDefaultShoppingRange(), []);
   const fromStr = from ?? defaultRange.from;
   const toStr = to ?? defaultRange.to;
 
-  const [excludedKeys, setExcludedKeys] = useState<Set<string>>(
-    () => new Set(),
+  const excludedKeys = useMemo(
+    () => new Set(excluded ?? NO_EXCLUDED),
+    [excluded],
   );
   // Stored as an array — Sets don't JSON-serialize.
   const [checkedKeys, setCheckedKeys] = useLocalStorage<string[]>(
-    shoppingCheckedStorageKey(fromStr, toStr),
-    [],
+    SHOPPING_CHECKED_STORAGE_KEY,
+    NO_CHECKED,
   );
   const checked = useMemo(() => new Set(checkedKeys), [checkedKeys]);
 
@@ -45,8 +56,12 @@ export function useShoppingList(from?: string, to?: string) {
     [setCheckedKeys],
   );
   const toggleExcluded = useCallback(
-    (mealId: string) => setExcludedKeys((s) => toggleInSet(s, mealId)),
-    [],
+    (mealId: string) => onExcludedChange?.(toggleInSet(excludedKeys, mealId)),
+    [excludedKeys, onExcludedChange],
+  );
+  const clearChecked = useCallback(
+    () => setCheckedKeys(NO_CHECKED),
+    [setCheckedKeys],
   );
 
   const query = useQuery(
@@ -90,6 +105,7 @@ export function useShoppingList(from?: string, to?: string) {
     toggleExcluded,
     checked,
     toggleChecked,
+    clearChecked,
     remaining: rows.filter((r) => !r.isChecked).length,
     range: { from: fromStr, to: toStr },
   };

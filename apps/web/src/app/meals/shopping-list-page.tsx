@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
+import { Copy, RotateCcw } from "lucide-react";
 import { useId } from "react";
+import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
@@ -9,10 +11,12 @@ import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
-import { cn } from "~/lib/utils";
+import { copyText } from "~/lib/clipboard";
+import { cn, formatCurrency } from "~/lib/utils";
 import type { ShoppingListView } from "./meal-search";
 import { ShoppingCard } from "./shopping-card";
 import { ShoppingMatrix } from "./shopping-matrix";
+import { shoppingRowsToText } from "./shopping-model";
 import { ShoppingOmissionNote } from "./shopping-omission-note";
 import { ShoppingTable } from "./shopping-table";
 import { useShoppingList } from "./use-shopping-list";
@@ -21,14 +25,18 @@ interface ShoppingListPageProps {
   view: ShoppingListView;
   from?: string;
   to?: string;
+  excluded: readonly string[];
   onRangeChange: (range: { from?: string; to?: string }) => void;
+  onExcludedChange: (next: ReadonlySet<string>) => void;
 }
 
 export function ShoppingListPage({
   view,
   from,
   to,
+  excluded: excludedParam,
   onRangeChange,
+  onExcludedChange,
 }: ShoppingListPageProps) {
   const {
     data,
@@ -44,16 +52,17 @@ export function ShoppingListPage({
     excluded,
     toggleExcluded,
     toggleChecked,
+    clearChecked,
     remaining,
     range,
-  } = useShoppingList(from, to);
+  } = useShoppingList(from, to, excludedParam, onExcludedChange);
 
   const fromId = useId();
   const toId = useId();
 
   return (
     <Stack>
-      <Row align="end" wrap gap="md">
+      <Row align="end" wrap gap="md" className="print:hidden">
         <Stack gap="xs">
           <label htmlFor={fromId} className="text-muted-foreground text-xs">
             From
@@ -82,6 +91,31 @@ export function ShoppingListPage({
             }
           />
         </Stack>
+        <Row gap="sm" align="center" className="ml-auto print:hidden">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={rows.length === 0}
+            onClick={() => {
+              void copyText(shoppingRowsToText(rows, range));
+              toast.success("Shopping list copied");
+            }}
+          >
+            <Copy />
+            Copy
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={remaining === rows.length}
+            onClick={clearChecked}
+          >
+            <RotateCcw />
+            Clear ticks
+          </Button>
+        </Row>
       </Row>
 
       {isLoading ? (
@@ -108,8 +142,9 @@ export function ShoppingListPage({
         </Description>
       ) : (
         <>
-          {/* Meal include/exclude toggles */}
-          <Row wrap gap="sm">
+          {/* Meal include/exclude toggles. Interactive chrome — on paper the
+              excluded ones simply aren't in the list. */}
+          <Row wrap gap="sm" className="print:hidden">
             {data.meals.map((m) => {
               const isOut = excluded.has(m.id);
               return (
@@ -128,7 +163,8 @@ export function ShoppingListPage({
                     />
                   }
                 >
-                  {m.name || "Meal"} · {format(parseISO(m.date), "EEE M/d")}
+                  {m.name || format(parseISO(m.date), "EEE M/d")}
+                  {m.name ? ` · ${format(parseISO(m.date), "EEE M/d")}` : ""}
                 </Badge>
               );
             })}
@@ -146,9 +182,19 @@ export function ShoppingListPage({
             <Description>Nothing to buy for the selected meals.</Description>
           ) : (
             <Stack gap="sm">
-              <Description as="div" size="xs">
-                {remaining} of {rows.length} left
-              </Description>
+              <Row align="baseline" gap="sm" wrap>
+                <Description as="div" size="xs">
+                  {remaining} of {rows.length} left
+                </Description>
+                {data.pricedItems > 0 && (
+                  <Description as="div" size="xs" className="tabular-nums">
+                    {/* The count is not decoration: a total covering 4 of 11
+                        rows must not read as the price of the trip. */}
+                    ~{formatCurrency(data.estimatedTotal)} for{" "}
+                    {data.pricedItems} of {data.items.length} priced
+                  </Description>
+                )}
+              </Row>
 
               {/* Mobile: stacked check-off cards, usable one-handed in a
                   store. A 15-column cross-tab is not, so `?view=matrix` still

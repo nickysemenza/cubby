@@ -1,6 +1,7 @@
 import { addDays, format, isValid, parseISO, startOfWeek } from "date-fns";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
+import { urlStringParam } from "~/lib/search-params";
 
 const dateParamSchema = z
   .string()
@@ -40,13 +41,26 @@ export const shoppingListSearchSchema = z.object({
   view: z.enum(["list", "matrix"]).optional().catch(undefined),
   from: dateParamSchema,
   to: dateParamSchema,
+  // Comma-joined meal shortcodes rather than a JSON array, so a shared list
+  // stays readable (`?excluded=MEL-4K7M,MEL-ZX4C`). `urlStringParam` because
+  // TanStack's parseSearch JSON-parses every value; shortcodes aren't JSON
+  // tokens today, but the helper is the house rule and costs nothing.
+  excluded: urlStringParam,
 });
 
 export const shoppingListSearchDefaults = {
   view: undefined,
   from: undefined,
   to: undefined,
+  excluded: undefined,
 } as const;
+
+/** `?excluded=` text ⇄ the set the renderers use. Empty means nothing hidden. */
+export const parseExcludedMeals = (value: string | undefined): string[] =>
+  value ? value.split(",").filter(Boolean) : [];
+
+export const serializeExcludedMeals = (ids: ReadonlySet<string>): string =>
+  [...ids].join(",");
 
 export const mealSuggestionFilters = [
   { label: "All", value: "all", minCoverage: 0 },

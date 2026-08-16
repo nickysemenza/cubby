@@ -508,6 +508,37 @@ export const emptyCookedMealSchema = z.object({
   date: plainDate,
 });
 
+// A planned meal whose cost rollup is knowingly incomplete: at least one of
+// its live recipes was costed and came back with fewer priced ingredients than
+// it has (`costCovered < ingredientCount`).
+//
+// Deliberately NOT `totals IS NULL`. That set is "the costing queue hasn't run
+// yet", it drains itself the moment the client opens, and `staleRecipeTotals`
+// already reports it in the maintenance card with a Fix button. This one does
+// not self-heal: the meal's cost stays understated until an ingredient gets a
+// price path, and `recipe-totals-gaps.ts` already ranks those fixes.
+export const understatedCostMealSchema = z.object({
+  id: mealShortcode,
+  name: z.string().nullable(),
+  date: plainDate,
+  /** Live planned recipes carrying at least one unpriced ingredient. */
+  recipeCount: z.number().int(),
+});
+
+// A live recipe with no instruction text anywhere — every live section's
+// `instructions` array is empty.
+//
+// Book- and Notion-sourced recipes are excluded, not flagged: a cookbook import
+// legitimately carries no instructions because the instructions are in the book
+// on the shelf. Including them would bury the recipes that are actually
+// half-entered under the ones that are working as designed — the same reason
+// the trigram index at schema.ts excludes those two sources.
+export const recipeWithoutInstructionsSchema = z.object({
+  id: recipeShortcode,
+  name: z.string(),
+  sectionCount: z.number().int(),
+});
+
 export const staleIngredientParseSchema = z.object({
   // A RecipeSectionIngredient row id — an internal child row, not one of the
   // shortcode entities, so it stays a plain uuid string.
@@ -759,6 +790,8 @@ const problemsFastShape = {
   entitiesMissingEmbeddings: z.array(entityMissingEmbeddingSchema),
   staleParentRecipes: z.array(staleParentRecipeSchema),
   emptyCookedMeals: z.array(emptyCookedMealSchema),
+  understatedCostMeals: z.array(understatedCostMealSchema),
+  recipesWithoutInstructions: z.array(recipeWithoutInstructionsSchema),
   staleLocations: z.array(staleLocationSchema),
   neverVerifiedInventory: z.array(neverVerifiedInventorySchema),
   unknownParkedItems: z.array(unknownParkedItemSchema),
@@ -958,6 +991,14 @@ export const PROBLEM_CLASS = {
   // just a row that is either finished or mislabelled. No auto-fix: only the
   // cook knows which of the two resolutions is true.
   emptyCookedMeals: "defect",
+  // The number on the meal is wrong, not merely unfinished, and it stays wrong
+  // until someone gives an ingredient a price path. Converges to zero; no
+  // auto-fix, because the fix is a pricing decision.
+  understatedCostMeals: "defect",
+  // A recipe you can't cook from. Converges to zero once typed in, and the
+  // book/Notion sources that legitimately have none are excluded rather than
+  // tolerated, so a row here is always real work.
+  recipesWithoutInstructions: "defect",
   unknownParkedItems: "defect",
   manufacturerSpellingVariants: "defect",
   // Two roster rows for one real vendor is simply wrong — that vendor's spend is
@@ -1188,6 +1229,10 @@ export type LocationWithoutAiDescription = z.infer<
 export type StaleIngredientParse = z.infer<typeof staleIngredientParseSchema>;
 export type StaleParentRecipe = z.infer<typeof staleParentRecipeSchema>;
 export type EmptyCookedMeal = z.infer<typeof emptyCookedMealSchema>;
+export type UnderstatedCostMeal = z.infer<typeof understatedCostMealSchema>;
+export type RecipeWithoutInstructions = z.infer<
+  typeof recipeWithoutInstructionsSchema
+>;
 export type ProductWithBetterUpcData = z.infer<
   typeof productWithBetterUpcDataSchema
 >;
