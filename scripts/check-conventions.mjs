@@ -195,8 +195,13 @@ const ACTION_VERBS_PATH = "apps/web/src/app/_components/actions/action-verbs.ts"
  */
 const menuItemText = (line) =>
   line
-    .replace(/<[^>]*>/g, " ")
+    // Braces FIRST. `<[^>]*>` stops at the first `>`, so an attribute holding
+    // one — `onSelect={() => x()}`, `disabled={x > 0}` — truncates the tag
+    // strip and leaves the label glued to attribute debris, re-opening the
+    // single-line hole this rule exists to close. Removing the brace
+    // expressions first makes the tag strip unambiguous.
     .replace(/\{[^}]*\}/g, " ")
+    .replace(/<[^>]*>/g, " ")
     .replace(/\s+/g, " ")
     .trim()
     .replace(/\.\.\.$/, "")
