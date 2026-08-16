@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { image, product, productImage } from "~/server/db/schema";
@@ -14,7 +14,11 @@ import {
   getSearchDocumentDiagnostics,
   refreshSearchDocument,
 } from "~/server/repo/search-document";
-import { findSearchHits } from "~/server/services/search.service";
+import {
+  findSearchHits,
+  inspectSearchDocumentHealth,
+  repairSearchDocuments,
+} from "~/server/services/search.service";
 
 describe("SearchDocument indexed retrieval", () => {
   const ctx = withTestDb();
@@ -180,5 +184,76 @@ describe("SearchDocument indexed retrieval", () => {
     expect(
       (await getSearchDocumentDiagnostics(ctx.db, ["product"])).orphaned,
     ).toContainEqual({ entityType: "product", entityId: created.entityId });
+  });
+
+  it("repairs missing and stale documents and retires orphans", async () => {
+    const missing = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Missing search document fixture" }),
+      ctx.actor,
+    );
+    const stale = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Stale search document fixture" }),
+      ctx.actor,
+    );
+    const orphaned = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Orphaned search document fixture" }),
+      ctx.actor,
+    );
+    await Promise.all([
+      refreshSearchDocument(ctx.db, "product", stale.entityId),
+      refreshSearchDocument(ctx.db, "product", orphaned.entityId),
+    ]);
+    await getDb(ctx.db)
+      .update(product)
+      .set({ name: "Stale source changed outside refresh" })
+      .where(eq(product.id, stale.entityId));
+    await getDb(ctx.db)
+      .update(product)
+      .set({ deletedAt: new Date() })
+      .where(eq(product.id, orphaned.entityId));
+
+    const result = await repairSearchDocuments(ctx.db);
+    expect(result).toMatchObject({
+      before: { missing: 1, stale: 1, orphaned: 1, total: 3 },
+      queued: 2,
+      retired: 1,
+    });
+    expect(result.batchId).not.toBeNull();
+    expect(await inspectSearchDocumentHealth(ctx.db)).toEqual({
+      missing: 0,
+      stale: 0,
+      orphaned: 0,
+      total: 0,
+    });
+
+    expect(
+      await findSearchHits(ctx.db, {
+        query: "Missing search document fixture",
+        entityTypes: ["product"],
+      }),
+    ).toContainEqual(expect.objectContaining({ id: missing.id }));
+  });
+
+  it("keeps the live-entity unique index aligned with the upsert arbiter", async () => {
+    const result = await getDb(ctx.db).execute<{
+      unique: boolean;
+      predicate: string | null;
+      definition: string;
+    }>(sql`
+      SELECT i.indisunique AS unique,
+        pg_get_expr(i.indpred, i.indrelid) AS predicate,
+        pg_get_indexdef(i.indexrelid) AS definition
+      FROM pg_index i
+      JOIN pg_class idx ON idx.oid = i.indexrelid
+      WHERE idx.relname = 'SearchDocument_live_entity_key'
+    `);
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({ unique: true });
+    expect(result.rows[0]?.definition).toContain('("entityType", "entityId")');
+    expect(result.rows[0]?.predicate).toMatch(/"deletedAt" IS NULL/);
   });
 });

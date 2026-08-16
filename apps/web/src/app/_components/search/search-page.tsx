@@ -333,6 +333,9 @@ function SearchRow({
         <span className="block truncate font-mono text-2xs text-muted-foreground uppercase">
           {entities[entityTypeMap[item.entityType]].label}
         </span>
+        <span className="block truncate font-mono text-2xs text-foreground tabular-nums">
+          {item.id}
+        </span>
         <span
           className="block truncate text-2xs text-muted-foreground"
           title={item.matchReason}
@@ -369,8 +372,8 @@ function MobileSearchResults({
           subtitle={item.subtitle}
           imageSlot={<SearchResultMedia item={item} variant="mobile" />}
           rightValues={[
+            item.id,
             entities[entityTypeMap[item.entityType]].label,
-            getSearchMatchText(item),
           ]}
           onClick={() => {
             rememberSearchResult(item);

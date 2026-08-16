@@ -388,7 +388,7 @@ export async function backfillSearchDocuments(
   }
   if (options.limit == null) {
     const diagnostics = await getSearchDocumentDiagnostics(db, entityTypes);
-    await softDeleteOrphanedSearchDocuments(db, diagnostics.orphaned);
+    await retireOrphanedSearchDocuments(db, diagnostics.orphaned);
   }
   return results;
 }
@@ -533,7 +533,7 @@ export async function getSearchDocumentDiagnostics(
   return { missing, orphaned, stale };
 }
 
-async function softDeleteOrphanedSearchDocuments(
+export async function retireOrphanedSearchDocuments(
   db: Database,
   refs: ReadonlyArray<{ entityType: SearchableEntity; entityId: string }>,
 ): Promise<number> {

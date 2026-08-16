@@ -4,7 +4,9 @@ import {
 } from "@cubby/schemas/background-jobs";
 import {
   relatedSearchOutSchema,
+  repairSearchDocumentsOutSchema,
   searchDebugOutSchema,
+  searchDocumentHealthSchema,
   searchHitsOut,
   searchQueryInputSchema,
   similarEntitiesInputSchema,
@@ -13,6 +15,8 @@ import {
 import {
   findRelatedSearchHits,
   findSearchHits,
+  inspectSearchDocumentHealth,
+  repairSearchDocuments,
 } from "~/server/services/search.service";
 import {
   enqueueEntityEmbeddingBackfill,
@@ -26,6 +30,16 @@ export const searchRouter = createTRPCRouter({
     .input(searchQueryInputSchema)
     .output(strictOutput(searchHitsOut))
     .query(async ({ ctx, input }) => await findSearchHits(ctx.db, input)),
+
+  /** On-demand catalog integrity check; intentionally absent from hot paths. */
+  documentHealth: protectedProcedure
+    .output(strictOutput(searchDocumentHealthSchema))
+    .query(async ({ ctx }) => await inspectSearchDocumentHealth(ctx.db)),
+
+  /** Queue missing/stale repairs and retire orphaned documents immediately. */
+  repairDocuments: protectedProcedure
+    .output(strictOutput(repairSearchDocumentsOutSchema))
+    .mutation(async ({ ctx }) => await repairSearchDocuments(ctx.db)),
 
   /** Opt-in semantic matches, returned separately so they never reorder lexical hits. */
   related: protectedProcedure
