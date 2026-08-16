@@ -40,6 +40,10 @@ import {
   findTransactionEmbeddingRefsForAccounts,
   findWishEmbeddingRefsForProducts,
 } from "~/server/repo/entity-embedding";
+import {
+  refreshSearchDocument,
+  refreshSearchDocuments,
+} from "~/server/repo/search-document";
 
 const mutationEntityRefSchema = z.discriminatedUnion("entityType", [
   z.object({ entityType: z.literal("product"), entityId: productId }),
@@ -109,6 +113,34 @@ const ownEmbeddingRef = (
         entityId: event.entity.entityId,
       }
     : null;
+
+/**
+ * Keep the changed entity immediately discoverable without coupling a
+ * successful source mutation to the availability of the derived index.
+ *
+ * The embedding job already queued by the manifest is the repair path when
+ * this best-effort synchronous refresh fails, so the committed mutation still
+ * returns success instead of reporting a false rollback to the caller.
+ */
+async function refreshOwnSearchDocument(
+  db: Database,
+  event: MutationSideEffectEvent,
+): Promise<void> {
+  if (event.action === "deleted") return;
+  const ref = ownEmbeddingRef(event);
+  if (!ref) return;
+  try {
+    await refreshSearchDocument(db, ref.entityType, ref.entityId);
+  } catch (error) {
+    console.error("search.document.sync-refresh.failed", {
+      source: event.source,
+      action: event.action,
+      entityType: ref.entityType,
+      entityId: ref.entityId,
+      error,
+    });
+  }
+}
 
 async function enqueueEntityEmbeddingRefreshMany(
   db: Database,
@@ -560,6 +592,7 @@ export async function runMutationSideEffects(
   event: MutationSideEffectEvent,
 ): Promise<BackgroundBatchRef[]> {
   const parsed = mutationSideEffectEventSchema.parse(event);
+  await refreshOwnSearchDocument(db, parsed);
   const batches = await runManifestHandlers(db, parsed);
   if (needsValuationRecompute(parsed)) {
     const dispatched = await dispatchLocationValuationRecompute(
@@ -578,6 +611,25 @@ export async function runMutationSideEffectsForEntities(
   const parsed = events.map((event) =>
     mutationSideEffectEventSchema.parse(event),
   );
+  const ownSearchRefs = uniqBy(
+    parsed.flatMap((event) => {
+      if (event.action === "deleted") return [];
+      const ref = ownEmbeddingRef(event);
+      return ref ? [ref] : [];
+    }),
+    (ref) => `${ref.entityType}:${ref.entityId}`,
+  );
+  if (ownSearchRefs.length > 0) {
+    try {
+      await refreshSearchDocuments(db, ownSearchRefs);
+    } catch (error) {
+      console.error("search.document.bulk-sync-refresh.failed", {
+        refCount: ownSearchRefs.length,
+        source: parsed[0]?.source ?? "mutation.bulk",
+        error,
+      });
+    }
+  }
   const batches: BackgroundBatchRef[] = [];
   // Embedding-refresh handlers all funnel into the same job kind, so their
   // refs are collected across the whole wave and dispatched once below

@@ -52,6 +52,7 @@ import {
   recipe,
   recipeSection,
   recipeSectionIngredient,
+  searchDocument,
   task,
   vendor,
   wish,
@@ -67,7 +68,7 @@ export interface OrphanedEntityEmbedding {
   createdAt: Date;
 }
 
-export async function softDeleteEntityEmbeddingsTx(
+async function softDeleteEntityEmbeddingsTx(
   tx: DrizzleTransaction,
   entityType: SearchableEntity,
   entityIds: string[],
@@ -81,6 +82,33 @@ export async function softDeleteEntityEmbeddingsTx(
         eq(entityEmbedding.entityType, entityType),
         inArray(entityEmbedding.entityId, entityIds),
         notDeleted(entityEmbedding),
+      ),
+    );
+}
+
+/**
+ * Transactional removal cascade for every derived search artifact.
+ *
+ * `SearchDocument` and `EntityEmbedding` describe the same live entity at two
+ * retrieval layers, so a removal must retire both rows atomically. Keep this
+ * as the one removal-module entry point rather than teaching every delete and
+ * merge path about the individual index tables.
+ */
+export async function softDeleteEntitySearchArtifactsTx(
+  tx: DrizzleTransaction,
+  entityType: SearchableEntity,
+  entityIds: string[],
+): Promise<void> {
+  if (entityIds.length === 0) return;
+  await softDeleteEntityEmbeddingsTx(tx, entityType, entityIds);
+  await tx
+    .update(searchDocument)
+    .set({ deletedAt: new Date() })
+    .where(
+      and(
+        eq(searchDocument.entityType, entityType),
+        inArray(searchDocument.entityId, entityIds),
+        notDeleted(searchDocument),
       ),
     );
 }

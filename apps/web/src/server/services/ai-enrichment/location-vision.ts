@@ -21,6 +21,7 @@ import {
   type ProductShortcode,
   unsafeInventoryId,
   unsafeProductId,
+  unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import { type ProductCategory, productCategory } from "@cubby/schemas/product";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
@@ -351,20 +352,24 @@ async function matchDetectedItems(
             db,
             productName,
           );
-          const semanticEntityId =
+          const semanticShortcode =
             semanticMatch?.item.entityType === "product"
-              ? await resolveLiveShortcode(db, semanticMatch.item.id, "product")
+              ? unsafeProductShortcode(semanticMatch.item.id)
               : null;
+          const semanticEntityId = semanticShortcode
+            ? await resolveLiveShortcode(db, semanticShortcode, "product")
+            : null;
           if (
             semanticMatch &&
             semanticEntityId &&
             semanticMatch.similarity >= SEMANTIC_PRODUCT_MATCH_THRESHOLD &&
             semanticMatch.item.entityType === "product" &&
-            !existingProductIds.has(semanticMatch.item.id)
+            semanticShortcode != null &&
+            !existingProductIds.has(semanticShortcode)
           ) {
             matched = {
               id: unsafeProductId(semanticEntityId),
-              shortcode: semanticMatch.item.id,
+              shortcode: semanticShortcode,
               name: semanticMatch.item.name,
               manufacturer: semanticMatch.item.subtitle ?? item.manufacturer,
               category:

@@ -1,16 +1,12 @@
-import type { LocationType } from "@cubby/schemas/location";
-import type { ProjectStatus, TaskStatus } from "@cubby/schemas/project";
 import {
   type SearchableEntity,
-  type SearchResultItem,
+  type SearchHit,
   searchableEntities,
 } from "@cubby/schemas/search";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Search, Send } from "lucide-react";
 import { useState } from "react";
-import { match } from "ts-pattern";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -26,129 +22,11 @@ import {
 import { useTRPC } from "~/integrations/trpc/react";
 import { getSearchResultRoute } from "./search-utils";
 
-function SearchResultEntityLink({ item }: { item: SearchResultItem }) {
-  return match(item)
-    .with({ entityType: "product" }, (i) => (
-      <EntityInlineLink
-        entity="product"
-        data={{
-          id: i.id,
-          name: i.name,
-          manufacturer: i.subtitle ?? undefined,
-        }}
-        compact
-      />
-    ))
-    .with({ entityType: "location" }, (i) => (
-      <EntityInlineLink
-        entity="location"
-        data={{
-          id: i.id,
-          name: i.name,
-          type: i.typeHint ? (i.typeHint as LocationType) : undefined,
-        }}
-        compact
-      />
-    ))
-    .with({ entityType: "recipe" }, (i) => (
-      <EntityInlineLink
-        entity="recipe"
-        data={{ id: i.id, name: i.name }}
-        compact
-      />
-    ))
-    .with({ entityType: "ingredient" }, (i) => (
-      <EntityInlineLink
-        entity="ingredient"
-        data={{ id: i.id, name: i.name }}
-        compact
-      />
-    ))
-    .with({ entityType: "inventory" }, (i) => (
-      <EntityInlineLink
-        entity="inventory"
-        data={{ id: i.id, name: i.name }}
-        compact
-      />
-    ))
-    .with({ entityType: "cookbook" }, (i) => (
-      <EntityInlineLink
-        entity="cookbook"
-        data={{
-          id: i.id,
-          name: i.name,
-          authors: i.authors,
-        }}
-        compact
-      />
-    ))
-    .with({ entityType: "meal" }, (i) => (
-      <EntityInlineLink
-        entity="meal"
-        data={{ id: i.id, name: i.name, date: i.date }}
-        compact
-      />
-    ))
-    .with({ entityType: "project" }, (i) => (
-      <EntityInlineLink
-        entity="project"
-        data={{
-          id: i.id,
-          name: i.name,
-          status: i.status ? (i.status as ProjectStatus) : undefined,
-        }}
-        compact
-      />
-    ))
-    .with({ entityType: "task" }, (i) => (
-      <EntityInlineLink
-        entity="task"
-        data={{
-          id: i.id,
-          name: i.name,
-          status: i.status ? (i.status as TaskStatus) : undefined,
-          projectName: i.projectName ?? undefined,
-        }}
-        compact
-      />
-    ))
-    .with({ entityType: "vendor" }, (i) => (
-      <Link {...getSearchResultRoute(i)}>{i.name}</Link>
-    ))
-    .with({ entityType: "purchase" }, (i) => (
-      <Link {...getSearchResultRoute(i)}>{i.name}</Link>
-    ))
-    .with({ entityType: "financialAccount" }, (i) => (
-      <Link {...getSearchResultRoute(i)}>{i.name}</Link>
-    ))
-    .with({ entityType: "financialTransaction" }, (i) => (
-      <Link {...getSearchResultRoute(i)}>{i.name}</Link>
-    ))
-    .with({ entityType: "expense" }, (i) => (
-      <EntityInlineLink
-        entity="expense"
-        data={{
-          id: i.id,
-          name: i.name,
-          cost: i.cost ?? undefined,
-          projectName: i.projectName ?? undefined,
-        }}
-        compact
-      />
-    ))
-    .with({ entityType: "wish" }, (i) => (
-      <Link {...getSearchResultRoute(i)}>{i.name}</Link>
-    ))
-    .exhaustive();
+function SearchResultEntityLink({ item }: { item: SearchHit }) {
+  return <Link {...getSearchResultRoute(item)}>{item.title}</Link>;
 }
 
-function ResultTable({
-  title,
-  items,
-}: {
-  title: string;
-  items: SearchResultItem[];
-}) {
+function ResultTable({ title, items }: { title: string; items: SearchHit[] }) {
   return (
     <section className="border border-border bg-card p-4">
       <h2 className="mb-2 font-mono font-semibold text-muted-foreground text-xs uppercase tracking-wide">
@@ -160,7 +38,6 @@ function ResultTable({
             <TableHead>Rank</TableHead>
             <TableHead>Type</TableHead>
             <TableHead>Name</TableHead>
-            <TableHead>Score</TableHead>
             <TableHead>Match</TableHead>
             <TableHead>Terms</TableHead>
             <TableHead>Reason</TableHead>
@@ -174,7 +51,6 @@ function ResultTable({
               <TableCell>
                 <SearchResultEntityLink item={item} />
               </TableCell>
-              <TableCell>{item.score?.toFixed(3) ?? ""}</TableCell>
               <TableCell>{item.matchKind ?? ""}</TableCell>
               <TableCell className="whitespace-normal text-muted-foreground">
                 {item.matchTerms?.join(", ") ?? ""}

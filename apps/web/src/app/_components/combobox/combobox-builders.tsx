@@ -7,14 +7,77 @@ import type {
   TaskShortcode,
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
+import { unsafeVendorShortcode } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import { locationType } from "@cubby/schemas/location";
+import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { locationToSegments } from "~/app/_components/locations/location-breadcrumb";
 import { LocationPickerThumb } from "~/app/_components/locations/location-picker-thumb";
 import { ProjectMark } from "~/app/projects/project-mark";
 import { VendorMark } from "~/components/entity/vendor-cell";
+import { Image } from "~/components/ui/image";
 import { EntityIcon } from "~/entities/entities";
+
+function SearchPickerIcon({
+  entity,
+  imageUrl,
+  typeHint,
+}: {
+  entity: SearchableEntity;
+  imageUrl: string | null;
+  typeHint: string | null;
+}) {
+  const fallback =
+    entity === "project" ? (
+      <ProjectMark icon={typeHint} />
+    ) : (
+      <EntityIcon entity={entity} size={14} colored />
+    );
+  return imageUrl ? (
+    <Image
+      src={imageUrl}
+      alt=""
+      displayWidth={24}
+      fallback={fallback}
+      className="size-6 shrink-0 border border-[var(--border)] object-cover"
+    />
+  ) : (
+    fallback
+  );
+}
+
+/** Maps compact indexed-search hits into the picker contract. */
+export function buildSearchHitComboboxItem<TId extends string>(
+  hit: SearchHit,
+  entity: SearchableEntity,
+): ComboboxItem<TId> {
+  const locationKind =
+    entity === "location" ? locationType.safeParse(hit.typeHint).data : null;
+  const fallback = locationKind ? (
+    <LocationPickerThumb imageUrl={hit.imageUrl} type={locationKind} />
+  ) : entity === "vendor" ? (
+    <VendorMark vendor={hit.title} vendorId={unsafeVendorShortcode(hit.id)} />
+  ) : (
+    <SearchPickerIcon
+      entity={entity}
+      imageUrl={hit.imageUrl}
+      typeHint={hit.typeHint}
+    />
+  );
+
+  return {
+    // The server applies the entityTypes scope; narrowing it here preserves the
+    // branded value each picker writes without ever exposing a private UUID.
+    id: hit.id as TId,
+    shortcode: hit.id,
+    name: hit.title,
+    secondary: hit.subtitle ?? hit.typeHint ?? undefined,
+    detail: hit.subtitle && hit.typeHint ? hit.typeHint : undefined,
+    icon: fallback,
+  };
+}
 
 // Builders take minimal structural shapes (not the full *Out types) so both
 // picker results and list-row relation summaries pass without casts.

@@ -65,8 +65,8 @@ import {
   type RecipeMcpOut,
 } from "./recipe";
 import {
-  globalSearchInputSchema,
-  globalSearchOut,
+  searchHitsOut,
+  searchQueryInputFields,
   similarEntitiesInputSchema,
   similarEntitiesOut,
 } from "./search";
@@ -184,13 +184,26 @@ export {
   allProblemsSchema,
 };
 
-export const globalSearchMcpOut = z.object({ results: globalSearchOut });
+/** MCP adds opt-in semantic related results to the shared lexical request. */
+export const globalSearchMcpInputSchema = z.object({
+  ...searchQueryInputFields,
+  includeRelated: z
+    .boolean()
+    .default(false)
+    .describe("Include semantic related results in a separate result section."),
+});
+
+export const globalSearchMcpOut = z.object({
+  results: searchHitsOut,
+  related: searchHitsOut,
+  relatedStatus: z.enum(["not_requested", "ready", "unavailable"]),
+});
 
 /** find_similar_entities — already a `{ source, results }` object, so the MCP
  * shape is the router output verbatim (each result carries its similarity). */
 export const similarEntitiesMcpOut = similarEntitiesOut;
 
-export { globalSearchInputSchema, similarEntitiesInputSchema };
+export { similarEntitiesInputSchema };
 
 export const recipeAvailabilityMcpOut = z.object({
   recipes: recipeAvailabilityListOut,

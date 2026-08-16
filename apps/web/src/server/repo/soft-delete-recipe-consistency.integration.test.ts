@@ -22,18 +22,16 @@ import {
   ingredientRef,
   makeRecipeInput,
 } from "./repo.fixtures";
-import { globalSearch } from "./search";
 
 // Invariant: a soft-deleted recipe must vanish from EVERY "appears in N recipes"
 // surface at once. These are computed by three independent mechanisms (the
 // `appearsInRecipes` relation transform, the shared `liveRecipeCountForIngredientSql`
 // subquery used by the list sort + global search, and the cascade itself), so this
-// test guards against any one of them drifting — the bug where an ingredient used
+// test guards against either one drifting — the bug where an ingredient used
 // only in a deleted recipe still showed a recipe pill / non-zero count.
 
-// Read the same two "appears in N recipes" surfaces every assertion checks: the
-// list-sort pill array (which sorts on `liveRecipeCountForIngredientSql`) and the
-// global-search recipe count (which uses the same helper).
+// Read the list-sort pill array, which sorts on
+// `liveRecipeCountForIngredientSql`.
 const appearsInRecipesFromList = async (
   db: Database,
   ingredientId: IngredientShortcode,
@@ -45,18 +43,6 @@ const appearsInRecipesFromList = async (
     { pageIndex: 0, pageSize: 50 },
   );
   return data.find((i) => i.id === ingredientId)?.appearsInRecipes ?? [];
-};
-
-const searchRecipeCount = async (
-  db: Database,
-  ingredientId: IngredientShortcode,
-  query: string,
-) => {
-  const results = await globalSearch(db, query);
-  const hit = results.find(
-    (r) => r.entityType === "ingredient" && r.id === ingredientId,
-  );
-  return hit && "recipeCount" in hit ? hit.recipeCount : undefined;
 };
 
 describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
@@ -97,9 +83,6 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
     expect(await appearsInRecipesFromList(ctx.db, ingredientCode)).toHaveLength(
       1,
     );
-    expect(
-      await searchRecipeCount(ctx.db, ingredientCode, "Soledad pepper"),
-    ).toBe(1);
 
     await deleteRecipes(ctx.db, [created.entityId], ctx.actor);
 
@@ -113,9 +96,6 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
     expect(await appearsInRecipesFromList(ctx.db, ingredientCode)).toHaveLength(
       0,
     );
-    expect(
-      await searchRecipeCount(ctx.db, ingredientCode, "Soledad pepper"),
-    ).toBe(0);
 
     // Data invariant: no live section/usage row may reference the dead recipe.
     const liveSections = await getDb(ctx.db)
@@ -189,9 +169,6 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
     expect(await appearsInRecipesFromList(ctx.db, ingredientCode)).toHaveLength(
       0,
     );
-    expect(
-      await searchRecipeCount(ctx.db, ingredientCode, "Orphan oregano"),
-    ).toBe(0);
   });
 });
 

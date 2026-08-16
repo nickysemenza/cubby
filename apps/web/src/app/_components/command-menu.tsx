@@ -1,5 +1,5 @@
 import { searchableEntities } from "@cubby/schemas/entity-manifest";
-import type { SearchableEntity, SearchResultItem } from "@cubby/schemas/search";
+import type { SearchableEntity } from "@cubby/schemas/search";
 import {
   type ParsedShortcode,
   parseShortcode,
@@ -44,10 +44,10 @@ import { recordCommandMenuOpened } from "./command-menu-loader";
 import { desktopLeaves } from "./navigation/nav-items";
 import {
   entityTypeMap,
-  getEnrichmentText,
   getSearchMatchText,
   getSearchResultRoute,
   rememberSearchResult,
+  type SearchHit,
   SearchResultMedia,
 } from "./search/search-utils";
 
@@ -101,8 +101,10 @@ export function GlobalCommandMenu({
     if (open) recordCommandMenuOpened();
   }, [open]);
 
-  const { results, filteredActions, isLoading, isFindingRelated, isEmpty } =
-    useGlobalSearch(search, searchScope ?? undefined);
+  const { results, filteredActions, isLoading, isEmpty } = useGlobalSearch(
+    search,
+    searchScope ?? undefined,
+  );
   const conversion = useConversionAnswer(searchScope ? "" : search);
 
   const trpc = useTRPC();
@@ -239,7 +241,7 @@ export function GlobalCommandMenu({
     goToEntity(entityType, shortcode, name);
   };
 
-  const goToSearchResult = (item: SearchResultItem) => {
+  const goToSearchResult = (item: SearchHit) => {
     rememberSearchResult(item);
     navigate(getSearchResultRoute(item));
     setOpen(false);
@@ -379,15 +381,6 @@ export function GlobalCommandMenu({
               </Row>
             )}
 
-            {isFindingRelated && !isLoading && (
-              <div
-                role="status"
-                className="py-2 text-center text-muted-foreground text-xs/relaxed"
-              >
-                Finding related matches…
-              </div>
-            )}
-
             {/* Empty state */}
             {isEmpty && !isLoading && !parsedShortcode && (
               <div
@@ -433,8 +426,7 @@ export function GlobalCommandMenu({
               </CommandGroup>
             )}
 
-            {/* Search results — lexical rank remains fixed while semantic-only
-                matches append to unused rows. */}
+            {/* Search results are lexical and stable: Cmd-K is a jump surface. */}
             {hasResults && !isLoading && (
               <div>
                 <CommandGroup
@@ -443,7 +435,6 @@ export function GlobalCommandMenu({
                   }
                 >
                   {results.map((item) => {
-                    const enrichment = getEnrichmentText(item);
                     const matchText = getSearchMatchText(item);
 
                     return (
@@ -454,12 +445,10 @@ export function GlobalCommandMenu({
                       >
                         <SearchResultMedia item={item} />
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm">{item.name}</div>
-                          {(item.subtitle || enrichment) && (
+                          <div className="truncate text-sm">{item.title}</div>
+                          {item.subtitle && (
                             <div className="truncate text-muted-foreground text-xs">
-                              {[item.subtitle, enrichment]
-                                .filter(Boolean)
-                                .join(" · ")}
+                              {item.subtitle}
                             </div>
                           )}
                           {isDevtoolsVisible && matchText && (

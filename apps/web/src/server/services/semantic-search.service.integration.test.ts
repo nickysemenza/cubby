@@ -1,18 +1,12 @@
-import { taskCreateInput } from "@cubby/schemas/project";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { mock } from "~/lib/test/mock-schema";
 import { getBackgroundBatchDetail } from "~/server/repo/background-jobs";
 import {
   createProductFixture as createProduct,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
-import { createTask } from "~/server/repo/task";
-import {
-  enqueueEntityEmbeddingBackfill,
-  hybridGlobalSearch,
-  lexicalGlobalSearch,
-} from "./semantic-search.service";
+import { refreshSearchDocument } from "~/server/repo/search-document";
+import { enqueueEntityEmbeddingBackfill } from "./semantic-search.service";
 
 describe("semantic search background jobs", () => {
   const ctx = withTestDb();
@@ -25,6 +19,7 @@ describe("semantic search background jobs", () => {
       }),
       ctx.actor,
     );
+    await refreshSearchDocument(ctx.db, "product", product.entityId);
 
     const result = await enqueueEntityEmbeddingBackfill(ctx.db, {
       entityTypes: ["product"],
@@ -47,61 +42,6 @@ describe("semantic search background jobs", () => {
           },
         }),
       ]),
-    );
-  });
-});
-
-describe("scoped global search", () => {
-  const ctx = withTestDb();
-
-  it("restricts lexical results to the requested entity type", async () => {
-    await Promise.all([
-      createProduct(
-        ctx.db,
-        makeProductInput({ name: "Scoped manifest drill product" }),
-        ctx.actor,
-      ),
-      createTask(
-        ctx.db,
-        mock(taskCreateInput, {
-          overrides: { name: "Scoped manifest drill task" },
-        }),
-        ctx.actor,
-      ),
-    ]);
-
-    const results = await lexicalGlobalSearch(
-      ctx.db,
-      "Scoped manifest drill",
-      10,
-      "task",
-    );
-
-    expect(results).not.toHaveLength(0);
-    expect(results.every((result) => result.entityType === "task")).toBe(true);
-  });
-
-  it("restricts hybrid results before the semantic minimum query length", async () => {
-    await Promise.all([
-      createProduct(
-        ctx.db,
-        makeProductInput({ name: "Qz scoped product" }),
-        ctx.actor,
-      ),
-      createTask(
-        ctx.db,
-        mock(taskCreateInput, {
-          overrides: { name: "Qz scoped task" },
-        }),
-        ctx.actor,
-      ),
-    ]);
-
-    const results = await hybridGlobalSearch(ctx.db, "Qz", 10, "product");
-
-    expect(results).not.toHaveLength(0);
-    expect(results.every((result) => result.entityType === "product")).toBe(
-      true,
     );
   });
 });

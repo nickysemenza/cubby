@@ -1,40 +1,29 @@
-import type { SearchResultItem, SearchType } from "@cubby/schemas/search";
-import { searchableEntities, searchTypeSchema } from "@cubby/schemas/search";
-import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
-import type { ColumnFiltersState, OnChangeFn } from "@tanstack/react-table";
-import {
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
+import type { SearchableEntity, SearchType } from "@cubby/schemas/search";
+import { searchableEntities } from "@cubby/schemas/search";
+import { useDebouncedValue } from "@tanstack/react-pacer";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
-import { Equal, Search } from "lucide-react";
-import { useCallback, useMemo } from "react";
+import { Search } from "lucide-react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skeleton";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Input } from "~/components/ui/input";
-import { EntityIcon, entities, entityDetailParams } from "~/entities/entities";
+import { EntityIcon, entities } from "~/entities/entities";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useIsMobile } from "~/hooks/useMobile";
 import { useTRPC } from "~/integrations/trpc/react";
 import { cn } from "~/lib/utils";
 import { getRecents, pushRecent } from "../command-menu/recents";
-import { useConversionAnswer } from "../command-menu/use-conversion-answer";
-import RTable from "../data-table/Table";
 import { useEntityPreview } from "../hooks/useEntityPreview";
-import { searchColumns } from "./search-columns";
 import {
   entityTypeMap,
-  getEnrichmentText,
   getSearchMatchText,
   getSearchResultRoute,
-  groupSearchResults,
   rememberSearchResult,
+  type SearchHit,
   SearchResultMedia,
 } from "./search-utils";
 
@@ -43,16 +32,11 @@ interface SearchPageProps {
   type: SearchType;
 }
 
-/** Stable empty filter list — a fresh `[]` would re-create table state each render. */
-const NO_COLUMN_FILTERS: ColumnFiltersState = [];
-
-const getSearchRowId = (row: SearchResultItem) => `${row.entityType}:${row.id}`;
-
 const filterOptions: Array<{ value: SearchType; label: string }> = [
   { value: "all", label: "All" },
-  ...searchableEntities.map((e) => ({
-    value: e as SearchType,
-    label: entities[entityTypeMap[e]].label,
+  ...searchableEntities.map((entityType) => ({
+    value: entityType as SearchType,
+    label: entities[entityTypeMap[entityType]].label,
   })),
 ];
 
@@ -61,353 +45,417 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview();
+  const [draft, setDraft] = useState(query);
+  const relatedHeadingId = useId();
+  const [debouncedDraft] = useDebouncedValue(draft, { wait: 150 });
+  const [relatedDraft] = useDebouncedValue(draft, { wait: 450 });
+  const entityTypes = type === "all" ? undefined : [type as SearchableEntity];
 
-  // Search query - 50 per entity type for full search page
-  const { data, isLoading, error } = useQuery({
-    ...api.search.global.queryOptions({ query, limit: 50 }),
-    enabled: query.length > 0,
-  });
-
-  // Inline unit answer ("250 g flour in cups") — same brain as the ⌘K console.
-  const conversion = useConversionAnswer(query);
-
-  // Entities recently jumped to from the console — shared localStorage list,
-  // read once per mount (the empty state re-mounts on every visit).
-  const jumps = useMemo(() => getRecents(), []);
-
-  // Recent searches — committed on Enter so we don't record every keystroke.
-  const [recents, setRecents] = useLocalStorage<string[]>(
-    "cubby:recent-searches",
-    [],
-  );
-  const commitRecent = (value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    setRecents((prev) => uniq([trimmed, ...prev]).slice(0, 8));
-  };
-
-  // The type filter is CONTROLLED by the `?type=` param rather than seeded
-  // into initialState. As initial-only state the desktop filter control wrote
-  // `columnFilters` and never the URL, so the two diverged: the chip said
-  // "Product" while the URL still said `all`, and a reload or share-link threw
-  // the filter away. `entityType` is the only column with a `filterConfig`, so
-  // it's the only thing that can appear here.
-  const columnFilters = useMemo(
-    () =>
-      type === "all" ? NO_COLUMN_FILTERS : [{ id: "entityType", value: type }],
-    [type],
-  );
-
-  const handleTypeChange = useCallback(
-    (nextType: SearchType) => {
-      // No `replace` here: a filter change is a deliberate action, so it should
-      // push history (Back undoes the filter).
-      navigate({
-        to: "/search",
-        search: {
-          q: query || undefined,
-          type: nextType === "all" ? undefined : nextType,
-        },
-      });
-    },
-    [navigate, query],
-  );
-
-  // Route every filter write back through the URL. The select filter hands
-  // back either a bare value or a single-element array depending on the
-  // toolbar's select control or Filter chip.
-  const onColumnFiltersChange: OnChangeFn<ColumnFiltersState> = useCallback(
-    (updater) => {
-      const next =
-        typeof updater === "function" ? updater(columnFilters) : updater;
-      const raw = next.find((f) => f.id === "entityType")?.value;
-      const parsed = searchTypeSchema.safeParse(
-        Array.isArray(raw) ? raw[0] : raw,
-      );
-      handleTypeChange(parsed.success ? parsed.data : "all");
-    },
-    [columnFilters, handleTypeChange],
-  );
-
-  // Create table instance (client-side filtering/sorting) — desktop only
-  const table = useReactTable({
-    data: data ?? [],
-    columns: searchColumns,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getRowId: getSearchRowId,
-    // Without a pagination row model the toolbar's rows-per-page control and
-    // the bottom pager render but do nothing — every row was always drawn.
-    getPaginationRowModel: getPaginationRowModel(),
-    state: { columnFilters },
-    onColumnFiltersChange,
-    // TanStack's default is 10, which isn't even one of the offered sizes.
-    initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
-  });
-
-  // Sync URL query param with input. `replace` avoids pushing a history entry
-  // for every character.
-  const handleSearchChange = (value: string) => {
+  useEffect(() => setDraft(query), [query]);
+  useEffect(() => {
+    if (debouncedDraft === query) return;
     navigate({
       to: "/search",
       search: {
-        q: value || undefined,
+        q: debouncedDraft || undefined,
         type: type === "all" ? undefined : type,
       },
       replace: true,
     });
-  };
+  }, [debouncedDraft, navigate, query, type]);
+
+  const primary = useQuery({
+    ...api.search.find.queryOptions({
+      query: debouncedDraft,
+      entityTypes,
+      limit: 50,
+    }),
+    enabled: debouncedDraft.trim().length > 0,
+    placeholderData: keepPreviousData,
+  });
+  const related = useQuery({
+    ...api.search.related.queryOptions({
+      query: relatedDraft,
+      entityTypes,
+      limit: 12,
+    }),
+    enabled: relatedDraft.trim().length > 0 && relatedDraft === draft,
+    placeholderData: keepPreviousData,
+  });
+  // A placeholder belongs to the prior draft. Never let it appear beneath a
+  // newer lexical result set — Related is intentionally a stable, separate
+  // section rather than a best-effort append.
+  const relatedResults = useMemo(() => {
+    if (
+      relatedDraft !== draft ||
+      related.isPlaceholderData ||
+      related.data?.status !== "ready"
+    )
+      return [];
+    const primaryRefs = new Set(
+      (primary.data ?? []).map((hit) => `${hit.entityType}:${hit.id}`),
+    );
+    return related.data.results.filter(
+      (hit) => !primaryRefs.has(`${hit.entityType}:${hit.id}`),
+    );
+  }, [
+    draft,
+    primary.data,
+    related.data,
+    related.isPlaceholderData,
+    relatedDraft,
+  ]);
+  const jumps = useMemo(() => getRecents(), []);
+  const [recents, setRecents] = useLocalStorage<string[]>(
+    "cubby:recent-searches",
+    [],
+  );
+  const hasQuery = draft.trim().length > 0;
 
   return (
     <Stack gap="md" className="container mx-auto p-1">
-      {/* Search input */}
       <div className="relative">
-        <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          type="text"
+          type="search"
           aria-label="Search Cubby"
           placeholder="Search products, recipes, locations..."
-          value={query}
-          onChange={(e) => handleSearchChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") commitRecent(e.currentTarget.value);
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && event.currentTarget.value.trim())
+              setRecents((previous) =>
+                uniq([event.currentTarget.value.trim(), ...previous]).slice(
+                  0,
+                  8,
+                ),
+              );
           }}
-          className={
-            "pl-10" /* tight: clears the absolute search icon at left-3 */
-          }
+          className="pl-6"
           autoFocus
         />
       </div>
-
-      {/* Inline unit answer — rendered above results, jumps to the ingredient */}
-      {query.length > 0 && conversion && (
-        <Row
-          as="button"
-          align="center"
-          gap="md"
-          type="button"
-          onClick={() => {
-            pushRecent({
-              entityType: "ingredient",
-              id: conversion.ingredientShortcode,
-              name: conversion.ingredientName,
-            });
-            navigate({
-              to: entities.ingredient.routes.detail,
-              params: entityDetailParams(conversion.ingredientShortcode),
-            });
-          }}
-          className="w-full border border-[var(--border)] bg-card px-4 py-4 text-left transition-colors hover:bg-muted/50"
-        >
-          <Equal className="size-4 shrink-0 text-primary" />
-          <span className="truncate font-mono font-semibold text-sm tabular-nums">
-            {conversion.input} {conversion.ingredientName} = {conversion.result}
-          </span>
-          {conversion.cost && (
-            <span className="ml-auto shrink-0 font-mono text-muted-foreground text-xs tabular-nums">
-              ≈ {conversion.cost}
-            </span>
-          )}
-        </Row>
-      )}
-
-      {/* Results */}
-      {query.length > 0 ? (
-        isMobile ? (
-          <MobileSearchResults
-            data={data ?? []}
-            isLoading={isLoading}
-            filter={type}
-            onFilterChange={handleTypeChange}
-          />
-        ) : (
-          <RTable
-            table={table}
-            isLoading={isLoading}
-            error={error}
-            ariaLabel="Search results"
-            // No `entity` — search rows are polymorphic — so name the width
-            // store explicitly or the columns aren't resizable.
-            sizingKey="search"
-            // Eight narrow columns left ~550px of dead space to the right of
-            // the actions menu while names truncated after a few characters.
-            onRowClick={onRowClick}
-            onRowHover={onRowHover}
-          />
-        )
-      ) : jumps.length > 0 || recents.length > 0 ? (
+      {hasQuery ? (
         <Stack gap="md">
-          {/* Entities recently jumped to — entity-inked chips, same list as ⌘K */}
-          {jumps.length > 0 && (
-            <Stack gap="xs">
-              <span className="eyebrow px-1 font-medium">Jump back</span>
-              {jumps.map((jump) => {
-                const entity = entityTypeMap[jump.entityType];
-                return (
-                  <Row
-                    as="button"
-                    align="center"
-                    gap="sm"
-                    key={`jump-${jump.entityType}-${jump.id}`}
-                    type="button"
-                    onClick={() => {
-                      pushRecent(jump);
-                      navigate({
-                        to: entities[entity].routes.detail,
-                        params: entityDetailParams(jump.id),
-                      });
-                    }}
-                    className="w-full rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted active:bg-muted/70"
-                  >
-                    <span
-                      className={cn(
-                        "flex size-6 shrink-0 items-center justify-center rounded",
-                        entities[entity]?.color.bg ?? "bg-muted/50",
-                        entities[entity]?.color.text,
-                      )}
-                    >
-                      <EntityIcon entity={entity} className="size-3.5" />
-                    </span>
-                    <span className="truncate">{jump.name}</span>
-                  </Row>
-                );
-              })}
-            </Stack>
+          <SearchFilter
+            value={type}
+            onChange={(next) =>
+              navigate({
+                to: "/search",
+                search: {
+                  q: draft || undefined,
+                  type: next === "all" ? undefined : next,
+                },
+              })
+            }
+          />
+          {isMobile ? (
+            <MobileSearchResults
+              data={primary.data ?? []}
+              isLoading={primary.isPending}
+            />
+          ) : (
+            <SearchResults
+              data={primary.data ?? []}
+              isLoading={primary.isPending}
+              error={primary.error}
+              onPreview={onRowClick}
+              onPrefetch={onRowHover}
+            />
           )}
-          {recents.length > 0 && (
-            <Stack gap="xs">
-              <Row align="center" justify="between" className="px-1">
-                <span className="eyebrow font-medium">Recent</span>
-                <button
-                  type="button"
-                  onClick={() => setRecents([])}
-                  className="font-mono text-2xs text-muted-foreground uppercase hover:text-foreground"
+          {relatedResults.length > 0 && (
+            <section
+              aria-labelledby={relatedHeadingId}
+              className="border-foreground border-t-2 pt-2"
+            >
+              <Row align="baseline" justify="between" className="mb-1">
+                <h2
+                  id={relatedHeadingId}
+                  className="font-bold font-heading text-base"
                 >
-                  Clear
-                </button>
+                  Related
+                </h2>
+                <span className="font-mono text-2xs text-muted-foreground uppercase">
+                  Meaning-based matches
+                </span>
               </Row>
-              {recents.map((term) => (
-                <Row
-                  as="button"
-                  align="center"
-                  gap="sm"
-                  key={term}
-                  type="button"
-                  onClick={() => handleSearchChange(term)}
-                  className="w-full rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted active:bg-muted/70"
-                >
-                  <Search className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="truncate">{term}</span>
-                </Row>
-              ))}
-            </Stack>
+              {isMobile ? (
+                <MobileSearchResults data={relatedResults} isLoading={false} />
+              ) : (
+                <SearchResults
+                  data={relatedResults}
+                  isLoading={false}
+                  error={null}
+                  onPreview={onRowClick}
+                  onPrefetch={onRowHover}
+                />
+              )}
+            </section>
           )}
+          {relatedDraft === draft &&
+          !related.isPlaceholderData &&
+          related.data?.status === "unavailable" &&
+          primary.data?.length ? (
+            <p className="text-muted-foreground text-xs">
+              Related matches are temporarily unavailable.
+            </p>
+          ) : null}
         </Stack>
       ) : (
-        <div className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground">
-          <Search className="size-8 opacity-40" />
-          <span className="text-sm">Start typing to search across Cubby</span>
-        </div>
+        <SearchLanding
+          jumps={jumps}
+          recents={recents}
+          clearRecents={() => setRecents([])}
+          onSelect={setDraft}
+        />
       )}
       <PreviewSheet />
     </Stack>
   );
 }
 
-/** Mobile-optimized search results with filter chips and grouped rows */
+function SearchFilter({
+  value,
+  onChange,
+}: {
+  value: SearchType;
+  onChange: (value: SearchType) => void;
+}) {
+  return (
+    <Row gap="sm" className="-mx-1 overflow-x-auto px-1 pb-1">
+      {filterOptions.map((option) => (
+        <Badge
+          key={option.value}
+          variant={option.value === value ? "default" : "outline"}
+          className="h-auto shrink-0 cursor-pointer px-2 py-1 text-xs"
+          render={
+            <button type="button" onClick={() => onChange(option.value)} />
+          }
+        >
+          {option.label}
+        </Badge>
+      ))}
+    </Row>
+  );
+}
+
+function SearchResults({
+  data,
+  isLoading,
+  error,
+  onPreview,
+  onPrefetch,
+}: {
+  data: SearchHit[];
+  isLoading: boolean;
+  error: { message: string } | null;
+  onPreview: <T extends Record<string, unknown>>(row: { original: T }) => void;
+  onPrefetch: <T extends Record<string, unknown>>(row: { original: T }) => void;
+}) {
+  if (isLoading)
+    return (
+      <div className="py-8 text-center text-muted-foreground text-sm">
+        Searching…
+      </div>
+    );
+  if (error)
+    return (
+      <div role="status" className="py-8 text-center text-destructive text-sm">
+        Search could not load. Try again.
+      </div>
+    );
+  if (data.length === 0)
+    return (
+      <div className="py-8 text-center text-muted-foreground text-sm">
+        No direct matches.
+      </div>
+    );
+  return (
+    <div className="border-border border-y">
+      {data.map((item) => (
+        <SearchRow
+          key={`${item.entityType}:${item.id}`}
+          item={item}
+          onPreview={onPreview}
+          onPrefetch={onPrefetch}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SearchRow({
+  item,
+  onPreview,
+  onPrefetch,
+}: {
+  item: SearchHit;
+  onPreview: <T extends Record<string, unknown>>(row: { original: T }) => void;
+  onPrefetch: <T extends Record<string, unknown>>(row: { original: T }) => void;
+}) {
+  return (
+    <div className="group flex items-center gap-4 border-border border-b px-2 py-2 last:border-b-0 hover:bg-muted/45">
+      <SearchResultMedia item={item} variant="list" />
+      <div className="min-w-0 flex-1">
+        <Link
+          {...getSearchResultRoute(item)}
+          onMouseEnter={() =>
+            onPrefetch({
+              original: item as SearchHit & Record<string, unknown>,
+            })
+          }
+          onFocus={() =>
+            onPrefetch({
+              original: item as SearchHit & Record<string, unknown>,
+            })
+          }
+          onClick={() => rememberSearchResult(item)}
+          className="block truncate font-medium text-sm hover:text-primary"
+        >
+          {item.title}
+        </Link>
+        {item.subtitle && (
+          <span className="block truncate text-muted-foreground text-xs">
+            {item.subtitle}
+          </span>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={() =>
+          onPreview({ original: item as SearchHit & Record<string, unknown> })
+        }
+        className="shrink-0 font-mono text-2xs text-muted-foreground uppercase hover:text-primary"
+      >
+        Preview
+      </button>
+      <div className="hidden max-w-44 shrink-0 text-right sm:block">
+        <span className="block truncate font-mono text-2xs text-muted-foreground uppercase">
+          {entities[entityTypeMap[item.entityType]].label}
+        </span>
+        <span
+          className="block truncate text-2xs text-muted-foreground"
+          title={item.matchReason}
+        >
+          {getSearchMatchText(item)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function MobileSearchResults({
   data,
   isLoading,
-  filter,
-  onFilterChange,
 }: {
-  data: SearchResultItem[];
+  data: SearchHit[];
   isLoading: boolean;
-  filter: SearchType;
-  onFilterChange: (filter: SearchType) => void;
 }) {
   const navigate = useNavigate();
-
-  // Filter data by selected type
-  const filtered = useMemo(
-    () =>
-      filter === "all"
-        ? data
-        : data.filter((item) => item.entityType === filter),
-    [data, filter],
+  if (isLoading) return <MobileCardSkeletonList count={6} />;
+  if (data.length === 0)
+    return (
+      <div className="flex h-32 items-center justify-center text-muted-foreground text-sm">
+        No direct matches.
+      </div>
+    );
+  return (
+    <div className="border-border border-y">
+      {data.map((item) => (
+        <MobileCard
+          key={`${item.entityType}:${item.id}`}
+          variant="row"
+          title={item.title}
+          subtitle={item.subtitle}
+          imageSlot={<SearchResultMedia item={item} variant="mobile" />}
+          rightValues={[
+            entities[entityTypeMap[item.entityType]].label,
+            getSearchMatchText(item),
+          ]}
+          onClick={() => {
+            rememberSearchResult(item);
+            navigate(getSearchResultRoute(item));
+          }}
+        />
+      ))}
+    </div>
   );
+}
 
-  const grouped = useMemo(() => groupSearchResults(filtered), [filtered]);
-
+function SearchLanding({
+  jumps,
+  recents,
+  clearRecents,
+  onSelect,
+}: {
+  jumps: ReturnType<typeof getRecents>;
+  recents: string[];
+  clearRecents: () => void;
+  onSelect: (value: string) => void;
+}) {
   return (
     <Stack gap="md">
-      {/* Filter chips */}
-      <Row gap="sm" className="-mx-1 overflow-x-auto px-1 pb-1">
-        {filterOptions.map((opt) => {
-          const isActive = filter === opt.value;
-          return (
-            <Badge
-              key={opt.value}
-              variant={isActive ? "default" : "outline"}
-              className="h-auto shrink-0 cursor-pointer px-2 py-1 text-xs"
-              render={
-                <button
-                  type="button"
-                  onClick={() => onFilterChange(opt.value)}
+      {jumps.length > 0 && (
+        <Stack gap="xs">
+          <span className="eyebrow px-1 font-medium">Jump back</span>
+          {jumps.map((jump) => {
+            const entity = entityTypeMap[jump.entityType];
+            return (
+              <Row
+                as="button"
+                align="center"
+                gap="sm"
+                key={`${jump.entityType}-${jump.id}`}
+                type="button"
+                onClick={() => {
+                  pushRecent(jump);
+                  onSelect(jump.name);
+                }}
+                className="w-full px-2 py-2 text-left text-sm hover:bg-muted"
+              >
+                <EntityIcon
+                  entity={entity}
+                  className={cn("size-4", entities[entity].color.text)}
                 />
-              }
-            >
-              {opt.label}
-            </Badge>
-          );
-        })}
-      </Row>
-
-      {/* Results */}
-      {isLoading ? (
-        <MobileCardSkeletonList count={6} />
-      ) : filtered.length === 0 ? (
-        <div className="flex h-32 items-center justify-center text-muted-foreground text-sm">
-          No results found
-        </div>
-      ) : (
-        grouped.map((group) => (
-          <div key={group.entityType}>
-            {/* Section header (only when showing "All") */}
-            {filter === "all" && (
-              <Row align="center" gap="sm" className="px-4 py-2">
-                <span className="font-medium text-muted-foreground text-xs uppercase tracking-wider">
-                  {group.label}
-                </span>
-                <span className="text-muted-foreground text-xs">
-                  ({group.items.length})
-                </span>
+                <span className="truncate">{jump.name}</span>
               </Row>
-            )}
-            {group.items.map((item) => {
-              const enrichment = getEnrichmentText(item);
-              const matchText = getSearchMatchText(item);
-
-              return (
-                <MobileCard
-                  key={`${item.entityType}-${item.id}`}
-                  variant="row"
-                  title={item.name}
-                  subtitle={item.subtitle}
-                  imageSlot={<SearchResultMedia item={item} variant="mobile" />}
-                  rightValues={[enrichment, matchText].filter(
-                    (value): value is string => Boolean(value),
-                  )}
-                  onClick={() => {
-                    rememberSearchResult(item);
-                    navigate(getSearchResultRoute(item));
-                  }}
-                />
-              );
-            })}
-          </div>
-        ))
+            );
+          })}
+        </Stack>
+      )}
+      {recents.length > 0 && (
+        <Stack gap="xs">
+          <Row align="center" justify="between" className="px-1">
+            <span className="eyebrow font-medium">Recent</span>
+            <button
+              type="button"
+              onClick={clearRecents}
+              className="font-mono text-2xs text-muted-foreground uppercase hover:text-foreground"
+            >
+              Clear
+            </button>
+          </Row>
+          {recents.map((term) => (
+            <Row
+              as="button"
+              align="center"
+              gap="sm"
+              key={term}
+              type="button"
+              onClick={() => onSelect(term)}
+              className="w-full px-2 py-2 text-left text-sm hover:bg-muted"
+            >
+              <Search className="size-4 shrink-0 text-muted-foreground" />
+              <span className="truncate">{term}</span>
+            </Row>
+          ))}
+        </Stack>
+      )}
+      {jumps.length === 0 && recents.length === 0 && (
+        <div className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground">
+          <Search className="size-8 opacity-40" />
+          <span className="text-sm">Start typing to search across Cubby</span>
+        </div>
       )}
     </Stack>
   );

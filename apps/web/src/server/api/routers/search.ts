@@ -3,54 +3,38 @@ import {
   enqueueEmbeddingBackfillOutSchema,
 } from "@cubby/schemas/background-jobs";
 import {
-  globalSearchInputSchema,
-  globalSearchOut,
-  type SearchResultItem,
+  relatedSearchOutSchema,
   searchDebugOutSchema,
+  searchHitsOut,
+  searchQueryInputSchema,
   similarEntitiesInputSchema,
   similarEntitiesOut,
 } from "@cubby/schemas/search";
 import {
-  debugHybridSearch,
+  findRelatedSearchHits,
+  findSearchHits,
+} from "~/server/services/search.service";
+import {
   enqueueEntityEmbeddingBackfill,
   findSimilarEntitiesForPair,
-  hybridGlobalSearch,
-  lexicalGlobalSearch,
-  semanticGlobalSearch,
 } from "~/server/services/semantic-search.service";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
-// Main search procedure
-const global = protectedProcedure
-  .input(globalSearchInputSchema)
-  .output(strictOutput(globalSearchOut))
-  .query(async ({ ctx, input }): Promise<SearchResultItem[]> => {
-    if (input.mode === "lexical") {
-      return await lexicalGlobalSearch(
-        ctx.db,
-        input.query,
-        input.limit,
-        input.entityType,
-      );
-    }
-    if (input.mode === "semantic") {
-      return await semanticGlobalSearch(
-        ctx.db,
-        input.query,
-        input.limit,
-        input.entityType,
-      );
-    }
-    return await hybridGlobalSearch(
-      ctx.db,
-      input.query,
-      input.limit,
-      input.entityType,
-    );
-  });
-
 export const searchRouter = createTRPCRouter({
-  global,
+  /** Fast, deterministic lexical search. No embedding request is made here. */
+  find: protectedProcedure
+    .input(searchQueryInputSchema)
+    .output(strictOutput(searchHitsOut))
+    .query(async ({ ctx, input }) => await findSearchHits(ctx.db, input)),
+
+  /** Opt-in semantic matches, returned separately so they never reorder lexical hits. */
+  related: protectedProcedure
+    .input(searchQueryInputSchema)
+    .output(strictOutput(relatedSearchOutSchema))
+    .query(
+      async ({ ctx, input }) => await findRelatedSearchHits(ctx.db, input),
+    ),
+
   /** Entity-to-entity similarity over the stored embeddings (allowlisted pairs). */
   similar: protectedProcedure
     .input(similarEntitiesInputSchema)
@@ -58,17 +42,27 @@ export const searchRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       return await findSimilarEntitiesForPair(ctx.db, input);
     }),
+
+  /**
+   * Debug remains a compact, public-only view while the diagnostics UI moves to
+   * the indexed retrieval pipeline.
+   */
   debug: protectedProcedure
-    .input(globalSearchInputSchema)
+    .input(searchQueryInputSchema)
     .output(strictOutput(searchDebugOutSchema))
     .query(async ({ ctx, input }) => {
-      return await debugHybridSearch(
-        ctx.db,
-        input.query,
-        input.limit,
-        input.entityType,
-      );
+      const [lexical, related] = await Promise.all([
+        findSearchHits(ctx.db, input),
+        findRelatedSearchHits(ctx.db, input),
+      ]);
+      return {
+        query: input.query,
+        lexical,
+        semantic: related.results,
+        results: lexical,
+      };
     }),
+
   enqueueEmbeddingBackfill: protectedProcedure
     .input(enqueueEmbeddingBackfillInputSchema)
     .output(strictOutput(enqueueEmbeddingBackfillOutSchema))

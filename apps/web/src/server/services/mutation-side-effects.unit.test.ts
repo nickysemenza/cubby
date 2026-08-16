@@ -20,6 +20,8 @@ const findEmbeddingRefsForVendorsMock = vi.hoisted(() => vi.fn());
 const findEmbeddingRefsForPurchasesMock = vi.hoisted(() => vi.fn());
 const findTransactionEmbeddingRefsForAccountsMock = vi.hoisted(() => vi.fn());
 const findCommercialEmbeddingRefsForExpensesMock = vi.hoisted(() => vi.fn());
+const refreshSearchDocumentMock = vi.hoisted(() => vi.fn());
+const refreshSearchDocumentsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("~/server/background-dispatch", () => ({
   dispatchBackgroundJobs: dispatchBackgroundJobsMock,
@@ -43,6 +45,11 @@ vi.mock("~/server/repo/entity-embedding", () => ({
     findTransactionEmbeddingRefsForAccountsMock,
   findCommercialEmbeddingRefsForExpenses:
     findCommercialEmbeddingRefsForExpensesMock,
+}));
+
+vi.mock("~/server/repo/search-document", () => ({
+  refreshSearchDocument: refreshSearchDocumentMock,
+  refreshSearchDocuments: refreshSearchDocumentsMock,
 }));
 
 function fakeBatchRef(overrides: Partial<BackgroundBatchRef> = {}) {
@@ -72,6 +79,8 @@ describe("runMutationSideEffectsForEntities batching", () => {
     findEmbeddingRefsForPurchasesMock.mockResolvedValue([]);
     findTransactionEmbeddingRefsForAccountsMock.mockResolvedValue([]);
     findCommercialEmbeddingRefsForExpensesMock.mockResolvedValue([]);
+    refreshSearchDocumentMock.mockResolvedValue({ status: "upserted" });
+    refreshSearchDocumentsMock.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -88,6 +97,8 @@ describe("runMutationSideEffectsForEntities batching", () => {
     findEmbeddingRefsForPurchasesMock.mockReset();
     findTransactionEmbeddingRefsForAccountsMock.mockReset();
     findCommercialEmbeddingRefsForExpensesMock.mockReset();
+    refreshSearchDocumentMock.mockReset();
+    refreshSearchDocumentsMock.mockReset();
   });
 
   it("dispatches one entity-embedding batch per wave, not one per entity", async () => {
@@ -123,6 +134,13 @@ describe("runMutationSideEffectsForEntities batching", () => {
       })),
     );
 
+    expect(refreshSearchDocumentsMock).toHaveBeenCalledWith(
+      db,
+      inventoryIds.map((entityId) => ({
+        entityType: "inventory",
+        entityId,
+      })),
+    );
     // Three entities whose only handler is refreshOwnEmbedding must collapse
     // into a single dispatchBackgroundJobs call carrying all three jobs,
     // instead of one call (transaction) per entity.

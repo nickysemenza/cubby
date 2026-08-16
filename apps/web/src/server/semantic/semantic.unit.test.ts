@@ -1,8 +1,6 @@
-import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
 import { shouldUseSemanticComboboxFallback } from "./combobox-fallback";
 import { embeddingTextHash } from "./hash";
-import { mergeHybridSearchResults } from "./ranking";
 import { SEMANTIC_SEARCH_EVALS } from "./search-evals";
 import {
   buildExpenseEmbeddingText,
@@ -102,62 +100,7 @@ describe("semantic hash", () => {
   });
 });
 
-describe("hybrid ranking", () => {
-  const createdAt = new Date("2026-06-28T00:00:00Z");
-  const product = (id: string, name: string) => ({
-    id: unsafeProductShortcode(`PRD-${id.toUpperCase()}`),
-    entityType: "product" as const,
-    name,
-    subtitle: "generic",
-    typeHint: "supplies",
-    imageUrl: null,
-    createdAt,
-    price: null,
-    stockCount: 1,
-  });
-
-  it("keeps exact lexical matches authoritative over semantic matches", () => {
-    const exact = product("p1", "blue tarp");
-    const semantic = product("p2", "plastic sheet");
-
-    const [first] = mergeHybridSearchResults(
-      "blue tarp",
-      [exact],
-      [{ item: semantic, similarity: 0.99 }],
-      5,
-    );
-
-    expect(first?.id).toBe("PRD-P1");
-    expect(first?.matchKind).toBe("exact");
-  });
-
-  it("ranks strong semantic household matches above weak lexical noise", () => {
-    const [first] = mergeHybridSearchResults(
-      "plastic tarp",
-      [product("p1", "plastic storage bin")],
-      [{ item: product("p2", "blue plastic tarp"), similarity: 0.95 }],
-      5,
-    );
-
-    expect(first?.name).toBe("blue plastic tarp");
-    expect(first?.matchKind).toBe("semantic");
-    expect(first?.matchTerms).toEqual(["plastic", "tarp"]);
-    expect(first?.matchReason).toContain("visible term plastic, tarp");
-  });
-
-  it("explains visible term relationships for semantic typo matches", () => {
-    const [first] = mergeHybridSearchResults(
-      "tarpulin",
-      [],
-      [{ item: product("p1", "blue plastic tarp"), similarity: 0.9 }],
-      5,
-    );
-
-    expect(first?.matchKind).toBe("semantic");
-    expect(first?.matchTerms).toContain("tarpulin ~ tarp");
-    expect(first?.matchReason).toContain("tarpulin ~ tarp");
-  });
-
+describe("semantic search evaluations", () => {
   it("includes the planned semantic eval examples", () => {
     expect(SEMANTIC_SEARCH_EVALS.map((fixture) => fixture.query)).toEqual(
       expect.arrayContaining([
