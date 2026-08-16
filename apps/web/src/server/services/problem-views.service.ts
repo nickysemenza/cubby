@@ -123,8 +123,10 @@ const toLocationWithoutAiDescription = (
     id: r.id,
     name: r.name,
     type: r.type,
-    // The list's `images` is already the displayable, live set — stricter than
-    // the detector's unguarded join, which counted detached rows and PDFs.
+    // The list's `images` relation is soft-delete guarded, which the detector's
+    // raw `innerJoin(locationImage)` was not — so this no longer counts
+    // detached associations. It carries no content-type filter, so a PDF
+    // attachment still counts, exactly as before.
     imageCount: r.images.length,
   };
 };
@@ -134,8 +136,9 @@ const toEmptyLocation = (row: ListRow): EmptyLocation => {
     images: { id: string; url: string }[];
   };
   // The detector built these two with a pair of correlated subqueries ordered
-  // by LocationImage.createdAt; the list's `images` relation is already
-  // cover-first, so the first element is the same photo.
+  // by LocationImage.createdAt; the list's `images` relation is `imageOrder`-
+  // first, so this is the cover rather than the oldest. Display-only — the card
+  // shows a thumbnail, and every count comes from `sectionTotals`.
   const cover = r.images[0];
   return {
     id: r.id,

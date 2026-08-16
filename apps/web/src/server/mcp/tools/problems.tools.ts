@@ -64,7 +64,13 @@ export function registerProblemsTools(server: McpServer) {
         if (!Array.isArray(slice)) {
           throw new Error(`Problem type '${params.type}' is not a list`);
         }
-        return { type: params.type, items: slice };
+        // `total`, not `slice.length`: a view-backed section ships a page, and
+        // an agent has no way to tell a short list from a truncated one.
+        return {
+          type: params.type,
+          items: slice,
+          total: all.sectionTotals[params.type] ?? slice.length,
+        };
       }
       return all;
     },

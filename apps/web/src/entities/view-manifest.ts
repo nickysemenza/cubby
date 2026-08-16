@@ -105,7 +105,17 @@ export interface ViewDefinition {
   problem?: ViewProblem;
 }
 
-/** Saved views select records; renderer tabs never do. */
+/**
+ * Saved views select records; renderer tabs never do.
+ *
+ * A view may additionally declare a `problem`, which makes it a Problems
+ * section too. Not every detector can become one — a predicate the flat filter
+ * vocabulary can't express (no OR-tree, no negation, no HAVING over groups),
+ * one whose bound is relative to now (a static `serverFilters` can't hold a
+ * cutoff date), or one whose correctness rests on a compile-time weld a data
+ * declaration can't carry. `findOrphanedProducts` is the third kind and says so
+ * at its own definition.
+ */
 export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
   project: [
     {

@@ -68,7 +68,9 @@ export const EMPTY_QUANTITY_LEDGER: QuantityLedger = {
  *
  * `alias` is the Expense alias in the enclosing query.
  */
-export const expenseSignedUnitsSql = (alias: string) =>
+// Module-private since the over-exited detector became a saved view — the
+// three remaining callers are all in this file.
+const expenseSignedUnitsSql = (alias: string) =>
   `CASE WHEN ${alias}."cost" > 0 THEN abs(${alias}."productQuantity")
         WHEN ${alias}."cost" < 0 THEN -abs(${alias}."productQuantity")
         ELSE ${alias}."productQuantity"

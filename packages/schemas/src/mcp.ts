@@ -218,6 +218,13 @@ export const recipeCostingExplainMcpOut = recipeCostingExplain;
 export const problemsTypeSliceOut = z.object({
   type: z.string(),
   items: z.array(z.unknown()),
+  /**
+   * How many rows the type really has. `items` may be a PAGE — view-backed
+   * sections return page one of an entity list — so an agent that read
+   * `items.length` would take a sampled section for a complete one and report a
+   * 212-row backlog as 12. Always present, so there is no shape to miss.
+   */
+  total: z.number().int(),
 });
 
 export const problemsUnknownTypeOut = z.object({

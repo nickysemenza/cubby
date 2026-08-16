@@ -170,6 +170,22 @@ export const findDuplicateInventoryProducts = async (
 };
 
 /**
+ * NOT convertible to a saved view, and the reason is the safety property rather
+ * than the predicate.
+ *
+ * The predicate itself is expressible — it's six `notExists` over incoming
+ * edges, and the product list already carries presence filters for most of
+ * them. What a view cannot carry is the weld: `PRODUCT_RETAINING_NOT_EXISTS` is
+ * a `Record<ProductRetainingEdgeKey, ...>` derived from `PRODUCT_EDGE_ROLES`,
+ * so adding a retaining edge is a COMPILE ERROR until it is wired in here. A
+ * view's `filters` array is plain data — a new retaining edge would simply not
+ * be checked, and this section is the one that offers a one-click Delete.
+ * Over-reporting here is executable data loss, not noise.
+ *
+ * Converting would trade a compile-time guarantee for a filter list somebody
+ * has to remember to update. Keep the detector.
+ */
+/**
  * Correlated `notExists` builder per retaining edge, keyed off
  * `ProductRetainingEdgeKey` (derived from `PRODUCT_EDGE_ROLES`, see
  * `~/server/repo/product/edge-roles`). `Record` over that type requires an

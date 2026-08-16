@@ -15,7 +15,7 @@ import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
 import type { EmptyLocation, StaleLocation } from "@cubby/schemas/problems";
 import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
-import { inventoryEntry, location } from "~/server/db/schema";
+import { inventoryEntry, location, product } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { stockOnly } from "~/server/repo/inventory/placement";
 
@@ -34,7 +34,7 @@ const STALE_RECOUNT_DAYS = 60;
 /**
  * Locations holding stock whose last recount is missing or older than
  * STALE_RECOUNT_DAYS. Empty locations are out of scope — they have no counts to
- * be wrong, and `findEmptyLocations` already covers them.
+ * be wrong, and the `location/empty-leaves` saved view already covers them.
  */
 export const findStaleLocations = async (
   db: Database,
@@ -53,8 +53,13 @@ export const findStaleLocations = async (
     })
     .from(location)
     // INNER join = "non-empty" (locations with no live entry drop out).
-    // stockOnly() must match findEmptyLocations's notExists, or a
-    // fixture-only location gets flagged as both empty AND stale.
+    //
+    // All three guards must match how the `location/empty-leaves` view resolves
+    // emptiness, or a location lands in both sections at once. That view goes
+    // through `locationList`'s `directItemCountMax: 0`, which counts entries
+    // whose PRODUCT is live too (`locationIdsExceedingInventoryMaximum`) — so
+    // without `notDeleted(product)` here, a shelf holding only entries on
+    // soft-deleted products reads as empty there and non-empty here.
     .innerJoin(
       inventoryEntry,
       and(
@@ -62,6 +67,10 @@ export const findStaleLocations = async (
         notDeleted(inventoryEntry),
         stockOnly(),
       ),
+    )
+    .innerJoin(
+      product,
+      and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
     )
     .where(
       and(
