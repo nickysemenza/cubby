@@ -1,14 +1,21 @@
 import {
   type RelatedSearchOut,
+  type RepairSearchDocumentsOut,
   type SearchableEntity,
+  type SearchDocumentHealth,
   type SearchHit,
   type SearchQueryInput,
   searchableEntities,
 } from "@cubby/schemas/search";
 import { type SQL, sql } from "drizzle-orm";
 import { getErrorMessage } from "~/lib/error-utils";
+import { dispatchBackgroundJobs } from "~/server/background-dispatch";
 import type { Database } from "~/server/db";
-import { executeSearchDocumentSql } from "~/server/repo/search-document";
+import {
+  executeSearchDocumentSql,
+  getSearchDocumentDiagnostics,
+  retireOrphanedSearchDocuments,
+} from "~/server/repo/search-document";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { SEMANTIC_MIN_QUERY_LENGTH } from "~/server/semantic/constants";
 import {
@@ -20,6 +27,9 @@ import { TraceNames, withTrace } from "~/server/tracing";
 
 type Candidate = Omit<SearchHit, "imageUrl"> & { entityId: string };
 export type InternalSearchHit = SearchHit & { entityId: string };
+type ServiceSearchQueryInput = Omit<SearchQueryInput, "limit"> & {
+  limit?: number;
+};
 
 export const searchTerms = (query: string): string[] =>
   normalizeSearchText(query)
@@ -103,14 +113,71 @@ const withThumbnails = async (
   }));
 };
 
+const documentHealth = (
+  diagnostics: Awaited<ReturnType<typeof getSearchDocumentDiagnostics>>,
+): SearchDocumentHealth => ({
+  missing: diagnostics.missing.length,
+  orphaned: diagnostics.orphaned.length,
+  stale: diagnostics.stale.length,
+  total:
+    diagnostics.missing.length +
+    diagnostics.orphaned.length +
+    diagnostics.stale.length,
+});
+
+/** Aggregate-only health: private entity UUIDs never cross the search interface. */
+export async function inspectSearchDocumentHealth(
+  db: Database,
+): Promise<SearchDocumentHealth> {
+  return documentHealth(await getSearchDocumentDiagnostics(db));
+}
+
+/**
+ * Retire orphaned rows now, then durably refresh missing/stale documents through
+ * the existing queue job that rebuilds SearchDocument before embeddings.
+ */
+export async function repairSearchDocuments(
+  db: Database,
+): Promise<RepairSearchDocumentsOut> {
+  const diagnostics = await getSearchDocumentDiagnostics(db);
+  const before = documentHealth(diagnostics);
+  const retired = await retireOrphanedSearchDocuments(db, diagnostics.orphaned);
+  const refs = [...diagnostics.missing, ...diagnostics.stale];
+  if (refs.length === 0) {
+    return { before, queued: 0, retired, batchId: null };
+  }
+  const dispatched = await dispatchBackgroundJobs(db, {
+    kind: "entity-embedding.refresh",
+    source: "maintenance",
+    metadata: {
+      source: "search.documentRepair",
+      missing: diagnostics.missing.length,
+      stale: diagnostics.stale.length,
+      orphaned: diagnostics.orphaned.length,
+    },
+    jobs: refs.map((ref) => ({
+      kind: "entity-embedding.refresh" as const,
+      dedupeKey: `search-document.repair:${ref.entityType}:${ref.entityId}`,
+      payload: ref,
+    })),
+  });
+  return {
+    before,
+    queued: dispatched.jobIds.length,
+    retired,
+    batchId: dispatched.batchId,
+  };
+}
+
 /** One indexed lexical candidate query; rank before applying the caller limit. */
 export async function findSearchHits(
   db: Database,
-  input: SearchQueryInput,
+  input: ServiceSearchQueryInput,
 ): Promise<SearchHit[]> {
   const normalized = normalizeSearchText(input.query);
   const tsQuery = buildPrefixTsQuery(input.query);
   if (!normalized || !tsQuery) return [];
+  const limit = Math.min(Math.max(input.limit ?? 5, 1), 50);
   const entityTypes = scopes(input.entityTypes);
   const matchTerms = textArray(searchTerms(input.query));
   const rows = await withTrace(
@@ -131,7 +198,7 @@ export async function findSearchHits(
         )})
         AND sd."normalizedText" % ${normalized}
       ORDER BY sd."normalizedText" <-> ${normalized}
-      LIMIT ${Math.min(input.limit * 4, 200)}
+      LIMIT ${Math.min(limit * 4, 200)}
     ),
     candidates AS (
       SELECT sd.id
@@ -196,13 +263,13 @@ export async function findSearchHits(
       ts_rank_cd(sd."searchVector", q.query) DESC,
       similarity(sd."normalizedText", ${normalized}) DESC,
       sd."updatedAt" DESC, sd."shortcode" ASC
-    LIMIT ${input.limit}
+    LIMIT ${limit}
   `,
       );
       span.setAttributes({
         "search.query_length": normalized.length,
         "search.scope_count": entityTypes.length,
-        "search.limit": input.limit,
+        "search.limit": limit,
         "search.candidate_count": candidates.length,
       });
       return candidates;
@@ -214,7 +281,7 @@ export async function findSearchHits(
 /** Semantic candidates remain a separate section and never block lexical hits. */
 export async function findRelatedSearchHits(
   db: Database,
-  input: SearchQueryInput,
+  input: ServiceSearchQueryInput,
 ): Promise<RelatedSearchOut> {
   if (
     input.query.trim().length < SEMANTIC_MIN_QUERY_LENGTH ||
@@ -225,6 +292,7 @@ export async function findRelatedSearchHits(
     const embedding = await embedQuery(input.query, { db });
     if (!embedding) return { status: "unavailable", results: [] };
     const config = getSemanticEmbeddingConfig();
+    const limit = Math.min(Math.max(input.limit ?? 5, 1), 12);
     const entityTypes = scopes(input.entityTypes);
     const matchTerms = textArray(searchTerms(input.query));
     const vector = sql.raw(`'[${embedding.join(",")}]'::vector`);
@@ -247,7 +315,7 @@ export async function findRelatedSearchHits(
           sql`, `,
         )})
       ORDER BY ${cast} <=> ${vector}
-      LIMIT ${Math.min(input.limit, 12)}
+      LIMIT ${limit}
     `,
     );
     return { status: "ready", results: await withThumbnails(db, rows) };

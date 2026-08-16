@@ -112,6 +112,25 @@ export type SearchHit = z.infer<typeof searchHitSchema>;
 
 export const searchHitsOut = z.array(searchHitSchema);
 
+/** Public, aggregate-only health for the private SearchDocument projection. */
+export const searchDocumentHealthSchema = z.object({
+  missing: z.number().int().nonnegative(),
+  orphaned: z.number().int().nonnegative(),
+  stale: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+});
+export type SearchDocumentHealth = z.infer<typeof searchDocumentHealthSchema>;
+
+export const repairSearchDocumentsOutSchema = z.object({
+  before: searchDocumentHealthSchema,
+  queued: z.number().int().nonnegative(),
+  retired: z.number().int().nonnegative(),
+  batchId: z.string().nullable(),
+});
+export type RepairSearchDocumentsOut = z.infer<
+  typeof repairSearchDocumentsOutSchema
+>;
+
 /** Semantic results are separate so they cannot reorder lexical hits. */
 export const relatedSearchOutSchema = z.object({
   status: z.enum(["ready", "unavailable"]),
