@@ -7,6 +7,7 @@ import {
   type LabelVariant,
   type NegativeExpectedQuantity,
   type ProductMissingPrice,
+  type PurchaselessExitExpense,
   type PurchaseNotReconciling,
   type SoldButStillStocked,
   type ToolUsedOutsideOwnership,
@@ -644,6 +645,13 @@ function unlinkedExitSubtitle(row: UnlinkedExitExpense): string {
     .join(" · ");
 }
 
+/** No vendor to show — these rows have no Purchase — so the project stands in. */
+function purchaselessExitSubtitle(row: PurchaselessExitExpense): string {
+  return [row.projectName, formatCurrency(Math.abs(row.cost)), row.date]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 /**
  * Both dates, because they are what tells you which of the two fixes applies:
  * an acquisition a few weeks late usually means a missing purchase Expense,
@@ -868,6 +876,25 @@ const DECLARED_SECTIONS = [
     renderItem: (row) => ({
       title: row.name,
       subtitle: unlinkedExitSubtitle(row),
+      route: entityDetailLink("expense", row.id),
+    }),
+  }),
+  section({
+    id: "purchaseless-exit-expenses",
+    label: "Credit with no order",
+    select: (p) => p.purchaselessExitExpenses,
+    entity: "expense",
+    title: "Money Back, No Order Behind It",
+    description:
+      "Negative lines with no vendor order at all — the hand-entered end of the ledger. The section above can only see a credit that sits on an order, so these are invisible there. About half are sales of something that was never inventoried; the rest are money that never bought anything, like a family contribution or a neighbour's share of a shared cost. Both are legitimate, which is why this list is advisory and never counted: link the ones that were sales, and leave the rest.",
+    emptyMessage: "Every credit is attached to an order.",
+    // No meter: half these rows are correct as they stand, so there is no
+    // denominator this is a fraction of — the same reason `unvalued-buckets`
+    // declares coverage without one.
+    coverage: { keys: ["purchaselessExitExpenses"] },
+    renderItem: (row) => ({
+      title: row.name,
+      subtitle: purchaselessExitSubtitle(row),
       route: entityDetailLink("expense", row.id),
     }),
   }),

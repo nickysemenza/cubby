@@ -94,6 +94,7 @@ import {
   findProductsWithoutMappings,
   findProductsWithUpcGaps,
   findPurchaseFinancialSettlementMismatches,
+  findPurchaselessExitExpenses,
   findPurchasesNotReconciling,
   findReferentialLivenessViolations,
   findSoldButStillStocked,
@@ -509,6 +510,9 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       // The inverse of the line above: same disposal-Purchase predicate, but
       // the exits with no product to group by, which that one cannot see.
       unlinkedExitExpenses: () => findUnlinkedExitExpenses(scoped),
+      // And the rows even THAT one cannot see: no Purchase to join, so its
+      // innerJoin drops them. Advisory — see the PROBLEM_CLASS note.
+      purchaselessExitExpenses: () => findPurchaselessExitExpenses(scoped),
       // One grouped scan of the product-linked Expense rows, filtered down to
       // the offenders by a HAVING rather than in JS.
       negativeExpectedQuantity: () =>
@@ -576,6 +580,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     unvaluedBucketProducts: r.productsMissingPrice.buckets,
     soldButStillStocked: r.soldButStillStocked,
     unlinkedExitExpenses: r.unlinkedExitExpenses,
+    purchaselessExitExpenses: r.purchaselessExitExpenses,
     negativeExpectedQuantity: r.negativeExpectedQuantity,
     toolsUsedOutsideOwnership: r.toolsUsedOutsideOwnership,
     productsWithoutMappings: r.productsWithoutMappings,

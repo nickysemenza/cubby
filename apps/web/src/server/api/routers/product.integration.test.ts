@@ -141,7 +141,7 @@ describe("product.list quantity ledger", () => {
       name: "one back",
       cost: -5,
       productId: agreeing.id,
-      productQuantity: 1,
+      productQuantity: -1,
     });
     await seedLine({
       name: "bits",
@@ -159,7 +159,7 @@ describe("product.list quantity ledger", () => {
       name: "ghost sold",
       cost: -40,
       productId: negative.id,
-      productQuantity: 1,
+      productQuantity: -1,
     });
 
     const all = await list();
@@ -370,7 +370,7 @@ describe("product.list unlocated cohort", () => {
       name: "rack out",
       cost: -12,
       productId: soldOff.id,
-      productQuantity: 1,
+      productQuantity: -1,
     });
     await seedLine({
       name: "racks, count unknown",
