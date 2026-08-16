@@ -256,6 +256,14 @@ async function upsertSearchDocumentBatch(
   }));
 }
 
+/**
+ * Refresh a whole wave in two queries, regardless of its size.
+ *
+ * The returned array is UNORDERED and DEDUPED: `missing` results are appended
+ * as refs are inspected, `upserted` results in batch order afterwards, and a
+ * ref repeated in the input yields one result. Do not zip it against `refs` —
+ * match on `entityType`/`entityId` if a caller ever needs the correspondence.
+ */
 export async function refreshSearchDocuments(
   db: Database,
   refs: ReadonlyArray<{ entityType: SearchableEntity; entityId: string }>,

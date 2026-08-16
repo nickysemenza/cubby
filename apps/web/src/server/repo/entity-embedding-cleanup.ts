@@ -476,11 +476,20 @@ const liveIdSources = {
 } satisfies Record<SearchableEntity, LiveIdSource>;
 
 /**
- * One anti-join, not a full scan plus one `IN (...)` per entity type. The old
- * shape read every live embedding row, bucketed the ids in JS, then issued a
- * query per type **sequentially** — ~16 round-trips carrying ~25k bind
- * parameters, on the single pinned connection `findFastProblems` shares across
- * all its detectors, on every Problems fetch.
+ * One round-trip, and one index-backed probe per live embedding row.
+ *
+ * The old shape read every live embedding row, bucketed the ids in JS, then
+ * queried each entity type **sequentially** — ~16 round-trips carrying ~25k
+ * bind parameters, on the single pinned connection `findFastProblems` shares
+ * across all its detectors, on every Problems fetch.
+ *
+ * The predicate is a per-type `EXISTS` rather than a join against a UNION of
+ * every live id. That distinction is measured, not stylistic: the UNION form
+ * makes the planner sort both sides for a merge anti-join, which spilled to
+ * disk on production (`external merge Disk: 3272kB`, 90ms). Per-type `EXISTS`
+ * lets it hash each source table once and probe — 38ms, no temp files — and
+ * it compares `entityId` as `uuid` on both sides, so the primary keys are
+ * usable instead of being cast to text.
  */
 export async function findOrphanedEntityEmbeddings(
   db: Database,
@@ -488,9 +497,9 @@ export async function findOrphanedEntityEmbeddings(
   const live = sql.join(
     searchableEntities.map((entityType) => {
       const source = liveIdSources[entityType];
-      return sql`SELECT ${entityType}::text AS "entityType", ${source.idColumn}::text AS "entityId" FROM ${source.table} WHERE ${source.deletedAtColumn} IS NULL`;
+      return sql`(ee."entityType" = ${entityType} AND EXISTS (SELECT 1 FROM ${source.table} WHERE ${source.idColumn} = ee."entityId" AND ${source.deletedAtColumn} IS NULL))`;
     }),
-    sql` UNION ALL `,
+    sql` OR `,
   );
 
   const result = await getDb(db).execute<{
@@ -500,15 +509,10 @@ export async function findOrphanedEntityEmbeddings(
     model: string;
     createdAt: Date;
   }>(sql`
-    WITH live AS (${live})
     SELECT ee."id"::text AS id, ee."entityType", ee."entityId"::text AS "entityId",
            ee."model", ee."createdAt"
     FROM "EntityEmbedding" ee
-    LEFT JOIN live
-      ON live."entityType" = ee."entityType"
-     AND live."entityId" = ee."entityId"::text
-    WHERE ee."deletedAt" IS NULL
-      AND live."entityId" IS NULL
+    WHERE ee."deletedAt" IS NULL AND NOT (${live})
   `);
   return result.rows;
 }
