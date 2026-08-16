@@ -70,6 +70,7 @@ const filterSearchKeys = {
   ],
   location: [
     "image",
+    "aiDescription",
     "name",
     "type",
     "parent",

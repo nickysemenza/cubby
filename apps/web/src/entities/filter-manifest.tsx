@@ -1473,6 +1473,15 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       options: presenceFilterOptions("image"),
     },
     {
+      // "none" alongside `image: has` is the describable backlog — there's
+      // nothing to describe about a location with no photo.
+      columnId: "aiDescription",
+      field: "aiDescriptionPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter descriptions...",
+      options: presenceFilterOptions("description"),
+    },
+    {
       columnId: "name",
       field: "nameFilter",
       kind: "text",

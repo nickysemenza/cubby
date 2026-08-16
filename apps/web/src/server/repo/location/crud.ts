@@ -71,6 +71,7 @@ import {
   mapImages,
   nextImageSortOrder,
   notDeleted,
+  presenceCondition,
   relations,
   unwrapDb,
   updateLiveAndReturn,
@@ -742,6 +743,10 @@ export const locationList = async (
         location.id,
         filters.imagePresenceFilter,
         locationIdsWithImages,
+      ),
+      presenceCondition(
+        location.aiDescription,
+        filters.aiDescriptionPresenceFilter,
       ),
       filters.directItemCountMin !== undefined
         ? inArray(location.id, locationIdsMeetingInventoryMinimum)
