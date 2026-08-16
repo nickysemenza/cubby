@@ -354,6 +354,93 @@ describe("computed purchase and product data quality", () => {
     ).rejects.toThrow("does not apply to purchase");
   });
 
+  // Every product identity check was missing from EXCEPTION_REASONS, and an
+  // absent entry admits no reason at all — so a product whose model number the
+  // manufacturer never issued (a kit component sold only inside the kit) could
+  // never clear its gap. Each check keeps its own reason set, so assert one
+  // allowed and one rejected reason per check rather than trusting the map.
+  it("admits typed exceptions on every product identity check", async () => {
+    // One product per check, not one shared row: `product_category` requires a
+    // null category and `product_model` only applies to the model-required
+    // categories, so the two gaps can never be open on the same product.
+    const cases = [
+      {
+        check: "product_manufacturer",
+        input: { manufacturer: UNSPECIFIED_MANUFACTURER, category: null },
+        allowedReason: "not_applicable",
+        rejectedReason: "expected_mismatch",
+      },
+      {
+        check: "product_category",
+        input: { manufacturer: "Acme", category: null },
+        allowedReason: "insufficient_detail",
+        rejectedReason: "not_issued",
+      },
+      {
+        check: "product_model",
+        input: { manufacturer: "Acme", category: "tools" },
+        allowedReason: "not_issued",
+        rejectedReason: "not_applicable",
+      },
+    ] as const;
+
+    const seeded = await seedPurchase("Exception Reason Supply");
+
+    for (const { check, input, allowedReason, rejectedReason } of cases) {
+      const product = await createProductFixture(
+        ctx.db,
+        makeProductInput({ ...input, name: `Test ${check}`, model: null }),
+        ctx.actor,
+      );
+      // Identity gaps only open on a product with quality scope — one that has
+      // an expense or inventory behind it. A bare product row has no gaps, so
+      // without this the exception would be rejected as "not an active gap".
+      await createExpense(
+        ctx.db,
+        makeExpenseInput({
+          purchaseId: seeded.output.id,
+          productId: product.id,
+          cost: 25,
+        }),
+        ctx.actor,
+      );
+
+      const before = await getProductByID(ctx.db, product.entityId);
+      expect(before.dataQuality.gaps.map((gap) => gap.check)).toContain(check);
+
+      // Rejection is asserted first: a successful exception closes the gap, and
+      // a closed gap fails the earlier active-gap guard instead of the reason
+      // allowlist, which would make this assertion pass for the wrong reason.
+      await expect(
+        setDataException(
+          ctx.db,
+          {
+            entityId: product.id,
+            check,
+            reason: rejectedReason,
+            note: "Reason outside this check's allowlist.",
+          },
+          ctx.actor,
+        ),
+      ).rejects.toThrow(`${rejectedReason} is not allowed for ${check}`);
+
+      const quality = await setDataException(
+        ctx.db,
+        {
+          entityId: product.id,
+          check,
+          reason: allowedReason,
+          note: `${check} does not exist for this product.`,
+        },
+        ctx.actor,
+      );
+      expect(quality.gaps.map((gap) => gap.check)).not.toContain(check);
+      expect(quality.exceptions).toContainEqual(
+        expect.objectContaining({ check, reason: allowedReason }),
+      );
+    }
+  });
+
   it("marks an exception stale when child evidence changes", async () => {
     const seeded = await seedPurchase("Stale Evidence Supply");
     const document = await attachDocument(seeded.entityId);
