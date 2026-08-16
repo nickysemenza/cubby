@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import { useCallback } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useTRPC } from "~/integrations/trpc/react";
 import { recipeMutationInvalidateKeys } from "~/lib/query-keys";
@@ -20,8 +21,12 @@ export function useDuplicateRecipe() {
       navigate({ to: "/recipes/$shortcode", params: { shortcode: data.id } });
     },
   });
+  // `mutate` is stable across renders, so wrapping it keeps `duplicateRecipe`
+  // stable too — without this the returned closure is new every render and
+  // the consumer's `useCallback([duplicateRecipe, ...])` never memoizes.
+  const { mutate } = mutation;
   return {
-    duplicateRecipe: (id: string) => mutation.mutate({ id }),
+    duplicateRecipe: useCallback((id: string) => mutate({ id }), [mutate]),
     isPending: mutation.isPending,
   };
 }
