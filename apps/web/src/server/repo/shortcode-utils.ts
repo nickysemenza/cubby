@@ -47,6 +47,7 @@ import {
 } from "~/server/db/schema";
 
 import {
+  FindOrCreateConflictError,
   findOrCreate,
   insertAndReturn,
   isTransaction,
@@ -184,11 +185,19 @@ const isShortcodeCollision = (error: unknown, tableName: string): boolean => {
  * which is NOT scoped to the `where` predicate's index. A shortcode collision
  * (unrelated to the name/alias match the caller is deduping on) therefore
  * silently inserts nothing, and the follow-up re-SELECT finds no row — surfacing
- * as `findOrCreate(...): insert conflicted but no matching row was found`
- * rather than as the transparent retry the caller wants. Retrying the whole
- * find-or-create is correct: the `values` thunk mints a fresh code each attempt,
- * and if the conflict really was the name index, the retry's SELECT finds the
- * winner and returns it.
+ * as a `FindOrCreateConflictError` rather than as the transparent retry the
+ * caller wants. Retrying the whole find-or-create is correct: the `values` thunk
+ * mints a fresh code each attempt, and if the conflict really was the name
+ * index, the retry's SELECT finds the winner and returns it.
+ *
+ * A conflict is only ASSUMED to be the shortcode after checking that the minted
+ * code is now taken. Every other unique index on the table produces the exact
+ * same silent-insert symptom, so retrying on the symptom alone spends three
+ * attempts and then blames the shortcode for someone else's collision — which
+ * is precisely how a sub-recipe link ingredient colliding on `lower(name)`
+ * reported itself as "3 shortcode collisions" (#716 follow-up). When the code
+ * is free, the conflict was an index this `where` cannot see: that's a caller
+ * bug, and it says so.
  */
 export async function findOrCreateWithShortcode<T extends ShortcodeType>(
   db: Database | DrizzleTransaction,
@@ -204,21 +213,26 @@ export async function findOrCreateWithShortcode<T extends ShortcodeType>(
   const table = SHORTCODE_TABLE[entity] as ShortcodeTable;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    // Captured so the conflict path can ask whether THIS code is what collided,
+    // rather than inferring it from the silent insert.
+    let mintedShortcode: string | undefined;
     const result = await findOrCreate(db, table, {
       where: opts.where,
-      values: async () =>
-        ({
+      values: async () => {
+        mintedShortcode = await generateUniqueShortcode(db, entity);
+        return {
           ...(await opts.values()),
-          shortcode: await generateUniqueShortcode(db, entity),
-        }) as InferInsertModel<ShortcodeTable>,
-    }).catch((error: unknown) => {
-      // `findOrCreate` throws this exact shape when DO NOTHING swallowed the
-      // insert but the re-SELECT can't see a winner — i.e. the conflict was on
-      // some OTHER unique index, which for us means the shortcode.
-      const message = error instanceof Error ? error.message : "";
-      if (message.includes("insert conflicted but no matching row"))
-        return null;
-      throw error;
+          shortcode: mintedShortcode,
+        } as InferInsertModel<ShortcodeTable>;
+      },
+    }).catch(async (error: unknown) => {
+      if (!(error instanceof FindOrCreateConflictError)) throw error;
+      if (mintedShortcode && (await shortcodeTaken(db, table, mintedShortcode)))
+        return null; // the code we minted is gone — retry with a fresh one
+      throw new Error(
+        `findOrCreateWithShortcode(${entity}): the insert conflicted on a unique index that \`where\` does not cover (the minted shortcode was still free), so the winner cannot be re-found. Check every unique index on ${getTableName(table)} against the values being inserted.`,
+        { cause: error },
+      );
     });
     if (result) {
       return result as {

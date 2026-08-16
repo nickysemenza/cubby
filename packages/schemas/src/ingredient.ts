@@ -105,8 +105,17 @@ export const ingredientMatchOut = z
 export const ingredientMatchesOut = z.record(z.string(), ingredientMatchOut);
 
 export const ingredientResolveOrCreateResultOut = z.object({
+  /** The requested name, echoed back so a caller can key results by its input. */
   name: z.string(),
   id: ingredientShortcode,
+  /**
+   * The resolved ingredient's own name and aliases. Both differ from the
+   * requested `name` whenever the match came through a casing variant or an
+   * alias, so a caller that displays or re-parses the result reads these rather
+   * than echoing back what it asked for.
+   */
+  canonicalName: z.string(),
+  aliases: z.array(z.string()),
   matched: z.boolean(),
   created: z.boolean(),
 });

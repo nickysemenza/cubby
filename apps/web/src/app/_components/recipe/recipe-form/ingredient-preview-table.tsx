@@ -1,4 +1,3 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { AlertCircle, AlertTriangle, Eye, EyeOff, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -22,13 +21,20 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { useTRPC } from "~/integrations/trpc/react";
-import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
+import { queryKeys } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
 import { CreateIngredientDialog } from "../../combobox/create-entity-dialogs";
 import { EntityInlineLink } from "../../EntityInlineLink";
 import { formatAmounts } from "../../inventory/format-amount";
 import { DecompositionView } from "../decomposition-view";
-import { useIngredientMatches } from "../use-ingredient-matches";
+import {
+  type IngredientMatch,
+  useIngredientMatches,
+} from "../use-ingredient-matches";
+import {
+  ingredientNameKey,
+  useResolveIngredientNames,
+} from "../use-resolve-ingredient-names";
 import {
   type ParsedIngredientLine,
   parsedIngredientNames,
@@ -37,12 +43,6 @@ import {
   resolveParsedIngredientGroups,
 } from "./ingredient-line-utils";
 import type { IngItem } from "./types";
-
-interface IngredientMatch {
-  id: string;
-  name: string;
-  aliases: string[];
-}
 
 /**
  * Parse ingredient lines via WASM and match each unique parsed name against the
@@ -312,9 +312,6 @@ function IngredientRow({
 
 // Export helper to get structured ingredients for form
 export function useIngredientImport(ingredientLines: string[]) {
-  const api = useTRPC();
-  const queryClient = useQueryClient();
-
   const { parsedIngredients, ingredientMatchMap, isLoading } =
     useParsedIngredientMatches(ingredientLines);
 
@@ -353,55 +350,23 @@ export function useIngredientImport(ingredientLines: string[]) {
     };
   }, [parsedIngredients, ingredientMatchMap]);
 
-  // Create ingredient mutation
-  const createIngredientMutation = useMutation(
-    api.ingredient.create.mutationOptions(),
-  );
+  const { resolveNames, isResolving } = useResolveIngredientNames();
 
-  // Create all missing ingredients and return structured form data
+  // Resolve every parsed name (not just the ones the display map reads as
+  // missing) and return structured form data. Handing the whole list to the
+  // server costs the same one round-trip and keeps the import off the cached
+  // match map, which can lag a create this same form just made.
   const importAll = async (): Promise<IngItem[]> => {
-    // Create missing ingredients first
-    const createdIngredients = new Map<
-      string,
-      { id: string; name: string; aliases: string[] }
-    >();
+    const rows = parsedIngredients.filter((p) => p.parsed.name.length > 0);
+    const matches = await resolveNames(parsedIngredientNames(rows));
 
-    for (const name of missingIngredients) {
-      try {
-        const result = await createIngredientMutation.mutateAsync({
-          name,
-          aliases: [],
-        });
-        createdIngredients.set(name, {
-          id: result.id,
-          name: result.name,
-          aliases: result.aliases ?? [],
-        });
-      } catch (error) {
-        console.error(`Failed to create ingredient: ${name}`, error);
+    return rows.map((p) => {
+      const match = matches.get(ingredientNameKey(p.parsed.name));
+      if (!match) {
+        throw new Error(`No match found for ingredient: ${p.parsed.name}`);
       }
-    }
-
-    // Invalidate queries to refresh matches.
-    invalidateTRPCQueries(queryClient, [queryKeys.ingredient.getByName]);
-
-    // Build structured ingredients
-    const structuredIngredients: IngItem[] = parsedIngredients
-      .filter((p) => p.parsed.name.length > 0)
-      .map((p) => {
-        const match =
-          ingredientMatchMap.get(p.parsed.name) ??
-          createdIngredients.get(p.parsed.name);
-
-        if (!match) {
-          // This shouldn't happen if creation succeeded
-          throw new Error(`No match found for ingredient: ${p.parsed.name}`);
-        }
-
-        return parsedIngredientToFormItem(p, match);
-      });
-
-    return structuredIngredients;
+      return parsedIngredientToFormItem(p, match);
+    });
   };
 
   return {
@@ -416,7 +381,7 @@ export function useIngredientImport(ingredientLines: string[]) {
       .length,
     namesForHighlighting,
     importAll,
-    isImporting: createIngredientMutation.isPending,
+    isImporting: isResolving,
   };
 }
 
@@ -429,12 +394,8 @@ export function useIngredientImport(ingredientLines: string[]) {
  * groups, so a name repeated across sections is only created once.
  */
 export function useIngredientResolver() {
-  const api = useTRPC();
-  const queryClient = useQueryClient();
-  const createIngredientMutation = useMutation(
-    api.ingredient.create.mutationOptions(),
-  );
-  // Progress across the sequential resolve loop, for user-visible feedback.
+  const { resolveNames, isResolving } = useResolveIngredientNames();
+  // How many names the in-flight resolve covers, for user-visible feedback.
   const [progress, setProgress] = useState<{ done: number; total: number }>({
     done: 0,
     total: 0,
@@ -447,31 +408,17 @@ export function useIngredientResolver() {
     const uniqueNames = parsedIngredientNames(parsedGroups.flat());
     setProgress({ done: 0, total: uniqueNames.length });
 
+    const matches = await resolveNames(uniqueNames);
+    setProgress({ done: uniqueNames.length, total: uniqueNames.length });
+
     return resolveParsedIngredientGroups(parsedGroups, async (name) => {
-      const existing = await queryClient.fetchQuery(
-        api.ingredient.getByName.queryOptions({ nameFilter: name }),
-      );
-      const match = existing
-        ? {
-            id: existing.id,
-            name: existing.name,
-            aliases: existing.aliases ?? [],
-          }
-        : await createIngredientMutation
-            .mutateAsync({ name, aliases: [] })
-            .then((created) => ({
-              id: created.id,
-              name: created.name,
-              aliases: created.aliases ?? [],
-            }));
-      setProgress((p) => ({ ...p, done: p.done + 1 }));
+      const match = matches.get(ingredientNameKey(name));
+      if (!match) {
+        throw new Error(`Failed to resolve ingredient: ${name}`);
+      }
       return match;
     });
   };
 
-  return {
-    resolveGroups,
-    isResolving: createIngredientMutation.isPending,
-    progress,
-  };
+  return { resolveGroups, isResolving, progress };
 }

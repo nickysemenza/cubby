@@ -84,7 +84,7 @@
     "@sentry/tanstackstart-react": "^10.66.0",
     "@t3-oss/env-core": "^0.13.11",
     "@tailwindcss/vite": "^4.3.3",
-    "@tanstack/ai": "^0.43.0",
+    "@tanstack/ai": "^0.44.0",
     "@tanstack/ai-anthropic": "^0.16.2",
     "@tanstack/query-async-storage-persister": "^5.101.2",
     "@tanstack/react-devtools": "^0.10.8",

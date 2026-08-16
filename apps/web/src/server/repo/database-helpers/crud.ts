@@ -20,6 +20,25 @@ import { unwrapDb } from "./core";
 import { notDeleted } from "./query";
 
 /**
+ * `findOrCreate` inserted nothing and then couldn't re-find a winner.
+ *
+ * Thrown, not returned, because it always means a broken assumption rather than
+ * a race: the bare `ON CONFLICT DO NOTHING` swallows a violation of ANY unique
+ * index on the table, so this fires when the index that actually conflicted is
+ * one the caller's `where` cannot see. A type, not a message match — callers
+ * distinguishing it from a genuine error (see `findOrCreateWithShortcode`)
+ * shouldn't be coupled to the wording.
+ */
+export class FindOrCreateConflictError extends Error {
+  constructor(readonly table: string) {
+    super(
+      `findOrCreate(${table}): insert conflicted but no matching row was found`,
+    );
+    this.name = "FindOrCreateConflictError";
+  }
+}
+
+/**
  * Atomic find-or-create. The correct, race-free SELECT-then-INSERT primitive:
  *
  *   1. SELECT by `where` — return the row if found.
@@ -86,9 +105,7 @@ export const findOrCreate = async <T extends PgTable>(
       .where(opts.where)
       .limit(1)) as InferSelectModel<T>[];
     if (!winner) {
-      throw new Error(
-        `findOrCreate(${getTableName(table)}): insert conflicted but no matching row was found`,
-      );
+      throw new FindOrCreateConflictError(getTableName(table));
     }
     return { row: winner, created: false };
   });
