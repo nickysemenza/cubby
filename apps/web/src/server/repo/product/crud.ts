@@ -481,6 +481,18 @@ export const productList = async (
   // Effective price exists when either Product carries an explicit override or
   // at least one actual, positive Expense has a known product quantity. Keep
   // this uncorrelated for the shared RQB/count/aggregate where clause below.
+  //
+  // Every predicate here must match `derivedProductPriceSql` (product/pricing.ts),
+  // whose own doc states the rule: a divergence filters by a number the user is
+  // never shown. Two were missing, and both made `pricePresenceFilter: "none"`
+  // NARROWER than "the Price cell renders —":
+  //
+  //  - `lineKind = 'principal'`. Without it a product whose only qualifying
+  //    lines are tax/shipping/fee counted as priced, so it never appeared in
+  //    the no-price worklist despite having no derived price.
+  //  - the `NULLIF(sum(abs(productQuantity)), 0)` case, which is what the
+  //    HAVING below reproduces. Quantities that cancel to zero divide to NULL,
+  //    so the rows exist but the price does not.
   const productIdsWithDerivedPrice = dbClient
     .select({ productId: expense.productId })
     .from(expense)
@@ -488,12 +500,14 @@ export const productList = async (
       and(
         notDeleted(expense),
         eq(expense.future, false),
+        eq(expense.lineKind, "principal"),
         gt(expense.cost, 0),
         isNotNull(expense.productId),
         isNotNull(expense.productQuantity),
       ),
     )
-    .groupBy(expense.productId);
+    .groupBy(expense.productId)
+    .having(sql`sum(abs(${expense.productQuantity})) <> 0`);
 
   const productIdsWithPurchases = dbClient
     .select({ productId: expense.productId })

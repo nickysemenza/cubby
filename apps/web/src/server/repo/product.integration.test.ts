@@ -1473,6 +1473,40 @@ describe("product repository", () => {
     });
 
     describe("pricePresenceFilter", () => {
+      it("matches 'none' when only non-principal lines exist", async () => {
+        // Regression: `productIdsWithDerivedPrice` omitted the
+        // `lineKind = 'principal'` predicate that `derivedProductPriceSql`
+        // requires, so a product whose only quantified spend is tax or shipping
+        // counted as priced. The Price cell rendered `—` and the no-price
+        // worklist skipped it — the divergence `derivedProductPriceSql`'s own
+        // doc warns about ("filters by a number the user is never shown").
+        const feeOnly = await createProduct(
+          ctx.db,
+          makeProductInput({
+            name: "Fee Only Product",
+            upc: "710000000041",
+            price: null,
+          }),
+          ctx.actor,
+        );
+        await createExpense(
+          ctx.db,
+          makeExpenseInput({
+            name: "Shipping",
+            productId: feeOnly.id,
+            cost: 12,
+            productQuantity: 1,
+            lineKind: "shipping",
+          }),
+          ctx.actor,
+        );
+
+        const none = await listWith({ pricePresenceFilter: "none" });
+        expect(none.data.map((row) => row.id)).toContain(feeOnly.id);
+        const has = await listWith({ pricePresenceFilter: "has" });
+        expect(has.data.map((row) => row.id)).not.toContain(feeOnly.id);
+      });
+
       it("derives a weighted price from known quantities and flags incomplete history", async () => {
         const derived = await createProduct(
           ctx.db,

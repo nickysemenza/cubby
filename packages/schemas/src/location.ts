@@ -54,12 +54,6 @@ export const locationFilterFields = {
     "Filter to locations that do / don't have at least one image (PDF attachments don't count).",
   ),
   /**
-   * `location.aiDescription` is a nullable column on the root table, so `"none"`
-   * is the un-described worklist. Combine with `imagePresenceFilter: "has"` for
-   * the backlog that can actually be worked: describing a location with no
-   * photo to look at isn't possible.
-   */
-  /**
    * Direct children only — `"none"` is the leaf-location worklist. Paired with
    * `inventoryPresenceFilter: "none"` it selects an empty leaf: a bin holding
    * nothing that also isn't a shelf for other bins.
@@ -67,6 +61,12 @@ export const locationFilterFields = {
   childPresenceFilter: presenceFilter.describe(
     "Filter to locations that do / don't have at least one live child location.",
   ),
+  /**
+   * `location.aiDescription` is a nullable column on the root table, so `"none"`
+   * is the un-described worklist. Combine with `imagePresenceFilter: "has"` for
+   * the backlog that can actually be worked: describing a location with no
+   * photo to look at isn't possible.
+   */
   aiDescriptionPresenceFilter: presenceFilter.describe(
     "Filter to locations that do / don't have an AI-generated description.",
   ),
