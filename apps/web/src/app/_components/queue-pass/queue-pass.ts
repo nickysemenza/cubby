@@ -213,3 +213,20 @@ export function resolveStops<T extends QueueStop>(
   }
   return out;
 }
+
+/**
+ * Whether stored progress already settles every stop in the current queue.
+ *
+ * A finished pass has nothing to resume, so offering "Resume or start over"
+ * for one is a dead end — it must reopen on its summary instead. Measured
+ * against the live queue rather than the stored total, so a pass whose scope
+ * has since grown correctly reads as unfinished.
+ */
+export function isStoredPassComplete(
+  stored: { completed: readonly string[]; skipped: readonly string[] },
+  queueIds: readonly string[],
+): boolean {
+  if (queueIds.length === 0) return false;
+  const settled = new Set([...stored.completed, ...stored.skipped]);
+  return queueIds.every((id) => settled.has(id));
+}

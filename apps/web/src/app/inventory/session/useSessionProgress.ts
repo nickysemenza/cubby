@@ -188,22 +188,23 @@ export function useSessionProgress(
     [itemResolutions, summary],
   );
 
+  // Rehydrates the staged choices and running tally whichever way the pass is
+  // adopted — the explicit Resume, or the automatic reopen of a finished pass.
+  const applyExtra = useCallback((restored: SessionExtra | undefined) => {
+    setItemResolutions(new Map(restored?.itemResolutions ?? []));
+    setSummary(restored?.summary ?? emptySummary());
+  }, []);
+
   const pass = useQueuePass<SessionLocation, SessionExtra>({
     scopeKey: rootId,
     candidateIds,
     stopsById,
     persistence: SESSION_PERSISTENCE,
+    onAdopt: applyExtra,
     extra,
   });
 
-  const { resumePass: adoptPass, startNewPass: freshPass } = pass;
-
-  const resumePass = useCallback(() => {
-    const restored = adoptPass();
-    if (!restored) return;
-    setItemResolutions(new Map(restored.itemResolutions));
-    setSummary(restored.summary);
-  }, [adoptPass]);
+  const { resumePass, startNewPass: freshPass } = pass;
 
   const startNewPass = useCallback(() => {
     freshPass();

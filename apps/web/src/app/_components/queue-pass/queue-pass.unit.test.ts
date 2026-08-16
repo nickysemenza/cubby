@@ -5,6 +5,7 @@ import {
   emptyPassProgress,
   isPassComplete,
   isSettled,
+  isStoredPassComplete,
   outstandingAfterUnsettling,
   type PassProgress,
   passCounts,
@@ -196,5 +197,40 @@ describe("resolveStops", () => {
 
   it("drops an id whose content has gone", () => {
     expect(resolveStops(["A", "GONE"], byId).map((s) => s.id)).toEqual(["A"]);
+  });
+});
+
+describe("isStoredPassComplete", () => {
+  const stored = (completed: string[], skipped: string[] = []) => ({
+    completed,
+    skipped,
+  });
+
+  it("is true when every queued stop is settled", () => {
+    expect(isStoredPassComplete(stored(["A", "B"]), ["A", "B"])).toBe(true);
+  });
+
+  it("counts a skip as settled", () => {
+    expect(isStoredPassComplete(stored(["A"], ["B"]), ["A", "B"])).toBe(true);
+  });
+
+  it("is false while a stop is outstanding", () => {
+    expect(isStoredPassComplete(stored(["A"]), ["A", "B"])).toBe(false);
+  });
+
+  // Measured against the live queue: a scope that has since grown is an
+  // unfinished pass, not a finished one with extra rows.
+  it("is false when the queue has grown past the stored progress", () => {
+    expect(isStoredPassComplete(stored(["A", "B"]), ["A", "B", "C"])).toBe(
+      false,
+    );
+  });
+
+  it("ignores stored progress for stops no longer queued", () => {
+    expect(isStoredPassComplete(stored(["A", "GONE"]), ["A"])).toBe(true);
+  });
+
+  it("is false for an empty queue, matching isPassComplete", () => {
+    expect(isStoredPassComplete(stored([]), [])).toBe(false);
   });
 });

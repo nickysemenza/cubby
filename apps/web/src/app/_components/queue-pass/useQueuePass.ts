@@ -4,6 +4,7 @@ import {
   clearSkipped,
   emptyPassProgress,
   isPassComplete,
+  isStoredPassComplete,
   outstandingAfterUnsettling,
   type PassCounts,
   type PassProgress,
@@ -74,6 +75,15 @@ interface UseQueuePassOptions<TStop extends QueueStop, TExtra> {
   /** Omit for an ephemeral pass; supply to make it resumable. */
   persistence?: QueuePassPersistence<TExtra>;
   /**
+   * Applies a restored pass's `extra` back into the caller's own state.
+   *
+   * Called on both adoption paths — the explicit Resume choice and the
+   * automatic one for an already-finished pass — so a flow has exactly one
+   * place that rehydrates its staged state. Held in a ref, so it need not be
+   * memoized.
+   */
+  onAdopt?: (extra: TExtra | undefined) => void;
+  /**
    * Per-flow state to persist alongside the queue bookkeeping.
    *
    * Must be referentially stable (memoized) — it is an effect dependency, and
@@ -134,6 +144,7 @@ export function useQueuePass<TStop extends QueueStop, TExtra = undefined>({
   candidateIds,
   stopsById,
   persistence,
+  onAdopt,
   extra,
 }: UseQueuePassOptions<TStop, TExtra>) {
   const [startedAt, setStartedAt] = useState<number | null>(null);
@@ -151,6 +162,23 @@ export function useQueuePass<TStop extends QueueStop, TExtra = undefined>({
   // a caller passing a fresh config literal must not restart their pass.
   const persistenceRef = useRef(persistence);
   persistenceRef.current = persistence;
+  const onAdoptRef = useRef(onAdopt);
+  onAdoptRef.current = onAdopt;
+  // Read inside the scope effect without making membership a dependency: the
+  // freeze above already ran this render, so this holds the queue being entered.
+  const candidateIdsRef = useRef(candidateIds);
+  candidateIdsRef.current = candidateIds;
+
+  const adopt = useCallback((stored: StoredQueuePass<TExtra>) => {
+    setProgress({
+      completed: new Set(stored.completed),
+      skipped: new Set(stored.skipped),
+    });
+    setCurrentIndex(Math.max(0, stored.currentIndex));
+    setStartedAt(stored.startedAt);
+    setResumeCandidate(null);
+    onAdoptRef.current?.(stored.extra);
+  }, []);
 
   // Freeze membership and clear the previous scope's progress in one render, so
   // no frame shows old counts against a new queue.
@@ -184,11 +212,17 @@ export function useQueuePass<TStop extends QueueStop, TExtra = undefined>({
       return;
     }
 
-    // Stale work is gated behind an explicit Resume / Start new choice, so a
-    // half-finished pass from days ago never silently becomes the live one.
+    // A finished pass has nothing to resume — reopen it on its summary rather
+    // than offering a Resume/Start-over choice that leads nowhere. Only
+    // *unfinished* work is gated behind that prompt, so a half-finished pass
+    // from days ago never silently becomes the live one.
+    if (isStoredPassComplete(restored, candidateIdsRef.current)) {
+      adopt(restored);
+      return;
+    }
     setStartedAt(null);
     setResumeCandidate(restored);
-  }, [scopeKey]);
+  }, [scopeKey, adopt]);
 
   const stops = useMemo(
     () => resolveStops(frozen.ids, stopsById),
@@ -272,21 +306,10 @@ export function useQueuePass<TStop extends QueueStop, TExtra = undefined>({
     setProgress(emptyPassProgress());
   }, []);
 
-  /**
-   * Adopt the stored pass, returning its `extra` so the caller can restore its
-   * own staged state in the same interaction.
-   */
-  const resumePass = useCallback((): TExtra | undefined => {
-    if (!resumeCandidate) return undefined;
-    setProgress({
-      completed: new Set(resumeCandidate.completed),
-      skipped: new Set(resumeCandidate.skipped),
-    });
-    setCurrentIndex(Math.max(0, resumeCandidate.currentIndex));
-    setStartedAt(resumeCandidate.startedAt);
-    setResumeCandidate(null);
-    return resumeCandidate.extra;
-  }, [resumeCandidate]);
+  /** Adopt the stored pass the prompt is offering. */
+  const resumePass = useCallback(() => {
+    if (resumeCandidate) adopt(resumeCandidate);
+  }, [adopt, resumeCandidate]);
 
   const resume = useMemo(
     (): QueuePassResumeCandidate<TExtra> | null =>

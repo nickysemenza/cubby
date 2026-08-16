@@ -97,7 +97,11 @@ test.describe("Project tracker", () => {
       page.getByRole("heading", { level: 1, name: "Tasks" }),
     ).toBeVisible({ timeout: 15000 });
 
-    await page.getByRole("button", { name: "New" }).click();
+    // `exact` — an empty list also renders its empty-state call-to-action
+    // ("New Expense", "New Task"), which a substring match would tie with the
+    // toolbar's own "New". Those buttons only started rendering once the empty
+    // states stopped gating on a `/new` route these entities never had.
+    await page.getByRole("button", { name: "New", exact: true }).click();
 
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText("New Task")).toBeVisible({
@@ -147,7 +151,7 @@ test.describe("Project tracker", () => {
       page.getByRole("heading", { level: 1, name: "Expenses" }),
     ).toBeVisible({ timeout: 15000 });
 
-    await page.getByRole("button", { name: "New" }).click();
+    await page.getByRole("button", { name: "New", exact: true }).click();
 
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText("New Expense")).toBeVisible({
@@ -252,7 +256,7 @@ test.describe("Project tracker", () => {
 
     await page.goto("/tasks");
     await page.waitForLoadState("networkidle");
-    await page.getByRole("button", { name: "New" }).click();
+    await page.getByRole("button", { name: "New", exact: true }).click();
 
     const createDialog = page.getByRole("dialog");
     await expect(createDialog.getByText("New Task")).toBeVisible({
@@ -355,7 +359,7 @@ test.describe("Project tracker", () => {
     // other quick-add tests avoid).
     await page.goto("/tasks");
     await page.waitForLoadState("networkidle");
-    await page.getByRole("button", { name: "New" }).click();
+    await page.getByRole("button", { name: "New", exact: true }).click();
 
     const taskDialog = page.getByRole("dialog");
     await expect(taskDialog.getByText("New Task")).toBeVisible({
@@ -487,7 +491,7 @@ test.describe("Project tracker", () => {
       page.getByRole("heading", { level: 1, name: "Expenses" }),
     ).toBeVisible({ timeout: 15000 });
 
-    await page.getByRole("button", { name: "New" }).click();
+    await page.getByRole("button", { name: "New", exact: true }).click();
 
     // Phase C: ResponsiveDialog renders a bottom Sheet (not a centered
     // Dialog) under the 768px mobile breakpoint — SheetContent's
