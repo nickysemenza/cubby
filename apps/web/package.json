@@ -43,7 +43,7 @@
     "gen:pwa-assets": "pnpm run gen:apple-icon && pnpm run gen:pwa-icons && pnpm run gen:pwa-splash"
   },
   "dependencies": {
-    "@atlaskit/pragmatic-drag-and-drop": "^2.0.1",
+    "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",
     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.0.0",
     "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.0.0",
     "@base-ui/react": "^1.6.0",
