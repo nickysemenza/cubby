@@ -136,14 +136,23 @@ const orderIdPresence = (
 
 /**
  * Translate `ExpenseFilters` into the exact Drizzle WHERE clause used to
- * scope expense rows. Shared by `expenseList` (the ledger) and
- * `expenseAnalytics` (repo/expense/analytics.ts) so the two can never
- * drift under the same filter set — the plan's hard invariant is "ledger
- * totals and analytics totals always agree".
+ * scope expense rows. Shared by `expenseList` (the ledger), `expenseAnalytics`
+ * (repo/expense/analytics.ts), and `projectPortfolioAnalytics`
+ * (repo/project/portfolio-analytics.ts) so all three can never drift under the
+ * same filter set — the plan's hard invariant is "ledger totals and analytics
+ * totals always agree".
+ *
+ * `extraConditions` is an escape hatch for a caller that already has a
+ * predicate the `ExpenseFilters` vocabulary can't express — e.g.
+ * `projectPortfolioAnalytics` already holds resolved project **uuids** (not
+ * the shortcodes `filters.projectId` expects), so it ANDs an `inArray`
+ * straight onto the result instead of round-tripping uuids back to
+ * shortcodes just to satisfy `toUuids`.
  */
 export const buildExpenseWhereClause = async (
   db: Database,
   filters: ExpenseFilters,
+  options?: { extraConditions?: Array<SQL | undefined> },
 ): Promise<SQL | undefined> => {
   // When scoped to a project subtree, resolve each selected project + every
   // live descendant and match on the whole set; otherwise a plain match on the
@@ -235,6 +244,7 @@ export const buildExpenseWhereClause = async (
     [
       ...auditDateWhereConditions(expense, filters),
       ...relatedWhereConditions("expense", filters, expense.id),
+      ...(options?.extraConditions ?? []),
       nameSearch,
       eqAny(expense.lineKind, filters.lineKind),
       // A plain column, deliberately: `lineBasis` lives on Expense rather than
@@ -290,9 +300,9 @@ export const buildExpenseWhereClause = async (
       filters.future !== undefined
         ? eq(expense.future, filters.future)
         : undefined,
-      // Rows with a null `date` (common on `future` expenses — nothing to
-      // date yet) fall out of any date window by plain SQL comparison
-      // semantics; that's intended, not a bug to work around.
+      // `expense.date` is NOT NULL (since #553 enforced the finance
+      // invariants), so unlike `cost` below there is no null-row case to
+      // reason about here — every row lands inside or outside the window.
       filters.dateFrom ? gte(expense.date, filters.dateFrom) : undefined,
       filters.dateTo ? lte(expense.date, filters.dateTo) : undefined,
       // `!== undefined`, NOT the truthiness guard the two date lines above use.
@@ -300,8 +310,9 @@ export const buildExpenseWhereClause = async (
       // items") and `costMax: 0` is the credits-only worklist — a truthiness
       // check would silently drop both. Follows `future`'s guard style instead.
       //
-      // Null-cost rows fall out of either bound by SQL semantics, same as
-      // null-date rows do above; `costPresenceFilter: "none"` is the filter for
+      // `cost` IS nullable — `cost IS NULL` is the Unclassified predicate — and
+      // those rows fall out of either bound by plain SQL comparison semantics;
+      // that's intended. `costPresenceFilter: "none"` is the filter for
       // "no cost recorded".
       filters.costMin !== undefined
         ? gte(expense.cost, filters.costMin)

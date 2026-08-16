@@ -2,14 +2,10 @@ import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
 import { keyBy } from "es-toolkit";
 import { Fragment, useMemo, useRef, useState } from "react";
 import { useAutoScroll } from "~/app/_components/hooks/use-auto-scroll";
-import {
-  OperationImpact,
-  useOperationPreview,
-} from "~/app/_components/impact/operation-impact";
-import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Row } from "~/components/layout";
 import { cn } from "~/lib/utils";
 import { CreateTaskDialog } from "../create-task-dialog";
+import { BoardAgenda } from "./BoardAgenda";
 import {
   axisColorChip,
   axisKey,
@@ -22,6 +18,7 @@ import {
 import type { BoardColsMode, BoardLaneMode } from "./board-model";
 import { buildColumns, buildLanes, cellTasks } from "./board-model";
 import type { TaskCreatePreset } from "./board-types";
+import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { useBoardDnd } from "./use-board-dnd";
 import {
   type BoardCacheTarget,
@@ -103,24 +100,6 @@ export function TaskBoard({
   // own: the optimistic delete drops the card out of `cellTasks`, so a dialog
   // owned by the card would unmount before the mutation settles.
   const [pendingDelete, setPendingDelete] = useState<TaskOut | null>(null);
-
-  // Impact preview — fetched only while the delete dialog is open. See
-  // `useOperationPreview`'s doc comment for the gating rule.
-  const deletePreviewInput = useMemo(
-    () =>
-      pendingDelete
-        ? {
-            operation: "delete" as const,
-            entity: "task" as const,
-            ids: [pendingDelete.id],
-          }
-        : null,
-    [pendingDelete],
-  );
-  const deletePreview = useOperationPreview(
-    deletePreviewInput,
-    pendingDelete !== null,
-  );
 
   const columns = useMemo(() => buildColumns(tasks, cols), [tasks, cols]);
   const lanes = useMemo(
@@ -248,7 +227,18 @@ export function TaskBoard({
 
   return (
     <>
-      {board}
+      {/* Both trees render; the BREAKPOINT decides, not JS — same reasoning
+          as `unified-calendar.tsx`'s agenda fallback: `useIsMobile` reports
+          false on the server, so a JS-only switch would paint the
+          horizontally-scrolling columns on a phone until hydration. */}
+      <div className="md:hidden">
+        <BoardAgenda
+          tasks={tasks}
+          cardProps={cardProps}
+          doneCountOverride={doneCountOverride}
+        />
+      </div>
+      <div className="hidden md:block">{board}</div>
       {pendingPreset && (
         <CreateTaskDialog
           open
@@ -260,38 +250,18 @@ export function TaskBoard({
           presetTrade={pendingPreset.trade}
         />
       )}
-      {pendingDelete && (
-        <BulkActionDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) setPendingDelete(null);
-          }}
-          items={[{ id: pendingDelete.id, name: pendingDelete.name }]}
-          itemNoun="Task"
-          action="Delete"
-          variant="destructive"
-          pendingLabel="Deleting..."
-          description={`${
-            pendingDelete.subtaskCount > 0
-              ? `This also deletes ${pendingDelete.subtaskCount} subtask${pendingDelete.subtaskCount === 1 ? "" : "s"}, and removes`
-              : "This also removes"
-          } the task from any dependency chains. This action cannot be undone.`}
-          renderItem={(item) => item.name}
-          onSubmit={async () => {
-            await deleteTask(pendingDelete.id);
-            setPendingDelete(null);
-          }}
-          isPending={isDeleting}
-          blocked={deletePreview.data?.canProceed === false}
-        >
-          <OperationImpact
-            preview={deletePreview.data}
-            isLoading={deletePreview.isLoading}
-            isError={deletePreview.isError}
-            onRetry={() => void deletePreview.refetch()}
-          />
-        </BulkActionDialog>
-      )}
+      <TaskDeleteDialog
+        task={pendingDelete}
+        isDeleting={isDeleting}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+        onConfirm={async () => {
+          if (!pendingDelete) return;
+          await deleteTask(pendingDelete.id);
+          setPendingDelete(null);
+        }}
+      />
     </>
   );
 }
