@@ -802,7 +802,6 @@ const problemsFastShape = {
   toolsUsedOutsideOwnership: z.array(toolUsedOutsideOwnershipSchema),
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
   ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
-  emptyLocations: z.array(emptyLocationSchema),
   productsWithNoImages: z.array(productWithNoImagesSchema),
   orphanedEntityEmbeddings: z.array(orphanedEntityEmbeddingSchema),
   unreferencedImages: z.array(unreferencedImageSchema),
@@ -904,6 +903,7 @@ export type SectionTotals = z.infer<typeof sectionTotalsSchema>;
 const problemsViewsShape = {
   neverVerifiedInventory: z.array(neverVerifiedInventorySchema),
   locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
+  emptyLocations: z.array(emptyLocationSchema),
   unusedIngredientsWithProduct: z.array(unusedIngredientSchema),
   unusedIngredientsWithoutProduct: z.array(unusedIngredientSchema),
 };

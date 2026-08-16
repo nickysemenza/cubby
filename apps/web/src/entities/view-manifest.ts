@@ -466,6 +466,39 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
           aiDescriptionPresenceFilter: "none",
         },
       },
+      // Both hidden by default on this table, so the view has to reveal them —
+      // otherwise it selects rows on a signal nothing on screen explains.
+      columnVisibility: { aiDescription: true, image: true },
+    },
+    {
+      id: "empty-leaves",
+      label: "Empty",
+      description: "Leaf locations holding nothing",
+      // Both halves are required. Without `children: none` this matches every
+      // shelf whose stock lives in its bins rather than directly on it, which
+      // is most of the tree and none of the worklist.
+      filters: [
+        { id: "inventoryEntries", value: "none" },
+        { id: "children", value: "none" },
+      ],
+      problem: {
+        key: "emptyLocations",
+        title: "Empty locations",
+        description:
+          "Leaf locations holding no stock — either not yet itemized, or genuinely empty.",
+        emptyMessage: "No empty locations.",
+        // The Inventory column is a COUNT range, not a presence toggle, so
+        // "none" expands to a bound rather than a sentinel. Same predicate
+        // either way: `directItemCountMax: 0` is resolved against the live,
+        // stock-only entry set (live product included), which is the detector's
+        // `notExists(... stockOnly())` plus the product-liveness guard the list
+        // already applies so the count matches what the cell renders.
+        serverFilters: {
+          directItemCountMax: 0,
+          childPresenceFilter: "none",
+        },
+      },
+      columnVisibility: { children: true, inventoryEntries: true },
     },
   ],
   inventory: [

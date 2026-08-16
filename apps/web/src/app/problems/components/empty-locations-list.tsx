@@ -14,9 +14,12 @@ import { createdAgoDetail } from "./render-helpers";
 export function EmptyLocationsList({
   locations,
   coverage,
+  count,
 }: {
   locations: EmptyLocation[];
   coverage?: ProblemSectionCoverage;
+  /** True population — `locations` is a page of it. */
+  count?: number;
 }) {
   const [addDialogLocation, setAddDialogLocation] =
     useState<EmptyLocation | null>(null);
@@ -28,6 +31,7 @@ export function EmptyLocationsList({
         description="Leaf locations holding no inventory entries. Many are deliberate — a crate of zip ties is photographed and described rather than itemized — so treat this as how much of the house is itemized, not as a list of mistakes."
         entity="location"
         items={locations}
+        count={count}
         coverage={coverage}
         emptyMessage="All leaf locations have inventory entries."
         renderItem={(location) => {

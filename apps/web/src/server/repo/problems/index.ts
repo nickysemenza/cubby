@@ -80,7 +80,6 @@ export {
 // Location-centric detectors (+ EmptyLocation type re-export)
 export {
   type EmptyLocation,
-  findEmptyLocations,
   findStaleLocations,
 } from "./detectors-location";
 // Meal-centric detectors

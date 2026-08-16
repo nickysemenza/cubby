@@ -240,22 +240,30 @@ function customSection<T, K extends CoverageProblemKey = never>(def: {
   id: string;
   label: string;
   select: (problems: AllProblems) => readonly T[];
+  /** See `section`'s `totalKey` — set when `select` returns a page. */
+  totalKey?: ProblemKey;
   render: (
     items: T[],
     coverage: ProblemSectionCoverage | undefined,
+    count: number,
   ) => ReactNode;
   coverage?: ProblemSectionDeclaredCoverage<K>;
 }): ProblemSectionEntry<K> {
+  const sizeOf = (problems: AllProblems, items: readonly unknown[]) =>
+    sectionSize(def.totalKey, items, problems.sectionTotals);
   return {
     id: def.id,
     label: def.label,
     coverage: def.coverage,
-    count: (problems) => def.select(problems).length,
-    node: (problems, totals) =>
-      def.render(
-        [...def.select(problems)],
+    count: (problems) => sizeOf(problems, def.select(problems)),
+    node: (problems, totals) => {
+      const items = [...def.select(problems)];
+      return def.render(
+        items,
         resolveCoverage(def.coverage, totals),
-      ),
+        sizeOf(problems, items),
+      );
+    },
   };
 }
 
@@ -1113,12 +1121,13 @@ const DECLARED_SECTIONS = [
     id: "locations",
     label: "Locations",
     select: (p) => p.emptyLocations,
+    totalKey: "emptyLocations",
     coverage: {
       keys: ["emptyLocations"],
       meter: { total: (t) => t.emptyLocations, doneLabel: "itemized" },
     },
-    render: (items, coverage) => (
-      <EmptyLocationsList locations={items} coverage={coverage} />
+    render: (items, coverage, count) => (
+      <EmptyLocationsList locations={items} coverage={coverage} count={count} />
     ),
   }),
   section({

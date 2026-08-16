@@ -59,6 +59,14 @@ export const locationFilterFields = {
    * the backlog that can actually be worked: describing a location with no
    * photo to look at isn't possible.
    */
+  /**
+   * Direct children only — `"none"` is the leaf-location worklist. Paired with
+   * `inventoryPresenceFilter: "none"` it selects an empty leaf: a bin holding
+   * nothing that also isn't a shelf for other bins.
+   */
+  childPresenceFilter: presenceFilter.describe(
+    "Filter to locations that do / don't have at least one live child location.",
+  ),
   aiDescriptionPresenceFilter: presenceFilter.describe(
     "Filter to locations that do / don't have an AI-generated description.",
   ),

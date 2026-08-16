@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { SortParams } from "@cubby/schemas/pagination";
 import type {
+  EmptyLocation,
   LocationWithoutAiDescription,
   NeverVerifiedInventory,
   ProblemsViewsOut,
@@ -127,6 +128,26 @@ const toLocationWithoutAiDescription = (
   };
 };
 
+const toEmptyLocation = (row: ListRow): EmptyLocation => {
+  const r = row as unknown as EmptyLocation & {
+    images: { id: string; url: string }[];
+  };
+  // The detector built these two with a pair of correlated subqueries ordered
+  // by LocationImage.createdAt; the list's `images` relation is already
+  // cover-first, so the first element is the same photo.
+  const cover = r.images[0];
+  return {
+    id: r.id,
+    name: r.name,
+    type: r.type,
+    createdAt: r.createdAt,
+    lastBulkInventory: r.lastBulkInventory,
+    aiDescription: r.aiDescription,
+    firstImageUrl: cover?.url ?? null,
+    firstImageId: cover?.id ?? null,
+  };
+};
+
 export const findViewProblems = async (
   db: Database,
 ): Promise<ProblemsViewsOut> => {
@@ -187,6 +208,7 @@ export const findViewProblems = async (
     locationsWithoutAiDescription: (
       results.locationsWithoutAiDescription?.data ?? []
     ).map(toLocationWithoutAiDescription),
+    emptyLocations: (results.emptyLocations?.data ?? []).map(toEmptyLocation),
     sectionTotals,
   };
 };

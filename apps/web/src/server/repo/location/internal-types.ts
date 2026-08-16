@@ -65,6 +65,9 @@ export interface LocationFilters {
   // Paired with `imagePresenceFilter: "has"` it's the describable backlog —
   // there's nothing to describe about a location with no photo.
   aiDescriptionPresenceFilter?: "has" | "none";
+  // Direct children only, matching what the Parent column shows. "none" is the
+  // leaf-location worklist.
+  childPresenceFilter?: "has" | "none";
   directItemCountMin?: number;
   directItemCountMax?: number;
   valuationMin?: number;

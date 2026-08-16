@@ -1,13 +1,19 @@
 /**
  * Location-centric Problems detectors.
- * Empty leaf locations (no inventory, no children), image-bearing locations
- * that still lack an AI description, and stocked locations overdue for a
- * recount.
+ *
+ * Only recount staleness lives here now. Empty leaves and the missing-AI-
+ * description backlog became saved views (`location/empty-leaves`,
+ * `location/undescribed`) — both were plain column predicates the location list
+ * could already express, and routing them through it also dropped a pair of
+ * hand-written correlated image subqueries.
+ *
+ * This one stays because its cutoff is relative to now, which a static view
+ * declaration can't carry.
  */
 
 import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
 import type { EmptyLocation, StaleLocation } from "@cubby/schemas/problems";
-import { and, eq, isNull, lt, notExists, or, sql } from "drizzle-orm";
+import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { inventoryEntry, location } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -16,78 +22,6 @@ import { stockOnly } from "~/server/repo/inventory/placement";
 // EmptyLocation is re-exported from the package barrel for the Problems-page
 // components that import it from there.
 export type { EmptyLocation };
-
-export const findEmptyLocations = async (
-  db: Database,
-): Promise<EmptyLocation[]> => {
-  const dbClient = getDb(db);
-
-  const childLocation = dbClient
-    .$with("child_location")
-    .as(
-      dbClient
-        .select({ parentId: location.parentId })
-        .from(location)
-        .where(notDeleted(location)),
-    );
-
-  const emptyLocations = await dbClient
-    .with(childLocation)
-    .select({
-      id: location.id,
-      shortcode: location.shortcode,
-      name: location.name,
-      type: location.type,
-      createdAt: location.createdAt,
-      lastBulkInventory: location.lastBulkInventory,
-      aiDescription: location.aiDescription,
-      firstImageUrl: sql<string | null>`(
-        SELECT "Image"."url" FROM "LocationImage"
-        JOIN "Image" ON "Image"."id" = "LocationImage"."imageId"
-        WHERE "LocationImage"."locationId" = "Location"."id"
-        ORDER BY "LocationImage"."createdAt" ASC
-        LIMIT 1
-      )`,
-      firstImageId: sql<string | null>`(
-        SELECT "Image"."id" FROM "LocationImage"
-        JOIN "Image" ON "Image"."id" = "LocationImage"."imageId"
-        WHERE "LocationImage"."locationId" = "Location"."id"
-        ORDER BY "LocationImage"."createdAt" ASC
-        LIMIT 1
-      )`,
-    })
-    .from(location)
-    .where(
-      and(
-        notDeleted(location),
-        // A location holding only installed fixtures reads as empty here —
-        // there's no browsable stock, only a wired-in dimmer or faucet.
-        notExists(
-          dbClient
-            .select({ id: sql`1` })
-            .from(inventoryEntry)
-            .where(
-              and(
-                eq(inventoryEntry.locationId, location.id),
-                notDeleted(inventoryEntry),
-                stockOnly(),
-              ),
-            ),
-        ),
-        notExists(
-          dbClient
-            .select({ id: sql`1` })
-            .from(childLocation)
-            .where(eq(childLocation.parentId, location.id)),
-        ),
-      ),
-    );
-
-  return emptyLocations.map((row) => ({
-    ...row,
-    id: unsafeLocationShortcode(row.shortcode),
-  }));
-};
 
 /**
  * How long a stocked bin may go without a deliberate recount before its counts

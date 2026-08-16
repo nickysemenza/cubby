@@ -77,7 +77,6 @@ import {
   findDuplicateSpendCandidates,
   findDuplicateVendors,
   findEmptyCookedMeals,
-  findEmptyLocations,
   findEntitiesMissingEmbeddings,
   findFinancialTransactionAllocationDefects,
   findIncompleteStatementImports,
@@ -528,7 +527,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       toolsUsedOutsideOwnership: () => findToolsUsedOutsideOwnership(scoped),
       productsWithoutMappings: () => findProductsWithoutMappings(scoped),
       ingredientsWithoutProduct: () => findIngredientsWithoutProduct(scoped),
-      emptyLocations: () => findEmptyLocations(scoped),
       productsWithNoImages: () =>
         findProductsWithNoImages(scoped, { excludeIngredients: true }),
       orphanedEntityEmbeddings: () => findOrphanedEntityEmbeddings(scoped),
@@ -589,7 +587,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     toolsUsedOutsideOwnership: r.toolsUsedOutsideOwnership,
     productsWithoutMappings: r.productsWithoutMappings,
     ingredientsWithoutProduct: r.ingredientsWithoutProduct,
-    emptyLocations: r.emptyLocations,
     productsWithNoImages: r.productsWithNoImages.map((p) => ({
       ...p,
       id: unsafeProductShortcode(p.shortcode),
