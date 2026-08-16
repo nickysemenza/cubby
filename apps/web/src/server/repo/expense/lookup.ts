@@ -136,14 +136,23 @@ const orderIdPresence = (
 
 /**
  * Translate `ExpenseFilters` into the exact Drizzle WHERE clause used to
- * scope expense rows. Shared by `expenseList` (the ledger) and
- * `expenseAnalytics` (repo/expense/analytics.ts) so the two can never
- * drift under the same filter set — the plan's hard invariant is "ledger
- * totals and analytics totals always agree".
+ * scope expense rows. Shared by `expenseList` (the ledger), `expenseAnalytics`
+ * (repo/expense/analytics.ts), and `projectPortfolioAnalytics`
+ * (repo/project/portfolio-analytics.ts) so all three can never drift under the
+ * same filter set — the plan's hard invariant is "ledger totals and analytics
+ * totals always agree".
+ *
+ * `extraConditions` is an escape hatch for a caller that already has a
+ * predicate the `ExpenseFilters` vocabulary can't express — e.g.
+ * `projectPortfolioAnalytics` already holds resolved project **uuids** (not
+ * the shortcodes `filters.projectId` expects), so it ANDs an `inArray`
+ * straight onto the result instead of round-tripping uuids back to
+ * shortcodes just to satisfy `toUuids`.
  */
 export const buildExpenseWhereClause = async (
   db: Database,
   filters: ExpenseFilters,
+  options?: { extraConditions?: Array<SQL | undefined> },
 ): Promise<SQL | undefined> => {
   // When scoped to a project subtree, resolve each selected project + every
   // live descendant and match on the whole set; otherwise a plain match on the
@@ -235,6 +244,7 @@ export const buildExpenseWhereClause = async (
     [
       ...auditDateWhereConditions(expense, filters),
       ...relatedWhereConditions("expense", filters, expense.id),
+      ...(options?.extraConditions ?? []),
       nameSearch,
       eqAny(expense.lineKind, filters.lineKind),
       // A plain column, deliberately: `lineBasis` lives on Expense rather than

@@ -2033,6 +2033,25 @@ export const projectDashboardSummaryOut = z.object({
     openTaskCount: z.number().int(),
     actualSpend: z.number(),
     committedSpend: z.number(),
+    /**
+     * Sum of each scoped project's own SUBTREE `costEstimate` (portfolio
+     * equivalent of `BudgetStrip`'s "Estimate" figure) — a project with no
+     * estimate contributes 0, not null, so an all-unestimated portfolio reads
+     * as $0 rather than needing a separate "no data" state.
+     */
+    estimateTotal: z.number(),
+    /**
+     * Forward-looking committed (future, unpaid) spend, cumulative by day
+     * window — `in90Days` includes everything `in30Days` does. Each window
+     * counts spend due *by* that many days out, including anything already
+     * overdue-but-unspent (see `past_due_planned_expense` in attention.ts for
+     * that same population surfaced per-row).
+     */
+    forwardCommittedSpend: z.object({
+      in30Days: z.number(),
+      in60Days: z.number(),
+      in90Days: z.number(),
+    }),
   }),
   projects: z.array(projectOut),
   taskStatusByProject: z.array(projectTaskStatusBreakdown),

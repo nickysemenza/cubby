@@ -14,6 +14,7 @@ import { Section, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
+import { TasksAgenda } from "./TasksAgenda";
 
 /** Stable empty default — never a fresh `[]` per render (would churn memos). */
 const NO_TASKS: TaskOut[] = [];
@@ -179,7 +180,16 @@ export function TasksTimelineView({ filters }: { filters: TaskFilters }) {
         title="Timeline"
         description="Ranges (dueDate → dueEndDate) as bars; single due dates as milestones."
       >
-        <TasksGanttTimeline tasks={datedTasks} />
+        {/* Both trees render; the BREAKPOINT decides, not JS — same pattern
+            as `unified-calendar.tsx`'s agenda fallback and the task board's
+            `BoardAgenda`: a horizontal Gantt has no usable form at phone
+            width, so mobile gets chronological rows instead. */}
+        <div className="md:hidden">
+          <TasksAgenda tasks={datedTasks} />
+        </div>
+        <div className="hidden md:block">
+          <TasksGanttTimeline tasks={datedTasks} />
+        </div>
       </Section>
     </Stack>
   );

@@ -22,6 +22,7 @@ import {
   and,
   asc,
   eq,
+  gt,
   inArray,
   isNotNull,
   isNull,
@@ -30,7 +31,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { sumBy, uniq } from "es-toolkit";
-import { householdLocalDate } from "~/lib/household-date";
+import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { expense, project, task } from "~/server/db/schema";
 import {
@@ -52,7 +53,19 @@ import {
   dashboardKindLocationConditions,
 } from "./dashboard-shared";
 import { EMPTY_PROJECT_SUBTREE_ROLLUP, hydrateProjectRow } from "./helpers";
-import { loadProjectSubtreeRollups, projectCompletionYear } from "./subtree";
+import {
+  collectDescendantIds,
+  loadProjectSubtreeRollups,
+  projectCompletionYear,
+} from "./subtree";
+
+/**
+ * Forward-looking committed-spend windows, in days from today. Mirrors the
+ * "30/60/90-day AP aging" convention: each window is cumulative (spend due
+ * *by* that many days out, including anything already overdue-but-unspent),
+ * not a disjoint bucket — so `in90Days` is always >= `in60Days` >= `in30Days`.
+ */
+const FORWARD_COMMITTED_WINDOWS_DAYS = [30, 60, 90] as const;
 
 /** Cap on `nextTasks` — a preview strip, not a full list (see `task.board`/`task.listActionable` for those). */
 const NEXT_TASKS_CAP = 10;
@@ -200,6 +213,18 @@ export async function projectDashboardSummary(
   const scopedOrInbox = (column: AnyColumn) =>
     ids.length > 0 ? or(inArray(column, ids), isNull(column)) : isNull(column);
 
+  // Same population `committedSpend` reads (each scoped project's own subtree),
+  // flattened to a deduped id set so ONE grouped query can add the date filter
+  // `subtreeRollups` doesn't carry. Unlike `actualSpend`/`committedSpend`'s
+  // per-top-level-id sum, this can't double-count a matched parent+child pair —
+  // the id set is deduped before the query runs.
+  const expandedProjectIds = uniq([
+    ...ids,
+    ...ids.flatMap((id) =>
+      collectDescendantIds(subtreeLoad.childrenByParent, id),
+    ),
+  ]);
+
   const [
     deps,
     taskStatusRows,
@@ -207,6 +232,7 @@ export async function projectDashboardSummary(
     undatedTaskCount,
     undatedExpenseCount,
     attention,
+    forwardCommittedRows,
   ] = await Promise.all([
     projectDependencyIds(db, ids),
     ids.length > 0
@@ -268,6 +294,23 @@ export async function projectDashboardSummary(
     // because their date is missing.
     Promise.resolve(0),
     computeAttentionItems(db, { preloaded: subtreeLoad, projectIds: ids }),
+    expandedProjectIds.length > 0
+      ? getDb(db)
+          .select({
+            in30Days: sql<number>`coalesce(sum(${expense.cost}) filter (where ${expense.date} <= ${householdDaysFromNow(FORWARD_COMMITTED_WINDOWS_DAYS[0])}), 0)::float`,
+            in60Days: sql<number>`coalesce(sum(${expense.cost}) filter (where ${expense.date} <= ${householdDaysFromNow(FORWARD_COMMITTED_WINDOWS_DAYS[1])}), 0)::float`,
+            in90Days: sql<number>`coalesce(sum(${expense.cost}) filter (where ${expense.date} <= ${householdDaysFromNow(FORWARD_COMMITTED_WINDOWS_DAYS[2])}), 0)::float`,
+          })
+          .from(expense)
+          .where(
+            and(
+              inArray(expense.projectId, expandedProjectIds),
+              notDeleted(expense),
+              eq(expense.future, true),
+              gt(expense.cost, 0),
+            ),
+          )
+      : Promise.resolve([{ in30Days: 0, in60Days: 0, in90Days: 0 }]),
   ]);
 
   const projects = projectRows.map((row) =>
@@ -291,6 +334,15 @@ export async function projectDashboardSummary(
     subtreeRollups.get(id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP;
   const actualSpend = sumBy(ids, (id) => subtreeOf(id).actualSpent);
   const committedSpend = sumBy(ids, (id) => subtreeOf(id).committedSpent);
+  // Missing per-project estimates contribute 0, same as the zero rollup does
+  // for actual/committedSpend — an unestimated project doesn't widen the
+  // portfolio total, it just adds nothing to it.
+  const estimateTotal = sumBy(ids, (id) => subtreeOf(id).costEstimate ?? 0);
+  const forwardCommittedSpend = forwardCommittedRows[0] ?? {
+    in30Days: 0,
+    in60Days: 0,
+    in90Days: 0,
+  };
 
   const statusByProject = new Map<ProjectId, ProjectTaskStatusBreakdown>();
   for (const id of ids) {
@@ -352,7 +404,14 @@ export async function projectDashboardSummary(
     .reverse();
 
   return {
-    summary: { activeProjectCount, openTaskCount, actualSpend, committedSpend },
+    summary: {
+      activeProjectCount,
+      openTaskCount,
+      actualSpend,
+      committedSpend,
+      estimateTotal,
+      forwardCommittedSpend,
+    },
     projects,
     taskStatusByProject: [...statusByProject.values()],
     nextTasks,

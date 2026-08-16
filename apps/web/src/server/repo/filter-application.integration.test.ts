@@ -457,6 +457,15 @@ const listFor =
   };
 
 const GUARDS = {
+  // `buildExpenseWhereClause` (the where-builder this guards, transitively)
+  // now also backs `projectPortfolioAnalytics`'s expense-grouped chart
+  // aggregates (repo/project/portfolio-analytics.ts). That endpoint takes a
+  // different, project-shaped filter vocabulary with no `{id, count}`-shaped
+  // list to plug into `listFor` here, so it can't join this per-field probe
+  // loop directly — its own regression coverage (date bounds still applying,
+  // and its `search` — PROJECT name — never leaking into this builder's
+  // expense-NAME `search`) lives in `project.integration.test.ts`'s "project
+  // dashboard — portfolio analytics" describe block instead.
   expense: { fields: expenseFilterFields, list: listFor(expenseList) },
   financialAccount: {
     fields: financialAccountFilterFields,

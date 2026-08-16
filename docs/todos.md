@@ -375,22 +375,27 @@ The triage board, not this catalog order, sets priority.
   `locationList`'s where-build async, then add `includeSubLocations` to location
   and inventory filters. Do not reuse `repo/location/tree.ts`'s whole-tree,
   relation-heavy CTE. Deferred because its cost exceeded its observed use.
-- [ ] **Make project portfolio expense charts honor ledger filters.**
-  `repo/project/portfolio-analytics.ts` hand-rolls date bounds from a different
-  input schema, so `costMin`/`costMax`/`notesSearch`/`urlSearch` and OR-search do
-  not reach it. Route the expense-grouped aggregates through the shared expense
-  filter builder without changing the separate project-set filters.
-- [ ] **Tracker data gaps** (2026-07 audit): `task.completedAt` (velocity /
-  "year in the house" + de-noises the stalled-project detector — `updatedAt`
-  resets on any edit); portfolio-level estimate total + a forward
-  committed-spend (next 30/60/90d) figure (per-project `BudgetStrip` exists,
-  the portfolio equivalent doesn't); mobile fallback for TaskBoard/Gantt
-  (desktop column tracks render on phones today).
 - [ ] **`projectMaterial` BOM**: on top of the bridge — quantity + free-text unit,
   optional product resolution, durable-vs-consumable flag → **have / need / buy**
   per project via the availability engine, shopping list from shortfalls. No
   reservations, no auto-decrement — audits are the backstop, "mark consumed" is an
   optional explicit action.
+
+### Rejected
+
+- **`task.completedAt` column** (2026-07 audit item, tracker data gaps). Proposed
+  for velocity / "year in the house" reporting and to de-noise the
+  stalled-project detector, whose `max(task.updatedAt)` dates every project to
+  whenever it was last imported rather than when the work happened. Measured on
+  production: 1,111 of 1,116 done tasks were Notion-imported in one window, so
+  `updatedAt` spans only 2 distinct months (2026-07-18 → 2026-08-12) while
+  `dueDate` spans 32 months (2023-10 → 2026-08) — zero rows have `dueDate` equal
+  to `updatedAt`'s day, and 1,110 are off by 30+ days. A `completedAt` column
+  would duplicate what `dueDate` already records, and backfilling it from
+  `updatedAt` (the only data available) would collapse that 3-year history into
+  the 3-week import window — worse than not having the column. The
+  stalled-project detector now derives activity from `dueDate`/`expense.date`
+  directly (`repo/project/attention.ts`) instead.
 
 ### Expenses ↔ inventory bridge (staged; v1 SHIPPED 2026-07)
 

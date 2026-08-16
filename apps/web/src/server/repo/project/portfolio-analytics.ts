@@ -27,21 +27,11 @@ import type {
   ProjectPortfolioAnalyticsInput,
   ProjectPortfolioAnalyticsOut,
 } from "@cubby/schemas/project";
-import {
-  and,
-  asc,
-  eq,
-  gte,
-  inArray,
-  isNotNull,
-  isNull,
-  lte,
-  ne,
-  sql,
-} from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { expense, project, task } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { buildExpenseWhereClause } from "~/server/repo/expense";
 import {
   EXPENSE_MONTH_BUCKET,
   expenseAggregateFields,
@@ -118,11 +108,24 @@ export async function projectPortfolioAnalytics(
   // costVsEstimate/spendingByProject, which intentionally show subtree
   // totals). Inbox expenses (no project) are excluded — judgment call, see
   // the task report.
-  const expenseScope = and(
-    inArray(expense.projectId, ids),
-    notDeleted(expense),
-    filters.dateFrom ? gte(expense.date, filters.dateFrom) : undefined,
-    filters.dateTo ? lte(expense.date, filters.dateTo) : undefined,
+  //
+  // Routed through the SAME `buildExpenseWhereClause` the ledger and
+  // `expenseAnalytics` use, so `costMin`/`costMax`/`notesSearch`/`urlSearch`
+  // and OR-search reach these charts too (they didn't before — a hand-rolled
+  // date-only clause lived here). `ProjectPortfolioAnalyticsInput` is
+  // project-shaped (`ProjectDashboardFilters`): only `dateFrom`/`dateTo` share
+  // both a name and a meaning with `ExpenseFilters` — `filters.search` means
+  // PROJECT name here and must never be forwarded as `ExpenseFilters.search`
+  // (expense name). `statusScope`/`kinds`/`locations`/`completionYear`
+  // already narrowed `ids` via `buildDashboardProjectWhere` above, so they
+  // need no expense-side translation. The project-id scoping itself is the
+  // `extraConditions` escape hatch: `ids` are already-resolved uuids, and
+  // `buildExpenseWhereClause`'s own `projectId` filter expects shortcodes it
+  // would have to resolve right back — round-tripping we'd rather skip.
+  const expenseScope = await buildExpenseWhereClause(
+    db,
+    { dateFrom: filters.dateFrom, dateTo: filters.dateTo },
+    { extraConditions: [inArray(expense.projectId, ids)] },
   );
   const expenseScopeWithDate = and(expenseScope, isNotNull(expense.date));
 

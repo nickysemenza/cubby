@@ -431,6 +431,23 @@ function OverviewView({
             ? `+${formatCurrency(data.summary.committedSpend, 0)} committed`
             : undefined,
       },
+      {
+        label: "Estimate",
+        value: data.summary.estimateTotal,
+        formatter: (v) => formatCurrency(Number(v), 0),
+      },
+      {
+        // Portfolio equivalent of the per-project BudgetStrip's "Committed"
+        // figure, split forward by day window (90d is the headline since it's
+        // the widest — the sub-line breaks out how much of it lands sooner).
+        label: "Committed (90d)",
+        value: data.summary.forwardCommittedSpend.in90Days,
+        formatter: (v) => formatCurrency(Number(v), 0),
+        subValue:
+          data.summary.forwardCommittedSpend.in90Days > 0
+            ? `${formatCurrency(data.summary.forwardCommittedSpend.in30Days, 0)} in 30d · ${formatCurrency(data.summary.forwardCommittedSpend.in60Days, 0)} in 60d`
+            : undefined,
+      },
     ],
     [data.summary],
   );
