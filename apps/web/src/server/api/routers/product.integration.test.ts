@@ -6,6 +6,7 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { createExpense } from "~/server/repo/expense";
+import { deleteInventoryEntries } from "~/server/repo/inventory";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -44,7 +45,7 @@ describe("product.tagSiblings", () => {
     const caller = createTestCaller(productRouter, ctx.db);
     const result = await caller.tagSiblings(source.id);
 
-    expect(result).toEqual([
+    expect(result.siblings).toEqual([
       {
         id: sibling.id,
         name: "Sibling",
@@ -53,7 +54,198 @@ describe("product.tagSiblings", () => {
         tags: ["shared", "sibling-only"],
       },
     ]);
-    expect(result[0]?.id).not.toBe(sibling.entityId);
+    expect(result.siblings[0]?.id).not.toBe(sibling.entityId);
+    // Nothing is stocked, so the storage half has nothing to say.
+    expect(result.tagStorage).toEqual([]);
+  });
+});
+
+describe("product.tagSiblings storage rollup", () => {
+  const ctx = withTestDb();
+
+  const stock = (
+    productId: string,
+    locationId: string,
+    placement?: "installed",
+  ) =>
+    createInventoryFixture(
+      ctx.db,
+      {
+        productId,
+        locationId,
+        amount: { value: 1, unit: "count" },
+        ...(placement ? { placement } : {}),
+      },
+      ctx.actor,
+    );
+
+  it("counts distinct siblings per location, excluding the viewed product", async () => {
+    const room = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Garage", type: "room" }),
+      ctx.actor,
+    );
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Shelf A", type: "shelf", parentId: room.id }),
+      ctx.actor,
+    );
+    const bin = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Bin 3", type: "box" }),
+      ctx.actor,
+    );
+
+    const source = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Source", tags: ["m18"] }),
+      ctx.actor,
+    );
+    const [a, b, c] = await Promise.all([
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "A", tags: ["m18"] }),
+        ctx.actor,
+      ),
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "B", tags: ["m18"] }),
+        ctx.actor,
+      ),
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "C", tags: ["m18"] }),
+        ctx.actor,
+      ),
+    ]);
+
+    await stock(a.id, shelf.id);
+    await stock(b.id, shelf.id);
+    await stock(c.id, bin.id);
+    // The viewed product is on the shelf too: it marks, it does not count.
+    await stock(source.id, shelf.id);
+
+    const caller = createTestCaller(productRouter, ctx.db);
+    const { tagStorage } = await caller.tagSiblings(source.id);
+
+    expect(tagStorage).toEqual([
+      {
+        tag: "m18",
+        omittedLocationCount: 0,
+        locations: [
+          {
+            id: shelf.id,
+            name: "Shelf A",
+            ancestors: [{ id: room.id, name: "Garage", type: "room" }],
+            productCount: 2,
+            holdsSource: true,
+          },
+          {
+            id: bin.id,
+            name: "Bin 3",
+            ancestors: [],
+            productCount: 1,
+            holdsSource: false,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("omits installed fixtures and soft-deleted entries", async () => {
+    const wall = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Wall", type: "room" }),
+      ctx.actor,
+    );
+    const source = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Source", tags: ["dimmer"] }),
+      ctx.actor,
+    );
+    const fixture = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Wired In", tags: ["dimmer"] }),
+      ctx.actor,
+    );
+    const removed = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Removed", tags: ["dimmer"] }),
+      ctx.actor,
+    );
+
+    await stock(fixture.id, wall.id, "installed");
+    const goneEntry = await stock(removed.id, wall.id);
+    await deleteInventoryEntries(ctx.db, [goneEntry.entityId], ctx.actor);
+
+    const caller = createTestCaller(productRouter, ctx.db);
+    const { siblings, tagStorage } = await caller.tagSiblings(source.id);
+
+    // Both are still siblings — only their storage is out of scope.
+    expect(siblings.map((s) => s.name).sort()).toEqual(["Removed", "Wired In"]);
+    expect(tagStorage).toEqual([]);
+  });
+
+  it("caps the list and discloses the remainder", async () => {
+    const source = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Source", tags: ["festool"] }),
+      ctx.actor,
+    );
+
+    // Six locations, each holding one sibling, so ranking is by name.
+    for (const n of [1, 2, 3, 4, 5, 6]) {
+      const loc = await createLocationFixture(
+        ctx.db,
+        makeLocationInput({ name: `Spot ${n}`, type: "shelf" }),
+        ctx.actor,
+      );
+      const sibling = await createProductFixture(
+        ctx.db,
+        makeProductInput({ name: `Sibling ${n}`, tags: ["festool"] }),
+        ctx.actor,
+      );
+      await stock(sibling.id, loc.id);
+    }
+
+    const caller = createTestCaller(productRouter, ctx.db);
+    const { tagStorage } = await caller.tagSiblings(source.id);
+
+    expect(tagStorage).toHaveLength(1);
+    expect(tagStorage[0]?.locations.map((l) => l.name)).toEqual([
+      "Spot 1",
+      "Spot 2",
+      "Spot 3",
+      "Spot 4",
+    ]);
+    expect(tagStorage[0]?.omittedLocationCount).toBe(2);
+  });
+
+  it("drops a tag whose only stocked product is the viewed one", async () => {
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Lone Shelf", type: "shelf" }),
+      ctx.actor,
+    );
+    const source = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Source", tags: ["lonely"] }),
+      ctx.actor,
+    );
+    await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Unstocked Sibling", tags: ["lonely"] }),
+      ctx.actor,
+    );
+    await stock(source.id, shelf.id);
+
+    const caller = createTestCaller(productRouter, ctx.db);
+    const { siblings, tagStorage } = await caller.tagSiblings(source.id);
+
+    expect(siblings).toHaveLength(1);
+    // `holdsSource` alone is not a reason to show a row — that is just this
+    // product's own Stocked At table, restated.
+    expect(tagStorage).toEqual([]);
   });
 });
 

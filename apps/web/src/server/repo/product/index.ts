@@ -27,6 +27,7 @@ export {
   getProductSummaryForAudit,
   getProductsSharingTags,
   getProductTagOptions,
+  getTagSiblingStorage,
 } from "./analytics";
 export {
   createProduct,

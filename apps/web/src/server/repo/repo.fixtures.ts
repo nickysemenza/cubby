@@ -11,6 +11,7 @@ import {
   unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
+import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import {
   type LocationCreateInput,
   locationCreateInput,
@@ -160,6 +161,8 @@ export const createInventoryFixture = async (
     locationId: string;
     amount: Amount;
     verifiedAt?: Date | null;
+    /** Defaults to `stock`; pass `installed` to exercise a fixture row. */
+    placement?: InventoryPlacement;
   },
   actor: ActorContext,
 ) => {
