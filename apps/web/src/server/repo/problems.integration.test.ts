@@ -779,6 +779,18 @@ describe("problems repo", () => {
         orderId: null,
         productId: null,
       });
+      // Planned, not banked. This one matters on live data: the largest
+      // purchase-less credits in the ledger are future-dated, so without the
+      // `future = false` filter they would dominate the list with money that
+      // has not moved.
+      await seedLine({
+        name: "expected contribution",
+        cost: -5000,
+        future: true,
+        vendor: null,
+        orderId: null,
+        productId: null,
+      });
 
       const found = await findFastProblems(ctx.db);
       const ids = found.purchaselessExitExpenses.map((row) => row.id);
@@ -802,6 +814,11 @@ describe("problems repo", () => {
       expect(
         found.purchaselessExitExpenses.some(
           (row) => row.name === "cash for gravel",
+        ),
+      ).toBe(false);
+      expect(
+        found.purchaselessExitExpenses.some(
+          (row) => row.name === "expected contribution",
         ),
       ).toBe(false);
     });
