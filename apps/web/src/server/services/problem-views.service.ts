@@ -4,6 +4,7 @@ import type {
   NeverVerifiedInventory,
   ProblemsViewsOut,
   SectionTotals,
+  UnusedIngredient,
 } from "@cubby/schemas/problems";
 import {
   type ViewProblemDeclaration,
@@ -96,6 +97,19 @@ const toNeverVerified = (row: ListRow): NeverVerifiedInventory => {
   };
 };
 
+const toUnusedIngredient = (row: ListRow): UnusedIngredient => {
+  const r = row as unknown as UnusedIngredient & {
+    product: { id: UnusedIngredient["products"][number]["id"]; name: string }[];
+  };
+  return {
+    id: r.id,
+    name: r.name,
+    createdAt: r.createdAt,
+    // The list embeds the full product rows; the card only names them.
+    products: r.product.map((p) => ({ id: p.id, name: p.name })),
+  };
+};
+
 export const findViewProblems = async (
   db: Database,
 ): Promise<ProblemsViewsOut> => {
@@ -147,6 +161,53 @@ export const findViewProblems = async (
     neverVerifiedInventory: (results.neverVerifiedInventory?.data ?? []).map(
       toNeverVerified,
     ),
+    unusedIngredientsWithProduct: (
+      results.unusedIngredientsWithProduct?.data ?? []
+    ).map(toUnusedIngredient),
+    unusedIngredientsWithoutProduct: (
+      results.unusedIngredientsWithoutProduct?.data ?? []
+    ).map(toUnusedIngredient),
     sectionTotals,
   };
+};
+
+/**
+ * Every shortcode a view-backed section selects — the whole set, not the page
+ * its card renders.
+ *
+ * Exists so a bulk action ("Delete all") can mean all. The card is handed
+ * SAMPLE_SIZE rows, so wiring a bulk mutation to what it rendered would act on
+ * twelve and say all; re-running the view's own filters here keeps membership
+ * on the server, where it belongs.
+ */
+export const findAllViewProblemIds = async (
+  db: Database,
+  key: string,
+): Promise<string[]> => {
+  const declaration = viewProblemDeclarations().find(
+    (candidate) => candidate.problem.key === key,
+  );
+  if (!declaration) throw new Error(`No view declares problem "${key}"`);
+  const list = LIST_FN[declaration.entity];
+  if (!list) {
+    throw new Error(
+      `No list function registered for entity "${declaration.entity}"`,
+    );
+  }
+
+  // Paged rather than one huge fetch: these sections converge to zero, so the
+  // loop almost always runs once, and it can't be defeated by a population that
+  // outgrows a hand-picked ceiling.
+  const PAGE = 500;
+  const ids: string[] = [];
+  for (let pageIndex = 0; ; pageIndex++) {
+    const { data, count } = await list(
+      db,
+      declaration.problem.serverFilters as never,
+      [],
+      { pageIndex, pageSize: PAGE },
+    );
+    ids.push(...data.map((row) => row.id));
+    if (data.length === 0 || ids.length >= count) return ids;
+  }
 };

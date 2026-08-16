@@ -7,14 +7,10 @@
  */
 
 import type { IngredientId } from "@cubby/schemas/identifiers";
-import {
-  unsafeIngredientShortcode,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
+import { unsafeIngredientShortcode } from "@cubby/schemas/identifiers";
 import type {
   IngredientWithoutProduct,
   IngredientWithUnusedAliases,
-  UnusedIngredient,
 } from "@cubby/schemas/problems";
 import { and, eq, isNotNull, isNull, notExists, sql } from "drizzle-orm";
 import { computeUnusedAliases } from "~/lib/unused-aliases";
@@ -229,90 +225,6 @@ export const findIngredientsWithUnusedAliases = async (
     }
   }
   return problems;
-};
-
-// Find ingredients used in NO live recipe and that aren't sub-recipe pointers —
-// pure cruft. Split by whether a non-deleted product links to them: the
-// "with product" set's delete must also remove those products. This is the
-// inverse of findIngredientsWithoutProduct (which keeps the in-recipe ones).
-export const findUnusedIngredients = async (
-  db: Database,
-): Promise<{
-  withProduct: UnusedIngredient[];
-  withoutProduct: UnusedIngredient[];
-}> => {
-  const dbClient = getDb(db);
-
-  const rows = await dbClient
-    .select({
-      id: ingredient.id,
-      shortcode: ingredient.shortcode,
-      name: ingredient.name,
-      createdAt: ingredient.createdAt,
-      products: sql<{ shortcode: string; name: string }[]>`
-        coalesce(
-          json_agg(json_build_object(
-            'shortcode', ${product.shortcode},
-            'name', ${product.name}
-          )) filter (where ${product.id} is not null),
-          '[]'
-        )`,
-    })
-    .from(ingredient)
-    .leftJoin(
-      product,
-      and(eq(product.ingredientId, ingredient.id), notDeleted(product)),
-    )
-    .where(
-      and(
-        notDeleted(ingredient),
-        isNull(ingredient.recipeId),
-        notExists(
-          dbClient
-            .select({ one: sql`1` })
-            .from(recipeSectionIngredient)
-            .innerJoin(
-              recipeSection,
-              and(
-                eq(recipeSection.id, recipeSectionIngredient.recipeSectionId),
-                notDeleted(recipeSection),
-              ),
-            )
-            .innerJoin(
-              recipe,
-              and(eq(recipe.id, recipeSection.recipeId), notDeleted(recipe)),
-            )
-            .where(
-              and(
-                eq(recipeSectionIngredient.ingredientId, ingredient.id),
-                notDeleted(recipeSectionIngredient),
-              ),
-            ),
-        ),
-      ),
-    )
-    .groupBy(
-      ingredient.id,
-      ingredient.shortcode,
-      ingredient.name,
-      ingredient.createdAt,
-    );
-
-  const withProduct: UnusedIngredient[] = [];
-  const withoutProduct: UnusedIngredient[] = [];
-  for (const row of rows) {
-    const item: UnusedIngredient = {
-      id: unsafeIngredientShortcode(row.shortcode),
-      name: row.name,
-      createdAt: row.createdAt,
-      products: row.products.map((p) => ({
-        id: unsafeProductShortcode(p.shortcode),
-        name: p.name,
-      })),
-    };
-    (item.products.length > 0 ? withProduct : withoutProduct).push(item);
-  }
-  return { withProduct, withoutProduct };
 };
 
 // Strip the given aliases (by value, case-insensitive) from each ingredient,

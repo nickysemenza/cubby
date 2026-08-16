@@ -1,3 +1,4 @@
+import type { IngredientShortcode } from "@cubby/schemas/identifiers";
 import {
   cleanupOrphanedEntityEmbeddingsInput,
   cleanupOrphanedEntityEmbeddingsOut,
@@ -18,7 +19,10 @@ import {
 import { streamProgress } from "~/lib/bulk-progress";
 import { recipeUsageCountsByProduct } from "~/server/repo/problems";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
-import { findViewProblems } from "~/server/services/problem-views.service";
+import {
+  findAllViewProblemIds,
+  findViewProblems,
+} from "~/server/services/problem-views.service";
 import {
   cleanupOrphanedEntityEmbeddings,
   deleteUnusedIngredients,
@@ -150,11 +154,14 @@ const deleteUnused = protectedProcedure
   .input(deleteUnusedIngredientsInput)
   .output(strictOutput(deleteUnusedIngredientsOut))
   .mutation(async ({ ctx, input }) => {
-    const entityIds = await resolveAllOrThrow(
-      ctx.db,
-      "ingredient",
-      input.ingredientIds,
-    );
+    // `allFromProblem` re-runs the section's own view filters here rather than
+    // trusting the rows the card rendered — see the input schema.
+    const shortcodes = (input.ingredientIds ??
+      (await findAllViewProblemIds(
+        ctx.db,
+        input.allFromProblem as string,
+      ))) as IngredientShortcode[];
+    const entityIds = await resolveAllOrThrow(ctx.db, "ingredient", shortcodes);
     const result = await deleteUnusedIngredients(
       ctx.db,
       entityIds,
@@ -162,10 +169,7 @@ const deleteUnused = protectedProcedure
       ctx.actorContext,
     );
     const shortcodeByEntityId = new Map(
-      input.ingredientIds.map((shortcode, index) => [
-        entityIds[index],
-        shortcode,
-      ]),
+      shortcodes.map((shortcode, index) => [entityIds[index], shortcode]),
     );
     return {
       deleted: result.deleted,

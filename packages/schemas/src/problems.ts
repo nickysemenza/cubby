@@ -802,8 +802,6 @@ const problemsFastShape = {
   toolsUsedOutsideOwnership: z.array(toolUsedOutsideOwnershipSchema),
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
   ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
-  unusedIngredientsWithProduct: z.array(unusedIngredientSchema),
-  unusedIngredientsWithoutProduct: z.array(unusedIngredientSchema),
   emptyLocations: z.array(emptyLocationSchema),
   productsWithNoImages: z.array(productWithNoImagesSchema),
   locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
@@ -906,6 +904,8 @@ export type SectionTotals = z.infer<typeof sectionTotalsSchema>;
  */
 const problemsViewsShape = {
   neverVerifiedInventory: z.array(neverVerifiedInventorySchema),
+  unusedIngredientsWithProduct: z.array(unusedIngredientSchema),
+  unusedIngredientsWithoutProduct: z.array(unusedIngredientSchema),
 };
 
 export const problemsViewsSchema = z.object({
@@ -970,10 +970,11 @@ export const EMPTY_SECTION_TOTALS: SectionTotals = Object.freeze({});
  * accidentally count a page.
  */
 export const sectionSize = (
-  key: string,
+  /** Absent for a section that returns its whole population. */
+  key: string | undefined,
   items: readonly unknown[],
   totals: SectionTotals | undefined,
-): number => totals?.[key] ?? items.length;
+): number => (key ? (totals?.[key] ?? items.length) : items.length);
 
 export type ProblemKey = keyof typeof allProblemArrayFields;
 
@@ -1434,10 +1435,31 @@ export const recipeUsageByProductInput = z.object({
  */
 export const recipeUsageByProductOut = z.record(z.string(), z.number());
 
-export const deleteUnusedIngredientsInput = z.object({
-  ingredientIds: z.array(ingredientShortcode),
-  alsoDeleteProducts: z.boolean(),
-});
+export const deleteUnusedIngredientsInput = z
+  .object({
+    /** Explicit rows — what a per-card "Delete" acts on. */
+    ingredientIds: z.array(ingredientShortcode).optional(),
+    /**
+     * Act on every row the named view-backed section selects, resolved
+     * SERVER-side.
+     *
+     * A view-backed card renders a page, so a "Delete all" wired to the rows it
+     * was handed would delete the page and call it all. Naming the section and
+     * letting the server re-run its filters is what keeps the label true —
+     * membership belongs on the server, not in the component that happened to
+     * render twelve of them.
+     */
+    allFromProblem: z
+      .enum(["unusedIngredientsWithProduct", "unusedIngredientsWithoutProduct"])
+      .optional(),
+    alsoDeleteProducts: z.boolean(),
+  })
+  .refine(
+    (input) =>
+      (input.ingredientIds === undefined) !==
+      (input.allFromProblem === undefined),
+    { message: "Provide exactly one of ingredientIds or allFromProblem" },
+  );
 
 export const deleteUnusedIngredientsOut = z.object({
   deleted: z.number(),

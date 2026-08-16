@@ -66,7 +66,6 @@ export {
 export {
   findIngredientsWithoutProduct,
   findIngredientsWithUnusedAliases,
-  findUnusedIngredients,
   pruneUnusedAliases,
 } from "./detectors-ingredient";
 // Schema-wide referential-liveness audit

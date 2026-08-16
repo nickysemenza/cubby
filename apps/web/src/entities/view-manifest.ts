@@ -398,16 +398,6 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       sort: [{ id: "postedDate", desc: true }],
     },
   ],
-  // Both ingredient views are deliberately NOT yet problem-backed. The
-  // predicate is an exact match for `findUnusedIngredients` (verified: the list
-  // applies `isNull(ingredient.recipeId)` unconditionally and resolves recipe
-  // usage through the same three-level soft-delete-guarded subquery), so
-  // converting them is cheap — but their Problems sections carry a
-  // "Delete all (N)" bulk button whose label and body are derived from the rows
-  // it was handed. Backed by a sampled section it would read "Delete all (12)"
-  // of a larger set: it deletes exactly the twelve it names, so nothing extra
-  // is destroyed, but calling twelve "all" is a lie the button shouldn't tell.
-  // Convert once it takes the filter rather than a row list.
   ingredient: [
     {
       id: "unused-with-product",
@@ -421,6 +411,17 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         { id: "appearsInRecipes", value: "none" },
         { id: "product", value: "has" },
       ],
+      problem: {
+        key: "unusedIngredientsWithProduct",
+        title: "Unused ingredients linked to a product",
+        description:
+          "Ingredients used in no recipe but still linked to a product. Deleting removes the ingredient and its product(s) — skipped if a product still has inventory.",
+        emptyMessage: "No unused product-linked ingredients.",
+        serverFilters: {
+          recipePresenceFilter: "none",
+          productPresenceFilter: "has",
+        },
+      },
     },
     {
       id: "unused-no-product",
@@ -430,6 +431,17 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         { id: "appearsInRecipes", value: "none" },
         { id: "product", value: "none" },
       ],
+      problem: {
+        key: "unusedIngredientsWithoutProduct",
+        title: "Unused ingredients",
+        description:
+          "Ingredients used in no recipe and linked to no product — safe to delete.",
+        emptyMessage: "No unused ingredients.",
+        serverFilters: {
+          recipePresenceFilter: "none",
+          productPresenceFilter: "none",
+        },
+      },
     },
   ],
   inventory: [
