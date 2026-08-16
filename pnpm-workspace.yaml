@@ -10,7 +10,7 @@ overrides:
   # The 2026-08-01 workerd pulled by newer Cloudflare tooling crashes under the
   # parallel Playwright CI load. Keep the last green toolchain until upstream
   # ships a stable runtime; the app and Worker builds remain independently tested.
-  "@cloudflare/vite-plugin": 1.52.1
+  "@cloudflare/vite-plugin": 1.51.1
   effect: ^3.20.0
   esbuild: ^0.28.1
   # GHSA-7p8r-x3mc-p8w7 / GHSA-v2hh-gcrm-f6hx (host confusion). Transitive via
@@ -34,7 +34,7 @@ overrides:
   undici@7.28.0: 7.29.0
   vite: ^8.0.0
   webpack: ^5.104.1
-  wrangler: 4.123.0
+  wrangler: 4.120.0
 
 packageExtensions:
   "@hookform/resolvers":

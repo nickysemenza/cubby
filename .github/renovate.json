@@ -4,6 +4,7 @@
   "schedule": ["every weekend"],
   "prHourlyLimit": 2,
   "prConcurrentLimit": 1,
+  "postUpdateOptions": ["pnpmDedupe"],
   "customManagers": [
     {
       "customType": "regex",
@@ -22,6 +23,11 @@
       "groupName": "all minor and pin updates",
       "automerge": true,
       "groupSlug": "all-deps"
+    },
+    {
+      "description": "The Cloudflare dev toolchain is last-green pinned and Wrangler carries an exact-version pnpm patch",
+      "matchPackageNames": ["@cloudflare/vite-plugin", "wrangler"],
+      "enabled": false
     },
     {
       "matchUpdateTypes": ["patch", "digest"],
