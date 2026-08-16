@@ -6,8 +6,8 @@ import { type SQL, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
 import {
-  getEmbeddingTextForEntity,
   getEmbeddingTextsForEntityTypes,
+  getEmbeddingTextsForRefs,
   type SearchableEntityText,
 } from "~/server/repo/entity-embedding";
 import type { SemanticEmbeddingConfig } from "~/server/semantic/config";
@@ -75,13 +75,22 @@ const textArray = (values: string[]): SQL =>
 async function getSearchDocumentSources(
   db: Database,
   entityTypes: SearchableEntity[],
-  entityId?: string,
+  entityIds?: readonly string[],
 ): Promise<SearchDocumentSource[]> {
   const types = sql.join(
     entityTypes.map((entityType) => sql`${entityType}`),
     sql`, `,
   );
-  const requestedId = entityId ?? null;
+  // ONE bind parameter for the whole id set, not one per id: a Postgres array
+  // literal bound as text and cast in SQL. It is deliberately NOT a JS array
+  // interpolated into `sql` — drizzle renders that as a row constructor, the
+  // trap `hand-rolled-any-array` guards. It is also not `eqAny`/`inArray`,
+  // which emit `IN ($1, …, $n)`: this query is raw SQL over fifteen aliased
+  // tables, and binding a parameter per id is the cost being removed. The
+  // matching `requested` CTE below unnests it once; a null set skips the gate
+  // entirely so the unfiltered backfill path is unchanged.
+  const requestedIds =
+    entityIds == null ? null : `{${[...new Set(entityIds)].join(",")}}`;
   const result = await getDb(db).execute<{
     entityType: SearchableEntity;
     entityId: string;
@@ -96,54 +105,56 @@ async function getSearchDocumentSources(
       SELECT l.id AS "rootId", l.id, l."parentId", l.name, 0 AS depth
       FROM "Location" l
       WHERE 'location' IN (${types})
-        AND (${requestedId}::uuid IS NULL OR l.id = ${requestedId}::uuid)
+        AND (${requestedIds}::text IS NULL OR l."id" IN (SELECT id FROM requested))
         AND l."deletedAt" IS NULL
       UNION ALL
       SELECT child."rootId", parent.id, parent."parentId", parent.name, child.depth + 1
       FROM "Location" parent
       JOIN location_path child ON child."parentId" = parent.id
       WHERE parent."deletedAt" IS NULL
+    ), requested AS (
+      SELECT unnest(${requestedIds}::uuid[]) AS id
     )
     SELECT * FROM (
       SELECT 'product'::text AS "entityType", p."id"::text AS "entityId", p."shortcode",
         p."name" AS title, p."manufacturer" AS subtitle, p."category" AS "typeHint",
         p."aliases" AS aliases, ARRAY[p."upc", p."model", p."manufacturer"]::text[] AS keywords
-      FROM "Product" p WHERE p."deletedAt" IS NULL AND 'product' IN (${types}) AND (${requestedId}::uuid IS NULL OR p."id" = ${requestedId}::uuid)
+      FROM "Product" p WHERE p."deletedAt" IS NULL AND 'product' IN (${types}) AND (${requestedIds}::text IS NULL OR p."id" IN (SELECT id FROM requested))
       UNION ALL
       SELECT 'recipe', r."id"::text, r."shortcode", r."name", NULL, NULL, ARRAY[]::text[], ARRAY[]::text[]
-      FROM "Recipe" r WHERE r."deletedAt" IS NULL AND 'recipe' IN (${types}) AND (${requestedId}::uuid IS NULL OR r."id" = ${requestedId}::uuid)
+      FROM "Recipe" r WHERE r."deletedAt" IS NULL AND 'recipe' IN (${types}) AND (${requestedIds}::text IS NULL OR r."id" IN (SELECT id FROM requested))
       UNION ALL
       SELECT 'ingredient', i."id"::text, i."shortcode", i."name", NULL, NULL, i."aliases", ARRAY[]::text[]
-      FROM "Ingredient" i WHERE i."deletedAt" IS NULL AND i."recipeId" IS NULL AND 'ingredient' IN (${types}) AND (${requestedId}::uuid IS NULL OR i."id" = ${requestedId}::uuid)
+      FROM "Ingredient" i WHERE i."deletedAt" IS NULL AND i."recipeId" IS NULL AND 'ingredient' IN (${types}) AND (${requestedIds}::text IS NULL OR i."id" IN (SELECT id FROM requested))
       UNION ALL
       SELECT 'cookbook', c."id"::text, c."shortcode", c."name", NULLIF(array_to_string(c."author", ', '), ''), NULL, ARRAY[]::text[], c."subjects"
-      FROM "Cookbook" c WHERE c."deletedAt" IS NULL AND 'cookbook' IN (${types}) AND (${requestedId}::uuid IS NULL OR c."id" = ${requestedId}::uuid)
+      FROM "Cookbook" c WHERE c."deletedAt" IS NULL AND 'cookbook' IN (${types}) AND (${requestedIds}::text IS NULL OR c."id" IN (SELECT id FROM requested))
       UNION ALL
       SELECT 'location', l."id"::text, l."shortcode", l."name",
         (SELECT string_agg(path.name, ' › ' ORDER BY path.depth DESC) FROM location_path path WHERE path."rootId" = l.id AND path.depth > 0),
         l."type", l."aliases", ARRAY[l."type"]::text[]
-      FROM "Location" l WHERE l."deletedAt" IS NULL AND 'location' IN (${types}) AND (${requestedId}::uuid IS NULL OR l."id" = ${requestedId}::uuid)
+      FROM "Location" l WHERE l."deletedAt" IS NULL AND 'location' IN (${types}) AND (${requestedIds}::text IS NULL OR l."id" IN (SELECT id FROM requested))
       UNION ALL
       SELECT 'inventory', ie."id"::text, ie."shortcode", p."name", l."name", p."category", p."aliases", ARRAY[l."name", l."type", p."manufacturer", p."upc"]::text[]
       FROM "InventoryEntry" ie JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL JOIN "Location" l ON l."id" = ie."locationId" AND l."deletedAt" IS NULL
-      WHERE ie."deletedAt" IS NULL AND 'inventory' IN (${types}) AND (${requestedId}::uuid IS NULL OR ie."id" = ${requestedId}::uuid)
+      WHERE ie."deletedAt" IS NULL AND 'inventory' IN (${types}) AND (${requestedIds}::text IS NULL OR ie."id" IN (SELECT id FROM requested))
       UNION ALL
       SELECT 'meal', m."id"::text, m."shortcode", COALESCE(NULLIF(m."name", ''), m."date"::text), m."date"::text, NULL, ARRAY[]::text[], ARRAY[m."date"::text]::text[]
-      FROM "Meal" m WHERE m."deletedAt" IS NULL AND 'meal' IN (${types}) AND (${requestedId}::uuid IS NULL OR m."id" = ${requestedId}::uuid)
+      FROM "Meal" m WHERE m."deletedAt" IS NULL AND 'meal' IN (${types}) AND (${requestedIds}::text IS NULL OR m."id" IN (SELECT id FROM requested))
       UNION ALL
       SELECT 'project', p."id"::text, p."shortcode", p."name", concat_ws(' · ', p."kind", p."status"), p."icon", ARRAY[]::text[], ARRAY[p."kind", p."status"]::text[]
-      FROM "Project" p WHERE p."deletedAt" IS NULL AND 'project' IN (${types}) AND (${requestedId}::uuid IS NULL OR p."id" = ${requestedId}::uuid)
+      FROM "Project" p WHERE p."deletedAt" IS NULL AND 'project' IN (${types}) AND (${requestedIds}::text IS NULL OR p."id" IN (SELECT id FROM requested))
       UNION ALL
       SELECT 'task', t."id"::text, t."shortcode", t."name", p."name", t."trade", ARRAY[]::text[], ARRAY[t."trade", sp."name"]::text[]
       FROM "Task" t LEFT JOIN "Project" p ON p."id" = t."projectId" AND p."deletedAt" IS NULL LEFT JOIN "Product" sp ON sp."id" = t."subjectProductId" AND sp."deletedAt" IS NULL
-      WHERE t."deletedAt" IS NULL AND 'task' IN (${types}) AND (${requestedId}::uuid IS NULL OR t."id" = ${requestedId}::uuid)
+      WHERE t."deletedAt" IS NULL AND 'task' IN (${types}) AND (${requestedIds}::text IS NULL OR t."id" IN (SELECT id FROM requested))
       UNION ALL
       SELECT 'vendor', v."id"::text, v."shortcode", v."name", v."website", NULL, ARRAY[]::text[], ARRAY[v."website"]::text[]
-      FROM "Vendor" v WHERE v."deletedAt" IS NULL AND 'vendor' IN (${types}) AND (${requestedId}::uuid IS NULL OR v."id" = ${requestedId}::uuid)
+      FROM "Vendor" v WHERE v."deletedAt" IS NULL AND 'vendor' IN (${types}) AND (${requestedIds}::text IS NULL OR v."id" IN (SELECT id FROM requested))
       UNION ALL
       SELECT 'purchase', pu."id"::text, pu."shortcode", COALESCE(NULLIF(pu."orderId", ''), v."name" || ' · ' || pu."date"::text), v."name", NULL, ARRAY[]::text[], ARRAY[pu."orderId", pu."displayLabel", v."name", v."website", pu."date"::text]::text[]
       FROM "Purchase" pu JOIN "Vendor" v ON v."id" = pu."vendorId" AND v."deletedAt" IS NULL
-      WHERE pu."deletedAt" IS NULL AND 'purchase' IN (${types}) AND (${requestedId}::uuid IS NULL OR pu."id" = ${requestedId}::uuid)
+      WHERE pu."deletedAt" IS NULL AND 'purchase' IN (${types}) AND (${requestedIds}::text IS NULL OR pu."id" IN (SELECT id FROM requested))
       UNION ALL
       SELECT 'financialAccount', fa."id"::text, fa."shortcode", fa."name", fa."identity"->>'kind', fa."identity"->>'kind', ARRAY[]::text[],
         ARRAY(
@@ -152,18 +163,18 @@ async function getSearchDocumentSources(
             LATERAL unnest(ARRAY[alias->>'source', alias->>'alias', alias->>'externalAccountId']) term
           WHERE term IS NOT NULL AND term <> ''
         )
-      FROM "FinancialAccount" fa WHERE fa."deletedAt" IS NULL AND 'financialAccount' IN (${types}) AND (${requestedId}::uuid IS NULL OR fa."id" = ${requestedId}::uuid)
+      FROM "FinancialAccount" fa WHERE fa."deletedAt" IS NULL AND 'financialAccount' IN (${types}) AND (${requestedIds}::text IS NULL OR fa."id" IN (SELECT id FROM requested))
       UNION ALL
       SELECT 'financialTransaction', ft."id"::text, ft."shortcode", COALESCE(NULLIF(ft."merchant", ''), NULLIF(ft."rawDescription", ''), ft."kind"), fa."name", ft."status", ARRAY[]::text[], ARRAY[ft."sourceCategory", ft."transactionDate"::text, ft."postedDate"::text]::text[]
       FROM "FinancialTransaction" ft JOIN "FinancialAccount" fa ON fa."id" = ft."accountId" AND fa."deletedAt" IS NULL
-      WHERE ft."deletedAt" IS NULL AND 'financialTransaction' IN (${types}) AND (${requestedId}::uuid IS NULL OR ft."id" = ${requestedId}::uuid)
+      WHERE ft."deletedAt" IS NULL AND 'financialTransaction' IN (${types}) AND (${requestedIds}::text IS NULL OR ft."id" IN (SELECT id FROM requested))
       UNION ALL
       SELECT 'expense', e."id"::text, e."shortcode", e."name", p."name", CASE WHEN e."lineKind" = 'principal' THEN e."costType" ELSE e."lineKind" END, ARRAY[]::text[], ARRAY[e."lineKind", e."trade", e."costType"]::text[]
       FROM "Expense" e LEFT JOIN "Project" p ON p."id" = e."projectId" AND p."deletedAt" IS NULL
-      WHERE e."deletedAt" IS NULL AND 'expense' IN (${types}) AND (${requestedId}::uuid IS NULL OR e."id" = ${requestedId}::uuid)
+      WHERE e."deletedAt" IS NULL AND 'expense' IN (${types}) AND (${requestedIds}::text IS NULL OR e."id" IN (SELECT id FROM requested))
       UNION ALL
       SELECT 'wish', w."id"::text, w."shortcode", w."name", w."notes", 'tool wishlist', ARRAY[]::text[], ARRAY['tool wishlist']::text[]
-      FROM "Wish" w WHERE w."deletedAt" IS NULL AND 'wish' IN (${types}) AND (${requestedId}::uuid IS NULL OR w."id" = ${requestedId}::uuid)
+      FROM "Wish" w WHERE w."deletedAt" IS NULL AND 'wish' IN (${types}) AND (${requestedIds}::text IS NULL OR w."id" IN (SELECT id FROM requested))
     ) source
   `);
   return result.rows.map((row) => ({
@@ -173,59 +184,13 @@ async function getSearchDocumentSources(
   }));
 }
 
-async function getSearchDocumentSource(
-  db: Database,
-  entityType: SearchableEntity,
-  entityId: string,
-): Promise<SearchDocumentSource | null> {
-  return (
-    (await getSearchDocumentSources(db, [entityType], entityId))[0] ?? null
-  );
-}
-
-type SearchDocumentBuilder = (
-  db: Database,
-  entityId: string,
-) => Promise<SearchDocumentSource | null>;
-
-const builderFor =
-  (entityType: SearchableEntity): SearchDocumentBuilder =>
-  async (db, entityId) =>
-    await getSearchDocumentSource(db, entityType, entityId);
-
-/** Type-level exhaustiveness: adding a searchable entity requires a builder. */
-const searchDocumentBuilders = {
-  product: builderFor("product"),
-  recipe: builderFor("recipe"),
-  ingredient: builderFor("ingredient"),
-  cookbook: builderFor("cookbook"),
-  location: builderFor("location"),
-  inventory: builderFor("inventory"),
-  meal: builderFor("meal"),
-  project: builderFor("project"),
-  task: builderFor("task"),
-  vendor: builderFor("vendor"),
-  purchase: builderFor("purchase"),
-  financialAccount: builderFor("financialAccount"),
-  financialTransaction: builderFor("financialTransaction"),
-  expense: builderFor("expense"),
-  wish: builderFor("wish"),
-} satisfies Record<SearchableEntity, SearchDocumentBuilder>;
-
 export async function refreshSearchDocument(
   db: Database,
   entityType: SearchableEntity,
   entityId: string,
 ): Promise<SearchDocumentRefreshResult> {
-  const [source, embedding] = await Promise.all([
-    searchDocumentBuilders[entityType](db, entityId),
-    getEmbeddingTextForEntity(db, entityType, entityId),
-  ]);
-  if (!source || !embedding) {
-    return await markSearchDocumentMissing(db, entityType, entityId);
-  }
-
-  return await upsertSearchDocument(db, source, embedding.embeddingText);
+  const [result] = await refreshSearchDocuments(db, [{ entityType, entityId }]);
+  return result ?? (await markSearchDocumentMissing(db, entityType, entityId));
 }
 
 async function markSearchDocumentMissing(
@@ -238,42 +203,6 @@ async function markSearchDocumentMissing(
     WHERE "entityType" = ${entityType} AND "entityId" = ${entityId}::uuid AND "deletedAt" IS NULL
   `);
   return { status: "missing", entityType, entityId };
-}
-
-async function upsertSearchDocument(
-  db: Database,
-  source: SearchDocumentSource,
-  body: string,
-): Promise<SearchDocumentRefreshResult> {
-  // Keep the trigram operand intentionally compact. Fuzzy matching a query
-  // against a whole semantic document makes similarity collapse as notes and
-  // relationship terms grow; title is the typo-rescue surface, while aliases
-  // and identifiers still have exact/prefix/FTS paths.
-  const normalizedText = normalizeSearchText(source.title);
-  const sourceHash = await hash(JSON.stringify({ ...source, body }));
-  const aliases = textArray(source.aliases);
-  const keywords = textArray(source.keywords);
-  await getDb(db).execute(sql`
-    INSERT INTO "SearchDocument" (
-      "entityType", "entityId", "shortcode", title, subtitle, "typeHint", aliases, keywords, body,
-      "semanticText", "normalizedText", "searchVector", "sourceHash"
-    ) VALUES (
-      ${source.entityType}, ${source.entityId}::uuid, ${source.shortcode}, ${source.title}, ${source.subtitle}::text, ${source.typeHint}::text,
-      ${aliases}, ${keywords}, ${body}, ${body}, ${normalizedText},
-      setweight(to_tsvector('simple', ${source.title}), 'A') ||
-      setweight(to_tsvector('simple', concat_ws(' ', ${source.subtitle}::text, array_to_string(${aliases}, ' '), array_to_string(${keywords}, ' '))), 'B') ||
-      setweight(to_tsvector('simple', ${body}), 'D'), ${sourceHash}
-    ) ON CONFLICT ("entityType", "entityId") WHERE "deletedAt" IS NULL DO UPDATE SET
-      "shortcode" = EXCLUDED."shortcode", title = EXCLUDED.title, subtitle = EXCLUDED.subtitle,
-      "typeHint" = EXCLUDED."typeHint", aliases = EXCLUDED.aliases, keywords = EXCLUDED.keywords,
-      body = EXCLUDED.body, "semanticText" = EXCLUDED."semanticText", "normalizedText" = EXCLUDED."normalizedText",
-      "searchVector" = EXCLUDED."searchVector", "sourceHash" = EXCLUDED."sourceHash", "updatedAt" = now(), "deletedAt" = NULL
-  `);
-  return {
-    status: "upserted",
-    entityType: source.entityType,
-    entityId: source.entityId,
-  };
 }
 
 async function upsertSearchDocumentBatch(
@@ -331,16 +260,64 @@ export async function refreshSearchDocuments(
   db: Database,
   refs: ReadonlyArray<{ entityType: SearchableEntity; entityId: string }>,
 ): Promise<SearchDocumentRefreshResult[]> {
+  if (refs.length === 0) return [];
+
+  const idsByType = new Map<SearchableEntity, string[]>();
+  for (const ref of refs) {
+    const ids = idsByType.get(ref.entityType);
+    if (ids) ids.push(ref.entityId);
+    else idsByType.set(ref.entityType, [ref.entityId]);
+  }
+
+  // Two queries for the whole wave, not two per ref. The id set is passed
+  // whole rather than per type: each UNION arm is already gated on its own
+  // entity type, and ids are uuids, so an id belonging to another type simply
+  // matches nothing in the arms it was not meant for.
+  const [sources, texts] = await Promise.all([
+    getSearchDocumentSources(
+      db,
+      [...idsByType.keys()],
+      refs.map((ref) => ref.entityId),
+    ),
+    getEmbeddingTextsForRefs(db, idsByType),
+  ]);
+
+  const refKey = (entityType: SearchableEntity, entityId: string) =>
+    `${entityType}:${entityId}`;
+  const sourceByRef = new Map(
+    sources.map((source) => [
+      refKey(source.entityType, source.entityId),
+      source,
+    ]),
+  );
+  const textByRef = new Map(
+    texts.map((text) => [refKey(text.entityType, text.entityId), text]),
+  );
+
   const results: SearchDocumentRefreshResult[] = [];
-  const concurrency = 10;
-  for (let index = 0; index < refs.length; index += concurrency) {
+  const entries: Array<{ source: SearchDocumentSource; body: string }> = [];
+  const seen = new Set<string>();
+  for (const ref of refs) {
+    const key = refKey(ref.entityType, ref.entityId);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const source = sourceByRef.get(key);
+    const text = textByRef.get(key);
+    if (source && text) {
+      entries.push({ source, body: text.embeddingText });
+      continue;
+    }
     results.push(
-      ...(await Promise.all(
-        refs
-          .slice(index, index + concurrency)
-          .map((ref) =>
-            refreshSearchDocument(db, ref.entityType, ref.entityId),
-          ),
+      await markSearchDocumentMissing(db, ref.entityType, ref.entityId),
+    );
+  }
+
+  const batchSize = 250;
+  for (let index = 0; index < entries.length; index += batchSize) {
+    results.push(
+      ...(await upsertSearchDocumentBatch(
+        db,
+        entries.slice(index, index + batchSize),
       )),
     );
   }

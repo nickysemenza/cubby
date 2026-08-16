@@ -775,16 +775,8 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 
 - [ ] **Finish the production query-cost sweep (#730 follow-ups).** A Neon
   `pg_stat_statements` dump prompted an audit against the live catalog. The
-  index half shipped; four items remain, in rough order of value.
-  - **Batch the search-document refresh.** `refreshSearchDocuments`
-    (`repo/search-document.ts`) maps the *singular* `refreshSearchDocument` over
-    its refs, and each call fires the 15-arm `UNION ALL` + recursive location CTE
-    to return **one row**, plus a single-id entity load. Measured **7,075** CTE
-    calls against **3,945** single-id `Product` selects. `backfillSearchDocuments`
-    in the same file already has the correct batched shape (one
-    `getSearchDocumentSources`, then `upsertSearchDocumentBatch` in chunks of
-    250) — rework the plural onto it and keep the singular for genuine
-    single-entity mutations.
+  index sweep (#733), the search-document batching, and the orphan-embedding
+  anti-join have shipped; three items remain, in rough order of value.
   - **The Problems fan-out.** `findFastProblems` runs 37 detectors sequentially
     on one pinned connection, with no server-side cache, and the navbar badge
     renders on every authenticated page — so the whole set re-runs on every hard
@@ -796,14 +788,15 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
     seq-scanning UNION arms per call). **Sequencing: do this after #731**, which
     rewrites `detectors-ingredient.ts`, `detectors-inventory.ts`, and
     `routers/problems.ts`.
-  - **Huge `IN (...)` lists.** Three sites bind 5,553 / 11,193 / 3,139
-    parameters: `createLiveIdLoader` (`repo/entity-embedding-cleanup.ts`),
-    `loadProductPricing` as called from `detectors-product.ts`, and the purchase
-    aggregates. Convert to `= ANY($1::uuid[])` via `eqAny` (mind the guarded
-    Drizzle array-param caveat — a bare array param becomes a row constructor).
-    `findOrphanedEntityEmbeddings` additionally full-scans `EntityEmbedding` then
-    issues one such query **per entity type, sequentially**; make it one
-    anti-join.
+  - **The two remaining huge `IN (...)` lists.** `loadProductPricing` binds
+    5,553 parameters when `detectors-product.ts` hands it the whole live
+    catalog, and the purchase aggregates bind ~3,139. Both are shared helpers
+    whose *other* callers pass a page or a single row, so the fix is not to
+    change the helper — either give it an explicit unfiltered mode, or have the
+    coverage detector aggregate without an id filter. Note `eqAny` delegates to
+    `inArray`, so it does not help here; a bound array needs the text-literal
+    cast used by `getSearchDocumentSources`, and `hand-rolled-any-array` will
+    (correctly) reject a raw `ANY(${...})`.
   - **Two counters worth an `EXPLAIN` before anyone "fixes" them.**
     `FinancialTransaction` shows **1,014,764 seq scans / 3.3B tuples** on a
     3,447-row table, and `Location` **655,591 updates** on 279 rows (the
