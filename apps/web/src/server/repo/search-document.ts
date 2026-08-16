@@ -91,6 +91,91 @@ async function getSearchDocumentSources(
   // entirely so the unfiltered backfill path is unchanged.
   const requestedIds =
     entityIds == null ? null : `{${[...new Set(entityIds)].join(",")}}`;
+
+  /** The shared id gate — null set means "no gate", not "match nothing". */
+  const requested = (column: SQL) =>
+    sql`(${requestedIds}::text IS NULL OR ${column} IN (SELECT id FROM requested))`;
+
+  // One branch per searchable entity, `satisfies Record<SearchableEntity, SQL>`
+  // so the compiler — not a reviewer — is what notices a new `searchable: true`
+  // entity. Without it the new entity still gets a `searchDocumentBuilders`
+  // entry (also exhaustive) and still passes every type check, while its branch
+  // is simply absent from the union: `getSearchDocumentSource` returns null,
+  // `refreshSearchDocument` marks the document missing forever, and the entity
+  // never appears in global search. Nothing else in the pipeline sees that hole.
+  const branches = {
+    product: sql`
+      SELECT 'product'::text AS "entityType", p."id"::text AS "entityId", p."shortcode",
+        p."name" AS title, p."manufacturer" AS subtitle, p."category" AS "typeHint",
+        p."aliases" AS aliases, ARRAY[p."upc", p."model", p."manufacturer"]::text[] AS keywords
+      FROM "Product" p WHERE p."deletedAt" IS NULL AND 'product' IN (${types}) AND ${requested(sql`p."id"`)}`,
+    recipe: sql`
+      SELECT 'recipe', r."id"::text, r."shortcode", r."name", NULL, NULL, ARRAY[]::text[], ARRAY[]::text[]
+      FROM "Recipe" r WHERE r."deletedAt" IS NULL AND 'recipe' IN (${types}) AND ${requested(sql`r."id"`)}`,
+    ingredient: sql`
+      SELECT 'ingredient', i."id"::text, i."shortcode", i."name", NULL, NULL, i."aliases", ARRAY[]::text[]
+      FROM "Ingredient" i WHERE i."deletedAt" IS NULL AND i."recipeId" IS NULL AND 'ingredient' IN (${types}) AND ${requested(sql`i."id"`)}`,
+    cookbook: sql`
+      SELECT 'cookbook', c."id"::text, c."shortcode", c."name", NULLIF(array_to_string(c."author", ', '), ''), NULL, ARRAY[]::text[], c."subjects"
+      FROM "Cookbook" c WHERE c."deletedAt" IS NULL AND 'cookbook' IN (${types}) AND ${requested(sql`c."id"`)}`,
+    location: sql`
+      SELECT 'location', l."id"::text, l."shortcode", l."name",
+        (SELECT string_agg(path.name, ' › ' ORDER BY path.depth DESC) FROM location_path path WHERE path."rootId" = l.id AND path.depth > 0),
+        l."type", l."aliases", ARRAY[l."type"]::text[]
+      FROM "Location" l WHERE l."deletedAt" IS NULL AND 'location' IN (${types}) AND ${requested(sql`l."id"`)}`,
+    inventory: sql`
+      SELECT 'inventory', ie."id"::text, ie."shortcode", p."name", l."name", p."category", p."aliases", ARRAY[l."name", l."type", p."manufacturer", p."upc"]::text[]
+      FROM "InventoryEntry" ie JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL JOIN "Location" l ON l."id" = ie."locationId" AND l."deletedAt" IS NULL
+      WHERE ie."deletedAt" IS NULL AND 'inventory' IN (${types}) AND ${requested(sql`ie."id"`)}`,
+    meal: sql`
+      SELECT 'meal', m."id"::text, m."shortcode", COALESCE(NULLIF(m."name", ''), m."date"::text), m."date"::text, NULL, ARRAY[]::text[], ARRAY[m."date"::text]::text[]
+      FROM "Meal" m WHERE m."deletedAt" IS NULL AND 'meal' IN (${types}) AND ${requested(sql`m."id"`)}`,
+    project: sql`
+      SELECT 'project', p."id"::text, p."shortcode", p."name", concat_ws(' · ', p."kind", p."status"), p."icon", ARRAY[]::text[], ARRAY[p."kind", p."status"]::text[]
+      FROM "Project" p WHERE p."deletedAt" IS NULL AND 'project' IN (${types}) AND ${requested(sql`p."id"`)}`,
+    task: sql`
+      SELECT 'task', t."id"::text, t."shortcode", t."name", p."name", t."trade", ARRAY[]::text[], ARRAY[t."trade", sp."name"]::text[]
+      FROM "Task" t LEFT JOIN "Project" p ON p."id" = t."projectId" AND p."deletedAt" IS NULL LEFT JOIN "Product" sp ON sp."id" = t."subjectProductId" AND sp."deletedAt" IS NULL
+      WHERE t."deletedAt" IS NULL AND 'task' IN (${types}) AND ${requested(sql`t."id"`)}`,
+    vendor: sql`
+      SELECT 'vendor', v."id"::text, v."shortcode", v."name", v."website", NULL, ARRAY[]::text[], ARRAY[v."website"]::text[]
+      FROM "Vendor" v WHERE v."deletedAt" IS NULL AND 'vendor' IN (${types}) AND ${requested(sql`v."id"`)}`,
+    purchase: sql`
+      SELECT 'purchase', pu."id"::text, pu."shortcode", COALESCE(NULLIF(pu."orderId", ''), v."name" || ' · ' || pu."date"::text), v."name", NULL, ARRAY[]::text[], ARRAY[pu."orderId", pu."displayLabel", v."name", v."website", pu."date"::text]::text[]
+      FROM "Purchase" pu JOIN "Vendor" v ON v."id" = pu."vendorId" AND v."deletedAt" IS NULL
+      WHERE pu."deletedAt" IS NULL AND 'purchase' IN (${types}) AND ${requested(sql`pu."id"`)}`,
+    financialAccount: sql`
+      SELECT 'financialAccount', fa."id"::text, fa."shortcode", fa."name", fa."identity"->>'kind', fa."identity"->>'kind', ARRAY[]::text[],
+        ARRAY(
+          SELECT term
+          FROM jsonb_array_elements(fa."sourceAliases") alias,
+            LATERAL unnest(ARRAY[alias->>'source', alias->>'alias', alias->>'externalAccountId']) term
+          WHERE term IS NOT NULL AND term <> ''
+        )
+      FROM "FinancialAccount" fa WHERE fa."deletedAt" IS NULL AND 'financialAccount' IN (${types}) AND ${requested(sql`fa."id"`)}`,
+    financialTransaction: sql`
+      SELECT 'financialTransaction', ft."id"::text, ft."shortcode", COALESCE(NULLIF(ft."merchant", ''), NULLIF(ft."rawDescription", ''), ft."kind"), fa."name", ft."status", ARRAY[]::text[], ARRAY[ft."sourceCategory", ft."transactionDate"::text, ft."postedDate"::text]::text[]
+      FROM "FinancialTransaction" ft JOIN "FinancialAccount" fa ON fa."id" = ft."accountId" AND fa."deletedAt" IS NULL
+      WHERE ft."deletedAt" IS NULL AND 'financialTransaction' IN (${types}) AND ${requested(sql`ft."id"`)}`,
+    expense: sql`
+      SELECT 'expense', e."id"::text, e."shortcode", e."name", p."name", CASE WHEN e."lineKind" = 'principal' THEN e."costType" ELSE e."lineKind" END, ARRAY[]::text[], ARRAY[e."lineKind", e."trade", e."costType"]::text[]
+      FROM "Expense" e LEFT JOIN "Project" p ON p."id" = e."projectId" AND p."deletedAt" IS NULL
+      WHERE e."deletedAt" IS NULL AND 'expense' IN (${types}) AND ${requested(sql`e."id"`)}`,
+    wish: sql`
+      SELECT 'wish', w."id"::text, w."shortcode", w."name", w."notes", 'tool wishlist', ARRAY[]::text[], ARRAY['tool wishlist']::text[]
+      FROM "Wish" w WHERE w."deletedAt" IS NULL AND 'wish' IN (${types}) AND ${requested(sql`w."id"`)}`,
+  } satisfies Record<SearchableEntity, SQL>;
+
+  // Postgres takes a UNION's column NAMES and TYPES from its FIRST branch, and
+  // `product` is the only branch that spells the aliases (and the only one
+  // whose `typeHint` is a real enum column). It therefore leads explicitly,
+  // rather than by whatever order this record or the manifest happens to have.
+  const { product: productBranch, ...otherBranches } = branches;
+  const union = sql.join(
+    [productBranch, ...Object.values(otherBranches)],
+    sql` UNION ALL `,
+  );
+
   const result = await getDb(db).execute<{
     entityType: SearchableEntity;
     entityId: string;
@@ -105,7 +190,7 @@ async function getSearchDocumentSources(
       SELECT l.id AS "rootId", l.id, l."parentId", l.name, 0 AS depth
       FROM "Location" l
       WHERE 'location' IN (${types})
-        AND (${requestedIds}::text IS NULL OR l."id" IN (SELECT id FROM requested))
+        AND ${requested(sql`l."id"`)}
         AND l."deletedAt" IS NULL
       UNION ALL
       SELECT child."rootId", parent.id, parent."parentId", parent.name, child.depth + 1
@@ -115,67 +200,7 @@ async function getSearchDocumentSources(
     ), requested AS (
       SELECT unnest(${requestedIds}::uuid[]) AS id
     )
-    SELECT * FROM (
-      SELECT 'product'::text AS "entityType", p."id"::text AS "entityId", p."shortcode",
-        p."name" AS title, p."manufacturer" AS subtitle, p."category" AS "typeHint",
-        p."aliases" AS aliases, ARRAY[p."upc", p."model", p."manufacturer"]::text[] AS keywords
-      FROM "Product" p WHERE p."deletedAt" IS NULL AND 'product' IN (${types}) AND (${requestedIds}::text IS NULL OR p."id" IN (SELECT id FROM requested))
-      UNION ALL
-      SELECT 'recipe', r."id"::text, r."shortcode", r."name", NULL, NULL, ARRAY[]::text[], ARRAY[]::text[]
-      FROM "Recipe" r WHERE r."deletedAt" IS NULL AND 'recipe' IN (${types}) AND (${requestedIds}::text IS NULL OR r."id" IN (SELECT id FROM requested))
-      UNION ALL
-      SELECT 'ingredient', i."id"::text, i."shortcode", i."name", NULL, NULL, i."aliases", ARRAY[]::text[]
-      FROM "Ingredient" i WHERE i."deletedAt" IS NULL AND i."recipeId" IS NULL AND 'ingredient' IN (${types}) AND (${requestedIds}::text IS NULL OR i."id" IN (SELECT id FROM requested))
-      UNION ALL
-      SELECT 'cookbook', c."id"::text, c."shortcode", c."name", NULLIF(array_to_string(c."author", ', '), ''), NULL, ARRAY[]::text[], c."subjects"
-      FROM "Cookbook" c WHERE c."deletedAt" IS NULL AND 'cookbook' IN (${types}) AND (${requestedIds}::text IS NULL OR c."id" IN (SELECT id FROM requested))
-      UNION ALL
-      SELECT 'location', l."id"::text, l."shortcode", l."name",
-        (SELECT string_agg(path.name, ' › ' ORDER BY path.depth DESC) FROM location_path path WHERE path."rootId" = l.id AND path.depth > 0),
-        l."type", l."aliases", ARRAY[l."type"]::text[]
-      FROM "Location" l WHERE l."deletedAt" IS NULL AND 'location' IN (${types}) AND (${requestedIds}::text IS NULL OR l."id" IN (SELECT id FROM requested))
-      UNION ALL
-      SELECT 'inventory', ie."id"::text, ie."shortcode", p."name", l."name", p."category", p."aliases", ARRAY[l."name", l."type", p."manufacturer", p."upc"]::text[]
-      FROM "InventoryEntry" ie JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL JOIN "Location" l ON l."id" = ie."locationId" AND l."deletedAt" IS NULL
-      WHERE ie."deletedAt" IS NULL AND 'inventory' IN (${types}) AND (${requestedIds}::text IS NULL OR ie."id" IN (SELECT id FROM requested))
-      UNION ALL
-      SELECT 'meal', m."id"::text, m."shortcode", COALESCE(NULLIF(m."name", ''), m."date"::text), m."date"::text, NULL, ARRAY[]::text[], ARRAY[m."date"::text]::text[]
-      FROM "Meal" m WHERE m."deletedAt" IS NULL AND 'meal' IN (${types}) AND (${requestedIds}::text IS NULL OR m."id" IN (SELECT id FROM requested))
-      UNION ALL
-      SELECT 'project', p."id"::text, p."shortcode", p."name", concat_ws(' · ', p."kind", p."status"), p."icon", ARRAY[]::text[], ARRAY[p."kind", p."status"]::text[]
-      FROM "Project" p WHERE p."deletedAt" IS NULL AND 'project' IN (${types}) AND (${requestedIds}::text IS NULL OR p."id" IN (SELECT id FROM requested))
-      UNION ALL
-      SELECT 'task', t."id"::text, t."shortcode", t."name", p."name", t."trade", ARRAY[]::text[], ARRAY[t."trade", sp."name"]::text[]
-      FROM "Task" t LEFT JOIN "Project" p ON p."id" = t."projectId" AND p."deletedAt" IS NULL LEFT JOIN "Product" sp ON sp."id" = t."subjectProductId" AND sp."deletedAt" IS NULL
-      WHERE t."deletedAt" IS NULL AND 'task' IN (${types}) AND (${requestedIds}::text IS NULL OR t."id" IN (SELECT id FROM requested))
-      UNION ALL
-      SELECT 'vendor', v."id"::text, v."shortcode", v."name", v."website", NULL, ARRAY[]::text[], ARRAY[v."website"]::text[]
-      FROM "Vendor" v WHERE v."deletedAt" IS NULL AND 'vendor' IN (${types}) AND (${requestedIds}::text IS NULL OR v."id" IN (SELECT id FROM requested))
-      UNION ALL
-      SELECT 'purchase', pu."id"::text, pu."shortcode", COALESCE(NULLIF(pu."orderId", ''), v."name" || ' · ' || pu."date"::text), v."name", NULL, ARRAY[]::text[], ARRAY[pu."orderId", pu."displayLabel", v."name", v."website", pu."date"::text]::text[]
-      FROM "Purchase" pu JOIN "Vendor" v ON v."id" = pu."vendorId" AND v."deletedAt" IS NULL
-      WHERE pu."deletedAt" IS NULL AND 'purchase' IN (${types}) AND (${requestedIds}::text IS NULL OR pu."id" IN (SELECT id FROM requested))
-      UNION ALL
-      SELECT 'financialAccount', fa."id"::text, fa."shortcode", fa."name", fa."identity"->>'kind', fa."identity"->>'kind', ARRAY[]::text[],
-        ARRAY(
-          SELECT term
-          FROM jsonb_array_elements(fa."sourceAliases") alias,
-            LATERAL unnest(ARRAY[alias->>'source', alias->>'alias', alias->>'externalAccountId']) term
-          WHERE term IS NOT NULL AND term <> ''
-        )
-      FROM "FinancialAccount" fa WHERE fa."deletedAt" IS NULL AND 'financialAccount' IN (${types}) AND (${requestedIds}::text IS NULL OR fa."id" IN (SELECT id FROM requested))
-      UNION ALL
-      SELECT 'financialTransaction', ft."id"::text, ft."shortcode", COALESCE(NULLIF(ft."merchant", ''), NULLIF(ft."rawDescription", ''), ft."kind"), fa."name", ft."status", ARRAY[]::text[], ARRAY[ft."sourceCategory", ft."transactionDate"::text, ft."postedDate"::text]::text[]
-      FROM "FinancialTransaction" ft JOIN "FinancialAccount" fa ON fa."id" = ft."accountId" AND fa."deletedAt" IS NULL
-      WHERE ft."deletedAt" IS NULL AND 'financialTransaction' IN (${types}) AND (${requestedIds}::text IS NULL OR ft."id" IN (SELECT id FROM requested))
-      UNION ALL
-      SELECT 'expense', e."id"::text, e."shortcode", e."name", p."name", CASE WHEN e."lineKind" = 'principal' THEN e."costType" ELSE e."lineKind" END, ARRAY[]::text[], ARRAY[e."lineKind", e."trade", e."costType"]::text[]
-      FROM "Expense" e LEFT JOIN "Project" p ON p."id" = e."projectId" AND p."deletedAt" IS NULL
-      WHERE e."deletedAt" IS NULL AND 'expense' IN (${types}) AND (${requestedIds}::text IS NULL OR e."id" IN (SELECT id FROM requested))
-      UNION ALL
-      SELECT 'wish', w."id"::text, w."shortcode", w."name", w."notes", 'tool wishlist', ARRAY[]::text[], ARRAY['tool wishlist']::text[]
-      FROM "Wish" w WHERE w."deletedAt" IS NULL AND 'wish' IN (${types}) AND (${requestedIds}::text IS NULL OR w."id" IN (SELECT id FROM requested))
-    ) source
+    SELECT * FROM (${union}) source
   `);
   return result.rows.map((row) => ({
     ...row,

@@ -887,16 +887,6 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
   client budget hint if MCP standardizes one, otherwise keep the conservative
   server-owned byte budget. Invalid or filter/sort-incompatible cursors must fail
   explicitly rather than silently restarting from page one.
-- [ ] **Unify where a shortcode becomes a uuid** (found by the filter-application
-  guard, #595): most repos resolve their own id filters, but
-  `inventory.locationIdFilter`, `inventory.productIdFilter`, and
-  `recipe.cookbookId` are resolved by their **routers**, so the repo parameter
-  is a uuid brand while the schema declares a shortcode. Feeding a shortcode
-  straight to those repos reaches Postgres as a uuid literal and 500s. The
-  guard documents them in a `REPO_TAKES_UUID` list and probes them one layer
-  down (absent uuid rather than unresolvable code), so nothing is unguarded —
-  this is about removing the asymmetry, not a live bug. Resolve in the repo
-  like everyone else, then delete the list.
 - [ ] **Duplicate `getByID`/`getByShortcode` read paths, no shared cache
   key.** All 15 shortcode entities (`shortcodeEntities`,
   `packages/schemas/src/entity-manifest.ts`) get two CRUD-factory procedures
@@ -911,46 +901,6 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
   followed by `meal-detail-page.tsx` firing its own cold `getByID` for the
   same row — every other detail page (product, recipe, …) takes the entity as
   a prop instead of re-querying.
-- [ ] **`inventory` is the last hand-rolled MCP CRUD toolset.** Every other
-  entity's create/list/get/update/delete MCP tools go through
-  `registerEntityCrudToolset` (`server/mcp/tools/_shared.ts`, ~30 lines of
-  config); `inventory.tools.ts` hand-writes the same five operations in ~96
-  lines, partly because it needs `data.amount`-merging logic the generic
-  shape doesn't express and partly because `registerEntityUpdateTool` — the
-  one op helper a migration would need standalone — isn't exported
-  (`registerEntityCreateTool` is exported, with no caller outside the toolset
-  factory and one test).
-- [ ] **Make `crud-factory.ts`'s `repository.create`/`update` optional.**
-  #603 found `product.ts` and `ingredient.ts` each feeding the factory
-  throwaway `create`/`update` callbacks — discarded because both routers
-  hand-roll the real ones for cost-recompute reasons — and left them as
-  `discardedByFactory(): never` stubs with an explanatory comment, because the
-  repository type requires both keys. `inventory`, `location`, and `recipe`
-  still destructure the full `{ getByID, getByShortcode, create, update }`
-  set, so the fix is a conditional return type keyed on which repository keys
-  are actually supplied, not a blanket optional.
-- [ ] **Coverage-concept gaps: two silent-omission spots, one missing
-  exhaustiveness check.** `packages/schemas/src/search.ts`'s
-  `searchResultItemSchema` discriminated union has no
-  `satisfies Record<SearchableEntity, …>` tying its variants to
-  `searchableEntities` — the pattern already exists two dozen lines away
-  (`similarEntityPairs`) but isn't applied here, so a new `searchable: true`
-  entity would compile fine and silently drop out of global search.
-  `entityFilters` (`entities/filter-manifest.tsx`,
-  `Partial<Record<Entity, …>>`) and `relatedViewRegistry`
-  (`packages/schemas/src/related-view.ts`, a flat array not keyed by entity at
-  all) both fall back to `[]` for an absent entity with no way to say "this
-  entity is deliberately missing" versus "nobody added it yet."
-- [ ] **CRUD factory can't use `strictOutput`.** 4 of 6 `.output()` calls in
-  `apps/web/src/server/api/crud-factory.ts` (`createGetByIdProcedure`,
-  `createGetByShortcodeProcedure`, `createCreateProcedure`,
-  `createUpdateProcedure`) can't be wrapped in `strictOutput` — the output
-  type is a naked generic `T`, so tRPC checks the resolver against
-  `DefaultValue<T, T>`, a conditional TypeScript never reduces for an
-  unresolved `T` (reproduced standalone with zero zod/trpc code). Fix is to
-  make the factory generic over the schema rather than the output type. See
-  PR #623, which documents each blocked site inline with this same
-  explanation.
 - [ ] **Two duplicate detectors have no fix action.** `problems/detectors-financial.ts`'s
   `findDuplicateFinancialTransactionSourceRefs` and
   `findDuplicateFinancialAccountSourceAliases` surface Problems-page findings

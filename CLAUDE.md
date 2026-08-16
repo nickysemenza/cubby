@@ -40,6 +40,43 @@ public-contract, and active-TODO context. Delete narration of obvious control fl
 stale implementation history, redundant section banners, signature-shaped JSDoc,
 and Arrange/Act/Assert prose that adds no behavioral fact.
 
+## Test placement
+
+Four tiers, distinguished by **what the test needs in order to fail correctly** —
+never by which layer of the codebase the code happens to live in. A repo function
+belongs in a unit test if its logic is decidable without Postgres; a pure helper
+belongs in an integration test if the bug being pinned is one only real SQL
+exhibits.
+
+| Tier | Pattern | Runner / environment | Belongs here when |
+| --- | --- | --- | --- |
+| unit | `*.unit.test.ts` | vitest `unit`, node, no I/O | The answer is decidable from inputs alone — schema parsing/branding, SQL-fragment shape, pure computation, filter/URL serialization, mappers. |
+| ui | `*.unit.test.tsx` | vitest `ui`, jsdom + RTL | Component or hook behavior: rendering, interaction, memo/dependency stability. Mock the network; a UI test that needs a database is misplaced. |
+| integration | `*.integration.test.ts` | vitest `integration`, real Postgres per file via IntegresQL | Only real SQL can be wrong in the way you're pinning — soft-delete and join visibility, transactions and cascades, shortcode resolution, where-clause application, count/aggregate agreement with the row set, tRPC callers end-to-end over a real DB. |
+| e2e | `tests/e2e/**/*.spec.ts` | Playwright against a built app | The bug lives in the seam a lower tier cannot see: routing and URL state, SSR/hydration, auth, service worker, real browser input. Slowest and flakiest — it earns its place only when nothing below can observe the failure. |
+
+Rules that follow from that:
+
+- **Write it at the lowest tier that can actually fail.** A test that would pass
+  even with the bug present is not coverage at that tier; move it down until it
+  fails, or up until it can.
+- **Don't restate one tier's coverage in another.** The same assertion in two
+  tiers doubles the maintenance and halves the signal about which layer broke.
+  Prefer deleting the higher-tier copy.
+- **Assert behavior, not implementation.** Pinning a call count, an internal
+  helper name, or a SQL string is a change-detector; it fails on refactors and
+  stays green on regressions.
+- **Real-DB invariants stay integration, always.** The soft-delete, incoming-edge,
+  search-artifact, and filter-application invariants documented below are only
+  meaningful against real SQL — see
+  `server/repo/filter-application.integration.test.ts` and
+  `server/repo/inventory/embedding-cascade-invariant.integration.test.ts`. Never
+  satisfy one with a mock.
+- **A guard that CI depends on is not deletable as duplication.** The convention
+  scripts (`check-conventions.mjs`, `check-soft-delete-filters.mjs`) and those
+  invariant suites back `pnpm check`; treat them as load-bearing even when a
+  narrower test appears to cover the same ground.
+
 ## Production database migrations
 
 Follow the shared-production-database guidance in [README's worktree section](README.md#worktrees-parallel-sessions) and its [D1 migration workflow](README.md#common-commands). Agents are authorized to run `pnpm --filter @cubby/web run db:push` when a schema change is necessary to complete the requested work and the migration has been verified as safe.

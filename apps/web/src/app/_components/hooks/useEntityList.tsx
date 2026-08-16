@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { PreviewDeleteEntity } from "@cubby/schemas/entity-integrity";
-import { relatedViewRegistry } from "@cubby/schemas/related-view";
+import { relatedViewsFor } from "@cubby/schemas/related-view";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { QueryKey } from "@tanstack/react-query";
 import { useSearch } from "@tanstack/react-router";
@@ -423,10 +423,7 @@ export function useEntityList<
   const { data, totalCount, sums, isLoading, error, timing, refreshControls } =
     infiniteResult;
 
-  const relatedViews = useMemo(
-    () => relatedViewRegistry.filter((view) => view.source === entity),
-    [entity],
-  );
+  const relatedViews = useMemo(() => relatedViewsFor(entity), [entity]);
   const relatedInitialVisibility = useMemo(
     () =>
       Object.fromEntries(

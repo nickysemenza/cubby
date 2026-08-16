@@ -34,7 +34,7 @@ import { vendorCreateInput, vendorFilterFields } from "@cubby/schemas/vendor";
 import { wishFilterFields } from "@cubby/schemas/wish";
 import type { ShortcodeType } from "@cubby/shared";
 import { SHORTCODE_PREFIX } from "@cubby/shared";
-import { NONEXISTENT_UUID, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import type { Database } from "~/server/db";
@@ -505,26 +505,6 @@ const GUARDED_ENTITIES = Object.keys(GUARDS) as GuardedEntity[];
  */
 const KNOWN_GAPS: Record<string, string> = {};
 
-/**
- * Id fields whose ROUTER resolves the shortcode to a uuid before the repo is
- * called, so the repo's parameter is a `XxxId` brand even though the schema
- * declares a shortcode. A shortcode probe against these reaches Postgres as a
- * uuid literal and errors — the wrong instrument, not a finding.
- *
- * They are still probed, with a well-formed uuid that names no row: that is the
- * same "supplied but resolves to nothing must match nothing" property, just one
- * layer down. The shortcode-specific probes (lowercase canonicalization,
- * wrong-prefix entity guard) belong to the resolving layer and are covered by
- * that router's own tests.
- */
-const REPO_TAKES_UUID: Record<string, string> = {
-  // routers/inventory.ts resolves both through `resolveLocationId`/`resolveProductId`.
-  "inventory.locationIdFilter": "resolved in routers/inventory.ts",
-  "inventory.productIdFilter": "resolved in routers/inventory.ts",
-  // routers/recipe/crud.ts resolves it through `resolveCookbookFilter`.
-  "recipe.cookbookId": "resolved in routers/recipe/crud.ts",
-};
-
 describe("every declared filter field is applied by its repo", () => {
   const ctx = withTestDb();
 
@@ -548,15 +528,7 @@ describe("every declared filter field is applied by its repo", () => {
       const key = `${entity}.${field}`;
       const before = violations.length;
 
-      if (probe.kind === "id" && key in REPO_TAKES_UUID) {
-        const absent = await list(ctx.db, { [field]: NONEXISTENT_UUID });
-        if (absent.count !== 0) {
-          record(
-            field,
-            `an absent uuid returned ${absent.count} rows (baseline ${baseline.count}); it must match nothing`,
-          );
-        }
-      } else if (probe.kind === "id") {
+      if (probe.kind === "id") {
         // Bug 1: a well-formed code that resolves to no live row must match
         // nothing. `eqAny([])` is "no constraint", so an unapplied guard here
         // returns the whole table.
@@ -672,22 +644,6 @@ describe("guard coverage", () => {
     const stale = Object.keys(KNOWN_GAPS).filter(
       (key) => fieldSchema(key) === undefined,
     );
-    expect(stale).toEqual([]);
-  });
-
-  /**
-   * Same hygiene for the router-resolved list: an entry must still name a live
-   * field, and that field must still be shortcode-typed — the moment a repo takes
-   * over resolution (or the schema stops being a shortcode) the entry is wrong and
-   * the field should go back to the full shortcode battery.
-   */
-  it("keeps the router-resolved list pointing at live shortcode fields", () => {
-    const stale = Object.keys(REPO_TAKES_UUID).filter((key) => {
-      const schema = fieldSchema(key);
-      if (!schema) return true;
-      const field = key.split(".")[1] ?? "";
-      return classify(field, schema).kind !== "id";
-    });
     expect(stale).toEqual([]);
   });
 

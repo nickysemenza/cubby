@@ -365,7 +365,25 @@ const filterTypeForKind = (
 ): "text" | "select" | "multiselect" =>
   kind === "text" ? "text" : isMultiFilterKind(kind) ? "multiselect" : "select";
 
-const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
+/**
+ * Entities that deliberately declare no filters, so "nobody has added them yet"
+ * stops looking identical to "there is nothing to add". `entityFilters` below is
+ * a TOTAL record over the remainder, so a new Entity must either bring a filter
+ * list or be named here with the reason — the `?? []` fallback used to swallow
+ * both cases silently.
+ */
+const ENTITIES_WITHOUT_FILTERS = {
+  // No list table of its own: cookbooks are browsed as a gallery, and the
+  // recipe list carries the `cookbookId` filter that scopes into one.
+  cookbook: "browsed as a gallery; recipe.cookbookId is the way in",
+  // Not a local entity — the USDA surface is a remote search box against the
+  // usda-api worker, with no column set to filter.
+  "usda-food": "remote USDA search, not a local list",
+} as const satisfies Partial<Record<Entity, string>>;
+
+type FilteredEntity = Exclude<Entity, keyof typeof ENTITIES_WITHOUT_FILTERS>;
+
+const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
   financialAccount: [
     {
       columnId: "name",
@@ -1639,10 +1657,18 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
   ],
 };
 
+const NO_FILTERS: readonly FilterSpec[] = [];
+
+/** The declared specs for an entity, or nothing for an opted-out one. */
+const declaredFilters = (entity: Entity): readonly FilterSpec[] =>
+  entity in ENTITIES_WITHOUT_FILTERS
+    ? NO_FILTERS
+    : entityFilters[entity as FilteredEntity];
+
 /** The specs for an entity, or an empty list when it has no list table. */
 const relatedFilterSpecs = Object.fromEntries(
   uniq(relatedViewRegistry.map((view) => view.source)).map((entity) => {
-    const existing = entityFilters[entity] ?? [];
+    const existing = declaredFilters(entity);
     const existingColumns = new Set(existing.map((spec) => spec.columnId));
     const generated: FilterSpec[] = [];
     for (const view of relatedViewRegistry.filter(
@@ -1841,7 +1867,7 @@ export const getEntityFilters = (entity: Entity): readonly FilterSpec[] => {
   const cached = filterSpecCache.get(entity);
   if (cached) return cached;
   const specs = [
-    ...(entityFilters[entity] ?? []),
+    ...declaredFilters(entity),
     ...(relatedFilterSpecs[entity] ?? []),
     ...(auditFilterEntities.has(entity) ? auditFilterSpecs : []),
   ];

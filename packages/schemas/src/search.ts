@@ -95,7 +95,18 @@ export const searchMatchFieldSchema = z.enum([
 ]);
 export type SearchMatchField = z.infer<typeof searchMatchFieldSchema>;
 
-/** A compact, public search result. `id` is always a public shortcode. */
+/**
+ * A compact, public search result. `id` is always a public shortcode.
+ *
+ * Deliberately NOT a per-entity discriminated union: every hit carries the same
+ * six presentation fields, and each entity's projection decides which of them
+ * are null. The coverage that keeps a new `searchable: true` entity from
+ * silently dropping out of global search therefore lives with the projections,
+ * not here — see the `satisfies Record<SearchableEntity, SQL>` branch map in
+ * `apps/web/src/server/repo/search-document.ts` and `searchDocumentBuilders`
+ * beside it, plus `entityTypeMap` in `search/search-utils.tsx` for the client
+ * route/icon side.
+ */
 export const searchHitSchema = z.object({
   id: searchableEntityIdSchema,
   entityType: searchableEntitySchema,
