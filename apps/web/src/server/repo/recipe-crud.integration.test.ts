@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createTestTRPCContext } from "~/server/api/trpc";
 import {
   auditLog,
+  ingredient,
   mealRecipe,
   recipe,
   recipeSection,
@@ -335,6 +336,102 @@ describe("recipe crud repo", () => {
       // The web upsert matches on `SourceType IS DISTINCT FROM 'Book'` + name, so a
       // Book recipe is exempted — scraping a same-named site won't clobber it.
       expect(web.id).not.toBe(book.id);
+
+      // …and each can be referenced as a sub-recipe. Both link rows are named
+      // `Recipe: Shared Name`, so while `Ingredient_name_key` spanned the
+      // recipe-linked rows the second insert conflicted on an index its `where`
+      // (recipeId) couldn't see: no row inserted, no winner to re-find, and the
+      // failure reported itself as three shortcode collisions.
+      const parent = await createRecipe(
+        ctx.db,
+        makeRecipeInput({
+          name: "Uses Both",
+          sections: [
+            {
+              instructions: [{ instruction: "Combine" }],
+              ingredients: [
+                {
+                  type: "recipe",
+                  recipeId: unsafeRecipeShortcode(book.shortcode),
+                  ingredientId: null,
+                  amounts: [{ value: 1, unit: "each" }],
+                },
+                {
+                  type: "recipe",
+                  recipeId: unsafeRecipeShortcode(web.shortcode),
+                  ingredientId: null,
+                  amounts: [{ value: 1, unit: "each" }],
+                },
+              ],
+            },
+          ],
+        }),
+        ctx.actor,
+      );
+
+      const links = (await getRecipeByID(ctx.db, parent.entityId))!.sections
+        .flatMap((s) => s.ingredients)
+        .flatMap((i) => (i.type === "recipe" ? [i.recipe] : []));
+      expect(links.map((r) => r.id).sort()).toEqual(
+        [book.shortcode, web.shortcode].sort(),
+      );
+    });
+
+    it("does not resurrect a soft-deleted sub-recipe link", async () => {
+      const child = await createRecipe(
+        ctx.db,
+        makeRecipeInput({ name: "Sauce" }),
+        ctx.actor,
+      );
+      const subRecipeSection = [
+        {
+          instructions: [{ instruction: "Add sauce" }],
+          ingredients: [
+            {
+              type: "recipe" as const,
+              recipeId: child.id,
+              ingredientId: null,
+              amounts: [{ value: 1, unit: "each" }],
+            },
+          ],
+        },
+      ];
+      const parent = await createRecipe(
+        ctx.db,
+        makeRecipeInput({ name: "Bowl", sections: subRecipeSection }),
+        ctx.actor,
+      );
+
+      // Retire the link row. `Ingredient_recipeId_key` is partial on
+      // `deletedAt IS NULL`, so a fresh link for the same recipe is legal — but a
+      // match predicate that omitted `notDeleted` would find this dead row first
+      // and re-point the live section at it.
+      const [dead] = await getDb(ctx.db)
+        .update(ingredient)
+        .set({ deletedAt: new Date() })
+        .where(eq(ingredient.recipeId, child.entityId))
+        .returning();
+
+      await updateRecipe(
+        ctx.db,
+        parent.entityId,
+        { sections: subRecipeSection },
+        ctx.actor,
+      );
+
+      const relinked = (await getRecipeByID(ctx.db, parent.entityId))!.sections
+        .flatMap((s) => s.ingredients)
+        .find((i) => i.type === "recipe");
+      expect(relinked?.type).toBe("recipe");
+
+      const live = await getDb(ctx.db).query.ingredient.findFirst({
+        where: and(
+          eq(ingredient.recipeId, child.entityId),
+          notDeleted(ingredient),
+        ),
+      });
+      expect(live).toBeDefined();
+      expect(live!.id).not.toBe(dead!.id);
     });
   });
 
@@ -514,4 +611,7 @@ describe("recipe crud repo", () => {
   });
 });
 
-import type { IngredientShortcode } from "@cubby/schemas/identifiers";
+import {
+  type IngredientShortcode,
+  unsafeRecipeShortcode,
+} from "@cubby/schemas/identifiers";
