@@ -184,6 +184,30 @@ const MENU_ITEM_ICON_RE =
  * point — Print Label previously shipped in three casings with four icons.
  */
 const ACTION_VERBS_PATH = "apps/web/src/app/_components/actions/action-verbs.ts";
+/**
+ * The visible text of a menu-item line, with JSX tags and `{…}` expressions
+ * stripped.
+ *
+ * Comparing the raw trimmed line only caught a label sitting alone on its own
+ * line — the shape every converted site happens to use. A single-line
+ * `<DropdownMenuItem><Trash /> Delete</DropdownMenuItem>` would have walked
+ * straight past the rule it exists to enforce.
+ */
+const menuItemText = (line) =>
+  line
+    // Braces FIRST. `<[^>]*>` stops at the first `>`, so an attribute holding
+    // one — `onSelect={() => x()}`, `disabled={x > 0}` — truncates the tag
+    // strip and leaves the label glued to attribute debris, re-opening the
+    // single-line hole this rule exists to close. Removing the brace
+    // expressions first makes the tag strip unambiguous.
+    .replace(/\{[^}]*\}/g, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\.\.\.$/, "")
+    .trim()
+    .toLowerCase();
+
 const actionVerbLabelSet = (() => {
   try {
     const src = readFileSync(join(repoRoot, ACTION_VERBS_PATH), "utf8");
@@ -912,9 +936,7 @@ function scan(files) {
         dropdownItemDepth > 0 &&
         !isCommentLine(line) &&
         !file.endsWith("action-verb-ui.tsx") &&
-        actionVerbLabelSet.has(
-          line.trim().replace(/\.\.\.$/, "").trim().toLowerCase(),
-        )
+        actionVerbLabelSet.has(menuItemText(line))
       ) {
         violations.push({
           file,

@@ -2,8 +2,9 @@ import type { Confidence } from "@cubby/schemas/ai";
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { useQuery } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronRight, GitMerge } from "lucide-react";
+import { Check, ChevronDown, ChevronRight } from "lucide-react";
 import { type Ref, useState } from "react";
+import { verbDef } from "~/app/_components/actions/action-verbs";
 import { confidenceColor } from "~/app/_components/ai/ai-suggest";
 import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
 import { RecipeUsagesTable } from "~/app/_components/recipe/recipe-usages-table";
@@ -18,6 +19,12 @@ import { cn } from "~/lib/utils";
 import { EnrichmentEditor } from "./enrichment-editor";
 import type { EquivalenceDraft } from "./equivalence-workbench-link";
 import { fixBadgeLabel } from "./workbench-fix-label";
+
+// Single-sourced from the action-verb registry so the workbench can't drift
+// from the ingredient list's own Merge — it had been rendering `GitMerge`
+// where every other merge affordance uses `Merge`. Only the presentation is
+// borrowed; these buttons keep their compact review-card density.
+const { icon: MergeIcon, label: mergeLabel } = verbDef("merge");
 
 /** An AI USDA suggestion for one row, kept at the table level for bulk review. */
 export type Suggestion = {
@@ -55,8 +62,8 @@ function MergeHint({
           onMerge();
         }}
       >
-        <GitMerge className="size-3" />
-        Merge
+        <MergeIcon className="size-3" />
+        {mergeLabel}
       </Button>
     </Row>
   );
