@@ -16,8 +16,7 @@ import {
   unsafeWishId,
 } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
-import { and, eq, inArray, sql } from "drizzle-orm";
-import { uniq } from "es-toolkit";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   cookbook,
@@ -244,6 +243,7 @@ async function getIngredientEmbeddingTexts(
   const rows = await getDb(db).query.ingredient.findMany({
     where: and(
       notDeleted(ingredient),
+      isNull(ingredient.recipeId),
       options.ids?.length
         ? inArray(ingredient.id, options.ids.map(unsafeIngredientId))
         : undefined,
@@ -734,65 +734,6 @@ export async function getEmbeddingTextsForEntityTypes(
   );
   const rows = chunks.flat();
   return limit == null ? rows : rows.slice(0, limit);
-}
-
-// When a limit is requested, scan a bounded window instead of the whole catalog.
-// Overscan so a fresh-heavy prefix doesn't starve the batch; the backfill action
-// is re-runnable to catch any stale rows beyond the window.
-const STALE_SCAN_OVERSCAN = 4;
-
-export async function getStaleEmbeddingTextsForEntityTypes(
-  db: Database,
-  entityTypes: SearchableEntity[],
-  config: SemanticEmbeddingConfig,
-  limit?: number,
-): Promise<SearchableEntityText[]> {
-  const rows = await getEmbeddingTextsForEntityTypes(
-    db,
-    entityTypes,
-    limit == null ? undefined : limit * STALE_SCAN_OVERSCAN,
-  );
-  if (rows.length === 0) return [];
-
-  const ids = uniq(rows.map((row) => row.entityId));
-  const existingRows = await getDb(db).query.entityEmbedding.findMany({
-    where: and(
-      inArray(entityEmbedding.entityType, entityTypes),
-      inArray(entityEmbedding.entityId, ids),
-      eq(entityEmbedding.provider, config.provider),
-      eq(entityEmbedding.model, config.model),
-      eq(entityEmbedding.dimensions, config.dimensions),
-      notDeleted(entityEmbedding),
-    ),
-    columns: {
-      entityType: true,
-      entityId: true,
-      embeddingHash: true,
-    },
-  });
-  const existingByEntity = new Map(
-    existingRows.map((row) => [
-      `${row.entityType}:${row.entityId}`,
-      row.embeddingHash,
-    ]),
-  );
-
-  const staleRows: SearchableEntityText[] = [];
-  for (const row of rows) {
-    const hash = await embeddingTextHash({
-      entityType: row.entityType,
-      provider: config.provider,
-      model: config.model,
-      dimensions: config.dimensions,
-      text: normalizeSearchText(row.embeddingText),
-    });
-    if (existingByEntity.get(`${row.entityType}:${row.entityId}`) !== hash) {
-      staleRows.push(row);
-    }
-    if (limit != null && staleRows.length >= limit) break;
-  }
-
-  return staleRows;
 }
 
 export async function getEmbeddingTextForEntity(

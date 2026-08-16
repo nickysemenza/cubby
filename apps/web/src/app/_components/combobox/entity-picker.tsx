@@ -84,7 +84,7 @@ export function EntityPicker<TId extends string>({
 }: EntityPickerProps<TId>) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
-  const [debouncedQuery] = useDebouncedValue(query, { wait: 300 });
+  const [debouncedQuery] = useDebouncedValue(query, { wait: 150 });
   const [isCreating, setIsCreating] = React.useState(false);
   const anchorRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);

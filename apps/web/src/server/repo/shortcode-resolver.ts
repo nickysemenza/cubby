@@ -398,7 +398,7 @@ export async function lookupEntityLabels(
  * An inventory row is the one shortcode entity whose identity is relational —
  * "N of a product on a shelf" — so it is named by a join rather than a column.
  * The pair is the same one global search already projects for these rows
- * (product as the title, location as the subtitle, see `repo/search.ts`);
+ * (product as the title, location as the subtitle, see SearchDocument);
  * flattening it to one string keeps the two surfaces naming a row the same way
  * instead of inventing a second definition. Location is what disambiguates two
  * entries of the same product, which is exactly the case an activity feed shows.

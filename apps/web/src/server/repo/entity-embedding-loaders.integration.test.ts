@@ -43,6 +43,10 @@ import {
   makeProductInput,
   makeRecipeInput,
 } from "./repo.fixtures";
+import {
+  getSearchDocumentEmbeddingText,
+  refreshSearchDocuments,
+} from "./search-document";
 import { createTask } from "./task";
 import { createVendor, deleteVendors, mergeVendors } from "./vendor";
 import { createWish } from "./wish";
@@ -208,6 +212,16 @@ describe("searchable entity loader maps", () => {
       batch.map((row) => [`${row.entityType}:${row.entityId}`, row]),
     );
 
+    const documentRefs = searchableEntities.map((entityType) => ({
+      entityType,
+      entityId: ids[entityType],
+    }));
+    const refreshed = await refreshSearchDocuments(ctx.db, documentRefs);
+    expect(refreshed).toHaveLength(searchableEntities.length);
+    expect(refreshed.every((result) => result.status === "upserted")).toBe(
+      true,
+    );
+
     for (const entityType of searchableEntities) {
       const single = await getEmbeddingTextForEntity(
         ctx.db,
@@ -216,6 +230,13 @@ describe("searchable entity loader maps", () => {
       );
       expect(single).toEqual(byRef.get(`${entityType}:${ids[entityType]}`));
       expect(single?.embeddingText).toContain("Loader");
+      expect(
+        await getSearchDocumentEmbeddingText(
+          ctx.db,
+          entityType,
+          ids[entityType],
+        ),
+      ).toEqual(single);
     }
   });
 

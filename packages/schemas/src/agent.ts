@@ -3,7 +3,7 @@ import { searchableEntityIdSchema, searchableEntitySchema } from "./search";
 
 /**
  * A cited entity the agent referenced while answering. Purpose-built for
- * citation rendering — lighter than the full SearchResultItem (the slimmed
+ * citation rendering — lighter than a generic SearchHit (the slimmed
  * tool outputs don't carry createdAt/imageUrl, and fabricating them is worse
  * than a minimal shape). Reuses `searchableEntitySchema` so the existing
  * entity icon/color infra applies via `entityTypeMap`.

@@ -1,8 +1,9 @@
-import { globalSearchMcpOut, similarEntitiesMcpOut } from "@cubby/schemas/mcp";
 import {
-  globalSearchInputSchema,
-  similarEntitiesInputSchema,
-} from "@cubby/schemas/search";
+  globalSearchMcpInputSchema,
+  globalSearchMcpOut,
+  similarEntitiesMcpOut,
+} from "@cubby/schemas/mcp";
+import { similarEntitiesInputSchema } from "@cubby/schemas/search";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getCaller, READ_ONLY_CLOSED, registerMcpTool } from "./_shared";
 
@@ -10,28 +11,41 @@ export function registerSearchTools(server: McpServer) {
   registerMcpTool(server, {
     name: "global_search",
     description:
-      "Fuzzy name search across every indexed entity in one call — products, inventory entries, locations, recipes, ingredients, cookbooks, meals, and the household tracker (projects, tasks, expenses). Pass entityType to restrict results. The default 'hybrid' mode ranks lexical (exact/substring/trigram) and semantic matching together; use 'lexical' to skip embeddings or 'semantic' to run only embeddings/vector lookup. Each hit returns entityType + id, where id is the public shortcode, so use this to turn a name into an id before calling get_*/update_* tools. For entity-to-entity matching use find_similar_entities instead.",
-    inputSchema: globalSearchInputSchema.shape,
+      "Fast name, alias, identifier, and shortcode search across Cubby entities. Pass entityTypes to restrict results. Every hit carries its public shortcode in id, ready for get_*/update_* tools. This lexical lookup never calls an embedding provider. Set includeRelated to true only when useful; semantic results are returned separately and never replace direct matches. For entity-to-entity matching use find_similar_entities instead.",
+    inputSchema: globalSearchMcpInputSchema.shape,
     outputSchema: globalSearchMcpOut,
     annotations: READ_ONLY_CLOSED,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
-      const result = await caller.search.global({
-        query: params.query,
-        limit: params.limit,
-        mode: params.mode,
-        entityType: params.entityType,
-      });
-      return { results: result };
+      const { includeRelated, ...query } = params;
+      const results = await caller.search.find(query);
+
+      if (!includeRelated) {
+        return {
+          results,
+          related: [],
+          relatedStatus: "not_requested" as const,
+        };
+      }
+
+      const relatedResult = await caller.search.related(query);
+      const primaryKeys = new Set(
+        results.map((result) => `${result.entityType}:${result.id}`),
+      );
+      return {
+        results,
+        related: relatedResult.results.filter(
+          (result) => !primaryKeys.has(`${result.entityType}:${result.id}`),
+        ),
+        relatedStatus: relatedResult.status,
+      };
     },
   });
 
   registerMcpTool(server, {
     name: "find_similar_entities",
     description:
-      "Find the entities whose stored embedding is closest to one seed entity's, along an allowlisted direction: expense_to_product (which product does this expense line refer to?), product_to_product / ingredient_to_ingredient (duplicate hunting), recipe_to_recipe (related recipes). Pass the pair key plus the seed's id; returns each neighbour with its cosine `similarity`, nearest first, and echoes the resolved `source` ref. " +
-      "WARNING — these scores RANK candidates, they do not VERIFY them. Nearest-neighbour always returns something, even when the correct answer is 'no match', and rank does not track correctness: in a real backfill a WRONG match (an M18 Hackzall for 'm18 angle grinder', cosine distance 0.326) scored BETTER than a CORRECT one (a TS 55 Track Saw for 'festool track saw', 0.353) — so a high score is not evidence, and a lower-ranked hit can be the right one. Never auto-apply, auto-link, or bulk-write a result. Read each candidate's name and details, confirm every match with the user, and be willing to conclude that none of them match. " +
-      "Returns an empty result set when the seed has no embedding yet or embeddings are not configured — that is 'unknown', not 'nothing is similar'.",
+      "Find the entities whose stored embedding is closest to one seed entity's, along an allowlisted direction: expense_to_product (which product does this expense line refer to?), product_to_product / ingredient_to_ingredient (duplicate hunting), recipe_to_recipe (related recipes). Pass the pair key plus the seed's id; returns each neighbour with its cosine similarity, nearest first, and echoes the resolved source ref. Similarity ranks candidates, but does not verify them: inspect each candidate and be willing to conclude that none match. Returns no results when the seed has no embedding yet or embeddings are unavailable.",
     inputSchema: similarEntitiesInputSchema.shape,
     outputSchema: similarEntitiesMcpOut,
     annotations: READ_ONLY_CLOSED,

@@ -11,6 +11,7 @@ import {
   product,
   productImage,
   productUnitMappings,
+  searchDocument,
   task,
   taskDependency,
 } from "~/server/db/schema";
@@ -26,6 +27,7 @@ const ACTOR: ActorContext = { userId: unsafeUserId("user-1"), source: "ui" };
 
 const AUDIT = getTableName(auditLog);
 const EMBEDDING = getTableName(entityEmbedding);
+const SEARCH_DOCUMENT = getTableName(searchDocument);
 
 type WriteStatement = {
   op: "select" | "update" | "delete";
@@ -151,6 +153,7 @@ describe("removeEntity — statement order", () => {
       `update ${getTableName(productImage)}`,
       `update ${getTableName(product)}`,
       `update ${EMBEDDING}`,
+      `update ${SEARCH_DOCUMENT}`,
       `insert ${AUDIT}`,
     ]);
   });
@@ -183,6 +186,7 @@ describe("removeEntity — statement order", () => {
       // count(productImage), then the image-id read, then the removals.
       "select",
       "select",
+      "update",
       "update",
       "update",
       "update",
@@ -236,6 +240,7 @@ describe("removeEntity — statement order", () => {
       `update ${getTableName(productUnitMappings)}`,
       `update ${getTableName(product)}`,
       `update ${EMBEDDING}`,
+      `update ${SEARCH_DOCUMENT}`,
       `insert ${AUDIT}`,
     ]);
     expect(auditRows(log)[0]?.changes).toEqual({
@@ -265,11 +270,12 @@ describe("removeEntity — removal mode", () => {
       removal: "hard",
       actor: ACTOR,
     });
-    // The embedding is still SOFT-deleted after a hard parent delete — that is
-    // what lets one cascade cover both modes (see `core.ts`).
+    // Search artifacts are still SOFT-deleted after a hard parent delete —
+    // that is what lets one cascade cover both modes (see `core.ts`).
     expect(log.map((s) => `${s.op} ${s.table}`)).toEqual([
       `delete ${getTableName(product)}`,
       `update ${EMBEDDING}`,
+      `update ${SEARCH_DOCUMENT}`,
       `insert ${AUDIT}`,
     ]);
   });
@@ -295,6 +301,7 @@ describe("removeEntity — removal mode", () => {
       `delete ${getTableName(taskDependency)}`,
       `update ${getTableName(task)}`,
       `update ${EMBEDDING}`,
+      `update ${SEARCH_DOCUMENT}`,
       `insert ${AUDIT}`,
     ]);
   });

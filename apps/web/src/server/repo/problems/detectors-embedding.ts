@@ -6,13 +6,12 @@
  * entities that have no embedding row — i.e. records semantic search simply
  * cannot see. Both are needed; neither implies the other.
  *
- * Deliberately a pure SQL anti-join, NOT a reuse of the backfill's
- * `getStaleEmbeddingTextsForEntityTypes`: that path scans every searchable table, builds
- * the embedding text for every live row, and SHA-hashes each one — fine for a
- * manual backfill, categorically unfit for the fast detector group. The tradeoff
- * is that we detect *missing* only, never *stale* (a row whose text changed but
- * whose hash we'd have to compute to notice). Missing is the case worth a
- * Problems section; stale drains on its own via the mutation side-effects.
+ * Deliberately a pure SQL anti-join, NOT a reuse of the SearchDocument
+ * embedding-backfill worklist: that path scans and hashes the complete catalog
+ * — fine for a manual backfill, categorically unfit for the fast detector
+ * group. The tradeoff is that we detect *missing* only, never *stale*. Missing
+ * is the case worth a Problems section; stale drains through mutation side
+ * effects.
  */
 
 import type { EntityMissingEmbedding } from "@cubby/schemas/problems";

@@ -61,8 +61,10 @@ describe("cascadeRemoval — the embedding cascade is derived, not passed", () =
         ids: ids("id-1", "id-2"),
         audit: { actor: ACTOR },
       });
-      expect(log.updates).toHaveLength(1);
-      expect(log.updates[0]?.values).toHaveProperty("deletedAt");
+      expect(log.updates).toHaveLength(2);
+      expect(log.updates.every((update) => "deletedAt" in update.values)).toBe(
+        true,
+      );
       expect(log.inserted.map((row) => row.entityId)).toEqual(["id-1", "id-2"]);
       expect(log.inserted.every((row) => row.action === "delete")).toBe(true);
       expect(log.inserted.every((row) => row.entityType === entity)).toBe(true);
@@ -121,7 +123,7 @@ describe("cascadeRemoval — the embedding cascade is derived, not passed", () =
       audit: { into: buffer },
     });
     expect(log.inserted).toEqual([]);
-    expect(log.updates).toHaveLength(1);
+    expect(log.updates).toHaveLength(2);
     expect(buffer.map((entry) => entry.action)).toEqual(["update", "delete"]);
   });
 });

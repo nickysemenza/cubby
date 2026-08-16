@@ -4,10 +4,10 @@
  * ## The invariant
  *
  * Root CLAUDE.md: every path that removes an entity must soft-delete that
- * entity's `EntityEmbedding` rows **in the same transaction**. A live embedding
- * pointing at a removed id is permanent damage — soft deletes aren't
- * restorable, `findOrphanedEntityEmbeddings` flags it forever, and until then
- * semantic search keeps returning a result that renders blank.
+ * entity's `SearchDocument` and `EntityEmbedding` rows **in the same
+ * transaction**. A live search artifact pointing at a removed id is permanent
+ * damage — soft deletes aren't restorable, diagnostics flag it forever, and
+ * until then search can return a result that no longer resolves.
  *
  * ## Why it lives here
  *
@@ -64,7 +64,7 @@ import type {
   RemovalAuditEntry,
 } from "~/server/repo/audit-log";
 import { logAuditEntries } from "~/server/repo/audit-log";
-import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
+import { softDeleteEntitySearchArtifactsTx } from "~/server/repo/entity-embedding-cleanup";
 
 /**
  * An entity a removal path can operate on: it writes audit rows and it has a
@@ -82,7 +82,7 @@ export type CascadeCounts = Record<string, Record<string, number>>;
 
 const SEARCHABLE = new Set<string>(searchableEntities);
 
-/** Whether removing a row of this entity must cascade an `EntityEmbedding`. */
+/** Whether removing a row of this entity must cascade derived search state. */
 const isSearchable = (entity: Entity): entity is SearchableEntity =>
   SEARCHABLE.has(entity);
 
@@ -154,7 +154,7 @@ export const cascadeRemoval = async <E extends RemovableEntity>(
   if (ids.length === 0) return;
 
   if (isSearchable(entity)) {
-    await softDeleteEntityEmbeddingsTx(tx, entity, [...ids]);
+    await softDeleteEntitySearchArtifactsTx(tx, entity, [...ids]);
   }
 
   const entries = buildCascadeAuditEntries(entity, ids, args.counts ?? {});

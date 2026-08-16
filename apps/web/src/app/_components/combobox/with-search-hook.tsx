@@ -27,6 +27,7 @@ import {
   buildProductComboboxItem,
   buildProjectComboboxItem,
   buildRecipeComboboxItem,
+  buildSearchHitComboboxItem,
   buildTaskComboboxItem,
 } from "./combobox-builders";
 import type { ComboboxItem } from "./combobox-types";
@@ -91,7 +92,15 @@ export function WithIngredientSearch({
       filters: { nameFilter: searchQuery },
       pagination,
     }),
-    enabled: enabled && !searchingByCode,
+    enabled: enabled && !searchingByCode && searchQuery.trim() === "",
+  });
+  const { data: searchHits, isLoading: isSearchLoading } = useQuery({
+    ...api.search.find.queryOptions({
+      query: searchQuery || "ingredient",
+      entityTypes: ["ingredient"],
+      limit: 20,
+    }),
+    enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
     api.ingredient.getByShortcode.queryOptions(
@@ -133,9 +142,20 @@ export function WithIngredientSearch({
           ? exactItem
             ? [buildIngredientComboboxItem(exactItem)]
             : []
-          : (data?.items.map(buildIngredientComboboxItem) ?? []),
+          : searchQuery.trim()
+            ? (searchHits?.map((hit) =>
+                buildSearchHitComboboxItem<IngredientShortcode>(
+                  hit,
+                  "ingredient",
+                ),
+              ) ?? [])
+            : (data?.items.map(buildIngredientComboboxItem) ?? []),
         onSearchChange,
-        isLoading: exactCode ? isExactLoading : isLoading,
+        isLoading: exactCode
+          ? isExactLoading
+          : searchQuery.trim()
+            ? isSearchLoading
+            : isLoading,
         onCreateNew: openDialog,
         onOpenChange,
       })}
@@ -177,7 +197,15 @@ export function WithLocationSearch({
       // on "zipties & pads").
       sort: { orderBy: "name", direction: "asc" },
     }),
-    enabled: enabled && !searchingByCode,
+    enabled: enabled && !searchingByCode && searchQuery.trim() === "",
+  });
+  const { data: searchHits, isLoading: isSearchLoading } = useQuery({
+    ...api.search.find.queryOptions({
+      query: searchQuery || "location",
+      entityTypes: ["location"],
+      limit: 20,
+    }),
+    enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
     api.location.getByShortcode.queryOptions(
@@ -219,9 +247,17 @@ export function WithLocationSearch({
           ? exactItem
             ? [buildLocationComboboxItemFromDetail(exactItem)]
             : []
-          : (data?.items.map(buildLocationComboboxItem) ?? []),
+          : searchQuery.trim()
+            ? (searchHits?.map((hit) =>
+                buildSearchHitComboboxItem<LocationShortcode>(hit, "location"),
+              ) ?? [])
+            : (data?.items.map(buildLocationComboboxItem) ?? []),
         onSearchChange,
-        isLoading: exactCode ? isExactLoading : isLoading,
+        isLoading: exactCode
+          ? isExactLoading
+          : searchQuery.trim()
+            ? isSearchLoading
+            : isLoading,
         onCreateNew: openDialog,
         onOpenChange,
       })}
@@ -258,7 +294,15 @@ export function WithProductSearch({
       filters: { nameFilter: searchQuery },
       pagination,
     }),
-    enabled: enabled && !searchingByCode,
+    enabled: enabled && !searchingByCode && searchQuery.trim() === "",
+  });
+  const { data: searchHits, isLoading: isSearchLoading } = useQuery({
+    ...api.search.find.queryOptions({
+      query: searchQuery || "product",
+      entityTypes: ["product"],
+      limit: 20,
+    }),
+    enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
     api.product.getByShortcode.queryOptions(
@@ -304,9 +348,17 @@ export function WithProductSearch({
           ? exactItem
             ? [buildProductComboboxItem(exactItem)]
             : []
-          : (data?.items.map(buildProductComboboxItem) ?? []),
+          : searchQuery.trim()
+            ? (searchHits?.map((hit) =>
+                buildSearchHitComboboxItem<ProductShortcode>(hit, "product"),
+              ) ?? [])
+            : (data?.items.map(buildProductComboboxItem) ?? []),
         onSearchChange,
-        isLoading: exactCode ? isExactLoading : isLoading,
+        isLoading: exactCode
+          ? isExactLoading
+          : searchQuery.trim()
+            ? isSearchLoading
+            : isLoading,
         onCreateNew,
         onOpenChange,
       })}
@@ -330,7 +382,15 @@ export function WithRecipeSearch({
       filters: { nameFilter: searchQuery },
       pagination,
     }),
-    enabled: enabled && !searchingByCode,
+    enabled: enabled && !searchingByCode && searchQuery.trim() === "",
+  });
+  const { data: searchHits, isLoading: isSearchLoading } = useQuery({
+    ...api.search.find.queryOptions({
+      query: searchQuery || "recipe",
+      entityTypes: ["recipe"],
+      limit: 20,
+    }),
+    enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
     api.recipe.getByShortcode.queryOptions(
@@ -347,9 +407,17 @@ export function WithRecipeSearch({
           ? exactItem
             ? [buildRecipeComboboxItem(exactItem)]
             : []
-          : (data?.items.map(buildRecipeComboboxItem) ?? []),
+          : searchQuery.trim()
+            ? (searchHits?.map((hit) =>
+                buildSearchHitComboboxItem<RecipeShortcode>(hit, "recipe"),
+              ) ?? [])
+            : (data?.items.map(buildRecipeComboboxItem) ?? []),
         onSearchChange,
-        isLoading: exactCode ? isExactLoading : isLoading,
+        isLoading: exactCode
+          ? isExactLoading
+          : searchQuery.trim()
+            ? isSearchLoading
+            : isLoading,
         onOpenChange,
       })}
     </>
@@ -377,7 +445,15 @@ export function WithProjectSearch({
       filters: { search: searchQuery },
       pagination,
     }),
-    enabled: enabled && !searchingByCode,
+    enabled: enabled && !searchingByCode && searchQuery.trim() === "",
+  });
+  const { data: searchHits, isLoading: isSearchLoading } = useQuery({
+    ...api.search.find.queryOptions({
+      query: searchQuery || "project",
+      entityTypes: ["project"],
+      limit: 20,
+    }),
+    enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
     api.project.getByShortcode.queryOptions(
@@ -390,14 +466,22 @@ export function WithProjectSearch({
     ? exactItem
       ? [buildProjectComboboxItem(exactItem)]
       : []
-    : (data?.items.map(buildProjectComboboxItem) ?? []);
+    : searchQuery.trim()
+      ? (searchHits?.map((hit) =>
+          buildSearchHitComboboxItem<ProjectShortcode>(hit, "project"),
+        ) ?? [])
+      : (data?.items.map(buildProjectComboboxItem) ?? []);
 
   return (
     <>
       {children({
         items,
         onSearchChange,
-        isLoading: exactCode ? isExactLoading : isLoading,
+        isLoading: exactCode
+          ? isExactLoading
+          : searchQuery.trim()
+            ? isSearchLoading
+            : isLoading,
         onOpenChange,
       })}
     </>
@@ -424,7 +508,15 @@ export function WithTaskSearch({
       filters: { search: searchQuery },
       pagination,
     }),
-    enabled: enabled && !searchingByCode,
+    enabled: enabled && !searchingByCode && searchQuery.trim() === "",
+  });
+  const { data: searchHits, isLoading: isSearchLoading } = useQuery({
+    ...api.search.find.queryOptions({
+      query: searchQuery || "task",
+      entityTypes: ["task"],
+      limit: 20,
+    }),
+    enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
     api.task.getByShortcode.queryOptions(
@@ -440,9 +532,17 @@ export function WithTaskSearch({
           ? exactItem
             ? [buildTaskComboboxItem(exactItem)]
             : []
-          : (data?.items.map(buildTaskComboboxItem) ?? []),
+          : searchQuery.trim()
+            ? (searchHits?.map((hit) =>
+                buildSearchHitComboboxItem<TaskShortcode>(hit, "task"),
+              ) ?? [])
+            : (data?.items.map(buildTaskComboboxItem) ?? []),
         onSearchChange,
-        isLoading: exactCode ? isExactLoading : isLoading,
+        isLoading: exactCode
+          ? isExactLoading
+          : searchQuery.trim()
+            ? isSearchLoading
+            : isLoading,
         onOpenChange,
       })}
     </>

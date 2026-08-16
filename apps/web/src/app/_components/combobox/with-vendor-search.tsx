@@ -7,15 +7,12 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { vendorMutationInvalidateKeys } from "~/lib/query-keys";
 import {
+  buildSearchHitComboboxItem,
   buildVendorNameComboboxItem,
   buildVendorShortcodeComboboxItem,
 } from "./combobox-builders";
 import type { ComboboxItem } from "./combobox-types";
-import {
-  pagination,
-  useDeferredSearch,
-  useEntitySearch,
-} from "./entity-search-hooks";
+import { useDeferredSearch, useEntitySearch } from "./entity-search-hooks";
 import type { WithEntitySearchProps } from "./with-search-hook";
 
 /**
@@ -47,10 +44,11 @@ function useVendorSearchRows() {
     ...api.vendor.options.queryOptions(),
     enabled: enabled && !searchingByCode && searchQuery.trim() === "",
   });
-  const { data: searchData, isLoading: isSearchLoading } = useQuery({
-    ...api.vendor.list.queryOptions({
-      filters: { search: searchQuery },
-      pagination,
+  const { data: searchHits, isLoading: isSearchLoading } = useQuery({
+    ...api.search.find.queryOptions({
+      query: searchQuery || "vendor",
+      entityTypes: ["vendor"],
+      limit: 20,
     }),
     enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
   });
@@ -62,20 +60,15 @@ function useVendorSearchRows() {
   );
 
   const rows = useMemo(
-    () =>
-      searchingByCode
-        ? exactItem
-          ? [exactItem]
-          : []
-        : searchQuery.trim()
-          ? (searchData?.items ?? [])
-          : (data ?? []),
-    [data, exactItem, searchData, searchQuery, searchingByCode],
+    () => (searchingByCode ? (exactItem ? [exactItem] : []) : (data ?? [])),
+    [data, exactItem, searchingByCode],
   );
 
   return {
     api,
     rows,
+    searchHits,
+    isTypedSearch: searchQuery.trim() !== "" && !searchingByCode,
     searchQuery,
     onSearchChange,
     onOpenChange,
@@ -106,8 +99,14 @@ function useVendorSearchRows() {
 export function WithVendorSearch({
   children,
 }: WithEntitySearchProps<VendorName>) {
-  const { rows, onSearchChange, onOpenChange, isLoading } =
-    useVendorSearchRows();
+  const {
+    rows,
+    searchHits,
+    isTypedSearch,
+    onSearchChange,
+    onOpenChange,
+    isLoading,
+  } = useVendorSearchRows();
 
   const items = useMemo<ComboboxItem<VendorName>[]>(() => {
     // Destructuring the real `id` here while the item's own `id` stays the
@@ -115,8 +114,12 @@ export function WithVendorSearch({
     // combobox item's identity is deliberately the name; `id` is consumed only
     // by the icon, to resolve a rename-proof logo via `VendorMark`'s
     // `vendorId` prop.
-    return rows.map(buildVendorNameComboboxItem);
-  }, [rows]);
+    if (!isTypedSearch) return rows.map(buildVendorNameComboboxItem);
+    return (searchHits ?? []).map((hit) => {
+      const item = buildSearchHitComboboxItem<VendorShortcode>(hit, "vendor");
+      return { ...item, id: hit.title };
+    });
+  }, [isTypedSearch, rows, searchHits]);
 
   // No server round trip: the item's id/name IS the typed vendor name, and the
   // roster row is created by the save that follows. Trimmed so a stray space
@@ -146,12 +149,22 @@ export function WithVendorSearch({
 export function WithVendorShortcodeSearch({
   children,
 }: WithEntitySearchProps<VendorShortcode>) {
-  const { api, rows, onSearchChange, onOpenChange, isLoading } =
-    useVendorSearchRows();
+  const {
+    api,
+    rows,
+    searchHits,
+    isTypedSearch,
+    onSearchChange,
+    onOpenChange,
+    isLoading,
+  } = useVendorSearchRows();
 
   const items = useMemo<ComboboxItem<VendorShortcode>[]>(() => {
-    return rows.map(buildVendorShortcodeComboboxItem);
-  }, [rows]);
+    if (!isTypedSearch) return rows.map(buildVendorShortcodeComboboxItem);
+    return (searchHits ?? []).map((hit) =>
+      buildSearchHitComboboxItem<VendorShortcode>(hit, "vendor"),
+    );
+  }, [isTypedSearch, rows, searchHits]);
 
   const createMutation = useActionMutation({
     mutationFn: api.vendor.create.mutationOptions,

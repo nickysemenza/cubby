@@ -194,7 +194,7 @@ export const buildExpenseWhereClause = async (
   // `urlSearch` below (distinct filters, meant to narrow) but wrong within one
   // multi-term name search, where the caller is guessing at synonyms for a row
   // that names the thing rather than the product (`dust extractor` for a
-  // Festool vacuum). Same pattern as repo/search.ts.
+  // Festool vacuum). The search document builder uses the same pattern.
   //
   // `formatSearchTerm` returns undefined for an empty/whitespace term, so `or()`
   // degrades cleanly to undefined when every term is blank.

@@ -9,10 +9,11 @@ import {
   getBackgroundJob,
   markBackgroundJobRunning,
 } from "~/server/repo/background-jobs";
+import { upsertEntityEmbedding } from "~/server/repo/entity-embedding";
 import {
-  getEmbeddingTextForEntity,
-  upsertEntityEmbedding,
-} from "~/server/repo/entity-embedding";
+  getSearchDocumentEmbeddingText,
+  refreshSearchDocument,
+} from "~/server/repo/search-document";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import {
   embedTexts,
@@ -113,8 +114,14 @@ async function runBackgroundJobPayload(
       return "succeeded" as const;
     })
     .with({ kind: "entity-embedding.refresh" }, async (p) => {
+      const refreshed = await refreshSearchDocument(
+        db,
+        p.payload.entityType,
+        p.payload.entityId,
+      );
+      if (refreshed.status !== "upserted") return "skipped" as const;
       if (!semanticEmbeddingsConfigured()) return "skipped" as const;
-      const text = await getEmbeddingTextForEntity(
+      const text = await getSearchDocumentEmbeddingText(
         db,
         p.payload.entityType,
         p.payload.entityId,

@@ -1362,7 +1362,7 @@ describe("specialized tools round-trip on shortcodes", () => {
 
     const searched = await callTool(
       "global_search",
-      { query: "Globally Searchable Shelf", mode: "lexical" },
+      { query: "Globally Searchable Shelf" },
       caller,
     );
     expectOk(searched);

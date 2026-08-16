@@ -124,6 +124,17 @@ const pgVector = customType<{
   },
 });
 
+// `tsvector` is maintained by the search-document projection, rather than a
+// generated column, because each document has field-specific weights.
+const pgTsVector = customType<{
+  data: string;
+  driverData: string;
+}>({
+  dataType() {
+    return "tsvector";
+  },
+});
+
 // Re-export Better-Auth tables for use throughout the app
 export {
   account,
@@ -781,6 +792,50 @@ export const entityEmbedding = pgTable(
   ],
 );
 
+/**
+ * Rebuildable, denormalized search projection. It is deliberately not an
+ * authority for entity data: mutation side-effects refresh rows from the
+ * source tables, and a full backfill can recreate it at any time.
+ */
+export const searchDocument = pgTable(
+  "SearchDocument",
+  {
+    id: pkUuid(),
+    entityType: text("entityType").notNull().$type<SearchableEntity>(),
+    entityId: uuid("entityId").notNull(),
+    shortcode: text("shortcode").notNull(),
+    title: text("title").notNull(),
+    subtitle: text("subtitle"),
+    typeHint: text("typeHint"),
+    aliases: text("aliases").array().notNull().default(sql`ARRAY[]::text[]`),
+    keywords: text("keywords").array().notNull().default(sql`ARRAY[]::text[]`),
+    body: text("body").notNull(),
+    semanticText: text("semanticText").notNull(),
+    normalizedText: text("normalizedText").notNull(),
+    searchVector: pgTsVector("searchVector").notNull(),
+    sourceHash: text("sourceHash").notNull(),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    uniqueIndex("SearchDocument_live_entity_key")
+      .on(table.entityType, table.entityId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("SearchDocument_shortcode_active_idx")
+      .using("btree", sql`lower(${table.shortcode})`)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("SearchDocument_title_active_idx")
+      .using("btree", sql`lower(${table.title}) text_pattern_ops`)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("SearchDocument_vector_gin_idx")
+      .using("gin", table.searchVector)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("SearchDocument_normalized_gist_idx")
+      .using("gist", sql`${table.normalizedText} gist_trgm_ops`)
+      .where(sql`${table.deletedAt} IS NULL`),
+  ],
+);
+
 // InventoryEntry table
 export const inventoryEntry = pgTable(
   "InventoryEntry",
@@ -1284,7 +1339,7 @@ export const purchase = pgTable(
       "Purchase_statedTotal_whole_cent_check",
       sql`${table.statedTotal} IS NULL OR abs(${table.statedTotal} * 100 - round(${table.statedTotal} * 100)) < 0.0000001`,
     ),
-    // Order ids are searched as substrings via repo/search.ts.
+    // Order ids are projected into SearchDocument identifiers/keywords.
     index("Purchase_orderId_gin_idx").using(
       "gin",
       sql`${table.orderId} gin_trgm_ops`,
