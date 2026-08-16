@@ -1729,8 +1729,9 @@ export const expense = pgTable(
     // SIGNED — money direction wins, and the quantity's own sign is consulted
     // only when there is no money:
     //   cost > 0  → acquisition of +|qty|
-    //   cost < 0  → exit of −|qty|   (302 live rows store these positive; the
-    //               sign is not consulted, so readers must use abs())
+    //   cost < 0  → exit of −|qty|   (enforced since 2026-08-16 by
+    //               `assertQuantitySignMatchesCost`; readers still abs() as
+    //               defence-in-depth rather than trusting the column)
     //   cost = 0  → the sign IS the fact: +qty is a free acquisition (promo
     //               pack, bundled accessory), −qty is a discard/write-off
     //   qty NULL  → unknown; contributes nothing and is reported as uncertainty

@@ -551,7 +551,7 @@ describe("problems repo", () => {
         vendor: "eBay",
         orderId: "SALE-1",
         productId: sold.id,
-        productQuantity: 1,
+        productQuantity: -1,
       });
       await seedLine({
         name: "four bins sold",
@@ -559,7 +559,7 @@ describe("problems repo", () => {
         vendor: "eBay",
         orderId: "SALE-2",
         productId: partial.id,
-        productQuantity: 4,
+        productQuantity: -4,
       });
       await seedLine({
         name: "sander",
@@ -679,7 +679,7 @@ describe("problems repo", () => {
         vendor: "eBay",
         orderId: "LINKED-SALE",
         productId: linked.id,
-        productQuantity: 1,
+        productQuantity: -1,
       });
       // THE false positive this predicate exists to avoid. A negative line with
       // no product, sitting on a purchase that nets POSITIVE: a refund, a price
@@ -725,6 +725,115 @@ describe("problems repo", () => {
     });
   });
 
+  describe("findPurchaselessExitExpenses", () => {
+    const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
+      unwrap(
+        createExpense(
+          ctx.db,
+          expenseCreateInput.parse(makeExpenseInput(overrides)),
+          ctx.actor,
+        ),
+      );
+
+    it("flags a credit with no order and leaves the mirror detector's rows alone", async () => {
+      // The defect: an item handed over for cash. No vendor, no order, so no
+      // Purchase — which is why findUnlinkedExitExpenses' innerJoin cannot see
+      // it however the disposal predicate is tuned.
+      const cashSale = await seedLine({
+        name: "old walking pad",
+        cost: -100,
+        vendor: null,
+        orderId: null,
+        productId: null,
+      });
+      // The tolerated false positive, seeded on purpose: money that never
+      // bought anything looks identical on the row. It is reported too, and the
+      // coverage class is what makes that honest rather than wrong.
+      const contribution = await seedLine({
+        name: "neighbour's share of the tree removal",
+        cost: -2000,
+        costType: "services",
+        vendor: null,
+        orderId: null,
+        productId: null,
+      });
+      // Has a Purchase, so it belongs to findUnlinkedExitExpenses, not here.
+      await seedLine({
+        name: "ebay payout - unknown item",
+        cost: -140,
+        vendor: "eBay",
+        orderId: "PURCHASELESS-MIRROR",
+        productId: null,
+      });
+      // An adjustment is productless by definition, not by omission. Without
+      // the lineKind filter this row would be reported as a missing link.
+      await seedLine({
+        name: "ProXtra savings",
+        cost: -20,
+        lineKind: "discount",
+        vendor: null,
+        orderId: null,
+        productId: null,
+      });
+      // Purchase-less but POSITIVE — an ordinary hand-entered spend line.
+      await seedLine({
+        name: "cash for gravel",
+        cost: 60,
+        vendor: null,
+        orderId: null,
+        productId: null,
+      });
+      // Planned, not banked. This one matters on live data: the largest
+      // purchase-less credits in the ledger are future-dated, so without the
+      // `future = false` filter they would dominate the list with money that
+      // has not moved.
+      await seedLine({
+        name: "expected contribution",
+        cost: -5000,
+        future: true,
+        vendor: null,
+        orderId: null,
+        productId: null,
+      });
+
+      const found = await findFastProblems(ctx.db);
+      const ids = found.purchaselessExitExpenses.map((row) => row.id);
+
+      expect(ids).toContain(cashSale.id);
+      expect(ids).toContain(contribution.id);
+      expect(found.purchaselessExitExpenses).toContainEqual(
+        expect.objectContaining({ id: cashSale.id, cost: -100 }),
+      );
+      // Belongs to the mirror detector — it has a Purchase.
+      expect(
+        found.purchaselessExitExpenses.some(
+          (row) => row.name === "ebay payout - unknown item",
+        ),
+      ).toBe(false);
+      expect(
+        found.purchaselessExitExpenses.some(
+          (row) => row.name === "ProXtra savings",
+        ),
+      ).toBe(false);
+      expect(
+        found.purchaselessExitExpenses.some(
+          (row) => row.name === "cash for gravel",
+        ),
+      ).toBe(false);
+      expect(
+        found.purchaselessExitExpenses.some(
+          (row) => row.name === "expected contribution",
+        ),
+      ).toBe(false);
+    });
+
+    // Load-bearing: roughly half the reported rows are legitimately
+    // productless, so counting them would make the badge permanently red.
+    it("is advisory, not a defect", () => {
+      expect(PROBLEM_CLASS.purchaselessExitExpenses).toBe("coverage");
+    });
+  });
+
   describe("findProductsWithNegativeExpectedQuantity", () => {
     const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
       unwrap(
@@ -753,7 +862,7 @@ describe("problems repo", () => {
         name: "saw sold",
         cost: -60,
         productId: unbalanced.id,
-        productQuantity: 1,
+        productQuantity: -1,
       });
       // Bought 8, returned 8. A return is a real exit, so this nets to zero —
       // and it sits on a Purchase that nets POSITIVE, which is why
@@ -772,7 +881,7 @@ describe("problems repo", () => {
         vendor: "Home Depot",
         orderId: "BOX-1",
         productId: balanced.id,
-        productQuantity: 8,
+        productQuantity: -8,
       });
 
       const found = await findFastProblems(ctx.db);
@@ -875,7 +984,7 @@ describe("problems repo", () => {
         vendor: "eBay",
         orderId: "REBUY-SALE",
         productId: rebought.id,
-        productQuantity: 1,
+        productQuantity: -1,
       });
 
       // Sold and nothing since — the shelf entry is stale, so it reports.

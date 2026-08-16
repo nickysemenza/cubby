@@ -100,6 +100,7 @@ export {
   findProductsWithNegativeExpectedQuantity,
   findProductsWithoutMappings,
   findProductsWithUpcGaps,
+  findPurchaselessExitExpenses,
   findSoldButStillStocked,
   findToolsUsedOutsideOwnership,
   findUnlinkedExitExpenses,

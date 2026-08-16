@@ -3,8 +3,10 @@ import {
   type ExpenseCreateInput,
   expenseCreateInput,
 } from "@cubby/schemas/project";
+import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { getDb } from "../database-helpers";
 import { createExpense } from "../expense";
 import {
   createProductFixture as createProduct,
@@ -47,14 +49,22 @@ describe("loadProductQuantityLedgers", () => {
       productId: prod.id,
       productQuantity: 8,
     });
-    // A return: negative cost, POSITIVE quantity — the shape 302 live rows use.
-    // The sign of the money decides, so this is 8 units leaving.
-    await seed({
+    // A return: negative cost, POSITIVE quantity — the legacy shape, no longer
+    // writable through the repo since `assertQuantitySignMatchesCost` closed
+    // that door on 2026-08-16. Forced past it with raw SQL on purpose: the
+    // reader's `abs()` is defence-in-depth for rows that arrive some other way,
+    // and without a test pinning it, a later reader would look at the assert
+    // and "simplify" the tolerance away. The sign of the money decides, so this
+    // is 8 units leaving however the quantity is stored.
+    const returned = await seed({
       name: "returned 8",
       cost: -33.44,
       productId: prod.id,
-      productQuantity: 8,
+      productQuantity: -8,
     });
+    await getDb(ctx.db).execute(
+      sql`UPDATE "Expense" SET "productQuantity" = 8 WHERE "id" = ${returned.entityId}`,
+    );
     await seed({
       name: "bought 2 more",
       cost: 9,
@@ -124,7 +134,7 @@ describe("loadProductQuantityLedgers", () => {
       name: "sold",
       cost: -60,
       productId: prod.id,
-      productQuantity: 1,
+      productQuantity: -1,
     });
 
     expect((await ledgerFor(prod.entityId))?.expectedQuantity).toBe(-1);

@@ -1544,7 +1544,7 @@ describe("product repository", () => {
           makeExpenseInput({
             name: "Return",
             productId: derived.id,
-            productQuantity: 1,
+            productQuantity: -1,
             cost: -100,
           }),
           ctx.actor,

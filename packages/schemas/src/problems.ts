@@ -173,6 +173,27 @@ export const unlinkedExitExpenseSchema = z.object({
   vendorName: z.string().nullable(),
 });
 
+// The blind spot in `unlinkedExitExpenseSchema` above, which keys on a disposal
+// Purchase and therefore cannot see a row that has no Purchase at all — an
+// `innerJoin` drops it before the predicate ever runs.
+//
+// Deliberately NOT folded into that detector. A purchase-less negative line is
+// about half sales (an item handed over for cash, entered by hand) and half
+// money that never bought anything (family contributions, a neighbour's share
+// of a shared cost). Neither the ledger nor the settlement side carries a
+// signal separating them, so this is reported as `coverage` — a worklist, never
+// a red count. Widening the disposal-Purchase predicate instead would import
+// that same ambiguity into a detector that is currently precise.
+export const purchaselessExitExpenseSchema = z.object({
+  id: expenseShortcode,
+  name: z.string(),
+  /** Negative, as stored. */
+  cost: z.number(),
+  date: plainDate.nullable(),
+  /** Present on most rows; the closest thing to a hint about what this was. */
+  projectName: z.string().nullable(),
+});
+
 // A recorded ProjectToolUsage edge for a tool we did not own while the project
 // ran. The `trade_match` suggestion lane shipped without consulting ownership
 // dates, so it drew candidates from the whole present-day tool shelf — for a
@@ -745,6 +766,7 @@ const problemsFastShape = {
   unvaluedBucketProducts: z.array(productMissingPriceSchema),
   soldButStillStocked: z.array(soldButStillStockedSchema),
   unlinkedExitExpenses: z.array(unlinkedExitExpenseSchema),
+  purchaselessExitExpenses: z.array(purchaselessExitExpenseSchema),
   negativeExpectedQuantity: z.array(negativeExpectedQuantitySchema),
   toolsUsedOutsideOwnership: z.array(toolUsedOutsideOwnershipSchema),
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
@@ -930,6 +952,18 @@ export const PROBLEM_CLASS = {
   // payout describes is the whole of the work, and guessing it would write a
   // false ownership history that `soldButStillStocked` would then trust.
   unlinkedExitExpenses: "defect",
+  // `coverage`, NOT `defect`, and the distinction is the whole point of the
+  // detector existing separately from `unlinkedExitExpenses` above.
+  //
+  // That one is a defect because every row it reports is genuinely a sale
+  // missing its product. This one reports negative lines with no Purchase, and
+  // roughly half of those are legitimately productless — a family
+  // contribution, a neighbour's share of a shared cost. There is no signal
+  // separating those from a hand-entered cash sale, so a red count here would
+  // be permanently non-zero and would train the reader to ignore it. Advisory
+  // means it can carry that ambiguity honestly. No auto-fix for the same
+  // reason.
+  purchaselessExitExpenses: "coverage",
   // A contradiction, not a shortfall: more units left than ever arrived, so
   // some row is wrong and fixing it removes the product from the list for
   // good. `coverage` would be wrong — there is no denominator, and no reported
@@ -1148,6 +1182,9 @@ export type OrphanedProduct = z.infer<typeof orphanedProductSchema>;
 export type ProductMissingPrice = z.infer<typeof productMissingPriceSchema>;
 export type SoldButStillStocked = z.infer<typeof soldButStillStockedSchema>;
 export type UnlinkedExitExpense = z.infer<typeof unlinkedExitExpenseSchema>;
+export type PurchaselessExitExpense = z.infer<
+  typeof purchaselessExitExpenseSchema
+>;
 export type NegativeExpectedQuantity = z.infer<
   typeof negativeExpectedQuantitySchema
 >;

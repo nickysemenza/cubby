@@ -28,6 +28,7 @@ import type {
   ProductMissingPrice,
   ProductWithBetterUpcData,
   ProductWithoutMappings,
+  PurchaselessExitExpense,
   SoldButStillStocked,
   ToolUsedOutsideOwnership,
   UnlinkedExitExpense,
@@ -525,6 +526,71 @@ export const findUnlinkedExitExpenses = async (
     date: row.date,
     purchaseId: unsafePurchaseShortcode(row.purchaseShortcode),
     vendorName: row.vendorName,
+  }));
+};
+
+// Find negative lines that have no Purchase at all — the blind spot of
+// `findUnlinkedExitExpenses` directly above.
+//
+// That detector's `innerJoin` on `purchase` drops a purchase-less row before
+// its predicate runs, so those rows are invisible to it BY CONSTRUCTION. They
+// are the hand-entered end of the ledger: an item handed over for cash with no
+// order number, no payout export, nothing but a name and an amount.
+//
+// This is `coverage`, not `defect`, and the reason is precision. On production
+// six rows match and three are real sales; the other three are money that never
+// bought anything — two family contributions and a neighbour's share of a
+// shared cost. Nothing on the row or one join out separates them: `costType`
+// splits them today only by accident, and `FinancialTransaction.kind` is
+// absent because none of these were ever settled through an account.
+//
+// The alternative — relaxing the disposal-Purchase test in the mirror detector
+// so it covers these too — was rejected. It would import this ambiguity into a
+// detector that is currently precise, which is the failure the essay above
+// `findSoldButStillStocked` describes: bare negative lines were "wrong about
+// half the time on production data". Keeping them apart lets one stay red and
+// this one stay advisory.
+export const findPurchaselessExitExpenses = async (
+  db: Database,
+): Promise<PurchaselessExitExpense[]> => {
+  const dbClient = getDb(db);
+
+  const rows = await dbClient
+    .select({
+      shortcode: expense.shortcode,
+      name: expense.name,
+      cost: expense.cost,
+      date: expense.date,
+      projectName: project.name,
+    })
+    .from(expense)
+    .leftJoin(
+      project,
+      and(eq(project.id, expense.projectId), notDeleted(project)),
+    )
+    .where(
+      and(
+        notDeleted(expense),
+        eq(expense.future, false),
+        lt(expense.cost, 0),
+        isNull(expense.productId),
+        isNull(expense.purchaseId),
+        // Adjustments (tax, discount, fee, …) are productless by definition, and
+        // an allocation may not carry a productId at all — neither is a missing
+        // link. Without these two the detector would report every credit line
+        // in the ledger.
+        eq(expense.lineKind, "principal"),
+        eq(expense.lineBasis, "item_line"),
+      ),
+    )
+    .orderBy(sql`${expense.date} DESC NULLS LAST`);
+
+  return rows.map((row) => ({
+    id: unsafeExpenseShortcode(row.shortcode),
+    name: row.name,
+    cost: Number(row.cost),
+    date: row.date,
+    projectName: row.projectName,
   }));
 };
 

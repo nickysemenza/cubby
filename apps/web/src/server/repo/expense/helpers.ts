@@ -29,30 +29,42 @@ import {
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 /**
- * Reject a negative quantity on a positive-cost line.
+ * Reject a quantity whose sign contradicts the money's direction.
  *
- * `Expense.productQuantity` is signed, but money direction wins: a positive
- * cost is an acquisition of `+|qty|` no matter what sign is stored, so a
- * negative value there says nothing and only corrupts the one aggregate that
- * sums the raw column — the derived unit price in `product/pricing.ts`.
+ * `Expense.productQuantity` is signed and money direction wins: a positive cost
+ * is an acquisition of `+|qty|` and a negative cost an exit of `−|qty|`, so a
+ * contradicting sign says nothing and only corrupts the aggregates that sum the
+ * raw column.
  *
- * Deliberately NOT mirrored for `cost < 0`: 302 live rows store a *positive*
- * quantity on a negative-cost line (returns and refunds imported as written),
- * and the ledger reads those as `−|qty|`, so both signs are legal there.
+ * The negative-cost half was NOT enforced until 2026-08-16, because 302 live
+ * rows stored a positive quantity there — returns and refunds imported as
+ * written. Those were normalized on 2026-08-06, and the 69 that imports had
+ * reintroduced since were normalized on 2026-08-16, so the stored sign is now
+ * consistent and this closes the door behind it. The readers deliberately keep
+ * their `abs()` (see `expenseSignedUnitsSql`): this makes the column
+ * trustworthy, it does not make them depend on it.
+ *
+ * A negative-cost line where no unit actually left — an Amazon "Account
+ * adjustment" is a price concession with the item KEPT — takes `null`, not a
+ * negative. Null is unaffected here, and that is the intended escape.
  */
 export const assertQuantitySignMatchesCost = (
   cost: number | null,
   productQuantity: number | null,
 ) => {
-  if (
-    cost !== null &&
-    cost > 0 &&
-    productQuantity !== null &&
-    productQuantity < 0
-  ) {
+  if (cost === null || productQuantity === null) {
+    return;
+  }
+  if (cost > 0 && productQuantity < 0) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
       "A positive-cost line is an acquisition; its quantity cannot be negative. Record an exit as a negative cost, or as a $0 line with a negative quantity.",
+    );
+  }
+  if (cost < 0 && productQuantity > 0) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "A negative-cost line is an exit; its quantity cannot be positive. Record the units that left as a negative quantity, or leave the quantity null if no unit left (a price concession where the item was kept).",
     );
   }
 };
