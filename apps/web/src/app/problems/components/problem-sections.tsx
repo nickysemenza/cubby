@@ -933,6 +933,7 @@ const DECLARED_SECTIONS = [
     id: "negative-expected-quantity",
     label: "Negative expected",
     select: (p) => p.negativeExpectedQuantity,
+    totalKey: "negativeExpectedQuantity",
     entity: "product",
     title: "Sold More Than Was Bought",
     description:

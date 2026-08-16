@@ -3,6 +3,7 @@ import type { SortParams } from "@cubby/schemas/pagination";
 import type {
   EmptyLocation,
   LocationWithoutAiDescription,
+  NegativeExpectedQuantity,
   NeverVerifiedInventory,
   ProblemsViewsOut,
   SectionTotals,
@@ -148,6 +149,25 @@ const toEmptyLocation = (row: ListRow): EmptyLocation => {
   };
 };
 
+const toNegativeExpectedQuantity = (row: ListRow): NegativeExpectedQuantity => {
+  const r = row as unknown as {
+    id: NegativeExpectedQuantity["id"];
+    name: string;
+    manufacturer: string;
+    // Field-for-field the five numbers the detector used to compute itself.
+    quantityLedger: Omit<
+      NegativeExpectedQuantity,
+      "id" | "name" | "manufacturer"
+    >;
+  };
+  return {
+    id: r.id,
+    name: r.name,
+    manufacturer: r.manufacturer,
+    ...r.quantityLedger,
+  };
+};
+
 export const findViewProblems = async (
   db: Database,
 ): Promise<ProblemsViewsOut> => {
@@ -209,6 +229,9 @@ export const findViewProblems = async (
       results.locationsWithoutAiDescription?.data ?? []
     ).map(toLocationWithoutAiDescription),
     emptyLocations: (results.emptyLocations?.data ?? []).map(toEmptyLocation),
+    negativeExpectedQuantity: (
+      results.negativeExpectedQuantity?.data ?? []
+    ).map(toNegativeExpectedQuantity),
     sectionTotals,
   };
 };

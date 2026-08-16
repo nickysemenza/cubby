@@ -798,7 +798,6 @@ const problemsFastShape = {
   soldButStillStocked: z.array(soldButStillStockedSchema),
   unlinkedExitExpenses: z.array(unlinkedExitExpenseSchema),
   purchaselessExitExpenses: z.array(purchaselessExitExpenseSchema),
-  negativeExpectedQuantity: z.array(negativeExpectedQuantitySchema),
   toolsUsedOutsideOwnership: z.array(toolUsedOutsideOwnershipSchema),
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
   ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
@@ -904,6 +903,7 @@ const problemsViewsShape = {
   neverVerifiedInventory: z.array(neverVerifiedInventorySchema),
   locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
   emptyLocations: z.array(emptyLocationSchema),
+  negativeExpectedQuantity: z.array(negativeExpectedQuantitySchema),
   unusedIngredientsWithProduct: z.array(unusedIngredientSchema),
   unusedIngredientsWithoutProduct: z.array(unusedIngredientSchema),
 };

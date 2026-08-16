@@ -348,6 +348,41 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         category: true,
       },
     },
+    {
+      id: "over-exited",
+      label: "Sold more than bought",
+      description: "More units gone than the ledger can account for buying",
+      // The schema already calls `expectedQuantityMax: -1` "a real data defect,
+      // and the reason this is not clamped at zero" — this view is that
+      // sentence, and the detector that separately re-derived it with a grouped
+      // HAVING is gone.
+      //
+      // Deliberately LOOSER than "sold but still stocked", which keys on
+      // disposal Purchases. Not an inconsistency — a different question. "Was
+      // this sold off entirely?" treats a refund as innocent noise, which on
+      // live data it usually is; "do the units balance?" treats a return of 8
+      // outlet boxes as 8 real units going back to the store, and most negative
+      // lines in this ledger are exactly that, sitting inside a Purchase that
+      // nets positive. Requiring a disposal Purchase here missed most of the
+      // exited units.
+      //
+      // The card reads `quantityLedger` off the list row, which carries the
+      // unknown-quantity counts field-for-field. They change what the row
+      // MEANS: unquantified acquisition lines are data-entry debt (the missing
+      // count almost certainly explains the gap), while a fully quantified
+      // ledger is a genuine contradiction. Reporting the bare number would
+      // flatten those into the same red row.
+      filters: [{ id: "expectedQuantity", value: "negative" }],
+      problem: {
+        key: "negativeExpectedQuantity",
+        title: "More units gone than acquired",
+        description:
+          "The ledger says more units left than ever arrived. Usually a missing acquisition line or a quantity typed on the wrong row.",
+        emptyMessage: "No product has exited more units than it acquired.",
+        serverFilters: { expectedQuantityMax: -1 },
+      },
+      columnVisibility: { expectedQuantity: true },
+    },
   ],
   purchase: [
     {

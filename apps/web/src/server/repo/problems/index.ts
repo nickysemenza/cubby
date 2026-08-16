@@ -94,7 +94,6 @@ export {
   findLinkedProductIds,
   findOrphanedProducts,
   findProductsMissingPrice,
-  findProductsWithNegativeExpectedQuantity,
   findProductsWithoutMappings,
   findProductsWithUpcGaps,
   findPurchaselessExitExpenses,

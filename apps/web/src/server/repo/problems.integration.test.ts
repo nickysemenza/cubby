@@ -836,7 +836,7 @@ describe("problems repo", () => {
     });
   });
 
-  describe("findProductsWithNegativeExpectedQuantity", () => {
+  describe("negative expected quantity (saved-view backed)", () => {
     const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
       unwrap(
         createExpense(
@@ -886,7 +886,7 @@ describe("problems repo", () => {
         productQuantity: -8,
       });
 
-      const found = await findFastProblems(ctx.db);
+      const found = await findViewProblems(ctx.db);
       const flagged = found.negativeExpectedQuantity.find(
         (p) => p.id === unbalanced.id,
       );
@@ -908,7 +908,7 @@ describe("problems repo", () => {
         productId: unbalanced.id,
         productQuantity: 1,
       });
-      const after = await findFastProblems(ctx.db);
+      const after = await findViewProblems(ctx.db);
       expect(
         after.negativeExpectedQuantity.some((p) => p.id === unbalanced.id),
       ).toBe(false);

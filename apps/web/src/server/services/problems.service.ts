@@ -88,7 +88,6 @@ import {
   findOrphanedProducts,
   findParentRecipesWithDeletedSubRecipes,
   findProductsMissingPrice,
-  findProductsWithNegativeExpectedQuantity,
   findProductsWithoutMappings,
   findProductsWithUpcGaps,
   findPurchaseFinancialSettlementMismatches,
@@ -519,8 +518,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       purchaselessExitExpenses: () => findPurchaselessExitExpenses(scoped),
       // One grouped scan of the product-linked Expense rows, filtered down to
       // the offenders by a HAVING rather than in JS.
-      negativeExpectedQuantity: () =>
-        findProductsWithNegativeExpectedQuantity(scoped),
       // One scan of the ~90 usage edges plus the whole-tree date fold. Cheap
       // enough for this group and it shares its single connection; the fold is
       // the same two queries `projectToolMatrix` already runs per page load.
@@ -583,7 +580,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     soldButStillStocked: r.soldButStillStocked,
     unlinkedExitExpenses: r.unlinkedExitExpenses,
     purchaselessExitExpenses: r.purchaselessExitExpenses,
-    negativeExpectedQuantity: r.negativeExpectedQuantity,
     toolsUsedOutsideOwnership: r.toolsUsedOutsideOwnership,
     productsWithoutMappings: r.productsWithoutMappings,
     ingredientsWithoutProduct: r.ingredientsWithoutProduct,
