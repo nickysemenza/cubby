@@ -1,8 +1,9 @@
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { useQuery } from "@tanstack/react-query";
-import { GitMerge, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { type Ref, useEffect, useMemo, useRef, useState } from "react";
+import { verbDef } from "~/app/_components/actions/action-verbs";
 import { ConfidenceReasoningCard } from "~/app/_components/ai/ai-suggest";
 import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
 import { QueuePassPosition } from "~/app/_components/queue-pass/QueuePassProgress";
@@ -19,6 +20,12 @@ import {
   type EnrichmentEditorHandle,
 } from "./enrichment-editor";
 import { hasUsdaLink } from "./workbench-editor-core";
+
+// Single-sourced from the action-verb registry so the workbench can't drift
+// from the ingredient list's own Merge — it had been rendering `GitMerge`
+// where every other merge affordance uses `Merge`. Only the presentation is
+// borrowed; these buttons keep their compact review-card density.
+const { icon: MergeIcon, label: mergeLabel } = verbDef("merge");
 
 // Up to this many alternative USDA foods alongside the AI pick.
 const MAX_ALTERNATIVES = 5;
@@ -281,7 +288,7 @@ export function ReviewCard({
                           className="ml-auto h-6 px-2 text-xs"
                           onClick={() => onMerge(opt)}
                         >
-                          <GitMerge className="size-3" /> Merge
+                          <MergeIcon className="size-3" /> {mergeLabel}
                           {i === 0 && <Kbd className="ml-1">m</Kbd>}
                         </Button>
                       </Row>
