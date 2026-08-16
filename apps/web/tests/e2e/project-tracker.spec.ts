@@ -291,16 +291,18 @@ test.describe("Project tracker", () => {
     await searchInput.fill(`tasks:${name}`);
 
     // Target the search-result name node specifically; the Ask Cubby action
-    // below the results also contains the literal query. `.first()` because the
-    // two-stage search (lexical → hybrid) can render the same task in two rows;
-    // both open the same detail page, so either is a valid target and picking
-    // one keeps the visibility check + click from tripping strict mode.
+    // below the results also contains the literal query. `.first()` guards
+    // strict mode in case the query substring matches more than one row's name.
     const resultName = palette
       .locator("div.truncate.text-sm", { hasText: name })
       .first();
     await expect(resultName).toBeVisible({ timeout: 10000 });
     const resultItem = resultName.locator("xpath=ancestor::*[@cmdk-item]");
-    await expect(resultItem.getByText("task", { exact: true })).toBeVisible();
+    // The row's type label is the entity manifest's `label` ("Task"), not the
+    // raw `entityType` enum — it is rendered uppercase by CSS only, so the DOM
+    // text stays title-case. Asserting the visible label is the point: it is
+    // what tells a task apart from a product of the same name.
+    await expect(resultItem.getByText("Task", { exact: true })).toBeVisible();
     await expect(resultItem).not.toContainText("pts");
     const optionTexts = await palette.getByRole("option").allTextContents();
     const resultIndex = optionTexts.findIndex((text) => text.includes(name));
