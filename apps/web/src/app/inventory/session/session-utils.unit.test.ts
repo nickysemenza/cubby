@@ -41,7 +41,7 @@ function loc(
 describe("inventory session utils", () => {
   it("flattens stocked descendants at any depth", () => {
     const bin = {
-      ...loc("00000000-0000-4000-8000-000000000004", "Bin A", "tote-27gal"),
+      ...loc("00000000-0000-4000-8000-000000000004", "Bin A", "box"),
       directItemCount: 1,
       totalItemCount: 1,
     };
@@ -83,14 +83,10 @@ describe("inventory session utils", () => {
     const emptyBin = loc(
       "00000000-0000-4000-8000-000000000104",
       "Empty Bin",
-      "tote-27gal",
+      "box",
     );
     const stockedBin = {
-      ...loc(
-        "00000000-0000-4000-8000-000000000103",
-        "Stocked Bin",
-        "tote-27gal",
-      ),
+      ...loc("00000000-0000-4000-8000-000000000103", "Stocked Bin", "box"),
       directItemCount: 2,
       totalItemCount: 2,
     };
@@ -193,7 +189,7 @@ describe("inventory session utils", () => {
       "shelf",
     );
     const tote = {
-      ...loc("00000000-0000-4000-8000-000000000032", "Tote", "tote-27gal"),
+      ...loc("00000000-0000-4000-8000-000000000032", "Tote", "box"),
       directItemCount: 2,
       totalItemCount: 2,
     };
@@ -214,7 +210,7 @@ describe("inventory session utils", () => {
     // belongs. An Unknown holding only empty child locations stays hidden.
     const emptyUnknown = {
       ...loc("00000000-0000-4000-8000-000000000060", "Unknown", "area", [
-        loc("00000000-0000-4000-8000-000000000061", "Parked bin", "tote-27gal"),
+        loc("00000000-0000-4000-8000-000000000061", "Parked bin", "box"),
       ]),
     };
     const stockedUnknown = {
@@ -233,7 +229,7 @@ describe("inventory session utils", () => {
 
   it("flattens picker roots with expansion and search", () => {
     const crate = {
-      ...loc("00000000-0000-4000-8000-000000000053", "Paint Crate", "crate"),
+      ...loc("00000000-0000-4000-8000-000000000053", "Paint Crate", "box"),
       directItemCount: 1,
       totalItemCount: 1,
     };
@@ -265,7 +261,7 @@ describe("inventory session utils", () => {
 
     expect(
       flattenPickerTree([garage], candidateIds, {
-        searchTerm: "crate",
+        searchTerm: "box",
       }).map((row) => row.location.name),
     ).toEqual(["Garage", "Paint Shelf", "Paint Crate"]);
   });

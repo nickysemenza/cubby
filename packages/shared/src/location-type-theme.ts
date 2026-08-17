@@ -1,16 +1,21 @@
+/**
+ * What a location IS, for the locations that aren't a product.
+ *
+ * Seven values retired in 2026-08 — `crate`, `half-crate`, `quarter-crate`,
+ * `milk-crate` and the three `tote-*` sizes. They were never a taxonomy: each
+ * named a SKU you can buy, which is a fact about the product and not about the
+ * bin. Those locations now carry `location.productId` and no type at all, so
+ * the size lives on the Product where correcting it fixes every bin at once.
+ *
+ * What remains is genuine structure plus the generic vessels — a `box` with no
+ * Product is a real cardboard box nobody catalogued.
+ */
 export const locationTypeValues = [
   "room",
   "area",
   "bag",
   "box",
   "shelf",
-  "crate",
-  "half-crate",
-  "quarter-crate",
-  "milk-crate",
-  "tote-27gal",
-  "tote-14gal",
-  "tote-7gal",
   "table",
   "drawer",
   "cart",
@@ -38,13 +43,6 @@ export const locationTypeColors: Record<LocationType, string> = {
   drawer: "var(--chart-6)",
 
   box: "var(--chart-6)",
-  crate: "var(--chart-7)",
-  "half-crate": "var(--chart-7)",
-  "quarter-crate": "var(--chart-7)",
-  "milk-crate": "var(--chart-8)",
-  "tote-27gal": "var(--chart-7)",
-  "tote-14gal": "var(--chart-7)",
-  "tote-7gal": "var(--chart-7)",
   bag: "var(--chart-8)",
 };
 

@@ -131,17 +131,12 @@ function getFurnitureSpec(type: LocationType | null): FurnitureSpec {
       return { w: 2.8, d: 1.8, h: 1.4, zone: "floor", shelfLevels: [1.3] };
     case "cart":
       return { w: 2.0, d: 1.2, h: 1.4, zone: "floor", shelfLevels: [1.3] };
+    // Crates and totes used to size themselves off the type. They are Products
+    // now and reach this switch as a null type, so they take the default —
+    // per-SKU dimensions would have to come off the Product, which does not
+    // carry them.
     case "box":
-    case "crate":
-    case "half-crate":
-    case "quarter-crate":
-    case "milk-crate":
-    case "tote-27gal":
       return { w: 1.6, d: 1.6, h: 1.2, zone: "floor", shelfLevels: [0.1] };
-    case "tote-14gal":
-      return { w: 1.3, d: 1.3, h: 1.0, zone: "floor", shelfLevels: [0.1] };
-    case "tote-7gal":
-      return { w: 1.0, d: 1.0, h: 0.8, zone: "floor", shelfLevels: [0.1] };
     case "bag":
       return { w: 1.2, d: 1.0, h: 0.9, zone: "floor", shelfLevels: [0.1] };
     default:

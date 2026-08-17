@@ -56,13 +56,6 @@ const typeToGroup: Record<LocationType, LocationTypeGroup> = {
   drawer: "storage",
   // Containers - portable (cyan family)
   box: "containers",
-  crate: "containers",
-  "half-crate": "containers",
-  "quarter-crate": "containers",
-  "milk-crate": "containers",
-  "tote-27gal": "containers",
-  "tote-14gal": "containers",
-  "tote-7gal": "containers",
   bag: "containers",
 };
 
@@ -80,13 +73,6 @@ const locationIcons: Record<LocationType, LucideIcon> = {
   area: LayoutGrid,
   bag: ShoppingBag,
   shelf: Layers,
-  crate: Box,
-  "half-crate": Box,
-  "quarter-crate": Box,
-  "milk-crate": Box,
-  "tote-27gal": Box,
-  "tote-14gal": Box,
-  "tote-7gal": Box,
   table: Table2,
   drawer: FileBox,
   cart: ShoppingCart,
