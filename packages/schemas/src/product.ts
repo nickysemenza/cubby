@@ -807,6 +807,15 @@ export const productWithIngredientAndInventoryAndMappingsOut = z.object({
   ingredient: productIngredientOut.nullable(),
   unitMappings: z.array(unitMappingOut),
   inventoryEntry: z.array(productInventoryWithLocationOut),
+  /**
+   * Locations that ARE this product — a bin, tote or rack in service, as
+   * opposed to `inventoryEntry`, which is stock held somewhere.
+   *
+   * Embedded on the detail read rather than fetched beside it, so the hero's
+   * count and the rows in the table cannot disagree while one of two queries is
+   * still in flight.
+   */
+  servingAsLocations: z.array(locationListRefOut),
   ...productQuantityFields,
 });
 
@@ -846,6 +855,7 @@ export const productWithFoodOut = z.object({
   ingredient: productIngredientOut.nullable(),
   unitMappings: z.array(unitMappingOut),
   inventoryEntry: z.array(productInventoryWithLocationOut),
+  servingAsLocations: z.array(locationListRefOut),
   food: foodSummary.nullable(),
   recipeUsages: z.array(recipeUsageOut),
   ...productQuantityFields,
@@ -857,6 +867,7 @@ export const productWithFoodAndSideEffectsOut = z.object({
   ingredient: productIngredientOut.nullable(),
   unitMappings: z.array(unitMappingOut),
   inventoryEntry: z.array(productInventoryWithLocationOut),
+  servingAsLocations: z.array(locationListRefOut),
   food: foodSummary.nullable(),
   recipeUsages: z.array(recipeUsageOut),
   sideEffects: mutationSideEffectsSchema,

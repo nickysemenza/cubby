@@ -44,6 +44,8 @@ export type ProductDeepDB = ProductSelect & {
       };
     }
   >;
+  /** Locations that ARE this product; scalar columns only. */
+  locations?: Array<typeof location.$inferSelect>;
   images: Array<{
     image: MappableImageRecord;
     deletedAt?: Date | null;

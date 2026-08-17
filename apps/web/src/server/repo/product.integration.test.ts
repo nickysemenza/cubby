@@ -1,6 +1,6 @@
 import type { ProductFilters } from "@cubby/schemas/product";
 import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import {
@@ -2611,5 +2611,92 @@ describe("product repository", () => {
     // Extend this block by hand for each entity that gets its own edge-role
     // map (`recipe` is next per the plan) and revisit genericizing once
     // there are three real examples to generalize from, not two.
+  });
+});
+
+/**
+ * The detail read's answer to "where is this product" — both halves of it.
+ *
+ * `servingAsLocations` is embedded rather than fetched beside the product so
+ * the hero's count and the table's rows cannot disagree mid-load; these pin
+ * that it actually arrives, and that it counts the same live rows
+ * `quantityLedger.locationCount` does.
+ */
+describe("product detail: where the product is", () => {
+  const ctx = withTestDb();
+
+  it("carries the locations that ARE the product", async () => {
+    const prod = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Detail Serving Tote" }),
+      ctx.actor,
+    );
+    await createLocation(
+      ctx.db,
+      {
+        name: "detail serving bin",
+        aliases: [],
+        productId: prod.id,
+        parentId: null,
+      },
+      ctx.actor,
+    );
+
+    const detail = await getProductByID(ctx.db, prod.entityId);
+
+    expect(detail?.servingAsLocations).toHaveLength(1);
+    expect(detail?.servingAsLocations[0]?.name).toBe("detail serving bin");
+    // The two numbers the page shows side by side must come from the same set.
+    expect(detail?.quantityLedger.locationCount).toBe(1);
+    // No shelf row, but a real unit — this is the shape that rendered
+    // "ON HAND 0 / NOT STOCKED" over a bin you own.
+    expect(detail?.inventoryEntry).toHaveLength(0);
+    expect(detail?.onHandUnits).toBe(1);
+  });
+
+  it("drops an entry whose LOCATION is soft-deleted, matching the list", async () => {
+    const prod = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Detail Dead Location Product" }),
+      ctx.actor,
+    );
+    const loc = await createLocation(
+      ctx.db,
+      {
+        name: "detail doomed shelf",
+        aliases: [],
+        type: "shelf",
+        parentId: null,
+      },
+      ctx.actor,
+    );
+    await createInventoryEntry(
+      ctx.db,
+      {
+        productId: prod.id,
+        locationId: loc.id,
+        amount: { value: 2, unit: "each" },
+      },
+      ctx.actor,
+    );
+
+    expect(
+      (await getProductByID(ctx.db, prod.entityId))?.inventoryEntry,
+    ).toHaveLength(1);
+
+    // Forced with raw SQL on purpose: `deleteLocations` refuses a location
+    // that still holds inventory (LOCATION_HAS_INVENTORY), so this state is
+    // unreachable through the repo. It exists in the wild anyway — a bulk
+    // move, a merge, or an older code path can leave it — and the mapper's job
+    // is to agree with the list when it does.
+    await getDb(ctx.db).execute(
+      sql`UPDATE "Location" SET "deletedAt" = now() WHERE "id" = ${loc.entityId}`,
+    );
+
+    // `dbProductToListAPI` has always filtered these and `onHandUnitsSql`
+    // inner-joins live locations; the detail mapper used to be the odd one out,
+    // so the same product reported different stock on two surfaces.
+    const detail = await getProductByID(ctx.db, prod.entityId);
+    expect(detail?.inventoryEntry).toHaveLength(0);
   });
 });

@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   extraActions: { current: null as ((row: never) => ReactNode) | null },
   /** The rows it was handed — grafted `StockedRow`s, not raw entries. */
   rows: { current: [] as unknown[] },
+  /** The per-row selection guard, so a test can assert it, not just trust it. */
+  rowIsEntity: { current: null as ((row: never) => boolean) | null },
   moveDialog: vi.fn(),
   deleteDialog: vi.fn(),
   discardDialog: vi.fn(),
@@ -47,9 +49,11 @@ vi.mock("~/app/_components/hooks/useClientEntityList", () => ({
   useClientEntityList: (opts: {
     data: unknown[];
     extraActions?: (row: never) => ReactNode;
+    rowIsEntity?: (row: never) => boolean;
   }) => {
     mocks.extraActions.current = opts.extraActions ?? null;
     mocks.rows.current = opts.data;
+    mocks.rowIsEntity.current = opts.rowIsEntity ?? null;
     return {
       table: { getRowModel: () => ({ rows: [] }), resetRowSelection: vi.fn() },
       bulkActionBar: null,
@@ -100,6 +104,20 @@ const product = {
     entry("INV-AAAA", "LOC-AAAA"),
     entry("INV-BBBB", "LOC-BBBB"),
   ],
+  servingAsLocations: [],
+} as unknown as ProductWithFoodOut;
+
+/** A product held only as bins in service — no loose stock at all. */
+const locationsOnlyProduct = {
+  ...product,
+  inventoryEntry: [],
+  servingAsLocations: [
+    {
+      id: unsafeLocationShortcode("LOC-CCCC"),
+      name: "chrome wire shelf",
+      type: null,
+    },
+  ],
 } as unknown as ProductWithFoodOut;
 
 /**
@@ -124,6 +142,7 @@ beforeEach(() => {
   ])
     m.mockClear();
   mocks.extraActions.current = null;
+  mocks.rowIsEntity.current = null;
 });
 
 describe("ProductStockedAt", () => {
@@ -137,11 +156,48 @@ describe("ProductStockedAt", () => {
   it("renders the empty shelf state instead of a table when nothing is stocked", () => {
     render(
       <ProductStockedAt
-        product={{ ...product, inventoryEntry: [] } as ProductWithFoodOut}
+        product={
+          {
+            ...product,
+            inventoryEntry: [],
+            servingAsLocations: [],
+          } as ProductWithFoodOut
+        }
       />,
     );
     expect(mocks.rTable).not.toHaveBeenCalled();
     expect(screen.getByText("Not stocked anywhere")).toBeInTheDocument();
+  });
+
+  // 26 of the 27 products serving as locations carry no loose stock, so this is
+  // the common shape for them — and it used to render "Not stocked anywhere"
+  // over a bin you own and can walk to.
+  it("tables a product held only as locations rather than calling it unstocked", () => {
+    render(<ProductStockedAt product={locationsOnlyProduct} />);
+    expect(screen.queryByText("Not stocked anywhere")).not.toBeInTheDocument();
+    expect(mocks.rTable).toHaveBeenCalled();
+    expect(mocks.rows.current).toHaveLength(1);
+    expect(mocks.rows.current[0]).toMatchObject({
+      kind: "identity",
+      amount: { value: 1, unit: "each" },
+    });
+  });
+
+  it("gives an identity row no row menu and no selection", () => {
+    render(<ProductStockedAt product={locationsOnlyProduct} />);
+    const row = mocks.rows.current[0];
+    expect(row).toBeDefined();
+    // No InventoryEntry behind it, so Move / Discard / Delete have nothing to
+    // act on — the menu is absent rather than present and failing.
+    expect(mocks.extraActions.current!(row as never)).toBeNull();
+    expect(mocks.rowIsEntity.current!(row as never)).toBe(false);
+  });
+
+  it("still selects and offers the menu on a real stock row", () => {
+    render(<ProductStockedAt product={product} />);
+    const row = mocks.rows.current[0];
+    expect(mocks.rowIsEntity.current!(row as never)).toBe(true);
+    expect(mocks.extraActions.current!(row as never)).not.toBeNull();
   });
 
   it("offers Move, Discard, and Delete on every row", () => {

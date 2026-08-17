@@ -324,33 +324,41 @@ export const dbProductToAPI = (
 ): z.infer<typeof productWithIngredientAndInventoryAndMappingsOut> => {
   const { ingredient, unitMappings, inventoryEntry, images } = productData;
 
-  const mappedInventoryEntry = mapRelation(inventoryEntry, (entry) => ({
-    id: unsafeInventoryShortcode(entry.shortcode),
-    amount: parseInventoryAmount(entry.amount, entry.id),
-    valuation: entry.valuation,
-    verifiedAt: entry.verifiedAt,
-    placement: entry.placement,
-    createdAt: entry.createdAt,
-    updatedAt: entry.updatedAt,
-    location: {
-      id: unsafeLocationShortcode(entry.location.shortcode),
-      name: entry.location.name,
-      aliases: entry.location.aliases,
-      // Null whenever the location IS a product; only a present value is
-      // validated against the enum.
-      type: parseLocationType(entry.location.type, {
-        id: entry.location.id,
+  // `isNotDeleted(entry.location)` matches `dbProductToListAPI` and
+  // `onHandUnitsSql`, which inner-joins live locations. Without it a detail
+  // read counted an entry whose LOCATION was soft-deleted while the list
+  // dropped it — one product, two surfaces, different stock. Same drift the
+  // `deriveProductQuantityShape` docblock exists to prevent.
+  const mappedInventoryEntry = mapRelation(
+    inventoryEntry.filter((entry) => isNotDeleted(entry.location)),
+    (entry) => ({
+      id: unsafeInventoryShortcode(entry.shortcode),
+      amount: parseInventoryAmount(entry.amount, entry.id),
+      valuation: entry.valuation,
+      verifiedAt: entry.verifiedAt,
+      placement: entry.placement,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+      location: {
+        id: unsafeLocationShortcode(entry.location.shortcode),
         name: entry.location.name,
-      }),
-      product: mapLocationIdentityProduct(entry.location),
-      lastBulkInventory: entry.location.lastBulkInventory,
-      aiDescription: entry.location.aiDescription,
-      images: mapImages(entry.location.images),
-      valuation: entry.location.valuation,
-      createdAt: entry.location.createdAt,
-      updatedAt: entry.location.updatedAt,
-    },
-  }));
+        aliases: entry.location.aliases,
+        // Null whenever the location IS a product; only a present value is
+        // validated against the enum.
+        type: parseLocationType(entry.location.type, {
+          id: entry.location.id,
+          name: entry.location.name,
+        }),
+        product: mapLocationIdentityProduct(entry.location),
+        lastBulkInventory: entry.location.lastBulkInventory,
+        aiDescription: entry.location.aiDescription,
+        images: mapImages(entry.location.images),
+        valuation: entry.location.valuation,
+        createdAt: entry.location.createdAt,
+        updatedAt: entry.location.updatedAt,
+      },
+    }),
+  );
 
   const result = {
     id: unsafeProductShortcode(productData.shortcode),
@@ -379,6 +387,15 @@ export const dbProductToAPI = (
     externalIds: mapProductExternalIds(productData.externalIds),
     images: mapImages(images),
     inventoryEntry: mappedInventoryEntry,
+    // The bins in service, beside the stock held somewhere. `mapRelation`
+    // drops soft-deleted rows, matching `quantityLedger.locationCount`, which
+    // counts only live locations — the two must agree or the hero contradicts
+    // the table beneath it.
+    servingAsLocations: mapRelation(productData.locations ?? [], (loc) => ({
+      id: unsafeLocationShortcode(loc.shortcode),
+      name: loc.name,
+      type: parseLocationType(loc.type, { id: loc.id, name: loc.name }),
+    })),
     ...deriveProductQuantityShape(
       mappedInventoryEntry,
       productData.quantityLedger,

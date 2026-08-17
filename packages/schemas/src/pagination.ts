@@ -21,6 +21,18 @@ const sortInput = z.union([
   z.array(sortParams).min(1).max(MAX_SORTS),
 ]);
 
+/**
+ * Deliberately as wide as the schema's OUTPUT, not its `.min(1)` constraint —
+ * `normalizeSorts` consumes parsed input, so narrowing here only breaks the
+ * consumers.
+ *
+ * The caller-facing type comes from zod inference, so `sort: []` compiles and
+ * then 400s at runtime. That cost a product page ("No locations are an
+ * instance of this product" over a product with fourteen) and a silently empty
+ * filter dropdown. Making it a compile error means a non-empty TUPLE in the
+ * schema itself, which changes the JSON Schema MCP advertises from a plain
+ * array to `prefixItems` — a worse trade than a test.
+ */
 export type SortInput = SortParams | SortParams[];
 
 /**
