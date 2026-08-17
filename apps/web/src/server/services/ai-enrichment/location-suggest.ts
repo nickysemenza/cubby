@@ -20,8 +20,9 @@
  *
  * The model is handed real shortcodes and asked to return one, but what comes
  * back is a string it typed. `resolveSuggestedLocation` matches it against the
- * candidate roster and returns THAT row's shortcode and name; an unrecognized
- * code fails loudly rather than reaching the client as a live-looking id.
+ * candidate roster and returns THAT row's identity — shortcode, name, type and
+ * ancestor chain, everything the picker renders; an unrecognized code fails
+ * loudly rather than reaching the client as a live-looking id.
  *
  * Runs inline: a rare, user-initiated press is exactly the work the background
  * queue is not for.
@@ -105,7 +106,12 @@ export const resolveSuggestedLocation = (
     );
   }
   return {
-    location: { id: match.id, name: match.name },
+    location: {
+      id: match.id,
+      name: match.name,
+      type: match.type,
+      ancestors: match.ancestors,
+    },
     confidence: result.confidence,
     reasoning: result.reasoning,
   };

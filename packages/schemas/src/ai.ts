@@ -6,7 +6,7 @@ import {
   locationShortcode,
   productShortcode,
 } from "./identifiers";
-import { locationType } from "./location";
+import { locationAncestorOut, locationType } from "./location";
 import { productCategory } from "./product";
 import { foodSummaryWithLinkedProducts } from "./usda";
 
@@ -68,12 +68,16 @@ export type LocationSuggestionAiResult = z.infer<
   typeof locationSuggestionAiResultSchema
 >;
 
-// What the client gets: a resolved location, name included, so the combobox can
-// render the pick without a second round trip.
+// What the client gets: a resolved location carrying everything a picker row
+// renders, so the accepted suggestion looks like any other pick rather than a
+// bare name — the ancestor chain especially, since "shelf 1" exists in four
+// rooms and that is the whole reason the roster carries it.
 export const locationSuggestionSchema = z.object({
   location: z.object({
     id: locationShortcode,
     name: z.string(),
+    type: locationType.nullable(),
+    ancestors: z.array(locationAncestorOut),
   }),
   confidence: confidence,
   reasoning: z.string(),

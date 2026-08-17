@@ -97,7 +97,17 @@ describe("formatLocationCandidates", () => {
 
 describe("resolveSuggestedLocation", () => {
   const candidates = [
-    candidate({ id: "LOC-2222", name: "PACKOUT Wall" }),
+    candidate({
+      id: "LOC-2222",
+      name: "PACKOUT Wall",
+      ancestors: [
+        {
+          id: unsafeLocationShortcode("LOC-AAAA"),
+          name: "Garage",
+          type: "room",
+        },
+      ],
+    }),
     candidate({ id: "LOC-3333", name: "Empty Bin" }),
   ];
 
@@ -105,7 +115,14 @@ describe("resolveSuggestedLocation", () => {
     expect(
       resolveSuggestedLocation(candidates, aiResult("  loc-2222 ")),
     ).toEqual({
-      location: { id: "LOC-2222", name: "PACKOUT Wall" },
+      location: {
+        id: "LOC-2222",
+        name: "PACKOUT Wall",
+        type: "shelf",
+        // The chain comes back too: without it the picker renders a bare name,
+        // and same-named shelves are indistinguishable once accepted.
+        ancestors: [{ id: "LOC-AAAA", name: "Garage", type: "room" }],
+      },
       confidence: "high",
       reasoning: "It is the PACKOUT wall.",
     });

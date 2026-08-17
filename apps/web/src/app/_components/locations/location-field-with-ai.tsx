@@ -8,6 +8,7 @@ import type {
 } from "react-hook-form";
 import { useTRPCClient } from "~/integrations/trpc/react";
 import { FieldWithAISuggest } from "../ai/ai-suggest";
+import { buildLocationComboboxItem } from "../combobox/combobox-builders";
 import { ComboboxFieldWithSearch } from "../form-utils/combobox-field-with-search";
 
 interface LocationFieldWithAIProps<
@@ -26,7 +27,9 @@ interface LocationFieldWithAIProps<
  * `FieldWithAISuggest` takes its field as a node, so the combobox goes in
  * untouched — the same shape as `TypeFieldWithAI` even though that one wraps a
  * SelectField. The server resolves the model's answer to a real location and
- * returns its name, which is exactly the `{id, name}` a ComboboxItem is.
+ * returns the row's full identity, which goes through the picker's own
+ * `buildLocationComboboxItem`: an accepted suggestion has to render with its
+ * ancestor breadcrumb like every other pick, or it reads as an ambiguous name.
  */
 export function LocationFieldWithAI<
   TFieldValues extends FieldValues = FieldValues,
@@ -55,7 +58,7 @@ export function LocationFieldWithAI<
       onResult={(r) =>
         form.setValue(
           name,
-          { id: r.location.id, name: r.location.name } as PathValue<
+          buildLocationComboboxItem(r.location) as PathValue<
             TFieldValues,
             Path<TFieldValues>
           >,

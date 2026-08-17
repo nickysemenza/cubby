@@ -21,9 +21,18 @@ vi.mock("~/app/_components/form-utils/combobox-field-with-search", () => ({
     form,
     name,
   }: {
-    form: { watch: (n: string) => { id: string; name: string } | null };
+    form: {
+      watch: (n: string) => { name: string; detail?: string } | null;
+    };
     name: string;
-  }) => <div data-testid="combobox">{form.watch(name)?.name ?? "(empty)"}</div>,
+  }) => {
+    const item = form.watch(name);
+    return (
+      <div data-testid="combobox">
+        {item ? `${item.detail ?? ""}|${item.name}` : "(empty)"}
+      </div>
+    );
+  },
 }));
 
 function Harness() {
@@ -42,7 +51,12 @@ function Harness() {
 describe("LocationFieldWithAI", () => {
   it("writes the suggested location into the field and shows its reasoning", async () => {
     mocks.suggestLocation.mockResolvedValue({
-      location: { id: "LOC-2222", name: "PACKOUT Wall" },
+      location: {
+        id: "LOC-2222",
+        name: "PACKOUT Wall",
+        type: "shelf",
+        ancestors: [{ id: "LOC-AAAA", name: "Garage", type: "room" }],
+      },
       confidence: "high",
       reasoning: "Three M18 siblings already live there.",
     });
@@ -53,7 +67,11 @@ describe("LocationFieldWithAI", () => {
     fireEvent.click(screen.getByRole("button"));
 
     await waitFor(() => {
-      expect(screen.getByTestId("combobox")).toHaveTextContent("PACKOUT Wall");
+      // The breadcrumb rides along, so the accepted pick is as legible as one
+      // chosen by hand.
+      expect(screen.getByTestId("combobox")).toHaveTextContent(
+        "Garage|PACKOUT Wall",
+      );
     });
     expect(mocks.suggestLocation).toHaveBeenCalledWith({
       productId: "PRD-4K7M",
