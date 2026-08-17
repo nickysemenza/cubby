@@ -7,7 +7,8 @@
 
 import type { LocationId } from "@cubby/schemas/identifiers";
 import type { LocationValuation } from "@cubby/schemas/location";
-import { and, eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import {
@@ -16,11 +17,13 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { effectiveProductPriceSql } from "~/server/repo/product/pricing";
+import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
 
 interface ValuationInventoryRow {
   locationId: LocationId;
   valuation: number | null;
+  /** Fixtures roll up apart from countable stock — the rollup splits on this. */
+  placement: "stock" | "installed";
   productName: string;
 }
 
@@ -57,24 +60,31 @@ export const getLocationValuationInputs = async (
     .from(inventoryEntry)
     .innerJoin(product, eq(inventoryEntry.productId, product.id))
     .where(notDeleted(inventoryEntry));
-  // Left join: most locations are not an instance of a product, and those
-  // that are must still appear in the tree so the rollup can walk them.
-  const locations = await client
+  // Every live location, product-linked or not: the tree must be whole for the
+  // rollup to walk it.
+  const rows = await client
     .select({
       id: location.id,
       parentId: location.parentId,
-      productPrice: sql<
-        number | null
-      >`CASE WHEN ${product.id} IS NULL THEN NULL ELSE ${sql.raw(effectiveProductPriceSql())} END`.as(
-        "productPrice",
-      ),
+      productId: location.productId,
     })
     .from(location)
-    .leftJoin(
-      product,
-      and(eq(location.productId, product.id), notDeleted(product)),
-    )
     .where(notDeleted(location));
+  // A second small query rather than a correlated price subquery in the select:
+  // locations number in the low hundreds, and `effectiveProductPriceSql` is raw
+  // SQL that has to be handed the enclosing query's exact alias — a mismatch is
+  // a runtime `missing FROM-clause entry`, invisible to typecheck and to every
+  // tier below integration. The loader has no alias to get wrong. (It silently
+  // broke this recompute; see services/location-valuation.integration.test.ts.)
+  const prices = await loadEffectiveProductPricesById(
+    db,
+    uniq(rows.flatMap((row) => (row.productId ? [row.productId] : []))),
+  );
+  const locations = rows.map((row) => ({
+    id: row.id,
+    parentId: row.parentId,
+    productPrice: row.productId ? (prices.get(row.productId) ?? null) : null,
+  }));
   return { entries, locations };
 };
 
