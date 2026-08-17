@@ -62,7 +62,6 @@ export {
 } from "./detectors-financial";
 // Ingredient-centric detectors
 export {
-  findIngredientsWithoutProduct,
   findIngredientsWithUnusedAliases,
   pruneUnusedAliases,
 } from "./detectors-ingredient";

@@ -797,7 +797,6 @@ const problemsFastShape = {
   unlinkedExitExpenses: z.array(unlinkedExitExpenseSchema),
   purchaselessExitExpenses: z.array(purchaselessExitExpenseSchema),
   toolsUsedOutsideOwnership: z.array(toolUsedOutsideOwnershipSchema),
-  ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
   productsWithNoImages: z.array(productWithNoImagesSchema),
   orphanedEntityEmbeddings: z.array(orphanedEntityEmbeddingSchema),
   unreferencedImages: z.array(unreferencedImageSchema),
@@ -894,6 +893,7 @@ export type SectionTotals = z.infer<typeof sectionTotalsSchema>;
  * These rows are a PAGE, not the population — see `sectionTotals`.
  */
 const problemsViewsShape = {
+  ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
   recipesWithoutInstructions: z.array(recipeWithoutInstructionsSchema),
   staleLocations: z.array(staleLocationSchema),
   productsWithoutMappings: z.array(productWithoutMappingsSchema),

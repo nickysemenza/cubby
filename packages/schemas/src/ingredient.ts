@@ -44,6 +44,18 @@ export const ingredientFilterFields = {
    * recipe-as-ingredient pointer rows (`ingredient.recipeId IS NULL`), so a
    * `"none"` hit really is an ingredient no live recipe references.
    */
+  /**
+   * Like {@link recipePresenceFilter}, but counting only NON-COOKBOOK recipes.
+   *
+   * `"has"` plus `productPresenceFilter: "none"` is the costing worklist: an
+   * ingredient one of your own recipes needs, with no product to price it from.
+   * The distinction is the whole point — on this database the cookbook import
+   * supplies the overwhelming majority of ingredient usages, and folding them
+   * in turns 24 actionable rows into ~1000.
+   */
+  ownRecipePresenceFilter: presenceFilter.describe(
+    "Filter to ingredients that are / aren't used by at least one live recipe of your own (excludes cookbook imports).",
+  ),
   recipePresenceFilter: presenceFilter.describe(
     "Filter to ingredients that are / aren't used by at least one live recipe",
   ),
@@ -183,6 +195,9 @@ export const ingredientListItemOut = z.object({
   ...ingredientOutFields,
   product: z.array(productWithMappingsOut),
   appearsInRecipes: z.array(recipeRefOut),
+  /** Distinct live non-cookbook recipes using this ingredient. Separate from
+   *  `appearsInRecipes.length`, which counts every live recipe. */
+  ownRecipeCount: z.number().int(),
 });
 export type IngredientListItem = z.infer<typeof ingredientListItemOut>;
 

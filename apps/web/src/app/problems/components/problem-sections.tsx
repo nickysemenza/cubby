@@ -1014,6 +1014,7 @@ const DECLARED_SECTIONS = [
     id: "no-product-ingredients",
     label: "No product",
     select: (p) => p.ingredientsWithoutProduct,
+    totalKey: "ingredientsWithoutProduct",
     coverage: {
       keys: ["ingredientsWithoutProduct"],
       meter: {

@@ -1471,6 +1471,15 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     {
       // "none" is the orphaned-ingredient worklist — the list already excludes
       // recipe-as-ingredient pointer rows, so a hit really is unused.
+      columnId: "ownRecipes",
+      field: "ownRecipePresenceFilter",
+      kind: "presence",
+      placeholder: "Filter own recipes...",
+      options: presenceFilterOptions("own recipes"),
+    },
+    {
+      // "none" is the orphaned-ingredient worklist — the list already excludes
+      // recipe-as-ingredient pointer rows, so a hit really is unused.
       columnId: "appearsInRecipes",
       field: "recipePresenceFilter",
       kind: "presence",

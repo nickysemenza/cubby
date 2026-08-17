@@ -64,6 +64,30 @@ const mapRecipeImages = (images: RecipeImageRow[] | undefined): ImageOut[] =>
   }));
 
 /**
+ * Distinct live NON-COOKBOOK recipes using this ingredient — "how many of my
+ * own recipes need this".
+ *
+ * A separate helper rather than a parameter on
+ * {@link liveRecipeCountForIngredientSql}: that one has three callers (the
+ * enrichment workbench's `recipeCount > 0` gate and two sorts) which all mean
+ * every live recipe, and the `appearsInRecipes` cell beside them counts the
+ * same way. Scoping it in place would make the ingredient list disagree with
+ * its own column.
+ *
+ * Keys on `cookbookId IS NULL` — the FK — not on `SourceType = 'Book'`. Those
+ * are different predicates; see {@link cookbookOnlyForIngredientSql}, which
+ * deliberately uses the other one.
+ *
+ * Same `ingredientRef` contract as its sibling: a trusted SQL expression, never
+ * user input.
+ */
+export const ownRecipeCountForIngredientSql = (ingredientRef: string): string =>
+  `(SELECT count(DISTINCT rs."recipeId") FROM "RecipeSectionIngredient" rsi ` +
+  `JOIN "RecipeSection" rs ON rs."id" = rsi."recipeSectionId" AND rs."deletedAt" IS NULL ` +
+  `JOIN "Recipe" r ON r."id" = rs."recipeId" AND r."deletedAt" IS NULL AND r."cookbookId" IS NULL ` +
+  `WHERE rsi."ingredientId" = ${ingredientRef} AND rsi."deletedAt" IS NULL)`;
+
+/**
  * Correlated subquery counting the DISTINCT *live* recipes an ingredient appears
  * in. Single source of truth for every "appears in N recipes" surface (ingredient
  * list sort, global search, etc.) so they can't silently diverge.

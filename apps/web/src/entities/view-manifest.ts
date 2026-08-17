@@ -539,6 +539,31 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
   ],
   ingredient: [
     {
+      id: "needs-a-product",
+      label: "Needs a product",
+      description: "Used by one of your own recipes, with nothing to cost it",
+      // `ownRecipes`, not `appearsInRecipes`: the cookbook import supplies the
+      // overwhelming majority of ingredient usages on this database, and
+      // counting them turns ~24 actionable rows into ~1000. A cookbook recipe
+      // you can't cost is not a gap in your own data.
+      filters: [
+        { id: "ownRecipes", value: "has" },
+        { id: "product", value: "none" },
+      ],
+      problem: {
+        key: "ingredientsWithoutProduct",
+        title: "Ingredients with no product",
+        description:
+          "Used by a recipe of your own but linked to no product, so nothing can price or convert them. Cookbook-only ingredients are excluded — costing someone else's book isn't the goal.",
+        emptyMessage: "Every ingredient your recipes use has a product.",
+        serverFilters: {
+          ownRecipePresenceFilter: "has",
+          productPresenceFilter: "none",
+        },
+      },
+      columnVisibility: { ownRecipes: true },
+    },
+    {
       id: "unused-with-product",
       label: "Unused (has product)",
       description: "Used in no recipe, but still linked to a product",

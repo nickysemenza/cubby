@@ -54,7 +54,14 @@ const filterSearchKeys = {
     "createdAt",
     "updatedAt",
   ],
-  ingredient: ["name", "product", "appearsInRecipes", "createdAt", "updatedAt"],
+  ingredient: [
+    "name",
+    "product",
+    "ownRecipes",
+    "appearsInRecipes",
+    "createdAt",
+    "updatedAt",
+  ],
   inventory: [
     "product",
     "location",

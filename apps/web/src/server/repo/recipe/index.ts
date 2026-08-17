@@ -44,6 +44,7 @@ export {
   dbRecipeToAPIShallow,
   dbRecipeToTopLevelShape,
   liveRecipeCountForIngredientSql,
+  ownRecipeCountForIngredientSql,
 } from "./helpers";
 // Analytics and queries (read path)
 export {

@@ -79,7 +79,6 @@ import {
   findEntitiesMissingEmbeddings,
   findFinancialTransactionAllocationDefects,
   findIncompleteStatementImports,
-  findIngredientsWithoutProduct,
   findIngredientsWithUnusedAliases,
   findInvalidFinancialJson,
   findLinkedProductIds,
@@ -516,7 +515,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       // enough for this group and it shares its single connection; the fold is
       // the same two queries `projectToolMatrix` already runs per page load.
       toolsUsedOutsideOwnership: () => findToolsUsedOutsideOwnership(scoped),
-      ingredientsWithoutProduct: () => findIngredientsWithoutProduct(scoped),
       productsWithNoImages: () =>
         findProductsWithNoImages(scoped, { excludeIngredients: true }),
       orphanedEntityEmbeddings: () => findOrphanedEntityEmbeddings(scoped),
@@ -569,7 +567,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     unlinkedExitExpenses: r.unlinkedExitExpenses,
     purchaselessExitExpenses: r.purchaselessExitExpenses,
     toolsUsedOutsideOwnership: r.toolsUsedOutsideOwnership,
-    ingredientsWithoutProduct: r.ingredientsWithoutProduct,
     productsWithNoImages: r.productsWithNoImages.map((p) => ({
       ...p,
       id: unsafeProductShortcode(p.shortcode),

@@ -3,6 +3,7 @@ import type { SortParams } from "@cubby/schemas/pagination";
 import type {
   EmptyCookedMeal,
   EmptyLocation,
+  IngredientWithoutProduct,
   LocationWithoutAiDescription,
   NegativeExpectedQuantity,
   NeverVerifiedInventory,
@@ -252,6 +253,20 @@ const toRecipeWithoutInstructions = (
   return { id: r.id, name: r.name, sectionCount: r.sectionCount };
 };
 
+const toIngredientWithoutProduct = (row: ListRow): IngredientWithoutProduct => {
+  const r = row as unknown as IngredientWithoutProduct & {
+    ownRecipeCount: number;
+  };
+  return {
+    id: r.id,
+    name: r.name,
+    // `ownRecipeCount`, not `appearsInRecipes.length` — the same non-cookbook
+    // population the filter selected on, so the card's number and the list it
+    // links to can't disagree.
+    recipeCount: r.ownRecipeCount,
+  };
+};
+
 export const findViewProblems = async (
   db: Database,
 ): Promise<ProblemsViewsOut> => {
@@ -332,6 +347,9 @@ export const findViewProblems = async (
     recipesWithoutInstructions: (
       results.recipesWithoutInstructions?.data ?? []
     ).map(toRecipeWithoutInstructions),
+    ingredientsWithoutProduct: (
+      results.ingredientsWithoutProduct?.data ?? []
+    ).map(toIngredientWithoutProduct),
     sectionTotals,
   };
 };

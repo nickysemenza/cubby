@@ -8,17 +8,13 @@
 
 import type { IngredientId } from "@cubby/schemas/identifiers";
 import { unsafeIngredientShortcode } from "@cubby/schemas/identifiers";
-import type {
-  IngredientWithoutProduct,
-  IngredientWithUnusedAliases,
-} from "@cubby/schemas/problems";
-import { and, eq, isNotNull, isNull, notExists, sql } from "drizzle-orm";
+import type { IngredientWithUnusedAliases } from "@cubby/schemas/problems";
+import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { computeUnusedAliases } from "~/lib/unused-aliases";
 import { wasm } from "~/lib/wasm";
 import type { Database } from "~/server/db";
 import {
   ingredient,
-  product,
   recipe,
   recipeSection,
   recipeSectionIngredient,
@@ -30,80 +26,6 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { TraceNames, withTrace } from "~/server/tracing";
-
-// Find ingredients used in a recipe but linked to no product, so they can't be
-// costed at all. This is the ingredient-side blind spot of the product-centric
-// detectors above (the product/unmapped view / findIngredientsWithPartialCoverage
-// both require a product row to exist). Sub-recipe ingredients (recipeId set) are
-// costed by their recipe, never a product, so they're excluded.
-//
-// Recipes imported from a cookbook (`cookbookId` set) are ALSO excluded — and
-// that exclusion is load-bearing, not a tuning knob. An EPUB import lands
-// hundreds of books' worth of ingredients nobody has committed to cooking; on
-// this database that was 992 of 1016 rows (98%), which drowned the 24 that
-// actually block costing a recipe of my own. An ingredient a cookbook alone
-// mentions isn't a data problem, it's a shopping list I never wrote. Because the
-// `recipe` join is INNER and pre-aggregation, filtering here keeps any
-// ingredient that has *at least one* live non-cookbook recipe (the 14 used in
-// both still qualify) and makes `recipeCount` mean "how many of my own recipes
-// need this" — the number that decides whether it's worth mapping.
-export const findIngredientsWithoutProduct = async (
-  db: Database,
-): Promise<IngredientWithoutProduct[]> => {
-  const dbClient = getDb(db);
-
-  const rows = await dbClient
-    .select({
-      shortcode: ingredient.shortcode,
-      name: ingredient.name,
-      recipeCount: sql<number>`count(distinct ${recipe.id})`,
-    })
-    .from(ingredient)
-    .innerJoin(
-      recipeSectionIngredient,
-      and(
-        eq(recipeSectionIngredient.ingredientId, ingredient.id),
-        notDeleted(recipeSectionIngredient),
-      ),
-    )
-    .innerJoin(
-      recipeSection,
-      and(
-        eq(recipeSection.id, recipeSectionIngredient.recipeSectionId),
-        notDeleted(recipeSection),
-      ),
-    )
-    .innerJoin(
-      recipe,
-      and(
-        eq(recipe.id, recipeSection.recipeId),
-        notDeleted(recipe),
-        // Cookbook-imported recipes don't count as usage here — see the note above.
-        isNull(recipe.cookbookId),
-      ),
-    )
-    .where(
-      and(
-        notDeleted(ingredient),
-        isNull(ingredient.recipeId),
-        notExists(
-          dbClient
-            .select({ one: sql`1` })
-            .from(product)
-            .where(
-              and(eq(product.ingredientId, ingredient.id), notDeleted(product)),
-            ),
-        ),
-      ),
-    )
-    .groupBy(ingredient.id, ingredient.name, ingredient.shortcode);
-
-  return rows.map((r) => ({
-    id: unsafeIngredientShortcode(r.shortcode),
-    name: r.name,
-    recipeCount: Number(r.recipeCount),
-  }));
-};
 
 // Find ingredients carrying ≥1 "unused" alias — one that's redundant (case-only
 // dup of the name / an earlier alias) or never matched by a recipe line. We
