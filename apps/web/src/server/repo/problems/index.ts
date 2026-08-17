@@ -101,7 +101,6 @@ export {
 // Recipe-centric detectors (derived-data-on-removal guardrail)
 export {
   findParentRecipesWithDeletedSubRecipes,
-  findRecipesWithoutInstructions,
   type StaleParentRecipe,
 } from "./detectors-recipe";
 // Optional vendor presentation coverage

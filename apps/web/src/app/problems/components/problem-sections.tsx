@@ -1479,6 +1479,7 @@ const DECLARED_SECTIONS = [
     id: "recipes-without-instructions",
     label: "No instructions",
     select: (p) => p.recipesWithoutInstructions,
+    totalKey: "recipesWithoutInstructions",
     entity: "recipe",
     title: "Recipes you can't cook from",
     description:

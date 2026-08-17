@@ -137,6 +137,10 @@ export const cookbookOnlyForIngredientSql = (ingredientRef: string): string =>
  * alias), never user input. See {@link liveRecipeCountForIngredientSql} for
  * the same contract on the ingredient side.
  */
+export const liveSectionCountForRecipeSql = (recipeRef: string): string =>
+  `(SELECT count(*) FROM "RecipeSection" rsc ` +
+  `WHERE rsc."recipeId" = ${recipeRef} AND rsc."deletedAt" IS NULL)`;
+
 export const liveMealCountForRecipeSql = (recipeRef: string): string =>
   `(SELECT count(*) FROM "MealRecipe" mr ` +
   `JOIN "Meal" m ON m."id" = mr."mealId" AND m."deletedAt" IS NULL ` +
@@ -300,7 +304,10 @@ export const dbRecipeToTopLevelShape = (
  * remaining fields on top via spread — see {@link dbRecipeToAPI},
  * {@link dbRecipeToAPIGraph}, {@link dbRecipeToListAPI}.
  */
-type RecipeShallowOut = Omit<RecipeListItem, "mealCount" | "images">;
+type RecipeShallowOut = Omit<
+  RecipeListItem,
+  "mealCount" | "sectionCount" | "images"
+>;
 
 /**
  * Convert a recipe DB record to a list item API type (without sections/images).
@@ -317,6 +324,7 @@ export const dbRecipeToAPIShallow: (
  * {@link liveMealCountForRecipeSql} and {@link recipeListCoverImageRelation}. */
 export type RecipeListDB = RecipeSelect & {
   mealCount: number | string;
+  sectionCount: number | string;
   images?: RecipeImageRow[] | null;
 };
 
@@ -326,12 +334,13 @@ export type RecipeListDB = RecipeSelect & {
  * image.
  */
 export const dbRecipeToListAPI = (recipeData: RecipeListDB): RecipeListItem => {
-  const { mealCount, images, ...rest } = recipeData;
+  const { mealCount, sectionCount, images, ...rest } = recipeData;
   return {
     ...dbRecipeToAPIShallow(rest),
     // count() returns bigint (string over the wire), so coerce — mirrors the
     // ingredient list's appearsInRecipes/recipeCount handling.
     mealCount: Number(mealCount),
+    sectionCount: Number(sectionCount),
     images: mapRecipeImages(images ?? undefined),
   };
 };

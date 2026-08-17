@@ -90,6 +90,8 @@ const filterSearchKeys = {
     "source",
     "meals",
     "image",
+    "instructions",
+    "sourceType",
     "costTotal",
     "caloriesTotal",
     "related-ingredient",

@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { recipeSourceValues } from "@cubby/schemas/recipe";
 import { describe, expect, it } from "vitest";
 import { getEntityFilters } from "./filter-manifest";
 import {
@@ -70,7 +71,7 @@ describe("view manifest", () => {
   });
 
   it("returns no views for an entity that declares none", () => {
-    expect(viewsForEntity("recipe")).toEqual([]);
+    expect(viewsForEntity("vendor")).toEqual([]);
     expect(viewsForEntity(undefined)).toEqual([]);
   });
 });
@@ -427,5 +428,25 @@ describe("problem-backed views", () => {
         ).toBe(false);
       }
     }
+  });
+});
+
+describe("recipe/no-instructions names the source complement", () => {
+  it("excludes exactly Book and Notion, by naming everything else", () => {
+    // A filter can include, never exclude, so the detector's
+    // `SourceType IS DISTINCT FROM 'Book' AND IS DISTINCT FROM 'Notion'` is
+    // spelled as a positive list plus the `(none)` sentinel for the nullable
+    // column. That is equivalent TODAY and silently stops being equivalent the
+    // moment a fifth source is added — the new one would be excluded from the
+    // worklist without anything failing. This is the thing that fails.
+    const view = viewsForEntity("recipe").find(
+      (candidate) => candidate.id === "no-instructions",
+    );
+    const named = view?.filters.find((f) => f.id === "sourceType")?.value;
+    expect(Array.isArray(named)).toBe(true);
+    const values = (named as string[]).filter((v) => v !== FILTER_NONE);
+    expect(new Set(values)).toEqual(
+      new Set(recipeSourceValues.filter((v) => v !== "Book" && v !== "Notion")),
+    );
   });
 });

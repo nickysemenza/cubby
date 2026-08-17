@@ -90,7 +90,6 @@ import {
   findPurchaseFinancialSettlementMismatches,
   findPurchaselessExitExpenses,
   findPurchasesNotReconciling,
-  findRecipesWithoutInstructions,
   findReferentialLivenessViolations,
   findSoldButStillStocked,
   findStaleIngredientParses,
@@ -528,7 +527,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       entitiesMissingEmbeddings: () => findMissingEmbeddings(scoped),
       staleParentRecipes: () => findParentRecipesWithDeletedSubRecipes(scoped),
       understatedCostMeals: () => findUnderstatedCostMeals(scoped),
-      recipesWithoutInstructions: () => findRecipesWithoutInstructions(scoped),
       unknownParkedItems: () => findUnknownParkedItems(scoped),
       manufacturerSpellingVariants: () =>
         findManufacturerSpellingVariants(scoped),
@@ -581,7 +579,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     entitiesMissingEmbeddings: r.entitiesMissingEmbeddings,
     staleParentRecipes: r.staleParentRecipes,
     understatedCostMeals: r.understatedCostMeals,
-    recipesWithoutInstructions: r.recipesWithoutInstructions,
     unknownParkedItems: r.unknownParkedItems,
     manufacturerSpellingVariants: r.manufacturerSpellingVariants,
     duplicateVendors: r.duplicateVendors,

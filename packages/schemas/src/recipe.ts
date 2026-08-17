@@ -27,6 +27,7 @@ import {
   recipeNotes,
   recipeServings,
   recipeSource,
+  recipeSourceValues,
   recipeTags,
   recipeTotals,
   recipeYieldSchema,
@@ -185,6 +186,9 @@ export const recipeListItemOut = z.object({
   // Live MealRecipe rows under a live Meal — a soft-deleted Meal's plan
   // doesn't count. Backs the list's "Meals" column.
   mealCount: z.number().int(),
+  /** Live sections. Cheap correlated scalar — the section GRAPH is not on the
+   *  list path (dropping it was the ~4.7s over-fetch fix). */
+  sectionCount: z.number().int(),
   // Single cover image only (sortOrder-first, limit 1) — the list only ever
   // renders a thumbnail, and loading every image was the over-fetch the
   // `totals` comment above already dropped `.sections` for. Backs the
@@ -300,6 +304,22 @@ export const recipeFilterFields = {
   imagePresenceFilter: presenceFilter.describe(
     "Filter to recipes that do / don't have at least one image (PDFs don't count)",
   ),
+  /**
+   * `"none"` is the can't-cook-from-it worklist: no live section carries a
+   * non-empty instruction list. Counts SECTIONS, not recipes — a recipe whose
+   * sections all have empty instruction arrays still has none.
+   */
+  instructionsPresenceFilter: presenceFilter.describe(
+    "Filter to recipes that do / don't have any written instructions.",
+  ),
+  /**
+   * The recipe's provenance. Nullable, so `sourceTypePresenceFilter: "none"`
+   * matches legacy hand-entered rows — and those must stay visible, which is
+   * why an exclusion is spelled as a positive list plus this sentinel rather
+   * than a `!=` that would evaluate UNKNOWN against NULL and drop them.
+   */
+  sourceTypeFilter: oneOrMany(z.enum(recipeSourceValues)).optional(),
+  sourceTypePresenceFilter: presenceFilter,
   costTotalMin: z.coerce.number().nonnegative().optional(),
   costTotalMax: z.coerce.number().nonnegative().optional(),
   caloriesTotalMin: z.coerce.number().nonnegative().optional(),

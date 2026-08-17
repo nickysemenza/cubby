@@ -670,6 +670,40 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       columnVisibility: { children: true, inventoryEntries: true },
     },
   ],
+  recipe: [
+    {
+      id: "no-instructions",
+      label: "No instructions",
+      description: "Nothing written down to cook from",
+      // The source exclusion is spelled as a POSITIVE list plus the `(none)`
+      // sentinel, not as a negation: `SourceType` is nullable, a NULL is a
+      // legacy hand-entered recipe that must stay visible, and `!= 'Book'`
+      // would evaluate UNKNOWN against it and drop it. Book and Notion recipes
+      // live elsewhere by design — the text isn't supposed to be here.
+      //
+      // `recipe-source-complement.unit.test.ts` pins the list to the full
+      // enum minus those two, so adding a fifth source can't silently exclude
+      // it from this worklist.
+      filters: [
+        { id: "instructions", value: "none" },
+        { id: "sourceType", value: ["Website", "Other", FILTER_NONE] },
+      ],
+      sort: [{ id: "name", desc: false }],
+      problem: {
+        key: "recipesWithoutInstructions",
+        title: "Recipes with no instructions",
+        description:
+          "No section carries any written steps, so there is nothing to cook from. Book and Notion recipes are excluded — their text lives outside Cubby on purpose.",
+        emptyMessage: "Every recipe has instructions.",
+        serverFilters: {
+          instructionsPresenceFilter: "none",
+          sourceTypeFilter: ["Website", "Other"],
+          sourceTypePresenceFilter: "none",
+        },
+      },
+      columnVisibility: { sourceType: true },
+    },
+  ],
   meal: [
     {
       id: "empty-cooked",

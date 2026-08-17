@@ -128,6 +128,7 @@ import {
   dbRecipeToAPIGraph,
   dbRecipeToListAPI,
   liveMealCountForRecipeSql,
+  liveSectionCountForRecipeSql,
   recipeListCoverImageRelation,
 } from "./helpers";
 import type { RecipeFilters } from "./internal-types";
@@ -426,6 +427,20 @@ export const recipeList = async (
       and(notDeleted(recipeImage), ne(image.contentType, PDF_CONTENT_TYPE)),
     );
 
+  // Recipes carrying at least one live section with a non-empty instruction
+  // list. `instructions` is NOT NULL with a `'[]'` default, so the length test
+  // needs no COALESCE — and a recipe with sections that are all empty is still
+  // "no instructions", which is why this counts sections rather than recipes.
+  const recipeIdsWithInstructions = dbClient
+    .select({ recipeId: recipeSection.recipeId })
+    .from(recipeSection)
+    .where(
+      and(
+        notDeleted(recipeSection),
+        sql`jsonb_array_length(${recipeSection.instructions}) > 0`,
+      ),
+    );
+
   // Build where conditions - always filter out deleted items. Scope to one
   // cookbook by FK id when browsing its detail page.
   const pickerSearch = filters.nameFilter
@@ -484,6 +499,16 @@ export const recipeList = async (
         recipe.id,
         filters.imagePresenceFilter,
         recipeIdsWithImages,
+      ),
+      idSetPresence(
+        recipe.id,
+        filters.instructionsPresenceFilter,
+        recipeIdsWithInstructions,
+      ),
+      eqAnyOrPresence(
+        recipe.SourceType,
+        filters.sourceTypeFilter,
+        filters.sourceTypePresenceFilter,
       ),
       filters.costTotalMin !== undefined
         ? sql`(${recipe.totals}->>'costTotal')::numeric >= ${filters.costTotalMin}`
@@ -571,6 +596,9 @@ export const recipeList = async (
         mealCount: sql<number>`${sql.raw(
           liveMealCountForRecipeSql('"recipe"."id"'),
         )}`.as("mealCount"),
+        sectionCount: sql<number>`${sql.raw(
+          liveSectionCountForRecipeSql('"recipe"."id"'),
+        )}`.as("sectionCount"),
       },
     }),
     countWhere(db, recipe, whereClause),

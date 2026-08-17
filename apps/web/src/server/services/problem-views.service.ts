@@ -9,6 +9,7 @@ import type {
   ProblemsViewsOut,
   ProductMissingPrice,
   ProductWithoutMappings,
+  RecipeWithoutInstructions,
   SectionTotals,
   StaleLocation,
   UnusedIngredient,
@@ -244,6 +245,13 @@ const toStaleLocation = (row: ListRow): StaleLocation => {
   };
 };
 
+const toRecipeWithoutInstructions = (
+  row: ListRow,
+): RecipeWithoutInstructions => {
+  const r = row as unknown as RecipeWithoutInstructions;
+  return { id: r.id, name: r.name, sectionCount: r.sectionCount };
+};
+
 export const findViewProblems = async (
   db: Database,
 ): Promise<ProblemsViewsOut> => {
@@ -321,6 +329,9 @@ export const findViewProblems = async (
       toProductWithoutMappings,
     ),
     staleLocations: (results.staleLocations?.data ?? []).map(toStaleLocation),
+    recipesWithoutInstructions: (
+      results.recipesWithoutInstructions?.data ?? []
+    ).map(toRecipeWithoutInstructions),
     sectionTotals,
   };
 };

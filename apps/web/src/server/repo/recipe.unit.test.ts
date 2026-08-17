@@ -147,10 +147,11 @@ const fullRecipeRow = {
 // dbRecipeToAPIShallow produces the shared topLevel+totals base that
 // dbRecipeToAPI/dbRecipeToAPIGraph/dbRecipeToListAPI each layer their own
 // remaining fields on top of — it deliberately omits the list-only
-// `mealCount`/`images` extras (see dbRecipeToListAPI), so validate its
-// output against recipeListItemOut minus those two fields.
+// `mealCount`/`sectionCount`/`images` extras (see dbRecipeToListAPI), so
+// validate its output against recipeListItemOut minus those three.
 const recipeShallowOut = recipeListItemOut.omit({
   mealCount: true,
+  sectionCount: true,
   images: true,
 });
 

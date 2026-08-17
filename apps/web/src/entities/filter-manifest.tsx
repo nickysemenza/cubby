@@ -24,7 +24,7 @@ import {
   taskFilterFields,
 } from "@cubby/schemas/project";
 import { purchaseFilterFields } from "@cubby/schemas/purchase";
-import { recipeFilterFields } from "@cubby/schemas/recipe";
+import { recipeFilterFields, recipeSourceValues } from "@cubby/schemas/recipe";
 import {
   relatedFilterPrefix,
   relatedViewRegistry,
@@ -311,6 +311,10 @@ const resolveLocationValuation = (value: string | undefined) => {
   if (value === "gte500") return { valuationMin: 500 };
   return {};
 };
+
+const recipeSourceOptions: FilterableComboboxItem[] = recipeSourceValues.map(
+  (value) => ({ value, label: value }),
+);
 
 const recipeCostOptions: FilterableComboboxItem[] = [
   { value: "under10", label: "Under $10" },
@@ -1418,6 +1422,21 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       kind: "presence",
       placeholder: "Filter images...",
       options: presenceFilterOptions("image"),
+    },
+    {
+      columnId: "instructions",
+      field: "instructionsPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter instructions...",
+      options: presenceFilterOptions("instructions"),
+    },
+    {
+      columnId: "sourceType",
+      field: "sourceTypeFilter",
+      kind: "multiselect",
+      placeholder: "Filter by source...",
+      options: recipeSourceOptions,
+      nullable: { field: "sourceTypePresenceFilter", label: "source" },
     },
     {
       columnId: "costTotal",
