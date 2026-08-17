@@ -63,9 +63,7 @@ test("tool matrix keeps angled project headers pinned below the nav", async ({
   );
 
   await page.setViewportSize({ width: 1280, height: 300 });
-  await page.goto(
-    `/projects/tools?floor=0&project=${encodeURIComponent(tag)}`,
-  );
+  await page.goto(`/projects/tools?floor=0&project=${encodeURIComponent(tag)}`);
   await page.waitForLoadState("networkidle");
 
   const table = page.getByRole("table");
