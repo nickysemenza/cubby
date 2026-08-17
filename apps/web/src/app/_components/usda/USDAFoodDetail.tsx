@@ -172,6 +172,9 @@ export const USDAFoodDetail: React.FC<{
           all, per the linkedProducts.length check below. */}
       {linkedProducts.length > 0 && (
         <NutrientDensityStats
+          // This page builds mappings with `unitMappings: []` (see below), so an
+          // unresolved basis here does not mean the product lacks a mapping.
+          canSeeStoredMappings={false}
           nutrients={nutritionInfo.nutrientsPer100}
           mappings={nutrientDensityMappings}
           price={

@@ -82,6 +82,7 @@ export function NutrientDensityStats({
   mappings,
   price,
   mappingProduct,
+  canSeeStoredMappings = true,
 }: {
   nutrients: NutrientsPer100;
   mappings: UnitMapping[];
@@ -90,6 +91,15 @@ export function NutrientDensityStats({
   /** The product whose weight mapping would resolve the basis — links the
    * "needs a weight mapping" nudge to where a human fixes it. */
   mappingProduct: { id: string; name: string; manufacturer?: string };
+  /**
+   * Whether `mappings` actually includes the product's STORED unit mappings.
+   * False on the USDA food page, whose `linkedProducts` projection has no
+   * `unitMappings` field — there, an unresolved basis means "this view cannot
+   * see the mappings", not "the product lacks one", so claiming a gap would
+   * point a human at a product that may already carry the exact mapping.
+   * Suppress the nudge rather than assert something this view cannot know.
+   */
+  canSeeStoredMappings?: boolean;
 }) {
   const { proteinDensity, costPerGramProtein, needsWeightMapping } =
     computeNutrientDensityFigures(nutrients, mappings, price);
@@ -107,7 +117,7 @@ export function NutrientDensityStats({
         <Description>
           {formatCurrency(costPerGramProtein)} / g protein
         </Description>
-      ) : needsWeightMapping ? (
+      ) : needsWeightMapping && canSeeStoredMappings ? (
         <Description>
           Needs a weight mapping on{" "}
           <EntityInlineLink entity="product" data={mappingProduct} compact /> to

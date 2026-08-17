@@ -11,6 +11,7 @@ import type { IngredientId } from "@cubby/schemas/identifiers";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { type DataType, dataTypeEnum } from "@cubby/usda-schemas";
 import { chat, maxIterations, toolDefinition } from "@tanstack/ai";
+import { getErrorMessage } from "~/lib/error-utils";
 import { DEFAULT_CHAT_MODEL } from "~/server/ai/models";
 import { dispatchBackgroundJobs } from "~/server/background-dispatch";
 import { aiGatewayUsageMiddleware } from "~/server/clients/ai-gateway-usage";
@@ -230,6 +231,7 @@ export async function suggestUsdaFoodBatch(
 ): Promise<UsdaFoodBatchSuggestion[]> {
   const capped = ingredients.slice(0, 20);
   const out: UsdaFoodBatchSuggestion[] = [];
+  const failed: { id: IngredientId; name: string }[] = [];
   for (let i = 0; i < capped.length; i += 5) {
     const batch = capped.slice(i, i + 5);
     const results = await Promise.allSettled(
@@ -250,20 +252,47 @@ export async function suggestUsdaFoodBatch(
           confidence: "low",
           reasoning: "Lookup failed.",
         });
-        await dispatchBackgroundJobs(db, {
-          kind: "usda-match.retry",
-          source: "mutation",
-          jobs: [
-            {
-              kind: "usda-match.retry",
-              dedupeKey: `usda-match.retry:${item.id}`,
-              payload: { ingredientId: item.id },
-            },
-          ],
-        });
+        failed.push(item);
       }
     }
   }
+
+  // Retry scheduling is deliberately BEST-EFFORT and happens after the read
+  // loop, never inside it. Two reasons, both learned the hard way:
+  //
+  //  1. `out` already holds every degraded and matched entry by this point. An
+  //     unguarded `await dispatchBackgroundJobs(...)` inside the loop meant a
+  //     rejecting dispatch (DB insert, queue.sendBatch) threw straight out of
+  //     this function and discarded ALL of them — turning "some matched, some
+  //     degraded" into a total failure, the exact opposite of the degrade
+  //     path's purpose.
+  //  2. With no queue bound (dev, test, self-host), `dispatchBackgroundJobs`
+  //     falls through to `processInlineJobs`, which loops
+  //     `while (outcome === "retry")` with no backoff and no bound. Dispatching
+  //     per failed item ran a full extra agent lookup, synchronously, inside
+  //     the user's request — once per failure, precisely during the upstream
+  //     outage that caused the failures. One dispatch of N jobs replaces N
+  //     dispatches, and the try/catch keeps a queue problem from ever reaching
+  //     the caller.
+  if (failed.length > 0) {
+    try {
+      await dispatchBackgroundJobs(db, {
+        kind: "usda-match.retry",
+        source: "mutation",
+        jobs: failed.map((item) => ({
+          kind: "usda-match.retry" as const,
+          dedupeKey: `usda-match.retry:${item.id}`,
+          payload: { ingredientId: item.id },
+        })),
+      });
+    } catch (error) {
+      console.error(
+        "[suggestUsdaFoodBatch] could not schedule retries:",
+        getErrorMessage(error),
+      );
+    }
+  }
+
   return out;
 }
 
