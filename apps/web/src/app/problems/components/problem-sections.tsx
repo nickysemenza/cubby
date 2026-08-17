@@ -1137,6 +1137,7 @@ const DECLARED_SECTIONS = [
     id: "stale-recounts",
     label: "Stale recounts",
     select: (p) => p.staleLocations,
+    totalKey: "staleLocations",
     coverage: {
       keys: ["staleLocations"],
       meter: { total: (t) => t.staleLocations, doneLabel: "recounted" },

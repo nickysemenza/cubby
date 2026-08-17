@@ -610,6 +610,36 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       columnVisibility: { aiDescription: true, image: true },
     },
     {
+      id: "stale-recounts",
+      label: "Overdue a recount",
+      description: "Holding stock, not counted in 60 days (or ever)",
+      // Inventory never auto-decrements, so nothing but a deliberate recount
+      // restores a count's truth — an uncounted bin just drifts. Deliberately
+      // looser than the 30-day tint the location page shows: that nudges, this
+      // raises a row.
+      filters: [
+        { id: "inventoryEntries", value: "has" },
+        { id: "lastBulkInventory", value: "60" },
+      ],
+      sort: [{ id: "lastBulkInventory", desc: false }],
+      problem: {
+        key: "staleLocations",
+        title: "Locations overdue a recount",
+        description:
+          "Holding stock whose count hasn't been checked against the shelf in 60 days — or ever. Never-counted bins sort first.",
+        emptyMessage: "Every stocked location has been recounted recently.",
+        // `directItemCountMin: 1` is how "holds stock" is spelled here, and it
+        // is slightly NARROWER than the detector's join: it counts only entries
+        // whose product is live. Same deliberate tightening as `empty-leaves`,
+        // and the two must agree or a shelf lands in both sections at once.
+        serverFilters: {
+          directItemCountMin: 1,
+          lastBulkInventoryOlderThanDays: 60,
+        },
+      },
+      columnVisibility: { lastBulkInventory: true, inventoryEntries: true },
+    },
+    {
       id: "empty-leaves",
       label: "Empty",
       description: "Leaf locations holding nothing",

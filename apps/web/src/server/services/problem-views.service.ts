@@ -10,6 +10,7 @@ import type {
   ProductMissingPrice,
   ProductWithoutMappings,
   SectionTotals,
+  StaleLocation,
   UnusedIngredient,
 } from "@cubby/schemas/problems";
 import {
@@ -228,6 +229,21 @@ const toProductWithoutMappings = (row: ListRow): ProductWithoutMappings => {
   };
 };
 
+const toStaleLocation = (row: ListRow): StaleLocation => {
+  const r = row as unknown as StaleLocation & {
+    inventoryEntries: unknown[];
+  };
+  return {
+    id: r.id,
+    name: r.name,
+    type: r.type,
+    lastBulkInventory: r.lastBulkInventory,
+    // The list embeds the live entries the count filter selected on, so this is
+    // the same population `directItemCountMin` measured.
+    itemCount: r.inventoryEntries.length,
+  };
+};
+
 export const findViewProblems = async (
   db: Database,
 ): Promise<ProblemsViewsOut> => {
@@ -304,6 +320,7 @@ export const findViewProblems = async (
     productsWithoutMappings: (results.productsWithoutMappings?.data ?? []).map(
       toProductWithoutMappings,
     ),
+    staleLocations: (results.staleLocations?.data ?? []).map(toStaleLocation),
     sectionTotals,
   };
 };

@@ -70,6 +70,7 @@ const filterSearchKeys = {
   ],
   location: [
     "image",
+    "lastBulkInventory",
     "children",
     "aiDescription",
     "name",

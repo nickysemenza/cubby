@@ -1671,7 +1671,7 @@ describe("problems service — recount staleness", () => {
     await setLastRecount(long.loc.entityId, daysAgo(90));
     await setLastRecount(fresh.loc.entityId, daysAgo(3));
 
-    const { staleLocations } = await findFastProblems(ctx.db);
+    const { staleLocations } = await findViewProblems(ctx.db);
     const ids = staleLocations.map((l) => l.id);
     expect(ids).toContain(never.loc.id);
     expect(ids).toContain(long.loc.id);
@@ -1691,7 +1691,7 @@ describe("problems service — recount staleness", () => {
     const emptied = await seedStocked("Emptied bin");
     await deleteInventoryEntries(ctx.db, [emptied.entry.entityId], ctx.actor);
 
-    const { staleLocations } = await findFastProblems(ctx.db);
+    const { staleLocations } = await findViewProblems(ctx.db);
     const ids = staleLocations.map((l) => l.id);
     // Nothing to recount — findEmptyLocations already owns these.
     expect(ids).not.toContain(empty.id);

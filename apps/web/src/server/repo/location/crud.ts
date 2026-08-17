@@ -772,6 +772,12 @@ export const locationList = async (
         filters.childPresenceFilter,
         locationIdsWithChildren,
       ),
+      filters.lastBulkInventoryOlderThanDays !== undefined
+        ? or(
+            isNull(location.lastBulkInventory),
+            sql`${location.lastBulkInventory} < now() - make_interval(days => ${filters.lastBulkInventoryOlderThanDays})`,
+          )
+        : undefined,
       filters.directItemCountMin !== undefined
         ? inArray(location.id, locationIdsMeetingInventoryMinimum)
         : undefined,

@@ -279,6 +279,21 @@ const resolveTaskDueFilter = (value: string | undefined) => {
   return resolveDueRange(value);
 };
 
+const recountAgeOptions: FilterableComboboxItem[] = [
+  { value: "30", label: "Not counted in 30 days" },
+  { value: "60", label: "Not counted in 60 days" },
+  { value: "90", label: "Not counted in 90 days" },
+];
+
+/** Each option is "older than N days, or never recounted" — see the field's
+ *  schema doc for why the never-recounted half is part of the predicate. */
+const resolveRecountAge = (value: string | undefined) => {
+  const days = Number(value);
+  return Number.isInteger(days) && days > 0
+    ? { lastBulkInventoryOlderThanDays: days }
+    : {};
+};
+
 const resolveLocationItems = (value: string | undefined) =>
   value === "none"
     ? { directItemCountMax: 0 }
@@ -1502,6 +1517,17 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       kind: "presence",
       placeholder: "Filter images...",
       options: presenceFilterOptions("image"),
+    },
+    {
+      // Presets rather than a date range: the predicate is "older than N days
+      // OR never", which no From/To pair expresses — and a relative bound is
+      // the only shape a saved view can pin, since an absolute date computed
+      // from the browser clock changes daily.
+      columnId: "lastBulkInventory",
+      kind: "range",
+      placeholder: "Filter recounts...",
+      options: recountAgeOptions,
+      expand: resolveRecountAge,
     },
     {
       // "none" is the leaf-location worklist; with `inventoryEntries: none`

@@ -68,6 +68,9 @@ export interface LocationFilters {
   // Direct children only, matching what the Parent column shows. "none" is the
   // leaf-location worklist.
   childPresenceFilter?: "has" | "none";
+  // Older than N days, OR never recounted — the NULL half is part of the
+  // predicate, since an uncounted bin is the worst offender, not an exempt one.
+  lastBulkInventoryOlderThanDays?: number;
   directItemCountMin?: number;
   directItemCountMax?: number;
   valuationMin?: number;

@@ -1,3 +1,4 @@
+import type { EmptyLocation } from "@cubby/schemas/problems";
 import { formatDistanceToNow } from "date-fns";
 import { Calendar } from "lucide-react";
 import { type ReactNode, useState } from "react";
@@ -6,7 +7,6 @@ import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { entityDetailLink } from "~/entities/entities";
-import type { EmptyLocation } from "~/server/repo/problems";
 import { AddInventoryDialog } from "./add-inventory-dialog";
 import { ProblemSection, type ProblemSectionCoverage } from "./problem-section";
 import { createdAgoDetail } from "./render-helpers";

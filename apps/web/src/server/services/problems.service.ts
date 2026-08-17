@@ -94,7 +94,6 @@ import {
   findReferentialLivenessViolations,
   findSoldButStillStocked,
   findStaleIngredientParses,
-  findStaleLocations,
   findToolsUsedOutsideOwnership,
   findUnderstatedCostMeals,
   findUnknownParkedItems,
@@ -530,7 +529,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       staleParentRecipes: () => findParentRecipesWithDeletedSubRecipes(scoped),
       understatedCostMeals: () => findUnderstatedCostMeals(scoped),
       recipesWithoutInstructions: () => findRecipesWithoutInstructions(scoped),
-      staleLocations: () => findStaleLocations(scoped),
       unknownParkedItems: () => findUnknownParkedItems(scoped),
       manufacturerSpellingVariants: () =>
         findManufacturerSpellingVariants(scoped),
@@ -584,7 +582,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     staleParentRecipes: r.staleParentRecipes,
     understatedCostMeals: r.understatedCostMeals,
     recipesWithoutInstructions: r.recipesWithoutInstructions,
-    staleLocations: r.staleLocations,
     unknownParkedItems: r.unknownParkedItems,
     manufacturerSpellingVariants: r.manufacturerSpellingVariants,
     duplicateVendors: r.duplicateVendors,

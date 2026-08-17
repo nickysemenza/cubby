@@ -14,8 +14,6 @@
  *                                            linked-product ids)
  *   INGREDIENT  → `detectors-ingredient.ts` (no-product, unused aliases,
  *                                            unused ingredients, alias pruning)
- *   LOCATION    → `detectors-location.ts`   (empty leaves, missing AI description,
- *                                            stocked bins overdue for a recount)
  *   MEAL        → `detectors-meal.ts`       (cooked meals with nothing planned —
  *                                            eating-out placeholders excluded)
  *   INVENTORY   → `detectors-inventory.ts`  (never-verified entries, items parked
@@ -77,11 +75,6 @@ export {
   findDuplicateVendors,
   findManufacturerSpellingVariants,
 } from "./detectors-label-variants";
-// Location-centric detectors (+ EmptyLocation type re-export)
-export {
-  type EmptyLocation,
-  findStaleLocations,
-} from "./detectors-location";
 // Meal-centric detectors
 export { findUnderstatedCostMeals } from "./detectors-meal";
 // Product-centric detectors (+ ProductWithBetterUpcData type re-export)
