@@ -92,7 +92,7 @@ describe("flattenPhotoStops", () => {
       children: [
         loc("BBBB", "Shelf 1", "shelf", {
           images: [img()],
-          children: [loc("CCCC", "Bin A", "tote-27gal")],
+          children: [loc("CCCC", "Bin A", "box")],
         }),
         loc("DDDD", "Shelf 2", "shelf"),
       ],
@@ -121,7 +121,7 @@ describe("flattenPhotoStops", () => {
   });
 
   it("narrows by type without hiding nested matches", () => {
-    const stops = flattenPhotoStops(tree, { types: ["tote-27gal"] });
+    const stops = flattenPhotoStops(tree, { types: ["box"] });
     expect(stops.map((s) => s.name)).toEqual(["Bin A"]);
   });
 

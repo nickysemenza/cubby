@@ -126,17 +126,11 @@ const LOCATION_TYPE_DESCRIPTIONS = {
   cabinet:
     "Enclosed storage with doors: tool cabinet, kitchen cabinet, medicine cabinet",
   drawer: "Pull-out compartments: desk drawer, toolbox drawer, kitchen drawer",
-  box: "Cardboard or plastic boxes: shipping box, storage box, parts box",
+  // Crates and totes deliberately have no type of their own any more: they are
+  // Products, and a location that is one carries `productId` instead. The
+  // classifier should reach for `box` and let the operator attach the SKU.
+  box: "Cardboard or plastic boxes, crates and totes: shipping box, storage box, parts box, stackable crate",
   bag: "Fabric or plastic bags: tool bag, shopping bag, parts bag",
-  crate: "Full-size stackable plastic crates",
-  "half-crate": "Half-height stackable plastic crates",
-  "quarter-crate": "Quarter-height stackable plastic crates",
-  "milk-crate": "Standard milk crate size containers",
-  "tote-27gal":
-    "27-gallon black storage tote with a yellow lid (the large size)",
-  "tote-14gal":
-    "14-gallon black storage tote with a yellow lid (the medium size)",
-  "tote-7gal": "7-gallon black storage tote with a yellow lid (the small size)",
   table: "Work surfaces: workbench, desk, countertop, craft table",
   cart: "Mobile storage with wheels: tool cart, utility cart, rolling cart",
 } satisfies Record<LocationType, string>;

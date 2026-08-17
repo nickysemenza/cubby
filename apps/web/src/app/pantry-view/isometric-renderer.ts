@@ -495,13 +495,6 @@ function getDrawFunction(type: LocationType | null) {
     case "cart":
       return drawTableSurface;
     case "box":
-    case "crate":
-    case "half-crate":
-    case "quarter-crate":
-    case "milk-crate":
-    case "tote-27gal":
-    case "tote-14gal":
-    case "tote-7gal":
     case "bag":
       return drawBoxContainer;
     default:
