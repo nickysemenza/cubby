@@ -1,5 +1,9 @@
 import { isDisplayableImageFile } from "@cubby/schemas/image";
-import type { LocationType } from "@cubby/schemas/location";
+import {
+  type LocationIdentityProductOut,
+  type LocationType,
+  locationCoverImage,
+} from "@cubby/schemas/location";
 import type {
   CostType,
   ProjectKind,
@@ -202,7 +206,7 @@ export function RecipePreviewContent({ recipeId }: { recipeId: string }) {
                 data.totals?.ingredientCount ??
                 sumBy(data.sections, (s) => s.ingredients.length),
               stepCount: sumBy(data.sections, (s) => s.instructions.length),
-              thumbUrl: data.images[0]?.url,
+              thumbUrl: data.images.find(isDisplayableImageFile)?.url,
             })}
           />
         );
@@ -222,6 +226,8 @@ export type IngredientPreview = {
   multiplePrices: boolean;
   recipeCount: number;
   usdaFdcId?: number;
+  /** An ingredient has no images of its own — the first product's cover stands in. */
+  thumbUrl?: string;
   products: {
     id: string;
     name: string;
@@ -239,6 +245,7 @@ export function toIngredientCard(vm: IngredientPreview): ManifestCardProps {
   stats.push({ label: "Recipes", value: vm.recipeCount });
 
   const body: BodyBlock[] = [];
+  if (vm.thumbUrl) body.push({ kind: "thumb", url: vm.thumbUrl });
   if (vm.nutrients) body.push({ kind: "nutrients", nutrients: vm.nutrients });
   body.push({ kind: "stats", stats });
   if (vm.products.length > 0)
@@ -287,6 +294,9 @@ export function IngredientPreviewContent({
               multiplePrices: prices.length > 1,
               recipeCount: data.appearsInRecipes.length,
               usdaFdcId: data.product.find((prod) => prod.food)?.food?.fdc_id,
+              thumbUrl: data.product
+                .flatMap((prod) => prod.images)
+                .find(isDisplayableImageFile)?.url,
               products: data.product.map((prod) => ({
                 id: prod.id,
                 name: prod.name,
@@ -456,9 +466,12 @@ export type LocationPreview = {
   id: string;
   name: string;
   type: LocationType | null;
+  /** The SKU this location IS — drives the glyph when `type` is null. */
+  product: LocationIdentityProductOut | null;
   parent?: { id: string; name: string };
   itemCount?: number;
   subCount?: number;
+  thumbUrl?: string;
 };
 
 export function toLocationCard(vm: LocationPreview): ManifestCardProps {
@@ -468,14 +481,24 @@ export function toLocationCard(vm: LocationPreview): ManifestCardProps {
   if (vm.subCount != null)
     stats.push({ label: "Sub-locations", value: vm.subCount });
 
+  const body: BodyBlock[] = [];
+  if (vm.thumbUrl) body.push({ kind: "thumb", url: vm.thumbUrl });
+  if (stats.length > 0) body.push({ kind: "stats", stats });
+
   return {
     entity: "location",
     routeParam: vm.id,
-    icon: <LocationIcon type={vm.type} product={null} size={14} colored />,
+    // `product` is load-bearing, not decoration: a location that IS a SKU has a
+    // null `type`, and getLocationGlyph falls back to the product's category.
+    icon: (
+      <LocationIcon type={vm.type} product={vm.product} size={14} colored />
+    ),
     name: vm.name,
     tag: "location",
     // Parent isn't repeated here — it lives in the cross-link below.
-    identity: vm.type,
+    // `type ?? product.name` is LocationTypeLabel's rule: a product-linked
+    // location has no type, and this line read blank for every one of them.
+    identity: vm.type ?? vm.product?.name,
     crossLinks: vm.parent
       ? [
           {
@@ -486,7 +509,7 @@ export function toLocationCard(vm: LocationPreview): ManifestCardProps {
           },
         ]
       : undefined,
-    body: stats.length > 0 ? [{ kind: "stats", stats }] : undefined,
+    body: body.length > 0 ? body : undefined,
   };
 }
 
@@ -504,6 +527,8 @@ export function LocationPreviewContent({ locationId }: { locationId: string }) {
             id: data.id,
             name: data.name,
             type: data.type,
+            product: data.product,
+            thumbUrl: locationCoverImage(data)?.url,
             parent: data.parent
               ? { id: data.parent.id, name: data.parent.name }
               : undefined,
@@ -788,6 +813,7 @@ export type ProjectPreview = {
   // samples) aren't forced to supply it.
   effectiveStart?: string | null;
   effectiveEnd?: string | null;
+  thumbUrl?: string;
 };
 
 export function toProjectCard(vm: ProjectPreview): ManifestCardProps {
@@ -807,6 +833,7 @@ export function toProjectCard(vm: ProjectPreview): ManifestCardProps {
     tag: "project",
     identity,
     body: [
+      ...(vm.thumbUrl ? [{ kind: "thumb" as const, url: vm.thumbUrl }] : []),
       {
         kind: "stats",
         stats: [
@@ -836,6 +863,15 @@ export function toProjectCard(vm: ProjectPreview): ManifestCardProps {
 export function ProjectPreviewContent({ projectId }: { projectId: string }) {
   const trpc = useTRPC();
   const query = useQuery(trpc.project.getByID.queryOptions({ id: projectId }));
+  // Projects deliberately carry no `images` on `getByID` — `projectOut` is also
+  // `project.list`'s output, so widening it would buy a per-row image join on
+  // every list page (see repo/image.ts's getImagesByProjectIds). This endpoint
+  // is the established path, already displayable-filtered and cover-first, and
+  // the projects dashboard usually leaves it warm in the cache. The card never
+  // waits on it: the thumb just appears when it lands.
+  const coverQuery = useQuery(
+    trpc.image.imagesByProjectIds.queryOptions({ projectIds: [projectId] }),
+  );
 
   return (
     <PreviewQuery query={query} label="Project">
@@ -855,6 +891,7 @@ export function ProjectPreviewContent({ projectId }: { projectId: string }) {
             expenseCount: data.rollup.expenseCount,
             effectiveStart: data.dates.effectiveStart,
             effectiveEnd: data.dates.effectiveEnd,
+            thumbUrl: coverQuery.data?.[projectId]?.[0]?.url,
           })}
         />
       )}

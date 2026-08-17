@@ -15,7 +15,7 @@ import {
   locationShortcode,
   productShortcode,
 } from "./identifiers";
-import { imageOut } from "./image";
+import { type ImageOut, imageOut, isDisplayableImageFile } from "./image";
 import {
   createPaginatedResponseSchema,
   oneOrMany,
@@ -214,6 +214,29 @@ export const locationIdentityProductOut = z.object({
 export type LocationIdentityProductOut = z.infer<
   typeof locationIdentityProductOut
 >;
+
+/**
+ * The image that represents a location: its own first displayable photo, else
+ * the cover of the SKU it IS.
+ *
+ * `locationIdentityProductOut.coverImage` was built for exactly this fallback
+ * and had no reader until this existed — every location surface resolved only
+ * `images`, so a bin that IS a photographed tote rendered the empty placeholder.
+ *
+ * Structurally typed rather than taking a `LocationOut`, so the list row, the
+ * detail read, and the hover-card view-model all satisfy it.
+ */
+export const locationCoverImage = (loc: {
+  images: ImageOut[];
+  product: { coverImage: ImageOut | null } | null;
+}): ImageOut | null => {
+  const own = loc.images.find(isDisplayableImageFile);
+  if (own) return own;
+  // `mapLocationIdentityProduct` filters this too, but a caller may hand us a
+  // cover from somewhere else; the predicate is the contract, not the mapper.
+  const cover = loc.product?.coverImage;
+  return cover && isDisplayableImageFile(cover) ? cover : null;
+};
 
 export const locationOutFields = {
   id: locationShortcode,

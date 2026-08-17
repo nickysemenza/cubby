@@ -60,6 +60,9 @@ the evidence required before promotion.
   auto-minting import creates a persistent operator worklist.
 - Fix the meals table's client-side filtering on the next meals-table touch;
   codegen the eager-route filter mirrors only if a third mirror appears.
+- The location identity-product image fallback on the tree-fed surfaces
+  (gallery, card grid, arrange) — it needs a `makeTree` join to do anything at
+  all, so adding the call alone is a silent no-op.
 - The before-drywall spatial-memory capture is the exception: promote it
   immediately when construction timing makes that deadline real.
 
@@ -279,6 +282,25 @@ runtime CDN) are all shipped. Target is iOS Safari only. Remaining:
   offering a 2,764-item queue. This is the mirror of the Unknown tray: that
   drains items filed in the wrong place, this files items that were never
   placed at all.
+- [ ] **The identity-product image fallback stops at the tree-fed surfaces.**
+  `locationCoverImage` (PR #767) resolves a location's own photo, else the cover
+  of the SKU it IS, and the hovercard, the ⌘K search hit, and the locations list
+  column all go through it. The gallery, the card grid, and the arrange thumbs do
+  **not** — and adding the call there would be a silent no-op, which is the part
+  worth remembering. Those three read `location.makeTree`, whose rows are typed
+  `InfLocation` but come from a raw recursive CTE that never joins the identity
+  product, so `buildLocationWithChildren` maps `product` to `null` for **every**
+  node. The type says the data is there and it never is. `ArrangeThumb` also
+  takes a bare `images` prop, so it needs `product` threaded before it could ask.
+  The fix is a join in `buildLocationTree` plus its cover, which adds per-node
+  work to the query behind `/locations/arrange` — a route that is `ssr: false`
+  precisely because it dehydrates 844 KB (see [apps/web/CLAUDE.md](../apps/web/CLAUDE.md)).
+  **Trigger**: enough product-linked bins without their own photo to make the
+  placeholder tiles annoying in the gallery — 14 at the time of writing, against
+  160 locations that have a photo of their own and are unaffected. Cheaper
+  alternative if it stays small: photograph those bins instead of widening the
+  query.
+
 - [ ] **Surface shelf-vs-ledger variance inside the session**: the review pane's
   "Expected contents" is the *shelf* record; the ledger's net-units figure never
   appears, so the one signal that says "this bin is probably wrong" is invisible

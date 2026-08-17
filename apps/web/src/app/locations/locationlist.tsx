@@ -1,6 +1,7 @@
-import type {
-  LocationListItemOut,
-  LocationType,
+import {
+  type LocationListItemOut,
+  type LocationType,
+  locationCoverImage,
 } from "@cubby/schemas/location";
 import { getLocationTypeColor } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
@@ -94,7 +95,15 @@ export function LocationList() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateLocationMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
-      createImageColumn(columnHelper, { entity: "location" }),
+      createImageColumn(columnHelper, {
+        entity: "location",
+        // A bin that IS a photographed tote should show the tote. The default
+        // accessor only reads `row.images`, so those rendered the placeholder.
+        getImages: (location) => {
+          const cover = locationCoverImage(location);
+          return cover ? [cover] : [];
+        },
+      }),
       createNameColumn(columnHelper, "location", "name", {
         // Keeps the default w-64. This used to be a bare `min-w-0` so the
         // auto-width name would split the leftover with the slack spacer —
