@@ -15,7 +15,6 @@ import {
   IntegreSQLClient,
   type IntegreSQLDatabaseConfig,
 } from "@devoxa/integresql-client";
-import { pushSchema } from "drizzle-kit/api";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { beforeEach } from "vitest";
@@ -79,6 +78,16 @@ export async function setup() {
     const db = drizzle(pool);
 
     try {
+      // Imported lazily, and deliberately. `pushSchema` is only ever needed
+      // HERE, in `setup()` — which is the integration project's `globalSetup`
+      // and so runs once per `vitest run`. But this module is also reached by
+      // every one of the 69 integration test files, because
+      // `tooling/integration-teardown.ts` (a `setupFiles` entry) imports
+      // `closeTestDb` from it. A top-level import therefore loaded the whole
+      // 9.8 MB drizzle-kit migration engine 69 times to use it once: measured
+      // **565ms per file**, ~39s of cumulative worker time. Keep this dynamic.
+      const { pushSchema } = await import("drizzle-kit/api");
+
       // pushSchema doesn't manage extensions; create them before pushing
       // (mirrors db:push and E2E setup).
       await ensureDbExtensions(db);
