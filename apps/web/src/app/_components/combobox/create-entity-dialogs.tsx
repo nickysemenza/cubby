@@ -113,6 +113,9 @@ export function CreateProductDialog({
   error,
   initialName,
   initialExpectedQuantity,
+  initialManufacturer,
+  initialUpc,
+  initialFdcId,
 }: {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
@@ -122,6 +125,10 @@ export function CreateProductDialog({
   error?: string;
   initialName?: string;
   initialExpectedQuantity?: number | null;
+  /** USDA-food-derived prefill — see `ProductForm`'s `CreateProductFormProps`. */
+  initialManufacturer?: string;
+  initialUpc?: string | null;
+  initialFdcId?: number | null;
 }) {
   return (
     <CreateEntityDialogWrapper
@@ -138,6 +145,9 @@ export function CreateProductDialog({
         onCreate={onCreate}
         initialName={initialName}
         initialExpectedQuantity={initialExpectedQuantity}
+        initialManufacturer={initialManufacturer}
+        initialUpc={initialUpc}
+        initialFdcId={initialFdcId}
         embedded
       />
     </CreateEntityDialogWrapper>

@@ -40,6 +40,7 @@ export const recipeRouter = createTRPCRouter({
   list: recipeCrudProcedures.list,
   create: recipeCrudProcedures.create,
   update: recipeCrudProcedures.update,
+  duplicate: recipeCrudProcedures.duplicate,
   delete: recipeCrudProcedures.delete,
   getAllTags: recipeCrudProcedures.getAllTags,
   getFlow: recipeFlowProcedures.getFlow,

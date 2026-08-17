@@ -10,29 +10,12 @@ import type {
   VendorId,
 } from "@cubby/schemas/identifiers";
 import {
-  unsafeCookbookId,
-  unsafeExpenseId,
-  unsafeFinancialAccountId,
-  unsafeFinancialTransactionId,
-  unsafeIngredientId,
-  unsafeInventoryId,
-  unsafeLocationId,
-  unsafeMealId,
-  unsafeProductId,
-  unsafeProjectId,
-  unsafePurchaseId,
-  unsafeRecipeId,
-  unsafeTaskId,
-  unsafeVendorId,
-  unsafeWishId,
-} from "@cubby/schemas/identifiers";
-import type {
-  SearchableEntity,
-  SearchableEntityRef,
+  type SearchableEntity,
+  type SearchableEntityRef,
+  searchableEntities,
 } from "@cubby/schemas/search";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
-import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   cookbook,
@@ -415,129 +398,117 @@ export async function findCommercialEmbeddingRefsForExpenses(
   ]);
 }
 
-type LiveIdLoader = (db: Database, ids: string[]) => Promise<Set<string>>;
+/**
+ * The live-row test for each searchable entity, as data rather than as a
+ * per-type query. Every entry is the same predicate — the row exists and is
+ * not soft-deleted — so the sweep below can express all fifteen as one UNION.
+ */
+interface LiveIdSource {
+  table: PgTable;
+  idColumn: AnyPgColumn;
+  deletedAtColumn: AnyPgColumn;
+}
 
-const createLiveIdLoader =
-  (
-    table: PgTable,
-    idColumn: AnyPgColumn,
-    deletedAtColumn: AnyPgColumn,
-    parseId: (id: string) => string,
-  ): LiveIdLoader =>
-  async (db, ids) => {
-    const rows = await getDb(db)
-      .select({ id: idColumn })
-      .from(table)
-      .where(and(inArray(idColumn, ids.map(parseId)), isNull(deletedAtColumn)));
-    return new Set(rows.map(({ id }) => String(id)));
-  };
+const liveIdSources = {
+  product: {
+    table: product,
+    idColumn: product.id,
+    deletedAtColumn: product.deletedAt,
+  },
+  recipe: {
+    table: recipe,
+    idColumn: recipe.id,
+    deletedAtColumn: recipe.deletedAt,
+  },
+  ingredient: {
+    table: ingredient,
+    idColumn: ingredient.id,
+    deletedAtColumn: ingredient.deletedAt,
+  },
+  cookbook: {
+    table: cookbook,
+    idColumn: cookbook.id,
+    deletedAtColumn: cookbook.deletedAt,
+  },
+  location: {
+    table: location,
+    idColumn: location.id,
+    deletedAtColumn: location.deletedAt,
+  },
+  inventory: {
+    table: inventoryEntry,
+    idColumn: inventoryEntry.id,
+    deletedAtColumn: inventoryEntry.deletedAt,
+  },
+  meal: { table: meal, idColumn: meal.id, deletedAtColumn: meal.deletedAt },
+  project: {
+    table: project,
+    idColumn: project.id,
+    deletedAtColumn: project.deletedAt,
+  },
+  task: { table: task, idColumn: task.id, deletedAtColumn: task.deletedAt },
+  vendor: {
+    table: vendor,
+    idColumn: vendor.id,
+    deletedAtColumn: vendor.deletedAt,
+  },
+  purchase: {
+    table: purchase,
+    idColumn: purchase.id,
+    deletedAtColumn: purchase.deletedAt,
+  },
+  financialAccount: {
+    table: financialAccount,
+    idColumn: financialAccount.id,
+    deletedAtColumn: financialAccount.deletedAt,
+  },
+  financialTransaction: {
+    table: financialTransaction,
+    idColumn: financialTransaction.id,
+    deletedAtColumn: financialTransaction.deletedAt,
+  },
+  expense: {
+    table: expense,
+    idColumn: expense.id,
+    deletedAtColumn: expense.deletedAt,
+  },
+  wish: { table: wish, idColumn: wish.id, deletedAtColumn: wish.deletedAt },
+} satisfies Record<SearchableEntity, LiveIdSource>;
 
-const liveIdLoaders = {
-  product: createLiveIdLoader(
-    product,
-    product.id,
-    product.deletedAt,
-    unsafeProductId,
-  ),
-  recipe: createLiveIdLoader(
-    recipe,
-    recipe.id,
-    recipe.deletedAt,
-    unsafeRecipeId,
-  ),
-  ingredient: createLiveIdLoader(
-    ingredient,
-    ingredient.id,
-    ingredient.deletedAt,
-    unsafeIngredientId,
-  ),
-  cookbook: createLiveIdLoader(
-    cookbook,
-    cookbook.id,
-    cookbook.deletedAt,
-    unsafeCookbookId,
-  ),
-  location: createLiveIdLoader(
-    location,
-    location.id,
-    location.deletedAt,
-    unsafeLocationId,
-  ),
-  inventory: createLiveIdLoader(
-    inventoryEntry,
-    inventoryEntry.id,
-    inventoryEntry.deletedAt,
-    unsafeInventoryId,
-  ),
-  meal: createLiveIdLoader(meal, meal.id, meal.deletedAt, unsafeMealId),
-  project: createLiveIdLoader(
-    project,
-    project.id,
-    project.deletedAt,
-    unsafeProjectId,
-  ),
-  task: createLiveIdLoader(task, task.id, task.deletedAt, unsafeTaskId),
-  vendor: createLiveIdLoader(
-    vendor,
-    vendor.id,
-    vendor.deletedAt,
-    unsafeVendorId,
-  ),
-  purchase: createLiveIdLoader(
-    purchase,
-    purchase.id,
-    purchase.deletedAt,
-    unsafePurchaseId,
-  ),
-  financialAccount: createLiveIdLoader(
-    financialAccount,
-    financialAccount.id,
-    financialAccount.deletedAt,
-    unsafeFinancialAccountId,
-  ),
-  financialTransaction: createLiveIdLoader(
-    financialTransaction,
-    financialTransaction.id,
-    financialTransaction.deletedAt,
-    unsafeFinancialTransactionId,
-  ),
-  expense: createLiveIdLoader(
-    expense,
-    expense.id,
-    expense.deletedAt,
-    unsafeExpenseId,
-  ),
-  wish: createLiveIdLoader(wish, wish.id, wish.deletedAt, unsafeWishId),
-} satisfies Record<SearchableEntity, LiveIdLoader>;
-
+/**
+ * One anti-join, not a full scan plus one `IN (...)` per entity type. The old
+ * shape read every live embedding row, bucketed the ids in JS, then issued a
+ * query per type **sequentially** — ~16 round-trips carrying ~25k bind
+ * parameters, on the single pinned connection `findFastProblems` shares across
+ * all its detectors, on every Problems fetch.
+ */
 export async function findOrphanedEntityEmbeddings(
   db: Database,
 ): Promise<OrphanedEntityEmbedding[]> {
-  const rows = await getDb(db).query.entityEmbedding.findMany({
-    where: notDeleted(entityEmbedding),
-    columns: {
-      id: true,
-      entityType: true,
-      entityId: true,
-      model: true,
-      createdAt: true,
-    },
-  });
-  const byType = new Map<SearchableEntity, string[]>();
-  for (const row of rows) {
-    const ids = byType.get(row.entityType) ?? [];
-    ids.push(row.entityId);
-    byType.set(row.entityType, ids);
-  }
-
-  const liveByType = new Map<SearchableEntity, Set<string>>();
-  for (const [type, ids] of byType.entries()) {
-    const uniqueIds = uniq(ids);
-    if (uniqueIds.length === 0) continue;
-    liveByType.set(type, await liveIdLoaders[type](db, uniqueIds));
-  }
-
-  return rows.filter(
-    (row) => !liveByType.get(row.entityType)?.has(row.entityId),
+  const live = sql.join(
+    searchableEntities.map((entityType) => {
+      const source = liveIdSources[entityType];
+      return sql`SELECT ${entityType}::text AS "entityType", ${source.idColumn}::text AS "entityId" FROM ${source.table} WHERE ${source.deletedAtColumn} IS NULL`;
+    }),
+    sql` UNION ALL `,
   );
+
+  const result = await getDb(db).execute<{
+    id: string;
+    entityType: SearchableEntity;
+    entityId: string;
+    model: string;
+    createdAt: Date;
+  }>(sql`
+    WITH live AS (${live})
+    SELECT ee."id"::text AS id, ee."entityType", ee."entityId"::text AS "entityId",
+           ee."model", ee."createdAt"
+    FROM "EntityEmbedding" ee
+    LEFT JOIN live
+      ON live."entityType" = ee."entityType"
+     AND live."entityId" = ee."entityId"::text
+    WHERE ee."deletedAt" IS NULL
+      AND live."entityId" IS NULL
+  `);
+  return result.rows;
 }

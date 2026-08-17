@@ -3,7 +3,7 @@
  * Types used across recipe modules.
  */
 
-import type { CookbookId } from "@cubby/schemas/identifiers";
+import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import type { PresenceFilter } from "@cubby/schemas/pagination";
 import type {
   ingredient,
@@ -75,9 +75,11 @@ export interface RecipeFilters {
   // null OR an empty array — and it ORs with `tagFilters` rather than
   // narrowing it. See TAGS_ARE_EMPTY in ./crud.ts.
   tagsPresenceFilter?: PresenceFilter;
-  // Scope the list to a single cookbook by FK id (or several — see `oneOrMany`).
-  // Powers the cookbook detail page.
-  cookbookId?: CookbookId | CookbookId[];
+  // Scope the list to a single cookbook (or several — see `oneOrMany`). Powers
+  // the cookbook detail page. Public codes: `recipeList` resolves them itself
+  // via `resolveFilterIds`, so a code naming no live cookbook narrows to
+  // nothing rather than 404ing the whole list.
+  cookbookId?: CookbookShortcode | CookbookShortcode[];
   // The cookbook column's "(none)" / "Has cookbook" sentinel. ORs with
   // `cookbookId` rather than narrowing it (see `tagsPresenceFilter` above).
   cookbookPresenceFilter?: PresenceFilter;

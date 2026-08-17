@@ -320,6 +320,27 @@ export const correlated = <T>(fragment: string): SQL<T> =>
  * `IN ()`, which is a syntax error. Every caller must go through here rather
  * than branching on Array.isArray itself, so that stays true everywhere.
  */
+/**
+ * A `uuid[]` as ONE bound parameter, for raw `sql` templates that cannot use
+ * `eqAny`/`inArray` — those emit `IN ($1, …, $n)`, which is the wrong shape
+ * when the whole point is to avoid a parameter per id, and they cannot target
+ * an aliased table inside a hand-written UNION.
+ *
+ * This is the ONLY sanctioned way to write `= ANY(...)` in raw SQL, and
+ * `check-conventions`' `hand-rolled-any-array` rule allows exactly this call
+ * and nothing else. The trap it guards is interpolating a **JS array**, which
+ * drizzle renders as a row constructor (`ANY(($1, $2))` — "op ANY/ALL requires
+ * array"). What this returns is a Postgres array *literal* bound as a single
+ * text value and cast in SQL, so that shape is unreachable by construction.
+ *
+ * Prefer it over `IN (SELECT unnest(...))`: with a bound parameter the planner
+ * cannot see into the subquery and falls back to a hashed SubPlan over a full
+ * table scan, where `= ANY` stays an index scan (measured on production:
+ * 270 buffers against 3).
+ */
+export const uuidArrayParam = (ids: readonly string[]): SQL =>
+  sql`${`{${[...new Set(ids)].join(",")}}`}::uuid[]`;
+
 export const eqAny = <TColumn extends AnyColumn>(
   column: TColumn,
   value: unknown,
@@ -330,6 +351,26 @@ export const eqAny = <TColumn extends AnyColumn>(
   if (value.length === 1) return eq(column, value[0]);
   return inArray(column, value);
 };
+
+/**
+ * `eqAny` for a set the caller REQUESTED but which may have resolved to nothing.
+ *
+ * `eqAny`'s "empty means no constraint" is right for a filter the caller left
+ * empty and catastrophically wrong for one whose supplied ids all failed to
+ * resolve: that must match nothing, never widen to an unfiltered query
+ * (CLAUDE.md, Renderers / saved views / scopes). Pass `undefined` for "not
+ * requested" and the resolved ids — empty array included — otherwise. Pairs
+ * with `resolveFilterIds`, which produces exactly that shape.
+ */
+export const eqAnyRequested = <TColumn extends AnyColumn>(
+  column: TColumn,
+  ids: readonly unknown[] | undefined,
+): SQL | undefined =>
+  ids === undefined
+    ? undefined
+    : ids.length === 0
+      ? sql`false`
+      : eqAny(column, [...ids]);
 
 /**
  * Equality against an optional set for a SQL expression rather than a table

@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import {
   type RelatedPreviewGroup,
-  relatedViewRegistry,
+  relatedViewsFor,
 } from "@cubby/schemas/related-view";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
@@ -33,10 +33,7 @@ export function RelationshipExplorer({
 }) {
   const api = useTRPC();
   const queryClient = useQueryClient();
-  const views = useMemo(
-    () => relatedViewRegistry.filter((view) => view.source === entity),
-    [entity],
-  );
+  const views = useMemo(() => relatedViewsFor(entity), [entity]);
   const relationKeys = useMemo(() => views.map((view) => view.key), [views]);
   // The recommended preset opens with a real page, rather than the three-row
   // table preview. Vendor deliberately leads with purchases; other entities

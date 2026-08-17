@@ -157,10 +157,18 @@ export const aiRouter = createTRPCRouter({
     .input(usdaFoodSuggestionBatchInput)
     .output(strictOutput(usdaFoodSuggestionBatchOut))
     .mutation(async ({ ctx, input }) => {
+      const entityIds = await resolveAllOrThrow(
+        ctx.db,
+        "ingredient",
+        input.ingredients.map((ingredient) => ingredient.id),
+      );
       return suggestUsdaFoodBatch(
         ctx.usdaService,
         ctx.db,
-        input.ingredientNames,
+        input.ingredients.map((ingredient, i) => ({
+          id: entityIds[i]!,
+          name: ingredient.name,
+        })),
       );
     }),
   // Batch AI merge suggester for the workbench's "Suggest merges" action. Tool-

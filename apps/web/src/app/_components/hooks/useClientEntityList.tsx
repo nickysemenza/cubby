@@ -1,4 +1,4 @@
-import { relatedViewRegistry } from "@cubby/schemas/related-view";
+import { relatedViewsFor } from "@cubby/schemas/related-view";
 import type { ColumnHelper } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useCallback, useEffect, useMemo, useRef } from "react";
@@ -57,6 +57,7 @@ type SharedListOptions<TData extends BaseListRow> = Pick<
   | "initialColumnVisibility"
   | "columnVisibilityScope"
   | "deleteEmptyLabel"
+  | "hiddenFilterColumns"
 >;
 
 interface UseClientEntityListOptions<TData extends BaseListRow>
@@ -98,6 +99,7 @@ export function useClientEntityList<TData extends BaseListRow>({
   data,
   columns: customColumns,
   filters,
+  hiddenFilterColumns,
   deletable,
   extraActions,
   nameEditable,
@@ -165,10 +167,7 @@ export function useClientEntityList<TData extends BaseListRow>({
     listBulkActions.state.clearSelection();
   }, [filterScopeKey, listBulkActions.state.clearSelection]);
 
-  const relatedViews = useMemo(
-    () => relatedViewRegistry.filter((view) => view.source === entity),
-    [entity],
-  );
+  const relatedViews = useMemo(() => relatedViewsFor(entity), [entity]);
   const relatedInitialVisibility = useMemo(
     () =>
       ({
@@ -229,6 +228,7 @@ export function useClientEntityList<TData extends BaseListRow>({
     columnHelper,
     customColumns: combinedCustomColumns,
     filters: filters ?? NO_FILTERS,
+    hiddenFilterColumns,
     enableRowSelection: listBulkActions.enableRowSelection,
     combinedExtraActions,
     mappingsMap: null,

@@ -41,9 +41,6 @@ Ordered within each domain only; choose based on which surface is seeing real us
 - **House:** recurring maintenance; then the tracker data gaps as separate
   changes (`completedAt`, portfolio figures, mobile renderer, activity
   filter), not one omnibus PR.
-- **Small UX batch:** recipe clone, recipe QR labels, compare-page picker, and
-  product bulk label printing. These may travel together only if their shared
-  implementation surface makes the batch smaller than separate changes.
 - **Engineering:** close the three coverage/exhaustiveness gaps, then document
   test-placement criteria. Keep symmetry-only refactors behind live correctness
   or maintenance work.
@@ -142,11 +139,6 @@ decision value.
   This starts with a persisted-data-shape decision and migration; it is L across
   schema, import/upsert, detail, list filters, and sorting rather than a small
   import-adapter patch.
-- [ ] **Recipe clone/duplicate** — still no `duplicate` in recipe crud.
-- [ ] **Recipe QR labels**: shortcodes are minted on every create and
-  `$shortcode.tsx` resolves `R-XXXX`, but the detail page never shows the code
-  and `use-shortcode-lookups.ts` only knows location/product, so `/labels`
-  can't print recipe QRs. Completes an already-shipped mechanic.
 - [ ] **Cookbook lifecycle**: no rename/metadata edit (a mangled OPF title is
   permanent); identity is keyed on `name` (same-title books collide, a re-titled
   EPUB forks a duplicate — needs merge/re-point); `subjects` renders only as a
@@ -161,8 +153,6 @@ decision value.
   flow (all spec- or diagram-flavored, the last an AI-assembled step flow chart)
   but no plain recipe-as-a-page format (`RecipeMagazineView` would drop in); no
   multi-recipe/cookbook export.
-- [ ] **Compare page picker**: "Add Another Recipe" navigates to `/recipes` and
-  loses the selection; add an on-page picker.
 - [ ] **Notion importer hygiene**: `staleTime: 0` full-DB refetch on every
   visit, every row runs WASM parses, no status filter/search/virtualization.
 - [ ] **EPUB recipe hero photos**: `recipe-epub` already identifies an in-archive
@@ -171,6 +161,17 @@ decision value.
   materialize the referenced EPUB bytes into R2 during the watched import, and
   attach the resulting image to the recipe. Keep this synchronous with the rest
   of cookbook import; it does not justify a queue under tenet 3.
+
+### Rejected
+
+- **Recipe QR labels.** `sheet-layouts.ts`'s `LabelItem.entityType` is
+  documented as "Locations and products only, deliberately" — a QR label is a
+  physical sticker that belongs on a bin or a thing you own, not on a recipe.
+  Widening `entityType`, adding `recipe.getByShortcodes`, or putting
+  `PrintLabelButton` on the recipe detail page would all fight that comment.
+  The recipe detail page instead shows its shortcode copyable via the
+  standard `heroNo` breadcrumb (matching product/location) — the id is
+  reachable without treating the recipe as a label target.
 
 ---
 
@@ -192,18 +193,14 @@ follow-ups:
   review card) inside the MCP tool handler. **Not** a SQL dedupe in usda-api: the
   list query's `count` and `data` come from different FROM clauses and are never
   reconciled, and that count drives the `/usda` table's pager.
-- [ ] **Replace `NutritionInfoTable` with `NutritionLabel`** on the USDA food pages —
-  the FDA-style label (with %DV) now coexists with the raw nutrient table on
-  product detail; decide whether the raw table still earns its place. (2026-07
-  audit: ingredient detail is a *third* raw-table instance.)
-- [ ] **USDA food detail is a read-only dead end** (2026-07 audit): no page
-  actions at all — add "create product from this food" / "link to an
-  ingredient", since the food page is where the `ingredient → product → fdc_id`
-  hop naturally closes.
-- [ ] **Nutrient-density intel beyond recipes**: `nutrition-intel.ts`
-  (`costPerNutrient`, `proteinPer100Kcal`) renders only in magazine view +
-  compare; product/ingredient/USDA pages — where "cost per g protein" drives
-  the buying decision — don't show it.
+- **Decided: `NutritionLabel` leads, `NutritionInfoTable` demoted to a disclosure.**
+  The raw nutrient table stays — it's the only surface for non-tier-1 nutrients
+  (B-vitamin variants, fatty-acid breakdowns, amino acids, sugars), and a straight
+  swap to `NutritionLabel` would silently drop all of them. Resolved by leading
+  with `NutritionLabel` and collapsing `NutritionInfoTable` behind a "Full
+  nutrient breakdown" disclosure (`FullNutrientBreakdown`), applied uniformly on
+  USDA food, ingredient, and product detail — closing the 2026-07 audit's "third
+  raw-table instance" note on ingredient detail.
 - [ ] **`parse_scraped_recipe` could return parsed lines**: today it returns raw
   ingredient strings and the import path batch-parses them separately; folding the
   parse into the scrape export would save one boundary crossing on import.
@@ -228,9 +225,6 @@ follow-ups:
   `short_description`, `brand_name`, and `brand_owner`. Before the next full USDA
   rebuild, decide whether food-name-focused search is intentional or add those
   fields to restore brand-search parity.
-- [ ] **Retry USDA enrichment instead of silently degrading to `null`** when usda-api
-  is down — a small job kind on the background queue that already exists
-  (`server/background-queue.ts`), not new infrastructure.
 
 ---
 
@@ -275,8 +269,6 @@ runtime CDN) are all shipped. Target is iOS Safari only. Remaining:
   (`costCovered < ingredientCount`, deliberately not `totals IS NULL` — that
   self-clears and `staleRecipeTotals` already owns it), and
   `recipesWithoutInstructions` (Book/Notion sources excluded).
-- [ ] **Products list bulk print-labels**: locations table has the bulk action,
-  products has per-row only, and the `/labels` empty state promises both.
 - [ ] **AiSearchBar on inventory is thinner than the plain filters**: it can
   only set `productName`/`locationName` — the two substring filters already on
   screen. Either teach it quantity/category/valuation/verified-before/subtree
@@ -375,22 +367,27 @@ The triage board, not this catalog order, sets priority.
   `locationList`'s where-build async, then add `includeSubLocations` to location
   and inventory filters. Do not reuse `repo/location/tree.ts`'s whole-tree,
   relation-heavy CTE. Deferred because its cost exceeded its observed use.
-- [ ] **Make project portfolio expense charts honor ledger filters.**
-  `repo/project/portfolio-analytics.ts` hand-rolls date bounds from a different
-  input schema, so `costMin`/`costMax`/`notesSearch`/`urlSearch` and OR-search do
-  not reach it. Route the expense-grouped aggregates through the shared expense
-  filter builder without changing the separate project-set filters.
-- [ ] **Tracker data gaps** (2026-07 audit): `task.completedAt` (velocity /
-  "year in the house" + de-noises the stalled-project detector — `updatedAt`
-  resets on any edit); portfolio-level estimate total + a forward
-  committed-spend (next 30/60/90d) figure (per-project `BudgetStrip` exists,
-  the portfolio equivalent doesn't); mobile fallback for TaskBoard/Gantt
-  (desktop column tracks render on phones today).
 - [ ] **`projectMaterial` BOM**: on top of the bridge — quantity + free-text unit,
   optional product resolution, durable-vs-consumable flag → **have / need / buy**
   per project via the availability engine, shopping list from shortfalls. No
   reservations, no auto-decrement — audits are the backstop, "mark consumed" is an
   optional explicit action.
+
+### Rejected
+
+- **`task.completedAt` column** (2026-07 audit item, tracker data gaps). Proposed
+  for velocity / "year in the house" reporting and to de-noise the
+  stalled-project detector, whose `max(task.updatedAt)` dates every project to
+  whenever it was last imported rather than when the work happened. Measured on
+  production: 1,111 of 1,116 done tasks were Notion-imported in one window, so
+  `updatedAt` spans only 2 distinct months (2026-07-18 → 2026-08-12) while
+  `dueDate` spans 32 months (2023-10 → 2026-08) — zero rows have `dueDate` equal
+  to `updatedAt`'s day, and 1,110 are off by 30+ days. A `completedAt` column
+  would duplicate what `dueDate` already records, and backfilling it from
+  `updatedAt` (the only data available) would collapse that 3-year history into
+  the 3-week import window — worse than not having the column. The
+  stalled-project detector now derives activity from `dueDate`/`expense.date`
+  directly (`repo/project/attention.ts`) instead.
 
 ### Expenses ↔ inventory bridge (staged; v1 SHIPPED 2026-07)
 
@@ -775,35 +772,50 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 
 - [ ] **Finish the production query-cost sweep (#730 follow-ups).** A Neon
   `pg_stat_statements` dump prompted an audit against the live catalog. The
-  index half shipped; four items remain, in rough order of value.
-  - **Batch the search-document refresh.** `refreshSearchDocuments`
-    (`repo/search-document.ts`) maps the *singular* `refreshSearchDocument` over
-    its refs, and each call fires the 15-arm `UNION ALL` + recursive location CTE
-    to return **one row**, plus a single-id entity load. Measured **7,075** CTE
-    calls against **3,945** single-id `Product` selects. `backfillSearchDocuments`
-    in the same file already has the correct batched shape (one
-    `getSearchDocumentSources`, then `upsertSearchDocumentBatch` in chunks of
-    250) — rework the plural onto it and keep the singular for genuine
-    single-entity mutations.
-  - **The Problems fan-out.** `findFastProblems` runs 37 detectors sequentially
-    on one pinned connection, with no server-side cache, and the navbar badge
-    renders on every authenticated page — so the whole set re-runs on every hard
-    load (~63–73× in the dump). Cheapest wins first: a `problems.getCounts` for
-    the badge (it needs a number, not 37 result sets), drop the route-loader
-    prefetch that double-fetches `getFast`, and run only the count arm of
-    `findReferentialLivenessViolations` on the page path (it reports zero on
-    production — it is an invariant audit, not a worklist, and costs 88
-    seq-scanning UNION arms per call). **Sequencing: do this after #731**, which
-    rewrites `detectors-ingredient.ts`, `detectors-inventory.ts`, and
-    `routers/problems.ts`.
-  - **Huge `IN (...)` lists.** Three sites bind 5,553 / 11,193 / 3,139
-    parameters: `createLiveIdLoader` (`repo/entity-embedding-cleanup.ts`),
-    `loadProductPricing` as called from `detectors-product.ts`, and the purchase
-    aggregates. Convert to `= ANY($1::uuid[])` via `eqAny` (mind the guarded
-    Drizzle array-param caveat — a bare array param becomes a row constructor).
-    `findOrphanedEntityEmbeddings` additionally full-scans `EntityEmbedding` then
-    issues one such query **per entity type, sequentially**; make it one
-    anti-join.
+  index sweep (#733), the search-document batching, the orphan-embedding
+  anti-join, the HNSW reindex (258MB → 213MB), the bound query vector, and
+  `loadProductPricing`'s whole-catalog mode have shipped; three items remain,
+  in rough order of value.
+  - [ ] **Give the navbar badge a count-only procedure.** This is now the largest
+    remaining cost on the page path, and it got worse with #731: the badge calls
+    `useProblemsData`, which fires **all five** unbatched groups — `getFast`'s
+    ~32 detectors *plus* every saved-view list query in `getViews` — on **every
+    authenticated page**, to render one integer. There is no server-side cache,
+    and a hard load starts a fresh QueryClient, so the whole set re-runs.
+    - **Two approaches were rejected, so nobody re-derives them.** *Persisting
+      the problems query keys* is out: `shouldDehydrateQuery` in
+      `root-provider.tsx` deliberately excludes `.list` payloads because
+      superjson-serializing them was profiled at ~38% of scroll-time CPU, and
+      the five problems payloads are exactly that shape (arrays of rows across
+      ~30 sections). *Dropping the route-loader prefetch* is out too — it was
+      filed as a double-fetch and is not one: the page inherits the 60s default
+      `staleTime`, so a dehydrated prefetch is a warm, not a duplicate. (Its
+      comment IS stale, still describing the pre-#704 SSR self-fetch.)
+    - **So the fix is a real `problems.getCounts`.** #731 already built half of
+      it: `countViewProblem` and `executeListQueryWithCount` give exact counts
+      for every view-backed section without materializing a page. The work is
+      the `getFast` detectors, which return arrays and are summed by
+      `countProblems` via `.length`. Several have no SQL `COUNT` today because
+      they filter in JS after the query — `findOrphanedEntityEmbeddings` and
+      `findPurchaseFinancialSettlementMismatches` are the clear ones.
+    - **The trap to design against** is the one #731 spent real effort killing
+      with `sectionTotals`: a count that drifts from the list it summarizes. A
+      count-only path derived separately from each detector's predicate is two
+      statements of the same question. Prefer deriving both from one predicate
+      (the way the view-backed sections now do) over hand-writing a second
+      `COUNT` per detector.
+    - Cheap and independent of the above: run only the count arm of
+      `findReferentialLivenessViolations` on the page path and fetch its sample
+      rows lazily. It reports zero on production — an invariant audit, not a
+      worklist — and costs 88 seq-scanning UNION arms per call.
+  - [ ] **The purchase aggregates still bind ~3,139 parameters.**
+    `loadProductPricing` got a `wholeCatalog` mode for the same problem
+    (6.7ms unfiltered against 13.7ms with 5,553 binds); apply the same
+    treatment to `loadPurchaseFinancialAggregates`, whose settlement caller
+    likewise passes every live purchase. Note `eqAny` delegates to `inArray`
+    and so does not help; a genuinely bound array needs the text-literal cast
+    used by `getSearchDocumentSources`, and `hand-rolled-any-array` will
+    (correctly) reject a raw `ANY(${...})`.
   - **Two counters worth an `EXPLAIN` before anyone "fixes" them.**
     `FinancialTransaction` shows **1,014,764 seq scans / 3.3B tuples** on a
     3,447-row table, and `Location` **655,591 updates** on 279 rows (the
@@ -890,16 +902,6 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
   client budget hint if MCP standardizes one, otherwise keep the conservative
   server-owned byte budget. Invalid or filter/sort-incompatible cursors must fail
   explicitly rather than silently restarting from page one.
-- [ ] **Unify where a shortcode becomes a uuid** (found by the filter-application
-  guard, #595): most repos resolve their own id filters, but
-  `inventory.locationIdFilter`, `inventory.productIdFilter`, and
-  `recipe.cookbookId` are resolved by their **routers**, so the repo parameter
-  is a uuid brand while the schema declares a shortcode. Feeding a shortcode
-  straight to those repos reaches Postgres as a uuid literal and 500s. The
-  guard documents them in a `REPO_TAKES_UUID` list and probes them one layer
-  down (absent uuid rather than unresolvable code), so nothing is unguarded —
-  this is about removing the asymmetry, not a live bug. Resolve in the repo
-  like everyone else, then delete the list.
 - [ ] **Duplicate `getByID`/`getByShortcode` read paths, no shared cache
   key.** All 15 shortcode entities (`shortcodeEntities`,
   `packages/schemas/src/entity-manifest.ts`) get two CRUD-factory procedures
@@ -914,46 +916,6 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
   followed by `meal-detail-page.tsx` firing its own cold `getByID` for the
   same row — every other detail page (product, recipe, …) takes the entity as
   a prop instead of re-querying.
-- [ ] **`inventory` is the last hand-rolled MCP CRUD toolset.** Every other
-  entity's create/list/get/update/delete MCP tools go through
-  `registerEntityCrudToolset` (`server/mcp/tools/_shared.ts`, ~30 lines of
-  config); `inventory.tools.ts` hand-writes the same five operations in ~96
-  lines, partly because it needs `data.amount`-merging logic the generic
-  shape doesn't express and partly because `registerEntityUpdateTool` — the
-  one op helper a migration would need standalone — isn't exported
-  (`registerEntityCreateTool` is exported, with no caller outside the toolset
-  factory and one test).
-- [ ] **Make `crud-factory.ts`'s `repository.create`/`update` optional.**
-  #603 found `product.ts` and `ingredient.ts` each feeding the factory
-  throwaway `create`/`update` callbacks — discarded because both routers
-  hand-roll the real ones for cost-recompute reasons — and left them as
-  `discardedByFactory(): never` stubs with an explanatory comment, because the
-  repository type requires both keys. `inventory`, `location`, and `recipe`
-  still destructure the full `{ getByID, getByShortcode, create, update }`
-  set, so the fix is a conditional return type keyed on which repository keys
-  are actually supplied, not a blanket optional.
-- [ ] **Coverage-concept gaps: two silent-omission spots, one missing
-  exhaustiveness check.** `packages/schemas/src/search.ts`'s
-  `searchResultItemSchema` discriminated union has no
-  `satisfies Record<SearchableEntity, …>` tying its variants to
-  `searchableEntities` — the pattern already exists two dozen lines away
-  (`similarEntityPairs`) but isn't applied here, so a new `searchable: true`
-  entity would compile fine and silently drop out of global search.
-  `entityFilters` (`entities/filter-manifest.tsx`,
-  `Partial<Record<Entity, …>>`) and `relatedViewRegistry`
-  (`packages/schemas/src/related-view.ts`, a flat array not keyed by entity at
-  all) both fall back to `[]` for an absent entity with no way to say "this
-  entity is deliberately missing" versus "nobody added it yet."
-- [ ] **CRUD factory can't use `strictOutput`.** 4 of 6 `.output()` calls in
-  `apps/web/src/server/api/crud-factory.ts` (`createGetByIdProcedure`,
-  `createGetByShortcodeProcedure`, `createCreateProcedure`,
-  `createUpdateProcedure`) can't be wrapped in `strictOutput` — the output
-  type is a naked generic `T`, so tRPC checks the resolver against
-  `DefaultValue<T, T>`, a conditional TypeScript never reduces for an
-  unresolved `T` (reproduced standalone with zero zod/trpc code). Fix is to
-  make the factory generic over the schema rather than the output type. See
-  PR #623, which documents each blocked site inline with this same
-  explanation.
 - [ ] **Two duplicate detectors have no fix action.** `problems/detectors-financial.ts`'s
   `findDuplicateFinancialTransactionSourceRefs` and
   `findDuplicateFinancialAccountSourceAliases` surface Problems-page findings

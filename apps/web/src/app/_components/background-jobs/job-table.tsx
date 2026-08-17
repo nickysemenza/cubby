@@ -98,6 +98,13 @@ function JobTarget({ job }: { job: BackgroundJobSummary }) {
     .with({ kind: "location-valuation.recompute" }, () => (
       <span>All locations</span>
     ))
+    .with({ kind: "usda-match.retry" }, (p) => (
+      <EntityInlineLinkById
+        entityType="ingredient"
+        entityId={p.payload.ingredientId}
+        compact
+      />
+    ))
     .exhaustive();
 }
 
@@ -122,6 +129,9 @@ function JobPayloadSummary({ job }: { job: BackgroundJobSummary }) {
     ))
     .with({ kind: "location-valuation.recompute" }, (p) => (
       <span>{p.payload.reason ?? "no reason"}</span>
+    ))
+    .with({ kind: "usda-match.retry" }, (p) => (
+      <span>ingredient · {p.payload.ingredientId.slice(0, 8)}</span>
     ))
     .exhaustive();
 }

@@ -1045,7 +1045,9 @@ export const loadProductsForCoverage = async (db: Database) => {
       ingredient: { columns: { naKinds: true, shortcode: true } },
     },
   });
-  const pricing = await loadProductPricing(db, rows);
+  // `rows` is every live product, so the id filter would bind one parameter
+  // per product to say "all of them".
+  const pricing = await loadProductPricing(db, rows, { wholeCatalog: true });
   return rows.map((row) => ({
     ...row,
     price: pricing.get(row.id)?.effectivePrice ?? null,

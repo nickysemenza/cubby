@@ -36,7 +36,7 @@ export function useRelatedPreviewColumns<TData extends { id: string }>({
   entity: Entity;
   sourceIds: string[];
   visibleRelationKeys: RelatedViewKey[];
-  relatedViews: RelatedViewDefinition[];
+  relatedViews: readonly RelatedViewDefinition[];
   columnHelper: ColumnHelper<TData>;
   filterOptions?: Record<string, FilterableComboboxItem[]>;
   supportsServerSorting: boolean;

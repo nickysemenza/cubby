@@ -37,6 +37,7 @@ export {
   countWhere,
   eqAny,
   eqAnyOrPresence,
+  eqAnyRequested,
   executeListQueryWithCount,
   formatSearchTerm,
   idSetPresence,
@@ -45,6 +46,7 @@ export {
   matchesStringValues,
   notDeleted,
   presenceCondition,
+  uuidArrayParam,
 } from "./query";
 // Relation loaders
 export { imageOrder, relations } from "./relations";

@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   ClipboardCopy,
+  Copy,
   FolderInput,
   ListChecks,
   Merge,
@@ -99,6 +100,7 @@ export const actionVerbs = {
   markAsStock: { label: "Mark as stock", icon: Wrench },
   merge: { label: "Merge", icon: Merge },
   copyCodes: { label: "Copy codes", icon: ClipboardCopy },
+  duplicate: { label: "Duplicate", icon: Copy },
 
   // — removal ————————————————————————————————————————————————————————
   delete: { label: "Delete", icon: Trash, tone: "destructive" },

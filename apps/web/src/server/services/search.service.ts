@@ -295,7 +295,9 @@ export async function findRelatedSearchHits(
     const limit = Math.min(Math.max(input.limit ?? 5, 1), 12);
     const entityTypes = scopes(input.entityTypes);
     const matchTerms = textArray(searchTerms(input.query));
-    const vector = sql.raw(`'[${embedding.join(",")}]'::vector`);
+    // One bound parameter, not ~30 KB of inlined literal re-parsed per search.
+    // The HNSW index scan is preserved (verified by EXPLAIN on production).
+    const vector = sql`${`[${embedding.join(",")}]`}::vector`;
     const cast = sql.raw(`ee."embedding"::vector(${config.dimensions})`);
     // Keep this literal in lockstep with EntityEmbedding's partial HNSW index;
     // a bound parameter prevents PostgreSQL proving that index predicate.

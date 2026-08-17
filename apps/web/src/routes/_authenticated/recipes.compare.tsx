@@ -7,9 +7,11 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useMemo } from "react";
 import { z } from "zod";
+import { EntityPicker } from "~/app/_components/combobox/entity-picker";
+import { WithRecipeSearch } from "~/app/_components/combobox/with-search-hook";
 import { useRecipeCostingData } from "~/app/_components/hooks/useRecipeCostingData";
 import {
   type ComparedRecipe,
@@ -109,6 +111,12 @@ function RecipeComparePage() {
     }
   };
 
+  // Add a recipe to comparison, preserving the current selection.
+  const handleAdd = (recipeId: string) => {
+    const newIds = uniq([...recipeIds, recipeId]).join(",");
+    navigate({ to: "/recipes/compare", search: { ids: newIds } });
+  };
+
   if (recipeIds.length === 0) {
     return (
       <Page variant="list" title="Compare Recipes">
@@ -154,13 +162,25 @@ function RecipeComparePage() {
         <div className="space-y-4">
           <RecipeCompareGrid compared={compared} onRemove={handleRemove} />
 
-          <div className="text-center">
-            <Link to="/recipes">
-              <Button variant="outline">
-                <Plus className="mr-2 size-4" />
-                Add Another Recipe
-              </Button>
-            </Link>
+          <div className="mx-auto max-w-sm">
+            <WithRecipeSearch>
+              {({ items, onSearchChange, isLoading, onOpenChange }) => (
+                <EntityPicker
+                  entity="recipe"
+                  label="recipe"
+                  items={items}
+                  value={null}
+                  placeholder="Add another recipe…"
+                  onSearchChange={onSearchChange}
+                  onOpenChange={onOpenChange}
+                  isLoading={isLoading}
+                  setValue={(recipe) => {
+                    if (!recipe) return;
+                    handleAdd(recipe.id);
+                  }}
+                />
+              )}
+            </WithRecipeSearch>
           </div>
         </div>
       )}

@@ -14,10 +14,12 @@
  *                                fits directly. `update` is wrapped to resolve
  *                                `{vendor, orderId}` into `purchaseId`.)
  *   LOOKUP    → `lookup.ts`    (filtered/sorted/paginated list; also exports
- *                                `buildExpenseWhereClause` for `analytics.ts`
- *                                to import directly — not re-exported here,
- *                                it's an internal sibling seam, not a public
- *                                barrel surface)
+ *                                `buildExpenseWhereClause`. `analytics.ts`
+ *                                imports it directly — an internal sibling
+ *                                seam, not the barrel — but it IS re-exported
+ *                                below for `repo/project/portfolio-analytics.ts`,
+ *                                a cross-directory consumer that has no
+ *                                sibling-import path to it.)
  *   ANALYTICS → `analytics.ts` (server-side grouped SQL aggregates for charts)
  *   MATCHING  → `match.ts`     (read-only reconciliation matcher: ranks vendor
  *                                export lines against the ledger, one query per
@@ -44,5 +46,5 @@ export {
   setExpensesTrade,
   updateExpense,
 } from "./crud";
-export { expenseList } from "./lookup";
+export { buildExpenseWhereClause, expenseList } from "./lookup";
 export { matchExpenses } from "./match";
