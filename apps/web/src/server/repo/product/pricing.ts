@@ -52,10 +52,20 @@ export const resolveProductPricing = (
   };
 };
 
-/** Batch-load the all-history, positive, actual acquisition aggregate. */
+/**
+ * Batch-load the all-history, positive, actual acquisition aggregate.
+ *
+ * `wholeCatalog` drops the `productId IN (...)` filter. Pass it only when
+ * `products` already IS every live product: the returned map is still built
+ * from `products`, so surplus aggregate rows are never looked up and the output
+ * is identical either way. It exists because the coverage detector hands this
+ * the entire catalog — 5,553 bind parameters at 13.7ms, where one unfiltered
+ * HashAggregate over the same rows measures 6.7ms.
+ */
 export const loadProductPricing = async (
   db: Database | DrizzleTransaction,
   products: ReadonlyArray<{ id: ProductId; price: number | null }>,
+  options: { wholeCatalog?: boolean } = {},
 ): Promise<Map<ProductId, ProductPricing>> => {
   const ids = products.map((product) => product.id);
   if (ids.length === 0) return new Map();
@@ -81,7 +91,7 @@ export const loadProductPricing = async (
         eq(expense.lineKind, "principal"),
         gt(expense.cost, 0),
         isNotNull(expense.productId),
-        inArray(expense.productId, ids),
+        options.wholeCatalog ? undefined : inArray(expense.productId, ids),
       ),
     )
     .groupBy(expense.productId);

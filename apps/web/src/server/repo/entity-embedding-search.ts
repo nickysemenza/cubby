@@ -2,7 +2,7 @@ import type {
   SearchableEntity,
   SearchableEntityRef,
 } from "@cubby/schemas/search";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, type SQL, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { entityEmbedding } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -14,14 +14,22 @@ export interface EntityEmbeddingCandidate {
   similarity: number;
 }
 
-const vectorLiteral = (embedding: number[]): ReturnType<typeof sql.raw> => {
+/**
+ * The query vector as ONE bound parameter, cast in SQL — not `sql.raw`, which
+ * inlined ~30 KB of literal into the statement text so every search paid a
+ * fresh parse and plan. Verified on production that binding it keeps the
+ * `EntityEmbedding_embedding_hnsw_idx` index scan (1.17ms); the `dimensions`
+ * literal beside it must still be raw, so the planner can prove that index's
+ * partial predicate.
+ */
+const vectorLiteral = (embedding: number[]): SQL => {
   if (
     embedding.length === 0 ||
     embedding.some((value) => !Number.isFinite(value))
   ) {
     throw new Error("Invalid embedding vector");
   }
-  return sql.raw(`'[${embedding.join(",")}]'::vector`);
+  return sql`${`[${embedding.join(",")}]`}::vector`;
 };
 
 const semanticCandidateQueryErrorDetails = (
