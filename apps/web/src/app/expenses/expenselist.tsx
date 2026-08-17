@@ -1,9 +1,9 @@
 import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
-import { createColumnHelper } from "@tanstack/react-table";
 import { useCallback, useMemo, useState } from "react";
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { ExternalLinkIcon } from "~/app/_components/ExternalLink";
 import {
   expenseCostColumn,
@@ -64,7 +64,7 @@ const NO_VENDOR_OPTIONS: FilterableComboboxItem[] = [];
 
 export function ExpenseList() {
   const api = useTRPC();
-  const columnHelper = useMemo(() => createColumnHelper<ExpenseOut>(), []);
+  const columnHelper = useMemo(() => createCubbyColumnHelper<ExpenseOut>(), []);
   const { options: projectOptions } = useProjectOptions();
   // Runtime picklist for the manifest's `vendor` spec (optionsKey: "vendor"),
   // ranked by frequency so the most-used vendors sort to the top (the roster

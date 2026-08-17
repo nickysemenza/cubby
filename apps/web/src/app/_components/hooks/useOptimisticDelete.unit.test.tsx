@@ -1,9 +1,9 @@
 import type { PreviewOperation } from "@cubby/schemas/entity-integrity";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { Row } from "@tanstack/react-table";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { CubbyRow as Row } from "../data-table/table-features";
 
 /**
  * Pins the fix for the two-tier bug: bulk delete (toolbar) and single-row

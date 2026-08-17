@@ -2,13 +2,13 @@ import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import type { RecipeListItem } from "@cubby/schemas/recipe";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { createColumnHelper } from "@tanstack/react-table";
 import { RotateCcw } from "lucide-react";
 import { type ReactNode, useCallback, useMemo } from "react";
 import {
   VerbMenuItem,
   verbBulkAction,
 } from "~/app/_components/actions/action-verb-ui";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { Row, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
@@ -151,7 +151,10 @@ export function RecipeList({
 }: RecipeListProps) {
   const api = useTRPC();
   const navigate = useNavigate();
-  const columnHelper = useMemo(() => createColumnHelper<RecipeListItem>(), []);
+  const columnHelper = useMemo(
+    () => createCubbyColumnHelper<RecipeListItem>(),
+    [],
+  );
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("recipe");
   // Runtime picklists for the manifest's `tags`/`source` specs (optionsKey:
   // "tags" / "cookbook"). Constant scope when rendered on a cookbook page.

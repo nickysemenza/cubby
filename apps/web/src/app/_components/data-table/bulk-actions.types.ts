@@ -1,5 +1,6 @@
-import type { Row } from "@tanstack/react-table";
+import type { RowData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
+import type { CubbyRow as Row } from "./table-features";
 
 /** Result of a bulk action execution */
 interface BulkActionResult {
@@ -7,7 +8,7 @@ interface BulkActionResult {
 }
 
 /** Configuration for a single bulk action */
-export interface BulkAction<TData> {
+export interface BulkAction<TData extends RowData> {
   /** Unique identifier for this action */
   id: string;
   /** Display label */
@@ -36,7 +37,7 @@ export interface BulkAction<TData> {
 }
 
 /** Configuration for bulk actions on an entity list */
-export interface BulkActionsConfig<TData> {
+export interface BulkActionsConfig<TData extends RowData> {
   /** Available actions */
   actions: BulkAction<TData>[];
   /** Whether to clear selection after action completes (default: true) */

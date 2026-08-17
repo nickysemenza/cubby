@@ -452,7 +452,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   // make page 1 the OLDEST rows. Flip to newest-first, nulls-last (matching
   // the old scoped-query default) before handing it to the table. Do NOT
   // replace this with `initialState.sorting` instead — the date column has
-  // no `sortingFn` and nulls-handling there is unverified.
+  // no `sortFn` and nulls-handling there is unverified.
   const sortedSubtreeExpenses = useMemo(
     () =>
       [...chartExpenses].sort((a, b) => {

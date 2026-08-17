@@ -1,29 +1,27 @@
 import {
-  type ColumnDef,
-  getCoreRowModel,
-  getExpandedRowModel,
-  getFacetedRowModel,
-  getFacetedUniqueValues,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
+  type ColumnVisibilityState,
   type OnChangeFn,
-  type Row,
   type RowData,
   type RowSelectionState,
-  type Table,
-  useReactTable,
+  type TableFeatures,
+  useTable,
 } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
+import {
+  type CubbyColumnDef,
+  type CubbyRow,
+  type CubbyTable,
+  cubbyTableFeatures,
+} from "./table-features";
 import type { TableStateReturn } from "./useTableState";
 
-interface UseTableConfigOptions<TData> {
+interface UseTableConfigOptions<TData extends RowData> {
   data: TData[];
   // Note: ColumnDef is invariant in TValue; columns often mix TValue types across accessors.
   // Using `any` here intentionally erases TValue to allow heterogeneous columns while keeping TData strict.
   // This mirrors TanStack's guidance for consumer-facing helpers that don't operate on TValue.
   // biome-ignore lint/suspicious/noExplicitAny: intentional
-  columns: ColumnDef<TData, any>[];
+  columns: CubbyColumnDef<TData, any>[];
   tableState: TableStateReturn;
   totalCount: number;
   manualPagination?: boolean;
@@ -37,7 +35,7 @@ interface UseTableConfigOptions<TData> {
    * `true`/`false` for the whole table, or a predicate for a heterogeneous
    * tree where only some rows belong to the entity the bulk actions target.
    */
-  enableRowSelection?: boolean | ((row: Row<TData>) => boolean);
+  enableRowSelection?: boolean | ((row: CubbyRow<TData>) => boolean);
   /** Current row selection state */
   rowSelection?: RowSelectionState;
   /** Callback when row selection changes */
@@ -49,8 +47,8 @@ interface UseTableConfigOptions<TData> {
    * `useTableColumnVisibility`). When provided together with
    * `onColumnVisibilityChange`, the internal useState fallback is bypassed.
    */
-  columnVisibility?: Record<string, boolean>;
-  onColumnVisibilityChange?: OnChangeFn<Record<string, boolean>>;
+  columnVisibility?: ColumnVisibilityState;
+  onColumnVisibilityChange?: OnChangeFn<ColumnVisibilityState>;
   /**
    * Server-computed totals over the FULL filtered set, surfaced to footer
    * renderers via table meta — client rows only cover loaded pages.
@@ -64,9 +62,8 @@ interface UseTableConfigOptions<TData> {
   rowContentVersion?: unknown;
   /**
    * Opt-in expandable tree support. Return a row's children to render nested
-   * sub-rows. Expansion is enabled purely by the PRESENCE of `getSubRows` —
-   * `getExpandedRowModel` is wired only then, so callers that don't pass it get
-   * byte-identical behavior (no expanded row model in the pipeline at all).
+   * sub-rows. The shared v9 feature bundle includes the expanded row model;
+   * without `getSubRows`, no table data is expandable.
    */
   getSubRows?: (row: TData) => TData[] | undefined;
   /**
@@ -90,7 +87,7 @@ interface ServerTotals {
 declare module "@tanstack/react-table" {
   // TData is required to match the library's TableMeta signature for the
   // module augmentation to merge; it's structurally unused here.
-  interface TableMeta<TData extends RowData> {
+  interface TableMeta<TFeatures extends TableFeatures, TData extends RowData> {
     serverTotals?: ServerTotals;
     /**
      * How many URL-only scopes (see `urlOnly` in `entities/filters`) are
@@ -106,7 +103,7 @@ declare module "@tanstack/react-table" {
   }
 }
 
-export function useTableConfig<TData>({
+export function useTableConfig<TData extends RowData>({
   data,
   columns,
   tableState,
@@ -128,7 +125,7 @@ export function useTableConfig<TData>({
   filterFromLeafRows,
   paginateExpandedRows,
   autoResetExpanded,
-}: UseTableConfigOptions<TData>): Table<TData> {
+}: UseTableConfigOptions<TData>): CubbyTable<TData> {
   const {
     sorting,
     setSorting,
@@ -151,31 +148,12 @@ export function useTableConfig<TData>({
   const setColumnVisibility =
     controlledOnVisibilityChange ?? setInternalVisibility;
 
-  // Memoize row models - these are stable functions
-  const coreRowModel = useMemo(() => getCoreRowModel<TData>(), []);
-  const filteredRowModel = useMemo(() => getFilteredRowModel<TData>(), []);
-  const facetedRowModel = useMemo(() => getFacetedRowModel<TData>(), []);
-  const facetedUniqueValues = useMemo(
-    () => getFacetedUniqueValues<TData>(),
-    [],
-  );
-  const paginationRowModel = useMemo(() => getPaginationRowModel<TData>(), []);
-  const sortedRowModel = useMemo(() => getSortedRowModel<TData>(), []);
-  // Stable factory; only *wired* into the table when getSubRows is present, so
-  // it never enters the row-model pipeline for non-tree callers.
-  const expandedRowModel = useMemo(() => getExpandedRowModel<TData>(), []);
-
   // Memoize table options to prevent recreating on every render
   const tableOptions = useMemo(
     () => ({
+      features: cubbyTableFeatures,
       data,
       columns,
-      getCoreRowModel: coreRowModel,
-      getFilteredRowModel: filteredRowModel,
-      getFacetedRowModel: facetedRowModel,
-      getFacetedUniqueValues: facetedUniqueValues,
-      getPaginationRowModel: paginationRowModel,
-      getSortedRowModel: sortedRowModel,
       onPaginationChange: setPagination,
       onSortingChange: setSorting,
       onColumnFiltersChange: setColumnFilters,
@@ -202,11 +180,10 @@ export function useTableConfig<TData>({
       ...(getRowId ? { getRowId } : {}),
       ...(enableRowSelection !== undefined ? { enableRowSelection } : {}),
       ...(onRowSelectionChange ? { onRowSelectionChange } : {}),
-      // Expandable tree (opt-in): wire the expanded row model ONLY when the
-      // caller provides getSubRows, keeping the pipeline unchanged otherwise.
-      ...(getSubRows
-        ? { getSubRows, getExpandedRowModel: expandedRowModel }
-        : {}),
+      // Cubby owns Shift-range selection so TanStack's native range behavior
+      // cannot compete with the custom selectable-row rules below.
+      enableRowRangeSelection: false,
+      ...(getSubRows ? { getSubRows } : {}),
       ...(filterFromLeafRows !== undefined ? { filterFromLeafRows } : {}),
       ...(paginateExpandedRows !== undefined ? { paginateExpandedRows } : {}),
       ...(autoResetExpanded !== undefined ? { autoResetExpanded } : {}),
@@ -221,12 +198,6 @@ export function useTableConfig<TData>({
     [
       data,
       columns,
-      coreRowModel,
-      filteredRowModel,
-      facetedRowModel,
-      facetedUniqueValues,
-      paginationRowModel,
-      sortedRowModel,
       sorting,
       setSorting,
       columnFilters,
@@ -248,12 +219,11 @@ export function useTableConfig<TData>({
       rowSelection,
       onRowSelectionChange,
       getSubRows,
-      expandedRowModel,
       filterFromLeafRows,
       paginateExpandedRows,
       autoResetExpanded,
     ],
   );
 
-  return useReactTable(tableOptions);
+  return useTable(tableOptions);
 }

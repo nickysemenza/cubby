@@ -1,6 +1,6 @@
-import type { Table } from "@tanstack/react-table";
 import { render, renderHook, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import type { CubbyTable as Table } from "./table-features";
 import { useMobileListModel } from "./useMobileListModel";
 
 interface TestRow {

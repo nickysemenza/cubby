@@ -1,7 +1,7 @@
-import type { Row } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { DesktopDataRow } from "./DesktopDataRow";
+import type { CubbyRow as Row } from "./table-features";
 
 interface TestRow {
   id: string;

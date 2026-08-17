@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { Table as ITable } from "@tanstack/react-table";
+import type { RowData } from "@tanstack/react-table";
 import { LayoutList, List } from "lucide-react";
 import { type ReactNode, useRef } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
@@ -12,6 +12,7 @@ import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { DataTableToolbar } from "./data-table-toolbar";
 import { MobileCardView } from "./MobileCardView";
 import { MobileSortSheet } from "./MobileSortSheet";
+import type { CubbyTable as ITable } from "./table-features";
 import type { GroupConfig } from "./useGroupedList";
 import { mobileListShape } from "./useMobileListModel";
 
@@ -20,7 +21,7 @@ interface MobileRefreshControls {
   isRefreshing: boolean;
 }
 
-interface MobileListScreenProps<TItem> {
+interface MobileListScreenProps<TItem extends RowData> {
   table: ITable<TItem>;
   entity?: Entity;
   additionalToolbarContent?: ReactNode;
@@ -48,7 +49,7 @@ interface MobileListScreenProps<TItem> {
   rowContentVersion?: unknown;
 }
 
-export function MobileListScreen<TItem>({
+export function MobileListScreen<TItem extends RowData>({
   table,
   entity,
   additionalToolbarContent,

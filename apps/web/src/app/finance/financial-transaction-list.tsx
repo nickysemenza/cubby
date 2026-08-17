@@ -5,8 +5,8 @@ import type {
   FinancialTransactionSourceOptionsOut,
 } from "@cubby/schemas/financial-transaction";
 import { useQuery } from "@tanstack/react-query";
-import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -37,7 +37,7 @@ const NO_SOURCES: FinancialTransactionSourceOptionsOut = [];
 export function FinancialTransactionList() {
   const api = useTRPC();
   const helper = useMemo(
-    () => createColumnHelper<FinancialTransactionOut>(),
+    () => createCubbyColumnHelper<FinancialTransactionOut>(),
     [],
   );
   // Eagerly-loaded rosters for the Account and Source header filters. The

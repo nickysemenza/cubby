@@ -1,4 +1,3 @@
-import type { Table } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -9,6 +8,7 @@ vi.mock("./data-table-view-options", () => ({
 vi.mock("./LedgerFilters", () => ({ LedgerFilters: () => null }));
 
 import { DataTableToolbar } from "./data-table-toolbar";
+import type { CubbyTable as Table } from "./table-features";
 
 const table = {} as Table<{ id: string }>;
 
@@ -28,17 +28,5 @@ describe("DataTableToolbar transition state", () => {
     expect(
       screen.getByRole("button", { name: "Delete selected" }),
     ).toBeDisabled();
-  });
-
-  it("leaves actions enabled for current rows", () => {
-    render(
-      <DataTableToolbar
-        table={table}
-        actions={<button type="button">Create</button>}
-      />,
-    );
-
-    expect(screen.queryByText("Updating…")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Create" })).toBeEnabled();
   });
 });

@@ -3,10 +3,10 @@ import {
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ExpenseOut } from "@cubby/schemas/project";
-import { createColumnHelper } from "@tanstack/react-table";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ColumnCellData } from "~/app/_components/data-table/cell-data";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
@@ -41,7 +41,10 @@ const EXPENSE: ExpenseOut = {
 };
 
 const buildColumn = (save = vi.fn(async () => undefined)) => ({
-  column: expenseProductQuantityColumn(createColumnHelper<ExpenseOut>(), save),
+  column: expenseProductQuantityColumn(
+    createCubbyColumnHelper<ExpenseOut>(),
+    save,
+  ),
   save,
 });
 

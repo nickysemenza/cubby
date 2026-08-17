@@ -8,7 +8,6 @@ import { statementRowSortableFields } from "@cubby/schemas/statement-row";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
-import { createColumnHelper } from "@tanstack/react-table";
 import { uniq } from "es-toolkit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
@@ -33,6 +32,7 @@ import {
   renderOptionCell,
 } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
+import { createCubbyColumnHelper } from "../data-table/table-features";
 import { useTableConfig } from "../data-table/useTableConfig";
 import { useTableState } from "../data-table/useTableState";
 
@@ -291,7 +291,7 @@ function StatementRowFilterBar({
   );
 }
 
-const columnHelper = createColumnHelper<StatementRowOut>();
+const columnHelper = createCubbyColumnHelper<StatementRowOut>();
 
 type StatementRowSortField = (typeof statementRowSortableFields)[number];
 

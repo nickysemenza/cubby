@@ -1,7 +1,7 @@
-import type { Row } from "@tanstack/react-table";
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { BulkAction } from "../data-table/bulk-actions.types";
+import type { CubbyRow as Row } from "../data-table/table-features";
 
 const mocks = vi.hoisted(() => ({
   copyShortcodes: vi.fn(async () => true),

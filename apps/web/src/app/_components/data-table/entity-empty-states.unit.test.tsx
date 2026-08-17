@@ -1,6 +1,6 @@
-import type { Table } from "@tanstack/react-table";
 import { describe, expect, it } from "vitest";
 import { hasActiveFilters, isNarrowed } from "./entity-empty-states";
+import type { CubbyTable as Table } from "./table-features";
 
 /**
  * A URL-only scope (`/expenses?productId=…`) narrows the rows without ever
@@ -11,9 +11,9 @@ import { hasActiveFilters, isNarrowed } from "./entity-empty-states";
 describe("isNarrowed", () => {
   const table = (columnFilters: unknown[], urlScopeCount?: number) =>
     ({
-      getState: () => ({ columnFilters }),
+      state: { columnFilters },
       options: { meta: urlScopeCount ? { urlScopeCount } : {} },
-    }) as unknown as Table<unknown>;
+    }) as unknown as Table<Record<string, unknown>>;
 
   it("is false with neither a column filter nor a scope", () => {
     expect(isNarrowed(table([]))).toBe(false);

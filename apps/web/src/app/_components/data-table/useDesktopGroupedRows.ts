@@ -1,5 +1,6 @@
-import type { Row } from "@tanstack/react-table";
+import type { RowData } from "@tanstack/react-table";
 import { useMemo } from "react";
+import type { CubbyRow as Row } from "./table-features";
 import type { GroupConfig } from "./useGroupedList";
 
 type DesktopGroupItem =
@@ -18,7 +19,7 @@ type DesktopGroupItem =
  * Returns null when grouping is disabled so the caller can fall back to flat
  * rendering.
  */
-export function useDesktopGroupedRows<TItem>(
+export function useDesktopGroupedRows<TItem extends RowData>(
   rows: Row<TItem>[],
   groupConfig: GroupConfig<TItem> | undefined,
   enabled: boolean,

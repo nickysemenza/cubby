@@ -2,11 +2,7 @@ import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import type { TaskOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import {
-  createColumnHelper,
-  getCoreRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
+import { useTable } from "@tanstack/react-table";
 import { type FC, useMemo } from "react";
 import {
   createNameColumn,
@@ -21,6 +17,10 @@ import { Description } from "~/components/ui/description";
 import { useTRPC } from "~/integrations/trpc/react";
 import { taskMutationInvalidateKeys } from "~/lib/query-keys";
 import { ShelfEmpty } from "../data-table/shelf";
+import {
+  createCubbyColumnHelper,
+  cubbyTableFeatures,
+} from "../data-table/table-features";
 
 const EMPTY_TASKS: TaskOut[] = [];
 
@@ -50,7 +50,7 @@ export const ProductTaskHistory: FC<{ product: ProductWithFoodOut }> = ({
   product,
 }) => {
   const api = useTRPC();
-  const helper = useMemo(() => createColumnHelper<TaskOut>(), []);
+  const helper = useMemo(() => createCubbyColumnHelper<TaskOut>(), []);
   const { data, isPending } = useQuery(
     api.task.chartData.queryOptions({ subjectProductId: product.id }),
   );
@@ -63,36 +63,40 @@ export const ProductTaskHistory: FC<{ product: ProductWithFoodOut }> = ({
   const nameEditable = useNameEditable<TaskOut>(update.mutateAsync);
   // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable
   const columns = useMemo(
-    () => [
-      createNameColumn(helper, "task", "name", {
-        header: "Task",
-        editable: nameEditable,
-      }),
-      taskStatusColumn(helper, async (status, task) => {
-        await update.mutateAsync({ id: task.id, data: { status } });
-      }),
-      taskDueColumn(
-        helper,
-        async (dueDate, task, field) => {
-          await update.mutateAsync({ id: task.id, data: { [field]: dueDate } });
-        },
-        { effective: true },
-      ),
-      createProjectLinkColumn(helper, {
-        editable: {
-          onSave: async (projectId, task) => {
-            await update.mutateAsync({ id: task.id, data: { projectId } });
+    () =>
+      helper.columns([
+        createNameColumn(helper, "task", "name", {
+          header: "Task",
+          editable: nameEditable,
+        }),
+        taskStatusColumn(helper, async (status, task) => {
+          await update.mutateAsync({ id: task.id, data: { status } });
+        }),
+        taskDueColumn(
+          helper,
+          async (dueDate, task, field) => {
+            await update.mutateAsync({
+              id: task.id,
+              data: { [field]: dueDate },
+            });
           },
-        },
-      }),
-    ],
+          { effective: true },
+        ),
+        createProjectLinkColumn(helper, {
+          editable: {
+            onSave: async (projectId, task) => {
+              await update.mutateAsync({ id: task.id, data: { projectId } });
+            },
+          },
+        }),
+      ]),
     [helper, nameEditable],
   );
   const ordered = useMemo(() => orderProductTasks(tasks), [tasks]);
-  const table = useReactTable({
+  const table = useTable({
+    features: cubbyTableFeatures,
     data: ordered,
     columns,
-    getCoreRowModel: getCoreRowModel(),
     getRowId: (task) => task.id,
   });
 

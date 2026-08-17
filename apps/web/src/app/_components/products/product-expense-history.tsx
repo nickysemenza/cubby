@@ -2,10 +2,7 @@ import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import type { ExpenseOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import {
-  createColumnHelper,
-  type VisibilityState,
-} from "@tanstack/react-table";
+import type { ColumnVisibilityState as VisibilityState } from "@tanstack/react-table";
 import { groupBy } from "es-toolkit";
 import { type FC, useEffect, useMemo, useState } from "react";
 import {
@@ -43,6 +40,7 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { ShelfEmpty } from "../data-table/shelf";
+import { createCubbyColumnHelper } from "../data-table/table-features";
 
 const EMPTY_EXPENSES: ExpenseOut[] = [];
 const QUANTITY_TARGET_PREFIX = "product-expense-quantity-";
@@ -123,7 +121,7 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
   product,
 }) => {
   const api = useTRPC();
-  const helper = useMemo(() => createColumnHelper<ExpenseOut>(), []);
+  const helper = useMemo(() => createCubbyColumnHelper<ExpenseOut>(), []);
   const [quantityEditorExpenseId, setQuantityEditorExpenseId] = useState<
     string | null
   >(null);
@@ -313,9 +311,7 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
     const rows = table.getSortedRowModel().flatRows;
     const index = rows.findIndex((row) => row.id === expenseId);
     if (index >= 0) {
-      table.setPageIndex(
-        Math.floor(index / table.getState().pagination.pageSize),
-      );
+      table.setPageIndex(Math.floor(index / table.state.pagination.pageSize));
     }
     setQuantityEditorExpenseId(expenseId);
   };

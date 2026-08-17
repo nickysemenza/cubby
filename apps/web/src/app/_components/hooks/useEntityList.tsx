@@ -4,8 +4,6 @@ import { relatedViewsFor } from "@cubby/schemas/related-view";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { QueryKey } from "@tanstack/react-query";
 import { useSearch } from "@tanstack/react-router";
-import type { ColumnDef, ColumnHelper, Table } from "@tanstack/react-table";
-import { createColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -21,6 +19,11 @@ import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import type { QueryTiming } from "~/lib/query-timing";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import type { RowLinkResolver } from "../data-table/columnHelpers";
+import {
+  type CubbyColumnDef,
+  type CubbyTable,
+  createCubbyColumnHelper,
+} from "../data-table/table-features";
 import type { GroupConfig } from "../data-table/useGroupedList";
 import { useTableColumnVisibility } from "../data-table/useTableColumnVisibility";
 import { useTableConfig } from "../data-table/useTableConfig";
@@ -48,7 +51,7 @@ export interface BaseListRow {
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: intentional
-type AnyColumnDef<TData> = ColumnDef<TData, any>;
+type AnyColumnDef<TData extends BaseListRow> = CubbyColumnDef<TData, any>;
 
 /** Stable empty-filters default (avoids a fresh `[]` reference each render). */
 const NO_FILTERS: FilterInput[] = [];
@@ -191,8 +194,12 @@ export interface UseEntityListOptions<
   deleteEmptyLabel?: (row: TData) => string;
 }
 
-export interface UseEntityListReturn<TData, TFilters = unknown, TRow = TData> {
-  table: Table<TData>;
+export interface UseEntityListReturn<
+  TData extends BaseListRow,
+  TFilters = unknown,
+  TRow = TData,
+> {
+  table: CubbyTable<TData>;
   /**
    * The filter object the list query is running with (manifest-derived state
    * plus `scopeFilters`). For a page that must call a second procedure over
@@ -289,10 +296,7 @@ export function useEntityList<
   const groupByField = grouped && groupConfig ? groupConfig.field : undefined;
 
   // Create columnHelper once - CRITICAL to prevent infinite re-renders
-  const columnHelper = useMemo(
-    () => createColumnHelper<TData>() as ColumnHelper<TData>,
-    [],
-  );
+  const columnHelper = useMemo(() => createCubbyColumnHelper<TData>(), []);
 
   // Optimistic delete: mutation, bulk action, extra actions, dialog
   const {

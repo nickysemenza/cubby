@@ -1,15 +1,16 @@
 import type { Entity } from "@cubby/schemas/entity";
-import {
-  type Column,
-  flexRender,
-  type Table as ITable,
-  type Row,
-} from "@tanstack/react-table";
+import type { RowData } from "@tanstack/react-table";
+import { flexRender } from "@tanstack/react-table";
 import { isValidElement, type ReactNode, useMemo } from "react";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities } from "~/entities/entities";
 import { extractEntityTitle } from "~/lib/entity-utils";
 import type { MobileColumnMeta, MobileSlot } from "./columnHelpers";
+import type {
+  CubbyColumn as Column,
+  CubbyTable as ITable,
+  CubbyRow as Row,
+} from "./table-features";
 
 interface MobileCellMeta {
   mobile?: MobileColumnMeta;
@@ -34,7 +35,7 @@ export interface MobileMetaValue {
   interactive?: boolean;
 }
 
-export interface MobileListRowModel<TItem> {
+export interface MobileListRowModel<TItem extends RowData> {
   row: Row<TItem>;
   title: string;
   subtitle?: ReactNode;
@@ -83,7 +84,7 @@ function humanizeColumnId(colId: string): string {
  * sort sheet's option label. Shared so a column can't be called two different
  * things by the two surfaces.
  */
-export function mobileColumnLabel<TItem>(
+export function mobileColumnLabel<TItem extends RowData>(
   column: Column<TItem, unknown>,
 ): string {
   const meta = column.columnDef.meta as MobileCellMeta | undefined;
@@ -199,7 +200,7 @@ function getPriority(
   return meta?.mobile?.priority ?? fallback;
 }
 
-export function useMobileListModel<TItem>({
+export function useMobileListModel<TItem extends RowData>({
   table,
   entity,
   rowContentVersion,
@@ -396,7 +397,7 @@ const specBlockHeight = (count: number, interactiveCount: number): number =>
  */
 export function estimateMobileRowHeight(
   model?: Pick<
-    MobileListRowModel<unknown>,
+    MobileListRowModel<Record<string, unknown>>,
     | "subtitle"
     | "rightValues"
     | "rightValueInteractive"
@@ -426,7 +427,9 @@ export function estimateMobileRowHeight(
  * renders the right number of lines and the list doesn't jump when real rows
  * replace it.
  */
-export function mobileListShape<TItem>(table: ITable<TItem>): {
+export function mobileListShape<TItem extends RowData>(
+  table: ITable<TItem>,
+): {
   metaLines: number;
   hasImage: boolean;
 } {

@@ -1,13 +1,15 @@
-import type { Table } from "@tanstack/react-table";
 import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import type { CubbyTable } from "../_components/data-table/table-features";
 
 interface TableOptions {
   getRowId?: (row: { fdc_id: number }) => string;
 }
 
 const mocks = vi.hoisted(() => ({
-  useTableConfig: vi.fn((_options: TableOptions) => ({}) as Table<unknown>),
+  useTableConfig: vi.fn(
+    (_options: TableOptions) => ({}) as CubbyTable<Record<string, unknown>>,
+  ),
 }));
 
 vi.mock("@tanstack/react-query", () => ({

@@ -44,7 +44,7 @@ interface UseOptimisticDeleteOptions<TData extends { id: string }> {
   emptyLabel?: (row: TData) => string;
 }
 
-interface UseOptimisticDeleteReturn<TData> {
+interface UseOptimisticDeleteReturn<TData extends { id: string }> {
   deleteBulkAction: BulkAction<TData> | null;
   combinedExtraActions: ((row: TData) => ReactNode) | undefined;
   deleteDialog: ReactNode | null;

@@ -1,6 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import type { ColumnDef, ColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useMemo, useRef } from "react";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
@@ -19,6 +18,10 @@ import {
   type RowLinkResolver,
 } from "../data-table/columnHelpers";
 import { buildSelectColumn } from "../data-table/row-selection";
+import type {
+  CubbyColumnDef as ColumnDef,
+  CubbyColumnHelper as ColumnHelper,
+} from "../data-table/table-features";
 
 /** Filter definition for use in useEntityList options */
 interface FilterDef {
@@ -32,7 +35,7 @@ interface FilterDef {
 export type FilterInput = string | FilterDef;
 
 // biome-ignore lint/suspicious/noExplicitAny: intentional
-type AnyColumnDef<TData> = ColumnDef<TData, any>;
+type AnyColumnDef<TData extends BaseListRow> = ColumnDef<TData, any>;
 
 /** Base interface for entities in list views */
 interface BaseListRow {

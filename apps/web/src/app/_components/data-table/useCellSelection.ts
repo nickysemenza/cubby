@@ -1,4 +1,4 @@
-import type { Table as ITable, Row } from "@tanstack/react-table";
+import type { RowData } from "@tanstack/react-table";
 import * as React from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
@@ -35,6 +35,7 @@ import {
   type CellEditEventDetail,
   NON_SELECTABLE_COLUMN_IDS,
 } from "./cell-selection-context";
+import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
 
 /**
  * Per-row projection of the current selection, handed to each `DesktopDataRow`.
@@ -48,7 +49,7 @@ export interface RowCellSelection {
   anchorColId: string | null;
 }
 
-interface UseCellSelectionArgs<TItem> {
+interface UseCellSelectionArgs<TItem extends RowData> {
   /** !isMobile. When false the hook is fully inert (no listeners, null state). */
   enabled: boolean;
   rows: Row<TItem>[];
@@ -127,7 +128,7 @@ function emitPasteToast(summary: PasteSummary): void {
  * drag) driving it. Copy/paste EXECUTION is a later phase — this hook only owns
  * the selection state + input; it deliberately does NOT intercept Cmd/Ctrl+C/V.
  */
-export function useCellSelection<TItem>({
+export function useCellSelection<TItem extends RowData>({
   enabled,
   rows,
   table,
@@ -184,7 +185,7 @@ export function useCellSelection<TItem>({
   // global filter, or pagination all remap row indices, so a stale rect would
   // highlight the wrong cells. Composed as a signature string; the effect fires
   // only when it actually changes.
-  const state = table.getState();
+  const state = table.state;
   // The four state slices are referentially stable between actual changes, so
   // memoizing keeps the JSON.stringify off every render (incl. per-tick drag
   // updates), running it only when one of them changes.
@@ -193,10 +194,9 @@ export function useCellSelection<TItem>({
       JSON.stringify({
         sorting: state.sorting,
         columnFilters: state.columnFilters,
-        globalFilter: state.globalFilter ?? null,
         pagination: state.pagination,
       }),
-    [state.sorting, state.columnFilters, state.globalFilter, state.pagination],
+    [state.sorting, state.columnFilters, state.pagination],
   );
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataSignature is the intended trigger
   React.useEffect(() => {
