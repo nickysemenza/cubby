@@ -13,11 +13,20 @@ describe("calendar search params", () => {
         kinds: "meal,task",
         projectKinds: "renovation,garden",
       }),
-    ).toEqual({
+    ).toMatchObject({
       date: "2026-07-01",
       day: "2026-07-14",
       kinds: "meal,task",
       projectKinds: "renovation,garden",
+    });
+  });
+
+  it("keeps a param the router JSON-parsed into a non-string", () => {
+    // `?future=true` arrives as the BOOLEAN true. A bare z.string() would drop
+    // it into `.catch(undefined)`, leaving an unfiltered calendar that reads as
+    // a real answer — the exact hole `urlStringParam` exists to close.
+    expect(calendarSearchSchema.parse({ future: true })).toMatchObject({
+      future: "true",
     });
   });
 

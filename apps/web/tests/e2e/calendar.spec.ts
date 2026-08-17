@@ -11,10 +11,7 @@ test("calendar opens a date drawer and prefills quick creation", async ({
   await expect(
     page.getByRole("heading", { level: 1, name: "Calendar" }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Meals" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Tasks" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Expenses" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Projects" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Filter" })).toBeVisible();
 
   const july14 = page
     .locator(
@@ -34,11 +31,40 @@ test("calendar opens a date drawer and prefills quick creation", async ({
   ).toBeVisible();
   await expect(page.getByText("Nothing planned yet.")).toBeVisible();
 
-  await page.getByRole("button", { name: "Meals" }).last().click();
+  // Scoped to the day sheet on purpose. This used to be `.last()`, which only
+  // disambiguated it from the kind-toggle row that the filter bar replaced —
+  // leaving the assertion silently dependent on there now being exactly one
+  // match anywhere on the page.
+  const daySheet = page.getByRole("dialog", { name: "Tuesday, July 14" });
+  await daySheet.getByRole("button", { name: "Meals" }).click();
   const mealDialog = page.getByRole("dialog", { name: "New Meal" });
   await expect(mealDialog).toBeVisible();
   await expect(
     mealDialog.getByRole("button", { name: "Date", exact: true }),
   ).toContainText("Jul 14, 2026");
+  expect(pageErrors).toEqual([]);
+});
+
+test("calendar filters are URL-backed and survive a reload", async ({
+  page,
+}) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  // The pre-filter-bar URL shape. Both keys were kept verbatim so bookmarks
+  // and shared links from before the manifest bar still resolve.
+  await page.goto(
+    "/calendar?date=2026-07-01&kinds=meal,task&projectKinds=renovation",
+  );
+  await page.waitForLoadState("networkidle");
+
+  const bar = page.getByRole("button", { name: "Filter" }).locator("..");
+  await expect(bar.getByText("Show")).toBeVisible();
+  await expect(bar.getByText("Project kind")).toBeVisible();
+  await expect(bar.getByText("Renovation")).toBeVisible();
+
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  await expect(page).toHaveURL(/kinds=meal%2Ctask|kinds=meal,task/);
+  await expect(bar.getByText("Renovation")).toBeVisible();
   expect(pageErrors).toEqual([]);
 });

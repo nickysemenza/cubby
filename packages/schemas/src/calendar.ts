@@ -4,7 +4,9 @@ import {
   projectShortcode,
   expenseShortcode,
   taskShortcode,
+  vendorShortcode,
 } from "./identifiers";
+import { oneOrMany, presenceFilter } from "./pagination";
 import { mealKindSchema, mealTypeSchema } from "./meal-classification";
 import {
   plainDate,
@@ -97,17 +99,62 @@ export const calendarItem = z.discriminatedUnion("kind", [
 ]);
 export type CalendarItem = z.infer<typeof calendarItem>;
 
+/**
+ * Server-side calendar filters.
+ *
+ * **The cross-kind rule.** A field prefixed with an item kind constrains ONLY
+ * rows of that kind; rows of every other kind pass through untouched. That is
+ * why these are `taskStatus` / `expenseFuture` / `projectStatus` rather than a
+ * bare `status` / `future` — the name IS the scope. Without it, picking a task
+ * status would read as a filter that also deletes every meal and expense from
+ * the month, which is not what anyone means by it. `kinds` is the only switch
+ * that removes a whole kind, and it does so by skipping the read.
+ *
+ * The one deliberately cross-kind pair is `projectId` /
+ * `projectPresenceFilter`; see repo/calendar.ts for what it does to meals,
+ * which have no project relation at all.
+ *
+ * Deliberately NOT named `calendarFilterFields`-as-an-entity-map: the scanner
+ * in filter-application.integration.test only adopts a `*FilterFields` export
+ * whose prefix parses as an `Entity`, and "calendar" doesn't — so this stays a
+ * composable fragment, like `auditDateFilterFields`.
+ */
+export const calendarFilterFields = {
+  /**
+   * Which item kinds to read. Omitted means all four — the in-app calendar
+   * wants everything, so that stays the default. Narrowing it lets a caller
+   * skip whole queries: asking for meals alone avoids the expense read and
+   * the project date fold entirely (see repo/calendar.ts).
+   */
+  kinds: z.array(calendarItemKind).nonempty().optional(),
+
+  /**
+   * Cross-kind: scopes tasks and expenses by their `projectId` and narrows
+   * project spans to the selection. Meals are treated as permanently
+   * unassigned rows — see repo/calendar.ts.
+   */
+  projectId: oneOrMany(projectShortcode).optional(),
+  projectPresenceFilter: presenceFilter,
+  /** Expand `projectId` to each project's live descendant subtree. */
+  includeSubProjects: z.boolean().optional(),
+
+  taskStatus: oneOrMany(taskStatusSchema).optional(),
+  taskTrade: oneOrMany(tradeSchema).optional(),
+
+  expenseVendorId: oneOrMany(vendorShortcode).optional(),
+  expenseVendorPresenceFilter: presenceFilter,
+  expenseFuture: z.boolean().optional(),
+
+  projectStatus: oneOrMany(projectStatusSchema).optional(),
+  projectKind: oneOrMany(projectKindSchema).optional(),
+  projectKindPresenceFilter: presenceFilter,
+};
+
 export const calendarRangeInput = z
   .object({
     startDate: plainDate,
     endDateExclusive: plainDate,
-    /**
-     * Which item kinds to read. Omitted means all four — the in-app calendar
-     * wants everything, so that stays the default. Narrowing it lets a caller
-     * skip whole queries: asking for meals alone avoids the expense read and
-     * the project subtree rollup entirely (see repo/calendar.ts).
-     */
-    kinds: z.array(calendarItemKind).nonempty().optional(),
+    ...calendarFilterFields,
   })
   .refine((value) => value.startDate < value.endDateExclusive, {
     message: "endDateExclusive must be after startDate",

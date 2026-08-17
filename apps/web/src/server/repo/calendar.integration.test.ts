@@ -1,3 +1,5 @@
+import type { CalendarItemKind } from "@cubby/schemas/calendar";
+import { unsafeProjectShortcode } from "@cubby/schemas/identifiers";
 import { mealCreateInput } from "@cubby/schemas/meal";
 import {
   expenseCreateInput,
@@ -11,6 +13,9 @@ import { createExpense } from "./expense";
 import { createMeal } from "./meal";
 import { createProject } from "./project";
 import { createTask } from "./task";
+
+/** A well-formed project shortcode that resolves to no row. */
+const MISSING_PROJECT = unsafeProjectShortcode("PRJ-ZZZZ");
 
 describe("calendar repository", () => {
   const ctx = withTestDb();
@@ -176,6 +181,201 @@ describe("calendar repository", () => {
       actualSpend: 0,
     });
   });
+  describe("filters", () => {
+    const range = { startDate: "2026-10-01", endDateExclusive: "2026-10-15" };
+
+    /** One of every kind on 2026-10-05, plus a sub-project one level down. */
+    const seed = async () => {
+      const { output: parent } = await createProject(
+        ctx.db,
+        projectCreateInput.parse({
+          name: "Bath remodel",
+          kind: "renovation",
+          status: "in_progress",
+          startDate: "2026-10-03",
+          endDate: "2026-10-09",
+        }),
+        ctx.actor,
+      );
+      const { output: child } = await createProject(
+        ctx.db,
+        projectCreateInput.parse({
+          name: "Bath remodel: tiling",
+          kind: "renovation",
+          status: "done",
+          parentProjectId: parent.id,
+          startDate: "2026-10-06",
+          endDate: "2026-10-08",
+        }),
+        ctx.actor,
+      );
+      await createMeal(
+        ctx.db,
+        mealCreateInput.parse({ date: "2026-10-05", name: "Soup" }),
+        ctx.actor,
+      );
+      await createTask(
+        ctx.db,
+        taskCreateInput.parse({
+          name: "Seal grout",
+          trade: "finishes",
+          status: "blocked",
+          projectId: parent.id,
+          dueDate: "2026-10-05",
+        }),
+        ctx.actor,
+      );
+      await createTask(
+        ctx.db,
+        taskCreateInput.parse({
+          name: "Order tile",
+          trade: "finishes",
+          status: "not_started",
+          projectId: child.id,
+          dueDate: "2026-10-06",
+        }),
+        ctx.actor,
+      );
+      await createExpense(
+        ctx.db,
+        expenseCreateInput.parse({
+          name: "Grout",
+          trade: "finishes",
+          costType: "materials",
+          date: "2026-10-05",
+          cost: 30,
+          future: false,
+          projectId: parent.id,
+        }),
+        ctx.actor,
+      );
+      await createExpense(
+        ctx.db,
+        expenseCreateInput.parse({
+          name: "Unassigned sundries",
+          trade: "finishes",
+          costType: "materials",
+          date: "2026-10-05",
+          cost: 12,
+          future: false,
+        }),
+        ctx.actor,
+      );
+      return { parent, child };
+    };
+
+    const countByKind = async (
+      filters: Partial<Parameters<typeof getCalendarRange>[1]>,
+    ) => {
+      const result = await getCalendarRange(ctx.db, { ...range, ...filters });
+      const counts: Record<CalendarItemKind, number> = {
+        meal: 0,
+        task: 0,
+        expense: 0,
+        project: 0,
+      };
+      for (const item of result.items) counts[item.kind] += 1;
+      return counts;
+    };
+
+    it("scopes a kind-specific filter to that kind ALONE", async () => {
+      await seed();
+      const baseline = await countByKind({});
+      expect(baseline).toEqual({ meal: 1, task: 2, expense: 2, project: 2 });
+
+      // The whole point of naming these `taskStatus` rather than `status`: a
+      // task filter must not empty the month of everything without a status.
+      expect(await countByKind({ taskStatus: ["blocked"] })).toEqual({
+        ...baseline,
+        task: 1,
+      });
+      expect(await countByKind({ taskTrade: ["plumbing"] })).toEqual({
+        ...baseline,
+        task: 0,
+      });
+      expect(await countByKind({ expenseFuture: true })).toEqual({
+        ...baseline,
+        expense: 0,
+      });
+      expect(await countByKind({ projectStatus: ["done"] })).toEqual({
+        ...baseline,
+        project: 1,
+      });
+    });
+
+    it("expands a project scope to its live subtree when asked", async () => {
+      const { parent } = await seed();
+
+      expect(await countByKind({ projectId: [parent.id] })).toEqual({
+        meal: 0,
+        task: 1,
+        expense: 1,
+        project: 1,
+      });
+      expect(
+        await countByKind({
+          projectId: [parent.id],
+          includeSubProjects: true,
+        }),
+      ).toEqual({ meal: 0, task: 2, expense: 1, project: 2 });
+    });
+
+    it("treats meals as permanently unassigned rows under a project scope", async () => {
+      const { parent } = await seed();
+
+      // Not a flat drop: `(none)` is the unassigned-work worklist, and a meal
+      // genuinely belongs in it.
+      expect((await countByKind({ projectId: [parent.id] })).meal).toBe(0);
+      expect((await countByKind({ projectPresenceFilter: "has" })).meal).toBe(
+        0,
+      );
+      expect((await countByKind({ projectPresenceFilter: "none" })).meal).toBe(
+        1,
+      );
+      expect(
+        (
+          await countByKind({
+            projectId: [parent.id],
+            projectPresenceFilter: "none",
+          })
+        ).meal,
+      ).toBe(1);
+    });
+
+    it("makes an unresolvable project code match nothing, never everything", async () => {
+      await seed();
+      // "A requested but unresolved id must fail or match nothing; it must
+      // never widen to an unfiltered query."
+      expect(await countByKind({ projectId: [MISSING_PROJECT] })).toEqual({
+        meal: 0,
+        task: 0,
+        expense: 0,
+        project: 0,
+      });
+      // ...but the presence sentinel beside it still answers for itself.
+      expect(
+        await countByKind({
+          projectId: [MISSING_PROJECT],
+          projectPresenceFilter: "none",
+        }),
+      ).toEqual({ meal: 1, task: 0, expense: 1, project: 0 });
+    });
+
+    it("keeps the day summary consistent with the filtered items", async () => {
+      await seed();
+      const filtered = await getCalendarRange(ctx.db, {
+        ...range,
+        projectPresenceFilter: "none",
+      });
+      expect(filtered.days["2026-10-05"]).toMatchObject({
+        mealCount: 1,
+        taskCount: 0,
+        expenseCount: 1,
+        actualSpend: 12,
+      });
+    });
+  });
+
   it("orders a day's meals by slot, not by title", async () => {
     // The exact case that was wrong before mealType existed: sorting fell
     // through to the title, so a breakfast named "Oatmeal" landed after a
