@@ -27,6 +27,7 @@ import {
   image,
   locationImage,
   mealRecipe,
+  productComponent,
   productExternalId,
   productImage,
   productUnitMappings,
@@ -50,7 +51,7 @@ import { findReferentialLivenessViolations } from "./detectors-integrity";
 /**
  * Regression suite for `findReferentialLivenessViolations` (detectors-integrity.ts)
  * — the audit that finds every LIVE row whose FK points at a SOFT-DELETED target,
- * across the 45 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
+ * across the 47 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
  *
  * The matrix below is driven from `INCOMING_EDGES` × `ENTITY_EDGE_SEMANTICS`
  * themselves (not a hand-copied edge list), so a newly-added `must-target-live`
@@ -174,7 +175,7 @@ const mkRecipeSection = async (db: Database) => {
 };
 
 /** One live-row factory per entity that appears as a `targetEntity` among the
- * 45 must-target-live edges below. */
+ * 47 must-target-live edges below. */
 const TARGET_FACTORIES: Partial<
   Record<Entity, (db: Database) => Promise<{ id: string }>>
 > = {
@@ -575,6 +576,22 @@ const SOURCE_FACTORIES: Record<
       amount: 1,
     });
   },
+
+  "ProductComponent.parentProductId": async (db, targetId) => {
+    const component = await mkProduct(db);
+    return insertAndReturn(db, productComponent, {
+      parentProductId: unsafeProductId(targetId),
+      componentProductId: component.id,
+    });
+  },
+
+  "ProductComponent.componentProductId": async (db, targetId) => {
+    const kit = await mkProduct(db);
+    return insertAndReturn(db, productComponent, {
+      parentProductId: kit.id,
+      componentProductId: unsafeProductId(targetId),
+    });
+  },
 };
 
 // Derive the must-target-live edge list from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS
@@ -636,11 +653,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 45 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 47 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(45);
+    expect(derivedMustTargetLiveEdges).toHaveLength(47);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {

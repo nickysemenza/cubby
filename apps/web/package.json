@@ -35,6 +35,7 @@
     "db:backfill-stock-tracked": "tsx scripts/backfill-stock-tracked.ts",
     "db:backfill-search-documents": "tsx scripts/backfill-search-documents.ts",
     "db:report-product-quantities": "tsx scripts/report-product-quantity-backfill.ts",
+    "db:report-split-sums": "tsx scripts/report-split-expense-sums.ts",
     "regenerate": "pnpm run db:rebuild",
     "knip": "knip",
     "knip:production": "knip --production",

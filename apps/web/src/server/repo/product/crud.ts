@@ -28,7 +28,6 @@ import {
   type ProductUpdateInput,
   productSortableFields,
 } from "@cubby/schemas/product";
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import {
   and,
@@ -54,6 +53,7 @@ import {
   inventoryEntry,
   location,
   product,
+  productComponent,
   productExternalId,
   productImage,
   productUnitMappings,
@@ -371,48 +371,6 @@ export const getProductImagesByProductIds = async (
 
   for (const row of rows) {
     result[row.productId]?.push(row.image);
-  }
-
-  return result;
-};
-
-/**
- * Stored conversion rows per product uuid, deliberately WITHOUT provenance.
- *
- * `sourceMetadata` names a product by its public shortcode (the schema's field
- * is `productShortcode`), and a repo keyed on uuids has no shortcode to stamp.
- * An earlier shape stamped `productId: row.productId` — a uuid — and relied on
- * its one caller to overwrite the field with the shortcode it happened to know.
- * That left a uuid-shaped `sourceMetadata` alive in the type system, one
- * forgetful second caller away from reaching the client, where the unit-mapping
- * table feeds that exact field into a `product.getByID` lookup that is keyed on
- * the shortcode. Whoever owns the shortcode stamps it (see
- * `getProductSummaries`); nobody else can.
- */
-export const getProductUnitMappingsByProductIds = async (
-  db: Database,
-  ids: ProductId[],
-): Promise<Record<string, Array<Omit<UnitMapping, "sourceMetadata">>>> => {
-  const uniqueIds = uniq(ids);
-  const result: Record<
-    string,
-    Array<Omit<UnitMapping, "sourceMetadata">>
-  > = Object.fromEntries(uniqueIds.map((id) => [id, []]));
-  if (uniqueIds.length === 0) return result;
-
-  const rows = await getDb(db).query.productUnitMappings.findMany({
-    where: and(
-      inArray(productUnitMappings.productId, uniqueIds),
-      notDeleted(productUnitMappings),
-    ),
-  });
-
-  for (const row of rows) {
-    result[row.productId]?.push({
-      a: row.a,
-      b: row.b,
-      source: row.source,
-    });
   }
 
   return result;
@@ -1457,13 +1415,17 @@ export const updateProduct = async (
 
       const updated = await updateLiveAndReturn(tx, product, updateData, id);
 
-      // When price changes, resync the dependent inventory valuations (amount × price).
-      if (data.price !== undefined) {
-        await syncInventoryValuationsForProduct(tx, id);
-      }
-
       if (unitMappings !== undefined) {
         await syncProductUnitMappings(tx, id, unitMappings);
+      }
+
+      // AFTER the mapping sync, and gated on either input: valuation routes the
+      // entry's amount to money through the mapping graph, so editing the
+      // mappings alone can change every valuation, and syncing first would
+      // re-derive them from the graph this write is about to replace.
+      // (`merge.ts` already orders these correctly.)
+      if (data.price !== undefined || unitMappings !== undefined) {
+        await syncInventoryValuationsForProduct(tx, id);
       }
       if (externalIds !== undefined) {
         await assertExternalIdsAvailable(tx, externalIds, id);
@@ -1834,6 +1796,18 @@ const PRODUCT_RETAINING_DEPENDENTS: Record<
       where: and(inArray(location.productId, ids), notDeleted(location)),
       columns: { productId: true },
     }),
+  "ProductComponent.componentProductId": async (tx, ids) => {
+    const rows = await tx.query.productComponent.findMany({
+      where: and(
+        inArray(productComponent.componentProductId, ids),
+        notDeleted(productComponent),
+      ),
+      columns: { componentProductId: true },
+    });
+    return rows.map(({ componentProductId }) => ({
+      productId: componentProductId,
+    }));
+  },
 };
 
 /**
@@ -1920,6 +1894,11 @@ export const deleteProducts = async (
           parentColumns: [productImage.productId],
           auditKey: "cascadedImages",
         },
+        {
+          table: productComponent,
+          parentColumns: [productComponent.parentProductId],
+          auditKey: "cascadedComponents",
+        },
       ],
     });
   });
@@ -1978,6 +1957,12 @@ export const previewDeleteProducts = async (
       "unit mappings",
     ],
     ["ProductImage.productId", productImage, productImage.productId, "images"],
+    [
+      "ProductComponent.parentProductId",
+      productComponent,
+      productComponent.parentProductId,
+      "kit components",
+    ],
   ];
 
   const changes: (ImpactItem | null)[] = [];

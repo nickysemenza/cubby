@@ -55,6 +55,7 @@ import {
   inventoryEntry,
   location,
   product,
+  productComponent,
   productExternalId,
   productImage,
   productUnitMappings,
@@ -272,6 +273,18 @@ const PRODUCT_RETAINING_NOT_EXISTS: Record<
         .select({ id: sql`1` })
         .from(location)
         .where(and(eq(location.productId, product.id), notDeleted(location))),
+    ),
+  "ProductComponent.componentProductId": (dbClient) =>
+    notExists(
+      dbClient
+        .select({ id: sql`1` })
+        .from(productComponent)
+        .where(
+          and(
+            eq(productComponent.componentProductId, product.id),
+            notDeleted(productComponent),
+          ),
+        ),
     ),
 };
 

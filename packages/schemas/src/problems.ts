@@ -367,6 +367,30 @@ export const unknownParkedItemSchema = z.object({
 });
 
 /**
+ * A live inventory entry whose Product HAS an effective price, yet whose
+ * `valuation` is null — the amount's unit has no path to money through that
+ * Product's unit-mapping graph.
+ *
+ * The actionable distinction the location rollup's `missingPricing` bucket
+ * loses: "set a price" and "add a conversion edge" are different fixes, and
+ * only the second one is this.
+ */
+export const inventoryWithoutPricePathSchema = z.object({
+  id: inventoryShortcode,
+  amount,
+  /** What the unit would be worth against, if it could reach it. */
+  effectivePrice: z.number(),
+  product: z.object({
+    id: productShortcode,
+    name: z.string(),
+  }),
+  location: z.object({
+    id: locationShortcode,
+    name: z.string(),
+  }),
+});
+
+/**
  * One spelling of a brand name that collides with a more-used spelling of the
  * same name — `RYOBI` where 12 other products say `Ryobi`.
  *
@@ -807,6 +831,7 @@ const problemsFastShape = {
   staleParentRecipes: z.array(staleParentRecipeSchema),
   understatedCostMeals: z.array(understatedCostMealSchema),
   unknownParkedItems: z.array(unknownParkedItemSchema),
+  inventoryWithoutPricePath: z.array(inventoryWithoutPricePathSchema),
   manufacturerSpellingVariants: z.array(labelVariantSchema),
   duplicateVendors: z.array(duplicateVendorSchema),
   vendorsWithoutLogos: z.array(vendorWithoutLogoSchema),
@@ -1101,6 +1126,11 @@ export const PROBLEM_CLASS = {
   // tolerated, so a row here is always real work.
   recipesWithoutInstructions: "defect",
   unknownParkedItems: "defect",
+  // Priced product, unpriceable unit. Converges to zero (add the conversion
+  // edge) and production sits at zero today, so a row is a regression in some
+  // write path rather than a backlog — the `referentialLivenessViolations`
+  // shape. No auto-fix: only a human knows how many rolls are in the pack.
+  inventoryWithoutPricePath: "defect",
   manufacturerSpellingVariants: "defect",
   // Two roster rows for one real vendor is simply wrong — that vendor's spend is
   // split across both — and it converges to zero: `mergeVendors` folds the pair
@@ -1336,6 +1366,9 @@ export type NeverVerifiedInventory = z.infer<
   typeof neverVerifiedInventorySchema
 >;
 export type UnknownParkedItem = z.infer<typeof unknownParkedItemSchema>;
+export type InventoryWithoutPricePath = z.infer<
+  typeof inventoryWithoutPricePathSchema
+>;
 export type LabelVariant = z.infer<typeof labelVariantSchema>;
 export type DuplicateVendor = z.infer<typeof duplicateVendorSchema>;
 export type VendorWithoutLogo = z.infer<typeof vendorWithoutLogoSchema>;

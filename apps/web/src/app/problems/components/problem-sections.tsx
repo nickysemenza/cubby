@@ -1310,6 +1310,27 @@ const DECLARED_SECTIONS = [
     }),
   }),
   section({
+    id: "inventory-no-price-path",
+    label: "Unvaluable units",
+    select: (p) => p.inventoryWithoutPricePath,
+    entity: "inventory",
+    title: "Priced products whose stored unit can't reach a price",
+    description:
+      "The Product has a price, but this entry's unit has no conversion edge leading to it, so the entry contributes nothing to any valuation. Add the missing unit mapping on the Product (for example, 1 each = 4 roll).",
+    emptyMessage: "Every priced product's stored units can reach a price.",
+    renderItem: (item) => ({
+      title: item.product.name,
+      subtitle: `${item.amount.value} ${item.amount.unit} in ${item.location.name}`,
+      badges: [
+        <Badge key="price" variant="outline">
+          {formatCurrency(item.effectivePrice)} each
+        </Badge>,
+      ],
+      route: entityDetailLink("product", item.product.id),
+      editLabel: "Open product",
+    }),
+  }),
+  section({
     id: "images",
     label: "Images",
     select: (p) => p.productsWithNoImages,

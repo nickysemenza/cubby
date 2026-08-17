@@ -145,14 +145,17 @@ export const discardProductUnits = async (
 
       const remaining = entry.amount.value - Math.abs(input.quantity);
       if (remaining > 0) {
+        // The whole Amount, unit included — the scalar this used to pass made a
+        // partially-discarded `can` entry re-value as if it were `each`.
+        const remainingAmount = { ...entry.amount, value: remaining };
         await tx
           .update(inventoryEntry)
           .set({
-            amount: { ...entry.amount, value: remaining },
+            amount: remainingAmount,
             valuation: await computeValuationForEntry(
               tx,
               input.productId,
-              remaining,
+              remainingAmount,
             ),
           })
           .where(eq(inventoryEntry.id, entry.id));

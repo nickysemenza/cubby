@@ -98,6 +98,31 @@ export const convertAmountToPrice = (
 };
 
 /**
+ * Batch sibling of {@link convertAmountToPrice}: N amounts against ONE
+ * conversion graph, built once inside WASM instead of per amount.
+ *
+ * Per-amount failures come back in-band as `WMeasureResult` errors so a single
+ * unconvertible row can't blank out the rest of the batch; the outer `Result`
+ * is only for whole-call failure, which the Rust `Result<_, String>` surfaces
+ * as a *throw* on the JS side (same convention `safeConvertAmount` wraps).
+ *
+ * Amounts go through {@link toWAmount} rather than straight across: the direct
+ * path silently drops `upperValue`.
+ */
+export const convertAmountsToPrice = (
+  amounts: readonly Amount[],
+  mappings: readonly UnitMapping[],
+): Result<WMeasureResult[]> => {
+  try {
+    return ok(
+      wasm.conv_amounts_to_kind([...mappings], "money", amounts.map(toWAmount)),
+    );
+  } catch (e) {
+    return err(`Error converting to money: ${e}`);
+  }
+};
+
+/**
  * Evaluate ingredient availability for a batch of groups in ONE WASM call. The
  * gram-first reconciliation + status verdict live in Rust (recipebridge's
  * availability module), shared with the costing engine's conversion kernel; the

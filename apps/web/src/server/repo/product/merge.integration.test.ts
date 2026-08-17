@@ -22,6 +22,10 @@ import {
   previewMergeProducts,
 } from "~/server/repo/product";
 import {
+  attachProductComponents,
+  listProductComponents,
+} from "~/server/repo/product-components";
+import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
@@ -348,5 +352,264 @@ describe("mergeProducts", () => {
       columns: { deletedAt: true },
     });
     expect(survivor?.deletedAt).toBeNull();
+  });
+
+  /**
+   * `ProductComponent` is the one incoming edge that points Product at Product,
+   * so a merge does not merely move rows between disjoint sets — it identifies
+   * two nodes of a DAG. That makes two things possible here and nowhere else in
+   * this file: the merge can create a cycle, and the SAME partial-unique slot
+   * wants opposite fold rules depending on which end of the edge is merging.
+   */
+  describe("kit composition", () => {
+    const componentCodes = async (parentId: ProductId) =>
+      (await listProductComponents(ctx.db, parentId)).map((c) => c.productId);
+
+    const componentQuantity = async (parentId: ProductId, code: string) =>
+      (await listProductComponents(ctx.db, parentId)).find(
+        (c) => c.productId === code,
+      )?.quantity;
+
+    it("refuses to merge a kit into a part it contains, several hops down", async () => {
+      const kit = await seedProduct("Combo Kit", { model: "KIT-1" });
+      const mid = await seedProduct("Sub Assembly", { model: "KIT-2" });
+      const leaf = await seedProduct("Deep Part", { model: "KIT-3" });
+      await attachProductComponents(
+        ctx.db,
+        kit.id,
+        [{ productId: mid.id, quantity: 1 }],
+        TEST_ACTOR,
+      );
+      await attachProductComponents(
+        ctx.db,
+        mid.id,
+        [{ productId: leaf.id, quantity: 1 }],
+        TEST_ACTOR,
+      );
+
+      const preview = await previewMergeProducts(ctx.db, {
+        keepId: kit.id,
+        mergeIds: [leaf.id],
+      });
+      expect(preview.blockers.map((b) => b.code)).toContain(
+        "block-component-cycle",
+      );
+
+      await expect(
+        mergeProducts(
+          ctx.db,
+          { keepId: kit.shortcode, mergeIds: [leaf.shortcode] },
+          TEST_ACTOR,
+        ),
+      ).rejects.toThrow(/contain itself/);
+
+      const dead = await getDb(ctx.db).query.product.findFirst({
+        where: eq(product.id, leaf.id),
+        columns: { deletedAt: true },
+      });
+      expect(dead?.deletedAt).toBeNull();
+    });
+
+    it("refuses the same merge run the other way round", async () => {
+      const kit = await seedProduct("Reverse Kit", { model: "REV-1" });
+      const part = await seedProduct("Reverse Part", { model: "REV-2" });
+      await attachProductComponents(
+        ctx.db,
+        kit.id,
+        [{ productId: part.id, quantity: 2 }],
+        TEST_ACTOR,
+      );
+
+      // Merging the descendant into its own kit closes the same loop; the
+      // guard is a property of the graph, not of which id the operator kept.
+      await expect(
+        mergeProducts(
+          ctx.db,
+          { keepId: part.shortcode, mergeIds: [kit.shortcode] },
+          TEST_ACTOR,
+        ),
+      ).rejects.toThrow(/contain itself/);
+    });
+
+    it("dedupes a component two merging kits list at the same quantity", async () => {
+      const keeper = await seedProduct("Keeper Kit", { model: "DUP-1" });
+      const loser = await seedProduct("Loser Kit", { model: "DUP-2" });
+      const shared = await seedProduct("Shared Bit", { model: "DUP-3" });
+      const only = await seedProduct("Loser-only Bit", { model: "DUP-4" });
+      await attachProductComponents(
+        ctx.db,
+        keeper.id,
+        [{ productId: shared.id, quantity: 4 }],
+        TEST_ACTOR,
+      );
+      await attachProductComponents(
+        ctx.db,
+        loser.id,
+        [
+          { productId: shared.id, quantity: 4 },
+          { productId: only.id, quantity: 1 },
+        ],
+        TEST_ACTOR,
+      );
+
+      const preview = await previewMergeProducts(ctx.db, {
+        keepId: keeper.id,
+        mergeIds: [loser.id],
+      });
+      expect(preview.blockers).toEqual([]);
+      const previewed = new Map(preview.changes.map((c) => [c.code, c.total]));
+      expect(previewed.get("repoint-or-dedupe-identical-component")).toBe(1);
+      expect(previewed.get("dedupe-identical-component")).toBe(1);
+
+      const summary = await mergeProducts(
+        ctx.db,
+        { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
+        TEST_ACTOR,
+      );
+
+      // The preview predicted exactly what the mutation did.
+      expect(summary.componentsMoved).toBe(1);
+      expect(summary.componentsDeduped).toBe(1);
+      expect((await componentCodes(keeper.id)).sort()).toEqual(
+        [shared.shortcode, only.shortcode].sort(),
+      );
+      // Deduping must not double the quantity — the two rows said the same thing.
+      expect(await componentQuantity(keeper.id, shared.shortcode)).toBe(4);
+    });
+
+    it("refuses when the two kits disagree on how many of the shared part", async () => {
+      const keeper = await seedProduct("Keeper Set", { model: "CONF-1" });
+      const loser = await seedProduct("Loser Set", { model: "CONF-2" });
+      const shared = await seedProduct("Contested Bit", { model: "CONF-3" });
+      await attachProductComponents(
+        ctx.db,
+        keeper.id,
+        [{ productId: shared.id, quantity: 4 }],
+        TEST_ACTOR,
+      );
+      await attachProductComponents(
+        ctx.db,
+        loser.id,
+        [{ productId: shared.id, quantity: 3 }],
+        TEST_ACTOR,
+      );
+
+      const preview = await previewMergeProducts(ctx.db, {
+        keepId: keeper.id,
+        mergeIds: [loser.id],
+      });
+      expect(preview.blockers.map((b) => b.code)).toContain(
+        "block-component-quantity-mismatch",
+      );
+
+      await expect(
+        mergeProducts(
+          ctx.db,
+          { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
+          TEST_ACTOR,
+        ),
+      ).rejects.toThrow(/different quantities/);
+
+      // Whole merge rolled back — neither list was silently rewritten.
+      expect(await componentQuantity(keeper.id, shared.shortcode)).toBe(4);
+      expect(await componentQuantity(loser.id, shared.shortcode)).toBe(3);
+    });
+
+    it("sums the quantities when one kit listed both merging parts", async () => {
+      const kit = await seedProduct("Host Kit", { model: "SUM-1" });
+      const keeper = await seedProduct("Keeper Screw", { model: "SUM-2" });
+      const loserA = await seedProduct("Loser Screw A", { model: "SUM-3" });
+      const loserB = await seedProduct("Loser Screw B", { model: "SUM-4" });
+      const otherKit = await seedProduct("Other Kit", { model: "SUM-5" });
+      await attachProductComponents(
+        ctx.db,
+        kit.id,
+        [
+          { productId: keeper.id, quantity: 2 },
+          { productId: loserA.id, quantity: 3 },
+          { productId: loserB.id, quantity: 4 },
+        ],
+        TEST_ACTOR,
+      );
+      // A kit that lists only a loser — nothing to fold into, so it re-points.
+      await attachProductComponents(
+        ctx.db,
+        otherKit.id,
+        [{ productId: loserA.id, quantity: 7 }],
+        TEST_ACTOR,
+      );
+
+      const preview = await previewMergeProducts(ctx.db, {
+        keepId: keeper.id,
+        mergeIds: [loserA.id, loserB.id],
+      });
+      const previewed = new Map(preview.changes.map((c) => [c.code, c.total]));
+      expect(previewed.get("repoint-or-sum-same-kit")).toBe(1);
+      expect(previewed.get("sum-same-kit-quantity")).toBe(2);
+
+      const summary = await mergeProducts(
+        ctx.db,
+        {
+          keepId: keeper.shortcode,
+          mergeIds: [loserA.shortcode, loserB.shortcode],
+        },
+        TEST_ACTOR,
+      );
+
+      expect(summary.kitLinksMoved).toBe(1);
+      expect(summary.kitLinksSummed).toBe(2);
+      // 2 + 3 + 4 in ONE write. Folding per row would read the unmutated target
+      // each pass and persist 6, losing a part inside a destructive operation.
+      expect(await componentQuantity(kit.id, keeper.shortcode)).toBe(9);
+      expect(await componentCodes(kit.id)).toEqual([keeper.shortcode]);
+      expect(await componentQuantity(otherKit.id, keeper.shortcode)).toBe(7);
+    });
+
+    it("carries a deliberate stockTracked: false onto a survivor that has none", async () => {
+      const keeper = await seedProduct("Undecided Kit", { model: "TRACK-1" });
+      const loser = await seedProduct("Reviewed Kit", {
+        model: "TRACK-2",
+        stockTracked: false,
+      });
+
+      const summary = await mergeProducts(
+        ctx.db,
+        { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
+        TEST_ACTOR,
+      );
+
+      // `false` is a decision ("reviewed, no shelf claim"), not an absent value:
+      // the fill-never-overwrite carry has to treat it as a donor.
+      expect(summary.carriedFields).toContain("stockTracked");
+      const survivor = await getDb(ctx.db).query.product.findFirst({
+        where: eq(product.id, keeper.id),
+        columns: { stockTracked: true },
+      });
+      expect(survivor?.stockTracked).toBe(false);
+    });
+
+    it("keeps the survivor's own stockTracked rather than overwriting it", async () => {
+      const keeper = await seedProduct("Tracked Kit", {
+        model: "TRACK-3",
+        stockTracked: false,
+      });
+      const loser = await seedProduct("Donor Kit", {
+        model: "TRACK-4",
+        stockTracked: true,
+      });
+
+      const summary = await mergeProducts(
+        ctx.db,
+        { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
+        TEST_ACTOR,
+      );
+
+      expect(summary.carriedFields).not.toContain("stockTracked");
+      const survivor = await getDb(ctx.db).query.product.findFirst({
+        where: eq(product.id, keeper.id),
+        columns: { stockTracked: true },
+      });
+      expect(survivor?.stockTracked).toBe(false);
+    });
   });
 });

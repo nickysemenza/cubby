@@ -52,6 +52,7 @@ import {
   locationImage,
   mealRecipe,
   product,
+  productComponent,
   productExternalId,
   productImage,
   productUnitMappings,
@@ -147,6 +148,12 @@ export const INCOMING_EDGES = {
     "PurchaseProduct.productId": { column: purchaseProduct.productId },
     "WishCandidate.productId": { column: wishCandidate.productId },
     "Location.productId": { column: location.productId },
+    "ProductComponent.parentProductId": {
+      column: productComponent.parentProductId,
+    },
+    "ProductComponent.componentProductId": {
+      column: productComponent.componentProductId,
+    },
   }),
   location: edges({
     "InventoryEntry.locationId": { column: inventoryEntry.locationId },

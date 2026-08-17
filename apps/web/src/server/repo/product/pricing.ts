@@ -22,6 +22,29 @@ const EMPTY_AGGREGATE: PricingAggregate = {
 };
 
 /**
+ * The weighted all-history unit cost, UNROUNDED.
+ *
+ * `resolveProductPricing` rounds this to cents because `derivedPrice` is shown
+ * as a price. Valuation must not: rounding the quotient BEFORE quantity
+ * multiplies it is a real error. A kit split into 2 units at a $37.97 ledger
+ * cost derives $18.985/unit, which rounds to $18.99 and re-multiplies to
+ * $37.98 — two cents the ledger never spent.
+ *
+ * Stated honestly, feeding the exact value to the valuation money edge fully
+ * fixes only the case where ONE entry holds all N units (exact × N is exact).
+ * Where the units span several entries it merely REDUCES the artifact: each
+ * entry's `valuation` still rounds independently into a `real` column, so the
+ * sum can still miss by cents.
+ */
+const derivedPriceExact = (aggregate: PricingAggregate): number | null =>
+  aggregate.knownUnitCount > 0
+    ? aggregate.knownCost / aggregate.knownUnitCount
+    : null;
+
+const round2 = (value: number | null): number | null =>
+  value === null ? null : Math.round(value * 100) / 100;
+
+/**
  * Resolve the public pricing contract from the manual override and the live
  * Expense aggregate. Historical money never lands on Product: the aggregate is
  * rebuilt from Expense whenever a caller needs it.
@@ -30,10 +53,7 @@ export const resolveProductPricing = (
   explicitPrice: number | null,
   aggregate: PricingAggregate = EMPTY_AGGREGATE,
 ): ProductPricing => {
-  const derivedPrice =
-    aggregate.knownUnitCount > 0
-      ? Math.round((aggregate.knownCost / aggregate.knownUnitCount) * 100) / 100
-      : null;
+  const derivedPrice = round2(derivedPriceExact(aggregate));
   const effectivePrice = explicitPrice ?? derivedPrice;
   return {
     derivedPrice,
@@ -53,23 +73,16 @@ export const resolveProductPricing = (
 };
 
 /**
- * Batch-load the all-history, positive, actual acquisition aggregate.
- *
- * `wholeCatalog` drops the `productId IN (...)` filter. Pass it only when
- * `products` already IS every live product: the returned map is still built
- * from `products`, so surplus aggregate rows are never looked up and the output
- * is identical either way. It exists because the coverage detector hands this
- * the entire catalog — 5,553 bind parameters at 13.7ms, where one unfiltered
- * HashAggregate over the same rows measures 6.7ms.
+ * The all-history, positive, actual acquisition aggregate per Product — the one
+ * query behind both {@link loadProductPricing} and
+ * {@link loadExactEffectivePrices}, so the two can never disagree about which
+ * Expense rows count.
  */
-export const loadProductPricing = async (
+const loadPricingAggregates = async (
   db: Database | DrizzleTransaction,
-  products: ReadonlyArray<{ id: ProductId; price: number | null }>,
-  options: { wholeCatalog?: boolean } = {},
-): Promise<Map<ProductId, ProductPricing>> => {
-  const ids = products.map((product) => product.id);
-  if (ids.length === 0) return new Map();
-
+  ids: readonly ProductId[],
+  options: { wholeCatalog?: boolean },
+): Promise<Map<ProductId, PricingAggregate>> => {
   const rows = await unwrapDb(db)
     .select({
       productId: expense.productId,
@@ -106,11 +119,60 @@ export const loadProductPricing = async (
       knownUnitCount: Number(row.knownUnitCount),
     });
   }
+  return aggregateById;
+};
 
+/**
+ * Batch-load the public pricing contract.
+ *
+ * `wholeCatalog` drops the `productId IN (...)` filter. Pass it only when
+ * `products` already IS every live product: the returned map is still built
+ * from `products`, so surplus aggregate rows are never looked up and the output
+ * is identical either way. It exists because the coverage detector hands this
+ * the entire catalog — 5,553 bind parameters at 13.7ms, where one unfiltered
+ * HashAggregate over the same rows measures 6.7ms.
+ */
+export const loadProductPricing = async (
+  db: Database | DrizzleTransaction,
+  products: ReadonlyArray<{ id: ProductId; price: number | null }>,
+  options: { wholeCatalog?: boolean } = {},
+): Promise<Map<ProductId, ProductPricing>> => {
+  const ids = products.map((product) => product.id);
+  if (ids.length === 0) return new Map();
+
+  const aggregateById = await loadPricingAggregates(db, ids, options);
   return new Map(
     products.map((product) => [
       product.id,
       resolveProductPricing(product.price, aggregateById.get(product.id)),
+    ]),
+  );
+};
+
+/**
+ * The price the synthesized `1 each = $X` valuation edge is built from:
+ * `explicit ?? {@link derivedPriceExact}`, i.e. `effectivePrice` without the
+ * cent rounding. The explicit override is user-entered and already
+ * cent-precise, so only the derived half differs.
+ *
+ * Server-internal on purpose — it is deliberately NOT part of `ProductPricing`,
+ * because that type IS the wire contract and every product payload, form, and
+ * fixture would otherwise have to carry a field that exists only to keep
+ * rounding out of a multiplication.
+ */
+export const loadExactEffectivePrices = async (
+  db: Database | DrizzleTransaction,
+  products: ReadonlyArray<{ id: ProductId; price: number | null }>,
+): Promise<Map<ProductId, number | null>> => {
+  const ids = products.map((product) => product.id);
+  if (ids.length === 0) return new Map();
+
+  const aggregateById = await loadPricingAggregates(db, ids, {});
+  return new Map(
+    products.map((product) => [
+      product.id,
+      product.price ??
+        derivedPriceExact(aggregateById.get(product.id) ?? EMPTY_AGGREGATE),
     ]),
   );
 };
@@ -184,14 +246,6 @@ export const enrichProductRowsWithPricing = async <
     pricing: pricing.get(product.id) ?? resolveProductPricing(product.price),
   }));
 };
-
-/** Load one Product's effective price without materializing historical money. */
-export const loadEffectiveProductPrice = async (
-  db: Database | DrizzleTransaction,
-  product: { id: ProductId; price: number | null },
-): Promise<number | null> =>
-  (await loadProductPricing(db, [product])).get(product.id)?.effectivePrice ??
-  null;
 
 export const loadEffectiveProductPricesById = async (
   db: Database | DrizzleTransaction,

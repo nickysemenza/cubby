@@ -50,6 +50,7 @@ const PROBLEM_LABELS: Record<
   staleLocations: (n) => `${n} overdue for a recount`,
   neverVerifiedInventory: (n) => pl(n, "never-verified item"),
   unknownParkedItems: (n) => `${n} parked in Unknown`,
+  inventoryWithoutPricePath: (n) => `${n} priced but unvaluable`,
   manufacturerSpellingVariants: (n) => pl(n, "manufacturer spelling"),
   duplicateVendors: (n) => pl(n, "duplicate vendor"),
   vendorsWithoutLogos: (n) => pl(n, "vendor without a mini logo"),

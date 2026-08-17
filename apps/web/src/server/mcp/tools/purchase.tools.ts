@@ -55,6 +55,7 @@ import {
   purchaseProductsOut,
   purchaseUpdateData,
   reclassifyPurchaseDocumentInput,
+  splitExpenseDelta,
   splitExpenseInput,
 } from "@cubby/schemas/purchase";
 import {
@@ -84,9 +85,32 @@ import {
  * `properties` key, which trips the "advertises real JSON Schema properties"
  * regression guard in server.unit.test.ts). Mirrors `expenseBulkMcpOut` in
  * project.tools.ts.
+ *
+ * `originalCost`/`partsSum`/`delta` close the gap the web dialog doesn't have:
+ * a human sees the "$X over/under" warning live as they type, but an MCP
+ * caller only sees the finished result — so the result carries the same cue.
+ * `splitExpenseDelta` is the pure computation (`@cubby/schemas/purchase`);
+ * `delta` is non-zero exactly when a partial refund or a one-sided discount
+ * legitimately makes the parts disagree with the original, and that is
+ * expected, not an error — nothing here rejects it.
  */
 const splitExpenseMcpOut = z.object({
   items: z.array(expenseOut),
+  originalCost: z
+    .number()
+    .nullable()
+    .describe(
+      "The original Expense's cost before the split, in dollars. Null only when the original had no recorded cost.",
+    ),
+  partsSum: z
+    .number()
+    .describe("Sum of the parts' `cost` as submitted, in dollars."),
+  delta: z
+    .number()
+    .nullable()
+    .describe(
+      "partsSum minus originalCost, in dollars. A CUE, never a gate — a non-zero delta is not rejected and is not back-computed into any part's cost. Null when originalCost is null (nothing to compare against).",
+    ),
 });
 
 /**
@@ -171,15 +195,22 @@ export function registerPurchaseTools(server: McpServer) {
     description:
       "Split ONE Expense into ≥2 Expenses on the SAME purchase — the way an aggregate spend record (a combo kit or multi-item receipt entered as one Expense) gets a real per-product cost basis instead of staying an unattributed blob. Any product in inventory whose only Expense is inside an aggregate has NO cost basis until it is split out. Each part gets its own name/cost/costType/trade/projectId/productId/productQuantity. productQuantity is SIGNED, and zero only on a negative-cost part (see create_expense); a part with a positive cost may not carry a negative quantity. Omitted notes inherit the original Expense notes; explicit null clears them for that part. The original URL, date and future state are preserved. " +
       "This REPLACES the old `(combo, saw portion)` naming convention that used to encode a split inside a single expense's name — do not invent names like that anymore; give each part its own real name instead. " +
-      "Parts are expected to sum to the original expense's cost, but that is a convention, NOT a rule this tool enforces: nothing validates the sum, and a deliberately mismatched total is DISPLAYED as a purchase-reconciliation cue against statedTotal/expenseTotal, never rejected. Posted refunds that exactly explain the gap are classified `refund_adjusted`; other differences remain `mismatch`. " +
+      "Parts are expected to sum to the original expense's cost, but that is a convention, NOT a rule this tool enforces: nothing validates the sum. The response's `originalCost`/`partsSum`/`delta` are a CUE, never a gate — parts are recorded exactly as entered, and a non-zero delta is EXPECTED, not an error, whenever a partial refund or a discount applied to only one part legitimately makes the parts disagree with the original. The same gap is separately DISPLAYED as a purchase-reconciliation cue against statedTotal/expenseTotal; posted refunds that exactly explain it are classified `refund_adjusted`, other differences remain `mismatch`. " +
       "The original Expense is soft-deleted and every part is created on the SAME purchase (`purchaseId`) the original had — this only re-labels how one purchase's money is attributed; it never creates a new purchase or moves money to a different vendor. If the purchase had no `statedTotal`, one is seeded from the original expense's cost so the parts have something to reconcile against. " +
       "REFUSES when the Expense has no purchase attached (`purchaseId` is null). Call update_expense first with a `vendor` (and `orderId` if known) to give the Expense a purchase, then split it.",
     inputSchema: splitExpenseInput.shape,
     outputSchema: splitExpenseMcpOut,
     annotations: WRITE_CLOSED,
     call: async (caller, params) => {
+      // Read before the split runs — the original row is soft-deleted by the
+      // time `purchase.split` returns, so its cost has to be captured first.
+      const original = await caller.expense.getByID({ id: params.expenseId });
       const items = await caller.purchase.split(params);
-      return { items };
+      const { originalCost, partsSum, delta } = splitExpenseDelta(
+        original.cost,
+        params.parts.map((part) => part.cost),
+      );
+      return { items, originalCost, partsSum, delta };
     },
   });
 

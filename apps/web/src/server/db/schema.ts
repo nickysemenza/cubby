@@ -877,7 +877,11 @@ export const inventoryEntry = pgTable(
       .notNull()
       .$type<LocationId>()
       .references(() => location.id),
-    valuation: real("valuation"), // Precomputed: amount.value * Product effective price
+    // Precomputed: the amount routed to money through the Product's unit-mapping
+    // graph (which carries a synthesized `1 each = $effectivePrice` edge), NOT
+    // `amount.value × price`. Null when this unit has no path to money — either
+    // the Product has no price, or it has one and this unit can't reach it.
+    valuation: real("valuation"),
     // Durable record of when this entry was last verified in an audit session
     // (set on session "Done"). Nullable: null = never verified.
     verifiedAt: timestamp("verifiedAt", { mode: "date" }),
@@ -1449,6 +1453,55 @@ export const purchaseProduct = pgTable(
   ],
 );
 
+// What's inside a kit. A combo tool kit or a multi-pack is a Product like any
+// other — it keeps its own UPC, model, ASIN, image, and purchase history — but
+// it is ALSO made of other Products, and this table is the only place that's
+// recorded. It exists because splitting a kit used to mean deleting the kit
+// Product outright, which destroyed the one row holding its own identity and
+// provenance; now the kit survives the split and this table says what came out
+// of it. One row per distinct component; a 4-pack of one part is one row with
+// `quantity: 4`, a 9-piece kit is nine rows.
+//
+// Non-entity, same as PurchaseProduct: no shortcode, no entity-manifest entry.
+// A component row is meaningless without both the kit and the part it names.
+export const productComponent = pgTable(
+  "ProductComponent",
+  {
+    id: pkUuid(),
+    parentProductId: uuid("parentProductId")
+      .notNull()
+      .$type<ProductId>()
+      .references(() => product.id),
+    componentProductId: uuid("componentProductId")
+      .notNull()
+      .$type<ProductId>()
+      .references(() => product.id),
+    quantity: integer("quantity").notNull().default(1),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    // Partial, so detaching and re-attaching the same pair stays legal — same
+    // rule as PurchaseProduct's.
+    uniqueIndex("ProductComponent_parentProductId_componentProductId_key")
+      .on(table.parentProductId, table.componentProductId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("ProductComponent_parentProductId_idx").on(table.parentProductId),
+    index("ProductComponent_componentProductId_idx").on(
+      table.componentProductId,
+    ),
+    check("ProductComponent_quantity_check", sql`${table.quantity} >= 1`),
+    // A product cannot be its own component. Deliberately narrow: catching a
+    // longer cycle (a kit nested inside one of its own components several
+    // hops down) is a graph-traversal question for the write path, not
+    // something a single-row CHECK can express.
+    check(
+      "ProductComponent_not_self_check",
+      sql`${table.parentProductId} <> ${table.componentProductId}`,
+    ),
+  ],
+);
+
 /**
  * A settlement-side event. Amounts are evidence only: they never participate
  * in spend/project/calendar rollups, which remain derived from Expense.cost.
@@ -2000,6 +2053,14 @@ export const productRelations = relations(product, ({ one, many }) => ({
   // Locations that ARE an instance of this product (a bin, tote, rack).
   // Distinct from `inventoryEntry`, which is stock held AT a location.
   locations: many(location),
+  // What's inside this product, when it's a kit — the parent side.
+  components: many(productComponent, {
+    relationName: "productComponent_parentProduct",
+  }),
+  // The kits this product is listed inside — the component side.
+  partOfKits: many(productComponent, {
+    relationName: "productComponent_componentProduct",
+  }),
 }));
 
 export const productExternalIdRelations = relations(
@@ -2227,6 +2288,22 @@ export const purchaseProductRelations = relations(
     product: one(product, {
       fields: [purchaseProduct.productId],
       references: [product.id],
+    }),
+  }),
+);
+
+export const productComponentRelations = relations(
+  productComponent,
+  ({ one }) => ({
+    parentProduct: one(product, {
+      fields: [productComponent.parentProductId],
+      references: [product.id],
+      relationName: "productComponent_parentProduct",
+    }),
+    componentProduct: one(product, {
+      fields: [productComponent.componentProductId],
+      references: [product.id],
+      relationName: "productComponent_componentProduct",
     }),
   }),
 );

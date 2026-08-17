@@ -36,6 +36,7 @@ import { assertLiveTargets } from "./helpers";
 import { dbInventoryEntryToAPI, requireLoadedProductPricing } from "./mappers";
 import { stockOnly } from "./placement";
 import type { InventoryEntryDeepDB } from "./types";
+import { loadValuationGraphs } from "./valuation";
 
 type ResolvedInventoryBulkOperationItem = Omit<
   InventoryBulkOperationItem,
@@ -191,17 +192,7 @@ export const bulkProcessInventoryEntries = async (
         ...items.filter((i) => i.productId).map((i) => i.productId),
         ...existingItems.map((i) => i.productId),
       ]);
-      const priceMap = new Map<string, number | null>();
-      if (allProductIds.length > 0) {
-        const products = await tx
-          .select({ id: product.id, price: product.price })
-          .from(product)
-          .where(inArray(product.id, allProductIds));
-        const pricing = await loadProductPricing(tx, products);
-        for (const p of products) {
-          priceMap.set(p.id, pricing.get(p.id)?.effectivePrice ?? null);
-        }
-      }
+      const valuationGraphs = await loadValuationGraphs(tx, allProductIds);
 
       const submittedIds = items
         .filter((item) => item.id)
@@ -252,13 +243,9 @@ export const bulkProcessInventoryEntries = async (
             );
           }
 
-          const amountValue =
-            typeof item.amount === "object" && item.amount !== null
-              ? (item.amount as { value: number }).value
-              : 0;
           const valuation = computeInventoryValuation(
-            amountValue,
-            priceMap.get(item.productId) ?? null,
+            item.amount,
+            valuationGraphs.get(item.productId) ?? [],
           );
 
           const created = await insertWithShortcode(tx, "inventory", {
@@ -285,15 +272,11 @@ export const bulkProcessInventoryEntries = async (
             const before = existingItemsMap.get(item.id);
             const effectiveProductId = item.productId ?? before?.productId;
             const effectiveAmount = item.amount ?? before?.amount;
-            const amountValue =
-              typeof effectiveAmount === "object" && effectiveAmount !== null
-                ? (effectiveAmount as { value: number }).value
-                : 0;
 
-            if (effectiveProductId) {
+            if (effectiveProductId && effectiveAmount) {
               valuation = computeInventoryValuation(
-                amountValue,
-                priceMap.get(effectiveProductId) ?? null,
+                effectiveAmount,
+                valuationGraphs.get(effectiveProductId) ?? [],
               );
             }
           }
@@ -478,17 +461,7 @@ export const moveInventoryEntries = async (
             })
           : [];
 
-      const priceMap = new Map<string, number | null>();
-      if (productIds.length > 0) {
-        const products = await tx
-          .select({ id: product.id, price: product.price })
-          .from(product)
-          .where(inArray(product.id, productIds));
-        const pricing = await loadProductPricing(tx, products);
-        for (const p of products) {
-          priceMap.set(p.id, pricing.get(p.id)?.effectivePrice ?? null);
-        }
-      }
+      const valuationGraphs = await loadValuationGraphs(tx, productIds);
 
       const plannedBySlot = new Map<string, PlannedRow>();
       const plan = (entry: InventoryEntryDeepDB) => {
@@ -672,8 +645,8 @@ export const moveInventoryEntries = async (
 
         for (const [key, row] of ready) {
           const valuation = computeInventoryValuation(
-            row.value,
-            priceMap.get(row.productId) ?? null,
+            { value: row.value, unit: row.unit },
+            valuationGraphs.get(row.productId) ?? [],
           );
 
           if (row.id === null) {
@@ -914,17 +887,7 @@ export const reconcileLocationSession = async (
           .map((r) => existingById.get(r.inventoryEntryId)?.productId)
           .filter((id): id is ProductId => id != null),
       );
-      const priceMap = new Map<string, number | null>();
-      if (changedProductIds.length > 0) {
-        const products = await tx
-          .select({ id: product.id, price: product.price })
-          .from(product)
-          .where(inArray(product.id, changedProductIds));
-        const pricing = await loadProductPricing(tx, products);
-        for (const p of products) {
-          priceMap.set(p.id, pricing.get(p.id)?.effectivePrice ?? null);
-        }
-      }
+      const valuationGraphs = await loadValuationGraphs(tx, changedProductIds);
 
       const relocationProductIds = uniq(
         resolutions
@@ -990,8 +953,8 @@ export const reconcileLocationSession = async (
           })
           .with({ kind: "adjust" }, async ({ amount: adjusted }) => {
             const valuation = computeInventoryValuation(
-              adjusted.value,
-              priceMap.get(before.productId) ?? null,
+              adjusted,
+              valuationGraphs.get(before.productId) ?? [],
             );
             const updated = await updateAndReturn(
               tx,
@@ -1021,7 +984,7 @@ export const reconcileLocationSession = async (
             const sourceAmount = parseInventoryAmount(before.amount, before.id);
             const targetKey = `${targetLocationId}:${before.productId}:${before.placement}`;
             const target = targetRowsByLocationProduct.get(targetKey);
-            const productPrice = priceMap.get(before.productId) ?? null;
+            const valuationGraph = valuationGraphs.get(before.productId) ?? [];
 
             if (target) {
               const targetAmount = parseInventoryAmount(
@@ -1038,8 +1001,8 @@ export const reconcileLocationSession = async (
                 {
                   amount: nextAmount,
                   valuation: computeInventoryValuation(
-                    nextAmount.value,
-                    productPrice,
+                    nextAmount,
+                    valuationGraph,
                   ),
                   verifiedAt: now,
                 },

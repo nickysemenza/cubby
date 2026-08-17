@@ -4,6 +4,7 @@ import {
   purchaseFilterFields,
   RECONCILIATION_TOLERANCE,
   reconcilePurchase,
+  splitExpenseDelta,
   splitExpenseInput,
 } from "./purchase";
 
@@ -196,6 +197,58 @@ describe("reconcilePurchase", () => {
     // Anything a human would call a discrepancy is flagged.
     expect(reconcilePurchase({ statedTotal: 100, expenseTotal: 99.97 })).toBe(
       "mismatch",
+    );
+  });
+});
+
+/**
+ * The MCP `split_expense` cue: `originalCost`/`partsSum`/`delta`. A cue, not a
+ * gate — `splitExpense` itself never validates the sum, and this function
+ * doesn't either; it only reports the gap the way `reconcilePurchase` reports
+ * `statedTotal` vs. `expenseTotal`.
+ */
+describe("splitExpenseDelta", () => {
+  it("is zero when the parts sum exactly to the original", () => {
+    expect(splitExpenseDelta(100, [60, 40])).toEqual({
+      originalCost: 100,
+      partsSum: 100,
+      delta: 0,
+    });
+  });
+
+  it("reports a positive delta when parts overshoot and negative when they undershoot", () => {
+    expect(splitExpenseDelta(100, [70, 40])).toEqual({
+      originalCost: 100,
+      partsSum: 110,
+      delta: 10,
+    });
+    expect(splitExpenseDelta(100, [50, 30])).toEqual({
+      originalCost: 100,
+      partsSum: 80,
+      delta: -20,
+    });
+  });
+
+  it("is null only when there is no original cost to compare against", () => {
+    expect(splitExpenseDelta(null, [50, 50])).toEqual({
+      originalCost: null,
+      partsSum: 100,
+      delta: null,
+    });
+  });
+
+  it("compares in cents, not floats", () => {
+    // Math.abs(0.1 + 0.2 - 0.3) !== 0 in plain float arithmetic; a cents-based
+    // comparison must still call this an exact match.
+    const result = splitExpenseDelta(0.3, [0.1, 0.2]);
+    expect(result.delta).toBe(0);
+    expect(result.partsSum).toBe(0.3);
+
+    // A genuine one-cent gap must still register, at a magnitude where a raw
+    // float subtraction (`326.36 - 326.35`) misses it (`0.009999999999990905`).
+    expect(splitExpenseDelta(326.36, [200, 126.35]).delta).toBeCloseTo(
+      -0.01,
+      10,
     );
   });
 });

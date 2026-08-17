@@ -1,10 +1,15 @@
+import type { Amount } from "@cubby/schemas/codec";
+import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { describe, expect, it } from "vitest";
 import {
   computeInventoryValuation,
+  computeInventoryValuations,
   isCanonicalPriceMapping,
   isMoneyUnit,
   truncateToTwoDecimals,
 } from "./price-mapping-utils";
+import { getAllUnitMappingsFromProduct } from "./unit-mapping-utils";
 
 describe("isMoneyUnit", () => {
   const CASES: { unit: string; expected: boolean }[] = [
@@ -103,26 +108,152 @@ describe("isCanonicalPriceMapping", () => {
   });
 });
 
+/**
+ * Valuation routes an amount to money through the product's own conversion
+ * graph, so the graph is built the way production builds it — through
+ * `getAllUnitMappingsFromProduct`, which is what synthesizes the `1 each =
+ * $price` edge. Hand-writing that edge here would test a graph the app never
+ * assembles.
+ */
+const graphFor = (
+  price: number | null,
+  stored: Array<{ a: Amount; b: Amount }> = [],
+): UnitMapping[] =>
+  getAllUnitMappingsFromProduct({
+    id: unsafeProductShortcode("PRD-TEST"),
+    unitMappings: stored.map((m) => ({ ...m, source: null })),
+    food: null,
+    price,
+  });
+
+const PACK_OF_FOUR = {
+  a: { value: 1, unit: "each" },
+  b: { value: 4, unit: "roll" },
+};
+const CAN_IS_WHOLE = {
+  a: { value: 1, unit: "whole" },
+  b: { value: 1, unit: "can" },
+};
+
 describe("computeInventoryValuation", () => {
   const CASES: {
     name: string;
-    amount: number;
-    price: number | null;
+    amount: Amount;
+    mappings: UnitMapping[];
     expected: number | null;
   }[] = [
-    { name: "amount * price", amount: 5, price: 10.0, expected: 50.0 },
-    // 2.5 * 4.99 = 12.475, truncated to 2 decimals = 12.48
+    // The bug this signature exists to kill: four rolls out of an $8 four-pack
+    // is one pack of value, not four.
     {
-      name: "decimal values truncate",
-      amount: 2.5,
-      price: 4.99,
+      name: "sub-unit amount values through the pack mapping",
+      amount: { value: 4, unit: "roll" },
+      mappings: graphFor(8, [PACK_OF_FOUR]),
+      expected: 8,
+    },
+    {
+      name: "no path to money → null, never a naive multiply",
+      amount: { value: 500, unit: "g" },
+      mappings: graphFor(12),
+      expected: null,
+    },
+    // The two shapes production actually holds: 721 live entries in `each`,
+    // one in `can` (which carries its own `1 whole = 1 can` row).
+    {
+      name: "each amounts land on price × quantity",
+      amount: { value: 5, unit: "each" },
+      mappings: graphFor(10),
+      expected: 50,
+    },
+    {
+      name: "can amounts reach money via the whole↔can row",
+      amount: { value: 8, unit: "can" },
+      mappings: graphFor(5.5, [CAN_IS_WHOLE]),
+      expected: 44,
+    },
+    // `each`/`whole`/`eaches` all normalize to one unit upstream — the reason a
+    // TS-side `unit === "each"` shortcut would be wrong even as an optimization.
+    {
+      name: "whole agrees with each",
+      amount: { value: 1, unit: "whole" },
+      mappings: graphFor(10),
+      expected: 10,
+    },
+    {
+      name: "each agrees with whole",
+      amount: { value: 1, unit: "each" },
+      mappings: graphFor(10),
+      expected: 10,
+    },
+    // Six live products are priced at $0. The synthesized edge is `1 each = $0`,
+    // whose reverse direction is 1/0 — the `real` column must still never see
+    // Infinity or NaN.
+    {
+      name: "$0 price values at 0, not null",
+      amount: { value: 5, unit: "each" },
+      mappings: graphFor(0),
+      expected: 0,
+    },
+    {
+      name: "no price at all → null",
+      amount: { value: 5, unit: "each" },
+      mappings: graphFor(null),
+      expected: null,
+    },
+    {
+      name: "zero amount → 0",
+      amount: { value: 0, unit: "each" },
+      mappings: graphFor(10),
+      expected: 0,
+    },
+    {
+      name: "decimal values round to cents",
+      amount: { value: 2.5, unit: "each" },
+      mappings: graphFor(4.99),
       expected: 12.48,
     },
-    { name: "null price → null", amount: 5, price: null, expected: null },
-    { name: "zero amount → 0", amount: 0, price: 10.0, expected: 0 },
   ];
 
-  it.each(CASES)("$name", ({ amount, price, expected }) => {
-    expect(computeInventoryValuation(amount, price)).toBe(expected);
+  it.each(CASES)("$name", ({ amount, mappings, expected }) => {
+    const result = computeInventoryValuation(amount, mappings);
+    expect(result).toBe(expected);
+    if (result !== null) expect(Number.isFinite(result)).toBe(true);
+  });
+
+  it("never returns a non-finite number the real column could store", () => {
+    for (const { amount, mappings } of CASES) {
+      const result = computeInventoryValuation(amount, mappings);
+      expect(result === null || Number.isFinite(result)).toBe(true);
+    }
+  });
+});
+
+describe("computeInventoryValuations", () => {
+  it("agrees with the single-amount path, elementwise", () => {
+    const mappings = graphFor(8, [PACK_OF_FOUR]);
+    const amounts: Amount[] = [
+      { value: 4, unit: "roll" },
+      { value: 2, unit: "each" },
+      { value: 500, unit: "g" },
+      { value: 1, unit: "roll" },
+    ];
+    expect(computeInventoryValuations(amounts, mappings)).toEqual(
+      amounts.map((a) => computeInventoryValuation(a, mappings)),
+    );
+  });
+
+  it("one unconvertible amount does not blank the rest of the batch", () => {
+    expect(
+      computeInventoryValuations(
+        [
+          { value: 500, unit: "g" },
+          { value: 3, unit: "each" },
+        ],
+        graphFor(10),
+      ),
+    ).toEqual([null, 30]);
+  });
+
+  it("empty input is an empty batch", () => {
+    expect(computeInventoryValuations([], graphFor(10))).toEqual([]);
   });
 });

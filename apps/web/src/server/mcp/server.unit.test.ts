@@ -2556,6 +2556,14 @@ describe("purchase restructuring tools (split/link/merge)", () => {
       }),
     ];
     const split = vi.fn().mockResolvedValue(parts);
+    // `split_expense` reads the original's cost via `expense.getByID` before
+    // splitting — the row is soft-deleted by the time `purchase.split` returns,
+    // so this is the tool's only chance to capture it for the response's cue.
+    const getByID = vi
+      .fn()
+      .mockResolvedValue(
+        mock(expenseOut, { seed: 12, overrides: { cost: 100 } }),
+      );
 
     const input = {
       expenseId: EXPENSE_A,
@@ -2584,16 +2592,27 @@ describe("purchase restructuring tools (split/link/merge)", () => {
 
     const result = await callTool(server, "split_expense", input, {
       purchase: { split },
+      expense: { getByID },
     });
 
+    expect(getByID).toHaveBeenCalledWith({ id: EXPENSE_A });
     expect(split).toHaveBeenCalledWith(input);
     expect(result.isError).not.toBe(true);
     const structured = result.structuredContent as {
       items: Array<Record<string, unknown>>;
+      originalCost: number | null;
+      partsSum: number;
+      delta: number | null;
     };
     expect(structured.items).toHaveLength(2);
     expect(structured.items[0]?.id).toBe(EXPENSE_A);
     expect(structured.items[1]?.id).toBe(EXPENSE_B);
+    // 80 + 20 from the input parts above, matched exactly against the
+    // original's mocked cost — a non-zero delta is exercised in the
+    // `splitExpenseDelta` unit tests in packages/schemas.
+    expect(structured.originalCost).toBe(100);
+    expect(structured.partsSum).toBe(100);
+    expect(structured.delta).toBe(0);
   });
 
   it("link_expenses_to_purchase is WRITE_CLOSED and passes params through to purchase.link", async () => {

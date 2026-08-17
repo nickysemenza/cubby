@@ -27,6 +27,7 @@
     "./unitmapping": "./src/unitmapping.ts",
     "./external-id": "./src/external-id.ts",
     "./product": "./src/product.ts",
+    "./product-components": "./src/product-components.ts",
     "./location": "./src/location.ts",
     "./inventory": "./src/inventory.ts",
     "./meal": "./src/meal.ts",
