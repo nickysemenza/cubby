@@ -75,6 +75,13 @@
  *     schema's input type; shortcode brands exist only in its parsed output, so
  *     a UUID brand is still assignable to the accepted plain string.
  *
+ * fixed-table-column-width: a static UI `<Table>` using the primitive's
+ *     default fixed layout must give every `<TableHead>` an unconditional
+ *     `w-*` class. An unsized or conditionally-unsized head can collapse to
+ *     zero while its nowrap content paints over adjacent columns. Explicit
+ *     `table-auto` tables and the dynamic TanStack `<RTable>` orchestrator are
+ *     exempt because they own sizing through different contracts.
+ *
  * Exit 1 + a report on any violation; exit 0 + one-line OK when clean.
  */
 
@@ -589,6 +596,226 @@ function jsxOpeningTag(content, open) {
   return content.slice(open);
 }
 
+const WIDTH_CLASS_RE = /(?:^|[\s"'`])w-(?:\[[^\]]+\]|[^\s"'`]+)/;
+
+/**
+ * The raw source of one JSX attribute value, including its quotes/braces.
+ * Returns null when the attribute is absent.
+ *
+ * @param {string} tag @param {string} name @returns {string | null}
+ */
+function jsxAttributeValue(tag, name) {
+  const match = new RegExp(`\\b${name}\\s*=`).exec(tag);
+  if (!match) return null;
+  let index = (match.index ?? 0) + match[0].length;
+  while (/\s/.test(tag[index] ?? "")) index++;
+  const opener = tag[index];
+  if (opener === '"' || opener === "'") {
+    let escaped = false;
+    for (let i = index + 1; i < tag.length; i++) {
+      const ch = tag[i];
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === opener) return tag.slice(index, i + 1);
+    }
+    return tag.slice(index);
+  }
+  if (opener !== "{") return null;
+
+  let depth = 0;
+  /** @type {'"' | "'" | "`" | null} */
+  let quote = null;
+  let escaped = false;
+  for (let i = index; i < tag.length; i++) {
+    const ch = tag[i];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") quote = ch;
+    else if (ch === "{") depth++;
+    else if (ch === "}" && --depth === 0) return tag.slice(index, i + 1);
+  }
+  return tag.slice(index);
+}
+
+/**
+ * Find a top-level conditional expression's two value branches. This is
+ * deliberately small JSX-source parsing rather than a regex so quoted `?`/`:`
+ * text and nested calls do not change the result.
+ *
+ * @param {string} expression @returns {[string, string] | null}
+ */
+function topLevelConditionalBranches(expression) {
+  let question = -1;
+  let nestedQuestions = 0;
+  let round = 0;
+  let square = 0;
+  let curly = 0;
+  /** @type {'"' | "'" | "`" | null} */
+  let quote = null;
+  let escaped = false;
+
+  for (let i = 0; i < expression.length; i++) {
+    const ch = expression[i];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") {
+      quote = ch;
+      continue;
+    }
+    if (ch === "(") round++;
+    else if (ch === ")") round--;
+    else if (ch === "[") square++;
+    else if (ch === "]") square--;
+    else if (ch === "{") curly++;
+    else if (ch === "}") curly--;
+    else if (round === 0 && square === 0 && curly === 0) {
+      if (ch === "?") {
+        if (question === -1) question = i;
+        else nestedQuestions++;
+      } else if (ch === ":" && question !== -1) {
+        if (nestedQuestions > 0) nestedQuestions--;
+        else
+          return [
+            expression.slice(question + 1, i),
+            expression.slice(i + 1),
+          ];
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Split a `cn(...)`/`clsx(...)` call into top-level arguments. Nested calls and
+ * quoted commas stay inside their argument.
+ *
+ * @param {string} expression @returns {string[] | null}
+ */
+function topLevelClassArguments(expression) {
+  const call = /^(?:cn|clsx)\s*\(/.exec(expression);
+  if (!call || !expression.endsWith(")")) return null;
+  const body = expression.slice(call[0].length, -1);
+  const arguments_ = [];
+  let start = 0;
+  let round = 0;
+  let square = 0;
+  let curly = 0;
+  /** @type {'"' | "'" | "`" | null} */
+  let quote = null;
+  let escaped = false;
+
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") {
+      quote = ch;
+      continue;
+    }
+    if (ch === "(") round++;
+    else if (ch === ")") round--;
+    else if (ch === "[") square++;
+    else if (ch === "]") square--;
+    else if (ch === "{") curly++;
+    else if (ch === "}") curly--;
+    else if (ch === "," && round === 0 && square === 0 && curly === 0) {
+      arguments_.push(body.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  arguments_.push(body.slice(start).trim());
+  return arguments_;
+}
+
+/** @param {string} expression @returns {boolean} */
+function expressionHasUnconditionalWidth(expression) {
+  const branches = topLevelConditionalBranches(expression);
+  if (branches)
+    return branches.every((branch) =>
+      expressionHasUnconditionalWidth(branch.trim()),
+    );
+
+  const arguments_ = topLevelClassArguments(expression);
+  if (arguments_)
+    return arguments_.some((argument) =>
+      expressionHasUnconditionalWidth(argument),
+    );
+
+  const widthIndex = expression.search(WIDTH_CLASS_RE);
+  if (widthIndex === -1) return false;
+  const conjunction = expression.indexOf("&&");
+  return conjunction === -1 || widthIndex < conjunction;
+}
+
+/** @param {string} source @returns {boolean} */
+function hasUnconditionalWidthClass(source) {
+  const value = jsxAttributeValue(source, "className");
+  if (!value) return false;
+  if (value[0] === '"' || value[0] === "'")
+    return WIDTH_CLASS_RE.test(value.slice(1, -1));
+
+  const expression = value.slice(1, -1).trim();
+  return expressionHasUnconditionalWidth(expression);
+}
+
+/** @param {string} tableTag @returns {boolean} */
+function hasUnconditionalTableAuto(tableTag) {
+  const value = jsxAttributeValue(tableTag, "className");
+  if (!value) return false;
+  if (value[0] === '"' || value[0] === "'")
+    return /(?:^|\s)table-auto(?:\s|$)/.test(value.slice(1, -1));
+  const expression = value.slice(1, -1).trim();
+  const autoIndex = expression.indexOf("table-auto");
+  const conjunction = expression.indexOf("&&");
+  return autoIndex !== -1 && (conjunction === -1 || autoIndex < conjunction);
+}
+
+/**
+ * Offsets of fixed-layout table heads that can render without a width.
+ *
+ * @param {string} content
+ * @param {boolean} dynamicOrchestrator
+ * @returns {{ index: number, tag: string }[]}
+ */
+function fixedTableColumnWidthViolations(
+  content,
+  dynamicOrchestrator = false,
+) {
+  if (dynamicOrchestrator) return [];
+  /** @type {{ index: number, tag: string }[]} */
+  const violations = [];
+  for (const tableMatch of content.matchAll(/<Table(?=[\s>])/g)) {
+    const tableIndex = tableMatch.index ?? 0;
+    const line = content.slice(0, tableIndex).split("\n").at(-1) ?? "";
+    if (isCommentLine(line)) continue;
+    const tableTag = jsxOpeningTag(content, tableIndex);
+    if (hasUnconditionalTableAuto(tableTag)) continue;
+    const close = content.indexOf("</Table>", tableIndex + tableTag.length);
+    if (close === -1) continue;
+    const body = content.slice(tableIndex + tableTag.length, close);
+    for (const headMatch of body.matchAll(/<TableHead(?=[\s/>])/g)) {
+      const headIndex =
+        tableIndex + tableTag.length + (headMatch.index ?? 0);
+      const headTag = jsxOpeningTag(content, headIndex);
+      if (!hasUnconditionalWidthClass(headTag))
+        violations.push({ index: headIndex, tag: headTag });
+    }
+  }
+  return violations;
+}
+
 // Keep this parser's edge cases adjacent to the guard it protects. The script
 // is dependency-free and runs in CI, so these regressions run with every scan.
 for (const [source, expected] of [
@@ -612,6 +839,43 @@ for (const [source, expected] of [
   assert.equal(jsxOpeningTag(source, 0), expected);
 }
 
+for (const [source, dynamicOrchestrator, expected] of [
+  [
+    '<Table><TableHead className="w-40">Name</TableHead></Table>',
+    false,
+    0,
+  ],
+  ['<Table><TableHead>Name</TableHead></Table>', false, 1],
+  ['<Table className="table-auto"><TableHead>Name</TableHead></Table>', false, 0],
+  [
+    '<Table><TableHead className={raw ? "w-[30%]" : "w-1/2"}>Name</TableHead></Table>',
+    false,
+    0,
+  ],
+  [
+    '<Table><TableHead className={raw && "w-[30%]"}>Name</TableHead></Table>',
+    false,
+    1,
+  ],
+  [
+    '<Table><TableHead className={cn(selected && "bg-muted", "w-40")}>Name</TableHead></Table>',
+    false,
+    0,
+  ],
+  [
+    '<Table><TableHead className={cn(selected && "w-40", "bg-muted")}>Name</TableHead></Table>',
+    false,
+    1,
+  ],
+  ['<Table><TableHead className={styles.header}>Name</TableHead></Table>', true, 0],
+]) {
+  assert.equal(
+    fixedTableColumnWidthViolations(source, dynamicOrchestrator).length,
+    expected,
+    source,
+  );
+}
+
 /** @typedef {{ file: string, line: number, snippet: string, rule: string }} Violation */
 
 /** @param {string[]} files @returns {Violation[]} */
@@ -633,6 +897,29 @@ function scan(files) {
     // Reset per file: the icon rule below only fires between a
     // <DropdownMenuItem and its closing tag.
     let dropdownItemDepth = 0;
+
+    // Rule (fixed-table-column-width): fixed-layout static tables need a real
+    // width on every rendered head. `table-auto` explicitly chooses intrinsic
+    // content sizing; the TanStack orchestrator derives dynamic widths.
+    if (
+      isTsx &&
+      !isTestOrFixture(file) &&
+      content.includes('from "~/components/ui/table"')
+    ) {
+      const isDynamicTableOrchestrator = relative(repoRoot, file) ===
+        "apps/web/src/app/_components/data-table/Table.tsx";
+      for (const finding of fixedTableColumnWidthViolations(
+        content,
+        isDynamicTableOrchestrator,
+      )) {
+        violations.push({
+          file,
+          line: content.slice(0, finding.index).split("\n").length,
+          snippet: finding.tag.replaceAll(/\s+/g, " ").slice(0, 120),
+          rule: "fixed-table-column-width",
+        });
+      }
+    }
 
     // Rule (untransformed-image): an <Image> that never declares its rendered
     // width. Content-level — the prop list spans lines.

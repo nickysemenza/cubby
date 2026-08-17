@@ -38,6 +38,7 @@ type EntityRoute = {
 type TableLinkProps = VariantProps<typeof tableLinkVariants> & {
   children: ReactNode;
   className?: string;
+  title?: string;
 } & (USDALookupRoute | EntityRoute);
 
 export const TableLink = ({
@@ -45,6 +46,7 @@ export const TableLink = ({
   params,
   children,
   className = "",
+  title,
   variant,
 }: TableLinkProps) => {
   return (
@@ -52,6 +54,7 @@ export const TableLink = ({
       className={tableLinkVariants({ variant, className })}
       to={to}
       params={params}
+      title={title}
     >
       {children}
     </Link>

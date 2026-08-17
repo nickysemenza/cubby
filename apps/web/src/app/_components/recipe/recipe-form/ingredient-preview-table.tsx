@@ -177,12 +177,16 @@ export function IngredientPreviewTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className={cn(showRaw && "w-[30%]")}>
+            <TableHead className={showRaw ? "w-[30%]" : "w-1/2"}>
               Ingredient
             </TableHead>
-            <TableHead className={cn(showRaw && "w-[20%]")}>Amount</TableHead>
-            <TableHead className={cn(showRaw && "w-[16%]")}>Modifier</TableHead>
-            {showRaw && <TableHead>Raw</TableHead>}
+            <TableHead className={showRaw ? "w-[20%]" : "w-1/4"}>
+              Amount
+            </TableHead>
+            <TableHead className={showRaw ? "w-[16%]" : "w-1/4"}>
+              Modifier
+            </TableHead>
+            {showRaw && <TableHead className="w-[34%]">Raw</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -234,11 +238,11 @@ function IngredientRow({
       )}
     >
       <TableCell>
-        <Row align="center" gap="sm">
+        <Row align="center" gap="sm" className="min-w-0">
           {isLoading ? (
             <>
               <Spinner className="text-muted-foreground" />
-              <span>{item.parsed.name}</span>
+              <span className="min-w-0 truncate">{item.parsed.name}</span>
             </>
           ) : isMatched && item.match ? (
             <EntityInlineLink
@@ -247,11 +251,14 @@ function IngredientRow({
                 id: item.match.id,
                 name: item.match.name,
               }}
+              truncate
             />
           ) : (
             <>
               <AlertCircle className="size-4 text-warning" />
-              <span className="text-warning">{item.parsed.name}</span>
+              <span className="min-w-0 truncate text-warning">
+                {item.parsed.name}
+              </span>
               <Button
                 type="button"
                 variant="ghost"

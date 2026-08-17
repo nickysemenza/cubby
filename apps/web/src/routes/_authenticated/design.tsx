@@ -81,7 +81,7 @@ function DesignSmokeTest() {
               <CardTitle>Purchase lines</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <Table className="min-w-[32rem]">
+              <Table className="min-w-[32rem] table-auto">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Line</TableHead>
