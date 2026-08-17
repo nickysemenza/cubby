@@ -172,11 +172,13 @@ const recomputeValuationsSql = `
 `;
 
 function aggregateEquals(a: Aggregate, b: Aggregate): boolean {
+  const cents = (value: string) => Math.round(Number(value) * 100);
+
   return (
     a.stockCount === b.stockCount &&
-    Number(a.stockValue) === Number(b.stockValue) &&
+    cents(a.stockValue) === cents(b.stockValue) &&
     a.installedCount === b.installedCount &&
-    Number(a.installedValue) === Number(b.installedValue)
+    cents(a.installedValue) === cents(b.installedValue)
   );
 }
 
