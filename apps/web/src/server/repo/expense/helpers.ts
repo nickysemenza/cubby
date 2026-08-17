@@ -48,23 +48,32 @@ import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
  * adjustment" is a price concession with the item KEPT — takes `0`, not a
  * negative and no longer `null`: the quantity there is known to be zero, and
  * spelling it `null` reported a certainty as missing data (the `−N?` cue beside
- * Expected). Zero is rejected in the other two directions because "money
- * without units" is only a real event when money comes back — a positive line
- * with no units is a fee or an allocation, neither of which may carry a
- * product, and a $0 line with no units is not an event at all.
+ * Expected).
+ *
+ * Zero is rejected in every other direction, because "money moved but no unit
+ * did" is a claim about the money, and only a **known negative** cost supports
+ * it. A positive line with no units is a fee or an allocation, neither of which
+ * may carry a product; a $0 line with no units is not an event at all; and an
+ * unclassified line (`cost IS NULL`) does not yet know which way the money
+ * went, so it cannot assert a concession either. That last case is why the zero
+ * check sits ABOVE the null-cost early return — the return exists to stop this
+ * function second-guessing a direction it cannot see, but zero is wrong
+ * *because* the direction is unknown, which is a conclusion, not a guess.
  */
 export const assertQuantitySignMatchesCost = (
   cost: number | null,
   productQuantity: number | null,
 ) => {
-  if (cost === null || productQuantity === null) {
-    return;
-  }
-  if (productQuantity === 0 && !(cost < 0)) {
+  // Deliberately before the early return below: a null cost makes zero wrong,
+  // not unknowable. See the doc comment.
+  if (productQuantity === 0 && !(cost !== null && cost < 0)) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      "A quantity of zero means money moved but no unit did, which is only possible on a refund. Use a negative cost, or leave the quantity null if the count is genuinely unknown.",
+      "A quantity of zero means money moved but no unit did, which only a refund can claim. Give this line a negative cost, or leave the quantity null if the count is genuinely unknown.",
     );
+  }
+  if (cost === null || productQuantity === null) {
+    return;
   }
   if (cost > 0 && productQuantity < 0) {
     throw createAppError(

@@ -43,4 +43,23 @@ describe("assertQuantitySignMatchesCost", () => {
     expect(() => assertQuantitySignMatchesCost(null, 1)).not.toThrow();
     expect(() => assertQuantitySignMatchesCost(null, -1)).not.toThrow();
   });
+
+  // A quantity of zero says "money moved but no unit did", which is a claim
+  // about the MONEY — so only a known-negative cost can carry it. The null-cost
+  // case is the one that has to be stated: `cost === null` returns early for
+  // every other quantity, and letting zero ride that return is what left the
+  // DB CHECK's three-valued hole reachable through the repo too (#772 review).
+  it("accepts a zero quantity only against a known-negative cost", () => {
+    expect(() => assertQuantitySignMatchesCost(-17.78, 0)).not.toThrow();
+  });
+
+  it.each([
+    ["a positive cost — that would be a fee or an allocation", 5],
+    ["a $0 line — no money moved either, so nothing happened", 0],
+    ["an unclassified line — its direction is not known yet", null],
+  ])("rejects a zero quantity on %s", (_label, cost) => {
+    expect(() => assertQuantitySignMatchesCost(cost, 0)).toThrowError(
+      /only a refund can claim/,
+    );
+  });
 });

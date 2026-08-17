@@ -952,15 +952,32 @@ describe("expense repository — expenseList filters", () => {
     );
     expect(concession.productQuantity).toBe(0);
 
-    // On a $0 line it says nothing at all, and on a positive-cost line it would
-    // be a fee or an allocation — neither of which may carry a product. Both
-    // are the repo guard's job now; the zod schema cannot see `cost`, so it
-    // deliberately no longer carries a bare `!== 0` refinement.
+    // On a $0 line it says nothing at all, on a positive-cost line it would be a
+    // fee or an allocation, and on an unclassified line the money's direction is
+    // not known yet — none may carry a zero. All three are the repo guard's job;
+    // the zod schema cannot see `cost`, so it deliberately no longer carries a
+    // bare `!== 0` refinement.
     await expect(
       mk({ name: "zero units on a free line", cost: 0, productQuantity: 0 }),
     ).rejects.toThrow();
     await expect(
       mk({ name: "zero units on a buy", cost: 10, productQuantity: 0 }),
+    ).rejects.toThrow();
+    await expect(
+      mk({ name: "zero units, cost unknown", cost: null, productQuantity: 0 }),
+    ).rejects.toThrow();
+
+    // And the CHECK backstops the unclassified case specifically. This is the
+    // three-valued-logic trap the constraint's first version fell into: without
+    // the `cost IS NOT NULL` guard, `NULL < 0` is NULL, `(0 <> 0 OR NULL)` is
+    // NULL, and a CHECK admits anything that is not FALSE. Asserting through raw
+    // SQL is the point — it bypasses the repo guard above, so this fails if the
+    // constraint alone regresses.
+    await expect(
+      getDb(ctx.db)
+        .update(expenseTable)
+        .set({ cost: null, productQuantity: 0 })
+        .where(eq(expenseTable.shortcode, concession.id)),
     ).rejects.toThrow();
 
     // ...and the DB CHECK is the backstop under it. This assertion is the one

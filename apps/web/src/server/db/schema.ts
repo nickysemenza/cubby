@@ -1810,10 +1810,12 @@ export const expense = pgTable(
     //               defence-in-depth rather than trusting the column)
     //   cost = 0  → the sign IS the fact: +qty is a free acquisition (promo
     //               pack, bundled accessory), −qty is a discard/write-off
-    //   qty 0     → NEGATIVE COST ONLY: money moved and no unit did. A price
-    //               concession with the item KEPT — an Amazon 'Account
-    //               adjustment', a partial refund for shipping damage. See
-    //               below.
+    //   qty 0     → KNOWN-NEGATIVE COST ONLY: money moved and no unit did. A
+    //               price concession with the item KEPT — an Amazon 'Account
+    //               adjustment', a partial refund for shipping damage. An
+    //               unclassified line (cost NULL) may NOT carry it: zero is a
+    //               claim about the money's direction, and that row has none
+    //               yet. See below.
     //   qty NULL  → unknown; contributes nothing and is reported as uncertainty
     //
     // Before the signed rule a $0 line was ambiguous between those last two —
@@ -1857,15 +1859,23 @@ export const expense = pgTable(
       "Expense_cost_whole_cent_check",
       sql`${table.cost} IS NULL OR abs(${table.cost} * 100 - round(${table.cost} * 100)) < 0.0000001`,
     ),
-    // Signed; zero only where the money is negative — see the ledger rule on
-    // `productQuantity`. NOTE: `drizzle-kit push` does NOT diff CHECK
-    // constraints, so editing this line changes tests (the template is built
-    // from schema.ts) and nothing else. A change here must be applied to
-    // production by hand and read back from `pg_constraint`. (Widened
-    // 2026-08-17 to admit `0`; the ALTER was applied by hand that day.)
+    // Signed; zero only where the money is known to be negative — see the
+    // ledger rule on `productQuantity`.
+    //
+    // The `cost IS NOT NULL` guard is load-bearing and is NOT redundant with
+    // `cost < 0`. A CHECK rejects only on FALSE, and for an unclassified row
+    // `NULL < 0` is NULL, so `(0 <> 0 OR NULL)` is NULL and the row would be
+    // ADMITTED — quietly allowing the one shape the rule above forbids. The
+    // guard collapses that NULL to FALSE. (Found in review on #772, where the
+    // first version of this constraint had exactly that hole.)
+    //
+    // NOTE: `drizzle-kit push` does NOT diff CHECK constraints, so editing this
+    // line changes tests (the template is built from schema.ts) and nothing
+    // else. A change here must be applied to production by hand and read back
+    // from `pg_constraint`.
     check(
       "Expense_productQuantity_check",
-      sql`${table.productQuantity} IS NULL OR (${table.productId} IS NOT NULL AND (${table.productQuantity} <> 0 OR ${table.cost} < 0))`,
+      sql`${table.productQuantity} IS NULL OR (${table.productId} IS NOT NULL AND (${table.productQuantity} <> 0 OR (${table.cost} IS NOT NULL AND ${table.cost} < 0)))`,
     ),
     // NOTE: `drizzle-kit push` does not diff CHECK constraints (see the longer
     // note on FinancialTransaction_purchase_settlement_check above). This one
