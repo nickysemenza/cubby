@@ -193,6 +193,10 @@ export const relations = {
         ingredient: true,
         unitMappings: true,
         externalIds: true,
+        // Locations that ARE this product — a bin in service, as opposed to
+        // `inventoryEntry`, which is stock held somewhere. Scalar columns only;
+        // the detail table renders a name, a type and a link.
+        locations: true,
         inventoryEntry: {
           with: {
             location: {

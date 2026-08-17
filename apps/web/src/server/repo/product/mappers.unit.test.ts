@@ -356,9 +356,27 @@ describe("product mappers", () => {
           placement: "stock" as const,
           location: {
             ...activeLocation,
-            deletedAt: DELETED_AT,
+            deletedAt: null,
             images: [],
           },
+        },
+        {
+          // Live entry, dead shelf. `dbProductToListAPI` has always dropped
+          // this and `onHandUnitsSql` inner-joins live locations; the detail
+          // mapper used to keep it, so one product reported different stock on
+          // two surfaces.
+          id: DELETED_LOCATION_INVENTORY_ID,
+          shortcode: "INV-3456",
+          productId: PRODUCT_ID,
+          amount: { value: 1, unit: "each" },
+          createdAt: CREATED_AT,
+          updatedAt: UPDATED_AT,
+          deletedAt: null,
+          locationId: deletedLocation.id,
+          valuation: 4.5,
+          verifiedAt: null,
+          placement: "stock" as const,
+          location: { ...deletedLocation, images: [] },
         },
       ],
     } satisfies ProductDeepDB;
@@ -436,6 +454,8 @@ describe("product mappers", () => {
     expect(result.externalIds).toHaveLength(1);
     expect(result.inventoryEntry[0]).not.toHaveProperty("productId");
     expect(result.inventoryEntry[0]).not.toHaveProperty("locationId");
+    // The dead-shelf entry is gone, matching `dbProductToListAPI`.
+    expect(result.inventoryEntry).toHaveLength(1);
     expect(
       productWithIngredientAndInventoryAndMappingsOut.parse(result),
     ).toEqual(result);

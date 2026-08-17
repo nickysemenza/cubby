@@ -23,6 +23,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
@@ -1173,6 +1174,13 @@ interface SingleEntityEditableConfig<T, TId extends string> {
   clearable?: boolean;
   /** Hide rows from the dropdown (e.g. a location can't be its own parent). */
   filterItems?: (item: ComboboxItem<TId>, row: T) => boolean;
+  /**
+   * Per-row gate. A false row falls through to the read-only render rather
+   * than getting an editor that would fail on save — for a table whose rows
+   * come from more than one source, where only some are backed by a writable
+   * record. Defaults to editable.
+   */
+  isEditable?: (row: T) => boolean;
 }
 
 /**
@@ -1253,7 +1261,11 @@ export function createSingleEntityInlineLinkColumn<
           | SingleEntityEditableConfig<T, string>
           | undefined;
 
-        if (editable && entity !== "usda-food") {
+        if (
+          editable &&
+          entity !== "usda-food" &&
+          (editable.isEditable?.(info.row.original) ?? true)
+        ) {
           const picker = entityPickers[entity as keyof SingleEntityIdMap];
           const buildItem = picker.buildItem as (
             data: NonNullable<typeof item>,
@@ -1552,6 +1564,11 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
     mobile?: MobileColumnMeta;
     /** Wrap the display-mode content (e.g. keep a detail-page link). */
     renderDisplay?: (content: ReactNode, row: T) => ReactNode;
+    /**
+     * Per-row gate — see {@link SingleEntityEditableConfig.isEditable}. A false
+     * row renders the formatted amount as plain text. Defaults to editable.
+     */
+    isEditable?: (row: T) => boolean;
   },
 ) {
   const cellData = amountCellData<T>(
@@ -1571,6 +1588,13 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
       const amount = info.getValue();
       const row = info.row.original;
       const unitMappings = options.getUnitMappings?.(row);
+
+      if (options.isEditable && !options.isEditable(row)) {
+        const display = <span>{tryFormatAmount(amount)}</span>;
+        return options.renderDisplay
+          ? options.renderDisplay(display, row)
+          : display;
+      }
 
       return (
         <EditableAmountCell

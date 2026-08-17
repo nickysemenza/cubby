@@ -1,5 +1,5 @@
 import { relatedViewsFor } from "@cubby/schemas/related-view";
-import type { ColumnHelper } from "@tanstack/react-table";
+import type { ColumnHelper, Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { entities } from "~/entities/entities";
@@ -69,6 +69,16 @@ interface UseClientEntityListOptions<TData extends BaseListRow>
   /** Opt-in expandable tree (TanStack getSubRows/getExpandedRowModel). */
   tree?: ClientTreeConfig<TData>;
   /**
+   * Which rows the bulk actions can target, for a table whose rows come from
+   * more than one source. A false row gets NO checkbox rather than a dead one
+   * (`row-selection.tsx`), so select-all skips it and no bulk action can reach
+   * a row it has no record to act on.
+   *
+   * The flat-list counterpart of `EntityListTreeConfig.rowIsEntity`, which does
+   * the same job for a tree whose children are a different entity.
+   */
+  rowIsEntity?: (row: TData) => boolean;
+  /**
    * Bulk actions configuration — combined with the delete bulk action (if
    * `deletable` is set), mirroring `useEntityList`'s `bulkActions`. Must be
    * referentially stable (wrap in `useMemo`) or the columns/table config churn
@@ -108,6 +118,7 @@ export function useClientEntityList<TData extends BaseListRow>({
   initialColumnVisibility,
   columnVisibilityScope,
   tree,
+  rowIsEntity,
   bulkActions,
   deleteEmptyLabel,
 }: UseClientEntityListOptions<TData>): UseClientEntityListReturn<TData> {
@@ -240,6 +251,18 @@ export function useClientEntityList<TData extends BaseListRow>({
 
   const getRowId = useCallback((row: TData) => row.id, []);
 
+  // Boolean for the columns (does a selection column exist at all), predicate
+  // for the table (which rows it applies to).
+  const rowSelectionEnabled = useMemo(
+    () =>
+      !listBulkActions.enableRowSelection
+        ? false
+        : rowIsEntity
+          ? (row: Row<TData>) => rowIsEntity(row.original)
+          : true,
+    [listBulkActions.enableRowSelection, rowIsEntity],
+  );
+
   // Client-side everything: manual* all false. Expansion wired only when a
   // tree config is provided (getSubRows presence gates getExpandedRowModel).
   const table = useTableConfig({
@@ -251,7 +274,7 @@ export function useClientEntityList<TData extends BaseListRow>({
     manualSorting: false,
     manualFiltering: false,
     getRowId,
-    enableRowSelection: listBulkActions.enableRowSelection,
+    enableRowSelection: rowSelectionEnabled,
     rowSelection: listBulkActions.rowSelection,
     onRowSelectionChange: listBulkActions.onRowSelectionChange,
     columnVisibility,
