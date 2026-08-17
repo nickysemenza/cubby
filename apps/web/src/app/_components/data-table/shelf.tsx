@@ -26,6 +26,7 @@ export function ShelfCard({
   to,
   params,
   image,
+  media,
   title,
   subtitle,
   entity,
@@ -35,6 +36,8 @@ export function ShelfCard({
   to: string;
   params: Record<string, string>;
   image?: string;
+  /** Custom source-aware media; preferred over the single-image fallback. */
+  media?: ReactNode;
   title: string;
   subtitle?: ReactNode;
   entity: Entity;
@@ -49,13 +52,15 @@ export function ShelfCard({
       className="flex flex-col overflow-hidden border border-[var(--border)] bg-card transition-colors duration-150 hover:bg-muted/50"
     >
       <div className="relative aspect-square w-full overflow-hidden bg-muted/20">
-        <Image
-          src={image ?? ""}
-          alt={title}
-          displayWidth={400}
-          className="absolute inset-0 h-full w-full object-cover"
-          fallback={<EntityIcon entity={entity} colored className="size-6" />}
-        />
+        {media ?? (
+          <Image
+            src={image ?? ""}
+            alt={title}
+            displayWidth={400}
+            className="absolute inset-0 h-full w-full object-cover"
+            fallback={<EntityIcon entity={entity} colored className="size-6" />}
+          />
+        )}
         {badgeSlot != null && (
           <div className="absolute top-1 left-1 rounded bg-black/60 p-1 text-white">
             {badgeSlot}

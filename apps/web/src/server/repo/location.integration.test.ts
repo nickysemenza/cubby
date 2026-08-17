@@ -4,10 +4,17 @@ import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { count, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { image, location, locationImage, product } from "~/server/db/schema";
+import {
+  image,
+  location,
+  locationImage,
+  product,
+  productImage,
+} from "~/server/db/schema";
 import { getDb, insertAndReturn } from "./database-helpers";
 import { createInventoryEntry } from "./inventory";
 import {
+  buildLocationTree,
   bulkReparentLocations,
   createLocation,
   findOrCreateLocationByName,
@@ -348,6 +355,58 @@ describe("locationSearch picker rows", () => {
     expect(found.data[0]!.coverImage).toBeNull();
   });
 
+  it("falls back to its identity product cover, while keeping an own photo first", async () => {
+    const vessel = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Picker vessel with cover" }),
+      ctx.actor,
+    );
+    const vesselId = unsafeProductId(
+      (await resolveLiveShortcode(ctx.db, vessel.id, "product"))!,
+    );
+    const productCover = await insertAndReturn(ctx.db, image, {
+      key: "picker-vessel-cover",
+      url: "https://example.com/picker-vessel-cover.png",
+      filename: "picker-vessel-cover.png",
+      contentType: "image/png",
+      size: 100,
+      status: "UPLOADED",
+    });
+    await insertAndReturn(ctx.db, productImage, {
+      productId: vesselId,
+      imageId: productCover.id,
+    });
+    const created = await createLocation(
+      ctx.db,
+      makeLocationInput({
+        name: "Identity-cover picker location",
+        productId: vessel.id,
+      }),
+      ctx.actor,
+    );
+
+    expect((await searchFor(created.name)).data[0]!.coverImage?.id).toBe(
+      productCover.id,
+    );
+
+    const ownPhoto = await insertAndReturn(ctx.db, image, {
+      key: "picker-location-cover",
+      url: "https://example.com/picker-location-cover.png",
+      filename: "picker-location-cover.png",
+      contentType: "image/png",
+      size: 100,
+      status: "UPLOADED",
+    });
+    await insertAndReturn(ctx.db, locationImage, {
+      locationId: await idOf(created.id),
+      imageId: ownPhoto.id,
+    });
+
+    expect((await searchFor(created.name)).data[0]!.coverImage?.id).toBe(
+      ownPhoto.id,
+    );
+  });
+
   // The breadcrumb-only roster must not carry a `coverImage` key at all —
   // a `null` there would be indistinguishable from "this location has no
   // photo", and the whole point of the split is that picklists don't pay the
@@ -382,6 +441,49 @@ describe("locationSearch picker rows", () => {
     // Same location, same page — the picker read still resolves the cover.
     const found = await searchFor("Optioned Bin");
     expect(found.data[0]!.coverImage?.id).toBe(img.id);
+  });
+});
+
+describe("buildLocationTree identity product hydration", () => {
+  const ctx = withTestDb();
+
+  it("includes each linked product's displayable cover without per-location reads", async () => {
+    const vessel = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Tree vessel with cover" }),
+      ctx.actor,
+    );
+    const vesselId = unsafeProductId(
+      (await resolveLiveShortcode(ctx.db, vessel.id, "product"))!,
+    );
+    const cover = await insertAndReturn(ctx.db, image, {
+      key: "tree-vessel-cover",
+      url: "https://example.com/tree-vessel-cover.png",
+      filename: "tree-vessel-cover.png",
+      contentType: "image/png",
+      size: 100,
+      status: "UPLOADED",
+    });
+    await insertAndReturn(ctx.db, productImage, {
+      productId: vesselId,
+      imageId: cover.id,
+    });
+    const created = await createLocation(
+      ctx.db,
+      makeLocationInput({
+        name: "Tree identity-cover location",
+        productId: vessel.id,
+      }),
+      ctx.actor,
+    );
+
+    const row = (await buildLocationTree(ctx.db)).find(
+      (location) => location.id === created.id,
+    );
+    expect(row?.product).toMatchObject({
+      id: vessel.id,
+      coverImage: { id: cover.id },
+    });
   });
 });
 

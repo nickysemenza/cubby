@@ -3,6 +3,7 @@ import {
   unsafeLocationShortcode,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
+import { isDisplayableImageFile } from "@cubby/schemas/image";
 /**
  * Location tree and hierarchy operations.
  * Build location trees, type counts, and import updates.
@@ -22,9 +23,12 @@ import {
   location,
   locationImage,
   product,
+  productImage,
 } from "~/server/db/schema";
 import {
   getDb,
+  imageOrder,
+  mapImages,
   notDeleted,
   relations,
   unwrapDb,
@@ -76,6 +80,42 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
   const rootLocations: LocationWithParentChild[] = [];
 
   const locationRows = res.rows as unknown as (typeof location.$inferSelect)[];
+
+  // Every tree row may be a physical instance of a Product. Hydrate those
+  // identity products (and their displayable cover) as one batch rather than
+  // turning each tree node into a relation query.
+  const productIds = [
+    ...new Set(
+      locationRows.flatMap((loc) => (loc.productId ? [loc.productId] : [])),
+    ),
+  ];
+  const identityProducts =
+    productIds.length > 0
+      ? await getDb(db).query.product.findMany({
+          where: and(inArray(product.id, productIds), notDeleted(product)),
+          with: {
+            images: {
+              where: notDeleted(productImage),
+              orderBy: imageOrder,
+              with: { image: true },
+            },
+          },
+        })
+      : [];
+  const productsById = new Map(
+    identityProducts.map((identityProduct) => [
+      identityProduct.id,
+      {
+        ...identityProduct,
+        // Identity-product cover semantics are displayable-image semantics;
+        // PDFs, failed renders, and missing files cannot occupy the slot.
+        images: identityProduct.images.filter((association) => {
+          const [mapped] = mapImages([association]);
+          return mapped ? isDisplayableImageFile(mapped) : false;
+        }),
+      },
+    ]),
+  );
 
   // Batch fetch all images for all locations in one query to avoid N+1
   const locationIds = locationRows.map((loc) => loc.id);
@@ -167,6 +207,7 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
             : null,
       children: [],
       parent: null,
+      product: loc.productId ? (productsById.get(loc.productId) ?? null) : null,
       images: imagesByLocationId.get(loc.id) ?? [],
       directItemCount: countsByLocationId.get(loc.id) ?? 0,
       inventoryItems: inventoryByLocationId.get(loc.id) ?? [],

@@ -8,13 +8,13 @@ import type {
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import { unsafeVendorShortcode } from "@cubby/schemas/identifiers";
-import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { locationType } from "@cubby/schemas/location";
 import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { locationToSegments } from "~/app/_components/locations/location-breadcrumb";
 import { LocationPickerThumb } from "~/app/_components/locations/location-picker-thumb";
+import { resolveLocationPrimaryVisual } from "~/app/_components/locations/location-visual-resolver";
 import { ProjectMark } from "~/app/projects/project-mark";
 import { VendorMark } from "~/components/entity/vendor-cell";
 import { Image } from "~/components/ui/image";
@@ -263,7 +263,7 @@ export const buildLocationComboboxItemFromDetail = (
     ...location,
     // `locationToSegments` is root→leaf and includes the location itself.
     ancestors: locationToSegments(location).slice(0, -1),
-    coverImage: location.images.find(isDisplayableImageFile) ?? null,
+    coverImage: resolveLocationPrimaryVisual(location).image,
   });
 
 export const buildIngredientComboboxItem = (ingredient: {

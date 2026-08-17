@@ -1,19 +1,16 @@
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
-import { useQuery } from "@tanstack/react-query";
 import { Calendar, LayoutGrid, List } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
-import { CardThumbnail } from "~/components/entity/card-thumbnail";
 import { EntityStat } from "~/components/entity/entity-stat";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { Grid } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { useTRPC } from "~/integrations/trpc/react";
-import type { InventoryItem } from "./calculate-inventory-valuation";
-import { InventoryValuationSummary } from "./inventory-valuation-summary";
+import { formatCurrency } from "~/lib/utils";
 import { LocationTypeLabel } from "./LocationTypeLabel";
-import { getLocationIcon, getLocationTypeGroup } from "./location-type-theme";
+import { getLocationGlyph, getLocationTypeGroup } from "./location-type-theme";
+import { LocationVisual } from "./location-visual";
 
 interface LocationCardGridProps {
   locations: InfLocation[];
@@ -31,32 +28,7 @@ export function LocationCardGrid({
   showParentPath = false,
   onLocationSelect,
 }: LocationCardGridProps) {
-  const api = useTRPC();
   const [isGrouped, setIsGrouped] = useState(true);
-
-  const locationIds = useMemo(
-    () => locations.map((loc) => loc.id),
-    [locations],
-  );
-
-  // Batch fetch all inventory items for valuation calculations
-  const { data: allInventory } = useQuery(
-    api.inventory.getByLocationIds.queryOptions({ locationIds }),
-  );
-
-  // Group inventory items by locationId client-side
-  const inventoryByLocation = useMemo(() => {
-    const map = new Map<string, InventoryItem[]>();
-    if (!allInventory) return map;
-
-    for (const item of allInventory) {
-      const locationId = item.location.id;
-      const items = map.get(locationId) ?? [];
-      items.push(item);
-      map.set(locationId, items);
-    }
-    return map;
-  }, [allInventory]);
 
   // Flat list sorted by name
   const sortedLocations = useMemo(
@@ -120,7 +92,6 @@ export function LocationCardGrid({
       location={location}
       showParentPath={showParentPath}
       onLocationSelect={onLocationSelect}
-      inventoryItems={inventoryByLocation.get(location.id) ?? []}
       showTypeBadge={showBadge}
     />
   );
@@ -176,7 +147,6 @@ interface LocationCardProps {
   location: InfLocation;
   showParentPath?: boolean;
   onLocationSelect?: (location: InfLocation) => void;
-  inventoryItems: InventoryItem[];
   showTypeBadge?: boolean;
 }
 
@@ -184,12 +154,15 @@ function LocationCard({
   location,
   showParentPath,
   onLocationSelect,
-  inventoryItems,
   showTypeBadge = false,
 }: LocationCardProps) {
   const childCount = location.childCount ?? 0;
   const inventoryCount = location.directItemCount ?? 0;
-  const hasInventory = inventoryCount > 0;
+  const totalInventoryCount =
+    location.valuation?.totalItemCount ??
+    location.totalItemCount ??
+    inventoryCount;
+  const hasInventory = totalInventoryCount > 0;
 
   // Create subtitle with parent path
   const subtitle =
@@ -200,17 +173,10 @@ function LocationCard({
   return (
     <MobileCard
       title={location.name}
-      titleIcon={getLocationIcon(location.type)}
+      titleIcon={getLocationGlyph(location)}
       subtitle={subtitle}
       imageSlot={
-        location.images.length > 0 ? (
-          <CardThumbnail
-            images={location.images}
-            alt={location.name}
-            to="/locations/$shortcode"
-            params={{ shortcode: location.id }}
-          />
-        ) : null
+        <LocationVisual location={location} variant="compact" size={48} />
       }
       onClick={onLocationSelect ? () => onLocationSelect(location) : undefined}
       className="h-full"
@@ -220,13 +186,9 @@ function LocationCard({
       )}
     >
       {/* Valuation row */}
-      {hasInventory && (
+      {hasInventory && location.valuation && (
         <div className="font-mono text-2xs text-muted-foreground tabular-nums">
-          <InventoryValuationSummary
-            items={inventoryItems}
-            variant="compact"
-            hidePricingStatus
-          />
+          {formatCurrency(location.valuation.totalValuation)}
         </div>
       )}
 
@@ -246,11 +208,11 @@ function LocationCard({
         />
         <EntityStat
           entity="inventory"
-          count={inventoryCount}
+          count={totalInventoryCount}
           tooltip={
-            inventoryCount === 1
+            totalInventoryCount === 1
               ? "1 inventory item"
-              : `${inventoryCount} inventory items`
+              : `${totalInventoryCount} inventory items across this location and its children`
           }
         />
       </div>
