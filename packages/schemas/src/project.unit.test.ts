@@ -151,7 +151,13 @@ describe("expense quantity filters", () => {
     ).toBe(true);
   });
 
-  it("rejects a zero product quantity — direction has to mean something", () => {
+  // Zero used to be refused right here. It now means "money moved, no unit did"
+  // — a price concession with the item kept — which is only coherent against a
+  // NEGATIVE cost, and this schema cannot see `cost`. Enforcing it here would
+  // reject the legal case along with the illegal ones, so the cross-field rule
+  // moved to `assertQuantitySignMatchesCost` on the write path and is pinned in
+  // `expense.integration.test.ts`, where a cost is actually in scope.
+  it("accepts a zero product quantity — the cost decides, and it is not visible here", () => {
     expect(
       expenseCreateInput.safeParse({
         name: "line",
@@ -161,7 +167,7 @@ describe("expense quantity filters", () => {
         productId: "PRD-4K7M",
         productQuantity: 0,
       }).success,
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("allows direct sorting on the physical quantity column", () => {

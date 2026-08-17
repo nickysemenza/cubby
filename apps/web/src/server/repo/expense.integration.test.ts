@@ -943,25 +943,32 @@ describe("expense repository — expenseList filters", () => {
     );
     expect(corrected.productQuantity).toBe(-1);
 
-    // Zero is refused twice over, and both layers are worth asserting.
-    // The schema catches it at the edge...
-    expect(() =>
-      expenseCreateInput.parse({
-        date: "2026-06-03",
-        trade: "other",
-        costType: "materials",
-        name: "zero units",
-        cost: 0,
-        productId: product.id,
-        productQuantity: 0,
-      }),
-    ).toThrow();
+    // Zero is legal in exactly one direction: money back with no unit moved,
+    // which is a price concession (Amazon "Account adjustment"). Admitted to
+    // the CHECK in 2026-08 so that class could stop borrowing `null` and being
+    // counted as an unrecorded quantity.
+    const concession = await unwrap(
+      mk({ name: "price concession", cost: -20, productQuantity: 0 }),
+    );
+    expect(concession.productQuantity).toBe(0);
 
-    // ...and the DB CHECK is the backstop under it. This second assertion is
-    // the one that fails loudly if someone edits the `check(...)` in schema.ts
-    // and assumes `db:push` shipped it — `drizzle-kit push` does not diff CHECK
+    // On a $0 line it says nothing at all, and on a positive-cost line it would
+    // be a fee or an allocation — neither of which may carry a product. Both
+    // are the repo guard's job now; the zod schema cannot see `cost`, so it
+    // deliberately no longer carries a bare `!== 0` refinement.
+    await expect(
+      mk({ name: "zero units on a free line", cost: 0, productQuantity: 0 }),
+    ).rejects.toThrow();
+    await expect(
+      mk({ name: "zero units on a buy", cost: 10, productQuantity: 0 }),
+    ).rejects.toThrow();
+
+    // ...and the DB CHECK is the backstop under it. This assertion is the one
+    // that fails loudly if someone edits the `check(...)` in schema.ts and
+    // assumes `db:push` shipped it — `drizzle-kit push` does not diff CHECK
     // constraints, so the test template would carry a constraint production
-    // lacks (or vice versa) with nothing else to notice.
+    // lacks (or vice versa) with nothing else to notice. `discard` is a $0
+    // line, so zeroing its quantity must still be refused at the DB.
     await expect(
       getDb(ctx.db)
         .update(expenseTable)

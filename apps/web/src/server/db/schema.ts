@@ -1810,12 +1810,25 @@ export const expense = pgTable(
     //               defence-in-depth rather than trusting the column)
     //   cost = 0  → the sign IS the fact: +qty is a free acquisition (promo
     //               pack, bundled accessory), −qty is a discard/write-off
+    //   qty 0     → NEGATIVE COST ONLY: money moved and no unit did. A price
+    //               concession with the item KEPT — an Amazon 'Account
+    //               adjustment', a partial refund for shipping damage. See
+    //               below.
     //   qty NULL  → unknown; contributes nothing and is reported as uncertainty
     //
     // Before the signed rule a $0 line was ambiguous between those last two —
     // see the essay above `findSoldButStillStocked` in
     // repo/problems/detectors-product.ts for why that ambiguity needed a real
     // signal on the row rather than a cleverer query.
+    //
+    // Zero was banned outright until 2026-08-17, which forced the concession
+    // class to borrow NULL — the one value that already meant 'unknown'. The
+    // cost was visible: `unknownExitLines` lit the warning `−N?` cue beside
+    // Expected on all eight of them, reporting a definitively-known quantity as
+    // data-entry debt. Zero is only legal on a negative-cost line because that
+    // is the only direction where 'money without units' is a real event: on a
+    // positive line it would be a fee or an allocation (neither carries a
+    // product), and on a $0 line it would say nothing at all.
     productQuantity: integer("productQuantity"),
     // The charge this line belongs to. Nullable: the 193 rows with no vendor
     // recorded have nothing to attach to, and forcing a synthetic charge on them
@@ -1844,14 +1857,15 @@ export const expense = pgTable(
       "Expense_cost_whole_cent_check",
       sql`${table.cost} IS NULL OR abs(${table.cost} * 100 - round(${table.cost} * 100)) < 0.0000001`,
     ),
-    // Signed, but never zero — see the ledger rule on `productQuantity`. NOTE:
-    // `drizzle-kit push` does NOT diff CHECK constraints, so editing this line
-    // changes tests (the template is built from schema.ts) and nothing else.
-    // A change here must be applied to production by hand and read back from
-    // `pg_constraint`.
+    // Signed; zero only where the money is negative — see the ledger rule on
+    // `productQuantity`. NOTE: `drizzle-kit push` does NOT diff CHECK
+    // constraints, so editing this line changes tests (the template is built
+    // from schema.ts) and nothing else. A change here must be applied to
+    // production by hand and read back from `pg_constraint`. (Widened
+    // 2026-08-17 to admit `0`; the ALTER was applied by hand that day.)
     check(
       "Expense_productQuantity_check",
-      sql`${table.productQuantity} IS NULL OR (${table.productId} IS NOT NULL AND ${table.productQuantity} <> 0)`,
+      sql`${table.productQuantity} IS NULL OR (${table.productId} IS NOT NULL AND (${table.productQuantity} <> 0 OR ${table.cost} < 0))`,
     ),
     // NOTE: `drizzle-kit push` does not diff CHECK constraints (see the longer
     // note on FinancialTransaction_purchase_settlement_check above). This one

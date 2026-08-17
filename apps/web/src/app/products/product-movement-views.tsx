@@ -35,6 +35,7 @@ const KIND_LABEL = {
   acquired: "Acquired",
   exited: "Exited",
   discarded: "Discarded",
+  adjusted: "Price adjusted",
   unknown: "Unknown",
 } as const;
 
@@ -42,6 +43,9 @@ const KIND_COLOR = {
   acquired: "var(--positive)",
   exited: "var(--destructive)",
   discarded: "var(--warning)",
+  // Money-only, so it takes the neutral tone rather than `exited`'s
+  // destructive one — nothing left the house on this row.
+  adjusted: "var(--muted-foreground)",
   unknown: "var(--muted-foreground)",
 } as const;
 
@@ -210,7 +214,9 @@ function MovementLine({
             ? "Amount and quantity not itemized"
             : movement.quantity === null
               ? "Quantity unknown"
-              : `${Math.abs(movement.quantity)} unit${Math.abs(movement.quantity) === 1 ? "" : "s"}`}
+              : movement.quantity === 0
+                ? "No unit moved"
+                : `${Math.abs(movement.quantity)} unit${Math.abs(movement.quantity) === 1 ? "" : "s"}`}
         </Description>
       </Stack>
       <MovementAmount movement={movement} />
@@ -325,6 +331,8 @@ function markerClass(kind: ProductMovementLineOut["kind"]): string {
   if (kind === "acquired") return "border-positive bg-positive";
   if (kind === "exited") return "border-destructive bg-destructive";
   if (kind === "discarded") return "border-warning bg-warning";
+  // Muted like "unknown": a concession moved money, not units, so it should not
+  // read on the lifecycle strip as an ownership event.
   return "border-muted-foreground bg-muted-foreground";
 }
 

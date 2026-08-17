@@ -45,8 +45,13 @@ import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
  * trustworthy, it does not make them depend on it.
  *
  * A negative-cost line where no unit actually left — an Amazon "Account
- * adjustment" is a price concession with the item KEPT — takes `null`, not a
- * negative. Null is unaffected here, and that is the intended escape.
+ * adjustment" is a price concession with the item KEPT — takes `0`, not a
+ * negative and no longer `null`: the quantity there is known to be zero, and
+ * spelling it `null` reported a certainty as missing data (the `−N?` cue beside
+ * Expected). Zero is rejected in the other two directions because "money
+ * without units" is only a real event when money comes back — a positive line
+ * with no units is a fee or an allocation, neither of which may carry a
+ * product, and a $0 line with no units is not an event at all.
  */
 export const assertQuantitySignMatchesCost = (
   cost: number | null,
@@ -54,6 +59,12 @@ export const assertQuantitySignMatchesCost = (
 ) => {
   if (cost === null || productQuantity === null) {
     return;
+  }
+  if (productQuantity === 0 && !(cost < 0)) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "A quantity of zero means money moved but no unit did, which is only possible on a refund. Use a negative cost, or leave the quantity null if the count is genuinely unknown.",
+    );
   }
   if (cost > 0 && productQuantity < 0) {
     throw createAppError(
@@ -64,7 +75,7 @@ export const assertQuantitySignMatchesCost = (
   if (cost < 0 && productQuantity > 0) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      "A negative-cost line is an exit; its quantity cannot be positive. Record the units that left as a negative quantity, or leave the quantity null if no unit left (a price concession where the item was kept).",
+      "A negative-cost line is an exit; its quantity cannot be positive. Record the units that left as a negative quantity, or use 0 if no unit left (a price concession where the item was kept).",
     );
   }
 };

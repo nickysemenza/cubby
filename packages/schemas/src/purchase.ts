@@ -364,11 +364,12 @@ export const splitExpenseInput = z.object({
         trade: tradeSchema,
         projectId: projectShortcode.nullable().default(null),
         productId: productShortcode.nullable().default(null),
-        // Signed and never zero, same rule as `Expense.productQuantity`.
+        // Signed, zero only on a negative cost — same rule as
+        // `Expense.productQuantity`. The cost-dependent half is enforced by
+        // `assertQuantitySignMatchesCost` on the write path.
         productQuantity: z
           .number()
           .int()
-          .refine((value) => value !== 0, "Quantity cannot be zero")
           .nullable()
           .default(null)
           .describe(PRODUCT_QUANTITY_DESCRIPTION),
