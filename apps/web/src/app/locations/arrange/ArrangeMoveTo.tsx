@@ -141,7 +141,11 @@ function MoveToDialog({
                         target.locationId,
                         item.id,
                       )
-                    : isValidItemDrop(target.drag.sourceLocationId, item.id);
+                    : isValidItemDrop(
+                        target.roots,
+                        target.drag.sourceLocationId,
+                        item.id,
+                      );
                 return valid
                   ? item
                   : {
