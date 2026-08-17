@@ -115,6 +115,8 @@ const rosterFilters = (filters: z.infer<typeof locationFiltersSchema>) => ({
   parentId: filters.parentId,
   parentPresenceFilter: filters.parentPresenceFilter,
   inventoryPresenceFilter: filters.inventoryPresenceFilter,
+  productId: filters.productId,
+  productPresenceFilter: filters.productPresenceFilter,
 });
 
 // Both roster reads take `list`'s filters/pagination shape but skip the

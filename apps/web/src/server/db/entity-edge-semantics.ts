@@ -211,6 +211,13 @@ export const ENTITY_EDGE_SEMANTICS = {
         "A tool Product considered as an alternative for a household Wishlist entry; it is planning data, not inventory or spend.",
       liveness: { kind: "must-target-live" },
     },
+    "Location.productId": {
+      role: "reference",
+      label: "locations",
+      description:
+        "A Location that IS an instance of this Product — the bin, tote or rack itself, not stock held in it. Deleting the Product would leave those locations with neither a type nor an identity, since a linked location stops carrying its own `type`.",
+      liveness: { kind: "must-target-live" },
+    },
   },
   location: {
     "InventoryEntry.locationId": {

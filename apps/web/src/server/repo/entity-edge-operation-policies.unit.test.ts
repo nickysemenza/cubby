@@ -100,13 +100,14 @@ describe("product retaining edges", () => {
   const RETAINING: readonly string[] = [
     "Expense.productId",
     "InventoryEntry.productId",
+    "Location.productId",
     "ProjectToolUsage.productId",
     "PurchaseProduct.productId",
     "Task.subjectProductId",
     "WishCandidate.productId",
   ];
 
-  it("retains exactly the acquisition and history edges", () => {
+  it("retains exactly the acquisition, history and reference edges", () => {
     expect(
       (
         Object.keys(PRODUCT_EDGE_ROLES) as Array<

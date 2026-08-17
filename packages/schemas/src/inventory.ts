@@ -175,7 +175,8 @@ export type InventoryListProductOut = z.infer<typeof inventoryListProductOut>;
 export const inventoryListLocationOut = z.object({
   id: locationShortcode,
   name: z.string(),
-  type: locationType,
+  /** Null when the location IS a product; the SKU carries its form factor. */
+  type: locationType.nullable(),
 });
 export type InventoryListLocationOut = z.infer<typeof inventoryListLocationOut>;
 

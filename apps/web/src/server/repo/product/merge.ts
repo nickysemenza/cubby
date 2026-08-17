@@ -84,6 +84,7 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   expense,
   inventoryEntry,
+  location,
   product,
   productExternalId,
   productImage,
@@ -173,6 +174,12 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     description:
       "A merged product's Wishlist candidacies move onto the survivor, skipping wishes the survivor is already a candidate for.",
   },
+  "Location.productId": {
+    code: "repoint-to-survivor",
+    effect: "repoint",
+    description:
+      "Locations that ARE a merged product re-point onto the survivor. A plain repoint, not a fold: many locations legitimately share one SKU (twelve bins can all be the same tote), so there is no slot to collide on.",
+  },
 } as const satisfies IncomingEdgePolicy<"product", OperationDisposition>;
 
 /**
@@ -229,6 +236,8 @@ interface ProductMergeSummary {
   imagesMoved: number;
   unitMappingsMoved: number;
   tasksMoved: number;
+  /** Locations that ARE a merged-away product, re-pointed onto the survivor. */
+  locationsMoved: number;
   projectUsesMoved: number;
   purchaseLinksMoved: number;
   wishCandidatesMoved: number;
@@ -557,6 +566,13 @@ export const mergeProducts = async (
         liveOnly: true,
       })
     ).length;
+    summary.locationsMoved = (
+      await repointEdge(tx, "product", "Location.productId", {
+        from: loserIds,
+        to: keepId,
+        liveOnly: true,
+      })
+    ).length;
     // Money moving between products is an AUDITED change, exactly as it is on
     // `updateExpense` and in `foldChargeInto`'s purchaseId re-point — net cost
     // and the owned/sold window are derived from these rows.
@@ -670,6 +686,7 @@ const emptySummary = (
   imagesMoved: 0,
   unitMappingsMoved: 0,
   tasksMoved: 0,
+  locationsMoved: 0,
   projectUsesMoved: 0,
   purchaseLinksMoved: 0,
   wishCandidatesMoved: 0,
@@ -844,6 +861,17 @@ export const previewMergeProducts = async (
         dbClient,
         wishCandidate,
         wishCandidate.productId,
+        losers,
+      ),
+    }),
+    impact({
+      disposition: PRODUCT_MERGE_EDGE_POLICY["Location.productId"],
+      edgeKey: "Location.productId",
+      label: "locations re-pointed",
+      byTargetId: await countByTarget(
+        dbClient,
+        location,
+        location.productId,
         losers,
       ),
     }),

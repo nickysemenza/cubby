@@ -30,7 +30,28 @@ import { requireLoadedProductPricing } from "~/server/repo/inventory/mappers";
 import { dbProductToInventoryEmbedShape } from "~/server/repo/product/mappers";
 import type { ProductPricing } from "~/server/repo/product/pricing";
 
-import type { LocationListDB, LocationWithParentChild } from "./internal-types";
+import { mapLocationIdentityProduct } from "./identity-product";
+import type {
+  LocationIdentityProductRow,
+  LocationListDB,
+  LocationWithParentChild,
+} from "./internal-types";
+
+/**
+ * A location that IS a Product carries no `type`, so the parse has to accept
+ * null rather than fail closed on it. Only a *present* value is validated
+ * against the enum.
+ */
+const parseLocationType = (
+  value: string | null,
+  identifier: { id: string; name: string },
+) =>
+  value === null
+    ? null
+    : parseWithContext(locationType, value, {
+        entityType: "Location",
+        identifier,
+      });
 
 /**
  * Transform a location DB record to API format.
@@ -38,6 +59,7 @@ import type { LocationListDB, LocationWithParentChild } from "./internal-types";
  */
 export const dbLocationToAPI = (
   locationData: RowWithOptionalAliases<typeof location.$inferSelect> & {
+    product?: LocationIdentityProductRow | null;
     images?: Array<{
       image: MappableImageRecord;
       deletedAt?: Date | null;
@@ -50,10 +72,11 @@ export const dbLocationToAPI = (
     aiDescription: locationData.aiDescription ?? null,
     name: locationData.name,
     aliases: locationData.aliases ?? [],
-    type: parseWithContext(locationType, locationData.type, {
-      entityType: "Location",
-      identifier: { id: locationData.id, name: locationData.name },
+    type: parseLocationType(locationData.type, {
+      id: locationData.id,
+      name: locationData.name,
     }),
+    product: mapLocationIdentityProduct(locationData),
     images: mapImages(locationData.images),
     valuation: locationData.valuation ?? null,
     ...extractDbTimestampsFromDBRec(locationData),
@@ -132,10 +155,8 @@ export const buildLocationWithChildren = (
     id: unsafeLocationShortcode(x.shortcode),
     lastBulkInventory: x.lastBulkInventory,
     aiDescription: x.aiDescription ?? null,
-    type: parseWithContext(locationType, x.type, {
-      entityType: "Location",
-      identifier: { id: x.id, name: x.name },
-    }),
+    type: parseLocationType(x.type, { id: x.id, name: x.name }),
+    product: mapLocationIdentityProduct(x),
     images: mapImages(x.images),
     valuation: x.valuation ?? null,
     children,

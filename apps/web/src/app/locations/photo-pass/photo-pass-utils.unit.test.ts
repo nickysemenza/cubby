@@ -36,6 +36,7 @@ function loc(
     id: unsafeLocationShortcode(`LOC-${code}`),
     name,
     aliases: [],
+    product: null,
     type,
     lastBulkInventory: null,
     aiDescription: null,

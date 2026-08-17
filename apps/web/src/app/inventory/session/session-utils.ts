@@ -5,7 +5,7 @@ import type { InfLocation, LocationType } from "@cubby/schemas/location";
 export interface SessionLocation {
   id: LocationShortcode;
   name: string;
-  type: LocationType;
+  type: LocationType | null;
   shortcode: string;
   lastBulkInventory: Date | null;
   aiDescription: string | null;
@@ -223,8 +223,10 @@ export function buildBulkMovePayloadItems<
   }));
 }
 
-export function locationTypeNoun(type: string): string {
-  return type.replaceAll("-", " ");
+export function locationTypeNoun(type: string | null): string {
+  // Null means the location IS a product, so it has no form-factor word of its
+  // own. Callers that have the product should show its name instead.
+  return type === null ? "container" : type.replaceAll("-", " ");
 }
 
 function locationPathFromRoot(

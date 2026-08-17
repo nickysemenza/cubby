@@ -104,7 +104,7 @@ export const buildProductComboboxItem = (product: {
 export const buildLocationComboboxItem = (location: {
   id: LocationShortcode;
   name: string;
-  type: LocationType;
+  type: LocationType | null;
   aliases?: string[] | null;
   ancestors?: Array<{ name: string }> | null;
   coverImage?: { url: string } | null;
@@ -113,7 +113,7 @@ export const buildLocationComboboxItem = (location: {
   shortcode: location.id,
   name: location.name,
   aliases: location.aliases ?? [],
-  secondary: location.type,
+  secondary: location.type ?? undefined,
   detail: location.ancestors?.length
     ? location.ancestors.map((ancestor) => ancestor.name).join(" › ")
     : undefined,

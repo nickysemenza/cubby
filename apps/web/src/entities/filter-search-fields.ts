@@ -82,6 +82,7 @@ const filterSearchKeys = {
     "aiDescription",
     "name",
     "type",
+    "product",
     "parent",
     "inventoryEntries",
     "valuation",

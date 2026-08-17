@@ -48,5 +48,12 @@ export const locationTypeColors: Record<LocationType, string> = {
   bag: "var(--chart-8)",
 };
 
-export const getLocationTypeColor = (type: LocationType): string =>
-  locationTypeColors[type];
+/**
+ * A location linked to a Product carries no `type` of its own — the SKU is its
+ * form factor — so every theme lookup has to answer for null. The fallback is
+ * the container rung: a linked location is always a vessel, never a room.
+ */
+const CONTAINER_FALLBACK_COLOR = "var(--chart-7)";
+
+export const getLocationTypeColor = (type: LocationType | null): string =>
+  type ? locationTypeColors[type] : CONTAINER_FALLBACK_COLOR;

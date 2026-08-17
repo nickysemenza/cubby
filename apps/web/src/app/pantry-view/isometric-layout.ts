@@ -53,7 +53,7 @@ export interface FurniturePiece {
   h: number;
   color: string;
   name: string;
-  locationType: LocationType;
+  locationType: LocationType | null;
   locationId: string;
   locationShortcode: string;
   items: FurnitureItem[];
@@ -111,7 +111,9 @@ interface FurnitureSpec {
   shelfLevels: number[];
 }
 
-function getFurnitureSpec(type: LocationType): FurnitureSpec {
+// A null type means the location IS a product (a tote, bin, rack). Those are
+// vessels, never rooms, so they fall to the default spec below.
+function getFurnitureSpec(type: LocationType | null): FurnitureSpec {
   switch (type) {
     case "shelf":
       return {
@@ -185,10 +187,10 @@ export interface InventoryData {
   amount: { value: number; unit: string };
   valuation: number | null;
   product: { name: string; category: ProductCategory | null };
-  location: { id: string; name: string; type: LocationType };
+  location: { id: string; name: string; type: LocationType | null };
 }
 
-function isContainerType(type: LocationType): boolean {
+function isContainerType(type: LocationType | null): boolean {
   return type === "room" || type === "area";
 }
 

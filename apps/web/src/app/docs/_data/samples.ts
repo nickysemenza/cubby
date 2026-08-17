@@ -24,6 +24,7 @@ const makeLocation = (
     id: unsafeLocationShortcode(`LOC-${String(locationSeq).padStart(4, "0")}`),
     name,
     aliases: [],
+    product: null,
     type,
     lastBulkInventory: null,
     aiDescription: null,

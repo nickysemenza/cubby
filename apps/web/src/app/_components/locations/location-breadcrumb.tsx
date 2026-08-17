@@ -18,7 +18,7 @@ import { LocationIcon } from "./location-icons";
 export interface LocationSegment {
   id?: string;
   name: string;
-  type: LocationType;
+  type: LocationType | null;
 }
 
 /**

@@ -29,7 +29,7 @@ type LocationLike = {
   id: LocationShortcode;
   shortcode: string;
   name: string;
-  type: LocationType;
+  type: LocationType | null;
 };
 
 interface InventoryEntriesInlineEditConfig<T, TEntry> {

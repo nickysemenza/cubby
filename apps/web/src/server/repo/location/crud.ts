@@ -10,8 +10,10 @@ import type {
 } from "@cubby/schemas/entity-integrity";
 import {
   type LocationId,
+  type ProductId,
   unsafeLocationId,
   unsafeLocationShortcode,
+  unsafeProductId,
 } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
@@ -203,6 +205,17 @@ export const createLocation = async (
   }
 };
 
+/**
+ * A caller-supplied product code that does not resolve is bad input, not a
+ * missing page — `REFERENCED_RECORD_MISSING` rather than `PRODUCT_NOT_FOUND`.
+ */
+const raiseMissingProduct = (): never => {
+  throw createAppError(
+    "REFERENCED_RECORD_MISSING",
+    "Cannot set product: the specified product does not exist",
+  );
+};
+
 const createLocationTx = async (
   db: Database,
   data: LocationCreateInput,
@@ -219,10 +232,22 @@ const createLocationTx = async (
       );
     }
     const parentId = resolvedParent ? unsafeLocationId(resolvedParent) : null;
+    // A miss here is a validation failure on caller-supplied input, not a 404
+    // for the location being created — hence the raw resolve rather than
+    // `resolveOrThrow`.
+    const productId = data.productId
+      ? unsafeProductId(
+          (await resolveLiveShortcode(tx, data.productId, "product")) ??
+            raiseMissingProduct(),
+        )
+      : null;
     const newLocation = await insertWithShortcode(tx, "location", {
       name: data.name,
       aliases: data.aliases,
-      type: data.type,
+      // Form factor is a fact about the SKU, so a linked location stores no
+      // type of its own.
+      type: productId ? null : (data.type ?? null),
+      productId,
       parentId,
     });
 
@@ -346,13 +371,27 @@ export const updateLocation = async (
         }
       }
     }
+    let productId: ProductId | null | undefined;
+    if (data.productId !== undefined) {
+      productId =
+        data.productId === null
+          ? null
+          : unsafeProductId(
+              (await resolveLiveShortcode(tx, data.productId, "product")) ??
+                raiseMissingProduct(),
+            );
+    }
+
     const before = await tx.query.location.findFirst({
       where: and(eq(location.id, id), notDeleted(location)),
     });
     const updateValues = buildPartialUpdateValues({
       name: data.name,
       aliases: data.aliases,
-      type: data.type,
+      // Linking a product clears the now-redundant type; the two are
+      // alternatives, never companions.
+      type: productId ? null : data.type,
+      productId,
       parentId,
     });
 
@@ -665,6 +704,30 @@ const locationNameSearchCondition = (nameFilter: string | undefined) =>
       )
     : undefined;
 
+/**
+ * "Which SKU is this location an instance of", plus the has/none presence
+ * split. A requested-but-unresolvable product code must match nothing rather
+ * than widening to an unfiltered query — the same rule the parent filter
+ * follows directly above.
+ */
+const locationProductCondition = async (
+  db: Database,
+  filters: Pick<LocationFilters, "productId" | "productPresenceFilter">,
+) => {
+  const codes = filters.productId ? [filters.productId].flat() : [];
+  const ids = await resolveAllPresent(db, "product", codes);
+  if (codes.length > 0 && ids.length === 0) {
+    return filters.productPresenceFilter
+      ? eqAnyOrPresence(location.productId, [], filters.productPresenceFilter)
+      : sql`false`;
+  }
+  return eqAnyOrPresence(
+    location.productId,
+    ids,
+    filters.productPresenceFilter,
+  );
+};
+
 export const locationList = async (
   db: Database,
   filters: LocationFilters,
@@ -684,6 +747,7 @@ export const locationList = async (
           parentIds,
           filters.parentPresenceFilter,
         );
+  const productCondition = await locationProductCondition(db, filters);
   // Uncorrelated subquery of location ids holding live inventory. Inner-joins
   // Product (notDeleted) because dbLocationToListAPI drops inventory entries
   // whose product is soft-deleted — without that join, a shelf holding only
@@ -753,6 +817,7 @@ export const locationList = async (
       locationNameSearchCondition(filters.nameFilter),
       eqAny(location.type, filters.itemTypeFilter),
       parentCondition,
+      productCondition,
       idSetPresence(
         location.id,
         filters.inventoryPresenceFilter,
@@ -906,6 +971,8 @@ type LocationRosterFilters = Pick<
   | "parentId"
   | "parentPresenceFilter"
   | "inventoryPresenceFilter"
+  | "productId"
+  | "productPresenceFilter"
 >;
 
 /**
@@ -951,6 +1018,8 @@ const locationRosterPage = async (
     // inventory" filter must not match on a wired-in fixture alone.
     .where(and(notDeleted(inventoryEntry), stockOnly()));
 
+  const productCondition = await locationProductCondition(db, filters);
+
   const whereClause = buildSearchConditions(
     location,
     [],
@@ -958,6 +1027,7 @@ const locationRosterPage = async (
       locationNameSearchCondition(filters.nameFilter),
       eqAny(location.type, filters.itemTypeFilter),
       parentCondition,
+      productCondition,
       idSetPresence(
         location.id,
         filters.inventoryPresenceFilter,

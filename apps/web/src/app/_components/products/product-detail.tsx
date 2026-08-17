@@ -54,6 +54,7 @@ import { ProductExpenseHistory } from "./product-expense-history";
 import { ProductForm } from "./product-form";
 import { ProductProjectUses } from "./product-project-uses";
 import { ProductPurchases } from "./product-purchases";
+import { ProductServingAsLocations } from "./product-serving-as-locations";
 import { ProductStockedAt } from "./product-stocked-at";
 import { ProductTagSiblings } from "./product-tag-siblings";
 import { ProductTaskHistory } from "./product-task-history";
@@ -129,6 +130,25 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       ),
       content: <ProductStockedAt product={product} />,
     },
+    // Custom section: the containers of this SKU that are in service as
+    // Locations rather than sitting as stock. Only shown when there are any —
+    // most products are never a location, and a permanently empty panel on
+    // every food row would be noise.
+    ...(product.quantityLedger.locationCount > 0
+      ? [
+          {
+            title: "Serving as locations",
+            icon: Package,
+            zone: "main" as const,
+            content: (
+              <ProductServingAsLocations
+                productId={product.id}
+                count={product.quantityLedger.locationCount}
+              />
+            ),
+          },
+        ]
+      : []),
     // Custom section: Expense History — every expense linked to this
     // product (arrivals and dispositions), the primary way cost basis gets
     // tracked over time.

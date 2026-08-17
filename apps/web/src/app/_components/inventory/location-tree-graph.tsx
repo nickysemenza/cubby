@@ -8,7 +8,7 @@ import { ROOT_LOCATION_ID, useLocationTree } from "~/hooks/useLocationTree";
 interface TreeNode {
   name: string;
   id: LocationShortcode;
-  type: LocationType;
+  type: LocationType | null;
   children?: TreeNode[];
 }
 

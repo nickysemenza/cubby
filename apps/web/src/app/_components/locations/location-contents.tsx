@@ -89,7 +89,12 @@ function LocationShelfCard({ location }: { location: InfLocation }) {
       title={location.name}
       subtitle={caption}
       entity="location"
-      badgeSlot={<TypeIcon className="size-3" aria-label={location.type} />}
+      badgeSlot={
+        <TypeIcon
+          className="size-3"
+          aria-label={location.type ?? location.product?.name}
+        />
+      }
     />
   );
 }

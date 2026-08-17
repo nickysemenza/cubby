@@ -17,7 +17,7 @@ const BOX = { width: THUMB_PX, minHeight: THUMB_PX };
 
 interface LocationPickerThumbProps {
   imageUrl?: string | null;
-  type: LocationType;
+  type: LocationType | null;
 }
 
 /**

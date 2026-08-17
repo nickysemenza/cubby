@@ -1,9 +1,19 @@
 import { type LocationType, locationType } from "@cubby/schemas/location";
+import type { ProductCategory } from "@cubby/schemas/product";
 import { Row } from "~/components/layout";
-import { getLocationIcon, getLocationTypeColor } from "./location-type-theme";
+import { getLocationGlyph, getLocationTypeColor } from "./location-type-theme";
 
-interface LocationIconProps {
-  type: LocationType;
+/**
+ * Enough of a location to draw it. `type` is null for a location that IS a
+ * Product, in which case the SKU's category supplies the glyph — see
+ * `getLocationGlyph`.
+ */
+interface LocationGlyphSource {
+  type: LocationType | null;
+  product?: { category: ProductCategory | null } | null;
+}
+
+interface LocationIconProps extends LocationGlyphSource {
   className?: string;
   size?: number;
   /** Apply the type-specific color */
@@ -12,11 +22,12 @@ interface LocationIconProps {
 
 export function LocationIcon({
   type,
+  product,
   className,
   size = 16,
   colored,
 }: LocationIconProps) {
-  const IconComponent = getLocationIcon(type);
+  const IconComponent = getLocationGlyph({ type, product });
   return (
     <IconComponent
       className={className}
@@ -33,6 +44,7 @@ interface LocationIconWithLabelProps extends LocationIconProps {
 
 export function LocationIconWithLabel({
   type,
+  product,
   label,
   className,
   size = 16,
@@ -43,6 +55,7 @@ export function LocationIconWithLabel({
     <Row align="center" gap="sm">
       <LocationIcon
         type={type}
+        product={product}
         className={className}
         size={size}
         colored={colored}

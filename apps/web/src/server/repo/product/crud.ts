@@ -1693,6 +1693,11 @@ const PRODUCT_RETAINING_DEPENDENTS: Record<
       ),
       columns: { productId: true },
     }),
+  "Location.productId": (tx, ids) =>
+    tx.query.location.findMany({
+      where: and(inArray(location.productId, ids), notDeleted(location)),
+      columns: { productId: true },
+    }),
 };
 
 /**

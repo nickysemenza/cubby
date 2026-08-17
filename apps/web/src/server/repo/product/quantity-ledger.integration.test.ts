@@ -78,6 +78,7 @@ describe("loadProductQuantityLedgers", () => {
       expectedQuantity: 2,
       unknownAcquisitionLines: 0,
       unknownExitLines: 0,
+      locationCount: 0,
     });
   });
 
@@ -120,6 +121,7 @@ describe("loadProductQuantityLedgers", () => {
       expectedQuantity: 0,
       unknownAcquisitionLines: 0,
       unknownExitLines: 0,
+      locationCount: 0,
     });
   });
 
@@ -173,6 +175,7 @@ describe("loadProductQuantityLedgers", () => {
       expectedQuantity: 3,
       unknownAcquisitionLines: 1,
       unknownExitLines: 1,
+      locationCount: 0,
     });
   });
 

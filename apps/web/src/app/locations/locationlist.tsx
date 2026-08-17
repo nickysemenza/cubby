@@ -3,6 +3,7 @@ import type {
   LocationType,
 } from "@cubby/schemas/location";
 import { getLocationTypeColor } from "@cubby/shared";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useCallback, useMemo, useState } from "react";
@@ -12,6 +13,7 @@ import {
   verbBulkAction,
 } from "~/app/_components/actions/action-verb-ui";
 import { usePageCount } from "~/components/page/Page";
+import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { useTRPC } from "~/integrations/trpc/react";
 import { locationMutationInvalidateKeys } from "~/lib/query-keys";
 import {
@@ -52,8 +54,26 @@ export function LocationList() {
 
   // Runtime picklist for the manifest's `parent` spec (optionsKey: "parentLocation").
   const { options: parentLocationOptions } = useLocationParentOptions();
+  // Runtime picklist for the `product` spec (optionsKey: "locationProducts") —
+  // scoped to products some location IS, not the whole catalog, so the
+  // dropdown lists the dozen vessel SKUs rather than thousands of groceries.
+  const identityProductsQuery = useQuery(
+    api.location.list.queryOptions({
+      filters: { productPresenceFilter: "has" },
+      sort: [],
+      pagination: { pageIndex: 0, pageSize: 500 },
+    }),
+  );
+  const locationProductOptions = useMemo<FilterableComboboxItem[]>(() => {
+    const byId = new Map<string, string>();
+    for (const row of identityProductsQuery.data?.items ?? []) {
+      if (row.product) byId.set(row.product.id, row.product.name);
+    }
+    return [...byId].map(([value, label]) => ({ value, label }));
+  }, [identityProductsQuery.data]);
   const filterOptions = useFilterOptions({
     parentLocation: parentLocationOptions,
+    locationProducts: locationProductOptions,
   });
 
   const updateLocationMutation = useUpdateMutation({
@@ -118,6 +138,8 @@ export function LocationList() {
         className: "w-32",
         placeholder: "Filter by type...",
         selectOptions: locationTypeOptionsWithTheme,
+        // A linked location has no type of its own, so this renders empty for
+        // one — the adjacent "Is a" column carries its identity instead.
         renderCell: (type) => <LocationTypeLabel type={type} />,
         mobile: { slot: "subtitle", priority: 15 },
         editable: {
@@ -128,6 +150,11 @@ export function LocationList() {
             });
           },
         },
+      }),
+      createSingleEntityInlineLinkColumn(columnHelper, "product", "product", {
+        header: "Is a",
+        className: "w-56",
+        mobile: { slot: "meta", priority: 40 },
       }),
       columnHelper.accessor((row) => row.valuation?.directValuation ?? null, {
         id: "valuation",

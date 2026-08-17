@@ -15,7 +15,7 @@ type LocationTreeNode = {
   id: string;
   name: string;
   nodeType: "location";
-  type: LocationType;
+  type: LocationType | null;
   directItemCount: number;
   totalItemCount: number;
   children?: TreeNode[];

@@ -39,7 +39,7 @@ import type { ProductQuantityLedgerOut } from "@cubby/schemas/product";
 import type { AnyColumn } from "drizzle-orm";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { expense } from "~/server/db/schema";
+import { expense, location } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 
 export type QuantityLedger = ProductQuantityLedgerOut;
@@ -50,6 +50,7 @@ export const EMPTY_QUANTITY_LEDGER: QuantityLedger = {
   expectedQuantity: 0,
   unknownAcquisitionLines: 0,
   unknownExitLines: 0,
+  locationCount: 0,
 };
 
 /**
@@ -123,18 +124,32 @@ export const expectedQuantitySql = (productAlias = '"product"') =>
  * and a fixture's purchase Expense is one of them — excluding installed rows
  * here would manufacture a permanent negative variance and light "Shelf
  * disagrees" forever on every fixture in the house.
+ *
+ * includes-locations: on-hand is the UNION of stock and identity — inventory
+ * units PLUS the Locations that ARE this product. A packout in service as a
+ * bin is a unit you own; counting only the shelf would show it missing against
+ * a ledger that recorded buying it. Locations are one unit each, so they add
+ * to the sum but never to the distinct-unit test: a mixed-unit shelf is still
+ * NULL, and a product with neither entries nor locations is still NULL.
  */
 const onHandUnitsSql = (productAlias = '"product"') =>
   `(SELECT CASE
-             WHEN count(*) = 0 THEN NULL
-             WHEN count(DISTINCT ohu_i."amount"->>'unit') > 1 THEN NULL
-             ELSE COALESCE(sum((ohu_i."amount"->>'value')::numeric), 0)
+             WHEN ohu_inv.n = 0 AND ohu_loc.n = 0 THEN NULL
+             WHEN ohu_inv.units > 1 THEN NULL
+             ELSE COALESCE(ohu_inv.qty, 0) + ohu_loc.n
            END::double precision
-      FROM "InventoryEntry" ohu_i
-      JOIN "Location" ohu_l
-        ON ohu_l."id" = ohu_i."locationId" AND ohu_l."deletedAt" IS NULL
-     WHERE ohu_i."productId" = ${productAlias}."id"
-       AND ohu_i."deletedAt" IS NULL)`;
+      FROM (SELECT count(*) AS n,
+                   count(DISTINCT ohu_i."amount"->>'unit') AS units,
+                   sum((ohu_i."amount"->>'value')::numeric) AS qty
+              FROM "InventoryEntry" ohu_i
+              JOIN "Location" ohu_l
+                ON ohu_l."id" = ohu_i."locationId" AND ohu_l."deletedAt" IS NULL
+             WHERE ohu_i."productId" = ${productAlias}."id"
+               AND ohu_i."deletedAt" IS NULL) ohu_inv,
+           (SELECT count(*) AS n
+              FROM "Location" ohu_ol
+             WHERE ohu_ol."productId" = ${productAlias}."id"
+               AND ohu_ol."deletedAt" IS NULL) ohu_loc)`;
 
 /**
  * Shelf minus ledger. Zero means the two agree; a product with no inventory and
@@ -179,15 +194,22 @@ export const expectedQuantityFilterSql = (productId: AnyColumn) =>
  */
 export const onHandUnitsFilterSql = (productId: AnyColumn) =>
   sql`(SELECT CASE
-                WHEN count(*) = 0 THEN NULL
-                WHEN count(DISTINCT ohu_i."amount"->>'unit') > 1 THEN NULL
-                ELSE COALESCE(sum((ohu_i."amount"->>'value')::numeric), 0)
+                WHEN ohu_inv.n = 0 AND ohu_loc.n = 0 THEN NULL
+                WHEN ohu_inv.units > 1 THEN NULL
+                ELSE COALESCE(ohu_inv.qty, 0) + ohu_loc.n
               END::double precision
-         FROM "InventoryEntry" ohu_i
-         JOIN "Location" ohu_l
-           ON ohu_l."id" = ohu_i."locationId" AND ohu_l."deletedAt" IS NULL
-        WHERE ohu_i."productId" = ${productId}
-          AND ohu_i."deletedAt" IS NULL)`;
+         FROM (SELECT count(*) AS n,
+                      count(DISTINCT ohu_i."amount"->>'unit') AS units,
+                      sum((ohu_i."amount"->>'value')::numeric) AS qty
+                 FROM "InventoryEntry" ohu_i
+                 JOIN "Location" ohu_l
+                   ON ohu_l."id" = ohu_i."locationId" AND ohu_l."deletedAt" IS NULL
+                WHERE ohu_i."productId" = ${productId}
+                  AND ohu_i."deletedAt" IS NULL) ohu_inv,
+              (SELECT count(*) AS n
+                 FROM "Location" ohu_ol
+                WHERE ohu_ol."productId" = ${productId}
+                  AND ohu_ol."deletedAt" IS NULL) ohu_loc)`;
 
 /** Does this product carry any product-linked Expense with no quantity? */
 export const hasUnknownQuantityLinesSql = (productId: AnyColumn) =>
@@ -230,6 +252,29 @@ export const loadProductQuantityLedgers = async (
     )
     .groupBy(expense.productId);
 
+  // Second grouped query rather than a join: the Expense aggregate above is
+  // grouped by product already, and folding a second one-to-many in would
+  // multiply its rows.
+  const locationRows = await unwrapDb(db)
+    .select({
+      productId: location.productId,
+      locationCount: sql<number>`count(*)::int`,
+    })
+    .from(location)
+    .where(
+      and(
+        notDeleted(location),
+        isNotNull(location.productId),
+        inArray(location.productId, [...ids]),
+      ),
+    )
+    .groupBy(location.productId);
+  const locationCounts = new Map<ProductId, number>();
+  for (const row of locationRows) {
+    if (row.productId === null) continue;
+    locationCounts.set(row.productId, Number(row.locationCount));
+  }
+
   const byProduct = new Map<ProductId, QuantityLedger>();
   for (const row of rows) {
     if (row.productId === null) continue;
@@ -241,6 +286,21 @@ export const loadProductQuantityLedgers = async (
       expectedQuantity: acquiredUnits - exitedUnits,
       unknownAcquisitionLines: Number(row.unknownAcquisitionLines),
       unknownExitLines: Number(row.unknownExitLines),
+      locationCount: locationCounts.get(row.productId) ?? 0,
+    });
+  }
+
+  // A product with locations but no ledger lines has no row above, and its
+  // count would otherwise vanish.
+  for (const [productId, locationCount] of locationCounts) {
+    if (byProduct.has(productId)) continue;
+    byProduct.set(productId, {
+      acquiredUnits: 0,
+      exitedUnits: 0,
+      expectedQuantity: 0,
+      unknownAcquisitionLines: 0,
+      unknownExitLines: 0,
+      locationCount,
     });
   }
   return byProduct;

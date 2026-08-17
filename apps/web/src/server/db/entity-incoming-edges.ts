@@ -146,6 +146,7 @@ export const INCOMING_EDGES = {
     "ProjectToolUsage.productId": { column: projectToolUsage.productId },
     "PurchaseProduct.productId": { column: purchaseProduct.productId },
     "WishCandidate.productId": { column: wishCandidate.productId },
+    "Location.productId": { column: location.productId },
   }),
   location: edges({
     "InventoryEntry.locationId": { column: inventoryEntry.locationId },

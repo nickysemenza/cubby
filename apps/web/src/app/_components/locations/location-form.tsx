@@ -1,4 +1,7 @@
-import type { LocationShortcode } from "@cubby/schemas/identifiers";
+import type {
+  LocationShortcode,
+  ProductShortcode,
+} from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import {
   type LocationCreateInput,
@@ -11,8 +14,10 @@ import type { FC } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
+import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import {
   getOptionalLocationId,
+  getOptionalProductShortcode,
   optionalLocationField,
 } from "~/app/_components/form-fields";
 import { AliasesField, filterAliases } from "~/components/forms/aliases-field";
@@ -33,10 +38,20 @@ import { PendingImageUpload } from "../PendingImageUpload";
 import { TypeFieldWithAI } from "./type-field-with-ai";
 
 // Form schema for location form (simple Zod schema without z.custom)
+/**
+ * `type` and `product` are alternatives, not companions: form factor is a fact
+ * about the SKU, so a location linked to a Product stores no type of its own.
+ *
+ * "at least one is set" is enforced structurally rather than by a `.refine()`
+ * — the type control always holds a value when no product is linked, and
+ * submit nulls it only when one is. A refine here would make this a
+ * `ZodEffects`, which react-hook-form's `UseFormReturn` generics reject.
+ */
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   aliases: z.array(z.string()),
-  type: locationType,
+  type: locationType.nullable(),
+  product: ComboboxItem.nullable(),
   parent: optionalLocationField,
 });
 
@@ -83,6 +98,9 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
       name: location ? location.name : (initialName ?? ""),
       aliases: location ? location.aliases : [],
       type: location ? location.type : "room",
+      product: location?.product
+        ? { id: location.product.id, name: location.product.name }
+        : null,
       parent: location?.parent
         ? buildLocationComboboxItem(location.parent)
         : initialParent
@@ -93,16 +111,21 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
 
   // Watch name field to pass to TypeFieldWithAI for AI suggestions
   const nameValue = form.watch("name");
+  // A linked location takes its form factor from the SKU, so the type control
+  // is hidden rather than left to disagree with the product.
+  const linkedProduct = form.watch("product");
 
   const handleSubmit = async (values: LocationFormValues) => {
     const aliases = filterAliases(values.aliases);
 
     if (mode === "create") {
       // For creation, pass all fields including pending image IDs
+      const productId = getOptionalProductShortcode(values.product) ?? null;
       const createData: LocationCreateInput = {
         name: values.name,
         aliases,
-        type: values.type,
+        type: productId ? null : values.type,
+        productId,
         parentId: getOptionalLocationId(values.parent) ?? null,
         ...getImageData(true), // Apply pending images for creation
       };
@@ -110,11 +133,23 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
       await props.onCreate(createData);
     } else if (mode === "edit" && location) {
       // Build update object for simple fields
+      const productId = getOptionalProductShortcode(values.product) ?? null;
       const updates: LocationUpdateInput["data"] = buildUpdateObject(
         location,
-        { ...values, aliases },
+        { ...values, aliases, type: productId ? null : values.type },
         ["name", "aliases", "type"],
       );
+
+      // Identity swap: linking a product clears the now-redundant type, and
+      // unlinking restores one so the location isn't left describing nothing.
+      const productIdChange = detectComboboxIdChange<ProductShortcode>(
+        location.product?.id,
+        values.product,
+      );
+      if (productIdChange !== undefined) {
+        updates.productId = productIdChange;
+        updates.type = productIdChange ? null : (values.type ?? "box");
+      }
 
       // Check if parent has changed (combobox requires special handling)
       const parentIdChange = detectComboboxIdChange<LocationShortcode>(
@@ -170,8 +205,23 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
               nullable={false}
             />
 
-            <TypeFieldWithAI form={form} name="type" locationName={nameValue} />
+            {!linkedProduct && (
+              <TypeFieldWithAI
+                form={form}
+                name="type"
+                locationName={nameValue}
+              />
+            )}
           </SideBySideFields>
+
+          {/* The SKU this location IS — a tote, bin or rack you own. Supplies
+              the form factor, which is why Type disappears once it's set. */}
+          <ComboboxFieldWithSearch
+            form={form}
+            name="product"
+            label="This location is a… (Optional)"
+            searchType="product"
+          />
 
           <ComboboxFieldWithSearch
             form={form}

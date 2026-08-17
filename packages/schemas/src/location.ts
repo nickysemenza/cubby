@@ -39,6 +39,14 @@ export const locationFilterFields = {
     .optional()
     .describe("Filter by location name (substring)"),
   itemTypeFilter: oneOrMany(locationType).optional(),
+  /**
+   * Locations that ARE this product. Matches the identity link, not stock
+   * held at the location — for that, use the inventory list.
+   */
+  productId: oneOrMany(productShortcode).optional(),
+  productPresenceFilter: presenceFilter.describe(
+    'Filter to locations that are / aren\'t an instance of a Product. "has" is the vessel set (totes, bins, racks); "none" is rooms, areas and drawers.',
+  ),
   parentId: oneOrMany(locationShortcode).optional(),
   parentPresenceFilter: presenceFilter,
   /**
@@ -165,8 +173,47 @@ export const locationValuation = z.object({
       totalItemCount: z.number().int().nonnegative(),
     })
     .optional(),
+  /**
+   * The vessels themselves, not their contents. A location that IS a product
+   * (`location.productId`) contributes its own price to its PARENT's
+   * container total, never to its own `directValuation` — "what is on this
+   * shelf" and "what is this shelf" are different questions, the same split
+   * `installed` already draws.
+   *
+   * Optional for the same reason as `installed`: rows persisted before the
+   * bucket existed still parse, and a missing key means "not recomputed since".
+   */
+  container: z
+    .object({
+      directValuation: z.number(),
+      totalValuation: z.number(),
+      directItemCount: z.number().int().nonnegative(),
+      totalItemCount: z.number().int().nonnegative(),
+    })
+    .optional(),
 });
 export type LocationValuation = z.infer<typeof locationValuation>;
+
+/**
+ * The SKU a location IS, embedded on every location read.
+ *
+ * Carries `category` and `coverImage` because they drive the location's own
+ * visual identity: the category icon is the glyph a linked location renders at
+ * small sizes (its `type` is null), and the cover is its thumbnail. `price` is
+ * what the container-valuation bucket rolls up.
+ */
+export const locationIdentityProductOut = z.object({
+  id: productShortcode,
+  name: z.string(),
+  manufacturer: z.string(),
+  model: z.string().nullable(),
+  category: z.enum(productCategoryValues).nullable(),
+  coverImage: imageOut.nullable(),
+  price: z.number().nullable(),
+});
+export type LocationIdentityProductOut = z.infer<
+  typeof locationIdentityProductOut
+>;
 
 export const locationOutFields = {
   id: locationShortcode,
@@ -175,7 +222,14 @@ export const locationOutFields = {
     .array(z.string())
     .default([])
     .describe("Alternate names for this location (searched + embedded)"),
-  type: locationType,
+  /**
+   * Null when `product` is set: form factor is a fact about the SKU, so a
+   * linked location does not restate it. Read the two together — the product
+   * wins when present.
+   */
+  type: locationType.nullable(),
+  /** The SKU this location IS (the bin itself), not stock held in it. */
+  product: locationIdentityProductOut.nullable(),
   lastBulkInventory: z.date().nullable(),
   aiDescription: z.string().nullable(),
   images: z.array(imageOut),
@@ -191,7 +245,7 @@ export type LocationOut = z.infer<typeof locationOut>;
 export const locationListRefOut = z.object({
   id: locationShortcode,
   name: z.string(),
-  type: locationType,
+  type: locationType.nullable(),
 });
 export type LocationListRefOut = z.infer<typeof locationListRefOut>;
 
@@ -203,7 +257,7 @@ export type LocationListRefOut = z.infer<typeof locationListRefOut>;
 export const locationAncestorOut = z.object({
   id: locationShortcode,
   name: z.string(),
-  type: locationType,
+  type: locationType.nullable(),
 });
 export type LocationAncestorOut = z.infer<typeof locationAncestorOut>;
 
@@ -350,7 +404,17 @@ const locationCreateShape = {
     .describe(
       "Alternate names for this location — searched alongside the name. Replaces the existing list when provided.",
     ),
-  type: locationType,
+  /**
+   * Omit when `productId` is set — the SKU carries the form factor and a
+   * linked location stores no type of its own.
+   */
+  type: locationType.nullable().optional(),
+  productId: productShortcode
+    .nullable()
+    .optional()
+    .describe(
+      "The product this location IS — a tote, bin or rack you own. Sets the location's identity and form factor; leave `type` unset when using this.",
+    ),
   parentId: optionalLocationShortcode.describe(
     "Parent location id — nest this location under another (omit/null for a top-level location).",
   ),
@@ -411,7 +475,18 @@ export type LocationBulkUpdateParentInput = z.infer<
 
 export const mcpLocationCreateInput = z.object({
   name: requiredName("Location name").describe("name of location"),
-  type: locationType,
+  type: locationType
+    .nullable()
+    .optional()
+    .describe(
+      "Form factor of a location you don't own as a product (room, area, drawer). Omit when passing productId.",
+    ),
+  productId: productShortcode
+    .nullable()
+    .optional()
+    .describe(
+      "The product this location IS — a tote, bin or rack you own. Supplies the form factor, so omit `type` when using this.",
+    ),
   parentId: optionalLocationShortcode.describe(
     "Parent location id — nest this location under another (omit/null for a top-level location).",
   ),

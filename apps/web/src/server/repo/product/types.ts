@@ -14,6 +14,7 @@ import type {
   MappableImageRecord,
   RowWithOptionalAliases,
 } from "~/server/repo/database-helpers";
+import type { LocationIdentityProductRow } from "~/server/repo/location/internal-types";
 import type { MappableProductExternalId } from "./external-id-types";
 import type { ProductPricing } from "./pricing";
 import type { QuantityLedger } from "./quantity-ledger";
@@ -33,6 +34,9 @@ export type ProductDeepDB = ProductSelect & {
   inventoryEntry: Array<
     typeof inventoryEntry.$inferSelect & {
       location: LocationSelect & {
+        // The holding location's own identity SKU — the bin itself, not this
+        // product's stock in it.
+        product?: LocationIdentityProductRow | null;
         images: Array<{
           image: MappableImageRecord;
           deletedAt?: Date | null;
