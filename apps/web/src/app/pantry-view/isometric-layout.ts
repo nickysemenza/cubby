@@ -111,10 +111,24 @@ interface FurnitureSpec {
   shelfLevels: number[];
 }
 
-// A null type means the location IS a product (a tote, bin, rack). Those are
-// vessels, never rooms, so they fall to the default spec below.
+/**
+ * A null type means the location IS a Product — see `location.productId`.
+ *
+ * Those get the box spec explicitly rather than falling through to `default`,
+ * which is the back-wall shelving unit: a tote drawn 3.8 ft tall against the
+ * wall is worse than a wrong-sized floor box. Of the 107 product-linked
+ * locations, ~82 are crates, totes and packout boxes, so a floor box is right
+ * for most and wrong for the handful of racks, carts and the one table.
+ *
+ * Getting those right needs a coarse shape on the Product, which it does not
+ * carry — the deliberate trade in #749, where per-type glyphs were dropped
+ * because nine of sixteen types already rendered identically. This switch is
+ * the one consumer that actually wanted the distinction.
+ */
 function getFurnitureSpec(type: LocationType | null): FurnitureSpec {
   switch (type) {
+    case null:
+      return { w: 1.6, d: 1.6, h: 1.2, zone: "floor", shelfLevels: [0.1] };
     case "shelf":
       return {
         w: 2.5,
@@ -131,10 +145,6 @@ function getFurnitureSpec(type: LocationType | null): FurnitureSpec {
       return { w: 2.8, d: 1.8, h: 1.4, zone: "floor", shelfLevels: [1.3] };
     case "cart":
       return { w: 2.0, d: 1.2, h: 1.4, zone: "floor", shelfLevels: [1.3] };
-    // Crates and totes used to size themselves off the type. They are Products
-    // now and reach this switch as a null type, so they take the default —
-    // per-SKU dimensions would have to come off the Product, which does not
-    // carry them.
     case "box":
       return { w: 1.6, d: 1.6, h: 1.2, zone: "floor", shelfLevels: [0.1] };
     case "bag":

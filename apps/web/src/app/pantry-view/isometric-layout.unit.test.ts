@@ -3,6 +3,45 @@ import { describe, expect, it, vi } from "vitest";
 import { buildRooms, type InventoryData } from "./isometric-layout";
 
 describe("isometric pantry layout", () => {
+  it("draws a product-linked location as a floor container, not a wall shelf", () => {
+    // A location that IS a Product carries no `type`. Falling through to the
+    // switch default would size it as a 3.8ft back-wall shelving unit, which is
+    // what ~82 of the 107 linked locations (crates, totes, packout boxes) are
+    // decidedly not.
+    const tote = {
+      id: "tote-1",
+      name: "party lighting",
+      type: null,
+      children: [],
+    } as unknown as InfLocation;
+    const room = {
+      id: "room-1",
+      name: "Garage",
+      type: "room",
+      children: [tote],
+    } as unknown as InfLocation;
+
+    // Contents are required: `buildRooms` skips a subtree whose pieces are all
+    // empty, so a bin with nothing in it never reaches the canvas anyway.
+    const inventory: InventoryData[] = [
+      {
+        id: "inventory-1",
+        amount: { value: 1, unit: "each" },
+        valuation: 20,
+        product: { name: "String lights", category: "household" },
+        location: { id: tote.id, name: tote.name, type: null },
+      },
+    ];
+
+    const rooms = buildRooms([room], inventory, (c: string) => c);
+    const piece = rooms[0]?.pieces[0];
+
+    expect(piece).toMatchObject({ name: "party lighting", locationType: null });
+    // The box spec — floor-standing and short, not the 3.8 back-wall default.
+    expect(piece?.h).toBe(1.2);
+    expect(piece?.shelfLevels).toEqual([0.1]);
+  });
+
   it("builds deterministic rooms while keeping CSS resolution outside layout", () => {
     const shelf = {
       id: "shelf-1",
