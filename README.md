@@ -299,6 +299,18 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
   Gitignored env (`apps/web/.env`, `.env.local`) is copied automatically via
   [.worktreeinclude](.worktreeinclude); `node_modules` and the gitignored WASM
   package (`packages/wasm/*`) are not copied.
+- **Heavy builds queue machine-wide.** `typecheck`, `test`, `build` and `check` run
+  through [scripts/with-slot.mjs](scripts/with-slot.mjs), which holds one of a few
+  slots under `~/.cache/cubby/slots` — outside any worktree, so every checkout
+  coordinates through the same set. This exists because contention, not compiler
+  speed, is what makes the loop slow: the same `apps/web` typecheck measured
+  **6.4s idle and 97s at load ~215**, and a full monorepo run exceeded nine minutes
+  at load ~400 with a dozen sessions each starting their own `tsc`. Slots default
+  to `max(2, cores/4)`; set `CUBBY_SLOTS` to change it, or `CUBBY_NO_SLOT=1` to
+  bypass (CI sets this — a single-tenant runner gains nothing from queueing).
+  A slot left behind by a `kill -9` is reclaimed automatically via a PID liveness
+  check, and nested calls pass straight through so `check` → `typecheck` can't
+  deadlock against itself.
 - **Builds are shared, not cold.** The `wasm` script points `CARGO_TARGET_DIR` at a
   shared cache (`~/.cache/cubby/recipebridge-target`), so worktrees reuse the
   compiled Rust deps — a worktree `pnpm run wasm` is an incremental build, not the

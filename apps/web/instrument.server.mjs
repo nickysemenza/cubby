@@ -1,13 +1,14 @@
 import { createRequire } from "node:module";
-import {
-  CompositePropagator,
-  W3CBaggagePropagator,
-  W3CTraceContextPropagator,
-} from "@opentelemetry/core";
 
+// Opt-in: `getNodeAutoInstrumentations()` patches ~40 modules at startup, and
+// measured on this preload that is ~1.6s of every `pnpm dev` — against 0.02s
+// for the Sentry half below. Almost no dev session actually reads the Jaeger
+// traces, so the common path shouldn't pay for them. Set CUBBY_OTEL=1 (with the
+// Jaeger container up) when you do want them.
+//
 // Initialize OTEL before Sentry so Jaeger gets the global tracer provider.
 // Sentry.init() registers its own tracer provider, which would block ours.
-{
+if (process.env.CUBBY_OTEL === "1") {
   const require = createRequire(import.meta.url);
   const { NodeSDK } = require("@opentelemetry/sdk-node");
   const { resourceFromAttributes } = require("@opentelemetry/resources");
@@ -21,6 +22,13 @@ import {
   const {
     getNodeAutoInstrumentations,
   } = require("@opentelemetry/auto-instrumentations-node");
+  // Required lazily alongside the rest: a static ESM import would pull
+  // @opentelemetry/core in even when this block is skipped, which is most runs.
+  const {
+    CompositePropagator,
+    W3CBaggagePropagator,
+    W3CTraceContextPropagator,
+  } = require("@opentelemetry/core");
 
   const otlpEndpoint =
     process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? "http://localhost:4318";
