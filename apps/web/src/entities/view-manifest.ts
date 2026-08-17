@@ -410,6 +410,49 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       columnVisibility: { price: true, location: true },
     },
     {
+      id: "unmapped",
+      label: "No way to cost it",
+      description: "No price, no USDA key, and no unit mapping",
+      // Every path to a cost or a conversion is absent at once: no price to
+      // scale, no USDA key to look a food up by, no manual edge to convert
+      // through. Any ONE of them would make the product usable, which is why
+      // the three are AND-ed rather than reported separately.
+      filters: [
+        { id: "price", value: "none-real" },
+        { id: "food", value: "none" },
+        { id: "unitMappingQuality", value: "none" },
+        { id: "category", value: ["food", FILTER_NONE] },
+      ],
+      problem: {
+        key: "productsWithoutMappings",
+        title: "Products with no conversion path",
+        description:
+          "No price, no USDA key, and no unit mapping — nothing can cost or convert these, so any recipe using them is under-covered.",
+        emptyMessage: "Every food product has at least one conversion path.",
+        // `usdaPresenceFilter: "none"` is `NO_USDA_KEY` — exactly the
+        // detector's two `isNull`s on fdc_id and upc.
+        //
+        // The category pair is the interesting one: `eqAnyOrPresence` is
+        // deliberately OR, so this emits `category = 'food' OR category IS
+        // NULL`, which is precisely `!isNonFoodCategory(category)`. Uncategorized
+        // is eligible on purpose — an unfiled product may well be food.
+        serverFilters: {
+          pricePresenceFilter: "none",
+          miscBucketFilter: "none",
+          usdaPresenceFilter: "none",
+          unitMappingPresenceFilter: "none",
+          categoryFilter: ["food"],
+          categoryPresenceFilter: "none",
+        },
+      },
+      columnVisibility: {
+        price: true,
+        food: true,
+        unitMappingQuality: true,
+        category: true,
+      },
+    },
+    {
       id: "over-exited",
       label: "Sold more than bought",
       description: "More units gone than the ledger can account for buying",

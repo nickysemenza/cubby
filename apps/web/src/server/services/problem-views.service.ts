@@ -8,6 +8,7 @@ import type {
   NeverVerifiedInventory,
   ProblemsViewsOut,
   ProductMissingPrice,
+  ProductWithoutMappings,
   SectionTotals,
   UnusedIngredient,
 } from "@cubby/schemas/problems";
@@ -206,6 +207,27 @@ const toProductMissingPrice = (row: ListRow): ProductMissingPrice => {
   };
 };
 
+const toProductWithoutMappings = (row: ListRow): ProductWithoutMappings => {
+  const r = row as unknown as ProductWithoutMappings & {
+    ingredient: { id: ProductWithoutMappings["ingredientId"] } | null;
+    usdaUnavailable: boolean | null;
+  };
+  return {
+    id: r.id,
+    name: r.name,
+    manufacturer: r.manufacturer,
+    createdAt: r.createdAt,
+    // The detector read `isIngredient` off the raw FK but `ingredientId` off a
+    // soft-delete-guarded join, so a product whose ingredient was deleted came
+    // back `{isIngredient: true, ingredientId: null}`. The list embed is
+    // guarded, so both now agree — the honest reading, since a deleted
+    // ingredient is no link at all.
+    isIngredient: r.ingredient != null,
+    ingredientId: r.ingredient?.id ?? null,
+    usdaUnavailable: r.usdaUnavailable ?? false,
+  };
+};
+
 export const findViewProblems = async (
   db: Database,
 ): Promise<ProblemsViewsOut> => {
@@ -278,6 +300,9 @@ export const findViewProblems = async (
     ),
     unvaluedBucketProducts: (results.unvaluedBucketProducts?.data ?? []).map(
       toProductMissingPrice,
+    ),
+    productsWithoutMappings: (results.productsWithoutMappings?.data ?? []).map(
+      toProductWithoutMappings,
     ),
     sectionTotals,
   };

@@ -14,7 +14,6 @@ import type {
 } from "@cubby/schemas/identifiers";
 import {
   unsafeExpenseShortcode,
-  unsafeIngredientShortcode,
   unsafeLocationShortcode,
   unsafeProductShortcode,
   unsafeProjectShortcode,
@@ -25,13 +24,12 @@ import type {
   DuplicateUniqueProduct,
   OrphanedProduct,
   ProductWithBetterUpcData,
-  ProductWithoutMappings,
   PurchaselessExitExpense,
   SoldButStillStocked,
   ToolUsedOutsideOwnership,
   UnlinkedExitExpense,
 } from "@cubby/schemas/problems";
-import { isMiscProduct, isNonFoodCategory } from "@cubby/shared";
+import { isMiscProduct } from "@cubby/shared";
 import { format } from "date-fns";
 import {
   and,
@@ -54,7 +52,6 @@ import type { Database, DrizzleClient } from "~/server/db";
 import {
   expense,
   image,
-  ingredient,
   inventoryEntry,
   product,
   productExternalId,
@@ -83,10 +80,7 @@ import {
   disposalPurchaseIds,
   loadProductOwnershipWindows,
 } from "~/server/repo/product/ownership";
-import {
-  effectiveProductPriceSql,
-  loadProductPricing,
-} from "~/server/repo/product/pricing";
+import { loadProductPricing } from "~/server/repo/product/pricing";
 import { loadProjectDateWindows } from "~/server/repo/project/subtree";
 import { buildTimelineGates } from "~/server/repo/project/tools";
 
@@ -879,80 +873,6 @@ export const findDuplicateProductIdentities = async (
   }
 
   return out;
-};
-
-// Find products with no conversion/price coverage at all. A product is covered
-// if it has a manual unit mapping OR a price (synthesizes a `1 each = $price`
-// edge) OR a USDA link (fdc_id/upc synthesizes portion/serving/nutrient
-// edges). Mirrors the totals-gap classifier in lib/recipe-totals-gaps.ts.
-// Excludes misc products (don't need pricing) and non-food (household/garage)
-// products, for which food unit coverage is meaningless.
-export const findProductsWithoutMappings = async (
-  db: Database,
-): Promise<ProductWithoutMappings[]> => {
-  const dbClient = getDb(db);
-
-  const productsWithoutMappings = await dbClient
-    .select({
-      id: product.id,
-      name: product.name,
-      manufacturer: product.manufacturer,
-      shortcode: product.shortcode,
-      createdAt: product.createdAt,
-      ingredientId: product.ingredientId,
-      // Through a LEFT JOIN (not the FK column) — the linked ingredient's own
-      // shortcode, so a null just means "no ingredient linked", matching the
-      // nullability of `ingredientId` itself.
-      ingredientShortcode: ingredient.shortcode,
-      usdaUnavailable: product.usdaUnavailable,
-      category: product.category,
-    })
-    .from(product)
-    .leftJoin(
-      ingredient,
-      and(eq(ingredient.id, product.ingredientId), notDeleted(ingredient)),
-    )
-    .where(
-      and(
-        notDeleted(product),
-        sql.raw(`${effectiveProductPriceSql('"Product"')} IS NULL`),
-        isNull(product.fdc_id),
-        isNull(product.upc),
-        notExists(
-          dbClient
-            .select({ id: sql`1` })
-            .from(productUnitMappings)
-            .where(
-              and(
-                eq(productUnitMappings.productId, product.id),
-                notDeleted(productUnitMappings),
-              ),
-            ),
-        ),
-      ),
-    );
-
-  return productsWithoutMappings
-    .filter((p) => !isMiscProduct(p.name) && !isNonFoodCategory(p.category))
-    .map(
-      ({
-        ingredientId,
-        ingredientShortcode,
-        usdaUnavailable,
-        category: _category,
-        shortcode,
-        ...rest
-      }) => ({
-        ...rest,
-        id: unsafeProductShortcode(shortcode),
-        isIngredient: ingredientId != null,
-        usdaUnavailable: usdaUnavailable ?? false,
-        ingredientId:
-          ingredientShortcode != null
-            ? unsafeIngredientShortcode(ingredientShortcode)
-            : null,
-      }),
-    );
 };
 
 // Synthesize a product's *effective* conversion edges (stored mappings + price

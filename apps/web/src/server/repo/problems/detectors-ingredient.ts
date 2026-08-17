@@ -33,7 +33,7 @@ import { TraceNames, withTrace } from "~/server/tracing";
 
 // Find ingredients used in a recipe but linked to no product, so they can't be
 // costed at all. This is the ingredient-side blind spot of the product-centric
-// detectors above (findProductsWithoutMappings / findIngredientsWithPartialCoverage
+// detectors above (the product/unmapped view / findIngredientsWithPartialCoverage
 // both require a product row to exist). Sub-recipe ingredients (recipeId set) are
 // costed by their recipe, never a product, so they're excluded.
 //

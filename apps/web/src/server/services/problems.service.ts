@@ -86,7 +86,6 @@ import {
   findManufacturerSpellingVariants,
   findOrphanedProducts,
   findParentRecipesWithDeletedSubRecipes,
-  findProductsWithoutMappings,
   findProductsWithUpcGaps,
   findPurchaseFinancialSettlementMismatches,
   findPurchaselessExitExpenses,
@@ -152,7 +151,7 @@ const countMissingEmbeddings = async (db: Database) =>
 // always-on navbar badge: the scan POSTs to the USDA worker once, not twice.
 //
 //   - partial coverage: an ingredient product with *some* coverage (so
-//     findProductsWithoutMappings skips it) whose effective conversion graph
+//     the product/unmapped view skips it) whose effective conversion graph
 //     (stored conversions + price edge + USDA edges) still can't reach all four
 //     base kinds. Money in a unit mapping counts like a scalar price.
 //   - islanded mappings: a product whose *effective* mappings still split into
@@ -519,7 +518,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       // enough for this group and it shares its single connection; the fold is
       // the same two queries `projectToolMatrix` already runs per page load.
       toolsUsedOutsideOwnership: () => findToolsUsedOutsideOwnership(scoped),
-      productsWithoutMappings: () => findProductsWithoutMappings(scoped),
       ingredientsWithoutProduct: () => findIngredientsWithoutProduct(scoped),
       productsWithNoImages: () =>
         findProductsWithNoImages(scoped, { excludeIngredients: true }),
@@ -575,7 +573,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     unlinkedExitExpenses: r.unlinkedExitExpenses,
     purchaselessExitExpenses: r.purchaselessExitExpenses,
     toolsUsedOutsideOwnership: r.toolsUsedOutsideOwnership,
-    productsWithoutMappings: r.productsWithoutMappings,
     ingredientsWithoutProduct: r.ingredientsWithoutProduct,
     productsWithNoImages: r.productsWithNoImages.map((p) => ({
       ...p,
