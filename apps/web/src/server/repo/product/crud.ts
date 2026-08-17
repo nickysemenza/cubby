@@ -482,17 +482,20 @@ export const productList = async (
   // at least one actual, positive Expense has a known product quantity. Keep
   // this uncorrelated for the shared RQB/count/aggregate where clause below.
   //
-  // Every predicate here must match `derivedProductPriceSql` (product/pricing.ts),
-  // whose own doc states the rule: a divergence filters by a number the user is
-  // never shown. Two were missing, and both made `pricePresenceFilter: "none"`
-  // NARROWER than "the Price cell renders —":
+  // It deliberately does NOT repeat two predicates `derivedProductPriceSql`
+  // (product/pricing.ts) carries, and the apparent divergence is worth reading
+  // twice before "fixing" it — both are already guaranteed by CHECK
+  // constraints, so restating them here would only cost a scan:
   //
-  //  - `lineKind = 'principal'`. Without it a product whose only qualifying
-  //    lines are tax/shipping/fee counted as priced, so it never appeared in
-  //    the no-price worklist despite having no derived price.
-  //  - the `NULLIF(sum(abs(productQuantity)), 0)` case, which is what the
-  //    HAVING below reproduces. Quantities that cancel to zero divide to NULL,
-  //    so the rows exist but the price does not.
+  //  - `lineKind = 'principal'` — `Expense_lineKind_productId_check` is
+  //    `lineKind = 'principal' OR productId IS NULL`, so every row this
+  //    subquery can see (it requires `productId IS NOT NULL`) is principal.
+  //  - the `NULLIF(sum(abs(productQuantity)), 0)` guard —
+  //    `Expense_productQuantity_check` forbids a zero quantity outright, so a
+  //    sum of absolute values over non-null quantities is never zero.
+  //
+  // Neither constraint is visible from this file, which is why this note is
+  // here rather than left for the next reader to re-derive.
   const productIdsWithDerivedPrice = dbClient
     .select({ productId: expense.productId })
     .from(expense)
@@ -500,14 +503,12 @@ export const productList = async (
       and(
         notDeleted(expense),
         eq(expense.future, false),
-        eq(expense.lineKind, "principal"),
         gt(expense.cost, 0),
         isNotNull(expense.productId),
         isNotNull(expense.productQuantity),
       ),
     )
-    .groupBy(expense.productId)
-    .having(sql`sum(abs(${expense.productQuantity})) <> 0`);
+    .groupBy(expense.productId);
 
   const productIdsWithPurchases = dbClient
     .select({ productId: expense.productId })
