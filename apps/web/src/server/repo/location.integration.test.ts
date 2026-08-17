@@ -598,9 +598,8 @@ describe("buildLocationTree identity product hydration", () => {
       ctx.actor,
     );
 
-    const row = (await buildLocationTree(ctx.db)).find(
-      (location) => location.id === created.id,
-    );
+    const [home] = await buildLocationTree(ctx.db);
+    const row = home?.children?.find((location) => location.id === created.id);
     expect(row?.product).toMatchObject({
       id: vessel.id,
       coverImage: { id: cover.id },
