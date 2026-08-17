@@ -15,7 +15,6 @@ import {
   IntegreSQLClient,
   type IntegreSQLDatabaseConfig,
 } from "@devoxa/integresql-client";
-import { pushSchema } from "drizzle-kit/api";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { beforeEach } from "vitest";
@@ -79,6 +78,16 @@ export async function setup() {
     const db = drizzle(pool);
 
     try {
+      // Imported lazily, and deliberately. `pushSchema` is only ever needed
+      // HERE, in `setup()` — which is the integration project's `globalSetup`
+      // and so runs once per `vitest run`. But this module is also reached by
+      // every one of the 69 integration test files, because
+      // `tooling/integration-teardown.ts` (a `setupFiles` entry) imports
+      // `closeTestDb` from it. A top-level import therefore loaded the whole
+      // 9.8 MB drizzle-kit migration engine 69 times to use it once: measured
+      // **565ms per file**, ~39s of cumulative worker time. Keep this dynamic.
+      const { pushSchema } = await import("drizzle-kit/api");
+
       // pushSchema doesn't manage extensions; create them before pushing
       // (mirrors db:push and E2E setup).
       await ensureDbExtensions(db);
@@ -219,6 +228,29 @@ async function getFileDb() {
  * every PK is a UUID or a client-generated text id. Crucially the ~177 indexes,
  * 7 enum types and 2 extensions all survive — that is precisely the per-database
  * work a `CREATE DATABASE ... TEMPLATE` was repeating for all 294 tests.
+ *
+ * Re-measured 2026-08-17 after docker-compose.yml was tuned for tests
+ * (`fsync=off`, `synchronous_commit=off`, `full_page_writes=off`, statement
+ * logging off) and the 1603 leaked IntegreSQL databases were dropped. Both
+ * halves of the original trade-off moved, and the conclusion survives:
+ *
+ *   - a fresh `getTestDatabase()` per test: **777ms -> 34ms**
+ *   - this TRUNCATE-all reset:             **266ms -> 31ms**
+ *
+ * So per-test databases are no longer disqualified on cost — they are simply a
+ * tie, and a tie does not justify rewriting `withTestDb()`. Note also that the
+ * 34ms was measured sequentially; under the real 8-way parallel run the binding
+ * constraint is IntegreSQL refilling its pool, which is what the original 777ms
+ * actually captured. Don't re-open this on a single-threaded microbenchmark.
+ *
+ * ⚠️ Truncating only the DIRTY tables (`pg_stat_user_tables` where
+ * `n_tup_ins + n_tup_upd + n_tup_del > 0`) looks like a 10x win and is NOT
+ * SAFE. Those counters are not synchronous: measured on PG17, a table INSERTed
+ * into reports `(NONE)` when queried immediately afterwards and only appears
+ * ~2s later. A reset built on them silently skips the tables the previous test
+ * just wrote — row leakage between tests, which is the exact failure this
+ * function exists to prevent, and it would fail as a confusing duplicate-key
+ * error in some unrelated later test rather than here.
  */
 async function resetTestDb() {
   const { rawDb, pool } = await getFileDb();

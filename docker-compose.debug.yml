@@ -1,0 +1,33 @@
+# Opt-in Postgres statement logging.
+#
+# `log_min_duration_statement=0` logs every statement. That is genuinely useful
+# when debugging a query, and genuinely expensive otherwise: measured at 18.7 MB
+# per integration test file (~1.1 GB per full integration run), and it had grown
+# the db container's json.log to 56 GB before being moved out of the default.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d
+# Back to normal:
+#   docker compose up -d
+services:
+  db:
+    command:
+      [
+        "postgres",
+        "-c",
+        "fsync=off",
+        "-c",
+        "synchronous_commit=off",
+        "-c",
+        "full_page_writes=off",
+        "-c",
+        "shared_buffers=512MB",
+        "-c",
+        "max_connections=200",
+        "-c",
+        "log_min_duration_statement=0",
+        "-c",
+        "log_destination=stderr",
+        "-c",
+        "log_line_prefix=%t [%p]:[%l] user=%u, db=%d "
+      ]

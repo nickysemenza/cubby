@@ -327,6 +327,15 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
 - **Shared services:** docker-compose (Postgres/IntegresQL/Jaeger) binds fixed host
   ports — `docker-compose up -d` once from any checkout and all worktrees reuse them
   for `test`/`test:e2e`.
+- **⚠ Always pass `-p cubby` to compose from a worktree.** Compose derives its
+  project name from the *directory* name, so `docker compose up -d` inside
+  `.claude/worktrees/<branch>/` creates a **second, parallel stack**
+  (`<branch>-db-1`, …) instead of managing the real `cubby-*` containers. It
+  then fails to start on `Bind for 0.0.0.0:5432 failed: port is already
+  allocated`, because the real stack still holds the port — and a
+  `docker compose down` from that worktree silently no-ops on the containers you
+  meant to stop. Use `docker compose -p cubby up -d` / `-p cubby down` from
+  anywhere outside the main checkout.
 - **⚠ Shared prod DB:** every worktree's `DATABASE_URL` is the **same prod Neon**
   instance (dev DB *is* prod). `db:push` and data changes from one worktree are
   visible everywhere and hit prod — coordinate schema changes across parallel work.
