@@ -124,7 +124,9 @@ export const negativeExpectedQuantitySchema = z.object({
 // lines are common and mostly innocent — refunds, price adjustments, family
 // contributions — and on live data that looser predicate is wrong about half
 // the time (43 flagged, 20 real). Reported with both quantities so a partial
-// sale reads as deliberate rather than as a bug.
+// sale reads clearly rather than as a bug. Membership itself is decided by the
+// canonical quantity ledger: only a known balance of zero or less is fully
+// disposed, and an unknown acquisition suppresses the finding.
 export const soldButStillStockedSchema = z.object({
   ...productProblemFields,
   // Units accounted for by disposal lines. A line with no `productQuantity`
@@ -133,8 +135,8 @@ export const soldButStillStockedSchema = z.object({
   // is read as `−|qty|`, so the detector takes `abs()` and either stored sign
   // yields the same number here.
   soldQuantity: z.number(),
-  // Units still on a shelf. Only reported when `soldQuantity >= liveQuantity`;
-  // selling 4 of 14 parts bins leaves 10 legitimately stocked.
+  // Units still owned according to the shared on-hand projection. Mixed-unit
+  // stock has no honest number and is not reported.
   liveQuantity: z.number(),
   // Net proceeds across those disposal lines (negative, as stored).
   proceeds: z.number(),

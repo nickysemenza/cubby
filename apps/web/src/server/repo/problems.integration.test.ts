@@ -504,8 +504,15 @@ describe("problems repo", () => {
         makeProductInput({ name: "Sold Off Track Saw", price: 400 }),
         ctx.actor,
       );
-      // Sold 4 of 14 — the remaining 10 are legitimately stocked.
-      const partial = await createProduct(
+      // The old `sold >= stocked` predicate only spared a partial sale when
+      // the remainder happened to be larger than the quantity sold. These two
+      // fixtures cover both sides of that accidental comparison.
+      const partialEqual = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Two-pack Work Light", price: 20 }),
+        ctx.actor,
+      );
+      const partialLargeSale = await createProduct(
         ctx.db,
         makeProductInput({ name: "Parts Bin Case", price: 10 }),
         ctx.actor,
@@ -531,9 +538,18 @@ describe("problems repo", () => {
       await createInventoryEntry(
         ctx.db,
         {
-          productId: partial.id,
+          productId: partialEqual.id,
           locationId: loc.id,
-          amount: { value: 10, unit: "each" },
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+      await createInventoryEntry(
+        ctx.db,
+        {
+          productId: partialLargeSale.id,
+          locationId: loc.id,
+          amount: { value: 3, unit: "each" },
         },
         ctx.actor,
       );
@@ -556,12 +572,36 @@ describe("problems repo", () => {
         productQuantity: -1,
       });
       await seedLine({
-        name: "four bins sold",
-        cost: -8.93,
+        name: "two work lights bought",
+        cost: 40,
+        vendor: "Home Depot",
+        orderId: "BUY-PARTIAL-1",
+        productId: partialEqual.id,
+        productQuantity: 2,
+      });
+      await seedLine({
+        name: "one work light sold",
+        cost: -10,
         vendor: "eBay",
-        orderId: "SALE-2",
-        productId: partial.id,
-        productQuantity: -4,
+        orderId: "SALE-PARTIAL-1",
+        productId: partialEqual.id,
+        productQuantity: -1,
+      });
+      await seedLine({
+        name: "eleven bins bought",
+        cost: 110,
+        vendor: "Home Depot",
+        orderId: "BUY-PARTIAL-2",
+        productId: partialLargeSale.id,
+        productQuantity: 11,
+      });
+      await seedLine({
+        name: "eight bins sold",
+        cost: -80,
+        vendor: "eBay",
+        orderId: "SALE-PARTIAL-2",
+        productId: partialLargeSale.id,
+        productQuantity: -8,
       });
       await seedLine({
         name: "sander",
@@ -589,10 +629,11 @@ describe("problems repo", () => {
       expect(flagged?.proceeds).toBe(-320);
       expect(flagged?.locations.map((l) => l.id)).toEqual([loc.id]);
 
-      // Rule 2: a partial sale leaves real stock behind.
-      expect(found.soldButStillStocked.some((p) => p.id === partial.id)).toBe(
-        false,
-      );
+      // Rule 2: both partial sales leave a positive ledger balance that exactly
+      // matches the shelf, regardless of how sold and stocked compare.
+      for (const id of [partialEqual.id, partialLargeSale.id]) {
+        expect(found.soldButStillStocked.some((p) => p.id === id)).toBe(false);
+      }
       // Rule 1: the refund sits on a purchase that nets +$200, so it is not a
       // disposal at all.
       expect(found.soldButStillStocked.some((p) => p.id === refunded.id)).toBe(
@@ -644,6 +685,115 @@ describe("problems repo", () => {
       const found = await findFastProblems(ctx.db);
       const flagged = found.soldButStillStocked.find((p) => p.id === prod.id);
       expect(flagged?.soldQuantity).toBe(1);
+    });
+
+    it("uses shared on-hand and uncertainty semantics", async () => {
+      const shelf = await createLocation(
+        ctx.db,
+        makeLocationInput({ name: "Quantity semantics shelf" }),
+        ctx.actor,
+      );
+      const secondShelf = await createLocation(
+        ctx.db,
+        makeLocationInput({ name: "Second quantity semantics shelf" }),
+        ctx.actor,
+      );
+      const installed = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Installed Sold Cabinet", price: 100 }),
+        ctx.actor,
+      );
+      const mixed = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Mixed Unit Sold Stock", price: 20 }),
+        ctx.actor,
+      );
+      const uncertain = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Unknown Acquisition Count", price: 30 }),
+        ctx.actor,
+      );
+
+      const installedLocation = await createLocation(
+        ctx.db,
+        makeLocationInput({
+          name: "Cabinet that is the product",
+          type: null,
+          productId: installed.id,
+        }),
+        ctx.actor,
+      );
+      for (const row of [
+        { locationId: shelf.id, amount: { value: 1, unit: "each" } },
+        { locationId: secondShelf.id, amount: { value: 1, unit: "box" } },
+      ]) {
+        await createInventoryEntry(
+          ctx.db,
+          { productId: mixed.id, ...row },
+          ctx.actor,
+        );
+      }
+      await createInventoryEntry(
+        ctx.db,
+        {
+          productId: uncertain.id,
+          locationId: shelf.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+
+      await seedLine({
+        name: "cabinet bought",
+        cost: 100,
+        productId: installed.id,
+        productQuantity: 1,
+      });
+      await seedLine({
+        name: "cabinet sold",
+        cost: -80,
+        vendor: "eBay",
+        orderId: "INSTALLED-SALE",
+        productId: installed.id,
+        productQuantity: -1,
+      });
+      await seedLine({
+        name: "mixed stock sold",
+        cost: -10,
+        vendor: "eBay",
+        orderId: "MIXED-SALE",
+        productId: mixed.id,
+        productQuantity: -1,
+      });
+      await seedLine({
+        name: "unknown amount bought",
+        cost: 30,
+        productId: uncertain.id,
+      });
+      await seedLine({
+        name: "one uncertain item sold",
+        cost: -20,
+        vendor: "eBay",
+        orderId: "UNCERTAIN-SALE",
+        productId: uncertain.id,
+        productQuantity: -1,
+      });
+
+      const { soldButStillStocked } = await findFastProblems(ctx.db);
+      expect(
+        soldButStillStocked.find((row) => row.id === installed.id),
+      ).toMatchObject({
+        liveQuantity: 1,
+        locations: [
+          { id: installedLocation.id, name: "Cabinet that is the product" },
+        ],
+      });
+      expect(soldButStillStocked.some((row) => row.id === mixed.id)).toBe(
+        false,
+      );
+      expect(soldButStillStocked.some((row) => row.id === uncertain.id)).toBe(
+        false,
+      );
     });
   });
 
@@ -1101,6 +1251,88 @@ describe("problems repo", () => {
       expect(
         after.toolsUsedOutsideOwnership.some((row) => row.id === late.id),
       ).toBe(false);
+    });
+
+    it("spares a partial-exit use and flags a use inside a sell-rebuy gap", async () => {
+      const { output: afterPartial, entityId: afterPartialId } =
+        await createProject(
+          ctx.db,
+          projectCreateInput.parse({
+            name: "After partial sale",
+            status: "done",
+            startDate: "2024-01-01",
+            endDate: "2024-02-01",
+          }),
+          ctx.actor,
+        );
+      const { output: inGap, entityId: inGapId } = await createProject(
+        ctx.db,
+        projectCreateInput.parse({
+          name: "Inside ownership gap",
+          status: "done",
+          startDate: "2022-06-01",
+          endDate: "2022-07-01",
+        }),
+        ctx.actor,
+      );
+      const partial = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Partially sold detector tool" }),
+        ctx.actor,
+      );
+      const rebought = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Gap detector tool" }),
+        ctx.actor,
+      );
+      const movement = (
+        productId: (typeof partial)["id"],
+        date: string,
+        cost: number,
+        productQuantity: number,
+      ) =>
+        createExpense(
+          ctx.db,
+          expenseCreateInput.parse(
+            makeExpenseInput({
+              name: `ownership ${date}`,
+              productId,
+              date,
+              cost,
+              productQuantity,
+              lineKind: "principal",
+            }),
+          ),
+          ctx.actor,
+        );
+
+      await movement(partial.id, "2021-01-01", 200, 2);
+      await movement(partial.id, "2023-01-01", -80, -1);
+      await movement(rebought.id, "2021-01-01", 100, 1);
+      await movement(rebought.id, "2022-01-01", -80, -1);
+      await movement(rebought.id, "2023-01-01", 120, 1);
+
+      await getDb(ctx.db)
+        .insert(projectToolUsage)
+        .values([
+          { projectId: afterPartialId, productId: partial.entityId },
+          { projectId: inGapId, productId: rebought.entityId },
+        ]);
+
+      const rows = (await findFastProblems(ctx.db)).toolsUsedOutsideOwnership;
+      expect(
+        rows.some(
+          (row) => row.id === partial.id && row.projectId === afterPartial.id,
+        ),
+      ).toBe(false);
+      expect(rows).toContainEqual(
+        expect.objectContaining({
+          id: rebought.id,
+          projectId: inGap.id,
+          conflict: "disposed_before_start",
+          toolDate: "2022-01-01",
+        }),
+      );
     });
   });
 

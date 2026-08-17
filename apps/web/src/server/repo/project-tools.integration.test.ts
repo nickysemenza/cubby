@@ -4,6 +4,7 @@ import {
   projectToolMatrixInput,
   taskCreateInput,
 } from "@cubby/schemas/project";
+import { format } from "date-fns";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -1366,10 +1367,14 @@ describe("project tool matrix", () => {
     ).toEqual([]);
     expect(
       matrix.rows.find((row) => row.productId === boughtLater.id)?.ownership,
-    ).toEqual({ acquiredAt: "2024-03-01", disposedAt: null });
+    ).toEqual({
+      acquiredAt: "2024-03-01",
+      intervals: [],
+      confidenceLostAt: "2024-03-01",
+    });
     expect(
       matrix.rows.find((row) => row.productId === undated.id)?.ownership,
-    ).toEqual({ acquiredAt: null, disposedAt: null });
+    ).toEqual({ acquiredAt: null, intervals: [], confidenceLostAt: null });
     expect(matrix.totals.timelineConflictCells).toBeGreaterThan(0);
 
     // And the write path refuses it outright, so MCP and a stale client can't
@@ -1491,6 +1496,16 @@ describe("project tool matrix", () => {
   });
 
   it("reopens the window for a tool sold and later re-bought", async () => {
+    const { entityId: gapId } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "Between sale and rebuy",
+        startDate: "2023-02-01",
+        endDate: "2023-03-01",
+        status: "done",
+      }),
+      ctx.actor,
+    );
     const { output: later, entityId: laterId } = await createProject(
       ctx.db,
       projectCreateInput.parse({
@@ -1517,6 +1532,11 @@ describe("project tool matrix", () => {
       makeProductInput({ name: "Replaced planer", category: "tools" }),
       ctx.actor,
     );
+    const partial = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Partially sold planer", category: "tools" }),
+      ctx.actor,
+    );
 
     // A disposal is a Purchase whose Expenses NET negative — a bare negative
     // line is a refund and must not close the window. `createExpense` resolves
@@ -1536,6 +1556,7 @@ describe("project tool matrix", () => {
           orderId,
           cost: -100,
           date,
+          productQuantity: -1,
         }),
         ctx.actor,
       );
@@ -1543,6 +1564,7 @@ describe("project tool matrix", () => {
     for (const row of [
       { product: soldOnly, orderId: "TOOL-SALE-1" },
       { product: rebought, orderId: "TOOL-SALE-2" },
+      { product: partial, orderId: "TOOL-SALE-3" },
     ]) {
       await createExpense(
         ctx.db,
@@ -1552,6 +1574,7 @@ describe("project tool matrix", () => {
           productId: row.product.id,
           cost: 250,
           date: "2021-01-01",
+          productQuantity: row.product.id === partial.id ? 2 : 1,
         }),
         ctx.actor,
       );
@@ -1565,6 +1588,7 @@ describe("project tool matrix", () => {
         productId: rebought.id,
         cost: 250,
         date: "2023-06-01",
+        productQuantity: 1,
       }),
       ctx.actor,
     );
@@ -1573,19 +1597,44 @@ describe("project tool matrix", () => {
       setProjectToolUsage(ctx.db, laterId, soldOnly.entityId, true, ctx.actor),
     ).rejects.toMatchObject({ cause: { reason: "TOOL_TIMELINE_CONFLICT" } });
     await expect(
+      setProjectToolUsage(ctx.db, gapId, rebought.entityId, true, ctx.actor),
+    ).rejects.toMatchObject({ cause: { reason: "TOOL_TIMELINE_CONFLICT" } });
+    await expect(
       setProjectToolUsage(ctx.db, laterId, rebought.entityId, true, ctx.actor),
+    ).resolves.toEqual({ changed: true });
+    await expect(
+      setProjectToolUsage(ctx.db, laterId, partial.entityId, true, ctx.actor),
     ).resolves.toEqual({ changed: true });
 
     const matrix = await projectToolMatrix(
       ctx.db,
       matrixInput({ minNetLifetimeCost: 0 }),
     );
+    const today = format(new Date(), "yyyy-MM-dd");
     expect(
       matrix.rows.find((row) => row.productId === soldOnly.id)?.ownership,
-    ).toEqual({ acquiredAt: "2021-01-01", disposedAt: "2023-01-01" });
+    ).toEqual({
+      acquiredAt: "2021-01-01",
+      intervals: [{ start: "2021-01-01", end: "2023-01-01" }],
+      confidenceLostAt: null,
+    });
     expect(
       matrix.rows.find((row) => row.productId === rebought.id)?.ownership,
-    ).toEqual({ acquiredAt: "2021-01-01", disposedAt: null });
+    ).toEqual({
+      acquiredAt: "2021-01-01",
+      intervals: [
+        { start: "2021-01-01", end: "2023-01-01" },
+        { start: "2023-06-01", end: today },
+      ],
+      confidenceLostAt: null,
+    });
+    expect(
+      matrix.rows.find((row) => row.productId === partial.id)?.ownership,
+    ).toEqual({
+      acquiredAt: "2021-01-01",
+      intervals: [{ start: "2021-01-01", end: today }],
+      confidenceLostAt: null,
+    });
     expect(later.id).toBeTruthy();
   });
 
