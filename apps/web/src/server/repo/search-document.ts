@@ -4,7 +4,7 @@ import {
 } from "@cubby/schemas/search";
 import { type SQL, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, uuidArrayParam } from "~/server/repo/database-helpers";
 import {
   getEmbeddingTextsForEntityTypes,
   getEmbeddingTextsForRefs,
@@ -82,19 +82,23 @@ async function getSearchDocumentSources(
     sql`, `,
   );
   // ONE bind parameter for the whole id set, not one per id: a Postgres array
-  // literal bound as text and cast in SQL. It is deliberately NOT a JS array
-  // interpolated into `sql` — drizzle renders that as a row constructor, the
-  // trap `hand-rolled-any-array` guards. It is also not `eqAny`/`inArray`,
-  // which emit `IN ($1, …, $n)`: this query is raw SQL over fifteen aliased
-  // tables, and binding a parameter per id is the cost being removed. The
-  // matching `requested` CTE below unnests it once; a null set skips the gate
-  // entirely so the unfiltered backfill path is unchanged.
-  const requestedIds =
-    entityIds == null ? null : `{${[...new Set(entityIds)].join(",")}}`;
+  // literal bound as text and cast in SQL, via the only constructor the
+  // `hand-rolled-any-array` guard accepts. It is deliberately NOT a JS array
+  // interpolated into `sql` — drizzle renders that as a row constructor — and
+  // not `eqAny`/`inArray`, which emit `IN ($1, …, $n)`: this is raw SQL over
+  // fifteen aliased tables, and a parameter per id is the cost being removed.
+  const hasIds = entityIds != null;
 
-  /** The shared id gate — null set means "no gate", not "match nothing". */
+  /**
+   * The shared id gate — an absent set means "no gate", not "match nothing".
+   *
+   * `= ANY` and not `IN (SELECT unnest(...))` over a CTE: with a BOUND
+   * parameter the planner cannot see into the subquery, so that form degrades
+   * every arm to a hashed SubPlan over a full table scan. Measured on
+   * production, fetching one row by uuid: 270 buffers against 3.
+   */
   const requested = (column: SQL) =>
-    sql`(${requestedIds}::text IS NULL OR ${column} IN (SELECT id FROM requested))`;
+    hasIds ? sql`${column} = ANY(${uuidArrayParam(entityIds)})` : sql`TRUE`;
 
   // One branch per searchable entity, `satisfies Record<SearchableEntity, SQL>`
   // so the compiler — not a reviewer — is what notices a new `searchable: true`
@@ -197,8 +201,6 @@ async function getSearchDocumentSources(
       FROM "Location" parent
       JOIN location_path child ON child."parentId" = parent.id
       WHERE parent."deletedAt" IS NULL
-    ), requested AS (
-      SELECT unnest(${requestedIds}::uuid[]) AS id
     )
     SELECT * FROM (${union}) source
   `);
