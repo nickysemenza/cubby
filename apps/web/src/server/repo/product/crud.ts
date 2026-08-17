@@ -919,12 +919,50 @@ export const productList = async (
 };
 
 /**
+ * First displayable product image in explicit display order, loaded once for a
+ * picker page. Keeping this separate from the product relation graph preserves
+ * the lightweight typeahead while restoring the cover its rows previously got
+ * from global-search thumbnail hydration.
+ */
+const loadProductCoverImageUrls = async (
+  db: Database,
+  ids: ProductId[],
+): Promise<Map<ProductId, string>> => {
+  const byId = new Map<ProductId, string>();
+  if (ids.length === 0) return byId;
+
+  const rows = await getDb(db)
+    .select({ productId: productImage.productId, url: image.url })
+    .from(productImage)
+    .innerJoin(image, eq(image.id, productImage.imageId))
+    .where(
+      and(
+        inArray(productImage.productId, ids),
+        notDeleted(productImage),
+        notDeleted(image),
+        displayableImageWhere,
+      ),
+    )
+    .orderBy(
+      productImage.productId,
+      asc(productImage.sortOrder),
+      asc(productImage.createdAt),
+      asc(productImage.id),
+    );
+
+  for (const row of rows) {
+    if (!byId.has(row.productId)) byId.set(row.productId, row.url);
+  }
+  return byId;
+};
+
+/**
  * Lightweight product search for typeahead/picker comboboxes.
  *
  * Returns the product picker shape only — it deliberately skips the inventory /
- * ingredient / unit-mapping / image / external-id relation joins that
- * `productList` pulls. Pickers need identity plus compact quantity evidence,
- * so this endpoint batches that evidence without pretending to carry full rows.
+ * ingredient / unit-mapping / external-id relation graph that `productList`
+ * pulls. Pickers get identity, compact quantity evidence, and one batched cover
+ * URL without pretending to carry full product rows.
  */
 export const productSearch = async (
   db: Database,
@@ -970,14 +1008,14 @@ export const productSearch = async (
     countWhere(db, product, whereClause),
   );
 
-  const quantities = await loadProductPickerQuantities(
-    db,
-    results.map((result) => result.id),
-  );
+  const resultIds = results.map((result) => result.id);
+  const quantities = await loadProductPickerQuantities(db, resultIds);
+  const coverImageUrls = await loadProductCoverImageUrls(db, resultIds);
   const data = results.map((result) =>
     dbProductToPickerItemAPI({
       ...result,
       ...quantities.get(result.id)!,
+      coverImageUrl: coverImageUrls.get(result.id) ?? null,
     }),
   );
 
@@ -1001,14 +1039,17 @@ export const getProductPickerItemsByIds = async (
       category: true,
     },
   });
-  const quantities = await loadProductPickerQuantities(
-    db,
-    rows.map((row) => row.id),
-  );
+  const rowIds = rows.map((row) => row.id);
+  const quantities = await loadProductPickerQuantities(db, rowIds);
+  const coverImageUrls = await loadProductCoverImageUrls(db, rowIds);
   const byId = new Map(
     rows.map((row) => [
       row.id,
-      dbProductToPickerItemAPI({ ...row, ...quantities.get(row.id)! }),
+      dbProductToPickerItemAPI({
+        ...row,
+        ...quantities.get(row.id)!,
+        coverImageUrl: coverImageUrls.get(row.id) ?? null,
+      }),
     ]),
   );
   return ids.flatMap((id) => {

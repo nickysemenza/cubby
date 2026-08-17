@@ -8,6 +8,11 @@ import type {
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import { unsafeVendorShortcode } from "@cubby/schemas/identifiers";
+import {
+  type ImageRenderStatus,
+  type ImageStorageStatus,
+  isDisplayableImageFile,
+} from "@cubby/schemas/image";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { locationType } from "@cubby/schemas/location";
 import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
@@ -99,6 +104,13 @@ export const buildProductComboboxItem = (
     name: string;
     manufacturer: string;
     category?: string | null;
+    coverImageUrl?: string | null;
+    images?: Array<{
+      url: string;
+      contentType: string;
+      renderStatus?: ImageRenderStatus | null;
+      storageStatus?: ImageStorageStatus | null;
+    }>;
     aliases?: string[] | null;
     quantityLedger?: {
       acquiredUnits: number;
@@ -141,6 +153,10 @@ export const buildProductComboboxItem = (
                   ) + ledger.locationCount,
               } as const);
   const onHand = product.onHand ?? derivedOnHand;
+  const coverImageUrl =
+    product.coverImageUrl ??
+    product.images?.find(isDisplayableImageFile)?.url ??
+    null;
   const base: ComboboxItem<ProductShortcode> = {
     id: product.id,
     shortcode: product.id,
@@ -148,7 +164,13 @@ export const buildProductComboboxItem = (
     aliases: product.aliases ?? [],
     secondary: product.manufacturer,
     detail: product.category ?? undefined,
-    icon: <EntityIcon entity="product" size={14} colored />,
+    icon: (
+      <SearchPickerIcon
+        entity="product"
+        imageUrl={coverImageUrl}
+        typeHint={null}
+      />
+    ),
   };
   if (!ledger || !onHand) return base;
 
