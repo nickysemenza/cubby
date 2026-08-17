@@ -276,6 +276,19 @@ jobs:
       - name: Run repository quality gates
         run: pnpm run check
 
+      # Dependency advisories are NOT a merge gate. Every one this repo has
+      # seen landed mid-branch, was unreachable from any request path, and
+      # turned every open PR red at once for something no PR introduced —
+      # four allowlist entries, four deferrals, zero real findings. Blocking on
+      # a third party's publication schedule taxes unrelated work.
+      #
+      # It still runs weekly so a genuinely reachable advisory surfaces, and
+      # `pnpm audit:security` remains available on demand.
+      - name: Dependency advisories (weekly, advisory only)
+        if: github.event_name == 'schedule'
+        continue-on-error: true
+        run: pnpm audit:security
+
   test-unit-web:
     name: Unit Tests - web
     needs: scope
