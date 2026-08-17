@@ -45,6 +45,7 @@ export const typeSupportsQrCode = (type: LocationType | null): boolean =>
 
 const typeToGroup: Record<LocationType, LocationTypeGroup> = {
   // Spaces - large areas (warm brown family)
+  house: "spaces",
   room: "spaces",
   area: "spaces",
   // Surfaces - work/display areas (lime green family)
@@ -69,6 +70,7 @@ export const getLocationTypeGroup = (
 // Exhaustive at construction: a new LocationType without a key here is a compile
 // error (replaces the old assertNever default-case guarantee).
 const locationIcons: Record<LocationType, LucideIcon> = {
+  house: Home,
   room: Home,
   area: LayoutGrid,
   bag: ShoppingBag,

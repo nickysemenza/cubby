@@ -9,6 +9,8 @@ import {
   type LocationShortcode,
   type ProductId,
   type ProductShortcode,
+  unsafeLocationId,
+  unsafeLocationShortcode,
   unsafeUserId,
 } from "@cubby/schemas/identifiers";
 import {
@@ -28,6 +30,10 @@ let hash = "";
 
 // Standard test IDs used across all tests
 export const TEST_USER_ID = "test-user-id";
+export const TEST_HOME_ID = unsafeLocationId(
+  "00000000-0000-4000-8000-000000000001",
+);
+export const TEST_HOME_SHORTCODE = unsafeLocationShortcode("LOC-HM3E");
 
 /**
  * The authenticated actor every integration test runs as. Mirrors what
@@ -123,6 +129,18 @@ async function seedTestUser(rawDb: ReturnType<typeof drizzle>) {
     emailVerified: true,
     createdAt: new Date(),
     updatedAt: new Date(),
+  });
+}
+
+/** Every integration database starts with Cubby's one real hierarchy root. */
+async function seedTestHome(rawDb: ReturnType<typeof drizzle>) {
+  await rawDb.insert(schema.location).values({
+    id: TEST_HOME_ID,
+    shortcode: TEST_HOME_SHORTCODE,
+    name: "Home",
+    aliases: [],
+    type: "house",
+    parentId: null,
   });
 }
 
@@ -270,6 +288,7 @@ async function resetTestDb() {
   );
   await pool.query(`TRUNCATE ${truncateTargets} RESTART IDENTITY CASCADE`);
   await seedTestUser(rawDb);
+  await seedTestHome(rawDb);
 }
 
 /** Holder returned by {@link withTestDb}; fields are live before each test. */
@@ -309,10 +328,9 @@ export async function closeTestDb() {
  * });
  * ```
  *
- * Every test still starts from an empty database, so absolute-count assertions
- * (`toHaveLength(0)`) and the partial-unique indexes on human-readable names
- * (`Recipe_name_key`, `Product_upc_key`, ...) behave exactly as before. What
- * changed is *how* that is achieved: the file provisions ONE IntegreSQL database
+ * Every test starts from the same two baseline rows (the test user and Home), so
+ * domain tables other than Location remain empty and uniqueness behavior stays
+ * deterministic. What changed is *how* that is achieved: the file provisions ONE IntegreSQL database
  * and truncates between tests, instead of paying a `CREATE DATABASE ...
  * TEMPLATE` per test. See {@link resetTestDb}.
  *
@@ -432,7 +450,7 @@ export async function seedFromCSV(
         const loc = await findOrCreateLocationByName(
           db,
           row.location_name,
-          null, // parentId - test locations are roots
+          TEST_HOME_ID,
           "room", // type - default to room for test locations
         );
         locationId = loc.locationId;

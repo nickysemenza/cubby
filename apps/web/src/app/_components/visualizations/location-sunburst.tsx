@@ -82,10 +82,7 @@ function Sunburst({ data }: SunburstProps) {
       .size([2 * Math.PI, radius])(hierarchy);
   }, [hierarchy, radius]);
 
-  const nodes = useMemo(
-    () => partitionLayout.descendants().filter((d) => d.depth > 0),
-    [partitionLayout],
-  );
+  const nodes = useMemo(() => partitionLayout.descendants(), [partitionLayout]);
 
   const arc = useCallback(
     (d: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>) => {
@@ -131,7 +128,8 @@ function Sunburst({ data }: SunburstProps) {
       // Fallback is unreachable (index is clamped into range) but keeps the
       // return type a definite `string` for DARK_RING_FILLS.has() below.
       return (
-        ramp[Math.min(node.depth - 1, ramp.length - 1)] ?? "var(--chart-6)"
+        ramp[Math.min(Math.max(0, node.depth), ramp.length - 1)] ??
+        "var(--chart-6)"
       );
     },
     [],
@@ -274,19 +272,14 @@ function HoverTooltip({
     <VizTooltip>
       <div className="flex items-center gap-2 font-medium">
         <LocationIcon type={node.data.type} product={null} size={14} />
-        {node.data.id ? (
-          <Link
-            to="/locations/$shortcode"
-            params={{ shortcode: node.data.id }}
-            className="hover:underline"
-            style={{ pointerEvents: "auto" }}
-          >
-            {node.data.name}
-          </Link>
-        ) : (
-          // The synthetic "All Locations" root has no row behind it.
-          <span>{node.data.name}</span>
-        )}
+        <Link
+          to="/locations/$shortcode"
+          params={{ shortcode: node.data.id }}
+          className="hover:underline"
+          style={{ pointerEvents: "auto" }}
+        >
+          {node.data.name}
+        </Link>
       </div>
       <div className="mt-1 space-y-1 text-muted-foreground">
         <LocationTypeLabel type={node.data.type} product={null} />

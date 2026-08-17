@@ -8,7 +8,7 @@ import { Description } from "~/components/ui/description";
 import { cn } from "~/lib/utils";
 import { ArrangeItemChip } from "./ArrangeItemChip";
 import { ArrangeLocationRow } from "./ArrangeLocationRow";
-import { childrenOf, pathToNode } from "./arrange-tree-utils";
+import { pathToNode } from "./arrange-tree-utils";
 import { UnknownDock } from "./UnknownDock";
 import { useArrangeDropTarget } from "./use-arrange-drop-target";
 
@@ -43,22 +43,23 @@ export function ArrangeTree({
   // The URL carries only the zoomed-to node; its ancestors are whatever the
   // live tree says they are, so a location moved underneath us stays zoomed
   // (under its new parent) and a deleted one resolves to Home.
+  const home = roots[0] ?? null;
   const ancestors: InfLocation[] = [];
   {
     let level = roots;
     for (const id of at ? pathToNode(roots, at) : []) {
       const node = level.find((n) => n.id === id);
       if (!node) break;
-      ancestors.push(node);
+      if (node.id !== home?.id) ancestors.push(node);
       level = node.children ?? [];
     }
   }
   const resolvedZoom = ancestors.map((n) => n.id);
-  const zoomRoot = ancestors[ancestors.length - 1] ?? null;
+  const zoomRoot = ancestors[ancestors.length - 1] ?? home;
 
-  const displayedChildren = (
-    resolvedZoom.length === 0 ? roots : childrenOf(roots, resolvedZoom)
-  ).filter((n) => !unknownRoot || n.id !== unknownRoot.id);
+  const displayedChildren = (zoomRoot?.children ?? []).filter(
+    (n) => !unknownRoot || n.id !== unknownRoot.id,
+  );
   const zoomItems = zoomRoot?.inventoryItems ?? [];
 
   return (
@@ -66,8 +67,8 @@ export function ArrangeTree({
       <Stack gap="sm" className="min-w-0 flex-1">
         <Row align="center" gap="xs" wrap className="text-sm">
           <BreadcrumbSegment
-            label="Home"
-            locationId={null}
+            label={home?.name ?? "Home"}
+            locationId={home?.id ?? null}
             roots={roots}
             active={resolvedZoom.length === 0}
             onClick={() => onSelect(undefined)}
@@ -97,6 +98,7 @@ export function ArrangeTree({
                   key={item.id}
                   item={item}
                   sourceLocationId={zoomRoot?.id as LocationShortcode}
+                  roots={roots}
                 />
               ))}
             </Stack>
@@ -161,6 +163,7 @@ function TreeLevel({ nodes, roots, level, maxDepth, onDrill }: TreeLevelProps) {
                     key={item.id}
                     item={item}
                     sourceLocationId={node.id}
+                    roots={roots}
                   />
                 ))}
               </Stack>

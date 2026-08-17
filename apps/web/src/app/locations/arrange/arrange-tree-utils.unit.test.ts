@@ -49,15 +49,17 @@ function item(id: string, productId: string): InventoryItemForTree {
 const L = (id: string) => unsafeLocationShortcode(id);
 const I = (id: string) => unsafeInventoryShortcode(id);
 
-// garage → [shelfA → [bin1], shelfB], kitchen → [pantry], Unknown
+// Home → [garage → [shelfA → [bin1], shelfB], kitchen → [pantry], Unknown]
 function buildTree(): InfLocation[] {
   return [
-    loc("garage", "Garage", [
-      loc("shelfA", "Shelf A", [loc("bin1", "Bin 1")], [item("i1", "prodX")]),
-      loc("shelfB", "Shelf B"),
+    loc("home", "Home", [
+      loc("garage", "Garage", [
+        loc("shelfA", "Shelf A", [loc("bin1", "Bin 1")], [item("i1", "prodX")]),
+        loc("shelfB", "Shelf B"),
+      ]),
+      loc("kitchen", "Kitchen", [loc("pantry", "Pantry")]),
+      loc("unknown", "Unknown"),
     ]),
-    loc("kitchen", "Kitchen", [loc("pantry", "Pantry")]),
-    loc("unknown", "Unknown"),
   ];
 }
 
@@ -68,22 +70,27 @@ describe("findNode / parentIdOf", () => {
   it("returns null for a missing node", () => {
     expect(findNode(buildTree(), L("nope"))).toBeNull();
   });
-  it("returns the parent id, null for a root", () => {
+  it("returns the parent id, null only for Home", () => {
     const t = buildTree();
     expect(parentIdOf(t, L("bin1"))).toBe(L("shelfA"));
     expect(parentIdOf(t, L("shelfA"))).toBe(L("garage"));
-    expect(parentIdOf(t, L("garage"))).toBeNull();
+    expect(parentIdOf(t, L("garage"))).toBe(L("home"));
+    expect(parentIdOf(t, L("home"))).toBeNull();
   });
 });
 
 describe("pathToNode", () => {
-  it("returns the full root→node path for a top-level node", () => {
-    expect(pathToNode(buildTree(), L("garage"))).toEqual([L("garage")]);
+  it("returns the full Home→node path", () => {
+    expect(pathToNode(buildTree(), L("garage"))).toEqual([
+      L("home"),
+      L("garage"),
+    ]);
   });
   it("returns the full chain for a deeply nested node (drill fix)", () => {
     // bin1 is a grandchild of garage — the path must include the intermediate
     // ancestor, not skip it.
     expect(pathToNode(buildTree(), L("bin1"))).toEqual([
+      L("home"),
       L("garage"),
       L("shelfA"),
       L("bin1"),
@@ -95,17 +102,19 @@ describe("pathToNode", () => {
 });
 
 describe("findUnknownRoot", () => {
-  it("finds the top-level Unknown", () => {
+  it("finds Unknown nested under Home", () => {
     expect(findUnknownRoot(buildTree())?.id).toBe(L("unknown"));
   });
   it("returns null when absent", () => {
-    expect(findUnknownRoot([loc("garage", "Garage")])).toBeNull();
+    expect(
+      findUnknownRoot([loc("home", "Home", [loc("garage", "Garage")])]),
+    ).toBeNull();
   });
-  it("ignores a nested location named Unknown", () => {
-    const t = [loc("garage", "Garage", [loc("u2", "Unknown")])];
-    // nested Unknown has a parent in the real tree; our fixture has no parent
-    // field, but it isn't a root, so findUnknownRoot won't return it.
-    expect(findUnknownRoot(t)).toBeNull();
+  it("finds Unknown at any depth", () => {
+    const t = [
+      loc("home", "Home", [loc("garage", "Garage", [loc("u2", "Unknown")])]),
+    ];
+    expect(findUnknownRoot(t)?.id).toBe(L("u2"));
   });
 });
 
@@ -141,7 +150,7 @@ describe("isValidLocationDrop", () => {
       false,
     );
   });
-  it("rejects dragging the Unknown root", () => {
+  it("rejects dragging the Unknown staging location", () => {
     expect(isValidLocationDrop(buildTree(), L("unknown"), L("garage"))).toBe(
       false,
     );
@@ -152,19 +161,29 @@ describe("isValidLocationDrop", () => {
     );
   });
   it("accepts drop-on-Home for a nested node", () => {
-    expect(isValidLocationDrop(buildTree(), L("shelfA"), null)).toBe(true);
+    expect(isValidLocationDrop(buildTree(), L("shelfA"), L("home"))).toBe(true);
   });
-  it("rejects drop-on-Home for an already-top-level node", () => {
-    expect(isValidLocationDrop(buildTree(), L("garage"), null)).toBe(false);
+  it("rejects dropping a direct Home child onto Home", () => {
+    expect(isValidLocationDrop(buildTree(), L("garage"), L("home"))).toBe(
+      false,
+    );
+  });
+  it("rejects reparenting Home", () => {
+    expect(isValidLocationDrop(buildTree(), L("home"), L("garage"))).toBe(
+      false,
+    );
   });
 });
 
 describe("isValidItemDrop", () => {
   it("rejects a same-location move", () => {
-    expect(isValidItemDrop(L("shelfA"), L("shelfA"))).toBe(false);
+    expect(isValidItemDrop(buildTree(), L("shelfA"), L("shelfA"))).toBe(false);
   });
   it("accepts a cross-location move", () => {
-    expect(isValidItemDrop(L("shelfA"), L("shelfB"))).toBe(true);
+    expect(isValidItemDrop(buildTree(), L("shelfA"), L("shelfB"))).toBe(true);
+  });
+  it("rejects moving an item into Home", () => {
+    expect(isValidItemDrop(buildTree(), L("shelfA"), L("home"))).toBe(false);
   });
 });
 
@@ -190,13 +209,13 @@ describe("canDropOnArrangeTarget", () => {
     ).toBe(false);
   });
 
-  it("allows nested locations, but not items, to move to the root target", () => {
+  it("allows locations, but not items, to move onto Home", () => {
     expect(
-      canDropOnArrangeTarget(buildTree(), null, locationDrag("shelfA")),
+      canDropOnArrangeTarget(buildTree(), L("home"), locationDrag("shelfA")),
     ).toBe(true);
-    expect(canDropOnArrangeTarget(buildTree(), null, itemDrag("shelfA"))).toBe(
-      false,
-    );
+    expect(
+      canDropOnArrangeTarget(buildTree(), L("home"), itemDrag("shelfA")),
+    ).toBe(false);
   });
 
   it("allows cross-location item moves and rejects same-location no-ops", () => {
@@ -220,10 +239,12 @@ describe("applyLocationMove", () => {
     // subtree came along
     expect(findNode(next, L("bin1"))?.name).toBe("Bin 1");
   });
-  it("moves a node to top level with null parent", () => {
-    const next = applyLocationMove(buildTree(), L("shelfA"), null);
-    expect(parentIdOf(next, L("shelfA"))).toBeNull();
-    expect(next.some((r) => r.id === L("shelfA"))).toBe(true);
+  it("moves a node under Home", () => {
+    const next = applyLocationMove(buildTree(), L("shelfA"), L("home"));
+    expect(parentIdOf(next, L("shelfA"))).toBe(L("home"));
+    expect(
+      findNode(next, L("home"))?.children?.some((r) => r.id === L("shelfA")),
+    ).toBe(true);
   });
   it("does not mutate the input", () => {
     const t = buildTree();
@@ -250,19 +271,19 @@ describe("applyItemMove", () => {
 });
 
 describe("childrenOf", () => {
-  it("returns roots for an empty path", () => {
-    expect(childrenOf(buildTree(), []).map((n) => n.id)).toEqual([
-      L("garage"),
-      L("kitchen"),
-      L("unknown"),
-    ]);
+  it("returns Home for an empty path", () => {
+    expect(childrenOf(buildTree(), []).map((n) => n.id)).toEqual([L("home")]);
   });
   it("returns children at a nested path", () => {
     expect(
-      childrenOf(buildTree(), [L("garage"), L("shelfA")]).map((n) => n.id),
+      childrenOf(buildTree(), [L("home"), L("garage"), L("shelfA")]).map(
+        (n) => n.id,
+      ),
     ).toEqual([L("bin1")]);
   });
   it("returns [] when the path breaks", () => {
-    expect(childrenOf(buildTree(), [L("garage"), L("nope")])).toEqual([]);
+    expect(
+      childrenOf(buildTree(), [L("home"), L("garage"), L("nope")]),
+    ).toEqual([]);
   });
 });

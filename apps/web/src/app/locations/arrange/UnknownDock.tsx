@@ -45,7 +45,7 @@ export function UnknownDock({ unknownRoot, roots }: UnknownDockProps) {
         if (d.arrangeDrag === "location") {
           return isValidLocationDrop(roots, d.locationId, targetId);
         }
-        return isValidItemDrop(d.sourceLocationId, targetId);
+        return isValidItemDrop(roots, d.sourceLocationId, targetId);
       },
       onDragEnter: () => setIsOver(true),
       onDragLeave: () => setIsOver(false),
@@ -109,6 +109,7 @@ export function UnknownDock({ unknownRoot, roots }: UnknownDockProps) {
                   key={item.id}
                   item={item}
                   sourceLocationId={unknownRoot.id}
+                  roots={roots}
                 />
               ))}
             </Stack>

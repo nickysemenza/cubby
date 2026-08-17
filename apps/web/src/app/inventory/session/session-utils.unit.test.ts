@@ -205,7 +205,7 @@ describe("inventory session utils", () => {
     ).toEqual(["Garage", "Tote"]);
   });
 
-  it("offers global Unknown as a root once it holds items", () => {
+  it("offers global Unknown as a session scope once it holds items", () => {
     // Recounting Unknown is the drain: each row gets relocated to where it
     // belongs. An Unknown holding only empty child locations stays hidden.
     const emptyUnknown = {

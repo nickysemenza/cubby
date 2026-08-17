@@ -12,9 +12,9 @@ import { ArrangeLocationCard } from "./ArrangeLocationCard";
 import { useArrangeDropTarget } from "./use-arrange-drop-target";
 
 interface ArrangeColumnProps {
-  /** The location this column represents (its cards are this location's children). Null = Home / top level. */
+  /** The location this column represents (its cards are this location's children). */
   locationId: LocationShortcode | null;
-  /** Header location, or null for the Home column. */
+  /** Header location, or null while the hierarchy is unavailable. */
   headerLocation: InfLocation | null;
   /** Child-location cards to render. */
   nodes: InfLocation[];
@@ -95,6 +95,7 @@ export function ArrangeColumn({
               key={item.id}
               item={item}
               sourceLocationId={locationId}
+              roots={roots}
             />
           ) : null,
         )}

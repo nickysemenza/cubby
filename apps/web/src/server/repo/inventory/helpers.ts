@@ -33,12 +33,18 @@ export const assertLiveTargets = async (
   if (targets.locationId !== undefined) {
     const live = await client.query.location.findFirst({
       where: and(eq(location.id, targets.locationId), notDeleted(location)),
-      columns: { id: true },
+      columns: { id: true, parentId: true },
     });
     if (!live) {
       throw createAppError(
         "LOCATION_NOT_FOUND",
         `Location ${targets.locationId} does not exist or has been deleted`,
+      );
+    }
+    if (live.parentId === null) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "Inventory cannot be placed directly at Home",
       );
     }
   }

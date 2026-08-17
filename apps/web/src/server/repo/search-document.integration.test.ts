@@ -279,8 +279,9 @@ describe("SearchDocument indexed retrieval", () => {
 
     const result = await repairSearchDocuments(ctx.db);
     expect(result).toMatchObject({
-      before: { missing: 1, stale: 1, orphaned: 1, total: 3 },
-      queued: 2,
+      // Home is a normal searchable Location and starts without a document.
+      before: { missing: 2, stale: 1, orphaned: 1, total: 4 },
+      queued: 3,
       retired: 1,
     });
     expect(result.batchId).not.toBeNull();

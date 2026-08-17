@@ -122,11 +122,14 @@ House  →  Room  →  Shelf  →  Bin
 
 - The shape is a tree, not fixed levels — `location.type` is free text ("house",
   "room", "shelf", "bin", …); depth is whatever the `parentId` chain produces.
-- A root location has `parentId = null`. The repo's `buildLocationTree` /
-  `buildLocationTypeCount` derive the nested structure read-time; there is no
-  materialized path column.
-- InventoryEntries reference leaf-ish locations via `inventoryEntry.locationId`,
-  but any location can hold inventory.
+- **Home** is the one root location and has `parentId = null`. Every other live
+  location is beneath it; omitted/null parent input means a direct child of
+  Home. The repo derives the nested structure read-time; there is no materialized
+  path column.
+- **Unknown** is the staging location directly beneath Home for inventory whose
+  physical placement has not been recorded yet.
+- InventoryEntries reference leaf-ish locations via `inventoryEntry.locationId`;
+  any live location except Home can hold inventory.
 - Each location has a printable QR **shortcode** (`LOC-XXXX`). Legacy `L-XXXX`
   labels remain accepted on input only, so previously printed labels still resolve.
 

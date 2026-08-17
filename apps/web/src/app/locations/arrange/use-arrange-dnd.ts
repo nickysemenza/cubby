@@ -73,7 +73,11 @@ export function useArrangeDnd({
             // Items require a real location target (never "Home").
             if (
               drop.locationId !== null &&
-              isValidItemDrop(d.sourceLocationId, drop.locationId)
+              isValidItemDrop(
+                rootsRef.current,
+                d.sourceLocationId,
+                drop.locationId,
+              )
             ) {
               moveItemRef.current(d, drop.locationId);
             }

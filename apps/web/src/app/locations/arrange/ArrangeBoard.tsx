@@ -35,9 +35,11 @@ export function ArrangeBoard({
   const scrollRef = useRef<HTMLDivElement>(null);
   useAutoScroll(scrollRef);
 
-  const rootsMain = useMemo(
-    () => roots.filter((r) => r.id !== unknownRoot?.id),
-    [roots, unknownRoot],
+  const home = roots[0] ?? null;
+  const homeChildren = useMemo(
+    () =>
+      (home?.children ?? []).filter((child) => child.id !== unknownRoot?.id),
+    [home, unknownRoot],
   );
 
   // The URL carries only the drilled-to leaf; the columns to its left are
@@ -45,17 +47,19 @@ export function ArrangeBoard({
   // every mutation for free — a location dragged elsewhere keeps its column
   // open under its new parent, where the old stored-path walk would have
   // truncated — and a location that's gone resolves to `[]`, i.e. Home.
-  const validPath = useMemo(
-    () => (at ? pathToNode(roots, at) : []),
-    [at, roots],
-  );
+  const validPath = useMemo(() => {
+    if (!at || !home) return [];
+    // The URL drills below Home. Keep the structural root in the rendered
+    // breadcrumb/header, not as an extra Miller column.
+    return pathToNode(roots, at).filter((id) => id !== home.id);
+  }, [at, home, roots]);
 
   const columns = useMemo<ColumnModel[]>(() => {
     const cols: ColumnModel[] = [
       {
-        locationId: null,
-        headerLocation: null,
-        nodes: rootsMain,
+        locationId: home?.id ?? null,
+        headerLocation: home,
+        nodes: homeChildren,
         items: [],
         activeChildId: validPath[0] ?? null,
       },
@@ -74,7 +78,7 @@ export function ArrangeBoard({
       });
     }
     return cols;
-  }, [rootsMain, roots, validPath]);
+  }, [home, homeChildren, roots, validPath]);
 
   // Show only the rightmost `depth` columns; the breadcrumb reaches the rest.
   const hiddenLeft = Math.max(0, columns.length - depth);
@@ -93,6 +97,7 @@ export function ArrangeBoard({
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <BoardBreadcrumb
         roots={roots}
+        home={home}
         path={validPath}
         onJump={(prefixLength) => onSelect(validPath[prefixLength - 1])}
       />
@@ -131,18 +136,19 @@ export function ArrangeBoard({
 
 interface BoardBreadcrumbProps {
   roots: InfLocation[];
+  home: InfLocation | null;
   path: LocationShortcode[];
   /** Jump to a path prefix of the given length (0 = Home). */
   onJump: (prefixLength: number) => void;
 }
 
-function BoardBreadcrumb({ roots, path, onJump }: BoardBreadcrumbProps) {
+function BoardBreadcrumb({ roots, home, path, onJump }: BoardBreadcrumbProps) {
   return (
     <div className="flex flex-wrap items-center gap-1 text-sm">
       <BreadcrumbCrumb
         roots={roots}
-        locationId={null}
-        label="Home"
+        locationId={home?.id ?? null}
+        label={home?.name ?? "Home"}
         icon={<Home className="size-3.5" />}
         onClick={() => onJump(0)}
       />

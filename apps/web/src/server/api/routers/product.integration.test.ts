@@ -3,7 +3,7 @@ import {
   type ExpenseCreateInput,
   expenseCreateInput,
 } from "@cubby/schemas/project";
-import { withTestDb } from "tooling/test-setup";
+import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { createExpense } from "~/server/repo/expense";
 import { deleteInventoryEntries } from "~/server/repo/inventory";
@@ -136,14 +136,19 @@ describe("product.tagSiblings storage rollup", () => {
           {
             id: shelf.id,
             name: "Shelf A",
-            ancestors: [{ id: room.id, name: "Garage", type: "room" }],
+            ancestors: [
+              { id: TEST_HOME_SHORTCODE, name: "Home", type: "house" },
+              { id: room.id, name: "Garage", type: "room" },
+            ],
             productCount: 2,
             holdsSource: true,
           },
           {
             id: bin.id,
             name: "Bin 3",
-            ancestors: [],
+            ancestors: [
+              { id: TEST_HOME_SHORTCODE, name: "Home", type: "house" },
+            ],
             productCount: 1,
             holdsSource: false,
           },

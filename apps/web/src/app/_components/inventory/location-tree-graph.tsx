@@ -3,7 +3,7 @@ import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import * as d3Hierarchy from "d3-hierarchy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
-import { ROOT_LOCATION_ID, useLocationTree } from "~/hooks/useLocationTree";
+import { useLocationTree } from "~/hooks/useLocationTree";
 
 interface TreeNode {
   name: string;
@@ -26,13 +26,8 @@ export default function LocationTreeGraph() {
   const data = locations.data;
 
   const treeData = useMemo(() => {
-    if (!data || data.length === 0) return null;
-    return {
-      name: "_root",
-      id: ROOT_LOCATION_ID,
-      type: "room" as LocationType,
-      children: data.map(transformToTreeNode),
-    };
+    const home = data?.[0];
+    return home ? transformToTreeNode(home) : null;
   }, [data]);
 
   if (!treeData) return null;
@@ -148,7 +143,7 @@ function TidyTree({ data }: TidyTreeProps) {
 
           {/* Nodes positioned using swapped x/y coordinates */}
           {nodes.map((node) => {
-            const isRoot = node.data.name === "_root";
+            const isRoot = node.depth === 0;
             const hasChildren = !!node.children?.length;
 
             return (
@@ -157,28 +152,26 @@ function TidyTree({ data }: TidyTreeProps) {
                 transform={`translate(${node.y}, ${node.x})`}
               >
                 <circle r={isRoot ? 6 : 4} className="fill-primary" />
-                {!isRoot && (
-                  <foreignObject
-                    x={hasChildren ? -200 : 8}
-                    y={-12}
-                    width={190}
-                    height={24}
-                    style={{ overflow: "visible" }}
+                <foreignObject
+                  x={isRoot ? 8 : hasChildren ? -200 : 8}
+                  y={-12}
+                  width={190}
+                  height={24}
+                  style={{ overflow: "visible" }}
+                >
+                  <div
+                    className={`flex ${!isRoot && hasChildren ? "justify-end" : "justify-start"}`}
                   >
-                    <div
-                      className={`flex ${hasChildren ? "justify-end" : "justify-start"}`}
-                    >
-                      <EntityInlineLink
-                        entity="location"
-                        data={{
-                          name: node.data.name,
-                          id: node.data.id,
-                          type: node.data.type,
-                        }}
-                      />
-                    </div>
-                  </foreignObject>
-                )}
+                    <EntityInlineLink
+                      entity="location"
+                      data={{
+                        name: node.data.name,
+                        id: node.data.id,
+                        type: node.data.type,
+                      }}
+                    />
+                  </div>
+                </foreignObject>
               </g>
             );
           })}

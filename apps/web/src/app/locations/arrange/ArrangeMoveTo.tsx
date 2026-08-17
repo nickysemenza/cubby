@@ -31,7 +31,7 @@ export type ArrangeMoveTarget =
       name: string;
       roots: InfLocation[];
     }
-  | { kind: "item"; drag: ItemDragData; name: string };
+  | { kind: "item"; drag: ItemDragData; name: string; roots: InfLocation[] };
 
 /**
  * The pointer-free way to move something on the arrange surface.
@@ -86,8 +86,8 @@ function MoveToDialog({
     useState<ComboboxItem<LocationShortcode> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // `null` destination = top level ("Home"), the drop target the breadcrumbs
-  // expose. Same validity guards the drop monitor re-checks before firing.
+  // The real Home location is the top-level destination. Same validity guards
+  // the drop monitor re-checks before firing.
   const commit = (destinationId: LocationShortcode | null) => {
     const moved = match(target)
       .with({ kind: "location" }, (t) => {
@@ -99,7 +99,7 @@ function MoveToDialog({
       .with({ kind: "item" }, (t) => {
         if (
           destinationId === null ||
-          !isValidItemDrop(t.drag.sourceLocationId, destinationId)
+          !isValidItemDrop(t.roots, t.drag.sourceLocationId, destinationId)
         )
           return false;
         moveItem(t.drag, destinationId);
@@ -154,8 +154,15 @@ function MoveToDialog({
 
         <Row justify="end" gap="sm" wrap>
           {target.kind === "location" && (
-            <Button variant="outline" onClick={() => commit(null)}>
-              Move to top level
+            <Button
+              variant="outline"
+              disabled={!target.roots[0]}
+              onClick={() => {
+                const home = target.roots[0];
+                if (home) commit(home.id);
+              }}
+            >
+              Move to Home
             </Button>
           )}
           <Button variant="outline" onClick={onClose}>

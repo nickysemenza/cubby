@@ -11,6 +11,7 @@
  * Product is a real cardboard box nobody catalogued.
  */
 export const locationTypeValues = [
+  "house",
   "room",
   "area",
   "bag",
@@ -32,7 +33,8 @@ export type LocationType = (typeof locationTypeValues)[number];
  * off the warm axis, distinguished by value not hue.
  */
 export const locationTypeColors: Record<LocationType, string> = {
-  room: "var(--chart-1)", // top-level space gets the accent
+  house: "var(--chart-1)",
+  room: "var(--chart-1)",
   area: "var(--chart-2)",
 
   table: "var(--chart-3)",

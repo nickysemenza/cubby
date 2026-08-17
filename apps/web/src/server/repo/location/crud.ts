@@ -106,6 +106,7 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { buildLocationWithChildren, dbLocationToListAPI } from "./helpers";
+import { getHomeLocation } from "./home";
 import type {
   LocationFilters,
   LocationWithParentChild,
@@ -126,10 +127,10 @@ export const LOCATION_DELETE_EDGE_POLICY = {
       "Image associations are soft-deleted with the location, and each file is\n      deleted too unless something else still references it.",
   },
   "Location.parentId": {
-    code: "clear-live-child-parent",
+    code: "promote-live-child",
     effect: "detach",
     description:
-      "A deleted location's children are orphaned to the root — their parentId is cleared rather than the deletion being blocked.",
+      "A deleted location's children are promoted to its nearest surviving ancestor rather than the deletion being blocked.",
   },
 } as const satisfies IncomingEdgePolicy<"location", OperationDisposition>;
 
@@ -220,16 +221,23 @@ const createLocationTx = async (
   actor: ActorContext,
 ) => {
   return await withTransaction(db, async (tx) => {
-    const resolvedParent = data.parentId
-      ? await resolveLiveShortcode(tx, data.parentId, "location")
-      : null;
-    if (data.parentId && !resolvedParent) {
-      throw createAppError(
-        "REFERENCED_RECORD_MISSING",
-        "Cannot set parent: the specified parent location does not exist",
+    let parentId: LocationId;
+    if (data.parentId) {
+      const resolvedParent = await resolveLiveShortcode(
+        tx,
+        data.parentId,
+        "location",
       );
+      if (!resolvedParent) {
+        throw createAppError(
+          "REFERENCED_RECORD_MISSING",
+          "Cannot set parent: the specified parent location does not exist",
+        );
+      }
+      parentId = unsafeLocationId(resolvedParent);
+    } else {
+      parentId = (await getHomeLocation(tx)).id;
     }
-    const parentId = resolvedParent ? unsafeLocationId(resolvedParent) : null;
     // A miss here is a validation failure on caller-supplied input, not a 404
     // for the location being created — hence the raw resolve rather than
     // `resolveOrThrow`.
@@ -271,16 +279,14 @@ const createLocationTx = async (
 
 /**
  * Identifying predicate for the single global "Unknown" parking location — the
- * root-level bin a scan/import drops an item into when it has no home yet.
+ * uniquely named location a scan/import drops an item into when it has no home
+ * yet. Unknown lives directly beneath Home, but name uniqueness means callers
+ * do not need to know its current parent to find it.
  * Exported so every consumer (ensure-or-create below, the Problems
  * "parked in Unknown" detector) agrees on what "Unknown" means.
  */
 export const isGlobalUnknownLocation = () =>
-  and(
-    eq(location.name, "Unknown"),
-    isNull(location.parentId),
-    notDeleted(location),
-  );
+  and(eq(location.name, "Unknown"), notDeleted(location));
 
 export const ensureGlobalUnknownLocation = async (
   db: Database,
@@ -299,13 +305,14 @@ export const ensureGlobalUnknownLocation = async (
   }
 
   try {
+    const home = await getHomeLocation(db);
     return await createLocation(
       db,
       {
         name: "Unknown",
         aliases: [],
         type: "area",
-        parentId: null,
+        parentId: unsafeLocationShortcode(home.shortcode),
       },
       actor,
     );
@@ -336,10 +343,20 @@ export const updateLocation = async (
 ) => {
   let detachedImageKeys: string[] = [];
   const runUpdate = async (tx: DrizzleTransaction) => {
+    const before = await tx.query.location.findFirst({
+      where: and(eq(location.id, id), notDeleted(location)),
+    });
     let parentId: LocationId | null | undefined;
     if (data.parentId !== undefined) {
+      const home = await getHomeLocation(tx);
+      if (id === home.id) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Home cannot be reparented",
+        );
+      }
       if (options && "resolvedParentId" in options) {
-        parentId = options.resolvedParentId;
+        parentId = options.resolvedParentId ?? home.id;
         if (parentId && (await wouldCreateParentCycle(tx, id, parentId))) {
           throw createAppError(
             "LOCATION_CYCLE_DETECTED",
@@ -347,7 +364,7 @@ export const updateLocation = async (
           );
         }
       } else if (data.parentId === null) {
-        parentId = null;
+        parentId = home.id;
       } else {
         const resolved = await resolveLiveShortcode(
           tx,
@@ -380,9 +397,6 @@ export const updateLocation = async (
             );
     }
 
-    const before = await tx.query.location.findFirst({
-      where: and(eq(location.id, id), notDeleted(location)),
-    });
     const updateValues = buildPartialUpdateValues({
       name: data.name,
       aliases: data.aliases,
@@ -481,7 +495,7 @@ export const updateLocation = async (
 export const bulkReparentLocations = async (
   db: Database,
   rawIds: LocationId[],
-  parentId: LocationId | null,
+  requestedParentId: LocationId | null,
   actor: ActorContext,
 ): Promise<void> => {
   // Dedupe so the `updated.length !== ids.length` guard below holds even for
@@ -490,6 +504,11 @@ export const bulkReparentLocations = async (
   // LOCATION_NOT_FOUND.
   const ids = uniq(rawIds);
   await withTransaction(db, async (tx) => {
+    const home = await getHomeLocation(tx);
+    const parentId = requestedParentId ?? home.id;
+    if (ids.includes(home.id)) {
+      throw createAppError("CONSTRAINT_VIOLATION", "Home cannot be reparented");
+    }
     // One snapshot serves both live-row validation and the parent-chain walk.
     // Walking parent pointers in memory avoids one database round-trip per
     // selected location while preserving the same "parent cannot be a
@@ -553,7 +572,7 @@ export const bulkReparentLocations = async (
 /**
  * Soft delete locations by setting deletedAt timestamp.
  * Also soft deletes related images.
- * Child locations are orphaned (parentId set to null) and become top-level locations.
+ * Child locations are promoted to the nearest surviving ancestor.
  * Throws if any location has inventory.
  */
 /**
@@ -571,6 +590,10 @@ export const deleteLocations = async (
     // Lock locations and validate they exist and aren't already deleted
     // Prevents race conditions by acquiring row-level locks
     await lockAndValidateForDelete(tx, location, ids, "Location");
+    const home = await getHomeLocation(tx);
+    if (ids.includes(home.id)) {
+      throw createAppError("CONSTRAINT_VIOLATION", "Home cannot be deleted");
+    }
 
     // Safety check: don't delete if any location has inventory
     const withInventory = await findLocationsWithLiveInventory(tx, ids);
@@ -586,13 +609,38 @@ export const deleteLocations = async (
         `Cannot delete ${count} location(s): ${names} have inventory entries. Move or remove them first.`,
     });
 
-    // Orphan any children by setting their parentId to null before the parents
-    // go: a child location becomes top-level rather than blocking the delete.
-    // Not a `ChildCascade` — the row survives, only its edge is cleared.
-    await tx
-      .update(location)
-      .set({ parentId: null })
-      .where(and(inArray(location.parentId, ids), notDeleted(location)));
+    // Promote each surviving child to the nearest ancestor that is not also
+    // being deleted. Multi-delete makes the direct parent insufficient: when a
+    // room and its shelf go together, the shelf's bins belong under Home, not
+    // under the soon-to-be-deleted room.
+    const liveLocations = await tx
+      .select({ id: location.id, parentId: location.parentId })
+      .from(location)
+      .where(notDeleted(location));
+    const parentById = new Map(
+      liveLocations.map((row) => [row.id, row.parentId] as const),
+    );
+    const deleting = new Set(ids);
+    const promotions = new Map<LocationId, LocationId[]>();
+    for (const child of liveLocations) {
+      if (!child.parentId || !deleting.has(child.parentId)) continue;
+      if (deleting.has(child.id)) continue;
+
+      let destinationId: LocationId | null = child.parentId;
+      while (destinationId && deleting.has(destinationId)) {
+        destinationId = parentById.get(destinationId) ?? null;
+      }
+      const survivingParentId = destinationId ?? home.id;
+      const childIds = promotions.get(survivingParentId) ?? [];
+      childIds.push(child.id);
+      promotions.set(survivingParentId, childIds);
+    }
+    for (const [parentId, childIds] of promotions) {
+      await tx
+        .update(location)
+        .set({ parentId })
+        .where(and(inArray(location.id, childIds), notDeleted(location)));
+    }
 
     return await removeEntity(tx, {
       entity: "location",
@@ -619,7 +667,7 @@ export const deleteLocations = async (
  * `Location.parentId` carries no FK — it's `unconstrained` in
  * `INCOMING_EDGES.location` — but the rows are real: `countByTarget` reads
  * the column directly and counts them like any other edge, exactly matching
- * the mutation's own `inArray(location.parentId, ids)` orphaning update.
+ * the mutation's own child-promotion update.
  *
  * Advisory only. `deleteLocations` still re-runs every check inside its own
  * transaction; nothing here is a lock or a permission.

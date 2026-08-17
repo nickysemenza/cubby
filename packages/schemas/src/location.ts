@@ -415,7 +415,7 @@ export const infLocationWithSideEffects = infLocation.and(
   z.object({ sideEffects: mutationSideEffectsSchema }),
 );
 
-const optionalLocationShortcode = locationShortcode.nullable();
+const optionalLocationShortcode = locationShortcode.nullable().optional();
 
 // Input schema for creating locations
 const locationCreateShape = {
@@ -440,7 +440,7 @@ const locationCreateShape = {
       "The product this location IS — a tote, bin or rack you own. Sets the location's identity and form factor; leave `type` unset when using this.",
     ),
   parentId: optionalLocationShortcode.describe(
-    "Parent location id — nest this location under another (omit/null for a top-level location).",
+    "Parent location id — nest this location under another (omit/null to place it directly under Home).",
   ),
   pendingImageIds: z.array(z.uuid()).optional(),
 };
@@ -512,7 +512,7 @@ export const mcpLocationCreateInput = z.object({
       "The product this location IS — a tote, bin or rack you own. Supplies the form factor, so omit `type` when using this.",
     ),
   parentId: optionalLocationShortcode.describe(
-    "Parent location id — nest this location under another (omit/null for a top-level location).",
+    "Parent location id — nest this location under another (omit/null to place it directly under Home).",
   ),
 });
 

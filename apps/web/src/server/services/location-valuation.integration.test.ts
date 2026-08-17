@@ -14,7 +14,7 @@
  * product-linked location, and read the persisted column back.
  */
 
-import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
+import { TEST_ACTOR, TEST_HOME_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { createExpense } from "~/server/repo/expense";
 import { getLocationById } from "~/server/repo/location";
@@ -70,7 +70,7 @@ describe("LocationValuationService.recompute", () => {
     );
 
     const written = await new LocationValuationService(ctx.db).recompute();
-    expect(written).toBe(2);
+    expect(written).toBe(3);
 
     const storedBin = await getLocationById(ctx.db, bin.entityId);
     expect(storedBin.valuation).toMatchObject({
@@ -91,6 +91,20 @@ describe("LocationValuationService.recompute", () => {
         directValuation: 40,
         totalValuation: 40,
         directItemCount: 1,
+        totalItemCount: 1,
+      },
+    });
+
+    const storedHome = await getLocationById(ctx.db, TEST_HOME_ID);
+    expect(storedHome.valuation).toMatchObject({
+      directValuation: 0,
+      totalValuation: 20,
+      directItemCount: 0,
+      totalItemCount: 1,
+      container: {
+        directValuation: 0,
+        totalValuation: 40,
+        directItemCount: 0,
         totalItemCount: 1,
       },
     });

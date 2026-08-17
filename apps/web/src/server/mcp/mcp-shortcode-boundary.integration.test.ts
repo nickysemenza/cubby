@@ -18,7 +18,7 @@ import { parseShortcode } from "@cubby/shared";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { withTestDb } from "tooling/test-setup";
+import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import type { DomainCaller } from "~/server/api/domain";
 import { domainRouter } from "~/server/api/domain";
@@ -746,8 +746,8 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
     // Provably unchanged: the rejection happened before the mutation ran.
     const after = await callTool("get_location", { id: locationCode }, caller);
     expectOk(after);
-    expect(structured(after).parentId).toBeNull();
-    expect(structured(after).parentName).toBeNull();
+    expect(structured(after).parentId).toBe(TEST_HOME_SHORTCODE);
+    expect(structured(after).parentName).toBe("Home");
   });
 
   it("create_inventory_entry rejects swapped product/location shortcodes before inserting a row", async () => {

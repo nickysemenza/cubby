@@ -4,7 +4,7 @@ import {
   unsafeProductId,
 } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
-import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
+import { TEST_ACTOR, TEST_HOME_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { inventoryEntry } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
@@ -210,6 +210,57 @@ describe("inventory soft-delete target guard", () => {
         TEST_ACTOR,
       ),
     ).rejects.toThrow(/does not exist or has been deleted/);
+  });
+
+  it("rejects creating inventory directly at Home", async () => {
+    const { entityId: productId } = await liveProduct();
+
+    await expect(
+      createInventoryEntry(
+        ctx.db,
+        { productId, locationId: TEST_HOME_ID, amount },
+        TEST_ACTOR,
+      ),
+    ).rejects.toThrow("Inventory cannot be placed directly at Home");
+  });
+
+  it("rejects moving inventory directly to Home", async () => {
+    const { entityId: sourceId } = await liveLocation();
+    const { entityId: productId } = await liveProduct();
+    const { entityId: entryId } = await createTestEntry(productId, sourceId);
+
+    await expect(
+      updateInventoryEntry(
+        ctx.db,
+        entryId,
+        { locationId: TEST_HOME_ID },
+        TEST_ACTOR,
+      ),
+    ).rejects.toThrow("Inventory cannot be placed directly at Home");
+    await expect(
+      bulkMoveInventoryEntries(
+        ctx.db,
+        {
+          sourceLocationId: sourceId,
+          targetLocationId: TEST_HOME_ID,
+          items: [{ inventoryEntryId: entryId, quantity: amount }],
+        },
+        TEST_ACTOR,
+      ),
+    ).rejects.toThrow("Inventory cannot be placed directly at Home");
+  });
+
+  it("rejects reconciling inventory directly at Home", async () => {
+    const { entityId: productId } = await liveProduct();
+
+    await expect(
+      bulkProcessInventoryEntries(
+        ctx.db,
+        TEST_HOME_ID,
+        [{ productId, locationId: TEST_HOME_ID, amount }],
+        TEST_ACTOR,
+      ),
+    ).rejects.toThrow("Inventory cannot be placed directly at Home");
   });
 
   it("allows writes to live product + location (no false positives)", async () => {
