@@ -100,6 +100,11 @@ const product = {
   id: unsafeProductShortcode("PRD-AAAA"),
   name: "Bora Clamp",
   unitMappings: [],
+  // No manual override; the unit price is the one derived from Expense rows.
+  // This is the majority shape — 86 of the 111 live identity locations hang
+  // off a product with `price: null`.
+  price: null,
+  pricing: { effectivePrice: 26.26, derivedPrice: 26.26, source: "derived" },
   inventoryEntry: [
     entry("INV-AAAA", "LOC-AAAA"),
     entry("INV-BBBB", "LOC-BBBB"),
@@ -181,6 +186,35 @@ describe("ProductStockedAt", () => {
       kind: "identity",
       amount: { value: 1, unit: "each" },
     });
+  });
+
+  // The stock rows' `valuation` is precomputed server-side from the EFFECTIVE
+  // price, so sourcing the identity row from the `price` override column left
+  // one table pricing its two row kinds two different ways — every bin whose
+  // product had no manual price read blank while the loose stock beside it
+  // showed a real number.
+  it("values an identity row at the effective price when there is no override", () => {
+    render(<ProductStockedAt product={locationsOnlyProduct} />);
+    expect(mocks.rows.current[0]).toMatchObject({ valuation: 26.26 });
+  });
+
+  it("lets the manual override win over the derived price", () => {
+    render(
+      <ProductStockedAt
+        product={
+          {
+            ...locationsOnlyProduct,
+            price: 40,
+            pricing: {
+              effectivePrice: 40,
+              derivedPrice: 26.26,
+              source: "explicit",
+            },
+          } as unknown as ProductWithFoodOut
+        }
+      />,
+    );
+    expect(mocks.rows.current[0]).toMatchObject({ valuation: 40 });
   });
 
   it("gives an identity row no row menu and no selection", () => {

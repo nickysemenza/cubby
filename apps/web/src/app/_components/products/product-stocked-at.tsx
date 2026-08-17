@@ -107,7 +107,12 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
       location: loc,
       // A location is one unit of the product by definition.
       amount: { value: 1, unit: "each" },
-      valuation: product.price,
+      // The EFFECTIVE price, not the `price` override column. A stock row's
+      // `valuation` is precomputed from `explicit ?? Expense-derived`, so
+      // reading the override here made two rows of one table answer the same
+      // question from different price sources — and the 86 of 111 bins whose
+      // product carries no manual price simply read blank.
+      valuation: product.pricing.effectivePrice,
       verifiedAt: null,
       placement: "stock" as const,
       product: { name: product.name },
@@ -117,7 +122,7 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
     product.inventoryEntry,
     product.servingAsLocations,
     product.name,
-    product.price,
+    product.pricing.effectivePrice,
   ]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable
