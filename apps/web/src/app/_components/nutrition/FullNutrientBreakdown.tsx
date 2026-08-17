@@ -1,0 +1,54 @@
+import type { NutritionInfo } from "@cubby/usda-schemas";
+import { ChevronRight, ListTree } from "lucide-react";
+import { useState } from "react";
+import { Row } from "~/components/layout";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "~/components/ui/collapsible";
+import { NutritionInfoTable } from "../usda/nutrition";
+
+/**
+ * `NutritionLabel` renders only the 22 TIER1_NUTRIENTS; `nutrientSummary` is
+ * the full, unbounded USDA nutrient join (B-vitamin variants, fatty-acid
+ * breakdowns, amino acids, sugars) that a straight swap to the FDA-style
+ * label would silently drop. This keeps the raw table reachable — collapsed
+ * by default so it doesn't compete with the label for first-paint attention,
+ * expanded on demand for the full breakdown.
+ */
+export function FullNutrientBreakdown({
+  nutritionInfo,
+}: {
+  nutritionInfo: NutritionInfo;
+}) {
+  const [open, setOpen] = useState(false);
+
+  if (nutritionInfo.nutrientSummary.length === 0) return null;
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger
+        render={
+          <Row
+            as="button"
+            type="button"
+            align="center"
+            gap="sm"
+            className="w-full rounded-md px-2 py-1 text-muted-foreground text-sm hover:bg-accent"
+          />
+        }
+      >
+        <ChevronRight
+          className={`size-4 transition-transform ${open ? "rotate-90" : ""}`}
+          aria-hidden
+        />
+        <ListTree className="size-4" aria-hidden />
+        <span>Full nutrient breakdown</span>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <NutritionInfoTable n={nutritionInfo} />
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}

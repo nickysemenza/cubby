@@ -287,13 +287,13 @@ export function EnrichmentWorkbench({
   };
 
   const handleSuggest = async () => {
-    const names = selectedRows.map((r) => r.name);
-    if (names.length === 0) return;
+    const ingredients = selectedRows.map((r) => ({ id: r.id, name: r.name }));
+    if (ingredients.length === 0) return;
     const byName = new Map(
       selectedRows.map((r) => [r.name.toLowerCase(), r.id]),
     );
     try {
-      const results = await suggestUsda.mutateAsync({ ingredientNames: names });
+      const results = await suggestUsda.mutateAsync({ ingredients });
       const next: Record<string, Suggestion> = {};
       let matched = 0;
       for (const r of results) {
@@ -308,7 +308,7 @@ export function EnrichmentWorkbench({
         }
       }
       setSuggestions((prev) => ({ ...prev, ...next }));
-      toast.success(`AI matched ${matched}/${names.length}.`);
+      toast.success(`AI matched ${matched}/${ingredients.length}.`);
     } catch (err) {
       toast.error(`Suggestion failed: ${getErrorMessage(err)}`);
     }

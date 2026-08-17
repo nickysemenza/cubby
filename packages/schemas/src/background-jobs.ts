@@ -7,6 +7,7 @@ export const backgroundJobKinds = [
   "location-ai.description.refresh",
   "location-ai.inventory.refresh",
   "location-valuation.recompute",
+  "usda-match.retry",
 ] as const;
 
 export const backgroundJobKindSchema = z.enum(backgroundJobKinds);
@@ -73,6 +74,14 @@ export const locationValuationRecomputePayloadSchema = z.object({
   reason: z.string().optional(),
 });
 
+// A `suggestUsdaFoodBatch` item that rejected at the infra level (network/AI
+// gateway blip) rather than genuinely finding no match — see
+// `suggestUsdaFoodBatch`'s `Promise.allSettled` catch. Retried on the queue's
+// own backoff instead of being silently indistinguishable from "no match".
+export const usdaMatchRetryPayloadSchema = z.object({
+  ingredientId: z.string(),
+});
+
 export const backgroundJobPayloadSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("recipe-totals.recompute"),
@@ -93,6 +102,10 @@ export const backgroundJobPayloadSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("location-valuation.recompute"),
     payload: locationValuationRecomputePayloadSchema,
+  }),
+  z.object({
+    kind: z.literal("usda-match.retry"),
+    payload: usdaMatchRetryPayloadSchema,
   }),
 ]);
 
