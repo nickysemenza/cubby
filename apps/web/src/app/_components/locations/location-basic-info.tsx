@@ -57,7 +57,10 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
           label: "Is a",
           value: <EntityInlineLink entity="product" data={location.product} />,
         }
-      : { label: "Type", value: <LocationTypeLabel type={location.type} /> },
+      : {
+          label: "Type",
+          value: <LocationTypeLabel type={location.type} product={null} />,
+        },
     {
       label: "Parent Location",
       value: location.parent ? (

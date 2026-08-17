@@ -10,6 +10,7 @@ import {
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { createTestCaller } from "../trpc";
 import { locationRouter } from "./location";
+import { problemsRouter } from "./problems";
 
 // Kinds enqueued for a given location id (metadata.entity.entityId), across all batches.
 const kindsForLocation = async (
@@ -203,5 +204,45 @@ describe("reads tolerate a product-linked location's null type", () => {
 
     const tree = await caller.makeTree();
     expect(JSON.stringify(tree)).toContain("null-type parent");
+  });
+});
+
+/**
+ * The Problems payload types its location rows as a bare `z.string()`, not the
+ * enum — which is why the sweep that fixed the enum-typed reads missed them
+ * entirely, and the page still 500'd with
+ * `staleLocations.N.type: expected string, received null`.
+ *
+ * Covered here rather than in a unit test because the failure is `strictOutput`
+ * validating the assembled payload, which only happens over a real caller.
+ */
+describe("problems tolerates a product-linked location's null type", () => {
+  const ctx = withTestDb();
+
+  it("assembles the fast and coverage payloads", async () => {
+    const product = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Problems Null Type Tote" }),
+      ctx.actor,
+    );
+    const locations = createTestCaller(locationRouter, ctx.db);
+    // Empty and never-recounted, so it lands in both `emptyLocations` and
+    // `staleLocations` — the two sections that broke.
+    await locations.create(
+      makeLocationInput({
+        name: "problems null-type bin",
+        productId: product.id,
+      }),
+    );
+
+    const problems = createTestCaller(problemsRouter, ctx.db);
+    // `getViews` is the one that carries these rows — `emptyLocations` and
+    // `staleLocations` are saved-view-backed sections, not fast detectors.
+    const views = await problems.getViews();
+    expect(
+      views.emptyLocations.some((l) => l.name === "problems null-type bin"),
+    ).toBe(true);
+    await expect(problems.getFast()).resolves.toBeDefined();
+    await expect(problems.getCoverage()).resolves.toBeDefined();
   });
 });

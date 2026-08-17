@@ -273,7 +273,7 @@ function HoverTooltip({
   return (
     <VizTooltip>
       <div className="flex items-center gap-2 font-medium">
-        <LocationIcon type={node.data.type} size={14} />
+        <LocationIcon type={node.data.type} product={null} size={14} />
         {node.data.id ? (
           <Link
             to="/locations/$shortcode"
@@ -289,7 +289,7 @@ function HoverTooltip({
         )}
       </div>
       <div className="mt-1 space-y-1 text-muted-foreground">
-        <LocationTypeLabel type={node.data.type} />
+        <LocationTypeLabel type={node.data.type} product={null} />
         <div>
           Items: {node.data.directCount} direct / {node.data.totalCount} total
         </div>

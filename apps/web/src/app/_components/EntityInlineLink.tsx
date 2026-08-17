@@ -230,7 +230,12 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         className={wrapperClass}
         icon={
           data.type ? (
-            <LocationIcon type={data.type} size={12} colored />
+            <LocationIcon
+              type={data.type}
+              product={data.product ?? null}
+              size={12}
+              colored
+            />
           ) : (
             <EntityIcon entity="location" size={12} colored />
           )

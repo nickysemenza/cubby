@@ -151,7 +151,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
 
   return (
     <Row style={style} ref={dragHandle} align="center" gap="sm">
-      <LocationIcon type={data.type} size={14} />
+      <LocationIcon type={data.type} product={null} size={14} />
       <span>{data.name}</span>
       {directItemCount > 0 && (
         <Badge variant="secondary" className="h-5 px-2 text-xs">

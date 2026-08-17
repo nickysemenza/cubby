@@ -45,7 +45,7 @@ export function LocationReviewCard({
               className="h-full w-full object-cover"
             />
           ) : (
-            <LocationIcon type={location.type} size={22} />
+            <LocationIcon type={location.type} product={null} size={22} />
           )}
         </div>
         <div className="min-w-0 flex-1">

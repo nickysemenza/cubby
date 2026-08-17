@@ -52,7 +52,12 @@ export function PhotoPassStop({
             )}
             <Row align="center" gap="sm" justify="between">
               <Row align="center" gap="sm" className="min-w-0">
-                <LocationIcon type={stop.type} size={18} colored />
+                <LocationIcon
+                  type={stop.type}
+                  product={null}
+                  size={18}
+                  colored
+                />
                 <h2 className="my-0 min-w-0 truncate font-heading font-semibold text-base">
                   {stop.name}
                 </h2>

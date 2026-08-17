@@ -159,6 +159,7 @@ function Treemap({ data }: TreemapProps) {
                       >
                         <LocationIcon
                           type={node.data.type}
+                          product={null}
                           size={12}
                           className="shrink-0"
                         />
@@ -228,7 +229,7 @@ function HoverTooltip({
       style={{ left: x, top: y }}
     >
       <Row align="center" gap="sm" className="font-medium">
-        <LocationIcon type={node.data.type} size={14} />
+        <LocationIcon type={node.data.type} product={null} size={14} />
         {node.data.name}
       </Row>
       <Stack gap="xs" className="mt-1 text-muted-foreground">

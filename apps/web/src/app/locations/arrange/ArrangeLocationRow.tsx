@@ -124,7 +124,7 @@ export function ArrangeLocationRow({
           fill
           // -my cancels the row's own py so the cover is full-bleed.
           className="-my-1"
-          fallback={<LocationIcon type={node.type} size={14} />}
+          fallback={<LocationIcon type={node.type} product={null} size={14} />}
           to="/locations/$shortcode"
           shortcode={node.id}
         />

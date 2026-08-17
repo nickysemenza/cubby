@@ -153,7 +153,7 @@ export function LocationCardGrid({
             {types.map(({ type, locations: typeLocations }) => (
               <div key={type} className="mb-6 last:mb-0">
                 <div className="mb-4">
-                  <LocationTypeLabel type={type} />
+                  <LocationTypeLabel type={type} product={null} />
                 </div>
                 <Grid cols="cards3">
                   {typeLocations.map((loc) => renderCard(loc, false))}

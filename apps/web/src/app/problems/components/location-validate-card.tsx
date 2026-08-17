@@ -245,10 +245,10 @@ export function LocationValidateForm({
                     key={child.id}
                     className="flex items-center gap-2 text-muted-foreground text-sm"
                   >
-                    <LocationIcon type={child.type} size={14} />
+                    <LocationIcon type={child.type} product={null} size={14} />
                     <span>{child.name}</span>
                     <span className="text-xs opacity-60">{child.id}</span>
-                    <LocationTypeLabel type={child.type} />
+                    <LocationTypeLabel type={child.type} product={null} />
                   </div>
                 ))}
               </div>
@@ -304,7 +304,7 @@ export function LocationValidateForm({
                   ) : (
                     <Circle className="size-4 shrink-0 opacity-40" />
                   )}
-                  <LocationIcon type={child.type} size={14} />
+                  <LocationIcon type={child.type} product={null} size={14} />
                   <span>{child.name}</span>
                   <span className="text-xs opacity-60">{child.id}</span>
                 </div>
@@ -326,7 +326,11 @@ export function LocationValidateForm({
                   className="flex items-center gap-2 text-primary text-sm"
                 >
                   <CircleHelp className="size-4 shrink-0" />
-                  <LocationIcon type={item.location.type} size={14} />
+                  <LocationIcon
+                    type={item.location.type}
+                    product={null}
+                    size={14}
+                  />
                   <span>{item.location.name}</span>
                   <span className="text-xs opacity-60">{item.shortcode}</span>
                   {item.location.parent && (
@@ -372,7 +376,7 @@ export function LocationValidateForm({
             <div className="space-y-1">
               {confirmed.map((child) => (
                 <div key={child.id} className="flex items-center gap-2 text-sm">
-                  <LocationIcon type={child.type} size={14} />
+                  <LocationIcon type={child.type} product={null} size={14} />
                   <span>{child.name}</span>
                   <span className="text-muted-foreground text-xs">
                     {child.id}
@@ -425,7 +429,11 @@ export function LocationValidateForm({
                   className="flex items-center justify-between gap-2 text-sm"
                 >
                   <div className="flex items-center gap-2">
-                    <LocationIcon type={item.location.type} size={14} />
+                    <LocationIcon
+                      type={item.location.type}
+                      product={null}
+                      size={14}
+                    />
                     <span>{item.location.name}</span>
                     <span className="text-muted-foreground text-xs">
                       {item.shortcode}
@@ -496,7 +504,7 @@ function MissingLocationRow({
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2 text-sm">
         <div className="flex items-center gap-2">
-          <LocationIcon type={location.type} size={14} />
+          <LocationIcon type={location.type} product={null} size={14} />
           <span>{location.name}</span>
           <span className="text-muted-foreground text-xs">{location.id}</span>
         </div>

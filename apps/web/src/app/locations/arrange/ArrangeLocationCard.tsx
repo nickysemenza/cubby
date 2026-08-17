@@ -114,7 +114,7 @@ export function ArrangeLocationCard({
           fill
           // -my cancels the card's own py so the cover is full-bleed.
           className="-my-1.5" /* tight: matches the card's py-1.5 */
-          fallback={<LocationIcon type={node.type} size={14} />}
+          fallback={<LocationIcon type={node.type} product={null} size={14} />}
           to="/locations/$shortcode"
           shortcode={node.id}
         />

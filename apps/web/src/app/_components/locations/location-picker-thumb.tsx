@@ -36,7 +36,12 @@ export function LocationPickerThumb({
   type,
 }: LocationPickerThumbProps) {
   const icon = (
-    <LocationIcon type={type} size={14} className="text-muted-foreground" />
+    <LocationIcon
+      type={type}
+      product={null}
+      size={14}
+      className="text-muted-foreground"
+    />
   );
 
   if (!imageUrl) {
