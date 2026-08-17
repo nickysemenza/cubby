@@ -1133,52 +1133,24 @@ describe("task repository — subject product filters and search", () => {
   });
 });
 
-// P0 regression guard: `eqAny([])` is "no constraint" BY DESIGN (see its doc
-// in database-helpers/query.ts) — a `parentTaskId`/`subjectProductId` filter
-// that was SUPPLIED but resolved to no live row must not fall through to "no
-// constraint" (which would return every task in the table). It must resolve
-// to zero rows. This file also guards `resolveShortcodes`' canonical-key
-// lookup (a lowercase code must still resolve) and `toUuids`'s entity guard
-// (a wrong-prefix code must match nothing, never an unrelated row) since all
-// three live in the same shared `toUuids` helper.
-describe("task repository — id filter widening & shortcode canonicalization guards", () => {
+// The unresolvable-code and wrong-prefix halves of this guard now live in
+// `filter-application.integration.test.ts`, which runs both against every
+// declared id filter on every entity — `parentTaskId`/`subjectProductId`
+// included.
+//
+// The POSITIVE lowercase cases stay here, because that generic probe cannot
+// express them: its seeded world is deliberately unrelated, so the canonical
+// form of a real code already matches zero rows and its
+// `lower.count === upper.count` check holds vacuously. It therefore still
+// catches #591's widening (`eqAny([])` is "no constraint" BY DESIGN, so a
+// dropped predicate returns the whole table) but NOT what a
+// supplied-but-unresolved code produces today — `sql\`false\``, a silent zero
+// on both sides. A real parent/child link is what gives the assertion teeth,
+// and it is the only thing that can see the two-path `parentTaskId` bug
+// documented on that case below.
+describe("task repository — id filter shortcode canonicalization guards", () => {
   const ctx = withTestDb();
   const pagination = { pageIndex: 0, pageSize: 500 };
-
-  it("an unresolvable parentTaskId matches nothing, not every task", async () => {
-    const { output: parent } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({ trade: "other", name: "widening guard parent" }),
-      ctx.actor,
-    );
-    await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: "widening guard real child",
-        parentTaskId: parent.id,
-      }),
-      ctx.actor,
-    );
-    await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: "widening guard unrelated top-level task",
-      }),
-      ctx.actor,
-    );
-
-    const bogus = unsafeTaskShortcode("TSK-9999");
-    const { data, count } = await taskList(
-      ctx.db,
-      { parentTaskId: bogus },
-      [],
-      pagination,
-    );
-    expect(data).toEqual([]);
-    expect(count).toBe(0);
-  });
 
   // `parentTaskId` is filtered TWICE and both had to be canonicalized for a
   // lowercase code to work end-to-end: this file's `toUuids`, and
@@ -1214,67 +1186,6 @@ describe("task repository — id filter widening & shortcode canonicalization gu
       pagination,
     );
     expect(data.map((row) => row.id)).toEqual([child.id]);
-  });
-
-  it("a wrong-entity code (a real project shortcode) as parentTaskId matches nothing", async () => {
-    const { output: project } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "widening guard wrong entity project" }),
-      ctx.actor,
-    );
-    await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: "widening guard wrong entity task",
-      }),
-      ctx.actor,
-    );
-
-    // A well-formed, LIVE shortcode — just for the wrong entity. `toUuids`'s
-    // entity guard must reject it rather than let it slip through.
-    // `${project.id}` de-brands it to a plain string first — `unsafe*Shortcode`
-    // is type-guarded against re-casting an already-branded value, which this
-    // test deliberately does to simulate a caller passing the wrong entity's
-    // code.
-    const wrongEntity = unsafeTaskShortcode(`${project.id}`);
-    const { data, count } = await taskList(
-      ctx.db,
-      { parentTaskId: wrongEntity },
-      [],
-      pagination,
-    );
-    expect(data).toEqual([]);
-    expect(count).toBe(0);
-  });
-
-  it("an unresolvable subjectProductId matches nothing, not every task", async () => {
-    await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: "widening guard subject product row one",
-      }),
-      ctx.actor,
-    );
-    await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: "widening guard subject product row two",
-      }),
-      ctx.actor,
-    );
-
-    const bogus = unsafeProductShortcode("PRD-9999");
-    const { data, count } = await taskList(
-      ctx.db,
-      { subjectProductId: bogus },
-      [],
-      pagination,
-    );
-    expect(data).toEqual([]);
-    expect(count).toBe(0);
   });
 
   it("a lowercase subjectProductId still resolves and filters correctly", async () => {

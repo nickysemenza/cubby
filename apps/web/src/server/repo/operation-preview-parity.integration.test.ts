@@ -103,255 +103,268 @@ describe("operation preview / mutation parity", () => {
   const ctx = withTestDb();
 
   describe("blocker parity", () => {
-    it("product: live inventory blocks delete, both in the preview and the mutation", async () => {
-      const location = await createLocation(
-        ctx.db,
-        makeLocationInput({ name: "Blocker Location" }),
-        ctx.actor,
-      );
-      const product = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Blocked Product", upc: "800000000001" }),
-        ctx.actor,
-      );
-      const entry = await createInventoryEntry(
-        ctx.db,
-        {
-          productId: product.id,
-          locationId: location.id,
-          amount: { value: 1, unit: "each" },
-        },
-        ctx.actor,
-      );
+    /**
+     * What a delete-blocker row hands the shared body. `preview` and `remove`
+     * are closures rather than data because each entity's ids are branded to
+     * itself and its delete takes a different id form (some the shortcode, some
+     * the uuid) — nothing narrower than "do it for me" is assignable across all
+     * five.
+     */
+    interface BlockerCase {
+      preview: () => ReturnType<typeof previewOperation>;
+      /** The edge the preview must name as the blocker. */
+      edgeKey: string;
+      /** The `cause.reason` the mutation must refuse with. */
+      reason: string;
+      /** The mutation under test. Called once blocked, once unblocked. */
+      remove: () => Promise<unknown>;
+      /** Delete the blocking row, so the second pass can proceed. */
+      clearBlocker: () => Promise<unknown>;
+      /** What the now-permitted delete resolves to. */
+      expectResolved: (result: unknown) => void;
+    }
 
-      const blocked = await previewOperation(
-        ctx.db,
-        { operation: "delete", entity: "product", ids: [product.id] },
-        new Date(),
-      );
-      expect(blocked.canProceed).toBe(false);
-      expect(blocked.blockers.map((b) => b.edgeKey)).toContain(
-        "InventoryEntry.productId",
-      );
-      await expect(
-        deleteProducts(ctx.db, [product.entityId], ctx.actor),
-      ).rejects.toMatchObject({
-        code: "PRECONDITION_FAILED",
-        cause: { reason: "PRODUCT_HAS_INVENTORY" },
-      });
+    const detachesNoImages = (result: unknown) =>
+      expect(result).toMatchObject({ detachedImageKeys: [] });
+    const resolvesVoid = (result: unknown) => expect(result).toBeUndefined();
 
-      await deleteInventoryEntries(ctx.db, [entry.entityId], ctx.actor);
-
-      const unblocked = await previewOperation(
-        ctx.db,
-        { operation: "delete", entity: "product", ids: [product.id] },
-        new Date(),
-      );
-      expect(unblocked.canProceed).toBe(true);
-      expect(unblocked.blockers).toEqual([]);
-      await expect(
-        deleteProducts(ctx.db, [product.entityId], ctx.actor),
-      ).resolves.toMatchObject({ detachedImageKeys: [] });
-    });
-
-    it("ingredient: a live recipe usage blocks delete, both in the preview and the mutation", async () => {
-      const ingredient = await createIngredient(
-        ctx.db,
-        { name: "Blocked Ingredient", aliases: [] },
-        ctx.actor,
-      );
-      const recipe = await createRecipe(
-        ctx.db,
-        makeRecipeInput({
-          name: "Uses Blocked Ingredient",
-          sections: [
+    /**
+     * One row per (entity, blocking edge). The body below is the parity claim
+     * itself — preview refuses, mutation refuses with the matching reason,
+     * clearing the edge flips BOTH to permitted — so a new blocking edge is a
+     * row, and can't accidentally assert only half of it.
+     */
+    const BLOCKER_CASES: ReadonlyArray<[string, () => Promise<BlockerCase>]> = [
+      [
+        "product: live inventory blocks delete",
+        async () => {
+          const location = await createLocation(
+            ctx.db,
+            makeLocationInput({ name: "Blocker Location" }),
+            ctx.actor,
+          );
+          const product = await createProduct(
+            ctx.db,
+            makeProductInput({ name: "Blocked Product", upc: "800000000001" }),
+            ctx.actor,
+          );
+          const entry = await createInventoryEntry(
+            ctx.db,
             {
-              name: "Main",
-              instructions: [{ instruction: "Mix" }],
-              ingredients: [ingredientRef(ingredient.id)],
+              productId: product.id,
+              locationId: location.id,
+              amount: { value: 1, unit: "each" },
             },
-          ],
-        }),
-        ctx.actor,
-      );
-
-      const blocked = await previewOperation(
-        ctx.db,
-        { operation: "delete", entity: "ingredient", ids: [ingredient.id] },
-        new Date(),
-      );
-      expect(blocked.canProceed).toBe(false);
-      expect(blocked.blockers.map((b) => b.edgeKey)).toContain(
-        "RecipeSectionIngredient.ingredientId",
-      );
-      await expect(
-        deleteIngredients(ctx.db, [ingredient.entityId], ctx.actor),
-      ).rejects.toMatchObject({
-        code: "PRECONDITION_FAILED",
-        cause: { reason: "INGREDIENT_HAS_RECIPES" },
-      });
-
-      // Deleting the recipe cascade-soft-deletes its section ingredients,
-      // clearing the live usage that was blocking the ingredient.
-      await deleteRecipes(ctx.db, [recipe.entityId], ctx.actor);
-
-      const unblocked = await previewOperation(
-        ctx.db,
-        { operation: "delete", entity: "ingredient", ids: [ingredient.id] },
-        new Date(),
-      );
-      expect(unblocked.canProceed).toBe(true);
-      expect(unblocked.blockers).toEqual([]);
-      await expect(
-        deleteIngredients(ctx.db, [ingredient.entityId], ctx.actor),
-      ).resolves.toBeUndefined();
-    });
-
-    it("location: live inventory blocks delete, both in the preview and the mutation", async () => {
-      const location = await createLocation(
-        ctx.db,
-        makeLocationInput({ name: "Blocked Location" }),
-        ctx.actor,
-      );
-      const product = await createProduct(
-        ctx.db,
-        makeProductInput({
-          name: "Location Blocker Product",
-          upc: "800000000002",
-        }),
-        ctx.actor,
-      );
-      const entry = await createInventoryEntry(
-        ctx.db,
-        {
-          productId: product.id,
-          locationId: location.id,
-          amount: { value: 1, unit: "each" },
+            ctx.actor,
+          );
+          return {
+            preview: () =>
+              previewOperation(
+                ctx.db,
+                {
+                  operation: "delete",
+                  entity: "product",
+                  ids: [product.id],
+                },
+                new Date(),
+              ),
+            edgeKey: "InventoryEntry.productId",
+            reason: "PRODUCT_HAS_INVENTORY",
+            remove: () => deleteProducts(ctx.db, [product.entityId], ctx.actor),
+            clearBlocker: () =>
+              deleteInventoryEntries(ctx.db, [entry.entityId], ctx.actor),
+            expectResolved: detachesNoImages,
+          };
         },
-        ctx.actor,
-      );
+      ],
+      [
+        "ingredient: a live recipe usage blocks delete",
+        async () => {
+          const ingredient = await createIngredient(
+            ctx.db,
+            { name: "Blocked Ingredient", aliases: [] },
+            ctx.actor,
+          );
+          const recipe = await createRecipe(
+            ctx.db,
+            makeRecipeInput({
+              name: "Uses Blocked Ingredient",
+              sections: [
+                {
+                  name: "Main",
+                  instructions: [{ instruction: "Mix" }],
+                  ingredients: [ingredientRef(ingredient.id)],
+                },
+              ],
+            }),
+            ctx.actor,
+          );
+          return {
+            preview: () =>
+              previewOperation(
+                ctx.db,
+                {
+                  operation: "delete",
+                  entity: "ingredient",
+                  ids: [ingredient.id],
+                },
+                new Date(),
+              ),
+            edgeKey: "RecipeSectionIngredient.ingredientId",
+            reason: "INGREDIENT_HAS_RECIPES",
+            remove: () =>
+              deleteIngredients(ctx.db, [ingredient.entityId], ctx.actor),
+            // Deleting the recipe cascade-soft-deletes its section
+            // ingredients, which is what clears the live usage.
+            clearBlocker: () =>
+              deleteRecipes(ctx.db, [recipe.entityId], ctx.actor),
+            expectResolved: resolvesVoid,
+          };
+        },
+      ],
+      [
+        "location: live inventory blocks delete",
+        async () => {
+          const location = await createLocation(
+            ctx.db,
+            makeLocationInput({ name: "Blocked Location" }),
+            ctx.actor,
+          );
+          const product = await createProduct(
+            ctx.db,
+            makeProductInput({
+              name: "Location Blocker Product",
+              upc: "800000000002",
+            }),
+            ctx.actor,
+          );
+          const entry = await createInventoryEntry(
+            ctx.db,
+            {
+              productId: product.id,
+              locationId: location.id,
+              amount: { value: 1, unit: "each" },
+            },
+            ctx.actor,
+          );
+          return {
+            preview: () =>
+              previewOperation(
+                ctx.db,
+                {
+                  operation: "delete",
+                  entity: "location",
+                  ids: [location.id],
+                },
+                new Date(),
+              ),
+            edgeKey: "InventoryEntry.locationId",
+            reason: "LOCATION_HAS_INVENTORY",
+            remove: () =>
+              deleteLocations(ctx.db, [location.entityId], ctx.actor),
+            clearBlocker: () =>
+              deleteInventoryEntries(ctx.db, [entry.entityId], ctx.actor),
+            expectResolved: detachesNoImages,
+          };
+        },
+      ],
+      [
+        "project: a live task blocks delete",
+        async () => {
+          const { output: project } = await createProject(
+            ctx.db,
+            projectCreateInput.parse({ name: "Blocked Project" }),
+            ctx.actor,
+          );
+          const { output: taskRow } = await createTask(
+            ctx.db,
+            taskCreateInput.parse({
+              name: "Blocking Task",
+              trade: "other",
+              projectId: project.id,
+            }),
+            ctx.actor,
+          );
+          return {
+            preview: () =>
+              previewOperation(
+                ctx.db,
+                {
+                  operation: "delete",
+                  entity: "project",
+                  ids: [project.id],
+                },
+                new Date(),
+              ),
+            edgeKey: "Task.projectId",
+            reason: "PROJECT_HAS_TASKS",
+            remove: () => deleteProjects(ctx.db, [project.id], ctx.actor),
+            clearBlocker: () => deleteTasks(ctx.db, [taskRow.id], ctx.actor),
+            expectResolved: detachesNoImages,
+          };
+        },
+      ],
+      [
+        "vendor: a live purchase blocks delete",
+        async () => {
+          const { output: vendor } = await createVendor(
+            ctx.db,
+            vendorCreateInput.parse({ name: "Blocked Vendor" }),
+            ctx.actor,
+          );
+          const { output: purchase } = await createPurchase(
+            ctx.db,
+            purchaseCreateInput.parse({
+              date: "2024-01-15",
+              vendorId: vendor.id,
+            }),
+            ctx.actor,
+          );
+          return {
+            preview: () =>
+              previewOperation(
+                ctx.db,
+                { operation: "delete", entity: "vendor", ids: [vendor.id] },
+                new Date(),
+              ),
+            edgeKey: "Purchase.vendorId",
+            reason: "VENDOR_HAS_PURCHASES",
+            remove: () => deleteVendors(ctx.db, [vendor.id], ctx.actor),
+            clearBlocker: () =>
+              deletePurchases(ctx.db, [purchase.id], ctx.actor),
+            expectResolved: resolvesVoid,
+          };
+        },
+      ],
+    ];
 
-      const blocked = await previewOperation(
-        ctx.db,
-        { operation: "delete", entity: "location", ids: [location.id] },
-        new Date(),
-      );
-      expect(blocked.canProceed).toBe(false);
-      expect(blocked.blockers.map((b) => b.edgeKey)).toContain(
-        "InventoryEntry.locationId",
-      );
-      await expect(
-        deleteLocations(ctx.db, [location.entityId], ctx.actor),
-      ).rejects.toMatchObject({
-        code: "PRECONDITION_FAILED",
-        cause: { reason: "LOCATION_HAS_INVENTORY" },
-      });
+    it.each(BLOCKER_CASES)(
+      "%s, both in the preview and the mutation",
+      async (_label, seed) => {
+        const subject = await seed();
 
-      await deleteInventoryEntries(ctx.db, [entry.entityId], ctx.actor);
+        const blocked = await subject.preview();
+        expect(blocked.canProceed).toBe(false);
+        expect(blocked.blockers.map((b) => b.edgeKey)).toContain(
+          subject.edgeKey,
+        );
+        await expect(subject.remove()).rejects.toMatchObject({
+          code: "PRECONDITION_FAILED",
+          cause: { reason: subject.reason },
+        });
 
-      const unblocked = await previewOperation(
-        ctx.db,
-        { operation: "delete", entity: "location", ids: [location.id] },
-        new Date(),
-      );
-      expect(unblocked.canProceed).toBe(true);
-      expect(unblocked.blockers).toEqual([]);
-      await expect(
-        deleteLocations(ctx.db, [location.entityId], ctx.actor),
-      ).resolves.toMatchObject({ detachedImageKeys: [] });
-    });
+        await subject.clearBlocker();
 
-    it("project: a live task blocks delete, both in the preview and the mutation", async () => {
-      const { output: project } = await createProject(
-        ctx.db,
-        projectCreateInput.parse({ name: "Blocked Project" }),
-        ctx.actor,
-      );
-      const { output: taskRow } = await createTask(
-        ctx.db,
-        taskCreateInput.parse({
-          name: "Blocking Task",
-          trade: "other",
-          projectId: project.id,
-        }),
-        ctx.actor,
-      );
+        const unblocked = await subject.preview();
+        expect(unblocked.canProceed).toBe(true);
+        expect(unblocked.blockers).toEqual([]);
+        subject.expectResolved(await subject.remove());
+      },
+    );
 
-      const blocked = await previewOperation(
-        ctx.db,
-        { operation: "delete", entity: "project", ids: [project.id] },
-        new Date(),
-      );
-      expect(blocked.canProceed).toBe(false);
-      expect(blocked.blockers.map((b) => b.edgeKey)).toContain(
-        "Task.projectId",
-      );
-      await expect(
-        deleteProjects(ctx.db, [project.id], ctx.actor),
-      ).rejects.toMatchObject({
-        code: "PRECONDITION_FAILED",
-        cause: { reason: "PROJECT_HAS_TASKS" },
-      });
-
-      await deleteTasks(ctx.db, [taskRow.id], ctx.actor);
-
-      const unblocked = await previewOperation(
-        ctx.db,
-        { operation: "delete", entity: "project", ids: [project.id] },
-        new Date(),
-      );
-      expect(unblocked.canProceed).toBe(true);
-      expect(unblocked.blockers).toEqual([]);
-      await expect(
-        deleteProjects(ctx.db, [project.id], ctx.actor),
-      ).resolves.toMatchObject({ detachedImageKeys: [] });
-    });
-
-    it("vendor: a live purchase blocks delete, both in the preview and the mutation", async () => {
-      const { output: vendor } = await createVendor(
-        ctx.db,
-        vendorCreateInput.parse({ name: "Blocked Vendor" }),
-        ctx.actor,
-      );
-      const { output: purchase } = await createPurchase(
-        ctx.db,
-        purchaseCreateInput.parse({
-          date: "2024-01-15",
-          vendorId: vendor.id,
-        }),
-        ctx.actor,
-      );
-
-      const blocked = await previewOperation(
-        ctx.db,
-        { operation: "delete", entity: "vendor", ids: [vendor.id] },
-        new Date(),
-      );
-      expect(blocked.canProceed).toBe(false);
-      expect(blocked.blockers.map((b) => b.edgeKey)).toContain(
-        "Purchase.vendorId",
-      );
-      await expect(
-        deleteVendors(ctx.db, [vendor.id], ctx.actor),
-      ).rejects.toMatchObject({
-        code: "PRECONDITION_FAILED",
-        cause: { reason: "VENDOR_HAS_PURCHASES" },
-      });
-
-      await deletePurchases(ctx.db, [purchase.id], ctx.actor);
-
-      const unblocked = await previewOperation(
-        ctx.db,
-        { operation: "delete", entity: "vendor", ids: [vendor.id] },
-        new Date(),
-      );
-      expect(unblocked.canProceed).toBe(true);
-      expect(unblocked.blockers).toEqual([]);
-      await expect(
-        deleteVendors(ctx.db, [vendor.id], ctx.actor),
-      ).resolves.toBeUndefined();
-    });
-
+    // The two merge refusals stay hand-written: each has a materially different
+    // setup and its own refusal reason, so a table row would be a fixture with
+    // nothing shared but the word "blocked".
     it("purchase merge: cross-vendor charges are refused, both in the preview and the mutation", async () => {
       const { output: vendorA } = await createVendor(
         ctx.db,

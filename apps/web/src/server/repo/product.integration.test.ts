@@ -11,7 +11,6 @@ import {
   productImage,
   productUnitMappings,
 } from "~/server/db/schema";
-import { PRODUCT_EDGE_ROLES } from "~/server/repo/product/edge-roles";
 import { getDb, insertAndReturn } from "./database-helpers";
 import { createExpense, deleteExpenses } from "./expense";
 import { deleteInventoryEntries } from "./inventory";
@@ -2371,83 +2370,20 @@ describe("product repository", () => {
    * Scoped to `product` alone — NOT written as a fully generic "loop every
    * entity's edge-role plan" test. See the TODO at the end of this block for
    * what a future entity needs before that generalization is worth building.
+   *
+   * Three retaining edges are covered elsewhere rather than here, so don't read
+   * this block as the complete roster:
+   *   - `Expense.productId` — `deleteProducts`' own describe above, which also
+   *     pins the error message and the post-delete NOT_FOUND.
+   *   - `InventoryEntry.productId` — `operation-preview-parity`, which asserts
+   *     the preview AND the mutation agree on the blocker.
+   *   - `Task.subjectProductId` — `deleteProducts`' own describe above.
+   * That the roles map itself is EXHAUSTIVE over `INCOMING_EDGES.product` is a
+   * type-free unit assertion, not a database one: it lives in
+   * `entity-edge-operation-policies.unit.test.ts`, derived from the fact table
+   * rather than from a hand-kept key list.
    */
   describe("PRODUCT_EDGE_ROLES backstop", () => {
-    it("has exactly the nine edges this test exercises (name+ordering drift is a signal to update the test too)", () => {
-      expect(Object.keys(PRODUCT_EDGE_ROLES).sort()).toEqual(
-        [
-          "Expense.productId",
-          "InventoryEntry.productId",
-          "ProductExternalId.productId",
-          "ProductImage.productId",
-          "ProjectToolUsage.productId",
-          "ProductUnitMappings.productId",
-          "PurchaseProduct.productId",
-          "Task.subjectProductId",
-          "WishCandidate.productId",
-        ].sort(),
-      );
-    });
-
-    it("blocks delete while inventory is live, and allows it once the entry is gone", async () => {
-      const testLocation = await createLocation(
-        ctx.db,
-        makeLocationInput({ name: "Backstop Location" }),
-        ctx.actor,
-      );
-      const prod = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Backstop Inventory Product" }),
-        ctx.actor,
-      );
-      const entry = await createInventoryEntry(
-        ctx.db,
-        {
-          productId: prod.id,
-          locationId: testLocation.id,
-          amount: { value: 1, unit: "each" },
-        },
-        ctx.actor,
-      );
-
-      await expect(
-        deleteProducts(ctx.db, [prod.entityId], ctx.actor),
-      ).rejects.toMatchObject({ cause: { reason: "PRODUCT_HAS_INVENTORY" } });
-
-      await deleteInventoryEntries(ctx.db, [entry.entityId], ctx.actor);
-
-      await expect(
-        deleteProducts(ctx.db, [prod.entityId], ctx.actor),
-      ).resolves.toMatchObject({ detachedImageKeys: [] });
-    });
-
-    it("blocks delete while an expense is live, and allows it once the expense is gone", async () => {
-      const prod = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Backstop Expense Product" }),
-        ctx.actor,
-      );
-      const { output: exp } = await createExpense(
-        ctx.db,
-        {
-          ...makeExpenseInput(),
-          name: "backstop expense",
-          productId: prod.id,
-        },
-        ctx.actor,
-      );
-
-      await expect(
-        deleteProducts(ctx.db, [prod.entityId], ctx.actor),
-      ).rejects.toMatchObject({ cause: { reason: "PRODUCT_HAS_EXPENSES" } });
-
-      await deleteExpenses(ctx.db, [exp.id], ctx.actor);
-
-      await expect(
-        deleteProducts(ctx.db, [prod.entityId], ctx.actor),
-      ).resolves.toMatchObject({ detachedImageKeys: [] });
-    });
-
     it("blocks delete while a purchase link is live, and allows it once detached", async () => {
       // The provenance edge is `acquisition`, so it retains the product for the
       // same reason a linked Expense does: for an installment order this link

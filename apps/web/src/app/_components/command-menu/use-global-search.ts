@@ -7,7 +7,7 @@ import { recordCommandSearch } from "~/lib/perf/perf-store";
 import { type QuickAction, quickActions } from "./quick-actions";
 
 const COMMAND_SEARCH_RESULT_LIMIT = 8;
-export const LEXICAL_DEBOUNCE_MS = 100;
+const LEXICAL_DEBOUNCE_MS = 100;
 
 interface UseGlobalSearchResult {
   results:
