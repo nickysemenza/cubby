@@ -46,12 +46,30 @@ export async function executeSearchDocumentSql<T>(
   return result.rows as unknown as T[];
 }
 
-const hash = async (value: string): Promise<string> => {
+/**
+ * The identity of a written row: every projected column plus the semantic body.
+ *
+ * The writer and the staleness check deliberately share this one function.
+ * Spelling the comparison out field by field would leave a rule that quietly
+ * stops covering whatever column is added to `SearchDocumentSource` next, and
+ * comparing the semantic body alone covers a projected column only where that
+ * column happens to also appear in the embedding text — `project.icon` never
+ * does, and a `typeHint` outliving its enum is exactly the drift that hides
+ * there (#750 narrowed the location enum and nothing re-projected the 100
+ * documents still carrying a retired value).
+ */
+async function searchDocumentSourceHash(
+  source: SearchDocumentSource,
+  body: string,
+): Promise<string> {
   const bytes = new Uint8Array(
-    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)),
+    await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(JSON.stringify({ ...source, body })),
+    ),
   );
   return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-};
+}
 
 const textList = (values: Array<string | null | undefined>): string[] =>
   values.flatMap((value) => {
@@ -240,7 +258,7 @@ async function upsertSearchDocumentBatch(
   const rows = await Promise.all(
     entries.map(async ({ source, body }) => {
       const normalizedText = normalizeSearchText(source.title);
-      const sourceHash = await hash(JSON.stringify({ ...source, body }));
+      const sourceHash = await searchDocumentSourceHash(source, body);
       return sql`(
         ${source.entityType}::text, ${source.entityId}::uuid,
         ${source.shortcode}::text, ${source.title}::text,
@@ -478,19 +496,33 @@ export async function getStaleSearchDocumentEmbeddingTexts(
   return stale;
 }
 
-/** Missing, orphaned, and source-text-stale rows for cutover/repair checks. */
+/**
+ * Missing, orphaned, and stale rows for cutover/repair checks.
+ *
+ * Staleness is the whole written row against the whole live one, via
+ * `sourceHash` — not the semantic body against itself. Nothing in this
+ * codebase re-projects `SearchDocument` when a projection or an enum changes:
+ * documents are refreshed per entity by `runMutationSideEffects`, and the two
+ * paths that skip it — a raw-SQL backfill script, a `db:push` that reinterprets
+ * a column — are exactly the ones that change a projection wholesale. This
+ * check plus `repairSearchDocuments` is that missing trigger, so it has to see
+ * every projected column rather than the subset the embedding text echoes.
+ */
 export async function getSearchDocumentDiagnostics(
   db: Database,
   entityTypes: SearchableEntity[] = [...searchableEntities],
 ): Promise<SearchDocumentDiagnostics> {
-  const [sources, documentResult] = await Promise.all([
+  // Texts enumerate what SHOULD exist (the canonical loaders, as the backfill
+  // uses); sources carry the projected columns the write path hashes.
+  const [texts, sources, documentResult] = await Promise.all([
     getEmbeddingTextsForEntityTypes(db, entityTypes),
+    getSearchDocumentSources(db, entityTypes),
     getDb(db).execute<{
       entityType: SearchableEntity;
       entityId: string;
-      semanticText: string;
+      sourceHash: string;
     }>(sql`
-      SELECT "entityType", "entityId"::text AS "entityId", "semanticText"
+      SELECT "entityType", "entityId"::text AS "entityId", "sourceHash"
       FROM "SearchDocument"
       WHERE "deletedAt" IS NULL
         AND "entityType" IN (${sql.join(
@@ -499,41 +531,50 @@ export async function getSearchDocumentDiagnostics(
         )})
     `),
   ]);
+  const refKey = (entityType: SearchableEntity, entityId: string) =>
+    `${entityType}:${entityId}`;
+  const textByRef = new Map(
+    texts.map((text) => [refKey(text.entityType, text.entityId), text]),
+  );
   const sourceByRef = new Map(
     sources.map((source) => [
-      `${source.entityType}:${source.entityId}`,
+      refKey(source.entityType, source.entityId),
       source,
     ]),
   );
   const documentByRef = new Map(
     documentResult.rows.map((document) => [
-      `${document.entityType}:${document.entityId}`,
+      refKey(document.entityType, document.entityId),
       document,
     ]),
   );
-  const missing = sources
+  const missing = texts
     .filter(
-      (source) => !documentByRef.has(`${source.entityType}:${source.entityId}`),
+      (text) => !documentByRef.has(refKey(text.entityType, text.entityId)),
     )
     .map(({ entityType, entityId }) => ({ entityType, entityId }));
   const orphaned = documentResult.rows
     .filter(
       (document) =>
-        !sourceByRef.has(`${document.entityType}:${document.entityId}`),
+        !textByRef.has(refKey(document.entityType, document.entityId)),
     )
     .map(({ entityType, entityId }) => ({ entityType, entityId }));
-  const stale = documentResult.rows
-    .filter((document) => {
-      const source = sourceByRef.get(
-        `${document.entityType}:${document.entityId}`,
-      );
-      return (
-        source != null &&
-        normalizeSearchText(source.embeddingText) !==
-          normalizeSearchText(document.semanticText)
-      );
-    })
-    .map(({ entityType, entityId }) => ({ entityType, entityId }));
+
+  const stale: Array<{ entityType: SearchableEntity; entityId: string }> = [];
+  for (const document of documentResult.rows) {
+    const key = refKey(document.entityType, document.entityId);
+    const source = sourceByRef.get(key);
+    const text = textByRef.get(key);
+    // No live source is orphaned, not stale — reported above, retired by repair.
+    if (!source || !text) continue;
+    const expected = await searchDocumentSourceHash(source, text.embeddingText);
+    if (expected !== document.sourceHash) {
+      stale.push({
+        entityType: document.entityType,
+        entityId: document.entityId,
+      });
+    }
+  }
   return { missing, orphaned, stale };
 }
 
