@@ -482,10 +482,14 @@ function drawFloorShadow(
   ctx.fill();
 }
 
-// Null means the location IS a product — a tote or bin, drawn as a generic
-// container by the default arm below.
+// Null means the location IS a Product. Drawn as a container rather than
+// falling through to `default` (a shelving unit) — same reasoning as
+// `getFurnitureSpec`, and the two must agree or a piece is sized as a box and
+// painted as a shelf.
 function getDrawFunction(type: LocationType | null) {
   switch (type) {
+    case null:
+      return drawBoxContainer;
     case "shelf":
       return drawShelfUnit;
     case "cabinet":
