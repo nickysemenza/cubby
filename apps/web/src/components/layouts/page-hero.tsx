@@ -340,6 +340,12 @@ interface DetailPlateProps {
   actions?: ReactNode;
   /** Images shown as a swipeable hero gallery on mobile (above the plate). */
   heroImages?: Array<{ id: string; url: string; filename: string }>;
+  /**
+   * Sourced detail media shown in place of the owned-image gallery. The slot
+   * lets a page present related imagery without treating it as editable record
+   * media.
+   */
+  heroMedia?: ReactNode;
 }
 
 /**
@@ -361,16 +367,22 @@ function DetailPlate({
   heroStats,
   actions,
   heroImages,
+  heroMedia,
 }: DetailPlateProps) {
   const onFileSince = getOnFileSince(rawData);
 
   return (
     <>
-      {/* Hero image gallery — mobile only; desktop shows it in section col-2. */}
-      {heroImages && heroImages.length > 0 && (
-        <div className="-mx-4 -mt-4 md:hidden">
-          <ImageGallery images={heroImages} />
-        </div>
+      {/* Detail media — mobile only; desktop shows it in the section rail. */}
+      {heroMedia !== undefined ? (
+        <div className="-mx-4 -mt-4 md:hidden">{heroMedia}</div>
+      ) : (
+        heroImages &&
+        heroImages.length > 0 && (
+          <div className="-mx-4 -mt-4 md:hidden">
+            <ImageGallery images={heroImages} />
+          </div>
+        )
       )}
 
       <Card
@@ -440,6 +452,7 @@ interface PageHeaderProps {
   heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
   heroStats?: DetailHeroStat[];
   heroImages?: Array<{ id: string; url: string; filename: string }>;
+  heroMedia?: ReactNode;
   count?: number;
 }
 
@@ -463,6 +476,7 @@ export function PageHeader({
   heroStamp,
   heroStats,
   heroImages,
+  heroMedia,
   count,
 }: PageHeaderProps) {
   if (variant === "detail") {
@@ -479,6 +493,7 @@ export function PageHeader({
         heroStats={heroStats}
         actions={actions}
         heroImages={heroImages}
+        heroMedia={heroMedia}
       />
     );
   }

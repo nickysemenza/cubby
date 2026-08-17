@@ -5,6 +5,7 @@ import { Focus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { LocationTreeRow } from "~/app/_components/locations/location-tree-row";
+import { resolveLocationPrimaryVisual } from "~/app/_components/locations/location-visual-resolver";
 import { Row } from "~/components/layout";
 import {
   Tooltip,
@@ -102,6 +103,7 @@ export function ArrangeLocationRow({
     node.inventoryItems?.length ??
     0;
   const childCount = node.childCount ?? node.children?.length ?? 0;
+  const cover = resolveLocationPrimaryVisual(node).image;
 
   return (
     <LocationTreeRow
@@ -118,13 +120,15 @@ export function ArrangeLocationRow({
       }
       icon={
         <ArrangeThumb
-          images={node.images}
+          images={cover ? [cover] : []}
           alt={node.name}
           size={32}
           fill
           // -my cancels the row's own py so the cover is full-bleed.
           className="-my-1"
-          fallback={<LocationIcon type={node.type} product={null} size={14} />}
+          fallback={
+            <LocationIcon type={node.type} product={node.product} size={14} />
+          }
           to="/locations/$shortcode"
           shortcode={node.id}
         />

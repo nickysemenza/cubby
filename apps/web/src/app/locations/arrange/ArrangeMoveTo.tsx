@@ -133,7 +133,33 @@ function MoveToDialog({
             <EntityPicker
               entity="location"
               label="location"
-              items={items}
+              items={items.map((item) => {
+                const valid =
+                  target.kind === "location"
+                    ? isValidLocationDrop(
+                        target.roots,
+                        target.locationId,
+                        item.id,
+                      )
+                    : isValidItemDrop(target.drag.sourceLocationId, item.id);
+                return valid
+                  ? item
+                  : {
+                      ...item,
+                      presentation: {
+                        ...item.presentation,
+                        group: {
+                          id: "unavailable",
+                          label: "Unavailable",
+                          order: 99,
+                        },
+                        disabledReason:
+                          target.kind === "location"
+                            ? "A location cannot move into itself or its descendants"
+                            : "Already the current location",
+                      },
+                    };
+              })}
               onSearchChange={onSearchChange}
               isLoading={isLoading}
               onOpenChange={onOpenChange}

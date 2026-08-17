@@ -88,6 +88,7 @@ export function MoveToDialog({
           form={form}
           label="Destination"
           error={error}
+          sourceLocationIds={sourceLocationId}
         />
       </FormProvider>
       <DialogFooter>

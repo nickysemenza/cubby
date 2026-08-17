@@ -76,8 +76,8 @@ function SectionCard({
 
 const STACK_CLASS = "min-w-0 space-y-2 sm:space-y-4";
 
-/** The hero image pseudo-card that rides in the aside rail on desktop. */
-function heroCard(
+/** The owned-image hero pseudo-card that rides in the aside rail on desktop. */
+function heroImageCard(
   heroImages: Array<{ id: string; url: string; filename: string }>,
 ) {
   return (
@@ -92,6 +92,34 @@ function heroCard(
 }
 
 /**
+ * Prefer page-supplied sourced media over the owned-image gallery. The wrapper
+ * provides the shared entrance treatment but deliberately adds no card or
+ * surface, so a self-contained visual keeps its own composition.
+ */
+function heroVisual({
+  heroImages,
+  heroMedia,
+}: {
+  heroImages?: Array<{ id: string; url: string; filename: string }>;
+  heroMedia?: ReactNode;
+}): ReactNode | undefined {
+  if (heroMedia !== undefined) {
+    return (
+      <div
+        key="detail-media"
+        className="fade-in slide-in-from-bottom-2 animate-in"
+        style={{ animationFillMode: "both" }}
+      >
+        {heroMedia}
+      </div>
+    );
+  }
+  return heroImages && heroImages.length > 0
+    ? heroImageCard(heroImages)
+    : undefined;
+}
+
+/**
  * Legacy layout for pages that declare no "main" section: half-width sections
  * dealt round-robin into two equal content-height column stacks, full-width
  * sections spanning both and breaking the run. Byte-compatible with the
@@ -100,9 +128,11 @@ function heroCard(
 function renderLegacyLayout({
   sections,
   heroImages,
+  heroMedia,
 }: {
   sections: DetailSection[];
   heroImages?: Array<{ id: string; url: string; filename: string }>;
+  heroMedia?: ReactNode;
 }): ReactNode {
   const blocks: ReactNode[] = [];
   let run: ReactNode[] = [];
@@ -133,8 +163,9 @@ function renderLegacyLayout({
       run.push(<SectionCard key={section.title} section={section} index={i} />);
     }
     // Hero image rides at the top of column 2, right after the first section.
-    if (i === 0 && heroImages && heroImages.length > 0) {
-      run.push(heroCard(heroImages));
+    if (i === 0) {
+      const visual = heroVisual({ heroImages, heroMedia });
+      if (visual) run.push(visual);
     }
   });
   flushRun();
@@ -155,20 +186,23 @@ function renderLegacyLayout({
 function renderZonedLayout({
   sections,
   heroImages,
+  heroMedia,
 }: {
   sections: DetailSection[];
   heroImages?: Array<{ id: string; url: string; filename: string }>;
+  heroMedia?: ReactNode;
 }): ReactNode {
   const blocks: ReactNode[] = [];
-  let heroPlaced = !heroImages || heroImages.length === 0;
+  const visual = heroVisual({ heroImages, heroMedia });
+  let heroPlaced = !visual;
   let run: { main: ReactNode[]; aside: ReactNode[] } = { main: [], aside: [] };
 
   const flushRun = () => {
     if (run.main.length === 0 && run.aside.length === 0) return;
     const { main, aside } = run;
     run = { main: [], aside: [] };
-    if (!heroPlaced && heroImages) {
-      aside.unshift(heroCard(heroImages));
+    if (!heroPlaced && visual) {
+      aside.unshift(visual);
       heroPlaced = true;
     }
     if (main.length === 0) {
@@ -226,13 +260,13 @@ function renderZonedLayout({
 
   // Degenerate case: every section was full-width, so no run ever hosted the
   // hero — give it its own block after the bands.
-  if (!heroPlaced && heroImages) {
+  if (!heroPlaced && visual) {
     blocks.push(
       <div
         key="hero-run"
         className="grid grid-cols-2 items-start gap-2 sm:gap-4 lg:grid-cols-3"
       >
-        <div className={STACK_CLASS}>{heroCard(heroImages)}</div>
+        <div className={STACK_CLASS}>{visual}</div>
       </div>,
     );
   }
@@ -252,10 +286,12 @@ function renderSectionLayout({
   sections,
   isMobile,
   heroImages,
+  heroMedia,
 }: {
   sections: DetailSection[];
   isMobile: boolean;
   heroImages?: Array<{ id: string; url: string; filename: string }>;
+  heroMedia?: ReactNode;
 }): ReactNode {
   const zoned = sections.some((s) => s.zone !== undefined);
 
@@ -275,8 +311,8 @@ function renderSectionLayout({
   }
 
   return zoned
-    ? renderZonedLayout({ sections, heroImages })
-    : renderLegacyLayout({ sections, heroImages });
+    ? renderZonedLayout({ sections, heroImages, heroMedia })
+    : renderLegacyLayout({ sections, heroImages, heroMedia });
 }
 
 interface DetailSectionsProps {
@@ -285,6 +321,8 @@ interface DetailSectionsProps {
   rawData: unknown;
   /** Images — on desktop the first rides at the top of the aside rail. */
   heroImages?: Array<{ id: string; url: string; filename: string }>;
+  /** Sourced detail media, preferred over owned-image gallery on desktop. */
+  heroMedia?: ReactNode;
 }
 
 /**
@@ -297,6 +335,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   sections,
   rawData,
   heroImages,
+  heroMedia,
 }) => {
   const { isDebugEnabled } = useDebug();
   const isMobile = useIsMobile();
@@ -331,10 +370,16 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   const allSections = relationshipSection
     ? [...sections, relationshipSection]
     : sections;
+  const resolvedHeroMedia = heroMedia ?? pageDetail?.heroMedia;
 
   return (
     <div className="space-y-2 sm:space-y-4">
-      {renderSectionLayout({ sections: allSections, isMobile, heroImages })}
+      {renderSectionLayout({
+        sections: allSections,
+        isMobile,
+        heroImages,
+        heroMedia: resolvedHeroMedia,
+      })}
 
       {/* Debug raw details section - full width */}
       {isDebugEnabled && (

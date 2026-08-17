@@ -133,19 +133,28 @@ export const dbProductToTopLevelAPI = (
 const dbProductToPickerItemShape = (
   productData: Pick<
     typeof product.$inferSelect,
-    "id" | "shortcode" | "name" | "manufacturer"
-  >,
+    "id" | "shortcode" | "name" | "manufacturer" | "category"
+  > & {
+    quantityLedger: ProductPickerItemOut["quantityLedger"];
+    onHand: ProductPickerItemOut["onHand"];
+  },
 ): ProductPickerItemOut => ({
   id: unsafeProductShortcode(productData.shortcode),
   name: productData.name,
   manufacturer: productData.manufacturer,
+  category: productData.category,
+  quantityLedger: productData.quantityLedger,
+  onHand: productData.onHand,
 });
 
 export const dbProductToPickerItemAPI = (
   productData: Pick<
     typeof product.$inferSelect,
-    "id" | "shortcode" | "name" | "manufacturer"
-  >,
+    "id" | "shortcode" | "name" | "manufacturer" | "category"
+  > & {
+    quantityLedger: ProductPickerItemOut["quantityLedger"];
+    onHand: ProductPickerItemOut["onHand"];
+  },
 ): ProductPickerItemOut => {
   const result = dbProductToPickerItemShape(productData);
 

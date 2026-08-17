@@ -53,6 +53,7 @@ import {
   location,
   locationImage,
   product,
+  productImage,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { isUniqueViolation } from "~/server/errors/db-errors";
@@ -1006,6 +1007,38 @@ const loadLocationCoverImages = async (
 };
 
 /**
+ * First displayable product cover for each live identity SKU, in one batched
+ * relation read. This is deliberately separate from LocationImage: callers
+ * may render it as a location cover, but it remains product-owned media.
+ */
+const loadIdentityProductCoverImages = async (
+  db: Database,
+  ids: ProductId[],
+): Promise<Map<ProductId, ImageOut>> => {
+  const byId = new Map<ProductId, ImageOut>();
+  if (ids.length === 0) return byId;
+  const uniqueIds = [...new Set(ids)];
+
+  const rows = await getDb(db).query.product.findMany({
+    where: and(inArray(product.id, uniqueIds), notDeleted(product)),
+    columns: { id: true },
+    with: {
+      images: {
+        where: notDeleted(productImage),
+        orderBy: imageOrder,
+        with: { image: true },
+      },
+    },
+  });
+
+  for (const row of rows) {
+    const cover = mapImages(row.images).find(isDisplayableImageFile);
+    if (cover) byId.set(row.id, cover);
+  }
+  return byId;
+};
+
+/**
  * Filters the roster reads accept. Narrowed on purpose: these paths ignore the
  * date/valuation/count filters, and the type should say so rather than accept
  * the full LocationFilters and silently drop them.
@@ -1036,6 +1069,7 @@ const locationRosterPage = async (
 ): Promise<{
   data: LocationOptionItemOut[];
   ids: LocationId[];
+  productIds: Array<ProductId | null>;
   count: number;
 }> => {
   const parentCodes = filters.parentId ? [filters.parentId].flat() : [];
@@ -1097,6 +1131,7 @@ const locationRosterPage = async (
         name: true,
         type: true,
         aliases: true,
+        productId: true,
       },
       orderBy: orderByClause,
       limit: take,
@@ -1116,7 +1151,12 @@ const locationRosterPage = async (
     ancestors: ancestorsById.get(row.id) ?? [],
   }));
 
-  return { data, ids, count: totalCount };
+  return {
+    data,
+    ids,
+    productIds: results.map((row) => row.productId),
+    count: totalCount,
+  };
 };
 
 /**
@@ -1149,19 +1189,28 @@ export const locationSearch = async (
   sorts: SortParams[],
   pagination: PaginationParams,
 ): Promise<{ data: LocationPickerItemOut[]; count: number }> => {
-  const { data, ids, count } = await locationRosterPage(
+  const { data, ids, productIds, count } = await locationRosterPage(
     db,
     filters,
     sorts,
     pagination,
   );
-  const coverById = await loadLocationCoverImages(db, ids);
+  const [coverById, productCoverById] = await Promise.all([
+    loadLocationCoverImages(db, ids),
+    loadIdentityProductCoverImages(
+      db,
+      productIds.filter((id): id is ProductId => id !== null),
+    ),
+  ]);
 
   return {
     data: data.map((row, index) => ({
       ...row,
       // `ids` is the same page in the same order — `data` is a 1:1 map of it.
-      coverImage: coverById.get(ids[index]!) ?? null,
+      coverImage:
+        coverById.get(ids[index]!) ??
+        (productIds[index] ? productCoverById.get(productIds[index]!) : null) ??
+        null,
     })),
     count,
   };

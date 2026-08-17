@@ -1,7 +1,13 @@
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { image, location, product, productImage } from "~/server/db/schema";
+import {
+  image,
+  location,
+  locationImage,
+  product,
+  productImage,
+} from "~/server/db/schema";
 import { getDb, insertAndReturn } from "~/server/repo/database-helpers";
 import { deleteProducts } from "~/server/repo/product";
 import {
@@ -155,6 +161,56 @@ describe("SearchDocument indexed retrieval", () => {
       limit: 1,
     });
     expect(hit).toMatchObject({ id: product.id, imageUrl: cover.url });
+  });
+
+  it("hydrates a location thumbnail from its identity product, after any own photo", async () => {
+    const vessel = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Search thumbnail vessel" }),
+      ctx.actor,
+    );
+    const productCover = await insertAndReturn(ctx.db, image, {
+      key: `test/${crypto.randomUUID()}.jpg`,
+      url: "https://example.com/location-product-cover.jpg",
+      filename: "location-product-cover.jpg",
+      contentType: "image/jpeg",
+      size: 456,
+    });
+    await insertAndReturn(ctx.db, productImage, {
+      productId: vessel.entityId,
+      imageId: productCover.id,
+    });
+    const vesselLocation = await createLocation(
+      ctx.db,
+      makeLocationInput({
+        name: "Search location identity thumbnail",
+        productId: vessel.id,
+      }),
+      ctx.actor,
+    );
+    await refreshSearchDocument(ctx.db, "location", vesselLocation.entityId);
+
+    const search = () =>
+      findSearchHits(ctx.db, {
+        query: vesselLocation.id,
+        entityTypes: ["location"],
+        limit: 1,
+      });
+    expect((await search())[0]).toMatchObject({ imageUrl: productCover.url });
+
+    const ownPhoto = await insertAndReturn(ctx.db, image, {
+      key: `test/${crypto.randomUUID()}.jpg`,
+      url: "https://example.com/location-own-cover.jpg",
+      filename: "location-own-cover.jpg",
+      contentType: "image/jpeg",
+      size: 456,
+    });
+    await insertAndReturn(ctx.db, locationImage, {
+      locationId: vesselLocation.entityId,
+      imageId: ownPhoto.id,
+    });
+
+    expect((await search())[0]).toMatchObject({ imageUrl: ownPhoto.url });
   });
 
   it("diagnoses missing, stale, and orphaned documents", async () => {

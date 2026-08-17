@@ -123,6 +123,7 @@ import {
   expectedQuantityFilterSql,
   expectedQuantitySql,
   hasUnknownQuantityLinesSql,
+  loadProductPickerQuantities,
   onHandUnitsFilterSql,
   quantityVarianceSql,
 } from "./quantity-ledger";
@@ -922,8 +923,8 @@ export const productList = async (
  *
  * Returns the product picker shape only — it deliberately skips the inventory /
  * ingredient / unit-mapping / image / external-id relation joins that
- * `productList` pulls. Pickers only need `{id, name, manufacturer, shortcode}`,
- * so this endpoint should not pretend to carry full product rows.
+ * `productList` pulls. Pickers need identity plus compact quantity evidence,
+ * so this endpoint batches that evidence without pretending to carry full rows.
  */
 export const productSearch = async (
   db: Database,
@@ -969,7 +970,16 @@ export const productSearch = async (
     countWhere(db, product, whereClause),
   );
 
-  const data = results.map(dbProductToPickerItemAPI);
+  const quantities = await loadProductPickerQuantities(
+    db,
+    results.map((result) => result.id),
+  );
+  const data = results.map((result) =>
+    dbProductToPickerItemAPI({
+      ...result,
+      ...quantities.get(result.id)!,
+    }),
+  );
 
   return { data, count };
 };
@@ -988,10 +998,18 @@ export const getProductPickerItemsByIds = async (
       shortcode: true,
       name: true,
       manufacturer: true,
+      category: true,
     },
   });
+  const quantities = await loadProductPickerQuantities(
+    db,
+    rows.map((row) => row.id),
+  );
   const byId = new Map(
-    rows.map((row) => [row.id, dbProductToPickerItemAPI(row)]),
+    rows.map((row) => [
+      row.id,
+      dbProductToPickerItemAPI({ ...row, ...quantities.get(row.id)! }),
+    ]),
   );
   return ids.flatMap((id) => {
     const item = byId.get(id);

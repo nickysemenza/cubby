@@ -6,6 +6,26 @@ export const ComboboxItem = z.object({
   id: z.string(),
 });
 
+type PickerTone = "neutral" | "positive" | "warning" | "destructive";
+
+export interface PickerPresentation {
+  /** Optional result section. Providers control its order; rows stay stable inside it. */
+  group?: {
+    id: string;
+    label: string;
+    order: number;
+  };
+  /** Short action/status cue, e.g. "Need 2" or "In progress". */
+  status?: {
+    label: string;
+    tone?: PickerTone;
+  };
+  /** Compact evidence beneath the name, rendered in the data voice. */
+  facts?: string[];
+  /** Known-invalid choices remain explainable but cannot be selected. */
+  disabledReason?: string;
+}
+
 // Generic ComboboxItem type that preserves ID branding
 // TId defaults to string for backward compatibility
 export type ComboboxItem<TId extends string = string> = {
@@ -27,6 +47,8 @@ export type ComboboxItem<TId extends string = string> = {
    * this is the longer disambiguator that earns its own row.
    */
   detail?: string;
+  /** Contextual ranking and evidence for the shared entity picker. */
+  presentation?: PickerPresentation;
 };
 
 export type PickerEntity =

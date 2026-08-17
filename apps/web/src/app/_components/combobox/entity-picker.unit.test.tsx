@@ -207,4 +207,65 @@ describe("EntityPicker", () => {
       screen.queryByRole("button", { name: /Create vendor/ }),
     ).not.toBeInTheDocument();
   });
+
+  it("renders ordered evidence groups and leaves invalid choices disabled", () => {
+    const setValue = vi.fn();
+    render(
+      <EntityPicker
+        entity="product"
+        label="product"
+        items={[
+          {
+            id: "returned",
+            name: "Returned brace",
+            presentation: {
+              group: { id: "other", label: "Other products", order: 2 },
+              status: { label: "Returned" },
+              facts: ["0 on hand / 0 expected"],
+            },
+          },
+          {
+            id: "needed",
+            name: "Needed brace",
+            presentation: {
+              group: {
+                id: "needs-stock",
+                label: "Needs stocking",
+                order: 0,
+              },
+              status: { label: "Need 1", tone: "positive" },
+              facts: ["0 on hand / 1 expected"],
+            },
+          },
+          {
+            id: "invalid",
+            name: "Current product",
+            presentation: {
+              group: { id: "unavailable", label: "Unavailable", order: 99 },
+              disabledReason: "Already selected",
+            },
+          },
+        ]}
+        value={null}
+        setValue={setValue}
+      />,
+    );
+
+    openPicker(screen.getByRole("combobox", { name: "product" }));
+    const headers = screen.getAllByText(
+      /Needs stocking|Other products|Unavailable/,
+    );
+    expect(headers.map((header) => header.textContent)).toEqual([
+      "Needs stocking",
+      "Other products",
+      "Unavailable",
+    ]);
+    expect(screen.getByText("0 on hand / 1 expected")).toBeInTheDocument();
+    const invalid = screen.getByRole("option", {
+      name: /Current product Already selected/,
+    });
+    expect(invalid).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(invalid);
+    expect(setValue).not.toHaveBeenCalled();
+  });
 });

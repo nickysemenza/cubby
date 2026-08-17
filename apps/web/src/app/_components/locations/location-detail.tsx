@@ -14,6 +14,7 @@ import {
   LocationContentsValuation,
 } from "./location-contents";
 import { LocationForm } from "./location-form";
+import { LocationVisual } from "./location-visual";
 
 interface LocationDetailProps {
   location: InfLocation;
@@ -21,6 +22,9 @@ interface LocationDetailProps {
 
 export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
   const api = useTRPC();
+  const heroMedia = (
+    <LocationVisual location={location} variant="hero" interactive />
+  );
 
   const { commonSections, editMode } = useEntityDetail<
     InfLocation,
@@ -74,6 +78,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
       title={location.name}
       rawData={location}
       heroImages={location.images}
+      heroMedia={heroMedia}
       heroNo={location.id ?? undefined}
     >
       {/* Breadcrumb lives inside Page so it sits within the max-width
