@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { image, product, productImage } from "~/server/db/schema";
+import { image, location, product, productImage } from "~/server/db/schema";
 import { getDb, insertAndReturn } from "~/server/repo/database-helpers";
 import { deleteProducts } from "~/server/repo/product";
 import {
@@ -184,6 +184,68 @@ describe("SearchDocument indexed retrieval", () => {
     expect(
       (await getSearchDocumentDiagnostics(ctx.db, ["product"])).orphaned,
     ).toContainEqual({ entityType: "product", entityId: created.entityId });
+  });
+
+  it("reports a projected column the embedding text never echoes as stale", async () => {
+    // The gap that let 100 location documents keep a `typeHint` their
+    // `Location.type` had already lost: staleness used to compare only the
+    // semantic body, so a projected column was covered exactly as far as that
+    // body happened to repeat it. A location's ancestor path is the case with
+    // no overlap at all — it is the document's `subtitle`, and
+    // `buildLocationEmbeddingText` never receives it — so renaming the parent
+    // leaves the child's body byte-identical and only the projection wrong.
+    const parent = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Original parent name" }),
+      ctx.actor,
+    );
+    const child = await createLocation(
+      ctx.db,
+      makeLocationInput({
+        name: "Child of renamed parent",
+        parentId: parent.id,
+      }),
+      ctx.actor,
+    );
+    await refreshSearchDocument(ctx.db, "location", child.entityId);
+
+    const [before] = await getDb(ctx.db)
+      .execute<{ semanticText: string }>(
+        sql`SELECT "semanticText" FROM "SearchDocument"
+          WHERE "entityType" = 'location' AND "entityId" = ${child.entityId}::uuid`,
+      )
+      .then((result) => result.rows);
+
+    await getDb(ctx.db)
+      .update(location)
+      .set({ name: "Renamed outside the refresh path" })
+      .where(eq(location.id, parent.entityId));
+
+    const diagnostics = await getSearchDocumentDiagnostics(ctx.db, [
+      "location",
+    ]);
+    expect(diagnostics.stale).toContainEqual({
+      entityType: "location",
+      entityId: child.entityId,
+    });
+
+    // Pins that the child's body is untouched — without it this test would
+    // still pass against the old body-only predicate and pin nothing.
+    const [after] = await getDb(ctx.db)
+      .execute<{ semanticText: string }>(
+        sql`SELECT "semanticText" FROM "SearchDocument"
+          WHERE "entityType" = 'location' AND "entityId" = ${child.entityId}::uuid`,
+      )
+      .then((result) => result.rows);
+    expect(after?.semanticText).toBe(before?.semanticText);
+
+    await refreshSearchDocument(ctx.db, "location", child.entityId);
+    expect(
+      (await getSearchDocumentDiagnostics(ctx.db, ["location"])).stale,
+    ).not.toContainEqual({
+      entityType: "location",
+      entityId: child.entityId,
+    });
   });
 
   it("repairs missing and stale documents and retires orphans", async () => {
