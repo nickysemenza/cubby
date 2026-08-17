@@ -1,14 +1,16 @@
+import { type ProjectId, unsafeProjectId } from "@cubby/schemas/identifiers";
 import { asc } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { product } from "~/server/db/schema";
+import { product, project, projectDependency } from "~/server/db/schema";
 import {
   buildOrderBy,
   buildPartialUpdateValues,
   eqAnyOrPresence,
   formatSearchTerm,
   isTransaction,
+  replaceDependencyEdges,
   withTransactionOn,
 } from "~/server/repo/database-helpers";
 
@@ -268,5 +270,62 @@ describe("buildPartialUpdateValues", () => {
     expect(result).toEqual({
       items: arr,
     });
+  });
+});
+
+/**
+ * The self-reference guard is entity-generic and runs before `tx` is touched:
+ * dedupe, then reject, then (only then) query for live rows.
+ *
+ * This replaces a pair of per-entity integration tests that each created a real
+ * row and called `updateProject` / `updateTask` just to reach it — those had to
+ * resolve shortcodes against the database first, so they paid three round trips
+ * to assert a string comparison. Testing the helper directly also covers the
+ * task path, which the project-flavoured test never did.
+ */
+describe("replaceDependencyEdges self-reference guard", () => {
+  const explodingTx = new Proxy(
+    {},
+    {
+      get(_target, prop) {
+        throw new Error(
+          `replaceDependencyEdges touched the transaction (property "${String(prop)}") before rejecting a self-reference`,
+        );
+      },
+    },
+  ) as unknown as DrizzleTransaction;
+
+  const A = unsafeProjectId("11111111-1111-4111-8111-111111111111");
+  const B = unsafeProjectId("22222222-2222-4222-8222-222222222222");
+
+  const opts = {
+    ownColumn: projectDependency.projectId,
+    blockedByColumn: projectDependency.blockedByProjectId,
+    buildRow: (projectId: ProjectId, blockedByProjectId: ProjectId) => ({
+      projectId,
+      blockedByProjectId,
+    }),
+    entityTable: project,
+    entity: "project" as const,
+  };
+
+  it("rejects an entity blocked by itself without touching the transaction", async () => {
+    await expect(
+      replaceDependencyEdges(explodingTx, projectDependency, opts, A, [A, B]),
+    ).rejects.toThrow(/cannot be blocked by itself/i);
+  });
+
+  it("rejects a self-reference that only appears after deduping", async () => {
+    await expect(
+      replaceDependencyEdges(explodingTx, projectDependency, opts, A, [A, A]),
+    ).rejects.toThrow(/cannot be blocked by itself/i);
+  });
+
+  // Guards the guard: a non-self edge set must get PAST the check and reach the
+  // transaction, so neither the proxy nor the guard can quietly stop working.
+  it("lets a clean edge set through to the transaction", async () => {
+    await expect(
+      replaceDependencyEdges(explodingTx, projectDependency, opts, A, [B]),
+    ).rejects.toThrow(/touched the transaction/i);
   });
 });

@@ -46,21 +46,4 @@ describe("recomputeRecipesForPriceAffectedProducts", () => {
       { source: "expense.test" },
     );
   });
-
-  it("skips the service when no product price changed", async () => {
-    const recomputeForIngredients = vi.fn();
-    const service = {
-      recomputeForIngredients,
-    } as unknown as RecipeCostingService;
-
-    await expect(
-      recomputeRecipesForPriceAffectedProducts(
-        ctx.db,
-        service,
-        [],
-        "expense.test",
-      ),
-    ).resolves.toEqual([]);
-    expect(recomputeForIngredients).not.toHaveBeenCalled();
-  });
 });

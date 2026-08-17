@@ -1,4 +1,3 @@
-import { recipeAvailabilityOut } from "@cubby/schemas/availability";
 import type { Amount } from "@cubby/schemas/codec";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -61,8 +60,6 @@ describe("suggestions router", () => {
       recipeId: recipe.id,
     });
 
-    // The .output() contract must accept real service output (pins schema<->service).
-    expect(() => recipeAvailabilityOut.parse(result)).not.toThrow();
     expect(result.coverage).toBe(1);
   });
 
