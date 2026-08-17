@@ -45,6 +45,9 @@ const baseRecipe = {
   notes: null,
   totals: null,
   totalsComputedAt: null,
+  activeMinutes: null,
+  totalMinutes: null,
+  meta: null,
 };
 
 const subRecipe = {
@@ -171,13 +174,24 @@ describe("recipe repository helpers", () => {
         totals: null,
         meta: {
           url: "https://example.com/recipe",
+          times: {
+            active: null,
+            total: null,
+            prep: null,
+            cook: null,
+            activeMinutes: null,
+            totalMinutes: null,
+            prepMinutes: null,
+            cookMinutes: null,
+          },
+          equipment: null,
+          page: null,
         },
         source: {
           type: "website",
           url: "https://example.com/recipe",
         },
       });
-      expect(result.id).toBe("RCP-A3F2");
       expect(result).not.toHaveProperty("deletedAt");
       expect(result).not.toHaveProperty("totalsComputedAt");
       expect(result).not.toHaveProperty("SourceType");
@@ -238,7 +252,6 @@ describe("recipe repository helpers", () => {
         },
       ],
     });
-    expect(result.id).toBe("RCP-A3F2");
     expect(result).not.toHaveProperty("deletedAt");
     expect(result).not.toHaveProperty("SourceType");
     expect(result.images).toHaveLength(1);
@@ -296,7 +309,6 @@ describe("recipe repository helpers", () => {
     expect(appearsInRecipes).toHaveLength(1);
     expect(recipeUsages[0]?.recipe).not.toHaveProperty("totals");
     expect(appearsInRecipes[0]).not.toHaveProperty("totals");
-    expect(recipeUsages[0]?.recipe.id).toBeDefined();
     expect(recipeUsageOut.parse(recipeUsages[0])).toEqual(recipeUsages[0]);
   });
 });

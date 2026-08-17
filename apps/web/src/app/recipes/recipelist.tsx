@@ -41,6 +41,7 @@ import {
 import { RecipeTag } from "../_components/recipe/recipe-tag";
 import {
   coverageLabel,
+  formatRecipeTime,
   formatYield,
   getServingBasis,
   perServingRange,
@@ -421,6 +422,29 @@ export function RecipeList({
           );
         },
       }),
+      // Total time — the weeknight axis. Accessor on `totalMinutes` so sorting
+      // and the range filter are the server's `Recipe.totalMinutes` column, but
+      // the cell prints the source's own prose whenever there is one: a present
+      // string does NOT imply a present count, and vice versa, so a recipe can
+      // show "about 1½ hours" here while sorting on nothing at all.
+      columnHelper.accessor(
+        (row) => row.meta?.times?.totalMinutes ?? undefined,
+        {
+          id: "totalMinutes",
+          header: "Time",
+          meta: {
+            numeric: true,
+            className: "w-24",
+            mobile: { slot: "meta", priority: 25 },
+          },
+          sortUndefined: "last",
+          cell: (info) => {
+            const times = info.row.original.meta?.times;
+            const label = formatRecipeTime(times?.total, times?.totalMinutes);
+            return label ?? <NoneValue />;
+          },
+        },
+      ),
       // Source column: cookbook link for book recipes, external URL for web
       // recipes, nothing otherwise — via the shared RecipeSourceLink.
       columnHelper.accessor("source", {

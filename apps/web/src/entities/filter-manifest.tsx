@@ -301,6 +301,22 @@ const resolveRecipeCost = (value: string | undefined) =>
         ? { costTotalMin: 25 }
         : {};
 
+// The weeknight axis: "what can I actually cook tonight". Buckets, not a free
+// numeric input, because that's how the decision is actually made.
+const recipeTotalTimeOptions: FilterableComboboxItem[] = [
+  { value: "under30", label: "Under 30 min" },
+  { value: "30to60", label: "30–60 min" },
+  { value: "60plus", label: "Over an hour" },
+];
+const resolveRecipeTotalTime = (value: string | undefined) =>
+  value === "under30"
+    ? { totalMinutesMax: 30 }
+    : value === "30to60"
+      ? { totalMinutesMin: 30, totalMinutesMax: 60 }
+      : value === "60plus"
+        ? { totalMinutesMin: 60 }
+        : {};
+
 const calorieOptions: FilterableComboboxItem[] = [
   { value: "under500", label: "Under 500 cal" },
   { value: "500to1000", label: "500–1,000 cal" },
@@ -1419,6 +1435,13 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       placeholder: "Filter calories...",
       options: calorieOptions,
       expand: resolveCalories,
+    },
+    {
+      columnId: "totalMinutes",
+      kind: "range",
+      placeholder: "Filter total time...",
+      options: recipeTotalTimeOptions,
+      expand: resolveRecipeTotalTime,
     },
   ],
 

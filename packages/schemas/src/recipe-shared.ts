@@ -180,7 +180,71 @@ export type RecipeCostingExplain = z.infer<typeof recipeCostingExplain>;
 // output schemas, API inputs, and form adapters stay in sync. Each consumer
 // applies its own null/optional wrapper because the optionality legitimately
 // differs per layer.
-export const recipeMeta = z.object({ url: z.url().nullable() }).nullable();
+/**
+ * A recipe's printed times, as persisted. Each duration is carried twice: the
+ * prose string is verbatim what the source printed (so display never rounds or
+ * re-words it), the minute count is the same duration as a number so the list
+ * can sort and filter in SQL. **A present string does not imply a present
+ * count** — the EPUB extractor deliberately leaves the count absent for a range
+ * or an open-ended phrase ("overnight") rather than guessing, so every renderer
+ * must handle string-without-minutes.
+ */
+const recipeTimeProse = {
+  active: z.string().nullish(),
+  total: z.string().nullish(),
+  prep: z.string().nullish(),
+  cook: z.string().nullish(),
+};
+const positiveMinutes = () => z.number().int().nonnegative().nullish();
+// Promoted to real `Recipe` columns: the list sorts and range-filters on these,
+// which is server work — so they must be plain SQL, not jsonb extraction.
+const recipeSortableMinutes = {
+  activeMinutes: positiveMinutes(),
+  totalMinutes: positiveMinutes(),
+};
+// Nothing queries these, so they ride along inside the `meta` jsonb.
+const recipeStoredMinutes = {
+  prepMinutes: positiveMinutes(),
+  cookMinutes: positiveMinutes(),
+};
+
+export const recipeTimes = z.object({
+  ...recipeTimeProse,
+  ...recipeSortableMinutes,
+  ...recipeStoredMinutes,
+});
+export type RecipeTimes = z.infer<typeof recipeTimes>;
+
+/**
+ * `url` is DERIVED from the `SourceType`/`SourceData` columns on read (see
+ * `dbRecipeToTopLevelShape`) — it is deliberately not stored in the `meta`
+ * jsonb, so provenance keeps its single source of truth. Everything else here
+ * is import-carried and persisted: `activeMinutes`/`totalMinutes` as real
+ * integer columns, the rest inside `meta`.
+ */
+export const recipeMeta = z
+  .object({
+    url: z.url().nullable(),
+    times: recipeTimes.nullish(),
+    /** Special-equipment lines, e.g. "stand mixer". */
+    equipment: z.array(z.string()).nullish(),
+    /** Printed page number — the cross-reference to the physical cookbook. */
+    page: z.string().nullish(),
+  })
+  .nullable();
+export type RecipeMeta = z.infer<typeof recipeMeta>;
+
+/**
+ * The `Recipe.meta` jsonb column's shape: `recipeMeta` minus `url` (derived)
+ * and minus the two minute counts promoted to real columns. Split and rejoined
+ * in exactly one place — `~/server/repo/recipe/meta`.
+ */
+export const recipeStoredMeta = z.object({
+  times: z.object({ ...recipeTimeProse, ...recipeStoredMinutes }).nullish(),
+  equipment: z.array(z.string()).nullish(),
+  page: z.string().nullish(),
+});
+export type RecipeStoredMeta = z.infer<typeof recipeStoredMeta>;
 export const recipeServings = z.number().int().positive();
 export const recipeTags = z.array(z.string());
 // Freeform markdown: headnote/intro blurb plus tips. Imports compose it from

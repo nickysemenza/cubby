@@ -96,4 +96,8 @@ export interface RecipeFilters {
   costTotalMax?: number;
   caloriesTotalMin?: number;
   caloriesTotalMax?: number;
+  // Total elapsed time. A NULL `totalMinutes` (no printed total, or prose the
+  // extractor wouldn't commit to a number for) matches neither bound.
+  totalMinutesMin?: number;
+  totalMinutesMax?: number;
 }

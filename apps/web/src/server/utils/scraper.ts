@@ -67,6 +67,11 @@ export const scrapedToImportRecipe = (w: WScrapedRecipe): ImportRecipe => {
       title: w.name ?? "",
       description: w.description,
       recipe_yield: w.recipe_yield,
+      // JSON-LD durations are ISO-8601, so the scraper always fills a count
+      // alongside each prose string — unlike the EPUB path, where a count can
+      // legitimately be absent while the string is present.
+      times: w.times,
+      equipment: w.equipment?.length ? w.equipment : undefined,
     },
     sections: w.sections.map((section) => ({
       name: sanitizeSectionName(section.name) ?? undefined,

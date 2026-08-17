@@ -1,9 +1,17 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { sumBy } from "es-toolkit";
-import { Clock, ExternalLink, Users } from "lucide-react";
+import {
+  BookMarked,
+  Clock,
+  ExternalLink,
+  Timer,
+  Users,
+  Wrench,
+} from "lucide-react";
 import { Row } from "~/components/layout";
 import { Image } from "~/components/ui/image";
 import { RecipeSourceLink } from "./recipe-source";
+import { recipeTimeEntries } from "./recipe-utils";
 
 interface RecipeHeroProps {
   recipe: RecipeOut;
@@ -25,7 +33,14 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
     (section) => section.instructions.length,
   );
 
-  // Meta row (ingredient/step counts, source) — shared between layouts.
+  // Printed times, equipment, and page — whatever the source actually carried.
+  // Each is independently optional: a web recipe has times and no page, a
+  // cookbook recipe often has a page and prose times with no minute counts.
+  const times = recipeTimeEntries(recipe.meta?.times);
+  const equipment = recipe.meta?.equipment ?? [];
+  const page = recipe.meta?.page;
+
+  // Meta row (ingredient/step counts, times, source) — shared between layouts.
   const metaInfo = (
     <Row
       align="center"
@@ -41,6 +56,26 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
         <Clock size={12} />
         <span>{totalSteps} steps</span>
       </Row>
+      {times.map((t) => (
+        <Row key={t.label} align="center" gap="sm">
+          <Timer size={12} />
+          <span>
+            {t.label} {t.value}
+          </span>
+        </Row>
+      ))}
+      {equipment.length > 0 && (
+        <Row align="center" gap="sm">
+          <Wrench size={12} />
+          <span>{equipment.join(", ")}</span>
+        </Row>
+      )}
+      {page && (
+        <Row align="center" gap="sm">
+          <BookMarked size={12} />
+          <span>p. {page}</span>
+        </Row>
+      )}
       {recipe.meta?.url && (
         <a
           href={recipe.meta.url}

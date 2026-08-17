@@ -58,6 +58,7 @@ import {
   purchaseDocumentKindValues,
 } from "@cubby/schemas/purchase";
 import {
+  type RecipeStoredMeta,
   type RecipeTotals,
   type RecipeYield,
   recipeSourceValues,
@@ -272,6 +273,20 @@ export const recipe = pgTable(
     // recipe-costing.service.
     totals: jsonb("totals").$type<RecipeTotals | null>(),
     totalsComputedAt: timestamp("totalsComputedAt", { mode: "date" }),
+    // Import-carried times, split by what the list needs from SQL. These two are
+    // real columns because "sort by total time" and "under 30 minutes" are list
+    // membership and ordering — server work, never a React filter over fetched
+    // rows. Null is genuinely unknown: the source printed no time, or printed
+    // prose no parser would commit to a number for (see `meta.times` below).
+    activeMinutes: integer("activeMinutes"),
+    totalMinutes: integer("totalMinutes"),
+    // Everything else the importers extract that nothing sorts by: the four
+    // printed time strings, prep/cook minutes, special equipment, and the
+    // printed page number (the cross-reference to a physical cookbook).
+    // `meta.url` is deliberately NOT here — it stays derived from
+    // SourceType/SourceData (see `dbRecipeToTopLevelShape`), so provenance keeps
+    // one source of truth and this column needs no backfill.
+    meta: jsonb("meta").$type<RecipeStoredMeta | null>(),
   },
   (table) => [
     shortcodeUnique("Recipe", table.shortcode),

@@ -91,6 +91,7 @@ const filterSearchKeys = {
     "image",
     "costTotal",
     "caloriesTotal",
+    "totalMinutes",
     "related-ingredient",
     "related-meal",
     "mealId",

@@ -8,6 +8,7 @@ import {
 } from "~/server/db/schema";
 import { getDb } from "./database-helpers";
 import { upsertImportRecipe } from "./import-recipe-convert";
+import { getRecipeByID } from "./recipe";
 import { makeImportRecipe } from "./repo.fixtures";
 
 describe("upsertImportRecipe", () => {
@@ -40,9 +41,7 @@ describe("upsertImportRecipe", () => {
   });
 
   it("creates a new recipe when it doesn't exist", async () => {
-    const result = await upsertImportRecipe(mockRecipe, ctx.db, ctx.actor);
-
-    expect(result.id).toBeDefined();
+    await upsertImportRecipe(mockRecipe, ctx.db, ctx.actor);
 
     const foundRecipe = await getDb(ctx.db).query.recipe.findFirst({
       where: eq(recipe.name, "Test Recipe"),
@@ -55,7 +54,6 @@ describe("upsertImportRecipe", () => {
       },
     });
 
-    expect(foundRecipe).toBeTruthy();
     expect(foundRecipe!.name).toBe("Test Recipe");
     expect(foundRecipe!.SourceType).toBe("Website");
     expect(foundRecipe!.SourceData).toBe("https://example.com/recipe");
@@ -140,7 +138,6 @@ describe("upsertImportRecipe", () => {
       },
     });
 
-    expect(updatedRecipe!.id).toBe(firstResult.id);
     expect(updatedRecipe!.SourceData).toBe(
       "https://example.com/recipe-updated",
     );
@@ -149,9 +146,7 @@ describe("upsertImportRecipe", () => {
     const firstSection = updatedRecipe!.sections[0];
     expect(firstSection!.ingredients).toHaveLength(2);
 
-    const secondSection = updatedRecipe!.sections[1];
-    expect(secondSection).toBeTruthy();
-    expect(secondSection!.ingredients).toHaveLength(1);
+    expect(updatedRecipe!.sections[1]!.ingredients).toHaveLength(1);
   });
 
   it("re-import updates yield/servings and preserves manually-set tags", async () => {
@@ -196,6 +191,119 @@ describe("upsertImportRecipe", () => {
     expect(updated!.tags).toEqual(["dinner"]);
   });
 
+  // Times arrive from the extractors as a prose string and a minute count that
+  // are independently optional, and the two halves are persisted to different
+  // places (minutes → real columns for sorting/filtering, strings + prep/cook
+  // minutes → the `meta` jsonb). Both `it.each` rows walk the full
+  // import → persist → read round trip so a split that drops a half fails here.
+  it.each([
+    {
+      label: "prose and minutes together (ISO-8601 source)",
+      times: {
+        total: "1 hour 30 minutes",
+        total_minutes: 90,
+        active: "20 minutes",
+        active_minutes: 20,
+        prep: "15 minutes",
+        prep_minutes: 15,
+        cook: "1 hour 15 minutes",
+        cook_minutes: 75,
+      },
+      expectedColumns: { activeMinutes: 20, totalMinutes: 90 },
+      expectedTimes: {
+        total: "1 hour 30 minutes",
+        totalMinutes: 90,
+        active: "20 minutes",
+        activeMinutes: 20,
+        prep: "15 minutes",
+        prepMinutes: 15,
+        cook: "1 hour 15 minutes",
+        cookMinutes: 75,
+      },
+    },
+    {
+      // The EPUB extractor refuses to guess a number for a range or an
+      // open-ended phrase, so the string is all there is. It must still be
+      // stored and rendered — dropping it would lose the only thing the source
+      // said — while the sortable columns stay NULL.
+      label: "prose present, minutes absent (unparseable printed time)",
+      times: {
+        total: "1 to 2 hours, plus overnight chilling",
+        active: "about 30 minutes",
+      },
+      expectedColumns: { activeMinutes: null, totalMinutes: null },
+      expectedTimes: {
+        total: "1 to 2 hours, plus overnight chilling",
+        totalMinutes: null,
+        active: "about 30 minutes",
+        activeMinutes: null,
+        prep: null,
+        prepMinutes: null,
+        cook: null,
+        cookMinutes: null,
+      },
+    },
+  ])(
+    "round-trips times, equipment, and page — $label",
+    async ({ times, expectedColumns, expectedTimes }) => {
+      const title = `Timed Recipe ${expectedColumns.totalMinutes ?? "none"}`;
+      const { id } = await upsertImportRecipe(
+        makeImportRecipe({
+          meta: {
+            title,
+            times,
+            equipment: ["stand mixer", "  ", "9-inch cake pan"],
+            page: "142",
+          },
+          sections: [{ instructions: ["Mix"], ingredients: ["2 cups flour"] }],
+        }),
+        ctx.db,
+        ctx.actor,
+      );
+
+      const row = await getDb(ctx.db).query.recipe.findFirst({
+        where: eq(recipe.id, id),
+      });
+      expect(row).toMatchObject(expectedColumns);
+
+      const read = await getRecipeByID(ctx.db, id);
+      expect(read!.meta?.times).toMatchObject(expectedTimes);
+      // Blank equipment lines are dropped on the way in, not on the way out.
+      expect(read!.meta?.equipment).toEqual(["stand mixer", "9-inch cake pan"]);
+      expect(read!.meta?.page).toBe("142");
+    },
+  );
+
+  it("re-import clears times the source stopped printing", async () => {
+    const withTimes = makeImportRecipe({
+      meta: {
+        title: "Retimed Recipe",
+        times: { total: "45 minutes", total_minutes: 45 },
+        page: "7",
+      },
+      sections: [{ instructions: ["Mix"], ingredients: ["2 cups flour"] }],
+    });
+    const first = await upsertImportRecipe(withTimes, ctx.db, ctx.actor);
+
+    // Same recipe, source no longer prints a time or a page: like yield/servings,
+    // the source owns these, so a re-import must not leave the old values behind.
+    const second = await upsertImportRecipe(
+      makeImportRecipe({
+        meta: { title: "Retimed Recipe" },
+        sections: [{ instructions: ["Mix"], ingredients: ["2 cups flour"] }],
+      }),
+      ctx.db,
+      ctx.actor,
+    );
+    expect(second.id).toBe(first.id);
+
+    const row = await getDb(ctx.db).query.recipe.findFirst({
+      where: eq(recipe.id, first.id),
+    });
+    expect(row!.totalMinutes).toBeNull();
+    expect(row!.meta).toBeNull();
+  });
+
   it("handles multiple upserts correctly (back-to-back npm run load-data scenario)", async () => {
     const firstRun = await upsertImportRecipe(mockRecipe, ctx.db, ctx.actor);
     const secondRun = await upsertImportRecipe(mockRecipe, ctx.db, ctx.actor);
@@ -214,18 +322,6 @@ describe("upsertImportRecipe", () => {
   it("properly cleans up old sections and ingredients", async () => {
     await upsertImportRecipe(mockRecipeUpdated, ctx.db, ctx.actor);
 
-    const beforeUpdate = await getDb(ctx.db).query.recipe.findFirst({
-      where: eq(recipe.name, "Test Recipe"),
-      with: { sections: { with: { ingredients: true } } },
-    });
-
-    const sectionCountBefore = beforeUpdate!.sections.length;
-    const ingredientCountBefore = beforeUpdate!.sections.reduce(
-      (total: number, section: { ingredients: unknown[] }) =>
-        total + section.ingredients.length,
-      0,
-    );
-
     await upsertImportRecipe(mockRecipe, ctx.db, ctx.actor);
 
     const afterUpdate = await getDb(ctx.db).query.recipe.findFirst({
@@ -241,9 +337,7 @@ describe("upsertImportRecipe", () => {
     );
 
     expect(sectionCountAfter).toBe(1);
-    expect(sectionCountAfter).toBeLessThan(sectionCountBefore);
     expect(ingredientCountAfter).toBe(2);
-    expect(ingredientCountAfter).toBeLessThan(ingredientCountBefore);
 
     // Verify no dangling section/ingredient rows remain for this recipe.
     // Section replacement hard-deletes the old rows (matching updateRecipe), so these

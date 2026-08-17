@@ -35,6 +35,7 @@ import type {
   RecipeGraphDB,
   SectionIngredientDB,
 } from "./internal-types";
+import { recipeMetaFromColumns } from "./meta";
 import { recipeSourceFromDb } from "./source";
 
 type RecipeSelect = typeof recipe.$inferSelect;
@@ -272,12 +273,14 @@ export const dbRecipeToTopLevelShape = (
     name: recipeData.name,
     createdAt: recipeData.createdAt,
     updatedAt: recipeData.updatedAt,
-    // The DB stores provenance as SourceType + SourceData; the API exposes a single
+    // The DB stores provenance as SourceType + SourceData; the API exposes it as
     // meta.url. This derivation is deliberately kept (rather than collapsing the two
-    // columns into one nullable sourceUrl) to avoid a DB migration + backfill.
-    meta: {
-      url: recipeData.SourceType === "Website" ? recipeData.SourceData : null,
-    },
+    // columns into one nullable sourceUrl) to avoid a DB migration + backfill —
+    // the `meta` jsonb column added for times/equipment/page holds no url.
+    meta: recipeMetaFromColumns(
+      recipeData,
+      recipeData.SourceType === "Website" ? recipeData.SourceData : null,
+    ),
     // Strong provenance union — surfaces the book name + cookbook id for cookbook
     // recipes (meta.url only ever held web URLs).
     source: recipeSourceFromDb({

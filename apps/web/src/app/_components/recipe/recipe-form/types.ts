@@ -8,6 +8,7 @@ import {
   recipeNotes,
   recipeServings,
   recipeTags,
+  recipeTimes,
 } from "@cubby/schemas/recipe-shared";
 import { z } from "zod";
 import { ComboboxItem } from "../../combobox/combobox-types";
@@ -78,7 +79,20 @@ export type IngItem = z.infer<typeof ingItem>;
 // the field is left blank. The strict recipeMeta (url must be a valid URL or null,
 // not undefined) would reject that and silently block the form, so accept a nullish
 // url here and let handleSubmit normalize to null when empty.
-const recipeMetaDraft = z.object({ url: z.url().nullish() }).nullable();
+// The form only *edits* `url`, but it must carry the rest of `meta` through
+// untouched. `buildUpdateObject` diffs with JSON.stringify, so a draft that
+// modelled `url` alone would differ from the stored meta on every imported
+// recipe, put `meta` into every update, and make `recipeMetaToColumns` null out
+// the times/equipment/page columns — silently wiping imported data on an
+// unrelated edit like renaming the recipe.
+const recipeMetaDraft = z
+  .object({
+    url: z.url().nullish(),
+    times: recipeTimes.nullish(),
+    equipment: z.array(z.string()).nullish(),
+    page: z.string().nullish(),
+  })
+  .nullable();
 
 // Draft shape for the optional yield, edited via two separate inputs. Either part
 // may be blank (nullish) so an untouched yield doesn't block submission; the refine

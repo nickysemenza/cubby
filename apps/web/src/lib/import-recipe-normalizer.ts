@@ -25,6 +25,36 @@ type NormalizedImportRecipe = {
 export const importRecipeUrl = (url: string | undefined): string | null =>
   /^https?:\/\//i.test(url ?? "") ? (url ?? null) : null;
 
+/**
+ * The importers' snake_cased `meta` (a verbatim mirror of the Rust
+ * `recipe_types::RecipeMeta` JSON) → the persisted camelCased `meta`. Prose
+ * strings and minute counts are carried independently on purpose: the extractors
+ * fill a string without a count whenever the printed time is a range or an
+ * open-ended phrase, and dropping the string in that case would lose the only
+ * thing the source actually said.
+ */
+const normalizeImportMeta = (
+  recipe: ImportRecipe,
+): RecipeCreateInput["meta"] => {
+  const times = recipe.meta.times;
+  const equipment = recipe.meta.equipment?.filter((line) => line.trim() !== "");
+  return {
+    url: importRecipeUrl(recipe.url),
+    times: {
+      active: times?.active ?? null,
+      total: times?.total ?? null,
+      prep: times?.prep ?? null,
+      cook: times?.cook ?? null,
+      activeMinutes: times?.active_minutes ?? null,
+      totalMinutes: times?.total_minutes ?? null,
+      prepMinutes: times?.prep_minutes ?? null,
+      cookMinutes: times?.cook_minutes ?? null,
+    },
+    equipment: equipment && equipment.length > 0 ? equipment : null,
+    page: recipe.meta.page ?? null,
+  };
+};
+
 const normalizeImportYield = (
   recipeYield: ImportRecipe["meta"]["recipe_yield"],
 ): {
@@ -54,7 +84,7 @@ export const normalizeImportRecipe = (
 
   return {
     name: recipe.meta.title,
-    meta: { url: importRecipeUrl(recipe.url) },
+    meta: normalizeImportMeta(recipe),
     yield: parsedYield.yield,
     servings: recipe.servings ?? parsedYield.servingsFromYield,
     tags: normalizedTags,
