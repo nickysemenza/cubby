@@ -8,7 +8,6 @@ import {
   mergePricingStatus,
   type PricingStatus,
 } from "~/app/_components/locations/calculate-inventory-valuation";
-import { ROOT_LOCATION_ID } from "~/hooks/useLocationTree";
 import { useTRPC } from "~/integrations/trpc/react";
 
 // Persisted location.valuation stores pricing as bare counts; the viz nodes use
@@ -34,8 +33,8 @@ function toPricingStatus(
 export interface LocationHierarchyNode {
   name: string;
   id: LocationShortcode;
-  /** Public id — the sunburst/treemap link by it. `null` on the synthetic root. */
-  shortcode: string | null;
+  /** Public id — visualizations link directly to this real location. */
+  shortcode: string;
   type: LocationType | null;
   /** Value used for D3 sizing - can be set based on use case */
   value: number;
@@ -77,8 +76,8 @@ export function useLocationHierarchy(
   const locations = useQuery(api.location.makeTree.queryOptions());
 
   const hierarchyData = useMemo(() => {
-    const data = locations.data;
-    if (!data || data.length === 0) return null;
+    const home = locations.data?.[0];
+    if (!home) return null;
 
     function transformNode(location: InfLocation): LocationHierarchyNode {
       const children = location.children?.map(transformNode);
@@ -121,31 +120,10 @@ export function useLocationHierarchy(
       };
     }
 
-    const allNodes = data.map(transformNode);
-    if (allNodes.length === 0) return null;
-
-    const totalCount = sumBy(allNodes, (n) => n.totalCount);
-    const totalValuation = sumBy(allNodes, (n) => n.totalValuation);
-    const totalPricingStatus = mergePricingStatus(
-      allNodes.map((n) => n.totalPricingStatus),
-    );
-
-    return {
-      name: "All Locations",
-      // Synthetic aggregate root — not a real location, so nothing to link to.
-      id: ROOT_LOCATION_ID,
-      shortcode: null,
-      type: "room" as LocationType,
-      value:
-        valuationMode === "equalWeight" ? allNodes.length : totalCount || 1,
-      directCount: 0,
-      totalCount,
-      directValuation: 0,
-      totalValuation,
-      directPricingStatus: emptyPricingStatus(),
-      totalPricingStatus,
-      children: allNodes,
-    };
+    // `makeTree` has one canonical root: the real Home Location. Keeping that
+    // row as the hierarchy root makes every visual surface linkable and avoids
+    // inventing a fake aggregate with a non-location shortcode.
+    return transformNode(home);
   }, [locations.data, valuationMode]);
 
   return {

@@ -14,7 +14,7 @@ import type {
 export type LocationDragData = {
   arrangeDrag: "location";
   locationId: LocationShortcode;
-  /** Current parent id, or null for a top-level location. Lets us skip no-ops. */
+  /** Current parent id, or null only for Home. Lets us skip no-ops. */
   parentId: LocationShortcode | null;
 };
 
@@ -27,7 +27,7 @@ export type ItemDragData = {
 
 export type ArrangeDragData = LocationDragData | ItemDragData;
 
-/** A location drop target. `locationId: null` is the "Home" (top-level) target. */
+/** A location drop target. Null is reserved for an unavailable hierarchy. */
 export type ArrangeDropData = {
   arrangeTarget: true;
   locationId: LocationShortcode | null;

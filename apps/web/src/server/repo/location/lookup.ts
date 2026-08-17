@@ -44,6 +44,7 @@ import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { getLocationById } from "./crud";
 import { dbLocationToAPI } from "./helpers";
+import { getHomeLocation } from "./home";
 import { parseLocationType } from "./parse-type";
 import { loadLocationAncestors } from "./tree";
 
@@ -161,6 +162,7 @@ export const findOrCreateLocationByName = async (
     shortcode?: string;
   },
 ): Promise<{ locationId: LocationId; created: boolean }> => {
+  const resolvedParentId = parentId ?? (await getHomeLocation(db)).id;
   // Atomic find-or-create. The `Location_name_key` unique index is on
   // lower(name) (partial, WHERE deletedAt IS NULL); the match is written as
   // lower(name) = lower(value) (not ilike) so the planner can actually use that
@@ -182,7 +184,7 @@ export const findOrCreateLocationByName = async (
       values: () => ({
         name,
         type,
-        parentId,
+        parentId: resolvedParentId,
         shortcode: explicitShortcode,
         ...(options?.createdAt && { createdAt: options.createdAt }),
         ...(options?.updatedAt && { updatedAt: options.updatedAt }),
@@ -196,7 +198,7 @@ export const findOrCreateLocationByName = async (
     values: () => ({
       name,
       type,
-      parentId,
+      parentId: resolvedParentId,
       ...(options?.createdAt && { createdAt: options.createdAt }),
       ...(options?.updatedAt && { updatedAt: options.updatedAt }),
     }),

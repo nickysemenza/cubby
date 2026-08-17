@@ -16,6 +16,6 @@ export function canDropOnArrangeTarget(
   }
   return (
     targetLocationId !== null &&
-    isValidItemDrop(drag.sourceLocationId, targetLocationId)
+    isValidItemDrop(roots, drag.sourceLocationId, targetLocationId)
   );
 }

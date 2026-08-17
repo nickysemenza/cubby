@@ -84,8 +84,9 @@ function Treemap({ data }: TreemapProps) {
         "var(--chart-seq-2)",
         "var(--chart-seq-1)",
       ];
-      // depth 1 = top visible ring (root is skipped) -> deepest step.
-      return ramp[Math.min(node.depth - 1, ramp.length - 1)] ?? ramp[0];
+      return (
+        ramp[Math.min(Math.max(0, node.depth), ramp.length - 1)] ?? ramp[0]
+      );
     },
     [],
   );
@@ -93,7 +94,7 @@ function Treemap({ data }: TreemapProps) {
   // Deep ramp steps need paper-colored ink; lighter steps read with foreground.
   const isDeepCell = useCallback(
     (node: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>) =>
-      node.data.totalCount > 0 && node.depth <= 2,
+      node.data.totalCount > 0 && node.depth <= 1,
     [],
   );
 
@@ -110,10 +111,8 @@ function Treemap({ data }: TreemapProps) {
         {nodes.map((node) => {
           const width = node.x1 - node.x0;
           const height = node.y1 - node.y0;
-          const isRoot = node.depth === 0;
           const isHovered = hoveredNode === node.data.id;
 
-          if (isRoot) return null;
           if (width < 20 || height < 20) return null;
 
           return (
@@ -152,8 +151,7 @@ function Treemap({ data }: TreemapProps) {
                     >
                       <Link
                         to="/locations/$shortcode"
-                        params={{ shortcode: node.data.id ?? "" }}
-                        disabled={!node.data.id}
+                        params={{ shortcode: node.data.id }}
                         className="flex min-w-0 items-center gap-1 font-medium hover:underline"
                         style={{ pointerEvents: "auto" }}
                       >

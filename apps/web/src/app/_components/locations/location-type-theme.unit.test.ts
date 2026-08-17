@@ -16,12 +16,14 @@ describe("product-backed locations (null type)", () => {
     // Having a product means it is a physical vessel you can stick a label on.
     expect(typeSupportsQrCode(null)).toBe(true);
     // Unchanged for the structural cases either side of it.
+    expect(typeSupportsQrCode("house")).toBe(false);
     expect(typeSupportsQrCode("room")).toBe(false);
     expect(typeSupportsQrCode("box")).toBe(true);
   });
 
   it("groups a linked location with the containers", () => {
     expect(getLocationTypeGroup(null)).toBe("containers");
+    expect(getLocationTypeGroup("house")).toBe("spaces");
   });
 
   it("resolves the glyph from the product's category", () => {

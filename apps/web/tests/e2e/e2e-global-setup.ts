@@ -131,6 +131,23 @@ async function globalSetup(config: FullConfig): Promise<void> {
 
   console.log(`[E2E Setup] Using database: ${databaseConfig.database}`);
 
+  // The application requires one real hierarchy root. IntegreSQL templates are
+  // cached by schema hash, so seed the checked-out test database rather than
+  // the template: this also repairs databases cloned from an older empty
+  // template after the invariant was introduced.
+  const seedPool = new Pool({ connectionString: databaseUrl });
+  try {
+    await drizzle(seedPool).insert(schema.location).values({
+      shortcode: "LOC-HM3E",
+      name: "Home",
+      aliases: [],
+      type: "house",
+      parentId: null,
+    });
+  } finally {
+    await seedPool.end();
+  }
+
   // 2. Start wrangler dev against the CF Workers build
   const webRoot = path.join(__dirname, "../..");
 

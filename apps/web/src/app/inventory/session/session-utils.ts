@@ -31,7 +31,7 @@ export function confirmationKey(
 }
 
 function isGlobalUnknownLocation(location: InfLocation): boolean {
-  return location.name === "Unknown" && !location.parent;
+  return location.name === "Unknown";
 }
 
 function hasSessionItems(location: InfLocation): boolean {
@@ -49,7 +49,7 @@ export function getSessionRootCandidates(
 ): InfLocation[] {
   return locations
     .filter((location) => {
-      // Unknown is a legitimate root: recounting it *is* how you drain it
+      // Unknown is a legitimate session scope: recounting it *is* how you drain it
       // (relocate each row to where it belongs). It only earns a slot while it
       // actually holds items — an empty Unknown is noise, not a sweep.
       if (isGlobalUnknownLocation(location)) return hasSessionItems(location);

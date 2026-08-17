@@ -121,6 +121,7 @@ Rules:
 // Location type descriptions for the LLM to understand what each type means
 // Using `satisfies` to ensure all types have descriptions (build fails if one is missing)
 const LOCATION_TYPE_DESCRIPTIONS = {
+  house: "The complete household or property: Home",
   room: "Large spaces in a building: workshop, garage, kitchen, office, bedroom, basement, attic",
   area: "Zones or sections within rooms: workbench area, cutting station, charging station, reading nook",
   shelf:

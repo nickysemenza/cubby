@@ -82,7 +82,7 @@ export function ArrangeLocationCard({
         if (!drag) return false;
         if (drag.arrangeDrag === "location")
           return isValidLocationDrop(roots, drag.locationId, node.id);
-        return isValidItemDrop(drag.sourceLocationId, node.id);
+        return isValidItemDrop(roots, drag.sourceLocationId, node.id);
       },
       onDragEnter: () => setIsOver(true),
       onDragLeave: () => setIsOver(false),

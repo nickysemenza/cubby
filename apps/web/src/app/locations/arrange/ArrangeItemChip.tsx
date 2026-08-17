@@ -1,6 +1,9 @@
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import type { InventoryItemForTree } from "@cubby/schemas/location";
+import type {
+  InfLocation,
+  InventoryItemForTree,
+} from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import { GripVertical, Package } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -15,6 +18,8 @@ interface ArrangeItemChipProps {
   item: InventoryItemForTree;
   /** The location this item currently lives at (the move's source). */
   sourceLocationId: LocationShortcode;
+  /** Needed so Move to… can exclude the Home structural location. */
+  roots: InfLocation[];
 }
 
 /**
@@ -25,6 +30,7 @@ interface ArrangeItemChipProps {
 export function ArrangeItemChip({
   item,
   sourceLocationId,
+  roots,
 }: ArrangeItemChipProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -90,7 +96,9 @@ export function ArrangeItemChip({
       <span className="shrink-0 text-muted-foreground">
         {tryFormatAmount(item.amount)}
       </span>
-      <ArrangeMoveTo target={{ kind: "item", drag, name: item.productName }} />
+      <ArrangeMoveTo
+        target={{ kind: "item", drag, name: item.productName, roots }}
+      />
     </div>
   );
 }

@@ -2,7 +2,11 @@ import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import { unsafeLocationId, unsafeProductId } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { count, eq } from "drizzle-orm";
-import { withTestDb } from "tooling/test-setup";
+import {
+  TEST_HOME_ID,
+  TEST_HOME_SHORTCODE,
+  withTestDb,
+} from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import {
   image,
@@ -17,6 +21,8 @@ import {
   buildLocationTree,
   bulkReparentLocations,
   createLocation,
+  deleteLocations,
+  ensureGlobalUnknownLocation,
   findOrCreateLocationByName,
   getLocationById,
   locationList,
@@ -52,7 +58,7 @@ describe("findOrCreateLocationByName", () => {
     const [result] = await getDb(ctx.db)
       .select({ count: count() })
       .from(location);
-    expect(result!.count).toEqual(1);
+    expect(result!.count).toEqual(2); // Home + Pantry
   });
 
   it("recovers from a concurrent create race instead of 500ing", async () => {
@@ -73,7 +79,12 @@ describe("findOrCreateLocationByName", () => {
     const winner = getDb(ctx.db).transaction(async (tx) => {
       const [row] = await tx
         .insert(location)
-        .values({ name, type: "room", shortcode: "LRACE1" })
+        .values({
+          name,
+          type: "room",
+          shortcode: "LRACE1",
+          parentId: TEST_HOME_ID,
+        })
         .returning();
       winnerId = row!.id;
       await winnerCommitted; // hold the txn (and its lock) open
@@ -197,6 +208,109 @@ describe("bulkReparentLocations", () => {
     const updated = await getLocationById(ctx.db, childId);
     expect(updated.parent?.id).toEqual(parent.id);
   });
+
+  it("maps a null parent to Home and refuses to move Home", async () => {
+    const parent = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Temporary Parent" }),
+      ctx.actor,
+    );
+    const child = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Back Home", parentId: parent.id }),
+      ctx.actor,
+    );
+    const childId = unsafeLocationId(
+      (await resolveLiveShortcode(ctx.db, child.id, "location"))!,
+    );
+
+    await bulkReparentLocations(ctx.db, [childId], null, ctx.actor);
+    expect((await getLocationById(ctx.db, childId)).parent?.id).toBe(
+      TEST_HOME_SHORTCODE,
+    );
+
+    await expect(
+      bulkReparentLocations(ctx.db, [TEST_HOME_ID], childId, ctx.actor),
+    ).rejects.toThrow("Home cannot be reparented");
+  });
+});
+
+describe("Home hierarchy invariants", () => {
+  const ctx = withTestDb();
+
+  it("maps an explicit null update parent to Home", async () => {
+    const parent = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Parent" }),
+      ctx.actor,
+    );
+    const child = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Child", parentId: parent.id }),
+      ctx.actor,
+    );
+    const childId = unsafeLocationId(
+      (await resolveLiveShortcode(ctx.db, child.id, "location"))!,
+    );
+
+    await updateLocation(ctx.db, childId, { parentId: null }, ctx.actor);
+
+    expect((await getLocationById(ctx.db, childId)).parent?.id).toBe(
+      TEST_HOME_SHORTCODE,
+    );
+  });
+
+  it("creates and finds Unknown beneath Home", async () => {
+    const unknown = await ensureGlobalUnknownLocation(ctx.db, ctx.actor);
+    const unknownId = unsafeLocationId(
+      (await resolveLiveShortcode(ctx.db, unknown.id, "location"))!,
+    );
+
+    expect((await getLocationById(ctx.db, unknownId)).parent?.id).toBe(
+      TEST_HOME_SHORTCODE,
+    );
+    await expect(
+      ensureGlobalUnknownLocation(ctx.db, ctx.actor),
+    ).resolves.toMatchObject({ id: unknown.id });
+  });
+});
+
+describe("deleteLocations hierarchy", () => {
+  const ctx = withTestDb();
+
+  it("promotes children to the nearest surviving ancestor", async () => {
+    const room = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Room" }),
+      ctx.actor,
+    );
+    const shelf = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Shelf", parentId: room.id }),
+      ctx.actor,
+    );
+    const bin = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Bin", parentId: shelf.id }),
+      ctx.actor,
+    );
+    const shelfId = unsafeLocationId(
+      (await resolveLiveShortcode(ctx.db, shelf.id, "location"))!,
+    );
+    const binId = unsafeLocationId(
+      (await resolveLiveShortcode(ctx.db, bin.id, "location"))!,
+    );
+
+    await deleteLocations(ctx.db, [shelfId], ctx.actor);
+
+    expect((await getLocationById(ctx.db, binId)).parent?.id).toBe(room.id);
+  });
+
+  it("protects Home from deletion", async () => {
+    await expect(
+      deleteLocations(ctx.db, [TEST_HOME_ID], ctx.actor),
+    ).rejects.toThrow("Home cannot be deleted");
+  });
 });
 
 describe("locationSearch picker rows", () => {
@@ -243,13 +357,14 @@ describe("locationSearch picker rows", () => {
     expect(found.data).toHaveLength(1);
     expect(found.data[0]!.id).toBe(leaf!.id);
     expect(found.data[0]!.ancestors.map((a) => a.name)).toEqual([
+      "Home",
       "House",
       "Garage",
       "Workbench",
     ]);
   });
 
-  it("returns an empty chain for a top-level location", async () => {
+  it("places an omitted parent directly beneath Home", async () => {
     await createLocation(
       ctx.db,
       makeLocationInput({ name: "Standalone Room", type: "room" }),
@@ -257,7 +372,7 @@ describe("locationSearch picker rows", () => {
     );
 
     const found = await searchFor("Standalone Room");
-    expect(found.data[0]!.ancestors).toEqual([]);
+    expect(found.data[0]!.ancestors.map((a) => a.name)).toEqual(["Home"]);
   });
 
   // A picker resolves a typed name through locationSearch and a typed `LOC-`
@@ -288,7 +403,12 @@ describe("locationSearch picker rows", () => {
     // Both keep the deleted rung: Location.parentId is `must-target-live`, so
     // this state is a referential-liveness violation the Problems detector
     // reports — not something two render paths should paper over differently.
-    expect(detailChain).toEqual(["Live Root", "Doomed Middle", "Live Inner"]);
+    expect(detailChain).toEqual([
+      "Home",
+      "Live Root",
+      "Doomed Middle",
+      "Live Inner",
+    ]);
   });
 
   it("stops walking up at the depth cap", async () => {
@@ -434,6 +554,7 @@ describe("locationSearch picker rows", () => {
       { pageIndex: 0, pageSize: 50 },
     );
     expect(options.data[0]!.ancestors.map((a) => a.name)).toEqual([
+      "Home",
       "Optioned Room",
     ]);
     expect(options.data[0]).not.toHaveProperty("coverImage");
@@ -477,9 +598,8 @@ describe("buildLocationTree identity product hydration", () => {
       ctx.actor,
     );
 
-    const row = (await buildLocationTree(ctx.db)).find(
-      (location) => location.id === created.id,
-    );
+    const [home] = await buildLocationTree(ctx.db);
+    const row = home?.children?.find((location) => location.id === created.id);
     expect(row?.product).toMatchObject({
       id: vessel.id,
       coverImage: { id: cover.id },
@@ -508,7 +628,7 @@ describe("locationList parentPresenceFilter", () => {
       [],
       { pageIndex: 0, pageSize: 10 },
     );
-    expect(rootsOnly.data.map((l) => l.id)).toEqual([root.id]);
+    expect(rootsOnly.data.map((l) => l.id)).toEqual(["LOC-HM3E"]);
 
     const childrenOnly = await locationList(
       ctx.db,
@@ -516,7 +636,9 @@ describe("locationList parentPresenceFilter", () => {
       [],
       { pageIndex: 0, pageSize: 10 },
     );
-    expect(childrenOnly.data.map((l) => l.id)).toEqual([child.id]);
+    expect(new Set(childrenOnly.data.map((l) => l.id))).toEqual(
+      new Set([root.id, child.id]),
+    );
   });
 
   describe("inventoryPresenceFilter", () => {

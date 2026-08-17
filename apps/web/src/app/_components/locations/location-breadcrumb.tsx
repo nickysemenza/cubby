@@ -1,6 +1,6 @@
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
-import { Home } from "lucide-react";
+import { LayoutDashboard } from "lucide-react";
 import * as React from "react";
 import {
   Breadcrumb,
@@ -59,7 +59,7 @@ interface LocationBreadcrumbProps {
   linkable?: boolean;
   /** Callback when segment is clicked (alternative to linkable) */
   onSegmentClick?: (locationId: string) => void;
-  /** Show a Home link before the location segments */
+  /** Show the application dashboard link before the location segments */
   showHome?: boolean;
   /** Truncate long segment names */
   compact?: boolean;
@@ -105,8 +105,8 @@ export function LocationBreadcrumb({
                   />
                 }
               >
-                <Home size={14} />
-                <span>Home</span>
+                <LayoutDashboard size={14} />
+                <span>Dashboard</span>
               </BreadcrumbLink>
             </BreadcrumbItem>
             {segments.length > 0 && <BreadcrumbSeparator />}

@@ -31,14 +31,14 @@ export function locationItemCount(node: InfLocation): number {
   );
 }
 
-/** The global "Unknown" staging location: a top-level node named "Unknown". */
-function isUnknownRoot(location: InfLocation): boolean {
-  return location.name === UNKNOWN_LOCATION_NAME && !location.parent;
-}
-
-/** The global "Unknown" root among the tree roots, or null if it doesn't exist yet. */
+/** The global "Unknown" staging location, wherever it lives under Home. */
 export function findUnknownRoot(roots: InfLocation[]): InfLocation | null {
-  return roots.find(isUnknownRoot) ?? null;
+  for (const location of roots) {
+    if (location.name === UNKNOWN_LOCATION_NAME) return location;
+    const nested = findUnknownRoot(location.children ?? []);
+    if (nested) return nested;
+  }
+  return null;
 }
 
 /** Depth-first search for a location node by id across the whole forest. */
@@ -118,9 +118,9 @@ export function isSelfOrDescendant(
 
 /**
  * May the dragged location be reparented under `targetId`?
- * Invalid when: dragging Unknown itself, target is the node or a descendant
- * (cycle), or target is already the current parent (no-op). `targetId === null`
- * means "drop on Home" → reparent to top level.
+ * Invalid when: dragging Home or Unknown, target is the node or a descendant
+ * (cycle), or target is already the current parent (no-op). The sole root is
+ * the real Home Location, so reparenting onto it is an ordinary location move.
  */
 export function isValidLocationDrop(
   roots: InfLocation[],
@@ -129,6 +129,8 @@ export function isValidLocationDrop(
 ): boolean {
   const unknown = findUnknownRoot(roots);
   if (unknown && dragId === unknown.id) return false;
+  const home = roots[0];
+  if (home && dragId === home.id) return false;
   const currentParent = parentIdOf(roots, dragId);
   if (targetId === null) return currentParent !== null; // already top-level → no-op
   if (targetId === dragId) return false;
@@ -136,12 +138,15 @@ export function isValidLocationDrop(
   return !isSelfOrDescendant(roots, dragId, targetId);
 }
 
-/** May the dragged item move to `targetLocationId`? Invalid only if it's a no-op. */
+/** May the dragged item move to `targetLocationId`? Home never holds items. */
 export function isValidItemDrop(
+  roots: InfLocation[],
   sourceLocationId: LocationShortcode,
   targetLocationId: LocationShortcode,
 ): boolean {
-  return sourceLocationId !== targetLocationId;
+  return (
+    targetLocationId !== roots[0]?.id && sourceLocationId !== targetLocationId
+  );
 }
 
 /** Immutable copy of `node` with `children` replaced (undefined children → []). */
@@ -150,10 +155,9 @@ function withChildren(node: InfLocation, children: InfLocation[]): InfLocation {
 }
 
 /**
- * Immutably move location `dragId` under `newParentId` (or to top level when
- * null). Removes it from its old parent's children (or the root list) and
- * appends it to the new parent's children (or the root list). Caller must have
- * already validated the move.
+ * Immutably move location `dragId` under `newParentId`. The null fallback is
+ * retained only for an unavailable/malformed hierarchy; normal moves target
+ * the real Home id. Caller must have already validated the move.
  */
 export function applyLocationMove(
   roots: InfLocation[],

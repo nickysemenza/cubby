@@ -96,10 +96,8 @@ export function rollupLocationValuations(
   // container tally, never to its own: "what is on this shelf" and "what is
   // this shelf" are different questions — the same split `installed` draws.
   //
-  // A top-level location with a product has no parent to attribute to, so its
-  // own price lands in no rollup. Accepted: every vessel in the tree today
-  // hangs off a room or area, and inventing a synthetic root to hold it would
-  // put a number on a screen nobody asked about.
+  // Home is the only top-level location and is not a Product, so every vessel
+  // location has a real parent that can own this container tally.
   for (const l of locations) {
     if (!l.parentId || l.productPrice == null) continue;
     let agg = direct.get(l.parentId);
