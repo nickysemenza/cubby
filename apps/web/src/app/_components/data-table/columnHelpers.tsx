@@ -1392,8 +1392,19 @@ export function createBooleanColumn<
   options: {
     header?: string;
     placeholder?: string;
-    /** Labels for the two decided states. Say what the field means, not "Yes"/"No". */
-    labels: { true: string; false: string };
+    /**
+     * The two decided states, as a `{value: "true"|"false", label, color}` roster
+     * — build it with `booleanCellOptions` (~/lib/select-options).
+     *
+     * A roster rather than a `labels` pair plus built-in tones, because "true" is
+     * not always the good outcome: `FinancialAccount.provisional` is amber when
+     * true and green when false, the inverse of the obvious default. Hardcoding
+     * positive/slate here made that column's list cell disagree with its own
+     * detail page, and silently turned a deliberately-amber "Planned" expense
+     * green. Passing the roster means the column and every other surface that
+     * renders the field read from one declaration.
+     */
+    trueFalseOptions: FilterableComboboxItem[];
     /**
      * Present ⇒ `null` is a real state the editor can return to: the picker
      * gains its clear affordance, its empty state reads with this label, and the
@@ -1410,10 +1421,7 @@ export function createBooleanColumn<
     };
   },
 ) {
-  const selectOptions: FilterableComboboxItem[] = [
-    { value: "true", label: options.labels.true, color: "var(--positive)" },
-    { value: "false", label: options.labels.false, color: "var(--slate)" },
-  ];
+  const selectOptions = options.trueFalseOptions;
   const filterPlaceholder = options.placeholder ?? "Set value...";
   // The editor's own empty state names the undecided state where there is one,
   // so clearing has a word attached rather than being an unlabelled ✗.

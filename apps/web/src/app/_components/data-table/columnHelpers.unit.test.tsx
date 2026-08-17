@@ -8,6 +8,9 @@ import {
 import { fireEvent, render, screen } from "@testing-library/react";
 import { type ReactNode, useMemo } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { expenseFutureOptions } from "~/app/expenses/expense-options";
+import { provisionalOptions } from "~/app/finance/financial-account-options";
+import { booleanCellOptions } from "~/lib/select-options";
 import { formatCurrency } from "~/lib/utils";
 import {
   createActionsColumn,
@@ -429,11 +432,16 @@ const DASH = "—";
 
 type TrackedRow = { stockTracked: boolean | null };
 
+const TRACKED_OPTIONS = booleanCellOptions({
+  true: "Tracked",
+  false: "Not tracked",
+});
+
 const trackedColumn = (
   onSave?: (v: boolean | null, row: TrackedRow) => Promise<void>,
 ): ColumnDef<TrackedRow, string | null> =>
   createBooleanColumn(createColumnHelper<TrackedRow>(), "stockTracked", {
-    labels: { true: "Tracked", false: "Not tracked" },
+    trueFalseOptions: TRACKED_OPTIONS,
     undecided: { label: "Undecided" },
     ...(onSave ? { editable: { onSave } } : {}),
   }) as ColumnDef<TrackedRow, string | null>;
@@ -513,7 +521,7 @@ describe("createBooleanColumn", () => {
   it("only offers the clear affordance when an undecided state is named", () => {
     const boolColumn = (undecided?: { label: string }) =>
       createBooleanColumn(createColumnHelper<TrackedRow>(), "stockTracked", {
-        labels: { true: "Tracked", false: "Not tracked" },
+        trueFalseOptions: TRACKED_OPTIONS,
         ...(undecided ? { undecided } : {}),
         editable: { onSave: async () => {} },
       }) as ColumnDef<TrackedRow, string | null>;
@@ -608,5 +616,42 @@ describe("enum/boolean columns stay in the copy/paste range", () => {
     // `filterConfig: null` must leave meta.filterConfig undefined so the
     // manifest's control is the one that attaches.
     expect(column.meta?.filterConfig).toBeUndefined();
+  });
+});
+
+// The factory used to hardcode `true → positive / false → slate`, which is only
+// right when "true" is the good outcome. `FinancialAccount.provisional` is the
+// inverse — provisional is the UNRESOLVED state — so the list cell rendered it
+// green while its own detail page rendered it amber, and a deliberately-amber
+// "Planned" expense silently went green (PR #766 review). The roster is now the
+// single source of both label and tone.
+describe("boolean tones come from the roster, not the factory", () => {
+  type ProvisionalRow = { provisional: boolean | null };
+
+  it("honours an inverted tone map and matches what other surfaces render", () => {
+    const column = createBooleanColumn(
+      createColumnHelper<ProvisionalRow>(),
+      "provisional",
+      { trueFalseOptions: provisionalOptions },
+    ) as ColumnDef<ProvisionalRow, string | null>;
+
+    // The dot the table cell paints must be the same ink the detail page's
+    // `renderOptionCell(…, provisionalOptions)` paints for the same value.
+    const inkFor = (value: string) =>
+      provisionalOptions.find((o) => o.value === value)?.color;
+    expect(inkFor("true")).toBe("var(--warning)");
+    expect(inkFor("false")).toBe("var(--positive)");
+
+    renderColumn<ProvisionalRow, string | null>(column, { provisional: true });
+    const dot = document.querySelector("td span[aria-hidden]");
+    expect(dot).not.toBeNull();
+    expect((dot as HTMLElement).style.backgroundColor).toBe("var(--warning)");
+  });
+
+  it("keeps Planned amber on the expense ledger", () => {
+    expect(expenseFutureOptions.find((o) => o.value === "true")).toMatchObject({
+      label: "Planned",
+      color: "var(--warning)",
+    });
   });
 });

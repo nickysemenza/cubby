@@ -84,6 +84,7 @@ import {
 } from "~/app/_components/tracker/task-bulk-actions";
 import {
   costTypeOptions,
+  expenseFutureOptions,
   expenseLineBasisOptions,
   expenseLineKindOptions,
 } from "~/app/expenses/expense-options";
@@ -762,7 +763,7 @@ export function expenseFutureColumn(
     // render `<NoneValue />` for false, which is how the great majority of the
     // ledger came to display the unknown-marker for a value that was never in
     // doubt.
-    labels: { true: "Planned", false: "Actual" },
+    trueFalseOptions: expenseFutureOptions,
     editable: {
       // `next` is only ever a boolean here: the column declares no `undecided`
       // state, so the editor offers no clear affordance.

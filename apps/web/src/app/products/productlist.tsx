@@ -37,7 +37,7 @@ import {
   inventoryMutationInvalidateKeys,
   productMutationInvalidateKeys,
 } from "~/lib/query-keys";
-import { presenceCellOptions } from "~/lib/select-options";
+import { booleanCellOptions, presenceCellOptions } from "~/lib/select-options";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
 import { WithLocationSearch } from "../_components/combobox/with-search-hook";
@@ -96,6 +96,12 @@ interface ProductListProps {
 // filter configuration).
 const NO_VENDOR_OPTIONS: FilterableComboboxItem[] = [];
 const NO_FILTER_OPTIONS: FilterableComboboxItem[] = [];
+
+// The generic tones fit here: tracked really is the resolved/good outcome.
+const STOCK_TRACKED_OPTIONS = booleanCellOptions({
+  true: "Tracked",
+  false: "Not tracked",
+});
 
 const MODEL_PRESENCE_OPTIONS = presenceCellOptions("model");
 const UPC_PRESENCE_OPTIONS = presenceCellOptions("UPC");
@@ -492,7 +498,7 @@ export function ProductList({
         header: "Stock tracking",
         className: "w-28",
         placeholder: "Filter stock tracking...",
-        labels: { true: "Tracked", false: "Not tracked" },
+        trueFalseOptions: STOCK_TRACKED_OPTIONS,
         undecided: { label: "Undecided" },
         // The header control stays the manifest's presence filter (undecided vs
         // reviewed) — that is what backs the worklist view, and it asks a

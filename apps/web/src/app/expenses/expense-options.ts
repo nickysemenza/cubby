@@ -10,7 +10,7 @@ import { format, startOfYear, subDays, subMonths } from "date-fns";
 import { match } from "ts-pattern";
 import { type BadgeVariant, badgeVariantColor } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
-import { buildSelectOptions } from "~/lib/select-options";
+import { booleanCellOptions, buildSelectOptions } from "~/lib/select-options";
 import { getCostTypeColor } from "~/lib/status-colors";
 
 /** Human labels for the fixed cost-type enum. */
@@ -103,6 +103,19 @@ export const expenseLineBasisOptions: FilterableComboboxItem[] =
     label: expenseLineBasisLabels[value],
     color: badgeVariantColor[expenseLineBasisBadgeVariant[value]],
   }));
+
+/**
+ * Roster for the `future` column — planned vs. actually made.
+ *
+ * Amber for `Planned`, matching the tone the ledger and the planning calendar
+ * already spend on planned/overdue money; `Actual` is the neutral resting state.
+ * Not the generic true→positive default: a planned expense is not a good
+ * outcome, it is an outstanding one.
+ */
+export const expenseFutureOptions = booleanCellOptions(
+  { true: "Planned", false: "Actual" },
+  { true: "var(--warning)", false: "var(--slate)" },
+);
 
 /** `{value,label}` options for the "future" (planned vs. made) filter. */
 export const futureFilterOptions: FilterableComboboxItem[] = [

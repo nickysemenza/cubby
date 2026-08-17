@@ -16,7 +16,10 @@ import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { TableLink } from "../_components/table/TableLink";
-import { accountIdentityKindOptions } from "./financial-account-options";
+import {
+  accountIdentityKindOptions,
+  provisionalOptions,
+} from "./financial-account-options";
 export function FinancialAccountList() {
   const api = useTRPC();
   const helper = useMemo(() => createColumnHelper<FinancialAccountOut>(), []);
@@ -56,7 +59,8 @@ export function FinancialAccountList() {
       createBooleanColumn(helper, "provisional", {
         header: "Status",
         className: "w-28",
-        labels: { true: "Provisional", false: "Known" },
+        // The same roster the detail page renders from, so the two cannot drift.
+        trueFalseOptions: provisionalOptions,
         editable: {
           // `NOT NULL DEFAULT false`, so there is no undecided state to clear to
           // and `next` is only ever a boolean.

@@ -1,6 +1,7 @@
 import type { FinancialAccountIdentityKind } from "@cubby/schemas/financial-account";
 import { financialAccountIdentityKind } from "@cubby/schemas/financial-account";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
+import { booleanCellOptions } from "~/lib/select-options";
 
 /**
  * Labels for `FinancialAccount.provisional`, shared by the list column and the
@@ -11,10 +12,12 @@ import type { FilterableComboboxItem } from "~/components/ui/combobox";
  * same field, so the same account read as two different facts depending on where
  * you looked. `provisional` is `NOT NULL`, so both states are always known.
  */
-export const provisionalOptions: FilterableComboboxItem[] = [
-  { value: "true", label: "Provisional", color: "var(--warning)" },
-  { value: "false", label: "Known", color: "var(--positive)" },
-];
+export const provisionalOptions = booleanCellOptions(
+  { true: "Provisional", false: "Known" },
+  // Inverted against the default: a provisional account is the UNRESOLVED one,
+  // so amber is the flag and `Known` is the healthy state.
+  { true: "var(--warning)", false: "var(--positive)" },
+);
 
 const ACCOUNT_IDENTITY_KIND_LABELS: Record<
   FinancialAccountIdentityKind,
