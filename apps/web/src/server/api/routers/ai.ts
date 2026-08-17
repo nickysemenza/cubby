@@ -14,6 +14,8 @@ import {
   ingredientMergeSuggestionBatchInput,
   ingredientMergeSuggestionBatchOut,
   locationDescriptionSchema,
+  locationSuggestionInput,
+  locationSuggestionSchema,
   locationTypeSuggestionInput,
   locationTypeSuggestionSchema,
   parsedSearchSchema,
@@ -40,6 +42,7 @@ import {
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { suggestIngredientMergeBatch } from "~/server/services/ai-enrichment/ingredient-merge";
+import { suggestLocationForProduct } from "~/server/services/ai-enrichment/location-suggest";
 import {
   approveDetectedInventoryItem,
   backfillLocationDescriptions,
@@ -85,6 +88,22 @@ const suggestLocationType = protectedProcedure
     });
   });
 
+/**
+ * Suggest where a product should be stocked, from the full location roster.
+ *
+ * A query, like the other two pure suggesters: no side effects, fired by a
+ * button press rather than read reactively.
+ */
+const suggestLocation = protectedProcedure
+  .input(locationSuggestionInput)
+  .output(strictOutput(locationSuggestionSchema))
+  .query(async ({ ctx, input }) => {
+    return suggestLocationForProduct(
+      ctx.db,
+      await resolveOrThrow(ctx.db, "product", input.productId),
+    );
+  });
+
 const resolveLocationEntityId = async (
   db: Parameters<typeof resolveOrThrow>[0],
   shortcode: string,
@@ -94,6 +113,7 @@ const resolveLocationEntityId = async (
 
 export const aiRouter = createTRPCRouter({
   suggestCategory,
+  suggestLocation,
   suggestLocationType,
   describeLocation: protectedProcedure
     .input(aiLocationIdInput)

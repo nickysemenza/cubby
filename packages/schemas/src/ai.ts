@@ -51,6 +51,35 @@ export const aiLocationIdInput = z.object({
   locationId: locationShortcode,
 });
 
+export const locationSuggestionInput = z.object({
+  productId: productShortcode,
+});
+
+// Model-owned shape: where should this product be put away. The id is a plain
+// string on purpose — it is whatever the model copied out of the candidate
+// roster, and only becomes a `locationShortcode` after the service has matched
+// it back against a real live location.
+export const locationSuggestionAiResultSchema = z.object({
+  locationId: z.string(),
+  confidence: confidence,
+  reasoning: z.string(),
+});
+export type LocationSuggestionAiResult = z.infer<
+  typeof locationSuggestionAiResultSchema
+>;
+
+// What the client gets: a resolved location, name included, so the combobox can
+// render the pick without a second round trip.
+export const locationSuggestionSchema = z.object({
+  location: z.object({
+    id: locationShortcode,
+    name: z.string(),
+  }),
+  confidence: confidence,
+  reasoning: z.string(),
+});
+export type LocationSuggestion = z.infer<typeof locationSuggestionSchema>;
+
 // Location description from photo analysis
 export const locationDescriptionSchema = z.object({
   description: z.string(),

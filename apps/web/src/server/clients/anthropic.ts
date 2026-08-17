@@ -12,8 +12,10 @@ import {
   type DetectedInventoryAiResult,
   detectedInventoryAiResultSchema,
   type LocationDescription,
+  type LocationSuggestionAiResult,
   type LocationTypeSuggestion,
   locationDescriptionSchema,
+  locationSuggestionAiResultSchema,
   locationTypeSuggestionSchema,
   type ParsedSearch,
   type ProductIdentification,
@@ -153,6 +155,22 @@ Rules:
 5. Names mentioning "workbench" or "station" are typically areas or tables`;
 }
 
+function buildLocationSuggestionSystemPrompt(): string {
+  return `You are a put-away assistant for a household inventory system. Given a product and the full roster of storage locations, choose the ONE location where the product should be stocked.
+
+Each candidate is one line:
+CODE | Room > Area > Shelf (type) - N items[; hints]
+
+Rules:
+1. Return the location's CODE exactly as it appears. Never invent a code, and never return one that is not in the roster.
+2. The location NAMES and their parent chain are the primary signal. A product belongs with the system it is part of ("PACKOUT" plates on the "PACKOUT Wall", pantry goods in a pantry, fasteners in a hardware bin).
+3. The hints ("3 share tags", "5 same manufacturer", "12 same category") are corroboration, not a ranking. A weakly-named location with a high count is a worse answer than a well-named one with none — a category is spread over dozens of locations.
+4. "already stocked here" means the product is there now. Prefer it unless the product is one that gets deliberately split across places.
+5. Prefer the most specific location that fits: a named shelf or bin over the room that contains it.
+6. Confidence: "high" when the name is a direct match for what this product is, "medium" when the category or family fits but the exact home is a guess, "low" when you are picking the least-bad room.
+7. Keep the reasoning to one sentence naming the actual evidence you used.`;
+}
+
 function buildProductIdentificationSystemPrompt(): string {
   const categoryList = productCategoryValues
     .map((cat) => `- "${cat}": ${CATEGORY_DESCRIPTIONS[cat]}`)
@@ -259,6 +277,44 @@ Determine the appropriate type for this location and explain your reasoning.`,
         },
       ],
       outputSchema: locationTypeSuggestionSchema,
+    });
+  }
+
+  /**
+   * Pick a put-away location from a roster the caller supplies.
+   *
+   * The roster is passed in already rendered, and the returned code is matched
+   * back against it by the caller — this method never touches the database and
+   * never certifies that the id it returns exists.
+   */
+  async suggestLocation(
+    productDescription: string,
+    candidateLines: string,
+    usage?: AnthropicUsageContext,
+  ): Promise<LocationSuggestionAiResult> {
+    const adapter = this.getStructuredAdapter();
+
+    return chat({
+      adapter,
+      middleware: aiGatewayUsageMiddleware(
+        anthropicUsageWithDefaults(usage, {
+          feature: "location-suggestion",
+          operation: "suggestLocation",
+        }),
+      ),
+      systemPrompts: [buildLocationSuggestionSystemPrompt()],
+      messages: [
+        {
+          role: "user",
+          content: `${productDescription}
+
+Storage locations:
+${candidateLines}
+
+Choose where this product should be stocked and explain your reasoning in one sentence.`,
+        },
+      ],
+      outputSchema: locationSuggestionAiResultSchema,
     });
   }
 

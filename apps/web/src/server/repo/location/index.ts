@@ -38,7 +38,9 @@ export {
 export {
   findOrCreateLocationByName,
   getLocationByShortcode,
+  getLocationPutAwayCandidates,
   getLocationsByShortcodes,
+  type LocationPutAwayCandidate,
   locationParentOptions,
 } from "./lookup";
 // Tree and hierarchy operations
