@@ -22,6 +22,8 @@ import type { ExpenseCreateInput } from "@cubby/schemas/project";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { mock } from "~/lib/test/mock-schema";
 import type { Database } from "~/server/db";
+import { image } from "~/server/db/schema";
+import { insertAndReturn } from "./database-helpers";
 import { createIngredient, findOrCreateIngredient } from "./ingredient";
 import { createInventoryEntry } from "./inventory";
 import { createLocation } from "./location";
@@ -393,3 +395,28 @@ export const seedIngredientWithStock = async (
   );
   return ingredient;
 };
+
+/**
+ * An uploaded Image row ready to attach via `pendingImageIds`.
+ *
+ * Lives here rather than in the test so a `services/` test can reach it: that
+ * layer is barred from importing schema or database-helpers directly, and this
+ * is the repo-side seam that rule expects fixtures to use.
+ *
+ * `overrides` is how a test asks for an UNdisplayable file — a PDF manual, a
+ * `renderStatus: "failed"` render, an object missing from R2.
+ */
+export const createImageFixture = async (
+  db: Database,
+  name: string,
+  overrides: Partial<typeof image.$inferInsert> = {},
+) =>
+  await insertAndReturn(db, image, {
+    key: `fixture-${name}`,
+    url: `https://example.com/${name}.png`,
+    filename: `${name}.png`,
+    contentType: "image/png",
+    size: 100,
+    status: "UPLOADED",
+    ...overrides,
+  });
