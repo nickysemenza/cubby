@@ -1,4 +1,8 @@
-import { previewOperationSchema } from "@cubby/schemas/entity-integrity";
+import {
+  type PreviewDeleteEntity,
+  type PreviewMergeEntity,
+  previewOperationSchema,
+} from "@cubby/schemas/entity-integrity";
 import {
   unsafeFinancialAccountId,
   unsafeFinancialTransactionId,
@@ -17,6 +21,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { NONEXISTENT_UUID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { previewOperation } from "~/server/api/routers/entity-integrity-preview";
+import type { Database } from "~/server/db/database";
 import {
   entityEmbedding,
   expense,
@@ -1152,78 +1157,84 @@ describe("operation preview / mutation parity", () => {
    * `.exhaustive()`, so a new entity fails `tsc` long before it fails here.
    */
   describe("planner smoke tests: SQL runs against zero rows", () => {
-    const missing = <T extends string>(brand: (id: string) => T): T[] => [
-      brand(NONEXISTENT_UUID),
-    ];
+    /**
+     * Keyed by entity and typed as a total `Record`, so **adding an entity to
+     * the enum fails `tsc` here until someone classifies it**. That restores
+     * the property the previous derived-by-subtraction version had: the SQL
+     * smoke coverage stays self-completing, rather than a hand-kept list that
+     * silently stops covering new planners.
+     *
+     * `"covered-by-parity"` means the blocker/count parity blocks above already
+     * run that planner against real rows. Everything else gets a thunk that
+     * calls the planner DIRECTLY — see the note above on why going through
+     * `previewOperation` does not work.
+     */
+    type Smoke = "covered-by-parity" | ((db: Database) => Promise<unknown>);
 
-    it("previewDeleteLocations", async () => {
-      await expect(
-        previewDeleteLocations(ctx.db, missing(unsafeLocationId)),
-      ).resolves.toBeDefined();
-    });
+    const DELETE_PLANNER_SMOKE: Record<PreviewDeleteEntity, Smoke> = {
+      product: "covered-by-parity",
+      recipe: "covered-by-parity",
+      ingredient: "covered-by-parity",
+      cookbook: "covered-by-parity",
+      meal: "covered-by-parity",
+      task: "covered-by-parity",
+      purchase: "covered-by-parity",
+      expense: "covered-by-parity",
+      inventory: "covered-by-parity",
+      image: "covered-by-parity",
+      location: (db) =>
+        previewDeleteLocations(db, [unsafeLocationId(NONEXISTENT_UUID)]),
+      project: (db) =>
+        previewDeleteProjects(db, [unsafeProjectId(NONEXISTENT_UUID)]),
+      vendor: (db) =>
+        previewDeleteVendors(db, [unsafeVendorId(NONEXISTENT_UUID)]),
+      wish: (db) => previewDeleteWishes(db, [unsafeWishId(NONEXISTENT_UUID)]),
+      financialAccount: (db) =>
+        previewDeleteFinancialAccounts(db, [
+          unsafeFinancialAccountId(NONEXISTENT_UUID),
+        ]),
+      financialTransaction: (db) =>
+        previewDeleteFinancialTransactions(db, [
+          unsafeFinancialTransactionId(NONEXISTENT_UUID),
+        ]),
+    };
 
-    it("previewDeleteProjects", async () => {
-      await expect(
-        previewDeleteProjects(ctx.db, missing(unsafeProjectId)),
-      ).resolves.toBeDefined();
-    });
-
-    it("previewDeleteVendors", async () => {
-      await expect(
-        previewDeleteVendors(ctx.db, missing(unsafeVendorId)),
-      ).resolves.toBeDefined();
-    });
-
-    it("previewDeleteWishes", async () => {
-      await expect(
-        previewDeleteWishes(ctx.db, missing(unsafeWishId)),
-      ).resolves.toBeDefined();
-    });
-
-    it("previewDeleteFinancialAccounts", async () => {
-      await expect(
-        previewDeleteFinancialAccounts(
-          ctx.db,
-          missing(unsafeFinancialAccountId),
-        ),
-      ).resolves.toBeDefined();
-    });
-
-    it("previewDeleteFinancialTransactions", async () => {
-      await expect(
-        previewDeleteFinancialTransactions(
-          ctx.db,
-          missing(unsafeFinancialTransactionId),
-        ),
-      ).resolves.toBeDefined();
-    });
-
-    it("previewMergeVendors", async () => {
-      await expect(
-        previewMergeVendors(ctx.db, {
-          mergeIds: missing(unsafeVendorId),
+    // `keepId` must differ from `mergeIds`: the planners compute
+    // `losers = mergeIds.filter((id) => id !== keepId)` and short-circuit on an
+    // empty result, so reusing one uuid for both would skip the SQL entirely
+    // and quietly re-vacuate these tests.
+    const MERGE_PLANNER_SMOKE: Record<PreviewMergeEntity, Smoke> = {
+      ingredient: "covered-by-parity",
+      vendor: (db) =>
+        previewMergeVendors(db, {
+          mergeIds: [unsafeVendorId(NONEXISTENT_UUID)],
           keepId: unsafeVendorId(NONEXISTENT_UUID_2),
         }),
-      ).resolves.toBeDefined();
-    });
-
-    it("previewMergePurchases", async () => {
-      await expect(
-        previewMergePurchases(ctx.db, {
-          mergeIds: missing(unsafePurchaseId),
+      purchase: (db) =>
+        previewMergePurchases(db, {
+          mergeIds: [unsafePurchaseId(NONEXISTENT_UUID)],
           keepId: unsafePurchaseId(NONEXISTENT_UUID_2),
         }),
-      ).resolves.toBeDefined();
-    });
-
-    it("previewMergeProducts", async () => {
-      await expect(
-        previewMergeProducts(ctx.db, {
-          mergeIds: missing(unsafeProductId),
+      product: (db) =>
+        previewMergeProducts(db, {
+          mergeIds: [unsafeProductId(NONEXISTENT_UUID)],
           keepId: unsafeProductId(NONEXISTENT_UUID_2),
         }),
-      ).resolves.toBeDefined();
-    });
+    };
+
+    for (const [entity, smoke] of Object.entries(DELETE_PLANNER_SMOKE)) {
+      if (smoke === "covered-by-parity") continue;
+      it(`delete/${entity} planner issues its SQL`, async () => {
+        await expect(smoke(ctx.db)).resolves.toBeDefined();
+      });
+    }
+
+    for (const [entity, smoke] of Object.entries(MERGE_PLANNER_SMOKE)) {
+      if (smoke === "covered-by-parity") continue;
+      it(`merge/${entity} planner issues its SQL`, async () => {
+        await expect(smoke(ctx.db)).resolves.toBeDefined();
+      });
+    }
   });
 
   describe("unresolved targets", () => {
