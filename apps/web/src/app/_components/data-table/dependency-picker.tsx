@@ -127,11 +127,28 @@ export function DependencyPicker<TId extends string>({
             <EntityPicker
               entity={label}
               label={label}
-              items={items.filter(
-                (item) =>
-                  item.id !== excludeId &&
-                  !pending.some((p) => p.id === item.id),
-              )}
+              items={items.map((item) => {
+                const disabledReason =
+                  item.id === excludeId
+                    ? `This is the current ${label}`
+                    : pending.some((candidate) => candidate.id === item.id)
+                      ? "Already selected"
+                      : undefined;
+                return disabledReason
+                  ? {
+                      ...item,
+                      presentation: {
+                        ...item.presentation,
+                        group: {
+                          id: "unavailable",
+                          label: "Unavailable",
+                          order: 99,
+                        },
+                        disabledReason,
+                      },
+                    }
+                  : item;
+              })}
               onSearchChange={onSearchChange}
               isLoading={isLoading}
               value={null}

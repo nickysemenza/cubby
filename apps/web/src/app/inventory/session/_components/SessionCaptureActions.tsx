@@ -720,7 +720,7 @@ function SuggestionProductOverride({
   onChange: (value: ComboboxItem<ProductShortcode> | null) => void;
 }) {
   return (
-    <WithProductSearch>
+    <WithProductSearch intent="stock">
       {({ items, onSearchChange, isLoading, onOpenChange }) => (
         <SuggestionProductCombobox
           itemName={item.name}
@@ -837,7 +837,7 @@ function ManualAdd({ locationId }: { locationId: LocationShortcode }) {
       className="min-w-0 flex-1"
     >
       <div className="min-w-56 flex-1">
-        <WithProductSearch>
+        <WithProductSearch intent="stock">
           {({ items, onSearchChange, isLoading, onOpenChange }) => (
             <ComboboxField
               form={form}

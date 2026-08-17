@@ -287,6 +287,9 @@ export default function BulkMoveForm({
             form={form}
             name="targetLocation"
             label="To Location"
+            sourceLocationIds={
+              sourceLocation ? getLocationId(sourceLocation) : undefined
+            }
           />
         </div>
       </Row>

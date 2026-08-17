@@ -99,3 +99,91 @@ describe("entity picker value adapters", () => {
     expect(screen.getByText("🔧")).toHaveAttribute("aria-hidden", "true");
   });
 });
+
+describe("product stock picker evidence", () => {
+  const product = unsafeProductShortcode("PRD-5ABC");
+  const base = {
+    id: product,
+    name: "Back Brace",
+    manufacturer: "BraceAbility",
+    category: "household",
+    quantityLedger: {
+      acquiredUnits: 1,
+      exitedUnits: 0,
+      expectedQuantity: 1,
+      unknownAcquisitionLines: 0,
+      unknownExitLines: 0,
+      locationCount: 0,
+    },
+  } as const;
+
+  it("leads with the missing quantity and its evidence", () => {
+    expect(
+      buildProductComboboxItem({ ...base, onHand: { state: "none" } }, "stock")
+        .presentation,
+    ).toEqual({
+      group: { id: "needs-stock", label: "Needs stocking", order: 0 },
+      status: { label: "Need 1", tone: "positive" },
+      facts: ["0 on hand / 1 expected"],
+    });
+  });
+
+  it("keeps a fully returned product visible below likely choices", () => {
+    expect(
+      buildProductComboboxItem(
+        {
+          ...base,
+          quantityLedger: {
+            ...base.quantityLedger,
+            exitedUnits: 1,
+            expectedQuantity: 0,
+          },
+          onHand: { state: "none" },
+        },
+        "stock",
+      ).presentation,
+    ).toEqual({
+      group: { id: "other", label: "Other products", order: 2 },
+      status: { label: "Returned" },
+      facts: ["0 on hand / 0 expected"],
+    });
+  });
+
+  it("does not manufacture a need from mixed or incomplete quantities", () => {
+    const item = buildProductComboboxItem(
+      {
+        ...base,
+        quantityLedger: {
+          ...base.quantityLedger,
+          unknownAcquisitionLines: 1,
+        },
+        onHand: { state: "mixed" },
+      },
+      "stock",
+    );
+    expect(item.presentation).toMatchObject({
+      group: { id: "check" },
+      status: { label: "Check quantity", tone: "warning" },
+      facts: ["Mixed units on hand", "1 line without quantity"],
+    });
+  });
+
+  it("derives mixed stock evidence from a full product detail result", () => {
+    const item = buildProductComboboxItem(
+      {
+        ...base,
+        onHandUnits: null,
+        inventoryEntry: [
+          { amount: { value: 1, unit: "each" } },
+          { amount: { value: 2, unit: "box" } },
+        ],
+      },
+      "stock",
+    );
+
+    expect(item.presentation).toMatchObject({
+      group: { id: "check" },
+      facts: ["Mixed units on hand"],
+    });
+  });
+});

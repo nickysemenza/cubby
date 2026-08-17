@@ -49,6 +49,9 @@ export function MoveInventoryDialog({
   const api = useTRPC();
   const invalidateInventory = useInventoryInvalidation();
   const { form, error, setError, reset } = useDestinationLocationForm();
+  const sourceLocationIds = uniq(
+    items.map((item) => sourceLocationIdProp ?? item.location.id),
+  ).filter((id): id is LocationShortcode => Boolean(id));
 
   const moveMutation = useMutation(
     api.inventory.moveEntries.mutationOptions({
@@ -60,10 +63,6 @@ export function MoveInventoryDialog({
 
   const handleSubmit = async () => {
     const values = form.getValues();
-
-    const sourceLocationIds = uniq(
-      items.map((item) => sourceLocationIdProp ?? item.location.id),
-    ).filter((id): id is LocationShortcode => Boolean(id));
 
     if (sourceLocationIds.length === 0) {
       setError("No source location available");
@@ -144,6 +143,7 @@ export function MoveInventoryDialog({
           name="targetLocation"
           label="Move to Location"
           error={error}
+          sourceLocationIds={sourceLocationIds}
         />
       </BulkActionDialog>
     </FormProvider>
