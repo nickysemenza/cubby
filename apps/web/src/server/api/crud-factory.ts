@@ -18,6 +18,7 @@ import {
   sortPaginationFields,
 } from "@cubby/schemas/pagination";
 import type { SearchableEntity } from "@cubby/schemas/search";
+import type { TRPCUnsetMarker } from "@trpc/server";
 import { type ZodSchema, z } from "zod";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
@@ -64,6 +65,29 @@ interface ProtectedCrudServices extends CrudServices {
   actorContext: ActorContext;
 }
 
+/**
+ * Widen a resolver's value past tRPC's internal `DefaultValue<TOutputIn, $Output>`.
+ *
+ * `.output(strictOutput(schema))` sets tRPC's `TOutputIn` to the schema's
+ * PARSED type, and a resolver is then checked against
+ * `TOutputIn extends UnsetMarker ? $Output : TOutputIn`. TypeScript reduces
+ * that conditional only when the check type is concrete enough for permissive
+ * instantiation to prove it is not `UnsetMarker` — true at the router call
+ * sites, and true for the paginated envelope below (an object-literal type),
+ * but never for an output type that is still a generic parameter of this
+ * factory. Restating the same conditional on the source side makes the two
+ * relate, which is all this does: `UnsetMarker` is a tRPC-private brand no Zod
+ * output can inhabit, so the true branch is unreachable, and `never` would be
+ * the correct value there if it weren't.
+ *
+ * The brand check `strictOutput` exists to perform is unaffected — it happens
+ * one line up, on the repository callback's declared `z.output<TSchema>`
+ * return type, which is where a UUID-for-shortcode mix-up would actually
+ * originate.
+ */
+const asResolvedOutput = <T>(value: T): T extends TRPCUnsetMarker ? never : T =>
+  value as T extends TRPCUnsetMarker ? never : T;
+
 // Reusable procedure builders
 const createDeleteProcedure = <TId extends string = string>(
   deleteFn: (
@@ -90,30 +114,40 @@ const createDeleteProcedure = <TId extends string = string>(
       return { sideEffects: { backgroundBatches } };
     });
 
-const createGetByIdProcedure = <T, TId extends string = string>(
-  outputSchema: ZodSchema<T>,
-  getByIdFn: (ctx: ProtectedCrudServices, id: TId) => Promise<T>,
+// FIXED (was: the four builders here could not take `strictOutput`). The old
+// signature was `<T>(outputSchema: ZodSchema<T>, fn: () => Promise<T>)`, which
+// left `T` a naked unresolved generic; `strictOutput` then made tRPC check the
+// resolver against `DefaultValue<T, T>`, a conditional TypeScript reduces for
+// no generic T at all (reproducible with zero zod/trpc code:
+// `function f<T>(x: T): (T extends Marker ? T : T) { return x }` fails on its
+// own — a TS conditional-type limitation, not a brand mismatch; see PR #623).
+//
+// The fix is two-part. Parameterizing over the SCHEMA (`TSchema extends
+// ZodSchema`) rather than its output type makes the repository callback's
+// contract literally `z.output<TSchema>` — the parsed, brand-carrying type —
+// instead of an inferred `T`, so that is now a stated contract rather than a
+// property of how `ZodSchema<T>` happens to infer. `asResolvedOutput` then
+// restates tRPC's own conditional on the resolver's side so the two relate.
+// See the comment on `asResolvedOutput` for why that is sound.
+const createGetByIdProcedure = <
+  TSchema extends ZodSchema,
+  TId extends string = string,
+>(
+  outputSchema: TSchema,
+  getByIdFn: (
+    ctx: ProtectedCrudServices,
+    id: TId,
+  ) => Promise<z.output<TSchema>>,
   idSchema?: z.ZodType<unknown>,
 ) =>
   protectedProcedure
     .input(idSchema ? z.object({ id: idSchema }) : IDInput)
-    // NOTE: cannot be `strictOutput(outputSchema)` here — `T` is a naked,
-    // unresolved generic in this shared factory (unlike the 164 router call
-    // sites, which pass a concrete schema). strictOutput forces the parser's
-    // Input type to equal `T`, which makes tRPC check the resolver against
-    // `DefaultValue<T, T>`; TypeScript never proves a bare `T` assignable to
-    // that conditional for ANY generic T (reproduced with zero zod/trpc code:
-    // `function f<T>(x: T): (T extends Marker ? T : T) { return x }` alone
-    // fails to compile — a TS conditional-type limitation, not a brand
-    // mismatch). Fixing this would require dropping the shared getByID/
-    // getByShortcode/create/update generic factory in favor of per-router
-    // concrete `.output()` calls — out of scope for a mechanical wrap.
-    .output(outputSchema)
-    .query(({ ctx, input }) => {
+    .output(strictOutput(outputSchema))
+    .query(async ({ ctx, input }) => {
       const id = idSchema
         ? (idSchema.parse(input.id) as TId)
         : (input.id as TId);
-      return getByIdFn(ctx, id);
+      return asResolvedOutput(await getByIdFn(ctx, id));
     });
 
 /**
@@ -125,57 +159,59 @@ const createGetByIdProcedure = <T, TId extends string = string>(
  * resolve to a uuid of the wrong type. The output is nullable because a URL is
  * user-supplied: an unknown code is a 404 for the route to render, not a throw.
  */
-const createGetByShortcodeProcedure = <T>(
+const createGetByShortcodeProcedure = <TSchema extends ZodSchema>(
   entity: ShortcodeEntity,
-  outputSchema: ZodSchema<T>,
+  outputSchema: TSchema,
   getByShortcodeFn: (
     ctx: ProtectedCrudServices,
     shortcode: string,
-  ) => Promise<T | null>,
+  ) => Promise<z.output<TSchema> | null>,
 ) =>
   protectedProcedure
     .input(z.object({ shortcode: shortcodeSchema(entity) }))
-    // NOTE: see createGetByIdProcedure above — `T` is a naked generic here
-    // too, so strictOutput(outputSchema.nullable()) breaks tRPC's internal
-    // DefaultValue<T, T> check for the same reason. Not fixable at this
-    // layer without a TS conditional-type workaround; can't be applied.
-    .output(outputSchema.nullable())
-    .query(({ ctx, input }) => getByShortcodeFn(ctx, input.shortcode));
+    .output(strictOutput(outputSchema.nullable()))
+    .query(async ({ ctx, input }) =>
+      asResolvedOutput(await getByShortcodeFn(ctx, input.shortcode)),
+    );
 
 // `inputSchema: S` (not `ZodSchema<TInput>`): annotating the param as
 // ZodSchema<T> erases the schema's *input* type to `unknown` (Zod 4's ZodType
 // input param defaults to unknown), which tRPC then exposes as the client
 // mutation arg type — defeating compile-time checking of the payload. Keeping
 // the concrete schema type `S` preserves `z.input<S>` end-to-end.
-const createCreateProcedure = <S extends ZodSchema, TOutput>(
+const createCreateProcedure = <
+  S extends ZodSchema,
+  TOutputSchema extends ZodSchema,
+>(
   inputSchema: S,
-  outputSchema: ZodSchema<TOutput>,
-  createFn: (ctx: ProtectedCrudServices, data: z.infer<S>) => Promise<TOutput>,
+  outputSchema: TOutputSchema,
+  createFn: (
+    ctx: ProtectedCrudServices,
+    data: z.infer<S>,
+  ) => Promise<z.output<TOutputSchema>>,
 ) =>
   protectedProcedure
     .input(inputSchema)
-    // NOTE: see createGetByIdProcedure above — `TOutput` is a naked generic
-    // here too, so strictOutput(outputSchema) breaks tRPC's internal
-    // DefaultValue<T, T> check for the same reason; can't be applied at
-    // this layer.
-    .output(outputSchema)
+    .output(strictOutput(outputSchema))
     // `input` is cast back to `z.infer<S>` because tRPC can't resolve the parsed
     // type from the still-generic `S` inside this builder; the cast is local and
     // doesn't affect the procedure's public (concrete) input type at call sites.
-    .mutation(({ ctx, input }) => createFn(ctx, input as z.infer<S>));
+    .mutation(async ({ ctx, input }) =>
+      asResolvedOutput(await createFn(ctx, input as z.infer<S>)),
+    );
 
 const createUpdateProcedure = <
   S extends ZodSchema,
-  TOutput,
+  TOutputSchema extends ZodSchema,
   TId extends string = string,
 >(
   inputSchema: S,
-  outputSchema: ZodSchema<TOutput>,
+  outputSchema: TOutputSchema,
   updateFn: (
     ctx: ProtectedCrudServices,
     id: TId,
     data: z.infer<S>,
-  ) => Promise<TOutput>,
+  ) => Promise<z.output<TOutputSchema>>,
   idSchema?: z.ZodType<unknown>,
 ) =>
   protectedProcedure
@@ -184,17 +220,13 @@ const createUpdateProcedure = <
         ? z.object({ id: idSchema, data: inputSchema })
         : updateInputSchema(inputSchema),
     )
-    // NOTE: see createGetByIdProcedure above — `TOutput` is a naked generic
-    // here too, so strictOutput(outputSchema) breaks tRPC's internal
-    // DefaultValue<T, T> check for the same reason; can't be applied at
-    // this layer.
-    .output(outputSchema)
-    .mutation(({ ctx, input }) => {
+    .output(strictOutput(outputSchema))
+    .mutation(async ({ ctx, input }) => {
       // Cast back to the concrete shape: tRPC can't resolve the parsed type from
       // the generic `S` here (the public input type stays concrete at call sites).
       const { id: rawId, data } = input as { id: unknown; data: z.infer<S> };
       const id = idSchema ? (idSchema.parse(rawId) as TId) : (rawId as TId);
-      return updateFn(ctx, id, data);
+      return asResolvedOutput(await updateFn(ctx, id, data));
     });
 
 // Simplified factory for just the list operation
@@ -265,19 +297,18 @@ export function createEntityListProcedure<TOutput, TFilters>({
 }
 
 /**
- * Just the two detail reads — for a router whose create/update are hand-rolled.
+ * Just the two detail reads — for a router whose create AND update are both
+ * hand-rolled.
  *
- * `createEntityCrudWithoutListProcedures` requires `repository.create` and
- * `repository.update`, so a router that only wants the reads had to hand the
- * factory callbacks it would then discard, plus the `createInput`/`updateInput`
- * schemas to type them. #603 found exactly that in `product.ts` and
- * `ingredient.ts`, where a plausible-looking discarded `update` was missing the
- * dependent-recipe recompute the real one performs — a fix applied there would
- * have silently not shipped.
- *
- * Splitting the reads out fixes that by construction rather than by comment:
- * a router with no create/update simply has nowhere to put one. The full
- * factory below is built on this, so the two can't drift.
+ * Predates the conditional `repository` below: when both mutations were
+ * required keys, a reads-only router had to hand the factory callbacks it
+ * would then discard, plus the `createInput`/`updateInput` schemas to type
+ * them. #603 found exactly that in `product.ts` and `ingredient.ts`, where a
+ * plausible-looking discarded `update` was missing the dependent-recipe
+ * recompute the real one performs — a fix applied there would have silently
+ * not shipped. `createEntityCrudWithoutListProcedures` now omits whichever
+ * mutation the repository omits, so this entry point is the degenerate
+ * "neither" case; the full factory is built on it, so the two can't drift.
  */
 export function createEntityDetailReadProcedures<
   TDetailOutput,
@@ -315,11 +346,37 @@ export function createEntityDetailReadProcedures<
   };
 }
 
-// Factory for getByID, create, update operations (without list)
+/**
+ * Present exactly when the paired input schema was supplied.
+ *
+ * The pairing is keyed on the input SCHEMA rather than on the callback because
+ * TypeScript cannot infer a naked type parameter from a context-sensitive
+ * argument: with `create?: TCreate`, every `async (services, data) => …` in the
+ * routers is context-sensitive, so `TCreate` is fixed to its default before the
+ * callback is ever contextually typed, and the callback's parameters collapse
+ * to `any`. A Zod schema is a plain value, so `SCreate`/`SUpdate` infer
+ * normally — and the schema and its callback are 1:1 anyway, which is the point
+ * (a `createInput` with no `create` is exactly the dead config #603 found).
+ */
+type WhenSchemaGiven<S, TPresent, TAbsent = object> = [S] extends [undefined]
+  ? TAbsent
+  : TPresent;
+
+/**
+ * Factory for getByID/getByShortcode plus whichever mutations the caller
+ * actually declares.
+ *
+ * `create` and `update` are conditionally present, NOT blanket-optional. A
+ * router that declares both destructures both with no narrowing (inventory,
+ * location, recipe do); a router that declares only `create` — ingredient,
+ * whose update dispatches a dependent-recipe recompute the factory's contract
+ * can't express — has nowhere to put the discarded placeholder #603 warned
+ * about, and no `updateInput` left to imply one exists.
+ */
 export function createEntityCrudWithoutListProcedures<
-  SCreate extends ZodSchema,
-  SUpdate extends ZodSchema,
   TDetailOutput,
+  SCreate extends ZodSchema | undefined = undefined,
+  SUpdate extends ZodSchema | undefined = undefined,
   TCreateOutput = TDetailOutput,
   TUpdateOutput = TDetailOutput,
   TId extends string = string,
@@ -331,8 +388,10 @@ export function createEntityCrudWithoutListProcedures<
   /** Drives the prefix the public `getByShortcode` input accepts. */
   entityName: ShortcodeEntity;
   schemas: {
-    createInput: SCreate;
-    updateInput: SUpdate;
+    /** Supply exactly when `repository.create` is supplied. */
+    createInput?: SCreate;
+    /** Supply exactly when `repository.update` is supplied. */
+    updateInput?: SUpdate;
     /** Default output for get/create/update. */
     output: ZodSchema<TDetailOutput>;
     /** Override when getByID carries a different shape than mutations. */
@@ -350,23 +409,60 @@ export function createEntityCrudWithoutListProcedures<
       ctx: ProtectedCrudServices,
       shortcode: string,
     ) => Promise<TDetailOutput | null>;
-    create: (
-      ctx: ProtectedCrudServices,
-      data: z.infer<SCreate>,
-    ) => Promise<TCreateOutput>;
-    update: (
-      ctx: ProtectedCrudServices,
-      id: TId,
-      data: z.infer<SUpdate>,
-    ) => Promise<TUpdateOutput>;
-  };
-}) {
+  } & WhenSchemaGiven<
+    SCreate,
+    {
+      create: (
+        ctx: ProtectedCrudServices,
+        data: z.infer<Extract<SCreate, ZodSchema>>,
+      ) => Promise<TCreateOutput>;
+    },
+    { create?: undefined }
+  > &
+    WhenSchemaGiven<
+      SUpdate,
+      {
+        update: (
+          ctx: ProtectedCrudServices,
+          id: TId,
+          data: z.infer<Extract<SUpdate, ZodSchema>>,
+        ) => Promise<TUpdateOutput>;
+      },
+      { update?: undefined }
+    >;
+}): ReturnType<typeof createEntityDetailReadProcedures<TDetailOutput, TId>> &
+  WhenSchemaGiven<
+    SCreate,
+    {
+      create: ReturnType<
+        typeof createCreateProcedure<
+          Extract<SCreate, ZodSchema>,
+          ZodSchema<TCreateOutput>
+        >
+      >;
+    }
+  > &
+  WhenSchemaGiven<
+    SUpdate,
+    {
+      update: ReturnType<
+        typeof createUpdateProcedure<
+          Extract<SUpdate, ZodSchema>,
+          ZodSchema<TUpdateOutput>,
+          TId
+        >
+      >;
+    }
+  > {
   const detailOutput = schemas.detailOutput ?? schemas.output;
   const createOutput = (schemas.createOutput ??
     schemas.output) as ZodSchema<TCreateOutput>;
   const updateOutput = (schemas.updateOutput ??
     schemas.output) as ZodSchema<TUpdateOutput>;
+  const { create, update } = repository;
 
+  // A value-level `if (create)` can't recover the type-level fact the return
+  // annotation states, so the assembly is cast to it once, here.
   return {
     ...createEntityDetailReadProcedures({
       entityName,
@@ -376,18 +472,49 @@ export function createEntityCrudWithoutListProcedures<
         getByShortcode: repository.getByShortcode,
       },
     }),
-    create: createCreateProcedure(
-      schemas.createInput,
-      createOutput,
-      repository.create,
-    ),
-    update: createUpdateProcedure(
-      schemas.updateInput,
-      updateOutput,
-      repository.update,
-      schemas.idSchema,
-    ),
-  };
+    ...(create
+      ? {
+          create: createCreateProcedure(
+            schemas.createInput as Extract<SCreate, ZodSchema>,
+            createOutput,
+            create,
+          ),
+        }
+      : {}),
+    ...(update
+      ? {
+          update: createUpdateProcedure(
+            schemas.updateInput as Extract<SUpdate, ZodSchema>,
+            updateOutput,
+            update,
+            schemas.idSchema,
+          ),
+        }
+      : {}),
+  } as ReturnType<typeof createEntityDetailReadProcedures<TDetailOutput, TId>> &
+    WhenSchemaGiven<
+      SCreate,
+      {
+        create: ReturnType<
+          typeof createCreateProcedure<
+            Extract<SCreate, ZodSchema>,
+            ZodSchema<TCreateOutput>
+          >
+        >;
+      }
+    > &
+    WhenSchemaGiven<
+      SUpdate,
+      {
+        update: ReturnType<
+          typeof createUpdateProcedure<
+            Extract<SUpdate, ZodSchema>,
+            ZodSchema<TUpdateOutput>,
+            TId
+          >
+        >;
+      }
+    >;
 }
 
 // Generic CRUD procedures factory. Public wrappers below add either search
@@ -467,25 +594,33 @@ function createEntityCrudProcedures<
     entityName,
   });
 
-  const { getByID, getByShortcode, create, update } =
-    createEntityCrudWithoutListProcedures({
-      entityName,
-      schemas: {
-        createInput: schemas.createInput,
-        updateInput: schemas.updateInput,
-        output: schemas.output,
-        detailOutput: schemas.detailOutput,
-        createOutput: schemas.createOutput,
-        updateOutput: schemas.updateOutput,
-        idSchema: schemas.idSchema,
-      },
-      repository: {
-        getByID: repository.getByID,
-        getByShortcode: repository.getByShortcode,
-        create: repository.create,
-        update: repository.update,
-      },
-    });
+  // Composed from the same three builders rather than from
+  // `createEntityCrudWithoutListProcedures`: its create/update presence is
+  // keyed on `SCreate`/`SUpdate`, and here those are still generic parameters,
+  // so the conditional would stay unreduced and both keys unreachable. Every
+  // entity reaching this path has both mutations by construction.
+  const { getByID, getByShortcode } = createEntityDetailReadProcedures({
+    entityName,
+    schemas: {
+      output: schemas.detailOutput ?? schemas.output,
+      idSchema: schemas.idSchema,
+    },
+    repository: {
+      getByID: repository.getByID,
+      getByShortcode: repository.getByShortcode,
+    },
+  });
+  const create = createCreateProcedure(
+    schemas.createInput,
+    (schemas.createOutput ?? schemas.output) as ZodSchema<TCreateOutput>,
+    repository.create,
+  );
+  const update = createUpdateProcedure(
+    schemas.updateInput,
+    (schemas.updateOutput ?? schemas.output) as ZodSchema<TUpdateOutput>,
+    repository.update,
+    schemas.idSchema,
+  );
 
   return {
     getByID,

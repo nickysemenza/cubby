@@ -495,6 +495,50 @@ export const relatedViewRegistry = [
   },
 ] as const satisfies readonly RelatedViewDefinition[];
 
+type RelatedViewSource = (typeof relatedViewRegistry)[number]["source"];
+
+/**
+ * Entities that deliberately offer no curated related views, each with the
+ * reason. `satisfies Record<Exclude<Entity, RelatedViewSource>, string>` makes
+ * this the exact complement of the registry's sources, in both directions: a
+ * new entity that is neither a source nor listed here fails to compile, and an
+ * entity that gains its first registry row must be deleted from here. Before
+ * this, an entity with no views and an entity nobody had gotten to were the
+ * same empty `.filter()` result.
+ */
+const ENTITIES_WITHOUT_RELATED_VIEWS = {
+  // Reached through its recipes; an ingredient's own relationships are
+  // usage rollups the ingredient detail page already renders in full.
+  ingredient: "usages are rendered in full on the detail page, not previewed",
+  // Browsed as a gallery, and its one relationship (its recipes) is the page.
+  cookbook: "the cookbook page IS its recipe list",
+  // The one entity with no shortcode, no detail route, and no list table.
+  image: "no detail route or list table to hang a preview column on",
+  // Not a local entity — remote USDA search results, no local edges.
+  "usda-food": "remote USDA records have no local relationships",
+} as const satisfies Record<Exclude<Entity, RelatedViewSource>, string>;
+
+/**
+ * A registry row with its literal `key` intact — callers derive
+ * `RelatedViewKey[]` from these, so widening to `RelatedViewDefinition` here
+ * would erase the union the preview endpoints validate against.
+ */
+type RegisteredRelatedView = (typeof relatedViewRegistry)[number];
+
+/** Stable identity so a `useMemo` over the result doesn't churn. */
+const NO_RELATED_VIEWS: readonly RegisteredRelatedView[] = [];
+
+/**
+ * The curated related views a source entity offers — the single reader of the
+ * registry, so the opt-out above is load-bearing rather than decorative.
+ */
+export const relatedViewsFor = (
+  entity: Entity,
+): readonly RegisteredRelatedView[] =>
+  entity in ENTITIES_WITHOUT_RELATED_VIEWS
+    ? NO_RELATED_VIEWS
+    : relatedViewRegistry.filter((view) => view.source === entity);
+
 export const relatedViewKeys = relatedViewRegistry.map((view) => view.key) as [
   (typeof relatedViewRegistry)[number]["key"],
   ...(typeof relatedViewRegistry)[number]["key"][],

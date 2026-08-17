@@ -1,4 +1,4 @@
-import { relatedViewRegistry } from "@cubby/schemas/related-view";
+import { relatedViewsFor } from "@cubby/schemas/related-view";
 import type { ColumnHelper } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useCallback, useEffect, useMemo, useRef } from "react";
@@ -167,10 +167,7 @@ export function useClientEntityList<TData extends BaseListRow>({
     listBulkActions.state.clearSelection();
   }, [filterScopeKey, listBulkActions.state.clearSelection]);
 
-  const relatedViews = useMemo(
-    () => relatedViewRegistry.filter((view) => view.source === entity),
-    [entity],
-  );
+  const relatedViews = useMemo(() => relatedViewsFor(entity), [entity]);
   const relatedInitialVisibility = useMemo(
     () =>
       ({

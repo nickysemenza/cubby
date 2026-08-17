@@ -8,8 +8,6 @@
  */
 
 import {
-  type CookbookId,
-  type CookbookShortcode,
   type RecipeId,
   type RecipeShortcode,
   recipeShortcode,
@@ -71,16 +69,6 @@ const resolveRecipeEntityIds = async (
   return resolveAllOrThrow(db, "recipe", shortcodes);
 };
 
-const resolveCookbookFilter = async (
-  db: Parameters<typeof resolveAllOrThrow>[0],
-  value: CookbookShortcode | CookbookShortcode[] | undefined,
-): Promise<CookbookId | CookbookId[] | undefined> => {
-  if (value === undefined) return undefined;
-  const shortcodes = Array.isArray(value) ? value : [value];
-  const ids = await resolveAllOrThrow(db, "cookbook", shortcodes);
-  return Array.isArray(value) ? ids : ids[0];
-};
-
 // List returns the lean summary (no section graph); detail keeps full recipeOut — split the factory so each carries its own output schema.
 const { list } = createEntityListProcedure({
   schemas: {
@@ -94,18 +82,9 @@ const { list } = createEntityListProcedure({
   },
   repository: {
     list: async (services, filters, sort, pagination) => {
-      return await recipeList(
-        services.db,
-        {
-          ...filters,
-          cookbookId: await resolveCookbookFilter(
-            services.db,
-            filters.cookbookId,
-          ),
-        },
-        sort,
-        pagination,
-      );
+      // `cookbookId` is resolved inside `recipeList` — a browse filter naming a
+      // dead cookbook narrows to nothing rather than 404ing the page.
+      return await recipeList(services.db, filters, sort, pagination);
     },
   },
   entityName: "recipe",

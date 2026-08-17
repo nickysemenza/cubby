@@ -68,7 +68,7 @@ import {
   buildOrderBy,
   buildSearchConditions,
   countWhere,
-  eqAnyOrPresence,
+  eqAnyRequested,
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
@@ -92,6 +92,7 @@ import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import {
   resolveAllPresent,
+  resolveFilterIds,
   resolveLiveShortcode,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
@@ -375,6 +376,11 @@ export const recipeList = async (
   pagination: PaginationParams,
 ) => {
   const dbClient = getDb(db);
+  const cookbookIds = await resolveFilterIds(
+    db,
+    "cookbook",
+    filters.cookbookId,
+  );
 
   // Recipes currently used as a sub-recipe: a live recipe-as-ingredient row
   // (`ingredient.recipeId`) reached through a LIVE link — section-ingredient →
@@ -447,10 +453,14 @@ export const recipeList = async (
         recipe.id,
       ),
       pickerSearch,
-      eqAnyOrPresence(
-        recipe.cookbookId,
-        filters.cookbookId,
-        filters.cookbookPresenceFilter,
+      // `eqAnyRequested` + `presenceCondition` rather than `eqAnyOrPresence`:
+      // the id half must distinguish "no cookbook filter" (unrestricted) from
+      // "a cookbook code that resolves to nothing" (match nothing), which the
+      // combined helper's `eqAny` cannot. The OR against the presence sentinel
+      // is unchanged — presence WIDENS the id filter (see `tagsPresenceFilter`).
+      or(
+        eqAnyRequested(recipe.cookbookId, cookbookIds),
+        presenceCondition(recipe.cookbookId, filters.cookbookPresenceFilter),
       ),
       // arrayOverlaps, not a hand-rolled `&&`: drizzle interpolates a JS array
       // into raw SQL as a ROW CONSTRUCTOR (`&& ($1, $2)`), which isn't a

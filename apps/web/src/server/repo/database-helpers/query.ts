@@ -332,6 +332,26 @@ export const eqAny = <TColumn extends AnyColumn>(
 };
 
 /**
+ * `eqAny` for a set the caller REQUESTED but which may have resolved to nothing.
+ *
+ * `eqAny`'s "empty means no constraint" is right for a filter the caller left
+ * empty and catastrophically wrong for one whose supplied ids all failed to
+ * resolve: that must match nothing, never widen to an unfiltered query
+ * (CLAUDE.md, Renderers / saved views / scopes). Pass `undefined` for "not
+ * requested" and the resolved ids — empty array included — otherwise. Pairs
+ * with `resolveFilterIds`, which produces exactly that shape.
+ */
+export const eqAnyRequested = <TColumn extends AnyColumn>(
+  column: TColumn,
+  ids: readonly unknown[] | undefined,
+): SQL | undefined =>
+  ids === undefined
+    ? undefined
+    : ids.length === 0
+      ? sql`false`
+      : eqAny(column, [...ids]);
+
+/**
  * Equality against an optional set for a SQL expression rather than a table
  * column, such as a `jsonb_array_elements` field. This avoids binding a JS
  * array as one scalar parameter to PostgreSQL's `ANY`, while preserving the

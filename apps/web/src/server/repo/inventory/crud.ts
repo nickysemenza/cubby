@@ -4,7 +4,9 @@ import type { ImpactItem } from "@cubby/schemas/entity-integrity";
 import type {
   InventoryId,
   LocationId,
+  LocationShortcode,
   ProductId,
+  ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import { inventorySortableFields } from "@cubby/schemas/inventory";
@@ -32,6 +34,7 @@ import {
   buildPartialUpdateValues,
   buildSearchConditions,
   eqAny,
+  eqAnyRequested,
   getDb,
   lockAndValidateForDelete,
   notDeleted,
@@ -53,6 +56,7 @@ import {
 } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
+import { resolveFilterIds } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { assertLiveTargets } from "./helpers";
 import {
@@ -217,8 +221,11 @@ interface InventoryFilters {
   updatedTo?: string;
   productNameFilter?: string;
   locationNameFilter?: string;
-  locationIdFilter?: LocationId;
-  productIdFilter?: ProductId;
+  // Public codes, resolved to uuids inside `inventoryentryList` — see
+  // `resolveFilterIds`. A code naming no live row narrows to nothing; it is
+  // not a 404 for the whole list.
+  locationIdFilter?: LocationShortcode;
+  productIdFilter?: ProductShortcode;
   manufacturerFilter?: string;
   categoryFilter?: ProductCategory | ProductCategory[];
   verifiedPresenceFilter?: "has" | "none";
@@ -297,6 +304,10 @@ export const inventoryentryList = async (
   pagination: PaginationParams,
 ) => {
   const { take, skip } = buildTakeSkip(pagination);
+  const [locationIds, productIds] = await Promise.all([
+    resolveFilterIds(db, "location", filters.locationIdFilter),
+    resolveFilterIds(db, "product", filters.productIdFilter),
+  ]);
 
   const whereCondition = buildSearchConditions(
     inventoryEntry,
@@ -312,12 +323,8 @@ export const inventoryentryList = async (
         filters as unknown as Record<string, unknown>,
         inventoryEntry.id,
       ),
-      filters.locationIdFilter
-        ? eq(inventoryEntry.locationId, filters.locationIdFilter)
-        : undefined,
-      filters.productIdFilter
-        ? eq(inventoryEntry.productId, filters.productIdFilter)
-        : undefined,
+      eqAnyRequested(inventoryEntry.locationId, locationIds),
+      eqAnyRequested(inventoryEntry.productId, productIds),
       eqAny(product.category, filters.categoryFilter),
       filters.verifiedPresenceFilter === "has"
         ? sql`${inventoryEntry.verifiedAt} IS NOT NULL`
