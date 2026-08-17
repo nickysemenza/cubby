@@ -728,6 +728,15 @@ export const productList = async (
         filters.unitMappingPresenceFilter,
         productIdsWithUnitMappings,
       ),
+      // `isMiscProduct` is a case-insensitive prefix test on the name, so this
+      // is a LIKE rather than a presence over a column or an id set. `lower()`
+      // both sides — buckets are written as "misc: " by the capture flows but
+      // nothing enforces the case.
+      filters.miscBucketFilter === "has"
+        ? sql`lower(${product.name}) LIKE 'misc:%'`
+        : filters.miscBucketFilter === "none"
+          ? sql`lower(${product.name}) NOT LIKE 'misc:%'`
+          : undefined,
       idSetPresence(
         product.id,
         filters.externalIdPresenceFilter ??

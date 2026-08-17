@@ -867,6 +867,7 @@ const DECLARED_SECTIONS = [
     id: "missing-price",
     label: "Unpriced",
     select: (p) => p.productsMissingPrice,
+    totalKey: "productsMissingPrice",
     entity: "product",
     title: "Stocked Without a Price",
     description:
@@ -973,6 +974,7 @@ const DECLARED_SECTIONS = [
     id: "unvalued-buckets",
     label: "Unvalued buckets",
     select: (p) => p.unvaluedBucketProducts,
+    totalKey: "unvaluedBucketProducts",
     // Coverage, but with no meter: a misc bucket isn't a fraction of any
     // population, so there's nothing honest to put in a denominator.
     coverage: { keys: ["unvaluedBucketProducts"] },

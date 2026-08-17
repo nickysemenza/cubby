@@ -397,7 +397,7 @@ describe("problems repo", () => {
     });
   });
 
-  describe("findProductsMissingPrice", () => {
+  describe("stocked products with no price (saved-view backed)", () => {
     it("flags stocked unpriced products, partitions misc buckets, and ignores priced or unstocked ones", async () => {
       const loc = await createLocation(
         ctx.db,
@@ -446,7 +446,7 @@ describe("problems repo", () => {
         );
       }
 
-      const found = await findFastProblems(ctx.db);
+      const found = await findViewProblems(ctx.db);
 
       const flagged = found.productsMissingPrice.find(
         (p) => p.id === unpriced.id,
@@ -470,7 +470,7 @@ describe("problems repo", () => {
 
       // Soft-deleting the only entry un-stocks it, so it drops out of both.
       await deleteInventoryEntries(ctx.db, [unpricedEntry.entityId], ctx.actor);
-      const after = await findFastProblems(ctx.db);
+      const after = await findViewProblems(ctx.db);
       expect(after.productsMissingPrice.some((p) => p.id === unpriced.id)).toBe(
         false,
       );

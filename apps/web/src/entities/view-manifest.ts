@@ -4,7 +4,7 @@ import {
   LIVE_PROJECT_STATUSES,
   taskStatusValues,
 } from "@cubby/schemas/project";
-import { FILTER_NONE } from "./filters";
+import { FILTER_ANY, FILTER_NONE } from "./filters";
 
 /**
  * Hardcoded saved views: a named starting point of filters + sort for a list
@@ -357,6 +357,57 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         stockTracked: true,
         category: true,
       },
+    },
+    {
+      id: "unpriced-stocked",
+      label: "Stocked but unpriced",
+      description: "On a shelf, with no price to value it by",
+      // The schema comment on `pricePresenceFilter` describes exactly this
+      // pairing. Unpriced stock is invisible to the location valuation rollup:
+      // a null price yields a null entry valuation and the rollup omits it.
+      filters: [
+        { id: "location", value: [FILTER_ANY] },
+        { id: "price", value: "none-real" },
+      ],
+      problem: {
+        key: "productsMissingPrice",
+        title: "Stocked products with no price",
+        description:
+          "On a shelf but carrying no price, so they are silently missing from every location's value.",
+        emptyMessage: "Every stocked product has a price.",
+        serverFilters: {
+          inventoryPresenceFilter: "has",
+          pricePresenceFilter: "none",
+          miscBucketFilter: "none",
+        },
+      },
+      columnVisibility: { price: true, location: true },
+    },
+    {
+      id: "unpriced-buckets",
+      label: "Unpriced buckets",
+      description: "`misc:` piles on a shelf, which have no unit price",
+      // Split from the view above rather than folded into it: a bucket is a
+      // heterogeneous pile and is *expected* to be unpriced, so counting it as
+      // a gap leaves that section permanently red. The per-location summary
+      // makes the same split (`miscNoPrice`, not `missingPricing`).
+      filters: [
+        { id: "location", value: [FILTER_ANY] },
+        { id: "price", value: "none-bucket" },
+      ],
+      problem: {
+        key: "unvaluedBucketProducts",
+        title: "Unvalued misc buckets",
+        description:
+          "Bucket rows on a shelf with no price. Pricing one is optional — it just makes its location's total less of an underestimate.",
+        emptyMessage: "Every misc bucket carries a price.",
+        serverFilters: {
+          inventoryPresenceFilter: "has",
+          pricePresenceFilter: "none",
+          miscBucketFilter: "has",
+        },
+      },
+      columnVisibility: { price: true, location: true },
     },
     {
       id: "over-exited",

@@ -7,6 +7,7 @@ import type {
   NegativeExpectedQuantity,
   NeverVerifiedInventory,
   ProblemsViewsOut,
+  ProductMissingPrice,
   SectionTotals,
   UnusedIngredient,
 } from "@cubby/schemas/problems";
@@ -177,6 +178,34 @@ const toEmptyCookedMeal = (row: ListRow): EmptyCookedMeal => {
   return { id: r.id, name: r.name, date: r.date };
 };
 
+const toProductMissingPrice = (row: ListRow): ProductMissingPrice => {
+  const r = row as unknown as ProductMissingPrice & {
+    inventoryEntry: {
+      amount: { value: number };
+      location: {
+        id: ProductMissingPrice["locations"][number]["id"];
+        name: string;
+      };
+    }[];
+  };
+  return {
+    id: r.id,
+    name: r.name,
+    manufacturer: r.manufacturer,
+    // A blind sum across entries, matching the detector — deliberately NOT
+    // `onHandUnits`, which returns null when a product's entries carry more
+    // than one unit. Here the number is a rough "how much is sitting unpriced",
+    // and a null would read as "none" rather than "mixed".
+    inventoryQuantity: r.inventoryEntry.reduce((n, e) => n + e.amount.value, 0),
+    // One per ENTRY, not deduped by location — same as the detector, so a
+    // product on two shelves names both.
+    locations: r.inventoryEntry.map((e) => ({
+      id: e.location.id,
+      name: e.location.name,
+    })),
+  };
+};
+
 export const findViewProblems = async (
   db: Database,
 ): Promise<ProblemsViewsOut> => {
@@ -243,6 +272,12 @@ export const findViewProblems = async (
     ).map(toNegativeExpectedQuantity),
     emptyCookedMeals: (results.emptyCookedMeals?.data ?? []).map(
       toEmptyCookedMeal,
+    ),
+    productsMissingPrice: (results.productsMissingPrice?.data ?? []).map(
+      toProductMissingPrice,
+    ),
+    unvaluedBucketProducts: (results.unvaluedBucketProducts?.data ?? []).map(
+      toProductMissingPrice,
     ),
     sectionTotals,
   };

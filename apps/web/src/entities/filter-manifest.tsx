@@ -164,6 +164,31 @@ const resolveNetBasis = (value: string | undefined) => {
  * have sold or returned more than you ever bought — and is the reason the
  * server-side bounds are signed rather than clamped at zero.
  */
+const priceOptions: FilterableComboboxItem[] = [
+  ...presenceFilterOptions("price"),
+  { value: "none-real", label: "No price (excluding buckets)" },
+  { value: "none-bucket", label: "No price (buckets only)" },
+];
+
+const resolvePrice = (value: string | undefined) => {
+  if (value === "has" || value === "none")
+    return { pricePresenceFilter: value };
+  // The two worklists behind the unpriced half: a `misc:` bucket has no
+  // meaningful unit price and is expected to be unpriced, so it is reported
+  // separately rather than kept permanently red alongside real gaps.
+  if (value === "none-real")
+    return {
+      pricePresenceFilter: "none" as const,
+      miscBucketFilter: "none" as const,
+    };
+  if (value === "none-bucket")
+    return {
+      pricePresenceFilter: "none" as const,
+      miscBucketFilter: "has" as const,
+    };
+  return {};
+};
+
 const expectedQuantityOptions: FilterableComboboxItem[] = [
   { value: "negative", label: "Negative (sold more than bought)" },
   { value: "zero", label: "Zero (none expected)" },
@@ -1247,11 +1272,17 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       // Combined with `inventoryPresenceFilter: "has"` this is the
       // valuation-gap worklist: products physically on a shelf that nobody
       // has priced yet.
+      //
+      // A range rather than a bare presence, because the unpriced half splits:
+      // a `misc:` bucket is a heterogeneous pile with no meaningful unit price
+      // and is EXPECTED to be unpriced, so the two belong in different
+      // worklists. One control emitting a two-field patch is the same shape
+      // `verifiedAt` and `expectedQuantity` use.
       columnId: "price",
-      field: "pricePresenceFilter",
-      kind: "presence",
+      kind: "range",
       placeholder: "Filter price...",
-      options: presenceFilterOptions("price"),
+      options: priceOptions,
+      expand: resolvePrice,
     },
     {
       // "USDA key", not "USDA food" — the predicate is `fdc_id IS NOT NULL OR

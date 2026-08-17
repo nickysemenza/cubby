@@ -338,6 +338,20 @@ export const productFilterFields = {
    * for the valuation-gap worklist: products physically in inventory that
    * nobody has priced yet.
    */
+  /**
+   * A `misc:` bucket — a heterogeneous pile captured in one row, with no
+   * meaningful unit price. `"has"` selects them, `"none"` excludes them.
+   *
+   * Mirrors `isMiscProduct` (@cubby/shared), a case-insensitive prefix test on
+   * the name, as `lower(name) LIKE 'misc:%'`. It exists because buckets are
+   * *expected* to be unpriced and unmapped: folding them into those worklists
+   * leaves both permanently red, and the per-location valuation summary
+   * already counts them separately as `miscNoPrice` rather than missing
+   * pricing.
+   */
+  miscBucketFilter: presenceFilter.describe(
+    "Filter to `misc:` bucket products (has) or exclude them (none).",
+  ),
   pricePresenceFilter: presenceFilter.describe(
     "Filter to products that do / don't have a price set.",
   ),

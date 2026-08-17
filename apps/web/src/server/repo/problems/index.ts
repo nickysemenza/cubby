@@ -90,7 +90,6 @@ export {
   findDuplicateProductIdentities,
   findLinkedProductIds,
   findOrphanedProducts,
-  findProductsMissingPrice,
   findProductsWithoutMappings,
   findProductsWithUpcGaps,
   findPurchaselessExitExpenses,

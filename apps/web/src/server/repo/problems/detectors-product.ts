@@ -24,7 +24,6 @@ import type {
   DuplicateProductIdentity,
   DuplicateUniqueProduct,
   OrphanedProduct,
-  ProductMissingPrice,
   ProductWithBetterUpcData,
   ProductWithoutMappings,
   PurchaselessExitExpense,
@@ -334,76 +333,6 @@ export const findOrphanedProducts = async (
     ...row,
     id: unsafeProductShortcode(row.shortcode),
   }));
-};
-
-// Find stocked products with no `price`.
-//
-// `inventoryEntry.valuation` is precomputed from Product effective price,
-// so a null price yields a null valuation and the location rollup silently
-// omits the item. Keyed off effective price (the cause) rather than
-// `inventoryEntry.valuation` (the symptom, which can lag a recompute).
-//
-// Returned partitioned, not as one list: a `misc:` bucket is a heterogeneous
-// pile with no meaningful unit price and is *expected* to be unpriced — the
-// per-location summary already treats those as `miscNoPrice` rather than
-// `missingPricing`. Folding them in would leave the section permanently red.
-export const findProductsMissingPrice = async (
-  db: Database,
-): Promise<{
-  real: ProductMissingPrice[];
-  buckets: ProductMissingPrice[];
-}> => {
-  const dbClient = getDb(db);
-
-  // includes-installed: a fixture still needs a price — pricing/enrichment
-  // scope, not a browse/count surface.
-  const stockedWithoutPrice = await dbClient.query.product.findMany({
-    where: and(
-      notDeleted(product),
-      sql.raw(`${effectiveProductPriceSql()} IS NULL`),
-    ),
-    columns: { id: true, name: true, manufacturer: true, shortcode: true },
-    with: {
-      inventoryEntry: {
-        where: notDeleted(inventoryEntry),
-        columns: { id: true, amount: true },
-        with: {
-          location: { columns: { id: true, name: true, shortcode: true } },
-        },
-      },
-    },
-  });
-
-  const real: ProductMissingPrice[] = [];
-  const buckets: ProductMissingPrice[] = [];
-
-  for (const prod of stockedWithoutPrice) {
-    // Products with no live inventory contribute nothing to any rollup, so an
-    // absent price costs nothing — `findOrphanedProducts` already covers them.
-    if (prod.inventoryEntry.length === 0) continue;
-
-    const item: ProductMissingPrice = {
-      id: unsafeProductShortcode(prod.shortcode),
-      name: prod.name,
-      manufacturer: prod.manufacturer,
-      inventoryQuantity: sumBy(
-        prod.inventoryEntry,
-        (entry) => entry.amount.value,
-      ),
-      locations: prod.inventoryEntry.map((entry) => ({
-        id: unsafeLocationShortcode(entry.location.shortcode),
-        name: entry.location.name,
-      })),
-    };
-
-    if (isMiscProduct(prod.name)) {
-      buckets.push(item);
-    } else {
-      real.push(item);
-    }
-  }
-
-  return { real, buckets };
 };
 
 // Find disposal lines that name no product — the exact inverse of

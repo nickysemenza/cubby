@@ -86,7 +86,6 @@ import {
   findManufacturerSpellingVariants,
   findOrphanedProducts,
   findParentRecipesWithDeletedSubRecipes,
-  findProductsMissingPrice,
   findProductsWithoutMappings,
   findProductsWithUpcGaps,
   findPurchaseFinancialSettlementMismatches,
@@ -507,7 +506,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       // JS — same shape and cost class as the spelling-variant scans below.
       duplicateProductIdentities: () => findDuplicateProductIdentities(scoped),
       orphanedProducts: () => findOrphanedProducts(scoped),
-      productsMissingPrice: () => findProductsMissingPrice(scoped),
       soldButStillStocked: () => findSoldButStillStocked(scoped),
       // The inverse of the line above: same disposal-Purchase predicate, but
       // the exits with no product to group by, which that one cannot see.
@@ -573,8 +571,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     duplicateInventory: r.duplicateInventory,
     duplicateProductIdentities: r.duplicateProductIdentities,
     orphanedProducts: r.orphanedProducts,
-    productsMissingPrice: r.productsMissingPrice.real,
-    unvaluedBucketProducts: r.productsMissingPrice.buckets,
     soldButStillStocked: r.soldButStillStocked,
     unlinkedExitExpenses: r.unlinkedExitExpenses,
     purchaselessExitExpenses: r.purchaselessExitExpenses,
