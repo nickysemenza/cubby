@@ -6,7 +6,7 @@ export const ComboboxItem = z.object({
   id: z.string(),
 });
 
-export type PickerTone = "neutral" | "positive" | "warning" | "destructive";
+type PickerTone = "neutral" | "positive" | "warning" | "destructive";
 
 export interface PickerPresentation {
   /** Optional result section. Providers control its order; rows stay stable inside it. */
