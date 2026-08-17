@@ -3,10 +3,24 @@ import { waitForFormHydration } from "./e2e-helpers";
 
 test("tool matrix keeps angled project headers pinned below the nav", async ({
   page,
-}) => {
+}, testInfo) => {
   test.setTimeout(120_000);
 
-  for (const name of ["Matrix kitchen", "Matrix garage"]) {
+  // Unique per ATTEMPT, and deliberately computed inside the test body rather
+  // than at module scope. CI runs `retries: 2`, and these rows persist across
+  // attempts — so with the old fixed names a timed-out attempt left its
+  // projects behind, the retry created them again, and the `project=` prefix
+  // filter below then matched 3-4 headers instead of 2. The retry failed on its
+  // own leftovers rather than on the defect it was retrying, which is how this
+  // test blocked merges on two unrelated PRs. A module-scope constant would
+  // reintroduce exactly that, since every attempt shares it.
+  const tag = `Matrix${Date.now()}x${testInfo.retry}`;
+  const kitchen = `${tag} kitchen`;
+  const garage = `${tag} garage`;
+  const toolName = `${tag} track saw`;
+  const manufacturer = `${tag} Tools`;
+
+  for (const name of [kitchen, garage]) {
     await page.goto("/projects");
     await page.waitForLoadState("networkidle");
     await page.getByRole("button", { name: "New Project" }).click();
@@ -15,7 +29,7 @@ test("tool matrix keeps angled project headers pinned below the nav", async ({
     await dialog.getByRole("button", { name: /^Create$/ }).click();
     await expect(dialog).not.toBeVisible({ timeout: 10000 });
 
-    if (name === "Matrix kitchen") {
+    if (name === kitchen) {
       await page.goto("/projects?view=gallery");
       await page.waitForLoadState("networkidle");
       await page.getByRole("link").filter({ hasText: name }).first().click();
@@ -38,8 +52,8 @@ test("tool matrix keeps angled project headers pinned below the nav", async ({
 
   await page.goto("/products/new");
   await waitForFormHydration(page);
-  await page.getByPlaceholder("Enter product name").fill("Matrix track saw");
-  await page.getByPlaceholder("Enter manufacturer").fill("Matrix Tools");
+  await page.getByPlaceholder("Enter product name").fill(toolName);
+  await page.getByPlaceholder("Enter manufacturer").fill(manufacturer);
   await page.getByPlaceholder("Select category").click();
   await page.getByRole("option", { name: "tools", exact: true }).click();
   await page.getByRole("button", { name: /^Create$/ }).click();
@@ -49,7 +63,7 @@ test("tool matrix keeps angled project headers pinned below the nav", async ({
   );
 
   await page.setViewportSize({ width: 1280, height: 300 });
-  await page.goto("/projects/tools?floor=0&project=Matrix%20");
+  await page.goto(`/projects/tools?floor=0&project=${encodeURIComponent(tag)}`);
   await page.waitForLoadState("networkidle");
 
   const table = page.getByRole("table");
@@ -57,16 +71,16 @@ test("tool matrix keeps angled project headers pinned below the nav", async ({
   const projectLinks = table.locator("thead").getByRole("link");
   await expect(projectLinks).toHaveCount(2);
   await expect(projectLinks.first()).toHaveCSS("rotate", "-60deg");
-  const customProject = projectLinks.filter({ hasText: "Matrix kitchen" });
+  const customProject = projectLinks.filter({ hasText: kitchen });
   await expect(customProject.getByText("🛠️")).toBeVisible();
-  const fallbackProject = projectLinks.filter({ hasText: "Matrix garage" });
+  const fallbackProject = projectLinks.filter({ hasText: garage });
   await expect(fallbackProject.locator("svg.lucide-hammer")).toBeVisible();
 
   const toolRow = table.getByRole("row").filter({
-    has: page.getByRole("link", { name: "Matrix track saw", exact: true }),
+    has: page.getByRole("link", { name: toolName, exact: true }),
   });
   const toolRowText = await toolRow.innerText();
-  expect(toolRowText.match(/Matrix Tools/g)).toHaveLength(1);
+  expect(toolRowText.split(manufacturer).length - 1).toBe(1);
 
   const header = table.locator("thead");
   const initialTop = await header.evaluate(
