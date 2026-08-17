@@ -1242,40 +1242,22 @@ describe("project repository — sub-projects (parentProjectId)", () => {
   });
 });
 
-// P0 regression guard: `parentProjectId` that was SUPPLIED but resolved to no
-// live project must not fall through to "no constraint" (which would return
-// every project in the table) — this file already asserts that shape via
-// `sql\`false\`` when `parentCodes.length > 0 && parentProjectUuids.length ===
-// 0`; what regressed was `resolveShortcodes`' canonical-key lookup: it keys its
-// result Map by the CANONICAL code, and the inlined resolver here indexed it by
-// the RAW input code, so a lowercase or legacy-prefix code resolved fine in SQL
-// but missed the Map and silently fell into the "unresolved" (zero-row) branch.
-describe("project repository — parentProjectId filter widening & canonicalization guard", () => {
+// P0 regression guard for `resolveShortcodes`' canonical-key lookup: it keys
+// its result Map by the CANONICAL code, and the inlined resolver here indexed
+// it by the RAW input code, so a lowercase or legacy-prefix code resolved fine
+// in SQL but missed the Map and silently fell into the "unresolved" (zero-row)
+// branch.
+//
+// That zero-row branch is exactly why the generic probe in
+// `filter-application.integration.test.ts` cannot stand in for this case: its
+// seeded world is deliberately unrelated, so the canonical form already
+// matches zero rows and its `lower.count === upper.count` check holds
+// vacuously. It covers the widening half (a supplied-but-unresolved code must
+// not fall through to "no constraint" and return the whole table) for every
+// declared id filter, which is why only the positive case remains here.
+describe("project repository — parentProjectId canonicalization guard", () => {
   const ctx = withTestDb();
   const pagination = { pageIndex: 0, pageSize: 50 };
-
-  it("an unresolvable parentProjectId matches nothing, not every project", async () => {
-    await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "widening guard project one" }),
-      ctx.actor,
-    );
-    await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "widening guard project two" }),
-      ctx.actor,
-    );
-
-    const bogus = unsafeProjectShortcode("PRJ-9999");
-    const { data, count } = await projectList(
-      ctx.db,
-      { parentProjectId: bogus },
-      [],
-      pagination,
-    );
-    expect(data).toEqual([]);
-    expect(count).toBe(0);
-  });
 
   it("a lowercase parentProjectId still resolves and filters correctly", async () => {
     const { output: parent } = await createProject(

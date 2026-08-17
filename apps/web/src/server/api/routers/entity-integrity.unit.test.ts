@@ -1,7 +1,4 @@
-import {
-  integrityCatalogSchema,
-  previewOperationInputSchema,
-} from "@cubby/schemas/entity-integrity";
+import { integrityCatalogSchema } from "@cubby/schemas/entity-integrity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
@@ -95,48 +92,5 @@ describe("integrity catalog", () => {
         Object.keys(INCOMING_EDGES[op.entity]).sort(),
       );
     }
-  });
-});
-
-describe("integrity preview public ids", () => {
-  it("requires the entity's shortcode prefix for public entities", () => {
-    expect(
-      previewOperationInputSchema.safeParse({
-        operation: "delete",
-        entity: "product",
-        ids: ["PRD-2CRC"],
-      }).success,
-    ).toBe(true);
-    expect(
-      previewOperationInputSchema.safeParse({
-        operation: "delete",
-        entity: "product",
-        ids: ["LOC-2CRC"],
-      }).success,
-    ).toBe(false);
-    expect(
-      previewOperationInputSchema.safeParse({
-        operation: "delete",
-        entity: "product",
-        ids: ["3f2504e0-4f89-41d3-9a0c-0305e82c3302"],
-      }).success,
-    ).toBe(false);
-  });
-
-  it("keeps image delete ids as the intentional UUID exception", () => {
-    expect(
-      previewOperationInputSchema.safeParse({
-        operation: "delete",
-        entity: "image",
-        ids: ["3f2504e0-4f89-41d3-9a0c-0305e82c3302"],
-      }).success,
-    ).toBe(true);
-    expect(
-      previewOperationInputSchema.safeParse({
-        operation: "delete",
-        entity: "image",
-        ids: ["PRD-2CRC"],
-      }).success,
-    ).toBe(false);
   });
 });

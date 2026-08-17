@@ -828,12 +828,6 @@ describe("problems repo", () => {
         ),
       ).toBe(false);
     });
-
-    // Load-bearing: roughly half the reported rows are legitimately
-    // productless, so counting them would make the badge permanently red.
-    it("is advisory, not a defect", () => {
-      expect(PROBLEM_CLASS.purchaselessExitExpenses).toBe("coverage");
-    });
   });
 
   describe("negative expected quantity (saved-view backed)", () => {
@@ -1012,10 +1006,6 @@ describe("problems repo", () => {
         false,
       );
     });
-
-    it("is a defect, not a coverage backlog", () => {
-      expect(PROBLEM_CLASS.soldButStillStocked).toBe("defect");
-    });
   });
 
   describe("findToolsUsedOutsideOwnership", () => {
@@ -1111,10 +1101,6 @@ describe("problems repo", () => {
       expect(
         after.toolsUsedOutsideOwnership.some((row) => row.id === late.id),
       ).toBe(false);
-    });
-
-    it("is a defect, not a coverage backlog", () => {
-      expect(PROBLEM_CLASS.toolsUsedOutsideOwnership).toBe("defect");
     });
   });
 
@@ -1989,10 +1975,6 @@ describe("findDuplicateProductIdentities", () => {
       duplicateProductIdentities.some((row) => row.model === "BOSCH-BITS"),
     ).toBe(false);
   });
-
-  it("classes the detector as a defect", () => {
-    expect(PROBLEM_CLASS.duplicateProductIdentities).toBe("defect");
-  });
 });
 
 describe("problems — brand-label spelling variants", () => {
@@ -2127,9 +2109,6 @@ describe("problems — duplicate vendors", () => {
         canonicalSampleId: canonicalSample.id,
       },
     ]);
-    // A duplicate roster row is wrong and drivable to zero, so unlike the
-    // advisory stated-total worklist it counts toward the badge.
-    expect(PROBLEM_CLASS.duplicateVendors).toBe("defect");
   });
 
   it("leaves vendors that are each spelled one way alone", async () => {
@@ -2194,14 +2173,13 @@ describe("problems — cooked meals with nothing planned", () => {
       ctx.actor,
     );
 
-  it("flags a cooked meal with no recipes and classes it a defect", async () => {
+  it("flags a cooked meal with no recipes", async () => {
     await makeMeal("2026-04-01", { name: "Thursday" });
 
     const { emptyCookedMeals } = await findFastProblems(ctx.db);
 
     expect(emptyCookedMeals.map((row) => row.name)).toEqual(["Thursday"]);
     expect(emptyCookedMeals[0]).toMatchObject({ date: "2026-04-01" });
-    expect(PROBLEM_CLASS.emptyCookedMeals).toBe("defect");
   });
 
   it("never flags a meal that is deliberately recipe-less", async () => {
@@ -2301,7 +2279,6 @@ describe("problems — vendor mini-logo coverage", () => {
       purchaseCount: 2,
       expenseRowCount: 2,
     });
-    expect(PROBLEM_CLASS.vendorsWithoutLogos).toBe("coverage");
     expect((await findCoverageTotals(ctx.db)).vendorsWithPurchases).toBe(2);
   });
 

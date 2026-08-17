@@ -180,6 +180,9 @@ export async function createProduct(
   await expect(page.getByText("Basic Information")).toBeVisible();
 }
 
+// Asserts the ingredient detail URL and the <h1> name heading, so every spec
+// that seeds an ingredient this way also covers the create flow itself — the
+// standalone create-ingredient spec was deleted in favour of that.
 export async function createIngredientViaForm(page: Page, name: string) {
   await page.goto("/ingredients/new");
   await waitForFormHydration(page);
@@ -188,6 +191,9 @@ export async function createIngredientViaForm(page: Page, name: string) {
   const ingredientShortcodeRe =
     /\/ingredients\/ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/;
   await expect(page).toHaveURL(ingredientShortcodeRe, { timeout: 15000 });
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(name, {
+    timeout: 10000,
+  });
 }
 
 // Create a product linked to an existing ingredient, with two unit→price

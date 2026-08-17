@@ -2265,46 +2265,21 @@ describe("purchase repository — purchase worklist filters", () => {
   });
 });
 
-// P0 regression guard: `eqAny([])` is "no constraint" BY DESIGN (see its doc
-// in database-helpers/query.ts) — so a `vendorId` filter that was SUPPLIED but
-// resolved to no live vendor must not fall through to "no constraint" (which
-// would return every purchase in the table). It must resolve to zero rows.
-// Same file also guards `resolveShortcodes`' canonical-key lookup (a lowercase
-// or legacy-prefix code must still resolve) since both bugs live in the same
-// `purchaseList` vendor-filter code path.
-describe("purchase repository — vendorId filter widening guard", () => {
+// The unresolvable-code and wrong-prefix halves of this guard now live in
+// `filter-application.integration.test.ts`, which runs both against every
+// declared id filter on every entity — `purchase.vendorId` included.
+//
+// The POSITIVE lowercase case stays here, because that generic probe cannot
+// express it: its seeded world is deliberately unrelated, so the canonical
+// form of a real vendor code already matches zero purchases and its
+// `lower.count === upper.count` check holds vacuously. It therefore still
+// catches #591's widening (`eqAny([])` is "no constraint" BY DESIGN, so a
+// dropped predicate returns the whole table) but NOT what a
+// supplied-but-unresolved code produces today — `sql\`false\``, a silent zero
+// on both sides. A purchase that really does belong to the vendor is what
+// gives the assertion teeth.
+describe("purchase repository — vendorId canonicalization guard", () => {
   const ctx = withTestDb();
-
-  it("an unresolvable vendorId matches nothing, not every purchase", async () => {
-    const vendorId = await vendorShortcodeByName(ctx.db, "Widening Guard A");
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({ date: "2024-01-15", vendorId }),
-      ctx.actor,
-    );
-    const otherVendorId = await vendorShortcodeByName(
-      ctx.db,
-      "Widening Guard B",
-    );
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        date: "2024-01-16",
-        vendorId: otherVendorId,
-      }),
-      ctx.actor,
-    );
-
-    const bogus = unsafeVendorShortcode("VEN-9999");
-    const { data, count } = await purchaseList(
-      ctx.db,
-      { vendorId: bogus },
-      [],
-      page,
-    );
-    expect(data).toEqual([]);
-    expect(count).toBe(0);
-  });
 
   it("a lowercase vendorId still resolves and filters correctly", async () => {
     const vendorId = await vendorShortcodeByName(ctx.db, "Widening Guard C");
