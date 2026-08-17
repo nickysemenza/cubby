@@ -20,6 +20,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { useHydrated } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 import { cn } from "~/lib/utils";
 import { EntityInlineLink } from "../_components/EntityInlineLink";
@@ -53,10 +54,22 @@ const spreadLabel = (c: CandidateEquivalence): string => {
  */
 export function EquivalencesReport() {
   const api = useTRPC();
-  const { data, isFetching, error, refetch } = useQuery({
+  const {
+    data: harvest,
+    isFetching: harvestFetching,
+    error,
+    refetch,
+  } = useQuery({
     ...api.recipe.harvestEquivalences.queryOptions(),
     staleTime: 5 * 60 * 1000,
   });
+  // Hydration-stable: the server renders mid-scan with no candidates, while the
+  // client's first render already has the streamed ones — so the scanning
+  // notice, the button's `disabled`, and the summary all have to ignore the
+  // data until hydration finishes. See useHydratedLoading.
+  const hydrated = useHydrated();
+  const data = hydrated ? harvest : undefined;
+  const isFetching = !hydrated || harvestFetching;
 
   // Group candidates by ingredient (preserving the server's confidence order, so
   // the highest-signal ingredient leads and its rows stay contiguous).

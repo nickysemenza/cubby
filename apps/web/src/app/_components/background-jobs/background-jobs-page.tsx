@@ -19,6 +19,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { Spinner } from "~/components/ui/spinner";
+import { useHydratedLoading } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
 import { BatchDetail } from "./batch-detail";
@@ -83,6 +84,16 @@ export function BackgroundJobsPage({
         ? BATCH_POLL_MS
         : false,
   });
+
+  // Hydration-stable loading gates — see the render below and useHydratedLoading.
+  const listLoading = useHydratedLoading(listQuery.isLoading);
+  // `detailQuery` is DISABLED with no batch selected, and a disabled query is
+  // `isPending && !isFetching` — so its `isLoading` is already a stable `false`
+  // on both sides and there is nothing to stabilize. Forcing the gate true until
+  // hydration would flash a spinner in the page's default state. The hook still
+  // has to run unconditionally (it is a hook), so AND the selection in after.
+  const detailHydratedLoading = useHydratedLoading(detailQuery.isLoading);
+  const detailLoading = Boolean(selectedBatchId) && detailHydratedLoading;
 
   const invalidate = async () => {
     const keys: QueryKey[] = [api.backgroundJobs.listBatches.queryKey()];
@@ -235,15 +246,21 @@ export function BackgroundJobsPage({
           </Link>
         </Row>
       ) : null}
-      {listQuery.isLoading ? <Spinner /> : null}
-      {listQuery.data ? (
+      {/* Hydration-stable: the server renders the spinner with no batches while
+          the client's first render already has the streamed ones, so the
+          spinner and the table have to be one chain rather than two
+          independent branches. See useHydratedLoading. */}
+      {listLoading ? (
+        <Spinner />
+      ) : listQuery.data ? (
         <BatchTable
           batches={filteredBatches}
           selectedBatchId={selectedBatchId}
         />
       ) : null}
-      {detailQuery.isLoading ? <Spinner /> : null}
-      {detailQuery.data ? (
+      {detailLoading ? (
+        <Spinner />
+      ) : detailQuery.data ? (
         <BatchDetail
           batch={detailQuery.data}
           onRetry={() => retry.mutate({ batchId: detailQuery.data.id })}

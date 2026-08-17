@@ -22,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { useHydrated } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
@@ -91,12 +92,23 @@ export function EnrichmentWorkbench({
     { id: string; name: string }[] | null
   >(null);
 
-  const { data, isLoading, error } = useQuery(
+  const {
+    data: worklist,
+    isLoading: worklistLoading,
+    error,
+  } = useQuery(
     // Pass no input when unscoped so the query key matches the plain worklist.
     api.ingredient.enrichmentWorkbench.queryOptions(
       enrichmentWorkbenchQueryInput({ focus, recipeId, initialConversion }),
     ),
   );
+  // Hydration-stable: the server renders this with no worklist, while the
+  // client's first render already has the streamed one — so both the spinner
+  // and the derived `rows`/`visible` have to ignore the data until hydration
+  // finishes, or React discards the tree. See useHydratedLoading.
+  const hydrated = useHydrated();
+  const data = hydrated ? worklist : undefined;
+  const isLoading = !hydrated || worklistLoading;
 
   // Recipe-scoped worklist: fetch the recipe name for the scope banner.
   const { data: scopeRecipe } = useQuery({

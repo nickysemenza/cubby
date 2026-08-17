@@ -10,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { useHydrated } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
   BASE_KINDS,
@@ -56,7 +57,7 @@ const KindAccent: React.FC<{
 // Component for lazy loading food data and rendering FoodPillLink
 const LazyFoodPillLink: React.FC<{ fdcId: number }> = ({ fdcId }) => {
   const api = useTRPC();
-  const { data: food, isLoading } = useQuery(
+  const { data: usdaFood, isLoading: foodLoading } = useQuery(
     api.usda.getByID.queryOptions(
       { id: fdcId },
       {
@@ -65,6 +66,10 @@ const LazyFoodPillLink: React.FC<{ fdcId: number }> = ({ fdcId }) => {
       },
     ),
   );
+  // Hydration-stable — see the note on LazyProductPillLink below.
+  const hydrated = useHydrated();
+  const food = hydrated ? usdaFood : undefined;
+  const isLoading = !hydrated || foodLoading;
 
   // Show placeholder while loading or if no data
   const displayFood = food || {
@@ -80,7 +85,7 @@ const LazyProductPillLink: React.FC<{ productId: string }> = ({
   productId,
 }) => {
   const api = useTRPC();
-  const { data: product, isLoading } = useQuery(
+  const { data: fetched, isLoading: productLoading } = useQuery(
     api.product.getByID.queryOptions(
       { id: productId },
       {
@@ -89,6 +94,15 @@ const LazyProductPillLink: React.FC<{ productId: string }> = ({
       },
     ),
   );
+  // Hydration-stable. Whether this product has landed differs between the SSR
+  // render and the first client render — TanStack Start's query stream races
+  // React's hydration — and the two branches below differ by a whole element
+  // (plain span vs. link) as well as by the "..." suffix. Gating on `hydrated`
+  // makes both renders take the placeholder branch whatever either cache holds.
+  // See useHydratedLoading.
+  const hydrated = useHydrated();
+  const product = hydrated ? fetched : undefined;
+  const isLoading = !hydrated || productLoading;
 
   // No real shortcode to link to until the product loads — render plain text
   // rather than a link that would 404 (or worse, one keyed on the uuid).
