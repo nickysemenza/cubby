@@ -61,7 +61,7 @@ export function ArrangeColumn({
         {pinned ? (
           <HelpCircle className="size-4 shrink-0 text-muted-foreground" />
         ) : headerLocation ? (
-          <LocationIcon type={headerLocation.type} size={16} />
+          <LocationIcon type={headerLocation.type} product={null} size={16} />
         ) : (
           <Home className="size-4 shrink-0 text-muted-foreground" />
         )}

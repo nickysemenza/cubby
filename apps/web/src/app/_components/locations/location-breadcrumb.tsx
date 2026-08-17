@@ -127,7 +127,12 @@ export function LocationBreadcrumb({
                 isLast && activeHighlight && "rounded bg-primary/10 px-1 py-px",
               )}
             >
-              <LocationIcon type={segment.type} size={12} colored />
+              <LocationIcon
+                type={segment.type}
+                product={null}
+                size={12}
+                colored
+              />
               <span className={cn("min-w-0", compact && "max-w-32 truncate")}>
                 {segment.name}
               </span>

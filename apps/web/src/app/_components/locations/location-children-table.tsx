@@ -89,7 +89,7 @@ export function LocationChildrenTable({
         selectOptions: locationTypeOptionsWithTheme,
         // Renders empty for a product-linked child — the "Is a" column beside
         // it carries that identity, same split as the locations list.
-        renderCell: (type) => <LocationTypeLabel type={type} />,
+        renderCell: (type) => <LocationTypeLabel type={type} product={null} />,
         mobile: { slot: "subtitle", priority: 15 },
       }),
       createSingleEntityInlineLinkColumn(helper, "product", "product", {

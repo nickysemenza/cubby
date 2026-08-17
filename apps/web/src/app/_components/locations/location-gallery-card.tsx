@@ -102,6 +102,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
             <Row align="center" gap="xs" wrap className="min-w-0">
               <LocationIcon
                 type={location.type}
+                product={location.product}
                 colored
                 className="size-3.5 shrink-0"
               />

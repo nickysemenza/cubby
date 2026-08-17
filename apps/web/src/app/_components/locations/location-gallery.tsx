@@ -645,7 +645,11 @@ function MobileGalleryDrillDown({
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center py-6 text-muted-foreground">
-          <LocationIcon type="room" className="mb-2 size-8 opacity-40" />
+          <LocationIcon
+            type="room"
+            product={null}
+            className="mb-2 size-8 opacity-40"
+          />
           <span>No locations here</span>
         </div>
       )}

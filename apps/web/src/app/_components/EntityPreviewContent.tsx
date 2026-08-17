@@ -471,7 +471,7 @@ export function toLocationCard(vm: LocationPreview): ManifestCardProps {
   return {
     entity: "location",
     routeParam: vm.id,
-    icon: <LocationIcon type={vm.type} size={14} colored />,
+    icon: <LocationIcon type={vm.type} product={null} size={14} colored />,
     name: vm.name,
     tag: "location",
     // Parent isn't repeated here — it lives in the cross-link below.
@@ -561,7 +561,14 @@ export function toInventoryCard(vm: InventoryPreview): ManifestCardProps {
       {
         to: "/locations/$shortcode",
         params: { shortcode: vm.locationId },
-        icon: <LocationIcon type={vm.locationType} size={12} colored />,
+        icon: (
+          <LocationIcon
+            type={vm.locationType}
+            product={null}
+            size={12}
+            colored
+          />
+        ),
         label: vm.locationName,
       },
     ],

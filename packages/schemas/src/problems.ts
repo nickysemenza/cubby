@@ -297,7 +297,8 @@ export const unusedIngredientSchema = z.object({
 export const emptyLocationSchema = z.object({
   id: locationShortcode,
   name: z.string(),
-  type: z.string(),
+  /** Null when the location IS a product — the SKU is its form factor. */
+  type: z.string().nullable(),
   createdAt: z.date(),
   lastBulkInventory: z.date().nullable(),
   aiDescription: z.string().nullable(),
@@ -317,7 +318,8 @@ export const emptyLocationSchema = z.object({
 export const staleLocationSchema = z.object({
   id: locationShortcode,
   name: z.string(),
-  type: z.string(),
+  /** Null when the location IS a product — the SKU is its form factor. */
+  type: z.string().nullable(),
   itemCount: z.number(),
   lastBulkInventory: z.date().nullable(),
 });
@@ -448,7 +450,8 @@ export const productWithIslandedMappingsSchema = z.object({
 export const locationWithoutAiDescriptionSchema = z.object({
   id: locationShortcode,
   name: z.string(),
-  type: z.string(),
+  /** Null when the location IS a product — the SKU is its form factor. */
+  type: z.string().nullable(),
   imageCount: z.number(),
 });
 

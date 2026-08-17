@@ -10,7 +10,7 @@ import { getLocationGlyph, getLocationTypeColor } from "./location-type-theme";
  */
 interface LocationGlyphSource {
   type: LocationType | null;
-  product?: { category: ProductCategory | null } | null;
+  product: { category: ProductCategory | null } | null;
 }
 
 interface LocationIconProps extends LocationGlyphSource {
@@ -72,6 +72,6 @@ export const locationTypeOptionsWithTheme = locationType.options.map(
   (type) => ({
     value: type,
     label: type,
-    icon: <LocationIcon type={type} size={14} colored />,
+    icon: <LocationIcon type={type} product={null} size={14} colored />,
   }),
 );

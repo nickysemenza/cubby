@@ -140,7 +140,7 @@ export function LocationList() {
         selectOptions: locationTypeOptionsWithTheme,
         // A linked location has no type of its own, so this renders empty for
         // one — the adjacent "Is a" column carries its identity instead.
-        renderCell: (type) => <LocationTypeLabel type={type} />,
+        renderCell: (type) => <LocationTypeLabel type={type} product={null} />,
         mobile: { slot: "subtitle", priority: 15 },
         editable: {
           onSave: async (newType, location) => {
