@@ -366,6 +366,7 @@ export const dbProductToAPI = (
         aiDescription: entry.location.aiDescription,
         images: mapImages(entry.location.images),
         valuation: entry.location.valuation,
+        ancestors: entry.location.ancestors ?? [],
         createdAt: entry.location.createdAt,
         updatedAt: entry.location.updatedAt,
       },
@@ -407,6 +408,7 @@ export const dbProductToAPI = (
       id: unsafeLocationShortcode(loc.shortcode),
       name: loc.name,
       type: parseLocationType(loc.type, { id: loc.id, name: loc.name }),
+      ancestors: loc.ancestors ?? [],
     })),
     ...deriveProductQuantityShape(
       mappedInventoryEntry,

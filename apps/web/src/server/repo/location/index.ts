@@ -53,7 +53,7 @@ export {
 // product/pricing, so a product module importing this barrel closes an import
 // cycle. Same reason crud.ts deep-imports `product/pricing` instead of the
 // product barrel.
-export { buildLocationTree } from "./tree";
+export { buildLocationTree, getLocationInventoryBreakdown } from "./tree";
 // Valuation rollup persistence
 export {
   getLocationValuationInputs,

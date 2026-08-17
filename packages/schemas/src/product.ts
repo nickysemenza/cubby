@@ -44,7 +44,8 @@ import {
 import {
   locationAncestorOut,
   locationListRefOut,
-  locationOut,
+  locationOutFields,
+  locationPathRefOut,
 } from "./location";
 import {
   createPaginatedResponseSchema,
@@ -770,7 +771,11 @@ const productInventoryFields = {
 
 const productInventoryWithLocationOut = z.object({
   ...productInventoryFields,
-  location: locationOut,
+  location: z.object({
+    ...locationOutFields,
+    /** Root → immediate parent, hydrated once for the whole detail read. */
+    ancestors: z.array(locationAncestorOut),
+  }),
 });
 
 export const productWithMappingsOut = z.object({
@@ -839,7 +844,7 @@ export const productWithIngredientAndInventoryAndMappingsOut = z.object({
    * count and the rows in the table cannot disagree while one of two queries is
    * still in flight.
    */
-  servingAsLocations: z.array(locationListRefOut),
+  servingAsLocations: z.array(locationPathRefOut),
   ...productQuantityFields,
 });
 
@@ -879,7 +884,7 @@ export const productWithFoodOut = z.object({
   ingredient: productIngredientOut.nullable(),
   unitMappings: z.array(unitMappingOut),
   inventoryEntry: z.array(productInventoryWithLocationOut),
-  servingAsLocations: z.array(locationListRefOut),
+  servingAsLocations: z.array(locationPathRefOut),
   food: foodSummary.nullable(),
   recipeUsages: z.array(recipeUsageOut),
   ...productQuantityFields,
@@ -891,7 +896,7 @@ export const productWithFoodAndSideEffectsOut = z.object({
   ingredient: productIngredientOut.nullable(),
   unitMappings: z.array(unitMappingOut),
   inventoryEntry: z.array(productInventoryWithLocationOut),
-  servingAsLocations: z.array(locationListRefOut),
+  servingAsLocations: z.array(locationPathRefOut),
   food: foodSummary.nullable(),
   recipeUsages: z.array(recipeUsageOut),
   sideEffects: mutationSideEffectsSchema,

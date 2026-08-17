@@ -2663,6 +2663,72 @@ describe("product detail: where the product is", () => {
     expect(detail?.onHandUnits).toBe(1);
   });
 
+  it("hydrates root-first paths for both stock and identity locations", async () => {
+    const prod = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Detail Path Product" }),
+      ctx.actor,
+    );
+    const garage = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Detail Path Garage", type: "room" }),
+      ctx.actor,
+    );
+    const area = await createLocation(
+      ctx.db,
+      makeLocationInput({
+        name: "Detail Path Area",
+        type: "area",
+        parentId: garage.id,
+      }),
+      ctx.actor,
+    );
+    const shelf = await createLocation(
+      ctx.db,
+      makeLocationInput({
+        name: "Detail Path Shelf",
+        type: "shelf",
+        parentId: area.id,
+      }),
+      ctx.actor,
+    );
+    const bin = await createLocation(
+      ctx.db,
+      makeLocationInput({
+        name: "Detail Path Bin",
+        productId: prod.id,
+        parentId: shelf.id,
+      }),
+      ctx.actor,
+    );
+    await createInventoryEntry(
+      ctx.db,
+      {
+        productId: prod.id,
+        locationId: shelf.id,
+        amount: { value: 1, unit: "each" },
+      },
+      ctx.actor,
+    );
+
+    const detail = await getProductByID(ctx.db, prod.entityId);
+
+    expect(
+      detail?.inventoryEntry[0]?.location.ancestors.map((node) => node.name),
+    ).toEqual(["Home", "Detail Path Garage", "Detail Path Area"]);
+    expect(detail?.servingAsLocations).toEqual([
+      expect.objectContaining({ id: bin.id, name: "Detail Path Bin" }),
+    ]);
+    expect(
+      detail?.servingAsLocations[0]?.ancestors.map((node) => node.name),
+    ).toEqual([
+      "Home",
+      "Detail Path Garage",
+      "Detail Path Area",
+      "Detail Path Shelf",
+    ]);
+  });
+
   it("drops an entry whose LOCATION is soft-deleted, matching the list", async () => {
     const prod = await createProduct(
       ctx.db,

@@ -10,6 +10,7 @@ import {
 import { describe, expect, it } from "vitest";
 import {
   image,
+  inventoryEntry,
   location,
   locationImage,
   product,
@@ -25,6 +26,7 @@ import {
   ensureGlobalUnknownLocation,
   findOrCreateLocationByName,
   getLocationById,
+  getLocationInventoryBreakdown,
   locationList,
   locationOptions,
   locationSearch,
@@ -110,6 +112,156 @@ describe("findOrCreateLocationByName", () => {
       .from(location)
       .where(eq(location.name, name));
     expect(countRow!.count).toEqual(1);
+  });
+});
+
+describe("getLocationInventoryBreakdown", () => {
+  const ctx = withTestDb();
+
+  const locationId = async (shortcode: string) =>
+    unsafeLocationId(
+      (await resolveLiveShortcode(ctx.db, shortcode, "location"))!,
+    );
+  const productId = async (shortcode: string) =>
+    unsafeProductId(
+      (await resolveLiveShortcode(ctx.db, shortcode, "product"))!,
+    );
+
+  it("returns the requested root with direct and descendant live-stock counts only", async () => {
+    const root = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Breakdown Garage", type: "room" }),
+      ctx.actor,
+    );
+    const shelf = await createLocation(
+      ctx.db,
+      makeLocationInput({
+        name: "Breakdown Shelf",
+        type: "shelf",
+        parentId: root.id,
+      }),
+      ctx.actor,
+    );
+    const identityProduct = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Breakdown Tote SKU" }),
+      ctx.actor,
+    );
+    const identityLocation = await createLocation(
+      ctx.db,
+      makeLocationInput({
+        name: "Breakdown Tote",
+        productId: identityProduct.id,
+        parentId: root.id,
+      }),
+      ctx.actor,
+    );
+    const deadLocation = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Deleted Breakdown Shelf", parentId: root.id }),
+      ctx.actor,
+    );
+    const deadEntryLocation = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Dead Entry Shelf", parentId: root.id }),
+      ctx.actor,
+    );
+    const deadProductLocation = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Dead Product Shelf", parentId: root.id }),
+      ctx.actor,
+    );
+    const installedLocation = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Installed Fixture Shelf", parentId: root.id }),
+      ctx.actor,
+    );
+
+    const liveProduct = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Breakdown Live Product" }),
+      ctx.actor,
+    );
+    const deadProduct = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Breakdown Deleted Product" }),
+      ctx.actor,
+    );
+    const fixtureProduct = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Breakdown Installed Fixture" }),
+      ctx.actor,
+    );
+    const stock = async (
+      productCode: string,
+      locationCode: string,
+      placement?: "stock" | "installed",
+    ) =>
+      createInventoryEntry(
+        ctx.db,
+        {
+          productId: await productId(productCode),
+          locationId: await locationId(locationCode),
+          amount: { value: 1, unit: "each" },
+          ...(placement ? { placement } : {}),
+        },
+        ctx.actor,
+      );
+
+    await stock(liveProduct.id, root.id);
+    await stock(liveProduct.id, shelf.id);
+    await stock(liveProduct.id, deadLocation.id);
+    const deadEntry = await stock(liveProduct.id, deadEntryLocation.id);
+    await stock(deadProduct.id, deadProductLocation.id);
+    await stock(fixtureProduct.id, installedLocation.id, "installed");
+
+    await getDb(ctx.db)
+      .update(location)
+      .set({ deletedAt: new Date() })
+      .where(eq(location.shortcode, deadLocation.id));
+    await getDb(ctx.db)
+      .update(inventoryEntry)
+      .set({ deletedAt: new Date() })
+      .where(eq(inventoryEntry.shortcode, deadEntry.id));
+    await getDb(ctx.db)
+      .update(product)
+      .set({ deletedAt: new Date() })
+      .where(eq(product.shortcode, deadProduct.id));
+
+    const result = await getLocationInventoryBreakdown(
+      ctx.db,
+      await locationId(root.id),
+    );
+
+    expect(result).toMatchObject({
+      id: root.id,
+      name: "Breakdown Garage",
+      directItemCount: 1,
+      totalItemCount: 2,
+    });
+    const child = (name: string) =>
+      result?.children.find((node) => node.name === name);
+    expect(child("Breakdown Shelf")).toMatchObject({
+      directItemCount: 1,
+      totalItemCount: 1,
+    });
+    expect(child("Breakdown Tote")).toMatchObject({
+      directItemCount: 0,
+      totalItemCount: 0,
+    });
+    expect(child("Deleted Breakdown Shelf")).toBeUndefined();
+    for (const name of [
+      "Dead Entry Shelf",
+      "Dead Product Shelf",
+      "Installed Fixture Shelf",
+    ]) {
+      expect(child(name)).toMatchObject({
+        directItemCount: 0,
+        totalItemCount: 0,
+      });
+    }
+    // The physical tote is a location-as-product, not an InventoryEntry.
+    expect(identityLocation.id).toBeDefined();
   });
 });
 

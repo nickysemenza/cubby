@@ -3,6 +3,7 @@
  */
 
 import type { DataQuality } from "@cubby/schemas/data-quality";
+import type { LocationAncestorOut } from "@cubby/schemas/location";
 import type {
   ingredient,
   inventoryEntry,
@@ -34,6 +35,7 @@ export type ProductDeepDB = ProductSelect & {
   inventoryEntry: Array<
     typeof inventoryEntry.$inferSelect & {
       location: LocationSelect & {
+        ancestors?: LocationAncestorOut[];
         // The holding location's own identity SKU — the bin itself, not this
         // product's stock in it.
         product?: LocationIdentityProductRow | null;
@@ -45,7 +47,9 @@ export type ProductDeepDB = ProductSelect & {
     }
   >;
   /** Locations that ARE this product; scalar columns only. */
-  locations?: Array<typeof location.$inferSelect>;
+  locations?: Array<
+    typeof location.$inferSelect & { ancestors?: LocationAncestorOut[] }
+  >;
   images: Array<{
     image: MappableImageRecord;
     deletedAt?: Date | null;

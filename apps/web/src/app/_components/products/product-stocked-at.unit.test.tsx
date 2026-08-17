@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   moveDialog: vi.fn(),
   deleteDialog: vi.fn(),
   discardDialog: vi.fn(),
+  hierarchyDrilldown: vi.fn(),
 }));
 
 vi.mock("~/integrations/trpc/react", () => ({
@@ -28,6 +29,12 @@ vi.mock("~/app/_components/data-table/Table", () => ({
   default: (props: unknown) => {
     mocks.rTable(props);
     return <div data-testid="rtable" />;
+  },
+}));
+vi.mock("~/app/_components/visualizations/hierarchy-drilldown", () => ({
+  HierarchyDrilldown: (props: unknown) => {
+    mocks.hierarchyDrilldown(props);
+    return <div data-testid="location-breakdown" />;
   },
 }));
 // Render the row menu's items as plain buttons: Base UI's DropdownMenuItem
@@ -93,7 +100,11 @@ const entry = (id: string, locationId: string) => ({
   verifiedAt: null,
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),
-  location: { id: unsafeLocationShortcode(locationId), name: "shelf" },
+  location: {
+    id: unsafeLocationShortcode(locationId),
+    name: "shelf",
+    ancestors: [],
+  },
 });
 
 const product = {
@@ -121,6 +132,7 @@ const locationsOnlyProduct = {
       id: unsafeLocationShortcode("LOC-CCCC"),
       name: "chrome wire shelf",
       type: null,
+      ancestors: [],
     },
   ],
 } as unknown as ProductWithFoodOut;
@@ -144,6 +156,7 @@ beforeEach(() => {
     mocks.moveDialog,
     mocks.deleteDialog,
     mocks.discardDialog,
+    mocks.hierarchyDrilldown,
   ])
     m.mockClear();
   mocks.extraActions.current = null;
@@ -151,6 +164,18 @@ beforeEach(() => {
 });
 
 describe("ProductStockedAt", () => {
+  it("renders the location breakdown above the editable entries table", () => {
+    render(<ProductStockedAt product={product} />);
+    expect(screen.getByTestId("location-breakdown")).toBeInTheDocument();
+    expect(screen.getByTestId("rtable")).toBeInTheDocument();
+    expect(mocks.hierarchyDrilldown).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ariaLabel: "Bora Clamp location breakdown",
+        root: expect.objectContaining({ metricLabel: "4 each" }),
+      }),
+    );
+  });
+
   it("keeps its own persisted-width scope, separate from the /inventory index", () => {
     render(<ProductStockedAt product={product} />);
     expect(mocks.rTable).toHaveBeenCalledWith(
