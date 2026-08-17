@@ -101,6 +101,7 @@ const filterSearchKeys = {
     "sourceType",
     "costTotal",
     "caloriesTotal",
+    "totalMinutes",
     "related-ingredient",
     "related-meal",
     "mealId",

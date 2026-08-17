@@ -30,11 +30,11 @@ tsify-next = { version = "0.5", features = ["js"] }
 # Pin the shared upstream commit so every CI job builds identical Rust sources.
 # Renovate follows main weekly and updates all three refs together. Locally the
 # global ~/.cargo/config.toml patch (above) can still override to a working copy.
-ingredient = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "3fab69222b21c9ae448fb95c553d02ef99ae6654" }
-recipe-scraper = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "3fab69222b21c9ae448fb95c553d02ef99ae6654" }
+ingredient = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "b6739b5bc849e147f30088d493d7f515aefb414b" }
+recipe-scraper = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "b6739b5bc849e147f30088d493d7f515aefb414b" }
 # EPUB cookbook extraction — the pure subset only (no reqwest/fs). `chunk_epub`
 # + `assemble_recipes` run client-side; the LLM call is proxied through Cubby.
-recipe-epub = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "3fab69222b21c9ae448fb95c553d02ef99ae6654", default-features = false }
+recipe-epub = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "b6739b5bc849e147f30088d493d7f515aefb414b", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 # 0.10 (not 0.11) to share recipe-epub's copy — a version split compiles sha2

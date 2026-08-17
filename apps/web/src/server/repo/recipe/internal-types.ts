@@ -103,4 +103,8 @@ export interface RecipeFilters {
   // legacy hand-entered recipe and must stay visible.
   sourceTypeFilter?: string | string[];
   sourceTypePresenceFilter?: "has" | "none";
+  // Total elapsed time. A NULL `totalMinutes` (no printed total, or prose the
+  // extractor wouldn't commit to a number for) matches neither bound.
+  totalMinutesMin?: number;
+  totalMinutesMax?: number;
 }

@@ -18,7 +18,7 @@ use ingredient::{
     rich_text::{Chunk, RichParser},
     usage::IngredientUsage,
 };
-use recipe_scraper::{RecipeSection, RecipeYield, ScrapedRecipe};
+use recipe_scraper::{RecipeSection, RecipeTimes, RecipeYield, ScrapedRecipe};
 use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
@@ -158,6 +158,47 @@ impl From<RecipeSection> for WRecipeSection {
     }
 }
 
+/// Printed times (mirrors `recipe_types::RecipeTimes`). Each duration is carried
+/// twice: the prose string is verbatim what the source printed, the `*_minutes`
+/// count is the same duration as a number so cubby can sort/filter without
+/// re-parsing prose. A present string does NOT imply a present count — a range
+/// ("1–2 hours") or an open-ended phrase ("overnight") keeps its string and
+/// leaves the count `None`.
+#[derive(Tsify, Serialize, Deserialize)]
+pub struct WRecipeTimes {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prep: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cook: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_minutes: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_minutes: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prep_minutes: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cook_minutes: Option<u32>,
+}
+
+impl From<RecipeTimes> for WRecipeTimes {
+    fn from(t: RecipeTimes) -> Self {
+        Self {
+            active: t.active,
+            total: t.total,
+            prep: t.prep,
+            cook: t.cook,
+            active_minutes: t.active_minutes,
+            total_minutes: t.total_minutes,
+            prep_minutes: t.prep_minutes,
+            cook_minutes: t.cook_minutes,
+        }
+    }
+}
+
 /// A scraped recipe (the cubby-facing subset of `ScrapedRecipe`); the TS side
 /// converts it to the shared `ImportRecipe` carrier.
 #[derive(Tsify, Serialize, Deserialize)]
@@ -180,6 +221,12 @@ pub struct WScrapedRecipe {
     /// Servings as integer (extracted from yield if unit is "serving(s)").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub servings: Option<u32>,
+    /// Prep/cook/active/total times, from the JSON-LD ISO-8601 durations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub times: Option<WRecipeTimes>,
+    /// Special equipment (schema.org HowTo `tool`); empty when the source lists none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub equipment: Vec<String>,
 }
 
 impl From<ScrapedRecipe> for WScrapedRecipe {
@@ -192,6 +239,8 @@ impl From<ScrapedRecipe> for WScrapedRecipe {
             description: r.description,
             recipe_yield: r.recipe_yield.map(WRecipeYield::from),
             servings: r.servings,
+            times: r.times.map(WRecipeTimes::from),
+            equipment: r.equipment,
         }
     }
 }

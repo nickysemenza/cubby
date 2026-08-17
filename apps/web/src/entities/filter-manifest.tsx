@@ -33,6 +33,10 @@ import { vendorFilterFields } from "@cubby/schemas/vendor";
 import { wishFilterFields } from "@cubby/schemas/wish";
 import { uniq } from "es-toolkit";
 import type { FilterConfig } from "~/app/_components/data-table/columnHelpers";
+import {
+  barFieldFromConfig,
+  type FilterBarField,
+} from "~/app/_components/data-table/filter-bar-core";
 import { locationTypeOptionsWithTheme } from "~/app/_components/locations/location-icons";
 import { productCategoryOptionsWithTheme } from "~/app/_components/products/product-category-icons";
 import {
@@ -72,6 +76,7 @@ import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import {
   type FilterKind,
   type FilterSpecCore,
+  humanize,
   isMultiFilterKind,
   nullableSentinelOptions,
   presenceFilterOptions,
@@ -99,6 +104,16 @@ export interface FilterSpec extends FilterSpecCore {
    * universe) and so can't be static module data.
    */
   optionsKey?: string;
+  /**
+   * Control label. Defaults to `humanize(columnId)`.
+   *
+   * Only a bar with no table under it needs this — a column-backed control
+   * reads its label off the column header. Set it where the column id doesn't
+   * read as one on its own, which on a cross-kind surface is most of them
+   * ("taskStatus" has to render as "Task status", because the whole point is
+   * that it constrains tasks and nothing else).
+   */
+  label?: string;
 }
 
 const resolveProductPurchaseDateFilter = (
@@ -328,6 +343,22 @@ const resolveRecipeCost = (value: string | undefined) =>
       ? { costTotalMin: 10, costTotalMax: 25 }
       : value === "25plus"
         ? { costTotalMin: 25 }
+        : {};
+
+// The weeknight axis: "what can I actually cook tonight". Buckets, not a free
+// numeric input, because that's how the decision is actually made.
+const recipeTotalTimeOptions: FilterableComboboxItem[] = [
+  { value: "under30", label: "Under 30 min" },
+  { value: "30to60", label: "30–60 min" },
+  { value: "60plus", label: "Over an hour" },
+];
+const resolveRecipeTotalTime = (value: string | undefined) =>
+  value === "under30"
+    ? { totalMinutesMax: 30 }
+    : value === "30to60"
+      ? { totalMinutesMin: 30, totalMinutesMax: 60 }
+      : value === "60plus"
+        ? { totalMinutesMin: 60 }
         : {};
 
 const calorieOptions: FilterableComboboxItem[] = [
@@ -1470,6 +1501,13 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       options: calorieOptions,
       expand: resolveCalories,
     },
+    {
+      columnId: "totalMinutes",
+      kind: "range",
+      placeholder: "Filter total time...",
+      options: recipeTotalTimeOptions,
+      expand: resolveRecipeTotalTime,
+    },
   ],
 
   ingredient: [
@@ -2013,20 +2051,60 @@ export function manifestFilterConfig(
   // those two specs happen to share a columnId with a rendered column. Every
   // other urlOnly spec escaped only by not colliding with one.
   if (spec.urlOnly) return undefined;
+  return specFilterConfig(spec, runtimeOptions);
+}
+
+/** A spec's rendered options: runtime roster or static list, sentinels first. */
+function resolveSpecOptions(
+  spec: FilterSpec,
+  runtimeOptions?: Record<string, FilterableComboboxItem[]>,
+): FilterableComboboxItem[] {
   // A runtime picklist (project roster, tag universe) can't be static module
   // data, so the caller injects it by key.
-  const resolvedOptions = spec.optionsKey
+  const resolved = spec.optionsKey
     ? (runtimeOptions?.[spec.optionsKey] ?? [])
     : (spec.options ?? []);
   // Sentinels come first so they're reachable without scrolling a long roster.
-  const options = spec.nullable
-    ? [...nullableSentinelOptions(spec.nullable.label), ...resolvedOptions]
-    : resolvedOptions;
+  return spec.nullable
+    ? [...nullableSentinelOptions(spec.nullable.label), ...resolved]
+    : resolved;
+}
+
+function specFilterConfig(
+  spec: FilterSpec,
+  runtimeOptions?: Record<string, FilterableComboboxItem[]>,
+): FilterConfig {
   return {
     placeholder: spec.placeholder,
     filterType: filterTypeForKind(spec.kind),
-    options,
+    options: resolveSpecOptions(spec, runtimeOptions),
   };
+}
+
+/**
+ * Chip-bar fields straight from a spec list, for a bar with no table under it.
+ *
+ * The table path derives its fields by walking mounted columns for
+ * `meta.filterConfig`; this one skips the column layer entirely. Both end at
+ * `barFieldFromConfig`, so the two bars can't drift in operator set, option
+ * shape, or searchability.
+ *
+ * `urlOnly` specs are skipped for the same reason `manifestFilterConfig`
+ * returns undefined for them: there is no state a control could bind to.
+ */
+export function manifestFilterFields(
+  specs: readonly FilterSpec[],
+  runtimeOptions?: Record<string, FilterableComboboxItem[]>,
+): FilterBarField[] {
+  return specs
+    .filter((spec) => !spec.urlOnly)
+    .map((spec) =>
+      barFieldFromConfig(
+        spec.columnId,
+        spec.label ?? humanize(spec.columnId),
+        specFilterConfig(spec, runtimeOptions),
+      ),
+    );
 }
 
 /**

@@ -27,6 +27,11 @@ import {
  * silently diverge back to single-select.
  */
 describe("manifestFilterConfig", () => {
+  // Each route spreads `entityFilterSearchFields` into its `validateSearch`, so
+  // a key the manifest declares but this record omits means the table writes
+  // the filter and the router strips it before anything reads it back. Pinned
+  // here for EVERY entity, which is why no entity keeps its own hand-written
+  // copy of the list.
   it("keeps the eager route search keys aligned with the full UI manifest", () => {
     for (const entity of entitySchema.options) {
       expect(Object.keys(entityFilterSearchFields(entity))).toEqual(
@@ -460,39 +465,6 @@ describe("vendor filters", () => {
       options: [],
     });
   });
-
-  it("declares its URL key so the route schema can't strip it", () => {
-    // The route spreads this into its `validateSearch`; a missing key means the
-    // table writes the filter and the router removes it before anything reads it.
-    expect(Object.keys(entityFilterSearchFields("vendor"))).toEqual([
-      "q",
-      "purchaseCount",
-      "spend",
-      "latestPurchaseDate",
-      "related-expense",
-      "expenseId",
-      "expensePresenceFilter",
-      "related-purchase",
-      "purchaseId",
-      "purchasePresenceFilter",
-      "related-product",
-      "productId",
-      "productPresenceFilter",
-      "related-project",
-      "projectId",
-      "projectPresenceFilter",
-      "related-financialTransaction",
-      "financialTransactionId",
-      "financialTransactionPresenceFilter",
-      "createdAt",
-      "updatedAt",
-    ]);
-    // And the fragment survives what `parseSearch` hands it — an all-digits
-    // vendor name search arrives pre-parsed as a number.
-    expect(
-      z.object(entityFilterSearchFields("vendor")).parse({ q: 486242 }),
-    ).toMatchObject({ q: "486242" });
-  });
 });
 
 /**
@@ -642,48 +614,6 @@ describe("purchase filters", () => {
       "projectId",
       "projectPresenceFilter",
     ]);
-  });
-
-  it("declares every URL key so the route schema can't strip them", () => {
-    // The route spreads this into its `validateSearch` and re-declares the
-    // visible keys by name; a missing key means the table writes the filter and the
-    // router removes it before anything reads it back.
-    expect(Object.keys(entityFilterSearchFields("purchase"))).toEqual([
-      "q",
-      "label",
-      "vendor",
-      "orderId",
-      "date",
-      "statedTotal",
-      "lines",
-      "lineTotal",
-      "reconciliation",
-      "documents",
-      "transactions",
-      "dataQuality",
-      "dataGaps",
-      "lineTotalMin",
-      "lineTotalMax",
-      "related-expense",
-      "expenseId",
-      "expensePresenceFilter",
-      "related-financialTransaction",
-      "financialTransactionId",
-      "financialTransactionPresenceFilter",
-      "related-product",
-      "productId",
-      "productPresenceFilter",
-      "related-project",
-      "projectId",
-      "projectPresenceFilter",
-      "createdAt",
-      "updatedAt",
-    ]);
-    // And the fragment survives what `parseSearch` hands it — an all-digits
-    // order-id search arrives pre-parsed as a number.
-    expect(
-      z.object(entityFilterSearchFields("purchase")).parse({ q: 486242 }),
-    ).toMatchObject({ q: "486242" });
   });
 
   it("round-trips a ?vendor= scope through the URL", () => {
@@ -853,22 +783,38 @@ describe("expense URL-only scopes", () => {
 
 /**
  * The manifest's own schema fragment must survive what TanStack's `parseSearch`
- * hands it, not just the strings the specs describe. Both of these arrive
+ * hands it, not just the strings the specs describe. Both shapes below arrive
  * pre-parsed into another type from a hand-typed URL, and used to be dropped.
  */
 describe("manifest search fields survive JSON-parsed values", () => {
-  const parse = (search: Record<string, unknown>) =>
-    z.object(entityFilterSearchFields("expense")).parse(search);
+  const parse = (entity: Entity, search: Record<string, unknown>) =>
+    z.object(entityFilterSearchFields(entity)).parse(search);
 
-  it("keeps an all-digits order id that parsed as a number", () => {
-    expect(parse({ order: 11334 })).toMatchObject({ order: "11334" });
-  });
+  // Order ids and vendor names are routinely all digits, so a hand-typed
+  // `?q=486242` reaches the schema as a NUMBER. One row per entity whose
+  // search key is a realistic place to type one.
+  it.each([
+    ["expense", "order", 11334],
+    ["vendor", "q", 486242],
+    ["purchase", "q", 486242],
+  ] as const)(
+    "%s: keeps an all-digits ?%s= that parsed as a number",
+    (entity, key, value) => {
+      expect(parse(entity, { [key]: value })).toMatchObject({
+        [key]: String(value),
+      });
+    },
+  );
 
   it("keeps a boolean-shaped filter value that parsed as a boolean", () => {
     // `future`'s option values are the literal strings "true"/"false", so its
     // URL form is indistinguishable from a JSON boolean.
-    expect(parse({ future: true })).toMatchObject({ future: "true" });
-    expect(parse({ future: false })).toMatchObject({ future: "false" });
+    expect(parse("expense", { future: true })).toMatchObject({
+      future: "true",
+    });
+    expect(parse("expense", { future: false })).toMatchObject({
+      future: "false",
+    });
   });
 });
 

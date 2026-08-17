@@ -44,7 +44,7 @@ import {
   setExpensesTrade,
   updateExpense,
 } from "~/server/repo/expense";
-import { createProduct, deleteProducts } from "~/server/repo/product";
+import { createProduct } from "~/server/repo/product";
 import { createProject, deleteProjects } from "~/server/repo/project";
 import {
   deletePurchases,
@@ -2388,58 +2388,6 @@ describe("expense repository — product bridge", () => {
     expect(data.reduce((sum, p) => sum + (p.cost ?? 0), 0)).toBe(30);
   });
 
-  it("deleteProducts rejects a product still referenced by a live expense", async () => {
-    // This used to be permitted deliberately — a product referenced only by
-    // expenses deleted fine, and the dangling link degraded to a null
-    // display name via resolveLiveJoinName. That was reversed
-    // (PRODUCT_HAS_EXPENSES, mirroring PRODUCT_HAS_INVENTORY): the ledger's
-    // net cost and owned/sold window are derived from these rows, and a
-    // nameless product would silently corrupt that derivation with no
-    // restore path. See expense repository — productPresenceFilter's "has"
-    // still counts an expense whose linked product was later soft-deleted"
-    // below for the (still-real) dangling-link read path, produced by writing
-    // deletedAt directly rather than through this now-blocked guard.
-    const bridgeDoomedDrill = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "bridge doomed drill" }),
-      ctx.actor,
-    );
-    const { output: created } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        trade: "other",
-        costType: "tools",
-        name: "doomed drill",
-        productId: bridgeDoomedDrill.id,
-      }),
-      ctx.actor,
-    );
-
-    await expect(
-      deleteProducts(
-        ctx.db,
-        [
-          unsafeProductId(
-            (await resolveLiveShortcode(
-              ctx.db,
-              bridgeDoomedDrill.id,
-              "product",
-            ))!,
-          ),
-        ],
-        ctx.actor,
-      ),
-    ).rejects.toMatchObject({
-      code: "PRECONDITION_FAILED",
-      cause: { reason: "PRODUCT_HAS_EXPENSES" },
-    });
-
-    const read = await getExpenseByShortcode(ctx.db, created.id);
-    expect(read?.productId).toBe(bridgeDoomedDrill.id);
-    expect(read?.productName).toBe("bridge doomed drill");
-  });
-
   it("still matches name search when vendor is null", async () => {
     // Regression gate: vendor must never join the `search` term, because
     // buildSearchConditions ANDs its searchFilters — `name ILIKE q AND vendor
@@ -2666,50 +2614,23 @@ describe("expense repository — product bridge", () => {
   });
 });
 
-// P0 regression guard: `eqAny([])` is "no constraint" BY DESIGN (see its doc
-// in database-helpers/query.ts) — a `productId`/`vendorId`/`purchaseId` filter
-// that was SUPPLIED but resolved to no live row must not fall through to "no
-// constraint" (which would return every expense in the table). It must
-// resolve to zero rows. This file also guards `resolveShortcodes`' canonical-
-// key lookup (a lowercase code must still resolve) and the entity guard (a
-// wrong-prefix code must match nothing, never an unrelated row) since all
-// three bugs live in the same `toUuids` helper these filters share.
-describe("expense repository — id filter widening & shortcode canonicalization guards", () => {
+// The unresolvable-code and wrong-prefix halves of this guard now live in
+// `filter-application.integration.test.ts`, which runs both against every
+// declared id filter on every entity — `productId`/`vendorId`/`purchaseId`
+// included.
+//
+// The POSITIVE lowercase cases stay here, because that generic probe cannot
+// express them: its seeded world is deliberately unrelated, so the canonical
+// form of a real code already matches zero rows and its
+// `lower.count === upper.count` check holds vacuously. It therefore still
+// catches #591's widening (`eqAny([])` is "no constraint" BY DESIGN, so a
+// dropped predicate returns the whole table) but NOT what a
+// supplied-but-unresolved code produces today — `sql\`false\``, a silent zero
+// on both sides. A real product/vendor/purchase link is what gives the
+// assertion teeth.
+describe("expense repository — id filter shortcode canonicalization guards", () => {
   const ctx = withTestDb();
   const pagination = { pageIndex: 0, pageSize: 50 };
-
-  it("an unresolvable productId matches nothing, not every expense", async () => {
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        trade: "other",
-        costType: "materials",
-        name: "widening guard row one",
-      }),
-      ctx.actor,
-    );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        trade: "other",
-        costType: "materials",
-        name: "widening guard row two",
-      }),
-      ctx.actor,
-    );
-
-    const bogus = unsafeProductShortcode("PRD-9999");
-    const { data, count } = await expenseList(
-      ctx.db,
-      { productId: bogus },
-      [],
-      pagination,
-    );
-    expect(data).toEqual([]);
-    expect(count).toBe(0);
-  });
 
   it("a lowercase productId still resolves and filters correctly", async () => {
     const product = await createProduct(
@@ -2747,41 +2668,6 @@ describe("expense repository — id filter widening & shortcode canonicalization
       pagination,
     );
     expect(data.map((p) => p.id)).toEqual([linked.id]);
-  });
-
-  it("an unresolvable vendorId matches nothing, not every expense", async () => {
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        trade: "other",
-        costType: "materials",
-        name: "widening guard vendor row one",
-        vendor: "Widening Guard Vendor A",
-      }),
-      ctx.actor,
-    );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        trade: "other",
-        costType: "materials",
-        name: "widening guard vendor row two",
-        vendor: "Widening Guard Vendor B",
-      }),
-      ctx.actor,
-    );
-
-    const bogus = unsafeVendorShortcode("VEN-9999");
-    const { data, count } = await expenseList(
-      ctx.db,
-      { vendorId: bogus },
-      [],
-      pagination,
-    );
-    expect(data).toEqual([]);
-    expect(count).toBe(0);
   });
 
   it("an unresolvable vendorId still ORs correctly with vendorPresenceFilter: none", async () => {
@@ -2859,41 +2745,6 @@ describe("expense repository — id filter widening & shortcode canonicalization
     expect(data.map((p) => p.id)).toEqual([lumber.id]);
   });
 
-  it("an unresolvable purchaseId matches nothing, not every expense", async () => {
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        trade: "other",
-        costType: "materials",
-        name: "widening guard purchase row one",
-        vendor: "Widening Guard Purchase Vendor A",
-      }),
-      ctx.actor,
-    );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        trade: "other",
-        costType: "materials",
-        name: "widening guard purchase row two",
-        vendor: "Widening Guard Purchase Vendor B",
-      }),
-      ctx.actor,
-    );
-
-    const bogus = unsafePurchaseShortcode("PUR-9999");
-    const { data, count } = await expenseList(
-      ctx.db,
-      { purchaseId: bogus },
-      [],
-      pagination,
-    );
-    expect(data).toEqual([]);
-    expect(count).toBe(0);
-  });
-
   it("a lowercase purchaseId still resolves and filters correctly", async () => {
     const { output: first } = await createExpense(
       ctx.db,
@@ -2928,42 +2779,6 @@ describe("expense repository — id filter widening & shortcode canonicalization
       pagination,
     );
     expect(data.map((p) => p.id)).toEqual([first.id]);
-  });
-
-  it("a wrong-entity code (a real project shortcode) as purchaseId matches nothing", async () => {
-    const { output: project } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "widening guard wrong entity project" }),
-      ctx.actor,
-    );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        trade: "other",
-        costType: "materials",
-        name: "widening guard wrong entity row",
-        vendor: "Widening Guard Wrong Entity Vendor",
-      }),
-      ctx.actor,
-    );
-
-    // A well-formed, LIVE shortcode — just for the wrong entity. The entity
-    // guard in `toUuids` must reject it rather than let it slip through as an
-    // unbranded uuid that happens to match nothing (or, worse, something).
-    // `${project.id}` de-brands it to a plain string first — `unsafe*Shortcode`
-    // is type-guarded against re-casting an already-branded value, which this
-    // test deliberately does to simulate a caller passing the wrong entity's
-    // code.
-    const wrongEntity = unsafePurchaseShortcode(`${project.id}`);
-    const { data, count } = await expenseList(
-      ctx.db,
-      { purchaseId: wrongEntity },
-      [],
-      pagination,
-    );
-    expect(data).toEqual([]);
-    expect(count).toBe(0);
   });
 });
 

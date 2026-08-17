@@ -125,7 +125,19 @@ const normalizeRecipeFormBasics = (values: RecipeFormValues) => ({
     values.yield?.value != null && values.yield.unit
       ? { value: values.yield.value, unit: values.yield.unit }
       : null,
-  meta: values.meta?.url ? { url: values.meta.url } : null,
+  // Preserve every non-url meta field the form doesn't edit. Reconstructing
+  // `{ url }` here dropped times/equipment/page, which then got written back as
+  // nulls by the update path — see the comment on `recipeMetaDraft`.
+  meta:
+    values.meta?.url ||
+    values.meta?.times ||
+    values.meta?.equipment ||
+    values.meta?.page
+      ? {
+          ...values.meta,
+          url: values.meta.url ?? null,
+        }
+      : null,
   notes: values.notes?.trim() ? values.notes : null,
 });
 

@@ -9,11 +9,22 @@ import { cookbookSummary } from "./recipe";
 // server parses them on import. Lenient by design: extractors omit empty
 // metadata, so most fields are optional.
 
+// Times arrive twice over: the prose string is verbatim what the source printed,
+// the `*_minutes` count is the same duration as a number. A present string does
+// NOT imply a present count — the scraper fills both from an ISO-8601 duration,
+// but the EPUB extractor parses the model's freeform prose conservatively, so a
+// range ("1 to 2 hours") or an open-ended phrase ("overnight") keeps its string
+// and leaves the count absent. Snake-cased because these mirror the Rust
+// `recipe_types::RecipeTimes` JSON verbatim.
 const importRecipeTimes = z.object({
   active: z.string().optional(),
   total: z.string().optional(),
   prep: z.string().optional(),
   cook: z.string().optional(),
+  active_minutes: z.number().int().nonnegative().optional(),
+  total_minutes: z.number().int().nonnegative().optional(),
+  prep_minutes: z.number().int().nonnegative().optional(),
+  cook_minutes: z.number().int().nonnegative().optional(),
 });
 
 // Structured yield, as the URL scraper produces it (parsed from schema.org).

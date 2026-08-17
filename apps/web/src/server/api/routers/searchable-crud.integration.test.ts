@@ -68,53 +68,55 @@ describe("searchable CRUD factory", () => {
 describe("every entity router stamps a usable, correctly-prefixed shortcode on create", () => {
   const ctx = withTestDb();
 
-  it("product", async () => {
-    const caller = createTestCaller(productRouter, ctx.db);
-    const created = await caller.create(
-      makeProductInput({ name: "Shortcode Ground Truth Product" }),
-    );
-    expect(parseShortcode(created.id)).toMatchObject({
-      type: "product",
-      legacy: false,
-    });
-  });
+  // One row per entity: a `create` thunk (the routers' input shapes differ too
+  // much to share one) and the shortcode type its id must carry. A new
+  // MCP-crossing entity gets a row rather than a copied block.
+  //
+  // `vendor.id` IS the shortcode — vendor has no separate `.shortcode` field
+  // (collapsed in the shortcode cutover, unlike product/location/ingredient,
+  // which haven't gone through it yet). The assertion is the same either way,
+  // which is what makes one table legitimate here.
+  const CREATES: ReadonlyArray<
+    [string, (db: typeof ctx.db) => Promise<{ id: string }>]
+  > = [
+    [
+      "product",
+      (db) =>
+        createTestCaller(productRouter, db).create(
+          makeProductInput({ name: "Shortcode Ground Truth Product" }),
+        ),
+    ],
+    [
+      "location",
+      (db) =>
+        createTestCaller(locationRouter, db).create(
+          makeLocationInput({ name: "Shortcode Ground Truth Location" }),
+        ),
+    ],
+    [
+      "ingredient",
+      (db) =>
+        createTestCaller(ingredientRouter, db).create(
+          mock(ingredientCreateInput, {
+            overrides: { name: "Shortcode Ground Truth Ingredient" },
+          }),
+        ),
+    ],
+    [
+      "vendor",
+      (db) =>
+        createTestCaller(vendorRouter, db).create(
+          mock(vendorCreateInput, {
+            overrides: { name: "Shortcode Ground Truth Vendor" },
+          }),
+        ),
+    ],
+  ];
 
-  it("location", async () => {
-    const caller = createTestCaller(locationRouter, ctx.db);
-    const created = await caller.create(
-      makeLocationInput({ name: "Shortcode Ground Truth Location" }),
-    );
+  it.each(CREATES)("%s", async (entity, create) => {
+    const created = await create(ctx.db);
     expect(parseShortcode(created.id)).toMatchObject({
-      type: "location",
-      legacy: false,
-    });
-  });
-
-  it("ingredient", async () => {
-    const caller = createTestCaller(ingredientRouter, ctx.db);
-    const created = await caller.create(
-      mock(ingredientCreateInput, {
-        overrides: { name: "Shortcode Ground Truth Ingredient" },
-      }),
-    );
-    expect(parseShortcode(created.id)).toMatchObject({
-      type: "ingredient",
-      legacy: false,
-    });
-  });
-
-  it("vendor", async () => {
-    const caller = createTestCaller(vendorRouter, ctx.db);
-    const created = await caller.create(
-      mock(vendorCreateInput, {
-        overrides: { name: "Shortcode Ground Truth Vendor" },
-      }),
-    );
-    // `vendor.id` IS the shortcode now — vendor has no separate `.shortcode`
-    // field (collapsed in the shortcode cutover, unlike product/location/
-    // ingredient above, which haven't gone through it yet).
-    expect(parseShortcode(created.id)).toMatchObject({
-      type: "vendor",
+      type: entity,
       legacy: false,
     });
   });
@@ -135,65 +137,106 @@ describe("factory-migrated routers expose the standard getByID/delete contract",
       sideEffects: { backgroundBatches: expect.any(Array) },
     });
 
-  it("vendor", async () => {
-    const caller = createTestCaller(vendorRouter, ctx.db);
-    const created = await caller.create(
-      mock(vendorCreateInput, { overrides: { name: "Contract Vendor" } }),
-    );
+  /**
+   * What a row hands the shared body. The three calls are pre-bound closures
+   * rather than a shared caller type: each router's ids are branded to its own
+   * entity, so nothing narrower than "call it for me" is assignable across all
+   * three.
+   */
+  interface FactoryCrudSubject {
+    id: string;
+    /** Fields `getByID` must read back beyond the id. */
+    expected: Record<string, unknown>;
+    getByID: () => Promise<unknown>;
+    getByShortcode: () => Promise<unknown>;
+    remove: () => Promise<unknown>;
+  }
 
-    const fetched = await caller.getByID({ id: created.id });
-    expect(fetched).toMatchObject({ id: created.id, name: "Contract Vendor" });
-    // getByShortcode is what every detail-page route loader calls, so a broken
-    // adapter here 500s the page while getByID stays green.
-    expect(
-      await caller.getByShortcode({ shortcode: created.id }),
-    ).toMatchObject({ id: created.id });
+  // Each row only creates its entity and names what `getByID` should read back.
+  // Everything after that — the `getByShortcode` adapter, the side-effect
+  // summary on delete, and the post-delete throw — is the factory contract
+  // itself, identical per entity, so it is asserted once below instead of
+  // copied per block. A newly factory-migrated router gets a row.
+  //
+  // `getByShortcode` is what every detail-page route loader calls, so a broken
+  // adapter there 500s the page while `getByID` stays green.
+  const SUBJECTS: ReadonlyArray<
+    [string, (db: typeof ctx.db) => Promise<FactoryCrudSubject>]
+  > = [
+    [
+      "vendor",
+      async (db) => {
+        const caller = createTestCaller(vendorRouter, db);
+        const { id } = await caller.create(
+          mock(vendorCreateInput, { overrides: { name: "Contract Vendor" } }),
+        );
+        return {
+          id,
+          expected: { name: "Contract Vendor" },
+          getByID: () => caller.getByID({ id }),
+          getByShortcode: () => caller.getByShortcode({ shortcode: id }),
+          remove: () => caller.delete({ ids: [id] }),
+        };
+      },
+    ],
+    [
+      "wish",
+      async (db) => {
+        const caller = createTestCaller(wishRouter, db);
+        const { id } = await caller.create(
+          mock(wishCreateInput, {
+            overrides: { name: "Contract Wish", candidateProductIds: [] },
+          }),
+        );
+        return {
+          id,
+          expected: { name: "Contract Wish" },
+          getByID: () => caller.getByID({ id }),
+          getByShortcode: () => caller.getByShortcode({ shortcode: id }),
+          remove: () => caller.delete({ ids: [id] }),
+        };
+      },
+    ],
+    [
+      "purchase",
+      async (db) => {
+        const vendor = await createTestCaller(vendorRouter, db).create(
+          mock(vendorCreateInput, {
+            overrides: { name: "Contract Purchase Co" },
+          }),
+        );
+        const caller = createTestCaller(purchaseRouter, db);
+        const { id } = await caller.create(
+          mock(purchaseCreateInput, {
+            overrides: {
+              vendorId: vendor.id,
+              orderId: "CONTRACT-1",
+              pendingImageIds: [],
+            },
+          }),
+        );
+        return {
+          id,
+          expected: { vendorId: vendor.id },
+          getByID: () => caller.getByID({ id }),
+          getByShortcode: () => caller.getByShortcode({ shortcode: id }),
+          remove: () => caller.delete({ ids: [id] }),
+        };
+      },
+    ],
+  ];
 
-    expectSideEffectSummary(await caller.delete({ ids: [created.id] }));
-    await expect(caller.getByID({ id: created.id })).rejects.toThrow();
-  });
+  it.each(SUBJECTS)("%s", async (_entity, seed) => {
+    const subject = await seed(ctx.db);
 
-  it("wish", async () => {
-    const caller = createTestCaller(wishRouter, ctx.db);
-    const created = await caller.create(
-      mock(wishCreateInput, {
-        overrides: { name: "Contract Wish", candidateProductIds: [] },
-      }),
-    );
+    expect(await subject.getByID()).toMatchObject({
+      id: subject.id,
+      ...subject.expected,
+    });
+    expect(await subject.getByShortcode()).toMatchObject({ id: subject.id });
 
-    const fetched = await caller.getByID({ id: created.id });
-    expect(fetched).toMatchObject({ id: created.id, name: "Contract Wish" });
-    expect(
-      await caller.getByShortcode({ shortcode: created.id }),
-    ).toMatchObject({ id: created.id });
-
-    expectSideEffectSummary(await caller.delete({ ids: [created.id] }));
-    await expect(caller.getByID({ id: created.id })).rejects.toThrow();
-  });
-
-  it("purchase", async () => {
-    const vendor = await createTestCaller(vendorRouter, ctx.db).create(
-      mock(vendorCreateInput, { overrides: { name: "Contract Purchase Co" } }),
-    );
-    const caller = createTestCaller(purchaseRouter, ctx.db);
-    const created = await caller.create(
-      mock(purchaseCreateInput, {
-        overrides: {
-          vendorId: vendor.id,
-          orderId: "CONTRACT-1",
-          pendingImageIds: [],
-        },
-      }),
-    );
-
-    const fetched = await caller.getByID({ id: created.id });
-    expect(fetched).toMatchObject({ id: created.id, vendorId: vendor.id });
-    expect(
-      await caller.getByShortcode({ shortcode: created.id }),
-    ).toMatchObject({ id: created.id });
-
-    expectSideEffectSummary(await caller.delete({ ids: [created.id] }));
-    await expect(caller.getByID({ id: created.id })).rejects.toThrow();
+    expectSideEffectSummary(await subject.remove());
+    await expect(subject.getByID()).rejects.toThrow();
   });
 
   /**

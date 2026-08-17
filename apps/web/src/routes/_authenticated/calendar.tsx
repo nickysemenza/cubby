@@ -3,6 +3,9 @@ import {
   stripSearchParams,
   useNavigate,
 } from "@tanstack/react-router";
+import { useCallback, useMemo } from "react";
+import { CalendarFilterBar } from "~/app/calendar/calendar-filter-bar";
+import { buildCalendarFilters } from "~/app/calendar/calendar-filters";
 import {
   calendarSearchDefaults,
   calendarSearchSchema,
@@ -22,6 +25,21 @@ export const Route = createFileRoute("/_authenticated/calendar")({
 function CalendarRoute() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
+  // `search` is referentially stable per navigation, and `filters` is a
+  // `useMemo` dependency of the query range downstream — building it inline
+  // would allocate a fresh object every render and churn the range.
+  const filters = useMemo(() => buildCalendarFilters(search), [search]);
+  // Stable, so `ManifestFilterBar`'s `commit` callback — and the draft effect
+  // that depends on it — don't churn every render. `LedgerFilters` gets this
+  // for free from its `[table]` dep; the URL-backed bar has to say it.
+  const onSearchChange = useCallback(
+    (params: Record<string, string | undefined>) =>
+      void navigate({
+        search: (previous) => ({ ...previous, ...params }),
+        replace: true,
+      }),
+    [navigate],
+  );
 
   return (
     <Page
@@ -30,11 +48,11 @@ function CalendarRoute() {
       fullWidth
       actions={<CalendarSubscribeDialog />}
     >
+      <CalendarFilterBar search={search} onSearchChange={onSearchChange} />
       <UnifiedCalendar
         date={search.date}
         day={search.day}
-        kinds={search.kinds}
-        projectKinds={search.projectKinds}
+        filters={filters}
         onDateChange={(date) =>
           void navigate({
             search: (previous) => ({ ...previous, date }),
@@ -44,18 +62,6 @@ function CalendarRoute() {
         onDayChange={(day) =>
           void navigate({
             search: (previous) => ({ ...previous, day }),
-            replace: true,
-          })
-        }
-        onKindsChange={(kinds) =>
-          void navigate({
-            search: (previous) => ({ ...previous, kinds }),
-            replace: true,
-          })
-        }
-        onProjectKindsChange={(projectKinds) =>
-          void navigate({
-            search: (previous) => ({ ...previous, projectKinds }),
             replace: true,
           })
         }

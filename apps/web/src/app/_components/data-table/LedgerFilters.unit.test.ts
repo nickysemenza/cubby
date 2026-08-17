@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { FilterFieldConfig } from "~/components/reui/filters";
 import {
-  columnFiltersToLedgerFilters,
-  ledgerFiltersToColumnFilters,
-} from "./LedgerFilters";
+  barFiltersToFilterState,
+  filterStateToBarFilters,
+} from "./filter-bar-core";
 
 type TestField = FilterFieldConfig<string> & {
   key: string;
@@ -24,7 +24,7 @@ describe("LedgerFilters adapters", () => {
       { id: "project", value: "project-1" },
     ];
 
-    const ledger = columnFiltersToLedgerFilters(tableFilters, fields);
+    const ledger = filterStateToBarFilters(tableFilters, fields);
 
     expect(
       ledger.map(({ field, operator, values }) => ({
@@ -41,12 +41,12 @@ describe("LedgerFilters adapters", () => {
       },
       { field: "project", operator: "is", values: ["project-1"] },
     ]);
-    expect(ledgerFiltersToColumnFilters(ledger, fields)).toEqual(tableFilters);
+    expect(barFiltersToFilterState(ledger, fields)).toEqual(tableFilters);
   });
 
   it("drops empty values and unknown fields", () => {
     expect(
-      ledgerFiltersToColumnFilters(
+      barFiltersToFilterState(
         [
           {
             id: "empty",

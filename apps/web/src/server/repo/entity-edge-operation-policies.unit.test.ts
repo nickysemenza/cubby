@@ -143,17 +143,35 @@ describe("ENTITY_LIFECYCLE_REGISTRY matches entityManifest lifecycle claims", ()
       (e) => e.entity === entity && e.operation === operation,
     );
 
-  for (const entity of allEntities) {
-    const { lifecycle } = entityManifest[entity];
+  // Accumulated rather than one `it` per entity per operation: a drift usually
+  // lands on several entities at once (a registry rebuild, a manifest sweep),
+  // and naming all of them in one failure beats reading them off ~38 separate
+  // red lines.
+  const drift = (
+    operation: "delete" | "merge",
+    claims: (entity: Entity) => boolean,
+  ) =>
+    allEntities
+      .filter((entity) => hasEntry(entity, operation) !== claims(entity))
+      .map(
+        (entity) =>
+          `${entity}: registry ${hasEntry(entity, operation) ? "has" : "lacks"} a "${operation}" entry, manifest ${claims(entity) ? "claims" : "does not claim"} one`,
+      );
 
-    it(`${entity}: "delete" entry presence matches lifecycle.delete`, () => {
-      expect(hasEntry(entity, "delete")).toBe(lifecycle.delete !== null);
-    });
+  it('"delete" entries match lifecycle.delete, entity for entity', () => {
+    expect(
+      drift(
+        "delete",
+        (entity) => entityManifest[entity].lifecycle.delete !== null,
+      ),
+    ).toEqual([]);
+  });
 
-    it(`${entity}: "merge" entry presence matches lifecycle.merge`, () => {
-      expect(hasEntry(entity, "merge")).toBe(lifecycle.merge);
-    });
-  }
+  it('"merge" entries match lifecycle.merge, entity for entity', () => {
+    expect(
+      drift("merge", (entity) => entityManifest[entity].lifecycle.merge),
+    ).toEqual([]);
+  });
 
   it("has no duplicate (entity, operation) entries", () => {
     const keys = ENTITY_LIFECYCLE_REGISTRY.map(

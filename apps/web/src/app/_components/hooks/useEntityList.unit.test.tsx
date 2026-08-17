@@ -122,7 +122,48 @@ vi.mock("./useStandardColumns", () => ({
   useStandardColumns: () => [] as ColumnDef<TestRow>[],
 }));
 
+import { useClientEntityList } from "./useClientEntityList";
 import { useEntityList } from "./useEntityList";
+
+/**
+ * `useClientEntityList` is a second entry point into the SAME table contract —
+ * it differs only in where the rows come from (a prop, versus the server list
+ * query). Anything both hooks must hand `useTableConfig` belongs here, run over
+ * both, so a fix applied to one can't quietly skip the other.
+ */
+describe.each([
+  [
+    "useEntityList",
+    () =>
+      useEntityList<TestRow, Record<string, never>>({
+        entity: "product",
+        queryOptions: vi.fn(),
+        buildFilters: () => ({}),
+        columns: [],
+      }),
+  ],
+  [
+    "useClientEntityList",
+    () =>
+      useClientEntityList<TestRow>({
+        entity: "product",
+        data: [{ id: "PRD-TEST" }],
+        columns: [],
+      }),
+  ],
+] as const)("%s — shared table contract", (_name, render) => {
+  beforeEach(() => mocks.useTableConfig.mockClear());
+
+  it("passes a related-preview render version into the table contract", () => {
+    renderHook(render);
+
+    expect(mocks.useTableConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rowContentVersion: expect.objectContaining({ loading: false }),
+      }),
+    );
+  });
+});
 
 describe("useEntityList", () => {
   beforeEach(() => {
@@ -165,22 +206,6 @@ describe("useEntityList", () => {
 
     const options = mocks.useTableConfig.mock.calls[0]?.[0];
     expect(options?.getRowId?.({ id: "EXP-TEST" })).toBe("EXP-TEST");
-  });
-
-  it("passes a related-preview render version into the table contract", () => {
-    renderHook(() =>
-      useEntityList<TestRow, Record<string, never>>({
-        entity: "product",
-        queryOptions: vi.fn(),
-        buildFilters: () => ({}),
-        columns: [],
-      }),
-    );
-
-    const options = mocks.useTableConfig.mock.calls[0]?.[0];
-    expect(options?.rowContentVersion).toEqual(
-      expect.objectContaining({ loading: false }),
-    );
   });
 
   it("clears bulk selection when the filter scope changes, but not initially", () => {

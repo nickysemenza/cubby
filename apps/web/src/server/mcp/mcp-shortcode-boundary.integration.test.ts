@@ -99,269 +99,220 @@ function expectShortcode(value: unknown, entity: string) {
 describe("MCP CRUD round trips are driven by shortcodes only", () => {
   const ctx = withTestDb();
 
-  it("location: create returns a usable shortcode, and parentId resolves (relationship field)", async () => {
-    const caller = createTestCaller(domainRouter, ctx.db);
+  /** Create through a tool and hand back the public id it minted. */
+  async function createCode(
+    caller: DomainCaller,
+    tool: string,
+    args: Record<string, unknown>,
+  ): Promise<string> {
+    const result = await callTool(tool, args, caller);
+    expectOk(result);
+    return structured(result).id as string;
+  }
 
-    const parent = await callTool(
-      "create_location",
-      { name: "Shortcode Pantry", type: "room", parentId: null },
-      caller,
-    );
-    expectOk(parent);
-    const parentOut = structured(parent);
-    expectShortcode(parentOut.id, "location");
-    const parentCode = parentOut.id as string;
+  /** Shortcodes minted by a row's `setup`, keyed by role. */
+  type Bag = Record<string, string>;
+  /** Which tool output a check runs against. */
+  type Phase = "create" | "get" | "update";
+  /** A dotted path into an output (array indices allowed), or a reader. */
+  type FieldPath = string | ((out: Record<string, unknown>) => unknown);
+  /** `[path, expected, ...phases]` — phases default to the create output. */
+  type FieldCheck = [FieldPath, unknown, ...Phase[]];
 
-    const child = await callTool(
-      "create_location",
-      { name: "Shortcode Shelf", type: "shelf", parentId: parentCode },
-      caller,
-    );
-    expectOk(child);
-    const childOut = structured(child);
-    expectShortcode(childOut.id, "location");
-    const childCode = childOut.id as string;
-    // Relationship field resolves: parentId round-trips to the PARENT's
-    // public id, not its private uuid.
-    expect(childOut.parentId).toBe(parentCode);
+  function readPath(out: Record<string, unknown>, path: FieldPath): unknown {
+    if (typeof path === "function") return path(out);
+    return path
+      .split(".")
+      .reduce<unknown>(
+        (acc, key) => (acc as Record<string, unknown> | undefined)?.[key],
+        out,
+      );
+  }
 
-    const listed = await callTool(
-      "list_locations",
-      { nameFilter: "Shortcode Shelf" },
-      caller,
-    );
-    expectOk(listed);
-    const items = structured(listed).items as Array<Record<string, unknown>>;
-    expect(items).toHaveLength(1);
-    expect(items[0]?.id).toBe(childCode);
+  function runChecks(
+    out: Record<string, unknown>,
+    checks: FieldCheck[],
+    phase: Phase,
+  ) {
+    for (const [path, expected, ...phases] of checks) {
+      if (!(phases.length ? phases : ["create"]).includes(phase)) continue;
+      const label = typeof path === "string" ? path : "(reader)";
+      expect(readPath(out, path), `${phase}: ${label}`).toEqual(expected);
+    }
+  }
 
-    const got = await callTool("get_location", { id: childCode }, caller);
-    expectOk(got);
-    expect(structured(got).parentName).toBe("Shortcode Pantry");
-    expect(structured(got).parentId).toBe(parentCode);
+  interface RoundTrip {
+    /** The entity every minted id must be stamped for, and the test's name. */
+    entity: string;
+    /** Tool names in lifecycle order: `create list get update [delete]`. */
+    tools: string;
+    /** Prerequisite entities; everything below closes over the codes it returns. */
+    setup?: (caller: DomainCaller) => Promise<Bag>;
+    createArgs: (bag: Bag) => Record<string, unknown>;
+    listArgs: (bag: Bag) => Record<string, unknown>;
+    /** Exact result count, where the filter is precise enough to pin one. */
+    expectListLength?: number;
+    /** A filter the list tool must REJECT (a raw uuid where a code belongs). */
+    rejectsListArgs?: Record<string, unknown>;
+    /** Merged with `{ id }`. */
+    updateArgs: Record<string, unknown>;
+    /** Relationship round-trips and field assertions, per phase. */
+    checks?: (bag: Bag) => FieldCheck[];
+    /** Anything that doesn't fit the skeleton; runs after update. */
+    extraChecks?: (args: {
+      caller: DomainCaller;
+      createdOut: Record<string, unknown>;
+      code: string;
+      bag: Bag;
+    }) => Promise<void>;
+    /** Defaults to `deleted === 1`. */
+    checkDelete?: (out: Record<string, unknown>, code: string) => void;
+    /** Whether `get` must error once the row is gone. */
+    getFailsAfterDelete?: boolean;
+  }
 
-    const updated = await callTool(
-      "update_location",
-      { id: childCode, name: "Shortcode Shelf Renamed" },
-      caller,
-    );
-    expectOk(updated);
-    expect(structured(updated).name).toBe("Shortcode Shelf Renamed");
-    // The shortcode never changes across an update.
-    expect(structured(updated).id).toBe(childCode);
+  function toolsOf(row: RoundTrip) {
+    const [create, list, get, update, remove] = row.tools.split(" ");
+    if (!create || !list || !get || !update) {
+      throw new Error(`Malformed tool lifecycle for ${row.entity}`);
+    }
+    return { create, list, get, update, remove };
+  }
 
-    const deleted = await callTool(
-      "delete_locations",
-      { ids: [childCode] },
-      caller,
-    );
-    expectOk(deleted);
-    expect(structured(deleted).deleted).toBe(1);
-
-    const afterDelete = await callTool(
-      "get_location",
-      { id: childCode },
-      caller,
-    );
-    expect(afterDelete.isError).toBe(true);
-  });
-
-  it("ingredient: create -> search -> get -> update -> delete", async () => {
-    const caller = createTestCaller(domainRouter, ctx.db);
-
-    const created = await callTool(
-      "create_ingredient",
-      { name: "Shortcode Basil", aliases: ["sweet basil"] },
-      caller,
-    );
-    expectOk(created);
-    expectShortcode(structured(created).id, "ingredient");
-    const code = structured(created).id as string;
-
-    const listed = await callTool(
-      "search_ingredients",
-      { nameFilter: "Shortcode Basil" },
-      caller,
-    );
-    expectOk(listed);
-    const items = structured(listed).items as Array<Record<string, unknown>>;
-    expect(items.map((i) => i.id)).toContain(code);
-
-    const got = await callTool("get_ingredient", { id: code }, caller);
-    expectOk(got);
-    expect(structured(got).name).toBe("Shortcode Basil");
-
-    const updated = await callTool(
-      "update_ingredient",
-      { id: code, name: "Shortcode Basil Renamed" },
-      caller,
-    );
-    expectOk(updated);
-    expect(structured(updated).name).toBe("Shortcode Basil Renamed");
-
-    const deleted = await callTool(
-      "delete_ingredients",
-      { ids: [code] },
-      caller,
-    );
-    expectOk(deleted);
-    expect(structured(deleted).deleted).toBe(1);
-  });
-
-  it("product: create with an ingredient shortcode link -> search -> get -> update -> delete", async () => {
-    const caller = createTestCaller(domainRouter, ctx.db);
-
-    const ingredient = await callTool(
-      "create_ingredient",
-      { name: "Shortcode Flour", aliases: [] },
-      caller,
-    );
-    expectOk(ingredient);
-    const ingredientCode = structured(ingredient).id as string;
-
-    const created = await callTool(
-      "create_product",
+  const financialAccountArgs = (name: string, last4: string) => ({
+    name,
+    identity: {
+      kind: "credit_card",
+      issuer: "Test Bank",
+      network: "visa",
+      last4,
+    },
+    sourceAliases: [
       {
-        name: "Shortcode Flour 5lb Bag",
-        upc: null,
-        manufacturer: "Test Mfg",
-        ingredientId: ingredientCode,
+        source: "shortcode-test",
+        alias: `Visa ending ${last4}`,
+        externalAccountId: `acct-shortcode-${last4}`,
       },
-      caller,
-    );
-    expectOk(created);
-    const createdOut = structured(created);
-    expectShortcode(createdOut.id, "product");
-    const productCode = createdOut.id as string;
-    // Relationship field resolves: ingredientId round-trips to the
-    // ingredient's public id.
-    expect(createdOut.ingredientId).toBe(ingredientCode);
-
-    const listed = await callTool(
-      "search_products",
-      { nameFilter: "Shortcode Flour 5lb Bag" },
-      caller,
-    );
-    expectOk(listed);
-    const items = structured(listed).items as Array<Record<string, unknown>>;
-    expect(items.map((i) => i.id)).toContain(productCode);
-
-    const got = await callTool("get_product", { id: productCode }, caller);
-    expectOk(got);
-    expect(structured(got).ingredientId).toBe(ingredientCode);
-
-    const updated = await callTool(
-      "update_product",
-      { id: productCode, name: "Shortcode Flour 5lb Bag v2" },
-      caller,
-    );
-    expectOk(updated);
-    expect(structured(updated).name).toBe("Shortcode Flour 5lb Bag v2");
-
-    const deleted = await callTool(
-      "delete_products",
-      { ids: [productCode] },
-      caller,
-    );
-    expectOk(deleted);
-    expect(structured(deleted).deleted).toBe(1);
+    ],
   });
 
-  it("inventory: productId/locationId relationship fields resolve on create and get", async () => {
-    const caller = createTestCaller(domainRouter, ctx.db);
+  const productArgs = (name: string) => ({
+    name,
+    upc: null,
+    manufacturer: "Test Mfg",
+    ingredientId: null,
+  });
 
-    const product = await callTool(
-      "create_product",
-      {
-        name: "Shortcode Canned Beans",
-        upc: null,
-        manufacturer: "Test Mfg",
-        ingredientId: null,
-      },
-      caller,
-    );
-    expectOk(product);
-    const productCode = structured(product).id as string;
-
-    const location = await callTool(
-      "create_location",
-      { name: "Shortcode Cupboard", type: "shelf", parentId: null },
-      caller,
-    );
-    expectOk(location);
-    const locationCode = structured(location).id as string;
-
-    const created = await callTool(
-      "create_inventory_entry",
-      {
-        productId: productCode,
-        locationId: locationCode,
+  /**
+   * One row per MCP-exposed entity: its lifecycle tools, the prerequisite
+   * entities `setup` mints, the args each step sends, and the field checks that
+   * pin every id crossing the boundary to a public shortcode. The shared body
+   * below runs create -> list -> get -> update -> delete and asserts the
+   * shortcode survives the update unchanged. A newly MCP-exposed entity belongs
+   * here as one more row.
+   */
+  const roundTrips: RoundTrip[] = [
+    {
+      entity: "location",
+      tools:
+        "create_location list_locations get_location update_location delete_locations",
+      setup: async (caller) => ({
+        parent: await createCode(caller, "create_location", {
+          name: "Shortcode Pantry",
+          type: "room",
+          parentId: null,
+        }),
+      }),
+      createArgs: (bag) => ({
+        name: "Shortcode Shelf",
+        type: "shelf",
+        parentId: bag.parent,
+      }),
+      listArgs: () => ({ nameFilter: "Shortcode Shelf" }),
+      expectListLength: 1,
+      updateArgs: { name: "Shortcode Shelf Renamed" },
+      checks: (bag) => [
+        // parentId round-trips to the PARENT's public id, not its uuid.
+        ["parentId", bag.parent, "create", "get"],
+        ["parentName", "Shortcode Pantry", "get"],
+        ["name", "Shortcode Shelf Renamed", "update"],
+      ],
+      getFailsAfterDelete: true,
+    },
+    {
+      entity: "ingredient",
+      tools:
+        "create_ingredient search_ingredients get_ingredient update_ingredient delete_ingredients",
+      createArgs: () => ({ name: "Shortcode Basil", aliases: ["sweet basil"] }),
+      listArgs: () => ({ nameFilter: "Shortcode Basil" }),
+      updateArgs: { name: "Shortcode Basil Renamed" },
+      checks: () => [
+        ["name", "Shortcode Basil", "get"],
+        ["name", "Shortcode Basil Renamed", "update"],
+      ],
+    },
+    {
+      entity: "product",
+      tools:
+        "create_product search_products get_product update_product delete_products",
+      setup: async (caller) => ({
+        ingredient: await createCode(caller, "create_ingredient", {
+          name: "Shortcode Flour",
+          aliases: [],
+        }),
+      }),
+      createArgs: (bag) => ({
+        ...productArgs("Shortcode Flour 5lb Bag"),
+        ingredientId: bag.ingredient,
+      }),
+      listArgs: () => ({ nameFilter: "Shortcode Flour 5lb Bag" }),
+      updateArgs: { name: "Shortcode Flour 5lb Bag v2" },
+      checks: (bag) => [
+        ["ingredientId", bag.ingredient, "create", "get"],
+        ["name", "Shortcode Flour 5lb Bag v2", "update"],
+      ],
+    },
+    {
+      entity: "inventory",
+      tools:
+        "create_inventory_entry list_inventory get_inventory_entry update_inventory_entry delete_inventory_entries",
+      setup: async (caller) => ({
+        product: await createCode(
+          caller,
+          "create_product",
+          productArgs("Shortcode Canned Beans"),
+        ),
+        location: await createCode(caller, "create_location", {
+          name: "Shortcode Cupboard",
+          type: "shelf",
+          parentId: null,
+        }),
+      }),
+      createArgs: (bag) => ({
+        productId: bag.product,
+        locationId: bag.location,
         value: 3,
         unit: "each",
-      },
-      caller,
-    );
-    expectOk(created);
-    const createdOut = structured(created);
-    expectShortcode(createdOut.id, "inventory");
-    const entryCode = createdOut.id as string;
-    expect((createdOut.product as Record<string, unknown>)?.id).toBe(
-      productCode,
-    );
-    expect((createdOut.location as Record<string, unknown>)?.id).toBe(
-      locationCode,
-    );
-
-    const listed = await callTool(
-      "list_inventory",
-      { locationIdFilter: locationCode },
-      caller,
-    );
-    expectOk(listed);
-    const items = structured(listed).items as Array<Record<string, unknown>>;
-    expect(items.map((i) => i.id)).toContain(entryCode);
-
-    const got = await callTool(
-      "get_inventory_entry",
-      { id: entryCode },
-      caller,
-    );
-    expectOk(got);
-    expect((structured(got).product as Record<string, unknown>)?.id).toBe(
-      productCode,
-    );
-
-    const updated = await callTool(
-      "update_inventory_entry",
-      { id: entryCode, value: 5, unit: "each" },
-      caller,
-    );
-    expectOk(updated);
-    expect(structured(updated).amount).toEqual({ value: 5, unit: "each" });
-
-    const deleted = await callTool(
-      "delete_inventory_entries",
-      { ids: [entryCode] },
-      caller,
-    );
-    expectOk(deleted);
-    expect(structured(deleted).deleted).toBe(1);
-  });
-
-  it("recipe: create with an ingredient-shortcode ref in sections -> list -> get -> update -> delete", async () => {
-    const caller = createTestCaller(domainRouter, ctx.db);
-
-    const ingredient = await callTool(
-      "create_ingredient",
-      { name: "Shortcode Garlic", aliases: [] },
-      caller,
-    );
-    expectOk(ingredient);
-    const ingredientCode = structured(ingredient).id as string;
-
-    const created = await callTool(
-      "create_recipe",
-      {
+      }),
+      listArgs: (bag) => ({ locationIdFilter: bag.location }),
+      updateArgs: { value: 5, unit: "each" },
+      checks: (bag) => [
+        ["product.id", bag.product, "create", "get"],
+        ["location.id", bag.location, "create"],
+        ["amount", { value: 5, unit: "each" }, "update"],
+      ],
+    },
+    {
+      entity: "recipe",
+      tools:
+        "create_recipe list_recipes get_recipe update_recipe delete_recipe",
+      setup: async (caller) => ({
+        ingredient: await createCode(caller, "create_ingredient", {
+          name: "Shortcode Garlic",
+          aliases: [],
+        }),
+      }),
+      createArgs: (bag) => ({
         name: "Shortcode Garlic Bread",
         meta: { url: null },
         sections: [
@@ -369,7 +320,7 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
             ingredients: [
               {
                 type: "ingredient",
-                ingredientId: ingredientCode,
+                ingredientId: bag.ingredient,
                 recipeId: null,
                 amounts: [{ value: 2, unit: "clove" }],
               },
@@ -377,487 +328,300 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
             instructions: [{ instruction: "Mince the garlic." }],
           },
         ],
-      },
-      caller,
-    );
-    expectOk(created);
-    const createdOut = structured(created);
-    expectShortcode(createdOut.id, "recipe");
-    const recipeCode = createdOut.id as string;
-
-    const listed = await callTool(
-      "list_recipes",
-      { nameFilter: "Shortcode Garlic Bread" },
-      caller,
-    );
-    expectOk(listed);
-    const items = structured(listed).items as Array<Record<string, unknown>>;
-    expect(items.map((i) => i.id)).toContain(recipeCode);
-
-    const got = await callTool("get_recipe", { id: recipeCode }, caller);
-    expectOk(got);
-    // Relationship field resolves: the section's ingredient ref names the
-    // ingredient by its public id, not its private uuid (get_recipe's detail
-    // shape — recipeOut/recipeDetailMcpOut — is the full section graph).
-    const gotOut = structured(got);
-    const sections = gotOut.sections as Array<Record<string, unknown>>;
-    const firstLine = (sections[0]?.ingredients ?? []) as Array<
-      Record<string, unknown>
-    >;
-    const linkedIngredient = firstLine[0]?.ingredient as
-      | Record<string, unknown>
-      | undefined;
-    expect(linkedIngredient?.id).toBe(ingredientCode);
-
-    const updated = await callTool(
-      "update_recipe",
-      { id: recipeCode, name: "Shortcode Garlic Bread v2" },
-      caller,
-    );
-    expectOk(updated);
-    expect(structured(updated).name).toBe("Shortcode Garlic Bread v2");
-
-    const deleted = await callTool(
-      "delete_recipe",
-      { ids: [recipeCode] },
-      caller,
-    );
-    expectOk(deleted);
-    expect(structured(deleted).deleted).toBe(1);
-  });
-
-  it("meal: create with a recipe-shortcode ref -> list -> get -> update -> delete", async () => {
-    const caller = createTestCaller(domainRouter, ctx.db);
-
-    const recipe = await callTool(
-      "create_recipe",
-      { name: "Shortcode Soup", meta: { url: null }, sections: [] },
-      caller,
-    );
-    expectOk(recipe);
-    const recipeCode = structured(recipe).id as string;
-
-    const created = await callTool(
-      "create_meal",
-      {
+      }),
+      listArgs: () => ({ nameFilter: "Shortcode Garlic Bread" }),
+      updateArgs: { name: "Shortcode Garlic Bread v2" },
+      checks: (bag) => [
+        // get_recipe's detail shape is the full section graph, and the
+        // section's ingredient ref names the ingredient by its public id.
+        ["sections.0.ingredients.0.ingredient.id", bag.ingredient, "get"],
+        ["name", "Shortcode Garlic Bread v2", "update"],
+      ],
+    },
+    {
+      entity: "meal",
+      tools: "create_meal list_meals get_meal update_meal delete_meals",
+      setup: async (caller) => ({
+        recipe: await createCode(caller, "create_recipe", {
+          name: "Shortcode Soup",
+          meta: { url: null },
+          sections: [],
+        }),
+      }),
+      createArgs: (bag) => ({
         date: "2026-08-01",
         name: "Shortcode Dinner",
-        recipes: [{ recipeId: recipeCode, scale: 1 }],
+        recipes: [{ recipeId: bag.recipe, scale: 1 }],
+      }),
+      listArgs: () => ({ from: "2026-08-01", to: "2026-08-01" }),
+      updateArgs: { name: "Shortcode Dinner Renamed" },
+      checks: (bag) => [
+        ["recipes.0.recipeId", bag.recipe, "create", "get"],
+        ["name", "Shortcode Dinner Renamed", "update"],
+      ],
+      extraChecks: async ({ caller, createdOut }) => {
+        // mealRecipe.id is a DECLARED EXCEPTION (no shortcode exists for the
+        // join row) — update_meal_recipe correctly takes the raw id.
+        const mealRecipeId = (
+          createdOut.recipes as Array<Record<string, unknown>>
+        )[0]?.id as string;
+        expectOk(
+          await callTool(
+            "update_meal_recipe",
+            { id: mealRecipeId, scale: 2 },
+            caller,
+          ),
+        );
       },
-      caller,
-    );
-    expectOk(created);
-    const createdOut = structured(created);
-    expectShortcode(createdOut.id, "meal");
-    const mealCode = createdOut.id as string;
-    const recipesOnMeal = createdOut.recipes as Array<Record<string, unknown>>;
-    // Relationship field resolves: the planned recipe is named by its public id.
-    expect(recipesOnMeal[0]?.recipeId).toBe(recipeCode);
-    const mealRecipeId = recipesOnMeal[0]?.id as string;
-
-    const listed = await callTool(
-      "list_meals",
-      { from: "2026-08-01", to: "2026-08-01" },
-      caller,
-    );
-    expectOk(listed);
-    const items = structured(listed).items as Array<Record<string, unknown>>;
-    expect(items.map((i) => i.id)).toContain(mealCode);
-
-    const got = await callTool("get_meal", { id: mealCode }, caller);
-    expectOk(got);
-    expect(
-      (structured(got).recipes as Array<Record<string, unknown>>)[0]?.recipeId,
-    ).toBe(recipeCode);
-
-    const updated = await callTool(
-      "update_meal",
-      { id: mealCode, name: "Shortcode Dinner Renamed" },
-      caller,
-    );
-    expectOk(updated);
-    expect(structured(updated).name).toBe("Shortcode Dinner Renamed");
-
-    // mealRecipe.id is a DECLARED EXCEPTION (no shortcode exists for the join
-    // row) — update_meal_recipe/remove_meal_recipe correctly take the raw id.
-    const updatedRecipe = await callTool(
-      "update_meal_recipe",
-      { id: mealRecipeId, scale: 2 },
-      caller,
-    );
-    expectOk(updatedRecipe);
-
-    const deleted = await callTool("delete_meals", { ids: [mealCode] }, caller);
-    expectOk(deleted);
-    expect(structured(deleted).deleted).toBe(1);
-  });
-
-  it("vendor: create -> list -> get -> update (no delete tool by design)", async () => {
-    const caller = createTestCaller(domainRouter, ctx.db);
-
-    const created = await callTool(
-      "create_vendor",
-      { name: "Shortcode Hardware Co" },
-      caller,
-    );
-    expectOk(created);
-    const createdOut = structured(created);
-    expectShortcode(createdOut.id, "vendor");
-    const vendorCode = createdOut.id as string;
-
-    const listed = await callTool(
-      "list_vendors",
-      { search: "Shortcode Hardware Co" },
-      caller,
-    );
-    expectOk(listed);
-    const items = structured(listed).items as Array<Record<string, unknown>>;
-    expect(items.map((i) => i.id)).toContain(vendorCode);
-
-    const got = await callTool("get_vendor", { id: vendorCode }, caller);
-    expectOk(got);
-    expect(structured(got).name).toBe("Shortcode Hardware Co");
-
-    const updated = await callTool(
-      "update_vendor",
-      { id: vendorCode, name: "Shortcode Hardware Co Renamed" },
-      caller,
-    );
-    expectOk(updated);
-    expect(structured(updated).name).toBe("Shortcode Hardware Co Renamed");
-  });
-
-  it("project: create -> list -> get -> update -> delete, and parentProjectId (relationship field)", async () => {
-    const caller = createTestCaller(domainRouter, ctx.db);
-
-    const parent = await callTool(
-      "create_project",
-      { name: "Shortcode Kitchen Remodel" },
-      caller,
-    );
-    expectOk(parent);
-    const parentCode = structured(parent).id as string;
-
-    const child = await callTool(
-      "create_project",
-      { name: "Shortcode Kitchen Electrical", parentProjectId: parentCode },
-      caller,
-    );
-    expectOk(child);
-    const childOut = structured(child);
-    expectShortcode(childOut.id, "project");
-    // Relationship field resolves: parentProjectId is the PARENT's public id.
-    expect(childOut.parentProjectId).toBe(parentCode);
-    const childCode = childOut.id as string;
-
-    const listed = await callTool(
-      "list_projects",
-      { search: "Shortcode Kitchen Electrical" },
-      caller,
-    );
-    expectOk(listed);
-    const items = structured(listed).items as Array<Record<string, unknown>>;
-    expect(items.map((i) => i.id)).toContain(childCode);
-
-    const got = await callTool("get_project", { id: childCode }, caller);
-    expectOk(got);
-    expect(
-      structured(got).parentProjectShortcode ?? structured(got).parentProjectId,
-    ).toBe(parentCode);
-
-    const updated = await callTool(
-      "update_project",
-      { id: childCode, name: "Shortcode Kitchen Electrical Renamed" },
-      caller,
-    );
-    expectOk(updated);
-    expect(structured(updated).name).toBe(
-      "Shortcode Kitchen Electrical Renamed",
-    );
-
-    const deleted = await callTool(
-      "delete_projects",
-      { ids: [childCode] },
-      caller,
-    );
-    expectOk(deleted);
-    expect(structured(deleted).deleted).toBe(1);
-  });
-
-  it("task: create -> list -> get -> update -> delete, and projectId/subjectProductId (relationship fields)", async () => {
-    const caller = createTestCaller(domainRouter, ctx.db);
-
-    const project = await callTool(
-      "create_project",
-      { name: "Shortcode Task Project" },
-      caller,
-    );
-    expectOk(project);
-    const projectCode = structured(project).id as string;
-
-    const product = await callTool(
-      "create_product",
-      {
-        name: "Shortcode Task Product",
-        upc: null,
-        manufacturer: "Test Mfg",
-        ingredientId: null,
-      },
-      caller,
-    );
-    expectOk(product);
-    const productCode = structured(product).id as string;
-
-    const created = await callTool(
-      "create_task",
-      {
+    },
+    {
+      entity: "vendor",
+      // Four tools, not five: vendors have NO delete tool BY DESIGN. The
+      // missing lifecycle step is deliberate, not an oversight.
+      tools: "create_vendor list_vendors get_vendor update_vendor",
+      createArgs: () => ({ name: "Shortcode Hardware Co" }),
+      listArgs: () => ({ search: "Shortcode Hardware Co" }),
+      updateArgs: { name: "Shortcode Hardware Co Renamed" },
+      checks: () => [
+        ["name", "Shortcode Hardware Co", "get"],
+        ["name", "Shortcode Hardware Co Renamed", "update"],
+      ],
+    },
+    {
+      entity: "project",
+      tools:
+        "create_project list_projects get_project update_project delete_projects",
+      setup: async (caller) => ({
+        parent: await createCode(caller, "create_project", {
+          name: "Shortcode Kitchen Remodel",
+        }),
+      }),
+      createArgs: (bag) => ({
+        name: "Shortcode Kitchen Electrical",
+        parentProjectId: bag.parent,
+      }),
+      listArgs: () => ({ search: "Shortcode Kitchen Electrical" }),
+      updateArgs: { name: "Shortcode Kitchen Electrical Renamed" },
+      checks: (bag) => [
+        ["parentProjectId", bag.parent],
+        [
+          (out) => out.parentProjectShortcode ?? out.parentProjectId,
+          bag.parent,
+          "get",
+        ],
+        ["name", "Shortcode Kitchen Electrical Renamed", "update"],
+      ],
+    },
+    {
+      entity: "task",
+      tools: "create_task list_tasks get_task update_task delete_tasks",
+      setup: async (caller) => ({
+        project: await createCode(caller, "create_project", {
+          name: "Shortcode Task Project",
+        }),
+        product: await createCode(
+          caller,
+          "create_product",
+          productArgs("Shortcode Task Product"),
+        ),
+      }),
+      createArgs: (bag) => ({
         name: "Shortcode Order Countertop",
         trade: "other",
-        projectId: projectCode,
-        subjectProductId: productCode,
+        projectId: bag.project,
+        subjectProductId: bag.product,
+      }),
+      listArgs: (bag) => ({
+        projectId: bag.project,
+        subjectProductId: bag.product,
+      }),
+      rejectsListArgs: {
+        subjectProductId: "00000000-0000-4000-8000-000000000001",
       },
-      caller,
-    );
-    expectOk(created);
-    const createdOut = structured(created);
-    expectShortcode(createdOut.id, "task");
-    // Relationship fields resolve: both FKs are their target's public id.
-    expect(createdOut.projectId).toBe(projectCode);
-    expect(createdOut.subjectProductId).toBe(productCode);
-    const taskCode = createdOut.id as string;
-
-    const listed = await callTool(
-      "list_tasks",
-      { projectId: projectCode, subjectProductId: productCode },
-      caller,
-    );
-    expectOk(listed);
-    const items = structured(listed).items as Array<Record<string, unknown>>;
-    expect(items.map((i) => i.id)).toContain(taskCode);
-
-    const uuidFilter = await callTool(
-      "list_tasks",
-      { subjectProductId: "00000000-0000-4000-8000-000000000001" },
-      caller,
-    );
-    expect(uuidFilter.isError).toBe(true);
-
-    const got = await callTool("get_task", { id: taskCode }, caller);
-    expectOk(got);
-    expect(structured(got).subjectProductId).toBe(productCode);
-
-    const updated = await callTool(
-      "update_task",
-      { id: taskCode, status: "done" },
-      caller,
-    );
-    expectOk(updated);
-    expect(structured(updated).status).toBe("done");
-
-    const deleted = await callTool("delete_tasks", { ids: [taskCode] }, caller);
-    expectOk(deleted);
-    expect(structured(deleted).deleted).toBe(1);
-  });
-
-  it("expense: create -> list -> get -> update -> delete, and projectId/productId (relationship fields)", async () => {
-    const caller = createTestCaller(domainRouter, ctx.db);
-
-    const project = await callTool(
-      "create_project",
-      { name: "Shortcode Expense Project" },
-      caller,
-    );
-    expectOk(project);
-    const projectCode = structured(project).id as string;
-
-    const product = await callTool(
-      "create_product",
-      {
-        name: "Shortcode Expense Product",
-        upc: null,
-        manufacturer: "Test Mfg",
-        ingredientId: null,
-      },
-      caller,
-    );
-    expectOk(product);
-    const productCode = structured(product).id as string;
-
-    const created = await callTool(
-      "create_expense",
-      {
+      updateArgs: { status: "done" },
+      checks: (bag) => [
+        ["projectId", bag.project],
+        ["subjectProductId", bag.product, "create", "get"],
+        ["status", "done", "update"],
+      ],
+    },
+    {
+      entity: "expense",
+      tools:
+        "create_expense list_expenses get_expense update_expense delete_expenses",
+      setup: async (caller) => ({
+        project: await createCode(caller, "create_project", {
+          name: "Shortcode Expense Project",
+        }),
+        product: await createCode(
+          caller,
+          "create_product",
+          productArgs("Shortcode Expense Product"),
+        ),
+      }),
+      createArgs: (bag) => ({
         name: "Shortcode Miter Saw",
         date: "2024-01-15",
         cost: 249.99,
         costType: "tools",
         trade: "other",
         future: false,
-        projectId: projectCode,
-        productId: productCode,
-      },
-      caller,
-    );
-    expectOk(created);
-    const createdOut = structured(created);
-    expectShortcode(createdOut.id, "expense");
-    expect(createdOut.projectId).toBe(projectCode);
-    expect(createdOut.productId).toBe(productCode);
-    const expenseCode = createdOut.id as string;
-
-    const listed = await callTool(
-      "list_expenses",
-      { projectId: projectCode, productId: productCode },
-      caller,
-    );
-    expectOk(listed);
-    const items = structured(listed).items as Array<Record<string, unknown>>;
-    expect(items.map((i) => i.id)).toContain(expenseCode);
-
-    const uuidFilter = await callTool(
-      "list_expenses",
-      { productId: "00000000-0000-4000-8000-000000000001" },
-      caller,
-    );
-    expect(uuidFilter.isError).toBe(true);
-
-    const got = await callTool("get_expense", { id: expenseCode }, caller);
-    expectOk(got);
-    expect(structured(got).productId).toBe(productCode);
-
-    const updated = await callTool(
-      "update_expense",
-      { id: expenseCode, name: "Shortcode Miter Saw Renamed" },
-      caller,
-    );
-    expectOk(updated);
-    expect(structured(updated).name).toBe("Shortcode Miter Saw Renamed");
-
-    const deleted = await callTool(
-      "delete_expenses",
-      { ids: [expenseCode] },
-      caller,
-    );
-    expectOk(deleted);
-    expect(structured(deleted)).toMatchObject({
-      deleted: 1,
-      deletedIds: [expenseCode],
-      affectedPurchaseIds: [],
-      newlyEmptyPurchaseIds: [],
-    });
-  });
-
-  it("purchase: create with a vendor shortcode -> list -> get -> update -> delete empty", async () => {
-    const caller = createTestCaller(domainRouter, ctx.db);
-
-    const vendor = await callTool(
-      "create_vendor",
-      { name: "Shortcode Purchase Vendor" },
-      caller,
-    );
-    expectOk(vendor);
-    const vendorCode = structured(vendor).id as string;
-
-    // INTENDED CONTRACT: create_purchase's vendorId names the vendor by its
-    // public shortcode, same as every other FK field on the MCP boundary.
-    const created = await callTool(
-      "create_purchase",
-      { vendorId: vendorCode, orderId: "SC-0001", date: "2024-01-15" },
-      caller,
-    );
-    expectOk(created);
-    const createdOut = structured(created);
-    expectShortcode(createdOut.id, "purchase");
-    const purchaseCode = createdOut.id as string;
-
-    const listed = await callTool(
-      "list_purchases",
-      { vendorId: vendorCode },
-      caller,
-    );
-    expectOk(listed);
-    const items = structured(listed).items as Array<Record<string, unknown>>;
-    expect(items.map((i) => i.id)).toContain(purchaseCode);
-
-    const got = await callTool("get_purchase", { id: purchaseCode }, caller);
-    expectOk(got);
-    expect(got.isError).not.toBe(true);
-
-    const updated = await callTool(
-      "update_purchase",
-      { id: purchaseCode, notes: "renamed" },
-      caller,
-    );
-    expectOk(updated);
-
-    const deleted = await callTool(
-      "delete_empty_purchases",
-      { ids: [purchaseCode] },
-      caller,
-    );
-    expectOk(deleted);
-    expect(structured(deleted)).toEqual({
-      deleted: 1,
-      deletedIds: [purchaseCode],
-    });
-  });
-
-  it("financial account and transaction: create -> list -> get -> update -> delete with account shortcode", async () => {
-    const caller = createTestCaller(domainRouter, ctx.db);
-
-    const account = await callTool(
-      "create_financial_account",
-      {
-        name: "Shortcode Settlement Visa",
-        identity: {
-          kind: "credit_card",
-          issuer: "Test Bank",
-          network: "visa",
-          last4: "4242",
-        },
-        sourceAliases: [
-          {
-            source: "shortcode-test",
-            alias: "Visa ending 4242",
-            externalAccountId: "acct-shortcode-4242",
-          },
+        projectId: bag.project,
+        productId: bag.product,
+      }),
+      listArgs: (bag) => ({ projectId: bag.project, productId: bag.product }),
+      rejectsListArgs: { productId: "00000000-0000-4000-8000-000000000001" },
+      updateArgs: { name: "Shortcode Miter Saw Renamed" },
+      checks: (bag) => [
+        ["projectId", bag.project],
+        ["productId", bag.product, "create", "get"],
+        ["name", "Shortcode Miter Saw Renamed", "update"],
+      ],
+      checkDelete: (out, code) =>
+        expect(out).toMatchObject({
+          deleted: 1,
+          deletedIds: [code],
+          affectedPurchaseIds: [],
+          newlyEmptyPurchaseIds: [],
+        }),
+    },
+    {
+      entity: "purchase",
+      tools:
+        "create_purchase list_purchases get_purchase update_purchase delete_empty_purchases",
+      setup: async (caller) => ({
+        vendor: await createCode(caller, "create_vendor", {
+          name: "Shortcode Purchase Vendor",
+        }),
+      }),
+      // INTENDED CONTRACT: create_purchase's vendorId names the vendor by its
+      // public shortcode, same as every other FK field on the MCP boundary.
+      createArgs: (bag) => ({
+        vendorId: bag.vendor,
+        orderId: "SC-0001",
+        date: "2024-01-15",
+      }),
+      listArgs: (bag) => ({ vendorId: bag.vendor }),
+      updateArgs: { notes: "renamed" },
+      checkDelete: (out, code) =>
+        expect(out).toEqual({ deleted: 1, deletedIds: [code] }),
+    },
+    {
+      entity: "financialAccount",
+      tools:
+        "create_financial_account list_financial_accounts get_financial_account update_financial_account delete_financial_accounts",
+      createArgs: () =>
+        financialAccountArgs("Shortcode Settlement Visa", "4242"),
+      listArgs: () => ({ search: "Shortcode Settlement Visa" }),
+      updateArgs: { notes: "Shortcode account note" },
+      checks: () => [
+        ["name", "Shortcode Settlement Visa", "get"],
+        ["notes", "Shortcode account note", "update"],
+      ],
+    },
+    {
+      entity: "financialTransaction",
+      tools:
+        "create_financial_transaction list_financial_transactions get_financial_transaction update_financial_transaction delete_financial_transactions",
+      setup: async (caller) => ({
+        account: await createCode(
+          caller,
+          "create_financial_account",
+          financialAccountArgs("Shortcode Settlement Visa", "4242"),
+        ),
+      }),
+      createArgs: (bag) => ({
+        accountId: bag.account,
+        kind: "purchase",
+        status: "pending",
+        amount: 42.5,
+        sourceRefs: [
+          { source: "shortcode-test", externalId: "transaction-4242" },
         ],
-      },
-      caller,
-    );
-    expectOk(account);
-    const accountOut = structured(account);
-    expectShortcode(accountOut.id, "financialAccount");
-    const accountCode = accountOut.id as string;
+      }),
+      listArgs: (bag) => ({ accountId: bag.account }),
+      updateArgs: { status: "posted", postedDate: "2026-07-31" },
+      checks: (bag) => [
+        ["accountId", bag.account, "create", "get"],
+        ["status", "posted", "update"],
+      ],
+    },
+  ];
 
-    const listedAccounts = await callTool(
-      "list_financial_accounts",
-      { search: "Shortcode Settlement Visa" },
-      caller,
-    );
-    expectOk(listedAccounts);
-    expect(
-      (structured(listedAccounts).items as Array<Record<string, unknown>>).map(
-        (item) => item.id,
-      ),
-    ).toContain(accountCode);
+  it.each(roundTrips)(
+    "$entity: create -> list -> get -> update -> delete, on shortcodes only",
+    async (row) => {
+      const caller = createTestCaller(domainRouter, ctx.db);
+      const tools = toolsOf(row);
+      const bag = (await row.setup?.(caller)) ?? {};
+      const checks = row.checks?.(bag) ?? [];
 
-    const gotAccount = await callTool(
-      "get_financial_account",
-      { id: accountCode },
-      caller,
-    );
-    expectOk(gotAccount);
-    expect(structured(gotAccount).name).toBe("Shortcode Settlement Visa");
+      const created = await callTool(tools.create, row.createArgs(bag), caller);
+      expectOk(created);
+      const createdOut = structured(created);
+      expectShortcode(createdOut.id, row.entity);
+      const code = createdOut.id as string;
+      runChecks(createdOut, checks, "create");
 
-    const updatedAccount = await callTool(
-      "update_financial_account",
-      { id: accountCode, notes: "Shortcode account note" },
-      caller,
-    );
-    expectOk(updatedAccount);
-    expect(structured(updatedAccount).notes).toBe("Shortcode account note");
+      const listed = await callTool(tools.list, row.listArgs(bag), caller);
+      expectOk(listed);
+      const items = structured(listed).items as Array<Record<string, unknown>>;
+      if (row.expectListLength !== undefined) {
+        expect(items).toHaveLength(row.expectListLength);
+      }
+      expect(items.map((item) => item.id)).toContain(code);
 
-    const transaction = await callTool(
+      if (row.rejectsListArgs) {
+        const rejected = await callTool(
+          tools.list,
+          row.rejectsListArgs,
+          caller,
+        );
+        expect(rejected.isError).toBe(true);
+      }
+
+      const got = await callTool(tools.get, { id: code }, caller);
+      expectOk(got);
+      runChecks(structured(got), checks, "get");
+
+      const updated = await callTool(
+        tools.update,
+        { id: code, ...row.updateArgs },
+        caller,
+      );
+      expectOk(updated);
+      const updatedOut = structured(updated);
+      // The shortcode never changes across an update.
+      expect(updatedOut.id).toBe(code);
+      runChecks(updatedOut, checks, "update");
+
+      await row.extraChecks?.({ caller, createdOut, code, bag });
+
+      if (!tools.remove) return;
+      const deleted = await callTool(tools.remove, { ids: [code] }, caller);
+      expectOk(deleted);
+      const deletedOut = structured(deleted);
+      if (row.checkDelete) row.checkDelete(deletedOut, code);
+      else expect(deletedOut.deleted).toBe(1);
+
+      if (row.getFailsAfterDelete) {
+        const afterDelete = await callTool(tools.get, { id: code }, caller);
+        expect(afterDelete.isError).toBe(true);
+      }
+    },
+  );
+
+  // Batch create has its own shape — a per-item result envelope rather than one
+  // row — so it stays beside the table instead of contorting a column into it.
+  it("financial transactions: a duplicate sourceRef inside one batch fails only that item", async () => {
+    const caller = createTestCaller(domainRouter, ctx.db);
+    const accountCode = await createCode(
+      caller,
+      "create_financial_account",
+      financialAccountArgs("Shortcode Settlement Visa", "4242"),
+    );
+    const transactionCode = await createCode(
+      caller,
       "create_financial_transaction",
       {
         accountId: accountCode,
@@ -868,75 +632,23 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
           { source: "shortcode-test", externalId: "transaction-4242" },
         ],
       },
-      caller,
     );
-    expectOk(transaction);
-    const transactionOut = structured(transaction);
-    expectShortcode(transactionOut.id, "financialTransaction");
-    expect(transactionOut.accountId).toBe(accountCode);
-    const transactionCode = transactionOut.id as string;
-
-    const listedTransactions = await callTool(
-      "list_financial_transactions",
-      { accountId: accountCode },
-      caller,
-    );
-    expectOk(listedTransactions);
-    expect(
-      (
-        structured(listedTransactions).items as Array<Record<string, unknown>>
-      ).map((item) => item.id),
-    ).toContain(transactionCode);
-
-    const gotTransaction = await callTool(
-      "get_financial_transaction",
-      { id: transactionCode },
-      caller,
-    );
-    expectOk(gotTransaction);
-    expect(structured(gotTransaction).accountId).toBe(accountCode);
-
-    const updatedTransaction = await callTool(
-      "update_financial_transaction",
-      {
-        id: transactionCode,
-        status: "posted",
-        postedDate: "2026-07-31",
-      },
-      caller,
-    );
-    expectOk(updatedTransaction);
-    expect(structured(updatedTransaction).status).toBe("posted");
 
     const duplicateSourceRefs = await callTool(
       "create_financial_transactions",
       {
-        items: [
-          {
-            accountId: accountCode,
-            kind: "purchase",
-            status: "pending",
-            amount: 9.99,
-            sourceRefs: [
-              {
-                source: "shortcode-test",
-                externalId: "duplicate-batch-source-ref",
-              },
-            ],
-          },
-          {
-            accountId: accountCode,
-            kind: "purchase",
-            status: "pending",
-            amount: 10.99,
-            sourceRefs: [
-              {
-                source: "shortcode-test",
-                externalId: "duplicate-batch-source-ref",
-              },
-            ],
-          },
-        ],
+        items: [9.99, 10.99].map((amount) => ({
+          accountId: accountCode,
+          kind: "purchase",
+          status: "pending",
+          amount,
+          sourceRefs: [
+            {
+              source: "shortcode-test",
+              externalId: "duplicate-batch-source-ref",
+            },
+          ],
+        })),
       },
       caller,
     );
@@ -968,21 +680,13 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
       firstBatchResult.item as Record<string, unknown>
     ).id as string;
 
-    const deletedTransaction = await callTool(
+    const deleted = await callTool(
       "delete_financial_transactions",
       { ids: [transactionCode, batchTransactionCode] },
       caller,
     );
-    expectOk(deletedTransaction);
-    expect(structured(deletedTransaction).deleted).toBe(2);
-
-    const deletedAccount = await callTool(
-      "delete_financial_accounts",
-      { ids: [accountCode] },
-      caller,
-    );
-    expectOk(deletedAccount);
-    expect(structured(deletedAccount).deleted).toBe(1);
+    expectOk(deleted);
+    expect(structured(deleted).deleted).toBe(2);
   });
 });
 

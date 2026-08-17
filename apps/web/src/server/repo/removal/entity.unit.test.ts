@@ -354,9 +354,13 @@ describe("removeEntity — multi-column child edges", () => {
       ],
     });
 
-    expect(renderedWhere(log[0]).sql).toBe(
-      `"${getTableName(taskDependency)}"."taskId" in ($1)`,
-    );
+    // Asserted by SHAPE, not by Drizzle's exact rendered string: the property
+    // is "one column means no OR wrapper", and pinning the literal SQL made
+    // this test fail on formatting churn that changes nothing.
+    const { sql, params } = renderedWhere(log[0]);
+    expect(params).toEqual(["t1"]);
+    expect(sql).toContain(`"${getTableName(taskDependency)}"."taskId"`);
+    expect(sql).not.toMatch(/\bor\b/i);
   });
 });
 

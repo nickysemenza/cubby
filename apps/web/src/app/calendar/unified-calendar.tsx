@@ -4,9 +4,8 @@ import type {
   CalendarItemKind,
 } from "@cubby/schemas/calendar";
 import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
-import { projectKindValues } from "@cubby/schemas/project";
 import { TZDate } from "@date-fns/tz";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   addDays,
   addMonths,
@@ -22,7 +21,6 @@ import { CreateExpenseDialog } from "~/app/expenses/create-expense-dialog";
 import { CreateMealDialog } from "~/app/meals/create-meal-dialog";
 import { mealKindIcon } from "~/app/meals/meal-options";
 import { CreateProjectDialog } from "~/app/projects/create-project-dialog";
-import { capitalize } from "~/app/projects/project-formatting";
 import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
 import { Row, Stack } from "~/components/layout";
 import {
@@ -55,7 +53,10 @@ import {
 } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { CalendarAgenda } from "./calendar-agenda";
-import { CalendarItemLink, itemIcon, KIND_ICONS } from "./calendar-item-row";
+import type { CalendarFilters } from "./calendar-filters";
+import { itemIcon, KIND_ICONS } from "./calendar-icons";
+import { CalendarItemLink } from "./calendar-item-row";
+import { itemSpanLabel } from "./calendar-span";
 
 const HOUSEHOLD_TIME_ZONE = "America/Los_Angeles";
 const CALENDAR_VIEWS: CalendarView[] = ["month"];
@@ -95,25 +96,21 @@ type CreateKind = CalendarItemKind | null;
 interface UnifiedCalendarProps {
   date?: string;
   day?: string;
-  kinds?: string;
-  projectKinds?: string;
+  /**
+   * Server-side filters, already built from the URL by `buildCalendarFilters`.
+   * Omitted by embedded surfaces that pin their own kinds.
+   */
+  filters?: CalendarFilters;
+  /**
+   * A kind set imposed by the surrounding page (the /meals calendar tab).
+   * Sent to the SERVER as `kinds` rather than filtered in React: a
+   * renderer-intrinsic omission has to be server-enforced, and the old
+   * behaviour fetched four kinds a month to throw three away.
+   */
   lockedKinds?: CalendarItemKind[];
   onDateChange: (date?: string) => void;
   onDayChange?: (day?: string) => void;
-  onKindsChange?: (kinds?: string) => void;
-  onProjectKindsChange?: (projectKinds?: string) => void;
 }
-
-const parseSelection = <T extends string>(
-  value: string | undefined,
-  allowed: readonly T[],
-): T[] => {
-  if (!value) return [...allowed];
-  const selected = value
-    .split(",")
-    .filter((entry): entry is T => allowed.includes(entry as T));
-  return selected.length > 0 ? selected : [...allowed];
-};
 
 const calendarDate = (plainDate: string) => {
   const parsed = parsePlainDate(plainDate);
@@ -177,6 +174,7 @@ const toEvent = (
 
 function CalendarChip({
   occurrence,
+  segment,
 }: EventCalendarRenderEventProps<CalendarItem>) {
   const item = occurrence.event.data;
   if (!item) return occurrence.event.title;
@@ -184,12 +182,26 @@ function CalendarChip({
   // Only non-cooked meals get one — see MEAL_KIND_ICONS.
   const kind = item.kind === "meal" ? item.mealKind : null;
   const KindIcon = kind ? mealKindIcon(kind) : null;
+  const span = itemSpanLabel(item);
+  // Repeated on EVERY week row of a span, not just the one carrying its start:
+  // a bar is re-drawn per week, so gating on `segment.isStart` would leave five
+  // of a six-week project's rows saying nothing. Dropped on bars too narrow to
+  // hold it — `colSpan` is the merged week-row width from `packWeekRowLanes`.
+  const spanLabel = span && (segment.colSpan ?? 1) >= 3 ? span : null;
   return (
     <>
       <Icon className="size-3 shrink-0" aria-hidden />
-      <span className="truncate" title={item.title}>
+      <span
+        className="truncate"
+        title={span ? `${item.title} (${span})` : item.title}
+      >
         {item.title}
       </span>
+      {spanLabel && (
+        <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">
+          {spanLabel}
+        </span>
+      )}
       {KindIcon && kind && (
         <KindIcon
           className="ml-auto size-3 shrink-0"
@@ -240,13 +252,10 @@ const summarizeDay = (items: CalendarItem[]): CalendarDaySummary => {
 export function UnifiedCalendar({
   date,
   day,
-  kinds,
-  projectKinds,
+  filters,
   lockedKinds,
   onDateChange,
   onDayChange,
-  onKindsChange,
-  onProjectKindsChange,
 }: UnifiedCalendarProps) {
   const api = useTRPC();
   const today = householdLocalDate();
@@ -263,36 +272,20 @@ export function UnifiedCalendar({
     () => ({
       startDate: formatPlainDate(monthGridStart),
       endDateExclusive: formatPlainDate(monthGridEnd),
+      ...(lockedKinds ? { kinds: lockedKinds } : filters),
     }),
-    [monthGridEnd, monthGridStart],
+    [filters, lockedKinds, monthGridEnd, monthGridStart],
   );
-  const { data, isLoading, isError } = useQuery(
-    api.calendar.range.queryOptions(range),
-  );
+  const { data, isLoading, isError } = useQuery({
+    ...api.calendar.range.queryOptions(range),
+    // Without this every chip toggle blanks the month grid mid-flight.
+    placeholderData: keepPreviousData,
+  });
   const items = data?.items ?? NO_ITEMS;
 
-  const activeKinds = useMemo(
-    () => lockedKinds ?? parseSelection(kinds, ALL_KINDS),
-    [kinds, lockedKinds],
-  );
-  const activeProjectKinds = useMemo(
-    () => parseSelection(projectKinds, projectKindValues),
-    [projectKinds],
-  );
-  const visibleItems = useMemo(
-    () =>
-      items.filter(
-        (item) =>
-          activeKinds.includes(item.kind) &&
-          (item.kind !== "project" ||
-            item.projectKind == null ||
-            activeProjectKinds.includes(item.projectKind)),
-      ),
-    [activeKinds, activeProjectKinds, items],
-  );
   const sourceEvents = useMemo(
-    () => visibleItems.map((item) => toEvent(item, today)),
-    [today, visibleItems],
+    () => items.map((item) => toEvent(item, today)),
+    [items, today],
   );
   const [events, setEvents] =
     useState<CalendarEvent<CalendarItem>[]>(sourceEvents);
@@ -366,34 +359,10 @@ export function UnifiedCalendar({
   const selectedItems = useMemo(
     () =>
       selectedDay
-        ? visibleItems.filter((item) => itemIncludesDay(item, selectedDay))
+        ? items.filter((item) => itemIncludesDay(item, selectedDay))
         : NO_ITEMS,
-    [selectedDay, visibleItems],
+    [items, selectedDay],
   );
-
-  const toggleKind = (kind: CalendarItemKind) => {
-    if (!onKindsChange) return;
-    const next = activeKinds.includes(kind)
-      ? activeKinds.filter((value) => value !== kind)
-      : [...activeKinds, kind];
-    onKindsChange(
-      next.length === ALL_KINDS.length || next.length === 0
-        ? undefined
-        : ALL_KINDS.filter((value) => next.includes(value)).join(","),
-    );
-  };
-
-  const toggleProjectKind = (kind: (typeof projectKindValues)[number]) => {
-    if (!onProjectKindsChange) return;
-    const next = activeProjectKinds.includes(kind)
-      ? activeProjectKinds.filter((value) => value !== kind)
-      : [...activeProjectKinds, kind];
-    onProjectKindsChange(
-      next.length === projectKindValues.length || next.length === 0
-        ? undefined
-        : projectKindValues.filter((value) => next.includes(value)).join(","),
-    );
-  };
 
   return (
     <>
@@ -436,49 +405,7 @@ export function UnifiedCalendar({
           <h2 className="font-heading font-semibold text-base">
             {format(anchor, "MMMM yyyy")}
           </h2>
-          {!lockedKinds && (
-            <Row className="ml-auto" align="center" wrap gap="xs">
-              {ALL_KINDS.map((kind) => {
-                const Icon = KIND_ICONS[kind];
-                const active = activeKinds.includes(kind);
-                return (
-                  <Button
-                    key={kind}
-                    type="button"
-                    size="sm"
-                    variant={active ? "secondary" : "outline"}
-                    aria-pressed={active}
-                    onClick={() => toggleKind(kind)}
-                  >
-                    <Icon />
-                    {KIND_LABELS[kind]}
-                  </Button>
-                );
-              })}
-            </Row>
-          )}
         </Row>
-
-        {!lockedKinds && activeKinds.includes("project") && (
-          <Row align="center" wrap gap="xs">
-            <Description as="span">Project kind</Description>
-            {projectKindValues.map((kind) => {
-              const active = activeProjectKinds.includes(kind);
-              return (
-                <Button
-                  key={kind}
-                  type="button"
-                  size="xs"
-                  variant={active ? "secondary" : "ghost"}
-                  aria-pressed={active}
-                  onClick={() => toggleProjectKind(kind)}
-                >
-                  {capitalize(kind)}
-                </Button>
-              );
-            })}
-          </Row>
-        )}
 
         {isError && (
           <Description>
@@ -492,7 +419,7 @@ export function UnifiedCalendar({
             `RTable` documents at length. */}
         <div className="md:hidden">
           <CalendarAgenda
-            items={visibleItems}
+            items={items}
             includesDay={itemIncludesDay}
             today={today}
             emptyMessage={
@@ -501,7 +428,11 @@ export function UnifiedCalendar({
                 <button
                   type="button"
                   className="underline hover:text-primary"
-                  onClick={() => setCreateKind(activeKinds[0] ?? "meal")}
+                  onClick={() =>
+                    setCreateKind(
+                      (lockedKinds ?? filters?.kinds ?? ALL_KINDS)[0] ?? "meal",
+                    )
+                  }
                 >
                   Add something
                 </button>

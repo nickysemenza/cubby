@@ -1,0 +1,93 @@
+import { describe, expect, it } from "vitest";
+import {
+  EMPTY_PROBLEM_ARRAYS,
+  PROBLEM_CLASS,
+  type ProblemClass,
+} from "./problems";
+
+/**
+ * `PROBLEM_CLASS` decides which detectors reach `totalProblems` and the navbar
+ * badge, so it is pinned BY VALUE rather than spot-checked. `satisfies` already
+ * makes a newly-added detector a compile error until it is classed — what it
+ * cannot check is that the class chosen is the RIGHT one, and the failure mode
+ * is quiet: a new detector classed `defect` by copy-paste turns the badge
+ * permanently red, and one classed `coverage` by mistake silently stops
+ * counting real defects.
+ *
+ * This replaces a scattering of `expect(PROBLEM_CLASS.x).toBe("defect")` lines
+ * in `problems.integration.test.ts` — four of which were standalone `it` blocks
+ * paying a real-Postgres `withTestDb()` reset to read one compile-time
+ * constant. Pinning the whole map is strictly stronger: it catches the new
+ * detector nobody wrote an assertion for.
+ */
+describe("PROBLEM_CLASS", () => {
+  const EXPECTED: Record<string, ProblemClass> = {
+    // Defects: wrong data, converges to zero, counts toward the badge.
+    blockedWorkProjects: "defect",
+    duplicateFinancialAccountSourceAliases: "defect",
+    duplicateFinancialTransactionSourceRefs: "defect",
+    duplicateInventory: "defect",
+    duplicateProductIdentities: "defect",
+    duplicateVendors: "defect",
+    emptyCookedMeals: "defect",
+    entitiesMissingEmbeddings: "defect",
+    financialTransactionAllocationDefects: "defect",
+    incompleteStatementImports: "defect",
+    ingredientsWithPartialCoverage: "defect",
+    invalidFinancialJson: "defect",
+    locationsWithoutAiDescription: "defect",
+    manufacturerSpellingVariants: "defect",
+    negativeExpectedQuantity: "defect",
+    orphanedEntityEmbeddings: "defect",
+    orphanedProducts: "defect",
+    overdueTasks: "defect",
+    pastDuePlannedExpenses: "defect",
+    productsMissingPrice: "defect",
+    productsWithBetterUpcData: "defect",
+    productsWithIslandedMappings: "defect",
+    productsWithoutMappings: "defect",
+    projectsMissingBudget: "defect",
+    projectsWithDateDrift: "defect",
+    recipesWithoutInstructions: "defect",
+    referentialLivenessViolations: "defect",
+    soldButStillStocked: "defect",
+    staleParentRecipes: "defect",
+    stalledProjects: "defect",
+    toolsUsedOutsideOwnership: "defect",
+    unclassifiedExpenses: "defect",
+    understatedCostMeals: "defect",
+    unknownParkedItems: "defect",
+    unlinkedExitExpenses: "defect",
+    unreferencedImages: "defect",
+    unusedIngredientsWithProduct: "defect",
+    unusedIngredientsWithoutProduct: "defect",
+
+    // Coverage: a backlog with a denominator, plus the advisory cues that share
+    // its contract (reported, never counted, never red).
+    duplicateSpendCandidates: "coverage",
+    emptyLocations: "coverage",
+    ingredientsWithoutProduct: "coverage",
+    neverVerifiedInventory: "coverage",
+    productsWithNoImages: "coverage",
+    purchaseFinancialSettlementMismatches: "coverage",
+    purchaselessExitExpenses: "coverage",
+    purchasesNotReconciling: "coverage",
+    staleLocations: "coverage",
+    unvaluedBucketProducts: "coverage",
+    vendorsWithoutLogos: "coverage",
+  };
+
+  it("classes every detector exactly as pinned here", () => {
+    expect(PROBLEM_CLASS).toEqual(EXPECTED);
+  });
+
+  // `PROBLEM_CLASS` is `satisfies Record<ProblemKey, ProblemClass>`, so an
+  // unclassed detector is already a type error. This is the runtime half: the
+  // pinned table above must not drift out of the key roster either, or a
+  // detector could be renamed and silently lose its pin.
+  it("covers the whole detector roster", () => {
+    expect(Object.keys(EXPECTED).sort()).toEqual(
+      Object.keys(EMPTY_PROBLEM_ARRAYS).sort(),
+    );
+  });
+});
