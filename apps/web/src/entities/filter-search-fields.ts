@@ -20,6 +20,7 @@ const filterSearchKeys = {
     "upcPresence",
     "category",
     "location",
+    "servingAsLocations",
     "ingredient",
     "expenses",
     "expenseTotal",

@@ -481,9 +481,14 @@ describe("product.list quantity ledger", () => {
  * are only a preset over this query.
  *
  * It is deliberately the complement of the variance filters above:
- * `quantityVarianceFilter` is scoped to products that are BOTH stocked and in
- * the ledger, and `onHandUnitsSql` is NULL for a zero-entry shelf, so nothing in
- * that pair can reach a product that is owned on paper and stocked nowhere.
+ * `quantityVarianceFilter` is scoped to products that are present and in the
+ * ledger, and `onHandUnitsSql` is NULL for a zero-entry shelf, so nothing in
+ * that pair can reach a product that is owned on paper and held nowhere.
+ *
+ * "Present" means EITHER form — stock on a shelf, or a Location that IS the
+ * product. Which is why this cohort has to exclude both: a bin in daily service
+ * is not "stocked nowhere", and admitting it here would put the same row in two
+ * views telling contradictory stories.
  */
 describe("product.list unlocated cohort", () => {
   const ctx = withTestDb();
@@ -603,6 +608,57 @@ describe("product.list unlocated cohort", () => {
       categoryFilter: ["tools", "tool-accessories", "storage"],
     });
     expect(durables.items.map((row) => row.id)).toEqual([unlocated.id]);
+  });
+
+  /**
+   * The two halves of one product identity: a tote can be owned on paper and
+   * simultaneously BE a bin you store things in. Before `location.productId`
+   * that was unrepresentable, so every such product looked stocked nowhere.
+   *
+   * Both assertions below fail against a shelf-only variance gate — the first
+   * because the cohort never reaches a product with no `InventoryEntry`, the
+   * second because the filter it selects on did not exist.
+   */
+  it("keeps bins-in-service out of unlocated and inside shelf-disagrees", async () => {
+    const tote = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "G Tough Tote", category: "storage" }),
+      ctx.actor,
+    );
+    // Three in service as bins, eight on the receipt: short five, and not a
+    // single InventoryEntry anywhere. The production shape of PRD-Y7TZ.
+    for (const name of ["Tote bin A", "Tote bin B", "Tote bin C"]) {
+      await createLocationFixture(
+        ctx.db,
+        makeLocationInput({ name, productId: tote.id }),
+        ctx.actor,
+      );
+    }
+    await seedLine({
+      name: "totes",
+      cost: 80,
+      productId: tote.id,
+      productQuantity: 8,
+    });
+
+    // Present as locations, so the variance gate must admit it.
+    const disagreeing = await list({ quantityVarianceFilter: "mismatched" });
+    expect(disagreeing.items.map((row) => row.id)).toContain(tote.id);
+    const row = disagreeing.items.find((item) => item.id === tote.id);
+    expect(row).toMatchObject({ onHandUnits: 3, quantityVariance: -5 });
+
+    // ...and the unlocated cohort must not, or both views claim the same row.
+    const cohort = await list({
+      expectedQuantityMin: 1,
+      inventoryPresenceFilter: "none",
+      servingAsLocationPresenceFilter: "none",
+    });
+    expect(cohort.items.map((item) => item.id)).not.toContain(tote.id);
+
+    // The filter is a real predicate in both directions, not a no-op that
+    // happens to leave the set unchanged.
+    const inService = await list({ servingAsLocationPresenceFilter: "has" });
+    expect(inService.items.map((item) => item.id)).toContain(tote.id);
   });
 });
 

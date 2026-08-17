@@ -454,6 +454,17 @@ export const productList = async (
     )
     .where(notDeleted(inventoryEntry));
 
+  // Products a Location IS an instance of. Deliberately NOT folded into
+  // `productIdsWithLiveInventory`: that set backs the `location` column's
+  // presence filter, and the column renders `inventoryEntry` rows, so widening
+  // it would make the filter and the cell disagree — a shelf-less bin would
+  // read "has inventory" over an empty cell. `onHandUnitsSql` counts both, so
+  // the variance gate below unions them explicitly instead.
+  const productIdsServingAsLocations = dbClient
+    .select({ productId: location.productId })
+    .from(location)
+    .where(and(notDeleted(location), isNotNull(location.productId)));
+
   const productIdsAtSelectedLocations = dbClient
     .select({ productId: inventoryEntry.productId })
     .from(inventoryEntry)
@@ -659,6 +670,11 @@ export const productList = async (
               productIdsWithLiveInventory,
             ),
           ),
+      idSetPresence(
+        product.id,
+        filters.servingAsLocationPresenceFilter,
+        productIdsServingAsLocations,
+      ),
       filters.expenseCountMin !== undefined
         ? sql`(SELECT count(*) FROM "Expense" e WHERE e."productId" = ${product.id} AND e."deletedAt" IS NULL) >= ${filters.expenseCountMin}`
         : undefined,
@@ -691,7 +707,15 @@ export const productList = async (
       //    a real ledger and a real shelf genuinely disagree.
       filters.quantityVarianceFilter !== undefined
         ? and(
-            inArray(product.id, productIdsWithLiveInventory),
+            // Present ANYWHERE — on a shelf or in service as a bin. The gate
+            // used to be shelf-only while the comparison it guards
+            // (`onHandUnitsFilterSql`) already counted locations, so the two
+            // halves of one predicate disagreed about what "stocked" means and
+            // this view could not see a product held entirely as containers.
+            or(
+              inArray(product.id, productIdsWithLiveInventory),
+              inArray(product.id, productIdsServingAsLocations),
+            ),
             inArray(product.id, productIdsWithExpenses),
             filters.quantityVarianceFilter === "mismatched"
               ? sql`${onHandUnitsFilterSql(product.id)} <> ${expectedQuantityFilterSql(product.id)}`
