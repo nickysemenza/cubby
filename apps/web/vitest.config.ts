@@ -179,6 +179,19 @@ export default defineConfig({
           // measures cold-graph cost that a full parallel run amortizes, so it
           // OVERSTATES that file's contribution to the tier. Compare tiers by
           // `user + system` CPU across the whole run, never by timing one file.
+          //
+          // NB: the `--no-isolate` failures above are **`vi.mock` artifacts,
+          // not state leaks**, which is why they were never worth chasing.
+          // `vi.mock` replaces a module for one FILE; with a shared module
+          // registry whichever file imports a module first decides what every
+          // other file in that worker sees, so the mock silently does not
+          // apply. Diagnosed from the failures themselves — every failing file
+          // uses `vi.mock`, and the error is the un-mocked module talking
+          // ("useTRPC() can only be used inside of a <TRPCProvider>"). The
+          // 0/2/3/7/9 spread is just which file won the import race that run.
+          // 31 of 71 ui files and 14 of 173 unit files use `vi.mock`, so this
+          // is structural: `isolate: false` is permanently unavailable to these
+          // tiers, not merely slower or flakier. Nothing to fix in the tests.
         },
       },
     ],
