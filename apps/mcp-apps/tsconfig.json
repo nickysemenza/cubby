@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "incremental": true,
     "target": "ES2022",
     // DOM, not Node: everything here runs in a sandboxed browser iframe.
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
