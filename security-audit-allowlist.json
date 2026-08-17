@@ -4,7 +4,7 @@
       "advisory": "GHSA-mh99-v99m-4gvg",
       "module": "brace-expansion",
       "reachability": "low",
-      "rationale": "brace-expansion DoS (unbounded expansion length -> OOM) requires an attacker-controlled glob/brace pattern. It reaches prod deps only via build-time tooling: @sentry/vite-plugin's glob (runs at build, patterns are our own) and the OTel GCP resource detector's transitive rimraf/glob (OTel is dev-only in cubby; production disables it per README). No runtime path feeds untrusted patterns to brace-expansion. Patched only in >=5.0.8 while minimatch consumers pin ^2.x, so a blanket override is a cross-major bump with lockfile churn — deferred to the same dedicated dependency-bump PR as GHSA-v2hh-gcrm-f6hx.",
+      "rationale": "brace-expansion DoS (unbounded expansion length -> OOM) requires an attacker-controlled glob/brace pattern. It reaches prod deps only via build-time tooling: @sentry/vite-plugin's glob (runs at build, patterns are our own) and the OTel GCP resource detector's transitive rimraf/glob (OTel is dev-only in cubby; production disables it per README). No runtime path feeds untrusted patterns to brace-expansion. Patched only in >=5.0.8 while minimatch consumers pin ^2.x, so a blanket override is a cross-major bump with lockfile churn \u2014 deferred to the same dedicated dependency-bump PR as GHSA-v2hh-gcrm-f6hx.",
       "reviewedAt": "2026-07-26",
       "expires": "2026-10-15"
     },
@@ -12,7 +12,7 @@
       "advisory": "GHSA-rgw5-rvv9-x895",
       "module": "brace-expansion",
       "reachability": "low",
-      "rationale": "Follow-up to GHSA-mh99-v99m-4gvg: the same brace-expansion DoS, re-reported because the CVE-2026-14257 mitigation can be bypassed via unbounded intermediate arrays. Same module, same two prod paths, same analysis as that entry — @sentry/vite-plugin's glob (build-time, our own patterns) and the OTel GCP resource detector's transitive rimraf/glob (OTel is dev-only; production disables it per README). No runtime path feeds an attacker-controlled glob/brace pattern to brace-expansion, so the bypass changes reachability not at all. Patched in >=2.1.4 / >=5.0.9; still not overridable in isolation for the reason documented on the other two entries (forcing it re-resolves the lockfile and pulls in NEW critical advisories), so it is deferred to the same dedicated dependency-bump PR and shares their 2026-10-15 deadline. Published after this branch was cut and unrelated to it — it turned every PR in the repo red at once.",
+      "rationale": "Follow-up to GHSA-mh99-v99m-4gvg: the same brace-expansion DoS, re-reported because the CVE-2026-14257 mitigation can be bypassed via unbounded intermediate arrays. Same module, same two prod paths, same analysis as that entry \u2014 @sentry/vite-plugin's glob (build-time, our own patterns) and the OTel GCP resource detector's transitive rimraf/glob (OTel is dev-only; production disables it per README). No runtime path feeds an attacker-controlled glob/brace pattern to brace-expansion, so the bypass changes reachability not at all. Patched in >=2.1.4 / >=5.0.9; still not overridable in isolation for the reason documented on the other two entries (forcing it re-resolves the lockfile and pulls in NEW critical advisories), so it is deferred to the same dedicated dependency-bump PR and shares their 2026-10-15 deadline. Published after this branch was cut and unrelated to it \u2014 it turned every PR in the repo red at once.",
       "reviewedAt": "2026-08-03",
       "expires": "2026-10-15"
     },
@@ -20,8 +20,16 @@
       "advisory": "GHSA-2v37-7h3g-55p8",
       "module": "nanoid",
       "reachability": "low",
-      "rationale": "nanoid's customAlphabet loops forever when asked for a zero-length id. cubby has exactly one first-party call site — `customAlphabet(SHORTCODE_CHARS, 4)` in packages/shared/src/shortcode.ts:223 — and its returned generator is invoked as `shortcodeBody()` with no argument, so the size is the baked-in literal 4 on every call. No caller can pass a size at all, let alone one derived from user input, so there is no path that reaches the zero-size loop. nanoid is also not a transitive dependency of anything else in the workspace. Published after this branch was cut and unrelated to it — it turned every PR in the repo red at once, the same way GHSA-rgw5-rvv9-x895 did. Deferred to the same dedicated dependency-bump PR and sharing its 2026-10-15 deadline.",
+      "rationale": "nanoid's customAlphabet loops forever when asked for a zero-length id. cubby has exactly one first-party call site \u2014 `customAlphabet(SHORTCODE_CHARS, 4)` in packages/shared/src/shortcode.ts:223 \u2014 and its returned generator is invoked as `shortcodeBody()` with no argument, so the size is the baked-in literal 4 on every call. No caller can pass a size at all, let alone one derived from user input, so there is no path that reaches the zero-size loop. nanoid is also not a transitive dependency of anything else in the workspace. Published after this branch was cut and unrelated to it \u2014 it turned every PR in the repo red at once, the same way GHSA-rgw5-rvv9-x895 did. Deferred to the same dedicated dependency-bump PR and sharing its 2026-10-15 deadline.",
       "reviewedAt": "2026-08-13",
+      "expires": "2026-10-15"
+    },
+    {
+      "advisory": "GHSA-ggr8-5vv4-36mx",
+      "module": "deepmerge-ts",
+      "reachability": "low",
+      "rationale": "deepmerge-ts blows the stack merging a self-referential object graph. It is not a cubby dependency at all: the single path is @prisma/config -> prisma, which merges the project's own prisma config at CLI time. Nothing in the worker, the MCP surface or any request path calls it, and the only object it ever merges is a file we wrote. An attacker would need commit access to the config to trigger it, at which point the stack is not the problem. Patched in >=7.1.6, and unlike the brace-expansion entries that is a plain patch bump \u2014 but forcing it via a pnpm override re-resolves the lockfile and pulls in THREE new critical advisories (GHSA-38f7-945m-qr2g in effect, GHSA-hx9m-jf43-8ffr and GHSA-mv8w-475r-vwqw in seroval), trading one unreachable DoS for two deserialization bugs. Verified, then reverted. Deferred to the same dedicated dependency-bump PR as the other entries and sharing its deadline. Published after this branch was cut and unrelated to it \u2014 it turned every PR in the repo red at once, the same way GHSA-rgw5-rvv9-x895 and GHSA-2v37-7h3g-55p8 did.",
+      "reviewedAt": "2026-08-17",
       "expires": "2026-10-15"
     }
   ]
