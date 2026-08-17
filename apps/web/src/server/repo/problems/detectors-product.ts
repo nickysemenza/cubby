@@ -35,7 +35,6 @@ import {
   and,
   eq,
   exists,
-  gt,
   inArray,
   isNotNull,
   isNull,
@@ -44,7 +43,7 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
-import { sumBy, uniq } from "es-toolkit";
+import { uniq, uniqBy } from "es-toolkit";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
@@ -79,9 +78,10 @@ import {
 } from "~/server/repo/product/edge-roles";
 import {
   disposalPurchaseIds,
-  loadProductOwnershipWindows,
+  loadProductOwnershipTimelines,
 } from "~/server/repo/product/ownership";
 import { loadProductPricing } from "~/server/repo/product/pricing";
+import { loadProductPickerQuantities } from "~/server/repo/product/quantity-ledger";
 import { loadProjectDateWindows } from "~/server/repo/project/subtree";
 import { buildTimelineGates } from "~/server/repo/project/tools";
 
@@ -483,27 +483,15 @@ export const findPurchaselessExitExpenses = async (
 //     contributions), and the looser predicate was wrong about half the time
 //     on production: 43 products matched, only 20 were genuine disposals.
 //
-//  2. *Fully disposed, not merely touched.* Selling 4 of 14 parts bins leaves
-//     10 legitimately stocked, so a row is reported only when the sold
-//     quantity accounts for everything still on the shelf. Both quantities
-//     ride along on the row so a partial sale reads as deliberate.
+//  2. *Fully disposed, not merely touched.* The quantity ledger is the
+//     authority: a row is reported only when the known movements leave zero or
+//     fewer units expected. Comparing units sold with units currently stocked
+//     is not equivalent — buying 2, selling 1 and stocking the remaining 1
+//     made both numbers equal and produced a false positive. An unknown
+//     acquisition keeps the result out because it may be the missing remainder.
 //
-//  3. *The exit has to be the last word.* `Expense.productId`'s doc note puts
-//     it plainly: ownership is an *interval* derived from these rows plus
-//     inventory. A tool sold and later re-bought keeps its disposal row
-//     forever, so without comparing the last exit against the last
-//     acquisition the fresh shelf entry reads as the stale one.
-//
-// The window's acquisition side is deliberately loose: any positive
-// product-linked line reopens it, so a positive price adjustment dated after a
-// real disposal would suppress a detection. That is the mirror of the cost-0
-// gap below and errs the same safe way (under-report on a list a human
-// reviews). Tightening it symmetrically — requiring the acquisition to sit on
-// a net-positive Purchase — is *worse*, not better: two live acquisitions
-// carry no purchase at all, so they would stop reopening the window and turn a
-// rare false negative into a false positive. Excluding only the positive lines
-// that sit inside a disposal Purchase is sound but changes nothing: zero of
-// them postdate their product's last exit.
+// A later re-acquisition is already represented in that net balance, so this
+// detector does not maintain a second, date-only ownership rule beside it.
 //
 // Cost-0 exits used to be an outright blind spot here: a broken or gifted item
 // is recorded at cost 0, and cost 0 is also how a free promotional
@@ -542,9 +530,6 @@ export const findSoldButStillStocked = async (
       // UI. `abs(NULL)` is `NULL`, so the coalesce default still applies.
       soldQuantity: sql<number>`sum(coalesce(abs(${expense.productQuantity}), 1))::double precision`,
       proceeds: sql<number>`sum(${expense.cost})::double precision`,
-      // Closes the ownership window (see below). `date` is a `mode: "string"`
-      // column, so ISO strings order correctly without parsing.
-      lastExitAt: sql<string>`max(${expense.date})`,
     })
     .from(expense)
     .where(
@@ -565,34 +550,6 @@ export const findSoldButStillStocked = async (
   );
   if (byProduct.size === 0) return [];
 
-  // Close the ownership window. `Expense.productId`'s own doc note is explicit
-  // that "net cost, ownership window and owned/sold status are derived from
-  // these rows plus inventory; nothing is stored" — so an exit only means the
-  // shelf is stale if nothing was acquired *after* it. Sell a tool and re-buy
-  // it later and the disposal row never goes away, so without this the fresh
-  // shelf entry reads as the stale one.
-  const acquisitions = await dbClient
-    .select({
-      productId: expense.productId,
-      lastAcquiredAt: sql<string>`max(${expense.date})`,
-    })
-    .from(expense)
-    .where(
-      and(
-        notDeleted(expense),
-        eq(expense.future, false),
-        gt(expense.cost, 0),
-        inArray(expense.productId, [...byProduct.keys()]),
-      ),
-    )
-    .groupBy(expense.productId);
-
-  const lastAcquiredAt = new Map(
-    acquisitions.flatMap((row) =>
-      row.productId ? ([[row.productId, row.lastAcquiredAt]] as const) : [],
-    ),
-  );
-
   // includes-installed: sold-but-still-stocked is an ownership/identity
   // question — a fixture the ledger says was sold is exactly as wrong as a
   // shelf item, and should still surface here.
@@ -604,11 +561,26 @@ export const findSoldButStillStocked = async (
         where: notDeleted(inventoryEntry),
         columns: { id: true, amount: true },
         with: {
-          location: { columns: { id: true, name: true, shortcode: true } },
+          location: {
+            columns: {
+              id: true,
+              name: true,
+              shortcode: true,
+              deletedAt: true,
+            },
+          },
         },
+      },
+      locations: {
+        where: notDeleted(location),
+        columns: { id: true, name: true, shortcode: true },
       },
     },
   });
+  const quantities = await loadProductPickerQuantities(
+    db,
+    candidates.map((candidate) => candidate.id),
+  );
 
   const rows: SoldButStillStocked[] = [];
 
@@ -616,23 +588,30 @@ export const findSoldButStillStocked = async (
     const disposal = byProduct.get(prod.id);
     if (!disposal) continue;
 
-    const liveQuantity = sumBy(
-      prod.inventoryEntry,
-      (entry) => entry.amount.value,
-    );
-
-    // Nothing on a shelf — the ledger and the inventory already agree, which is
-    // the normal end state after a sale.
+    const quantity = quantities.get(prod.id);
+    // A mixed-unit shelf has no honest numeric `liveQuantity`, and no stock is
+    // already the normal post-sale state.
+    if (quantity?.onHand.state !== "counted") continue;
+    const liveQuantity = quantity.onHand.units;
     if (liveQuantity <= 0) continue;
-    // A partial sale leaves real stock behind; only a fully-accounted-for
-    // disposal means the remaining entry is stale.
-    if (disposal.soldQuantity < liveQuantity) continue;
-    // Re-acquired after the last exit, so the shelf entry is a fresh purchase
-    // rather than a leftover. Ties keep the row: a same-day sell-and-rebuy is
-    // not distinguishable at date granularity, and reporting it is the safer
-    // side of an ambiguity a human resolves anyway.
-    const acquiredAt = lastAcquiredAt.get(prod.id);
-    if (acquiredAt && acquiredAt > disposal.lastExitAt) continue;
+    // A positive known balance is a partial exit. Unknown acquisitions may be
+    // the missing balance, so they suppress this high-confidence defect too.
+    if (
+      quantity.quantityLedger.expectedQuantity > 0 ||
+      quantity.quantityLedger.unknownAcquisitionLines > 0
+    ) {
+      continue;
+    }
+
+    const liveLocations = uniqBy(
+      [
+        ...prod.inventoryEntry.flatMap((entry) =>
+          entry.location.deletedAt === null ? [entry.location] : [],
+        ),
+        ...prod.locations,
+      ],
+      (item) => item.id,
+    );
 
     rows.push({
       id: unsafeProductShortcode(prod.shortcode),
@@ -641,9 +620,9 @@ export const findSoldButStillStocked = async (
       soldQuantity: disposal.soldQuantity,
       liveQuantity,
       proceeds: disposal.proceeds,
-      locations: prod.inventoryEntry.map((entry) => ({
-        id: unsafeLocationShortcode(entry.location.shortcode),
-        name: entry.location.name,
+      locations: liveLocations.map((item) => ({
+        id: unsafeLocationShortcode(item.shortcode),
+        name: item.name,
       })),
     });
   }
@@ -694,9 +673,10 @@ export const findToolsUsedOutsideOwnership = async (
 
   const [loadedWindows, ownership] = await Promise.all([
     loadProjectDateWindows(db),
-    loadProductOwnershipWindows(
+    loadProductOwnershipTimelines(
       dbClient,
       uniq(edges.map((edge) => edge.productId)),
+      { today },
     ),
   ]);
   const gates = buildTimelineGates(

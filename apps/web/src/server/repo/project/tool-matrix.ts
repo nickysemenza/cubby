@@ -76,7 +76,7 @@ import {
   getDb,
   notDeleted,
 } from "~/server/repo/database-helpers";
-import { loadProductOwnershipWindows } from "~/server/repo/product/ownership";
+import { loadProductOwnershipTimelines } from "~/server/repo/product/ownership";
 import { buildDashboardProjectWhere } from "./dashboard-shared";
 import { loadProjectDateWindows, projectCompletionYear } from "./subtree";
 import {
@@ -493,7 +493,7 @@ export async function projectToolMatrix(
           )
           .groupBy(expense.productId, expense.trade),
     loadResourceMetrics(dbc, rowIds),
-    loadProductOwnershipWindows(dbc, rowIds),
+    loadProductOwnershipTimelines(dbc, rowIds, { today }),
   ]);
 
   // The ownership gate. `buildTimelineGates` folds the same windows

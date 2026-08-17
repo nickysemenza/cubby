@@ -639,8 +639,9 @@ function unpricedSubtitle(product: ProductMissingPrice): string {
 
 /**
  * `by {mfr} · sold 1, 1 still on a shelf · $700.00 recovered`. Both quantities
- * are shown because they are what distinguishes a stale shelf from a partial
- * sale, and `proceeds` is stored negative (it is a disposal).
+ * remain useful context for the human review, while membership is decided by
+ * the canonical quantity ledger. `proceeds` is stored negative because it is a
+ * disposal.
  */
 function soldButStockedSubtitle(product: SoldButStillStocked): string {
   const live = product.liveQuantity;

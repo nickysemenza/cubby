@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  type ProductOwnershipTimeline,
   TOOL_TIMELINE_GRACE_DAYS,
   type ToolTimelineProjectWindow,
   toolTimelineConflict,
@@ -19,14 +20,35 @@ const window = (
 });
 
 const check = (
-  ownership: { acquiredAt?: string | null; disposedAt?: string | null },
+  ownership: {
+    acquiredAt?: string | null;
+    disposedAt?: string | null;
+    intervals?: ProductOwnershipTimeline["intervals"];
+    confidenceLostAt?: string | null;
+  },
   win: ToolTimelineProjectWindow,
   isLive = false,
-) =>
-  toolTimelineConflict({ ...UNKNOWN_OWNERSHIP, ...ownership }, win, {
-    isLive,
-    today: TODAY,
-  });
+) => {
+  const acquiredAt = ownership.acquiredAt ?? null;
+  const intervals =
+    ownership.intervals ??
+    (acquiredAt === null
+      ? []
+      : [{ start: acquiredAt, end: ownership.disposedAt ?? TODAY }]);
+  return toolTimelineConflict(
+    {
+      ...UNKNOWN_OWNERSHIP,
+      acquiredAt,
+      intervals,
+      confidenceLostAt: ownership.confidenceLostAt ?? null,
+    },
+    win,
+    {
+      isLive,
+      today: TODAY,
+    },
+  );
+};
 
 describe("toolTimelineConflict", () => {
   describe("unknown never blocks", () => {
@@ -146,6 +168,30 @@ describe("toolTimelineConflict", () => {
           true,
         ),
       ).toMatchObject({ kind: "disposed_before_start" });
+    });
+
+    it("flags a project inside a proven sell-and-rebuy gap", () => {
+      const conflict = toolTimelineConflict(
+        {
+          acquiredAt: "2020-01-01",
+          intervals: [
+            { start: "2020-01-01", end: "2021-01-01" },
+            { start: "2023-01-01", end: TODAY },
+          ],
+          confidenceLostAt: null,
+        },
+        window({
+          effectiveStart: "2022-01-01",
+          effectiveEnd: "2022-06-30",
+        }),
+        { isLive: false, today: TODAY },
+      );
+
+      expect(conflict).toEqual({
+        kind: "disposed_before_start",
+        date: "2021-01-01",
+        boundary: "2022-01-01",
+      });
     });
   });
 });

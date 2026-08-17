@@ -57,7 +57,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { foldAssociation } from "~/server/repo/merge";
-import { loadProductOwnershipWindows } from "~/server/repo/product/ownership";
+import { loadProductOwnershipTimelines } from "~/server/repo/product/ownership";
 import { maxPlainDate } from "./helpers";
 import { collectDescendantIds, loadProjectDateWindows } from "./subtree";
 
@@ -523,7 +523,7 @@ async function assertNoTimelineConflict(
     purchaseCosts,
   ] = await Promise.all([
     loadProjectDateWindows(db),
-    loadProductOwnershipWindows(dbc, productIds),
+    loadProductOwnershipTimelines(dbc, productIds, { today }),
     dbc
       .select({ id: project.id, name: project.name })
       .from(project)
@@ -1240,7 +1240,7 @@ export async function suggestProjectTools(
   ]);
   const [metrics, ownership] = await Promise.all([
     loadResourceMetrics(dbc, candidateProductIds),
-    loadProductOwnershipWindows(dbc, candidateProductIds),
+    loadProductOwnershipTimelines(dbc, candidateProductIds, { today }),
   ]);
 
   /**
