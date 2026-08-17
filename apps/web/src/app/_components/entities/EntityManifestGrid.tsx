@@ -7,7 +7,7 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Check, Minus } from "lucide-react";
+import { AlertTriangle, Check, Minus } from "lucide-react";
 import type { ReactNode } from "react";
 import { Stack } from "~/components/layout";
 import { stickyRowHeaderPage } from "~/components/matrix/matrix-chrome";
@@ -23,6 +23,7 @@ import {
 import { entities } from "~/entities/entities";
 import { getEntityContract } from "~/entities/entity-contracts";
 import { getSortableFields } from "~/entities/sortable-fields";
+import { viewsForEntity } from "~/entities/view-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
@@ -49,6 +50,32 @@ function Chips({ items }: { items: readonly string[] }) {
       {items.map((item) => (
         <Badge key={item} variant="outline" className="font-mono text-2xs">
           {item}
+        </Badge>
+      ))}
+    </div>
+  );
+}
+
+export function SavedViewChips({ entity }: { entity: Entity }) {
+  const views = viewsForEntity(entity);
+  if (views.length === 0)
+    return <span className="text-muted-foreground/40">—</span>;
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {views.map((view) => (
+        <Badge
+          key={view.id}
+          variant="outline"
+          className="font-sans normal-case tracking-normal"
+        >
+          {view.problem && (
+            <AlertTriangle className="text-warning" aria-hidden="true" />
+          )}
+          {view.label}
+          {view.problem && (
+            <span className="sr-only">Also appears on the Problems page.</span>
+          )}
         </Badge>
       ))}
     </div>
@@ -126,6 +153,10 @@ const GROUPS: Group[] = [
         cell: ({ entity }) => (
           <Chips items={entities[entity].list?.standardColumns ?? []} />
         ),
+      },
+      {
+        label: "Saved views",
+        cell: ({ entity }) => <SavedViewChips entity={entity} />,
       },
       {
         label: "Common sections",
