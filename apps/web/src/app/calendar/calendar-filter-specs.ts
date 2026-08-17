@@ -1,0 +1,130 @@
+import { calendarItemKind } from "@cubby/schemas/calendar";
+import {
+  unsafeProjectShortcode,
+  unsafeVendorShortcode,
+} from "@cubby/schemas/identifiers";
+import { createElement } from "react";
+import { futureFilterOptions } from "~/app/expenses/expense-options";
+import {
+  PROJECT_STATUS_OPTIONS,
+  projectKindOptions,
+} from "~/app/projects/project-options";
+import { tradeOptions } from "~/app/projects/trade-options";
+import { taskStatusOptions } from "~/app/tasks/task-options";
+import type { FilterableComboboxItem } from "~/components/ui/combobox";
+import type { FilterSpec } from "~/entities/filter-manifest";
+import { KIND_ICONS } from "./calendar-icons";
+
+/**
+ * The calendar's filter manifest.
+ *
+ * **A standalone spec list, deliberately outside the `entityFilters` registry.**
+ * The calendar is not an `Entity`: it has no shortcode prefix, no detail route,
+ * no `SearchDocument`, no incoming edges. Registering one to reach the shared
+ * bar would force an invented member into ~10 exhaustive `Record<Entity, …>`
+ * tables and a fake `calendarFilterFields` entry into three drift guards, all
+ * to serve one page. Exporting the specs directly gets `decodeFilters`,
+ * `encodeFilters`, and `buildFiltersFromManifest` with none of that — and
+ * `calendar-filter-specs.unit.test.tsx` re-creates the drift protection the
+ * registry would have supplied.
+ *
+ * A `.ts`, not `.tsx`: the item-kind icons are built with `createElement` so
+ * the module stays loadable from the dependency-light `unit` vitest project.
+ *
+ * **Labels name the kind they scope.** "Task status", not "Status" — a
+ * calendar shows four kinds at once, and a bare "Status" chip would read as
+ * one that empties the month rather than one that narrows the tasks in it.
+ * See `calendarFilterFields` for the cross-kind rule this is the UI half of.
+ */
+
+const KIND_LABELS: Record<string, string> = {
+  meal: "Meals",
+  task: "Tasks",
+  expense: "Expenses",
+  project: "Projects",
+};
+
+const itemKindOptions: FilterableComboboxItem[] = calendarItemKind.options.map(
+  (value) => ({
+    value,
+    label: KIND_LABELS[value] ?? value,
+    icon: createElement(KIND_ICONS[value], { className: "size-3.5" }),
+  }),
+);
+
+export const calendarFilterSpecs: readonly FilterSpec[] = [
+  {
+    columnId: "kinds",
+    kind: "multiselect",
+    label: "Show",
+    placeholder: "Filter by item kind...",
+    options: itemKindOptions,
+  },
+  {
+    columnId: "project",
+    field: "projectId",
+    kind: "idMulti",
+    // The WIRE takes shortcodes (`oneOrMany(projectShortcode)`), so the brand
+    // is the shortcode brand. The entity manifests' project/vendor specs brand
+    // with `unsafeProjectId`/`unsafeVendorId` against the same shortcode wire —
+    // a latent mislabel that only survives because `brand` is typed
+    // `(v: string) => unknown`. Don't copy it here.
+    brand: unsafeProjectShortcode,
+    label: "Project",
+    placeholder: "Filter by project...",
+    optionsKey: "project",
+    nullable: { field: "projectPresenceFilter", label: "project" },
+  },
+  {
+    columnId: "taskStatus",
+    kind: "multiselect",
+    label: "Task status",
+    placeholder: "Filter by task status...",
+    options: taskStatusOptions,
+  },
+  {
+    columnId: "taskTrade",
+    kind: "multiselect",
+    label: "Task trade",
+    placeholder: "Filter by task trade...",
+    options: tradeOptions,
+  },
+  {
+    columnId: "vendor",
+    field: "expenseVendorId",
+    kind: "idMulti",
+    brand: unsafeVendorShortcode,
+    label: "Vendor",
+    placeholder: "Filter by vendor...",
+    optionsKey: "vendor",
+    nullable: { field: "expenseVendorPresenceFilter", label: "vendor" },
+  },
+  {
+    columnId: "future",
+    field: "expenseFuture",
+    kind: "boolean",
+    label: "Expense status",
+    placeholder: "Filter by expense status...",
+    options: futureFilterOptions,
+  },
+  {
+    columnId: "projectStatus",
+    kind: "multiselect",
+    label: "Project status",
+    placeholder: "Filter by project status...",
+    options: PROJECT_STATUS_OPTIONS,
+  },
+  {
+    // Keeps the pre-existing `?projectKinds=` URL key so old links still
+    // resolve. `project.kind`'s own manifest spec claims `?kinds` for the same
+    // concept, but that only binds within a route that mounts the project
+    // manifest — and /calendar mounts none, where `?kinds` means ITEM kinds.
+    columnId: "projectKinds",
+    field: "projectKind",
+    kind: "multiselect",
+    label: "Project kind",
+    placeholder: "Filter by project kind...",
+    options: projectKindOptions,
+    nullable: { field: "projectKindPresenceFilter", label: "kind" },
+  },
+];

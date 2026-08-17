@@ -1,37 +1,17 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
 import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
 import { Link } from "@tanstack/react-router";
-import {
-  CalendarRange,
-  CheckSquare,
-  CircleDollarSign,
-  CookingPot,
-} from "lucide-react";
 import type { ReactNode } from "react";
-import { mealKindIcon, mealTypeIcon } from "~/app/meals/meal-options";
+import { mealKindIcon } from "~/app/meals/meal-options";
 import { entityDetailLink } from "~/entities/entities";
 import { cn, formatCurrency } from "~/lib/utils";
+import { itemIcon } from "./calendar-icons";
+import { itemSpanLabel } from "./calendar-span";
 
 /**
  * The one-line form of a calendar item, shared by the month view's day drawer
  * and the phone agenda so the two can't render the same record differently.
  */
-
-export const KIND_ICONS: Record<CalendarItem["kind"], typeof CookingPot> = {
-  meal: CookingPot,
-  task: CheckSquare,
-  expense: CircleDollarSign,
-  project: CalendarRange,
-};
-
-/**
- * The leading glyph. Meals resolve to their slot (breakfast → dinner) rather
- * than the generic per-kind pot: the slot is the meal's primary
- * classification, it already orders the day, and the icon costs no width the
- * title could have used.
- */
-export const itemIcon = (item: CalendarItem) =>
-  item.kind === "meal" ? mealTypeIcon(item.mealType) : KIND_ICONS[item.kind];
 
 export function CalendarItemLink({ item }: { item: CalendarItem }) {
   const Icon = itemIcon(item);
@@ -41,12 +21,21 @@ export function CalendarItemLink({ item }: { item: CalendarItem }) {
   // a night is takeout.
   const kind = item.kind === "meal" ? item.mealKind : null;
   const KindIcon = kind ? mealKindIcon(kind) : null;
+  // A span covers every day it touches, so this row repeats across dozens of
+  // day sheets — without the range there is nothing to say whether you are
+  // looking at its first day or its last.
+  const span = itemSpanLabel(item);
   const content: ReactNode = (
     <>
       <Icon className="size-3.5 shrink-0" aria-hidden />
       <span className="min-w-0 flex-1 truncate" title={item.title}>
         {item.title}
       </span>
+      {span && (
+        <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
+          {span}
+        </span>
+      )}
       {KindIcon && kind && (
         <KindIcon
           className="size-3.5 shrink-0 text-slate"

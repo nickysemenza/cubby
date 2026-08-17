@@ -100,7 +100,7 @@ const chargeIdsWhere = (db: Database, inner: SQL) =>
     .from(purchase)
     .where(and(notDeleted(purchase), inner));
 
-const chargeCondition = (
+export const chargeCondition = (
   db: Database,
   inner: SQL | undefined,
 ): SQL | undefined =>
