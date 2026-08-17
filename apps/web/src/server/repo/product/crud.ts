@@ -337,18 +337,27 @@ export const getProductImagesByProductIds = async (
   return result;
 };
 
+/**
+ * Stored conversion rows per product uuid, deliberately WITHOUT provenance.
+ *
+ * `sourceMetadata` names a product by its public shortcode (the schema's field
+ * is `productShortcode`), and a repo keyed on uuids has no shortcode to stamp.
+ * An earlier shape stamped `productId: row.productId` — a uuid — and relied on
+ * its one caller to overwrite the field with the shortcode it happened to know.
+ * That left a uuid-shaped `sourceMetadata` alive in the type system, one
+ * forgetful second caller away from reaching the client, where the unit-mapping
+ * table feeds that exact field into a `product.getByID` lookup that is keyed on
+ * the shortcode. Whoever owns the shortcode stamps it (see
+ * `getProductSummaries`); nobody else can.
+ */
 export const getProductUnitMappingsByProductIds = async (
   db: Database,
   ids: ProductId[],
-) => {
+): Promise<Record<string, Array<Omit<UnitMapping, "sourceMetadata">>>> => {
   const uniqueIds = uniq(ids);
   const result: Record<
     string,
-    Array<
-      Omit<UnitMapping, "sourceMetadata"> & {
-        sourceMetadata: { type: "product"; productId: ProductId };
-      }
-    >
+    Array<Omit<UnitMapping, "sourceMetadata">>
   > = Object.fromEntries(uniqueIds.map((id) => [id, []]));
   if (uniqueIds.length === 0) return result;
 
@@ -364,7 +373,6 @@ export const getProductUnitMappingsByProductIds = async (
       a: row.a,
       b: row.b,
       source: row.source,
-      sourceMetadata: { type: "product", productId: row.productId },
     });
   }
 
