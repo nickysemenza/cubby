@@ -26,6 +26,7 @@
     "db:cleanup-unreferenced-images": "tsx scripts/cleanup-unreferenced-images.ts",
     "db:backfill-settlement-allocations": "tsx scripts/backfill-settlement-allocations.ts",
     "db:backfill-household-project": "tsx scripts/backfill-household-project.ts",
+    "db:backfill-location-identity": "tsx scripts/backfill-location-product-identity.ts",
     "db:backfill-stock-tracked": "tsx scripts/backfill-stock-tracked.ts",
     "db:backfill-search-documents": "tsx scripts/backfill-search-documents.ts",
     "db:report-product-quantities": "tsx scripts/report-product-quantity-backfill.ts",
