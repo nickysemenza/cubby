@@ -44,15 +44,18 @@ import {
 } from "./calculate-inventory-valuation";
 import { CreateChildLocationDialog } from "./create-child-location-dialog";
 import { LocationChildrenTable } from "./location-children-table";
+import { locationContentsVisibility } from "./location-contents-state";
 import {
   LocationInventoryTable,
   locationInventoryListInput,
 } from "./location-inventory-table";
 import {
-  getLocationIcon,
+  getLocationGlyph,
   getLocationTypeGroup,
   typeSupportsQrCode,
 } from "./location-type-theme";
+import { LocationVisual } from "./location-visual";
+import { locationChildGroupLabel } from "./location-visual-resolver";
 
 /** Display order for type groups in the sub-locations grid. */
 const GROUP_ORDER = ["surfaces", "storage", "containers", "spaces"] as const;
@@ -66,7 +69,7 @@ const groupRank = (loc: InfLocation) => {
 
 /** One sub-location as a square photo card, matching the item shelf cards. */
 function LocationShelfCard({ location }: { location: InfLocation }) {
-  const TypeIcon = getLocationIcon(location.type);
+  const TypeIcon = getLocationGlyph(location);
   const itemCount =
     location.valuation?.totalItemCount ?? location.directItemCount ?? 0;
   const childCount = location.childCount ?? 0;
@@ -84,8 +87,7 @@ function LocationShelfCard({ location }: { location: InfLocation }) {
     <ShelfCard
       to="/locations/$shortcode"
       params={{ shortcode: location.id }}
-      image={location.images[0]?.url}
-      extraCount={location.images.length - 1}
+      media={<LocationVisual location={location} variant="card" />}
       title={location.name}
       subtitle={caption}
       entity="location"
@@ -110,6 +112,11 @@ export function LocationContentsValuation({
   location: InfLocation;
 }) {
   const total = location.valuation?.totalValuation ?? 0;
+  const totalItems =
+    location.valuation?.totalItemCount ?? location.totalItemCount ?? 0;
+  const children = location.children ?? [];
+  const childCount = children.length;
+  const childLabel = locationChildGroupLabel(children);
   const pricingNote = formatPricingCountsSummary(location.valuation?.total);
 
   return (
@@ -120,7 +127,13 @@ export function LocationContentsValuation({
           "font-mono tabular-nums",
         )}
       >
-        {formatCurrency(total)}
+        <span className="max-w-[70vw] truncate">
+          {totalItems} {totalItems === 1 ? "item" : "items"}
+          {childCount > 0
+            ? ` across ${childCount} ${childLabel.toLowerCase()}`
+            : ""}{" "}
+          · {formatCurrency(total)}
+        </span>
         <ChevronDown className="size-3 text-muted-foreground" />
       </PopoverTrigger>
       <PopoverContent align="end" className="w-64">
@@ -213,7 +226,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
     api.inventory.list.queryOptions(locationInventoryListInput(location.id)),
   );
   const itemCount = itemsData?.meta.totalCount ?? location.directItemCount ?? 0;
-  const hasItems = itemCount > 0;
+  const visibility = locationContentsVisibility(children.length, itemCount);
 
   // Fixtures are excluded from the list above, so they have to be disclosed
   // rather than silently dropped — otherwise the shelf reads as complete when
@@ -229,6 +242,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
     () => sortBy(children, [groupRank, (c) => c.type, (c) => c.name]),
     [children],
   );
+  const childGroupLabel = locationChildGroupLabel(sortedChildren);
 
   const handlePrintLabels = useCallback(() => {
     const eligible = children.filter((c) => c.id && typeSupportsQrCode(c.type));
@@ -338,7 +352,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
         </CollapsibleContent>
       </Collapsible>
 
-      {!hasChildren && !hasItems ? (
+      {visibility.empty ? (
         <ShelfEmpty
           entity="location"
           label="Nothing here yet — add an item or a sub-location"
@@ -347,9 +361,11 @@ export function LocationContents({ location }: { location: InfLocation }) {
         <>
           {/* Sub-locations group — cards on the shelf, a full descendant tree
               in the table. The toggle covers both groups. */}
-          {hasChildren && (
+          {visibility.showChildren && (
             <Stack gap="sm">
-              <Eyebrow>Locations · {children.length}</Eyebrow>
+              <Eyebrow>
+                {childGroupLabel} · {children.length}
+              </Eyebrow>
               {view === "table" ? (
                 <LocationChildrenTable locationId={location.id} />
               ) : (
@@ -364,17 +380,12 @@ export function LocationContents({ location }: { location: InfLocation }) {
           )}
 
           {/* Items group — the shelf/table toggle applies here only. */}
-          <Stack gap="sm">
-            <Eyebrow>Items · {itemCount}</Eyebrow>
-            {hasItems ? (
+          {visibility.showDirectItems && (
+            <Stack gap="sm">
+              <Eyebrow>Items here · {itemCount}</Eyebrow>
               <LocationInventoryTable locationId={location.id} view={view} />
-            ) : (
-              <ShelfEmpty
-                entity="inventory"
-                label="No items stored directly here"
-              />
-            )}
-          </Stack>
+            </Stack>
+          )}
 
           {fixtureCount > 0 && (
             <details>

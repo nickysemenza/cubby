@@ -53,7 +53,7 @@ export function usePageIdentity(): PageIdentity | null {
 
 /** Detail-only context keeps shared body sections aware of their owner. */
 const PageDetailContext = createContext<
-  { entity: Entity; rawData: unknown } | undefined
+  { entity: Entity; rawData: unknown; heroMedia?: ReactNode } | undefined
 >(undefined);
 
 export function usePageDetailContext() {
@@ -116,6 +116,12 @@ interface PageDetailProps extends PageBaseProps {
   heroStats?: DetailHeroStat[];
   heroNo?: string;
   heroImages?: Array<{ id: string; url: string; filename: string }>;
+  /**
+   * Detail-only sourced media. This is intentionally separate from
+   * `heroImages`: callers can show related imagery without implying it is an
+   * attachment owned by this record.
+   */
+  heroMedia?: ReactNode;
   rawData?: unknown;
 }
 
@@ -165,6 +171,7 @@ export function Page(props: PageProps) {
             heroStats={detail?.heroStats}
             heroNo={detail?.heroNo}
             heroImages={detail?.heroImages}
+            heroMedia={detail?.heroMedia}
             rawData={detail?.rawData}
             count={variant === "list" ? count : undefined}
           />
@@ -173,7 +180,11 @@ export function Page(props: PageProps) {
           <PageDetailContext.Provider
             value={
               detail
-                ? { entity: detail.entity, rawData: detail.rawData }
+                ? {
+                    entity: detail.entity,
+                    rawData: detail.rawData,
+                    heroMedia: detail.heroMedia,
+                  }
                 : undefined
             }
           >

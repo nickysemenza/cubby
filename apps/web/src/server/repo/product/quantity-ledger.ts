@@ -45,11 +45,14 @@
  * only genuine unknowns — as of the backfill, none.
  */
 import type { ProductId } from "@cubby/schemas/identifiers";
-import type { ProductQuantityLedgerOut } from "@cubby/schemas/product";
+import type {
+  ProductPickerOnHandOut,
+  ProductQuantityLedgerOut,
+} from "@cubby/schemas/product";
 import type { AnyColumn } from "drizzle-orm";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { expense, location } from "~/server/db/schema";
+import { expense, inventoryEntry, location } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 
 export type QuantityLedger = ProductQuantityLedgerOut;
@@ -335,4 +338,77 @@ export const enrichProductRowsWithQuantityLedger = async <
     ...product,
     quantityLedger: ledgers.get(product.id) ?? EMPTY_QUANTITY_LEDGER,
   }));
+};
+
+export interface ProductPickerQuantity {
+  quantityLedger: QuantityLedger;
+  onHand: ProductPickerOnHandOut;
+}
+
+/**
+ * Batch-load the compact stock state a picker needs without hydrating the full
+ * product graph. It preserves the list/detail rules for live locations,
+ * location-as-product ownership, and incompatible mixed inventory units.
+ */
+export const loadProductPickerQuantities = async (
+  db: Database | DrizzleTransaction,
+  ids: readonly ProductId[],
+): Promise<Map<ProductId, ProductPickerQuantity>> => {
+  if (ids.length === 0) return new Map();
+
+  // Keep these sequential: callers may pass a transaction-bound pg client,
+  // which cannot safely execute two queries concurrently (and pg@9 removes
+  // the old implicit queuing behavior).
+  const ledgers = await loadProductQuantityLedgers(db, ids);
+  const inventoryRows = await unwrapDb(db)
+    .select({
+      productId: inventoryEntry.productId,
+      amount: inventoryEntry.amount,
+    })
+    .from(inventoryEntry)
+    .innerJoin(
+      location,
+      and(eq(location.id, inventoryEntry.locationId), notDeleted(location)),
+    )
+    .where(
+      and(
+        notDeleted(inventoryEntry),
+        inArray(inventoryEntry.productId, [...ids]),
+      ),
+    );
+
+  const amountsByProduct = new Map<
+    ProductId,
+    Array<{ value: number; unit: string }>
+  >();
+  for (const row of inventoryRows) {
+    const amounts = amountsByProduct.get(row.productId) ?? [];
+    amounts.push(row.amount);
+    amountsByProduct.set(row.productId, amounts);
+  }
+
+  const quantities = new Map<ProductId, ProductPickerQuantity>();
+  for (const id of ids) {
+    const quantityLedger = ledgers.get(id) ?? EMPTY_QUANTITY_LEDGER;
+    const amounts = amountsByProduct.get(id) ?? [];
+    const units = new Set(amounts.map((amount) => amount.unit));
+
+    let onHand: ProductPickerOnHandOut;
+    if (amounts.length === 0 && quantityLedger.locationCount === 0) {
+      onHand = { state: "none" };
+    } else if (units.size > 1) {
+      onHand = { state: "mixed" };
+    } else {
+      onHand = {
+        state: "counted",
+        units:
+          amounts.reduce((sum, amount) => sum + amount.value, 0) +
+          quantityLedger.locationCount,
+      };
+    }
+
+    quantities.set(id, { quantityLedger, onHand });
+  }
+
+  return quantities;
 };

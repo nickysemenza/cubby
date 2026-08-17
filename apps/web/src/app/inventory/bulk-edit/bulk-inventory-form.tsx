@@ -319,6 +319,7 @@ export default function BulkInventoryForm({
                       name={`items.${index}.product`}
                       label="Product"
                       searchType="product"
+                      productIntent="stock"
                     />
                   </div>
 

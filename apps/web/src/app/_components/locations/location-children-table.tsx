@@ -27,6 +27,7 @@ import RTable from "../data-table/Table";
 import { useClientEntityList } from "../hooks/useClientEntityList";
 import { LocationTypeLabel } from "./LocationTypeLabel";
 import { locationTypeOptionsWithTheme } from "./location-icons";
+import { resolveLocationPrimaryVisual } from "./location-visual-resolver";
 
 /**
  * `subRows` rather than reusing `children`: `useClientEntityList` walks
@@ -76,7 +77,13 @@ export function LocationChildrenTable({
       // `location` declares `standardColumns: []` (entities.tsx), so image and
       // name are the table's own — which is also why the expand chevron is set
       // here rather than via the tree config's `expandable`.
-      createImageColumn(helper, { entity: "location" }),
+      createImageColumn(helper, {
+        entity: "location",
+        getImages: (row) => {
+          const image = resolveLocationPrimaryVisual(row).image;
+          return image ? [image] : [];
+        },
+      }),
       createNameColumn(helper, "location", "name", {
         expandable: true,
         filterConfig: { placeholder: "Filter by location name..." },

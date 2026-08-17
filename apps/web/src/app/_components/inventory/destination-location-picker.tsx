@@ -45,14 +45,24 @@ export function DestinationLocationField<TFieldValues extends FieldValues>({
   name,
   label,
   error,
+  sourceLocationIds,
 }: {
   form: UseFormReturn<TFieldValues>;
   /** Defaults to `"targetLocation"`. */
   name?: Path<TFieldValues>;
   label: string;
   error?: string | null;
+  sourceLocationIds?: LocationShortcode | LocationShortcode[];
 }) {
   const fieldName = name ?? ("targetLocation" as Path<TFieldValues>);
+  const sources = sourceLocationIds
+    ? Array.isArray(sourceLocationIds)
+      ? sourceLocationIds
+      : [sourceLocationIds]
+    : [];
+  const disabledItemReasons = Object.fromEntries(
+    sources.map((source) => [source, "Already the current location"]),
+  );
   return (
     <Stack gap="md">
       <ComboboxFieldWithSearch
@@ -60,6 +70,7 @@ export function DestinationLocationField<TFieldValues extends FieldValues>({
         name={fieldName}
         label={label}
         searchType="location"
+        disabledItemReasons={disabledItemReasons}
       />
       {error && (
         <StatusText as="div" tone="destructive" className="text-sm">

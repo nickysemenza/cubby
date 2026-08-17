@@ -242,7 +242,7 @@ export function QuickInventoryAdd({
           <div className="flex flex-col gap-2">
             <Row align="end" gap="sm">
               <div className="flex-1">
-                <WithProductSearch>
+                <WithProductSearch intent="stock">
                   {({ items, onSearchChange, isLoading, onOpenChange }) => (
                     <ComboboxField
                       entity="product"

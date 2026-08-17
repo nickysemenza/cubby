@@ -7,10 +7,11 @@ import { type Ref, useMemo } from "react";
 import { Row } from "~/components/layout";
 import { ImageWithPreview } from "~/components/ui/image-with-preview";
 import { EntityIcon } from "~/entities/entities";
-import { cn } from "~/lib/utils";
+import { cn, formatCurrency } from "~/lib/utils";
 import { useHydratedProductImages } from "../products/product-image-summaries";
-import { InventoryValuationSummary } from "./inventory-valuation-summary";
 import { LocationIcon } from "./location-icons";
+import { LocationVisual } from "./location-visual";
+import { locationChildGroupLabel } from "./location-visual-resolver";
 
 type ProductPreview = {
   id: string;
@@ -59,8 +60,11 @@ export const LocationGalleryCard = function LocationGalleryCard({
     return Array.from(productMap.values());
   }, [inventoryItems]);
 
-  const primaryLocationImage = location.images[0];
   const extraLocationImages = location.images.slice(1, 4);
+  const childCount = location.children?.length ?? location.childCount ?? 0;
+  const totalItemCount =
+    location.valuation?.totalItemCount ?? location.totalItemCount ?? 0;
+  const childLabel = locationChildGroupLabel(location.children ?? []);
 
   return (
     <div
@@ -79,25 +83,12 @@ export const LocationGalleryCard = function LocationGalleryCard({
     >
       <div className="border-b px-2 py-2">
         <Row align="center" gap="sm" className="min-w-0">
-          {primaryLocationImage ? (
-            <ImageWithPreview
-              src={primaryLocationImage.url}
-              alt={`${location.name} photo`}
-              to="/images/$id"
-              params={{ id: primaryLocationImage.id }}
-              size={40}
-              previewSize={240}
-            />
-          ) : (
-            <div className="flex size-10 shrink-0 items-center justify-center border bg-muted/40">
-              <LocationIcon
-                type={location.type}
-                product={location.product}
-                colored
-                size={18}
-              />
-            </div>
-          )}
+          <LocationVisual
+            location={location}
+            variant="card"
+            className="size-20 shrink-0"
+            interactive
+          />
           <div className="min-w-0 flex-1">
             <Row align="center" gap="xs" wrap className="min-w-0">
               <LocationIcon
@@ -114,13 +105,10 @@ export const LocationGalleryCard = function LocationGalleryCard({
               >
                 {location.name}
               </Link>
-              {inventoryItems.length > 0 && (
-                <InventoryValuationSummary
-                  valuation={location.valuation}
-                  variant="compact"
-                  hidePricingStatus
-                  className="shrink-0 font-mono text-2xs text-muted-foreground tabular-nums"
-                />
+              {totalItemCount > 0 && (
+                <span className="shrink-0 font-mono text-2xs text-muted-foreground tabular-nums">
+                  {formatCurrency(location.valuation?.totalValuation ?? 0)}
+                </span>
               )}
             </Row>
           </div>
@@ -160,6 +148,21 @@ export const LocationGalleryCard = function LocationGalleryCard({
               </Row>
             ))}
           </div>
+        ) : totalItemCount > 0 || childCount > 0 ? (
+          <Row
+            align="center"
+            justify="center"
+            gap="sm"
+            className="py-2 text-2xs text-muted-foreground"
+          >
+            <EntityIcon entity="location" className="size-3 opacity-40" />
+            <span>
+              {totalItemCount} {totalItemCount === 1 ? "item" : "items"}
+              {childCount > 0
+                ? ` across ${childCount} ${childLabel.toLowerCase()}`
+                : ""}
+            </span>
+          </Row>
         ) : (
           <Row
             align="center"

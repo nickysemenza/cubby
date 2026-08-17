@@ -7,6 +7,13 @@ import { Spinner } from "~/components/ui/spinner";
 import { cn } from "~/lib/utils";
 import type { ComboboxItem, PickerEntity } from "./combobox-types";
 
+const statusToneClass = {
+  neutral: "text-muted-foreground",
+  positive: "text-positive",
+  warning: "text-warning",
+  destructive: "text-destructive",
+} as const;
+
 const ENTITY_CODE: Record<PickerEntity, string> = {
   ingredient: "ING",
   location: "LOC",
@@ -30,6 +37,8 @@ export function matchesPickerItem(
     item.shortcode,
     item.secondary,
     item.detail,
+    item.presentation?.status?.label,
+    ...(item.presentation?.facts ?? []),
     ...(item.aliases ?? []),
   ]
     .filter((part): part is string => !!part)
@@ -110,6 +119,19 @@ export function EntityPicker<TId extends string>({
     return [value, ...roster];
   }, [items, onSearchChange, query, value]);
 
+  const orderedItems = React.useMemo(
+    () =>
+      visibleItems
+        .map((item, index) => ({ item, index }))
+        .sort((a, b) => {
+          const groupOrderA = a.item.presentation?.group?.order ?? 0;
+          const groupOrderB = b.item.presentation?.group?.order ?? 0;
+          return groupOrderA - groupOrderB || a.index - b.index;
+        })
+        .map(({ item }) => item),
+    [visibleItems],
+  );
+
   React.useEffect(() => {
     if (open) onSearchChange?.(debouncedQuery);
   }, [debouncedQuery, onSearchChange, open]);
@@ -163,8 +185,8 @@ export function EntityPicker<TId extends string>({
 
   return (
     <ComboboxPrimitive.Root<ComboboxItem<TId>>
-      items={visibleItems}
-      filteredItems={visibleItems}
+      items={orderedItems}
+      filteredItems={orderedItems}
       filter={null}
       value={value}
       onValueChange={(nextValue) => {
@@ -261,72 +283,118 @@ export function EntityPicker<TId extends string>({
               </button>
             )}
             <ComboboxPrimitive.List className="max-h-[min(var(--available-height),28rem)] overflow-y-auto overscroll-contain p-1 outline-none">
-              {visibleItems.map((item) => (
-                <ComboboxPrimitive.Item
-                  key={item.id}
-                  value={item}
-                  aria-label={[
-                    item.name,
-                    item.secondary,
-                    item.detail,
-                    item.shortcode,
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  className={cn(
-                    "relative flex cursor-default select-none items-center gap-2 rounded-none px-2 py-2 text-left text-sm outline-none",
-                    "data-[selected]:bg-accent/50 data-highlighted:bg-accent data-highlighted:text-accent-foreground",
-                    renderItem && "items-start whitespace-normal",
-                  )}
-                >
-                  {item.color && (
-                    <span
-                      aria-hidden
-                      className="size-2 shrink-0"
-                      style={{ backgroundColor: item.color }}
-                    />
-                  )}
-                  {item.icon && (
-                    <span
+              {orderedItems.map((item, index) => {
+                const group = item.presentation?.group;
+                const previousGroup =
+                  orderedItems[index - 1]?.presentation?.group;
+                const showGroup = group && group.id !== previousGroup?.id;
+                const status = item.presentation?.status;
+                const facts = item.presentation?.facts ?? [];
+                const disabledReason = item.presentation?.disabledReason;
+
+                return (
+                  <React.Fragment key={item.id}>
+                    {showGroup && (
+                      <div
+                        role="presentation"
+                        className="border-[var(--border)] border-b bg-muted/40 px-2 py-1 font-mono text-[0.625rem] text-muted-foreground uppercase tracking-wider first:border-t-0"
+                      >
+                        {group.label}
+                      </div>
+                    )}
+                    <ComboboxPrimitive.Item
+                      value={item}
+                      disabled={disabledReason != null}
+                      aria-label={[
+                        item.name,
+                        item.secondary,
+                        item.detail,
+                        status?.label,
+                        ...facts,
+                        disabledReason,
+                        item.shortcode,
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
                       className={cn(
-                        "flex shrink-0",
-                        // Full-bleed leading slot: -my-2 cancels the row's py-2
-                        // so an image tile meets the row's top and bottom
-                        // edges. Glyph icons stay vertically centered. Custom
-                        // rows (renderItem) opt out — they are top-aligned and
-                        // multi-line, so a stretched slot would move the glyph.
-                        !renderItem && "-my-2 items-center self-stretch",
+                        "relative flex cursor-default select-none items-center gap-2 rounded-none px-2 py-2 text-left text-sm outline-none",
+                        "data-[selected]:bg-accent/50 data-highlighted:bg-accent data-highlighted:text-accent-foreground",
+                        "data-disabled:cursor-not-allowed data-disabled:bg-muted/20 data-disabled:text-muted-foreground",
+                        renderItem && "items-start whitespace-normal",
                       )}
                     >
-                      {item.icon}
-                    </span>
-                  )}
-                  {renderItem ? (
-                    <span className="min-w-0 flex-1">{renderItem(item)}</span>
-                  ) : (
-                    <span className="flex min-w-0 flex-1 flex-col">
-                      <span className="flex min-w-0 items-baseline gap-2">
-                        <span className="min-w-0 flex-1 truncate">
-                          {item.name}
-                        </span>
-                        {item.secondary && (
-                          <span className="max-w-40 truncate text-muted-foreground text-xs">
-                            {item.secondary}
-                          </span>
-                        )}
-                      </span>
-                      {item.detail && (
-                        <span className="truncate text-muted-foreground text-xs">
-                          {item.detail}
+                      {item.color && (
+                        <span
+                          aria-hidden
+                          className="size-2 shrink-0"
+                          style={{ backgroundColor: item.color }}
+                        />
+                      )}
+                      {item.icon && (
+                        <span
+                          className={cn(
+                            "flex shrink-0",
+                            // Full-bleed leading slot: -my-2 cancels the row's py-2
+                            // so an image tile meets the row's top and bottom
+                            // edges. Glyph icons stay vertically centered. Custom
+                            // rows (renderItem) opt out — they are top-aligned and
+                            // multi-line, so a stretched slot would move the glyph.
+                            !renderItem && "-my-2 items-center self-stretch",
+                          )}
+                        >
+                          {item.icon}
                         </span>
                       )}
-                    </span>
-                  )}
-                  <ComboboxPrimitive.ItemIndicator className="shrink-0">
-                    <CheckIcon className="size-3.5" />
-                  </ComboboxPrimitive.ItemIndicator>
-                </ComboboxPrimitive.Item>
-              ))}
+                      {renderItem ? (
+                        <span className="min-w-0 flex-1">
+                          {renderItem(item)}
+                        </span>
+                      ) : (
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="flex min-w-0 items-baseline gap-2">
+                            <span className="min-w-0 flex-1 truncate">
+                              {item.name}
+                            </span>
+                            {item.secondary && (
+                              <span className="max-w-40 truncate text-muted-foreground text-xs">
+                                {item.secondary}
+                              </span>
+                            )}
+                            {status && (
+                              <span
+                                className={cn(
+                                  "shrink-0 font-mono text-xs tabular-nums",
+                                  statusToneClass[status.tone ?? "neutral"],
+                                )}
+                              >
+                                {status.label}
+                              </span>
+                            )}
+                          </span>
+                          {item.detail && (
+                            <span className="truncate text-muted-foreground text-xs">
+                              {item.detail}
+                            </span>
+                          )}
+                          {facts.length > 0 && (
+                            <span className="truncate font-mono text-muted-foreground text-xs tabular-nums">
+                              {facts.join(" · ")}
+                            </span>
+                          )}
+                          {disabledReason && (
+                            <span className="truncate text-muted-foreground text-xs">
+                              {disabledReason}
+                            </span>
+                          )}
+                        </span>
+                      )}
+                      <ComboboxPrimitive.ItemIndicator className="shrink-0">
+                        <CheckIcon className="size-3.5" />
+                      </ComboboxPrimitive.ItemIndicator>
+                    </ComboboxPrimitive.Item>
+                  </React.Fragment>
+                );
+              })}
             </ComboboxPrimitive.List>
 
             {(isLoading || error || visibleItems.length === 0) && (

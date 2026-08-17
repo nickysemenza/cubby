@@ -330,7 +330,11 @@ export type LocationOptionItemOut = z.infer<typeof locationOptionItemOut>;
  */
 export const locationPickerItemOut = z.object({
   ...locationOptionItemFields,
-  /** First displayable image by `imageOrder`; null when the location has none. */
+  /**
+   * Resolved display cover: the location's first displayable image by
+   * `imageOrder`, then its identity product's first displayable cover. This is
+   * presentation-only; product imagery is never treated as a LocationImage.
+   */
   coverImage: imageOut.nullable(),
 });
 export type LocationPickerItemOut = z.infer<typeof locationPickerItemOut>;

@@ -1,4 +1,7 @@
-import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
+import {
+  unsafeLocationShortcode,
+  unsafeProductShortcode,
+} from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { describe, expect, it } from "vitest";
@@ -29,14 +32,18 @@ function img(overrides: Partial<ImageOut> = {}): ImageOut {
 function loc(
   code: string,
   name: string,
-  type: LocationType,
-  extra: { images?: ImageOut[]; children?: InfLocation[] } = {},
+  type: LocationType | null,
+  extra: {
+    images?: ImageOut[];
+    children?: InfLocation[];
+    product?: InfLocation["product"];
+  } = {},
 ): InfLocation {
   return {
     id: unsafeLocationShortcode(`LOC-${code}`),
     name,
     aliases: [],
-    product: null,
+    product: extra.product ?? null,
     type,
     lastBulkInventory: null,
     aiDescription: null,
@@ -83,6 +90,22 @@ describe("needsPhoto", () => {
     expect(
       needsPhoto({ images: [img({ renderStatus: "failed" }), img()] }),
     ).toBe(false);
+  });
+
+  it("still requires a true location photo when a linked product has a cover", () => {
+    const productBacked = loc("AAAA", "Drawer box", null, {
+      product: {
+        id: unsafeProductShortcode("PRD-AAAA"),
+        name: "Two drawer box",
+        manufacturer: "Example",
+        model: null,
+        category: "storage",
+        coverImage: img(),
+        price: null,
+      },
+    });
+
+    expect(needsPhoto(productBacked)).toBe(true);
   });
 });
 

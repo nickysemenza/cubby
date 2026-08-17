@@ -792,8 +792,16 @@ export const productPickerItemOut = z.object({
   id: productShortcode,
   name: z.string(),
   manufacturer: z.string(),
+  category: productCategory.nullable(),
+  quantityLedger: productQuantityLedgerOut,
+  onHand: z.discriminatedUnion("state", [
+    z.object({ state: z.literal("none") }),
+    z.object({ state: z.literal("counted"), units: z.number() }),
+    z.object({ state: z.literal("mixed") }),
+  ]),
 });
 export type ProductPickerItemOut = z.infer<typeof productPickerItemOut>;
+export type ProductPickerOnHandOut = ProductPickerItemOut["onHand"];
 
 /**
  * Units expected on hand, what is actually on the shelf, and the gap between
