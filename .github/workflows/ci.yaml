@@ -40,12 +40,6 @@ permissions:
   actions: read
   pull-requests: read
 
-# scripts/with-slot.mjs throttles heavy builds so the many local agent worktrees
-# on one machine stop thrashing each other. A CI runner is single-tenant, so
-# queueing there would only add wall-clock to every job.
-env:
-  CUBBY_NO_SLOT: "1"
-
 jobs:
   scope:
     name: Scope work and resolve provenance
