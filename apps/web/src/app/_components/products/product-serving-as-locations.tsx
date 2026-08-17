@@ -19,17 +19,33 @@ export const ProductServingAsLocations: FC<{
   count: number;
 }> = ({ productId, count }) => {
   const api = useTRPC();
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     ...api.location.list.queryOptions({
       filters: { productId },
       pagination: { pageIndex: 0, pageSize: 100 },
-      sort: [],
+      // `sort` is `.min(1)` on the list input. An empty array is a 400, and
+      // this section then rendered "No locations are an instance of this
+      // product" over a product with fourteen of them — the failure looked
+      // exactly like an answer.
+      sort: [{ orderBy: "name", direction: "asc" }],
     }),
     // The section only renders when the ledger already counted at least one.
     enabled: count > 0,
   });
 
   if (isLoading) return <ShelfEmpty entity="location" label="Loading…" />;
+
+  // Never say "none" when the question went unanswered. The ledger already
+  // counted `count` of these, so an empty result here is a contradiction, not
+  // a fact about the world.
+  if (isError) {
+    return (
+      <ShelfEmpty
+        entity="location"
+        label={`Couldn't load the ${count} location(s) using this product.`}
+      />
+    );
+  }
 
   const locations = data?.items ?? [];
   if (locations.length === 0) {
