@@ -28,6 +28,7 @@ import { lazy, Suspense, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
+import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import { DependencyPicker } from "~/app/_components/data-table/dependency-picker";
 import {
   type DetailSection,
@@ -80,7 +81,6 @@ import {
 } from "./project-query-params";
 import { ProjectResourcesSection } from "./project-tools-section";
 import {
-  capitalize,
   ExpenseList,
   PROJECT_STATUS_LABELS,
   PROJECT_STATUS_OPTIONS,
@@ -687,7 +687,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
               data: { kind: kind as ProjectKind | null },
             });
           }}
-          renderValue={(v) => (v ? capitalize(v) : <NoneValue />)}
+          renderValue={(v) => renderOptionCell(v, projectKindOptions)}
         />
       ),
     },

@@ -3,9 +3,10 @@ import { Link } from "@tanstack/react-router";
 import { ImageIcon } from "lucide-react";
 import prettyBytes from "pretty-bytes";
 import { match } from "ts-pattern";
+import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
-import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
+import { imageStatusOptions } from "~/app/images/image-options";
 import { Row, Stack } from "~/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
@@ -184,7 +185,7 @@ export function ImageDetail({ image }: ImageDetailProps) {
           </div>
           <Row align="center" gap="sm">
             <span className="text-muted-foreground">Status:</span>
-            <ImageStatusBadge status={image.status} />
+            {renderOptionCell(image.status, imageStatusOptions)}
           </Row>
           <div>
             <span className="text-muted-foreground">Entity:</span>{" "}

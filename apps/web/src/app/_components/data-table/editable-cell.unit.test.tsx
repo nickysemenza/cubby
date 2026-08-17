@@ -278,6 +278,43 @@ describe("EditableCell select editor (commit-on-pick)", () => {
     expect(buttons.some((b) => b.querySelector("svg.lucide-x"))).toBe(true);
   });
 
+  // `clearable` is what lets a tri-state column (Product.stockTracked, where
+  // null is the undecided worklist) be put BACK into its undecided state. The
+  // select path accepted no such flag, so the editor could only ever move a row
+  // out of the backlog.
+  it("saves null through the clear affordance when clearable", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <EditableCell
+        value="a"
+        onSave={onSave}
+        config={{ type: "select", options: OPTIONS, clearable: true }}
+        renderValue={(v) => <span data-testid="display">{String(v)}</span>}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+    await screen.findByRole("combobox");
+    fireEvent.click(
+      screen.getByRole("button", { name: /Clear/i, hidden: true }),
+    );
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith(null);
+    });
+  });
+
+  it("offers no clear affordance by default", async () => {
+    renderSelect("a", vi.fn().mockResolvedValue(undefined));
+
+    fireEvent.click(screen.getByRole("button"));
+    await screen.findByRole("combobox");
+
+    expect(
+      screen.queryByRole("button", { name: /^Clear/i, hidden: true }),
+    ).toBeNull();
+  });
+
   it("shows a toast and stays open when onSave rejects", async () => {
     const { toast } = await import("sonner");
     const onSave = vi.fn().mockRejectedValue(new Error("Save failed"));

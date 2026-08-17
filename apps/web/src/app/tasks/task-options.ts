@@ -35,8 +35,9 @@ export const taskStatusBadgeVariant: Record<
 
 /**
  * `{value,label,color}` options for the status filter/inline-edit select. Not
- * `buildSelectOptions` — that helper carries no color, and the swatch is what
- * ties the picklist to the status chip the cell renders.
+ * `buildSelectOptions` — that helper carries no color, and the colour is what
+ * the table cell renders as its dot (see `renderOptionCell`), so this roster is
+ * the single source of both the wording and the tone.
  */
 export const taskStatusOptions: FilterableComboboxItem[] = taskStatusValues.map(
   (value) => ({

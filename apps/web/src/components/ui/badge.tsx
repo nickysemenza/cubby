@@ -61,4 +61,27 @@ export type BadgeVariant = NonNullable<
   VariantProps<typeof badgeVariants>["variant"]
 >;
 
+/**
+ * The same tone, as a bare ink for `<DotLabel color>`.
+ *
+ * Exists so a table cell can render an enum as a dot + text (dense lists read
+ * as text with a quiet colour cue) while reusing the tone map its Badge already
+ * had. The alternative was re-picking a colour per enum by hand, which would
+ * have let the list and the detail page drift apart on the same value.
+ *
+ * `secondary` and `outline` carry no tone of their own, so they land on the
+ * neutral ink: a roster where every option is untoned gets uniform dots by
+ * design, and the label carries the distinction.
+ */
+export const badgeVariantColor: Record<BadgeVariant, string> = {
+  default: "var(--primary)",
+  secondary: "var(--slate)",
+  destructive: "var(--destructive)",
+  positive: "var(--positive)",
+  warning: "var(--warning)",
+  plum: "var(--plum)",
+  slate: "var(--slate)",
+  outline: "var(--slate)",
+};
+
 export { Badge, badgeVariants };

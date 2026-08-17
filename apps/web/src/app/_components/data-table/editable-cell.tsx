@@ -49,6 +49,13 @@ type EditableSelectConfig = {
   type: "select";
   options: FilterableComboboxItem[];
   placeholder?: string;
+  /**
+   * Offer the picker's clear affordance, so a nullable column can be returned
+   * to null. Needed by any tri-state field — `Product.stockTracked` encodes
+   * "undecided" as null, and without this the editor could only ever move a row
+   * *out* of the undecided worklist, never back in.
+   */
+  clearable?: boolean;
 };
 
 type EditableDateConfig = {
@@ -99,6 +106,7 @@ export function EditableCell<T>({
         onSave={onSave as (value: string | null) => Promise<void>}
         options={config.options}
         placeholder={config.placeholder}
+        clearable={config.clearable}
         renderValue={renderValue as (value: string | null) => React.ReactNode}
         clipboard={clipboard}
         trigger={trigger}
@@ -547,6 +555,7 @@ function EditableSelectCellInternal({
   onSave,
   options,
   placeholder = "Select...",
+  clearable,
   renderValue,
   clipboard,
   trigger,
@@ -556,6 +565,7 @@ function EditableSelectCellInternal({
   onSave: (value: string | null) => Promise<void>;
   options: FilterableComboboxItem[];
   placeholder?: string;
+  clearable?: boolean;
   renderValue: (value: string | null) => React.ReactNode;
   clipboard?: CellClipboardSpec;
   trigger: EditTriggerMode;
@@ -590,6 +600,7 @@ function EditableSelectCellInternal({
             onSave={onSave}
             options={options}
             placeholder={placeholder}
+            clearable={clearable}
             onCancel={edit.cancel}
             onCommit={(nextValue) => {
               setOptimisticValue(nextValue);
@@ -614,6 +625,7 @@ function EditableSelectEditor({
   onSave,
   options,
   placeholder,
+  clearable,
   onCancel,
   onCommit,
 }: {
@@ -621,6 +633,7 @@ function EditableSelectEditor({
   onSave: (value: string | null) => Promise<void>;
   options: FilterableComboboxItem[];
   placeholder: string;
+  clearable?: boolean;
   onCancel: () => void;
   onCommit: (value: string | null) => void;
 }) {
@@ -651,6 +664,7 @@ function EditableSelectEditor({
         className="w-48"
         autoFocus
         compact
+        clearable={clearable}
       />
       <Button
         size="icon"

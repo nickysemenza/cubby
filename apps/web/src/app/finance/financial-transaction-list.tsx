@@ -11,16 +11,25 @@ import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { financialTransactionMutationInvalidateKeys } from "~/lib/query-keys";
+import { presenceCellOptions } from "~/lib/select-options";
 import { formatCurrency } from "~/lib/utils";
 import {
+  createFilterableSelectColumn,
   createPlainDateColumn,
   createTextColumn,
+  renderOptionCell,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { TableLink } from "../_components/table/TableLink";
+import {
+  financialTransactionKindOptions,
+  financialTransactionStatusOptions,
+} from "./financial-transaction-kind-options";
+
+const PURCHASE_PRESENCE_OPTIONS = presenceCellOptions("purchase");
 
 const NO_OPTIONS: FinancialAccountOptionsOut = [];
 const NO_SOURCES: FinancialTransactionSourceOptionsOut = [];
@@ -87,10 +96,25 @@ export function FinancialTransactionList() {
           </TableLink>
         ),
       }),
-      createTextColumn(helper, "kind", { header: "Kind", className: "w-32" }),
-      createTextColumn(helper, "status", {
+      // Through the factory, not a bare accessor: these were `createTextColumn`,
+      // which wires `meta.cellData` unconditionally, so hand-rolling the cell
+      // dropped them out of the range copy/paste engine (which reads cellData,
+      // never the rendered cell). `filterConfig: null` keeps `meta.filterConfig`
+      // undefined exactly as `createTextColumn` left it, so the manifest's
+      // multiselect control stays the one that attaches.
+      createFilterableSelectColumn(helper, "kind", {
+        header: "Kind",
+        className: "w-32",
+        placeholder: "Filter by kind...",
+        selectOptions: financialTransactionKindOptions,
+        filterConfig: null,
+      }),
+      createFilterableSelectColumn(helper, "status", {
         header: "Status",
         className: "w-24",
+        placeholder: "Filter by status...",
+        selectOptions: financialTransactionStatusOptions,
+        filterConfig: null,
       }),
       helper.accessor("amount", {
         header: "Amount",
@@ -127,7 +151,11 @@ export function FinancialTransactionList() {
         header: "Linked",
         enableSorting: false,
         meta: { className: "w-24" },
-        cell: (i) => (i.getValue() ? "Has purchase" : <NoneValue />),
+        cell: (i) =>
+          renderOptionCell(
+            i.getValue() ? "yes" : "no",
+            PURCHASE_PRESENCE_OPTIONS,
+          ),
       }),
       createTextColumn(helper, "merchant", {
         header: "Merchant",

@@ -11,9 +11,9 @@ import { useId, useMemo } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import { Grid, Row, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
+import { DotLabel } from "~/components/ui/dot-label";
 import { Input } from "~/components/ui/input";
 import { Skeleton } from "~/components/ui/skeleton";
 import { StatTile } from "~/components/ui/stat-tile";
@@ -38,11 +38,11 @@ const KIND_LABEL = {
   unknown: "Unknown",
 } as const;
 
-const KIND_CLASS = {
-  acquired: "text-positive",
-  exited: "text-destructive",
-  discarded: "text-warning",
-  unknown: "text-muted-foreground",
+const KIND_COLOR = {
+  acquired: "var(--positive)",
+  exited: "var(--destructive)",
+  discarded: "var(--warning)",
+  unknown: "var(--muted-foreground)",
 } as const;
 
 function formatMovementDate(date: string): string {
@@ -202,9 +202,9 @@ function MovementLine({
         )}
       </Stack>
       <Stack gap="tight">
-        <Badge variant="outline" className={KIND_CLASS[movement.kind]}>
+        <DotLabel color={KIND_COLOR[movement.kind]}>
           {KIND_LABEL[movement.kind]}
-        </Badge>
+        </DotLabel>
         <Description size="xs">
           {movement.provenanceOnly
             ? "Amount and quantity not itemized"

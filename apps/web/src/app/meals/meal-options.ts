@@ -20,7 +20,7 @@ import {
   Sunrise,
   UtensilsCrossed,
 } from "lucide-react";
-import type { BadgeVariant } from "~/components/ui/badge";
+import { type BadgeVariant, badgeVariantColor } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { buildSelectOptions } from "~/lib/select-options";
 
@@ -38,17 +38,12 @@ export const mealTypeOptions: FilterableComboboxItem[] = buildSelectOptions(
   MEAL_TYPE_LABELS,
 );
 
-export const mealKindOptions: FilterableComboboxItem[] = buildSelectOptions(
-  mealKindValues,
-  MEAL_KIND_LABELS,
-);
-
 /**
- * Chip tone per kind. `cooked` is the overwhelming majority and the default,
- * so it stays neutral — tone is spent on the exceptions, which is the whole
- * point of scanning this column. The eat-out kinds share the ultramarine
- * accent (money left the house), leftovers reads as a reuse, and `other` is
- * the quiet outline.
+ * Tone per kind. `cooked` is the overwhelming majority and the default, so it
+ * stays neutral — tone is spent on the exceptions, which is the whole point of
+ * scanning this column. The eat-out kinds share the ultramarine accent (money
+ * left the house), leftovers reads as a reuse, and `other` is the quiet
+ * outline.
  */
 export const mealKindBadgeVariant: Record<MealKind, BadgeVariant> = {
   cooked: "secondary",
@@ -57,6 +52,16 @@ export const mealKindBadgeVariant: Record<MealKind, BadgeVariant> = {
   takeout: "default",
   other: "outline",
 };
+
+/** Declared after the tone map so the roster can carry it as the dot ink — the
+ *  table cell renders label + colour straight off these options. */
+export const mealKindOptions: FilterableComboboxItem[] = mealKindValues.map(
+  (value) => ({
+    value,
+    label: MEAL_KIND_LABELS[value],
+    color: badgeVariantColor[mealKindBadgeVariant[value]],
+  }),
+);
 
 /**
  * Slot glyphs for tight surfaces — the calendar chip, where the label is

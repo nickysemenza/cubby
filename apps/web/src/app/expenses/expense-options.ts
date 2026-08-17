@@ -8,9 +8,9 @@ import type { CostType } from "@cubby/schemas/project";
 import { costTypeValues } from "@cubby/schemas/project";
 import { format, startOfYear, subDays, subMonths } from "date-fns";
 import { match } from "ts-pattern";
-import type { BadgeVariant } from "~/components/ui/badge";
+import { type BadgeVariant, badgeVariantColor } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
-import { buildSelectOptions } from "~/lib/select-options";
+import { booleanCellOptions, buildSelectOptions } from "~/lib/select-options";
 import { getCostTypeColor } from "~/lib/status-colors";
 
 /** Human labels for the fixed cost-type enum. */
@@ -36,8 +36,9 @@ export const costTypeBadgeVariant: Record<CostType, BadgeVariant> = {
 
 /**
  * `{value,label,color}` options for the cost-type filter/inline-edit select.
- * Not `buildSelectOptions` — that helper carries no color, and the swatch is
- * what makes the picklist read as the twin of the cell's chip.
+ * Not `buildSelectOptions` — that helper carries no color, and the colour is
+ * what the table cell renders as its dot (see `renderOptionCell`), so the
+ * picklist and the cell cannot drift apart.
  */
 export const costTypeOptions: FilterableComboboxItem[] = costTypeValues.map(
   (value) => ({
@@ -74,6 +75,7 @@ export const expenseLineKindOptions: FilterableComboboxItem[] =
   expenseLineKindValues.map((value) => ({
     value,
     label: expenseLineKindLabels[value],
+    color: badgeVariantColor[expenseLineKindBadgeVariant[value]],
   }));
 
 /**
@@ -99,7 +101,21 @@ export const expenseLineBasisOptions: FilterableComboboxItem[] =
   expenseLineBasisValues.map((value) => ({
     value,
     label: expenseLineBasisLabels[value],
+    color: badgeVariantColor[expenseLineBasisBadgeVariant[value]],
   }));
+
+/**
+ * Roster for the `future` column — planned vs. actually made.
+ *
+ * Amber for `Planned`, matching the tone the ledger and the planning calendar
+ * already spend on planned/overdue money; `Actual` is the neutral resting state.
+ * Not the generic true→positive default: a planned expense is not a good
+ * outcome, it is an outstanding one.
+ */
+export const expenseFutureOptions = booleanCellOptions(
+  { true: "Planned", false: "Actual" },
+  { true: "var(--warning)", false: "var(--slate)" },
+);
 
 /** `{value,label}` options for the "future" (planned vs. made) filter. */
 export const futureFilterOptions: FilterableComboboxItem[] = [

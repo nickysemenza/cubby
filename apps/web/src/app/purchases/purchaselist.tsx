@@ -15,6 +15,7 @@ import { NoneValue } from "~/components/ui/none-value";
 import { StatTile } from "~/components/ui/stat-tile";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
+import { dataQualityOptions } from "~/lib/data-quality-options";
 import { purchaseIdentityLabel } from "~/lib/purchase-label";
 import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
@@ -22,6 +23,7 @@ import {
   createCurrencyColumn,
   createPlainDateColumn,
   createTextColumn,
+  renderOptionCell,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
@@ -214,7 +216,6 @@ export function PurchaseList() {
       createCurrencyColumn(columnHelper, "expenseTotal", {
         header: "Expense total",
         className: "w-28",
-        zeroAsEmpty: false,
         signedTone: true,
         mobile: { slot: "trailing", priority: 5 },
       }),
@@ -262,7 +263,7 @@ export function PurchaseList() {
         header: "Data quality",
         enableSorting: false,
         meta: { className: "w-28" },
-        cell: (info) => info.getValue(),
+        cell: (info) => renderOptionCell(info.getValue(), dataQualityOptions),
       }),
       columnHelper.accessor(
         (row) => row.dataQuality.gaps.map((gap) => gap.check).join(", "),

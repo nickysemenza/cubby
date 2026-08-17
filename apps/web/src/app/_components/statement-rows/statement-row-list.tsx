@@ -14,7 +14,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
-import { Badge, type BadgeVariant } from "~/components/ui/badge";
+import { type BadgeVariant, badgeVariantColor } from "~/components/ui/badge";
+import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { DrilldownMetricStrip } from "~/components/ui/drilldown-metric-strip";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
@@ -29,6 +30,7 @@ import { formatCurrency } from "~/lib/utils";
 import {
   createCurrencyColumn,
   createPlainDateColumn,
+  renderOptionCell,
 } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
 import { useTableConfig } from "../data-table/useTableConfig";
@@ -45,23 +47,33 @@ type MatchStateSearchValue = StatementRowMatchState | "all";
 const NO_ROWS: StatementRowOut[] = [];
 const NO_SOURCES: string[] = [];
 
-const MATCH_STATE_PRESENTATION: Record<
-  StatementRowMatchState,
-  { label: string; variant: BadgeVariant }
-> = {
-  matched: { label: "Matched", variant: "positive" },
-  unmatched: { label: "Unmatched", variant: "warning" },
-  superseded: { label: "Superseded", variant: "slate" },
-  ignored: { label: "Ignored", variant: "secondary" },
+const MATCH_STATE_TONE: Record<StatementRowMatchState, BadgeVariant> = {
+  matched: "positive",
+  unmatched: "warning",
+  superseded: "slate",
+  ignored: "secondary",
 };
 
-const DISPOSITION_PRESENTATION: Record<
-  StatementRowDisposition,
-  { label: string; variant: BadgeVariant }
-> = {
-  open: { label: "Open", variant: "outline" },
-  ignored: { label: "Ignored", variant: "secondary" },
+const MATCH_STATE_OPTIONS: FilterableComboboxItem[] = (
+  Object.keys(MATCH_STATE_TONE) as StatementRowMatchState[]
+).map((value) => ({
+  value,
+  label: value.charAt(0).toUpperCase() + value.slice(1),
+  color: badgeVariantColor[MATCH_STATE_TONE[value]],
+}));
+
+const DISPOSITION_TONE: Record<StatementRowDisposition, BadgeVariant> = {
+  open: "outline",
+  ignored: "secondary",
 };
+
+const DISPOSITION_OPTIONS: FilterableComboboxItem[] = (
+  Object.keys(DISPOSITION_TONE) as StatementRowDisposition[]
+).map((value) => ({
+  value,
+  label: value.charAt(0).toUpperCase() + value.slice(1),
+  color: badgeVariantColor[DISPOSITION_TONE[value]],
+}));
 
 /** Route search → server filters. `"all"` never reaches the wire — it's the
  * client-only way to say "no matchState filter" (see the route file). */
@@ -421,20 +433,13 @@ export function StatementRowList() {
         header: "Amount",
         className: "w-24",
         signedTone: true,
-        zeroAsEmpty: false,
       }),
       columnHelper.accessor("matchState", {
         id: "matchState",
         header: "Match",
         enableSorting: false,
         meta: { className: "w-28" },
-        cell: (info) => {
-          const state = info.getValue();
-          const presentation = MATCH_STATE_PRESENTATION[state];
-          return (
-            <Badge variant={presentation.variant}>{presentation.label}</Badge>
-          );
-        },
+        cell: (info) => renderOptionCell(info.getValue(), MATCH_STATE_OPTIONS),
       }),
       columnHelper.accessor("source", {
         id: "source",
@@ -450,14 +455,12 @@ export function StatementRowList() {
         meta: { className: "w-32" },
         cell: (info) => {
           const row = info.row.original;
-          const presentation = DISPOSITION_PRESENTATION[row.disposition];
+          // The reason stays a hover title — it is free-form prose, not part of
+          // the taxonomy label.
           return (
-            <Badge
-              variant={presentation.variant}
-              title={row.dispositionReason ?? undefined}
-            >
-              {presentation.label}
-            </Badge>
+            <span title={row.dispositionReason ?? undefined}>
+              {renderOptionCell(row.disposition, DISPOSITION_OPTIONS)}
+            </span>
           );
         },
       }),

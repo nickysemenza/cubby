@@ -23,6 +23,14 @@ const tone = {
   match: "positive",
   mismatch: "destructive",
 } as const;
+
+/** Human labels — this badge used to interpolate the raw enum value. */
+const label = {
+  unknown: "No evidence",
+  pending: "Pending",
+  match: "Settled",
+  mismatch: "Mismatch",
+} as const;
 export function FinancialSettlementBadge({
   purchase,
 }: {
@@ -31,7 +39,7 @@ export function FinancialSettlementBadge({
   const settlement = purchase.financialReconciliation;
   return (
     <Badge variant={tone[settlement.status]}>
-      {settlement.status} · {settlement.transactionCount}
+      {label[settlement.status]} · {settlement.transactionCount}
     </Badge>
   );
 }

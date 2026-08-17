@@ -4,6 +4,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { uniq } from "es-toolkit";
 import { ImageIcon } from "lucide-react";
 import { useMemo } from "react";
+import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
@@ -16,7 +17,6 @@ import {
 } from "~/app/_components/products/product-image-summaries";
 import { ImageThumbnail } from "~/app/_components/table/ImageThumbnail";
 import { usePageCount } from "~/components/page/Page";
-import { Badge } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
@@ -27,6 +27,16 @@ import { formatCurrency } from "~/lib/utils";
 import { WishFormDialog } from "./wish-form-dialog";
 import { wishPriceRange } from "./wish-price-range";
 import { buildWishRows, type WishRow, wishSubRows } from "./wish-rows";
+
+const WISH_STATUS_OPTIONS = [
+  { value: "acquired", label: "Acquired", color: "var(--positive)" },
+  { value: "wanted", label: "Wanted", color: "var(--slate)" },
+];
+
+const CANDIDATE_STOCK_OPTIONS = [
+  { value: "yes", label: "In inventory", color: "var(--positive)" },
+  { value: "no", label: "Not stocked", color: "var(--slate)" },
+];
 
 /**
  * Tree config for the wishlist. Module-level so the reference is stable —
@@ -101,19 +111,22 @@ export function WishList() {
             className: "w-28",
             mobile: { slot: "trailing", priority: 10 },
           },
+          // Derived, so read-only: a wish's state comes from `acquiredAt` (a
+          // timestamp) and a candidate's from whether the Product is on a shelf
+          // — neither is a boolean column to write. Both branches label both
+          // states; the candidate's negative case used to render `—`, which
+          // claimed "unknown" about a shelf we had in fact just checked.
           cell: (info) => {
             const row = info.row.original;
             if (row.kind === "candidate") {
-              return row.candidate.inventoried ? (
-                <Badge variant="positive">In inventory</Badge>
-              ) : (
-                <NoneValue />
+              return renderOptionCell(
+                row.candidate.inventoried ? "yes" : "no",
+                CANDIDATE_STOCK_OPTIONS,
               );
             }
-            return row.wish.acquiredAt ? (
-              <Badge variant="positive">Acquired</Badge>
-            ) : (
-              <Badge variant="slate">Wanted</Badge>
+            return renderOptionCell(
+              row.wish.acquiredAt ? "acquired" : "wanted",
+              WISH_STATUS_OPTIONS,
             );
           },
         },

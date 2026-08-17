@@ -5,7 +5,6 @@ import type {
 import type {
   CostType,
   ExpenseOut,
-  ProjectKind,
   ProjectOut,
   ProjectStatus,
   TaskOut,
@@ -37,12 +36,12 @@ import {
 } from "~/app/_components/combobox/with-vendor-search";
 import {
   numberCellData,
-  selectCellData,
   specFromCellData,
   textCellData,
 } from "~/app/_components/data-table/cell-data";
 import {
   createActionsColumn,
+  createBooleanColumn,
   createCreatedAtColumn,
   createCurrencyColumn,
   createFilterableSelectColumn,
@@ -55,6 +54,7 @@ import {
   createTextColumn,
   type FilterConfig,
   type MobileColumnMeta,
+  renderOptionCell,
 } from "~/app/_components/data-table/columnHelpers";
 import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import { EditableEntityCell } from "~/app/_components/data-table/editable-entity-cell";
@@ -83,14 +83,9 @@ import {
   useTaskBulkActions,
 } from "~/app/_components/tracker/task-bulk-actions";
 import {
-  costTypeBadgeVariant,
-  costTypeLabels,
   costTypeOptions,
-  expenseLineBasisBadgeVariant,
-  expenseLineBasisLabels,
+  expenseFutureOptions,
   expenseLineBasisOptions,
-  expenseLineKindBadgeVariant,
-  expenseLineKindLabels,
   expenseLineKindOptions,
 } from "~/app/expenses/expense-options";
 import {
@@ -98,11 +93,7 @@ import {
   ExpenseProductImages,
 } from "~/app/expenses/expense-product-image-column";
 import { ProjectMark } from "~/app/projects/project-mark";
-import {
-  TASK_STATUS_LABELS,
-  taskStatusBadgeVariant,
-  taskStatusOptions,
-} from "~/app/tasks/task-options";
+import { taskStatusOptions } from "~/app/tasks/task-options";
 import { VendorCell, VendorMark } from "~/components/entity/vendor-cell";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -132,10 +123,9 @@ import {
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
 import { persistedVendorId } from "~/lib/vendor-logo";
-import { capitalize, PROJECT_STATUS_LABELS } from "./project-formatting";
 import { PROJECT_STATUS_OPTIONS, projectKindOptions } from "./project-options";
 import { buildProjectTree, type ProjectTreeRow } from "./project-tree";
-import { TradeBadge, tradeOptions } from "./trade-options";
+import { tradeOptions } from "./trade-options";
 
 /**
  * Stable empty default for `defaultColumnFilters` — an inline `= []` would
@@ -206,7 +196,7 @@ const taskHelper = createColumnHelper<TaskOut>();
 // own shared factory (`createProjectLinkColumn`); the name column differs per
 // caller, so both are left inline.
 
-/** Status column — badge render + `status` write. */
+/** Status column — dot + label render (from the roster) + `status` write. */
 export function taskStatusColumn(
   helper: ColumnHelper<TaskOut>,
   save: (status: TaskStatus, task: TaskOut) => Promise<void>,
@@ -218,11 +208,6 @@ export function taskStatusColumn(
     placeholder: "Filter by status...",
     selectOptions: taskStatusOptions,
     filterConfig: manifestFilterConfig("task", "status"),
-    renderCell: (status: TaskStatus) => (
-      <Badge variant={taskStatusBadgeVariant[status]}>
-        {TASK_STATUS_LABELS[status]}
-      </Badge>
-    ),
     mobile: opts?.mobile,
     editable: {
       onSave: async (newStatus, task) => {
@@ -232,7 +217,8 @@ export function taskStatusColumn(
   });
 }
 
-/** Trade column — glyph badge + required `trade` write. `emptyAsNull` renders an
+/** Trade column — the roster's trade glyph + label, and a required `trade`
+ * write. `emptyAsNull` renders an
  * empty cell (embedded tables) instead of the muted dash (index pages). */
 export function taskTradeColumn(
   helper: ColumnHelper<TaskOut>,
@@ -245,12 +231,12 @@ export function taskTradeColumn(
     placeholder: "Filter by trade...",
     selectOptions: tradeOptions,
     filterConfig: manifestFilterConfig("task", "trade"),
+    // Only the empty case differs from the shared render: an embedded table
+    // suppresses the dash entirely rather than showing "no trade" per row.
     renderCell: (trade: Trade | null) =>
-      trade ? (
-        <TradeBadge trade={trade} />
-      ) : opts?.emptyAsNull ? null : (
-        <NoneValue />
-      ),
+      trade === null && opts?.emptyAsNull
+        ? null
+        : renderOptionCell(trade, tradeOptions),
     mobile: opts?.mobile,
     editable: {
       onSave: async (newTrade, task) => {
@@ -540,18 +526,6 @@ export function TaskList({
 
 const expenseHelper = createColumnHelper<ExpenseOut>();
 
-/**
- * Editable-select options for the embedded expenses table's Future/Status
- * column — same "true"/"false" values as the index page's `futureFilterOptions`
- * (~/app/expenses/expense-options), but "Actual" rather than "Already made"
- * to match this column's tighter "Status" header. Module-level: a stable
- * reference for the column's `useMemo`.
- */
-const futureEditOptions: FilterableComboboxItem[] = [
-  { value: "false", label: "Actual" },
-  { value: "true", label: "Planned" },
-];
-
 export function expenseLineKindColumn(
   helper: ColumnHelper<ExpenseOut>,
   save: (lineKind: ExpenseLineKind, expense: ExpenseOut) => Promise<void>,
@@ -563,11 +537,6 @@ export function expenseLineKindColumn(
     placeholder: "Filter by line kind...",
     selectOptions: expenseLineKindOptions,
     filterConfig: manifestFilterConfig("expense", "lineKind"),
-    renderCell: (lineKind: ExpenseLineKind) => (
-      <Badge variant={expenseLineKindBadgeVariant[lineKind]}>
-        {expenseLineKindLabels[lineKind]}
-      </Badge>
-    ),
     mobile: opts?.mobile,
     editable: {
       onSave: async (newLineKind, expense) => {
@@ -596,11 +565,6 @@ export function expenseLineBasisColumn(
     placeholder: "Filter by itemization...",
     selectOptions: expenseLineBasisOptions,
     filterConfig: manifestFilterConfig("expense", "lineBasis"),
-    renderCell: (lineBasis: ExpenseLineBasis) => (
-      <Badge variant={expenseLineBasisBadgeVariant[lineBasis]}>
-        {expenseLineBasisLabels[lineBasis]}
-      </Badge>
-    ),
     mobile: opts?.mobile,
     editable: {
       onSave: async (newLineBasis, expense) => {
@@ -623,14 +587,6 @@ export function expenseCostTypeColumn(
     placeholder: "Filter by cost type...",
     selectOptions: costTypeOptions,
     filterConfig: manifestFilterConfig("expense", "costType"),
-    renderCell: (costType: CostType | null) =>
-      costType ? (
-        <Badge variant={costTypeBadgeVariant[costType]}>
-          {costTypeLabels[costType]}
-        </Badge>
-      ) : (
-        <NoneValue />
-      ),
     mobile: opts?.mobile,
     editable: {
       onSave: async (newCostType, expense) => {
@@ -642,7 +598,8 @@ export function expenseCostTypeColumn(
   });
 }
 
-/** Trade column — glyph badge + required `trade` write. `emptyAsNull` renders
+/** Trade column — the roster's trade glyph + label, and a required `trade`
+ * write. `emptyAsNull` renders
  * an empty cell instead of the muted dash. The multiselect `filterConfig` gives
  * the column `multiSelectFilterFn` (set membership), which the pivot's
  * single-trade selection satisfies as a one-element array. */
@@ -660,12 +617,12 @@ export function expenseTradeColumn(
     placeholder: "Filter by trade...",
     selectOptions: tradeOptions,
     filterConfig: manifestFilterConfig("expense", "trade"),
+    // Only the empty case differs from the shared render: an embedded table
+    // suppresses the dash entirely rather than showing "no trade" per row.
     renderCell: (trade: Trade | null) =>
-      trade ? (
-        <TradeBadge trade={trade} />
-      ) : opts?.emptyAsNull ? null : (
-        <NoneValue />
-      ),
+      trade === null && opts?.emptyAsNull
+        ? null
+        : renderOptionCell(trade, tradeOptions),
     mobile: opts?.mobile,
     editable: {
       onSave: async (newTrade, expense) => {
@@ -796,43 +753,21 @@ export function expenseFutureColumn(
     filterConfig?: FilterConfig;
   },
 ) {
-  // Shared copy/paste descriptor: the boolean `future` field as a select of
-  // "true"/"false". Wiring `meta.cellData` (like the column factories do) makes
-  // this the last inline-editable expense column visible to range copy/paste.
-  const cellData = selectCellData<ExpenseOut>(
-    (row) => (row.future ? "true" : "false"),
-    futureEditOptions,
-    (row, value) => save(value === "true", row),
-  );
-  return helper.accessor((row) => (row.future ? "true" : "false"), {
-    id: "future",
+  return createBooleanColumn(helper, "future", {
     header: "Status",
-    enableSorting: false,
-    meta: {
-      className: opts?.className ?? "w-24",
-      mobile: opts?.mobile,
-      filterConfig: opts?.filterConfig,
-      cellData,
-    },
-    cell: (info) => {
-      const expense = info.row.original;
-      return (
-        <EditableCell
-          value={info.getValue()}
-          onSave={async (newVal) => {
-            await save(newVal === "true", expense);
-          }}
-          clipboard={specFromCellData(cellData, expense)}
-          config={{ type: "select", options: futureEditOptions }}
-          renderValue={(v) =>
-            v === "true" ? (
-              <Badge variant="warning">Planned</Badge>
-            ) : (
-              <NoneValue />
-            )
-          }
-        />
-      );
+    className: opts?.className ?? "w-24",
+    mobile: opts?.mobile,
+    filterConfig: opts?.filterConfig ?? null,
+    // "Actual" rather than a dash: `future` is `NOT NULL DEFAULT false`, so a
+    // made expense is a recorded fact, not a missing one. This cell used to
+    // render `<NoneValue />` for false, which is how the great majority of the
+    // ledger came to display the unknown-marker for a value that was never in
+    // doubt.
+    trueFalseOptions: expenseFutureOptions,
+    editable: {
+      // `next` is only ever a boolean here: the column declares no `undecided`
+      // state, so the editor offers no clear affordance.
+      onSave: (next, expense) => save(next ?? false, expense),
     },
   });
 }
@@ -1510,12 +1445,6 @@ export function ProjectTable({
         className: "w-32",
         placeholder: "Filter by status...",
         selectOptions: PROJECT_STATUS_OPTIONS,
-        renderCell: (status: ProjectStatus) => (
-          <Row align="center" gap="xs">
-            <StatusIcon status={status} />
-            <span>{PROJECT_STATUS_LABELS[status]}</span>
-          </Row>
-        ),
         mobile: { slot: "subtitle", priority: 10 },
         editable: {
           onSave: async (newStatus, project) => {
@@ -1531,12 +1460,6 @@ export function ProjectTable({
         className: "w-32",
         placeholder: "Filter by kind...",
         selectOptions: projectKindOptions,
-        renderCell: (kind: ProjectKind | null) =>
-          kind ? (
-            <Badge variant="secondary">{capitalize(kind)}</Badge>
-          ) : (
-            <NoneValue />
-          ),
         mobile: { slot: "meta", priority: 20 },
         editable: {
           onSave: async (newKind, project) => {
