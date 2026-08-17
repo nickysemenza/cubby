@@ -4,7 +4,7 @@ import {
   LIVE_PROJECT_STATUSES,
   taskStatusValues,
 } from "@cubby/schemas/project";
-import { FILTER_NONE } from "./filters";
+import { FILTER_ANY, FILTER_NONE } from "./filters";
 
 /**
  * Hardcoded saved views: a named starting point of filters + sort for a list
@@ -46,7 +46,7 @@ interface ViewFilter {
  * predicate the entity's list already expressed as filters — and the schemas
  * said so out loud: `productFilterFields.expectedQuantityMax` documents
  * `-1` as "the 'sold or returned more than was ever bought' worklist", which
- * is exactly what `findProductsWithNegativeExpectedQuantity` re-derived with a
+ * is exactly what a since-deleted detector re-derived with a
  * grouped HAVING scan. Two implementations of one question, two places to drift.
  *
  * The card's rows come from the entity's ordinary list procedure, whose output
@@ -359,6 +359,100 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       },
     },
     {
+      id: "unpriced-stocked",
+      label: "Stocked but unpriced",
+      description: "On a shelf, with no price to value it by",
+      // The schema comment on `pricePresenceFilter` describes exactly this
+      // pairing. Unpriced stock is invisible to the location valuation rollup:
+      // a null price yields a null entry valuation and the rollup omits it.
+      filters: [
+        { id: "location", value: [FILTER_ANY] },
+        { id: "price", value: "none-real" },
+      ],
+      problem: {
+        key: "productsMissingPrice",
+        title: "Stocked products with no price",
+        description:
+          "On a shelf but carrying no price, so they are silently missing from every location's value.",
+        emptyMessage: "Every stocked product has a price.",
+        serverFilters: {
+          inventoryPresenceFilter: "has",
+          pricePresenceFilter: "none",
+          miscBucketFilter: "none",
+        },
+      },
+      columnVisibility: { price: true, location: true },
+    },
+    {
+      id: "unpriced-buckets",
+      label: "Unpriced buckets",
+      description: "`misc:` piles on a shelf, which have no unit price",
+      // Split from the view above rather than folded into it: a bucket is a
+      // heterogeneous pile and is *expected* to be unpriced, so counting it as
+      // a gap leaves that section permanently red. The per-location summary
+      // makes the same split (`miscNoPrice`, not `missingPricing`).
+      filters: [
+        { id: "location", value: [FILTER_ANY] },
+        { id: "price", value: "none-bucket" },
+      ],
+      problem: {
+        key: "unvaluedBucketProducts",
+        title: "Unvalued misc buckets",
+        description:
+          "Bucket rows on a shelf with no price. Pricing one is optional — it just makes its location's total less of an underestimate.",
+        emptyMessage: "Every misc bucket carries a price.",
+        serverFilters: {
+          inventoryPresenceFilter: "has",
+          pricePresenceFilter: "none",
+          miscBucketFilter: "has",
+        },
+      },
+      columnVisibility: { price: true, location: true },
+    },
+    {
+      id: "unmapped",
+      label: "No way to cost it",
+      description: "No price, no USDA key, and no unit mapping",
+      // Every path to a cost or a conversion is absent at once: no price to
+      // scale, no USDA key to look a food up by, no manual edge to convert
+      // through. Any ONE of them would make the product usable, which is why
+      // the three are AND-ed rather than reported separately.
+      filters: [
+        { id: "price", value: "none-real" },
+        { id: "food", value: "none" },
+        { id: "unitMappingQuality", value: "none" },
+        { id: "category", value: ["food", FILTER_NONE] },
+      ],
+      problem: {
+        key: "productsWithoutMappings",
+        title: "Products with no conversion path",
+        description:
+          "No price, no USDA key, and no unit mapping — nothing can cost or convert these, so any recipe using them is under-covered.",
+        emptyMessage: "Every food product has at least one conversion path.",
+        // `usdaPresenceFilter: "none"` is `NO_USDA_KEY` — exactly the
+        // detector's two `isNull`s on fdc_id and upc.
+        //
+        // The category pair is the interesting one: `eqAnyOrPresence` is
+        // deliberately OR, so this emits `category = 'food' OR category IS
+        // NULL`, which is precisely `!isNonFoodCategory(category)`. Uncategorized
+        // is eligible on purpose — an unfiled product may well be food.
+        serverFilters: {
+          pricePresenceFilter: "none",
+          miscBucketFilter: "none",
+          usdaPresenceFilter: "none",
+          unitMappingPresenceFilter: "none",
+          categoryFilter: ["food"],
+          categoryPresenceFilter: "none",
+        },
+      },
+      columnVisibility: {
+        price: true,
+        food: true,
+        unitMappingQuality: true,
+        category: true,
+      },
+    },
+    {
       id: "over-exited",
       label: "Sold more than bought",
       description: "More units gone than the ledger can account for buying",
@@ -445,6 +539,31 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
   ],
   ingredient: [
     {
+      id: "needs-a-product",
+      label: "Needs a product",
+      description: "Used by one of your own recipes, with nothing to cost it",
+      // `ownRecipes`, not `appearsInRecipes`: the cookbook import supplies the
+      // overwhelming majority of ingredient usages on this database, and
+      // counting them turns ~24 actionable rows into ~1000. A cookbook recipe
+      // you can't cost is not a gap in your own data.
+      filters: [
+        { id: "ownRecipes", value: "has" },
+        { id: "product", value: "none" },
+      ],
+      problem: {
+        key: "ingredientsWithoutProduct",
+        title: "Ingredients with no product",
+        description:
+          "Used by a recipe of your own but linked to no product, so nothing can price or convert them. Cookbook-only ingredients are excluded — costing someone else's book isn't the goal.",
+        emptyMessage: "Every ingredient your recipes use has a product.",
+        serverFilters: {
+          ownRecipePresenceFilter: "has",
+          productPresenceFilter: "none",
+        },
+      },
+      columnVisibility: { ownRecipes: true },
+    },
+    {
       id: "unused-with-product",
       label: "Unused (has product)",
       description: "Used in no recipe, but still linked to a product",
@@ -516,6 +635,45 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       columnVisibility: { aiDescription: true, image: true },
     },
     {
+      id: "stale-recounts",
+      label: "Overdue a recount",
+      description: "Holding stock, not counted in 60 days (or ever)",
+      // Inventory never auto-decrements, so nothing but a deliberate recount
+      // restores a count's truth — an uncounted bin just drifts. Deliberately
+      // looser than the 30-day tint the location page shows: that nudges, this
+      // raises a row.
+      filters: [
+        { id: "inventoryEntries", value: "has" },
+        { id: "lastBulkInventory", value: "60" },
+      ],
+      // Oldest recount first. Never-recounted bins do NOT lead: `buildOrderBy`
+      // emits NULLS LAST in both directions, which is the house convention
+      // (revisited and kept 2026-07 — empties are found with presence filters,
+      // not by sort direction). The detector this replaced ordered `nulls
+      // first`; that behaviour is gone deliberately rather than by accident,
+      // and a one-column exception is exactly what the convention exists to
+      // prevent. They are still fully IN the section — the `IS NULL` half of
+      // the predicate is load-bearing — and the count includes them; they just
+      // don't fill the card's sample.
+      sort: [{ id: "lastBulkInventory", desc: false }],
+      problem: {
+        key: "staleLocations",
+        title: "Locations overdue a recount",
+        description:
+          "Holding stock whose count hasn't been checked against the shelf in 60 days — or ever.",
+        emptyMessage: "Every stocked location has been recounted recently.",
+        // `directItemCountMin: 1` is how "holds stock" is spelled here, and it
+        // is slightly NARROWER than the detector's join: it counts only entries
+        // whose product is live. Same deliberate tightening as `empty-leaves`,
+        // and the two must agree or a shelf lands in both sections at once.
+        serverFilters: {
+          directItemCountMin: 1,
+          lastBulkInventoryOlderThanDays: 60,
+        },
+      },
+      columnVisibility: { lastBulkInventory: true, inventoryEntries: true },
+    },
+    {
       id: "empty-leaves",
       label: "Empty",
       description: "Leaf locations holding nothing",
@@ -544,6 +702,69 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         },
       },
       columnVisibility: { children: true, inventoryEntries: true },
+    },
+  ],
+  recipe: [
+    {
+      id: "no-instructions",
+      label: "No instructions",
+      description: "Nothing written down to cook from",
+      // The source exclusion is spelled as a POSITIVE list plus the `(none)`
+      // sentinel, not as a negation: `SourceType` is nullable, a NULL is a
+      // legacy hand-entered recipe that must stay visible, and `!= 'Book'`
+      // would evaluate UNKNOWN against it and drop it. Book and Notion recipes
+      // live elsewhere by design — the text isn't supposed to be here.
+      //
+      // `recipe-source-complement.unit.test.ts` pins the list to the full
+      // enum minus those two, so adding a fifth source can't silently exclude
+      // it from this worklist.
+      filters: [
+        { id: "instructions", value: "none" },
+        { id: "sourceType", value: ["Website", "Other", FILTER_NONE] },
+      ],
+      sort: [{ id: "name", desc: false }],
+      problem: {
+        key: "recipesWithoutInstructions",
+        title: "Recipes with no instructions",
+        description:
+          "No section carries any written steps, so there is nothing to cook from. Book and Notion recipes are excluded — their text lives outside Cubby on purpose.",
+        emptyMessage: "Every recipe has instructions.",
+        serverFilters: {
+          instructionsPresenceFilter: "none",
+          sourceTypeFilter: ["Website", "Other"],
+          sourceTypePresenceFilter: "none",
+        },
+      },
+      columnVisibility: { sourceType: true },
+    },
+  ],
+  meal: [
+    {
+      id: "empty-cooked",
+      label: "Nothing cooked",
+      description: "Cooked meals with no recipe recorded",
+      filters: [
+        { id: "mealKind", value: ["cooked"] },
+        { id: "related:meal.recipes", value: "none" },
+      ],
+      // Soonest first: an empty meal three days out is the one worth fixing.
+      sort: [{ id: "date", desc: false }],
+      problem: {
+        key: "emptyCookedMeals",
+        title: "Cooked meals with no recipes",
+        description:
+          "A meal marked cooked but carrying no recipe — either the plan was never filled in, or its recipe was deleted.",
+        emptyMessage: "Every cooked meal names at least one recipe.",
+        // `SQL_RELATED_VIEWS["meal.recipes"]` carries BOTH soft-delete guards
+        // the detector spelled out by hand: unplanning soft-deletes the
+        // MealRecipe link, while deleting the recipe leaves the link intact,
+        // and `dbMealToAPI` drops either — so a meal whose only recipe was
+        // deleted renders empty and must filter as empty too.
+        serverFilters: { mealKind: ["cooked"], recipePresenceFilter: "none" },
+      },
+      // The Recipes column is defaultVisible:false, so reveal the signal this
+      // view selects on.
+      columnVisibility: { "related:meal.recipes": true },
     },
   ],
   inventory: [

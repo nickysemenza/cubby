@@ -128,6 +128,8 @@ export const dbIngredientToTopLevelShape = (
 type IngredientListDB = IngredientSelect & {
   product: Array<Qualified<IngredientDeepDB["product"][number]>>;
   appearsInRecipes: RecipeRef[] | null;
+  // `count()` comes back as a string over the wire — coerced below.
+  ownRecipeCount: number | string;
 };
 
 export const dbIngredientToListAPI = (
@@ -137,6 +139,7 @@ export const dbIngredientToListAPI = (
     ...dbIngredientToTopLevelShape(ingredientData),
     product: mapIngredientProducts(ingredientData.product),
     appearsInRecipes: ingredientData.appearsInRecipes ?? [],
+    ownRecipeCount: Number(ingredientData.ownRecipeCount),
   };
 
   return parseWithContext(ingredientListItemOut, result, {

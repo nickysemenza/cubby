@@ -397,7 +397,7 @@ describe("problems repo", () => {
     });
   });
 
-  describe("findProductsMissingPrice", () => {
+  describe("stocked products with no price (saved-view backed)", () => {
     it("flags stocked unpriced products, partitions misc buckets, and ignores priced or unstocked ones", async () => {
       const loc = await createLocation(
         ctx.db,
@@ -446,7 +446,7 @@ describe("problems repo", () => {
         );
       }
 
-      const found = await findFastProblems(ctx.db);
+      const found = await findViewProblems(ctx.db);
 
       const flagged = found.productsMissingPrice.find(
         (p) => p.id === unpriced.id,
@@ -470,7 +470,7 @@ describe("problems repo", () => {
 
       // Soft-deleting the only entry un-stocks it, so it drops out of both.
       await deleteInventoryEntries(ctx.db, [unpricedEntry.entityId], ctx.actor);
-      const after = await findFastProblems(ctx.db);
+      const after = await findViewProblems(ctx.db);
       expect(after.productsMissingPrice.some((p) => p.id === unpriced.id)).toBe(
         false,
       );
@@ -1657,7 +1657,7 @@ describe("problems service — recount staleness", () => {
     await setLastRecount(long.loc.entityId, daysAgo(90));
     await setLastRecount(fresh.loc.entityId, daysAgo(3));
 
-    const { staleLocations } = await findFastProblems(ctx.db);
+    const { staleLocations } = await findViewProblems(ctx.db);
     const ids = staleLocations.map((l) => l.id);
     expect(ids).toContain(never.loc.id);
     expect(ids).toContain(long.loc.id);
@@ -1677,9 +1677,9 @@ describe("problems service — recount staleness", () => {
     const emptied = await seedStocked("Emptied bin");
     await deleteInventoryEntries(ctx.db, [emptied.entry.entityId], ctx.actor);
 
-    const { staleLocations } = await findFastProblems(ctx.db);
+    const { staleLocations } = await findViewProblems(ctx.db);
     const ids = staleLocations.map((l) => l.id);
-    // Nothing to recount — findEmptyLocations already owns these.
+    // Nothing to recount — the `location/empty-leaves` view already owns these.
     expect(ids).not.toContain(empty.id);
     expect(ids).not.toContain(emptied.loc.id);
   });
@@ -2176,7 +2176,7 @@ describe("problems — cooked meals with nothing planned", () => {
   it("flags a cooked meal with no recipes", async () => {
     await makeMeal("2026-04-01", { name: "Thursday" });
 
-    const { emptyCookedMeals } = await findFastProblems(ctx.db);
+    const { emptyCookedMeals } = await findViewProblems(ctx.db);
 
     expect(emptyCookedMeals.map((row) => row.name)).toEqual(["Thursday"]);
     expect(emptyCookedMeals[0]).toMatchObject({ date: "2026-04-01" });
@@ -2189,7 +2189,7 @@ describe("problems — cooked meals with nothing planned", () => {
     await makeMeal("2026-04-03", { mealKind: "takeout" });
     await makeMeal("2026-04-04", { mealKind: "leftovers" });
 
-    const { emptyCookedMeals } = await findFastProblems(ctx.db);
+    const { emptyCookedMeals } = await findViewProblems(ctx.db);
 
     expect(emptyCookedMeals).toEqual([]);
   });
@@ -2203,7 +2203,7 @@ describe("problems — cooked meals with nothing planned", () => {
     const planned = await makeMeal("2026-04-05", { name: "Planned" });
     const rekinded = await makeMeal("2026-04-06", { name: "Rekinded" });
 
-    expect((await findFastProblems(ctx.db)).emptyCookedMeals).toHaveLength(2);
+    expect((await findViewProblems(ctx.db)).emptyCookedMeals).toHaveLength(2);
 
     await addRecipeToMeal(
       ctx.db,
@@ -2218,7 +2218,7 @@ describe("problems — cooked meals with nothing planned", () => {
       ctx.actor,
     );
 
-    expect((await findFastProblems(ctx.db)).emptyCookedMeals).toEqual([]);
+    expect((await findViewProblems(ctx.db)).emptyCookedMeals).toEqual([]);
   });
 
   it("still flags a meal whose only recipe was deleted", async () => {
@@ -2239,12 +2239,12 @@ describe("problems — cooked meals with nothing planned", () => {
       ctx.actor,
     );
 
-    expect((await findFastProblems(ctx.db)).emptyCookedMeals).toEqual([]);
+    expect((await findViewProblems(ctx.db)).emptyCookedMeals).toEqual([]);
 
     await deleteRecipes(ctx.db, [recipe.entityId], ctx.actor);
 
     expect(
-      (await findFastProblems(ctx.db)).emptyCookedMeals.map((r) => r.name),
+      (await findViewProblems(ctx.db)).emptyCookedMeals.map((r) => r.name),
     ).toEqual(["Orphaned"]);
   });
 });

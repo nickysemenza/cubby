@@ -793,23 +793,16 @@ const problemsFastShape = {
   duplicateInventory: z.array(duplicateUniqueProductSchema),
   duplicateProductIdentities: z.array(duplicateProductIdentitySchema),
   orphanedProducts: z.array(orphanedProductSchema),
-  productsMissingPrice: z.array(productMissingPriceSchema),
-  unvaluedBucketProducts: z.array(productMissingPriceSchema),
   soldButStillStocked: z.array(soldButStillStockedSchema),
   unlinkedExitExpenses: z.array(unlinkedExitExpenseSchema),
   purchaselessExitExpenses: z.array(purchaselessExitExpenseSchema),
   toolsUsedOutsideOwnership: z.array(toolUsedOutsideOwnershipSchema),
-  productsWithoutMappings: z.array(productWithoutMappingsSchema),
-  ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
   productsWithNoImages: z.array(productWithNoImagesSchema),
   orphanedEntityEmbeddings: z.array(orphanedEntityEmbeddingSchema),
   unreferencedImages: z.array(unreferencedImageSchema),
   entitiesMissingEmbeddings: z.array(entityMissingEmbeddingSchema),
   staleParentRecipes: z.array(staleParentRecipeSchema),
-  emptyCookedMeals: z.array(emptyCookedMealSchema),
   understatedCostMeals: z.array(understatedCostMealSchema),
-  recipesWithoutInstructions: z.array(recipeWithoutInstructionsSchema),
-  staleLocations: z.array(staleLocationSchema),
   unknownParkedItems: z.array(unknownParkedItemSchema),
   manufacturerSpellingVariants: z.array(labelVariantSchema),
   duplicateVendors: z.array(duplicateVendorSchema),
@@ -900,6 +893,13 @@ export type SectionTotals = z.infer<typeof sectionTotalsSchema>;
  * These rows are a PAGE, not the population — see `sectionTotals`.
  */
 const problemsViewsShape = {
+  ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
+  recipesWithoutInstructions: z.array(recipeWithoutInstructionsSchema),
+  staleLocations: z.array(staleLocationSchema),
+  productsWithoutMappings: z.array(productWithoutMappingsSchema),
+  productsMissingPrice: z.array(productMissingPriceSchema),
+  unvaluedBucketProducts: z.array(productMissingPriceSchema),
+  emptyCookedMeals: z.array(emptyCookedMealSchema),
   neverVerifiedInventory: z.array(neverVerifiedInventorySchema),
   locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
   emptyLocations: z.array(emptyLocationSchema),
@@ -1125,7 +1125,7 @@ export const PROBLEM_CLASS = {
   projectsWithDateDrift: "defect",
 
   // --- coverage: backlog size, never reaches zero ---
-  // Misc buckets are *expected* to be unpriced — `findProductsMissingPrice`
+  // Misc buckets are *expected* to be unpriced — the `product/unpriced-buckets` view
   // already partitions them out for exactly this reason; classing them here is
   // what finally keeps them out of the total.
   unvaluedBucketProducts: "coverage",

@@ -54,12 +54,6 @@ export const locationFilterFields = {
     "Filter to locations that do / don't have at least one image (PDF attachments don't count).",
   ),
   /**
-   * `location.aiDescription` is a nullable column on the root table, so `"none"`
-   * is the un-described worklist. Combine with `imagePresenceFilter: "has"` for
-   * the backlog that can actually be worked: describing a location with no
-   * photo to look at isn't possible.
-   */
-  /**
    * Direct children only — `"none"` is the leaf-location worklist. Paired with
    * `inventoryPresenceFilter: "none"` it selects an empty leaf: a bin holding
    * nothing that also isn't a shelf for other bins.
@@ -67,9 +61,36 @@ export const locationFilterFields = {
   childPresenceFilter: presenceFilter.describe(
     "Filter to locations that do / don't have at least one live child location.",
   ),
+  /**
+   * `location.aiDescription` is a nullable column on the root table, so `"none"`
+   * is the un-described worklist. Combine with `imagePresenceFilter: "has"` for
+   * the backlog that can actually be worked: describing a location with no
+   * photo to look at isn't possible.
+   */
   aiDescriptionPresenceFilter: presenceFilter.describe(
     "Filter to locations that do / don't have an AI-generated description.",
   ),
+  /**
+   * Locations whose last deliberate recount is older than N days — or that have
+   * never been recounted at all.
+   *
+   * Relative rather than an absolute date pair on purpose: this is the shape a
+   * static declaration can hold. Every other date control in the manifest
+   * expands to absolute `yyyy-MM-dd` strings computed from the browser's clock,
+   * which a saved view could never pin — the value would change daily.
+   *
+   * The never-recounted half is part of the predicate, not an oversight. A
+   * plain `<` bound drops NULLs, and a bin nobody has ever counted is the worst
+   * offender rather than an exempt one.
+   */
+  lastBulkInventoryOlderThanDays: z.coerce
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      "Locations last recounted more than this many days ago, or never recounted.",
+    ),
   directItemCountMin: z.coerce.number().int().nonnegative().optional(),
   directItemCountMax: z.coerce.number().int().nonnegative().optional(),
   valuationMin: z.coerce.number().optional(),

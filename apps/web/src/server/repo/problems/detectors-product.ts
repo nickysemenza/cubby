@@ -14,7 +14,6 @@ import type {
 } from "@cubby/schemas/identifiers";
 import {
   unsafeExpenseShortcode,
-  unsafeIngredientShortcode,
   unsafeLocationShortcode,
   unsafeProductShortcode,
   unsafeProjectShortcode,
@@ -24,15 +23,13 @@ import type {
   DuplicateProductIdentity,
   DuplicateUniqueProduct,
   OrphanedProduct,
-  ProductMissingPrice,
   ProductWithBetterUpcData,
-  ProductWithoutMappings,
   PurchaselessExitExpense,
   SoldButStillStocked,
   ToolUsedOutsideOwnership,
   UnlinkedExitExpense,
 } from "@cubby/schemas/problems";
-import { isMiscProduct, isNonFoodCategory } from "@cubby/shared";
+import { isMiscProduct } from "@cubby/shared";
 import { format } from "date-fns";
 import {
   and,
@@ -55,7 +52,6 @@ import type { Database, DrizzleClient } from "~/server/db";
 import {
   expense,
   image,
-  ingredient,
   inventoryEntry,
   product,
   productExternalId,
@@ -84,10 +80,7 @@ import {
   disposalPurchaseIds,
   loadProductOwnershipWindows,
 } from "~/server/repo/product/ownership";
-import {
-  effectiveProductPriceSql,
-  loadProductPricing,
-} from "~/server/repo/product/pricing";
+import { loadProductPricing } from "~/server/repo/product/pricing";
 import { loadProjectDateWindows } from "~/server/repo/project/subtree";
 import { buildTimelineGates } from "~/server/repo/project/tools";
 
@@ -336,76 +329,6 @@ export const findOrphanedProducts = async (
   }));
 };
 
-// Find stocked products with no `price`.
-//
-// `inventoryEntry.valuation` is precomputed from Product effective price,
-// so a null price yields a null valuation and the location rollup silently
-// omits the item. Keyed off effective price (the cause) rather than
-// `inventoryEntry.valuation` (the symptom, which can lag a recompute).
-//
-// Returned partitioned, not as one list: a `misc:` bucket is a heterogeneous
-// pile with no meaningful unit price and is *expected* to be unpriced — the
-// per-location summary already treats those as `miscNoPrice` rather than
-// `missingPricing`. Folding them in would leave the section permanently red.
-export const findProductsMissingPrice = async (
-  db: Database,
-): Promise<{
-  real: ProductMissingPrice[];
-  buckets: ProductMissingPrice[];
-}> => {
-  const dbClient = getDb(db);
-
-  // includes-installed: a fixture still needs a price — pricing/enrichment
-  // scope, not a browse/count surface.
-  const stockedWithoutPrice = await dbClient.query.product.findMany({
-    where: and(
-      notDeleted(product),
-      sql.raw(`${effectiveProductPriceSql()} IS NULL`),
-    ),
-    columns: { id: true, name: true, manufacturer: true, shortcode: true },
-    with: {
-      inventoryEntry: {
-        where: notDeleted(inventoryEntry),
-        columns: { id: true, amount: true },
-        with: {
-          location: { columns: { id: true, name: true, shortcode: true } },
-        },
-      },
-    },
-  });
-
-  const real: ProductMissingPrice[] = [];
-  const buckets: ProductMissingPrice[] = [];
-
-  for (const prod of stockedWithoutPrice) {
-    // Products with no live inventory contribute nothing to any rollup, so an
-    // absent price costs nothing — `findOrphanedProducts` already covers them.
-    if (prod.inventoryEntry.length === 0) continue;
-
-    const item: ProductMissingPrice = {
-      id: unsafeProductShortcode(prod.shortcode),
-      name: prod.name,
-      manufacturer: prod.manufacturer,
-      inventoryQuantity: sumBy(
-        prod.inventoryEntry,
-        (entry) => entry.amount.value,
-      ),
-      locations: prod.inventoryEntry.map((entry) => ({
-        id: unsafeLocationShortcode(entry.location.shortcode),
-        name: entry.location.name,
-      })),
-    };
-
-    if (isMiscProduct(prod.name)) {
-      buckets.push(item);
-    } else {
-      real.push(item);
-    }
-  }
-
-  return { real, buckets };
-};
-
 // Find disposal lines that name no product — the exact inverse of
 // `findSoldButStillStocked` below.
 //
@@ -529,7 +452,7 @@ export const findPurchaselessExitExpenses = async (
 
 // Find products that were sold off but are still sitting on a shelf.
 //
-// The exact mirror of `findProductsMissingPrice`, and it exists for the same
+// The exact mirror of the `product/unpriced-stocked` view, and it exists for the same
 // reason: `inventoryEntry.valuation` is precomputed from the product's
 // effective price, so a stale entry keeps contributing its full value to the
 // location rollup. An unpriced product makes the rollup silently *omit* value;
@@ -950,80 +873,6 @@ export const findDuplicateProductIdentities = async (
   }
 
   return out;
-};
-
-// Find products with no conversion/price coverage at all. A product is covered
-// if it has a manual unit mapping OR a price (synthesizes a `1 each = $price`
-// edge) OR a USDA link (fdc_id/upc synthesizes portion/serving/nutrient
-// edges). Mirrors the totals-gap classifier in lib/recipe-totals-gaps.ts.
-// Excludes misc products (don't need pricing) and non-food (household/garage)
-// products, for which food unit coverage is meaningless.
-export const findProductsWithoutMappings = async (
-  db: Database,
-): Promise<ProductWithoutMappings[]> => {
-  const dbClient = getDb(db);
-
-  const productsWithoutMappings = await dbClient
-    .select({
-      id: product.id,
-      name: product.name,
-      manufacturer: product.manufacturer,
-      shortcode: product.shortcode,
-      createdAt: product.createdAt,
-      ingredientId: product.ingredientId,
-      // Through a LEFT JOIN (not the FK column) — the linked ingredient's own
-      // shortcode, so a null just means "no ingredient linked", matching the
-      // nullability of `ingredientId` itself.
-      ingredientShortcode: ingredient.shortcode,
-      usdaUnavailable: product.usdaUnavailable,
-      category: product.category,
-    })
-    .from(product)
-    .leftJoin(
-      ingredient,
-      and(eq(ingredient.id, product.ingredientId), notDeleted(ingredient)),
-    )
-    .where(
-      and(
-        notDeleted(product),
-        sql.raw(`${effectiveProductPriceSql('"Product"')} IS NULL`),
-        isNull(product.fdc_id),
-        isNull(product.upc),
-        notExists(
-          dbClient
-            .select({ id: sql`1` })
-            .from(productUnitMappings)
-            .where(
-              and(
-                eq(productUnitMappings.productId, product.id),
-                notDeleted(productUnitMappings),
-              ),
-            ),
-        ),
-      ),
-    );
-
-  return productsWithoutMappings
-    .filter((p) => !isMiscProduct(p.name) && !isNonFoodCategory(p.category))
-    .map(
-      ({
-        ingredientId,
-        ingredientShortcode,
-        usdaUnavailable,
-        category: _category,
-        shortcode,
-        ...rest
-      }) => ({
-        ...rest,
-        id: unsafeProductShortcode(shortcode),
-        isIngredient: ingredientId != null,
-        usdaUnavailable: usdaUnavailable ?? false,
-        ingredientId:
-          ingredientShortcode != null
-            ? unsafeIngredientShortcode(ingredientShortcode)
-            : null,
-      }),
-    );
 };
 
 // Synthesize a product's *effective* conversion edges (stored mappings + price

@@ -867,6 +867,7 @@ const DECLARED_SECTIONS = [
     id: "missing-price",
     label: "Unpriced",
     select: (p) => p.productsMissingPrice,
+    totalKey: "productsMissingPrice",
     entity: "product",
     title: "Stocked Without a Price",
     description:
@@ -973,6 +974,7 @@ const DECLARED_SECTIONS = [
     id: "unvalued-buckets",
     label: "Unvalued buckets",
     select: (p) => p.unvaluedBucketProducts,
+    totalKey: "unvaluedBucketProducts",
     // Coverage, but with no meter: a misc bucket isn't a fraction of any
     // population, so there's nothing honest to put in a denominator.
     coverage: { keys: ["unvaluedBucketProducts"] },
@@ -1012,6 +1014,7 @@ const DECLARED_SECTIONS = [
     id: "no-product-ingredients",
     label: "No product",
     select: (p) => p.ingredientsWithoutProduct,
+    totalKey: "ingredientsWithoutProduct",
     coverage: {
       keys: ["ingredientsWithoutProduct"],
       meter: {
@@ -1135,6 +1138,7 @@ const DECLARED_SECTIONS = [
     id: "stale-recounts",
     label: "Stale recounts",
     select: (p) => p.staleLocations,
+    totalKey: "staleLocations",
     coverage: {
       keys: ["staleLocations"],
       meter: { total: (t) => t.staleLocations, doneLabel: "recounted" },
@@ -1441,6 +1445,7 @@ const DECLARED_SECTIONS = [
     id: "empty-cooked-meals",
     label: "Empty meals",
     select: (p) => p.emptyCookedMeals,
+    totalKey: "emptyCookedMeals",
     entity: "meal",
     title: "Cooked meals with nothing planned",
     description:
@@ -1475,6 +1480,7 @@ const DECLARED_SECTIONS = [
     id: "recipes-without-instructions",
     label: "No instructions",
     select: (p) => p.recipesWithoutInstructions,
+    totalKey: "recipesWithoutInstructions",
     entity: "recipe",
     title: "Recipes you can't cook from",
     description:

@@ -76,28 +76,22 @@ import {
   findDuplicateProductIdentities,
   findDuplicateSpendCandidates,
   findDuplicateVendors,
-  findEmptyCookedMeals,
   findEntitiesMissingEmbeddings,
   findFinancialTransactionAllocationDefects,
   findIncompleteStatementImports,
-  findIngredientsWithoutProduct,
   findIngredientsWithUnusedAliases,
   findInvalidFinancialJson,
   findLinkedProductIds,
   findManufacturerSpellingVariants,
   findOrphanedProducts,
   findParentRecipesWithDeletedSubRecipes,
-  findProductsMissingPrice,
-  findProductsWithoutMappings,
   findProductsWithUpcGaps,
   findPurchaseFinancialSettlementMismatches,
   findPurchaselessExitExpenses,
   findPurchasesNotReconciling,
-  findRecipesWithoutInstructions,
   findReferentialLivenessViolations,
   findSoldButStillStocked,
   findStaleIngredientParses,
-  findStaleLocations,
   findToolsUsedOutsideOwnership,
   findUnderstatedCostMeals,
   findUnknownParkedItems,
@@ -154,14 +148,14 @@ const countMissingEmbeddings = async (db: Database) =>
 // always-on navbar badge: the scan POSTs to the USDA worker once, not twice.
 //
 //   - partial coverage: an ingredient product with *some* coverage (so
-//     findProductsWithoutMappings skips it) whose effective conversion graph
+//     the product/unmapped view skips it) whose effective conversion graph
 //     (stored conversions + price edge + USDA edges) still can't reach all four
 //     base kinds. Money in a unit mapping counts like a scalar price.
 //   - islanded mappings: a product whose *effective* mappings still split into
 //     2+ components. A product islanded on its stored mappings alone but bridged
 //     into one component by USDA portion/serving edges is fully convertible, so
 //     it isn't flagged — mirroring the "a USDA link counts as coverage" rule in
-//     findProductsWithoutMappings.
+//     the `product/unmapped` view.
 const findProductCoverageProblems = async (
   db: Database,
   usdaClient: USDAClient,
@@ -175,12 +169,12 @@ const findProductCoverageProblems = async (
 
   // Candidate sets are pure DB/WASM (no network). Partial coverage wants
   // ingredient products with *some* signal — truly-empty ones belong to
-  // findProductsWithoutMappings. Islanded wants products whose STORED mappings
+  // the `product/unmapped` view. Islanded wants products whose STORED mappings
   // already split into 2+ components: adding the derived edges can only merge
   // components, never split them, so a product connected on its stored mappings
   // can never be islanded. detect_unit_mapping_islands is infallible (never throws).
   // Non-food (household/garage) products have no food-coverage meaning — exempt
-  // them from both coverage detectors, matching findProductsWithoutMappings.
+  // them from both coverage detectors, matching the `product/unmapped` view.
   const partialCandidates = products.filter(
     (p) =>
       p.ingredientId != null &&
@@ -508,7 +502,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       // JS — same shape and cost class as the spelling-variant scans below.
       duplicateProductIdentities: () => findDuplicateProductIdentities(scoped),
       orphanedProducts: () => findOrphanedProducts(scoped),
-      productsMissingPrice: () => findProductsMissingPrice(scoped),
       soldButStillStocked: () => findSoldButStillStocked(scoped),
       // The inverse of the line above: same disposal-Purchase predicate, but
       // the exits with no product to group by, which that one cannot see.
@@ -522,8 +515,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       // enough for this group and it shares its single connection; the fold is
       // the same two queries `projectToolMatrix` already runs per page load.
       toolsUsedOutsideOwnership: () => findToolsUsedOutsideOwnership(scoped),
-      productsWithoutMappings: () => findProductsWithoutMappings(scoped),
-      ingredientsWithoutProduct: () => findIngredientsWithoutProduct(scoped),
       productsWithNoImages: () =>
         findProductsWithNoImages(scoped, { excludeIngredients: true }),
       orphanedEntityEmbeddings: () => findOrphanedEntityEmbeddings(scoped),
@@ -533,10 +524,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       unreferencedImages: () => findUnreferencedImages(scoped),
       entitiesMissingEmbeddings: () => findMissingEmbeddings(scoped),
       staleParentRecipes: () => findParentRecipesWithDeletedSubRecipes(scoped),
-      emptyCookedMeals: () => findEmptyCookedMeals(scoped),
       understatedCostMeals: () => findUnderstatedCostMeals(scoped),
-      recipesWithoutInstructions: () => findRecipesWithoutInstructions(scoped),
-      staleLocations: () => findStaleLocations(scoped),
       unknownParkedItems: () => findUnknownParkedItems(scoped),
       manufacturerSpellingVariants: () =>
         findManufacturerSpellingVariants(scoped),
@@ -575,14 +563,10 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     duplicateInventory: r.duplicateInventory,
     duplicateProductIdentities: r.duplicateProductIdentities,
     orphanedProducts: r.orphanedProducts,
-    productsMissingPrice: r.productsMissingPrice.real,
-    unvaluedBucketProducts: r.productsMissingPrice.buckets,
     soldButStillStocked: r.soldButStillStocked,
     unlinkedExitExpenses: r.unlinkedExitExpenses,
     purchaselessExitExpenses: r.purchaselessExitExpenses,
     toolsUsedOutsideOwnership: r.toolsUsedOutsideOwnership,
-    productsWithoutMappings: r.productsWithoutMappings,
-    ingredientsWithoutProduct: r.ingredientsWithoutProduct,
     productsWithNoImages: r.productsWithNoImages.map((p) => ({
       ...p,
       id: unsafeProductShortcode(p.shortcode),
@@ -591,10 +575,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     unreferencedImages: r.unreferencedImages,
     entitiesMissingEmbeddings: r.entitiesMissingEmbeddings,
     staleParentRecipes: r.staleParentRecipes,
-    emptyCookedMeals: r.emptyCookedMeals,
     understatedCostMeals: r.understatedCostMeals,
-    recipesWithoutInstructions: r.recipesWithoutInstructions,
-    staleLocations: r.staleLocations,
     unknownParkedItems: r.unknownParkedItems,
     manufacturerSpellingVariants: r.manufacturerSpellingVariants,
     duplicateVendors: r.duplicateVendors,

@@ -24,7 +24,7 @@ import {
   taskFilterFields,
 } from "@cubby/schemas/project";
 import { purchaseFilterFields } from "@cubby/schemas/purchase";
-import { recipeFilterFields } from "@cubby/schemas/recipe";
+import { recipeFilterFields, recipeSourceValues } from "@cubby/schemas/recipe";
 import {
   relatedFilterPrefix,
   relatedViewRegistry,
@@ -179,6 +179,31 @@ const resolveNetBasis = (value: string | undefined) => {
  * have sold or returned more than you ever bought — and is the reason the
  * server-side bounds are signed rather than clamped at zero.
  */
+const priceOptions: FilterableComboboxItem[] = [
+  ...presenceFilterOptions("price"),
+  { value: "none-real", label: "No price (excluding buckets)" },
+  { value: "none-bucket", label: "No price (buckets only)" },
+];
+
+const resolvePrice = (value: string | undefined) => {
+  if (value === "has" || value === "none")
+    return { pricePresenceFilter: value };
+  // The two worklists behind the unpriced half: a `misc:` bucket has no
+  // meaningful unit price and is expected to be unpriced, so it is reported
+  // separately rather than kept permanently red alongside real gaps.
+  if (value === "none-real")
+    return {
+      pricePresenceFilter: "none" as const,
+      miscBucketFilter: "none" as const,
+    };
+  if (value === "none-bucket")
+    return {
+      pricePresenceFilter: "none" as const,
+      miscBucketFilter: "has" as const,
+    };
+  return {};
+};
+
 const expectedQuantityOptions: FilterableComboboxItem[] = [
   { value: "negative", label: "Negative (sold more than bought)" },
   { value: "zero", label: "Zero (none expected)" },
@@ -269,6 +294,21 @@ const resolveTaskDueFilter = (value: string | undefined) => {
   return resolveDueRange(value);
 };
 
+const recountAgeOptions: FilterableComboboxItem[] = [
+  { value: "30", label: "Not counted in 30 days" },
+  { value: "60", label: "Not counted in 60 days" },
+  { value: "90", label: "Not counted in 90 days" },
+];
+
+/** Each option is "older than N days, or never recounted" — see the field's
+ *  schema doc for why the never-recounted half is part of the predicate. */
+const resolveRecountAge = (value: string | undefined) => {
+  const days = Number(value);
+  return Number.isInteger(days) && days > 0
+    ? { lastBulkInventoryOlderThanDays: days }
+    : {};
+};
+
 const resolveLocationItems = (value: string | undefined) =>
   value === "none"
     ? { directItemCountMax: 0 }
@@ -286,6 +326,10 @@ const resolveLocationValuation = (value: string | undefined) => {
   if (value === "gte500") return { valuationMin: 500 };
   return {};
 };
+
+const recipeSourceOptions: FilterableComboboxItem[] = recipeSourceValues.map(
+  (value) => ({ value, label: value }),
+);
 
 const recipeCostOptions: FilterableComboboxItem[] = [
   { value: "under10", label: "Under $10" },
@@ -1296,11 +1340,17 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       // Combined with `inventoryPresenceFilter: "has"` this is the
       // valuation-gap worklist: products physically on a shelf that nobody
       // has priced yet.
+      //
+      // A range rather than a bare presence, because the unpriced half splits:
+      // a `misc:` bucket is a heterogeneous pile with no meaningful unit price
+      // and is EXPECTED to be unpriced, so the two belong in different
+      // worklists. One control emitting a two-field patch is the same shape
+      // `verifiedAt` and `expectedQuantity` use.
       columnId: "price",
-      field: "pricePresenceFilter",
-      kind: "presence",
+      kind: "range",
       placeholder: "Filter price...",
-      options: presenceFilterOptions("price"),
+      options: priceOptions,
+      expand: resolvePrice,
     },
     {
       // "USDA key", not "USDA food" — the predicate is `fdc_id IS NOT NULL OR
@@ -1423,6 +1473,21 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       options: presenceFilterOptions("image"),
     },
     {
+      columnId: "instructions",
+      field: "instructionsPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter instructions...",
+      options: presenceFilterOptions("instructions"),
+    },
+    {
+      columnId: "sourceType",
+      field: "sourceTypeFilter",
+      kind: "multiselect",
+      placeholder: "Filter by source...",
+      options: recipeSourceOptions,
+      nullable: { field: "sourceTypePresenceFilter", label: "source" },
+    },
+    {
       columnId: "costTotal",
       kind: "range",
       placeholder: "Filter recipe cost...",
@@ -1458,6 +1523,15 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       kind: "presence",
       placeholder: "Filter product...",
       options: presenceFilterOptions("product"),
+    },
+    {
+      // "none" is the orphaned-ingredient worklist — the list already excludes
+      // recipe-as-ingredient pointer rows, so a hit really is unused.
+      columnId: "ownRecipes",
+      field: "ownRecipePresenceFilter",
+      kind: "presence",
+      placeholder: "Filter own recipes...",
+      options: presenceFilterOptions("own recipes"),
     },
     {
       // "none" is the orphaned-ingredient worklist — the list already excludes
@@ -1527,6 +1601,17 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       kind: "presence",
       placeholder: "Filter images...",
       options: presenceFilterOptions("image"),
+    },
+    {
+      // Presets rather than a date range: the predicate is "older than N days
+      // OR never", which no From/To pair expresses — and a relative bound is
+      // the only shape a saved view can pin, since an absolute date computed
+      // from the browser clock changes daily.
+      columnId: "lastBulkInventory",
+      kind: "range",
+      placeholder: "Filter recounts...",
+      options: recountAgeOptions,
+      expand: resolveRecountAge,
     },
     {
       // "none" is the leaf-location worklist; with `inventoryEntries: none`
@@ -1850,6 +1935,35 @@ const relatedFilterSpecs = Object.fromEntries(
             placeholder: "Filter candidate presence...",
           },
         );
+        continue;
+      }
+      if (view.key === "meal.recipes") {
+        // Column-backed presence rather than the generated free-text trio.
+        // `partitionFilterSpecs` keeps `urlOnly` specs out of `columnFilters`,
+        // so the generated `recipePresenceFilter` could never be pinned by a
+        // saved view — which is what the `meal/empty-cooked` view needs.
+        //
+        // A plain `presence` kind, not the `idMulti` + `nullable` shape
+        // `recipe.ingredients` uses: that one carries an `optionsKey` roster,
+        // and `MealTable` passes no `filterOptions` at all, so a roster-backed
+        // picker would render empty. Same shape as `ingredient.appearsInRecipes`.
+        generated.push({
+          columnId: `related:${view.key}`,
+          field: `${prefix}PresenceFilter`,
+          urlKey: `related-${prefix}`,
+          kind: "presence",
+          placeholder: "Filter recipes...",
+          options: presenceFilterOptions("recipes"),
+        });
+        // The deep-link scope, kept so existing links still resolve. No
+        // matching presence scope — the column above already writes that field,
+        // and a second URL writer for one server field is a conflict.
+        generated.push({
+          columnId: `${prefix}Id`,
+          urlOnly: true,
+          kind: "idMulti",
+          placeholder: "Filter by related recipe id...",
+        });
         continue;
       }
       if (view.key === "recipe.ingredients") {

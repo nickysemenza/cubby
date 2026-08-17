@@ -65,6 +65,7 @@ import {
   computeRecipeUsages,
   cookbookOnlyForIngredientSql,
   liveRecipeCountForIngredientSql,
+  ownRecipeCountForIngredientSql,
 } from "../recipe";
 import { buildIngredientWhere } from "./internal-types";
 import {
@@ -460,6 +461,31 @@ export const ingredientList = async (
     )
     .where(notDeleted(recipeSectionIngredient));
 
+  // The same three-level guarded shape as `ingredientIdsInLiveRecipes`, scoped
+  // to recipes of your own. A SEPARATE subquery on purpose: scoping the one
+  // above would make `recipePresenceFilter` disagree with the
+  // `appearsInRecipes` cell and sort beside it, which count every live recipe —
+  // exactly the divergence that subquery's own comment forbids.
+  const ingredientIdsInOwnRecipes = dbClient
+    .select({ ingredientId: recipeSectionIngredient.ingredientId })
+    .from(recipeSectionIngredient)
+    .innerJoin(
+      recipeSection,
+      and(
+        eq(recipeSection.id, recipeSectionIngredient.recipeSectionId),
+        notDeleted(recipeSection),
+      ),
+    )
+    .innerJoin(
+      recipe,
+      and(
+        eq(recipe.id, recipeSection.recipeId),
+        notDeleted(recipe),
+        isNull(recipe.cookbookId),
+      ),
+    )
+    .where(notDeleted(recipeSectionIngredient));
+
   // Always filter out deleted items and recipe ingredients
   const conditions: (SQL | undefined)[] = [
     isNull(ingredient.recipeId),
@@ -485,6 +511,11 @@ export const ingredientList = async (
       ingredient.id,
       filters.recipePresenceFilter,
       ingredientIdsInLiveRecipes,
+    ),
+    idSetPresence(
+      ingredient.id,
+      filters.ownRecipePresenceFilter,
+      ingredientIdsInOwnRecipes,
     ),
   );
 
@@ -536,6 +567,12 @@ export const ingredientList = async (
       appearsInRecipes: sql<RecipeRef[]>`${sql.raw(
         appearsInRecipesRefsForIngredientSql('"ingredient"."id"'),
       )}`.as("appearsInRecipes"),
+      // Distinct live NON-cookbook recipes — the number the
+      // `ownRecipePresenceFilter` worklist selects on, so the card and the
+      // filter can't report different populations.
+      ownRecipeCount: sql<number>`${sql.raw(
+        ownRecipeCountForIngredientSql('"ingredient"."id"'),
+      )}`.as("ownRecipeCount"),
     },
   } as const;
 

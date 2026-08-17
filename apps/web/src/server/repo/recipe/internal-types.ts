@@ -96,6 +96,13 @@ export interface RecipeFilters {
   costTotalMax?: number;
   caloriesTotalMin?: number;
   caloriesTotalMax?: number;
+  // No live section carries a non-empty instruction list — the
+  // can't-cook-from-it worklist.
+  instructionsPresenceFilter?: "has" | "none";
+  // Nullable column, so the presence half matters: a NULL SourceType is a
+  // legacy hand-entered recipe and must stay visible.
+  sourceTypeFilter?: string | string[];
+  sourceTypePresenceFilter?: "has" | "none";
   // Total elapsed time. A NULL `totalMinutes` (no printed total, or prose the
   // extractor wouldn't commit to a number for) matches neither bound.
   totalMinutesMin?: number;

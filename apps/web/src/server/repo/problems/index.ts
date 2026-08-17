@@ -14,8 +14,6 @@
  *                                            linked-product ids)
  *   INGREDIENT  → `detectors-ingredient.ts` (no-product, unused aliases,
  *                                            unused ingredients, alias pruning)
- *   LOCATION    → `detectors-location.ts`   (empty leaves, missing AI description,
- *                                            stocked bins overdue for a recount)
  *   MEAL        → `detectors-meal.ts`       (cooked meals with nothing planned —
  *                                            eating-out placeholders excluded)
  *   INVENTORY   → `detectors-inventory.ts`  (never-verified entries, items parked
@@ -64,7 +62,6 @@ export {
 } from "./detectors-financial";
 // Ingredient-centric detectors
 export {
-  findIngredientsWithoutProduct,
   findIngredientsWithUnusedAliases,
   pruneUnusedAliases,
 } from "./detectors-ingredient";
@@ -77,24 +74,14 @@ export {
   findDuplicateVendors,
   findManufacturerSpellingVariants,
 } from "./detectors-label-variants";
-// Location-centric detectors (+ EmptyLocation type re-export)
-export {
-  type EmptyLocation,
-  findStaleLocations,
-} from "./detectors-location";
 // Meal-centric detectors
-export {
-  findEmptyCookedMeals,
-  findUnderstatedCostMeals,
-} from "./detectors-meal";
+export { findUnderstatedCostMeals } from "./detectors-meal";
 // Product-centric detectors (+ ProductWithBetterUpcData type re-export)
 export {
   findDuplicateInventoryProducts,
   findDuplicateProductIdentities,
   findLinkedProductIds,
   findOrphanedProducts,
-  findProductsMissingPrice,
-  findProductsWithoutMappings,
   findProductsWithUpcGaps,
   findPurchaselessExitExpenses,
   findSoldButStillStocked,
@@ -113,7 +100,6 @@ export {
 // Recipe-centric detectors (derived-data-on-removal guardrail)
 export {
   findParentRecipesWithDeletedSubRecipes,
-  findRecipesWithoutInstructions,
   type StaleParentRecipe,
 } from "./detectors-recipe";
 // Optional vendor presentation coverage
