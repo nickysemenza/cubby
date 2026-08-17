@@ -11,6 +11,7 @@ import type {
   MappableImageRecord,
   RowWithOptionalAliases,
 } from "~/server/repo/database-helpers";
+import type { LocationIdentityProductRow } from "~/server/repo/location/internal-types";
 import type { MappableProductExternalId } from "~/server/repo/product/external-id-types";
 
 type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect>;
@@ -25,6 +26,9 @@ export type InventoryEntryDeepDB = typeof inventoryEntry.$inferSelect & {
     }>;
   };
   location: LocationSelect & {
+    // The holding location's own identity SKU, so a stock row can render the
+    // bin it sits in without a second fetch.
+    product?: LocationIdentityProductRow | null;
     images: Array<{
       image: MappableImageRecord;
     }>;

@@ -119,6 +119,22 @@ const sectionOrder = (t: {
  */
 export const imageOrder = sectionOrder;
 
+/**
+ * The identity product a Location IS — the bin, tote or rack itself, as
+ * opposed to `inventoryEntries.product`, which is stock held at it. Carries
+ * the cover image because a linked location renders from its SKU's photo.
+ */
+const locationIdentityProduct = {
+  with: {
+    images: {
+      orderBy: imageOrder,
+      with: {
+        image: true,
+      },
+    },
+  },
+} as const;
+
 export const relations = {
   ingredient: {
     full: {
@@ -320,6 +336,7 @@ export const relations = {
     list: {
       with: {
         parent: true,
+        product: locationIdentityProduct,
         children: {
           where: notDeleted(location),
         },
@@ -344,6 +361,7 @@ export const relations = {
     full: {
       with: {
         parent: true,
+        product: locationIdentityProduct,
         children: {
           with: {
             images: {
@@ -369,6 +387,7 @@ export const relations = {
     },
     withImages: {
       with: {
+        product: locationIdentityProduct,
         images: {
           orderBy: imageOrder,
           with: {
@@ -401,6 +420,7 @@ export const relations = {
         },
         location: {
           with: {
+            product: locationIdentityProduct,
             images: {
               orderBy: imageOrder,
               with: {

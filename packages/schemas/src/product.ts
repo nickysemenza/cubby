@@ -539,6 +539,16 @@ export const productQuantityLedgerOut = z.object({
    */
   unknownAcquisitionLines: z.number().int().nonnegative(),
   unknownExitLines: z.number().int().nonnegative(),
+  /**
+   * Locations that ARE an instance of this product — a bin, tote or rack in
+   * service rather than stock on a shelf.
+   *
+   * Units in use as locations are still units you own, so on-hand counts add
+   * this to the inventory sum. Without it every container promoted to a
+   * Location would read as missing and light "Shelf disagrees" forever — the
+   * same false-variance trap `includes-installed` documents for fixtures.
+   */
+  locationCount: z.number().int().nonnegative(),
 });
 export type ProductQuantityLedgerOut = z.infer<typeof productQuantityLedgerOut>;
 

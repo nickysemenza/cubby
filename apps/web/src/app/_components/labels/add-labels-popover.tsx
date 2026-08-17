@@ -66,7 +66,7 @@ export function AddLabelsPopover({
   function handleAddSingle(location: {
     id: LocationShortcode;
     name: string;
-    type: LocationType;
+    type: LocationType | null;
   }) {
     if (!typeSupportsQrCode(location.type)) {
       toast.warning(

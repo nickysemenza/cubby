@@ -719,7 +719,18 @@ export const location = pgTable(
     ...softDeletedAt(),
     lastBulkInventory: timestamp("lastBulkInventory", { mode: "date" }),
     parentId: uuid("parentId").$type<LocationId>(),
-    type: text("type").notNull(),
+    // The SKU this location physically IS — "this bin is a Milwaukee
+    // 48-22-8443". Many locations to one Product: the pooled model has no
+    // per-unit identity, and only the count matters. Nullable because rooms,
+    // areas and drawers are never something you buy.
+    productId: uuid("productId")
+      .$type<ProductId>()
+      .references(() => product.id),
+    // Nullable on purpose, and in practice mutually exclusive with productId:
+    // form factor is a fact about the SKU, so a linked location leaves this
+    // null rather than restating what the Product already says. Only
+    // productless locations carry a type.
+    type: text("type"),
     aiDescription: text("aiDescription"),
     // Precomputed inventory-valuation rollup (direct + descendants), recomputed
     // eagerly at inventory/price mutations — like recipe.totals. Null until the
@@ -735,6 +746,7 @@ export const location = pgTable(
       .where(sql`${table.deletedAt} IS NULL`),
     index("Location_name_idx").on(table.name),
     index("Location_type_idx").on(table.type),
+    index("Location_productId_idx").on(table.productId),
     index("Location_parentId_idx").on(table.parentId),
     index("Location_createdAt_idx").on(table.createdAt),
     index("Location_lastBulkInventory_idx").on(table.lastBulkInventory),
@@ -1961,6 +1973,9 @@ export const productRelations = relations(product, ({ one, many }) => ({
   projectToolUsages: many(projectToolUsage),
   purchaseProducts: many(purchaseProduct),
   wishCandidates: many(wishCandidate),
+  // Locations that ARE an instance of this product (a bin, tote, rack).
+  // Distinct from `inventoryEntry`, which is stock held AT a location.
+  locations: many(location),
 }));
 
 export const productExternalIdRelations = relations(
@@ -1994,6 +2009,11 @@ export const locationRelations = relations(location, ({ one, many }) => ({
   }),
   inventoryEntries: many(inventoryEntry),
   images: many(locationImage),
+  // The SKU this location is an instance of; null for rooms, areas, drawers.
+  product: one(product, {
+    fields: [location.productId],
+    references: [product.id],
+  }),
 }));
 
 export const inventoryEntryRelations = relations(inventoryEntry, ({ one }) => ({

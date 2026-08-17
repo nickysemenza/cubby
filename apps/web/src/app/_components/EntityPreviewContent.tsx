@@ -455,7 +455,7 @@ export function UsdaFoodPreviewContent({ fdcId }: { fdcId: number }) {
 export type LocationPreview = {
   id: string;
   name: string;
-  type: LocationType;
+  type: LocationType | null;
   parent?: { id: string; name: string };
   itemCount?: number;
   subCount?: number;
@@ -525,7 +525,7 @@ export type InventoryPreview = {
   productId: string;
   locationName: string;
   locationId: string;
-  locationType: LocationType;
+  locationType: LocationType | null;
   amountText: string;
   valuation?: number | null;
   thumbUrl?: string;

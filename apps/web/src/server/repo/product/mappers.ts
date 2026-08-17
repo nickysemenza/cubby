@@ -36,6 +36,7 @@ import {
   parseInventoryAmount,
   type RowWithOptionalAliases,
 } from "~/server/repo/database-helpers";
+import { mapLocationIdentityProduct } from "~/server/repo/location/identity-product";
 import type { MappableProductExternalId } from "./external-id-types";
 import { type ProductPricing, resolveProductPricing } from "./pricing";
 import type { QuantityLedger } from "./quantity-ledger";
@@ -234,6 +235,11 @@ const dbLocationToProductListInventoryShape = (
  * is exactly why an unguarded sum would have looked correct right up until it
  * wasn't.) `quantityLedger` is always present: it is ledger-only, so no unit
  * ambiguity can reach it.
+ *
+ * On-hand is the UNION of stock and identity: inventory units PLUS
+ * `quantityLedger.locationCount`, the Locations that ARE this product. This is
+ * the TS half of the rule `onHandUnitsSql` implements in SQL for sorting and
+ * filtering — keep the two in step, they are one rule with two call sites.
  */
 const deriveProductQuantityShape = (
   entries: ReadonlyArray<{ amount: { value: number; unit: string } }>,
@@ -248,12 +254,16 @@ const deriveProductQuantityShape = (
     onHandUnits: null,
     quantityVariance: null,
   };
-  if (entries.length === 0) return empty;
+  const { locationCount } = quantityLedger;
+  if (entries.length === 0 && locationCount === 0) return empty;
 
+  // Locations are one unit apiece, so they never widen the unit set — but a
+  // mixed-unit shelf is still unanswerable regardless of them.
   const units = uniq(entries.map((entry) => entry.amount.unit));
   if (units.length > 1) return empty;
 
-  const onHandUnits = sumBy(entries, (entry) => entry.amount.value);
+  const onHandUnits =
+    sumBy(entries, (entry) => entry.amount.value) + locationCount;
   return {
     quantityLedger,
     onHandUnits,
@@ -326,10 +336,16 @@ export const dbProductToAPI = (
       id: unsafeLocationShortcode(entry.location.shortcode),
       name: entry.location.name,
       aliases: entry.location.aliases,
-      type: parseWithContext(locationType, entry.location.type, {
-        entityType: "Location",
-        identifier: { id: entry.location.id, name: entry.location.name },
-      }),
+      // Null whenever the location IS a product; only a present value is
+      // validated against the enum.
+      type:
+        entry.location.type === null
+          ? null
+          : parseWithContext(locationType, entry.location.type, {
+              entityType: "Location",
+              identifier: { id: entry.location.id, name: entry.location.name },
+            }),
+      product: mapLocationIdentityProduct(entry.location),
       lastBulkInventory: entry.location.lastBulkInventory,
       aiDescription: entry.location.aiDescription,
       images: mapImages(entry.location.images),

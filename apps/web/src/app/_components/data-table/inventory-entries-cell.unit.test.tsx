@@ -72,7 +72,7 @@ function StubSearchProvider({
 interface TestEntry {
   id: InventoryShortcode;
   amount: Amount;
-  location?: { id: LocationShortcode; name: string; type: LocationType };
+  location?: { id: LocationShortcode; name: string; type: LocationType | null };
 }
 
 interface TestRow {

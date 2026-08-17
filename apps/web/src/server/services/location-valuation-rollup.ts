@@ -23,6 +23,13 @@ interface DirectAgg {
   /** Fixed installations, tallied apart from the countable figures above. */
   installedValuation: number;
   installedItemCount: number;
+  /**
+   * The vessels standing directly in this location — the child locations that
+   * ARE products. Their price is not stock held here, so it stays out of
+   * `valuation` entirely.
+   */
+  containerValuation: number;
+  containerItemCount: number;
 }
 
 const emptyAgg = (): DirectAgg => ({
@@ -33,6 +40,8 @@ const emptyAgg = (): DirectAgg => ({
   miscNoPrice: 0,
   installedValuation: 0,
   installedItemCount: 0,
+  containerValuation: 0,
+  containerItemCount: 0,
 });
 
 /**
@@ -47,7 +56,12 @@ export function rollupLocationValuations(
     placement?: "stock" | "installed";
     productName: string;
   }[],
-  locations: { id: LocationId; parentId: LocationId | null }[],
+  locations: {
+    id: LocationId;
+    parentId: LocationId | null;
+    /** Effective price of the SKU this location IS, when it is one. */
+    productPrice?: number | null;
+  }[],
 ): Map<LocationId, LocationValuation> {
   // Direct aggregates per location.
   const direct = new Map<LocationId, DirectAgg>();
@@ -78,6 +92,25 @@ export function rollupLocationValuations(
     }
   }
 
+  // A location that IS a product contributes its own price to its PARENT's
+  // container tally, never to its own: "what is on this shelf" and "what is
+  // this shelf" are different questions — the same split `installed` draws.
+  //
+  // A top-level location with a product has no parent to attribute to, so its
+  // own price lands in no rollup. Accepted: every vessel in the tree today
+  // hangs off a room or area, and inventing a synthetic root to hold it would
+  // put a number on a screen nobody asked about.
+  for (const l of locations) {
+    if (!l.parentId || l.productPrice == null) continue;
+    let agg = direct.get(l.parentId);
+    if (!agg) {
+      agg = emptyAgg();
+      direct.set(l.parentId, agg);
+    }
+    agg.containerValuation += l.productPrice;
+    agg.containerItemCount += 1;
+  }
+
   // Tree rollup: total = direct + Σ descendants (post-order, memoized).
   const childrenOf = new Map<LocationId, LocationId[]>();
   for (const l of locations) {
@@ -101,6 +134,8 @@ export function rollupLocationValuations(
     let tMisc = d.miscNoPrice;
     let totalInstalledValuation = d.installedValuation;
     let totalInstalledItemCount = d.installedItemCount;
+    let totalContainerValuation = d.containerValuation;
+    let totalContainerItemCount = d.containerItemCount;
     if (!visiting.has(id)) {
       // Guard against a malformed parent cycle (wouldCreateParentCycle should
       // prevent these, but never recurse forever on bad data).
@@ -114,6 +149,8 @@ export function rollupLocationValuations(
         tMisc += ct.total.miscNoPrice;
         totalInstalledValuation += ct.installed?.totalValuation ?? 0;
         totalInstalledItemCount += ct.installed?.totalItemCount ?? 0;
+        totalContainerValuation += ct.container?.totalValuation ?? 0;
+        totalContainerItemCount += ct.container?.totalItemCount ?? 0;
       }
       visiting.delete(id);
     }
@@ -133,6 +170,12 @@ export function rollupLocationValuations(
         totalValuation: round2(totalInstalledValuation),
         directItemCount: d.installedItemCount,
         totalItemCount: totalInstalledItemCount,
+      },
+      container: {
+        directValuation: round2(d.containerValuation),
+        totalValuation: round2(totalContainerValuation),
+        directItemCount: d.containerItemCount,
+        totalItemCount: totalContainerItemCount,
       },
     };
     rollups.set(id, v);

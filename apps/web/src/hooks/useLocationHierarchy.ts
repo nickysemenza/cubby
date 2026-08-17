@@ -36,7 +36,7 @@ export interface LocationHierarchyNode {
   id: LocationShortcode;
   /** Public id — the sunburst/treemap link by it. `null` on the synthetic root. */
   shortcode: string | null;
-  type: LocationType;
+  type: LocationType | null;
   /** Value used for D3 sizing - can be set based on use case */
   value: number;
   directCount: number;

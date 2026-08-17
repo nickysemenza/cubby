@@ -26,6 +26,7 @@ function loc(
     // must key off the varying tail, not the head, to stay unique per id.
     name,
     aliases: [],
+    product: null,
     type,
     lastBulkInventory: null,
     aiDescription: null,

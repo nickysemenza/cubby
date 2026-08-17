@@ -7,7 +7,7 @@
 
 import type { LocationId } from "@cubby/schemas/identifiers";
 import type { LocationValuation } from "@cubby/schemas/location";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import {
@@ -16,6 +16,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { effectiveProductPriceSql } from "~/server/repo/product/pricing";
 
 interface ValuationInventoryRow {
   locationId: LocationId;
@@ -26,12 +27,18 @@ interface ValuationInventoryRow {
 interface ValuationLocationRow {
   id: LocationId;
   parentId: LocationId | null;
+  /**
+   * Effective price of the SKU this location IS — the vessel's own worth,
+   * which rolls into its PARENT's container bucket rather than its own
+   * contents value. Null for rooms, areas and anything unlinked.
+   */
+  productPrice: number | null;
 }
 
 /**
  * Read the inputs for a whole-tree valuation recompute: every non-deleted
  * inventory item (location, valuation, product name) and every non-deleted
- * location (id, parentId).
+ * location (id, parentId, and the price of the SKU it is).
  */
 export const getLocationValuationInputs = async (
   db: Database,
@@ -50,9 +57,23 @@ export const getLocationValuationInputs = async (
     .from(inventoryEntry)
     .innerJoin(product, eq(inventoryEntry.productId, product.id))
     .where(notDeleted(inventoryEntry));
+  // Left join: most locations are not an instance of a product, and those
+  // that are must still appear in the tree so the rollup can walk them.
   const locations = await client
-    .select({ id: location.id, parentId: location.parentId })
+    .select({
+      id: location.id,
+      parentId: location.parentId,
+      productPrice: sql<
+        number | null
+      >`CASE WHEN ${product.id} IS NULL THEN NULL ELSE ${sql.raw(effectiveProductPriceSql())} END`.as(
+        "productPrice",
+      ),
+    })
     .from(location)
+    .leftJoin(
+      product,
+      and(eq(location.productId, product.id), notDeleted(product)),
+    )
     .where(notDeleted(location));
   return { entries, locations };
 };

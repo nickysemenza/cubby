@@ -3,14 +3,15 @@
  * edge semantics — replacing the "must agree on both" prose comment that used
  * to sit next to `deleteProducts` in `crud.ts`.
  *
- * `product` has seven incoming edges (`INCOMING_EDGES.product` in
+ * `product` has ten incoming edges (`INCOMING_EDGES.product` in
  * `entity-incoming-edges.ts`). Their *stable roles* now live in
  * `ENTITY_EDGE_SEMANTICS.product` (`~/server/db/entity-edge-semantics`)
  * alongside every other entity's, because a role describes what an edge means
- * and not what deleting does about it. Two are **acquisition** evidence —
- * proof the thing was actually owned at some point — one is durable
- * **history**, one is a retained Wishlist **association**, two are
- * **metadata**, and one is **media**:
+ * and not what deleting does about it. Three are **acquisition** evidence —
+ * proof the thing was actually owned at some point — two are durable
+ * **history**, one is a retained Wishlist **association**, one is a
+ * **reference** from a Location's own record, two are **metadata**, and one is
+ * **media**:
  *
  *  - acquisition: `InventoryEntry.productId` (it's on a shelf right now) and
  *    `Expense.productId` (it was bought — the ledger's net cost and
@@ -20,6 +21,10 @@
  *    the subject would leave that durable task history nameless).
  *  - association: `WishCandidate.productId` (a Tool alternative remains
  *    meaningful until removed from its Wishlist entries).
+ *  - reference: `Location.productId` (a Location that IS this product — the
+ *    bin itself). Retaining because a linked Location deliberately carries no
+ *    `type` of its own: the SKU is its form factor, so orphaning the Product
+ *    leaves the Location with no identity at all, not merely a broken link.
  *  - metadata / media: `ProductExternalId.productId`,
  *    `ProductUnitMappings.productId`, `ProductImage.productId` — none of which
  *    say anything about ownership on their own.
@@ -76,7 +81,12 @@ export const PRODUCT_EDGE_ROLES = ENTITY_EDGE_SEMANTICS.product;
  * The roles that make a product worth keeping: acquisition evidence, or
  * durable work history. An allowlist on purpose — see the file doc.
  */
-const RETAINING_ROLES = ["acquisition", "history", "association"] as const;
+const RETAINING_ROLES = [
+  "acquisition",
+  "history",
+  "association",
+  "reference",
+] as const;
 type RetainingRole = (typeof RETAINING_ROLES)[number];
 
 /**
@@ -172,6 +182,14 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
     effect: "soft-delete",
     description:
       "Hand-entered unit conversions are soft-deleted with the product.",
+  },
+  "Location.productId": {
+    code: "block-live-location-identity",
+    effect: "block",
+    description:
+      "A product that a location IS can't be deleted — a linked location carries no `type` of its own, so orphaning it would leave it with no identity at all.",
+    reason: "PRODUCT_HAS_LOCATIONS",
+    label: "locations",
   },
   "ProductImage.productId": {
     code: "soft-delete-association",

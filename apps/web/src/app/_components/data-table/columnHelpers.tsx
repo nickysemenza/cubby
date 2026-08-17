@@ -614,7 +614,7 @@ type EntityColumnData =
   | { entity: "recipe"; items: { name: string; id: string }[] }
   | {
       entity: "location";
-      items: { name: string; id: string; type: LocationType }[];
+      items: { name: string; id: string; type: LocationType | null }[];
     };
 
 /**
@@ -1116,7 +1116,7 @@ type SingleEntityColumnData =
   | { entity: "recipe"; data: { name: string; id: string } | null }
   | {
       entity: "location";
-      data: { name: string; id: string; type: LocationType } | null;
+      data: { name: string; id: string; type: LocationType | null } | null;
     }
   | {
       entity: "usda-food";

@@ -546,8 +546,12 @@ export const mutationSideEffectManifest = {
 } satisfies MutationSideEffectManifest;
 
 // Whole-tree location valuation must run whenever inventory changes, a product's
-// price/details change, or a location is changed/removed. Matches the entity/action
-// combos that previously each enqueued a valuation refresh.
+// price/details change, or a location is created/changed/removed.
+//
+// `created` counts because a location can now BE a product: a new linked
+// location adds its SKU's price to its parent's container bucket the moment it
+// exists. Before `location.productId`, a fresh location was always empty and
+// could not move any number, which is why creation used to be exempt.
 function needsValuationRecompute(event: MutationSideEffectEvent): boolean {
   switch (event.entity.entityType) {
     case "inventory":
@@ -555,7 +559,11 @@ function needsValuationRecompute(event: MutationSideEffectEvent): boolean {
     case "product":
       return event.action === "updated";
     case "location":
-      return event.action === "updated" || event.action === "deleted";
+      return (
+        event.action === "created" ||
+        event.action === "updated" ||
+        event.action === "deleted"
+      );
     default:
       return false;
   }

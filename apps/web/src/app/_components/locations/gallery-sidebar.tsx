@@ -6,6 +6,7 @@ import {
   PanelLeftClose,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { locationTypeNoun } from "~/app/inventory/session/session-utils";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -259,7 +260,7 @@ function SidebarTreeNode({
         ref={isActive ? activeItemRef : undefined}
         location={location}
         depth={level}
-        primaryMeta={location.type.replaceAll("-", " ")}
+        primaryMeta={locationTypeNoun(location.type)}
         leading={
           <button
             type="button"

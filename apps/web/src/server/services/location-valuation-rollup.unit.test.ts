@@ -7,6 +7,12 @@ const loc = (id: string, parentId?: string) => ({
   parentId: parentId ? unsafeLocationId(parentId) : null,
 });
 
+/** A location that IS a product — a tote, bin or rack worth `price`. */
+const vessel = (id: string, parentId: string, price: number) => ({
+  ...loc(id, parentId),
+  productPrice: price,
+});
+
 const item = (
   locationId: string,
   valuation: number | null,
@@ -19,6 +25,58 @@ const fixture = (locationId: string, valuation: number | null) => ({
 });
 
 describe("rollupLocationValuations", () => {
+  it("charges a vessel's own price to its PARENT, never to itself", () => {
+    // "What is on this shelf" and "what is this shelf" are different
+    // questions — the same split `installed` draws for fixtures.
+    const result = rollupLocationValuations(
+      [item("bin", 12)],
+      [loc("room"), vessel("bin", "room", 199)],
+    );
+
+    const bin = result.get(unsafeLocationId("bin"))!;
+    expect(bin.directValuation).toBe(12); // contents only
+    expect(bin.container?.directValuation).toBe(0);
+
+    const room = result.get(unsafeLocationId("room"))!;
+    expect(room.container?.directValuation).toBe(199);
+    expect(room.container?.directItemCount).toBe(1);
+    // The vessel's price never leaks into the contents figures.
+    expect(room.directValuation).toBe(0);
+    expect(room.totalValuation).toBe(12);
+  });
+
+  it("rolls container value up the tree like contents value", () => {
+    const result = rollupLocationValuations(
+      [],
+      [
+        loc("garage"),
+        loc("area", "garage"),
+        vessel("cart", "area", 100),
+        vessel("drawer", "cart", 25),
+      ],
+    );
+
+    const garage = result.get(unsafeLocationId("garage"))!;
+    expect(garage.container?.directValuation).toBe(0);
+    expect(garage.container?.totalValuation).toBe(125);
+    expect(garage.container?.totalItemCount).toBe(2);
+
+    const cart = result.get(unsafeLocationId("cart"))!;
+    expect(cart.container?.directValuation).toBe(25);
+    expect(cart.container?.totalValuation).toBe(25);
+  });
+
+  it("leaves the container bucket empty when nothing is a product", () => {
+    const result = rollupLocationValuations([item("a", 5)], [loc("a")]);
+    const a = result.get(unsafeLocationId("a"))!;
+    expect(a.container).toEqual({
+      directValuation: 0,
+      totalValuation: 0,
+      directItemCount: 0,
+      totalItemCount: 0,
+    });
+  });
+
   it("buckets direct items into priced / missing / misc", () => {
     const result = rollupLocationValuations(
       [

@@ -7,14 +7,14 @@ import { entityCellData, specFromCellData } from "./cell-data";
 export interface InventoryEntryBase {
   id: string;
   amount: Amount;
-  location?: { id: string; name: string; type: LocationType };
+  location?: { id: string; name: string; type: LocationType | null };
   product?: { id: string; name: string; manufacturer: string };
 }
 
 export type InventoryRelatedEntity =
   | {
       entity: "location";
-      data: { id: string; name: string; type: LocationType };
+      data: { id: string; name: string; type: LocationType | null };
     }
   | {
       entity: "product";

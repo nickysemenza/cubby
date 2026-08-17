@@ -1,4 +1,5 @@
 import type { LocationType } from "@cubby/schemas/location";
+import type { ProductCategory } from "@cubby/schemas/product";
 import type {
   ProjectKind,
   ProjectStatus,
@@ -43,7 +44,10 @@ type EntityInlineLinkProps = {
   | { entity: "meal"; data: MinimalEntityData & { date?: string | null } }
   | {
       entity: "location";
-      data: MinimalEntityData & { type?: LocationType };
+      data: MinimalEntityData & {
+        type?: LocationType | null;
+        product?: { category: ProductCategory | null } | null;
+      };
     }
   | { entity: "inventory"; data: MinimalEntityData }
   | {
@@ -232,7 +236,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
           )
         }
         name={data.name}
-        metadata={data.type}
+        metadata={data.type ?? undefined}
         compact={compact}
         truncate={truncate}
       />

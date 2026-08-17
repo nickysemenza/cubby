@@ -14,6 +14,7 @@ import {
 import { getDb, insertAndReturn } from "./database-helpers";
 import { createExpense, deleteExpenses } from "./expense";
 import { deleteInventoryEntries } from "./inventory";
+import { updateLocation } from "./location";
 import {
   deleteProducts,
   findProductByNameFuzzyManufacturer,
@@ -24,6 +25,7 @@ import {
   quickCreateProduct,
   updateProduct,
 } from "./product";
+import { loadProductQuantityLedgers } from "./product/quantity-ledger";
 import { createProject } from "./project";
 import {
   attachPurchaseProducts,
@@ -2384,6 +2386,78 @@ describe("product repository", () => {
    * rather than from a hand-kept key list.
    */
   describe("PRODUCT_EDGE_ROLES backstop", () => {
+    it("blocks delete while a location IS the product, and allows it once unlinked", async () => {
+      // The `reference` edge retains for a reason the other blockers don't
+      // share: a linked location deliberately stores NO `type` of its own, so
+      // orphaning the product leaves it with no identity at all — not a
+      // dangling name, an empty one.
+      const prod = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Backstop Identity Tote" }),
+        ctx.actor,
+      );
+      const loc = await createLocation(
+        ctx.db,
+        {
+          name: "Backstop Identity Bin",
+          aliases: [],
+          productId: prod.id,
+          parentId: null,
+        },
+        ctx.actor,
+      );
+
+      // The location took its form factor from the SKU rather than a type.
+      const linked = await getDb(ctx.db).query.location.findFirst({
+        where: eq(location.id, loc.entityId),
+      });
+      expect(linked?.productId).toBe(prod.entityId);
+      expect(linked?.type).toBeNull();
+
+      await expect(
+        deleteProducts(ctx.db, [prod.entityId], ctx.actor),
+      ).rejects.toMatchObject({
+        cause: { reason: "PRODUCT_HAS_LOCATIONS" },
+      });
+
+      await updateLocation(
+        ctx.db,
+        loc.entityId,
+        { productId: null, type: "box" },
+        ctx.actor,
+      );
+
+      await expect(
+        deleteProducts(ctx.db, [prod.entityId], ctx.actor),
+      ).resolves.toMatchObject({ detachedImageKeys: [] });
+    });
+
+    it("counts a location that IS the product as a unit on hand", async () => {
+      // The union rule: a packout in service as a bin is still a packout you
+      // own. Without this it reads as missing against a ledger that recorded
+      // buying it, and lights "Shelf disagrees" forever.
+      const prod = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Backstop Union Count Tote" }),
+        ctx.actor,
+      );
+      await createLocation(
+        ctx.db,
+        {
+          name: "Backstop Union Count Bin",
+          aliases: [],
+          productId: prod.id,
+          parentId: null,
+        },
+        ctx.actor,
+      );
+
+      const ledger = (
+        await loadProductQuantityLedgers(ctx.db, [prod.entityId])
+      ).get(prod.entityId);
+      expect(ledger?.locationCount).toBe(1);
+    });
+
     it("blocks delete while a purchase link is live, and allows it once detached", async () => {
       // The provenance edge is `acquisition`, so it retains the product for the
       // same reason a linked Expense does: for an installment order this link

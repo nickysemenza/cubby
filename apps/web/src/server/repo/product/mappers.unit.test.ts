@@ -161,6 +161,7 @@ const activeLocation = {
   updatedAt: UPDATED_AT,
   deletedAt: null,
   lastBulkInventory: null,
+  productId: null,
   parentId: null,
   type: "room",
   aiDescription: null,
@@ -438,5 +439,68 @@ describe("product mappers", () => {
     expect(
       productWithIngredientAndInventoryAndMappingsOut.parse(result),
     ).toEqual(result);
+  });
+});
+
+/**
+ * On-hand is the UNION of stock and identity: inventory units plus the
+ * Locations that ARE this product. The SQL half of the same rule lives in
+ * `onHandUnitsSql`; these two must agree.
+ */
+describe("on-hand counts units in service as locations", () => {
+  const stockedRow = (locationCount: number, entryValue: number | null) =>
+    ({
+      ...baseProduct,
+      quantityLedger: {
+        ...EMPTY_QUANTITY_LEDGER,
+        acquiredUnits: 3,
+        expectedQuantity: 3,
+        locationCount,
+      },
+      ingredient: null,
+      dataQuality: completeDataQuality,
+      unitMappings: [],
+      externalIds: [],
+      images: [],
+      inventoryEntry:
+        entryValue === null
+          ? []
+          : [
+              {
+                id: INVENTORY_ID,
+                shortcode: "INV-2345",
+                productId: PRODUCT_ID,
+                amount: { value: entryValue, unit: "each" },
+                createdAt: CREATED_AT,
+                updatedAt: UPDATED_AT,
+                deletedAt: null,
+                locationId: LOCATION_ID,
+                valuation: 9,
+                verifiedAt: null,
+                placement: "stock" as const,
+                location: activeLocation,
+              },
+            ],
+    }) satisfies ProductListDB;
+
+  it("sums loose stock and in-use locations against the ledger", () => {
+    // One packout loose on a shelf, two in service as bins, three bought.
+    const result = dbProductToListAPI(stockedRow(2, 1));
+    expect(result.onHandUnits).toBe(3);
+    expect(result.quantityVariance).toBe(0);
+  });
+
+  it("counts locations even when nothing is on a shelf", () => {
+    // The whole point: without this the containers read as missing and every
+    // one of them lights "Shelf disagrees" forever.
+    const result = dbProductToListAPI(stockedRow(3, null));
+    expect(result.onHandUnits).toBe(3);
+    expect(result.quantityVariance).toBe(0);
+  });
+
+  it("stays null when there is neither stock nor a location", () => {
+    const result = dbProductToListAPI(stockedRow(0, null));
+    expect(result.onHandUnits).toBeNull();
+    expect(result.quantityVariance).toBeNull();
   });
 });

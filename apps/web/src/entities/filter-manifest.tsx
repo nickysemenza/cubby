@@ -1645,6 +1645,17 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       options: locationTypeOptionsWithTheme,
     },
     {
+      // Which SKU a location IS. "none" is the structural remainder — rooms,
+      // areas and drawers, the locations you never bought as a thing.
+      columnId: "product",
+      field: "productId",
+      kind: "idMulti",
+      brand: unsafeProductId,
+      placeholder: "Filter product...",
+      optionsKey: "locationProducts",
+      nullable: { field: "productPresenceFilter", label: "product" },
+    },
+    {
       // Matches direct children only — this is what the Parent column
       // literally shows on each row. There's no location-side descendant walk
       // (unlike projects' `collectDescendantIds`); subtree scoping would be a

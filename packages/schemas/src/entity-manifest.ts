@@ -166,6 +166,13 @@ export const entityManifest = {
         inc("WishCandidate.productId"),
         out("WishCandidate.wishId"),
       ),
+      // Locations that ARE an instance of this product, not stock held at one.
+      path(
+        "locations",
+        "Serving as locations",
+        "location",
+        inc("Location.productId"),
+      ),
       imageGallery("ProductImage", "productId"),
       // Not one column: the USDA link resolves UPC-first and falls back to an
       // explicit fdc_id (see usda-link-resolved-at-query-time), so declaring
@@ -276,6 +283,8 @@ export const entityManifest = {
         "location",
         "Location.parentId",
       ),
+      // The SKU this location is an instance of; null for rooms and areas.
+      path("product", "Product", "product", out("Location.productId")),
       imageGallery("LocationImage", "locationId"),
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },

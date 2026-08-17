@@ -482,7 +482,9 @@ function drawFloorShadow(
   ctx.fill();
 }
 
-function getDrawFunction(type: LocationType) {
+// Null means the location IS a product — a tote or bin, drawn as a generic
+// container by the default arm below.
+function getDrawFunction(type: LocationType | null) {
   switch (type) {
     case "shelf":
       return drawShelfUnit;
@@ -706,7 +708,7 @@ export function renderScene(
       if (piece.isEmpty) ctx.globalAlpha = 0.25;
 
       drawFloorShadow(ctx, piece, roomCx, roomCy);
-      const drawFn = getDrawFunction(piece.locationType);
+      const drawFn = getDrawFunction(piece.locationType ?? null);
       drawFn(ctx, piece, roomCx, roomCy, hoveredItemId);
 
       // Valuation heat overlay on furniture top face

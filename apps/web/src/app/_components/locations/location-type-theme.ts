@@ -1,3 +1,4 @@
+import type { ProductCategory } from "@cubby/schemas/product";
 import { getLocationTypeColor, type LocationType } from "@cubby/shared";
 import {
   Box,
@@ -6,10 +7,13 @@ import {
   Layers,
   LayoutGrid,
   type LucideIcon,
+  Package,
   ShoppingBag,
   ShoppingCart,
   Table2,
 } from "lucide-react";
+
+import { getCategoryIcon } from "../products/category-theme";
 
 // Re-export colors/helpers from @cubby/shared for existing consumers
 export { getLocationTypeColor };
@@ -28,11 +32,16 @@ const QR_LABEL_GROUPS: ReadonlySet<LocationTypeGroup> = new Set([
 ]);
 
 /**
- * Whether a location type supports QR code labels.
+ * Whether a location supports QR code labels.
  * Surfaces, storage, and containers get labels — spaces don't.
+ *
+ * A null type means the location is an instance of a Product, which is by
+ * definition a physical vessel you can stick a label on, so it always
+ * qualifies. That widens eligibility slightly and correctly: the old gate
+ * could only reason about the coarse type groups.
  */
-export const typeSupportsQrCode = (type: LocationType): boolean =>
-  QR_LABEL_GROUPS.has(typeToGroup[type]);
+export const typeSupportsQrCode = (type: LocationType | null): boolean =>
+  type === null || QR_LABEL_GROUPS.has(typeToGroup[type]);
 
 const typeToGroup: Record<LocationType, LocationTypeGroup> = {
   // Spaces - large areas (warm brown family)
@@ -60,8 +69,9 @@ const typeToGroup: Record<LocationType, LocationTypeGroup> = {
 /**
  * Get the group for a location type (useful for logic based on grouping)
  */
-export const getLocationTypeGroup = (type: LocationType): LocationTypeGroup =>
-  typeToGroup[type];
+export const getLocationTypeGroup = (
+  type: LocationType | null,
+): LocationTypeGroup => (type ? typeToGroup[type] : "containers");
 
 // Exhaustive at construction: a new LocationType without a key here is a compile
 // error (replaces the old assertNever default-case guarantee).
@@ -87,5 +97,26 @@ const locationIcons: Record<LocationType, LucideIcon> = {
 /**
  * Get the icon component for a location type
  */
-export const getLocationIcon = (type: LocationType): LucideIcon =>
-  locationIcons[type]; // safe: complete Record keyed by the enum
+export const getLocationIcon = (type: LocationType | null): LucideIcon =>
+  // safe: complete Record keyed by the enum. Null means the location is an
+  // instance of a Product; callers holding that Product should prefer
+  // `getLocationGlyph`, which resolves the SKU's category icon instead.
+  type ? locationIcons[type] : Package;
+
+/**
+ * The glyph for a location, resolving identity before form factor.
+ *
+ * A linked location has no `type`, so its shape comes from the SKU. The
+ * product's *category* icon is the right fallback rather than a new column:
+ * nine of the sixteen location types already render the same `Box`, so a
+ * per-type glyph was never carrying much, while `storage` / `tools` /
+ * `household` distinguish the cases that matter.
+ */
+export const getLocationGlyph = (location: {
+  type: LocationType | null;
+  product?: { category: ProductCategory | null } | null;
+}): LucideIcon => {
+  if (location.type) return locationIcons[location.type];
+  const category = location.product?.category;
+  return category ? getCategoryIcon(category) : Package;
+};

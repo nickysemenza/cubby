@@ -11,7 +11,7 @@ import type { InfLocation, LocationType } from "@cubby/schemas/location";
 export interface PhotoStop {
   id: InfLocation["id"];
   name: string;
-  type: LocationType;
+  type: LocationType | null;
   /** Names from the scoped root down to and including this location. */
   path: string[];
   depth: number;
@@ -64,7 +64,10 @@ export function flattenPhotoStops(
 
   const visit = (node: InfLocation, path: string[], depth: number) => {
     const nextPath = [...path, node.name];
-    const typeMatches = !typeFilter || typeFilter.has(node.type);
+    // A location with no type is product-backed; an explicit type filter is
+    // asking for form factors, so it can't match one.
+    const typeMatches =
+      !typeFilter || (node.type !== null && typeFilter.has(node.type));
     const photoMatches = includePhotographed || needsPhoto(node);
 
     if (typeMatches && photoMatches) {

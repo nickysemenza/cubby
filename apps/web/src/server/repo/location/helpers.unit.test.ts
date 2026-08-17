@@ -42,6 +42,7 @@ const baseLocation = {
   type: "room",
   parentId: null,
   lastBulkInventory: null,
+  productId: null,
   aiDescription: null,
   valuation: null,
   createdAt: CREATED_AT,

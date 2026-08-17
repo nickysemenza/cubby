@@ -67,7 +67,9 @@ export function LocationCardGrid({
   // Group locations by type, then by group
   const groupedLocations = useMemo(() => {
     // First group by specific type
-    const byType = new Map<LocationType, InfLocation[]>();
+    // Null keys the product-backed locations into a single bucket — they have
+    // no form factor of their own, so there is nothing finer to group them by.
+    const byType = new Map<LocationType | null, InfLocation[]>();
     for (const loc of locations) {
       const list = byType.get(loc.type) ?? [];
       list.push(loc);
@@ -77,12 +79,12 @@ export function LocationCardGrid({
     // Then organize by group, preserving type sub-groups
     const result: Array<{
       group: string;
-      types: Array<{ type: LocationType; locations: InfLocation[] }>;
+      types: Array<{ type: LocationType | null; locations: InfLocation[] }>;
     }> = [];
 
     for (const group of groupOrder) {
       const typesInGroup: Array<{
-        type: LocationType;
+        type: LocationType | null;
         locations: InfLocation[];
       }> = [];
       for (const [type, locs] of byType) {
@@ -94,7 +96,9 @@ export function LocationCardGrid({
       }
       if (typesInGroup.length > 0) {
         // Sort types alphabetically within group
-        typesInGroup.sort((a, b) => a.type.localeCompare(b.type));
+        typesInGroup.sort((a, b) =>
+          (a.type ?? "\uffff").localeCompare(b.type ?? "\uffff"),
+        );
         result.push({ group, types: typesInGroup });
       }
     }

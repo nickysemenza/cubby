@@ -31,7 +31,7 @@ type EntityInlineLinkListProps = BaseProps &
       }
     | {
         entity: "location";
-        items?: { name: string; id: string; type: LocationType }[];
+        items?: { name: string; id: string; type: LocationType | null }[];
       }
     | {
         entity: "usda-food";
