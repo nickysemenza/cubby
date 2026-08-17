@@ -18,6 +18,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "~/components/ui/collapsible";
+import { useHydratedLoading } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 import { AutoFixButton, useAutoFixPlan } from "./components/auto-fix-button";
 import { AUTO_FIX_SECTION_IDS } from "./components/auto-fix-registry";
@@ -72,7 +73,10 @@ export function ProblemsOverview() {
   // own Worker invocation/CPU budget — see useProblemsData) and merges them back
   // into the AllProblems shape the sections expect. No staleTime: opening the
   // page revalidates whatever the badge's 5-min cache may have left stale.
-  const { problems, isLoading, error } = useProblemsData();
+  const { problems, isLoading: detectorsLoading, error } = useProblemsData();
+  // Hydration-stable: the server renders this branch with no detector results,
+  // while the client's first render already has them. See useHydratedLoading.
+  const isLoading = useHydratedLoading(detectorsLoading);
 
   // Every product shortcode across the product-bearing sections, so we fetch
   // recipe usage once for the whole page rather than per card. Keyed by

@@ -11,6 +11,7 @@ import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
+import { useHydratedLoading } from "~/hooks/useHydrated";
 import { copyText } from "~/lib/clipboard";
 import { cn, formatCurrency } from "~/lib/utils";
 import type { ShoppingListView } from "./meal-search";
@@ -40,7 +41,7 @@ export function ShoppingListPage({
 }: ShoppingListPageProps) {
   const {
     data,
-    isLoading,
+    isLoading: listLoading,
     isError,
     error,
     refetch,
@@ -56,6 +57,10 @@ export function ShoppingListPage({
     remaining,
     range,
   } = useShoppingList(from, to, excludedParam, onExcludedChange);
+
+  // Hydration-stable: the server renders this branch with no list, while the
+  // client's first render already has the streamed one. See useHydratedLoading.
+  const isLoading = useHydratedLoading(listLoading);
 
   const fromId = useId();
   const toId = useId();

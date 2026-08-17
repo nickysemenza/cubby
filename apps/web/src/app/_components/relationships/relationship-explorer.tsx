@@ -5,6 +5,7 @@ import {
 } from "@cubby/schemas/related-view";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
+import { useHydratedLoading } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 import { type RelationshipPreset, RelationshipTree } from "./relationship-tree";
 
@@ -56,6 +57,12 @@ export function RelationshipExplorer({
     }),
     enabled: Boolean(sourceId && primaryRelationKey),
   });
+  // Hydration-stable: whether the previews have landed differs between the SSR
+  // render and the first client render (TanStack Start's query stream races
+  // React's hydration), and the two branches below differ by a whole subtree.
+  // `views` comes from static config, so holding this gate `true` until
+  // hydration is enough. See useHydratedLoading.
+  const previewsLoading = useHydratedLoading(query.isLoading);
   const groups = query.data ?? NO_PREVIEW_GROUPS;
   const presets = useMemo<RelationshipPreset[]>(() => {
     const byKey = new Map(groups.map((group) => [group.relationKey, group]));
@@ -145,7 +152,7 @@ export function RelationshipExplorer({
   );
 
   if (views.length === 0) return null;
-  if (query.isLoading) {
+  if (previewsLoading) {
     return (
       <p className="text-muted-foreground text-sm">Loading relationships…</p>
     );

@@ -11,6 +11,7 @@ import {
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Loader2, Maximize2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { useHydratedLoading } from "~/hooks/useHydrated";
 import { useIsometricPantry } from "./use-isometric-pantry";
 
 function CategoryLegend() {
@@ -51,9 +52,13 @@ export function IsometricPantry() {
     handleMouseMove,
     handleMouseUp,
     inventory,
-    isLoading,
+    isLoading: queryLoading,
     resetView,
   } = useIsometricPantry();
+
+  // Hydration-stable: the server renders this branch with no tree, while the
+  // client's first render already has the streamed one. See useHydratedLoading.
+  const isLoading = useHydratedLoading(queryLoading);
 
   if (isLoading) {
     return (

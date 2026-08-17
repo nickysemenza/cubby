@@ -1,7 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { LocationType } from "@cubby/schemas/location";
-import type { ProductCategory } from "@cubby/schemas/product";
 import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
+import { locationTypeValues, productCategoryValues } from "@cubby/shared";
 import { ProjectMark } from "~/app/projects/project-mark";
 import { IconTile } from "~/components/ui/icon-tile";
 import { Image } from "~/components/ui/image";
@@ -50,6 +49,32 @@ export function rememberSearchResult(item: SearchHit): void {
   pushRecent({ entityType: item.entityType, id: item.id, name: item.title });
 }
 
+/**
+ * `typeHint` is whatever string the `SearchDocument` row was written with, NOT
+ * a validated enum member — a row keeps its hint until it is reindexed, so
+ * retired values outlive the enum. The location enum went 16 → 9 and left
+ * `quarter-crate`, `crate`, `half-crate`, `tote-27gal`, `milk-crate`, and the
+ * other tote sizes behind on live rows.
+ *
+ * The icon Records are deliberately exhaustive over the CURRENT enum, so
+ * casting a stale hint into one (`hint as LocationType`) returns `undefined` —
+ * and rendering `<undefined />` is React error #130, which takes down the whole
+ * command menu. Searching "quarter" did exactly that. `noUncheckedIndexedAccess`
+ * cannot catch it: a finite-key Record is not an index signature, so the lookup
+ * types as `LucideIcon`, and the `as` is what makes the claim false.
+ *
+ * Narrowing by membership keeps the Records exhaustive (their compile-time
+ * guarantee is load-bearing) while letting an unrecognized hint fall through to
+ * the entity's own icon. `find` returns the literal union, so there is no cast.
+ */
+function asLocationType(hint: string | null | undefined) {
+  return locationTypeValues.find((value) => value === hint);
+}
+
+function asProductCategory(hint: string | null | undefined) {
+  return productCategoryValues.find((value) => value === hint);
+}
+
 function SearchHitIcon({
   item,
   className = "size-4 shrink-0",
@@ -60,24 +85,27 @@ function SearchHitIcon({
   const entity = entityTypeMap[item.entityType];
   if (item.entityType === "project")
     return <ProjectMark icon={item.typeHint} className={className} />;
-  if (item.entityType === "location" && item.typeHint) {
-    const Icon = getLocationIcon(item.typeHint as LocationType);
+  const locationType =
+    item.entityType === "location" ? asLocationType(item.typeHint) : undefined;
+  if (locationType) {
+    const Icon = getLocationIcon(locationType);
     return (
       <Icon
         className={className}
-        style={{ color: getLocationTypeColor(item.typeHint as LocationType) }}
+        style={{ color: getLocationTypeColor(locationType) }}
       />
     );
   }
-  if (
-    (item.entityType === "product" || item.entityType === "inventory") &&
-    item.typeHint
-  ) {
-    const Icon = getCategoryIcon(item.typeHint as ProductCategory);
+  const category =
+    item.entityType === "product" || item.entityType === "inventory"
+      ? asProductCategory(item.typeHint)
+      : undefined;
+  if (category) {
+    const Icon = getCategoryIcon(category);
     return (
       <Icon
         className={className}
-        style={{ color: getCategoryColor(item.typeHint as ProductCategory) }}
+        style={{ color: getCategoryColor(category) }}
       />
     );
   }

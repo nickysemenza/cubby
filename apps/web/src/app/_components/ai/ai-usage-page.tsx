@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { useHydrated } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 import { formatCount } from "~/lib/utils";
 
@@ -156,10 +157,19 @@ export function AiUsagePage() {
   const recentQuery = useQuery(
     api.ai.usageRecent.queryOptions({ limit: recentLimit }),
   );
-  const totals = useMemo(
-    () => usageTotals(summaryQuery.data ?? []),
-    [summaryQuery.data],
-  );
+  // Hydration-stable. Whether a query's data has landed differs between the SSR
+  // render and the first client render — TanStack Start's query stream races
+  // React's hydration and can win in either direction (here the SERVER rendered
+  // rows the client's first render did not have). Gating both sides on
+  // `hydrated` makes the two renders identical whatever either cache holds; the
+  // real rows appear on the render right after hydration. See useHydratedLoading.
+  const hydrated = useHydrated();
+  const summaryRows = hydrated ? summaryQuery.data : undefined;
+  const summaryLoading = !hydrated || summaryQuery.isLoading;
+  const recentRows = hydrated ? recentQuery.data : undefined;
+  const recentLoading = !hydrated || recentQuery.isLoading;
+
+  const totals = useMemo(() => usageTotals(summaryRows ?? []), [summaryRows]);
 
   return (
     <Stack gap="md">
@@ -236,7 +246,7 @@ export function AiUsagePage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {summaryQuery.data?.map((row) => (
+            {summaryRows?.map((row) => (
               <TableRow
                 key={`${row.day}:${row.feature}:${row.provider}:${row.model}:${row.operation}:${row.cacheStatus ?? ""}`}
               >
@@ -259,14 +269,14 @@ export function AiUsagePage() {
                 <TableCell>{formatMs(row.durationMs)}</TableCell>
               </TableRow>
             ))}
-            {summaryQuery.isLoading ? (
+            {summaryLoading ? (
               <TableRow>
                 <TableCell colSpan={11}>
                   <Spinner />
                 </TableCell>
               </TableRow>
             ) : null}
-            {!summaryQuery.isLoading && summaryQuery.data?.length === 0 ? (
+            {!summaryLoading && summaryRows?.length === 0 ? (
               <TableRow>
                 <TableCell className="text-muted-foreground" colSpan={11}>
                   No AI usage recorded
@@ -298,7 +308,7 @@ export function AiUsagePage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {recentQuery.data?.map((row) => (
+            {recentRows?.map((row) => (
               <TableRow key={row.id}>
                 <TableCell>{row.createdAt.toLocaleString()}</TableCell>
                 <TableCell className="whitespace-normal">
@@ -325,14 +335,14 @@ export function AiUsagePage() {
                 <TableCell>{formatMs(row.durationMs)}</TableCell>
               </TableRow>
             ))}
-            {recentQuery.isLoading ? (
+            {recentLoading ? (
               <TableRow>
                 <TableCell colSpan={11}>
                   <Spinner />
                 </TableCell>
               </TableRow>
             ) : null}
-            {!recentQuery.isLoading && recentQuery.data?.length === 0 ? (
+            {!recentLoading && recentRows?.length === 0 ? (
               <TableRow>
                 <TableCell className="text-muted-foreground" colSpan={11}>
                   No recent calls

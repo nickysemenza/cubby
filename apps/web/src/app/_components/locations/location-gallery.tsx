@@ -21,6 +21,7 @@ import {
   type EmptyFilter,
   useGalleryViewState,
 } from "~/hooks/useGalleryViewState";
+import { useHydratedLoading } from "~/hooks/useHydrated";
 import { useIsMobile } from "~/hooks/useMobile";
 import { useTRPC } from "~/integrations/trpc/react";
 import { ProductImageSummariesProvider } from "../products/product-image-summaries";
@@ -461,7 +462,9 @@ export function LocationGallery() {
     }
   }, []);
 
-  const isLoading = locationsLoading;
+  // Hydration-stable: the server renders this branch with no tree, while the
+  // client's first render already has the streamed one. See useHydratedLoading.
+  const isLoading = useHydratedLoading(locationsLoading);
 
   if (isLoading) {
     return (
