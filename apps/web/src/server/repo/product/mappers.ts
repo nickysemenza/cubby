@@ -9,7 +9,6 @@ import type {
   InventoryListProductOut,
   ProductInventoryEmbedOut,
 } from "@cubby/schemas/inventory";
-import { locationType } from "@cubby/schemas/location";
 import {
   type ProductListItem,
   type ProductPickerItemOut,
@@ -37,6 +36,7 @@ import {
   type RowWithOptionalAliases,
 } from "~/server/repo/database-helpers";
 import { mapLocationIdentityProduct } from "~/server/repo/location/identity-product";
+import { parseLocationType } from "~/server/repo/location/parse-type";
 import type { MappableProductExternalId } from "./external-id-types";
 import { type ProductPricing, resolveProductPricing } from "./pricing";
 import type { QuantityLedger } from "./quantity-ledger";
@@ -210,9 +210,9 @@ const dbLocationToProductListInventoryShape = (
 ) => ({
   id: unsafeLocationShortcode(locationData.shortcode),
   name: locationData.name,
-  type: parseWithContext(locationType, locationData.type, {
-    entityType: "Location",
-    identifier: { id: locationData.id, name: locationData.name },
+  type: parseLocationType(locationData.type, {
+    id: locationData.id,
+    name: locationData.name,
   }),
 });
 
@@ -338,13 +338,10 @@ export const dbProductToAPI = (
       aliases: entry.location.aliases,
       // Null whenever the location IS a product; only a present value is
       // validated against the enum.
-      type:
-        entry.location.type === null
-          ? null
-          : parseWithContext(locationType, entry.location.type, {
-              entityType: "Location",
-              identifier: { id: entry.location.id, name: entry.location.name },
-            }),
+      type: parseLocationType(entry.location.type, {
+        id: entry.location.id,
+        name: entry.location.name,
+      }),
       product: mapLocationIdentityProduct(entry.location),
       lastBulkInventory: entry.location.lastBulkInventory,
       aiDescription: entry.location.aiDescription,

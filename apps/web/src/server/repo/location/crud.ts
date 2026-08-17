@@ -27,7 +27,6 @@ import type {
 import {
   locationPickerSortableFields,
   locationSortableFields,
-  locationType,
 } from "@cubby/schemas/location";
 import {
   buildTakeSkip,
@@ -46,7 +45,6 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
-import { parseWithContext } from "~/lib/zod-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -98,6 +96,7 @@ import {
   sideEffect,
 } from "~/server/repo/impact";
 import { stockOnly } from "~/server/repo/inventory/placement";
+import { parseLocationType } from "~/server/repo/location/parse-type";
 import { loadProductPricing } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
@@ -106,7 +105,6 @@ import {
   resolveLiveShortcode,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-
 import { buildLocationWithChildren, dbLocationToListAPI } from "./helpers";
 import type {
   LocationFilters,
@@ -1065,11 +1063,7 @@ const locationRosterPage = async (
   const data = results.map((row) => ({
     id: unsafeLocationShortcode(row.shortcode),
     name: row.name,
-    // `type` is a free-text column; parse it the same way dbLocationToAPI does.
-    type: parseWithContext(locationType, row.type, {
-      entityType: "Location",
-      identifier: { id: row.id, name: row.name },
-    }),
+    type: parseLocationType(row.type, { id: row.id, name: row.name }),
     aliases: row.aliases ?? [],
     ancestors: ancestorsById.get(row.id) ?? [],
   }));

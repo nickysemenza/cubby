@@ -21,6 +21,7 @@ import {
   createFilterableSelectColumn,
   createImageColumn,
   createNameColumn,
+  createSingleEntityInlineLinkColumn,
 } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
 import { useClientEntityList } from "../hooks/useClientEntityList";
@@ -86,8 +87,15 @@ export function LocationChildrenTable({
         className: "w-32",
         placeholder: "Filter by type...",
         selectOptions: locationTypeOptionsWithTheme,
+        // Renders empty for a product-linked child — the "Is a" column beside
+        // it carries that identity, same split as the locations list.
         renderCell: (type) => <LocationTypeLabel type={type} />,
         mobile: { slot: "subtitle", priority: 15 },
+      }),
+      createSingleEntityInlineLinkColumn(helper, "product", "product", {
+        header: "Is a",
+        className: "w-48",
+        mobile: { slot: "meta", priority: 40 },
       }),
       helper.accessor(
         (row) => row.valuation?.totalItemCount ?? row.totalItemCount ?? 0,
