@@ -111,12 +111,18 @@ describe("HierarchyDrilldown", () => {
       name: "Drill into Workshop: 10 each",
     });
     expect(drill.tagName).toBe("BUTTON");
-    expect(screen.getByLabelText("Workshop: 10 each")).toBeInTheDocument();
+    expect(within(drill).getByText("10 each")).toBeInTheDocument();
+    expect(screen.getByText("Workshop")).toHaveAttribute("title", "Workshop");
 
     fireEvent.click(drill);
-    expect(screen.getByLabelText("Directly here: 3 each")).toBeInTheDocument();
+    const workshopBreakdown = screen.getByRole("list", {
+      name: "Workshop breakdown",
+    });
+    expect(within(workshopBreakdown).getByText("3 each")).toBeInTheDocument();
     expect(
-      screen.getByLabelText("Upper Zone: 7 each, installed"),
+      screen.getByRole("link", {
+        name: "Open location Upper Zone: 7 each, installed",
+      }),
     ).toBeInTheDocument();
   });
 
@@ -128,6 +134,20 @@ describe("HierarchyDrilldown", () => {
         name: /open location utility room: 2 each/i,
       }),
     ).toHaveAttribute("href", `/locations/${utilityRoom}`);
+  });
+
+  it("sizes contribution bars against the focused total", () => {
+    renderDrilldown();
+
+    const workshopRow = screen.getByText("Workshop").closest("li");
+    const utilityRow = screen.getByText("Utility Room").closest("li");
+
+    expect(
+      workshopRow?.querySelector('[aria-hidden="true"][style]'),
+    ).toHaveStyle({ width: `${(10 / 12) * 100}%` });
+    expect(
+      utilityRow?.querySelector('[aria-hidden="true"][style]'),
+    ).toHaveStyle({ width: `${(2 / 12) * 100}%` });
   });
 
   it("omits proportional bars when a sibling level uses incomparable values", () => {
@@ -170,7 +190,11 @@ describe("HierarchyDrilldown", () => {
     });
 
     expect(screen.getByText("Directly here")).toBeInTheDocument();
-    expect(screen.getByLabelText("Directly here: 4 each")).toBeInTheDocument();
+    expect(
+      within(
+        screen.getByRole("list", { name: "Workshop breakdown" }),
+      ).getByText("4 each"),
+    ).toBeInTheDocument();
   });
 
   it("keeps the focused branch live when refreshed data replaces the tree", () => {
@@ -202,6 +226,10 @@ describe("HierarchyDrilldown", () => {
     );
 
     expect(screen.getByText("11 each")).toBeInTheDocument();
-    expect(screen.getByLabelText("Directly here: 4 each")).toBeInTheDocument();
+    expect(
+      within(
+        screen.getByRole("list", { name: "Workshop breakdown" }),
+      ).getByText("4 each"),
+    ).toBeInTheDocument();
   });
 });
