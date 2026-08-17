@@ -60,7 +60,9 @@ export function LocationList() {
   const identityProductsQuery = useQuery(
     api.location.list.queryOptions({
       filters: { productPresenceFilter: "has" },
-      sort: [],
+      // `.min(1)` — an empty sort is a 400, and this dropdown would just be
+      // silently empty.
+      sort: [{ orderBy: "name", direction: "asc" }],
       pagination: { pageIndex: 0, pageSize: 500 },
     }),
   );

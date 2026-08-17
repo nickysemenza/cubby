@@ -246,3 +246,66 @@ describe("problems tolerates a product-linked location's null type", () => {
     await expect(problems.getCoverage()).resolves.toBeDefined();
   });
 });
+
+/**
+ * The exact query `ProductServingAsLocations` issues.
+ *
+ * That component asked for `sort: []`, which is a 400 (`sort` is `.min(1)`),
+ * so it rendered "No locations are an instance of this product" on a product
+ * with fourteen of them. The failure looked precisely like an answer, and no
+ * test noticed because the section is driven by a live query.
+ */
+describe("the product -> locations query the detail page issues", () => {
+  const ctx = withTestDb();
+
+  it("returns every location that IS the product", async () => {
+    const product = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Serving As Locations Tote" }),
+      ctx.actor,
+    );
+    const caller = createTestCaller(locationRouter, ctx.db);
+    for (const name of ["serving bin a", "serving bin b", "serving bin c"]) {
+      await caller.create(makeLocationInput({ name, productId: product.id }));
+    }
+    // A productless location must not leak into the result.
+    await caller.create(
+      makeLocationInput({ name: "serving decoy", type: "box" }),
+    );
+
+    const result = await caller.list({
+      filters: { productId: product.id },
+      pagination: { pageIndex: 0, pageSize: 100 },
+      sort: [{ orderBy: "name", direction: "asc" }],
+    });
+
+    expect(result.items).toHaveLength(3);
+    expect(result.items.map((l) => l.name).sort()).toEqual([
+      "serving bin a",
+      "serving bin b",
+      "serving bin c",
+    ]);
+  });
+
+  it("matches nothing for a product no location is", async () => {
+    const product = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Unused Tote" }),
+      ctx.actor,
+    );
+    const caller = createTestCaller(locationRouter, ctx.db);
+    await caller.create(
+      makeLocationInput({ name: "unused decoy", type: "box" }),
+    );
+
+    const result = await caller.list({
+      filters: { productId: product.id },
+      pagination: { pageIndex: 0, pageSize: 100 },
+      sort: [{ orderBy: "name", direction: "asc" }],
+    });
+
+    // Empty, not "everything" — a requested-but-unmatched id must never widen
+    // to an unfiltered query.
+    expect(result.items).toHaveLength(0);
+  });
+});
