@@ -1009,8 +1009,10 @@ export const productSearch = async (
   );
 
   const resultIds = results.map((result) => result.id);
-  const quantities = await loadProductPickerQuantities(db, resultIds);
-  const coverImageUrls = await loadProductCoverImageUrls(db, resultIds);
+  const [quantities, coverImageUrls] = await Promise.all([
+    loadProductPickerQuantities(db, resultIds),
+    loadProductCoverImageUrls(db, resultIds),
+  ]);
   const data = results.map((result) =>
     dbProductToPickerItemAPI({
       ...result,
@@ -1040,8 +1042,10 @@ export const getProductPickerItemsByIds = async (
     },
   });
   const rowIds = rows.map((row) => row.id);
-  const quantities = await loadProductPickerQuantities(db, rowIds);
-  const coverImageUrls = await loadProductCoverImageUrls(db, rowIds);
+  const [quantities, coverImageUrls] = await Promise.all([
+    loadProductPickerQuantities(db, rowIds),
+    loadProductCoverImageUrls(db, rowIds),
+  ]);
   const byId = new Map(
     rows.map((row) => [
       row.id,
