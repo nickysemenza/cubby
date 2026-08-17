@@ -233,7 +233,8 @@ const { getByID, getByShortcode } = createEntityDetailReadProcedures({
 
 // Lightweight typeahead for product-picker comboboxes. Same filters/pagination
 // shape as `list`, but the repo replaces the full relation graph and per-row
-// USDA enrichment with two batched quantity queries tailored to picker hints.
+// USDA enrichment with small batched quantity and cover-photo reads tailored
+// to picker rows.
 const { list: search } = createEntityListProcedure({
   schemas: {
     output: productPickerItemOut,

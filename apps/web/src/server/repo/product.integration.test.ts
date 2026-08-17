@@ -32,6 +32,7 @@ import {
   detachPurchaseProducts,
 } from "./purchase-products";
 import {
+  createImageFixture,
   createIngredientFixture as createIngredient,
   createInventoryFixture as createInventoryEntry,
   createLocationFixture as createLocation,
@@ -149,9 +150,17 @@ describe("product repository", () => {
       makeProductInput({ name: "Picker hydrate B" }),
       ctx.actor,
     );
+    const cover = await createImageFixture(ctx.db, "picker-hydrate-cover");
+    await updateProduct(
+      ctx.db,
+      first.entityId,
+      { pendingImageIds: [cover.id] },
+      ctx.actor,
+    );
 
     const one = await getProductPickerItemsByIds(ctx.db, [first.entityId]);
     expect(one.map((item) => item.id)).toEqual([first.id]);
+    expect(one[0]).toMatchObject({ coverImageUrl: cover.url });
 
     const both = await getProductPickerItemsByIds(ctx.db, [
       first.entityId,

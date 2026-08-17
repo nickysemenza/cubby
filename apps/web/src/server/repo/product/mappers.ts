@@ -135,6 +135,7 @@ const dbProductToPickerItemShape = (
     typeof product.$inferSelect,
     "id" | "shortcode" | "name" | "manufacturer" | "category"
   > & {
+    coverImageUrl: ProductPickerItemOut["coverImageUrl"];
     quantityLedger: ProductPickerItemOut["quantityLedger"];
     onHand: ProductPickerItemOut["onHand"];
   },
@@ -143,6 +144,7 @@ const dbProductToPickerItemShape = (
   name: productData.name,
   manufacturer: productData.manufacturer,
   category: productData.category,
+  coverImageUrl: productData.coverImageUrl,
   quantityLedger: productData.quantityLedger,
   onHand: productData.onHand,
 });
@@ -152,6 +154,7 @@ export const dbProductToPickerItemAPI = (
     typeof product.$inferSelect,
     "id" | "shortcode" | "name" | "manufacturer" | "category"
   > & {
+    coverImageUrl: ProductPickerItemOut["coverImageUrl"];
     quantityLedger: ProductPickerItemOut["quantityLedger"];
     onHand: ProductPickerItemOut["onHand"];
   },

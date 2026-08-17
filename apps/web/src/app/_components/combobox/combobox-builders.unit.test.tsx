@@ -128,6 +128,21 @@ describe("product stock picker evidence", () => {
     });
   });
 
+  it("keeps the product cover photo beside quantity evidence", () => {
+    const photographed = {
+      ...base,
+      coverImageUrl: "https://example.com/back-brace.png",
+      onHand: { state: "none" } as const,
+    };
+    const item = buildProductComboboxItem(photographed, "stock");
+
+    const { container } = render(item.icon);
+    expect(container.querySelector("img")).toHaveAttribute(
+      "src",
+      photographed.coverImageUrl,
+    );
+  });
+
   it("keeps a fully returned product visible below likely choices", () => {
     expect(
       buildProductComboboxItem(
