@@ -1111,8 +1111,66 @@ describe("operation preview / mutation parity", () => {
     });
   });
 
+  /**
+   * Smoke-test the planners that nothing else in this file executes.
+   *
+   * These cases assert almost nothing on purpose: `result.operation`/`entity`
+   * echo the input, and `previewOperationSchema.safeParse` cannot fail because
+   * `previewOperation` already `.parse()`s its own output. The dispatch itself
+   * is a compile-time guarantee — the `match(...)` chain in
+   * entity-integrity-preview.ts ends in `.exhaustive()`, so a new entity in the
+   * enum fails `tsc` long before it fails here.
+   *
+   * What they DO buy is one real execution of each planner's SQL against zero
+   * rows, which is why they are scoped rather than deleted: `blocker parity`
+   * and `count parity` above cover 10 of 16 delete planners and 1 of 4 merge
+   * planners, so without this the remaining 9 would never run in any test and a
+   * syntax error in one would ship.
+   *
+   * Derived by subtraction rather than hard-coded, so a newly added entity is
+   * smoke-tested automatically and only drops out once a real parity test
+   * covers it.
+   */
+  const DELETE_COVERED_BY_PARITY = [
+    "cookbook",
+    "expense",
+    "image",
+    "ingredient",
+    "inventory",
+    "meal",
+    "product",
+    "purchase",
+    "recipe",
+    "task",
+  ] as const;
+  const MERGE_COVERED_BY_PARITY = ["ingredient"] as const;
+
   describe("router dispatch: previewOperation", () => {
-    for (const entity of previewDeleteEntitySchema.options) {
+    // A rename in either enum would otherwise leave a stale name on the
+    // covered-list, silently dropping that planner from BOTH this smoke test
+    // and the parity block it claims to be covered by.
+    it("the covered-by-parity lists name real entities", () => {
+      expect(
+        DELETE_COVERED_BY_PARITY.filter(
+          (e) =>
+            !(previewDeleteEntitySchema.options as readonly string[]).includes(
+              e,
+            ),
+        ),
+      ).toEqual([]);
+      expect(
+        MERGE_COVERED_BY_PARITY.filter(
+          (e) =>
+            !(previewMergeEntitySchema.options as readonly string[]).includes(
+              e,
+            ),
+        ),
+      ).toEqual([]);
+    });
+
+    for (const entity of previewDeleteEntitySchema.options.filter(
+      (e) => !(DELETE_COVERED_BY_PARITY as readonly string[]).includes(e),
+    )) {
       it(`delete/${entity} dispatches to a planner and returns a schema-valid payload`, async () => {
         const result = await previewOperation(
           ctx.db,
@@ -1125,7 +1183,9 @@ describe("operation preview / mutation parity", () => {
       });
     }
 
-    for (const entity of previewMergeEntitySchema.options) {
+    for (const entity of previewMergeEntitySchema.options.filter(
+      (e) => !(MERGE_COVERED_BY_PARITY as readonly string[]).includes(e),
+    )) {
       it(`merge/${entity} dispatches to a planner and returns a schema-valid payload`, async () => {
         const result = await previewOperation(
           ctx.db,

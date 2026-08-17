@@ -167,6 +167,18 @@ export default defineConfig({
           // shifts with file->worker assignment, so it is not a bounded "fix
           // these N tests" job. `pool: "threads"` takes 4x on unit and 1.5x on
           // ui with zero isolation trade-off; that is the deal we took.
+          //
+          // NB: **splitting a slow test file is not a speed fix here.** With
+          // per-file isolation each file builds its own module registry, so
+          // splitting one file into two makes the shared graph get built
+          // TWICE. Measured on server.unit.test.ts, whose lone `appRouter`
+          // import makes it cost 12.83s ALONE vs 2.40s without: moving that one
+          // test to its own file did cut the file to 2.37s, but the unit tier's
+          // CPU went from ~97-109s to ~122-153s and wall clock did not improve.
+          // Reverted. The lesson generalises — an isolated per-file duration
+          // measures cold-graph cost that a full parallel run amortizes, so it
+          // OVERSTATES that file's contribution to the tier. Compare tiers by
+          // `user + system` CPU across the whole run, never by timing one file.
         },
       },
     ],
