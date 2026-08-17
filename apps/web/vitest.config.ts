@@ -75,6 +75,15 @@ export default defineConfig({
         test: {
           name: "unit",
           include: ["**/*.unit.test.ts"],
+          // Threads, not forks. This tier is almost entirely module transform +
+          // import: 167 files and 1458 tests, but only `tests: 5.0s` inside a
+          // 56s wall clock. So the lever is cheaper worker startup, not faster
+          // assertions — measured **56s -> ~14s** (14.3s / 16.8s over two runs)
+          // with per-file isolation fully preserved. See the shared
+          // "measured and rejected" note on the integration project below for
+          // why `isolate: false` is not the answer, even though it is faster
+          // still.
+          pool: "threads",
         },
       },
       {
@@ -86,6 +95,11 @@ export default defineConfig({
           environment: "jsdom",
           include: ["**/*.unit.test.tsx"],
           setupFiles: ["./tooling/ui-test-setup.ts"],
+          // Same reasoning as `unit` — jsdom construction dominates here
+          // (`environment: 59s` cumulative against a 28.4s wall clock), and a
+          // thread pays it far more cheaply than a forked process. Measured
+          // **28.4s -> ~19s** (19.7s / 18.9s), 697/697 green on both runs.
+          pool: "threads",
         },
       },
       {
@@ -102,12 +116,21 @@ export default defineConfig({
           include: ["**/*.integration.test.ts"],
           testTimeout: 10000, // Increase timeout for integration tests
           // The `beforeEach` still does real work, so this stays above the 10s
-          // default. `withTestDb()` now provisions one database per file and
-          // resets between tests, but the reset is not free — measured across
-          // the full parallel suite: terminate-backends ~19ms mean, TRUNCATE of
-          // 40 tables **266ms mean / 1.0s p99**, seed ~20ms, and the whole hook
-          // p99 11.5s / max 16.9s once the first-test-in-file provision is
-          // included. 10s was tried and still timed out under load.
+          // default. `withTestDb()` provisions one database per file and resets
+          // between tests. The reset used to be the dominant per-test cost —
+          // TRUNCATE of 40 tables at **266ms mean / 1.0s p99** — which is why
+          // these timeouts are generous.
+          //
+          // Re-measured 2026-08-17 after docker-compose.yml was tuned for test
+          // workloads (fsync/synchronous_commit/full_page_writes off, statement
+          // logging moved to docker-compose.debug.yml) and the 1603 leaked
+          // IntegreSQL databases were dropped: the whole reset is now **~31ms
+          // mean**, and the tier went **233s -> ~118s** with the previously
+          // failing test going green. The timeouts stay where they are — they
+          // cost nothing when unused, and the first-test-in-file provision is
+          // still the long tail. See tooling/test-setup.ts for why TRUNCATE
+          // survived the re-measurement and why the "truncate only dirty
+          // tables" variant is unsafe.
           hookTimeout: 30000,
           //
           // NB: raising IntegreSQL's pool size does NOT help — measured with
@@ -128,6 +151,22 @@ export default defineConfig({
           // files, and the suite's global "zero" invariants
           // (findOrphanedEntityEmbeddings) and recent-N windows
           // (listBackgroundBatches) are only meaningful within one file.
+          //
+          // NB: `pool: "threads"` — which IS a large win on the `unit` and `ui`
+          // projects above — was tried here and is a LOSS on both axes:
+          // **257.6s vs 233s** wall clock, and failures rose from 3 files to
+          // **9 files / 7 tests**. Same root cause as the `isolate: false` note
+          // above: the per-worker pg pools and the IntegreSQL client don't
+          // survive being shared inside one process. This tier stays on forks.
+          //
+          // NB: `--no-isolate` was measured and REJECTED repo-wide, not just
+          // here. It is genuinely the fastest option (unit 56s -> 7.2s), but
+          // over five runs it leaks cross-file state nondeterministically:
+          // ui failed 0, 2, 3, 7, and 9 tests on five consecutive runs, and
+          // unit — clean on four — failed 3 on the fifth. The leak surface
+          // shifts with file->worker assignment, so it is not a bounded "fix
+          // these N tests" job. `pool: "threads"` takes 4x on unit and 1.5x on
+          // ui with zero isolation trade-off; that is the deal we took.
         },
       },
     ],

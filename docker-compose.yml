@@ -19,16 +19,44 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: cubby
+    # This database is disposable by construction — IntegreSQL rebuilds every
+    # test database from a template, and nothing here is a source of truth. So
+    # it is tuned for throughput, not durability.
+    #
+    # `fsync`/`synchronous_commit`/`full_page_writes` off matter most for
+    # `CREATE DATABASE ... TEMPLATE`, which is a physical file copy plus fsync
+    # and is the per-file cost IntegreSQL pays 69 times per integration run.
+    #
+    # Statement logging is deliberately NOT on by default: measured at 18.7 MB
+    # of log per integration test file, ~1.1 GB per full run, and it had grown
+    # the container's json.log to 56 GB. To debug queries, re-enable it for one
+    # session with a compose override rather than making every run pay it:
+    #   docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d
     command:
       [
         "postgres",
         "-c",
-        "log_min_duration_statement=0",
+        "fsync=off",
+        "-c",
+        "synchronous_commit=off",
+        "-c",
+        "full_page_writes=off",
+        "-c",
+        "shared_buffers=512MB",
+        "-c",
+        "max_connections=200",
         "-c",
         "log_destination=stderr",
         "-c",
         "log_line_prefix=%t [%p]:[%l] user=%u, db=%d "
       ]
+    # Belt and braces so a future logging change cannot silently eat the disk
+    # again.
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
   jaeger-all-in-one:
     image: cr.jaegertracing.io/jaegertracing/jaeger:2.20.0
     restart: always

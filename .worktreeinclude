@@ -10,3 +10,11 @@ apps/web/.env
 apps/web/.env.test
 .env.local
 .env*.local
+
+# Incremental TypeScript caches. Contains only relative paths, so a copy stays
+# valid at the new worktree path; tsc validates file hashes and rechecks
+# whatever actually differs, so a stale one costs a miss and never correctness.
+# Worth ~6s on a new worktree's first typecheck (7.1s cold -> ~0.8s warm on
+# TS 7's native tsc). Copied, never shared — see apps/web/tsconfig.json on why
+# a shared buildinfo path would have worktrees clobbering each other.
+*.tsbuildinfo

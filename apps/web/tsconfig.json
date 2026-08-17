@@ -2,9 +2,17 @@
   "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules", "dist", "src/sw.ts"],
   "compilerOptions": {
-    // Measured 97s cold vs ~12s warm on this program. The default buildinfo
-    // path is beside this tsconfig, which is what keeps parallel worktrees from
-    // clobbering each other's cache — do not point it at a shared location.
+    // Re-measured 2026-08-17 on TypeScript 7.0.2 (the native Go tsc): **7.1s
+    // cold, ~0.8s warm** on this program, and 2.2s for a warm `pnpm typecheck`
+    // across all 10 packages. The figures previously recorded here — 97s cold
+    // vs ~12s warm — predate the native compiler and are no longer true;
+    // they were load-bearing enough to misdirect a whole round of test-speed
+    // work, so keep them current.
+    //
+    // The default buildinfo path is beside this tsconfig, which is what keeps
+    // parallel worktrees from clobbering each other's cache — do not point it
+    // at a shared location. The file carries only relative paths, so it stays
+    // valid when copied into a new worktree; see `.worktreeinclude`.
     "incremental": true,
     "target": "ES2022",
     "jsx": "react-jsx",
