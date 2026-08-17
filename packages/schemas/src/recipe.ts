@@ -45,6 +45,7 @@ export const recipeSortableFields = [
   "source",
   "yield",
   "tags",
+  "totalMinutes",
 ] as const;
 
 export type RecipeSortField = (typeof recipeSortableFields)[number];
@@ -304,6 +305,11 @@ export const recipeFilterFields = {
   costTotalMax: z.coerce.number().nonnegative().optional(),
   caloriesTotalMin: z.coerce.number().nonnegative().optional(),
   caloriesTotalMax: z.coerce.number().nonnegative().optional(),
+  // Total elapsed time in minutes — a real column, so this is a plain SQL
+  // range. A recipe whose source printed no total time (or printed prose no
+  // parser would commit to) has NULL here and matches neither bound.
+  totalMinutesMin: z.coerce.number().int().nonnegative().optional(),
+  totalMinutesMax: z.coerce.number().int().nonnegative().optional(),
 };
 
 export const recipeFiltersSchema = z.object(recipeFilterFields);

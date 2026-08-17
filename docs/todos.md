@@ -130,15 +130,6 @@ decision value.
 
 ### Recipe & cookbook UX (2026-07 audit)
 
-- [ ] **Persist recipe times on import**: scraper + EPUB already extract
-  `importRecipeTimes {active,total,prep,cook}` plus `equipment` and `page`
-  (`import-recipe.ts`), but persisted `recipeMeta` is `{ url }` only — the data
-  is extracted then dropped. Persist, render on detail, sort/filter the list by
-  total time (the #1 weeknight decision axis; gives meal planning an effort
-  axis). `meta.page` is the natural cross-reference for a physical cookbook.
-  This starts with a persisted-data-shape decision and migration; it is L across
-  schema, import/upsert, detail, list filters, and sorting rather than a small
-  import-adapter patch.
 - [ ] **Cookbook lifecycle**: no rename/metadata edit (a mangled OPF title is
   permanent); identity is keyed on `name` (same-title books collide, a re-titled
   EPUB forks a duplicate — needs merge/re-point); `subjects` renders only as a

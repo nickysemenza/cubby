@@ -33,8 +33,10 @@ import {
   and,
   arrayOverlaps,
   eq,
+  gte,
   inArray,
   isNotNull,
+  lte,
   ne,
   notInArray,
   or,
@@ -134,6 +136,7 @@ import {
   recipeListCoverImageRelation,
 } from "./helpers";
 import type { RecipeFilters } from "./internal-types";
+import { recipeMetaToColumns } from "./meta";
 import {
   type RecipeProvenance,
   recipeSourceToColumns,
@@ -509,6 +512,15 @@ export const recipeList = async (
       filters.caloriesTotalMax !== undefined
         ? sql`(${recipe.totals}->>'caloriesTotal')::numeric <= ${filters.caloriesTotalMax}`
         : undefined,
+      // A real column, so no jsonb extraction and no cast — and NULL (no
+      // printed total time) drops out of both bounds, which is what "under 30
+      // minutes" should mean for a recipe whose time is unknown.
+      filters.totalMinutesMin !== undefined
+        ? gte(recipe.totalMinutes, filters.totalMinutesMin)
+        : undefined,
+      filters.totalMinutesMax !== undefined
+        ? lte(recipe.totalMinutes, filters.totalMinutesMax)
+        : undefined,
     ],
   );
 
@@ -630,6 +642,7 @@ const createRecipeReturningId = async (
       servings: recipeInput.servings ?? null,
       tags: recipeInput.tags ?? null,
       notes: recipeInput.notes ?? null,
+      ...recipeMetaToColumns(recipeInput.meta),
     });
     const createdRecipeId = createdRecipe.id;
 
@@ -883,6 +896,10 @@ const upsertRecipeMatching = async (
           // carries them, null when unparsed). Previously omitted -> stale forever.
           yield: input.yield ?? null,
           servings: input.servings ?? null,
+          // Same rule for times/equipment/page: the source owns them, so a
+          // re-import refreshes all three columns (clearing them when the source
+          // stopped printing a time) rather than leaving a stale row behind.
+          ...recipeMetaToColumns(input.meta),
           // Tags only when the importer actually supplies them (Notion page columns).
           // Web/cookbook imports leave tags undefined, so don't clobber manual tags.
           ...(input.tags !== undefined ? { tags: input.tags } : {}),

@@ -85,6 +85,9 @@ const baseRecipe = {
   notes: null,
   totals: null,
   totalsComputedAt: null,
+  activeMinutes: null,
+  totalMinutes: null,
+  meta: null,
 };
 
 const activeUnitMapping = {

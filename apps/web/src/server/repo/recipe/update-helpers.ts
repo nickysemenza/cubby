@@ -35,6 +35,7 @@ import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
 
 import type { ExistingRecipeWithSections } from "./internal-types";
+import { type RecipeMetaColumns, recipeMetaToColumns } from "./meta";
 import { webProvenance } from "./source";
 
 /**
@@ -199,7 +200,7 @@ export async function updateRecipeBasicProperties(
     servings?: number | null;
     tags?: string[] | null;
     notes?: string | null;
-  } = {};
+  } & Partial<RecipeMetaColumns> = {};
 
   if (updates.name) {
     updateData.name = updates.name;
@@ -207,6 +208,10 @@ export async function updateRecipeBasicProperties(
   if (updates.meta !== undefined) {
     updateData.SourceType = sourceType;
     updateData.SourceData = sourceData;
+    // `meta` is edited as a whole object, so the times/equipment/page columns
+    // are rewritten from it wholesale — omitting a time in the submitted meta
+    // means "no longer set", exactly like clearing the url.
+    Object.assign(updateData, recipeMetaToColumns(updates.meta));
   }
   if (updates.yield !== undefined) {
     updateData.yield = updates.yield;

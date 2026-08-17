@@ -41,6 +41,7 @@ export const sortableFields = {
     "source",
     "yield",
     "tags",
+    "totalMinutes",
   ],
   cookbook: [],
   location: [
