@@ -40,6 +40,15 @@ import { Client } from "pg";
  */
 
 const DRY_RUN = !process.argv.includes("--write");
+/**
+ * The CONTRACT half: null `type` on every linked location, so the SKU is the
+ * only place its form factor lives.
+ *
+ * Gated behind its own flag because it is only safe once the deployed worker
+ * tolerates a null type. Running it early breaks every location read in
+ * production — the old code parses `type` through a non-nullable zod enum.
+ */
+const CONTRACT = process.argv.includes("--contract");
 
 /** Crockford-ish alphabet the repo's shortcodes use — no I/L/O/0/1. */
 const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
@@ -374,6 +383,36 @@ async function main() {
       log.push("cascaded search documents + embeddings");
     }
 
+    // ---- contract: the SKU becomes the only source of form factor ----------
+    if (CONTRACT) {
+      const cleared = await client.query(
+        `UPDATE "Location" SET type = NULL
+          WHERE "deletedAt" IS NULL AND "productId" IS NOT NULL AND type IS NOT NULL`,
+      );
+      log.push(
+        `contract: cleared type on ${cleared.rowCount} linked locations`,
+      );
+      const orphaned = await client.query(
+        `SELECT count(*)::int AS n FROM "Location"
+          WHERE "deletedAt" IS NULL AND type IS NULL AND "productId" IS NULL`,
+      );
+      if (orphaned.rows[0].n > 0) {
+        throw new Error(
+          `${orphaned.rows[0].n} locations would have neither a type nor a product — refusing`,
+        );
+      }
+      const stragglers = await client.query(
+        `SELECT DISTINCT type FROM "Location"
+          WHERE "deletedAt" IS NULL AND type IN
+            ('crate','half-crate','quarter-crate','milk-crate','tote-27gal','tote-14gal','tote-7gal')`,
+      );
+      log.push(
+        stragglers.rowCount === 0
+          ? "contract: no retiring type values remain — safe to narrow locationTypeValues"
+          : `contract: STILL PRESENT ${stragglers.rows.map((r) => r.type).join(", ")} — do NOT narrow the enum yet`,
+      );
+    }
+
     // ---- verification ------------------------------------------------------
     const summary = await client.query(
       `SELECT count(*) FILTER (WHERE "productId" IS NOT NULL)::int AS linked,
@@ -445,7 +484,9 @@ async function main() {
       await client.query("COMMIT");
       console.log("\nCOMMITTED.");
       console.log(
-        "Next, AFTER deploying the new code: null out `type` on linked rows, then narrow locationTypeValues 16 -> 9.",
+        CONTRACT
+          ? "Contract applied. locationTypeValues can now be narrowed 16 -> 9."
+          : "Next, AFTER deploying the new code: re-run with --write --contract, then narrow locationTypeValues 16 -> 9.",
       );
     }
   } catch (err) {
