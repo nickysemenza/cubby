@@ -70,31 +70,19 @@ export function registerProductTools(server: McpServer) {
       delete:
         "Soft-delete products by IDs. Fails while live inventory entries, expenses, or tasks still reference a product.",
     },
-    create: async (caller, params) => {
-      const unitMappings = (
-        (params.unitMappings as Array<z.infer<typeof mcpUnitMappingInput>>) ??
-        []
-      ).map(toUnitMappingInput);
-      return await caller.product.create({
-        name: params.name,
-        manufacturer: params.manufacturer,
-        aliases: params.aliases ?? [],
-        tags: params.tags ?? [],
-        upc: (params.upc as string | null | undefined) ?? null,
-        fdc_id: (params.fdc_id as number | null | undefined) ?? null,
-        model: (params.model as string | null | undefined) ?? null,
-        notes: (params.notes as string | null | undefined) ?? null,
-        expectedQuantity:
-          (params.expectedQuantity as number | null | undefined) ?? null,
-        category: params.category ?? null,
-        ingredientId: params.ingredientId ?? null,
-        price: (params.price as number | undefined) ?? null,
-        unitMappings,
-        externalIds: params.externalIds ?? [],
-        usdaUnavailable:
-          (params.usdaUnavailable as boolean | null | undefined) ?? null,
-      });
-    },
+    // Spread, never enumerate. A field-by-field copy silently drops any field
+    // added to `mcpProductCreateInput` later and the created row reads back as
+    // if the agent never sent it — that is how `stockTracked: false` became
+    // `null` on every MCP-created product, erasing the reviewed/no-shelf-claim
+    // decision the create call actually made. Only fields whose MCP shape is
+    // genuinely looser than the router's are normalized here.
+    create: async (caller, params) =>
+      await caller.product.create({
+        ...params,
+        // Required (nullable, not optional) on the router's create input.
+        expectedQuantity: params.expectedQuantity ?? null,
+        unitMappings: (params.unitMappings ?? []).map(toUnitMappingInput),
+      }),
     resolveUpdateData: async (_caller, data) =>
       data.unitMappings === undefined
         ? data
