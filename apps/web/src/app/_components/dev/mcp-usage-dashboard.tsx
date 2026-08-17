@@ -299,7 +299,7 @@ function ActivityTable({
         ) : entries.length === 0 ? (
           <Description>No captured calls.</Description>
         ) : (
-          <Table>
+          <Table className="table-auto">
             <TableHeader>
               <TableRow>
                 <TableHead>Time</TableHead>
@@ -451,7 +451,7 @@ export function McpUsageDashboard() {
               ),
             )}
           </div>
-          <Table>
+          <Table className="table-auto">
             <TableHeader>
               <TableRow>
                 {(

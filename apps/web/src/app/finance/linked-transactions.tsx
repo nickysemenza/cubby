@@ -11,7 +11,9 @@ import {
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrency } from "~/lib/utils";
+import { renderOptionCell } from "../_components/data-table/columnHelpers";
 import { TableLink } from "../_components/table/TableLink";
+import { financialTransactionStatusOptions } from "./financial-transaction-kind-options";
 
 /** Compact linked-evidence table for account and Purchase detail plates. */
 export function LinkedTransactions({
@@ -46,11 +48,11 @@ export function LinkedTransactions({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Transaction</TableHead>
-          <TableHead>Account</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Posted</TableHead>
-          <TableHead className="text-right">Amount</TableHead>
+          <TableHead className="w-40">Transaction</TableHead>
+          <TableHead className="w-32">Account</TableHead>
+          <TableHead className="w-24">Status</TableHead>
+          <TableHead className="w-24">Posted</TableHead>
+          <TableHead className="w-36 text-right">Amount</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -60,6 +62,7 @@ export function LinkedTransactions({
               <TableLink
                 to={entities.financialTransaction.routes.detail}
                 params={entityDetailParams(transaction.id)}
+                className="block truncate"
               >
                 {transaction.merchant ||
                   transaction.rawDescription ||
@@ -67,9 +70,20 @@ export function LinkedTransactions({
               </TableLink>
             </TableCell>
             <TableCell>
-              {transaction.accountName ?? transaction.accountId}
+              <TableLink
+                to={entities.financialAccount.routes.detail}
+                params={entityDetailParams(transaction.accountId)}
+                className="block truncate"
+              >
+                {transaction.accountName ?? transaction.accountId}
+              </TableLink>
             </TableCell>
-            <TableCell>{transaction.status}</TableCell>
+            <TableCell>
+              {renderOptionCell(
+                transaction.status,
+                financialTransactionStatusOptions,
+              )}
+            </TableCell>
             <TableCell>{transaction.postedDate ?? "—"}</TableCell>
             <TableCell className="text-right font-mono tabular-nums">
               {/* Scoped to one purchase, the slice is the honest figure — the

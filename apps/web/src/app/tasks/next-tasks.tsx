@@ -96,7 +96,7 @@ function TaskRows({ rows }: { rows: ActionableTaskOut[] }) {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Task</TableHead>
+          <TableHead className="w-64">Task</TableHead>
           <TableHead className="w-32">Status</TableHead>
           <TableHead className="w-40">Project</TableHead>
           <TableHead className="w-28">Due</TableHead>
@@ -106,7 +106,7 @@ function TaskRows({ rows }: { rows: ActionableTaskOut[] }) {
         {rows.map((t) => (
           <TableRow key={t.id}>
             <TableCell>
-              <Row align="center" gap="xs">
+              <Row align="center" gap="xs" className="min-w-0">
                 <EntityInlineLink
                   entity="task"
                   data={{ id: t.id, name: t.name }}

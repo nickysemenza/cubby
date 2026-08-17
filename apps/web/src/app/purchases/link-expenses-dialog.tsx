@@ -207,7 +207,7 @@ export function LinkExpensesDialog({
             <TableHeader>
               <TableRow>
                 <TableHead className="w-8" />
-                <TableHead>Expense</TableHead>
+                <TableHead className="w-64">Expense</TableHead>
                 <TableHead className="w-24">Date</TableHead>
                 <TableHead className="w-20 text-right">Cost</TableHead>
                 <TableHead className="w-36">Trade</TableHead>
