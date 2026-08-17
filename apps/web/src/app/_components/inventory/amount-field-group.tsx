@@ -8,6 +8,15 @@ import {
 } from "../form-utils";
 import { getHoverableMeasureUnitIcon } from "./format-amount";
 
+/**
+ * The unit every new inventory row starts with.
+ *
+ * Not a guess: 663 of the ledger's 664 live entries are "each". Seeding the
+ * field empty instead is a guaranteed round-trip through a validation error,
+ * because `amount` requires `unit: z.string().min(1)`.
+ */
+export const DEFAULT_AMOUNT_UNIT = "each";
+
 interface AmountFieldGroupProps<
   TFieldValues extends FieldValues = FieldValues,
 > {

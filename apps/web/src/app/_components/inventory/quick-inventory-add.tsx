@@ -39,7 +39,7 @@ import type { ComboboxItem } from "../combobox/combobox-types";
 import { WithProductSearch } from "../combobox/with-search-hook";
 import { ProductFormFields } from "../products/product-form-fields";
 import { useUpcAwareCreate } from "../products/use-upc-aware-create";
-import { AmountFieldGroup } from "./amount-field-group";
+import { AmountFieldGroup, DEFAULT_AMOUNT_UNIT } from "./amount-field-group";
 import {
   useCreateInventoryMutation,
   useProductLookupInvalidation,
@@ -99,7 +99,7 @@ export function QuickInventoryAdd({
     resolver: zodResolver(selectFormSchema),
     defaultValues: {
       product: initialProduct,
-      amount: { value: 1, unit: "" },
+      amount: { value: 1, unit: DEFAULT_AMOUNT_UNIT },
     },
   });
 
@@ -108,7 +108,7 @@ export function QuickInventoryAdd({
       toast.success("Tucked it into your cubby.");
       selectForm.reset({
         product: initialProduct,
-        amount: { value: 1, unit: "" },
+        amount: { value: 1, unit: DEFAULT_AMOUNT_UNIT },
       });
       onSuccess();
     },
@@ -137,7 +137,7 @@ export function QuickInventoryAdd({
       price: null,
       ingredient: null,
       unitMappings: [],
-      amount: { value: 1, unit: "" },
+      amount: { value: 1, unit: DEFAULT_AMOUNT_UNIT },
     },
   });
 
@@ -215,7 +215,7 @@ export function QuickInventoryAdd({
         price: null,
         ingredient: null,
         unitMappings: [],
-        amount: { value: 1, unit: "" },
+        amount: { value: 1, unit: DEFAULT_AMOUNT_UNIT },
       });
       imageState.reset();
       setMode("create");

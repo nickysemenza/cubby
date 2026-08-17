@@ -32,7 +32,10 @@ import {
 } from "~/app/_components/form-fields";
 import { ComboboxField } from "~/app/_components/form-utils";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
+import {
+  AmountFieldGroup,
+  DEFAULT_AMOUNT_UNIT,
+} from "~/app/_components/inventory/amount-field-group";
 import { useUpcLookup } from "~/app/_components/inventory/hooks";
 import {
   BARCODE_FORMATS,
@@ -281,7 +284,7 @@ export function SessionCaptureActions({
       const inventory = await createInventory.mutateAsync({
         productId: product.id,
         locationId: location.id,
-        amount: { value: 1, unit: "each" },
+        amount: { value: 1, unit: DEFAULT_AMOUNT_UNIT },
       });
       updateScanChip({ status: "added" });
       setScanTally((count) => count + 1);
@@ -383,7 +386,7 @@ export function SessionCaptureActions({
       const created = await createInventory.mutateAsync({
         productId: product.id,
         locationId: location.id,
-        amount: { value: 1, unit: "each" },
+        amount: { value: 1, unit: DEFAULT_AMOUNT_UNIT },
       });
       toast.success(
         savedWithBackgroundWork(created.sideEffects, `Added ${name}`),
@@ -775,7 +778,7 @@ function ManualAdd({ locationId }: { locationId: LocationShortcode }) {
     resolver: zodResolver(manualAddSchema),
     defaultValues: {
       product: undefined,
-      amount: { value: 1, unit: "each" },
+      amount: { value: 1, unit: DEFAULT_AMOUNT_UNIT },
     },
   });
   const createInventory = useActionMutation({
@@ -783,7 +786,10 @@ function ManualAdd({ locationId }: { locationId: LocationShortcode }) {
     success: (data) => savedWithBackgroundWork(data.sideEffects, "Added item"),
     invalidateKeys: inventoryMutationInvalidateKeys,
     onSuccess: () => {
-      form.reset({ product: undefined, amount: { value: 1, unit: "each" } });
+      form.reset({
+        product: undefined,
+        amount: { value: 1, unit: DEFAULT_AMOUNT_UNIT },
+      });
     },
   });
 

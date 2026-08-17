@@ -5,30 +5,46 @@
 
 import {
   type LocationId,
+  type LocationShortcode,
+  type ProductId,
   unsafeLocationId,
   unsafeLocationShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
+  LocationAncestorOut,
   LocationOut,
   LocationParentOptionsOut,
   LocationType,
 } from "@cubby/schemas/location";
-import { and, asc, eq, exists, inArray, sql } from "drizzle-orm";
+import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import {
+  and,
+  arrayOverlaps,
+  asc,
+  countDistinct,
+  eq,
+  exists,
+  inArray,
+  ne,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Database } from "~/server/db";
-import { location } from "~/server/db/schema";
+import { inventoryEntry, location, product } from "~/server/db/schema";
 import {
   findOrCreate,
   getDb,
   notDeleted,
   relations,
 } from "~/server/repo/database-helpers";
+import { stockOnly } from "~/server/repo/inventory/placement";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { getLocationById } from "./crud";
 import { dbLocationToAPI } from "./helpers";
+import { parseLocationType } from "./parse-type";
 import { loadLocationAncestors } from "./tree";
 
 // Self-join alias for the child-existence check in `locationParentOptions` —
@@ -186,4 +202,136 @@ export const findOrCreateLocationByName = async (
     }),
   });
   return { locationId: row.id, created };
+};
+
+/**
+ * Every live location, scored as a put-away destination for `productId`.
+ *
+ * The consumer is the AI location suggester: the model reads the *names* and
+ * the ancestor chain (a PACKOUT wall plate belongs on the PACKOUT Wall), and
+ * these counts are the corroborating hints under them. They are hints and not
+ * a ranking on purpose — backtested against every existing entry, ordering
+ * locations by these counts alone lands the right one 22% of the time, because
+ * `tools` alone spreads across 72 locations with the leader holding 8%.
+ *
+ * Every live location is returned, stocked or not: an empty shelf is a
+ * perfectly good destination, and the model needs the whole board to choose
+ * from. The aggregation is per-location in SQL rather than a fold over raw
+ * entries so the interactive call stays one small grouped scan as the ledger
+ * grows.
+ *
+ * Sibling counts are **distinct products excluding the source itself** — the
+ * same rule as `getTagSiblingStorage`, for the same reason: a location that
+ * holds only this product tells you nothing about where its family lives. The
+ * source's own rows raise `holdsProduct` instead. `stockOnly()` throughout,
+ * because a fixture wired into a wall is not somewhere to put a spare.
+ */
+export interface LocationPutAwayCandidate {
+  id: LocationShortcode;
+  name: string;
+  type: LocationType | null;
+  /** Root → immediate parent. Empty for a top-level location. */
+  ancestors: LocationAncestorOut[];
+  /** Distinct products stocked here, source included — "how full is this bin". */
+  itemCount: number;
+  /** Distinct other products here sharing at least one tag with the source. */
+  tagSiblings: number;
+  /** Distinct other products here from the same manufacturer. */
+  manufacturerSiblings: number;
+  /** Distinct other products here in the same category. */
+  categorySiblings: number;
+  /** The source product is already stocked here. */
+  holdsProduct: boolean;
+}
+
+export const getLocationPutAwayCandidates = async (
+  db: Database,
+  productId: ProductId,
+): Promise<LocationPutAwayCandidate[]> => {
+  const dbClient = getDb(db);
+
+  const [source] = await dbClient
+    .select({
+      tags: product.tags,
+      manufacturer: product.manufacturer,
+      category: product.category,
+    })
+    .from(product)
+    .where(and(eq(product.id, productId), notDeleted(product)))
+    .limit(1);
+  if (!source) return [];
+
+  const otherProduct = ne(product.id, productId);
+  // An empty tag array would render as `tags && '{}'`, which matches nothing
+  // but still costs a parameter; say `false` outright instead. Same for the
+  // placeholder manufacturer, which is not a shared identity, and a null
+  // category, which is not a group.
+  const sharesTag =
+    source.tags && source.tags.length > 0
+      ? arrayOverlaps(product.tags, source.tags)
+      : sql`false`;
+  const sharesManufacturer =
+    source.manufacturer && source.manufacturer !== UNSPECIFIED_MANUFACTURER
+      ? eq(product.manufacturer, source.manufacturer)
+      : sql`false`;
+  const sharesCategory = source.category
+    ? eq(product.category, source.category)
+    : sql`false`;
+
+  const tallies = await dbClient
+    .select({
+      locationId: inventoryEntry.locationId,
+      itemCount: countDistinct(product.id),
+      tagSiblings: sql<number>`count(distinct ${product.id}) filter (where ${sharesTag} and ${otherProduct})::int`,
+      manufacturerSiblings: sql<number>`count(distinct ${product.id}) filter (where ${sharesManufacturer} and ${otherProduct})::int`,
+      categorySiblings: sql<number>`count(distinct ${product.id}) filter (where ${sharesCategory} and ${otherProduct})::int`,
+      holdsProduct: sql<boolean>`bool_or(${product.id} = ${productId})`,
+    })
+    .from(inventoryEntry)
+    .innerJoin(product, eq(product.id, inventoryEntry.productId))
+    .innerJoin(location, eq(location.id, inventoryEntry.locationId))
+    .where(
+      and(
+        notDeleted(inventoryEntry),
+        stockOnly(),
+        notDeleted(product),
+        notDeleted(location),
+      ),
+    )
+    .groupBy(inventoryEntry.locationId);
+
+  const tallyByLocation = new Map(tallies.map((row) => [row.locationId, row]));
+
+  const rows = await dbClient
+    .select({
+      id: location.id,
+      shortcode: location.shortcode,
+      name: location.name,
+      type: location.type,
+    })
+    .from(location)
+    .where(notDeleted(location))
+    .orderBy(asc(location.name));
+
+  // "shelf 1" exists in four rooms; without the chain the model is choosing
+  // between four identical strings.
+  const ancestorsById = await loadLocationAncestors(
+    db,
+    rows.map((row) => row.id),
+  );
+
+  return rows.map((row) => {
+    const tally = tallyByLocation.get(row.id);
+    return {
+      id: unsafeLocationShortcode(row.shortcode),
+      name: row.name,
+      type: parseLocationType(row.type, { id: row.id, name: row.name }),
+      ancestors: ancestorsById.get(row.id) ?? [],
+      itemCount: tally?.itemCount ?? 0,
+      tagSiblings: tally?.tagSiblings ?? 0,
+      manufacturerSiblings: tally?.manufacturerSiblings ?? 0,
+      categorySiblings: tally?.categorySiblings ?? 0,
+      holdsProduct: tally?.holdsProduct ?? false,
+    };
+  });
 };

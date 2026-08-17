@@ -6,7 +6,7 @@ import {
   locationShortcode,
   productShortcode,
 } from "./identifiers";
-import { locationType } from "./location";
+import { locationAncestorOut, locationType } from "./location";
 import { productCategory } from "./product";
 import { foodSummaryWithLinkedProducts } from "./usda";
 
@@ -50,6 +50,39 @@ export const locationTypeSuggestionInput = z.object({
 export const aiLocationIdInput = z.object({
   locationId: locationShortcode,
 });
+
+export const locationSuggestionInput = z.object({
+  productId: productShortcode,
+});
+
+// Model-owned shape: where should this product be put away. The id is a plain
+// string on purpose — it is whatever the model copied out of the candidate
+// roster, and only becomes a `locationShortcode` after the service has matched
+// it back against a real live location.
+export const locationSuggestionAiResultSchema = z.object({
+  locationId: z.string(),
+  confidence: confidence,
+  reasoning: z.string(),
+});
+export type LocationSuggestionAiResult = z.infer<
+  typeof locationSuggestionAiResultSchema
+>;
+
+// What the client gets: a resolved location carrying everything a picker row
+// renders, so the accepted suggestion looks like any other pick rather than a
+// bare name — the ancestor chain especially, since "shelf 1" exists in four
+// rooms and that is the whole reason the roster carries it.
+export const locationSuggestionSchema = z.object({
+  location: z.object({
+    id: locationShortcode,
+    name: z.string(),
+    type: locationType.nullable(),
+    ancestors: z.array(locationAncestorOut),
+  }),
+  confidence: confidence,
+  reasoning: z.string(),
+});
+export type LocationSuggestion = z.infer<typeof locationSuggestionSchema>;
 
 // Location description from photo analysis
 export const locationDescriptionSchema = z.object({

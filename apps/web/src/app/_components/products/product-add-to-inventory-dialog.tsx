@@ -2,8 +2,9 @@
  * ProductAddToInventoryDialog — stock a known product from its detail page.
  *
  * The product is fixed, so the only thing missing is where it goes: pick a
- * location, then the shared QuickInventoryAdd form (product prefilled) handles
- * the amount and the create.
+ * location — or let the AI suggester read the roster and propose one — then the
+ * shared QuickInventoryAdd form (product prefilled) handles the amount and the
+ * create.
  */
 
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
@@ -15,8 +16,8 @@ import {
   getOptionalLocationId,
   optionalLocationField,
 } from "~/app/_components/form-fields";
-import { ComboboxFieldWithSearch } from "~/app/_components/form-utils/combobox-field-with-search";
 import { QuickInventoryAdd } from "~/app/_components/inventory/quick-inventory-add";
+import { LocationFieldWithAI } from "~/app/_components/locations/location-field-with-ai";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
@@ -68,11 +69,10 @@ export const ProductAddToInventoryDialog: FC<
       description={`Stock "${product.name}" at a location.`}
     >
       <Stack gap="md">
-        <ComboboxFieldWithSearch
+        <LocationFieldWithAI
           form={form}
           name="location"
-          label="Location"
-          searchType="location"
+          productId={product.id}
         />
         {locationId ? (
           <QuickInventoryAdd

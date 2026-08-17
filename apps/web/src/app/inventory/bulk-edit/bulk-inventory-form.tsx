@@ -17,7 +17,10 @@ import {
 } from "~/app/_components/form-fields";
 import { FormWrapper, getSubmitButtonText } from "~/app/_components/form-utils";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils/combobox-field-with-search";
-import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
+import {
+  AmountFieldGroup,
+  DEFAULT_AMOUNT_UNIT,
+} from "~/app/_components/inventory/amount-field-group";
 import { BarcodeScannerButton } from "~/app/_components/inventory/barcode-scanner-button";
 import {
   useInventoryInvalidation,
@@ -160,7 +163,7 @@ export default function BulkInventoryForm({
   const addInventoryItem = () => {
     append({
       product: null,
-      amount: { value: 1, unit: "" },
+      amount: { value: 1, unit: DEFAULT_AMOUNT_UNIT },
     });
   };
 

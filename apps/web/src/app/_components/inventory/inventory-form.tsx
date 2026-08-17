@@ -29,7 +29,7 @@ import {
   submitOrCancel,
 } from "../form-utils";
 import { ComboboxFieldWithSearch } from "../form-utils/combobox-field-with-search";
-import { AmountFieldGroup } from "./amount-field-group";
+import { AmountFieldGroup, DEFAULT_AMOUNT_UNIT } from "./amount-field-group";
 
 // Form schema using shared field schemas
 const formSchema = inventoryItemWithLocationFields;
@@ -73,7 +73,9 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       location: inventoryItem
         ? buildLocationComboboxItem(inventoryItem.location)
         : undefined,
-      amount: inventoryItem ? inventoryItem.amount : { value: 1, unit: "" },
+      amount: inventoryItem
+        ? inventoryItem.amount
+        : { value: 1, unit: DEFAULT_AMOUNT_UNIT },
     },
   });
 
