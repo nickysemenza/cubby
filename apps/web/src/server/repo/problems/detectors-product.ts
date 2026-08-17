@@ -452,7 +452,7 @@ export const findPurchaselessExitExpenses = async (
 
 // Find products that were sold off but are still sitting on a shelf.
 //
-// The exact mirror of `findProductsMissingPrice`, and it exists for the same
+// The exact mirror of the `product/unpriced-stocked` view, and it exists for the same
 // reason: `inventoryEntry.valuation` is precomputed from the product's
 // effective price, so a stale entry keeps contributing its full value to the
 // location rollup. An unpriced product makes the rollup silently *omit* value;

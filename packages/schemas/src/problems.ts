@@ -1125,7 +1125,7 @@ export const PROBLEM_CLASS = {
   projectsWithDateDrift: "defect",
 
   // --- coverage: backlog size, never reaches zero ---
-  // Misc buckets are *expected* to be unpriced — `findProductsMissingPrice`
+  // Misc buckets are *expected* to be unpriced — the `product/unpriced-buckets` view
   // already partitions them out for exactly this reason; classing them here is
   // what finally keeps them out of the total.
   unvaluedBucketProducts: "coverage",

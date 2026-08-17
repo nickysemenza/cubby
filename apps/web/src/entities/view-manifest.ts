@@ -46,7 +46,7 @@ interface ViewFilter {
  * predicate the entity's list already expressed as filters — and the schemas
  * said so out loud: `productFilterFields.expectedQuantityMax` documents
  * `-1` as "the 'sold or returned more than was ever bought' worklist", which
- * is exactly what `findProductsWithNegativeExpectedQuantity` re-derived with a
+ * is exactly what a since-deleted detector re-derived with a
  * grouped HAVING scan. Two implementations of one question, two places to drift.
  *
  * The card's rows come from the entity's ordinary list procedure, whose output
@@ -646,12 +646,21 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         { id: "inventoryEntries", value: "has" },
         { id: "lastBulkInventory", value: "60" },
       ],
+      // Oldest recount first. Never-recounted bins do NOT lead: `buildOrderBy`
+      // emits NULLS LAST in both directions, which is the house convention
+      // (revisited and kept 2026-07 — empties are found with presence filters,
+      // not by sort direction). The detector this replaced ordered `nulls
+      // first`; that behaviour is gone deliberately rather than by accident,
+      // and a one-column exception is exactly what the convention exists to
+      // prevent. They are still fully IN the section — the `IS NULL` half of
+      // the predicate is load-bearing — and the count includes them; they just
+      // don't fill the card's sample.
       sort: [{ id: "lastBulkInventory", desc: false }],
       problem: {
         key: "staleLocations",
         title: "Locations overdue a recount",
         description:
-          "Holding stock whose count hasn't been checked against the shelf in 60 days — or ever. Never-counted bins sort first.",
+          "Holding stock whose count hasn't been checked against the shelf in 60 days — or ever.",
         emptyMessage: "Every stocked location has been recounted recently.",
         // `directItemCountMin: 1` is how "holds stock" is spelled here, and it
         // is slightly NARROWER than the detector's join: it counts only entries

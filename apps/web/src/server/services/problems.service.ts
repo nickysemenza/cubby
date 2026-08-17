@@ -155,7 +155,7 @@ const countMissingEmbeddings = async (db: Database) =>
 //     2+ components. A product islanded on its stored mappings alone but bridged
 //     into one component by USDA portion/serving edges is fully convertible, so
 //     it isn't flagged — mirroring the "a USDA link counts as coverage" rule in
-//     findProductsWithoutMappings.
+//     the `product/unmapped` view.
 const findProductCoverageProblems = async (
   db: Database,
   usdaClient: USDAClient,
@@ -169,12 +169,12 @@ const findProductCoverageProblems = async (
 
   // Candidate sets are pure DB/WASM (no network). Partial coverage wants
   // ingredient products with *some* signal — truly-empty ones belong to
-  // findProductsWithoutMappings. Islanded wants products whose STORED mappings
+  // the `product/unmapped` view. Islanded wants products whose STORED mappings
   // already split into 2+ components: adding the derived edges can only merge
   // components, never split them, so a product connected on its stored mappings
   // can never be islanded. detect_unit_mapping_islands is infallible (never throws).
   // Non-food (household/garage) products have no food-coverage meaning — exempt
-  // them from both coverage detectors, matching findProductsWithoutMappings.
+  // them from both coverage detectors, matching the `product/unmapped` view.
   const partialCandidates = products.filter(
     (p) =>
       p.ingredientId != null &&

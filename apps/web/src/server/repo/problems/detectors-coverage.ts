@@ -75,7 +75,8 @@ export const findCoverageTotals = async (
       ),
     );
 
-  // Matches findStaleLocations' INNER join: locations holding live stock.
+  // Matches the `location/stale-recounts` view's population: locations holding
+  // live stock.
   // Leaving installed fixtures in here would permanently cap this meter below
   // 100% — a fixture never gets recounted, so it can never be "covered".
   const stockedLocations = await dbClient
@@ -106,7 +107,7 @@ export const findCoverageTotals = async (
     .from(inventoryEntry)
     .where(and(notDeleted(inventoryEntry), stockOnly()));
 
-  // Matches findIngredientsWithoutProduct's population: ingredients used by at
+  // Matches the `ingredient/needs-a-product` view's population: ingredients used by at
   // least one live NON-cookbook recipe, excluding sub-recipe ingredients. The
   // cookbook exclusion is load-bearing — without it the denominator counts the
   // ~1000 EPUB-imported rows the numerator deliberately ignores, and the meter

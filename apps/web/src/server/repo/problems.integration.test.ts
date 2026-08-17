@@ -1693,7 +1693,7 @@ describe("problems service — recount staleness", () => {
 
     const { staleLocations } = await findViewProblems(ctx.db);
     const ids = staleLocations.map((l) => l.id);
-    // Nothing to recount — findEmptyLocations already owns these.
+    // Nothing to recount — the `location/empty-leaves` view already owns these.
     expect(ids).not.toContain(empty.id);
     expect(ids).not.toContain(emptied.loc.id);
   });
