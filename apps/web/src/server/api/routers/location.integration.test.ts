@@ -248,14 +248,19 @@ describe("problems tolerates a product-linked location's null type", () => {
 });
 
 /**
- * The exact query `ProductServingAsLocations` issues.
+ * "Which locations ARE this product", as a query.
  *
- * That component asked for `sort: []`, which is a 400 (`sort` is `.min(1)`),
- * so it rendered "No locations are an instance of this product" on a product
- * with fourteen of them. The failure looked precisely like an answer, and no
- * test noticed because the section is driven by a live query.
+ * The component that asked this over the wire is gone — its rows are embedded
+ * in the product payload now — but the filter it exercised is still how any
+ * caller answers the question, and it is worth pinning on its own.
+ *
+ * Kept also as the record of why: that component sent `sort: []`, which is a
+ * 400 (`sort` is `.min(1)`), so it rendered "No locations are an instance of
+ * this product" on a product with fourteen. The failure looked precisely like
+ * an answer, and nothing caught it because the section was driven by a live
+ * query no test covered.
  */
-describe("the product -> locations query the detail page issues", () => {
+describe("the product -> locations query", () => {
   const ctx = withTestDb();
 
   it("returns every location that IS the product", async () => {
