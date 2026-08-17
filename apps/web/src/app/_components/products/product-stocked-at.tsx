@@ -18,14 +18,48 @@ import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { DeleteInventoryDialog } from "~/app/_components/inventory/delete-inventory-dialog";
 import { MoveInventoryDialog } from "~/app/_components/inventory/move-inventory-dialog";
 import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
+import { Badge } from "~/components/ui/badge";
 import { useTRPC } from "~/integrations/trpc/react";
 import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 import { ShelfEmpty } from "../data-table/shelf";
 import { ProductDiscardDialog } from "./product-discard-dialog";
 
 type InventoryEntry = ProductWithFoodOut["inventoryEntry"][number];
-/** `useClientEntityList` keys rows by `id`; inventory entries carry no name. */
-type StockedRow = InventoryEntry & { product: { name: string } };
+
+/**
+ * One table, one question: where is this product?
+ *
+ * Two kinds of answer share it. A `stock` row is an InventoryEntry — units
+ * sitting somewhere, editable and deletable. An `identity` row is a Location
+ * that IS this product: the bin itself, in service rather than on a shelf.
+ *
+ * They live together because splitting them made the page contradict itself —
+ * a rack in use as a shelf read "Not stocked anywhere" in one section while
+ * another listed it. The discriminator column is the honest way to show two
+ * kinds of presence, and it extends vocabulary `inventoryEntry.placement`
+ * already established for `stock` vs `installed`.
+ *
+ * An identity row has no InventoryEntry behind it, so it is unselectable, has
+ * no row menu and no editable cell. `rowIsEntity` and `isEditable` enforce
+ * that structurally rather than by hoping a handler checks.
+ */
+type StockRow = InventoryEntry & {
+  kind: "stock";
+  product: { name: string };
+};
+
+type IdentityRow = {
+  kind: "identity";
+  id: InventoryShortcode;
+  location: ProductWithFoodOut["servingAsLocations"][number];
+  amount: { value: number; unit: string };
+  valuation: number | null;
+  verifiedAt: null;
+  placement: "stock";
+  product: { name: string };
+};
+
+type StockedRow = StockRow | IdentityRow;
 
 /** Stable hook config (see apps/web/CLAUDE.md on inline objects). */
 const EMBEDDED_TABLE_STATE = {
@@ -33,9 +67,11 @@ const EMBEDDED_TABLE_STATE = {
   readUrlState: false,
 } as const;
 
+const rowIsEntity = (row: StockedRow) => row.kind === "stock";
+
 type DialogState =
   | { type: null }
-  | { type: "move" | "delete"; items: StockedRow[] }
+  | { type: "move" | "delete"; items: StockRow[] }
   | { type: "discard"; entryId: InventoryShortcode };
 
 const CLOSED: DialogState = { type: null };
@@ -56,14 +92,33 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
   // The shared Move/Delete dialogs name a row by its product; on this page the
   // product is the page itself, so carry it onto the row rather than refetching
   // the list-shaped inventory row.
-  const rows = useMemo<StockedRow[]>(
-    () =>
-      product.inventoryEntry.map((entry) => ({
-        ...entry,
-        product: { name: product.name },
-      })),
-    [product.inventoryEntry, product.name],
-  );
+  const rows = useMemo<StockedRow[]>(() => {
+    const stock: StockedRow[] = product.inventoryEntry.map((entry) => ({
+      ...entry,
+      kind: "stock" as const,
+      product: { name: product.name },
+    }));
+    const identity: StockedRow[] = product.servingAsLocations.map((loc) => ({
+      kind: "identity" as const,
+      // The table keys rows by `id` and an identity row has no InventoryEntry,
+      // so it borrows the location's shortcode. Prefixes cannot collide —
+      // `LOC-` is never an `INV-`.
+      id: loc.id as unknown as InventoryShortcode,
+      location: loc,
+      // A location is one unit of the product by definition.
+      amount: { value: 1, unit: "each" },
+      valuation: product.price,
+      verifiedAt: null,
+      placement: "stock" as const,
+      product: { name: product.name },
+    }));
+    return [...stock, ...identity];
+  }, [
+    product.inventoryEntry,
+    product.servingAsLocations,
+    product.name,
+    product.price,
+  ]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable
   const columns = useMemo(
@@ -72,24 +127,42 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
         header: "Location",
         className: "w-56",
         editable: {
+          isEditable: rowIsEntity,
           onSave: async (locationId, entry) => {
-            if (!locationId) return;
+            if (!locationId || entry.kind !== "stock") return;
             await update.mutateAsync({ id: entry.id, data: { locationId } });
           },
         },
       }),
+      helper.accessor("kind", {
+        header: "Held as",
+        meta: { className: "w-32" },
+        cell: (info) =>
+          info.getValue() === "identity" ? (
+            <Badge variant="secondary">is this location</Badge>
+          ) : info.row.original.placement === "installed" ? (
+            <Badge variant="secondary">installed</Badge>
+          ) : (
+            <Badge variant="outline">stock</Badge>
+          ),
+      }),
       createEditableAmountColumn(helper, "amount", {
+        isEditable: rowIsEntity,
         onSave: async (amount, entry) => {
+          if (entry.kind !== "stock") return;
           await update.mutateAsync({ id: entry.id, data: { amount } });
         },
         getUnitMappings: () => product.unitMappings,
         // The row's own entity — every other column here points at the
         // location or the product. Same treatment as the location table.
-        renderDisplay: (content, entry) => (
-          <Link to="/inventory/$shortcode" params={{ shortcode: entry.id }}>
-            {content}
-          </Link>
-        ),
+        renderDisplay: (content, entry) =>
+          entry.kind === "stock" ? (
+            <Link to="/inventory/$shortcode" params={{ shortcode: entry.id }}>
+              {content}
+            </Link>
+          ) : (
+            content
+          ),
       }),
       createCurrencyColumn(helper, "valuation", {
         header: "Value",
@@ -98,13 +171,16 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
       helper.accessor("verifiedAt", {
         header: "Verified",
         meta: { className: "w-32" },
-        cell: (info) => (
-          <AuditedHint
-            at={info.getValue()}
-            label="verified"
-            placement={info.row.original.placement}
-          />
-        ),
+        cell: (info) =>
+          // A location is not recounted as its own stock, so there is nothing
+          // to be stale about.
+          info.row.original.kind === "identity" ? null : (
+            <AuditedHint
+              at={info.getValue()}
+              label="verified"
+              placement={info.row.original.placement}
+            />
+          ),
       }),
     ],
     [helper, product.unitMappings],
@@ -117,7 +193,12 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
           id: "move",
           minSelection: 1,
           onExecute: async (selected) => {
-            setDialog({ type: "move", items: selected.map((r) => r.original) });
+            setDialog({
+              type: "move",
+              items: selected
+                .map((r) => r.original)
+                .filter((r): r is StockRow => r.kind === "stock"),
+            });
             return { success: true };
           },
         }),
@@ -126,7 +207,9 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
           onExecute: async (selected) => {
             setDialog({
               type: "delete",
-              items: selected.map((r) => r.original),
+              items: selected
+                .map((r) => r.original)
+                .filter((r): r is StockRow => r.kind === "stock"),
             });
             return { success: true };
           },
@@ -146,37 +229,42 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
     // persisted View settings rather than sharing `table-columns:inventory`.
     columnVisibilityScope: "product-detail",
     bulkActions,
-    extraActions: (entry) => (
-      <>
-        <VerbMenuItem
-          verb="moveTo"
-          onSelect={(event) => {
-            event.stopPropagation();
-            setDialog({ type: "move", items: [entry] });
-          }}
-        />
-        {/* Discard writes a ledger row and can clear the shelf in the same
+    rowIsEntity,
+    extraActions: (entry) =>
+      // An identity row has no InventoryEntry to move, discard or delete.
+      // Unlinking is a location-side edit, so the menu points there instead of
+      // offering a verb that would have nothing to act on.
+      entry.kind !== "stock" ? null : (
+        <>
+          <VerbMenuItem
+            verb="moveTo"
+            onSelect={(event) => {
+              event.stopPropagation();
+              setDialog({ type: "move", items: [entry] });
+            }}
+          />
+          {/* Discard writes a ledger row and can clear the shelf in the same
             transaction — the honest verb for "used it up", where Delete just
             says the entry should never have existed. */}
-        <VerbMenuItem
-          verb="discard"
-          onSelect={(event) => {
-            event.stopPropagation();
-            setDialog({ type: "discard", entryId: entry.id });
-          }}
-        />
-        <VerbMenuItem
-          verb="delete"
-          onSelect={(event) => {
-            event.stopPropagation();
-            setDialog({ type: "delete", items: [entry] });
-          }}
-        />
-      </>
-    ),
+          <VerbMenuItem
+            verb="discard"
+            onSelect={(event) => {
+              event.stopPropagation();
+              setDialog({ type: "discard", entryId: entry.id });
+            }}
+          />
+          <VerbMenuItem
+            verb="delete"
+            onSelect={(event) => {
+              event.stopPropagation();
+              setDialog({ type: "delete", items: [entry] });
+            }}
+          />
+        </>
+      ),
   });
 
-  if (product.inventoryEntry.length === 0) {
+  if (rows.length === 0) {
     return <ShelfEmpty entity="inventory" label="Not stocked anywhere" />;
   }
 

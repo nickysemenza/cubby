@@ -4,7 +4,6 @@ import type {
   ProductWithFoodOut,
 } from "@cubby/schemas/product";
 import { isNonFoodCategory } from "@cubby/shared";
-import { uniq } from "es-toolkit";
 import {
   Apple,
   ChefHat,
@@ -52,9 +51,9 @@ import { ProductBasicInfo } from "./product-basic-info";
 import { ProductDiscardDialog } from "./product-discard-dialog";
 import { ProductExpenseHistory } from "./product-expense-history";
 import { ProductForm } from "./product-form";
+import { heroPresence } from "./product-hero-presence";
 import { ProductProjectUses } from "./product-project-uses";
 import { ProductPurchases } from "./product-purchases";
-import { ProductServingAsLocations } from "./product-serving-as-locations";
 import { ProductStockedAt } from "./product-stocked-at";
 import { ProductTagSiblings } from "./product-tag-siblings";
 import { ProductTaskHistory } from "./product-task-history";
@@ -130,25 +129,6 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       ),
       content: <ProductStockedAt product={product} />,
     },
-    // Custom section: the containers of this SKU that are in service as
-    // Locations rather than sitting as stock. Only shown when there are any —
-    // most products are never a location, and a permanently empty panel on
-    // every food row would be noise.
-    ...(product.quantityLedger.locationCount > 0
-      ? [
-          {
-            title: "Serving as locations",
-            icon: Package,
-            zone: "main" as const,
-            content: (
-              <ProductServingAsLocations
-                productId={product.id}
-                count={product.quantityLedger.locationCount}
-              />
-            ),
-          },
-        ]
-      : []),
     // Custom section: Expense History — every expense linked to this
     // product (arrivals and dispositions), the primary way cost basis gets
     // tracked over time.
@@ -370,8 +350,12 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   ];
 
   const entries = product.inventoryEntry ?? [];
-  const locationCount = uniq(entries.map((e) => e.location.id)).length;
   const { quantityLedger, onHandUnits, quantityVariance } = product;
+  // Locations this product IS, not shelves it sits on. This used to count
+  // `uniq(entries.map(e => e.location.id))` while the section below read
+  // `quantityLedger.locationCount` — one word, two meanings, on one page, and
+  // a rack in service as a shelf read "LOCATIONS 0" above a list containing it.
+  const { locationCount } = quantityLedger;
   // `onHandUnits` is the SERVER's answer to "do these entries have a
   // meaningful total?" — null when they carry more than one unit ("3 lb + 2
   // each" has no sum) or when nothing is stocked. Read rather than recomputed:
@@ -379,23 +363,26 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   // rendered cells disagree twice. Only the formatting is local, and the unit
   // is safe to take from the first entry because a non-null total means they
   // all share one.
+  //
+  // The rules live in `heroPresence` — pure, and unit-tested — because all of
+  // them were wrong at once while buried in this JSX.
+  const presence = heroPresence({
+    entryCount: entries.length,
+    entryUnit: entries[0]?.amount.unit,
+    onHandUnits,
+    locationCount,
+  });
   const onHandStat: DetailHeroStat =
-    onHandUnits !== null && entries[0]
+    presence.onHand.kind === "amount"
       ? {
-          label: "On hand",
+          label: presence.onHand.label,
           value: (
             <OptionalStatusText tone={quantityVariance ? "warning" : undefined}>
-              {tryFormatAmount({
-                value: onHandUnits,
-                unit: entries[0].amount.unit,
-              })}
+              {tryFormatAmount(presence.onHand.amount)}
             </OptionalStatusText>
           ),
         }
-      : {
-          label: entries.length === 0 ? "On hand" : "Entries",
-          value: entries.length,
-        };
+      : { label: presence.onHand.label, value: presence.onHand.count };
   // Bought minus gone, from the Expense ledger below. Sits beside On hand
   // because the comparison is the whole point — the two disagreeing is the
   // signal, so the shelf figure takes the warning tone rather than adding a
@@ -442,7 +429,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       heroImages={images}
       heroNo={product.id ?? undefined}
       heroStamp={
-        entries.length > 0
+        presence.inStock
           ? { label: "In stock", tone: "green" }
           : { label: "Not stocked", tone: "ink" }
       }
