@@ -45,12 +45,10 @@ const quickAddExpenseSchema = z.object({
   costType: costTypeSchema,
   trade: tradeSchema,
   future: z.boolean(),
-  // Signed, never zero — a negative quantity on a $0 line is a discard.
-  productQuantity: z
-    .number()
-    .int()
-    .refine((value) => value !== 0, "Quantity cannot be zero")
-    .nullable(),
+  // Signed — a negative quantity on a $0 line is a discard, and 0 on a refund
+  // line is a price concession with the item kept. The cost-dependent half is
+  // enforced server-side by `assertQuantitySignMatchesCost`.
+  productQuantity: z.number().int().nullable(),
   vendor: z.string(),
   orderId: z.string(),
 });

@@ -86,14 +86,26 @@ describe("Expense Quantity inline editor", () => {
     await waitFor(() => expect(save).toHaveBeenCalledWith(null, EXPENSE));
   });
 
-  it.each([0, 1.5])("rejects an invalid quantity of %s", async (value) => {
+  it("rejects a fractional quantity", async () => {
     const { column, save } = buildColumn();
     const cellData = column.meta?.cellData as ColumnCellData<ExpenseOut>;
 
-    await expect(
-      cellData.applyPaste?.(EXPENSE, { json: value }),
-    ).rejects.toThrow("non-zero whole number");
+    await expect(cellData.applyPaste?.(EXPENSE, { json: 1.5 })).rejects.toThrow(
+      "whole number",
+    );
     expect(save).not.toHaveBeenCalled();
+  });
+
+  // Zero is legal on a refund line — money back, no unit moved. This editor
+  // cannot see the row's cost, so it must pass zero through and let
+  // `assertQuantitySignMatchesCost` reject it where the cost contradicts it;
+  // a `!== 0` rule here would make every price concession uneditable.
+  it("accepts a quantity of zero", async () => {
+    const { column, save } = buildColumn();
+    const cellData = column.meta?.cellData as ColumnCellData<ExpenseOut>;
+
+    await cellData.applyPaste?.(EXPENSE, { json: 0 });
+    expect(save).toHaveBeenCalledWith(0, EXPENSE);
   });
 
   // `productQuantity` is signed: a negative quantity on a $0 line is a discard.

@@ -14,6 +14,9 @@
  *   cost > 0 → acquisition of +|qty|
  *   cost < 0 → exit of −|qty|          (both stored signs are legal here)
  *   cost = 0 → signed: +qty is a free acquisition, −qty is a discard
+ *   qty 0    → negative cost only: money moved, no unit did — a price
+ *              concession with the item kept. Sums to nothing, and is
+ *              deliberately NOT an unknown line
  *   qty NULL → unknown; contributes nothing, reported as a line count instead
  *
  * Two deliberate divergences from neighbouring predicates:
@@ -33,6 +36,13 @@
  * Unknowns are never guessed at. A quantity-less line contributes nothing to
  * the number and is surfaced as a count, so a partially-quantified product
  * reads as data-entry debt rather than as a confident total.
+ *
+ * That count is why `0` exists as a distinct value from `NULL`. Both add
+ * nothing to the sum, but only NULL is debt. Until 2026-08-17 zero was banned
+ * by the CHECK, so the price-concession class had to borrow NULL, and all eight
+ * such rows in the ledger lit the `−N?` uncertainty cue beside Expected on
+ * products whose count was in fact exactly known. `unknownExitLines` now counts
+ * only genuine unknowns — as of the backfill, none.
  */
 import type { ProductId } from "@cubby/schemas/identifiers";
 import type { ProductQuantityLedgerOut } from "@cubby/schemas/product";

@@ -179,6 +179,43 @@ describe("loadProductQuantityLedgers", () => {
     });
   });
 
+  // The distinction this test pins is the whole reason `0` was admitted to the
+  // CHECK in 2026-08: a price concession (money back, item KEPT) knows its
+  // quantity exactly, and spelling that `null` reported it as debt — the `−N?`
+  // cue beside Expected lit on all eight such rows in the live ledger while
+  // their counts were in fact certain. Both values sum to nothing; only `null`
+  // is an unknown line, and that difference is what the cue reads.
+  it("treats a zero quantity as known, not as an unrecorded one", async () => {
+    const prod = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Kept After Refund" }),
+      ctx.actor,
+    );
+    await seed({
+      name: "bought 1",
+      cost: 100,
+      productId: prod.id,
+      productQuantity: 1,
+    });
+    // Amazon "Account adjustment": the money came back, the item did not go.
+    await seed({
+      name: "price concession",
+      cost: -20,
+      productId: prod.id,
+      productQuantity: 0,
+    });
+
+    expect(await ledgerFor(prod.entityId)).toEqual({
+      acquiredUnits: 1,
+      exitedUnits: 0,
+      // Still owned — a concession must not exit the unit.
+      expectedQuantity: 1,
+      unknownAcquisitionLines: 0,
+      unknownExitLines: 0,
+      locationCount: 0,
+    });
+  });
+
   it("ignores planned spend — `future` rows are not on any shelf yet", async () => {
     const prod = await createProduct(
       ctx.db,

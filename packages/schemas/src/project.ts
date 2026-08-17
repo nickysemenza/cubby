@@ -827,16 +827,17 @@ export type TaskTimelineOut = z.infer<typeof taskTimelineOut>;
  * $0 line carries its direction in the sign — keep it explicit.
  */
 export const PRODUCT_QUANTITY_DESCRIPTION =
-  "Whole product units covered by this expense; null means the receipt does not establish quantity. Signed, never zero: money direction wins, so a positive-cost line is an acquisition of |qty| and a negative-cost line is an exit of |qty|. On a $0 line the sign IS the fact — a positive quantity is a free acquisition (promo pack, bundled accessory), a negative quantity is a discard/write-off.";
+  'Whole product units covered by this expense; null means the receipt does not establish quantity. Signed: money direction wins, so a positive-cost line is an acquisition of |qty| and a negative-cost line is an exit of |qty|. On a $0 line the sign IS the fact — a positive quantity is a free acquisition (promo pack, bundled accessory), a negative quantity is a discard/write-off. Zero is legal ONLY on a negative-cost line and means money came back but no unit left — a price concession with the item kept (Amazon "Account adjustment", a partial refund for shipping damage). Prefer 0 over null there: null says the count is unknown and gets reported as data-entry debt.';
 
 /**
- * Whole product units — signed and never zero. See `Expense.productQuantity` in
- * schema.ts for the full ledger rule; the DB CHECK enforces the same `<> 0`.
+ * Whole product units — signed, and zero only where the cost is negative. See
+ * `Expense.productQuantity` in schema.ts for the full ledger rule; the DB CHECK
+ * enforces the same pairing. The cross-field half cannot live on this schema
+ * (it has no view of `cost`), so `assertQuantitySignMatchesCost` owns it and is
+ * what every write path actually calls — this only rejects the value that is
+ * wrong regardless of cost.
  */
-const signedProductQuantity = z
-  .number()
-  .int()
-  .refine((value) => value !== 0, "Quantity cannot be zero");
+const signedProductQuantity = z.number().int();
 
 const expenseFields = {
   name: z.string().min(1),

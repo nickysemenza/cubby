@@ -1,4 +1,7 @@
-type ProductMovementKind = "acquired" | "exited" | "discarded" | "unknown";
+// Derived from the zod enum rather than restated: this union and
+// `productMovementKind` are the same contract, and a local copy silently
+// diverges the moment a kind is added on one side.
+import type { ProductMovementKind } from "@cubby/schemas/product";
 
 export type ProductMovementClassification = {
   kind: ProductMovementKind;
@@ -49,6 +52,12 @@ export function classifyProductMovement(
     };
   }
   if (cost !== null && cost < 0) {
+    // Zero is the concession case — money back, item kept. Checked before the
+    // exit branch because `-Math.abs(0)` is `-0`, which renders as "-0" and
+    // compares false under `Object.is` against the 0 every consumer expects.
+    if (productQuantity === 0) {
+      return { kind: "adjusted", signedQuantity: 0 };
+    }
     return {
       kind: "exited",
       signedQuantity:
