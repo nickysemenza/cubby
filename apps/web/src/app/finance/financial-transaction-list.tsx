@@ -14,6 +14,7 @@ import { financialTransactionMutationInvalidateKeys } from "~/lib/query-keys";
 import { presenceCellOptions } from "~/lib/select-options";
 import { formatCurrency } from "~/lib/utils";
 import {
+  createFilterableSelectColumn,
   createPlainDateColumn,
   createTextColumn,
   renderOptionCell,
@@ -95,17 +96,25 @@ export function FinancialTransactionList() {
           </TableLink>
         ),
       }),
-      helper.accessor("kind", {
+      // Through the factory, not a bare accessor: these were `createTextColumn`,
+      // which wires `meta.cellData` unconditionally, so hand-rolling the cell
+      // dropped them out of the range copy/paste engine (which reads cellData,
+      // never the rendered cell). `filterConfig: null` keeps `meta.filterConfig`
+      // undefined exactly as `createTextColumn` left it, so the manifest's
+      // multiselect control stays the one that attaches.
+      createFilterableSelectColumn(helper, "kind", {
         header: "Kind",
-        meta: { className: "w-32" },
-        cell: (i) =>
-          renderOptionCell(i.getValue(), financialTransactionKindOptions),
+        className: "w-32",
+        placeholder: "Filter by kind...",
+        selectOptions: financialTransactionKindOptions,
+        filterConfig: null,
       }),
-      helper.accessor("status", {
+      createFilterableSelectColumn(helper, "status", {
         header: "Status",
-        meta: { className: "w-24" },
-        cell: (i) =>
-          renderOptionCell(i.getValue(), financialTransactionStatusOptions),
+        className: "w-24",
+        placeholder: "Filter by status...",
+        selectOptions: financialTransactionStatusOptions,
+        filterConfig: null,
       }),
       helper.accessor("amount", {
         header: "Amount",

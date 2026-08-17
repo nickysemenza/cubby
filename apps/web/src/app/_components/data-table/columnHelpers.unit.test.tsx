@@ -13,6 +13,7 @@ import {
   createActionsColumn,
   createBooleanColumn,
   createCurrencyColumn,
+  createFilterableSelectColumn,
   createImageColumn,
   createParentLinkColumn,
 } from "./columnHelpers";
@@ -570,5 +571,42 @@ describe("createCurrencyColumn zero handling", () => {
       { amount: 0 },
     );
     expect(screen.getByText(DASH)).toBeVisible();
+  });
+});
+
+// Range copy/paste reads `meta.cellData`, never the rendered cell — so a column
+// that renders correctly can still be silently absent from the copy range. That
+// is exactly what happened when two `createTextColumn` enum columns were
+// hand-rolled into bare accessors to get the new dot+label render (PR #766
+// review): the cells looked right and dropped out of the range engine.
+describe("enum/boolean columns stay in the copy/paste range", () => {
+  type EnumRow = { kind: string | null };
+  const OPTIONS = [{ value: "purchase", label: "Purchase" }];
+
+  it("createFilterableSelectColumn wires cellData even with no filter and no editor", () => {
+    const column = createFilterableSelectColumn(
+      createColumnHelper<EnumRow>(),
+      "kind",
+      {
+        placeholder: "Filter by kind...",
+        selectOptions: OPTIONS,
+        // The shape the financial-transaction columns use: the manifest owns the
+        // filter control, and the column is read-only.
+        filterConfig: null,
+      },
+    );
+
+    const cellData = column.meta?.cellData;
+    expect(cellData?.kind).toBe("select");
+    // Copy carries the human label, not the raw enum the old text column emitted.
+    expect(cellData?.getCopyPayload({ kind: "purchase" })).toEqual({
+      text: "Purchase",
+      json: "purchase",
+    });
+    // Read-only: no editor means no paste target, same as before the conversion.
+    expect(cellData?.applyPaste).toBeUndefined();
+    // `filterConfig: null` must leave meta.filterConfig undefined so the
+    // manifest's control is the one that attaches.
+    expect(column.meta?.filterConfig).toBeUndefined();
   });
 });
