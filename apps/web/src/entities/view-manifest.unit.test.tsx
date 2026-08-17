@@ -328,6 +328,9 @@ describe("views reveal the columns they select on", () => {
     expect(shelfDisagrees?.columnVisibility).toEqual({
       expectedQuantity: true,
       quantityVariance: true,
+      // A product can be short while sitting in no inventory row at all, so
+      // the bins-in-service count has to be on screen to explain the variance.
+      servingAsLocations: true,
     });
 
     // Every product view filters on a column hidden by `initialColumnVisibility`,
@@ -355,12 +358,34 @@ describe("the unlocated views stay one question at two widths", () => {
   const broad = productViews.find((v) => v.id === "unlocated");
   const durables = productViews.find((v) => v.id === "unlocated-durables");
 
-  it("selects on expected-quantity, inventory-presence, and undecided stock tracking", () => {
+  // `servingAsLocations: none` is the half that keeps this disjoint from
+  // `shelf-disagrees`: presence has two forms now, and "nowhere" means neither.
+  it("selects on expected-quantity, BOTH kinds of presence, and undecided stock tracking", () => {
     expect(broad?.filters).toEqual([
       { id: "expectedQuantity", value: "positive" },
       { id: "location", value: [FILTER_NONE] },
+      { id: "servingAsLocations", value: "none" },
       { id: "stockTracked", value: "none" },
     ]);
+  });
+
+  it("cannot overlap shelf-disagrees", () => {
+    // One view requires presence somewhere — its variance gate unions stock
+    // and locations — and the other requires absence from both. Disjoint by
+    // construction, not by the filters happening not to co-occur.
+    const disagrees = productViews.find((v) => v.id === "shelf-disagrees");
+    expect(disagrees?.filters).toContainEqual({
+      id: "quantityVariance",
+      value: "mismatched",
+    });
+    expect(broad?.filters).toContainEqual({
+      id: "servingAsLocations",
+      value: "none",
+    });
+    expect(broad?.filters).toContainEqual({
+      id: "location",
+      value: [FILTER_NONE],
+    });
   });
 
   it("narrows the broad view rather than restating it", () => {

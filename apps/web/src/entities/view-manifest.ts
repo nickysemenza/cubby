@@ -280,7 +280,15 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       filters: [{ id: "quantityVariance", value: "mismatched" }],
       // Both hidden by default on a table this wide, so the view has to reveal
       // them — otherwise it selects rows on a signal nothing on screen explains.
-      columnVisibility: { expectedQuantity: true, quantityVariance: true },
+      // `servingAsLocations` joins them because a product can now be short
+      // while sitting in no inventory row at all: eight 7-gal totes bought,
+      // three in service as bins, five nowhere. Without the column the row
+      // reads as a bare -5 with an empty Location cell.
+      columnVisibility: {
+        expectedQuantity: true,
+        quantityVariance: true,
+        servingAsLocations: true,
+      },
     },
     {
       id: "unknown-quantities",
@@ -313,9 +321,17 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       // every grocery purchase. Still sorted by price so the money surfaces
       // first while the backlog is large; `unlocated-durables` below is the
       // shortcut, not the answer.
+      //
+      // `servingAsLocations: none` is what keeps this DISJOINT from
+      // `shelf-disagrees`. Presence has two forms now — stock on a shelf, and
+      // the bin itself — and this view means neither. Without it the HDX totes
+      // appeared here under "stocked nowhere" while three of them were bins in
+      // daily use, and the same rows showed in both views telling different
+      // stories.
       filters: [
         { id: "expectedQuantity", value: "positive" },
         { id: "location", value: [FILTER_NONE] },
+        { id: "servingAsLocations", value: "none" },
         { id: "stockTracked", value: "none" },
       ],
       sort: [{ id: "price", desc: true }],
@@ -327,6 +343,7 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       columnVisibility: {
         expectedQuantity: true,
         location: true,
+        servingAsLocations: true,
         stockTracked: true,
       },
     },
@@ -347,6 +364,7 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       filters: [
         { id: "expectedQuantity", value: "positive" },
         { id: "location", value: [FILTER_NONE] },
+        { id: "servingAsLocations", value: "none" },
         { id: "stockTracked", value: "none" },
         { id: "category", value: ["tools", "tool-accessories", "storage"] },
       ],
@@ -354,6 +372,7 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       columnVisibility: {
         expectedQuantity: true,
         location: true,
+        servingAsLocations: true,
         stockTracked: true,
         category: true,
       },

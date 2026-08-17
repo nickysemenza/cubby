@@ -264,6 +264,16 @@ export const productFilterFields = {
     .optional()
     .describe("Filter by category"),
   inventoryPresenceFilter: presenceFilter,
+  /**
+   * Whether any Location IS this product — a bin, tote or rack in service,
+   * rather than stock held on a shelf.
+   *
+   * Separate from `inventoryPresenceFilter` on purpose: the two are different
+   * kinds of presence, and "Not on a shelf" means neither of them.
+   */
+  servingAsLocationPresenceFilter: presenceFilter.describe(
+    "Filter to products that are / aren't in service as a Location.",
+  ),
   locationIdFilter: oneOrMany(locationShortcode).optional(),
   ingredientPresenceFilter: presenceFilter,
   ingredientIdFilter: oneOrMany(ingredientShortcode).optional(),

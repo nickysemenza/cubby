@@ -590,6 +590,19 @@ export function ProductList({
       // nothing to the number, so without the cue a product with six
       // unquantified receipts reads as a confident 0. Same shape as
       // `knownAcquiredUnits` in relationship-summary-table.
+      // Bins in service. Free to render — `quantityLedger` is already on every
+      // list row — and it gives the "is a location" presence filter a column to
+      // hang on, without which the manifest spec would render nothing.
+      columnHelper.accessor((row) => row.quantityLedger.locationCount, {
+        id: "servingAsLocations",
+        header: "In service",
+        meta: {
+          numeric: true,
+          className: "w-24",
+          mobile: { slot: "meta", priority: 43 },
+        },
+        cell: (info) => (info.getValue() > 0 ? info.getValue() : <NoneValue />),
+      }),
       columnHelper.accessor((row) => row.quantityLedger.expectedQuantity, {
         id: "expectedQuantity",
         header: "Expected",

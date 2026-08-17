@@ -1235,6 +1235,16 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       nullable: { field: "inventoryPresenceFilter", label: "inventory" },
     },
     {
+      // A second kind of presence: the product IS a bin somewhere, rather than
+      // sitting on a shelf as stock. "none" plus `location: none` is the
+      // genuine "owned and nowhere" set.
+      columnId: "servingAsLocations",
+      field: "servingAsLocationPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter in service...",
+      options: presenceFilterOptions("in service as a location"),
+    },
+    {
       columnId: "ingredient",
       field: "ingredientIdFilter",
       kind: "idMulti",
