@@ -63,6 +63,11 @@ export function LinkedTransactions({
                 to={entities.financialTransaction.routes.detail}
                 params={entityDetailParams(transaction.id)}
                 className="block truncate"
+                title={
+                  transaction.merchant ||
+                  transaction.rawDescription ||
+                  transaction.id
+                }
               >
                 {transaction.merchant ||
                   transaction.rawDescription ||
@@ -74,6 +79,7 @@ export function LinkedTransactions({
                 to={entities.financialAccount.routes.detail}
                 params={entityDetailParams(transaction.accountId)}
                 className="block truncate"
+                title={transaction.accountName ?? transaction.accountId}
               >
                 {transaction.accountName ?? transaction.accountId}
               </TableLink>

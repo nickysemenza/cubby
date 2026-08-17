@@ -26,11 +26,13 @@ vi.mock("@tanstack/react-router", () => ({
     to,
     params,
     className,
+    title,
   }: {
     children?: ReactNode;
     to: string;
     params?: Record<string, string>;
     className?: string;
+    title?: string;
   }) => {
     const href = params
       ? Object.entries(params).reduce(
@@ -39,7 +41,7 @@ vi.mock("@tanstack/react-router", () => ({
         )
       : to;
     return (
-      <a href={href} className={className}>
+      <a href={href} className={className} title={title}>
         {children}
       </a>
     );
@@ -95,10 +97,12 @@ describe("LinkedTransactions", () => {
       "/financial-transactions/FTR-2345",
     );
     expect(transactionLink).toHaveClass("block", "truncate");
+    expect(transactionLink).toHaveAttribute("title", "Neighborhood Market");
 
     const accountLink = screen.getByRole("link", { name: "Household Card" });
     expect(accountLink).toHaveAttribute("href", "/financial-accounts/FAC-2345");
     expect(accountLink).toHaveClass("block", "truncate");
+    expect(accountLink).toHaveAttribute("title", "Household Card");
 
     const row = transactionLink.closest("tr");
     expect(row).not.toBeNull();

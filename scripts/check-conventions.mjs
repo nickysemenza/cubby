@@ -693,6 +693,72 @@ function topLevelConditionalBranches(expression) {
   return null;
 }
 
+/**
+ * Split a `cn(...)`/`clsx(...)` call into top-level arguments. Nested calls and
+ * quoted commas stay inside their argument.
+ *
+ * @param {string} expression @returns {string[] | null}
+ */
+function topLevelClassArguments(expression) {
+  const call = /^(?:cn|clsx)\s*\(/.exec(expression);
+  if (!call || !expression.endsWith(")")) return null;
+  const body = expression.slice(call[0].length, -1);
+  const arguments_ = [];
+  let start = 0;
+  let round = 0;
+  let square = 0;
+  let curly = 0;
+  /** @type {'"' | "'" | "`" | null} */
+  let quote = null;
+  let escaped = false;
+
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") {
+      quote = ch;
+      continue;
+    }
+    if (ch === "(") round++;
+    else if (ch === ")") round--;
+    else if (ch === "[") square++;
+    else if (ch === "]") square--;
+    else if (ch === "{") curly++;
+    else if (ch === "}") curly--;
+    else if (ch === "," && round === 0 && square === 0 && curly === 0) {
+      arguments_.push(body.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  arguments_.push(body.slice(start).trim());
+  return arguments_;
+}
+
+/** @param {string} expression @returns {boolean} */
+function expressionHasUnconditionalWidth(expression) {
+  const branches = topLevelConditionalBranches(expression);
+  if (branches)
+    return branches.every((branch) =>
+      expressionHasUnconditionalWidth(branch.trim()),
+    );
+
+  const arguments_ = topLevelClassArguments(expression);
+  if (arguments_)
+    return arguments_.some((argument) =>
+      expressionHasUnconditionalWidth(argument),
+    );
+
+  const widthIndex = expression.search(WIDTH_CLASS_RE);
+  if (widthIndex === -1) return false;
+  const conjunction = expression.indexOf("&&");
+  return conjunction === -1 || widthIndex < conjunction;
+}
+
 /** @param {string} source @returns {boolean} */
 function hasUnconditionalWidthClass(source) {
   const value = jsxAttributeValue(source, "className");
@@ -701,17 +767,7 @@ function hasUnconditionalWidthClass(source) {
     return WIDTH_CLASS_RE.test(value.slice(1, -1));
 
   const expression = value.slice(1, -1).trim();
-  const branches = topLevelConditionalBranches(expression);
-  if (branches)
-    return branches.every((branch) => WIDTH_CLASS_RE.test(branch));
-
-  const widthIndex = expression.search(WIDTH_CLASS_RE);
-  if (widthIndex === -1) return false;
-  // `cn(showRaw && "w-1/2")` is not a width in every render state. A width
-  // written before any conditional conjunction is an unconditional base class
-  // (`cn("w-40", selected && "bg-muted")`).
-  const conjunction = expression.indexOf("&&");
-  return conjunction === -1 || widthIndex < conjunction;
+  return expressionHasUnconditionalWidth(expression);
 }
 
 /** @param {string} tableTag @returns {boolean} */
@@ -798,6 +854,16 @@ for (const [source, dynamicOrchestrator, expected] of [
   ],
   [
     '<Table><TableHead className={raw && "w-[30%]"}>Name</TableHead></Table>',
+    false,
+    1,
+  ],
+  [
+    '<Table><TableHead className={cn(selected && "bg-muted", "w-40")}>Name</TableHead></Table>',
+    false,
+    0,
+  ],
+  [
+    '<Table><TableHead className={cn(selected && "w-40", "bg-muted")}>Name</TableHead></Table>',
     false,
     1,
   ],
