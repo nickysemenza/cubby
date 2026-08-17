@@ -62,7 +62,12 @@ export function RelationshipExplorer({
   // React's hydration), and the two branches below differ by a whole subtree.
   // `views` comes from static config, so holding this gate `true` until
   // hydration is enough. See useHydratedLoading.
-  const previewsLoading = useHydratedLoading(query.isLoading);
+  // Guarded like background-jobs-page: `query` is disabled without a `sourceId`,
+  // and a disabled query's `isLoading` is already a stable `false`. (The
+  // `relationKeys.length` half of `enabled` cannot bite here — an empty
+  // `relationKeys` means empty `views`, which returns null above.)
+  const previewsHydratedLoading = useHydratedLoading(query.isLoading);
+  const previewsLoading = Boolean(sourceId) && previewsHydratedLoading;
   const groups = query.data ?? NO_PREVIEW_GROUPS;
   const presets = useMemo<RelationshipPreset[]>(() => {
     const byKey = new Map(groups.map((group) => [group.relationKey, group]));
