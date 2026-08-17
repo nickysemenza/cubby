@@ -8,14 +8,13 @@ import type {
   inventoryListItemOut,
   inventoryWithLocationAndProductOut,
 } from "@cubby/schemas/inventory";
-import { locationType } from "@cubby/schemas/location";
 import type { z } from "zod";
-import { parseWithContext } from "~/lib/zod-utils";
 import {
   mapImages,
   parseInventoryAmount,
 } from "~/server/repo/database-helpers";
 import { mapLocationIdentityProduct } from "~/server/repo/location/identity-product";
+import { parseLocationType } from "~/server/repo/location/parse-type";
 import {
   dbProductToInventoryEmbedShape,
   dbProductToInventoryListShape,
@@ -79,15 +78,10 @@ export const dbInventoryEntryToAPI: (
       valuation: location.valuation,
       name: location.name,
       aliases: location.aliases ?? [],
-      // Null whenever the location IS a product; only a present value is
-      // validated against the enum.
-      type:
-        location.type === null
-          ? null
-          : parseWithContext(locationType, location.type, {
-              entityType: "Location",
-              identifier: { id: location.id, name: location.name },
-            }),
+      type: parseLocationType(location.type, {
+        id: location.id,
+        name: location.name,
+      }),
       // The inventory embed carries the holding location's own identity so a
       // stock row can render the bin it sits in without a second fetch.
       product: mapLocationIdentityProduct(location),
@@ -120,9 +114,9 @@ export const dbInventoryEntryToListAPI: (
     location: {
       id: unsafeLocationShortcode(location.shortcode),
       name: location.name,
-      type: parseWithContext(locationType, location.type, {
-        entityType: "Location",
-        identifier: { id: location.id, name: location.name },
+      type: parseLocationType(location.type, {
+        id: location.id,
+        name: location.name,
       }),
     },
     product: dbProductToInventoryListShape({

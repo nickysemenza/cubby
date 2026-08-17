@@ -49,7 +49,15 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
           },
         ]
       : []),
-    { label: "Type", value: <LocationTypeLabel type={location.type} /> },
+    // A location that IS a Product has no type of its own — the SKU is its form
+    // factor. Showing an empty "Type" row was the tell that this page still
+    // only knew how to render the productless half.
+    location.product
+      ? {
+          label: "Is a",
+          value: <EntityInlineLink entity="product" data={location.product} />,
+        }
+      : { label: "Type", value: <LocationTypeLabel type={location.type} /> },
     {
       label: "Parent Location",
       value: location.parent ? (
@@ -72,6 +80,7 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
           <div className="flex items-center gap-2">
             <LocationIconWithLabel
               type={location.type}
+              product={location.product}
               label={location.name}
               size={20}
             />

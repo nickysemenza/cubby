@@ -7,7 +7,7 @@ import { LocationIcon } from "./location-icons";
 
 interface LocationTreeRowProps extends React.HTMLAttributes<HTMLDivElement> {
   ref?: React.Ref<HTMLDivElement>;
-  location: Pick<InfLocation, "name" | "type">;
+  location: Pick<InfLocation, "name" | "type" | "product">;
   depth: number;
   primaryMeta?: React.ReactNode;
   secondaryMeta?: React.ReactNode;
@@ -66,7 +66,13 @@ export function LocationTreeRow({
         )}
       </div>
       {leading}
-      {icon ?? <LocationIcon type={location.type} size={16} />}
+      {icon ?? (
+        <LocationIcon
+          type={location.type}
+          product={location.product}
+          size={16}
+        />
+      )}
       <div className="min-w-0 flex-1 space-y-0.5" /* tight: compact tree row */>
         <div
           className="flex min-w-0 items-baseline gap-1.5" /* tight: compact tree row */

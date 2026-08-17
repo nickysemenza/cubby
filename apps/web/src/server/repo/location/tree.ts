@@ -14,9 +14,7 @@ import type {
   InventoryItemForTree,
   LocationAncestorOut,
 } from "@cubby/schemas/location";
-import { locationType } from "@cubby/schemas/location";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { parseWithContext } from "~/lib/zod-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   type image,
@@ -32,7 +30,7 @@ import {
   unwrapDb,
 } from "~/server/repo/database-helpers";
 import { stockOnly } from "~/server/repo/inventory/placement";
-
+import { parseLocationType } from "~/server/repo/location/parse-type";
 import { buildLocationWithChildren } from "./helpers";
 import type { LocationWithParentChild } from "./internal-types";
 
@@ -287,9 +285,9 @@ export const loadLocationAncestors = async (
     const rung: LocationAncestorOut = {
       id: unsafeLocationShortcode(row.shortcode),
       name: row.name,
-      type: parseWithContext(locationType, row.type, {
-        entityType: "Location",
-        identifier: { id: row.shortcode, name: row.name },
+      type: parseLocationType(row.type, {
+        id: row.shortcode,
+        name: row.name,
       }),
     };
     if (chain) chain.push(rung);

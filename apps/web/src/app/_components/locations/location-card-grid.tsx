@@ -232,7 +232,9 @@ function LocationCard({
 
       {/* Stats row: counts */}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs">
-        {showTypeBadge && <LocationTypeLabel type={location.type} />}
+        {showTypeBadge && (
+          <LocationTypeLabel type={location.type} product={location.product} />
+        )}
         <EntityStat
           entity="location"
           count={childCount}

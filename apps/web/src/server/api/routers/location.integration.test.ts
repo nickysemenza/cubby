@@ -2,7 +2,11 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { listBackgroundBatches } from "~/server/repo/background-jobs";
 import { createUploadedImageRecord } from "~/server/repo/image";
-import { makeLocationInput } from "~/server/repo/repo.fixtures";
+import {
+  createProductFixture,
+  makeLocationInput,
+  makeProductInput,
+} from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { createTestCaller } from "../trpc";
 import { locationRouter } from "./location";
@@ -131,5 +135,73 @@ describe("location.bulkUpdateParent", () => {
       code: "PRECONDITION_FAILED",
       message: "Cannot set parent: would create a circular reference",
     });
+  });
+});
+
+/**
+ * A location that IS a Product carries `type = NULL`, and every read path has
+ * to survive that.
+ *
+ * This broke in production after the enum narrowing: five mappers still called
+ * `parseWithContext(locationType, row.type, …)`, which takes its value as
+ * `unknown` — so a `string | null` flowing into a non-nullable enum was not a
+ * type error, just a 500 on the location detail page. A typecheck and 2,231
+ * tests all passed. The only thing that catches it is exercising the real
+ * endpoints against a real null.
+ */
+describe("reads tolerate a product-linked location's null type", () => {
+  const ctx = withTestDb();
+
+  const seedLinkedLocation = async (name: string) => {
+    const product = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: `Null Type Tote ${name}` }),
+      ctx.actor,
+    );
+    const caller = createTestCaller(locationRouter, ctx.db);
+    const created = await caller.create(
+      makeLocationInput({ name, productId: product.id }),
+    );
+    return { caller, created, product };
+  };
+
+  it("returns the location from every roster and detail read", async () => {
+    const { caller, created } = await seedLinkedLocation("null-type bin");
+
+    const detail = await caller.getByShortcode({ shortcode: created.id });
+    expect(detail?.type).toBeNull();
+    expect(detail?.product?.name).toBe("Null Type Tote null-type bin");
+
+    const list = await caller.list({
+      filters: {},
+      sort: [{ orderBy: "name", direction: "asc" }],
+      pagination: { pageIndex: 0, pageSize: 50 },
+    });
+    expect(list.items.some((l) => l.id === created.id)).toBe(true);
+
+    // `options` is the picker roster — a separate mapper from `list`, and the
+    // one whose output schema still refused a null.
+    const options = await caller.options({
+      filters: {},
+      sort: [{ orderBy: "name", direction: "asc" }],
+      pagination: { pageIndex: 0, pageSize: 50 },
+    });
+    expect(options.items.some((l) => l.id === created.id)).toBe(true);
+
+    const byCodes = await caller.getByShortcodes({ shortcodes: [created.id] });
+    expect(byCodes[0]?.type).toBeNull();
+  });
+
+  it("returns it as a parent, where the ancestor chain re-parses the type", async () => {
+    const { caller, created } = await seedLinkedLocation("null-type parent");
+    const child = await caller.create(
+      makeLocationInput({ name: "null-type child", parentId: created.id }),
+    );
+
+    const detail = await caller.getByShortcode({ shortcode: child.id });
+    expect(detail?.parent?.type ?? null).toBeNull();
+
+    const tree = await caller.makeTree();
+    expect(JSON.stringify(tree)).toContain("null-type parent");
   });
 });

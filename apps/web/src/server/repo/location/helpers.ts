@@ -13,10 +13,9 @@ import type {
   InfLocation,
   LocationListItemOut,
   LocationListRefOut,
+  LocationOut,
 } from "@cubby/schemas/location";
-import { type LocationOut, locationType } from "@cubby/schemas/location";
 import { sumBy } from "es-toolkit";
-import { parseWithContext } from "~/lib/zod-utils";
 import type { location } from "~/server/db/schema";
 import {
   isNotDeleted,
@@ -27,31 +26,15 @@ import {
   type RowWithOptionalAliases,
 } from "~/server/repo/database-helpers";
 import { requireLoadedProductPricing } from "~/server/repo/inventory/mappers";
+import { parseLocationType } from "~/server/repo/location/parse-type";
 import { dbProductToInventoryEmbedShape } from "~/server/repo/product/mappers";
 import type { ProductPricing } from "~/server/repo/product/pricing";
-
 import { mapLocationIdentityProduct } from "./identity-product";
 import type {
   LocationIdentityProductRow,
   LocationListDB,
   LocationWithParentChild,
 } from "./internal-types";
-
-/**
- * A location that IS a Product carries no `type`, so the parse has to accept
- * null rather than fail closed on it. Only a *present* value is validated
- * against the enum.
- */
-const parseLocationType = (
-  value: string | null,
-  identifier: { id: string; name: string },
-) =>
-  value === null
-    ? null
-    : parseWithContext(locationType, value, {
-        entityType: "Location",
-        identifier,
-      });
 
 /**
  * Transform a location DB record to API format.
@@ -88,9 +71,9 @@ const dbLocationToListRefShape = (
 ): LocationListRefOut => ({
   id: unsafeLocationShortcode(locationData.shortcode),
   name: locationData.name,
-  type: parseWithContext(locationType, locationData.type, {
-    entityType: "Location",
-    identifier: { id: locationData.id, name: locationData.name },
+  type: parseLocationType(locationData.type, {
+    id: locationData.id,
+    name: locationData.name,
   }),
 });
 

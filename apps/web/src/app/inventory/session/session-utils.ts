@@ -6,6 +6,8 @@ export interface SessionLocation {
   id: LocationShortcode;
   name: string;
   type: LocationType | null;
+  /** The SKU this location IS; supplies the glyph when `type` is null. */
+  product: InfLocation["product"];
   shortcode: string;
   lastBulkInventory: Date | null;
   aiDescription: string | null;
@@ -158,6 +160,7 @@ export function flattenAuditableLocations(
         id: node.id,
         name: node.name,
         type: node.type,
+        product: node.product,
         shortcode: node.id,
         lastBulkInventory: node.lastBulkInventory,
         aiDescription: node.aiDescription,

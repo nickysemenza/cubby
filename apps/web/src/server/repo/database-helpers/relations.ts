@@ -339,6 +339,7 @@ export const relations = {
         product: locationIdentityProduct,
         children: {
           where: notDeleted(location),
+          with: { product: locationIdentityProduct },
         },
         inventoryEntries: {
           where: notDeleted(inventoryEntry),
@@ -364,6 +365,10 @@ export const relations = {
         product: locationIdentityProduct,
         children: {
           with: {
+            // Children carry their identity SKU too — the Contents table shows
+            // one row per child bin, and without this every product-linked
+            // child renders an empty type with no name to fall back on.
+            product: locationIdentityProduct,
             images: {
               orderBy: imageOrder,
               with: {

@@ -90,7 +90,12 @@ export const LocationGalleryCard = function LocationGalleryCard({
             />
           ) : (
             <div className="flex size-10 shrink-0 items-center justify-center border bg-muted/40">
-              <LocationIcon type={location.type} colored size={18} />
+              <LocationIcon
+                type={location.type}
+                product={location.product}
+                colored
+                size={18}
+              />
             </div>
           )}
           <div className="min-w-0 flex-1">

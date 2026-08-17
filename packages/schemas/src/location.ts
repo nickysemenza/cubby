@@ -286,7 +286,8 @@ export type LocationParentOptionsOut = z.infer<typeof locationParentOptionsOut>;
 const locationOptionItemFields = {
   id: locationShortcode,
   name: z.string(),
-  type: locationType,
+  /** Null when the location IS a product; the SKU carries its form factor. */
+  type: locationType.nullable(),
   aliases: z.array(z.string()).default([]),
   /** Root → immediate parent. Empty for a top-level location. */
   ancestors: z.array(locationAncestorOut),
@@ -496,7 +497,8 @@ export const mcpLocationCreateInput = z.object({
 export const locationMcpOut = z.object({
   id: locationShortcode,
   name: z.string(),
-  type: locationType,
+  /** Null when the location IS a product; see `productId`. */
+  type: locationType.nullable(),
   parentName: z.string().nullable(),
   parentId: locationShortcode.nullable(),
   children: z.array(z.object({ id: locationShortcode, name: z.string() })),
