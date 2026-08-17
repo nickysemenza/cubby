@@ -3,7 +3,7 @@ import {
   stripSearchParams,
   useNavigate,
 } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { CalendarFilterBar } from "~/app/calendar/calendar-filter-bar";
 import { buildCalendarFilters } from "~/app/calendar/calendar-filters";
 import {
@@ -29,6 +29,17 @@ function CalendarRoute() {
   // `useMemo` dependency of the query range downstream — building it inline
   // would allocate a fresh object every render and churn the range.
   const filters = useMemo(() => buildCalendarFilters(search), [search]);
+  // Stable, so `ManifestFilterBar`'s `commit` callback — and the draft effect
+  // that depends on it — don't churn every render. `LedgerFilters` gets this
+  // for free from its `[table]` dep; the URL-backed bar has to say it.
+  const onSearchChange = useCallback(
+    (params: Record<string, string | undefined>) =>
+      void navigate({
+        search: (previous) => ({ ...previous, ...params }),
+        replace: true,
+      }),
+    [navigate],
+  );
 
   return (
     <Page
@@ -37,15 +48,7 @@ function CalendarRoute() {
       fullWidth
       actions={<CalendarSubscribeDialog />}
     >
-      <CalendarFilterBar
-        search={search}
-        onSearchChange={(params) =>
-          void navigate({
-            search: (previous) => ({ ...previous, ...params }),
-            replace: true,
-          })
-        }
-      />
+      <CalendarFilterBar search={search} onSearchChange={onSearchChange} />
       <UnifiedCalendar
         date={search.date}
         day={search.day}
