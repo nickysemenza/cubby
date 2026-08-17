@@ -1,0 +1,143 @@
+import {
+  unsafeLocationShortcode,
+  unsafeProductShortcode,
+} from "@cubby/schemas/identifiers";
+import type { ImageOut } from "@cubby/schemas/image";
+import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import { describe, expect, it } from "vitest";
+import {
+  locationChildGroupLabel,
+  resolveLocationVisual,
+} from "./location-visual-resolver";
+
+const image = (id: string, overrides: Partial<ImageOut> = {}): ImageOut =>
+  ({
+    id: `00000000-0000-4000-8000-${id.padStart(12, "0")}`,
+    url: `https://example.test/${id}.jpg`,
+    key: `${id}.jpg`,
+    filename: `${id}.jpg`,
+    size: 100,
+    contentType: "image/jpeg",
+    status: "UPLOADED",
+    width: 800,
+    height: 600,
+    detectedContentType: null,
+    sha256: null,
+    renderStatus: null,
+    storageStatus: null,
+    verifiedAt: null,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date("2026-01-01T00:00:00Z"),
+    ...overrides,
+  }) as ImageOut;
+
+const location = (
+  code: string,
+  type: LocationType | null,
+  overrides: Partial<InfLocation> = {},
+): InfLocation => ({
+  id: unsafeLocationShortcode(`LOC-${code}`),
+  name: `Location ${code}`,
+  aliases: [],
+  type,
+  product: null,
+  lastBulkInventory: null,
+  aiDescription: null,
+  images: [],
+  valuation: null,
+  createdAt: new Date("2026-01-01T00:00:00Z"),
+  updatedAt: new Date("2026-01-01T00:00:00Z"),
+  children: [],
+  ...overrides,
+});
+
+describe("resolveLocationVisual", () => {
+  it("prefers an own photo over the linked product and children", () => {
+    const own = image("own");
+    const product = image("product");
+    const child = location("BBBB", "drawer", { images: [image("child")] });
+    const result = resolveLocationVisual(
+      location("AAAA", null, {
+        images: [own],
+        product: {
+          id: unsafeProductShortcode("PRD-AAAA"),
+          name: "Two drawer box",
+          manufacturer: "Example",
+          model: null,
+          category: "storage",
+          coverImage: product,
+          price: 50,
+        },
+        children: [child],
+      }),
+    );
+
+    expect(result.primaryImage).toBe(own);
+    expect(result.primarySource).toBe("location");
+    expect(result.childVisuals).toHaveLength(1);
+  });
+
+  it("falls back through product, child, then none", () => {
+    const product = image("product");
+    const childImage = image("child");
+    const child = location("BBBB", "drawer", { images: [childImage] });
+    const productBacked = location("AAAA", null, {
+      product: {
+        id: unsafeProductShortcode("PRD-AAAA"),
+        name: "Two drawer box",
+        manufacturer: "Example",
+        model: null,
+        category: "storage",
+        coverImage: product,
+        price: null,
+      },
+      children: [child],
+    });
+
+    expect(resolveLocationVisual(productBacked).primarySource).toBe("product");
+    expect(
+      resolveLocationVisual(location("CCCC", "box", { children: [child] }))
+        .primarySource,
+    ).toBe("child");
+    expect(resolveLocationVisual(location("DDDD", "box")).primarySource).toBe(
+      "none",
+    );
+  });
+
+  it("skips unusable images and caps previews at four in child order", () => {
+    const children = Array.from({ length: 6 }, (_, index) =>
+      location(`A${index}AA`, "drawer", {
+        images: [
+          image(`bad-${index}`, { contentType: "application/pdf" }),
+          image(`good-${index}`),
+        ],
+      }),
+    );
+    const result = resolveLocationVisual(location("ZZZZ", "box", { children }));
+
+    expect(result.childVisuals.map((child) => child.image.filename)).toEqual([
+      "good-0.jpg",
+      "good-1.jpg",
+      "good-2.jpg",
+      "good-3.jpg",
+    ]);
+    expect(result.hiddenChildCount).toBe(2);
+  });
+});
+
+describe("locationChildGroupLabel", () => {
+  it("uses a homogeneous physical type and falls back for mixed children", () => {
+    expect(
+      locationChildGroupLabel([
+        location("AAAA", "drawer"),
+        location("BBBB", "drawer"),
+      ]),
+    ).toBe("drawers");
+    expect(
+      locationChildGroupLabel([
+        location("AAAA", "drawer"),
+        location("BBBB", "shelf"),
+      ]),
+    ).toBe("Compartments");
+  });
+});

@@ -6,6 +6,7 @@ import type { InfLocation } from "@cubby/schemas/location";
 import { ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
+import { resolveLocationPrimaryVisual } from "~/app/_components/locations/location-visual-resolver";
 import { Row } from "~/components/layout";
 import { cn } from "~/lib/utils";
 import { ArrangeMoveTo } from "./ArrangeMoveTo";
@@ -91,6 +92,7 @@ export function ArrangeLocationCard({
 
   const count = locationItemCount(node);
   const childCount = node.childCount ?? node.children?.length ?? 0;
+  const cover = resolveLocationPrimaryVisual(node).image;
 
   return (
     <Row align="center" gap="tight" className="min-w-0">
@@ -108,13 +110,15 @@ export function ArrangeLocationCard({
         )}
       >
         <ArrangeThumb
-          images={node.images}
+          images={cover ? [cover] : []}
           alt={node.name}
           size={32}
           fill
           // -my cancels the card's own py so the cover is full-bleed.
           className="-my-1.5" /* tight: matches the card's py-1.5 */
-          fallback={<LocationIcon type={node.type} product={null} size={14} />}
+          fallback={
+            <LocationIcon type={node.type} product={node.product} size={14} />
+          }
           to="/locations/$shortcode"
           shortcode={node.id}
         />
