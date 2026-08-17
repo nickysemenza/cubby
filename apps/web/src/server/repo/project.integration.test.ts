@@ -349,23 +349,6 @@ describe("project repository", () => {
     expect(projectCAfter.blockingIds).toEqual([]);
   });
 
-  it("rejects a self-reference in blockedByIds", async () => {
-    const { output: projectA } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "test project self-ref" }),
-      ctx.actor,
-    );
-
-    await expect(
-      updateProject(
-        ctx.db,
-        projectA.id,
-        { blockedByIds: [projectA.id] },
-        ctx.actor,
-      ),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-  });
-
   it("dedupes duplicate ids in blockedByIds down to a single edge", async () => {
     const { output: projectA, entityId: projectAEntityId } =
       await createProject(

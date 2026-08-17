@@ -4,11 +4,7 @@ import {
   unsafeProjectShortcode,
   unsafeTaskShortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  actionableTasksOut,
-  projectCreateInput,
-  taskCreateInput,
-} from "@cubby/schemas/project";
+import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
@@ -594,7 +590,7 @@ describe("task router — listActionable", () => {
     taskCaller = createTestCaller(taskRouter, ctx.db);
   });
 
-  it("listActionable output satisfies the published schema", async () => {
+  it("returns a newly created task as actionable", async () => {
     await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "router test task" }),
@@ -603,8 +599,18 @@ describe("task router — listActionable", () => {
 
     const result = await taskCaller.listActionable();
 
-    // The .output() contract must accept real repo output (pins schema<->repo).
-    expect(() => actionableTasksOut.parse(result)).not.toThrow();
+    // The schema<->repo pin is the CALL, not a re-parse: the router declares
+    // `.output(strictOutput(actionableTasksOut))` and tRPC runs that parser, so
+    // `result` has already been validated by the time we see it. This matters
+    // because `actionableTaskOut` re-declares `taskOut`'s shape by hand (see
+    // the note on it in packages/schemas/src/project.ts) — a field the repo
+    // stops emitting, or emits as a Date where a string is declared, fails
+    // here and nowhere else. An explicit `actionableTasksOut.parse(result)`
+    // used to stand in for that and could not fail; asserting real behaviour
+    // keeps the pin and adds something the parse never checked.
+    expect([...result.next, ...result.later].map((t) => t.name)).toContain(
+      "router test task",
+    );
   });
 });
 

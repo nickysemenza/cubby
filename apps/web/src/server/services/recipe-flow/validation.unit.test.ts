@@ -1,5 +1,8 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
-import type { RecipeFlowPlan } from "@cubby/schemas/recipe-flow";
+import {
+  type RecipeFlowPlan,
+  recipeFlowGenerateInputSchema,
+} from "@cubby/schemas/recipe-flow";
 import { describe, expect, it } from "vitest";
 import { validateRecipeFlowPlan } from "./validation";
 
@@ -161,5 +164,18 @@ describe("validateRecipeFlowPlan", () => {
     expect(result.issues).toContain(
       `divided ingredient usage ${FLOUR_USAGE} needs a distinct role on every source`,
     );
+  });
+});
+
+// Shortcodes are the public id; a uuid must never be accepted here. Split out
+// of api/routers/recipe/flow.integration.test.ts, where it was bolted onto a
+// caller round-trip and referenced nothing that test had created.
+describe("recipeFlowGenerateInputSchema", () => {
+  it("rejects a uuid where a recipe shortcode is required", () => {
+    expect(
+      recipeFlowGenerateInputSchema.safeParse({
+        id: "00000000-0000-4000-8000-000000000001",
+      }).success,
+    ).toBe(false);
   });
 });

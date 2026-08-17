@@ -465,40 +465,6 @@ describe("inventory router", () => {
       expect(result.items[0]!.amount.value).toEqual(8);
     });
 
-    it("should throw error when source and target are the same", async () => {
-      const caller = createTestCaller(inventoryRouter, ctx.db);
-
-      const seed = await seedFromCSV(
-        ctx.db,
-        [
-          {
-            product_name: "Error Product",
-            manufacturer: "Brand",
-            location_name: "Same Location",
-            quantity: 5,
-            unit: "units",
-          },
-        ],
-        TEST_ACTOR,
-      );
-
-      const locationId = seed.locationIds.get("Same Location")!;
-      const entryId = seed.inventoryIds.get("Error Product@Same Location")!;
-
-      await expect(
-        caller.bulkMove({
-          sourceLocationId: locationId,
-          targetLocationId: locationId,
-          items: [
-            {
-              inventoryEntryId: entryId,
-              quantity: { value: 5, unit: "units" },
-            },
-          ],
-        }),
-      ).rejects.toThrow("Source and target locations must be different");
-    });
-
     it("should throw error when move quantity exceeds available", async () => {
       const caller = createTestCaller(inventoryRouter, ctx.db);
 

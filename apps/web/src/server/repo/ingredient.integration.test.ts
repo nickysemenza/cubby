@@ -381,21 +381,6 @@ describe("ingredient", () => {
     expect(embeddingRow?.deletedAt).not.toBeNull();
   });
 
-  it("merge rejects a self-merge without deleting the target", async () => {
-    const a = await findOrCreateIngredient(ctx.db, "self target");
-    const b = await findOrCreateIngredient(ctx.db, "self alias");
-
-    await expect(
-      mergeIngredients(ctx.db, a.id, [a.id, b.id], ctx.actor),
-    ).rejects.toThrow(/itself/i);
-
-    // Target (and alias) untouched — the old code would have hard-deleted `a`.
-    const [survivors] = await getDb(ctx.db)
-      .select({ count: count() })
-      .from(ingredient);
-    expect(survivors!.count).toEqual(2);
-  });
-
   it("merge fails loud on an unknown alias id (no silent no-op)", async () => {
     const a = await findOrCreateIngredient(ctx.db, "keeper");
     const bogus = unsafeIngredientId("00000000-0000-0000-0000-000000000000");

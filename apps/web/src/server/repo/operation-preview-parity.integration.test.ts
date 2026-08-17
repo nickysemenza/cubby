@@ -1,8 +1,18 @@
 import {
-  previewDeleteEntitySchema,
-  previewMergeEntitySchema,
+  type PreviewDeleteEntity,
+  type PreviewMergeEntity,
   previewOperationSchema,
 } from "@cubby/schemas/entity-integrity";
+import {
+  unsafeFinancialAccountId,
+  unsafeFinancialTransactionId,
+  unsafeLocationId,
+  unsafeProductId,
+  unsafeProjectId,
+  unsafePurchaseId,
+  unsafeVendorId,
+  unsafeWishId,
+} from "@cubby/schemas/identifiers";
 import { mealCreateInput } from "@cubby/schemas/meal";
 import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
@@ -11,6 +21,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { NONEXISTENT_UUID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { previewOperation } from "~/server/api/routers/entity-integrity-preview";
+import type { Database } from "~/server/db/database";
 import {
   entityEmbedding,
   expense,
@@ -21,6 +32,11 @@ import {
   recipeSection,
   task,
 } from "~/server/db/schema";
+import { previewDeleteFinancialAccounts } from "~/server/repo/financial-account";
+import { previewDeleteFinancialTransactions } from "~/server/repo/financial-transaction";
+import { previewDeleteLocations } from "~/server/repo/location/crud";
+import { previewMergeProducts } from "~/server/repo/product/merge";
+import { previewDeleteProjects } from "~/server/repo/project/crud";
 import {
   deleteCookbook,
   previewDeleteCookbooks,
@@ -56,6 +72,7 @@ import {
   deletePurchases,
   mergePurchases,
   previewDeletePurchases,
+  previewMergePurchases,
 } from "./purchase";
 import { deleteRecipes } from "./recipe";
 import { previewDeleteRecipes } from "./recipe/crud";
@@ -76,7 +93,13 @@ import {
 import { insertWithShortcode } from "./shortcode-utils";
 import { createTask, deleteTasks } from "./task";
 import { previewDeleteTasks } from "./task/crud";
-import { createVendor, deleteVendors } from "./vendor";
+import {
+  createVendor,
+  deleteVendors,
+  previewDeleteVendors,
+  previewMergeVendors,
+} from "./vendor";
+import { previewDeleteWishes } from "./wish";
 
 /**
  * Real-database parity tests between an operation preview and the mutation it
@@ -1111,38 +1134,109 @@ describe("operation preview / mutation parity", () => {
     });
   });
 
-  describe("router dispatch: previewOperation", () => {
-    for (const entity of previewDeleteEntitySchema.options) {
-      it(`delete/${entity} dispatches to a planner and returns a schema-valid payload`, async () => {
-        const result = await previewOperation(
-          ctx.db,
-          { operation: "delete", entity, ids: [NONEXISTENT_UUID] },
-          new Date(),
-        );
-        expect(result.operation).toBe("delete");
-        expect(result.entity).toBe(entity);
-        expect(previewOperationSchema.safeParse(result).success).toBe(true);
+  /**
+   * Smoke-test the planners that nothing else in this file executes.
+   *
+   * These call the planner functions DIRECTLY, and that is the whole point.
+   * An earlier version drove them through `previewOperation` with a
+   * nonexistent id, which looked equivalent and was vacuous: `plan()` resolves
+   * ids first and returns `EMPTY_PLAN` on any unresolved one, so it never
+   * reaches the `match(...)` dispatch and the planner is never called. Proved
+   * by throwing from the first line of `previewDeleteWishes` — the
+   * `delete/wish` case still passed. What that version actually exercised was
+   * the resolve-gate, which `unresolved targets` below already covers.
+   *
+   * `blocker parity` and `count parity` above cover 10 of 16 delete planners
+   * and 1 of 4 merge planners with real rows. These are the remaining 9. Each
+   * runs the planner's real SQL against zero matching rows — the planners
+   * short-circuit only on an EMPTY array, so a non-empty nonexistent id still
+   * issues the query — which is enough to catch a syntax error or a bad join
+   * in one that no other test touches.
+   *
+   * The dispatch itself needs no test: the `match(...)` chain ends in
+   * `.exhaustive()`, so a new entity fails `tsc` long before it fails here.
+   */
+  describe("planner smoke tests: SQL runs against zero rows", () => {
+    /**
+     * Keyed by entity and typed as a total `Record`, so **adding an entity to
+     * the enum fails `tsc` here until someone classifies it**. That restores
+     * the property the previous derived-by-subtraction version had: the SQL
+     * smoke coverage stays self-completing, rather than a hand-kept list that
+     * silently stops covering new planners.
+     *
+     * `"covered-by-parity"` means the blocker/count parity blocks above already
+     * run that planner against real rows. Everything else gets a thunk that
+     * calls the planner DIRECTLY — see the note above on why going through
+     * `previewOperation` does not work.
+     */
+    type Smoke = "covered-by-parity" | ((db: Database) => Promise<unknown>);
+
+    const DELETE_PLANNER_SMOKE: Record<PreviewDeleteEntity, Smoke> = {
+      product: "covered-by-parity",
+      recipe: "covered-by-parity",
+      ingredient: "covered-by-parity",
+      cookbook: "covered-by-parity",
+      meal: "covered-by-parity",
+      task: "covered-by-parity",
+      purchase: "covered-by-parity",
+      expense: "covered-by-parity",
+      inventory: "covered-by-parity",
+      image: "covered-by-parity",
+      location: (db) =>
+        previewDeleteLocations(db, [unsafeLocationId(NONEXISTENT_UUID)]),
+      project: (db) =>
+        previewDeleteProjects(db, [unsafeProjectId(NONEXISTENT_UUID)]),
+      vendor: (db) =>
+        previewDeleteVendors(db, [unsafeVendorId(NONEXISTENT_UUID)]),
+      wish: (db) => previewDeleteWishes(db, [unsafeWishId(NONEXISTENT_UUID)]),
+      financialAccount: (db) =>
+        previewDeleteFinancialAccounts(db, [
+          unsafeFinancialAccountId(NONEXISTENT_UUID),
+        ]),
+      financialTransaction: (db) =>
+        previewDeleteFinancialTransactions(db, [
+          unsafeFinancialTransactionId(NONEXISTENT_UUID),
+        ]),
+    };
+
+    // `keepId` must differ from `mergeIds`: the planners compute
+    // `losers = mergeIds.filter((id) => id !== keepId)` and short-circuit on an
+    // empty result, so reusing one uuid for both would skip the SQL entirely
+    // and quietly re-vacuate these tests.
+    const MERGE_PLANNER_SMOKE: Record<PreviewMergeEntity, Smoke> = {
+      ingredient: "covered-by-parity",
+      vendor: (db) =>
+        previewMergeVendors(db, {
+          mergeIds: [unsafeVendorId(NONEXISTENT_UUID)],
+          keepId: unsafeVendorId(NONEXISTENT_UUID_2),
+        }),
+      purchase: (db) =>
+        previewMergePurchases(db, {
+          mergeIds: [unsafePurchaseId(NONEXISTENT_UUID)],
+          keepId: unsafePurchaseId(NONEXISTENT_UUID_2),
+        }),
+      product: (db) =>
+        previewMergeProducts(db, {
+          mergeIds: [unsafeProductId(NONEXISTENT_UUID)],
+          keepId: unsafeProductId(NONEXISTENT_UUID_2),
+        }),
+    };
+
+    for (const [entity, smoke] of Object.entries(DELETE_PLANNER_SMOKE)) {
+      if (smoke === "covered-by-parity") continue;
+      it(`delete/${entity} planner issues its SQL`, async () => {
+        await expect(smoke(ctx.db)).resolves.toBeDefined();
       });
     }
 
-    for (const entity of previewMergeEntitySchema.options) {
-      it(`merge/${entity} dispatches to a planner and returns a schema-valid payload`, async () => {
-        const result = await previewOperation(
-          ctx.db,
-          {
-            operation: "merge",
-            entity,
-            keepId: NONEXISTENT_UUID,
-            mergeIds: [NONEXISTENT_UUID_2],
-          },
-          new Date(),
-        );
-        expect(result.operation).toBe("merge");
-        expect(result.entity).toBe(entity);
-        expect(previewOperationSchema.safeParse(result).success).toBe(true);
+    for (const [entity, smoke] of Object.entries(MERGE_PLANNER_SMOKE)) {
+      if (smoke === "covered-by-parity") continue;
+      it(`merge/${entity} planner issues its SQL`, async () => {
+        await expect(smoke(ctx.db)).resolves.toBeDefined();
       });
     }
   });
+
   describe("unresolved targets", () => {
     it("blocks a delete preview whose id names nothing, instead of previewing nothing", async () => {
       const result = await previewOperation(

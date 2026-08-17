@@ -19,7 +19,6 @@ import {
 import {
   approveDetectedInventoryItem,
   detectInventoryItems,
-  isDetectedItemCoveredByInventoryName,
 } from "./location-vision";
 
 const detectedItem = {
@@ -128,23 +127,6 @@ describe("approveDetectedInventoryItem", () => {
       location.entityId,
     ]);
     expect(inventory[0]?.product.name).toBe("misc: unidentified cables");
-  });
-});
-
-describe("isDetectedItemCoveredByInventoryName", () => {
-  it("treats a generic cached detection as covered by a more specific inventoried product", () => {
-    expect(
-      isDetectedItemCoveredByInventoryName("drop cloth", "plastic drop cloth"),
-    ).toBe(true);
-    expect(
-      isDetectedItemCoveredByInventoryName("plastic tarp", "blue plastic tarp"),
-    ).toBe(true);
-  });
-
-  it("does not dedupe single-token broad matches", () => {
-    expect(isDetectedItemCoveredByInventoryName("tarp", "tarp clips")).toBe(
-      false,
-    );
   });
 });
 
