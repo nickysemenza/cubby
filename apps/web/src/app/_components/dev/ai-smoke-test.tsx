@@ -52,6 +52,14 @@ const SPECS: EndpointSpec[] = [
       c.ai.suggestLocationType.query(i as { locationName: string }),
   },
   {
+    key: "suggestLocation",
+    label: "ai.suggestLocation",
+    description:
+      "Structured output over your real location roster — product → where to put it",
+    defaultInput: { productId: "PRD-XXXX" },
+    run: (c, i) => c.ai.suggestLocation.query(i as { productId: string }),
+  },
+  {
     key: "parseSearch",
     label: "ai.parseSearch",
     description: "Structured output — free-text search → filters",

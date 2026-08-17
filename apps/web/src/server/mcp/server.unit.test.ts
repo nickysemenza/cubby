@@ -4,6 +4,7 @@ import { previewOperationInputSchema } from "@cubby/schemas/entity-integrity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { FINANCIAL_STATEMENT_IMPORT_MAX_ROWS } from "@cubby/schemas/financial-transaction";
 import { unsafeExpenseShortcode } from "@cubby/schemas/identifiers";
+import { mcpProductCreateInput } from "@cubby/schemas/product";
 import type { ExpenseMatchCandidate } from "@cubby/schemas/project";
 import {
   expenseOut,
@@ -1310,6 +1311,66 @@ describe("listMcpToolCatalog", () => {
         accepted: declaredInput?.safeParse(captured).success,
       }).toEqual({ tool: toolName, accepted: true });
     }
+  });
+
+  it("carries every field create_product advertises through to product.create", async () => {
+    // Regression: the MCP create handler copied `mcpProductCreateInput` across
+    // field by field, so `stockTracked` — added to the shape later — never
+    // reached the router. Twenty-one products created with an explicit
+    // `stockTracked: false` read back `null`, which is a DIFFERENT fact: null
+    // means "undecided, still on the Not-on-a-shelf worklist", false means
+    // "reviewed, no shelf claim". Nothing in the catalog could see it, because
+    // the tool advertised the field correctly and only dropped it downstream.
+    // Asserted over the shape rather than one field name so the next field
+    // added to the MCP shape is covered without touching this test.
+    const args: Record<string, unknown> = {
+      name: "Field Passthrough Product",
+      manufacturer: "generic",
+      aliases: ["passthrough alias"],
+      tags: ["passthrough-tag"],
+      upc: null,
+      fdc_id: null,
+      model: "MDL-1",
+      notes: "passthrough notes",
+      expectedQuantity: 2,
+      category: "hardware",
+      ingredientId: `${SHORTCODE_PREFIX.ingredient}2222`,
+      price: 12.5,
+      unitMappings: [
+        { a: { value: 8, unit: "oz" }, b: { value: 10, unit: "dollar" } },
+      ],
+      externalIds: [
+        { source: "amazon", kind: "asin", externalId: "B000PASSTHRU" },
+      ],
+      usdaUnavailable: false,
+      stockTracked: false,
+    };
+    expect(Object.keys(args).sort()).toEqual(
+      Object.keys(mcpProductCreateInput.shape).sort(),
+    );
+
+    let captured: Record<string, unknown> | undefined;
+    // The stub's return value is irrelevant here — output validation runs after
+    // the capture, so a failed response still proves what the router received.
+    await callTool(createMcpServer(), "create_product", args, {
+      product: {
+        create: async (argument: Record<string, unknown>) => {
+          captured = argument;
+          return {};
+        },
+      },
+    });
+
+    expect(
+      captured,
+      "create_product never reached product.create",
+    ).toBeDefined();
+    const dropped = Object.keys(mcpProductCreateInput.shape).filter(
+      (field) => !(captured && field in captured),
+    );
+    expect(dropped).toEqual([]);
+    // An explicit decision, not an absent one: `false` must not arrive as null.
+    expect(captured?.stockTracked).toBe(false);
   });
 
   it("advertises outputSchema on every tool with no mock metadata", async () => {

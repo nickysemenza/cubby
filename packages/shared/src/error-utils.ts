@@ -119,6 +119,12 @@ export const AppErrors = {
   REQUIRED_FIELD_MISSING: "BAD_REQUEST",
   CONSTRAINT_VIOLATION: "BAD_REQUEST",
 
+  // AI suggestions: the model answered, but with an id that names no live
+  // location. Never surfaced as the model's word — a 5xx, because a suggester
+  // ignoring its own candidate roster is a prompt/provider regression worth
+  // seeing in Sentry rather than a normal empty result.
+  AI_SUGGESTION_UNUSABLE: "INTERNAL_SERVER_ERROR",
+
   // Image operations
   IMAGE_UPLOAD_FAILED: "INTERNAL_SERVER_ERROR",
   IMAGE_CULL_FAILED: "INTERNAL_SERVER_ERROR",
