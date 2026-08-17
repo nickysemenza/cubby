@@ -90,8 +90,6 @@ export function VendorList() {
           <span className="font-mono tabular-nums">{info.getValue()}</span>
         ),
       }),
-      // `zeroAsEmpty: false` — a vendor on the roster with no spend yet is a real
-      // $0, not an unset price, and the dash would read as "unknown".
       // `signedTone` because vendor spend genuinely goes negative (a refund-only
       // vendor, or the family wedding contributions), and a credit must not read
       // as spend. The footer is exact: `vendorList` returns a `sums.spend` over
@@ -102,7 +100,6 @@ export function VendorList() {
         header: "Spend",
         className: "w-28",
         decimals: 0,
-        zeroAsEmpty: false,
         signedTone: true,
         mobile: { slot: "trailing", priority: 5 },
       }),

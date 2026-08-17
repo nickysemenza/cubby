@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from "vitest";
 import { formatCurrency } from "~/lib/utils";
 import {
   createActionsColumn,
+  createBooleanColumn,
   createCurrencyColumn,
   createImageColumn,
   createParentLinkColumn,
@@ -418,5 +419,156 @@ describe("createCurrencyColumn", () => {
 
     expect(screen.getByText("—")).toBeInTheDocument();
     expect(document.querySelector("[title]")).toBeNull();
+  });
+});
+
+// The unknown-marker is a single glyph with no accessible name, so these assert
+// on text content: "—" present means the cell claimed "we do not know".
+const DASH = "—";
+
+type TrackedRow = { stockTracked: boolean | null };
+
+const trackedColumn = (
+  onSave?: (v: boolean | null, row: TrackedRow) => Promise<void>,
+): ColumnDef<TrackedRow, string | null> =>
+  createBooleanColumn(createColumnHelper<TrackedRow>(), "stockTracked", {
+    labels: { true: "Tracked", false: "Not tracked" },
+    undecided: { label: "Undecided" },
+    ...(onSave ? { editable: { onSave } } : {}),
+  }) as ColumnDef<TrackedRow, string | null>;
+
+describe("createBooleanColumn", () => {
+  // The bug this factory exists to prevent: `false` is a decision somebody
+  // recorded, and it used to render as nothing (expense `future`) or as bare
+  // text indistinguishable from the undecided case.
+  it("renders all three states distinctly, and false is not the dash", () => {
+    const { unmount } = renderColumn<TrackedRow, string | null>(
+      trackedColumn(),
+      { stockTracked: false },
+    );
+    expect(screen.getByText("Not tracked")).toBeVisible();
+    expect(screen.queryByText(DASH)).toBeNull();
+    unmount();
+
+    const second = renderColumn<TrackedRow, string | null>(trackedColumn(), {
+      stockTracked: true,
+    });
+    expect(screen.getByText("Tracked")).toBeVisible();
+    expect(screen.queryByText(DASH)).toBeNull();
+    second.unmount();
+
+    // null is the ONE case the dash is correct for — undecided really is unknown.
+    renderColumn<TrackedRow, string | null>(trackedColumn(), {
+      stockTracked: null,
+    });
+    expect(screen.getByText(DASH)).toBeVisible();
+    expect(screen.queryByText(/tracked/i)).toBeNull();
+  });
+
+  // `stockTracked: false` reading back as `null` is a bug this codebase has
+  // already shipped once (see server/mcp/tools/product.tools.ts), so the
+  // string encoding the editor round-trips through is pinned here.
+  it("round-trips false through the string encoding without collapsing to null", async () => {
+    const saved: (boolean | null)[] = [];
+    const onSave = async (v: boolean | null) => {
+      saved.push(v);
+    };
+
+    renderColumn<TrackedRow, string | null>(trackedColumn(onSave), {
+      stockTracked: null,
+    });
+
+    const cellData = trackedColumn(onSave).meta?.cellData;
+    if (!cellData?.applyPaste) throw new Error("expected a pasteable column");
+
+    // Paste accepts the human label as well as the encoded value — that is what
+    // makes a copied "Not tracked" land in another boolean column.
+    await cellData.applyPaste({ stockTracked: null }, { text: "Not tracked" });
+    await cellData.applyPaste({ stockTracked: null }, { json: "true" });
+
+    expect(saved).toEqual([false, true]);
+  });
+
+  it("copies the label, and copies nothing when undecided", () => {
+    const cellData = trackedColumn().meta?.cellData;
+    if (!cellData) throw new Error("expected cellData");
+
+    expect(cellData.getCopyPayload({ stockTracked: false })).toEqual({
+      text: "Not tracked",
+      json: "false",
+    });
+    // Nothing to copy beats copying the word "Undecided" — an empty TSV field
+    // is what an unknown value means to the range engine.
+    expect(cellData.getCopyPayload({ stockTracked: null })).toBeNull();
+  });
+
+  // Reusing the `select` kind (rather than minting a `boolean` one) is what lets
+  // a boolean cell paste across columns; a new kind would be incompatible with
+  // every existing column for no gain.
+  it("declares the select cell kind so paste stays cross-column", () => {
+    expect(trackedColumn().meta?.cellData?.kind).toBe("select");
+  });
+
+  it("only offers the clear affordance when an undecided state is named", () => {
+    const boolColumn = (undecided?: { label: string }) =>
+      createBooleanColumn(createColumnHelper<TrackedRow>(), "stockTracked", {
+        labels: { true: "Tracked", false: "Not tracked" },
+        ...(undecided ? { undecided } : {}),
+        editable: { onSave: async () => {} },
+      }) as ColumnDef<TrackedRow, string | null>;
+
+    // Asserted through the rendered editor rather than the config object: the
+    // config is internal, the clear button is the behaviour. The picker names it
+    // after the undecided label, so clearing reads as a state rather than an ✗.
+    const withUndecided = renderColumn<TrackedRow, string | null>(
+      boolColumn({ label: "Undecided" }),
+      { stockTracked: true },
+    );
+    fireEvent.click(screen.getByText("Tracked"));
+    // Presence, not visibility: the editor renders through a body portal, which
+    // jsdom reports as not visible regardless of the real layout.
+    expect(
+      screen.getByRole("button", { name: /Clear Undecided/i }),
+    ).toBeInTheDocument();
+    withUndecided.unmount();
+
+    // Without a named undecided state there is nothing valid to clear TO — the
+    // field's schema may not accept null at all.
+    renderColumn<TrackedRow, string | null>(boolColumn(), {
+      stockTracked: true,
+    });
+    fireEvent.click(screen.getByText("Tracked"));
+    expect(screen.queryByRole("button", { name: /^Clear/i })).toBeNull();
+  });
+});
+
+describe("createCurrencyColumn zero handling", () => {
+  // The reported bug: a $0 warranty replacement rendered as the unknown-marker
+  // while the column footer summed the same row as 0. `Expense.cost` books a
+  // gifted or broken item as 0 and reserves NULL for "unclassified", so the two
+  // must not share a rendering.
+  it("renders a real zero as $0.00 and reserves the dash for null", () => {
+    const { unmount } = renderColumn<MoneyRow, number | null>(moneyColumn(), {
+      amount: 0,
+    });
+    expect(screen.getByText(formatCurrency(0))).toBeVisible();
+    expect(screen.queryByText(DASH)).toBeNull();
+    unmount();
+
+    renderColumn<MoneyRow, number | null>(moneyColumn(), { amount: null });
+    expect(screen.getByText(DASH)).toBeVisible();
+  });
+
+  it("still suppresses zero when a column opts in explicitly", () => {
+    const opted = createCurrencyColumn(
+      createColumnHelper<MoneyRow>(),
+      "amount",
+      { zeroAsEmpty: true },
+    );
+    renderColumn<MoneyRow, number | null>(
+      opted as ColumnDef<MoneyRow, number | null>,
+      { amount: 0 },
+    );
+    expect(screen.getByText(DASH)).toBeVisible();
   });
 });

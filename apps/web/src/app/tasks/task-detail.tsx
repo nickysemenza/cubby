@@ -18,12 +18,9 @@ import {
   WithProjectSearch,
   WithTaskSearch,
 } from "~/app/_components/combobox/with-search-hook";
+import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
-import {
-  formatDateRange,
-  TradeBadge,
-  tradeOptions,
-} from "~/app/projects/shared";
+import { formatDateRange, tradeOptions } from "~/app/projects/shared";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -369,9 +366,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
               data: { trade: trade as Trade },
             });
           }}
-          renderValue={(v) =>
-            v ? <TradeBadge trade={v as Trade} /> : <NoneValue />
-          }
+          renderValue={(v) => renderOptionCell(v, tradeOptions)}
         />
       ),
     },
@@ -579,7 +574,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
       : []),
     {
       label: "Trade",
-      value: task.trade ? <TradeBadge trade={task.trade} /> : <NoneValue />,
+      value: renderOptionCell(task.trade, tradeOptions),
     },
     {
       label: "Due",

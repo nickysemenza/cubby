@@ -73,6 +73,7 @@ import {
   taskStatusOptions,
 } from "~/app/tasks/task-options";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
+import { dataQualityOptions } from "~/lib/data-quality-options";
 import {
   type FilterKind,
   type FilterSpecCore,
@@ -1053,11 +1054,7 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       field: "dataStatus",
       kind: "select",
       placeholder: "Filter data quality...",
-      options: [
-        { value: "complete", label: "Complete" },
-        { value: "needs_data", label: "Needs data" },
-        { value: "defect", label: "Defect" },
-      ],
+      options: dataQualityOptions,
     },
     {
       // `primary_document` is deliberately absent. The check is unscoped and
@@ -1299,11 +1296,7 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       field: "dataStatus",
       kind: "select",
       placeholder: "Filter data quality...",
-      options: [
-        { value: "complete", label: "Complete" },
-        { value: "needs_data", label: "Needs data" },
-        { value: "defect", label: "Defect" },
-      ],
+      options: dataQualityOptions,
     },
     {
       columnId: "dataGaps",

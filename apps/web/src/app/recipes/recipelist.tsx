@@ -304,7 +304,7 @@ export function RecipeList({
               config={{ type: "number" }}
               clipboard={specFromCellData(servingsCellDataDef, recipe)}
               renderValue={(servings) =>
-                servings ? `${servings} servings` : <NoneValue />
+                servings == null ? <NoneValue /> : `${servings} servings`
               }
               onSave={(newValue) => saveServings(recipe, newValue)}
             />

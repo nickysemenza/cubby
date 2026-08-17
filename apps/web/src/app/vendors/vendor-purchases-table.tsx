@@ -138,7 +138,6 @@ export function VendorPurchasesTable({ vendor }: { vendor: VendorOut }) {
       createCurrencyColumn(helper, "expenseTotal", {
         header: "Expense total",
         className: "w-28",
-        zeroAsEmpty: false,
       }),
     ],
     [helper],

@@ -7,9 +7,14 @@ import { Page } from "~/components/page/Page";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { useTRPC } from "~/integrations/trpc/react";
 import { financialAccountMutationInvalidateKeys } from "~/lib/query-keys";
+import { renderOptionCell } from "../_components/data-table/columnHelpers";
 import { DetailSections } from "../_components/data-table/detail-page";
 import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { EditFinancialAccountDialog } from "./edit-financial-account-dialog";
+import {
+  accountIdentityKindOptions,
+  provisionalOptions,
+} from "./financial-account-options";
 import { LinkedTransactions } from "./linked-transactions";
 export function FinancialAccountDetail({
   account,
@@ -52,15 +57,17 @@ export function FinancialAccountDetail({
                   { label: "Name", value: account.name },
                   {
                     label: "Identity",
-                    value: (
-                      <span className="font-mono">
-                        {account.identity.kind.replaceAll("_", " ")}
-                      </span>
+                    value: renderOptionCell(
+                      account.identity.kind,
+                      accountIdentityKindOptions,
                     ),
                   },
                   {
                     label: "Provisional",
-                    value: account.provisional ? "Yes" : "No",
+                    value: renderOptionCell(
+                      account.provisional ? "true" : "false",
+                      provisionalOptions,
+                    ),
                   },
                   {
                     label: "Aliases",

@@ -10,10 +10,11 @@ import {
   WithProjectSearch,
 } from "~/app/_components/combobox/with-search-hook";
 import { WithVendorSearch } from "~/app/_components/combobox/with-vendor-search";
+import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { ExternalLinkText } from "~/app/_components/ExternalLink";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
-import { TradeBadge, tradeOptions } from "~/app/projects/shared";
+import { tradeOptions } from "~/app/projects/shared";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { VendorCell } from "~/components/entity/vendor-cell";
 import { Row } from "~/components/layout";
@@ -212,9 +213,7 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
               data: { trade: trade as Trade },
             });
           }}
-          renderValue={(v) =>
-            v ? <TradeBadge trade={v as Trade} /> : <NoneValue />
-          }
+          renderValue={(v) => renderOptionCell(v, tradeOptions)}
         />
       ),
     },

@@ -164,6 +164,24 @@ const GRADIENT_EXCLUDE_BASENAMES = new Set(["audit-log-entry.tsx"]);
 // steps have tokens: text-[8px]→text-3xs, text-[9/10/11px]→text-2xs.
 const TEXT_PX_RE = /\btext-\[[0-9]+px\]/;
 
+// A `<NoneValue />` reached through a TRUTHINESS test rather than a null check.
+//
+// `NoneValue` renders the muted `—`, which this codebase reserves for "we do not
+// know". Gating it on truthiness hands that marker to `0`, `false`, and `""`
+// as well — all of which are values somebody recorded. That is how a genuine
+// $0 warranty replacement, a product reviewed as deliberately not stock-tracked,
+// and a shelf with zero bins in service all came to display as "unknown", and how
+// `expense.future === false` became visually identical to a decision never made.
+// `view-manifest.ts` states the rule the other way round: "a dash reads as
+// 'unknown' when the actual fact is 'none'".
+//
+// Matches `x ? … : <NoneValue`, `x ? <NoneValue`, and `x || <NoneValue`, but not
+// `x != null ? …` / `x == null ? …` / `x === null` — an explicit null test is the
+// fix, so it must not trip the rule.
+const FALSY_NONE_VALUE_RE =
+  /(?:\?|\|\|)[^?]*<NoneValue|<NoneValue\s*\/>\s*\)?\s*:/;
+const NULL_CHECKED_RE = /[!=]==?\s*(?:null|undefined)|isNil|\?\?/;
+
 // Adjacent equal height/width Tailwind pairs (`h-4 w-4`, `w-3.5 h-3.5`) — the
 // `size-4` shorthand is the single-token form. The backreference enforces the
 // numbers are EQUAL and the two branches enforce one h + one w, so unequal
@@ -900,6 +918,22 @@ function scan(files) {
         });
       }
 
+      // Rule (falsy-none-value): the unknown-marker `—` reached by truthiness.
+      // Guards the one-marker-one-meaning rule described at FALSY_NONE_VALUE_RE.
+      if (
+        isTsx &&
+        !isCommentLine(line) &&
+        FALSY_NONE_VALUE_RE.test(line) &&
+        !NULL_CHECKED_RE.test(line)
+      ) {
+        violations.push({
+          file,
+          line: i + 1,
+          snippet: line.trim(),
+          rule: "falsy-none-value",
+        });
+      }
+
       // Rule 14: adjacent equal h-N/w-N pairs (tsx only). Use `size-N`. No
       // exemptions — the density pass normalized components/ui too.
       if (isTsx && !isCommentLine(line) && HW_PAIR_RE.test(line)) {
@@ -1059,6 +1093,8 @@ const byRule = {
     "TS costing engine — recipe totals live in the Rust/WASM crate (recipebridge); call the WASM instead of reimplementing calculateTotals in TS (CLAUDE.md Where logic lives).",
   "hand-rolled-any-array":
     "Hand-rolled `= ANY(${arr})` — drizzle interpolates a JS array into raw SQL as a row constructor, so this is a hard 500 rather than a silent mismatch. Use `eqAny(col, arr)` / `inArray(col, arr)`.",
+  "falsy-none-value":
+    'Truthiness-gated <NoneValue /> — the muted `—` means "we do not know", so gating it on truthiness hands that marker to `0`, `false` and `""`, which are recorded values. A genuine $0, a `stockTracked: false`, and a zero count all read as unknown this way. Test explicitly: `x == null ? <NoneValue /> : …`.',
   "raw-control-byte":
     'Raw C0 control byte in source — a literal 0x00/0x1b/… makes the WHOLE FILE binary to the grep family (`file` reports "data", ripgrep skips it, `grep -c` returns nothing for a symbol `git grep` finds). Write it as an escape (`\\0`, `\\u001b`, …).',
 };

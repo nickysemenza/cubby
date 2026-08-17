@@ -26,6 +26,7 @@ import type { ReactNode } from "react";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { DotLabel } from "~/components/ui/dot-label";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -999,9 +1000,22 @@ export function createCurrencyColumn<
     className?: string;
     mobile?: MobileColumnMeta;
     /**
-     * Render 0 as the muted dash instead of "$0.00" (default true — a zero
-     * price/cost in cubby means "unset", not "free"). Pass false for columns
-     * where zero is a real value.
+     * Render 0 as the muted dash instead of "$0.00". **Defaults false: the dash
+     * means "we don't know", and zero is a known value.**
+     *
+     * This used to default true, on the theory that "a zero price/cost in cubby
+     * means unset, not free". The schema says otherwise — `Expense.cost` books a
+     * broken or gifted item as "cost 0 (never null: `cost IS NULL` is already
+     * the Unclassified predicate)" (schema.ts, `expense.cost`) — so a genuine
+     * $0 (a warranty replacement, a vendor's own $0.00 bundle component row) was
+     * indistinguishable from a cost nobody ever recorded. Six of eleven call
+     * sites had already passed `false` to escape it, the expense *detail* page
+     * rendered the same field as `$0.00`, and the column footer summed the row
+     * as 0 while the cell above claimed the value was unknown.
+     *
+     * Pass true only where zero genuinely encodes "not computable" — and prefer
+     * fixing the source to return null instead, so the dash keeps meaning one
+     * thing.
      */
     zeroAsEmpty?: boolean;
     /** Fraction digits for the displayed value (default 2). Pass 0 for the
@@ -1019,7 +1033,7 @@ export function createCurrencyColumn<
     };
   },
 ) {
-  const zeroAsEmpty = options?.zeroAsEmpty ?? true;
+  const zeroAsEmpty = options?.zeroAsEmpty ?? false;
   const decimals = options?.decimals;
   const signedTone = options?.signedTone ?? false;
   const isEmpty = (v: number | null | undefined): v is null | undefined | 0 =>
@@ -1319,6 +1333,154 @@ export function createSingleEntityInlineLinkColumn<
 }
 
 /**
+ * The one way a small-enum / boolean value renders in a table cell: a quiet
+ * colour dot plus the option's own label.
+ *
+ * Derived from the column's `selectOptions` roster, which already carries
+ * `{ value, label, color }` for the filter control and the inline editor — so
+ * the roster is the single source of both the wording and the tone, and a cell
+ * cannot disagree with the dropdown that edits it. Before this, the same class
+ * of value rendered five different ways across 35 columns (bare string, Badge
+ * with a tone map, Badge with an inline ternary, DotLabel, icon + text), and
+ * several columns printed the raw enum (`needs_data`, `UPLOADED`) because their
+ * label lived only in the filter roster the cell never consulted.
+ *
+ * An unrecognised value falls back to printing itself rather than to `—`:
+ * a value the roster forgot is a real stored value, and hiding it behind the
+ * unknown-marker is how it would stay forgotten.
+ */
+export function renderOptionCell(
+  value: string | null | undefined,
+  options: readonly FilterableComboboxItem[],
+): ReactNode {
+  if (value == null || value === "") return <NoneValue />;
+  const option = options.find((o) => o.value === value);
+  return (
+    <DotLabel icon={option?.icon} color={option?.color ?? "var(--slate)"}>
+      {option?.label ?? value}
+    </DotLabel>
+  );
+}
+
+/**
+ * A stored boolean rendered and edited like any other small enum.
+ *
+ * Booleans were the one column class with no factory, so all seven in the app
+ * were hand-rolled — and each one picked its own answer for the false case:
+ * plain text, a second Badge, or nothing at all. Rendering nothing is the
+ * dangerous one, because `false` then looks exactly like "never decided".
+ *
+ * **Tri-state is the default reading.** `null` is "we don't know" and renders
+ * `—`; `false` is a recorded decision and renders its own label. Pass
+ * `undecided` to make null *selectable*, which a nullable column needs if a row
+ * is ever to go back into an undecided worklist — `Product.stockTracked` is the
+ * motivating case, where `null` is the backlog the saved view filters on.
+ *
+ * Encoded over the existing `select` machinery rather than a new cell kind:
+ * paste compatibility is keyed on the base kind (`cell-range.ts`), so reusing
+ * `"select"` means a copied "Tracked" pastes into any boolean column, and
+ * `selectCellData`'s label-or-value matching already accepts the human label as
+ * text. A dedicated `"boolean"` kind would have been paste-incompatible with
+ * every existing column for no gain.
+ */
+export function createBooleanColumn<
+  T extends Record<string, unknown>,
+  K extends keyof T,
+>(
+  columnHelper: ColumnHelper<T>,
+  accessor: K,
+  options: {
+    header?: string;
+    placeholder?: string;
+    /** Labels for the two decided states. Say what the field means, not "Yes"/"No". */
+    labels: { true: string; false: string };
+    /**
+     * Present ⇒ `null` is a real state the editor can return to: the picker
+     * gains its clear affordance, its empty state reads with this label, and the
+     * clear control is announced as "Clear <label>". Absent ⇒ null still renders
+     * `—`, but the editor can only ever move away from it.
+     */
+    undecided?: { label: string };
+    className?: string;
+    mobile?: MobileColumnMeta;
+    /** `null` opts out of a filter control entirely; omit to derive one. */
+    filterConfig?: FilterConfig | null;
+    editable?: {
+      onSave: (newValue: boolean | null, row: T) => Promise<void>;
+    };
+  },
+) {
+  const selectOptions: FilterableComboboxItem[] = [
+    { value: "true", label: options.labels.true, color: "var(--positive)" },
+    { value: "false", label: options.labels.false, color: "var(--slate)" },
+  ];
+  const filterPlaceholder = options.placeholder ?? "Set value...";
+  // The editor's own empty state names the undecided state where there is one,
+  // so clearing has a word attached rather than being an unlabelled ✗.
+  const editorPlaceholder = options.undecided?.label ?? filterPlaceholder;
+  const encode = (v: unknown): string | null =>
+    v === true ? "true" : v === false ? "false" : null;
+  const decode = (v: string | null): boolean | null =>
+    v === "true" ? true : v === "false" ? false : null;
+
+  const save = options.editable
+    ? (row: T, v: string | null) => options.editable!.onSave(decode(v), row)
+    : undefined;
+  const cellData = selectCellData<T>(
+    (row) => encode(row[accessor]),
+    selectOptions,
+    save,
+  );
+  const filterConfig: FilterConfig | undefined =
+    options.filterConfig === null
+      ? undefined
+      : (options.filterConfig ?? {
+          placeholder: filterPlaceholder,
+          filterType: "select",
+          options: selectOptions,
+        });
+
+  return columnHelper.accessor((row) => encode(row[accessor]), {
+    id: String(accessor),
+    header: options.header,
+    enableSorting: false,
+    meta: {
+      className: options.className,
+      mobile: options.mobile,
+      filterConfig,
+      cellData,
+    },
+    cell: (info) => {
+      const value = info.getValue();
+
+      if (options.editable) {
+        return (
+          <EditableCell
+            value={value}
+            onSave={(next) =>
+              options.editable!.onSave(decode(next), info.row.original)
+            }
+            clipboard={specFromCellData(cellData, info.row.original)}
+            config={{
+              type: "select",
+              options: selectOptions,
+              placeholder: editorPlaceholder,
+              // Only a column that names an undecided state can be cleared back
+              // into it; elsewhere clearing would invent a null the field's
+              // schema may not allow.
+              clearable: options.undecided !== undefined,
+            }}
+            renderValue={(v) => renderOptionCell(v, selectOptions)}
+          />
+        );
+      }
+
+      return renderOptionCell(value, selectOptions);
+    },
+  });
+}
+
+/**
  * Creates a column with a select-based inline filter.
  * Optionally supports inline editing when `editable` option is provided.
  */
@@ -1332,7 +1494,12 @@ export function createFilterableSelectColumn<
     header?: string;
     placeholder: string;
     selectOptions: FilterableComboboxItem[];
-    renderCell: (value: T[K]) => ReactNode;
+    /**
+     * Override the default dot + label render. Omit it — the default reads the
+     * label and tone straight off `selectOptions`, which is what keeps a cell
+     * and its editor in agreement.
+     */
+    renderCell?: (value: T[K]) => ReactNode;
     className?: string;
     mobile?: MobileColumnMeta;
     /**
@@ -1354,6 +1521,10 @@ export function createFilterableSelectColumn<
     };
   },
 ) {
+  const renderCell =
+    options.renderCell ??
+    ((value: T[K]) =>
+      renderOptionCell(value as string | null, options.selectOptions));
   const cellData = selectCellData<T>(
     (row) => (row[accessor] as string | null) ?? null,
     options.selectOptions,
@@ -1400,12 +1571,12 @@ export function createFilterableSelectColumn<
               options: options.selectOptions,
               placeholder: options.placeholder,
             }}
-            renderValue={(v) => options.renderCell(v as T[K])}
+            renderValue={(v) => renderCell(v as T[K])}
           />
         );
       }
 
-      return options.renderCell(value);
+      return renderCell(value);
     },
   });
 }

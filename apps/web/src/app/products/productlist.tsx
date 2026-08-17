@@ -32,14 +32,17 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { useTRPC } from "~/integrations/trpc/react";
+import { dataQualityOptions } from "~/lib/data-quality-options";
 import {
   inventoryMutationInvalidateKeys,
   productMutationInvalidateKeys,
 } from "~/lib/query-keys";
+import { presenceCellOptions } from "~/lib/select-options";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
 import { WithLocationSearch } from "../_components/combobox/with-search-hook";
 import {
+  createBooleanColumn,
   createCurrencyColumn,
   createExternalLinkColumn,
   createFilterableSelectColumn,
@@ -47,6 +50,7 @@ import {
   createPlainDateColumn,
   createSingleEntityInlineLinkColumn,
   createTextColumn,
+  renderOptionCell,
 } from "../_components/data-table/columnHelpers";
 import { DataTableToolbar } from "../_components/data-table/data-table-toolbar";
 import { EditableCell } from "../_components/data-table/editable-cell";
@@ -92,6 +96,10 @@ interface ProductListProps {
 // filter configuration).
 const NO_VENDOR_OPTIONS: FilterableComboboxItem[] = [];
 const NO_FILTER_OPTIONS: FilterableComboboxItem[] = [];
+
+const MODEL_PRESENCE_OPTIONS = presenceCellOptions("model");
+const UPC_PRESENCE_OPTIONS = presenceCellOptions("UPC");
+const NOTES_PRESENCE_OPTIONS = presenceCellOptions("notes");
 
 function renderNotesValue(notes: string | null): ReactNode {
   if (!notes) return <NoneValue />;
@@ -446,31 +454,57 @@ export function ProductList({
         header: "Model present",
         enableSorting: false,
         meta: { className: "w-24" },
-        cell: (info) => (info.getValue() ? "Has model" : <NoneValue />),
+        cell: (info) =>
+          renderOptionCell(
+            info.getValue() ? "yes" : "no",
+            MODEL_PRESENCE_OPTIONS,
+          ),
       }),
       columnHelper.accessor((row) => row.upc, {
         id: "upcPresence",
         header: "UPC present",
         enableSorting: false,
         meta: { className: "w-24" },
-        cell: (info) => (info.getValue() ? "Has UPC" : <NoneValue />),
+        cell: (info) =>
+          renderOptionCell(
+            info.getValue() ? "yes" : "no",
+            UPC_PRESENCE_OPTIONS,
+          ),
       }),
       columnHelper.accessor((row) => row.notes, {
         id: "notesPresence",
         header: "Notes present",
         enableSorting: false,
         meta: { className: "w-24" },
-        cell: (info) => (info.getValue() ? "Has notes" : <NoneValue />),
+        cell: (info) =>
+          renderOptionCell(
+            info.getValue() ? "yes" : "no",
+            NOTES_PRESENCE_OPTIONS,
+          ),
       }),
-      columnHelper.accessor((row) => row.stockTracked, {
-        id: "stockTracked",
+      // Editable, and tri-state on purpose. `null` is the undecided backlog the
+      // "Products the ledger says you own" saved view filters on, so this cell is
+      // where that view gets worked: decide a row and it leaves the view. Before
+      // this the field had no UI surface at all — not here, not the detail page,
+      // not the product form — so the only way to answer the worklist's question
+      // was MCP.
+      createBooleanColumn(columnHelper, "stockTracked", {
         header: "Stock tracking",
-        enableSorting: false,
-        meta: { className: "w-28" },
-        cell: (info) => {
-          const value = info.getValue();
-          if (value === null) return <NoneValue />;
-          return value ? "Tracked" : "Not tracked";
+        className: "w-28",
+        placeholder: "Filter stock tracking...",
+        labels: { true: "Tracked", false: "Not tracked" },
+        undecided: { label: "Undecided" },
+        // The header control stays the manifest's presence filter (undecided vs
+        // reviewed) — that is what backs the worklist view, and it asks a
+        // different question than tracked-vs-untracked.
+        filterConfig: null,
+        editable: {
+          onSave: async (stockTracked, product) => {
+            await updateProductMutation.mutateAsync({
+              id: product.id,
+              data: { stockTracked },
+            });
+          },
         },
       }),
       columnHelper.accessor((row) => row.dataQuality.status, {
@@ -478,18 +512,7 @@ export function ProductList({
         header: "Data quality",
         enableSorting: false,
         meta: { className: "w-28", mobile: { slot: "meta", priority: 75 } },
-        cell: (info) => {
-          const status = info.getValue();
-          return (
-            <Badge variant={status === "defect" ? "destructive" : "outline"}>
-              {status === "needs_data"
-                ? "Needs data"
-                : status === "defect"
-                  ? "Defect"
-                  : "Complete"}
-            </Badge>
-          );
-        },
+        cell: (info) => renderOptionCell(info.getValue(), dataQualityOptions),
       }),
       columnHelper.accessor((row) => row.dataQuality.gaps, {
         id: "dataGaps",
@@ -567,17 +590,9 @@ export function ProductList({
       // acquisition. Hidden by default via `initialColumnVisibility`: the table
       // is already wide and `price` covers the common case, but it's a real
       // column so the number is visible rather than only sortable.
-      //
-      // `zeroAsEmpty: false` is load-bearing, not a style choice. The helper
-      // defaults it true because "a zero price means unset" — but
-      // `productListItemOut.expenseTotal` is 0 for a product with no expenses
-      // and never null, so the default would dash every expense-less product as
-      // though the value were missing. Same opt-out as `expenseTotal` on the
-      // purchase list and `spend` on the vendor list.
       createCurrencyColumn(columnHelper, "expenseTotal", {
         header: "Net basis",
         className: "w-28",
-        zeroAsEmpty: false,
         signedTone: true,
         mobile: { slot: "trailing", priority: 5 },
       }),
@@ -593,6 +608,12 @@ export function ProductList({
       // Bins in service. Free to render — `quantityLedger` is already on every
       // list row — and it gives the "is a location" presence filter a column to
       // hang on, without which the manifest spec would render nothing.
+      //
+      // Renders a literal `0`, not a dash: `locationCount` is a count, never
+      // null, so "no bins in service" is a known fact and the dash would claim
+      // the opposite. See `view-manifest.ts`, which declines to reveal a column
+      // for exactly this reason — "a dash reads as 'unknown' when the actual
+      // fact is 'none'".
       columnHelper.accessor((row) => row.quantityLedger.locationCount, {
         id: "servingAsLocations",
         header: "In service",
@@ -601,7 +622,7 @@ export function ProductList({
           className: "w-24",
           mobile: { slot: "meta", priority: 43 },
         },
-        cell: (info) => (info.getValue() > 0 ? info.getValue() : <NoneValue />),
+        cell: (info) => info.getValue(),
       }),
       columnHelper.accessor((row) => row.quantityLedger.expectedQuantity, {
         id: "expectedQuantity",

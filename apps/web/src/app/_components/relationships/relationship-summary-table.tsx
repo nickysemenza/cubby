@@ -256,15 +256,13 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
             id: "unpriced",
             header: COLUMN_LABELS.unpriced,
             meta: { className: "w-20", numeric: true, mono: true },
-            cell: (info) => (info.getValue() === 0 ? "—" : info.getValue()),
+            // A count, never null — zero unpriced expenses is a real answer.
+            cell: (info) => info.getValue(),
           });
         case "netSpend":
           return createCurrencyColumn(helper, "netSpend", {
             header: COLUMN_LABELS.netSpend,
             className: "w-24",
-            // An aggregate that nets to zero is a real answer (offsetting
-            // refunds), not an unset price.
-            zeroAsEmpty: false,
           });
         case "latestActivity":
           return helper.accessor((row) => row.latestActivity, {

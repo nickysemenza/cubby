@@ -6,6 +6,7 @@ import { useMemo } from "react";
 import {
   createImageColumn,
   createNameColumn,
+  renderOptionCell,
 } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
@@ -14,7 +15,7 @@ import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
-import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
+import { imageStatusOptions } from "~/app/images/image-options";
 import { usePageCount } from "~/components/page/Page";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -113,10 +114,8 @@ export default function ImageList() {
           className: "w-28",
           mobile: { slot: "meta", priority: 20 },
         },
-        cell: ({ getValue }) => {
-          const status = getValue();
-          return <ImageStatusBadge status={status} />;
-        },
+        cell: ({ getValue }) =>
+          renderOptionCell(getValue(), imageStatusOptions),
       }),
       // Associated entity
       columnHelper.accessor(

@@ -59,7 +59,8 @@ describe("purchase reconciliation badges", () => {
       />,
     );
 
-    const badge = screen.getByText("match · 2");
+    // "Settled", not the raw `match` enum this badge used to interpolate.
+    const badge = screen.getByText("Settled · 2");
     expect(badge.className).toContain("text-positive");
   });
 });

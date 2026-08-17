@@ -107,8 +107,9 @@ export function LocationChildrenTable({
             numeric: true,
             mobile: { slot: "meta", priority: 30 },
           },
-          cell: (info) =>
-            info.getValue() === 0 ? <NoneValue /> : info.getValue(),
+          // The accessor already coerces null to 0, so the cell cannot tell
+          // "empty shelf" from "unknown" — and an empty shelf is a fact. Show it.
+          cell: (info) => info.getValue(),
         },
       ),
       helper.accessor((row) => row.childCount ?? 0, {
@@ -119,8 +120,7 @@ export function LocationChildrenTable({
           numeric: true,
           mobile: { slot: "meta", priority: 40 },
         },
-        cell: (info) =>
-          info.getValue() === 0 ? <NoneValue /> : info.getValue(),
+        cell: (info) => info.getValue(),
       }),
       // Total, not direct — it's the number the shelf card's caption shows, and
       // on a parent row the subtree total is the useful one.

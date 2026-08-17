@@ -11,16 +11,24 @@ import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { financialTransactionMutationInvalidateKeys } from "~/lib/query-keys";
+import { presenceCellOptions } from "~/lib/select-options";
 import { formatCurrency } from "~/lib/utils";
 import {
   createPlainDateColumn,
   createTextColumn,
+  renderOptionCell,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { TableLink } from "../_components/table/TableLink";
+import {
+  financialTransactionKindOptions,
+  financialTransactionStatusOptions,
+} from "./financial-transaction-kind-options";
+
+const PURCHASE_PRESENCE_OPTIONS = presenceCellOptions("purchase");
 
 const NO_OPTIONS: FinancialAccountOptionsOut = [];
 const NO_SOURCES: FinancialTransactionSourceOptionsOut = [];
@@ -87,10 +95,17 @@ export function FinancialTransactionList() {
           </TableLink>
         ),
       }),
-      createTextColumn(helper, "kind", { header: "Kind", className: "w-32" }),
-      createTextColumn(helper, "status", {
+      helper.accessor("kind", {
+        header: "Kind",
+        meta: { className: "w-32" },
+        cell: (i) =>
+          renderOptionCell(i.getValue(), financialTransactionKindOptions),
+      }),
+      helper.accessor("status", {
         header: "Status",
-        className: "w-24",
+        meta: { className: "w-24" },
+        cell: (i) =>
+          renderOptionCell(i.getValue(), financialTransactionStatusOptions),
       }),
       helper.accessor("amount", {
         header: "Amount",
@@ -127,7 +142,11 @@ export function FinancialTransactionList() {
         header: "Linked",
         enableSorting: false,
         meta: { className: "w-24" },
-        cell: (i) => (i.getValue() ? "Has purchase" : <NoneValue />),
+        cell: (i) =>
+          renderOptionCell(
+            i.getValue() ? "yes" : "no",
+            PURCHASE_PRESENCE_OPTIONS,
+          ),
       }),
       createTextColumn(helper, "merchant", {
         header: "Merchant",
