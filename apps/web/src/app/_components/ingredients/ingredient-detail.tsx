@@ -2,6 +2,7 @@ import type {
   IngredientUpdateInput,
   IngredientWithFoodOut,
 } from "@cubby/schemas/ingredient";
+import type { ProductWithMappingsAndFoodOut } from "@cubby/schemas/product";
 import { uniqBy } from "es-toolkit";
 import {
   Apple,
@@ -12,19 +13,24 @@ import {
   Sparkles,
 } from "lucide-react";
 import { type FC, useCallback, useState } from "react";
-import { MutedBox } from "~/components/layout/muted-box";
+import { Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { useTRPC } from "~/integrations/trpc/react";
-import { getIngredientMappings } from "~/lib/unit-mapping-utils";
+import {
+  getAllUnitMappingsFromProduct,
+  getIngredientMappings,
+} from "~/lib/unit-mapping-utils";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
+import { FullNutrientBreakdown } from "../nutrition/FullNutrientBreakdown";
+import { NutrientDensityStats } from "../nutrition/NutrientDensityStats";
+import { NutritionLabel } from "../nutrition/NutritionLabel";
 import { RecipeUsagesTable } from "../recipe/recipe-usages-table";
 import { UnitCoveragePanel } from "../units/UnitCoveragePanel";
-import { NutritionInfoTable } from "../usda/nutrition";
 import { EnrichIngredientDialog } from "./enrich-ingredient-dialog";
 import { IngredientBasicInfo } from "./ingredient-basic-info";
 import { IngredientForm } from "./ingredient-form";
@@ -32,6 +38,22 @@ import { IngredientProductShelf } from "./ingredient-product-shelf";
 
 interface IngredientDetailProps {
   ingredient: IngredientWithFoodOut;
+}
+
+/**
+ * Nutrition and cost-per-nutrient must share one product's basis — pricing
+ * one product's protein off a different product's nutrients would silently
+ * misattribute cost. Deliberately pick the product carrying both (falling
+ * back to nutrition alone when none has a price), rather than the previous
+ * "any product with nutritionInfo" pick that left price unaccounted for.
+ */
+export function selectNutritionProduct(
+  products: ProductWithMappingsAndFoodOut[],
+): ProductWithMappingsAndFoodOut | undefined {
+  return (
+    products.find((p) => p.food?.nutritionInfo && p.price != null) ??
+    products.find((p) => p.food?.nutritionInfo)
+  );
 }
 
 export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
@@ -49,9 +71,13 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
     getMappings: getIngredientMappings,
   });
 
-  // Find nutrition info from any product
-  const nutritionInfo = ingredient.product.find((p) => p.food?.nutritionInfo)
-    ?.food?.nutritionInfo;
+  // See selectNutritionProduct for why nutrition and price must come from
+  // the same product.
+  const nutritionProduct = selectNutritionProduct(ingredient.product);
+  const nutritionInfo = nutritionProduct?.food?.nutritionInfo;
+  const nutritionMappings = nutritionProduct
+    ? getAllUnitMappingsFromProduct(nutritionProduct)
+    : [];
 
   const sections: DetailSection[] = [
     editableDetailSection({
@@ -67,16 +93,34 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
         />
       ),
     }),
-    // Custom section: Nutrition (only if available)
-    ...(nutritionInfo
+    // Custom section: Nutrition (only if available) — see nutritionProduct
+    // above for which product supplies both the nutrients and the price.
+    ...(nutritionInfo && nutritionProduct
       ? [
           {
             title: "Nutrition Information",
             icon: Apple,
             content: (
-              <MutedBox>
-                <NutritionInfoTable n={nutritionInfo} />
-              </MutedBox>
+              <Stack gap="md">
+                <NutritionLabel
+                  nutrients={nutritionInfo.nutrientsPer100}
+                  servingLabel="per 100 g"
+                />
+                <NutrientDensityStats
+                  nutrients={nutritionInfo.nutrientsPer100}
+                  mappings={nutritionMappings}
+                  price={
+                    nutritionProduct.pricing.effectivePrice ??
+                    nutritionProduct.price
+                  }
+                  mappingProduct={{
+                    id: nutritionProduct.id,
+                    name: nutritionProduct.name,
+                    manufacturer: nutritionProduct.manufacturer,
+                  }}
+                />
+                <FullNutrientBreakdown nutritionInfo={nutritionInfo} />
+              </Stack>
             ),
           },
         ]

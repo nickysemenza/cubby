@@ -1,5 +1,6 @@
 import {
   EMPTY_PROBLEM_ARRAYS,
+  EMPTY_SECTION_TOTALS,
   type ProblemArrays,
   sumProblemSections,
 } from "@cubby/schemas/problems";
@@ -38,6 +39,7 @@ export function useProblemsData(opts?: {
   const enabled = opts?.enabled;
   const problemGroupQueries = {
     getFast: { ...api.problems.getFast.queryOptions(), staleTime, enabled },
+    getViews: { ...api.problems.getViews.queryOptions(), staleTime, enabled },
     getCoverage: {
       ...api.problems.getCoverage.queryOptions(),
       staleTime,
@@ -53,11 +55,15 @@ export function useProblemsData(opts?: {
   return useQueries({
     queries: [
       problemGroupQueries.getFast,
+      problemGroupQueries.getViews,
       problemGroupQueries.getCoverage,
       problemGroupQueries.getUpc,
       problemGroupQueries.getTracker,
     ],
-    combine: ([fast, coverage, upc, tracker]) => {
+    combine: ([fast, views, coverage, upc, tracker]) => {
+      // The views group carries its section rows alongside the totals that
+      // describe them; only the rows belong in `sections`.
+      const { sectionTotals: viewTotals, ...viewSections } = views.data ?? {};
       // Each group's own shape supplies its keys, so a group that hasn't
       // resolved yet falls through to the derived empties rather than to 42
       // hand-written `?? []` defaults that a new detector would have to be
@@ -66,19 +72,27 @@ export function useProblemsData(opts?: {
       const sections: ProblemArrays = {
         ...EMPTY_PROBLEM_ARRAYS,
         ...fast.data,
+        ...viewSections,
         ...coverage.data,
         ...upc.data,
         ...tracker.data,
       };
-      const results = [fast, coverage, upc, tracker];
+      const results = [fast, views, coverage, upc, tracker];
+      // A view-backed section renders a PAGE, so its `items.length` is the page
+      // size. Every count below has to read the declared total instead, or a
+      // 212-row backlog reports as 12. Falls back to the shared frozen empty
+      // while the group loads, so a not-yet-resolved query can't churn the
+      // memos downstream (same reason as `EMPTY_PROBLEM_ARRAYS`).
+      const sectionTotals = viewTotals ?? EMPTY_SECTION_TOTALS;
       return {
         problems: {
           ...sections,
+          sectionTotals,
           // Defect sections only — must match `assembleAllProblems`, hence the
           // shared helper rather than a second local sum.
-          totalProblems: sumProblemSections(sections, "defect"),
+          totalProblems: sumProblemSections(sections, "defect", sectionTotals),
         },
-        coverageTotal: sumProblemSections(sections, "coverage"),
+        coverageTotal: sumProblemSections(sections, "coverage", sectionTotals),
         isLoading: results.some((r) => r.isLoading),
         error: results.find((r) => r.error)?.error ?? null,
       };

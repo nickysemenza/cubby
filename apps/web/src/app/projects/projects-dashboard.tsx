@@ -431,6 +431,37 @@ function OverviewView({
             ? `+${formatCurrency(data.summary.committedSpend, 0)} committed`
             : undefined,
       },
+      {
+        // `estimateTotal` is null when NOTHING in scope has a `costEstimate`
+        // (nullable end-to-end — see dashboard-summary.ts) — "—", not "$0",
+        // for the same reason a per-project BudgetStrip never shows a $0
+        // estimate it doesn't have. A PARTIAL population still sums (real
+        // money from the projects that DO have one) but discloses which
+        // slice of the portfolio that is, rather than presenting it as a
+        // complete total.
+        label: "Estimate",
+        value:
+          data.summary.estimateTotal != null
+            ? formatCurrency(data.summary.estimateTotal, 0)
+            : "—",
+        caption:
+          data.summary.estimateCoverage.projectsWithEstimate <
+          data.summary.estimateCoverage.projectsInScope
+            ? `across ${data.summary.estimateCoverage.projectsWithEstimate} of ${data.summary.estimateCoverage.projectsInScope} projects`
+            : undefined,
+      },
+      {
+        // Portfolio equivalent of the per-project BudgetStrip's "Committed"
+        // figure, split forward by day window (90d is the headline since it's
+        // the widest — the sub-line breaks out how much of it lands sooner).
+        label: "Committed (90d)",
+        value: data.summary.forwardCommittedSpend.in90Days,
+        formatter: (v) => formatCurrency(Number(v), 0),
+        subValue:
+          data.summary.forwardCommittedSpend.in90Days > 0
+            ? `${formatCurrency(data.summary.forwardCommittedSpend.in30Days, 0)} in 30d · ${formatCurrency(data.summary.forwardCommittedSpend.in60Days, 0)} in 60d`
+            : undefined,
+      },
     ],
     [data.summary],
   );

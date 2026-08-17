@@ -8,8 +8,6 @@
  */
 
 import {
-  type CookbookId,
-  type CookbookShortcode,
   type RecipeId,
   type RecipeShortcode,
   recipeShortcode,
@@ -18,6 +16,7 @@ import {
   recipeCreateInput,
   recipeFiltersSchema,
   recipeGraphListOut,
+  recipeIdInput,
   recipeIdsInput,
   recipeListItemOut,
   recipeOut,
@@ -31,6 +30,7 @@ import { createAppError } from "~/server/errors/app-error";
 import {
   createRecipe,
   deleteRecipes,
+  duplicateRecipe,
   getAllTags,
   getRecipeByID,
   getRecipeByShortcode,
@@ -69,16 +69,6 @@ const resolveRecipeEntityIds = async (
   return resolveAllOrThrow(db, "recipe", shortcodes);
 };
 
-const resolveCookbookFilter = async (
-  db: Parameters<typeof resolveAllOrThrow>[0],
-  value: CookbookShortcode | CookbookShortcode[] | undefined,
-): Promise<CookbookId | CookbookId[] | undefined> => {
-  if (value === undefined) return undefined;
-  const shortcodes = Array.isArray(value) ? value : [value];
-  const ids = await resolveAllOrThrow(db, "cookbook", shortcodes);
-  return Array.isArray(value) ? ids : ids[0];
-};
-
 // List returns the lean summary (no section graph); detail keeps full recipeOut — split the factory so each carries its own output schema.
 const { list } = createEntityListProcedure({
   schemas: {
@@ -92,18 +82,9 @@ const { list } = createEntityListProcedure({
   },
   repository: {
     list: async (services, filters, sort, pagination) => {
-      return await recipeList(
-        services.db,
-        {
-          ...filters,
-          cookbookId: await resolveCookbookFilter(
-            services.db,
-            filters.cookbookId,
-          ),
-        },
-        sort,
-        pagination,
-      );
+      // `cookbookId` is resolved inside `recipeList` — a browse filter naming a
+      // dead cookbook narrows to nothing rather than 404ing the page.
+      return await recipeList(services.db, filters, sort, pagination);
     },
   },
   entityName: "recipe",
@@ -253,6 +234,41 @@ const getAllTagsEndpoint = protectedProcedure
     return await getAllTags(ctx.db);
   });
 
+// Clone a recipe's whole graph (sections, ingredients, images) as a new
+// recipe named "<name> (copy)". Mirrors `create`'s post-write side effects
+// (recompute + mutation side effects) since it's a fresh recipe by another
+// name.
+const duplicate = protectedProcedure
+  .input(recipeIdInput)
+  .output(strictOutput(recipeWithSideEffectsOut))
+  .mutation(async ({ ctx, input }) => {
+    const sourceId = await resolveRecipeEntityId(ctx.db, input.id);
+    const duplicated = await duplicateRecipe(
+      ctx.db,
+      sourceId,
+      ctx.actorContext,
+    );
+    const entityId = await resolveRecipeEntityId(ctx.db, duplicated.id);
+    const recipeBatches = await ctx.services.recipeCosting.dispatchRecompute(
+      [entityId],
+      {
+        source: "recipe.duplicate",
+        entity: { entityType: "recipe", entityId },
+      },
+    );
+    const backgroundBatches = await runMutationSideEffects(ctx.db, {
+      action: "created",
+      entity: { entityType: "recipe", entityId },
+      source: "recipe.duplicate",
+    });
+    return {
+      ...duplicated,
+      sideEffects: {
+        backgroundBatches: [...recipeBatches, ...backgroundBatches],
+      },
+    };
+  });
+
 export const recipeCrudProcedures = {
   getByID,
   getByShortcode,
@@ -260,6 +276,7 @@ export const recipeCrudProcedures = {
   list,
   create,
   update,
+  duplicate,
   delete: deleteItem,
   getAllTags: getAllTagsEndpoint,
 };

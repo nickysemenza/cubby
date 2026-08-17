@@ -18,7 +18,10 @@ const mocks = vi.hoisted(() => ({
   clearSelection: vi.fn(),
 }));
 
-vi.mock("@cubby/schemas/related-view", () => ({ relatedViewRegistry: [] }));
+vi.mock("@cubby/schemas/related-view", () => ({
+  relatedViewRegistry: [],
+  relatedViewsFor: () => [],
+}));
 vi.mock("@tanstack/react-query", () => ({
   useQuery: () => ({ data: [], isLoading: false }),
 }));

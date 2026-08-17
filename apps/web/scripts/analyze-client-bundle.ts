@@ -3,8 +3,16 @@ import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
 
+// Raised 510 -> 515 KiB when the USDA food page gained its create-product and
+// link-to-ingredient actions (#739), which pull ProductForm and the ingredient
+// combobox into the eager closure. The overage was 307 bytes; deferring the
+// actions behind a Suspense boundary would have bought that back, but it isn't
+// worth a lazy boundary on a page whose actions are its point. Headroom here is
+// deliberately small — this budget exists to catch a route or dependency that
+// adds tens of KiB, and it only keeps working if raising it stays a decision
+// rather than a reflex.
 export const CLIENT_BUNDLE_BUDGET = {
-  gzipBytes: 510 * 1024,
+  gzipBytes: 515 * 1024,
   chunks: 145,
 } as const;
 

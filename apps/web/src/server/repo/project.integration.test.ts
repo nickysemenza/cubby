@@ -17,6 +17,7 @@ import {
 import { eq, or } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { householdDaysAgo } from "~/lib/household-date";
 import {
   image,
   project,
@@ -1791,6 +1792,73 @@ describe("project repository — date windows (derivation)", () => {
 describe("project dashboard — attention detector + summary", () => {
   const ctx = withTestDb();
 
+  /**
+   * The bug `dueDate`-based activity replaced: `max(task.updatedAt)` reads
+   * as recent for a task an import bulk-touched, even when its real due date
+   * — hence real work timeline — is long past. Both projects here have a
+   * stale `updatedAt` (60 days ago) AND a task whose OWN `updatedAt` is
+   * "just now" (simulating an import/backfill sweep); they differ only in
+   * `dueDate`. The old `max(task.updatedAt)` signal would have called BOTH
+   * projects fresh.
+   */
+  it("dates stalled_project by task dueDate, not task.updatedAt", async () => {
+    const sixtyDaysAgo = householdDaysAgo(60);
+    const fifteenDaysAgo = householdDaysAgo(15);
+
+    const { output: stale, entityId: staleEntityId } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "attention stalled by due date",
+        status: "in_progress",
+      }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(project)
+      .set({ updatedAt: new Date(`${sixtyDaysAgo}T00:00:00Z`) })
+      .where(eq(project.id, staleEntityId));
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "task with a stale due date",
+        projectId: stale.id,
+        dueDate: sixtyDaysAgo,
+      }),
+      ctx.actor,
+    );
+
+    const { output: live, entityId: liveEntityId } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "attention live by due date",
+        status: "in_progress",
+      }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(project)
+      .set({ updatedAt: new Date(`${sixtyDaysAgo}T00:00:00Z`) })
+      .where(eq(project.id, liveEntityId));
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "task with a recent due date",
+        projectId: live.id,
+        dueDate: fifteenDaysAgo,
+      }),
+      ctx.actor,
+    );
+
+    const items = await computeAttentionItems(ctx.db);
+    const stalledIds = items
+      .filter((i) => i.type === "stalled_project")
+      .map((i) => i.entityId);
+    expect(stalledIds).toContain(stale.id);
+    expect(stalledIds).not.toContain(live.id);
+  });
+
   it("flags missing_budget only for a project with spend and no estimate", async () => {
     const { output: noEstimate } = await createProject(
       ctx.db,
@@ -2152,6 +2220,74 @@ describe("project dashboard — attention detector + summary", () => {
     ]);
     expect(live.summary.actualSpend).toBe(liveActual);
     expect(live.summary.committedSpend).toBe(liveCommitted);
+  });
+
+  /**
+   * `costEstimate` is nullable end-to-end — an unestimated project is
+   * UNKNOWN, not $0 (see `helpers.ts`'s `EMPTY_PROJECT_SUBTREE_ROLLUP` doc
+   * comment). `estimateTotal` must sum only the projects that have one AND
+   * report which slice of the scoped set that is, rather than silently
+   * treating "no estimate" as "zero estimate" (that would understate the
+   * total for the wrong reason — see dashboard-summary.ts).
+   */
+  it("sums estimateTotal over only estimated projects and reports coverage", async () => {
+    await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "estimate coverage estimated",
+        costEstimate: 500,
+      }),
+      ctx.actor,
+    );
+    const { output: alsoEstimated } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "estimate coverage also estimated",
+        costEstimate: 250,
+      }),
+      ctx.actor,
+    );
+    const { output: unestimated } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "estimate coverage unestimated" }),
+      ctx.actor,
+    );
+
+    const mixed = await projectDashboardSummary(ctx.db, {
+      search: "estimate coverage",
+    });
+    expect(mixed.projects.map((p) => p.name)).toEqual([
+      "estimate coverage also estimated",
+      "estimate coverage estimated",
+      "estimate coverage unestimated",
+    ]);
+    expect(mixed.summary.estimateTotal).toBe(750);
+    expect(mixed.summary.estimateCoverage).toEqual({
+      projectsWithEstimate: 2,
+      projectsInScope: 3,
+    });
+
+    // Scoped down to ONLY the unestimated project: the sum must be null, not
+    // 0 — there is nothing to sum, which is a different fact than "$0 of
+    // planned work".
+    const noneEstimated = await projectDashboardSummary(ctx.db, {
+      search: unestimated.name,
+    });
+    expect(noneEstimated.summary.estimateTotal).toBeNull();
+    expect(noneEstimated.summary.estimateCoverage).toEqual({
+      projectsWithEstimate: 0,
+      projectsInScope: 1,
+    });
+
+    // Scoped down to ONLY the estimated projects: full coverage, real sum.
+    const bothEstimated = await projectDashboardSummary(ctx.db, {
+      search: alsoEstimated.name,
+    });
+    expect(bothEstimated.summary.estimateTotal).toBe(250);
+    expect(bothEstimated.summary.estimateCoverage).toEqual({
+      projectsWithEstimate: 1,
+      projectsInScope: 1,
+    });
   });
 });
 
@@ -2772,6 +2908,68 @@ describe("project dashboard — portfolio analytics", () => {
         openTaskCount: 0,
       },
     ]);
+  });
+
+  /**
+   * The expense-grouped aggregates now route through `buildExpenseWhereClause`
+   * (the same builder `expenseList`/`expenseAnalytics` use), so `dateFrom`/
+   * `dateTo` must still bound `expense.date` for them — same as the hand-rolled
+   * clause it replaced.
+   */
+  it("still bounds monthlySpend/tradeActivity/adjustments by dateFrom/dateTo", async () => {
+    const project = await mkProject({ name: "analytics date window" });
+    await mkExpense("in window", project.id, 50, { date: "2025-03-15" });
+    await mkExpense("before window", project.id, 999, { date: "2025-01-01" });
+
+    const analytics = await projectPortfolioAnalytics(ctx.db, {
+      dateFrom: "2025-02-01",
+      dateTo: "2025-04-01",
+    });
+    expect(analytics.monthlySpend).toEqual([
+      {
+        month: "2025-03",
+        actual: 50,
+        committed: 0,
+        credits: 0,
+        net: 50,
+        count: 1,
+      },
+    ]);
+    expect(analytics.tradeActivity).toEqual([
+      {
+        trade: "other",
+        actual: 50,
+        committed: 0,
+        credits: 0,
+        net: 50,
+        count: 1,
+      },
+    ]);
+    expect(analytics.adjustments.count).toBe(0);
+  });
+
+  /**
+   * `search` means PROJECT name for this endpoint's input
+   * (`ProjectDashboardFilters`) but expense NAME in `ExpenseFilters` — the two
+   * must never be conflated. A regression that forwarded `filters.search`
+   * straight into `buildExpenseWhereClause`'s `search` would filter the
+   * expense-grouped aggregates down to rows whose NAME happens to contain the
+   * PROJECT's name, which this expense's name deliberately does not.
+   */
+  it("doesn't conflate the project-name `search` filter with expense-name search", async () => {
+    const project = await mkProject({ name: "unrelated tag string" });
+    await mkExpense("totally different wording", project.id, 75);
+
+    const analytics = await projectPortfolioAnalytics(ctx.db, {
+      search: "unrelated tag string",
+    });
+
+    expect(analytics.spendingByProject).toEqual([
+      { projectId: project.id, projectName: "unrelated tag string", spend: 75 },
+    ]);
+    // If `search` had leaked into the expense name filter, this would be empty.
+    expect(analytics.monthlySpend[0]?.actual).toBe(75);
+    expect(analytics.tradeActivity[0]?.actual).toBe(75);
   });
 });
 

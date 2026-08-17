@@ -61,6 +61,13 @@ export interface LocationFilters {
   // The image column's "(none)" / "Has image" sentinel. Counts only displayable
   // images, matching the thumbnail cell — PDF attachments don't count.
   imagePresenceFilter?: "has" | "none";
+  // Nullable column on the root table, so "none" is the un-described worklist.
+  // Paired with `imagePresenceFilter: "has"` it's the describable backlog —
+  // there's nothing to describe about a location with no photo.
+  aiDescriptionPresenceFilter?: "has" | "none";
+  // Direct children only, matching what the Parent column shows. "none" is the
+  // leaf-location worklist.
+  childPresenceFilter?: "has" | "none";
   directItemCountMin?: number;
   directItemCountMax?: number;
   valuationMin?: number;

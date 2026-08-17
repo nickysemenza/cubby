@@ -1,13 +1,16 @@
 import type { ProductFilters, ProductListItem } from "@cubby/schemas/product";
 import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { uniq } from "es-toolkit";
 import { CalendarRange, Clock3, Rows3, Table2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
+import {
+  VerbMenuItem,
+  verbBulkAction,
+} from "~/app/_components/actions/action-verb-ui";
 import {
   ProductFoodSummariesProvider,
   useHydratedProductFood,
@@ -173,6 +176,7 @@ export function ProductList({
   onViewChange,
 }: ProductListProps) {
   const api = useTRPC();
+  const navigate = useNavigate();
   const columnHelper = useMemo(() => createColumnHelper<ProductListItem>(), []);
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("product");
   // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
@@ -813,6 +817,25 @@ export function ProductList({
 
   const queryOptions = api.product.list.queryOptions;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: navigate is stable
+  const bulkActions = useMemo(
+    () => ({
+      actions: [
+        verbBulkAction<ProductListItem>("printLabels", {
+          id: "print-labels",
+          minSelection: 1,
+          onExecute: (rows) => {
+            const codes = rows.map((r) => r.original.id).join(",");
+            navigate({ to: "/labels", search: { codes } });
+            return Promise.resolve({ success: true });
+          },
+        }),
+      ],
+      clearSelectionOnComplete: false,
+    }),
+    [],
+  );
+
   const {
     table,
     data,
@@ -837,6 +860,7 @@ export function ProductList({
     filterOptions,
     extraActions,
     nameEditable,
+    bulkActions,
     initialColumnVisibility: {
       tags: false,
       fdc_id: false,

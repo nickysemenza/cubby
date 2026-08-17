@@ -202,15 +202,34 @@ export async function computeAttentionItems(
   }
 
   // 2. stalled_project — in_progress project with no project/task/expense
-  // `updatedAt` in the last 30 days. (Note/image activity isn't included —
-  // no cheap existing "last activity" timestamp for those; see module doc.)
+  // activity in the last 30 days. (Note/image activity isn't included — no
+  // cheap existing "last activity" timestamp for those; see module doc.)
+  //
+  // Task activity is `max(dueEndDate ?? dueDate)`, NOT `max(updatedAt)`.
+  // Measured on production: 1,111 of 1,116 done tasks were Notion-imported in
+  // one window, so `updatedAt` spans only 2 distinct months (2026-07-18 →
+  // 2026-08-12) while `dueDate` spans 32 months (2023-10 → 2026-08) — the real
+  // work timeline. Zero rows have `dueDate` equal to `updatedAt`'s day; 1,110
+  // are off by 30+ days. `max(updatedAt)` therefore dates every project to the
+  // import, not the work, and can't tell a live project from a dormant one.
+  // `dueDate` also does double duty as a *forward* signal: a task due next
+  // month means the project has scheduled live work, so it correctly reads as
+  // "not stalled" even before that task is touched again.
+  //
+  // `dueDate` is nullable (1,116 done tasks have 1 without one; 100% of
+  // `later`/`blocked` tasks lack one). SQL `max()` already ignores NULLs, so a
+  // project whose tasks are all undated simply gets no task-activity signal —
+  // it neither widens (falsely "recent") nor collapses (falsely "ancient")
+  // the window; `project.updatedAt` and expense activity still apply.
   const inProgressIds = inProgressProjectRows.map((r) => r.id);
   const [taskActivityRows, expenseActivityRows] = await Promise.all([
     inProgressIds.length > 0
       ? getDb(db)
           .select({
             projectId: task.projectId,
-            lastActivity: sql<Date>`max(${task.updatedAt})`,
+            lastActivity: sql<
+              string | null
+            >`max(coalesce(${task.dueEndDate}, ${task.dueDate}))`,
           })
           .from(task)
           .where(and(inArray(task.projectId, inProgressIds), notDeleted(task)))
@@ -220,7 +239,7 @@ export async function computeAttentionItems(
       ? getDb(db)
           .select({
             projectId: expense.projectId,
-            lastActivity: sql<Date>`max(${expense.updatedAt})`,
+            lastActivity: sql<string>`max(${expense.date})`,
           })
           .from(expense)
           .where(
@@ -229,12 +248,12 @@ export async function computeAttentionItems(
           .groupBy(expense.projectId)
       : Promise.resolve([]),
   ]);
-  const taskActivityByProject = new Map<ProjectId, Date>();
+  const taskActivityByProject = new Map<ProjectId, string>();
   for (const row of taskActivityRows) {
-    if (row.projectId)
+    if (row.projectId && row.lastActivity)
       taskActivityByProject.set(row.projectId, row.lastActivity);
   }
-  const expenseActivityByProject = new Map<ProjectId, Date>();
+  const expenseActivityByProject = new Map<ProjectId, string>();
   for (const row of expenseActivityRows) {
     if (row.projectId)
       expenseActivityByProject.set(row.projectId, row.lastActivity);
@@ -242,15 +261,13 @@ export async function computeAttentionItems(
 
   for (const row of inProgressProjectRows) {
     const candidates = [
-      row.updatedAt,
+      householdLocalDate(row.updatedAt),
       taskActivityByProject.get(row.id),
       expenseActivityByProject.get(row.id),
-    ].filter((d): d is Date => d != null);
-    const lastActivity = candidates.reduce(
-      (latest, d) => (d > latest ? d : latest),
-      row.updatedAt,
+    ].filter((d): d is string => d != null);
+    const lastActivityDate = candidates.reduce((latest, d) =>
+      d > latest ? d : latest,
     );
-    const lastActivityDate = householdLocalDate(lastActivity);
     if (lastActivityDate >= activityCutoff) continue;
     items.push({
       key: attentionKey("stalled_project", row.shortcode),

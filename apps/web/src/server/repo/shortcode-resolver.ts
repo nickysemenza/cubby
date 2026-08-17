@@ -232,6 +232,32 @@ export async function resolveAllPresent<E extends ShortcodeEntity>(
 }
 
 /**
+ * Resolve a list FILTER's shortcode value to live branded ids.
+ *
+ * Filters are the one place a shortcode becomes a uuid inside the repo rather
+ * than in the router: a filter is user-supplied browse state, so an id it
+ * names that no longer exists narrows the result to nothing — it is not a 404
+ * for the whole page. That is why this wraps `resolveAllPresent` and not
+ * `resolveAllOrThrow`.
+ *
+ * `undefined` in, `undefined` out: an omitted (or explicitly empty) filter is
+ * unrestricted. A supplied value that resolves to nothing comes back as an
+ * EMPTY ARRAY, which is a different thing entirely — feed it to
+ * `eqAnyRequested`, which turns it into "match nothing" rather than dropping
+ * the constraint.
+ */
+export async function resolveFilterIds<E extends ShortcodeEntity>(
+  db: Database | DrizzleTransaction,
+  entity: E,
+  value: string | readonly string[] | undefined,
+): Promise<BrandForEntity<E>[] | undefined> {
+  if (value === undefined) return undefined;
+  const codes = typeof value === "string" ? [value] : value;
+  if (codes.length === 0) return undefined;
+  return resolveAllPresent(db, entity, codes);
+}
+
+/**
  * Resolve many shortcodes at once — one query per entity type present, not one
  * per code. Unknown or malformed codes are simply absent from the result.
  *

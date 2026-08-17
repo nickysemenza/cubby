@@ -43,7 +43,14 @@ describe("inventoryentryList product-attribute filters", () => {
     input: Parameters<typeof createLocation>[1],
   ) => {
     const output = await createLocation(ctx.db, input, TEST_ACTOR);
-    return unsafeLocationId(await requireResolvedId(output.id, "location"));
+    return {
+      // `locationIdFilter` now takes the PUBLIC code (the repo resolves it);
+      // the write paths below still take the uuid.
+      shortcode: output.id,
+      entityId: unsafeLocationId(
+        await requireResolvedId(output.id, "location"),
+      ),
+    };
   };
 
   const createTestProduct = async (
@@ -70,9 +77,8 @@ describe("inventoryentryList product-attribute filters", () => {
   // pre-check the partial unique index raises a raw 23505 and nothing maps that
   // to an AppError, so the operator sees an untranslated Postgres error.
   it("refuses a placement flip that would collide with an existing slot", async () => {
-    const locationId = await createTestLocation(
-      makeLocationInput({ name: "Kitchen" }),
-    );
+    const { entityId: locationId, shortcode: locationShortcode } =
+      await createTestLocation(makeLocationInput({ name: "Kitchen" }));
     const { entityId: productId } = await createTestProduct(
       makeProductInput({ name: "Poetto faucet" }),
     );
@@ -108,14 +114,14 @@ describe("inventoryentryList product-attribute filters", () => {
 
     // And the refusal is clean: the spare is untouched, not half-written.
     const rows = await list({
-      locationIdFilter: locationId,
+      locationIdFilter: locationShortcode,
       placementFilter: "all",
     });
     expect(rows.data).toHaveLength(2);
   });
 
   it("manufacturerFilter matches case-insensitively on a substring", async () => {
-    const locationId = await createTestLocation(
+    const { entityId: locationId } = await createTestLocation(
       makeLocationInput({ name: "Garage" }),
     );
     const { entityId: milwaukeeId } = await createTestProduct(
@@ -151,7 +157,7 @@ describe("inventoryentryList product-attribute filters", () => {
   });
 
   it("categoryFilter scopes to the matching category", async () => {
-    const locationId = await createTestLocation(
+    const { entityId: locationId } = await createTestLocation(
       makeLocationInput({ name: "Shop" }),
     );
     const { entityId: toolId } = await createTestProduct(
@@ -186,7 +192,7 @@ describe("inventoryentryList product-attribute filters", () => {
   });
 
   it("ANDs manufacturerFilter and categoryFilter rather than ORing them", async () => {
-    const locationId = await createTestLocation(
+    const { entityId: locationId } = await createTestLocation(
       makeLocationInput({ name: "Basement" }),
     );
     // Matches manufacturer only.
@@ -235,7 +241,7 @@ describe("inventoryentryList product-attribute filters", () => {
   });
 
   it("the count/valuation aggregate agrees with the filtered row set", async () => {
-    const locationId = await createTestLocation(
+    const { entityId: locationId } = await createTestLocation(
       makeLocationInput({ name: "Kitchen" }),
     );
     const { entityId: flourId } = await createTestProduct(
@@ -306,7 +312,7 @@ describe("inventoryentryList product-attribute filters", () => {
   });
 
   it("a soft-deleted product does not leak an entry through the join", async () => {
-    const locationId = await createTestLocation(
+    const { entityId: locationId } = await createTestLocation(
       makeLocationInput({ name: "Attic" }),
     );
     const { entityId: doomedId } = await createTestProduct(

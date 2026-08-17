@@ -2,15 +2,13 @@ import type { SearchableEntity } from "@cubby/schemas/search";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { viewProblemDeclarations } from "~/entities/view-manifest";
 import { entityEmbedding, ingredient } from "~/server/db/schema";
 import { deleteUnusedIngredients } from "../services/problems.service";
 import { getDb } from "./database-helpers";
 import { upsertImportRecipe } from "./import-recipe-convert";
-import { findOrCreateIngredient } from "./ingredient";
-import {
-  findIngredientsWithUnusedAliases,
-  findUnusedIngredients,
-} from "./problems";
+import { findOrCreateIngredient, ingredientList } from "./ingredient";
+import { findIngredientsWithUnusedAliases } from "./problems";
 import {
   createInventoryFixture as createInventoryEntry,
   createLocationFixture as createLocation,
@@ -21,7 +19,35 @@ import {
 } from "./repo.fixtures";
 import { generateUniqueShortcode } from "./shortcode-utils";
 
-describe("findUnusedIngredients", () => {
+/**
+ * The unused-ingredient split, resolved the way the app now resolves it: through
+ * the two saved views' own declared filters.
+ *
+ * Reading `serverFilters` from the manifest rather than restating the predicate
+ * is what makes this a parity gate — it's the assertion that let
+ * `findUnusedIngredients` be deleted, and it keeps failing if the views drift.
+ */
+const unusedIngredients = async (db: Parameters<typeof ingredientList>[0]) => {
+  const bySection = async (key: string) => {
+    const declaration = viewProblemDeclarations().find(
+      (candidate) => candidate.problem.key === key,
+    );
+    if (!declaration) throw new Error(`no view declares ${key}`);
+    const { data } = await ingredientList(
+      db,
+      declaration.problem.serverFilters as never,
+      [],
+      { pageIndex: 0, pageSize: 100 },
+    );
+    return data.map((row) => ({ ...row, products: row.product }));
+  };
+  return {
+    withProduct: await bySection("unusedIngredientsWithProduct"),
+    withoutProduct: await bySection("unusedIngredientsWithoutProduct"),
+  };
+};
+
+describe("unused ingredients (saved-view backed)", () => {
   const ctx = withTestDb();
 
   it("splits unused ingredients by product link, excluding in-recipe and sub-recipe ones", async () => {
@@ -60,7 +86,7 @@ describe("findUnusedIngredients", () => {
         shortcode: await generateUniqueShortcode(ctx.db, "ingredient"),
       });
 
-    const { withProduct, withoutProduct } = await findUnusedIngredients(ctx.db);
+    const { withProduct, withoutProduct } = await unusedIngredients(ctx.db);
 
     expect(withoutProduct.map((i) => i.name)).toEqual(["lonely spice"]);
     expect(withProduct.map((i) => i.name)).toEqual(["boxed thing"]);
@@ -191,7 +217,7 @@ describe("deleteUnusedIngredients", () => {
     expect(gone?.deletedAt).not.toBeNull();
 
     // No unused product-linked ingredient remains.
-    const { withProduct } = await findUnusedIngredients(ctx.db);
+    const { withProduct } = await unusedIngredients(ctx.db);
     expect(withProduct.map((i) => i.name)).not.toContain(
       "deletable ingredient",
     );

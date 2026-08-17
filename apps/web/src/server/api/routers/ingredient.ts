@@ -29,7 +29,6 @@ import {
   ingredientResolvableNamesInput,
   ingredientResolveOrCreateOut,
   ingredientSortableFields,
-  ingredientUpdateData,
   ingredientUpdateInput,
   ingredientWithFoodAndSideEffectsOut,
   ingredientWithFoodLeanListOut,
@@ -82,25 +81,6 @@ const resolveIngredientEntityIds = async (
   return resolveAllOrThrow(db, "ingredient", shortcodes);
 };
 
-/**
- * The factory builds an `update` procedure from this callback, and this router
- * DISCARDS it — only `getByID`/`getByShortcode`/`create` are destructured,
- * because the shipped `update` is hand-rolled below (it dispatches the
- * dependent-recipe recompute the factory's contract can't express). The
- * factory's `repository` type still requires the key, so this is an unreachable
- * placeholder.
- *
- * Never put behavior here. The version this replaced called
- * `updateIngredientService` WITHOUT that recompute — a plausible-looking body no
- * request could reach, which a future fix would have been applied to and would
- * silently not have shipped.
- */
-const discardedByFactory = (): never => {
-  throw new Error(
-    "unreachable: ingredient.update is the hand-rolled procedure below",
-  );
-};
-
 // Update is customized so it can eagerly recompute dependent recipes and report side-effects.
 // List returns a lean summary (lean ingredient + food + {id,name} recipe refs, no
 // per-usage recipe bodies); detail (getByID/create) keeps the full
@@ -130,7 +110,6 @@ const { getByID, getByShortcode, create } =
     entityName: "ingredient",
     schemas: {
       createInput: ingredientCreateInput,
-      updateInput: ingredientUpdateData,
       output: ingredientWithFoodOut,
       createOutput: ingredientWithFoodAndSideEffectsOut,
       idSchema: ingredientShortcode,
@@ -179,7 +158,6 @@ const { getByID, getByShortcode, create } =
         });
         return { ...ingredient, sideEffects: { backgroundBatches } };
       },
-      update: discardedByFactory,
     },
   });
 

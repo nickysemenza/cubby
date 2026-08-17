@@ -4,8 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { RotateCcw } from "lucide-react";
-import { type ReactNode, useMemo } from "react";
-import { verbBulkAction } from "~/app/_components/actions/action-verb-ui";
+import { type ReactNode, useCallback, useMemo } from "react";
+import {
+  VerbMenuItem,
+  verbBulkAction,
+} from "~/app/_components/actions/action-verb-ui";
 import { Row, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
@@ -43,6 +46,7 @@ import {
   perServingRange,
   perUnitSuffix,
 } from "../_components/recipe/recipe-utils";
+import { useDuplicateRecipe } from "../_components/recipe/use-duplicate-recipe";
 import { TruncatedList } from "../_components/TruncatedList";
 import { totalsLookStuck } from "./recipe-totals-staleness";
 
@@ -467,6 +471,18 @@ export function RecipeList({
     entity: "recipe",
   });
 
+  const { duplicateRecipe, isPending: isDuplicating } = useDuplicateRecipe();
+  const extraActions = useCallback(
+    (row: RecipeListItem) => (
+      <VerbMenuItem
+        verb="duplicate"
+        disabled={isDuplicating}
+        onSelect={() => duplicateRecipe(row.id)}
+      />
+    ),
+    [duplicateRecipe, isDuplicating],
+  );
+
   const {
     table,
     isLoading,
@@ -487,6 +503,7 @@ export function RecipeList({
     columns,
     nameClassName: "w-64",
     hiddenFilterColumns,
+    extraActions,
     bulkActions: {
       actions: [
         verbBulkAction<RecipeListItem>("compare", {

@@ -21,7 +21,13 @@ function keysReadBy(section: Section): ProblemKey[] {
   const read = new Set<string>();
   const probe = new Proxy({} as AllProblems, {
     get: (_target, property) => {
-      if (typeof property === "string") read.add(property);
+      // `sectionTotals` is infrastructure, not a detector: `count` reads it so a
+      // view-backed section reports its population rather than the page it
+      // renders. Recording it would make every section look like it reads an
+      // unknown key.
+      if (typeof property === "string" && property !== "sectionTotals") {
+        read.add(property);
+      }
       return [];
     },
   });

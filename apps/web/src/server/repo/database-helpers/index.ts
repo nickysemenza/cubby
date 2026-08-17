@@ -37,6 +37,7 @@ export {
   countWhere,
   eqAny,
   eqAnyOrPresence,
+  eqAnyRequested,
   executeListQueryWithCount,
   formatSearchTerm,
   idSetPresence,

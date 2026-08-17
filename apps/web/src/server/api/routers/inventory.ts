@@ -135,18 +135,10 @@ const { list } = createEntityListProcedure({
   },
   repository: {
     list: async (services, filters, sort, pagination) => {
-      const locationIdFilter = filters.locationIdFilter
-        ? await resolveLocationId(services.db, filters.locationIdFilter)
-        : undefined;
-      const productIdFilter = filters.productIdFilter
-        ? await resolveProductId(services.db, filters.productIdFilter)
-        : undefined;
-      return await inventoryentryList(
-        services.db,
-        { ...filters, locationIdFilter, productIdFilter },
-        sort,
-        pagination,
-      );
+      // The repo resolves `locationIdFilter`/`productIdFilter` itself — a
+      // browse filter naming a dead code narrows to nothing rather than 404ing
+      // the page, which `resolveOrThrow` here could not express.
+      return await inventoryentryList(services.db, filters, sort, pagination);
     },
   },
   entityName: "inventory",

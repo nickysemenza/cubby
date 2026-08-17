@@ -16,8 +16,8 @@ import { upsertCookbook } from "./cookbook";
 import { getDb } from "./database-helpers";
 import {
   findOrphanedEntityEmbeddings,
-  getEmbeddingTextForEntity,
   getEmbeddingTextsForEntityTypes,
+  getEmbeddingTextsForRefs,
   getEntityEmbeddingDeletedAtForRef,
   upsertEntityEmbedding,
 } from "./entity-embedding";
@@ -223,10 +223,9 @@ describe("searchable entity loader maps", () => {
     );
 
     for (const entityType of searchableEntities) {
-      const single = await getEmbeddingTextForEntity(
+      const [single] = await getEmbeddingTextsForRefs(
         ctx.db,
-        entityType,
-        ids[entityType],
+        new Map([[entityType, [ids[entityType]]]]),
       );
       expect(single).toEqual(byRef.get(`${entityType}:${ids[entityType]}`));
       expect(single?.embeddingText).toContain("Loader");

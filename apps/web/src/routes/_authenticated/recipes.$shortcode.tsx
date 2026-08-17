@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-router";
 import { Edit, X } from "lucide-react";
 import { z } from "zod";
+import { VerbButton } from "~/app/_components/actions/action-verb-ui";
 import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import { CopyRecipeParseButton } from "~/app/_components/recipe/copy-corpus-button";
 import EditRecipeForm from "~/app/_components/recipe/edit-recipe";
@@ -17,6 +18,7 @@ import RecipeDetail, {
   remapLegacyView,
 } from "~/app/_components/recipe/RecipeDetail";
 import type { RecipeFlowLayoutMode } from "~/app/_components/recipe/RecipeFlowView";
+import { useDuplicateRecipe } from "~/app/_components/recipe/use-duplicate-recipe";
 import { AddToMeal } from "~/app/meals/add-to-meal";
 import { Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -150,6 +152,8 @@ function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
     redirectTo: "/recipes",
   });
 
+  const { duplicateRecipe, isPending: isDuplicating } = useDuplicateRecipe();
+
   useDetailTitle(shortcode, recipe.name);
 
   // Placard stats from the persisted totals — zero engine calls. The Data
@@ -188,12 +192,18 @@ function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
       entity="recipe"
       title={recipe.name}
       rawData={recipe}
+      heroNo={recipe.id}
       heroStats={heroStats.length > 0 ? heroStats : undefined}
       actions={
         !isEditing ? (
           <>
             <AddToMeal recipeId={recipe.id} />
             <CopyRecipeParseButton recipe={recipe} />
+            <VerbButton
+              verb="duplicate"
+              disabled={isDuplicating}
+              onClick={() => duplicateRecipe(recipe.id)}
+            />
             <Button onClick={startEditing} variant="outline" size="sm">
               <Edit />
               Edit Recipe
