@@ -14,8 +14,9 @@ import type {
   InfLocation,
   InventoryItemForTree,
   LocationAncestorOut,
+  LocationInventoryBreakdownOut,
 } from "@cubby/schemas/location";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   type image,
@@ -254,6 +255,111 @@ type AncestorRow = {
   shortcode: string;
   name: string;
   type: string;
+};
+
+type BreakdownLocationRow = {
+  id: LocationId;
+  parentId: LocationId | null;
+  shortcode: string;
+  name: string;
+  type: string | null;
+};
+
+/**
+ * Lightweight, root-included inventory count tree for the location detail
+ * drill-down. This deliberately reads no images, products, or inventory row
+ * payloads: only the location scalars and grouped stock counts it renders.
+ */
+export const getLocationInventoryBreakdown = async (
+  db: Database,
+  rootId: LocationId,
+): Promise<LocationInventoryBreakdownOut | null> => {
+  const dbClient = getDb(db);
+  const treeResult = await dbClient.execute<BreakdownLocationRow>(sql`
+    WITH RECURSIVE location_tree AS (
+      SELECT l."id", l."parentId", l."shortcode", l."name", l."type", 0 AS depth
+      FROM ${location} l
+      WHERE l."id" = ${rootId} AND l."deletedAt" IS NULL
+
+      UNION ALL
+
+      SELECT l."id", l."parentId", l."shortcode", l."name", l."type", lt.depth + 1
+      FROM ${location} l
+      INNER JOIN location_tree lt ON l."parentId" = lt."id"
+      WHERE l."deletedAt" IS NULL AND lt.depth < ${MAX_TREE_DEPTH}
+    )
+    SELECT "id", "parentId", "shortcode", "name", "type"
+    FROM location_tree
+  `);
+  const rows = treeResult.rows;
+  if (rows.length === 0) return null;
+
+  const ids = rows.map((row) => row.id);
+  const directCounts = await dbClient
+    .select({
+      locationId: inventoryEntry.locationId,
+      itemCount: count(),
+    })
+    .from(inventoryEntry)
+    .innerJoin(
+      product,
+      and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
+    )
+    .innerJoin(
+      location,
+      and(eq(location.id, inventoryEntry.locationId), notDeleted(location)),
+    )
+    .where(
+      and(
+        inArray(inventoryEntry.locationId, ids),
+        notDeleted(inventoryEntry),
+        stockOnly(),
+      ),
+    )
+    .groupBy(inventoryEntry.locationId);
+  const countsByLocationId = new Map(
+    directCounts.map((row) => [row.locationId, Number(row.itemCount)]),
+  );
+
+  type MutableNode = LocationInventoryBreakdownOut & {
+    parentId: LocationId | null;
+  };
+  const byId = new Map<LocationId, MutableNode>();
+  for (const row of rows) {
+    byId.set(row.id, {
+      id: unsafeLocationShortcode(row.shortcode),
+      name: row.name,
+      type: parseLocationType(row.type, { id: row.shortcode, name: row.name }),
+      directItemCount: countsByLocationId.get(row.id) ?? 0,
+      totalItemCount: 0,
+      children: [],
+      parentId: row.parentId,
+    });
+  }
+  for (const [id, node] of byId) {
+    if (id === rootId) continue;
+    const parent = node.parentId ? byId.get(node.parentId) : undefined;
+    if (parent) parent.children.push(node);
+  }
+  const root = byId.get(rootId);
+  if (!root) return null;
+
+  const finalize = (node: MutableNode): LocationInventoryBreakdownOut => {
+    const children = (node.children as MutableNode[])
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(finalize);
+    return {
+      id: node.id,
+      name: node.name,
+      type: node.type,
+      directItemCount: node.directItemCount,
+      totalItemCount:
+        node.directItemCount +
+        children.reduce((total, child) => total + child.totalItemCount, 0),
+      children,
+    };
+  };
+  return finalize(root);
 };
 
 /**

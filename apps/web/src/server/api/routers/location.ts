@@ -19,6 +19,7 @@ import {
   locationBulkUpdateParentOut,
   locationCreateInput,
   locationFiltersSchema,
+  locationInventoryBreakdownOut,
   locationListItemOut,
   locationOptionItemOut,
   locationParentOptionsOut,
@@ -41,6 +42,7 @@ import {
   ensureGlobalUnknownLocation,
   getLocationById,
   getLocationByShortcode,
+  getLocationInventoryBreakdown,
   getLocationsByShortcodes,
   locationList,
   locationOptions,
@@ -258,6 +260,17 @@ const subtree = protectedProcedure
       ),
   );
 
+/** Count-only, root-included hierarchy for the location drill-down chart. */
+const inventoryBreakdown = protectedProcedure
+  .input(z.object({ shortcode: locationShortcode }))
+  .output(strictOutput(locationInventoryBreakdownOut.nullable()))
+  .query(async ({ ctx, input }) =>
+    getLocationInventoryBreakdown(
+      ctx.db,
+      await resolveLocationId(ctx.db, input.shortcode),
+    ),
+  );
+
 /**
  * Lightweight `{id, name}` options for the location filter's parent picklist
  * (see `useLocationParentOptions`) — only locations with at least one live
@@ -362,6 +375,7 @@ export const locationRouter = createTRPCRouter({
   getByShortcodes,
   makeTree,
   subtree,
+  inventoryBreakdown,
   parentOptions,
   ensureGlobalUnknown,
   create,

@@ -45,6 +45,7 @@ import {
 import { CreateChildLocationDialog } from "./create-child-location-dialog";
 import { LocationChildrenTable } from "./location-children-table";
 import { locationContentsVisibility } from "./location-contents-state";
+import { LocationInventoryBreakdown } from "./location-inventory-breakdown";
 import {
   LocationInventoryTable,
   locationInventoryListInput,
@@ -265,12 +266,11 @@ export function LocationContents({ location }: { location: InfLocation }) {
 
   const handleChildCreated = useCallback(() => {
     invalidateTRPCQueries(queryClient, [
-      api.location.getByID.queryKey({ id: location.id }),
-      // The tree table reads its own subtree query — without this a new child
-      // shows in the card grid but not in the table.
-      queryKeys.location.subtree,
+      // Children change every derived location view, including the count-only
+      // drill-down. Keep this broad instead of adding one-off query keys.
+      queryKeys.location.all,
     ]);
-  }, [queryClient, api, location.id]);
+  }, [queryClient]);
 
   const handleItemAdded = useCallback(() => {
     setAddOpen(false);
@@ -351,6 +351,11 @@ export function LocationContents({ location }: { location: InfLocation }) {
           </div>
         </CollapsibleContent>
       </Collapsible>
+
+      <LocationInventoryBreakdown
+        shortcode={location.id}
+        hasChildren={hasChildren}
+      />
 
       {visibility.empty ? (
         <ShelfEmpty

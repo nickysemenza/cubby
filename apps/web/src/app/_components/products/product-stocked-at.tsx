@@ -17,12 +17,15 @@ import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { DeleteInventoryDialog } from "~/app/_components/inventory/delete-inventory-dialog";
 import { MoveInventoryDialog } from "~/app/_components/inventory/move-inventory-dialog";
+import { HierarchyDrilldown } from "~/app/_components/visualizations/hierarchy-drilldown";
 import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
+import { Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { useTRPC } from "~/integrations/trpc/react";
 import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 import { ShelfEmpty } from "../data-table/shelf";
 import { ProductDiscardDialog } from "./product-discard-dialog";
+import { buildProductLocationBreakdown } from "./product-location-breakdown";
 
 type InventoryEntry = ProductWithFoodOut["inventoryEntry"][number];
 
@@ -124,6 +127,11 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
     product.name,
     product.pricing.effectivePrice,
   ]);
+
+  const locationBreakdown = useMemo(
+    () => buildProductLocationBreakdown(product),
+    [product],
+  );
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable
   const columns = useMemo(
@@ -280,14 +288,23 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
 
   return (
     <>
-      <RTable
-        table={table}
-        ariaLabel={`${product.name} inventory`}
-        entity="inventory"
-        sizingKey="inventory:product-detail"
-        bulkActionBar={bulkActionBar}
-        embedded
-      />
+      <Stack gap="md">
+        {locationBreakdown && (
+          <HierarchyDrilldown
+            root={locationBreakdown}
+            ariaLabel={`${product.name} location breakdown`}
+          />
+        )}
+
+        <RTable
+          table={table}
+          ariaLabel={`${product.name} inventory`}
+          entity="inventory"
+          sizingKey="inventory:product-detail"
+          bulkActionBar={bulkActionBar}
+          embedded
+        />
+      </Stack>
 
       <MoveInventoryDialog
         open={dialog.type === "move"}

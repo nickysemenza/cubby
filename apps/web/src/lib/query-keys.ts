@@ -40,6 +40,7 @@ export const queryKeys = {
     list: procedureKey("location", "list"),
     makeTree: procedureKey("location", "makeTree"),
     subtree: procedureKey("location", "subtree"),
+    inventoryBreakdown: procedureKey("location", "inventoryBreakdown"),
     getByID: procedureKey("location", "getByID"),
     getByShortcode: procedureKey("location", "getByShortcode"),
     // The bounded parent-filter roster (`useLocationParentOptions`) — only

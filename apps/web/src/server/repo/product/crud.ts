@@ -98,6 +98,7 @@ import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { resolveEstablishedManufacturer } from "~/server/repo/label-canonical";
+import { loadLocationAncestors } from "~/server/repo/location/tree";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
@@ -270,7 +271,44 @@ const fetchProductById = async (
   const priced = await enrichProductRowsWithPricing(db, [row]);
   // The detail page shows Expected beside On hand, so it needs the same ledger
   // the list does — one grouped query for the single row.
-  return (await enrichProductRowsWithQuantityLedger(db, priced))[0];
+  return (
+    await hydrateProductLocationAncestors(
+      db,
+      await enrichProductRowsWithQuantityLedger(db, priced),
+    )
+  )[0];
+};
+
+/**
+ * Detail products can mention a holding location and a location whose identity
+ * is the product. Resolve every breadcrumb in one recursive query for the
+ * entire result set, rather than one parent walk per row in the mapper.
+ */
+const hydrateProductLocationAncestors = async (
+  db: Database,
+  rows: ProductDeepDB[],
+): Promise<ProductDeepDB[]> => {
+  const locationIds = uniq(
+    rows.flatMap((row) => [
+      ...row.inventoryEntry.map((entry) => entry.location.id),
+      ...(row.locations ?? []).map((loc) => loc.id),
+    ]),
+  );
+  const ancestorsById = await loadLocationAncestors(db, locationIds);
+  return rows.map((row) => ({
+    ...row,
+    inventoryEntry: row.inventoryEntry.map((entry) => ({
+      ...entry,
+      location: {
+        ...entry.location,
+        ancestors: ancestorsById.get(entry.location.id) ?? [],
+      },
+    })),
+    locations: row.locations?.map((loc) => ({
+      ...loc,
+      ancestors: ancestorsById.get(loc.id) ?? [],
+    })),
+  }));
 };
 
 // Read path through the shared reader (fetch-with-relations → 404 → map). The
@@ -403,7 +441,10 @@ export const getProductsByShortcodes = async (
     results.map((row) => row.id),
   );
   const priced = await enrichProductRowsWithPricing(db, results);
-  const ledgered = await enrichProductRowsWithQuantityLedger(db, priced);
+  const ledgered = await hydrateProductLocationAncestors(
+    db,
+    await enrichProductRowsWithQuantityLedger(db, priced),
+  );
   return ledgered.map((row) => dbProductToAPI(row, qualities.get(row.id)!));
 };
 

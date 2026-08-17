@@ -285,6 +285,40 @@ export const locationAncestorOut = z.object({
 export type LocationAncestorOut = z.infer<typeof locationAncestorOut>;
 
 /**
+ * Small location identity plus its root-first breadcrumb.  Detail reads use
+ * this instead of making consumers reconstruct a path from unrelated rows.
+ */
+export const locationPathRefOut = z.object({
+  id: locationShortcode,
+  name: z.string(),
+  type: locationType.nullable(),
+  ancestors: z.array(locationAncestorOut),
+});
+export type LocationPathRefOut = z.infer<typeof locationPathRefOut>;
+
+/** A deliberately lean inventory-count tree for the location drill-down. */
+export type LocationInventoryBreakdownOut = {
+  id: z.infer<typeof locationShortcode>;
+  name: string;
+  type: LocationType | null;
+  directItemCount: number;
+  totalItemCount: number;
+  children: LocationInventoryBreakdownOut[];
+};
+
+export const locationInventoryBreakdownOut: z.ZodType<LocationInventoryBreakdownOut> =
+  z.lazy(() =>
+    z.object({
+      id: locationShortcode,
+      name: z.string(),
+      type: locationType.nullable(),
+      directItemCount: z.number().int().nonnegative(),
+      totalItemCount: z.number().int().nonnegative(),
+      children: z.array(locationInventoryBreakdownOut),
+    }),
+  );
+
+/**
  * Lightweight `{id, name}` roster for the location filter's `parentLocation`
  * picklist (see `useLocationParentOptions`) — only locations with at least
  * one live child (repo/location/lookup.ts's `locationParentOptions`), not the
