@@ -138,6 +138,7 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
               name="product"
               label="Product"
               searchType="product"
+              productIntent="stock"
             />
             <ComboboxFieldWithSearch
               form={form}

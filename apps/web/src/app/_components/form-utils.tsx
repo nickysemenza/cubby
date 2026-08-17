@@ -474,6 +474,7 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
   onOpenChange,
   entity,
   clearable = true,
+  disabledItemReasons,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
@@ -491,6 +492,7 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
   onOpenChange?: (open: boolean) => void;
   entity: PickerEntity;
   clearable?: boolean;
+  disabledItemReasons?: Readonly<Record<string, string>>;
 }) {
   return (
     <Controller
@@ -506,7 +508,23 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
           <EntityPicker
             entity={entity}
             label={label?.toLowerCase() ?? "item"}
-            items={items}
+            items={items.map((item) => {
+              const disabledReason = disabledItemReasons?.[item.id];
+              return disabledReason
+                ? {
+                    ...item,
+                    presentation: {
+                      ...item.presentation,
+                      group: {
+                        id: "unavailable",
+                        label: "Unavailable",
+                        order: 99,
+                      },
+                      disabledReason,
+                    },
+                  }
+                : item;
+            })}
             onSearchChange={onSearchChange}
             isLoading={isLoading}
             value={field.value as ComboboxItem | null}

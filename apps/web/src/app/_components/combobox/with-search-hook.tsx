@@ -29,6 +29,7 @@ import {
   buildRecipeComboboxItem,
   buildSearchHitComboboxItem,
   buildTaskComboboxItem,
+  type ProductPickerIntent,
 } from "./combobox-builders";
 import type { ComboboxItem } from "./combobox-types";
 import {
@@ -267,7 +268,8 @@ export function WithLocationSearch({
 
 export function WithProductSearch({
   children,
-}: WithEntitySearchProps<ProductShortcode>) {
+  intent = "reference",
+}: WithEntitySearchProps<ProductShortcode> & { intent?: ProductPickerIntent }) {
   const api = useTRPC();
   const {
     searchQuery,
@@ -281,9 +283,8 @@ export function WithProductSearch({
   } = useEntitySearchWithDialog<ProductShortcode>();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
-  // `product.search` (not `.list`): the picker needs only {id, name,
-  // manufacturer}, so it skips the per-row USDA food enrichment + relation joins
-  // that `.list` pays for.
+  // `product.search` (not `.list`) returns the compact picker shape plus its
+  // batched quantity evidence, without paying for the full product graph.
   const parsedCode = parseShortcode(searchQuery);
   const exactCode =
     parsedCode?.type === "product" ? parsedCode.shortcode : null;
@@ -294,15 +295,7 @@ export function WithProductSearch({
       filters: { nameFilter: searchQuery },
       pagination,
     }),
-    enabled: enabled && !searchingByCode && searchQuery.trim() === "",
-  });
-  const { data: searchHits, isLoading: isSearchLoading } = useQuery({
-    ...api.search.find.queryOptions({
-      query: searchQuery || "product",
-      entityTypes: ["product"],
-      limit: 20,
-    }),
-    enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
+    enabled: enabled && !searchingByCode,
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
     api.product.getByShortcode.queryOptions(
@@ -346,19 +339,13 @@ export function WithProductSearch({
       {children({
         items: searchingByCode
           ? exactItem
-            ? [buildProductComboboxItem(exactItem)]
+            ? [buildProductComboboxItem(exactItem, intent)]
             : []
-          : searchQuery.trim()
-            ? (searchHits?.map((hit) =>
-                buildSearchHitComboboxItem<ProductShortcode>(hit, "product"),
-              ) ?? [])
-            : (data?.items.map(buildProductComboboxItem) ?? []),
+          : (data?.items.map((item) =>
+              buildProductComboboxItem(item, intent),
+            ) ?? []),
         onSearchChange,
-        isLoading: exactCode
-          ? isExactLoading
-          : searchQuery.trim()
-            ? isSearchLoading
-            : isLoading,
+        isLoading: exactCode ? isExactLoading : isLoading,
         onCreateNew,
         onOpenChange,
       })}

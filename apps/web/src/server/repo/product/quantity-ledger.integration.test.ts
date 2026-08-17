@@ -9,11 +9,17 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "../database-helpers";
 import { createExpense } from "../expense";
 import {
+  createInventoryFixture,
+  createLocationFixture,
   createProductFixture as createProduct,
   makeExpenseInput,
+  makeLocationInput,
   makeProductInput,
 } from "../repo.fixtures";
-import { loadProductQuantityLedgers } from "./quantity-ledger";
+import {
+  loadProductPickerQuantities,
+  loadProductQuantityLedgers,
+} from "./quantity-ledger";
 
 /**
  * The ledger rule, exercised against a real database.
@@ -212,5 +218,77 @@ describe("loadProductQuantityLedgers", () => {
     // The caller substitutes EMPTY_QUANTITY_LEDGER — "no rows" and "nets zero"
     // are different facts, and the map keeps them distinguishable.
     expect(await ledgerFor(prod.entityId)).toBeUndefined();
+  });
+});
+
+describe("loadProductPickerQuantities", () => {
+  const ctx = withTestDb();
+
+  it("distinguishes absent, counted, and mixed-unit stock", async () => {
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Picker shelf" }),
+      ctx.actor,
+    );
+    const absent = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Absent brace" }),
+      ctx.actor,
+    );
+    const counted = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Counted brace" }),
+      ctx.actor,
+    );
+    const mixed = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Mixed brace" }),
+      ctx.actor,
+    );
+
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: counted.entityId,
+        locationId: shelf.entityId,
+        amount: { value: 2, unit: "each" },
+      },
+      ctx.actor,
+    );
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: mixed.entityId,
+        locationId: shelf.entityId,
+        amount: { value: 1, unit: "each" },
+      },
+      ctx.actor,
+    );
+    const secondShelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Picker shelf two" }),
+      ctx.actor,
+    );
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: mixed.entityId,
+        locationId: secondShelf.entityId,
+        amount: { value: 1, unit: "box" },
+      },
+      ctx.actor,
+    );
+
+    const result = await loadProductPickerQuantities(ctx.db, [
+      absent.entityId,
+      counted.entityId,
+      mixed.entityId,
+    ]);
+    expect(result.get(absent.entityId)?.onHand).toEqual({ state: "none" });
+    expect(result.get(counted.entityId)?.onHand).toEqual({
+      state: "counted",
+      units: 2,
+    });
+    expect(result.get(mixed.entityId)?.onHand).toEqual({ state: "mixed" });
   });
 });

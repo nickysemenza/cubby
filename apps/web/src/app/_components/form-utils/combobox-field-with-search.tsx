@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
+import type { ProductPickerIntent } from "../combobox/combobox-builders";
 import type { ComboboxItem } from "../combobox/combobox-types";
 import {
   WithIngredientSearch,
@@ -12,6 +13,7 @@ import { ComboboxField } from "../form-utils";
 type SearchType = "ingredient" | "product" | "location" | "recipe";
 
 interface WithEntitySearchProps {
+  intent?: ProductPickerIntent;
   children: (props: {
     items: ComboboxItem[];
     onSearchChange: (query: string) => void;
@@ -36,6 +38,8 @@ interface ComboboxFieldWithSearchProps<TFieldValues extends FieldValues> {
   name: Path<TFieldValues>;
   label?: string;
   searchType: SearchType;
+  productIntent?: ProductPickerIntent;
+  disabledItemReasons?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -47,11 +51,15 @@ export function ComboboxFieldWithSearch<TFieldValues extends FieldValues>({
   name,
   label,
   searchType,
+  productIntent,
+  disabledItemReasons,
 }: ComboboxFieldWithSearchProps<TFieldValues>) {
   const SearchWrapper = searchWrapperMap[searchType];
 
   return (
-    <SearchWrapper>
+    <SearchWrapper
+      intent={searchType === "product" ? productIntent : undefined}
+    >
       {({ items, onSearchChange, isLoading, onCreateNew, onOpenChange }) => (
         <ComboboxField
           form={form}
@@ -63,6 +71,7 @@ export function ComboboxFieldWithSearch<TFieldValues extends FieldValues>({
           onCreateNew={onCreateNew}
           onOpenChange={onOpenChange}
           entity={searchType}
+          disabledItemReasons={disabledItemReasons}
         />
       )}
     </SearchWrapper>
