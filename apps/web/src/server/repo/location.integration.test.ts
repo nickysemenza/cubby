@@ -233,6 +233,24 @@ describe("getLocationInventoryBreakdown", () => {
       await locationId(root.id),
     );
 
+    const expectPublicNodeShape = (node: NonNullable<typeof result>): void => {
+      expect(Object.keys(node).sort()).toEqual(
+        [
+          "children",
+          "directItemCount",
+          "id",
+          "name",
+          "totalItemCount",
+          "type",
+        ].sort(),
+      );
+      for (const descendant of node.children) {
+        expectPublicNodeShape(descendant);
+      }
+    };
+    expect(result).not.toBeNull();
+    expectPublicNodeShape(result!);
+
     expect(result).toMatchObject({
       id: root.id,
       name: "Breakdown Garage",

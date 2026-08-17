@@ -345,16 +345,19 @@ export const getLocationInventoryBreakdown = async (
   if (!root) return null;
 
   const finalize = (node: MutableNode): LocationInventoryBreakdownOut => {
-    const children = node.children as MutableNode[];
-    children.sort((a, b) => a.name.localeCompare(b.name));
-    node.totalItemCount =
-      node.directItemCount +
-      children.reduce(
-        (total, child) => total + finalize(child).totalItemCount,
-        0,
-      );
-    const { parentId: _parentId, ...output } = node;
-    return output;
+    const children = (node.children as MutableNode[])
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(finalize);
+    return {
+      id: node.id,
+      name: node.name,
+      type: node.type,
+      directItemCount: node.directItemCount,
+      totalItemCount:
+        node.directItemCount +
+        children.reduce((total, child) => total + child.totalItemCount, 0),
+      children,
+    };
   };
   return finalize(root);
 };
