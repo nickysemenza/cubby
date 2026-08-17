@@ -4,7 +4,7 @@ import {
 } from "@cubby/schemas/search";
 import { type SQL, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, uuidArrayParam } from "~/server/repo/database-helpers";
 import {
   getEmbeddingTextsForEntityTypes,
   getEmbeddingTextsForRefs,
@@ -81,16 +81,15 @@ async function getSearchDocumentSources(
     entityTypes.map((entityType) => sql`${entityType}`),
     sql`, `,
   );
-  // ONE bind parameter for the whole id set, not one per id: a Postgres array
-  // literal bound as text and cast in SQL. It is deliberately NOT a JS array
-  // interpolated into `sql` — drizzle renders that as a row constructor, the
-  // trap `hand-rolled-any-array` guards. It is also not `eqAny`/`inArray`,
-  // which emit `IN ($1, …, $n)`: this query is raw SQL over fifteen aliased
-  // tables, and binding a parameter per id is the cost being removed. The
-  // matching `requested` CTE below unnests it once; a null set skips the gate
-  // entirely so the unfiltered backfill path is unchanged.
-  const requestedIds =
-    entityIds == null ? null : `{${[...new Set(entityIds)].join(",")}}`;
+  // ONE bind parameter for the whole id set, not one per id. `= ANY` and not
+  // `IN (SELECT unnest(...))`: with a BOUND parameter the planner cannot see
+  // into the subquery, so that form degraded every arm to a hashed SubPlan over
+  // a full table scan — measured on production at 270 buffers to fetch a single
+  // row by uuid, against 3 for the index scan below. The `IS NULL` gate keeps
+  // its own text param so the unfiltered backfill path still skips the filter.
+  const hasIds = entityIds != null;
+  const idGate = (column: string) =>
+    hasIds ? sql`AND ${sql.raw(column)} = ANY(${uuidArrayParam(entityIds)})` : sql``;
   const result = await getDb(db).execute<{
     entityType: SearchableEntity;
     entityId: string;
@@ -105,56 +104,54 @@ async function getSearchDocumentSources(
       SELECT l.id AS "rootId", l.id, l."parentId", l.name, 0 AS depth
       FROM "Location" l
       WHERE 'location' IN (${types})
-        AND (${requestedIds}::text IS NULL OR l."id" IN (SELECT id FROM requested))
+        AND TRUE ${idGate('l."id"')}
         AND l."deletedAt" IS NULL
       UNION ALL
       SELECT child."rootId", parent.id, parent."parentId", parent.name, child.depth + 1
       FROM "Location" parent
       JOIN location_path child ON child."parentId" = parent.id
       WHERE parent."deletedAt" IS NULL
-    ), requested AS (
-      SELECT unnest(${requestedIds}::uuid[]) AS id
     )
     SELECT * FROM (
       SELECT 'product'::text AS "entityType", p."id"::text AS "entityId", p."shortcode",
         p."name" AS title, p."manufacturer" AS subtitle, p."category" AS "typeHint",
         p."aliases" AS aliases, ARRAY[p."upc", p."model", p."manufacturer"]::text[] AS keywords
-      FROM "Product" p WHERE p."deletedAt" IS NULL AND 'product' IN (${types}) AND (${requestedIds}::text IS NULL OR p."id" IN (SELECT id FROM requested))
+      FROM "Product" p WHERE p."deletedAt" IS NULL AND 'product' IN (${types}) AND TRUE ${idGate('p."id"')}
       UNION ALL
       SELECT 'recipe', r."id"::text, r."shortcode", r."name", NULL, NULL, ARRAY[]::text[], ARRAY[]::text[]
-      FROM "Recipe" r WHERE r."deletedAt" IS NULL AND 'recipe' IN (${types}) AND (${requestedIds}::text IS NULL OR r."id" IN (SELECT id FROM requested))
+      FROM "Recipe" r WHERE r."deletedAt" IS NULL AND 'recipe' IN (${types}) AND TRUE ${idGate('r."id"')}
       UNION ALL
       SELECT 'ingredient', i."id"::text, i."shortcode", i."name", NULL, NULL, i."aliases", ARRAY[]::text[]
-      FROM "Ingredient" i WHERE i."deletedAt" IS NULL AND i."recipeId" IS NULL AND 'ingredient' IN (${types}) AND (${requestedIds}::text IS NULL OR i."id" IN (SELECT id FROM requested))
+      FROM "Ingredient" i WHERE i."deletedAt" IS NULL AND i."recipeId" IS NULL AND 'ingredient' IN (${types}) AND TRUE ${idGate('i."id"')}
       UNION ALL
       SELECT 'cookbook', c."id"::text, c."shortcode", c."name", NULLIF(array_to_string(c."author", ', '), ''), NULL, ARRAY[]::text[], c."subjects"
-      FROM "Cookbook" c WHERE c."deletedAt" IS NULL AND 'cookbook' IN (${types}) AND (${requestedIds}::text IS NULL OR c."id" IN (SELECT id FROM requested))
+      FROM "Cookbook" c WHERE c."deletedAt" IS NULL AND 'cookbook' IN (${types}) AND TRUE ${idGate('c."id"')}
       UNION ALL
       SELECT 'location', l."id"::text, l."shortcode", l."name",
         (SELECT string_agg(path.name, ' › ' ORDER BY path.depth DESC) FROM location_path path WHERE path."rootId" = l.id AND path.depth > 0),
         l."type", l."aliases", ARRAY[l."type"]::text[]
-      FROM "Location" l WHERE l."deletedAt" IS NULL AND 'location' IN (${types}) AND (${requestedIds}::text IS NULL OR l."id" IN (SELECT id FROM requested))
+      FROM "Location" l WHERE l."deletedAt" IS NULL AND 'location' IN (${types}) AND TRUE ${idGate('l."id"')}
       UNION ALL
       SELECT 'inventory', ie."id"::text, ie."shortcode", p."name", l."name", p."category", p."aliases", ARRAY[l."name", l."type", p."manufacturer", p."upc"]::text[]
       FROM "InventoryEntry" ie JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL JOIN "Location" l ON l."id" = ie."locationId" AND l."deletedAt" IS NULL
-      WHERE ie."deletedAt" IS NULL AND 'inventory' IN (${types}) AND (${requestedIds}::text IS NULL OR ie."id" IN (SELECT id FROM requested))
+      WHERE ie."deletedAt" IS NULL AND 'inventory' IN (${types}) AND TRUE ${idGate('ie."id"')}
       UNION ALL
       SELECT 'meal', m."id"::text, m."shortcode", COALESCE(NULLIF(m."name", ''), m."date"::text), m."date"::text, NULL, ARRAY[]::text[], ARRAY[m."date"::text]::text[]
-      FROM "Meal" m WHERE m."deletedAt" IS NULL AND 'meal' IN (${types}) AND (${requestedIds}::text IS NULL OR m."id" IN (SELECT id FROM requested))
+      FROM "Meal" m WHERE m."deletedAt" IS NULL AND 'meal' IN (${types}) AND TRUE ${idGate('m."id"')}
       UNION ALL
       SELECT 'project', p."id"::text, p."shortcode", p."name", concat_ws(' · ', p."kind", p."status"), p."icon", ARRAY[]::text[], ARRAY[p."kind", p."status"]::text[]
-      FROM "Project" p WHERE p."deletedAt" IS NULL AND 'project' IN (${types}) AND (${requestedIds}::text IS NULL OR p."id" IN (SELECT id FROM requested))
+      FROM "Project" p WHERE p."deletedAt" IS NULL AND 'project' IN (${types}) AND TRUE ${idGate('p."id"')}
       UNION ALL
       SELECT 'task', t."id"::text, t."shortcode", t."name", p."name", t."trade", ARRAY[]::text[], ARRAY[t."trade", sp."name"]::text[]
       FROM "Task" t LEFT JOIN "Project" p ON p."id" = t."projectId" AND p."deletedAt" IS NULL LEFT JOIN "Product" sp ON sp."id" = t."subjectProductId" AND sp."deletedAt" IS NULL
-      WHERE t."deletedAt" IS NULL AND 'task' IN (${types}) AND (${requestedIds}::text IS NULL OR t."id" IN (SELECT id FROM requested))
+      WHERE t."deletedAt" IS NULL AND 'task' IN (${types}) AND TRUE ${idGate('t."id"')}
       UNION ALL
       SELECT 'vendor', v."id"::text, v."shortcode", v."name", v."website", NULL, ARRAY[]::text[], ARRAY[v."website"]::text[]
-      FROM "Vendor" v WHERE v."deletedAt" IS NULL AND 'vendor' IN (${types}) AND (${requestedIds}::text IS NULL OR v."id" IN (SELECT id FROM requested))
+      FROM "Vendor" v WHERE v."deletedAt" IS NULL AND 'vendor' IN (${types}) AND TRUE ${idGate('v."id"')}
       UNION ALL
       SELECT 'purchase', pu."id"::text, pu."shortcode", COALESCE(NULLIF(pu."orderId", ''), v."name" || ' · ' || pu."date"::text), v."name", NULL, ARRAY[]::text[], ARRAY[pu."orderId", pu."displayLabel", v."name", v."website", pu."date"::text]::text[]
       FROM "Purchase" pu JOIN "Vendor" v ON v."id" = pu."vendorId" AND v."deletedAt" IS NULL
-      WHERE pu."deletedAt" IS NULL AND 'purchase' IN (${types}) AND (${requestedIds}::text IS NULL OR pu."id" IN (SELECT id FROM requested))
+      WHERE pu."deletedAt" IS NULL AND 'purchase' IN (${types}) AND TRUE ${idGate('pu."id"')}
       UNION ALL
       SELECT 'financialAccount', fa."id"::text, fa."shortcode", fa."name", fa."identity"->>'kind', fa."identity"->>'kind', ARRAY[]::text[],
         ARRAY(
@@ -163,18 +160,18 @@ async function getSearchDocumentSources(
             LATERAL unnest(ARRAY[alias->>'source', alias->>'alias', alias->>'externalAccountId']) term
           WHERE term IS NOT NULL AND term <> ''
         )
-      FROM "FinancialAccount" fa WHERE fa."deletedAt" IS NULL AND 'financialAccount' IN (${types}) AND (${requestedIds}::text IS NULL OR fa."id" IN (SELECT id FROM requested))
+      FROM "FinancialAccount" fa WHERE fa."deletedAt" IS NULL AND 'financialAccount' IN (${types}) AND TRUE ${idGate('fa."id"')}
       UNION ALL
       SELECT 'financialTransaction', ft."id"::text, ft."shortcode", COALESCE(NULLIF(ft."merchant", ''), NULLIF(ft."rawDescription", ''), ft."kind"), fa."name", ft."status", ARRAY[]::text[], ARRAY[ft."sourceCategory", ft."transactionDate"::text, ft."postedDate"::text]::text[]
       FROM "FinancialTransaction" ft JOIN "FinancialAccount" fa ON fa."id" = ft."accountId" AND fa."deletedAt" IS NULL
-      WHERE ft."deletedAt" IS NULL AND 'financialTransaction' IN (${types}) AND (${requestedIds}::text IS NULL OR ft."id" IN (SELECT id FROM requested))
+      WHERE ft."deletedAt" IS NULL AND 'financialTransaction' IN (${types}) AND TRUE ${idGate('ft."id"')}
       UNION ALL
       SELECT 'expense', e."id"::text, e."shortcode", e."name", p."name", CASE WHEN e."lineKind" = 'principal' THEN e."costType" ELSE e."lineKind" END, ARRAY[]::text[], ARRAY[e."lineKind", e."trade", e."costType"]::text[]
       FROM "Expense" e LEFT JOIN "Project" p ON p."id" = e."projectId" AND p."deletedAt" IS NULL
-      WHERE e."deletedAt" IS NULL AND 'expense' IN (${types}) AND (${requestedIds}::text IS NULL OR e."id" IN (SELECT id FROM requested))
+      WHERE e."deletedAt" IS NULL AND 'expense' IN (${types}) AND TRUE ${idGate('e."id"')}
       UNION ALL
       SELECT 'wish', w."id"::text, w."shortcode", w."name", w."notes", 'tool wishlist', ARRAY[]::text[], ARRAY['tool wishlist']::text[]
-      FROM "Wish" w WHERE w."deletedAt" IS NULL AND 'wish' IN (${types}) AND (${requestedIds}::text IS NULL OR w."id" IN (SELECT id FROM requested))
+      FROM "Wish" w WHERE w."deletedAt" IS NULL AND 'wish' IN (${types}) AND TRUE ${idGate('w."id"')}
     ) source
   `);
   return result.rows.map((row) => ({

@@ -247,7 +247,11 @@ const HAND_ROLLED_ARRAY_OVERLAP_RE = /&&\s*\$\{/;
 // Content-level (not per-line), like `unstable-hook-default`: a long `sql`
 // template can be wrapped so `ANY(` and `${...}` land on different lines, and a
 // per-line scan would wave that through.
-const HAND_ROLLED_ANY_ARRAY_RE = /\bANY\s*\(\s*\$\{/g;
+// `uuidArrayParam(...)` is exempt: it is the single audited constructor for a
+// bound array parameter (a Postgres array LITERAL bound as one text value and
+// cast in SQL), so the row-constructor shape is unreachable through it. Any
+// other interpolation still fails.
+const HAND_ROLLED_ANY_ARRAY_RE = /\bANY\s*\(\s*\$\{(?!uuidArrayParam\()/g;
 
 // An explicit router output without the parsed-output type narrowing. The empty
 // `.output()` spelling in prose is excluded so comments do not false-positive.

@@ -775,27 +775,49 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 
 - [ ] **Finish the production query-cost sweep (#730 follow-ups).** A Neon
   `pg_stat_statements` dump prompted an audit against the live catalog. The
-  index sweep (#733), the search-document batching, and the orphan-embedding
-  anti-join have shipped; three items remain, in rough order of value.
-  - **The Problems fan-out.** `findFastProblems` runs 37 detectors sequentially
-    on one pinned connection, with no server-side cache, and the navbar badge
-    renders on every authenticated page — so the whole set re-runs on every hard
-    load (~63–73× in the dump). Cheapest wins first: a `problems.getCounts` for
-    the badge (it needs a number, not 37 result sets), drop the route-loader
-    prefetch that double-fetches `getFast`, and run only the count arm of
-    `findReferentialLivenessViolations` on the page path (it reports zero on
-    production — it is an invariant audit, not a worklist, and costs 88
-    seq-scanning UNION arms per call). **Sequencing: do this after #731**, which
-    rewrites `detectors-ingredient.ts`, `detectors-inventory.ts`, and
-    `routers/problems.ts`.
-  - **The two remaining huge `IN (...)` lists.** `loadProductPricing` binds
-    5,553 parameters when `detectors-product.ts` hands it the whole live
-    catalog, and the purchase aggregates bind ~3,139. Both are shared helpers
-    whose *other* callers pass a page or a single row, so the fix is not to
-    change the helper — either give it an explicit unfiltered mode, or have the
-    coverage detector aggregate without an id filter. Note `eqAny` delegates to
-    `inArray`, so it does not help here; a bound array needs the text-literal
-    cast used by `getSearchDocumentSources`, and `hand-rolled-any-array` will
+  index sweep (#733), the search-document batching, the orphan-embedding
+  anti-join, the HNSW reindex (258MB → 213MB), the bound query vector, and
+  `loadProductPricing`'s whole-catalog mode have shipped; three items remain,
+  in rough order of value.
+  - [ ] **Give the navbar badge a count-only procedure.** This is now the largest
+    remaining cost on the page path, and it got worse with #731: the badge calls
+    `useProblemsData`, which fires **all five** unbatched groups — `getFast`'s
+    ~32 detectors *plus* every saved-view list query in `getViews` — on **every
+    authenticated page**, to render one integer. There is no server-side cache,
+    and a hard load starts a fresh QueryClient, so the whole set re-runs.
+    - **Two approaches were rejected, so nobody re-derives them.** *Persisting
+      the problems query keys* is out: `shouldDehydrateQuery` in
+      `root-provider.tsx` deliberately excludes `.list` payloads because
+      superjson-serializing them was profiled at ~38% of scroll-time CPU, and
+      the five problems payloads are exactly that shape (arrays of rows across
+      ~30 sections). *Dropping the route-loader prefetch* is out too — it was
+      filed as a double-fetch and is not one: the page inherits the 60s default
+      `staleTime`, so a dehydrated prefetch is a warm, not a duplicate. (Its
+      comment IS stale, still describing the pre-#704 SSR self-fetch.)
+    - **So the fix is a real `problems.getCounts`.** #731 already built half of
+      it: `countViewProblem` and `executeListQueryWithCount` give exact counts
+      for every view-backed section without materializing a page. The work is
+      the `getFast` detectors, which return arrays and are summed by
+      `countProblems` via `.length`. Several have no SQL `COUNT` today because
+      they filter in JS after the query — `findOrphanedEntityEmbeddings` and
+      `findPurchaseFinancialSettlementMismatches` are the clear ones.
+    - **The trap to design against** is the one #731 spent real effort killing
+      with `sectionTotals`: a count that drifts from the list it summarizes. A
+      count-only path derived separately from each detector's predicate is two
+      statements of the same question. Prefer deriving both from one predicate
+      (the way the view-backed sections now do) over hand-writing a second
+      `COUNT` per detector.
+    - Cheap and independent of the above: run only the count arm of
+      `findReferentialLivenessViolations` on the page path and fetch its sample
+      rows lazily. It reports zero on production — an invariant audit, not a
+      worklist — and costs 88 seq-scanning UNION arms per call.
+  - [ ] **The purchase aggregates still bind ~3,139 parameters.**
+    `loadProductPricing` got a `wholeCatalog` mode for the same problem
+    (6.7ms unfiltered against 13.7ms with 5,553 binds); apply the same
+    treatment to `loadPurchaseFinancialAggregates`, whose settlement caller
+    likewise passes every live purchase. Note `eqAny` delegates to `inArray`
+    and so does not help; a genuinely bound array needs the text-literal cast
+    used by `getSearchDocumentSources`, and `hand-rolled-any-array` will
     (correctly) reject a raw `ANY(${...})`.
   - **Two counters worth an `EXPLAIN` before anyone "fixes" them.**
     `FinancialTransaction` shows **1,014,764 seq scans / 3.3B tuples** on a

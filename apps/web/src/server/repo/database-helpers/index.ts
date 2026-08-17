@@ -45,6 +45,7 @@ export {
   matchesStringValues,
   notDeleted,
   presenceCondition,
+  uuidArrayParam,
 } from "./query";
 // Relation loaders
 export { imageOrder, relations } from "./relations";
