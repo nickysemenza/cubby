@@ -24,9 +24,28 @@ type AgendaGroup = { day: string; items: CalendarItem[] };
 export const groupItemsByDay = (
   items: readonly CalendarItem[],
   includesDay: (item: CalendarItem, day: string) => boolean,
+  range?: { startDate: string; endDateExclusive: string },
 ): AgendaGroup[] => {
   const days = new Set<string>();
-  for (const item of items) days.add(item.startDate);
+  for (const item of items) {
+    // A long-running project can begin years before the month being viewed.
+    // The phone agenda is an in-range reading of the current month, not an
+    // unbounded chronological history: anchor its first visible row to the
+    // first day this item occupies inside the active range.
+    if (range) {
+      const firstVisible =
+        item.startDate < range.startDate ? range.startDate : item.startDate;
+      if (
+        firstVisible >= range.startDate &&
+        firstVisible < range.endDateExclusive &&
+        item.endDateExclusive > range.startDate
+      ) {
+        days.add(firstVisible);
+      }
+    } else {
+      days.add(item.startDate);
+    }
+  }
 
   return [...days]
     .sort((a, b) => a.localeCompare(b))
@@ -41,15 +60,18 @@ export const groupItemsByDay = (
 export function CalendarAgenda({
   items,
   includesDay,
+  range,
   today,
   emptyMessage,
 }: {
   items: readonly CalendarItem[];
   includesDay: (item: CalendarItem, day: string) => boolean;
+  /** The currently viewed period. Keeps long-running spans in-range on phone. */
+  range?: { startDate: string; endDateExclusive: string };
   today: string;
   emptyMessage: React.ReactNode;
 }) {
-  const groups = groupItemsByDay(items, includesDay);
+  const groups = groupItemsByDay(items, includesDay, range);
 
   if (groups.length === 0) {
     return <div className="border p-4">{emptyMessage}</div>;

@@ -1,10 +1,9 @@
-import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
 import { taskStatusValues } from "@cubby/schemas/project";
+import { useDraggable } from "@dnd-kit/core";
 import { useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { Ban, EllipsisVertical } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Ban, EllipsisVertical, GripVertical } from "lucide-react";
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { todayPlain } from "~/app/projects/charts/gantt/gantt-date";
@@ -52,6 +51,8 @@ interface TaskCardProps {
   /** Show the status badge (project/trade-columns modes — no status column says it). */
   showStatus: boolean;
   onSetStatus: (status: TaskStatus) => void;
+  /** The board calculates the current card-edge insertion marker. */
+  dropEdge?: "top" | "bottom" | null;
   /**
    * Hands the task up to the board, which owns the confirm dialog. It can't
    * live here: the optimistic delete unmounts this card, and an open dialog
@@ -82,38 +83,39 @@ export function TaskCard({
   showStatus,
   onSetStatus,
   onRequestDelete,
+  dropEdge,
 }: TaskCardProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = useState(false);
   const navigate = useNavigate();
 
   // The Done column ranks by recency, not manually — its cards opt out of
   // being reorder targets (drops fall through to the cell as a status change).
   const rankDisabled = column.kind === "status" && column.status === "done";
-  const closestEdge = useBoardCardDropTarget({
-    ref,
+  const { setNodeRef: setDropNodeRef, isOver } = useBoardCardDropTarget({
     column,
     lane,
     taskId: task.id,
     disabled: rankDisabled,
   });
-
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    return draggable({
-      element,
-      getInitialData: (): TaskCardDragData & Record<string, unknown> => ({
-        taskBoardDrag: true,
-        taskId: task.id,
-        status: task.status,
-        projectId: task.projectId,
-        trade: task.trade,
-      }),
-      onDragStart: () => setDragging(true),
-      onDrop: () => setDragging(false),
-    });
-  }, [task.id, task.status, task.projectId, task.trade]);
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDragNodeRef,
+    setActivatorNodeRef,
+    isDragging,
+  } = useDraggable({
+    id: `task-board:drag:${task.id}`,
+    data: {
+      taskBoardDrag: true,
+      taskId: task.id,
+      status: task.status,
+      projectId: task.projectId,
+      trade: task.trade,
+    } satisfies TaskCardDragData,
+  });
+  const setNodeRef = (node: HTMLDivElement | null) => {
+    setDragNodeRef(node);
+    setDropNodeRef(node);
+  };
 
   const open = () =>
     navigate({
@@ -146,37 +148,45 @@ export function TaskCard({
       : `Blocked by ${blockedByNames.join(", ")}${unresolvedBlockerCount > 0 ? ` and ${unresolvedBlockerCount} more` : ""}`;
 
   return (
-    // biome-ignore lint/a11y/useSemanticElements: a native <button> can't wrap the nested project link + status menu; role="button" + onKeyDown keeps it operable.
     <div
-      ref={ref}
-      role="button"
-      tabIndex={0}
-      onClick={open}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          open();
-        }
-      }}
+      ref={setNodeRef}
       className={cn(
-        "group relative block cursor-grab border border-[var(--border)] bg-card p-2 text-left transition-colors hover:border-primary/50 active:cursor-grabbing",
-        dragging && "opacity-40",
+        "group relative block border border-[var(--border)] bg-card p-2 text-left transition-colors duration-100 hover:border-primary/50",
+        isDragging && "opacity-40",
       )}
     >
-      {closestEdge && (
+      {isOver && dropEdge && (
         <div
           className={cn(
             "pointer-events-none absolute inset-x-0 h-0.5 bg-primary",
-            closestEdge === "top" ? "top-0" : "bottom-0",
+            dropEdge === "top" ? "top-0" : "bottom-0",
           )}
           aria-hidden
         />
       )}
       <Stack gap="snug">
         <Row align="start" justify="between" gap="tight">
-          <span className="line-clamp-2 font-medium text-sm" title={task.name}>
-            {task.name}
-          </span>
+          <Row align="start" gap="tight" className="min-w-0">
+            <Button
+              ref={setActivatorNodeRef}
+              variant="ghost"
+              size="icon-xs"
+              className="mt-0.5 shrink-0 cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
+              aria-label={`Drag ${task.name}`}
+              {...attributes}
+              {...listeners}
+            >
+              <GripVertical className="size-3" />
+            </Button>
+            <button
+              type="button"
+              className="line-clamp-2 min-w-0 text-left font-medium text-sm underline-offset-2 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              title={task.name}
+              onClick={open}
+            >
+              {task.name}
+            </button>
+          </Row>
           <Row align="center" gap="tight" className="shrink-0">
             {task.subtaskCount > 0 && (
               <Badge variant="outline">

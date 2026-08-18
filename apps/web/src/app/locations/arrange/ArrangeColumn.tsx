@@ -4,7 +4,6 @@ import type {
   InventoryItemForTree,
 } from "@cubby/schemas/location";
 import { HelpCircle, Home } from "lucide-react";
-import { useRef } from "react";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { cn } from "~/lib/utils";
 import { ArrangeItemChip } from "./ArrangeItemChip";
@@ -43,15 +42,15 @@ export function ArrangeColumn({
   onOpenChild,
   pinned = false,
 }: ArrangeColumnProps) {
-  const bodyRef = useRef<HTMLDivElement>(null);
-  const isOver = useArrangeDropTarget({ ref: bodyRef, roots, locationId });
+  const { setNodeRef, isOver } = useArrangeDropTarget({ roots, locationId });
 
   const isEmpty = nodes.length === 0 && items.length === 0;
 
   return (
     <div
+      data-arrange-main-column={pinned ? undefined : ""}
       className={cn(
-        "flex w-72 shrink-0 flex-col border",
+        "flex w-[calc(100vw-2rem)] shrink-0 snap-start flex-col border sm:w-72",
         pinned
           ? "border-[var(--border-strong)] border-dashed"
           : "border-[var(--border)]",
@@ -74,7 +73,7 @@ export function ArrangeColumn({
       </div>
 
       <div
-        ref={bodyRef}
+        ref={setNodeRef}
         className={cn(
           "flex max-h-[calc(100dvh-14rem)] flex-1 flex-col gap-1 overflow-y-auto p-2" /* tight: dense card list */,
           isOver && "bg-primary/10",

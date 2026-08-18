@@ -2,7 +2,6 @@ import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { ChevronRight, Home } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
-import { useAutoScroll } from "~/app/_components/hooks/use-auto-scroll";
 import { cn } from "~/lib/utils";
 import { ArrangeColumn } from "./ArrangeColumn";
 import { findNode, pathToNode } from "./arrange-tree-utils";
@@ -33,7 +32,6 @@ export function ArrangeBoard({
   onSelect,
 }: ArrangeBoardProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  useAutoScroll(scrollRef);
 
   const home = roots[0] ?? null;
   const homeChildren = useMemo(
@@ -84,13 +82,19 @@ export function ArrangeBoard({
   const hiddenLeft = Math.max(0, columns.length - depth);
   const visibleColumns = columns.slice(hiddenLeft);
 
-  // Keep the newest column in view when the cascade grows. The effect body
-  // doesn't read validPath.length — it's the reactive trigger (scroll right
-  // whenever a column opens/closes), which is exactly the intent.
+  // Keep the newly active Miller column visible without making Unknown the
+  // default mobile destination.
   // biome-ignore lint/correctness/useExhaustiveDependencies: length is the intended trigger, not a read
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollLeft = el.scrollWidth;
+    if (el) {
+      const columns = el.querySelectorAll<HTMLElement>(
+        "[data-arrange-main-column]",
+      );
+      columns
+        .item(columns.length - 1)
+        ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
   }, [validPath.length]);
 
   return (
@@ -103,7 +107,8 @@ export function ArrangeBoard({
       />
       <div
         ref={scrollRef}
-        className="flex min-h-[24rem] flex-1 gap-2 overflow-x-auto pb-2"
+        data-arrange-scroll
+        className="flex min-h-[24rem] flex-1 snap-x snap-mandatory gap-2 overflow-x-auto pb-2"
       >
         {visibleColumns.map((col) => (
           <ArrangeColumn
@@ -186,12 +191,11 @@ function BreadcrumbCrumb({
   icon,
   onClick,
 }: BreadcrumbCrumbProps) {
-  const ref = useRef<HTMLButtonElement>(null);
-  const isOver = useArrangeDropTarget({ ref, roots, locationId });
+  const { setNodeRef, isOver } = useArrangeDropTarget({ roots, locationId });
 
   return (
     <button
-      ref={ref}
+      ref={setNodeRef}
       type="button"
       onClick={onClick}
       className={cn(

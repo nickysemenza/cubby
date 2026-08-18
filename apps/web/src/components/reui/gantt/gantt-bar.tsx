@@ -14,7 +14,7 @@ import {
   useGanttViewConfig,
 } from "~/components/reui/gantt/gantt"
 import {
-  useGanttGestures,
+  useGanttBarDraggable,
   wasRecentDrag,
 } from "~/components/reui/gantt/gantt-dnd"
 import {
@@ -114,7 +114,6 @@ function GanttBar<TData = unknown>({
 }: GanttBarProps<TData>) {
   const instance = useGantt<TData>()
   const viewConfig = useGanttViewConfig<TData>()
-  const gestures = useGanttGestures<TData>()
   const { settings } = instance
   const occurrence = segment.occurrence
   const event = occurrence.event
@@ -200,18 +199,36 @@ function GanttBar<TData = unknown>({
   )
   const rowTitle = rowTitleProp ?? fallbackRowTitle
 
-  const showResize = gestures.canResize(segment)
+  const canDrag =
+    instance.getState().interactions.drag &&
+    !event.readOnly &&
+    event.draggable !== false
+  const canResize =
+    instance.getState().interactions.resize &&
+    !event.readOnly &&
+    event.resizable !== false
+  const move = useGanttBarDraggable(segment, "move", !canDrag)
+  const resizeStart = useGanttBarDraggable(segment, "resize-start", !canResize)
+  const resizeEnd = useGanttBarDraggable(segment, "resize-end", !canResize)
+  const showResize = canResize
   const resizeHandles = showResize && (
     <>
       {segment.isStart && (
         <span
           data-slot="gantt-resize-handle"
           data-edge="start"
+          data-dnd-immediate=""
           // grip hugs the start edge (justify-start + tight inset) so the
           // indicator reads as "resize this end", not a centered pill.
           // pointer-coarse keeps it visible on touch, where hover never fires
           className="absolute inset-y-0 start-0.5 flex w-2 cursor-ew-resize items-center justify-start opacity-0 group-hover/gantt-bar-group:opacity-100 pointer-coarse:opacity-100"
-          onPointerDown={(e) => gestures.beginResize(e, segment, "start")}
+          ref={resizeStart.setNodeRef}
+          {...resizeStart.attributes}
+          {...resizeStart.listeners}
+          onPointerDown={(e) => {
+            resizeStart.listeners?.onPointerDown?.(e)
+            e.stopPropagation()
+          }}
         >
           <span
             aria-hidden
@@ -223,11 +240,18 @@ function GanttBar<TData = unknown>({
         <span
           data-slot="gantt-resize-handle"
           data-edge="end"
+          data-dnd-immediate=""
           // grip hugs the end edge (justify-end + tight inset) so the
           // indicator reads as "resize this end", not a centered pill.
           // pointer-coarse keeps it visible on touch, where hover never fires
           className="absolute inset-y-0 end-0.5 flex w-2 cursor-ew-resize items-center justify-end opacity-0 group-hover/gantt-bar-group:opacity-100 pointer-coarse:opacity-100"
-          onPointerDown={(e) => gestures.beginResize(e, segment, "end")}
+          ref={resizeEnd.setNodeRef}
+          {...resizeEnd.attributes}
+          {...resizeEnd.listeners}
+          onPointerDown={(e) => {
+            resizeEnd.listeners?.onPointerDown?.(e)
+            e.stopPropagation()
+          }}
         >
           <span
             aria-hidden
@@ -262,10 +286,9 @@ function GanttBar<TData = unknown>({
     style: {
       "--gantt-event-color": event.color ?? "var(--color-primary)",
     } as CSSProperties,
-    onPointerDown: (e: React.PointerEvent) => {
-      e.stopPropagation()
-      gestures.beginMove(e, segment)
-    },
+    ref: move.setNodeRef,
+    ...move.listeners,
+    ...move.attributes,
     onClick: (e: React.MouseEvent) => {
       e.stopPropagation()
       if (wasRecentDrag()) return

@@ -2,17 +2,11 @@ import {
   closestCenter,
   DndContext,
   type DragEndEvent,
-  KeyboardSensor,
-  PointerSensor,
-  TouchSensor,
   useDroppable,
-  useSensor,
-  useSensors,
 } from "@dnd-kit/core";
 import {
   arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
@@ -28,6 +22,11 @@ import {
   PinOff,
   RotateCcw,
 } from "lucide-react";
+import {
+  createDndAnnouncements,
+  cubbyDndScreenReaderInstructions,
+} from "~/components/dnd/accessibility";
+import { useCubbyDndSensors } from "~/components/dnd/sensors";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import { columnLabel } from "./data-table-view-options";
@@ -242,15 +241,7 @@ export default function TableLayoutCustomizer<TData extends RowData>({
   table: Table<TData>;
 }) {
   const columns = table.getAllLeafColumns();
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 150, tolerance: 5 },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    }),
-  );
+  const sensors = useCubbyDndSensors({ touchDelay: 150, touchTolerance: 5 });
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
@@ -315,6 +306,15 @@ export default function TableLayoutCustomizer<TData extends RowData>({
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragEnd={onDragEnd}
+        accessibility={{
+          container:
+            typeof document === "undefined" ? undefined : document.body,
+          screenReaderInstructions: cubbyDndScreenReaderInstructions,
+          announcements: createDndAnnouncements({
+            item: (id) => `${id} column`,
+            target: (id) => `${id} layout position`,
+          }),
+        }}
       >
         <Zone
           region="start"

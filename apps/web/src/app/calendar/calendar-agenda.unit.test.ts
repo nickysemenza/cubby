@@ -80,4 +80,25 @@ describe("groupItemsByDay", () => {
     const secondDay = groups.find((g) => g.day === "2026-03-02");
     expect(secondDay?.items.map((i) => i.id)).toEqual(["TSK-1111", "MEL-2222"]);
   });
+
+  it("anchors long-running spans inside the active month", () => {
+    const groups = groupItemsByDay(
+      [task("TSK-1111", "2015-01-01", "2026-09-01")],
+      includesDay,
+      { startDate: "2026-08-01", endDateExclusive: "2026-09-01" },
+    );
+
+    expect(groups.map((group) => group.day)).toEqual(["2026-08-01"]);
+    expect(groups[0]?.items.map((item) => item.id)).toEqual(["TSK-1111"]);
+  });
+
+  it("does not create an agenda heading for a span outside the active month", () => {
+    expect(
+      groupItemsByDay(
+        [task("TSK-1111", "2026-07-01", "2026-08-01")],
+        includesDay,
+        { startDate: "2026-08-01", endDateExclusive: "2026-09-01" },
+      ),
+    ).toEqual([]);
+  });
 });

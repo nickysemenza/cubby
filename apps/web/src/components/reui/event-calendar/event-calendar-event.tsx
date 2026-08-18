@@ -18,8 +18,9 @@ import {
   useEventCalendarViewContext,
 } from "~/components/reui/event-calendar/event-calendar";
 import {
+  beginBlockedEventCalendarGesture,
   markChipPress,
-  useEventCalendarGestures,
+  useEventCalendarDrag,
   wasRecentDrag,
 } from "~/components/reui/event-calendar/event-calendar-dnd";
 import {
@@ -129,6 +130,53 @@ interface EventCalendarEventProps<TData = unknown>
   preview?: boolean;
 }
 
+function EventCalendarResizeHandle<TData>({
+  segment,
+  edge,
+  disabled,
+  className,
+  children,
+}: {
+  segment: EventCalendarSegment<TData>;
+  edge: "start" | "end";
+  disabled: boolean;
+  className: string;
+  children: ReactNode;
+}) {
+  const instance = useEventCalendar<TData>();
+  const drag = useEventCalendarDrag(
+    segment,
+    edge === "start" ? "resize-start" : "resize-end",
+    disabled,
+  );
+  return (
+    <span
+      ref={drag.setNodeRef}
+      data-slot="event-calendar-resize-handle"
+      data-edge={edge}
+      data-dnd-immediate=""
+      className={className}
+      {...drag.attributes}
+      {...drag.listeners}
+      onPointerDown={(e) => {
+        if (disabled) {
+          beginBlockedEventCalendarGesture(
+            instance,
+            e.nativeEvent,
+            segment,
+            "resize",
+          );
+        } else {
+          drag.listeners?.onPointerDown?.(e);
+        }
+        e.stopPropagation();
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
 /**
  * The one interactive event element used by every view. The wrapper owns
  * positioning hooks, a11y, selection, drag/resize listeners, and data
@@ -146,7 +194,6 @@ function EventCalendarEvent<TData = unknown>({
   const instance = useEventCalendar<TData>();
   const viewConfig = useEventCalendarViewConfig<TData>();
   const { view } = useEventCalendarViewContext();
-  const gestures = useEventCalendarGestures<TData>();
   const { settings } = instance;
   const occurrence = segment.occurrence;
   const event = occurrence.event;
@@ -175,6 +222,17 @@ function EventCalendarEvent<TData = unknown>({
   const inTimeGrid =
     view === "week" || view === "day" || view === "days" || view === "resource";
   const interactive = view !== "agenda" && !preview;
+  const dragOn = useEventCalendarSelector<TData, boolean>(
+    (state) => state.interactions.drag,
+    { calendar: instance },
+  );
+  const moveDrag = useEventCalendarDrag(
+    segment,
+    "move",
+    !interactive || !dragOn || event.readOnly || event.draggable === false,
+  );
+  const moveDisabled =
+    !interactive || !dragOn || event.readOnly || event.draggable === false;
   const timedBlock = inTimeGrid && !isBar;
   const horizontalBar = isBar && !inTimeGrid;
   // >= compactEventMinutes renders the stacked (title over time) layout;
@@ -381,62 +439,65 @@ function EventCalendarEvent<TData = unknown>({
   const resizeHandles = showResize && (
     <>
       {timedBlock && segment.isStart && (
-        <span
-          data-slot="event-calendar-resize-handle"
-          data-edge="start"
+        <EventCalendarResizeHandle
+          segment={segment}
+          edge="start"
+          disabled={!resizeOn || event.readOnly || event.resizable === false}
           className={cn(
             "absolute inset-x-1 top-0 flex h-1.5 cursor-ns-resize items-center justify-center opacity-0 transition-opacity duration-150 group-hover/ec-event:opacity-100",
             viewConfig.classNames?.resizeHandle,
           )}
-          onPointerDown={(e) => gestures.beginResize(e, segment, "start")}
         >
           {grip}
-        </span>
+        </EventCalendarResizeHandle>
       )}
       {timedBlock && segment.isEnd && (
-        <span
-          data-slot="event-calendar-resize-handle"
-          data-edge="end"
+        <EventCalendarResizeHandle
+          segment={segment}
+          edge="end"
+          disabled={!resizeOn || event.readOnly || event.resizable === false}
           className={cn(
             "absolute inset-x-1 bottom-0 flex h-1.5 cursor-ns-resize items-center justify-center opacity-0 transition-opacity duration-150 group-hover/ec-event:opacity-100",
             viewConfig.classNames?.resizeHandle,
           )}
-          onPointerDown={(e) => gestures.beginResize(e, segment, "end")}
         >
           {grip}
-        </span>
+        </EventCalendarResizeHandle>
       )}
       {(horizontalBar || (isBar && inTimeGrid)) && segment.isStart && (
-        <span
-          data-slot="event-calendar-resize-handle"
-          data-edge="start"
+        <EventCalendarResizeHandle
+          segment={segment}
+          edge="start"
+          disabled={!resizeOn || event.readOnly || event.resizable === false}
           className={cn(
             "absolute inset-y-0 start-0 flex w-2 cursor-ew-resize items-center justify-center opacity-0 transition-opacity duration-150 group-hover/ec-event:opacity-100",
             viewConfig.classNames?.resizeHandle,
           )}
-          onPointerDown={(e) => gestures.beginResize(e, segment, "start")}
         >
           {grip}
-        </span>
+        </EventCalendarResizeHandle>
       )}
       {(horizontalBar || (isBar && inTimeGrid)) && segment.isEnd && (
-        <span
-          data-slot="event-calendar-resize-handle"
-          data-edge="end"
+        <EventCalendarResizeHandle
+          segment={segment}
+          edge="end"
+          disabled={!resizeOn || event.readOnly || event.resizable === false}
           className={cn(
             "absolute inset-y-0 end-0 flex w-2 cursor-ew-resize items-center justify-center opacity-0 transition-opacity duration-150 group-hover/ec-event:opacity-100",
             viewConfig.classNames?.resizeHandle,
           )}
-          onPointerDown={(e) => gestures.beginResize(e, segment, "end")}
         >
           {grip}
-        </span>
+        </EventCalendarResizeHandle>
       )}
     </>
   );
 
   const defaultProps = {
     type: "button" as const,
+    ref: moveDrag.setNodeRef,
+    ...moveDrag.attributes,
+    ...moveDrag.listeners,
     "data-slot": "event-calendar-event",
     "data-view": view,
     "data-all-day": occurrence.allDay || undefined,
@@ -468,12 +529,22 @@ function EventCalendarEvent<TData = unknown>({
     style: {
       "--ec-event-color": event.color ?? "var(--color-primary)",
     } as CSSProperties,
-    onPointerDown: (e: React.PointerEvent) => {
-      e.stopPropagation();
+    onPointerDownCapture: () => {
       // suppress the trailing slot-create click if this press does not turn
       // into a drag (e.g. a locked chip) - see markChipPress
       markChipPress();
-      if (interactive) gestures.beginMove(e, segment);
+    },
+    onPointerDown: (e: React.PointerEvent) => {
+      if (moveDisabled && interactive) {
+        beginBlockedEventCalendarGesture(
+          instance,
+          e.nativeEvent,
+          segment,
+          "move",
+        );
+      } else {
+        moveDrag.listeners?.onPointerDown?.(e);
+      }
     },
     onClick: (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -491,7 +562,7 @@ function EventCalendarEvent<TData = unknown>({
     },
     className: cn(
       "group/ec-event relative flex w-full min-w-0 cursor-pointer touch-none select-none items-center overflow-hidden text-start text-foreground",
-      "outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+      "outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
       preview && "pointer-events-none",
       view === "agenda"
         ? // plain list row: color lives in the dot badge, not a tinted pill;

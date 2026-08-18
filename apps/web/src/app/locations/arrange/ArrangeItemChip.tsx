@@ -1,12 +1,12 @@
-import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
   InventoryItemForTree,
 } from "@cubby/schemas/location";
+import { useDraggable } from "@dnd-kit/core";
 import { Link } from "@tanstack/react-router";
 import { GripVertical, Package } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { useHydratedProductImages } from "~/app/_components/products/product-image-summaries";
 import { cn } from "~/lib/utils";
@@ -32,8 +32,6 @@ export function ArrangeItemChip({
   sourceLocationId,
   roots,
 }: ArrangeItemChipProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = useState(false);
   const images = useHydratedProductImages(item.productId);
 
   const drag = useMemo<ItemDragData>(
@@ -46,28 +44,30 @@ export function ArrangeItemChip({
     [item.id, item.amount, sourceLocationId],
   );
 
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    return draggable({
-      element,
-      getInitialData: (): ItemDragData & Record<string, unknown> => ({
-        ...drag,
-      }),
-      onDragStart: () => setDragging(true),
-      onDrop: () => setDragging(false),
+  const { setNodeRef, setActivatorNodeRef, listeners, attributes, isDragging } =
+    useDraggable({
+      id: `arrange-item:${item.id}`,
+      data: drag,
     });
-  }, [drag]);
 
   return (
     <div
-      ref={ref}
+      ref={setNodeRef}
       className={cn(
-        "flex cursor-grab items-center gap-1.5 rounded border border-[var(--border)] bg-background px-2 py-1 text-xs active:cursor-grabbing" /* tight: chip */,
-        dragging && "opacity-40",
+        "flex items-center gap-1.5 rounded border border-[var(--border)] bg-background px-2 py-1 text-xs" /* tight: chip */,
+        isDragging && "opacity-40",
       )}
     >
-      <GripVertical className="size-3 shrink-0 text-muted-foreground" />
+      <button
+        ref={setActivatorNodeRef}
+        type="button"
+        aria-label={`Drag ${item.productName}`}
+        className="touch-none rounded text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+        {...listeners}
+        {...attributes}
+      >
+        <GripVertical className="size-3" />
+      </button>
       <ArrangeThumb
         images={images}
         alt={item.productName}

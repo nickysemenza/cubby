@@ -1,6 +1,18 @@
 "use client"
 
 import {
+  closestCenter,
+  DndContext,
+  DragOverlay,
+  type DragOverEvent,
+} from "@dnd-kit/core"
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers"
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable"
+import {
   memo,
   useCallback,
   useEffect,
@@ -25,8 +37,9 @@ import {
 import { GanttBar } from "~/components/reui/gantt/gantt-bar"
 import {
   cancelActiveGanttGestures,
+  GanttDndProvider,
   markGestureEnd,
-  useGanttGestures,
+  useGanttCreateDraggable,
   useGanttGestureTeardown,
   wasRecentDrag,
 } from "~/components/reui/gantt/gantt-dnd"
@@ -74,6 +87,12 @@ import {
 } from "date-fns"
 
 import { cn } from "~/lib/utils"
+import {
+  createDndAnnouncements,
+  cubbyDndScreenReaderInstructions,
+} from "~/components/dnd/accessibility"
+import { DragPreviewFrame } from "~/components/dnd/DragPreviewFrame"
+import { useCubbyDndSensors } from "~/components/dnd/sensors"
 import { Button } from "~/components/ui/button"
 import { Checkbox } from "~/components/ui/checkbox"
 import {
@@ -1786,191 +1805,79 @@ function GanttView({
   // Panning suppresses the placement hints (scroll intent, not create intent)
   const [isPanning, setIsPanning] = useState(false)
 
-  // ----- tree-row drag reorder (mirrors the event engine: live validity,
-  // destructive styling when invalid, Esc cancel, commit via callback) -----
+  // ----- tree-row drag reorder: dnd-kit owns pointer/touch/keyboard input;
+  // the existing immutable tree proposal remains the policy boundary. -----
   const [reorder, setReorder] = useState<TimelineReorderState | null>(null)
+  const reorderRef = useRef<TimelineReorderState | null>(null)
+  const [activeReorderId, setActiveReorderId] = useState<string | null>(null)
   const reorderEnabled = !!settings.onResourceReorder
-  const settingsRef = useRef(settings)
-  settingsRef.current = settings
-  const rowsRef = useRef(rows)
-  rowsRef.current = rows
-
-  const beginRowReorder = useCallback(
-    (e: React.PointerEvent, dragRow: TimelineRow) => {
-      const settings = settingsRef.current
-      const rows = rowsRef.current
-      if (e.button !== 0 || !settings.onResourceReorder) return
-      e.preventDefault()
-      e.stopPropagation()
-      const container = treeRowsRef.current
-      const pane = treePaneRef.current
-      if (!container || !pane) return
-      const rowEls = Array.from(
-        container.querySelectorAll<HTMLElement>("[data-slot=gantt-row-group]")
+  const reorderSensors = useCubbyDndSensors()
+  const updateReorder = useCallback(
+    ({ active, over }: DragOverEvent) => {
+      if (!over) return
+      const dragRow = active.data.current?.row as TimelineRow | undefined
+      if (!dragRow) return
+      const overIndex = rows.findIndex(
+        (candidate) => candidate.resource.id === over.id
       )
-      document.body.style.cursor = "grabbing"
-      document.body.style.userSelect = "none"
-      let current: TimelineReorderState | null = null
-      let lastBoundary = -1
-
-      // Carry overlay: clone the WHOLE row (name + detail columns), flat -
-      // it reads as the row itself moving, not a separate card
-      const pointerId = e.pointerId
-      const rowEl = (e.currentTarget as HTMLElement).closest<HTMLElement>(
+      if (overIndex < 0) return
+      const translated = active.rect.current.translated
+      const after =
+        translated !== null &&
+        translated.top + translated.height / 2 > over.rect.top + over.rect.height / 2
+      const boundary = Math.min(overIndex + (after ? 1 : 0), rows.length)
+      const below = rows[boundary]
+      const parentId =
+        below?.parentId ?? rows[rows.length - 1]?.parentId ?? null
+      let index = 0
+      for (let rowIndex = 0; rowIndex < boundary; rowIndex += 1) {
+        if (
+          rows[rowIndex]?.parentId === parentId &&
+          rows[rowIndex]?.resource.id !== dragRow.resource.id
+        ) {
+          index += 1
+        }
+      }
+      const resources = reorderResources(
+        settings.resources,
+        dragRow.resource.id,
+        parentId,
+        index
+      )
+      const proposal: GanttResourceReorder | null = resources
+        ? { resourceId: dragRow.resource.id, parentId, index, resources }
+        : null
+      const valid =
+        !!proposal && (settings.canReorderResource?.(proposal) ?? true)
+      const paneRect = treePaneRef.current?.getBoundingClientRect()
+      const rowElements = treeRowsRef.current?.querySelectorAll<HTMLElement>(
         "[data-slot=gantt-row-group]"
       )
-      const overlay = document.createElement("div")
-      overlay.setAttribute("data-slot", "gantt-drag-overlay")
-      overlay.className =
-        "bg-background pointer-events-none fixed overflow-hidden opacity-95"
-      overlay.style.zIndex = "100"
-      // body-appended, so it is outside the gantt root that owns the type
-      // scale: without adopting the root's resolved metrics the carried row
-      // renders at the document default and reads bigger than the row it left
-      const ganttRoot = pane.closest<HTMLElement>("[data-slot=gantt]")
-      if (ganttRoot) {
-        const rootStyle = getComputedStyle(ganttRoot)
-        overlay.style.fontSize = rootStyle.fontSize
-        overlay.style.lineHeight = rootStyle.lineHeight
-        overlay.style.fontFamily = rootStyle.fontFamily
-        overlay.style.letterSpacing = rootStyle.letterSpacing
-        overlay.style.direction = rootStyle.direction
-      }
-      if (rowEl) {
-        const rowRect = rowEl.getBoundingClientRect()
-        overlay.style.width = `${rowRect.width}px`
-        overlay.style.height = `${rowRect.height}px`
-        const clone = rowEl.cloneNode(true) as HTMLElement
-        clone.removeAttribute("data-gantt-row-id")
-        clone.classList.remove("border-b")
-        clone.style.height = "100%"
-        overlay.appendChild(clone)
-      }
-      document.body.appendChild(overlay)
-      const grabRect = rowEl?.getBoundingClientRect()
-      const grabDY = grabRect ? e.clientY - grabRect.top : 8
-      // vertical-only carry, locked to the tree panel like a list row drag
-      const lockedX = grabRect?.left ?? pane.getBoundingClientRect().left
-      const paneRect = pane.getBoundingClientRect()
-      const rowH = grabRect?.height ?? 40
-      // Rows do not move during the gesture (the carry is a fixed overlay), so
-      // rects are measured ONCE - per-move full-row rect scans forced a
-      // synchronous reflow after every overlay style write.
-      const rects = rowEls.map((el) => el.getBoundingClientRect())
-      const place = (y: number) => {
-        const top = Math.min(
-          Math.max(y - grabDY, paneRect.top),
-          paneRect.bottom - rowH
-        )
-        overlay.style.left = `${lockedX}px`
-        overlay.style.top = `${top}px`
-      }
-      place(e.clientY)
-
-      const propose = (boundary: number): TimelineReorderState => {
-        const below = rows[boundary]
-        const parentId =
-          below?.parentId ?? rows[rows.length - 1]?.parentId ?? null
-        let index = 0
-        for (let i = 0; i < boundary; i++) {
-          if (
-            rows[i]!.parentId === parentId &&
-            rows[i]!.resource.id !== dragRow.resource.id
-          ) {
-            index++
-          }
-        }
-        const next = reorderResources(
-          settings.resources,
-          dragRow.resource.id,
-          parentId,
-          index
-        )
-        const proposal: GanttResourceReorder | null = next
-          ? {
-              resourceId: dragRow.resource.id,
-              parentId,
-              index,
-              resources: next,
-            }
-          : null
-        const valid =
-          !!proposal && (settings.canReorderResource?.(proposal) ?? true)
-        const top =
-          boundary < rects.length
-            ? rects[boundary]!.top - paneRect.top
-            : (rects[rects.length - 1]?.bottom ?? paneRect.top) - paneRect.top
-        return { resourceId: dragRow.resource.id, top, valid, proposal }
-      }
-
-      const onMove = (ev: PointerEvent) => {
-        if (ev.pointerId !== pointerId) return
-        place(ev.clientY)
-        let boundary = rects.length
-        for (let i = 0; i < rects.length; i++) {
-          if (ev.clientY < rects[i]!.top + rects[i]!.height / 2) {
-            boundary = i
-            break
-          }
-        }
-        // the immutable tree clone + validity check run only when the pointer
-        // crosses into another slot, not per pointermove
-        if (boundary === lastBoundary) return
-        lastBoundary = boundary
-        const nextState = propose(boundary)
-        if (
-          current &&
-          current.top === nextState.top &&
-          current.valid === nextState.valid
-        ) {
-          return
-        }
-        current = nextState
-        document.body.style.cursor = nextState.valid
-          ? "grabbing"
-          : "not-allowed"
-        setReorder(nextState)
-      }
-      const finish = (commit: boolean) => {
-        window.removeEventListener("pointermove", onMove)
-        window.removeEventListener("pointerup", onUp)
-        window.removeEventListener("pointercancel", onCancelEvent)
-        window.removeEventListener("keydown", onKey)
-        overlay.remove()
-        document.body.style.cursor = ""
-        document.body.style.userSelect = ""
-        if (commit && current?.proposal && !current.valid) {
-          // released on a rejected position (e.g. a pinned row): let the
-          // consumer explain it - the destructive indicator already showed live
-          settings.onResourceReorderReject?.(current.proposal)
-        } else if (commit && current?.valid && current.proposal) {
-          settings.onResourceReorder?.(current.proposal)
-          const announcer = pane
-            .closest<HTMLElement>("[data-slot=gantt]")
-            ?.querySelector<HTMLElement>("[data-slot=gantt-announcer]")
-          if (announcer) {
-            announcer.textContent = `${dragRow.resource.title}: ${settings.i18n.labels.reorder}`
-          }
-        }
-        setReorder(null)
-      }
-      const onUp = (ev: PointerEvent) => {
-        if (ev.pointerId !== pointerId) return
-        finish(true)
-      }
-      const onCancelEvent = (ev: PointerEvent) => {
-        if (ev.pointerId !== pointerId) return
-        finish(false)
-      }
-      const onKey = (ev: KeyboardEvent) => {
-        if (ev.key === "Escape") finish(false)
-      }
-      window.addEventListener("pointermove", onMove)
-      window.addEventListener("pointerup", onUp)
-      window.addEventListener("pointercancel", onCancelEvent)
-      window.addEventListener("keydown", onKey)
+      const boundaryRect = rowElements?.[boundary]?.getBoundingClientRect()
+      const lastRect = rowElements?.[rowElements.length - 1]?.getBoundingClientRect()
+      const top = paneRect
+        ? (boundaryRect?.top ?? lastRect?.bottom ?? paneRect.top) - paneRect.top
+        : 0
+      const next = { resourceId: dragRow.resource.id, top, valid, proposal }
+      reorderRef.current = next
+      setReorder(next)
     },
-    []
+    [rows, settings]
+  )
+
+  const finishReorder = useCallback(
+    (commit: boolean) => {
+      const current = reorderRef.current
+      if (commit && current?.proposal && !current.valid) {
+        settings.onResourceReorderReject?.(current.proposal)
+      } else if (commit && current?.valid && current.proposal) {
+        settings.onResourceReorder?.(current.proposal)
+      }
+      reorderRef.current = null
+      setReorder(null)
+      setActiveReorderId(null)
+    },
+    [settings]
   )
 
   const collapsedIdsRef = useRef(collapsedIds)
@@ -2014,6 +1921,9 @@ function GanttView({
   // toggle/checkbox gutter (w-5 + me-1 = 1.5rem) + the reorder grip (0.875rem)
   // when present, so "Resources" lines up with the row titles below it.
   const namePaddingStart = reorderEnabled ? "3.125rem" : "2.25rem"
+  const activeReorderRow = rows.find(
+    (row) => row.resource.id === activeReorderId
+  )
   const treeContent = (
     <div
       className={cn(
@@ -2074,23 +1984,63 @@ function GanttView({
           )}
         </div>
       </div>
-      <div ref={treeRowsRef} className="flex flex-col">
-        {rows.map((row) => (
-          <GanttTreeRow
-            key={row.resource.id}
-            row={row}
-            heightRem={rowBars.get(row.resource.id)?.heightRem ?? minRowRem}
-            bandRem={rowBars.get(row.resource.id)?.bandRem ?? minRowRem}
-            columns={columns}
-            nameWidth={treeConfig.nameColumnWidth}
-            dimmed={reorder?.resourceId === row.resource.id}
-            selected={selectedSet.has(row.resource.id)}
-            onSelectedChange={row.isGroup ? undefined : toggleRowSelected}
-            onGripPointerDown={reorderEnabled ? beginRowReorder : undefined}
-            onToggle={onToggleRow}
-          />
-        ))}
-        {showCreateTask && (
+      <DndContext
+        sensors={reorderSensors}
+        autoScroll={false}
+        collisionDetection={closestCenter}
+        modifiers={[restrictToVerticalAxis]}
+        onDragStart={({ active }) => {
+          const row = active.data.current?.row as TimelineRow | undefined
+          setActiveReorderId(row?.resource.id ?? null)
+        }}
+        onDragOver={updateReorder}
+        onDragEnd={() => finishReorder(true)}
+        onDragCancel={() => finishReorder(false)}
+        accessibility={{
+          container: typeof document === "undefined" ? undefined : document.body,
+          screenReaderInstructions: cubbyDndScreenReaderInstructions,
+          announcements: createDndAnnouncements({
+            item: (id) =>
+              rows.find((row) => row.resource.id === id)?.resource.title ?? id,
+            target: (id) =>
+              rows.find((row) => row.resource.id === id)?.resource.title ?? id,
+          }),
+        }}
+      >
+        <SortableContext
+          items={rows.map((row) => row.resource.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          <div ref={treeRowsRef} className="flex flex-col">
+            {rows.map((row) => (
+              <GanttTreeRow
+                key={row.resource.id}
+                row={row}
+                heightRem={rowBars.get(row.resource.id)?.heightRem ?? minRowRem}
+                bandRem={rowBars.get(row.resource.id)?.bandRem ?? minRowRem}
+                columns={columns}
+                nameWidth={treeConfig.nameColumnWidth}
+                dimmed={reorder?.resourceId === row.resource.id}
+                selected={selectedSet.has(row.resource.id)}
+                onSelectedChange={row.isGroup ? undefined : toggleRowSelected}
+                reorderEnabled={reorderEnabled}
+                onToggle={onToggleRow}
+              />
+            ))}
+          </div>
+        </SortableContext>
+        <DragOverlay dropAnimation={null}>
+          {activeReorderRow ? (
+            <DragPreviewFrame
+              valid={reorder?.valid ?? true}
+              className="min-w-48 px-3 py-2 text-xs font-medium"
+            >
+              {activeReorderRow.resource.title}
+            </DragPreviewFrame>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+      {showCreateTask && (
           <button
             type="button"
             data-slot="gantt-create-task"
@@ -2118,7 +2068,6 @@ function GanttView({
             </span>
           </button>
         )}
-      </div>
     </div>
   )
 
@@ -2591,7 +2540,7 @@ function GanttView({
                 the last row and leave the rest of the pane dead space. As a
                 flex parent it can hand the leftover height down instead. */}
               <ScrollAreaPrimitive.Content className="flex min-h-full flex-col">
-                {timelineContent}
+                <GanttDndProvider>{timelineContent}</GanttDndProvider>
               </ScrollAreaPrimitive.Content>
               {horizontalScrollbar}
             </ScrollArea>
@@ -2601,7 +2550,7 @@ function GanttView({
               data-gantt-native-scroll=""
               className="h-full overflow-auto overscroll-contain"
             >
-              {timelineContent}
+              <GanttDndProvider>{timelineContent}</GanttDndProvider>
             </div>
           )}
           {/* Reserved scrollbar rail - the twin of the tree rail. Keeps the
@@ -2749,7 +2698,7 @@ const GanttTreeRow = memo(function GanttTreeRow({
   dimmed,
   selected,
   onSelectedChange,
-  onGripPointerDown,
+  reorderEnabled,
   onToggle,
 }: {
   row: TimelineRow
@@ -2760,11 +2709,22 @@ const GanttTreeRow = memo(function GanttTreeRow({
   dimmed: boolean
   selected: boolean
   onSelectedChange?: (id: string, checked: boolean) => void
-  onGripPointerDown?: (e: React.PointerEvent, row: TimelineRow) => void
+  reorderEnabled: boolean
   onToggle: (row: TimelineRow) => void
 }) {
   const settings = useGanttSettings()
   const viewConfig = useGanttViewConfig()
+  const {
+    attributes,
+    listeners,
+    setActivatorNodeRef,
+    setNodeRef,
+    isDragging,
+  } = useSortable({
+    id: row.resource.id,
+    data: { kind: "gantt-resource", row },
+    disabled: !reorderEnabled,
+  })
   const ctx = {
     resource: row.resource,
     depth: row.depth,
@@ -2783,12 +2743,13 @@ const GanttTreeRow = memo(function GanttTreeRow({
 
   const rowNode = (
     <div
+      ref={setNodeRef}
       data-slot="gantt-row-group"
       data-gantt-row-id={row.resource.id}
       data-selected={selected || undefined}
       className={cn(
         "group/gantt-row data-hover:bg-muted/40 data-selected:bg-primary/5 data-selected:data-hover:bg-primary/5 flex border-b",
-        dimmed && "opacity-50"
+        (dimmed || isDragging) && "opacity-50"
       )}
       style={{ height: `${heightRem}rem` }}
       onClick={
@@ -2831,8 +2792,9 @@ const GanttTreeRow = memo(function GanttTreeRow({
             className="flex w-full min-w-0 items-center"
             style={{ height: `${bandRem}rem` }}
           >
-            {onGripPointerDown && (
+            {reorderEnabled && (
               <button
+                ref={setActivatorNodeRef}
                 type="button"
                 data-slot="gantt-row-grip"
                 aria-label={settings.i18n.labels.reorder}
@@ -2842,7 +2804,8 @@ const GanttTreeRow = memo(function GanttTreeRow({
                 // the checkbox; the equal start/end margins keep the grip's
                 // footprint net-zero, so the title stays aligned with the header.
                 className="text-muted-foreground/60 hover:text-foreground -ms-1.5 me-1.5 flex w-3.5 shrink-0 cursor-grab touch-none items-center justify-center opacity-0 group-hover/gantt-row:opacity-100 group-data-hover/gantt-row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
-                onPointerDown={(e) => onGripPointerDown(e, row)}
+                {...attributes}
+                {...listeners}
                 onClick={(e) => e.stopPropagation()}
               >
                 <GripVerticalIcon className="size-3" aria-hidden="true" />
@@ -2975,7 +2938,6 @@ const GanttTimelineRow = memo(function GanttTimelineRow({
   const instance = useGantt()
   const settings = useGanttSettings()
   const viewConfig = useGanttViewConfig()
-  const gestures = useGanttGestures()
   const segments = bars?.segments ?? []
   // parents aggregate their subtree; they take no direct scheduling gestures
   const schedulable = !row.isGroup || viewConfig.parentScheduling
@@ -3002,6 +2964,13 @@ const GanttTimelineRow = memo(function GanttTimelineRow({
   )
   const canSchedule = useGanttSelector<unknown, boolean>(
     (state) => state.interactions.selectSlot
+  )
+  const createDrag = useGanttCreateDraggable(
+    row.resource.id,
+    !viewConfig.dragCreate ||
+      !schedulable ||
+      !canSchedule ||
+      !settings.onSelectSlot
   )
   // The affordance is offered ANYWHERE on a schedulable row - over bare track
   // and over existing bars alike - because a row can always take another
@@ -3199,6 +3168,7 @@ const GanttTimelineRow = memo(function GanttTimelineRow({
       data-gantt-bar-color={bars?.extent?.color}
       data-gantt-bar-label={bars?.extent?.label}
       data-gantt-bar-start-ms={bars?.extent?.startMs}
+      data-dnd-distance="4"
       data-drop-target={dragTarget ?? undefined}
       data-selected={selected || undefined}
       className={cn(
@@ -3253,9 +3223,10 @@ const GanttTimelineRow = memo(function GanttTimelineRow({
               true)
           if (!allowed) return
           e.stopPropagation()
-          gestures.beginCreate(e)
+          createDrag.listeners?.onPointerDown?.(e)
         }
       }}
+      ref={createDrag.setNodeRef}
       onPointerMove={(e) => {
         // read interaction state imperatively - a subscription here would
         // re-render the row for every gesture anywhere on the grid

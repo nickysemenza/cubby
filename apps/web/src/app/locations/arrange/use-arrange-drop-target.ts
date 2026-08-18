@@ -1,12 +1,12 @@
-import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { useDroppable } from "@dnd-kit/core";
+import { useEffect, useId, useRef } from "react";
 import { canDropOnArrangeTarget } from "./arrange-drop-policy";
 import type { ArrangeDropData } from "./arrange-types";
+import { useArrangeDndState } from "./use-arrange-dnd";
 
-interface ArrangeDropTargetOptions<T extends HTMLElement> {
-  ref: RefObject<T | null>;
+interface ArrangeDropTargetOptions {
   roots: InfLocation[];
   locationId: LocationShortcode | null;
   onDragEnter?: () => void;
@@ -14,44 +14,37 @@ interface ArrangeDropTargetOptions<T extends HTMLElement> {
   onDrop?: () => void;
 }
 
-/** Registers the common drop target behavior and exposes its hover state. */
-export function useArrangeDropTarget<T extends HTMLElement>({
-  ref,
+/** Registers a typed dnd-kit target and exposes valid-hover state. */
+export function useArrangeDropTarget({
   roots,
   locationId,
   onDragEnter,
   onDragLeave,
   onDrop,
-}: ArrangeDropTargetOptions<T>): boolean {
-  const [isOver, setIsOver] = useState(false);
-  const callbacks = useRef({ onDragEnter, onDragLeave, onDrop });
-  callbacks.current = { onDragEnter, onDragLeave, onDrop };
-
+}: ArrangeDropTargetOptions) {
+  const targetInstanceId = useId();
+  const data: ArrangeDropData = { arrangeTarget: true, locationId };
+  const { setNodeRef, isOver } = useDroppable({
+    // A location can be visible simultaneously as a row, column body, and
+    // breadcrumb. dnd-kit IDs identify DOM registrations, so keep the policy
+    // identity in data and qualify each rendered target independently.
+    id: `arrange-target:${locationId ?? "home"}:${targetInstanceId}`,
+    data,
+  });
+  const { active } = useArrangeDndState();
+  const valid = !!active && canDropOnArrangeTarget(roots, locationId, active);
+  const wasOver = useRef(false);
   useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    return dropTargetForElements({
-      element,
-      getData: (): ArrangeDropData & Record<string, unknown> => ({
-        arrangeTarget: true,
-        locationId,
-      }),
-      canDrop: ({ source }) =>
-        canDropOnArrangeTarget(roots, locationId, source.data),
-      onDragEnter: () => {
-        setIsOver(true);
-        callbacks.current.onDragEnter?.();
-      },
-      onDragLeave: () => {
-        setIsOver(false);
-        callbacks.current.onDragLeave?.();
-      },
-      onDrop: () => {
-        setIsOver(false);
-        callbacks.current.onDrop?.();
-      },
-    });
-  }, [locationId, ref, roots]);
-
-  return isOver;
+    const next = isOver && valid;
+    if (next && !wasOver.current) onDragEnter?.();
+    if (!next && wasOver.current) onDragLeave?.();
+    wasOver.current = next;
+  }, [isOver, valid, onDragEnter, onDragLeave]);
+  useEffect(
+    () => () => {
+      if (wasOver.current) onDrop?.();
+    },
+    [onDrop],
+  );
+  return { setNodeRef, isOver: isOver && valid };
 }

@@ -5,10 +5,8 @@ import type {
 } from "@cubby/schemas/identifiers";
 
 /**
- * pragmatic-drag-and-drop payloads for the arrange surface. Both the Board and
- * Tree views produce the SAME drag/drop data shapes, so the monitor + validity
- * logic is shared. Data is `Record<string | symbol, unknown>` on the wire; the
- * `as*`/`is*` guards below narrow it back.
+ * dnd-kit payloads for the arrange surface. Both views produce the same typed
+ * drag/drop data, so collision and commit policy are shared.
  */
 
 export type LocationDragData = {
