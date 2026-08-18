@@ -12,24 +12,28 @@ import {
 describe("exact entity filters", () => {
   const shortcode = z.string().regex(/^PRD-[A-Z2-9]{4}$/);
 
-  it("maps invalid filter input without weakening the entity schema", () => {
+  it("accepts only the internal fallback without weakening the entity schema", () => {
     expect(entityFilter(shortcode).parse("PRD-4K7M")).toBe("PRD-4K7M");
     expect(entityFilter(shortcode).parse(UNRESOLVABLE_ENTITY_FILTER)).toBe(
       UNRESOLVABLE_ENTITY_FILTER,
     );
-    expect(entityFilter(shortcode).parse("Milwaukee drill")).toBe(
-      UNRESOLVABLE_ENTITY_FILTER,
+    expect(entityFilter(shortcode).safeParse("Milwaukee drill").success).toBe(
+      false,
     );
     expect(shortcode.safeParse("Milwaukee drill").success).toBe(false);
   });
 
-  it("maps an invalid one-or-many value to the same fallback", () => {
+  it("accepts the internal fallback as a one-or-many value", () => {
     expect(entityFilterList(shortcode).parse(["PRD-4K7M", "PRD-2ABC"])).toEqual(
       ["PRD-4K7M", "PRD-2ABC"],
     );
+    expect(entityFilterList(shortcode).parse(UNRESOLVABLE_ENTITY_FILTER)).toBe(
+      UNRESOLVABLE_ENTITY_FILTER,
+    );
     expect(
-      entityFilterList(shortcode).parse(["PRD-4K7M", "Milwaukee drill"]),
-    ).toBe(UNRESOLVABLE_ENTITY_FILTER);
+      entityFilterList(shortcode).safeParse(["PRD-4K7M", "Milwaukee drill"])
+        .success,
+    ).toBe(false);
   });
 });
 

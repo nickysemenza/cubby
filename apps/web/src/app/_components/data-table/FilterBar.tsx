@@ -10,6 +10,13 @@ import { Input } from "~/components/ui/input";
 import { cn } from "~/lib/utils";
 import type { Filter, FilterBarField } from "./filter-bar-core";
 
+const EMPTY_FILTER_OPTIONS: NonNullable<FilterBarField["options"]> = [];
+const INVALID_FILTER_OPTION = {
+  value: UNRESOLVABLE_ENTITY_FILTER,
+  label: "Invalid link filter",
+  meta: true,
+} as const;
+
 /**
  * Cubby's small, manifest-backed filter bar.
  *
@@ -33,6 +40,24 @@ export function FilterBar({
     () => new Map(fields.map((field) => [field.key, field])),
     [fields],
   );
+  const visibleOptionsByFilterId = useMemo(
+    () =>
+      new Map(
+        filters.map((filter) => {
+          const options =
+            fieldsByKey.get(filter.field)?.options ?? EMPTY_FILTER_OPTIONS;
+          const visibleOptions =
+            filter.values.includes(UNRESOLVABLE_ENTITY_FILTER) &&
+            !options.some(
+              (option) => option.value === UNRESOLVABLE_ENTITY_FILTER,
+            )
+              ? [INVALID_FILTER_OPTION, ...options]
+              : options;
+          return [filter.id, visibleOptions] as const;
+        }),
+      ),
+    [filters, fieldsByKey],
+  );
   const active = new Set(filters.map((filter) => filter.field));
   const available = fields.filter((field) => !active.has(field.key));
 
@@ -48,19 +73,8 @@ export function FilterBar({
       {filters.flatMap((filter) => {
         const field = fieldsByKey.get(filter.field);
         if (!field) return [];
-        const options = field.options ?? [];
         const visibleOptions =
-          filter.values.includes(UNRESOLVABLE_ENTITY_FILTER) &&
-          !options.some((option) => option.value === UNRESOLVABLE_ENTITY_FILTER)
-            ? [
-                {
-                  value: UNRESOLVABLE_ENTITY_FILTER,
-                  label: "Invalid link filter",
-                  meta: true,
-                },
-                ...options,
-              ]
-            : options;
+          visibleOptionsByFilterId.get(filter.id) ?? EMPTY_FILTER_OPTIONS;
         return (
           <div
             key={filter.id}
