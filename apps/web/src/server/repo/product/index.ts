@@ -34,6 +34,7 @@ export {
   deleteProducts,
   getProductByID,
   getProductByShortcode,
+  getProductCoverImageUrlsByProductIds,
   getProductImagesByProductIds,
   getProductPickerItemsByIds,
   getProductsByShortcodes,

@@ -41,7 +41,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { getProductImagesByProductIds } from "~/server/repo/product";
+import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
 
 /** The Products linked to one Purchase, alphabetically by name. */
@@ -72,9 +72,9 @@ export async function listPurchaseProducts(
     .orderBy(asc(product.name));
 
   const productIds = rows.map((row) => row.productId);
-  const [prices, imagesByProduct] = await Promise.all([
+  const [prices, coverImageUrls] = await Promise.all([
     loadEffectiveProductPricesById(db, productIds),
-    getProductImagesByProductIds(db, productIds),
+    getProductCoverImageUrlsByProductIds(db, productIds),
   ]);
 
   return rows.map((row) => ({
@@ -82,7 +82,7 @@ export async function listPurchaseProducts(
     productName: row.productName,
     manufacturer: row.manufacturer,
     price: prices.get(row.productId) ?? null,
-    coverImageUrl: imagesByProduct[row.productId]?.[0]?.url ?? null,
+    coverImageUrl: coverImageUrls.get(row.productId) ?? null,
     attachedAt: row.attachedAt,
   }));
 }
