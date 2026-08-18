@@ -5,15 +5,17 @@ import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { FINANCIAL_STATEMENT_IMPORT_MAX_ROWS } from "@cubby/schemas/financial-transaction";
 import { unsafeExpenseShortcode } from "@cubby/schemas/identifiers";
 import { mcpProductCreateInput } from "@cubby/schemas/product";
+import { productComponentOut } from "@cubby/schemas/product-components";
 import type { ExpenseMatchCandidate } from "@cubby/schemas/project";
 import {
   expenseOut,
   MATCH_MAX_ROWS,
   projectDashboardSummaryOut,
   projectOut,
+  projectResourceOut,
   taskOut,
 } from "@cubby/schemas/project";
-import { purchaseOut } from "@cubby/schemas/purchase";
+import { purchaseOut, purchaseProductOut } from "@cubby/schemas/purchase";
 import { mcpRecipeCreateInput, recipeMcpOut } from "@cubby/schemas/recipe";
 import type {
   McpTelemetryIdentity,
@@ -1432,11 +1434,8 @@ describe("listMcpToolCatalog", () => {
     // a tool lost its advertised output shape.
     const LOOSE_OUTPUT_TOOLS = new Set([
       "list_problems",
-      "list_project_resources",
       "get_usda_food",
       "find_usda_food",
-      "list_purchase_products",
-      "list_product_components",
     ]);
     const isEmpty = (schema: unknown) => {
       const properties = (schema as { properties?: Record<string, unknown> })
@@ -2946,4 +2945,68 @@ describe("registerMcpTool non-object output schemas", () => {
     )) as CallToolResult;
     expect(result.isError).toBe(true);
   });
+});
+
+describe("list-tool output envelopes", () => {
+  // Regression: these three tools advertised their router's own schema — a
+  // bare ARRAY root — while the SDK re-validates `structuredContent` against
+  // the permissive OBJECT `sdkOutputSchema` substitutes for any non-object
+  // schema. Every call died with "Invalid structured content ... expected
+  // object, received array", so kit composition could not be read back over
+  // MCP at all while the write path (attach_product_components) worked. The
+  // rows now travel in the same `{items}` envelope every other list tool uses;
+  // the routers still return bare arrays to their tRPC callers.
+  const cases = [
+    {
+      tool: "list_product_components",
+      args: { parentProductId: "PRD-PWVY" },
+      router: "product",
+      procedure: "components",
+      row: productComponentOut,
+    },
+    {
+      tool: "list_purchase_products",
+      args: { purchaseId: "PUR-8882" },
+      router: "purchase",
+      procedure: "products",
+      row: purchaseProductOut,
+    },
+    {
+      tool: "list_project_resources",
+      args: { projectId: "PRJ-WXYZ" },
+      router: "project",
+      procedure: "resources",
+      row: projectResourceOut,
+    },
+  ] as const;
+
+  it.each(cases)(
+    "$tool wraps its rows in items",
+    async ({ tool, args, router, procedure, row }) => {
+      const rows = [mock(row, { seed: 1 }), mock(row, { seed: 2 })];
+      const list = vi.fn().mockResolvedValue(rows);
+
+      const result = await callTool(createMcpServer(), tool, args, {
+        [router]: { [procedure]: list },
+      });
+
+      expect(list).toHaveBeenCalledWith(args);
+      expect(result.isError, JSON.stringify(result.content)).not.toBe(true);
+      expect(result.structuredContent).toEqual({ items: rows });
+    },
+  );
+
+  it.each(cases)(
+    "$tool advertises the items envelope, not a bare array root",
+    async ({ tool }) => {
+      // A bare-array root never reaches the client as a usable shape: the SDK
+      // swaps it for `z.looseObject({})`, so the catalog advertises nothing and
+      // the call then fails validation. Naming `items` here is what proves the
+      // declared schema and the returned payload agree.
+      const advertised = (await listMcpToolCatalog()).tools.find(
+        (entry) => entry.name === tool,
+      )?.outputSchema as { properties?: Record<string, { type?: string }> };
+      expect(advertised?.properties?.items?.type).toBe("array");
+    },
+  );
 });
