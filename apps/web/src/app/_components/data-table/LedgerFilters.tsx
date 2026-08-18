@@ -18,6 +18,7 @@ import { useFilterBarDraft } from "./useFilterBarDraft";
  */
 function getLedgerFields<TData extends RowData>(
   table: Table<TData>,
+  optionHints?: Readonly<Record<string, Readonly<Record<string, string>>>>,
 ): FilterBarField[] {
   return table.getAllLeafColumns().flatMap((column) => {
     const config = column.columnDef.meta?.filterConfig as
@@ -26,18 +27,23 @@ function getLedgerFields<TData extends RowData>(
     if (!config) return [];
     const header = column.columnDef.header;
     const label = typeof header === "string" ? header : humanize(column.id);
-    return [barFieldFromConfig(column.id, label, config)];
+    return [
+      barFieldFromConfig(column.id, label, config, optionHints?.[column.id]),
+    ];
   });
 }
 
 export function LedgerFilters<TData extends RowData>({
   table,
+  optionHints,
 }: {
   table: Table<TData>;
+  /** Server facet counts by mounted column id then option value. */
+  optionHints?: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }) {
   const fields = useMemo(
-    () => getLedgerFields(table),
-    [table, table.options.columns],
+    () => getLedgerFields(table, optionHints),
+    [table, table.options.columns, optionHints],
   );
   const externalColumnFilters = table.state.columnFilters;
   const externalFilters = useMemo(

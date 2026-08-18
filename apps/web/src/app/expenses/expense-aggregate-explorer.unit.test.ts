@@ -1,129 +1,142 @@
-import type { ExpenseAnalyticsOut } from "@cubby/schemas/project";
+import type { ExpenseAnalyzeReadyOut } from "@cubby/schemas/project";
 import { describe, expect, it } from "vitest";
-import { buildExpenseExplorerModel } from "./expense-aggregate-explorer";
+import {
+  buildExpenseAnalyzeTableRows,
+  canCompareExpenseAnalysis,
+  expenseAnalyzeDrilldownFilter,
+  formatExpenseAnalyzeValue,
+  initialExpenseAnalyzeSorting,
+} from "./expense-aggregate-explorer";
 
-const analytics = {
-  summary: {
-    actual: 150,
-    committed: 50,
-    credits: 10,
-    net: 190,
-    count: 5,
-    actualCount: 4,
-    plannedCount: 1,
-  },
-  adjustments: { actual: 10, committed: 0, credits: 0, net: 10, count: 1 },
-  byTrade: [
+const ready = {
+  status: "ready",
+  rowDimension: "trade",
+  columnDimension: null,
+  comparison: { mode: "none", previousRange: null },
+  rows: [
     {
-      trade: "electrical",
-      actual: 140,
-      committed: 50,
-      credits: 10,
-      net: 180,
-      count: 4,
-    },
-  ],
-  byCostType: [
-    {
-      costType: "materials",
-      actual: 140,
-      committed: 50,
-      credits: 10,
-      net: 180,
-      count: 4,
-    },
-  ],
-  tradeCostMatrix: [
-    {
-      trade: "electrical",
-      costType: "materials",
-      actual: 140,
-      committed: 50,
-      credits: 10,
-      net: 180,
-      count: 4,
-    },
-  ],
-  monthly: [
-    {
-      month: "2026-02",
-      actual: 120,
-      committed: 50,
-      credits: 10,
-      net: 160,
-      count: 4,
-    },
-  ],
-  cumulative: [{ month: "2026-02", cumulativeNet: 160 }],
-  byProject: [
-    {
-      projectId: "PROJ-1",
-      projectName: "Kitchen",
-      actual: 100,
-      committed: 50,
-      credits: 10,
-      net: 140,
-      count: 3,
-    },
-  ],
-  byVendor: [
-    {
-      vendorId: "VEND-1",
-      vendorName: "Supply House",
-      actual: 130,
-      committed: 50,
-      credits: 10,
-      net: 170,
-      count: 4,
-    },
-  ],
-} as ExpenseAnalyticsOut;
-
-describe("buildExpenseExplorerModel", () => {
-  it("keeps principal dimensions complete and reconciles adjustments", () => {
-    const model = buildExpenseExplorerModel(analytics, "trade");
-    expect(model.rows[0]).toMatchObject({
+      key: "electrical",
       label: "Electrical & Lighting",
-      ledgerFilter: { trade: "electrical" },
-    });
-    expect(model.tail).toEqual({
-      label: "Purchase adjustments",
-      actual: 10,
-      committed: 0,
-      credits: 0,
-      net: 10,
-      count: 1,
-    });
+      filter: { trade: "electrical" },
+    },
+  ],
+  columns: [],
+  cells: [
+    {
+      rowKey: "electrical",
+      columnKey: null,
+      current: { actual: 140, committed: 50, credits: 10, net: 180, count: 4 },
+      previous: null,
+    },
+  ],
+  totals: {
+    scope: {
+      current: { actual: 150, committed: 50, credits: 10, net: 190, count: 5 },
+      previous: null,
+    },
+    grid: {
+      current: { actual: 140, committed: 50, credits: 10, net: 180, count: 4 },
+      previous: null,
+    },
+  },
+  reconciliation: {
+    tail: {
+      current: { actual: 10, committed: 0, credits: 0, net: 10, count: 1 },
+      previous: null,
+    },
+    causes: {
+      adjustments: {
+        current: { actual: 10, committed: 0, credits: 0, net: 10, count: 1 },
+        previous: null,
+      },
+      unattributedProject: {
+        current: { actual: 0, committed: 0, credits: 0, net: 0, count: 0 },
+        previous: null,
+      },
+      unattributedVendor: {
+        current: { actual: 0, committed: 0, credits: 0, net: 0, count: 0 },
+        previous: null,
+      },
+      undated: {
+        current: { actual: 0, committed: 0, credits: 0, net: 0, count: 0 },
+        previous: null,
+      },
+    },
+  },
+} as const satisfies ExpenseAnalyzeReadyOut;
+
+describe("ExpenseAggregateExplorer", () => {
+  it("projects complete server buckets into one-dimensional rows without inventing a tail bucket", () => {
+    expect(buildExpenseAnalyzeTableRows(ready)).toEqual([
+      {
+        id: "electrical",
+        label: "Electrical & Lighting",
+        filter: { trade: "electrical" },
+        current: {
+          actual: 140,
+          committed: 50,
+          credits: 10,
+          net: 180,
+          count: 4,
+        },
+        previous: null,
+      },
+    ]);
   });
 
-  it("reports unattributed project and vendor tails without unknown buckets", () => {
-    expect(buildExpenseExplorerModel(analytics, "project").tail).toMatchObject({
-      label: "Unattributed to a project",
-      net: 50,
-      count: 2,
-    });
-    expect(buildExpenseExplorerModel(analytics, "vendor").tail).toMatchObject({
-      label: "Unattributed to a vendor",
-      net: 20,
-      count: 1,
-    });
-  });
-
-  it("turns a complete monthly bucket into an exact shared ledger date scope", () => {
-    const model = buildExpenseExplorerModel(analytics, "month");
-    expect(model.rows[0]?.ledgerFilter).toEqual({
-      dateFrom: "2026-02-01",
-      dateTo: "2026-02-28",
-    });
-    expect(model.tail).toMatchObject({ label: "Undated spend", net: 30 });
-  });
-
-  it("keeps the existing trade by cost-type pivot navigable", () => {
+  it("only enables prior-period comparison for an explicit non-month range", () => {
     expect(
-      buildExpenseExplorerModel(analytics, "tradeCost").rows[0],
-    ).toMatchObject({
-      label: "Electrical & Lighting · Materials",
-      ledgerFilter: { trade: "electrical", costType: "materials" },
+      canCompareExpenseAnalysis(
+        { dateFrom: "2026-08-01", dateTo: "2026-08-15" },
+        "trade",
+        "costType",
+      ),
+    ).toBe(true);
+    expect(
+      canCompareExpenseAnalysis(
+        { dateFrom: "2026-08-01", dateTo: "2026-08-15" },
+        "month",
+        null,
+      ),
+    ).toBe(false);
+    expect(
+      canCompareExpenseAnalysis({ dateFrom: "2026-08-01" }, "trade", null),
+    ).toBe(false);
+  });
+
+  it("uses honest zero-baseline comparison labels", () => {
+    expect(formatExpenseAnalyzeValue(10, 0, "net", "percent")).toBe("New");
+    expect(formatExpenseAnalyzeValue(0, 0, "net", "percent")).toBe("—");
+    expect(formatExpenseAnalyzeValue(120, 100, "net", "percent")).toBe("+20%");
+  });
+
+  it("uses a valid initial sort column for each table shape", () => {
+    expect(initialExpenseAnalyzeSorting("none")).toEqual([
+      { id: "net", desc: true },
+    ]);
+    expect(initialExpenseAnalyzeSorting("previousPeriod")).toEqual([
+      { id: "current", desc: true },
+    ]);
+  });
+
+  it("drills into exact current or previous populations, not derived deltas", () => {
+    const compared = {
+      ...ready,
+      comparison: {
+        mode: "previousPeriod",
+        previousRange: { dateFrom: "2026-07-17", dateTo: "2026-07-31" },
+      },
+    } satisfies ExpenseAnalyzeReadyOut;
+    const axis = { trade: "electrical" };
+    expect(expenseAnalyzeDrilldownFilter(compared, "current", axis)).toEqual(
+      axis,
+    );
+    expect(expenseAnalyzeDrilldownFilter(compared, "previous", axis)).toEqual({
+      trade: "electrical",
+      dateFrom: "2026-07-17",
+      dateTo: "2026-07-31",
     });
+    expect(expenseAnalyzeDrilldownFilter(compared, "delta", axis)).toBeNull();
+    expect(expenseAnalyzeDrilldownFilter(compared, "percent", axis)).toBeNull();
   });
 });

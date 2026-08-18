@@ -34,6 +34,7 @@
  */
 
 export { expenseAnalytics, expenseTradeAffinity } from "./analytics";
+export { expenseAnalyze, expenseFacetCounts } from "./analyze";
 export {
   createExpense,
   deleteExpenses,

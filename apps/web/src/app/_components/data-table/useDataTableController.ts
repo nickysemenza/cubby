@@ -142,18 +142,13 @@ export function useDataTableController<TItem extends RowData>({
     [flatRowToVirtualIndex, scrollToIndex],
   );
 
-  const { selection, containerProps: cellSelectionContainerProps } =
-    useCellSelection({
-      enabled: !isMobile && !isTransitioning,
-      rows,
-      table,
-      scrollToFlatRow,
-      onOpenRow: onRowClick,
-    });
-
-  // Focused-row ring follows the selection's focus cell (flat row index). No
-  // separate state — cell selection is the single source of truth.
-  const focusedRowIndex = selection?.focus.row ?? null;
+  const { containerProps: cellSelectionContainerProps } = useCellSelection({
+    enabled: !isMobile && !isTransitioning,
+    rows,
+    table,
+    scrollToFlatRow,
+    onOpenRow: onRowClick,
+  });
 
   // Save scroll position on unmount for navigate-back restoration. The page is
   // the scroller now, so we track window.scrollY rather than a container.
@@ -237,7 +232,6 @@ export function useDataTableController<TItem extends RowData>({
     columnsKey,
     columnSizeVars,
     dConfig,
-    focusedRowIndex,
     hydrated,
     isDebugEnabled,
     isFetchingNextPage,

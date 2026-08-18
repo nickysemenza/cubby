@@ -1349,6 +1349,185 @@ export const expenseAnalyticsOut = z.object({
 });
 export type ExpenseAnalyticsOut = z.infer<typeof expenseAnalyticsOut>;
 
+// Expense Analyze — complete server-side aggregates for the interactive
+// Expenses analyzer. These intentionally live beside `expenseAnalyticsOut`:
+// both contracts are scoped by the exact same `expenseFiltersSchema` as the
+// ledger, but Analyze is a bounded, user-configurable grid rather than the
+// chart payload above.
+export const expenseAnalyzeRowDimensionSchema = z.enum([
+  "trade",
+  "costType",
+  "month",
+  "project",
+  "vendor",
+]);
+export type ExpenseAnalyzeRowDimension = z.infer<
+  typeof expenseAnalyzeRowDimensionSchema
+>;
+
+export const expenseAnalyzeColumnDimensionSchema = z.enum([
+  "trade",
+  "costType",
+  "month",
+]);
+export type ExpenseAnalyzeColumnDimension = z.infer<
+  typeof expenseAnalyzeColumnDimensionSchema
+>;
+
+export const expenseAnalyzeComparisonSchema = z.enum([
+  "none",
+  "previousPeriod",
+]);
+export type ExpenseAnalyzeComparison = z.infer<
+  typeof expenseAnalyzeComparisonSchema
+>;
+
+export const expenseAnalyzeInput = z
+  .object({
+    filters: expenseFiltersSchema,
+    rowDimension: expenseAnalyzeRowDimensionSchema,
+    columnDimension: expenseAnalyzeColumnDimensionSchema.nullish(),
+    comparison: expenseAnalyzeComparisonSchema.default("none"),
+  })
+  .superRefine((input, ctx) => {
+    if (input.columnDimension === input.rowDimension) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["columnDimension"],
+        message: "Rows and columns must use different dimensions",
+      });
+    }
+    if (
+      input.comparison === "previousPeriod" &&
+      (!input.filters.dateFrom || !input.filters.dateTo)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["comparison"],
+        message: "Previous-period comparison requires a bounded date range",
+      });
+    }
+    if (
+      input.comparison === "previousPeriod" &&
+      (input.rowDimension === "month" || input.columnDimension === "month")
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["comparison"],
+        message: "Previous-period comparison is unavailable with a Month axis",
+      });
+    }
+  });
+export type ExpenseAnalyzeInput = z.infer<typeof expenseAnalyzeInput>;
+
+export const expenseAnalyzeAggregate = z.object({
+  ...expenseAggregateFields,
+});
+export type ExpenseAnalyzeAggregate = z.infer<typeof expenseAnalyzeAggregate>;
+
+/** A dimension bucket carries an exact Ledger URL-filter fragment. */
+export const expenseAnalyzeBucket = z.object({
+  key: z.string(),
+  label: z.string(),
+  filter: z.record(z.string(), z.string()),
+});
+export type ExpenseAnalyzeBucket = z.infer<typeof expenseAnalyzeBucket>;
+
+export const expenseAnalyzeCell = z.object({
+  rowKey: z.string(),
+  columnKey: z.string().nullable(),
+  current: expenseAnalyzeAggregate,
+  previous: expenseAnalyzeAggregate.nullable(),
+});
+export type ExpenseAnalyzeCell = z.infer<typeof expenseAnalyzeCell>;
+
+const expenseAnalyzeComparisonOutput = z.object({
+  mode: expenseAnalyzeComparisonSchema,
+  previousRange: z
+    .object({ dateFrom: plainDate, dateTo: plainDate })
+    .nullable(),
+});
+
+const expenseAnalyzeValuePair = z.object({
+  current: expenseAnalyzeAggregate,
+  previous: expenseAnalyzeAggregate.nullable(),
+});
+
+export const expenseAnalyzeReadyOut = z.object({
+  status: z.literal("ready"),
+  rowDimension: expenseAnalyzeRowDimensionSchema,
+  columnDimension: expenseAnalyzeColumnDimensionSchema.nullable(),
+  comparison: expenseAnalyzeComparisonOutput,
+  rows: z.array(expenseAnalyzeBucket),
+  columns: z.array(expenseAnalyzeBucket),
+  cells: z.array(expenseAnalyzeCell),
+  totals: z.object({
+    scope: expenseAnalyzeValuePair,
+    grid: expenseAnalyzeValuePair,
+  }),
+  reconciliation: z.object({
+    tail: expenseAnalyzeValuePair,
+    causes: z.object({
+      adjustments: expenseAnalyzeValuePair,
+      unattributedProject: expenseAnalyzeValuePair,
+      unattributedVendor: expenseAnalyzeValuePair,
+      undated: expenseAnalyzeValuePair,
+    }),
+  }),
+});
+export type ExpenseAnalyzeReadyOut = z.infer<typeof expenseAnalyzeReadyOut>;
+
+export const expenseAnalyzeTooLargeOut = z.object({
+  status: z.literal("too_large"),
+  reason: z.enum(["row_limit", "month_column_limit", "cell_limit"]),
+  limit: z.number().int().positive(),
+  observedAtLeast: z.number().int().nonnegative(),
+});
+export type ExpenseAnalyzeTooLargeOut = z.infer<
+  typeof expenseAnalyzeTooLargeOut
+>;
+
+export const expenseAnalyzeOut = z.discriminatedUnion("status", [
+  expenseAnalyzeReadyOut,
+  expenseAnalyzeTooLargeOut,
+]);
+export type ExpenseAnalyzeOut = z.infer<typeof expenseAnalyzeOut>;
+
+export const expenseFacetIdSchema = z.enum([
+  "costType",
+  "lineKind",
+  "lineBasis",
+  "trade",
+  "future",
+  "project",
+  "productPresence",
+  "vendor",
+  "orderIdPresence",
+]);
+export type ExpenseFacetId = z.infer<typeof expenseFacetIdSchema>;
+
+export const expenseFacetCountsInput = z.object({
+  filters: expenseFiltersSchema,
+  facetIds: z.array(expenseFacetIdSchema).min(1).max(9),
+});
+export type ExpenseFacetCountsInput = z.infer<typeof expenseFacetCountsInput>;
+
+export const expenseFacetCountsOut = z.object({
+  facets: z.array(
+    z.object({
+      id: expenseFacetIdSchema,
+      options: z.array(
+        z.object({
+          value: z.string(),
+          label: z.string().nullable(),
+          count: z.number().int().nonnegative(),
+        }),
+      ),
+    }),
+  ),
+});
+export type ExpenseFacetCountsOut = z.infer<typeof expenseFacetCountsOut>;
+
 /**
  * The household's sales-tax rate, 8.625%.
  *

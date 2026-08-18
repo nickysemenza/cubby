@@ -14,10 +14,14 @@ import {
   deleteExpensesWithPurchaseEffectsInput,
   deleteExpensesWithPurchaseEffectsOut,
   expenseAnalyticsOut,
+  expenseAnalyzeInput,
+  expenseAnalyzeOut,
   expenseBulkCostTypeInput,
   expenseBulkMoveInput,
   expenseBulkTradeInput,
   expenseCreateInput,
+  expenseFacetCountsInput,
+  expenseFacetCountsOut,
   expenseFiltersSchema,
   expenseListAndSideEffectsOut,
   expenseMatchInput,
@@ -35,6 +39,8 @@ import {
   deleteExpenses,
   deleteExpensesWithPurchaseEffects,
   expenseAnalytics,
+  expenseAnalyze,
+  expenseFacetCounts,
   expenseList,
   expenseTradeAffinity,
   getExpenseByID,
@@ -200,6 +206,25 @@ const analytics = protectedProcedure
   .query(({ ctx, input }) => expenseAnalytics(ctx.db, input));
 
 /**
+ * Complete server-side aggregate grid for the Expenses Analyze section. Unlike
+ * the paginated ledger, this procedure never derives totals from loaded rows.
+ */
+const analyze = protectedProcedure
+  .input(expenseAnalyzeInput)
+  .output(strictOutput(expenseAnalyzeOut))
+  .query(({ ctx, input }) => expenseAnalyze(ctx.db, input));
+
+/**
+ * Filter-option counts under the canonical ledger population. A facet omits
+ * only its own predicate so users can see viable alternatives before changing
+ * that control.
+ */
+const facetCounts = protectedProcedure
+  .input(expenseFacetCountsInput)
+  .output(strictOutput(expenseFacetCountsOut))
+  .query(({ ctx, input }) => expenseFacetCounts(ctx.db, input));
+
+/**
  * Vendor roster for the ledger's Vendor filter picklist. Kept on THIS router
  * (rather than moving to `vendor.options`) so the ledger's filter wiring didn't
  * have to change alongside everything else; it's a thin re-export of
@@ -357,6 +382,8 @@ export const expenseRouter = createTRPCRouter({
   deleteWithPurchaseEffects,
   chartData,
   analytics,
+  analyze,
+  facetCounts,
   tradeAffinity,
   match,
   vendorOptions,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  expenseAnalyzeInput,
   expenseCreateInput,
   expenseFiltersSchema,
   expenseSortableFields,
@@ -7,6 +8,55 @@ import {
   projectOut,
   projectUpdateData,
 } from "./project";
+
+describe("expense analyzer input", () => {
+  it("rejects the same dimension on both axes", () => {
+    expect(
+      expenseAnalyzeInput.safeParse({
+        filters: {},
+        rowDimension: "trade",
+        columnDimension: "trade",
+        comparison: "none",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("requires an explicit bounded range for previous-period comparison", () => {
+    expect(
+      expenseAnalyzeInput.safeParse({
+        filters: { dateFrom: "2026-06-01" },
+        rowDimension: "project",
+        comparison: "previousPeriod",
+      }).success,
+    ).toBe(false);
+    expect(
+      expenseAnalyzeInput.safeParse({
+        filters: { dateFrom: "2026-06-01", dateTo: "2026-06-15" },
+        rowDimension: "project",
+        comparison: "previousPeriod",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects previous-period comparison when Month is either axis", () => {
+    const filters = { dateFrom: "2026-06-01", dateTo: "2026-06-15" };
+    expect(
+      expenseAnalyzeInput.safeParse({
+        filters,
+        rowDimension: "month",
+        comparison: "previousPeriod",
+      }).success,
+    ).toBe(false);
+    expect(
+      expenseAnalyzeInput.safeParse({
+        filters,
+        rowDimension: "project",
+        columnDimension: "month",
+        comparison: "previousPeriod",
+      }).success,
+    ).toBe(false);
+  });
+});
 
 describe("project resource URLs", () => {
   it("accepts and preserves complete Google Drive folder URLs", () => {

@@ -1,4 +1,3 @@
-import { useStore } from "@tanstack/react-store";
 import type { RowData } from "@tanstack/react-table";
 import * as React from "react";
 import { toast } from "sonner";
@@ -52,7 +51,8 @@ interface ContainerProps {
 }
 
 interface UseCellSelectionResult {
-  selection: CellSelection | null;
+  /** Imperative projection for tests and keyboard/clipboard transports. */
+  getSelection: () => CellSelection | null;
   containerProps: ContainerProps;
 }
 
@@ -108,7 +108,6 @@ export function useCellSelection<TItem extends RowData>({
   scrollToFlatRow,
   onOpenRow,
 }: UseCellSelectionArgs<TItem>): UseCellSelectionResult {
-  const nativeSelection = useStore(table.atoms.cellSelection!);
   const displayColumns = [
     ...table.getStartVisibleLeafColumns(),
     ...table.getCenterVisibleLeafColumns(),
@@ -143,36 +142,32 @@ export function useCellSelection<TItem extends RowData>({
   const colCount = selectableColumnIds.length;
   const rowCount = rows.length;
 
-  // Cubby's clipboard/paste layer still consumes a normalized integer rect.
-  // Derive that view from v9's durable row/column-id corners; the ids are the
-  // source of truth and remain correct as infinite pages append.
-  const selection = React.useMemo<CellSelection | null>(() => {
-    const range = nativeSelection.at(-1);
-    if (!range) return null;
-    const anchor = {
-      row: rows.findIndex((row) => row.id === range.anchorRowId),
-      col: selectableColumnIds.indexOf(range.anchorColumnId),
-    };
-    const focus = {
-      row: rows.findIndex((row) => row.id === range.focusRowId),
-      col: selectableColumnIds.indexOf(range.focusColumnId),
-    };
-    if (anchor.row < 0 || anchor.col < 0 || focus.row < 0 || focus.col < 0) {
-      return null;
-    }
-    return { anchor, focus };
-  }, [nativeSelection, rows, selectableColumnIds]);
-
-  // Live refs for the DOM-delegated handlers (recreated cheaply each render, but
-  // the window mouseup handler needs stable access to the latest values).
-  const selectionRef = React.useRef(selection);
-  selectionRef.current = selection;
+  // Live refs keep clipboard/keyboard transports out of the table owner's
+  // render subscription. Individual rows subscribe to v9's selection atom;
+  // handlers read that same atom imperatively when an interaction occurs.
   const selectableColumnIdsRef = React.useRef(selectableColumnIds);
   selectableColumnIdsRef.current = selectableColumnIds;
   // Live rows ref so the document paste listener + timer (which close over one
   // render) read the current row model without re-installing on every data tick.
   const rowsRef = React.useRef(rows);
   rowsRef.current = rows;
+  const getSelection = React.useCallback((): CellSelection | null => {
+    const range = table.atoms.cellSelection!.get().at(-1);
+    if (!range) return null;
+    const currentRows = rowsRef.current;
+    const columns = selectableColumnIdsRef.current;
+    const anchor = {
+      row: currentRows.findIndex((row) => row.id === range.anchorRowId),
+      col: columns.indexOf(range.anchorColumnId),
+    };
+    const focus = {
+      row: currentRows.findIndex((row) => row.id === range.focusRowId),
+      col: columns.indexOf(range.focusColumnId),
+    };
+    return anchor.row < 0 || anchor.col < 0 || focus.row < 0 || focus.col < 0
+      ? null
+      : { anchor, focus };
+  }, [table]);
   // The scroll container is the clipboard/flash query root. Capture it from
   // both keyboard and pointer interaction so a mouse selection can be pasted
   // immediately, before the user presses any other key.
@@ -215,6 +210,7 @@ export function useCellSelection<TItem extends RowData>({
   // Appends preserve id corners. A replacement/removal clears only when a
   // corner actually disappeared; width and density changes never touch ids.
   React.useEffect(() => {
+    const nativeSelection = table.atoms.cellSelection!.get();
     if (nativeSelection.length === 0) return;
     const rowIds = new Set(rows.map((row) => row.id));
     const columnIds = new Set(selectableColumnIds);
@@ -226,7 +222,7 @@ export function useCellSelection<TItem extends RowData>({
         columnIds.has(range.focusColumnId),
     );
     if (!valid) resetCellSelection(true);
-  }, [nativeSelection, rows, selectableColumnIds, resetCellSelection]);
+  }, [table, rows, selectableColumnIds, resetCellSelection]);
 
   const openEditorAt = React.useCallback(
     (container: HTMLElement, row: number, col: number, seedText?: string) => {
@@ -290,7 +286,7 @@ export function useCellSelection<TItem extends RowData>({
 
   const doCopy = React.useCallback(
     (container: HTMLElement) => {
-      const sel = selectionRef.current;
+      const sel = getSelection();
       if (!sel) return;
       const rect = selectionRect(sel);
       const grid = buildCopyGrid({
@@ -314,12 +310,12 @@ export function useCellSelection<TItem extends RowData>({
       }
       flashCoords(container, coords, "copied");
     },
-    [buildColumnCellData, flashCoords],
+    [buildColumnCellData, flashCoords, getSelection],
   );
 
   const doPaste = React.useCallback(
     async (container: HTMLElement, clipboardText: string) => {
-      const sel = selectionRef.current;
+      const sel = getSelection();
       if (!sel) return;
       const rect = selectionRect(sel);
       const rowsNow = rowsRef.current;
@@ -400,13 +396,13 @@ export function useCellSelection<TItem extends RowData>({
         flashCoords(container, result.updatedOps, "pasted");
       }
     },
-    [buildColumnCellData, flashCoords],
+    [buildColumnCellData, flashCoords, getSelection],
   );
 
   const doClear = React.useCallback(
     (container: HTMLElement): boolean => {
       const target = resolveCellClearTarget({
-        selection: selectionRef.current,
+        selection: getSelection(),
         rows: rowsRef.current.map((row) => row.original),
         columnCellData: buildColumnCellData(),
       });
@@ -426,13 +422,13 @@ export function useCellSelection<TItem extends RowData>({
         });
       return true;
     },
-    [buildColumnCellData, flashCoords],
+    [buildColumnCellData, flashCoords, getSelection],
   );
 
   // Primary paste transport: a document-level listener, live only while a
   // selection exists. Chrome/Safari dispatch `paste` to the focused container.
   React.useEffect(() => {
-    if (!enabled || !selection) return;
+    if (!enabled) return;
     const handler = (event: ClipboardEvent) => {
       // Double-paste guard: cancel the Firefox keydown fallback SYNCHRONOUSLY,
       // before anything else, so it can't also fire.
@@ -442,6 +438,7 @@ export function useCellSelection<TItem extends RowData>({
       }
       // An open editor (input/textarea/contenteditable) owns paste.
       if (isTypingTarget(document.activeElement)) return;
+      if (!getSelection()) return;
       const container = containerElRef.current;
       if (!container) return;
       const text = event.clipboardData?.getData("text/plain") ?? "";
@@ -453,7 +450,7 @@ export function useCellSelection<TItem extends RowData>({
     };
     document.addEventListener("paste", handler);
     return () => document.removeEventListener("paste", handler);
-  }, [enabled, selection, doPaste]);
+  }, [enabled, doPaste, getSelection]);
 
   // Clear a pending fallback timer on unmount.
   React.useEffect(
@@ -484,7 +481,7 @@ export function useCellSelection<TItem extends RowData>({
       }
 
       if (isMod && (e.key === "c" || e.key === "C")) {
-        if (!selectionRef.current) return;
+        if (!getSelection()) return;
         // preventDefault suppresses the native copy so the legacy document copy
         // listener never fires (no double handling).
         e.preventDefault();
@@ -493,7 +490,7 @@ export function useCellSelection<TItem extends RowData>({
       }
 
       if (isMod && (e.key === "v" || e.key === "V")) {
-        if (!selectionRef.current) return;
+        if (!getSelection()) return;
         // Firefox fallback ONLY: don't preventDefault. Chrome/Safari fire a
         // document `paste` event (handled above) which cancels this timer
         // synchronously. If none comes (Firefox skips non-editable focus), the
@@ -516,7 +513,7 @@ export function useCellSelection<TItem extends RowData>({
 
       if (dir && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
-        if (!selectionRef.current) {
+        if (!getSelection()) {
           const firstRow = rows[0];
           const firstColumnId = selectableColumnIdsRef.current[0];
           if (firstRow && firstColumnId) {
@@ -537,7 +534,7 @@ export function useCellSelection<TItem extends RowData>({
 
       if (e.key === "Enter") {
         e.preventDefault();
-        const sel = selectionRef.current;
+        const sel = getSelection();
         if (!sel) return;
         if (e.metaKey || e.ctrlKey) {
           // Old Enter behavior: open the anchor row (detail/preview).
@@ -550,7 +547,7 @@ export function useCellSelection<TItem extends RowData>({
       }
 
       if (e.key === "Escape") {
-        if (selectionRef.current) {
+        if (getSelection()) {
           e.preventDefault();
           table.resetCellSelection(true);
         }
@@ -563,7 +560,7 @@ export function useCellSelection<TItem extends RowData>({
       // `key.length === 1` matches a single printable char (letters, digits,
       // punctuation, space) and excludes named keys (Tab, Backspace, F-keys).
       // Shift/Alt are allowed — they produce printable characters.
-      const sel = selectionRef.current;
+      const sel = getSelection();
       if (sel && e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
         openEditorAt(e.currentTarget, sel.anchor.row, sel.anchor.col, e.key);
@@ -580,6 +577,7 @@ export function useCellSelection<TItem extends RowData>({
       doCopy,
       doPaste,
       doClear,
+      getSelection,
       table,
     ],
   );
@@ -595,7 +593,7 @@ export function useCellSelection<TItem extends RowData>({
   }, [enabled, onKeyDown]);
 
   return {
-    selection: enabled ? selection : null,
+    getSelection,
     containerProps,
   };
 }

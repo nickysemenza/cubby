@@ -187,6 +187,18 @@ test.describe("Project tracker", () => {
     await expect(page.getByText(name).first()).toBeVisible({
       timeout: 10000,
     });
+
+    // The Analytics tab consumes the same URL filter and lazily loads the
+    // server-backed analyzer. This is deliberately a smoke assertion rather
+    // than a chart snapshot: the complete aggregate table is the actionable
+    // contract, and it must remain outside the eager Ledger chunk.
+    await page.goto(`/expenses?view=analytics&q=${encodeURIComponent(name)}`);
+    await expect(
+      page.getByRole("heading", { level: 2, name: "Analyze" }),
+    ).toBeVisible({ timeout: 15000 });
+    await expect(
+      page.getByRole("table", { name: "Expense analysis" }),
+    ).toBeVisible({ timeout: 15000 });
   });
 
   test("projects: quick-add creates a project and it appears on the dashboard", async ({

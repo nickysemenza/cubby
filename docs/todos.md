@@ -802,6 +802,16 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 
 ## Architecture / engineering
 
+- [ ] **Expand server-backed table intelligence beyond Expenses.** The Expense
+  analyzer is the proving ground: extend exact facet counts (and only then useful
+  range summaries) to Products, Purchases, Tasks, Inventory, and Projects; add
+  domain analyzers only where the server can return a complete aggregate with an
+  honest reconciliation tail; add equal-length prior-period comparison only to
+  analytics with explicit bounded dates; and opt other eligible desktop tables
+  into typed numeric cell-selection statistics. A partially loaded or
+  server-paginated page is never an analytical population and must not be grouped
+  or counted as though it were complete.
+
 - [ ] **Converge every remaining drag surface on dnd-kit.** React Table layout
   now establishes the shared pointer, keyboard, and touch foundation. Migrate
   the Task Board and Location Arrange tree/board/dock first, then extract shared

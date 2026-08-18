@@ -9,6 +9,7 @@ import {
   type CubbyColumnDef,
   type CubbyRow,
   type CubbyTable,
+  cubbyStructuralTableStateSelector,
   useCubbyTable,
 } from "./table-features";
 import type { CubbyTableLayoutController } from "./table-layout";
@@ -204,5 +205,8 @@ export function useTableConfig<TData extends RowData>({
     ],
   );
 
-  return useCubbyTable(tableOptions) as CubbyTable<TData>;
+  return useCubbyTable(
+    tableOptions,
+    cubbyStructuralTableStateSelector,
+  ) as unknown as CubbyTable<TData>;
 }
