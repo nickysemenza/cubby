@@ -76,7 +76,7 @@ export function ComponentDemosSection() {
 
       <EditableComponentDemo
         title="LocationTree"
-        description="Hierarchical tree view of storage locations using react-arborist."
+        description="Searchable household index with location hierarchy, inventory rollups, and direct record navigation."
         schema={z.array(infLocation)}
         defaultData={sampleLocations}
       >

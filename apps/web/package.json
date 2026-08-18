@@ -140,7 +140,6 @@
     "pretty-bytes": "^7.1.1",
     "qrcode": "^1.5.4",
     "react": "^19.2.7",
-    "react-arborist": "^3.13.2",
     "react-day-picker": "^10.0.1",
     "react-dom": "^19.2.7",
     "react-dropzone": "^18.3.0",

@@ -1,0 +1,212 @@
+import {
+  unsafeInventoryShortcode,
+  unsafeProductShortcode,
+} from "@cubby/schemas/identifiers";
+import type { InfLocation } from "@cubby/schemas/location";
+import { fireEvent, render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { describe, expect, it, vi } from "vitest";
+import { sampleLocations } from "~/app/docs/_data/samples";
+
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    to,
+    params,
+    children,
+    className,
+    title,
+  }: {
+    to: string;
+    params?: { shortcode?: string };
+    children?: ReactNode;
+    className?: string;
+    title?: string;
+  }) => (
+    <a
+      href={to.replace("$shortcode", params?.shortcode ?? "")}
+      className={className}
+      title={title}
+    >
+      {children}
+    </a>
+  ),
+}));
+
+import { LocationTree } from "./location-tree-view";
+
+const FLOUR_ID = unsafeInventoryShortcode("INV-FLOUR");
+const RICE_ID = unsafeInventoryShortcode("INV-RICE");
+
+function treeData(): InfLocation[] {
+  const kitchen = sampleLocations.find(
+    (location) => location.name === "Kitchen",
+  );
+  const garage = sampleLocations.find((location) => location.name === "Garage");
+  const pantry = kitchen?.children?.find(
+    (location) => location.name === "Pantry",
+  );
+  if (!kitchen || !garage || !pantry) {
+    throw new Error("location demo fixture is incomplete");
+  }
+
+  return [
+    {
+      ...kitchen,
+      directItemCount: 1,
+      totalItemCount: 2,
+      inventoryItems: [
+        {
+          id: RICE_ID,
+          amount: { value: 2, unit: "lb" },
+          productName: "Jasmine Rice",
+          productId: unsafeProductShortcode("PRD-RICE"),
+        },
+      ],
+      children: [
+        {
+          ...pantry,
+          directItemCount: 1,
+          totalItemCount: 1,
+          inventoryItems: [
+            {
+              id: FLOUR_ID,
+              amount: { value: 5, unit: "lb" },
+              productName: "Bread Flour",
+              productId: unsafeProductShortcode("PRD-FLOUR"),
+            },
+          ],
+        },
+        ...(kitchen.children ?? []).filter(
+          (location) => location.name !== "Pantry",
+        ),
+      ],
+    },
+    garage,
+  ];
+}
+
+describe("LocationTree", () => {
+  it("renders an expanded navigable ledger with labeled rollups", () => {
+    const data = treeData();
+    render(<LocationTree data={data} />);
+
+    expect(screen.getByRole("link", { name: "Kitchen" })).toHaveAttribute(
+      "href",
+      `/locations/${data[0]?.id}`,
+    );
+    expect(screen.getByRole("link", { name: "Top Shelf" })).toBeInTheDocument();
+    expect(screen.getAllByLabelText("1 item here")).toHaveLength(2);
+    expect(screen.getByLabelText("2 items total")).toHaveTextContent("2 total");
+
+    const kitchenToggle = screen.getByRole("button", {
+      name: "Collapse Kitchen",
+    });
+    const controlledId = kitchenToggle.getAttribute("aria-controls");
+    expect(kitchenToggle).toHaveAttribute("aria-expanded", "true");
+    expect(controlledId).not.toBeNull();
+    expect(document.getElementById(controlledId ?? "")).toBeInTheDocument();
+  });
+
+  it("supports branch and global disclosure controls", () => {
+    render(<LocationTree data={treeData()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Pantry" }));
+    expect(
+      screen.queryByRole("link", { name: "Top Shelf" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Expand Pantry" }),
+    ).toHaveAttribute("aria-expanded", "false");
+    const pantryContents = screen
+      .getByRole("button", { name: "Expand Pantry" })
+      .getAttribute("aria-controls");
+    expect(document.getElementById(pantryContents ?? "")).not.toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse all" }));
+    expect(
+      screen.queryByRole("link", { name: "Pantry" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+    expect(screen.getByRole("link", { name: "Top Shelf" })).toBeInTheDocument();
+  });
+
+  it("keeps inventory opt-in without resetting disclosure state", () => {
+    render(<LocationTree data={treeData()} />);
+
+    expect(
+      screen.queryByRole("link", { name: "Bread Flour" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Pantry" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Show inventory" }));
+
+    expect(screen.getByRole("link", { name: "Jasmine Rice" })).toHaveAttribute(
+      "href",
+      `/inventory/${RICE_ID}`,
+    );
+    expect(
+      screen.queryByRole("link", { name: "Bread Flour" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Expand Pantry" }),
+    ).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand Pantry" }));
+    expect(screen.getByRole("link", { name: "Bread Flour" })).toHaveAttribute(
+      "href",
+      `/inventory/${FLOUR_ID}`,
+    );
+    expect(screen.getByText("5 lb")).toBeInTheDocument();
+  });
+
+  it("searches case-insensitively, retains ancestors, and restores expansion", () => {
+    render(<LocationTree data={treeData()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Pantry" }));
+    const search = screen.getByRole("searchbox", { name: "Find a location" });
+    fireEvent.change(search, { target: { value: "TOP SHELF" } });
+
+    expect(screen.getByRole("link", { name: "Kitchen" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Pantry" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Top Shelf" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Garage" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Pantry is expanded for search" }),
+    ).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear tree search" }));
+    expect(
+      screen.queryByRole("link", { name: "Top Shelf" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Expand Pantry" }),
+    ).toBeInTheDocument();
+  });
+
+  it("searches visible inventory and explains empty results", () => {
+    render(<LocationTree data={treeData()} />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Show inventory" }));
+    const search = screen.getByRole("searchbox", {
+      name: "Find a location or inventory item",
+    });
+    fireEvent.change(search, { target: { value: "bread flour" } });
+
+    expect(screen.getByRole("link", { name: "Kitchen" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Pantry" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Bread Flour" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Garage" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: "nowhere" } });
+    expect(screen.getByText("No matching locations")).toBeInTheDocument();
+    expect(
+      screen.getByText(/clear the search to see the whole house/i),
+    ).toBeInTheDocument();
+  });
+});
