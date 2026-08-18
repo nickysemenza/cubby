@@ -177,6 +177,7 @@ export const purchaseFilterFields = {
   expenseStatus: oneOrMany(purchaseExpenseStatus).optional(),
   /** Shared soft verdict over statedTotal versus SUM(expense.cost). */
   reconciliation: oneOrMany(purchaseReconciliation).optional(),
+  financialReconciliation: z.enum(["mismatch"]).optional(),
   /** `"none"` matches purchases with no live invoice/receipt document. */
   documentPresenceFilter: presenceFilter,
   dataStatus: dataQualityStatus.optional(),
@@ -207,6 +208,7 @@ export const purchaseSortableFields = [
   "vendor",
   "expenseCount",
   "expenseTotal",
+  "reconciliationGap",
   "documentCount",
   "createdAt",
   "updatedAt",

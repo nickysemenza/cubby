@@ -6,7 +6,7 @@ import type {
   RowData,
 } from "@tanstack/react-table";
 import { type Atom, batch, createAtom } from "@tanstack/store";
-import { type CSSProperties, useEffect, useMemo } from "react";
+import { type CSSProperties, useEffect, useMemo, useRef } from "react";
 import type { CubbyColumnDef } from "./table-features";
 
 const MIN_COLUMN_WIDTH = 48;
@@ -469,6 +469,30 @@ export function useCubbyTableLayout<TData extends RowData>({
     }),
     [store, defaults, normalizedColumns, sizeBounds],
   );
+}
+
+/**
+ * Reveals contextual columns once when a table enters a new worklist. The
+ * reveal runs after persisted layout hydration, so a previously hidden column
+ * is visible on arrival; subsequent user toggles remain authoritative until a
+ * different context is activated.
+ */
+export function useRevealTableColumnsOnce<TData extends RowData>(
+  layout: CubbyTableLayoutController<TData>,
+  reveal?: { key: string; visibility: ColumnVisibilityState },
+) {
+  const revealedKeyRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!reveal) {
+      revealedKeyRef.current = undefined;
+      return;
+    }
+    if (revealedKeyRef.current === reveal.key) return;
+    revealedKeyRef.current = reveal.key;
+    const current = layout.atoms.columnVisibility.get();
+    layout.atoms.columnVisibility.set({ ...current, ...reveal.visibility });
+  }, [layout, reveal]);
 }
 
 /** Test-only reset for the module-global client store. */

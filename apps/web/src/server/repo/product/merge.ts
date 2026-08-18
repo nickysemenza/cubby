@@ -116,6 +116,7 @@ import {
   location,
   product,
   productComponent,
+  productConversionCoverage,
   productExternalId,
   productImage,
   productUnitMappings,
@@ -148,6 +149,7 @@ import {
   resolveMergeTargets,
 } from "~/server/repo/merge";
 import { cascadeRemoval } from "~/server/repo/removal";
+import { markProductConversionCoverageInputStale } from "./conversion-coverage";
 
 export const PRODUCT_MERGE_EDGE_POLICY = {
   "ProductExternalId.productId": {
@@ -221,6 +223,12 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     effect: "move-dedupe",
     description:
       "Kits that listed a merged product as a part now list the survivor; where one kit listed both, the two quantities are summed into the survivor's row and the absorbed one is soft-deleted.",
+  },
+  "ProductConversionCoverage.productId": {
+    code: "discard-rebuildable-projection",
+    effect: "hard-delete",
+    description:
+      "Absorbed products' conversion projections are discarded; the survivor is marked stale and rebuilt from the merged graph.",
   },
 } as const satisfies IncomingEdgePolicy<"product", OperationDisposition>;
 
@@ -971,6 +979,10 @@ export const mergeProducts = async (
       })
       .where(eq(product.id, keepId));
 
+    await tx
+      .delete(productConversionCoverage)
+      .where(inArray(productConversionCoverage.productId, loserIds));
+
     await finalizeMerge(tx, {
       entity: "product",
       table: product,
@@ -1002,6 +1014,11 @@ export const mergeProducts = async (
     // this a re-pointed row keeps a valuation derived from a product that no
     // longer exists, and the location rollup silently reports the old number.
     await syncInventoryValuationsForProduct(tx, keepId);
+    // Moved mappings, adopted food identity and kit composition all change the
+    // survivor's effective conversion graph. Absorbed rows are no longer live;
+    // the survivor must wait for the shared rebuild before it can match a
+    // persisted conversion filter.
+    await markProductConversionCoverageInputStale(tx, [keepId]);
 
     return summary;
   });
@@ -1309,6 +1326,19 @@ export const previewMergeProducts = async (
         location,
         location.productId,
         losers,
+      ),
+    }),
+    impact({
+      disposition:
+        PRODUCT_MERGE_EDGE_POLICY["ProductConversionCoverage.productId"],
+      edgeKey: "ProductConversionCoverage.productId",
+      label: "conversion coverage projections discarded",
+      byTargetId: await countByTarget(
+        dbClient,
+        productConversionCoverage,
+        productConversionCoverage.productId,
+        losers,
+        { includeDeleted: true },
       ),
     }),
   ]);

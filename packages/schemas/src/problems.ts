@@ -818,6 +818,9 @@ export const invalidFinancialJsonSchema = z.discriminatedUnion("entity", [
 // parse-sweeps (stale parses, unused aliases) are NOT here — they re-parse every
 // recipe line and blew the CPU/memory budget on the request path, so they live as
 // manual dry-run/fix-all actions in Settings → Maintenance instead.
+export const sectionTotalsSchema = z.record(z.string(), z.number().int());
+export type SectionTotals = z.infer<typeof sectionTotalsSchema>;
+
 const problemsFastShape = {
   duplicateInventory: z.array(duplicateUniqueProductSchema),
   duplicateProductIdentities: z.array(duplicateProductIdentitySchema),
@@ -861,7 +864,10 @@ const problemsFastShape = {
 };
 
 // DB-only detectors — cheap, no WASM/network.
-export const problemsFastSchema = z.object(problemsFastShape);
+export const problemsFastSchema = z.object({
+  ...problemsFastShape,
+  sectionTotals: sectionTotalsSchema,
+});
 
 // USDA-coverage detectors — share one product scan + USDA enrichment.
 const problemsCoverageShape = {
@@ -869,14 +875,47 @@ const problemsCoverageShape = {
   productsWithIslandedMappings: z.array(productWithIslandedMappingsSchema),
 };
 
-export const problemsCoverageSchema = z.object(problemsCoverageShape);
+const conversionCoverageFreshnessSchema = z.object({
+  state: z.enum(["fresh", "stale", "unavailable"]),
+  computedAt: z.date().nullable(),
+  expectedEngineVersion: z.string(),
+  readyCount: z.number().int().nonnegative(),
+  staleCount: z.number().int().nonnegative(),
+  unavailableCount: z.number().int().nonnegative(),
+  missingCount: z.number().int().nonnegative(),
+});
+
+export const problemsCoverageSchema = z.object({
+  ...problemsCoverageShape,
+  sectionTotals: sectionTotalsSchema,
+  /** Exact list filters read this persisted projection, not the card scan. */
+  freshness: conversionCoverageFreshnessSchema,
+});
 
 // UPC-lookup network detector.
 const problemsUpcShape = {
   productsWithBetterUpcData: z.array(productWithBetterUpcDataSchema),
 };
 
-export const problemsUpcSchema = z.object(problemsUpcShape);
+/**
+ * The UPC provider is advisory. Its status is part of the wire contract so an
+ * outage cannot masquerade as a healthy empty proposal list.
+ */
+export const upcEnrichmentFreshnessSchema = z.object({
+  status: z.enum(["fresh", "stale", "unavailable"]),
+  checkedAt: z.date(),
+  oldestFetchedAt: z.date().nullable(),
+  unavailableCount: z.number().int().nonnegative(),
+});
+export type UpcEnrichmentFreshness = z.infer<
+  typeof upcEnrichmentFreshnessSchema
+>;
+
+export const problemsUpcSchema = z.object({
+  ...problemsUpcShape,
+  sectionTotals: sectionTotalsSchema,
+  freshness: upcEnrichmentFreshnessSchema,
+});
 
 // Household-tracker detectors (projects / tasks / expenses). Every row is a
 // `ProjectAttentionItem` — the exact shape `computeAttentionItems` already
@@ -901,9 +940,6 @@ export const problemsUpcSchema = z.object(problemsUpcShape);
  * `EMPTY_PROBLEM_ARRAYS`, and `countProblems` are all mechanically derived from
  * its keys and would break on a non-array member.
  */
-export const sectionTotalsSchema = z.record(z.string(), z.number().int());
-export type SectionTotals = z.infer<typeof sectionTotalsSchema>;
-
 /**
  * Sections backed by a saved view rather than a bespoke detector.
  *
@@ -955,7 +991,10 @@ const problemsTrackerShape = {
   projectsWithDateDrift: z.array(projectAttentionItemSchema),
 };
 
-export const problemsTrackerSchema = z.object(problemsTrackerShape);
+export const problemsTrackerSchema = z.object({
+  ...problemsTrackerShape,
+  sectionTotals: sectionTotalsSchema,
+});
 export type ProblemsTracker = z.infer<typeof problemsTrackerSchema>;
 
 /**
@@ -987,6 +1026,10 @@ const allProblemArrayFields = {
 export const allProblemsSchema = z.object({
   ...allProblemArrayFields,
   sectionTotals: sectionTotalsSchema.default({}),
+  // Grouped clients can be mid-load, so aggregate callers may omit this until
+  // the UPC lane resolves. A resolved UPC lane always supplies it.
+  upcFreshness: upcEnrichmentFreshnessSchema.optional(),
+  conversionCoverageFreshness: conversionCoverageFreshnessSchema.optional(),
   totalProblems: z.number(),
 });
 
@@ -1281,7 +1324,17 @@ export type ProblemsCount = z.infer<typeof problemsCountSchema>;
 export const countProblems = (all: AllProblems): ProblemsCount => {
   // `sectionTotals` must come OUT of the rest — it is not a detector section,
   // and leaving it in would put a non-array into `byType`.
-  const { totalProblems, sectionTotals, ...arrays } = all;
+  const {
+    totalProblems,
+    sectionTotals,
+    upcFreshness: _upcFreshness,
+    conversionCoverageFreshness: _conversionCoverageFreshness,
+  } = all;
+  // Freshness metadata sits beside detector arrays in the aggregate contract.
+  // Keep the mechanically-derived count roster arrays-only as promised.
+  const arrays = Object.fromEntries(
+    Object.entries(all).filter(([, value]) => Array.isArray(value)),
+  ) as ProblemArrays;
   const byType = Object.fromEntries(
     Object.entries(arrays).map(([key, items]) => [
       key,
@@ -1311,17 +1364,38 @@ export const assembleAllProblems = (groups: {
    *  Required, so a caller can't silently drop a converted section. */
   views: ProblemsViewsOut;
 }): AllProblems => {
-  const { sectionTotals, ...viewSections } = groups.views;
+  const { sectionTotals: fastTotals, ...fastSections } = groups.fast;
+  const {
+    sectionTotals: coverageTotals,
+    freshness: conversionCoverageFreshness,
+    ...coverageSections
+  } = groups.coverage;
+  const {
+    sectionTotals: upcTotals,
+    freshness: _upcFreshness,
+    ...upcSections
+  } = groups.upc;
+  const { sectionTotals: trackerTotals, ...trackerSections } = groups.tracker;
+  const { sectionTotals: viewTotals, ...viewSections } = groups.views;
+  const sectionTotals = {
+    ...fastTotals,
+    ...coverageTotals,
+    ...upcTotals,
+    ...trackerTotals,
+    ...viewTotals,
+  };
   const sections = {
-    ...groups.fast,
-    ...groups.coverage,
-    ...groups.upc,
-    ...groups.tracker,
+    ...fastSections,
+    ...coverageSections,
+    ...upcSections,
+    ...trackerSections,
     ...viewSections,
   };
   return {
     ...sections,
     sectionTotals,
+    upcFreshness: groups.upc.freshness,
+    conversionCoverageFreshness,
     // Counts the true population of a sampled section, not its page.
     totalProblems: sumProblemSections(sections, "defect", sectionTotals),
   };

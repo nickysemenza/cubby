@@ -51,6 +51,8 @@ import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { EntityIcon, entities, entityDetailLink } from "~/entities/entities";
+import type { ProblemQuery } from "~/entities/problem-query";
+import { problemQuery } from "~/entities/problem-registry";
 import { useTRPC } from "~/integrations/trpc/react";
 import { productRecipeMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
@@ -61,6 +63,7 @@ import {
   DeleteAllUnusedButton,
   UnusedIngredientDeleteFix,
 } from "./ingredient-cleanup-fixes";
+import { ProblemAssembly, problemListLocation } from "./problem-assembly";
 import { BackfillButton } from "./problem-backfill-action";
 import {
   type IconProp,
@@ -157,6 +160,8 @@ type ProblemSectionEntry<K extends CoverageProblemKey = CoverageProblemKey> = {
   ) => ReactNode;
   /** Present ⇒ coverage, not a defect; absent ⇒ the main defect list. */
   coverage?: ProblemSectionDeclaredCoverage<K>;
+  /** Canonical query branches shown in this section's assembly. */
+  problemKeys?: readonly ProblemKey[];
 };
 
 /**
@@ -176,13 +181,16 @@ function section<T, K extends CoverageProblemKey = never>(config: {
    * count and the card's meter describe the backlog instead of the page.
    */
   totalKey?: ProblemKey;
-  title: string;
-  description: string;
-  emptyMessage: string;
+  /** Override only for a section that combines several Problem definitions. */
+  title?: string;
+  description?: string;
+  emptyMessage?: string;
   icon?: LucideIcon;
   entity?: Entity;
   renderItem: (item: T) => RenderedProblemItem;
   groupBy?: (items: T[]) => Record<string, T[]>;
+  /** Registry keys represented by this section; multiple keys are OR branches. */
+  problemKeys?: readonly ProblemKey[];
   /**
    * A static "fix all" node, or one built from the section's contents.
    *
@@ -196,6 +204,19 @@ function section<T, K extends CoverageProblemKey = never>(config: {
   const iconProp: IconProp = config.entity
     ? { entity: config.entity }
     : { icon: config.icon as LucideIcon };
+  const canonicalPresentation =
+    config.problemKeys?.length === 1
+      ? problemQuery(config.problemKeys[0] as ProblemKey)
+      : undefined;
+  const title = config.title ?? canonicalPresentation?.title;
+  const description = config.description ?? canonicalPresentation?.description;
+  const emptyMessage =
+    config.emptyMessage ?? canonicalPresentation?.emptyMessage;
+  if (!title || !description || !emptyMessage) {
+    throw new Error(
+      `Problem section "${config.id}" needs one canonical Problem key or explicit presentation copy`,
+    );
+  }
   return {
     id: config.id,
     label: config.label,
@@ -204,6 +225,7 @@ function section<T, K extends CoverageProblemKey = never>(config: {
     // meter (node reads `config` directly) while the section itself sat in the
     // defect list — a mismatch the meter hides rather than reveals.
     coverage: config.coverage,
+    problemKeys: config.problemKeys,
     count: (problems) =>
       sectionSize(
         config.totalKey,
@@ -216,13 +238,18 @@ function section<T, K extends CoverageProblemKey = never>(config: {
       return (
         <ProblemSection
           {...iconProp}
-          title={config.title}
-          description={config.description}
-          emptyMessage={config.emptyMessage}
+          title={title}
+          description={description}
+          emptyMessage={emptyMessage}
           items={items}
           count={count}
           renderItem={config.renderItem}
           groupBy={config.groupBy}
+          assembly={problemAssembly(
+            config.problemKeys,
+            problems,
+            problems.conversionCoverageFreshness,
+          )}
           coverage={resolveCoverage(config.coverage, totals)}
           headerAction={
             typeof config.headerAction === "function"
@@ -246,7 +273,9 @@ function customSection<T, K extends CoverageProblemKey = never>(def: {
     items: T[],
     coverage: ProblemSectionCoverage | undefined,
     count: number,
+    assembly: ReactNode | undefined,
   ) => ReactNode;
+  problemKeys?: readonly ProblemKey[];
   coverage?: ProblemSectionDeclaredCoverage<K>;
 }): ProblemSectionEntry<K> {
   const sizeOf = (problems: AllProblems, items: readonly unknown[]) =>
@@ -255,6 +284,7 @@ function customSection<T, K extends CoverageProblemKey = never>(def: {
     id: def.id,
     label: def.label,
     coverage: def.coverage,
+    problemKeys: def.problemKeys,
     count: (problems) => sizeOf(problems, def.select(problems)),
     node: (problems, totals) => {
       const items = [...def.select(problems)];
@@ -262,9 +292,45 @@ function customSection<T, K extends CoverageProblemKey = never>(def: {
         items,
         resolveCoverage(def.coverage, totals),
         sizeOf(problems, items),
+        problemAssembly(
+          def.problemKeys,
+          problems,
+          problems.conversionCoverageFreshness,
+        ),
       );
     },
   };
+}
+
+/** Resolve the currently migrated registry entries without making UI own SQL. */
+function problemAssembly(
+  keys: readonly ProblemKey[] | undefined,
+  problems: AllProblems,
+  projectionFreshness?: AllProblems["conversionCoverageFreshness"],
+): ReactNode | undefined {
+  const queries = (keys ?? [])
+    .map(problemQuery)
+    .filter((query): query is ProblemQuery => query != null);
+  if (!queries.length) return undefined;
+  const listLocations = queries.flatMap((query) => {
+    const location = problemListLocation(query);
+    return location
+      ? [
+          {
+            query,
+            location,
+            count: problems.sectionTotals[query.key] ?? 0,
+          },
+        ]
+      : [];
+  });
+  return (
+    <ProblemAssembly
+      queries={queries}
+      listLocations={listLocations}
+      projectionFreshness={projectionFreshness}
+    />
+  );
 }
 
 /**
@@ -780,12 +846,8 @@ const DECLARED_SECTIONS = [
     id: "duplicates",
     label: "Duplicates",
     select: (p) => p.duplicateInventory,
+    problemKeys: ["duplicateInventory"],
     entity: "product",
-    title: "Duplicate Unique Products",
-    description:
-      "Products marked as unique (expectedQuantity=1) but found in multiple locations. These should be consolidated or have their expectedQuantity updated.",
-    emptyMessage:
-      "No duplicate unique products found. All products with expectedQuantity=1 are in single locations.",
     renderItem: (product) => ({
       title: product.name,
       subtitle: byManufacturer(product.manufacturer),
@@ -812,11 +874,8 @@ const DECLARED_SECTIONS = [
     id: "duplicate-products",
     label: "Duplicate products",
     select: (p) => p.duplicateProductIdentities,
+    problemKeys: ["duplicateProductIdentities"],
     entity: "product",
-    title: "One SKU, Two Product Rows",
-    description:
-      "Products sharing a maker part number whose identifiers came from different retailers — almost always the same item imported twice. Spend, stock, and identifiers are split across both rows until they are merged. Clusters where a distinct UPC or a distinct retailer SKU proves the rows are different variants are not listed here.",
-    emptyMessage: "No product rows share a maker part number.",
     renderItem: (dupe) => ({
       key: `${dupe.manufacturer}/${dupe.model}`,
       title: `${dupe.manufacturer} ${dupe.model}`,
@@ -841,12 +900,8 @@ const DECLARED_SECTIONS = [
     id: "orphaned",
     label: "Orphaned",
     select: (p) => p.orphanedProducts,
+    problemKeys: ["orphanedProducts"],
     entity: "product",
-    title: "Orphaned Products",
-    description:
-      "Products with no inventory, no expense history, and not linked to an ingredient. These may be unused and can potentially be deleted.",
-    emptyMessage:
-      "No orphaned products found. Every product is stocked, purchased, or linked to an ingredient.",
     renderItem: (product) => ({
       title: product.name,
       subtitle: byManufacturer(product.manufacturer),
@@ -868,12 +923,9 @@ const DECLARED_SECTIONS = [
     id: "missing-price",
     label: "Unpriced",
     select: (p) => p.productsMissingPrice,
+    problemKeys: ["productsMissingPrice"],
     totalKey: "productsMissingPrice",
     entity: "product",
-    title: "Stocked Without a Price",
-    description:
-      "These products are on a shelf but have no price, so their inventory values at nothing and the location totals under-report. Set a price to bring them into the valuation.",
-    emptyMessage: "No stocked products are missing a price.",
     renderItem: (product) => ({
       title: product.name,
       subtitle: unpricedSubtitle(product),
@@ -885,11 +937,8 @@ const DECLARED_SECTIONS = [
     id: "sold-but-still-stocked",
     label: "Sold but stocked",
     select: (p) => p.soldButStillStocked,
+    problemKeys: ["soldButStillStocked"],
     entity: "product",
-    title: "Sold But Still Stocked",
-    description:
-      "These products were sold off — the ledger has the disposal — but they are still on a shelf, so the location totals count value you no longer own. Inventory never decrements on its own, so clear the entry once you have confirmed the item is gone.",
-    emptyMessage: "No sold products are still stocked.",
     renderItem: (product) => ({
       title: product.name,
       subtitle: soldButStockedSubtitle(product),
@@ -901,11 +950,8 @@ const DECLARED_SECTIONS = [
     id: "unlinked-exit-expenses",
     label: "Sold without a product",
     select: (p) => p.unlinkedExitExpenses,
+    problemKeys: ["unlinkedExitExpenses"],
     entity: "expense",
-    title: "Sold, But Nothing Says What",
-    description:
-      "These are disposal lines with no product linked, so the ledger knows money came in but not what left. The section above can only see a sale once it is linked, which is why an unlinked one is invisible there — and marketplace payouts arrive unlinked by default. Link each row to the product that was actually sold; if the sale was not of an inventoried product, record an exception.",
-    emptyMessage: "Every recorded disposal names its product.",
     renderItem: (row) => ({
       title: row.name,
       subtitle: unlinkedExitSubtitle(row),
@@ -916,11 +962,8 @@ const DECLARED_SECTIONS = [
     id: "purchaseless-exit-expenses",
     label: "Credit with no order",
     select: (p) => p.purchaselessExitExpenses,
+    problemKeys: ["purchaselessExitExpenses"],
     entity: "expense",
-    title: "Money Back, No Order Behind It",
-    description:
-      "Negative lines with no vendor order at all — the hand-entered end of the ledger. The section above can only see a credit that sits on an order, so these are invisible there. About half are sales of something that was never inventoried; the rest are money that never bought anything, like a family contribution or a neighbour's share of a shared cost. Both are legitimate, which is why this list is advisory and never counted: link the ones that were sales, and leave the rest.",
-    emptyMessage: "Every credit is attached to an order.",
     // No meter: half these rows are correct as they stand, so there is no
     // denominator this is a fraction of — the same reason `unvalued-buckets`
     // declares coverage without one.
@@ -935,12 +978,9 @@ const DECLARED_SECTIONS = [
     id: "negative-expected-quantity",
     label: "Negative expected",
     select: (p) => p.negativeExpectedQuantity,
+    problemKeys: ["negativeExpectedQuantity"],
     totalKey: "negativeExpectedQuantity",
     entity: "product",
-    title: "Sold More Than Was Bought",
-    description:
-      "The ledger says more units of these products left than ever arrived, which cannot be true. Usually an acquisition Expense is missing, or one is there but its quantity was never recorded. Where lines carry no quantity, filling those in is the fix; where they all do, an exit is probably booked against the wrong product.",
-    emptyMessage: "Every product's units balance.",
     renderItem: (row) => ({
       title: row.name,
       subtitle: negativeExpectedSubtitle(row),
@@ -951,11 +991,8 @@ const DECLARED_SECTIONS = [
     id: "tools-used-outside-ownership",
     label: "Used before owned",
     select: (p) => p.toolsUsedOutsideOwnership,
+    problemKeys: ["toolsUsedOutsideOwnership"],
     entity: "product",
-    title: "Tool Used Outside Its Ownership Window",
-    description:
-      "These tools are recorded as used on a project we did not own them during — bought after it ended, or sold before it started. Suggestions and every write path now refuse these, so the list only shrinks. Detach the use, or add the acquisition Expense if the purchase is simply missing from the ledger.",
-    emptyMessage: "Every recorded tool use falls inside its ownership window.",
     renderItem: (row) => ({
       title: row.name,
       subtitle: outsideOwnershipSubtitle(row),
@@ -975,15 +1012,12 @@ const DECLARED_SECTIONS = [
     id: "unvalued-buckets",
     label: "Unvalued buckets",
     select: (p) => p.unvaluedBucketProducts,
+    problemKeys: ["unvaluedBucketProducts"],
     totalKey: "unvaluedBucketProducts",
     // Coverage, but with no meter: a misc bucket isn't a fraction of any
     // population, so there's nothing honest to put in a denominator.
     coverage: { keys: ["unvaluedBucketProducts"] },
     entity: "product",
-    title: "Unvalued Bucket Products",
-    description:
-      "Misc buckets holding inventory with no price. Unlike the section above these are expected to be unpriced — a bucket is a heterogeneous pile, not a unit. Give one a lump-sum price only if you want its contents counted in the valuation.",
-    emptyMessage: "Every misc bucket carries a price.",
     renderItem: (product) => ({
       title: getMiscDisplayName(product.name),
       subtitle: unpricedSubtitle(product),
@@ -1003,6 +1037,11 @@ const DECLARED_SECTIONS = [
         p.ingredientsWithPartialCoverage,
         p.productsWithIslandedMappings,
       ),
+    problemKeys: [
+      "productsWithoutMappings",
+      "ingredientsWithPartialCoverage",
+      "productsWithIslandedMappings",
+    ],
     icon: Network,
     title: "Unit coverage",
     description:
@@ -1015,6 +1054,7 @@ const DECLARED_SECTIONS = [
     id: "no-product-ingredients",
     label: "No product",
     select: (p) => p.ingredientsWithoutProduct,
+    problemKeys: ["ingredientsWithoutProduct"],
     totalKey: "ingredientsWithoutProduct",
     coverage: {
       keys: ["ingredientsWithoutProduct"],
@@ -1024,10 +1064,6 @@ const DECLARED_SECTIONS = [
       },
     },
     entity: "ingredient",
-    title: "Ingredients without a product",
-    description:
-      "Ingredients used in recipes but not linked to any product, so they can't be costed. Link a product (ideally with a USDA food) to each.",
-    emptyMessage: "Every recipe ingredient is linked to a product.",
     renderItem: (ing) => ({
       title: ing.name,
       details: [
@@ -1042,12 +1078,9 @@ const DECLARED_SECTIONS = [
     id: "unused-with-product",
     label: "Unused (has product)",
     select: (p) => p.unusedIngredientsWithProduct,
+    problemKeys: ["unusedIngredientsWithProduct"],
     totalKey: "unusedIngredientsWithProduct",
     entity: "ingredient",
-    title: "Unused ingredients linked to a product",
-    description:
-      "Ingredients used in no recipe but still linked to a product. Deleting removes the ingredient and its product(s) — skipped if a product still has inventory.",
-    emptyMessage: "No unused product-linked ingredients.",
     headerAction: (_items, count) => (
       <DeleteAllUnusedButton
         count={count}
@@ -1092,12 +1125,9 @@ const DECLARED_SECTIONS = [
     id: "unused-no-product",
     label: "Unused",
     select: (p) => p.unusedIngredientsWithoutProduct,
+    problemKeys: ["unusedIngredientsWithoutProduct"],
     totalKey: "unusedIngredientsWithoutProduct",
     entity: "ingredient",
-    title: "Unused ingredients",
-    description:
-      "Ingredients used in no recipe and linked to no product — safe to delete.",
-    emptyMessage: "No unused ingredients.",
     headerAction: (_items, count) => (
       <DeleteAllUnusedButton
         count={count}
@@ -1126,29 +1156,32 @@ const DECLARED_SECTIONS = [
     id: "locations",
     label: "Locations",
     select: (p) => p.emptyLocations,
+    problemKeys: ["emptyLocations"],
     totalKey: "emptyLocations",
     coverage: {
       keys: ["emptyLocations"],
       meter: { total: (t) => t.emptyLocations, doneLabel: "itemized" },
     },
-    render: (items, coverage, count) => (
-      <EmptyLocationsList locations={items} coverage={coverage} count={count} />
+    render: (items, coverage, count, assembly) => (
+      <EmptyLocationsList
+        locations={items}
+        coverage={coverage}
+        count={count}
+        assembly={assembly}
+      />
     ),
   }),
   section({
     id: "stale-recounts",
     label: "Stale recounts",
     select: (p) => p.staleLocations,
+    problemKeys: ["staleLocations"],
     totalKey: "staleLocations",
     coverage: {
       keys: ["staleLocations"],
       meter: { total: (t) => t.staleLocations, doneLabel: "recounted" },
     },
     entity: "location",
-    title: "Locations overdue for a recount",
-    description:
-      "Stocked locations that have never been recounted, or not in over 60 days. Inventory never auto-decrements — a deliberate recount is the only thing that makes these numbers true again.",
-    emptyMessage: "Every stocked location has been recounted recently.",
     renderItem: (loc) => ({
       title: loc.name,
       badges: [
@@ -1176,6 +1209,7 @@ const DECLARED_SECTIONS = [
     id: "never-verified",
     label: "Never verified",
     select: (p) => p.neverVerifiedInventory,
+    problemKeys: ["neverVerifiedInventory"],
     // Rows are page one of the inventory list; the meter must not read them.
     totalKey: "neverVerifiedInventory",
     coverage: {
@@ -1183,10 +1217,6 @@ const DECLARED_SECTIONS = [
       meter: { total: (t) => t.neverVerifiedInventory, doneLabel: "verified" },
     },
     entity: "inventory",
-    title: "Inventory never confirmed by a recount",
-    description:
-      "Entries whose count has never been checked against the shelf (oldest first). Recount the location they live in to clear them. `verifiedAt` only started being stamped when audit sessions landed, so most of the inventory starts here — this is a backlog to work down, not a list of mistakes.",
-    emptyMessage: "Every inventory entry has been verified at least once.",
     renderItem: (item) => ({
       title: item.product.name,
       subtitle: `${item.amount.value} ${item.amount.unit}`,
@@ -1216,11 +1246,8 @@ const DECLARED_SECTIONS = [
     id: "manufacturer-spellings",
     label: "Manufacturer spellings",
     select: (p) => p.manufacturerSpellingVariants,
+    problemKeys: ["manufacturerSpellingVariants"],
     entity: "product",
-    title: "One manufacturer, two spellings",
-    description:
-      "The same brand entered two ways splits it across grouping, filters and the manufacturer picklist. Rename the odd one out to the spelling already in use.",
-    emptyMessage: "Every manufacturer is spelled one way.",
     renderItem: (v) => ({
       key: v.value,
       title: v.value,
@@ -1234,11 +1261,8 @@ const DECLARED_SECTIONS = [
     id: "duplicate-vendors",
     label: "Duplicate vendors",
     select: (p) => p.duplicateVendors,
+    problemKeys: ["duplicateVendors"],
     entity: "vendor",
-    title: "One vendor, two roster rows",
-    description:
-      "Vendor names are matched exactly when a purchase is imported, so the same vendor entered two ways becomes two roster rows — and that vendor's spend splits across both. Merging folds one into the other, purchases and all. Only spellings that normalize to the same name are compared, so a genuine abbreviation (B&H vs B&H Photo) is never guessed at here.",
-    emptyMessage: "Every vendor on the roster is spelled one way.",
     renderItem: (v) => ({
       // Names are unique among live vendors, so the variant spelling is a stable
       // per-card key.
@@ -1261,6 +1285,7 @@ const DECLARED_SECTIONS = [
     id: "vendor-mini-logos",
     label: "Vendor logos",
     select: (p) => p.vendorsWithoutLogos,
+    problemKeys: ["vendorsWithoutLogos"],
     coverage: {
       keys: ["vendorsWithoutLogos"],
       meter: {
@@ -1269,10 +1294,6 @@ const DECLARED_SECTIONS = [
       },
     },
     icon: Store,
-    title: "Active vendors without a mini logo",
-    description:
-      "Optional brand marks for vendors that appear in the purchase and expense ledgers. Fill or correct the vendor website, then rerun the vendor-logo seeder; vendors without a suitable logo keep their monogram.",
-    emptyMessage: "Every active vendor has a seeded mini logo.",
     renderItem: (vendor) => ({
       title: vendor.name,
       subtitle: vendor.website ?? "No website recorded",
@@ -1294,11 +1315,8 @@ const DECLARED_SECTIONS = [
     id: "unknown-parked",
     label: "Parked in Unknown",
     select: (p) => p.unknownParkedItems,
+    problemKeys: ["unknownParkedItems"],
     entity: "inventory",
-    title: "Items parked in Unknown",
-    description:
-      "Stock a capture or import dropped into the global Unknown location because it had no home yet. Move each to a real location.",
-    emptyMessage: "Nothing is parked in Unknown.",
     renderItem: (item) => ({
       title: item.product.name,
       subtitle: `${item.amount.value} ${item.amount.unit}`,
@@ -1314,11 +1332,8 @@ const DECLARED_SECTIONS = [
     id: "inventory-no-price-path",
     label: "Unvaluable units",
     select: (p) => p.inventoryWithoutPricePath,
+    problemKeys: ["inventoryWithoutPricePath"],
     entity: "inventory",
-    title: "Priced products whose stored unit can't reach a price",
-    description:
-      "The Product has a price, but this entry's unit has no conversion edge leading to it, so the entry contributes nothing to any valuation. Add the missing unit mapping on the Product (for example, 1 each = 4 roll).",
-    emptyMessage: "Every priced product's stored units can reach a price.",
     renderItem: (item) => ({
       title: item.product.name,
       subtitle: `${item.amount.value} ${item.amount.unit} in ${item.location.name}`,
@@ -1335,6 +1350,7 @@ const DECLARED_SECTIONS = [
     id: "images",
     label: "Images",
     select: (p) => p.productsWithNoImages,
+    problemKeys: ["productsWithNoImages"],
     coverage: {
       keys: ["productsWithNoImages"],
       meter: {
@@ -1343,9 +1359,6 @@ const DECLARED_SECTIONS = [
       },
     },
     icon: ImageOff,
-    title: "Missing Images",
-    description: "Products that don't have any images.",
-    emptyMessage: "All products have images.",
     headerAction: <BackfillButton {...BACKFILL.fetchUpcImages} />,
     renderItem: (product) => ({
       title: product.name,
@@ -1358,12 +1371,9 @@ const DECLARED_SECTIONS = [
     id: "ai-descriptions",
     label: "AI Descriptions",
     select: (p) => p.locationsWithoutAiDescription ?? [],
+    problemKeys: ["locationsWithoutAiDescription"],
     totalKey: "locationsWithoutAiDescription",
     icon: Sparkles,
-    title: "Missing AI Descriptions",
-    description:
-      "Locations with photos that haven't been analyzed by AI yet. Run backfill to generate descriptions for all.",
-    emptyMessage: "All locations with photos have AI descriptions.",
     headerAction: <BackfillButton {...BACKFILL.analyzeDescriptions} />,
     renderItem: (location) => ({
       title: location.name,
@@ -1382,11 +1392,8 @@ const DECLARED_SECTIONS = [
     id: "orphaned-embeddings",
     label: "Embeddings",
     select: (p) => p.orphanedEntityEmbeddings,
+    problemKeys: ["orphanedEntityEmbeddings"],
     icon: Wrench,
-    title: "Orphaned search embeddings",
-    description:
-      "Semantic search rows whose entity no longer exists. These are safe to clean up.",
-    emptyMessage: "No orphaned search embeddings.",
     renderItem: (embedding) => ({
       // The embedding row's own id is stable and unique on its own — no route
       // to derive a fallback key from (see the comment on `route` below).
@@ -1410,11 +1417,8 @@ const DECLARED_SECTIONS = [
     id: "unreferenced-images",
     label: "Files",
     select: (p) => p.unreferencedImages,
+    problemKeys: ["unreferencedImages"],
     icon: Wrench,
-    title: "Unreferenced files",
-    description:
-      "Stored files nothing points at. R2 bills for every one and no page can render them. Detaching a file used to remove only the association, leaving the file and its object behind — these are the residue. Safe to delete: there is nothing left to detach them from.",
-    emptyMessage: "No unreferenced files.",
     renderItem: (file) => ({
       key: file.id,
       title: file.filename,
@@ -1435,11 +1439,8 @@ const DECLARED_SECTIONS = [
     id: "missing-embeddings",
     label: "Unindexed",
     select: (p) => p.entitiesMissingEmbeddings,
+    problemKeys: ["entitiesMissingEmbeddings"],
     icon: Wrench,
-    title: "Missing search embeddings",
-    description:
-      "Live records semantic search can't see — no embedding under the current model. The list is a sample; the true figure is on the Fix button and in Maintenance.",
-    emptyMessage: "Everything is indexed for semantic search.",
     headerAction: <MissingEmbeddingsBackfillAction />,
     renderItem: (entity) => ({
       title: `${entity.entityType} · ${entity.entityId.slice(0, 8)}`,
@@ -1452,11 +1453,8 @@ const DECLARED_SECTIONS = [
     id: "stale-parent-recipes",
     label: "Deleted sub-recipes",
     select: (p) => p.staleParentRecipes,
+    problemKeys: ["staleParentRecipes"],
     entity: "recipe",
-    title: "Recipes referencing a deleted sub-recipe",
-    description:
-      "Live recipes whose totals still reference a sub-recipe that was deleted (a removal path that skipped staleness propagation). Open each and remove or replace the dangling sub-recipe line so its cost recomputes cleanly — recompute alone can't drop the stale reference.",
-    emptyMessage: "No recipes reference a deleted sub-recipe.",
     renderItem: (recipe) => ({
       title: recipe.name,
       route: entityDetailLink("recipe", recipe.id),
@@ -1467,12 +1465,9 @@ const DECLARED_SECTIONS = [
     id: "empty-cooked-meals",
     label: "Empty meals",
     select: (p) => p.emptyCookedMeals,
+    problemKeys: ["emptyCookedMeals"],
     totalKey: "emptyCookedMeals",
     entity: "meal",
-    title: "Cooked meals with nothing planned",
-    description:
-      "Meals on the calendar whose kind says you'll cook them, but which carry no live planned recipe — a plan you started and didn't finish. Meals kinded as eating out, takeout, or leftovers are deliberately excluded: a recipe-less record is correct for those, and they contribute nothing to the shopping list either. Two valid fixes and only you know which: plan a recipe, or re-kind the meal to what it actually was. A meal whose only recipe was since deleted counts as empty here, matching how it already renders.",
-    emptyMessage: "Every cooked meal has at least one recipe planned.",
     renderItem: (meal) => ({
       title: meal.name ?? mealDateLabel(meal),
       subtitle: meal.name ? mealDateLabel(meal) : undefined,
@@ -1484,11 +1479,8 @@ const DECLARED_SECTIONS = [
     id: "understated-cost-meals",
     label: "Understated cost",
     select: (p) => p.understatedCostMeals,
+    problemKeys: ["understatedCostMeals"],
     entity: "meal",
-    title: "Meals whose cost is understated",
-    description:
-      "These meals plan a recipe that was costed and came back with unpriced ingredients, so the meal's cost is lower than the real one and will stay that way. Not the same as a meal waiting on the costing queue — that clears itself and is counted under maintenance. Open a recipe and give its unpriced ingredients a price path (a product, a per-item price, or a purchase mapping).",
-    emptyMessage: "Every planned meal's cost accounts for all its ingredients.",
     renderItem: (meal) => ({
       title: meal.name ?? mealDateLabel(meal),
       subtitle: `${mealDateLabel(meal)} · ${meal.recipeCount} recipe${
@@ -1502,12 +1494,9 @@ const DECLARED_SECTIONS = [
     id: "recipes-without-instructions",
     label: "No instructions",
     select: (p) => p.recipesWithoutInstructions,
+    problemKeys: ["recipesWithoutInstructions"],
     totalKey: "recipesWithoutInstructions",
     entity: "recipe",
-    title: "Recipes you can't cook from",
-    description:
-      "Live recipes whose sections carry no instruction text at all — usually a half-finished entry or an import that captured only the ingredients. Book- and Notion-sourced recipes are excluded: those legitimately have none, because the instructions are in the book.",
-    emptyMessage: "Every typed-in recipe has instructions.",
     renderItem: (recipe) => ({
       title: recipe.name,
       subtitle:
@@ -1524,11 +1513,8 @@ const DECLARED_SECTIONS = [
     id: "referential-liveness",
     label: "Dangling refs",
     select: (p) => p.referentialLivenessViolations,
+    problemKeys: ["referentialLivenessViolations"],
     icon: Unlink,
-    title: "Live rows pointing at deleted records",
-    description:
-      "A removal path forgot to detach, re-point, or cascade: a live row still carries a foreign key to a soft-deleted target. Production sits at zero for this check — any row here is a regression, not a backlog. Clearing the reference and deleting the dangling row are both plausible and not interchangeable, so there's no auto-fix; each needs a judgment call.",
-    emptyMessage: "No live row points at a soft-deleted target.",
     groupBy: (items) =>
       groupBy(
         [...items].sort((a, b) =>
@@ -1561,6 +1547,9 @@ const DECLARED_SECTIONS = [
     // rule; the per-rule counts stay separate in the schema/badge.
     select: (p) =>
       TRACKER_GROUPS.flatMap((g) => p[TRACKER_PROBLEM_KEY_BY_TYPE[g.type]]),
+    problemKeys: TRACKER_GROUPS.map(
+      (group) => TRACKER_PROBLEM_KEY_BY_TYPE[group.type],
+    ),
     icon: AlertTriangle,
     title: "Projects, tasks & expenses needing attention",
     description:
@@ -1573,11 +1562,8 @@ const DECLARED_SECTIONS = [
     id: "upc-updates",
     label: "UPC Updates",
     select: (p) => p.productsWithBetterUpcData ?? [],
+    problemKeys: ["productsWithBetterUpcData"],
     icon: Download,
-    title: "Better UPC data available",
-    description:
-      "A fresh UPC lookup can fill in these missing fields. Apply to write the new value onto the product.",
-    emptyMessage: "No products have newer info available from UPC lookup.",
     renderItem: (product) => {
       const { proposed } = product;
       // Show the actual value a fresh lookup would write per field — not just
@@ -1637,17 +1623,13 @@ const DECLARED_SECTIONS = [
     id: "purchases-not-reconciling",
     label: "Stated totals",
     select: (p) => p.purchasesNotReconciling,
+    problemKeys: ["purchasesNotReconciling"],
     // Advisory, so it declares `coverage` — that marker is what keeps it out of
     // the defect list, out of the red, and out of `totalProblems`. No meter: a
     // discrepancy isn't a fraction of a population, and "N of M purchases
     // reconcile" would read as a score to drive to 100%, which this isn't.
     coverage: { keys: ["purchasesNotReconciling"] },
     entity: "purchase",
-    title: "Stated Totals That Need Review",
-    description:
-      "What the paperwork claimed, next to what the purchase's expenses actually add up to. Purchases whose posted refunds fully explain the difference are excluded. Stated totals are never summed into spend — spend is always the expenses.",
-    emptyMessage:
-      "Every purchase with a stated total agrees with its expenses. Purchases with no stated total recorded aren't compared.",
     renderItem: (purchase) => {
       const hint = purchaseDeltaHint(purchase);
       return {
@@ -1696,13 +1678,10 @@ const DECLARED_SECTIONS = [
     id: "financial-settlement-mismatches",
     label: "Settlement",
     select: (p) => p.purchaseFinancialSettlementMismatches,
+    problemKeys: ["purchaseFinancialSettlementMismatches"],
     // A mismatch needs review, but does not imply an Expense should be changed.
     coverage: { keys: ["purchaseFinancialSettlementMismatches"] },
     entity: "purchase",
-    title: "Purchase financial settlement mismatches",
-    description:
-      "Linked settlement evidence does not agree with the live Expense total. This is advisory: statements describe settlement, while Expenses remain the only source of spend.",
-    emptyMessage: "Every comparable Purchase settlement matches its Expenses.",
     renderItem: (item) => ({
       title: item.vendorName ?? "Vendor deleted",
       subtitle: `Expenses ${formatCurrency(item.expenseTotal)} · projected ${formatCurrency(item.financialReconciliation.projectedTotal)}`,
@@ -1722,6 +1701,7 @@ const DECLARED_SECTIONS = [
     id: "duplicate-spend-candidates",
     label: "Possible duplicates",
     select: (p) => p.duplicateSpendCandidates,
+    problemKeys: ["duplicateSpendCandidates"],
     // Advisory, and more so than its neighbours: the match itself is a heuristic,
     // and the remedy destroys a row. No meter — these aren't a fraction of a
     // population, and a count to drive to zero would invite deleting the doubtful
@@ -1729,11 +1709,6 @@ const DECLARED_SECTIONS = [
     // purchase it collides with.
     coverage: { keys: ["duplicateSpendCandidates"] },
     entity: "expense",
-    title: "Possible Duplicate Spend",
-    description:
-      "An expense linked to no purchase, costing exactly what an itemized purchase already accounts for, within a week of it. Usually a hand-entered lump that a later vendor import re-created line by line — the same money counted twice. Confirm before acting: two unrelated things can cost the same on the same day.",
-    emptyMessage:
-      "No unlinked expense duplicates a purchase's total. Expenses whose names don't resemble the purchase's lines aren't reported.",
     renderItem: (item) => ({
       // Two lump rows can share a name, and the name is the card title.
       key: item.id,
@@ -1776,11 +1751,8 @@ const DECLARED_SECTIONS = [
     id: "duplicate-financial-transaction-source-refs",
     label: "Duplicate transaction refs",
     select: (p) => p.duplicateFinancialTransactionSourceRefs,
+    problemKeys: ["duplicateFinancialTransactionSourceRefs"],
     entity: "financialTransaction",
-    title: "Duplicate financial transaction source references",
-    description:
-      "The same provider source and external transaction ID appears on more than one live transaction.",
-    emptyMessage: "No duplicate financial transaction references.",
     renderItem: (item) => ({
       title: `${item.source}: ${item.externalId}`,
       details: [item.transactionIds.join(", ")],
@@ -1790,11 +1762,8 @@ const DECLARED_SECTIONS = [
     id: "duplicate-financial-account-source-aliases",
     label: "Duplicate account aliases",
     select: (p) => p.duplicateFinancialAccountSourceAliases,
+    problemKeys: ["duplicateFinancialAccountSourceAliases"],
     entity: "financialAccount",
-    title: "Duplicate financial account source aliases",
-    description:
-      "One provider external account ID is attached to multiple live accounts.",
-    emptyMessage: "No duplicate financial account aliases.",
     renderItem: (item) => ({
       title: `${item.source}: ${item.externalAccountId}`,
       details: [item.accountIds.join(", ")],
@@ -1804,12 +1773,8 @@ const DECLARED_SECTIONS = [
     id: "financial-transaction-allocation-defects",
     label: "Broken settlement allocations",
     select: (p) => p.financialTransactionAllocationDefects,
+    problemKeys: ["financialTransactionAllocationDefects"],
     entity: "financialTransaction",
-    title: "Broken settlement allocations",
-    description:
-      "A transaction's purchase allocations violate an invariant the write path enforces but the database cannot: they must sum to the transaction's own amount and share its sign, and only settlement kinds may carry them. A split transaction's mirror purchaseId is NULL, so the DB CHECK passes it vacuously — these rows are the only thing watching.",
-    emptyMessage:
-      "Every settlement allocation reconciles with its transaction.",
     renderItem: (item) => ({
       title: `${item.id} · ${item.reasons.join(", ")}`,
       details: [
@@ -1826,11 +1791,8 @@ const DECLARED_SECTIONS = [
     id: "invalid-financial-json",
     label: "Invalid finance JSON",
     select: (p) => p.invalidFinancialJson,
+    problemKeys: ["invalidFinancialJson"],
     entity: "financialAccount",
-    title: "Invalid financial evidence",
-    description:
-      "A finance-owned JSON field no longer conforms to its strict contract. The record remains visible so it can be repaired rather than crashing Problems.",
-    emptyMessage: "All financial evidence JSON is valid.",
     renderItem: (item) => ({
       title: `${item.entity} · ${item.field}`,
       subtitle: item.id,
@@ -1841,11 +1803,8 @@ const DECLARED_SECTIONS = [
     id: "incomplete-statement-imports",
     label: "Incomplete statement imports",
     select: (p) => p.incompleteStatementImports,
+    problemKeys: ["incompleteStatementImports"],
     entity: "financialAccount",
-    title: "Statement imports missing rows",
-    description:
-      "Fewer rows were stored than the export declared, so a chunked ingest stopped partway. Re-submitting the whole export is safe: rows already recorded are a no-op.",
-    emptyMessage: "Every recorded export stored the rows it declared.",
     renderItem: (item) => ({
       title: `${item.source} · ${item.label}`,
       subtitle: item.fingerprint,

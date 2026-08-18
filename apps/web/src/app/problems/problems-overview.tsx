@@ -161,6 +161,30 @@ export function ProblemsOverview() {
       <Stack gap="lg">
         <ProblemsSummary problems={problems} onJump={scrollToSection} />
 
+        {problems.upcFreshness?.status !== "fresh" &&
+          problems.upcFreshness != null && (
+            <div
+              role="status"
+              className="rounded-md border border-warning/40 bg-warning/10 px-4 py-2 text-sm text-warning-foreground"
+            >
+              {problems.upcFreshness.status === "stale"
+                ? "UPC provider is unavailable; showing the last cached proposals."
+                : "UPC provider is unavailable; proposals will return when it recovers."}
+            </div>
+          )}
+
+        {problems.conversionCoverageFreshness?.state !== "fresh" &&
+          problems.conversionCoverageFreshness != null && (
+            <div
+              role="status"
+              className="rounded-md border border-warning/40 bg-warning/10 px-4 py-2 text-sm text-warning-foreground"
+            >
+              {problems.conversionCoverageFreshness.state === "unavailable"
+                ? "Conversion coverage is partially unavailable; exact product worklists omit unavailable rows until enrichment recovers."
+                : "Conversion coverage is stale; exact product worklists omit stale rows until the projection is rebuilt."}
+            </div>
+          )}
+
         {MAIN_SECTIONS.map(renderSection)}
 
         {/* Everything the Fix button clears, folded away: one click empties

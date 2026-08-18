@@ -8,6 +8,7 @@ import { cn, formatCount } from "~/lib/utils";
 import { DataTableViews } from "./DataTableViews";
 import { DataTableViewOptions } from "./data-table-view-options";
 import { LedgerFilters } from "./LedgerFilters";
+import { ProblemWorklistStatus } from "./problem-worklist";
 import type { CubbyTable as Table } from "./table-features";
 
 interface DataTableToolbarProps<TData extends RowData> {
@@ -82,6 +83,13 @@ export function DataTableToolbar<TData extends RowData>({
     <Row align="center" justify="between" gap="sm" className={className}>
       <Row align="center" gap="sm" className="min-w-0">
         {ownsPageIdentity && <ToolbarIdentity />}
+        {entity && (
+          <ProblemWorklistStatus
+            entity={entity}
+            filters={table.state.columnFilters}
+            sorting={table.state.sorting}
+          />
+        )}
         {showViewOptions && <DataTableViewOptions table={table} />}
         <DataTableViews table={table} entity={entity} />
         <fieldset disabled={isTransitioning} className="contents">

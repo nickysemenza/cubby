@@ -36,6 +36,7 @@ import {
   quickCreateProduct,
 } from "~/server/repo/product";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { readCachedUpcLookups } from "~/server/repo/upc-lookup-cache";
 import { importImageFromUPC } from "./image-import";
 import type { LocationValuationService } from "./location-valuation.service";
 import { runMutationSideEffects } from "./mutation-side-effects";
@@ -160,7 +161,15 @@ export async function applyUpcDataWithSideEffects(
   actor: ActorContext,
 ): Promise<ProductWithFoodAndSideEffectsOut> {
   const current = await services.product.getProductByID(input.id);
-  const lookup = await services.upcLookupClient.lookup(input.upc);
+  // Apply the same materialized proposal that the Problems card showed. This
+  // avoids a provider outage or a changed upstream answer turning one click
+  // into a different mutation from the reviewed proposal.
+  const { lookups } = await readCachedUpcLookups(
+    services.db,
+    [input.upc],
+    (upcs) => services.upcLookupClient.lookupBatch(upcs),
+  );
+  const lookup = lookups.get(input.upc) ?? null;
 
   const data: { manufacturer?: string; price?: number } = {};
   const lookupManufacturer = lookup?.manufacturer ?? lookup?.brand ?? null;

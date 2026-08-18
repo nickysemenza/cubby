@@ -11,10 +11,12 @@ import { parseShortcode } from "@cubby/shared";
 import {
   and,
   eq,
+  gt,
   gte,
   inArray,
   isNotNull,
   isNull,
+  lt,
   lte,
   notInArray,
   or,
@@ -22,6 +24,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
+import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { expense, purchase } from "~/server/db/schema";
 import {
@@ -37,6 +40,7 @@ import {
   presenceCondition,
   relations,
 } from "~/server/repo/database-helpers";
+import { disposalPurchaseIds } from "~/server/repo/product/ownership";
 import { matchingEmbeddedProjectIds } from "~/server/repo/project/dashboard-shared";
 import {
   collectDescendantIds,
@@ -305,6 +309,11 @@ export const buildExpenseWhereClause = async (
       // reason about here — every row lands inside or outside the window.
       filters.dateFrom ? gte(expense.date, filters.dateFrom) : undefined,
       filters.dateTo ? lte(expense.date, filters.dateTo) : undefined,
+      filters.dateRelative === "beforeToday"
+        ? lt(expense.date, householdLocalDate())
+        : filters.dateRelative === "onOrBeforeToday"
+          ? lte(expense.date, householdLocalDate())
+          : undefined,
       // `!== undefined`, NOT the truthiness guard the two date lines above use.
       // `costMin: 0` is a meaningful bound ("actuals and credits, no free
       // items") and `costMax: 0` is the credits-only worklist — a truthiness
@@ -321,6 +330,16 @@ export const buildExpenseWhereClause = async (
         ? lte(expense.cost, filters.costMax)
         : undefined,
       presenceCondition(expense.cost, filters.costPresenceFilter),
+      filters.costSign === "negative" ? lt(expense.cost, 0) : undefined,
+      filters.costSign === "positive" ? gt(expense.cost, 0) : undefined,
+      filters.disposalPurchasePresenceFilter === "has"
+        ? inArray(expense.purchaseId, disposalPurchaseIds(getDb(db)))
+        : filters.disposalPurchasePresenceFilter === "none"
+          ? or(
+              isNull(expense.purchaseId),
+              notInArray(expense.purchaseId, disposalPurchaseIds(getDb(db))),
+            )
+          : undefined,
       // Quantity is nullable evidence, never an inferred one-unit default.
       // Bounds naturally exclude unknown rows; the presence filter is the
       // explicit worklist for those receipts.

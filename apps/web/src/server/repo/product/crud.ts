@@ -37,6 +37,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  lt,
   ne,
   or,
   sql,
@@ -52,6 +53,7 @@ import {
   location,
   product,
   productComponent,
+  productConversionCoverage,
   productExternalId,
   productImage,
   productUnitMappings,
@@ -102,6 +104,10 @@ import { removeEntity } from "~/server/repo/removal";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
+  currentProductConversionCoverageCondition,
+  markProductConversionCoverageInputStale,
+} from "./conversion-coverage";
+import {
   PRODUCT_DELETE_EDGE_POLICY,
   type ProductRetainingEdgeKey,
 } from "./edge-roles";
@@ -111,6 +117,7 @@ import {
   dbProductToPickerItemAPI,
   dbProductToTopLevelAPI,
 } from "./mappers";
+import { disposalPurchaseIds } from "./ownership";
 import {
   derivedPriceFilterSql,
   effectiveProductPriceSql,
@@ -123,6 +130,7 @@ import {
   enrichProductRowsWithQuantityLedger,
   expectedQuantityFilterSql,
   expectedQuantitySql,
+  hasUnknownAcquisitionLinesSql,
   hasUnknownQuantityLinesSql,
   loadProductPickerQuantities,
   onHandUnitsFilterSql,
@@ -462,6 +470,17 @@ export const productList = async (
     )
     .where(notDeleted(inventoryEntry));
 
+  const productIdsWithDuplicatePlacement = dbClient
+    .select({ productId: inventoryEntry.productId })
+    .from(inventoryEntry)
+    .innerJoin(
+      location,
+      and(eq(location.id, inventoryEntry.locationId), notDeleted(location)),
+    )
+    .where(notDeleted(inventoryEntry))
+    .groupBy(inventoryEntry.productId, inventoryEntry.placement)
+    .having(sql`count(*) > 1`);
+
   // Products a Location IS an instance of. Deliberately NOT folded into
   // `productIdsWithLiveInventory`: that set backs the `location` column's
   // presence filter, and the column renders `inventoryEntry` rows, so widening
@@ -572,6 +591,23 @@ export const productList = async (
     .from(productUnitMappings)
     .where(notDeleted(productUnitMappings));
 
+  // This is the entity-list form of the sold-but-still-stocked diagnostic.
+  // The quantity ledger remains the authority for expected quantity and unknown
+  // acquisition lines; the disposal purchase predicate prevents ordinary
+  // refunds/adjustments from reading as an ownership exit.
+  const productIdsWithRecordedDisposal = dbClient
+    .select({ productId: expense.productId })
+    .from(expense)
+    .where(
+      and(
+        notDeleted(expense),
+        eq(expense.future, false),
+        lt(expense.cost, 0),
+        isNotNull(expense.productId),
+        inArray(expense.purchaseId, disposalPurchaseIds(dbClient)),
+      ),
+    );
+
   const externalSources = filters.externalIdSource
     ? [filters.externalIdSource].flat()
     : undefined;
@@ -651,6 +687,48 @@ export const productList = async (
         filters.servingAsLocationPresenceFilter,
         productIdsServingAsLocations,
       ),
+      filters.inventoryMultiplicity === "duplicate_within_placement"
+        ? and(
+            eq(product.expectedQuantity, 1),
+            inArray(product.id, productIdsWithDuplicatePlacement),
+          )
+        : undefined,
+      filters.ownershipReconciliation === "disposed_still_on_hand"
+        ? and(
+            inArray(product.id, productIdsWithRecordedDisposal),
+            sql`${onHandUnitsFilterSql(product.id)} > 0`,
+            sql`${expectedQuantityFilterSql(product.id)} <= 0`,
+            sql`NOT ${hasUnknownAcquisitionLinesSql(product.id)}`,
+          )
+        : undefined,
+      filters.conversionCoverage === "partial"
+        ? inArray(
+            product.id,
+            dbClient
+              .select({ id: productConversionCoverage.productId })
+              .from(productConversionCoverage)
+              .where(
+                and(
+                  currentProductConversionCoverageCondition(),
+                  eq(productConversionCoverage.coverageTier, "partial"),
+                ),
+              ),
+          )
+        : undefined,
+      filters.conversionTopology === "islanded"
+        ? inArray(
+            product.id,
+            dbClient
+              .select({ id: productConversionCoverage.productId })
+              .from(productConversionCoverage)
+              .where(
+                and(
+                  currentProductConversionCoverageCondition(),
+                  sql`${productConversionCoverage.islandCount} >= 2`,
+                ),
+              ),
+          )
+        : undefined,
       filters.expenseCountMin !== undefined
         ? sql`(SELECT count(*) FROM "Expense" e WHERE e."productId" = ${product.id} AND e."deletedAt" IS NULL) >= ${filters.expenseCountMin}`
         : undefined,
@@ -1393,6 +1471,19 @@ export const updateProduct = async (
         await syncProductUnitMappings(tx, id, unitMappings);
       }
 
+      // Price, food identity, ingredient coverage opt-outs and stored mappings
+      // all participate in the effective conversion graph. Keep an old graph
+      // from being presented as a current list/filter result until its rebuild.
+      if (
+        unitMappings !== undefined ||
+        data.price !== undefined ||
+        ingredientId !== undefined ||
+        data.fdc_id !== undefined ||
+        data.upc !== undefined
+      ) {
+        await markProductConversionCoverageInputStale(tx, [id]);
+      }
+
       // AFTER the mapping sync, and gated on either input: valuation routes the
       // entry's amount to money through the mapping graph, so editing the
       // mappings alone can change every valuation, and syncing first would
@@ -1847,6 +1938,10 @@ export const deleteProducts = async (
       });
     }
 
+    await tx
+      .delete(productConversionCoverage)
+      .where(inArray(productConversionCoverage.productId, ids));
+
     return await removeEntity(tx, {
       entity: "product",
       ids,
@@ -1917,7 +2012,7 @@ export const previewDeleteProducts = async (
 
   // Everything the delete cascades. Each is a `soft-delete` disposition on the
   // same policy, so adding an edge there surfaces here without a code change.
-  const cascades: Array<[string, PgTable, PgColumn, string]> = [
+  const cascades: Array<[string, PgTable, PgColumn, string, boolean?]> = [
     [
       "ProductExternalId.productId",
       productExternalId,
@@ -1937,10 +2032,17 @@ export const previewDeleteProducts = async (
       productComponent.parentProductId,
       "kit components",
     ],
+    [
+      "ProductConversionCoverage.productId",
+      productConversionCoverage,
+      productConversionCoverage.productId,
+      "conversion coverage projections",
+      true,
+    ],
   ];
 
   const changes: (ImpactItem | null)[] = [];
-  for (const [edgeKey, table, column, label] of cascades) {
+  for (const [edgeKey, table, column, label, includeDeleted] of cascades) {
     const disposition =
       PRODUCT_DELETE_EDGE_POLICY[
         edgeKey as keyof typeof PRODUCT_DELETE_EDGE_POLICY
@@ -1950,7 +2052,9 @@ export const previewDeleteProducts = async (
         disposition,
         edgeKey,
         label,
-        byTargetId: await countByTarget(dbClient, table, column, ids),
+        byTargetId: await countByTarget(dbClient, table, column, ids, {
+          includeDeleted,
+        }),
       }),
     );
   }

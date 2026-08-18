@@ -19,10 +19,10 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import { and, eq, gte, lte, type SQL, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, type SQL, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { meal, mealRecipe } from "~/server/db/schema";
+import { meal, mealRecipe, recipe } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
@@ -113,6 +113,20 @@ export const mealList = async (
   sorts: SortParams[],
   pagination: PaginationParams,
 ): Promise<{ data: MealOut[]; count: number }> => {
+  const dbClient = getDb(db);
+  const mealsWithUnderstatedRecipeCost = dbClient
+    .select({ mealId: mealRecipe.mealId })
+    .from(mealRecipe)
+    .innerJoin(
+      recipe,
+      and(eq(recipe.id, mealRecipe.recipeId), notDeleted(recipe)),
+    )
+    .where(
+      and(
+        notDeleted(mealRecipe),
+        sql`(${recipe.totals} ->> 'costCovered')::int < (${recipe.totals} ->> 'ingredientCount')::int`,
+      ),
+    );
   // `mealType` must sort by slot, not by slug: a plain text ordering puts
   // dessert before dinner, which reads as a broken table. `mealTypeValues`
   // declaration order IS the slot order (the calendar sorts a day by it), so
@@ -155,10 +169,13 @@ export const mealList = async (
     eqAny(meal.mealKind, filters.mealKind),
     filters.from ? gte(meal.date, filters.from) : undefined,
     filters.to ? lte(meal.date, filters.to) : undefined,
+    filters.recipeCostCoverage === "understated"
+      ? inArray(meal.id, mealsWithUnderstatedRecipeCost)
+      : undefined,
   );
 
   const { data: rows, count } = await executeListQueryWithCount(
-    getDb(db).query.meal.findMany({
+    dbClient.query.meal.findMany({
       where: whereCondition,
       orderBy: orderByArray,
       limit: take,

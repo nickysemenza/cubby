@@ -105,7 +105,7 @@ type ProductWithUpcGapCandidate = {
 // confused with product/analytics.ts's identically-shaped but independently
 // implemented findDuplicateUniqueProducts, which serves the inventory
 // router's own (differently-named, self-consistent) duplicate-check surface.
-export const findDuplicateInventoryProducts = async (
+const findDuplicateInventoryProducts = async (
   db: Database,
 ): Promise<DuplicateUniqueProduct[]> => {
   const duplicates = await getDb(db).query.product.findMany({
@@ -365,7 +365,7 @@ export const findOrphanedProducts = async (
 // Expense lines are overwhelmingly refunds, price adjustments, and family
 // contributions, and keying on them instead was wrong about half the time on
 // production data.
-export const findUnlinkedExitExpenses = async (
+const findUnlinkedExitExpenses = async (
   db: Database,
 ): Promise<UnlinkedExitExpense[]> => {
   const dbClient = getDb(db);
@@ -427,7 +427,7 @@ export const findUnlinkedExitExpenses = async (
 // `findSoldButStillStocked` describes: bare negative lines were "wrong about
 // half the time on production data". Keeping them apart lets one stay red and
 // this one stay advisory.
-export const findPurchaselessExitExpenses = async (
+const findPurchaselessExitExpenses = async (
   db: Database,
 ): Promise<PurchaselessExitExpense[]> => {
   const dbClient = getDb(db);
@@ -523,7 +523,7 @@ export const findPurchaselessExitExpenses = async (
 // would only catch a hand-entered $0 discard whose shelf was left behind —
 // coherent, and a reasonable follow-on, but a different question from the one
 // this detector answers today.
-export const findSoldButStillStocked = async (
+const findSoldButStillStocked = async (
   db: Database,
 ): Promise<SoldButStillStocked[]> => {
   const dbClient = getDb(db);
@@ -641,6 +641,92 @@ export const findSoldButStillStocked = async (
   }
 
   return rows;
+};
+
+// Retained temporarily for their focused historical fixtures; runtime Problem
+// membership is now exclusively the canonical entity-list path.
+void [
+  findDuplicateInventoryProducts,
+  findUnlinkedExitExpenses,
+  findPurchaselessExitExpenses,
+  findSoldButStillStocked,
+];
+
+/**
+ * Disposal totals for card rows selected by the canonical Product list.
+ * This is hydration only: the caller supplies the exact page shortcodes, so
+ * no quantity/inventory eligibility predicate is repeated here.
+ */
+export const loadSoldButStockedPresenterTotals = async (
+  db: Database,
+  shortcodes: readonly string[],
+): Promise<
+  Map<
+    string,
+    {
+      soldQuantity: number;
+      proceeds: number;
+      servingLocations: { id: string; name: string }[];
+    }
+  >
+> => {
+  if (shortcodes.length === 0) return new Map();
+  const dbClient = getDb(db);
+  const [rows, servingRows] = await Promise.all([
+    dbClient
+      .select({
+        shortcode: product.shortcode,
+        soldQuantity: sql<number>`sum(coalesce(abs(${expense.productQuantity}), 1))::double precision`,
+        proceeds: sql<number>`sum(${expense.cost})::double precision`,
+      })
+      .from(expense)
+      .innerJoin(product, eq(product.id, expense.productId))
+      .where(
+        and(
+          notDeleted(expense),
+          notDeleted(product),
+          inArray(product.shortcode, [...shortcodes]),
+          eq(expense.future, false),
+          lt(expense.cost, 0),
+          inArray(expense.purchaseId, disposalPurchaseIds(dbClient)),
+        ),
+      )
+      .groupBy(product.shortcode),
+    dbClient
+      .select({
+        productShortcode: product.shortcode,
+        id: location.shortcode,
+        name: location.name,
+      })
+      .from(location)
+      .innerJoin(product, eq(product.id, location.productId))
+      .where(
+        and(
+          notDeleted(location),
+          notDeleted(product),
+          inArray(product.shortcode, [...shortcodes]),
+        ),
+      ),
+  ]);
+  const servingByProduct = new Map<string, { id: string; name: string }[]>();
+  for (const row of servingRows) {
+    const locations = servingByProduct.get(row.productShortcode) ?? [];
+    locations.push({
+      id: unsafeLocationShortcode(row.id),
+      name: row.name,
+    });
+    servingByProduct.set(row.productShortcode, locations);
+  }
+  return new Map(
+    rows.map((row) => [
+      row.shortcode,
+      {
+        soldQuantity: Number(row.soldQuantity),
+        proceeds: Number(row.proceeds),
+        servingLocations: servingByProduct.get(row.shortcode) ?? [],
+      },
+    ]),
+  );
 };
 
 /**
@@ -1021,9 +1107,15 @@ export const recipeUsageCountsByProduct = async (
 // `ingredientShortcode` and `ProductWithIslandedMappings.shortcode` (see
 // problems.service.ts's `findProductCoverageProblems`, which owns assembling
 // those rows and currently omits both fields from its push()es).
-export const loadProductsForCoverage = async (db: Database) => {
+export const loadProductsForCoverage = async (
+  db: Database,
+  productIds?: readonly ProductId[],
+) => {
   const rows = await getDb(db).query.product.findMany({
-    where: notDeleted(product),
+    where:
+      productIds == null
+        ? notDeleted(product)
+        : and(notDeleted(product), inArray(product.id, [...productIds])),
     columns: {
       id: true,
       name: true,
@@ -1046,9 +1138,9 @@ export const loadProductsForCoverage = async (db: Database) => {
       ingredient: { columns: { naKinds: true, shortcode: true } },
     },
   });
-  // `rows` is every live product, so the id filter would bind one parameter
-  // per product to say "all of them".
-  const pricing = await loadProductPricing(db, rows, { wholeCatalog: true });
+  const pricing = await loadProductPricing(db, rows, {
+    wholeCatalog: productIds == null,
+  });
   return rows.map((row) => ({
     ...row,
     price: pricing.get(row.id)?.effectivePrice ?? null,

@@ -1,13 +1,27 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { z } from "zod";
-import { LocationValidateForm } from "~/app/problems/components/location-validate-card";
-import { ProblemsOverview } from "~/app/problems/problems-overview";
+import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Section, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { RoutePending } from "~/components/route-pending";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
+
+// The overview pulls in all five independently loaded Problems lanes plus the
+// declarative assembly UI. It is only useful on this dedicated route, so keep
+// it out of the app shell's eager closure while preserving its own loading
+// semantics once the route is opened.
+const ProblemsOverview = lazy(async () => {
+  const module = await import("~/app/problems/problems-overview");
+  return { default: module.ProblemsOverview };
+});
+const LocationValidateForm = lazy(async () => {
+  const module = await import(
+    "~/app/problems/components/location-validate-card"
+  );
+  return { default: module.LocationValidateForm };
+});
 
 const searchSchema = z.object({
   // Deep-link target for the phone-at-the-shelf location-validate flow (folded
@@ -58,19 +72,29 @@ function ProblemsPage() {
       title="Validate locations"
       description="Scan a location's QR-labeled children to confirm they're all in place, and reassign any that have moved."
     >
-      <LocationValidateForm
-        key={validateParent ?? "manual"}
-        initialParentId={validateParent}
-      />
+      <Suspense fallback={<SimpleLoading text="Loading validator..." />}>
+        <LocationValidateForm
+          key={validateParent ?? "manual"}
+          initialParentId={validateParent}
+        />
+      </Suspense>
     </Section>
   );
 
   return (
     <Page variant="list" title="Data Problems">
       <Stack gap="lg">
-        {leadWithValidate ? validateCard : <ProblemsOverview />}
-        {leadWithValidate ? <ProblemsOverview /> : validateCard}
+        {leadWithValidate ? validateCard : <ProblemsContent />}
+        {leadWithValidate ? <ProblemsContent /> : validateCard}
       </Stack>
     </Page>
+  );
+}
+
+function ProblemsContent() {
+  return (
+    <Suspense fallback={<SimpleLoading text="Loading Problems..." />}>
+      <ProblemsOverview />
+    </Suspense>
   );
 }

@@ -78,6 +78,46 @@ export const settleableUnpricedExpenseCountSql = (purchaseAlias: string) =>
        AND se_e."future" = false)`;
 
 /**
+ * Correlated SQL form of `calculateFinancialReconciliation(...).status ===
+ * "mismatch"`. Purchase lists and the detector share its incurred-expense
+ * fragments and settlement-kind roster, so list pagination/counts stay exact.
+ */
+export const purchaseFinancialMismatchSql = (purchaseAlias: string) => `
+  ${settleableUnpricedExpenseCountSql(purchaseAlias)} = 0
+  AND (
+    SELECT count(DISTINCT a."transactionId")
+    FROM "FinancialTransactionAllocation" a
+    JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
+    WHERE a."purchaseId" = ${purchaseAlias}."id"
+      AND a."deletedAt" IS NULL
+      AND ft."deletedAt" IS NULL
+      AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
+      AND ft."status" <> 'void'
+  ) > 0
+  AND round((
+    CASE WHEN (
+      SELECT count(DISTINCT a."transactionId")
+      FROM "FinancialTransactionAllocation" a
+      JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
+      WHERE a."purchaseId" = ${purchaseAlias}."id" AND a."deletedAt" IS NULL
+        AND ft."deletedAt" IS NULL AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
+        AND ft."status" IN ('expected', 'pending')
+    ) > 0 THEN (
+      SELECT COALESCE(sum(a."amount"), 0) FROM "FinancialTransactionAllocation" a
+      JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
+      WHERE a."purchaseId" = ${purchaseAlias}."id" AND a."deletedAt" IS NULL
+        AND ft."deletedAt" IS NULL AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
+        AND ft."status" <> 'void'
+    ) ELSE (
+      SELECT COALESCE(sum(a."amount"), 0) FROM "FinancialTransactionAllocation" a
+      JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
+      WHERE a."purchaseId" = ${purchaseAlias}."id" AND a."deletedAt" IS NULL
+        AND ft."deletedAt" IS NULL AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
+        AND ft."status" = 'posted'
+    ) END
+  ) * 100) IS DISTINCT FROM round((${settleableExpenseTotalSql(purchaseAlias)}) * 100)`;
+
+/**
  * `kind = 'refund' AND status = 'posted'` — the atom behind every posted-refund
  * figure. It had been spelled out five times (two grouped scans, two correlated
  * scalars, one hand-written detector query), which is exactly the shape of

@@ -1,10 +1,17 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { ProblemKey } from "@cubby/schemas/problems";
+import { PROBLEM_CLASS } from "@cubby/schemas/problems";
 import {
   LIVE_PROJECT_STATUSES,
   taskStatusValues,
 } from "@cubby/schemas/project";
 import { FILTER_ANY, FILTER_NONE } from "./filters";
+import {
+  defineProblem,
+  type EntityProblemSource,
+  type ProblemQuery,
+  validateProblemQueries,
+} from "./problem-query";
 
 /**
  * Hardcoded saved views: a named starting point of filters + sort for a list
@@ -75,20 +82,6 @@ interface ViewProblem {
   title: string;
   description: string;
   emptyMessage: string;
-  /**
-   * The same predicate in the server's `*Filters` vocabulary.
-   *
-   * A projection of `filters`, never an independent statement of it:
-   * `view-manifest.unit.test.tsx` resolves `filters` through the real manifest
-   * with `buildFiltersFromManifest` and asserts deep equality with this, so the
-   * two cannot drift — a mismatch fails with the exact expected object.
-   *
-   * It exists because the server needs these filters and the resolver's input,
-   * `filter-manifest.tsx`, reaches into `~/app/**` for its icon-bearing option
-   * lists. Importing that graph into the Worker to re-derive fourteen static
-   * objects is a worse trade than a mechanically-pinned projection.
-   */
-  serverFilters: Record<string, unknown>;
 }
 
 export interface ViewDefinition {
@@ -109,8 +102,8 @@ export interface ViewDefinition {
  * A view may additionally declare a `problem`, which makes it a Problems
  * section too. Not every detector can become one — a predicate the flat filter
  * vocabulary can't express (no OR-tree, no negation, no HAVING over groups),
- * one whose bound is relative to now (a static `serverFilters` can't hold a
- * cutoff date), or one whose correctness rests on a compile-time weld a data
+ * one whose bound is relative to now, or one whose correctness rests on a
+ * compile-time weld a data
  * declaration can't carry. `findOrphanedProducts` is the third kind and says so
  * at its own definition.
  */
@@ -407,11 +400,6 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         description:
           "On a shelf but carrying no price, so they are silently missing from every location's value.",
         emptyMessage: "Every stocked product has a price.",
-        serverFilters: {
-          inventoryPresenceFilter: "has",
-          pricePresenceFilter: "none",
-          miscBucketFilter: "none",
-        },
       },
       layout: {
         ...DEFAULT_CURATED_LAYOUT,
@@ -436,11 +424,6 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         description:
           "Bucket rows on a shelf with no price. Pricing one is optional — it just makes its location's total less of an underestimate.",
         emptyMessage: "Every misc bucket carries a price.",
-        serverFilters: {
-          inventoryPresenceFilter: "has",
-          pricePresenceFilter: "none",
-          miscBucketFilter: "has",
-        },
       },
       layout: {
         ...DEFAULT_CURATED_LAYOUT,
@@ -467,21 +450,6 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         description:
           "No price, no USDA key, and no unit mapping — nothing can cost or convert these, so any recipe using them is under-covered.",
         emptyMessage: "Every food product has at least one conversion path.",
-        // `usdaPresenceFilter: "none"` is `NO_USDA_KEY` — exactly the
-        // detector's two `isNull`s on fdc_id and upc.
-        //
-        // The category pair is the interesting one: `eqAnyOrPresence` is
-        // deliberately OR, so this emits `category = 'food' OR category IS
-        // NULL`, which is precisely `!isNonFoodCategory(category)`. Uncategorized
-        // is eligible on purpose — an unfiled product may well be food.
-        serverFilters: {
-          pricePresenceFilter: "none",
-          miscBucketFilter: "none",
-          usdaPresenceFilter: "none",
-          unitMappingPresenceFilter: "none",
-          categoryFilter: ["food"],
-          categoryPresenceFilter: "none",
-        },
       },
       layout: {
         ...DEFAULT_CURATED_LAYOUT,
@@ -524,7 +492,6 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         description:
           "The ledger says more units left than ever arrived. Usually a missing acquisition line or a quantity typed on the wrong row.",
         emptyMessage: "No product has exited more units than it acquired.",
-        serverFilters: { expectedQuantityMax: -1 },
       },
       layout: {
         ...DEFAULT_CURATED_LAYOUT,
@@ -600,10 +567,6 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         description:
           "Used by a recipe of your own but linked to no product, so nothing can price or convert them. Cookbook-only ingredients are excluded — costing someone else's book isn't the goal.",
         emptyMessage: "Every ingredient your recipes use has a product.",
-        serverFilters: {
-          ownRecipePresenceFilter: "has",
-          productPresenceFilter: "none",
-        },
       },
       layout: {
         ...DEFAULT_CURATED_LAYOUT,
@@ -628,10 +591,6 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         description:
           "Ingredients used in no recipe but still linked to a product. Deleting removes the ingredient and its product(s) — skipped if a product still has inventory.",
         emptyMessage: "No unused product-linked ingredients.",
-        serverFilters: {
-          recipePresenceFilter: "none",
-          productPresenceFilter: "has",
-        },
       },
     },
     {
@@ -648,10 +607,6 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         description:
           "Ingredients used in no recipe and linked to no product — safe to delete.",
         emptyMessage: "No unused ingredients.",
-        serverFilters: {
-          recipePresenceFilter: "none",
-          productPresenceFilter: "none",
-        },
       },
     },
   ],
@@ -672,10 +627,6 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         description:
           "Locations with photos that haven't been analyzed by AI yet. Run backfill to generate descriptions for all.",
         emptyMessage: "All locations with photos have AI descriptions.",
-        serverFilters: {
-          imagePresenceFilter: "has",
-          aiDescriptionPresenceFilter: "none",
-        },
       },
       // Both hidden by default on this table, so the view has to reveal them —
       // otherwise it selects rows on a signal nothing on screen explains.
@@ -712,14 +663,6 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         description:
           "Holding stock whose count hasn't been checked against the shelf in 60 days — or ever.",
         emptyMessage: "Every stocked location has been recounted recently.",
-        // `directItemCountMin: 1` is how "holds stock" is spelled here, and it
-        // is slightly NARROWER than the detector's join: it counts only entries
-        // whose product is live. Same deliberate tightening as `empty-leaves`,
-        // and the two must agree or a shelf lands in both sections at once.
-        serverFilters: {
-          directItemCountMin: 1,
-          lastBulkInventoryOlderThanDays: 60,
-        },
       },
       layout: {
         ...DEFAULT_CURATED_LAYOUT,
@@ -743,16 +686,6 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         description:
           "Leaf locations holding no stock — either not yet itemized, or genuinely empty.",
         emptyMessage: "No empty locations.",
-        // The Inventory column is a COUNT range, not a presence toggle, so
-        // "none" expands to a bound rather than a sentinel. Same predicate
-        // either way: `directItemCountMax: 0` is resolved against the live,
-        // stock-only entry set (live product included), which is the detector's
-        // `notExists(... stockOnly())` plus the product-liveness guard the list
-        // already applies so the count matches what the cell renders.
-        serverFilters: {
-          directItemCountMax: 0,
-          childPresenceFilter: "none",
-        },
       },
       layout: {
         ...DEFAULT_CURATED_LAYOUT,
@@ -785,11 +718,6 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         description:
           "No section carries any written steps, so there is nothing to cook from. Book and Notion recipes are excluded — their text lives outside Cubby on purpose.",
         emptyMessage: "Every recipe has instructions.",
-        serverFilters: {
-          instructionsPresenceFilter: "none",
-          sourceTypeFilter: ["Website", "Other"],
-          sourceTypePresenceFilter: "none",
-        },
       },
       layout: {
         ...DEFAULT_CURATED_LAYOUT,
@@ -814,12 +742,6 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         description:
           "A meal marked cooked but carrying no recipe — either the plan was never filled in, or its recipe was deleted.",
         emptyMessage: "Every cooked meal names at least one recipe.",
-        // `SQL_RELATED_VIEWS["meal.recipes"]` carries BOTH soft-delete guards
-        // the detector spelled out by hand: unplanning soft-deletes the
-        // MealRecipe link, while deleting the recipe leaves the link intact,
-        // and `dbMealToAPI` drops either — so a meal whose only recipe was
-        // deleted renders empty and must filter as empty too.
-        serverFilters: { mealKind: ["cooked"], recipePresenceFilter: "none" },
       },
       // The Recipes column is defaultVisible:false, so reveal the signal this
       // view selects on.
@@ -848,7 +770,6 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         description:
           "Entries whose count has never been checked against the shelf (oldest first). Recount the location they live in to clear them. `verifiedAt` only started being stamped when audit sessions landed, so most of the inventory starts here — this is a backlog to work down, not a list of mistakes.",
         emptyMessage: "Every inventory entry has been verified at least once.",
-        serverFilters: { verifiedPresenceFilter: "none" },
       },
     },
   ],
@@ -867,30 +788,301 @@ export interface ViewProblemDeclaration {
   entity: Entity;
   viewId: string;
   sort: ViewDefinition["sort"];
-  problem: ViewProblem;
+  problem: ProblemQuery;
 }
 
 /**
  * Every problem-backed view, flattened.
  *
  * The single roster the Problems service iterates to run its list queries and
- * the pinning test iterates to prove each `serverFilters` really is the
- * projection of its `filters`. Derived from `viewManifest` rather than
+ * and the canonical Problem Query registry. Derived from `viewManifest` rather than
  * hand-listed, so declaring a view IS declaring the section — there is no
  * second place to register it and therefore no way for the two to disagree.
  */
 export function viewProblemDeclarations(): ViewProblemDeclaration[] {
-  return Object.entries(viewManifest).flatMap(([entity, views]) =>
+  const declarations = Object.entries(viewManifest).flatMap(([entity, views]) =>
     (views ?? [])
       .filter((view) => view.problem)
-      .map((view) => ({
-        entity: entity as Entity,
-        viewId: view.id,
-        sort: view.sort,
-        // Narrowed by the filter above; the predicate can't tell TS that.
-        problem: view.problem as ViewProblem,
-      })),
+      .map((view) => {
+        const problem = view.problem as ViewProblem;
+        const source: EntityProblemSource = {
+          kind: "entity",
+          entity: entity as Entity,
+          filters: view.filters,
+          ...(view.sort ? { sort: view.sort } : {}),
+          ...(view.columnVisibility
+            ? { columnVisibility: view.columnVisibility }
+            : {}),
+        };
+        return {
+          entity: entity as Entity,
+          viewId: view.id,
+          sort: view.sort,
+          problem: defineProblem({
+            ...problem,
+            problemClass: PROBLEM_CLASS[problem.key],
+            executionLane: "views",
+            continuation: { kind: "entity-list" },
+            freshness: { kind: "live" },
+            source,
+          }),
+        };
+      }),
   );
+  validateProblemQueries(declarations.map(({ problem }) => problem));
+  return declarations;
+}
+
+/**
+ * Exact entity Problems that are not named saved views. They remain ordinary
+ * filter assemblies; a dedicated view would only add a redundant tab to the
+ * ledger while the Problems page is their intended entry point.
+ */
+const standaloneEntityProblems = [
+  defineProblem({
+    key: "purchaseFinancialSettlementMismatches",
+    problemClass: PROBLEM_CLASS.purchaseFinancialSettlementMismatches,
+    executionLane: "fast",
+    continuation: { kind: "entity-list" as const },
+    freshness: { kind: "live" as const },
+    title: "Purchase financial settlement mismatches",
+    description:
+      "Purchase settlement evidence disagrees with the incurred expense total.",
+    emptyMessage: "Every comparable purchase settlement reconciles.",
+    source: {
+      kind: "entity" as const,
+      entity: "purchase" as const,
+      filters: [{ id: "financialReconciliation", value: "mismatch" }],
+    },
+  }),
+  defineProblem({
+    key: "financialTransactionAllocationDefects",
+    problemClass: PROBLEM_CLASS.financialTransactionAllocationDefects,
+    executionLane: "fast",
+    continuation: { kind: "entity-list" as const },
+    freshness: { kind: "live" as const },
+    title: "Financial transaction allocation defects",
+    description:
+      "Settlement allocations whose amount, kind, or sign violates the transaction's integrity rules.",
+    emptyMessage: "Every settlement allocation is internally consistent.",
+    source: {
+      kind: "entity" as const,
+      entity: "financialTransaction" as const,
+      filters: [{ id: "allocationIntegrity", value: "defect" }],
+      sort: [{ id: "postedDate", desc: true }],
+    },
+  }),
+  defineProblem({
+    key: "purchasesNotReconciling",
+    problemClass: PROBLEM_CLASS.purchasesNotReconciling,
+    executionLane: "fast",
+    continuation: { kind: "entity-list" as const },
+    freshness: { kind: "live" as const },
+    title: "Purchases whose totals do not reconcile",
+    description:
+      "Purchase paperwork and its live expense lines disagree beyond the reconciliation tolerance.",
+    emptyMessage: "Every purchase reconciles with its expense lines.",
+    source: {
+      kind: "entity" as const,
+      entity: "purchase" as const,
+      filters: [{ id: "reconciliation", value: ["mismatch"] }],
+      sort: [{ id: "reconciliationGap", desc: true }],
+    },
+  }),
+  defineProblem({
+    key: "unlinkedExitExpenses",
+    problemClass: PROBLEM_CLASS.unlinkedExitExpenses,
+    executionLane: "fast",
+    continuation: { kind: "entity-list" as const },
+    freshness: { kind: "live" as const },
+    title: "Exit expenses without a product",
+    description:
+      "Disposal purchases with a negative principal line that names no product.",
+    emptyMessage: "Every disposal line names the product that left.",
+    source: {
+      kind: "entity" as const,
+      entity: "expense" as const,
+      filters: [
+        { id: "future", value: "false" },
+        { id: "costSign", value: "negative" },
+        { id: "product", value: "none" },
+        { id: "disposalPurchasePresenceFilter", value: "has" },
+      ],
+      sort: [{ id: "date", desc: true }],
+    },
+  }),
+  defineProblem({
+    key: "purchaselessExitExpenses",
+    problemClass: PROBLEM_CLASS.purchaselessExitExpenses,
+    executionLane: "fast",
+    continuation: { kind: "entity-list" as const },
+    freshness: { kind: "live" as const },
+    title: "Possible exits without a purchase",
+    description:
+      "Negative actual principal item lines with neither a product nor a purchase.",
+    emptyMessage: "No purchase-less exit candidates remain.",
+    source: {
+      kind: "entity" as const,
+      entity: "expense" as const,
+      filters: [
+        { id: "future", value: "false" },
+        { id: "costSign", value: "negative" },
+        { id: "product", value: "none" },
+        { id: "vendor", value: [FILTER_NONE] },
+        { id: "lineKind", value: ["principal"] },
+        { id: "lineBasis", value: ["item_line"] },
+      ],
+      sort: [{ id: "date", desc: true }],
+    },
+  }),
+  defineProblem({
+    key: "pastDuePlannedExpenses",
+    problemClass: PROBLEM_CLASS.pastDuePlannedExpenses,
+    executionLane: "tracker",
+    continuation: { kind: "entity-list" as const },
+    freshness: { kind: "live" as const },
+    title: "Past-due planned expenses",
+    description: "Planned expenses dated before the household's current day.",
+    emptyMessage: "No planned expenses are past due.",
+    source: {
+      kind: "entity" as const,
+      entity: "expense" as const,
+      filters: [
+        { id: "future", value: "true" },
+        { id: "dateRelative", value: "beforeToday" },
+      ],
+      sort: [{ id: "date", desc: false }],
+    },
+  }),
+  defineProblem({
+    key: "productsWithNoImages",
+    problemClass: PROBLEM_CLASS.productsWithNoImages,
+    executionLane: "fast",
+    continuation: { kind: "entity-list" as const },
+    freshness: { kind: "live" as const },
+    title: "Products with no images",
+    description: "Non-ingredient products with no displayable image.",
+    emptyMessage: "Every standalone product has an image.",
+    source: {
+      kind: "entity" as const,
+      entity: "product" as const,
+      filters: [
+        { id: "image", value: "none" },
+        { id: "ingredient", value: FILTER_NONE },
+      ],
+      sort: [{ id: "createdAt", desc: false }],
+      columnVisibility: { image: true, ingredient: true },
+    },
+  }),
+  defineProblem({
+    key: "duplicateInventory",
+    problemClass: PROBLEM_CLASS.duplicateInventory,
+    executionLane: "fast",
+    continuation: { kind: "entity-list" as const },
+    freshness: { kind: "live" as const },
+    title: "Products recorded twice",
+    description:
+      "Single-unit products duplicated within stock or installed placement.",
+    emptyMessage: "No single-unit products are duplicated within a placement.",
+    source: {
+      kind: "entity" as const,
+      entity: "product" as const,
+      filters: [
+        { id: "inventoryMultiplicity", value: "duplicate_within_placement" },
+      ],
+      sort: [{ id: "name", desc: false }],
+      columnVisibility: { expectedQuantity: true, location: true },
+    },
+  }),
+  defineProblem({
+    key: "soldButStillStocked",
+    problemClass: PROBLEM_CLASS.soldButStillStocked,
+    executionLane: "fast",
+    continuation: { kind: "entity-list" as const },
+    freshness: { kind: "live" as const },
+    title: "Disposed but still on hand",
+    description:
+      "A recorded disposal closed the known quantity while inventory remains on hand.",
+    emptyMessage: "No disposed products remain in inventory.",
+    source: {
+      kind: "entity" as const,
+      entity: "product" as const,
+      filters: [
+        { id: "ownershipReconciliation", value: "disposed_still_on_hand" },
+      ],
+      sort: [{ id: "updatedAt", desc: true }],
+      columnVisibility: { expectedQuantity: true, location: true },
+    },
+  }),
+  defineProblem({
+    key: "unknownParkedItems",
+    problemClass: PROBLEM_CLASS.unknownParkedItems,
+    executionLane: "fast",
+    continuation: { kind: "entity-list" as const },
+    freshness: { kind: "live" as const },
+    title: "Items parked in Unknown",
+    description: "Inventory in the household-wide Unknown location.",
+    emptyMessage: "No inventory is parked in Unknown.",
+    source: {
+      kind: "entity" as const,
+      entity: "inventory" as const,
+      filters: [
+        { id: "locationRole", value: "global_unknown" },
+        { id: "placement", value: "all" },
+      ],
+      sort: [{ id: "createdAt", desc: false }],
+      columnVisibility: { location: true, placement: true },
+    },
+  }),
+  defineProblem({
+    key: "inventoryWithoutPricePath",
+    problemClass: PROBLEM_CLASS.inventoryWithoutPricePath,
+    executionLane: "fast",
+    continuation: { kind: "entity-list" as const },
+    freshness: { kind: "live" as const },
+    title: "Inventory without a price path",
+    description:
+      "Inventory whose product has a price but whose stored unit cannot reach it.",
+    emptyMessage: "Every priced product can value its inventory.",
+    source: {
+      kind: "entity" as const,
+      entity: "inventory" as const,
+      filters: [
+        { id: "valuationStatus", value: "missing_with_priced_product" },
+        { id: "placement", value: "all" },
+      ],
+      sort: [{ id: "createdAt", desc: false }],
+      columnVisibility: { valuation: true, product: true },
+    },
+  }),
+  defineProblem({
+    key: "understatedCostMeals",
+    problemClass: PROBLEM_CLASS.understatedCostMeals,
+    executionLane: "fast",
+    continuation: { kind: "entity-list" as const },
+    freshness: { kind: "live" as const },
+    title: "Meals with understated recipe cost",
+    description:
+      "Meals whose live recipes have incomplete priced ingredient coverage.",
+    emptyMessage: "Every meal has complete recipe cost coverage.",
+    source: {
+      kind: "entity" as const,
+      entity: "meal" as const,
+      filters: [{ id: "recipeCostCoverage", value: "understated" }],
+      sort: [{ id: "date", desc: false }],
+      columnVisibility: { recipes: true },
+    },
+  }),
+] as const satisfies readonly ProblemQuery[];
+
+/** All exact entity-grain Problem declarations currently migrated. */
+export function entityProblemDeclarations(): readonly ProblemQuery[] {
+  const definitions = [
+    ...viewProblemDeclarations().map(({ problem }) => problem),
+    ...standaloneEntityProblems,
+  ];
+  validateProblemQueries(definitions);
+  return definitions;
 }
 
 export function viewsForEntity(entity: Entity | undefined): ViewDefinition[] {

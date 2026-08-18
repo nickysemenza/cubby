@@ -44,6 +44,10 @@ import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { resolveShortcodes } from "~/server/repo/shortcode-resolver";
 import { projectContentDates, projectDependencyIds } from "./analytics";
+import {
+  computeAttentionItems,
+  projectAttentionFilterTypes,
+} from "./attention";
 import { dashboardProjectDateCondition } from "./dashboard-shared";
 import { EMPTY_PROJECT_DATE_WINDOW, hydrateProjectRow } from "./helpers";
 import {
@@ -124,6 +128,18 @@ export const buildProjectListQuery = async (
   // handed back in so the tree is never queried twice.
   const tree = await loadProjectTree(db);
   const { childrenByParent } = tree;
+
+  // Delegate exact tracker membership to the same deep module used by the
+  // dashboard and Problems. This avoids a second copy of the stalled, budget,
+  // and blocked-next-action predicates in the ordinary entity list.
+  const attentionFilter = filters.attention;
+  const attentionCodes = attentionFilter
+    ? (await computeAttentionItems(db))
+        .filter(
+          (item) => item.type === projectAttentionFilterTypes[attentionFilter],
+        )
+        .map((item) => item.entityId)
+    : undefined;
 
   const parentCodes = filters.parentProjectId
     ? [filters.parentProjectId].flat()
@@ -213,6 +229,11 @@ export const buildProjectListQuery = async (
         ? arrayOverlaps(project.locations, [filters.location].flat())
         : undefined,
       dashboardProjectDateCondition(filters),
+      attentionCodes
+        ? attentionCodes.length
+          ? inArray(project.shortcode, attentionCodes)
+          : sql`false`
+        : undefined,
       completionIds ? inArray(project.id, completionIds) : undefined,
       filters.topLevelOnly ? isNull(project.parentProjectId) : undefined,
       parentCondition,

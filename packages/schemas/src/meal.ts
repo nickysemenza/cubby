@@ -143,6 +143,12 @@ export const mealFilterFields = {
    */
   mealTypePresenceFilter: presenceFilter,
   mealKind: oneOrMany(mealKindSchema).optional(),
+  recipeCostCoverage: z
+    .enum(["understated"])
+    .optional()
+    .describe(
+      "Meals with a live recipe whose priced ingredients are incomplete.",
+    ),
   from: mealDate.optional().describe("Only meals on or after this day"),
   to: mealDate.optional().describe("Only meals on or before this day"),
   ...mealRelatedFilterFields,

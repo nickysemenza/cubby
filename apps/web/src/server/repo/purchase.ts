@@ -122,6 +122,7 @@ import {
 import {
   calculateFinancialReconciliation,
   postedRefundTotalSql,
+  purchaseFinancialMismatchSql,
   settleableExpenseTotalSql,
   settleableUnpricedExpenseCountSql,
 } from "~/server/repo/financial-reconciliation";
@@ -550,6 +551,9 @@ const buildPurchaseWhereClause = (
       ),
       expenseStatusCondition(filters.expenseStatus),
       reconciliationCondition(filters.reconciliation),
+      filters.financialReconciliation === "mismatch"
+        ? sql.raw(purchaseFinancialMismatchSql('"Purchase"'))
+        : undefined,
       documentPresenceCondition(filters.documentPresenceFilter),
       filters.dataStatus === "needs_data"
         ? purchaseNeedsDataCondition()
@@ -580,6 +584,9 @@ const resolvePurchaseSort = (sort: SortParams) => {
   if (sort.orderBy === "vendor") return [dir(purchaseVendorName)];
   if (sort.orderBy === "expenseCount") return [dir(purchaseExpenseCount)];
   if (sort.orderBy === "expenseTotal") return [dir(purchaseExpenseTotal)];
+  if (sort.orderBy === "reconciliationGap") {
+    return [dir(sql`abs(${purchaseExpenseTotal} - ${purchase.statedTotal})`)];
+  }
   if (sort.orderBy === "documentCount") return [dir(purchaseDocumentCount)];
   return null;
 };

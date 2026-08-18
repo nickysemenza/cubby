@@ -54,6 +54,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
+import { allocationIntegrityDefectSql } from "~/server/repo/financial-allocation-integrity";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import {
   type AllocationInput,
@@ -278,6 +279,9 @@ async function whereFor(
         : filters.purchasePresenceFilter === "none"
           ? sql`NOT ${hasAnyAllocation()}`
           : undefined,
+      filters.allocationIntegrity === "defect"
+        ? allocationIntegrityDefectSql('"FinancialTransaction"')
+        : undefined,
       // `eqAny`, NOT sql`col = ANY(${arr})`: drizzle expands a JS array in a
       // template into a row constructor (`ANY(($1, $2))`), which postgres
       // rejects — `ANY` wants an array, so the whole query 500s.

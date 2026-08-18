@@ -6,6 +6,7 @@ import {
   clearTableLayoutStoresForTests,
   normalizeTableLayout,
   useCubbyTableLayout,
+  useRevealTableColumnsOnce,
 } from "./table-layout";
 
 interface Row {
@@ -161,5 +162,54 @@ describe("useCubbyTableLayout", () => {
       start: [],
       end: [],
     });
+  });
+
+  it("reveals a persisted hidden worklist column once", () => {
+    localStorage.setItem(
+      "table-layout:v1:product",
+      JSON.stringify({
+        version: 1,
+        columnOrder: ["name", "cost"],
+        columnPinning: { start: [], end: [] },
+        columnVisibility: { name: true, cost: false },
+        columnSizing: {},
+      }),
+    );
+    const { result } = renderHook(() => {
+      const layout = useCubbyTableLayout({ key: "product", columns });
+      useRevealTableColumnsOnce(layout, {
+        key: "productsMissingPrice",
+        visibility: { cost: true },
+      });
+      return layout;
+    });
+
+    expect(result.current.atoms.columnVisibility.get().cost).toBe(true);
+    act(() =>
+      result.current.atoms.columnVisibility.set({ name: true, cost: false }),
+    );
+    expect(result.current.atoms.columnVisibility.get().cost).toBe(false);
+  });
+
+  it("reveals a newly activated worklist without a route remount", () => {
+    const { result, rerender } = renderHook(
+      ({ worklist }: { worklist?: string }) => {
+        const layout = useCubbyTableLayout({ key: "product", columns });
+        useRevealTableColumnsOnce(
+          layout,
+          worklist
+            ? { key: worklist, visibility: { cost: true } }
+            : undefined,
+        );
+        return layout;
+      },
+      { initialProps: { worklist: undefined as string | undefined } },
+    );
+
+    act(() =>
+      result.current.atoms.columnVisibility.set({ name: true, cost: false }),
+    );
+    rerender({ worklist: "productsMissingPrice" });
+    expect(result.current.atoms.columnVisibility.get().cost).toBe(true);
   });
 });

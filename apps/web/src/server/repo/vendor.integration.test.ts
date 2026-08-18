@@ -11,7 +11,7 @@ import {
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -473,6 +473,53 @@ describe("vendor repository — deletion guard", () => {
       cause: { reason: "VENDOR_NOT_FOUND" },
     });
     expect((await vendorList(ctx.db, {}, [], page)).count).toBe(0);
+  });
+
+  it("reaps an exclusive logo but preserves an image shared by another vendor", async () => {
+    const [logo] = await getDb(ctx.db)
+      .insert(image)
+      .values({
+        url: "https://example.com/shared-vendor-logo.png",
+        key: "shared-vendor-logo.png",
+        filename: "shared-vendor-logo.png",
+        size: 1,
+        contentType: "image/png",
+      })
+      .returning({ id: image.id, key: image.key });
+    const first = await createVendor(
+      ctx.db,
+      vendorCreateInput.parse({ name: "Shared Logo A" }),
+      ctx.actor,
+    );
+    const second = await createVendor(
+      ctx.db,
+      vendorCreateInput.parse({ name: "Shared Logo B" }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(vendor)
+      .set({ logoImageId: logo!.id })
+      .where(inArray(vendor.id, [first.entityId, second.entityId]));
+
+    expect(await deleteVendors(ctx.db, [first.output.id], ctx.actor)).toEqual({
+      detachedImageKeys: [],
+    });
+    expect(
+      await getDb(ctx.db).query.image.findFirst({
+        where: eq(image.id, logo!.id),
+        columns: { deletedAt: true },
+      }),
+    ).toMatchObject({ deletedAt: null });
+
+    expect(await deleteVendors(ctx.db, [second.output.id], ctx.actor)).toEqual({
+      detachedImageKeys: [logo!.key],
+    });
+    expect(
+      await getDb(ctx.db).query.image.findFirst({
+        where: eq(image.id, logo!.id),
+        columns: { id: true },
+      }),
+    ).toBeUndefined();
   });
 });
 

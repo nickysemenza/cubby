@@ -1,28 +1,21 @@
 import { useState } from "react";
 import { EntityPreviewLink } from "~/app/_components/EntityPreviewLink";
 import { Row } from "~/components/layout";
-import {
-  publicBucketUrl,
-  transformedImageUrl,
-  transformedSrcSet,
-} from "~/lib/image-url";
+import { transformedImageUrl, transformedSrcSet } from "~/lib/image-url";
 import { cn } from "~/lib/utils";
-import { VENDOR_LOGO_PREFIX, vendorMonogram } from "~/lib/vendor-logo";
-import { VENDOR_LOGO_BY_SHORTCODE } from "~/lib/vendor-logos.generated";
+import { vendorMonogram } from "~/lib/vendor-logo";
 
 /** Rendered edge in CSS px. `size-4` — an inline glyph, not a card icon. */
 const MARK_PX = 16;
 
 /**
- * Whether this vendor has a logo, so callers can lay out around its absence.
- * A persisted shortcode is required: the manifest is the authoritative record
- * that the corresponding R2 object exists.
+ * The list/read-model supplies a displayable logo directly. We intentionally do
+ * not infer an asset from a vendor name or shortcode: `Vendor.logoImageId` is
+ * the only ownership relation and a missing logo is a first-class monogram.
  */
-const vendorLogoSlug = (vendorId?: string | null): string | null =>
-  vendorId ? (VENDOR_LOGO_BY_SHORTCODE[vendorId] ?? null) : null;
-
-const hasVendorLogo = (vendorId?: string | null): boolean =>
-  vendorLogoSlug(vendorId) !== null;
+type VendorLogo = { url: string } | null | undefined;
+const hasVendorLogo = (logo: VendorLogo): logo is { url: string } =>
+  Boolean(logo?.url);
 
 /**
  * A vendor's brand mark: its logo when we have one in R2, otherwise a monogram
@@ -37,7 +30,7 @@ const hasVendorLogo = (vendorId?: string | null): boolean =>
  */
 export function VendorMark({
   vendor,
-  vendorId,
+  logo,
   className,
 }: {
   vendor: string;
@@ -46,24 +39,25 @@ export function VendorMark({
    * stays a monogram instead of guessing that a same-slug asset exists.
    */
   vendorId?: string | null;
+  /** Resolved through Vendor.logoImageId by the read model. */
+  logo?: VendorLogo;
   className?: string;
 }) {
-  // The failure is remembered per-slug rather than as a bare boolean: this node
+  // The failure is remembered per URL rather than as a bare boolean: this node
   // is not remounted when a vendor is edited inline (same component instance,
   // new `vendor` prop), so a boolean set by the *previous* vendor's broken logo
   // would survive the swap and pin the new vendor to a monogram forever. Keying
-  // the state to the slug it describes self-corrects on every change, with no
+  // the state to the URL it describes self-corrects on every change, with no
   // effect and no extra render pass.
   //
-  const [failedSlug, setFailedSlug] = useState<string | null>(null);
-  const slug = vendorLogoSlug(vendorId);
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
 
   const shared = cn("size-4 shrink-0", className);
 
   // The `failedSlug` half covers the offline PWA and a manifest that has drifted
   // ahead of the bucket; the manifest lookup is what keeps the common logo-less
   // vendor from costing a failed request in the first place.
-  if (!slug || failedSlug === slug) {
+  if (!hasVendorLogo(logo) || failedUrl === logo.url) {
     return (
       <span
         aria-hidden
@@ -77,10 +71,7 @@ export function VendorMark({
     );
   }
 
-  // Always PNG — the seed script normalizes every source format on the way in,
-  // so Cloudflare Image Transformations can serve an exact 1x/2x AVIF/WebP pair
-  // off whatever resolution the original happened to be.
-  const url = publicBucketUrl(`${VENDOR_LOGO_PREFIX}/${slug}.png`);
+  const url = logo.url;
 
   return (
     <img
@@ -88,7 +79,7 @@ export function VendorMark({
       srcSet={transformedSrcSet(url, MARK_PX)}
       alt=""
       loading="lazy"
-      onError={() => setFailedSlug(slug)}
+      onError={() => setFailedUrl(url)}
       className={cn(
         shared,
         "object-contain grayscale transition-[filter] group-hover/row:grayscale-0 max-sm:grayscale-0",
@@ -123,6 +114,7 @@ export function VendorMark({
 export function VendorCell({
   vendor,
   vendorId,
+  logo,
   compactOnMobile,
 }: {
   vendor: string;
@@ -130,15 +122,18 @@ export function VendorCell({
    * doc. Passing it to only one would make `compactOnMobile`'s logo-presence
    * check disagree with what the mark actually renders. */
   vendorId?: string | null;
+  /** Forwarded to VendorMark and used by compact mobile layout. */
+  logo?: VendorLogo;
   compactOnMobile?: boolean;
 }) {
-  const logo = hasVendorLogo(vendorId);
+  const hasLogo = hasVendorLogo(logo);
   const body = (
     <Row gap="sm" align="center" className="min-w-0">
-      {(!compactOnMobile || logo) && (
+      {(!compactOnMobile || hasLogo) && (
         <VendorMark
           vendor={vendor}
           vendorId={vendorId}
+          logo={logo}
           className={
             vendorId ? "group-hover/vendor-link:grayscale-0" : undefined
           }
@@ -147,7 +142,7 @@ export function VendorCell({
       <span
         className={cn(
           "truncate",
-          compactOnMobile && logo && "max-sm:sr-only",
+          compactOnMobile && hasLogo && "max-sm:sr-only",
           vendorId &&
             "font-medium underline decoration-border/70 decoration-dotted underline-offset-2 group-hover/vendor-link:decoration-primary group-hover/vendor-link:decoration-solid",
         )}

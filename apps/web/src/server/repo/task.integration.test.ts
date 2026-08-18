@@ -445,6 +445,54 @@ describe("task repository — listActionableTasks", () => {
     ]);
   });
 
+  it("filters effective due dates with stable household-relative presets", async () => {
+    const { output: past } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "relative overdue",
+        dueDate: householdDaysAgo(1),
+      }),
+      ctx.actor,
+    );
+    const { output: today } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "relative today",
+        dueDate: householdDaysAgo(0),
+      }),
+      ctx.actor,
+    );
+    const { output: future } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "relative future",
+        dueDate: householdDaysFromNow(1),
+      }),
+      ctx.actor,
+    );
+
+    const before = await taskList(ctx.db, { dueRelative: "beforeToday" }, [], {
+      pageIndex: 0,
+      pageSize: 500,
+    });
+    expect(before.data.map((row) => row.id)).toContain(past.id);
+    expect(before.data.map((row) => row.id)).not.toContain(today.id);
+    expect(before.data.map((row) => row.id)).not.toContain(future.id);
+
+    const throughToday = await taskList(
+      ctx.db,
+      { dueRelative: "onOrBeforeToday" },
+      [],
+      { pageIndex: 0, pageSize: 500 },
+    );
+    expect(throughToday.data.map((row) => row.id)).toContain(past.id);
+    expect(throughToday.data.map((row) => row.id)).toContain(today.id);
+    expect(throughToday.data.map((row) => row.id)).not.toContain(future.id);
+  });
+
   it("orders `later`: due date ascending (nulls last), then updatedAt descending", async () => {
     const soon = householdDaysFromNow(1);
     const later = householdDaysFromNow(2);

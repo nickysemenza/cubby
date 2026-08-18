@@ -1,15 +1,27 @@
 import type { Entity } from "@cubby/schemas/entity";
+import {
+  unsafeIngredientId,
+  unsafeLocationId,
+  unsafeTaskId,
+  unsafeVendorId,
+} from "@cubby/schemas/identifiers";
 import { urlStringParam } from "~/lib/search-params";
+import { buildFiltersFromManifest, type FilterSpecCore } from "./filters";
+import type { FilterAssembly } from "./problem-query";
 
 /**
- * Dependency-light URL projection of the UI filter manifest.
+ * Dependency-light semantic filter core for URL state.
  *
  * Route modules are part of TanStack Router's eager graph. Importing the full
  * icon/options/brand-bearing filter manifest there made every browser download
  * table UI and date helpers before hydration. The UI test suite asserts this
  * key projection stays identical to `getEntityFilters()`.
+ *
+ * This is deliberately metadata, rather than a route-shaped object: the
+ * route adapter below is generated from it. Server code can also consult the
+ * same vocabulary without importing the React/icon/options bearing manifest.
  */
-const filterSearchKeys = {
+export const entityFilterSemantics = {
   product: [
     "name",
     "manufacturer",
@@ -35,6 +47,10 @@ const filterSearchKeys = {
     "price",
     "food",
     "image",
+    "inventoryMultiplicity",
+    "ownershipReconciliation",
+    "conversionCoverage",
+    "conversionTopology",
     "unitMappingQuality",
     "stockTracked",
     "tags",
@@ -70,6 +86,8 @@ const filterSearchKeys = {
     "category",
     "verifiedAt",
     "placement",
+    "locationRole",
+    "valuationStatus",
     "related-ingredient",
     "ingredientId",
     "ingredientPresenceFilter",
@@ -114,6 +132,7 @@ const filterSearchKeys = {
   meal: [
     "mealType",
     "mealKind",
+    "recipeCostCoverage",
     "related-recipe",
     "recipeId",
     "createdAt",
@@ -124,6 +143,7 @@ const filterSearchKeys = {
     "name",
     "statuses",
     "kinds",
+    "attention",
     "locations",
     "date",
     "completed",
@@ -157,6 +177,8 @@ const filterSearchKeys = {
     "status",
     "trade",
     "dueDate",
+    "dueRelative",
+    "completion",
     "project",
     "productId",
     "subjectProduct",
@@ -175,6 +197,7 @@ const filterSearchKeys = {
     "date",
     "dateFrom",
     "dateTo",
+    "dateRelative",
     "costType",
     "lineKind",
     "lineBasis",
@@ -183,6 +206,8 @@ const filterSearchKeys = {
     "cost",
     "costMin",
     "costMax",
+    "costSign",
+    "disposalPurchasePresenceFilter",
     "productQuantity",
     "productQuantityMin",
     "productQuantityMax",
@@ -207,6 +232,7 @@ const filterSearchKeys = {
     "purchaseCount",
     "spend",
     "latestPurchaseDate",
+    "logo",
     "related-expense",
     "expenseId",
     "expensePresenceFilter",
@@ -226,6 +252,7 @@ const filterSearchKeys = {
     "updatedAt",
   ],
   purchase: [
+    "financialReconciliation",
     "q",
     "label",
     "vendor",
@@ -277,6 +304,7 @@ const filterSearchKeys = {
     "updatedAt",
   ],
   financialTransaction: [
+    "allocationIntegrity",
     "q",
     "kind",
     "status",
@@ -315,15 +343,267 @@ const filterSearchKeys = {
     "createdAt",
     "updatedAt",
   ],
-  image: ["filename", "createdAt", "updatedAt"],
+  image: ["filename", "status", "entity", "createdAt", "updatedAt"],
   "usda-food": [],
   cookbook: [],
 } as const satisfies Record<Entity, readonly string[]>;
+
+/**
+ * Server-safe semantic entries used by Problem Query assemblies.
+ *
+ * This deliberately lives beside the full URL-key roster above rather than in
+ * a second Problem-only projection.  Both route validation and server query
+ * compilation now consult this one dependency-light module.  The UI manifest
+ * augments these semantics with controls, icons, option loading, and display
+ * labels; it must not invent an additional URL vocabulary.
+ */
+export const problemFilterSemantics = {
+  product: [
+    {
+      columnId: "location",
+      field: "locationIdFilter",
+      kind: "idMulti",
+      brand: unsafeLocationId,
+      nullable: { field: "inventoryPresenceFilter", label: "inventory" },
+    },
+    {
+      columnId: "price",
+      kind: "range",
+      expand: (value) =>
+        value === "none-real"
+          ? { pricePresenceFilter: "none", miscBucketFilter: "none" }
+          : value === "none-bucket"
+            ? { pricePresenceFilter: "none", miscBucketFilter: "has" }
+            : {},
+    },
+    { columnId: "food", field: "usdaPresenceFilter", kind: "presence" },
+    {
+      columnId: "unitMappingQuality",
+      field: "unitMappingPresenceFilter",
+      kind: "presence",
+    },
+    {
+      columnId: "category",
+      field: "categoryFilter",
+      kind: "multiselect",
+      nullable: { field: "categoryPresenceFilter", label: "category" },
+    },
+    {
+      columnId: "expectedQuantity",
+      kind: "range",
+      expand: (value) =>
+        value === "negative" ? { expectedQuantityMax: -1 } : {},
+    },
+    { columnId: "image", field: "imagePresenceFilter", kind: "presence" },
+    {
+      columnId: "ingredient",
+      field: "ingredientIdFilter",
+      kind: "idMulti",
+      brand: unsafeIngredientId,
+      nullable: { field: "ingredientPresenceFilter", label: "ingredient" },
+    },
+    { columnId: "inventoryMultiplicity", kind: "select" },
+    { columnId: "ownershipReconciliation", kind: "select" },
+    { columnId: "conversionCoverage", kind: "select" },
+    { columnId: "conversionTopology", kind: "select" },
+  ],
+  ingredient: [
+    {
+      columnId: "ownRecipes",
+      field: "ownRecipePresenceFilter",
+      kind: "presence",
+    },
+    {
+      columnId: "appearsInRecipes",
+      field: "recipePresenceFilter",
+      kind: "presence",
+    },
+    { columnId: "product", field: "productPresenceFilter", kind: "presence" },
+  ],
+  location: [
+    { columnId: "image", field: "imagePresenceFilter", kind: "presence" },
+    {
+      columnId: "aiDescription",
+      field: "aiDescriptionPresenceFilter",
+      kind: "presence",
+    },
+    {
+      columnId: "lastBulkInventory",
+      kind: "range",
+      expand: (value) =>
+        value === "60" ? { lastBulkInventoryOlderThanDays: 60 } : {},
+    },
+    {
+      columnId: "inventoryEntries",
+      kind: "range",
+      expand: (value) =>
+        value === "none"
+          ? { directItemCountMax: 0 }
+          : value === "has"
+            ? { directItemCountMin: 1 }
+            : {},
+    },
+    { columnId: "children", field: "childPresenceFilter", kind: "presence" },
+  ],
+  recipe: [
+    {
+      columnId: "instructions",
+      field: "instructionsPresenceFilter",
+      kind: "presence",
+    },
+    {
+      columnId: "sourceType",
+      field: "sourceTypeFilter",
+      kind: "multiselect",
+      nullable: { field: "sourceTypePresenceFilter", label: "source" },
+    },
+  ],
+  meal: [
+    { columnId: "mealKind", kind: "multiselect" },
+    {
+      columnId: "related:meal.recipes",
+      urlKey: "related-recipe",
+      field: "recipePresenceFilter",
+      kind: "presence",
+    },
+    { columnId: "recipeCostCoverage", kind: "select" },
+  ],
+  inventory: [
+    {
+      columnId: "verifiedAt",
+      kind: "range",
+      expand: (value) =>
+        value === "has" || value === "none"
+          ? { verifiedPresenceFilter: value }
+          : {},
+    },
+    { columnId: "locationRole", kind: "select" },
+    { columnId: "placement", field: "placementFilter", kind: "select" },
+    { columnId: "valuationStatus", kind: "select" },
+  ],
+  expense: [
+    { columnId: "future", kind: "boolean" },
+    { columnId: "costSign", kind: "select" },
+    { columnId: "dateRelative", kind: "select" },
+    { columnId: "product", field: "productPresenceFilter", kind: "presence" },
+    {
+      columnId: "vendor",
+      field: "vendorId",
+      kind: "idMulti",
+      brand: unsafeVendorId,
+      nullable: { field: "vendorPresenceFilter", label: "purchase" },
+    },
+    { columnId: "lineKind", kind: "multiselect" },
+    { columnId: "lineBasis", kind: "multiselect" },
+    { columnId: "trade", kind: "multiselect" },
+    {
+      columnId: "cost",
+      kind: "range",
+      expand: (value) =>
+        value === "has" || value === "none"
+          ? { costPresenceFilter: value }
+          : {},
+    },
+    { columnId: "disposalPurchasePresenceFilter", kind: "presence" },
+  ],
+  purchase: [
+    { columnId: "reconciliation", kind: "multiselect" },
+    { columnId: "financialReconciliation", kind: "select" },
+  ],
+  financialTransaction: [{ columnId: "allocationIntegrity", kind: "select" }],
+  image: [
+    { columnId: "status", kind: "multiselect" },
+    { columnId: "entity", field: "referencePresenceFilter", kind: "presence" },
+    {
+      columnId: "createdAt",
+      kind: "range",
+      expand: (value) =>
+        value === "olderThan1h" ? { uploadedAgeHoursMin: 1 } : {},
+    },
+  ],
+  vendor: [
+    {
+      columnId: "purchaseCount",
+      kind: "range",
+      expand: (value) => ({ purchaseCountMin: Number(value) }),
+    },
+    { columnId: "logo", field: "logoPresenceFilter", kind: "presence" },
+  ],
+  task: [
+    { columnId: "dueRelative", kind: "select" },
+    { columnId: "completion", kind: "select" },
+    {
+      columnId: "parentTask",
+      field: "parentTaskId",
+      kind: "idMulti",
+      brand: unsafeTaskId,
+      nullable: { field: "parentTaskPresenceFilter", label: "parent task" },
+    },
+  ],
+  project: [{ columnId: "attention", kind: "select" }],
+} as const satisfies Partial<Record<Entity, readonly FilterSpecCore[]>>;
+
+/** The URL keys an entity accepts for its canonical filter assembly. */
+export const entityFilterUrlKeys = (entity: Entity): readonly string[] =>
+  entityFilterSemantics[entity];
 
 export function entityFilterSearchFields(
   entity: Entity,
 ): Record<string, typeof urlStringParam> {
   const fields: Record<string, typeof urlStringParam> = {};
-  for (const key of filterSearchKeys[entity]) fields[key] = urlStringParam;
+  for (const key of entityFilterUrlKeys(entity)) fields[key] = urlStringParam;
   return fields;
+}
+
+/** Compile a Problem assembly through the same server-safe semantic registry. */
+export function compileProblemFilters(
+  entity: Entity,
+  assembly: FilterAssembly,
+): Record<string, unknown> {
+  const specs: readonly FilterSpecCore[] =
+    (
+      problemFilterSemantics as Partial<
+        Record<Entity, readonly FilterSpecCore[]>
+      >
+    )[entity] ?? [];
+  const values = new Map(assembly.map(({ id, value }) => [id, value]));
+  const byColumn = new Map(specs.map((spec) => [spec.columnId, spec]));
+  const unknown = assembly.find(({ id }) => !byColumn.has(id));
+  if (unknown) {
+    throw new Error(
+      `No server-safe Problem filter semantic for ${entity}.${unknown.id}`,
+    );
+  }
+  const urlKeys = new Set(entityFilterUrlKeys(entity));
+  const nonSerializable = assembly.find(({ id }) => {
+    const spec = byColumn.get(id);
+    return !spec || !urlKeys.has(spec.urlKey ?? spec.columnId);
+  });
+  if (nonSerializable) {
+    throw new Error(
+      `Problem filter ${entity}.${nonSerializable.id} has no canonical URL semantic`,
+    );
+  }
+  return buildFiltersFromManifest(specs, (columnId) => values.get(columnId));
+}
+
+/**
+ * Boundary check used by the UI adapter after it adds controls and options.
+ * It makes a new UI-only URL filter fail immediately instead of silently
+ * creating route state that the dependency-light route adapter cannot parse.
+ */
+export function assertUiFilterSemantics(
+  entity: Entity,
+  specs: readonly Pick<FilterSpecCore, "columnId" | "urlKey">[],
+): void {
+  const declared = specs.map((spec) => spec.urlKey ?? spec.columnId);
+  const expected = entityFilterUrlKeys(entity);
+  if (
+    declared.length !== expected.length ||
+    declared.some((key, index) => key !== expected[index])
+  ) {
+    throw new Error(
+      `UI filter adapter drift for ${entity}: expected [${expected.join(", ")}], got [${declared.join(", ")}].`,
+    );
+  }
 }

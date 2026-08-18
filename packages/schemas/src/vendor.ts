@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { imageOut } from "./image";
 import { vendorRelatedFilterFields } from "./related-view";
 import {
   auditDateFilterFields,
@@ -63,6 +64,7 @@ export const vendorFilterFields = {
   latestPurchaseDatePresenceFilter: presenceFilter,
   latestPurchaseDateFrom: plainDate.optional(),
   latestPurchaseDateTo: plainDate.optional(),
+  logoPresenceFilter: presenceFilter,
 };
 export const vendorFiltersSchema = z.object(vendorFilterFields);
 export type VendorFilters = z.infer<typeof vendorFiltersSchema>;
@@ -91,6 +93,8 @@ export const vendorOut = z.object({
    */
   spend: z.number(),
   latestPurchaseDate: plainDate.nullable(),
+  /** A displayable vendor brand mark, or null when the monogram is intentional. */
+  logo: imageOut.nullable(),
   ...timestampedFields,
 });
 export type VendorOut = z.infer<typeof vendorOut>;

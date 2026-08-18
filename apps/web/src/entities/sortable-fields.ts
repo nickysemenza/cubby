@@ -100,6 +100,7 @@ export const sortableFields = {
     "vendor",
     "expenseCount",
     "expenseTotal",
+    "reconciliationGap",
     "documentCount",
     "createdAt",
     "updatedAt",

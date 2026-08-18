@@ -20,12 +20,16 @@ import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import type { QueryTiming } from "~/lib/query-timing";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import type { RowLinkResolver } from "../data-table/columnHelpers";
+import { problemWorklistState } from "../data-table/problem-worklist";
 import {
   type CubbyColumnDef,
   type CubbyTable,
   createCubbyColumnHelper,
 } from "../data-table/table-features";
-import { useCubbyTableLayout } from "../data-table/table-layout";
+import {
+  useCubbyTableLayout,
+  useRevealTableColumnsOnce,
+} from "../data-table/table-layout";
 import type { GroupConfig } from "../data-table/useGroupedList";
 import { useTableConfig } from "../data-table/useTableConfig";
 import {
@@ -356,6 +360,18 @@ export function useEntityList<
   // size internally, but never expose meaningless page/pageSize URL state.
   const tableState = useTableState(mergedTableStateOptions);
 
+  // `worklist` is orientation only. The ordinary URL filters and sort above
+  // already decide membership; an exact match merely reveals the columns that
+  // explain why this Problem selected the row. Editing either state leaves the
+  // worklist in place as a visibly modified source without reapplying it.
+  const routeSearch = useSearch({ strict: false }) as Record<string, unknown>;
+  const worklist = problemWorklistState(
+    entity,
+    routeSearch.worklist,
+    tableState.columnFilters,
+    tableState.sorting,
+  );
+
   // Tab title: `Products: packout ↓price | cubby`, so several list tabs of the
   // same entity are tellable apart.
   //
@@ -369,12 +385,11 @@ export function useEntityList<
   // Gated on `urlSync` because that already marks the ONE list that owns the
   // page's URL state; an embedded table (the project detail page's tasks and
   // expenses) opts out of it and must not retitle the page either.
-  const search = useSearch({ strict: false });
   useDocumentTitle(
     mergedTableStateOptions.urlSync
       ? [
           entities[entity].pluralLabel,
-          summarizeListState(getEntityFilters(entity), search),
+          summarizeListState(getEntityFilters(entity), routeSearch),
         ]
           .filter(Boolean)
           .join(": ")
@@ -454,9 +469,12 @@ export function useEntityList<
       createdAt: false,
       updatedAt: false,
       ...relatedInitialVisibility,
+      ...(worklist?.exact && worklist.query.source.kind === "entity"
+        ? worklist.query.source.columnVisibility
+        : {}),
       ...initialColumnVisibility,
     }),
-    [initialColumnVisibility, relatedInitialVisibility],
+    [initialColumnVisibility, relatedInitialVisibility, worklist],
   );
   const sourceIds = useMemo(() => data.map((item) => item.id), [data]);
   const relatedStateRef = useRelatedPreviewStateRef();
@@ -531,6 +549,15 @@ export function useEntityList<
     legacyVisibilityKey: legacyLayoutVisibilityKey ?? persistedLayoutKey,
     legacySizingKey: legacyLayoutSizingKey ?? persistedLayoutKey,
   });
+  useRevealTableColumnsOnce(
+    layout,
+    worklist?.exact && worklist.query.source.kind === "entity"
+      ? {
+          key: worklist.query.key,
+          visibility: worklist.query.source.columnVisibility ?? {},
+        }
+      : undefined,
+  );
   const columnVisibility = useStore(layout.atoms.columnVisibility);
   const visibleRelatedKeys = useMemo(
     () =>

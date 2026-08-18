@@ -14,11 +14,6 @@
  *                                            linked-product ids)
  *   INGREDIENT  → `detectors-ingredient.ts` (no-product, unused aliases,
  *                                            unused ingredients, alias pruning)
- *   MEAL        → `detectors-meal.ts`       (cooked meals with nothing planned —
- *                                            eating-out placeholders excluded)
- *   INVENTORY   → `detectors-inventory.ts`  (items parked in the global
- *                                            "Unknown" location, entries whose
- *                                            unit cannot reach money)
  *   COVERAGE    → `detectors-coverage.ts`   (population denominators for the
  *                                            coverage meters — the only module
  *                                            here that counts *healthy* rows)
@@ -56,10 +51,9 @@ export {
 export {
   findDuplicateFinancialAccountSourceAliases,
   findDuplicateFinancialTransactionSourceRefs,
-  findFinancialTransactionAllocationDefects,
   findIncompleteStatementImports,
   findInvalidFinancialJson,
-  findPurchaseFinancialSettlementMismatches,
+  loadAllocationDefectPresenters,
 } from "./detectors-financial";
 // Ingredient-centric detectors
 export {
@@ -68,46 +62,33 @@ export {
 } from "./detectors-ingredient";
 // Schema-wide referential-liveness audit
 export { findReferentialLivenessViolations } from "./detectors-integrity";
-// Inventory-centric detectors (recount staleness)
-export {
-  findInventoryWithoutPricePath,
-  findUnknownParkedItems,
-} from "./detectors-inventory";
 // Name drift (one name, two spellings) — free-text manufacturer + vendor roster
 export {
   findDuplicateVendors,
   findManufacturerSpellingVariants,
 } from "./detectors-label-variants";
-// Meal-centric detectors
-export { findUnderstatedCostMeals } from "./detectors-meal";
 // Product-centric detectors (+ ProductWithBetterUpcData type re-export)
 export {
-  findDuplicateInventoryProducts,
   findDuplicateProductIdentities,
   findLinkedProductIds,
   findOrphanedProducts,
   findProductsWithUpcGaps,
-  findPurchaselessExitExpenses,
-  findSoldButStillStocked,
   findToolsUsedOutsideOwnership,
-  findUnlinkedExitExpenses,
   loadProductsForCoverage,
+  loadSoldButStockedPresenterTotals,
   type ProductWithBetterUpcData,
   recipeUsageCountsByProduct,
   synthesizeEffectiveMappings,
 } from "./detectors-product";
 // Purchase-centric detectors (the soft stated-total-vs-lines worklist)
-export {
-  findDuplicateSpendCandidates,
-  findPurchasesNotReconciling,
-} from "./detectors-purchase";
+export { findDuplicateSpendCandidates } from "./detectors-purchase";
 // Recipe-centric detectors (derived-data-on-removal guardrail)
 export {
   findParentRecipesWithDeletedSubRecipes,
   type StaleParentRecipe,
 } from "./detectors-recipe";
 // Optional vendor presentation coverage
-export { findVendorsWithoutLogos } from "./detectors-vendor";
+export { loadVendorLogoPresenterCounts } from "./detectors-vendor";
 // Stale-parse detection + re-parse write path
 export {
   applyReparsedStaleLines,

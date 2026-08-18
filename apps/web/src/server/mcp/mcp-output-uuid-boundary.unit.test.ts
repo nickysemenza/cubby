@@ -24,6 +24,7 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "add_recipe_to_meal.recipes[].id",
   "attach_file.imageId",
   "get_product.images[].id",
+  "get_vendor.logo.id",
   "patch_product_external_ids.images[].id",
   "create_meal.recipes[].id",
   "find_recipes_using_ingredient.recipes[].usages[].lineId",
@@ -32,9 +33,13 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "get_recipe.sections[].id",
   "get_recipe.sections[].ingredients[].id",
   "list_meals.items[].recipes[].id",
+  "list_vendors.items[].logo.id",
   "remove_meal_recipe.recipes[].id",
   "update_meal.recipes[].id",
   "update_meal_recipe.recipes[].id",
+  "create_vendor.logo.id",
+  "update_vendor.logo.id",
+  "merge_vendors.logo.id",
   "verify_product_images.images[].id",
   // Plural mirrors of the singular exceptions above. A batch tool wraps its
   // singular's own output in `results[].item`, so it re-exposes exactly the
@@ -45,6 +50,8 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "update_meals.results[].item.recipes[].id",
   "patch_products_external_ids.results[].item.images[].id",
   "verify_products_images.results[].item.images[].id",
+  "create_vendors.results[].item.logo.id",
+  "update_vendors.results[].item.logo.id",
   // The staged-upload handle. It IS an Image id, and images are a declared
   // exception with no shortcode — the caller hands this straight back to
   // attach_file, so it is the identifier rather than a leaked internal.

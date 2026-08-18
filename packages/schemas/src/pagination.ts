@@ -78,6 +78,15 @@ export const presenceFilter = z.enum(["has", "none"]).optional();
 export type PresenceFilter = z.infer<typeof presenceFilter>;
 
 /**
+ * Stable calendar predicates whose boundary is resolved by the server using
+ * Cubby's household clock. Unlike serializing today's literal date into a
+ * saved view, these values remain truthful when a bookmarked worklist is
+ * opened tomorrow.
+ */
+export const relativeDateFilter = z.enum(["beforeToday", "onOrBeforeToday"]);
+export type RelativeDateFilter = z.infer<typeof relativeDateFilter>;
+
+/**
  * Accept one value or a set of them for the same filter — the shape a
  * multi-select column filter produces.
  *

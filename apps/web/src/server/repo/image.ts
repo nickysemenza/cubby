@@ -49,7 +49,21 @@ import {
   imageSortableFields,
 } from "@cubby/schemas/image";
 import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
-import { and, asc, count, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
+import {
+  aliasedTable,
+  and,
+  asc,
+  count,
+  eq,
+  exists,
+  inArray,
+  isNotNull,
+  lt,
+  not,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { match } from "ts-pattern";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -59,6 +73,7 @@ import type {
 } from "~/server/db/entity-incoming-edges";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import {
+  cookbook,
   image,
   location,
   locationImage,
@@ -70,6 +85,7 @@ import {
   purchaseImage,
   recipe,
   recipeImage,
+  vendor,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { touchDataQualityTargets } from "~/server/repo/data-quality";
@@ -78,6 +94,7 @@ import {
   auditDateWhereConditions,
   buildOrderBy,
   countWhere,
+  eqAny,
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
@@ -392,6 +409,88 @@ const imageEntityRelations = {
   },
 } as const;
 
+/**
+ * The SQL form of the same exhaustive incoming-edge set used by image delete.
+ * Entity-list membership can therefore paginate/count unreferenced images
+ * without loading every Image and reducing the result in JavaScript.
+ */
+const imageReferenceCondition = (
+  db: Database,
+  outerImage: typeof image,
+): SQL => {
+  const dbc = getDb(db);
+  const byEdge = {
+    "Cookbook.coverImageId": exists(
+      dbc
+        .select({ one: sql`1` })
+        .from(cookbook)
+        .where(
+          and(eq(cookbook.coverImageId, outerImage.id), notDeleted(cookbook)),
+        ),
+    ),
+    "Vendor.logoImageId": exists(
+      dbc
+        .select({ one: sql`1` })
+        .from(vendor)
+        .where(and(eq(vendor.logoImageId, outerImage.id), notDeleted(vendor))),
+    ),
+    "ProductImage.imageId": exists(
+      dbc
+        .select({ one: sql`1` })
+        .from(productImage)
+        .where(
+          and(
+            eq(productImage.imageId, outerImage.id),
+            notDeleted(productImage),
+          ),
+        ),
+    ),
+    "LocationImage.imageId": exists(
+      dbc
+        .select({ one: sql`1` })
+        .from(locationImage)
+        .where(
+          and(
+            eq(locationImage.imageId, outerImage.id),
+            notDeleted(locationImage),
+          ),
+        ),
+    ),
+    "RecipeImage.imageId": exists(
+      dbc
+        .select({ one: sql`1` })
+        .from(recipeImage)
+        .where(
+          and(eq(recipeImage.imageId, outerImage.id), notDeleted(recipeImage)),
+        ),
+    ),
+    "ProjectImage.imageId": exists(
+      dbc
+        .select({ one: sql`1` })
+        .from(projectImage)
+        .where(
+          and(
+            eq(projectImage.imageId, outerImage.id),
+            notDeleted(projectImage),
+          ),
+        ),
+    ),
+    "PurchaseImage.imageId": exists(
+      dbc
+        .select({ one: sql`1` })
+        .from(purchaseImage)
+        .where(
+          and(
+            eq(purchaseImage.imageId, outerImage.id),
+            notDeleted(purchaseImage),
+          ),
+        ),
+    ),
+  } satisfies Record<IncomingEdgeKey<"image">, SQL>;
+
+  return or(...Object.values(byEdge))!;
+};
+
 export const imageList = async (
   db: Database,
   filters: import("@cubby/schemas/image").ImageListFilters,
@@ -399,24 +498,39 @@ export const imageList = async (
   pagination: { pageIndex: number; pageSize: number },
 ) => {
   const dbClient = getDb(db);
+  const buildWhere = (outerImage: typeof image) => {
+    const whereConditions: SQL[] = [];
+    const filenameCondition = formatSearchTerm(
+      outerImage.filename,
+      filters.nameFilter,
+    );
+    if (filenameCondition) whereConditions.push(filenameCondition);
+    const statusCondition = eqAny(outerImage.status, filters.status);
+    if (statusCondition) whereConditions.push(statusCondition);
+    whereConditions.push(
+      ...auditDateWhereConditions(outerImage, filters).filter(
+        (condition): condition is NonNullable<typeof condition> =>
+          Boolean(condition),
+      ),
+    );
+    if (filters.referencePresenceFilter) {
+      const referenced = imageReferenceCondition(db, outerImage);
+      whereConditions.push(
+        filters.referencePresenceFilter === "has"
+          ? referenced
+          : not(referenced),
+      );
+    }
+    if (filters.uploadedAgeHoursMin !== undefined) {
+      whereConditions.push(
+        sql`${outerImage.createdAt} < now() - (${filters.uploadedAgeHoursMin} * interval '1 hour')`,
+      );
+    }
+    return whereConditions.length > 0 ? and(...whereConditions) : undefined;
+  };
 
-  const whereConditions: ReturnType<typeof eq>[] = [];
-  const filenameCondition = formatSearchTerm(
-    image.filename,
-    filters.nameFilter,
-  );
-  if (filenameCondition) {
-    whereConditions.push(filenameCondition);
-  }
-  whereConditions.push(
-    ...auditDateWhereConditions(image, filters).filter(
-      (condition): condition is NonNullable<typeof condition> =>
-        Boolean(condition),
-    ),
-  );
-
-  const whereClause =
-    whereConditions.length > 0 ? and(...whereConditions) : undefined;
+  const whereClause = buildWhere(aliasedTable(image, "image"));
+  const countWhereClause = buildWhere(image);
 
   const orderByClause = buildOrderBy(image, sorts, [...imageSortableFields]);
 
@@ -431,7 +545,7 @@ export const imageList = async (
       offset: skip,
       with: imageEntityRelations,
     }),
-    countWhere(db, image, whereClause),
+    countWhere(db, image, countWhereClause),
   );
 
   const processedImages = images.map(imageWithRelationsToAPI);
@@ -626,6 +740,12 @@ export const IMAGE_HARD_DELETE = {
     effect: "detach",
     description:
       "A cookbook's cover image is cleared, not cascaded — the cookbook survives without a cover.",
+  },
+  "Vendor.logoImageId": {
+    code: "clearFk",
+    effect: "detach",
+    description:
+      "A vendor logo is cleared when its Image is removed; the vendor keeps its monogram fallback.",
   },
   "ProductImage.imageId": {
     code: "deleteRow",
@@ -995,6 +1115,7 @@ export const countUnreferencedImages = async (
 /** Human-readable labels for each {@link IMAGE_HARD_DELETE} edge, for the preview. */
 const IMAGE_HARD_DELETE_LABELS: Record<IncomingEdgeKey<"image">, string> = {
   "Cookbook.coverImageId": "cookbook cover references",
+  "Vendor.logoImageId": "vendor logo references",
   "ProductImage.imageId": "product image associations",
   "LocationImage.imageId": "location image associations",
   "RecipeImage.imageId": "recipe image associations",

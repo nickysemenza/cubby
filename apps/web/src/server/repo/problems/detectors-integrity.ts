@@ -85,6 +85,7 @@ interface EdgeAuditSpec {
   label: string;
   sourceTableName: string;
   sourceColumnName: string;
+  sourceIdColumnName: string;
   targetTableName: string;
   /** Whether the source table itself has a `deletedAt` column to guard on. */
   sourceSoftDeletable: boolean;
@@ -93,11 +94,12 @@ interface EdgeAuditSpec {
 /** Source tables with no `deletedAt` column — hard-delete-only, so no `s."deletedAt" IS NULL` guard applies. */
 const EXPECTED_HARD_DELETE_ONLY_TABLES = new Set([
   "ProjectDependency",
+  "ProductConversionCoverage",
   "TaskDependency",
 ]);
 
 /** The must-target-live edges this audit checks, derived (not hand-maintained) should equal this. */
-const EXPECTED_EDGE_COUNT = 47;
+const EXPECTED_EDGE_COUNT = 49;
 
 /**
  * Derive one {@link EdgeAuditSpec} per `must-target-live` edge in
@@ -145,6 +147,16 @@ function buildEdgeAuditSpecs(): EdgeAuditSpec[] {
       const sourceTableConfig = getTableConfig(column.table);
       const sourceTableName = sourceTableConfig.name;
       const sourceColumnName = column.name;
+      const sourceIdColumnName =
+        sourceTableConfig.columns.find((candidate) => candidate.primary)
+          ?.name ??
+        sourceTableConfig.columns.find((candidate) => candidate.name === "id")
+          ?.name;
+      if (!sourceIdColumnName) {
+        throw new Error(
+          `Source table "${sourceTableName}" has no primary/id column for liveness diagnostics.`,
+        );
+      }
 
       const derivedKey = `${sourceTableName}.${sourceColumnName}`;
       if (derivedKey !== edgeKey) {
@@ -173,6 +185,7 @@ function buildEdgeAuditSpecs(): EdgeAuditSpec[] {
         label: semantics.label,
         sourceTableName,
         sourceColumnName,
+        sourceIdColumnName,
         targetTableName,
         sourceSoftDeletable,
       });
@@ -219,7 +232,7 @@ function buildEdgeAuditSpecs(): EdgeAuditSpec[] {
 function detailBranch(spec: EdgeAuditSpec): SQL {
   return sql`(
     SELECT ${spec.edgeKey}::text AS "edgeKey",
-           s.id::text AS "sourceId",
+           s.${sql.identifier(spec.sourceIdColumnName)}::text AS "sourceId",
            t.id::text AS "targetId"
     FROM ${sql.identifier(spec.sourceTableName)} s
     JOIN ${sql.identifier(spec.targetTableName)} t
@@ -269,7 +282,7 @@ type CountRow = Record<string, unknown> & {
 };
 
 /**
- * Every live row whose FK points at a soft-deleted target, across all 47
+ * Every live row whose FK points at a soft-deleted target, across all 49
  * `must-target-live` incoming edges. See the file-level doc comment for the
  * invariant, why it's a regression guard, and the two audit exemptions
  * (`Ingredient.recipeId` skipped entirely, `Location.parentId` included

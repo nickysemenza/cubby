@@ -118,6 +118,7 @@ export class UPCLookupClient {
     if (upcs.length === 0) return result;
 
     return this.traced("lookupBatch", async () => {
+      let failure: Error | null = null;
       for (const batch of chunk(upcs, BULK_MAX_UPCS)) {
         try {
           const res = await this.fetcher(
@@ -137,6 +138,7 @@ export class UPCLookupClient {
             console.warn(
               `[UPC Lookup] Batch failed: ${res.status} ${res.statusText}${await this.errorBody(res)}`,
             );
+            failure ??= new Error(`UPC batch lookup failed (${res.status})`);
             continue;
           }
 
@@ -145,6 +147,9 @@ export class UPCLookupClient {
             console.warn(
               "[UPC Lookup] Batch response parse error:",
               parsed.error,
+            );
+            failure ??= new Error(
+              "UPC batch lookup returned an invalid response",
             );
             continue;
           }
@@ -161,8 +166,17 @@ export class UPCLookupClient {
           } else {
             console.warn("[UPC Lookup] Batch error:", error);
           }
+          failure ??=
+            error instanceof Error
+              ? error
+              : new Error("UPC batch lookup failed");
         }
       }
+      // Callers that need a truthful health state (the cached Problems
+      // projection) must be able to distinguish an empty, successful provider
+      // result from a transport/provider failure. The old best-effort return
+      // silently collapsed those two states into the same empty Map.
+      if (failure) throw failure;
       return result;
     });
   }

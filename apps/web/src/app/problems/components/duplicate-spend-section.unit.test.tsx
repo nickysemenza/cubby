@@ -160,7 +160,7 @@ describe("duplicate spend section", () => {
     // biome-ignore lint/complexity/noUselessFragments: as above — ReactNode to ReactElement
     render(<>{entry()?.node(problems([]), undefined as never)}</>);
     expect(
-      screen.getByText(/No unlinked expense duplicates a purchase's total/),
+      screen.getByText("No duplicate-spend candidates remain."),
     ).toBeTruthy();
   });
 });

@@ -31,6 +31,7 @@ import {
   createPaginatedResponseSchema,
   oneOrMany,
   presenceFilter,
+  relativeDateFilter,
 } from "./pagination";
 
 /**
@@ -375,6 +376,10 @@ export const projectFilterFields = {
   // Only meaningful alongside `parentProjectId`: expands the filter to the
   // whole live subtree under that parent, not just direct children.
   includeSubProjects: z.boolean().optional(),
+  /** Exact project-grain tracker worklists, resolved by shared attention rules. */
+  attention: z
+    .enum(["stalled", "missing_budget", "blocked_no_next_action"])
+    .optional(),
 };
 export const projectFiltersSchema = z.object(projectFilterFields);
 export type ProjectFilters = z.infer<typeof projectFiltersSchema>;
@@ -628,6 +633,8 @@ export const taskFilterFields = {
   /** Inclusive upper bound on a task's due date (matches `dueDate`). */
   dueTo: plainDate.optional().describe("Inclusive upper bound on due date"),
   duePresenceFilter: presenceFilter,
+  /** Server-relative effective-due predicate, stable in saved URLs. */
+  dueRelative: relativeDateFilter.optional(),
   /** Completion scope — see `taskCompletionSchema`. Undefined = "all". */
   completion: taskCompletionSchema
     .optional()
@@ -1031,6 +1038,8 @@ export const expenseFilterFields = {
   dateTo: plainDate
     .optional()
     .describe("Inclusive upper bound on expense date"),
+  /** Server-relative expense-date predicate, stable in saved URLs. */
+  dateRelative: relativeDateFilter.optional(),
   /**
    * Inclusive bounds on `cost`, in dollars — the money window the ledger has
    * never had. (Its absence is why 61 of 318 audited raw-SQL statements existed
@@ -1064,6 +1073,14 @@ export const expenseFilterFields = {
    * 3-value enum.
    */
   costPresenceFilter: presenceFilter,
+  /** Strict direction of a recorded cost. Zero and null match neither side. */
+  costSign: z.enum(["negative", "positive"]).optional(),
+  /**
+   * Whether an Expense belongs to a disposal Purchase. This is a relationship
+   * fact, not a restatement of a negative line: refunds are often negative but
+   * are not exits.
+   */
+  disposalPurchasePresenceFilter: presenceFilter,
   /**
    * Whole-unit receipt quantity is deliberately nullable: null means the
    * source paperwork did not establish a count. Bounds are inclusive and only

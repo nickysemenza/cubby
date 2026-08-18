@@ -707,6 +707,68 @@ export const productUnitMappings = pgTable(
   (table) => [index("ProductUnitMappings_productId_idx").on(table.productId)],
 );
 
+/**
+ * Rebuildable conversion-coverage projection. The conversion engine remains
+ * WASM; this table only makes its catalog-wide result filterable/sortable
+ * without evaluating a graph for a paginated list page.
+ */
+export const productConversionCoverage = pgTable(
+  "ProductConversionCoverage",
+  {
+    productId: uuid("productId")
+      .primaryKey()
+      .$type<ProductId>()
+      .references(() => product.id, { onDelete: "cascade" }),
+    coverageTier: text("coverageTier").notNull(),
+    coveredKinds: text("coveredKinds")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    applicableKinds: text("applicableKinds")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    islandCount: integer("islandCount").notNull().default(0),
+    // A mutation marks the row stale until the shared conversion engine has
+    // rebuilt it. Query filters intentionally only read ready rows.
+    status: text("status").notNull().default("ready"),
+    engineVersion: text("engineVersion").notNull(),
+    computedAt: timestamp("computedAt", { mode: "date" }).notNull(),
+  },
+  (table) => [
+    index("ProductConversionCoverage_tier_idx").on(table.coverageTier),
+    index("ProductConversionCoverage_island_idx").on(table.islandCount),
+    index("ProductConversionCoverage_status_idx").on(table.status),
+  ],
+);
+
+/**
+ * Materialized UPC-provider answers, keyed by the stable barcode rather than a
+ * Product. A product can gain or lose an empty field without invalidating the
+ * provider's answer; proposal membership is re-evaluated from this cache.
+ *
+ * `status=ready` includes a provider miss: it is a successfully checked UPC
+ * with no useful fields, not an outage. Provider outages deliberately do not
+ * overwrite a previous answer, so callers can distinguish stale data from an
+ * unavailable provider.
+ */
+export const upcLookupCache = pgTable(
+  "UpcLookupCache",
+  {
+    upc: text("upc").primaryKey(),
+    manufacturer: text("manufacturer"),
+    brand: text("brand"),
+    priceDollars: doublePrecision("priceDollars"),
+    imageUrl: text("imageUrl"),
+    status: text("status").notNull().default("ready"),
+    fetchedAt: timestamp("fetchedAt", { mode: "date" }).notNull(),
+  },
+  (table) => [
+    index("UpcLookupCache_fetchedAt_idx").on(table.fetchedAt),
+    index("UpcLookupCache_status_idx").on(table.status),
+  ],
+);
+
 // Location table
 export const location = pgTable(
   "Location",
@@ -1264,6 +1326,12 @@ export const vendor = pgTable(
     name: text("name").notNull(),
     website: text("website"),
     /**
+     * The optional, first-class brand mark for this vendor. Unlike gallery
+     * attachments, a logo is one owned presentation asset. Its absence is
+     * meaningful: VendorMark intentionally renders a monogram instead.
+     */
+    logoImageId: uuid("logoImageId").references(() => image.id),
+    /**
      * URL pattern for this vendor's own order-details page, with `{orderId}`
      * standing in for `Purchase.orderId` — e.g.
      * `https://www.amazon.com/gp/your-account/order-details?orderID={orderId}`.
@@ -1284,6 +1352,7 @@ export const vendor = pgTable(
     uniqueIndex("Vendor_name_key")
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
+    index("Vendor_logoImageId_idx").on(table.logoImageId),
   ],
 );
 
@@ -2043,6 +2112,7 @@ export const productRelations = relations(product, ({ one, many }) => ({
     references: [ingredient.id],
   }),
   unitMappings: many(productUnitMappings),
+  conversionCoverage: one(productConversionCoverage),
   externalIds: many(productExternalId),
   inventoryEntry: many(inventoryEntry),
   images: many(productImage),
@@ -2083,6 +2153,16 @@ export const productUnitMappingsRelations = relations(
   }),
 );
 
+export const productConversionCoverageRelations = relations(
+  productConversionCoverage,
+  ({ one }) => ({
+    product: one(product, {
+      fields: [productConversionCoverage.productId],
+      references: [product.id],
+    }),
+  }),
+);
+
 export const locationRelations = relations(location, ({ one, many }) => ({
   parent: one(location, {
     fields: [location.parentId],
@@ -2118,6 +2198,7 @@ export const imageRelations = relations(image, ({ many }) => ({
   recipeImages: many(recipeImage),
   projectImages: many(projectImage),
   purchaseImages: many(purchaseImage),
+  vendorLogos: many(vendor),
 }));
 
 export const projectRelations = relations(project, ({ one, many }) => ({
@@ -2231,8 +2312,12 @@ export const expenseRelations = relations(expense, ({ one }) => ({
   }),
 }));
 
-export const vendorRelations = relations(vendor, ({ many }) => ({
+export const vendorRelations = relations(vendor, ({ one, many }) => ({
   purchases: many(purchase),
+  logo: one(image, {
+    fields: [vendor.logoImageId],
+    references: [image.id],
+  }),
 }));
 
 export const financialAccountRelations = relations(

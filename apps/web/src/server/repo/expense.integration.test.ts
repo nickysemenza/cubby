@@ -24,6 +24,11 @@ import {
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import {
+  householdDaysAgo,
+  householdDaysFromNow,
+  householdLocalDate,
+} from "~/lib/household-date";
 import { expenseRouter } from "~/server/api/routers/expense";
 import { createTestCaller } from "~/server/api/trpc";
 import type { Database } from "~/server/db";
@@ -755,6 +760,48 @@ describe("expense repository — expenseList filters", () => {
     );
   });
 
+  it("resolves stable relative date filters against the household day", async () => {
+    const createDated = (name: string, date: string) =>
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse({
+          trade: "other",
+          costType: "materials",
+          name,
+          date,
+        }),
+        ctx.actor,
+      );
+    const past = await createDated("relative past", householdDaysAgo(1));
+    const today = await createDated("relative today", householdLocalDate());
+    const future = await createDated(
+      "relative future",
+      householdDaysFromNow(1),
+    );
+
+    const before = await expenseList(
+      ctx.db,
+      { dateRelative: "beforeToday" },
+      [],
+      pagination,
+    );
+    expect(before.data.map((row) => row.id)).toContain(past.output.id);
+    expect(before.data.map((row) => row.id)).not.toContain(today.output.id);
+    expect(before.data.map((row) => row.id)).not.toContain(future.output.id);
+
+    const throughToday = await expenseList(
+      ctx.db,
+      { dateRelative: "onOrBeforeToday" },
+      [],
+      pagination,
+    );
+    expect(throughToday.data.map((row) => row.id)).toContain(past.output.id);
+    expect(throughToday.data.map((row) => row.id)).toContain(today.output.id);
+    expect(throughToday.data.map((row) => row.id)).not.toContain(
+      future.output.id,
+    );
+  });
+
   it("filters by costMin/costMax (inclusive boundary, outside window, null-cost excluded)", async () => {
     const mk = (name: string, cost: number | undefined) =>
       unwrap(
@@ -827,6 +874,31 @@ describe("expense repository — expenseList filters", () => {
     // ...and `costMax: 0` likewise excludes every positive row rather than
     // being dropped as falsy.
     expect(toOnly.data.map((p) => p.id)).not.toContain(inWindow.id);
+
+    // Exit worklists require strictly negative money: zero-dollar corrections
+    // are neither a credit nor a disposal candidate.
+    const negative = await expenseList(
+      ctx.db,
+      { costSign: "negative" },
+      [],
+      pagination,
+    );
+    expect(negative.data.map((p) => p.id)).toEqual([credit.id]);
+    const positive = await expenseList(
+      ctx.db,
+      { costSign: "positive" },
+      [],
+      pagination,
+    );
+    expect(new Set(positive.data.map((p) => p.id))).toEqual(
+      new Set([
+        lowerBoundary.id,
+        inWindow.id,
+        upperBoundary.id,
+        belowWindow.id,
+        aboveWindow.id,
+      ]),
+    );
   });
 
   it("filters and sorts by recorded product quantity with nulls last", async () => {

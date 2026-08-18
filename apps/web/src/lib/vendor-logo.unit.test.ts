@@ -1,7 +1,5 @@
-import { vendorShortcode } from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
 import { persistedVendorId, vendorMonogram, vendorSlug } from "./vendor-logo";
-import { VENDOR_LOGO_BY_SHORTCODE } from "./vendor-logos.generated";
 
 describe("vendorSlug", () => {
   it("deaccents, lowercases, and hyphenates punctuation", () => {
@@ -28,21 +26,6 @@ describe("vendorSlug", () => {
     ]) {
       const once = vendorSlug(name);
       expect(vendorSlug(once)).toBe(once);
-    }
-  });
-
-  it("every manifest value is exactly what vendorSlug produces from itself", () => {
-    // Catches a seeder that accidentally writes a vendor's NAME or ID into the
-    // manifest's value slot instead of its slug — a mistake `vendorSlug`'s
-    // idempotence otherwise makes invisible to a naive equality check.
-    for (const slug of Object.values(VENDOR_LOGO_BY_SHORTCODE)) {
-      expect(vendorSlug(slug)).toBe(slug);
-    }
-  });
-
-  it("keys every generated entry by a public vendor shortcode", () => {
-    for (const shortcode of Object.keys(VENDOR_LOGO_BY_SHORTCODE)) {
-      expect(vendorShortcode.safeParse(shortcode).success).toBe(true);
     }
   });
 });

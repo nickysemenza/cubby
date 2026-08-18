@@ -17,6 +17,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   type IngredientId,
+  type ProductId,
   type RecipeId,
   unsafeIngredientId,
   unsafeIngredientShortcode,
@@ -29,24 +30,23 @@ import {
   type CoverageTotals,
   type IngredientWithPartialCoverage,
   type MaintenanceCounts,
+  type ProblemKey,
   type ProblemsCoverage,
   type ProblemsFast,
   type ProblemsTracker,
   type ProblemsUpc,
   type ProductWithBetterUpcData,
   type ProductWithIslandedMappings,
-  TRACKER_PROBLEM_KEY_BY_TYPE,
 } from "@cubby/schemas/problems";
+import type { ProjectAttentionItem } from "@cubby/schemas/project";
 import { isMiscProduct, isNonFoodCategory } from "@cubby/shared";
 import { sum, uniq, uniqBy } from "es-toolkit";
-import { env } from "~/env";
 import {
   BASE_KINDS,
   conversionCoverage,
   gradedKinds,
 } from "~/lib/conversion-coverage";
 import { getErrorMessage } from "~/lib/error-utils";
-import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { isMoneyUnit } from "~/lib/price-mapping-utils";
 import { wasm } from "~/lib/wasm";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
@@ -59,7 +59,6 @@ import {
 import {
   countCullablePendingImages,
   countUnreferencedImages,
-  findUnreferencedImages,
 } from "~/server/repo/image";
 import {
   deleteIngredients,
@@ -70,35 +69,13 @@ import {
   countEntitiesMissingEmbeddings,
   countReparseableLines,
   findCoverageTotals as findCoverageTotalsRepo,
-  findDuplicateFinancialAccountSourceAliases,
-  findDuplicateFinancialTransactionSourceRefs,
-  findDuplicateInventoryProducts,
-  findDuplicateProductIdentities,
-  findDuplicateSpendCandidates,
-  findDuplicateVendors,
-  findEntitiesMissingEmbeddings,
-  findFinancialTransactionAllocationDefects,
-  findIncompleteStatementImports,
   findIngredientsWithUnusedAliases,
-  findInvalidFinancialJson,
-  findInventoryWithoutPricePath,
   findLinkedProductIds,
-  findManufacturerSpellingVariants,
-  findOrphanedProducts,
-  findParentRecipesWithDeletedSubRecipes,
-  findProductsWithUpcGaps,
-  findPurchaseFinancialSettlementMismatches,
-  findPurchaselessExitExpenses,
-  findPurchasesNotReconciling,
-  findReferentialLivenessViolations,
-  findSoldButStillStocked,
   findStaleIngredientParses,
-  findToolsUsedOutsideOwnership,
-  findUnderstatedCostMeals,
-  findUnknownParkedItems,
-  findUnlinkedExitExpenses,
-  findVendorsWithoutLogos,
+  loadAllocationDefectPresenters,
   loadProductsForCoverage,
+  loadSoldButStockedPresenterTotals,
+  loadVendorLogoPresenterCounts,
   pruneUnusedAliases,
   type ReparsedStaleLineWrite,
   synthesizeEffectiveMappings,
@@ -106,17 +83,23 @@ import {
 import {
   deleteProducts,
   findProductsWithNoImages,
+  getProductConversionCoverageFreshness,
+  loadProductConversionCoverageProjection,
+  type ProductConversionCoverageFreshness,
+  type ProductConversionCoverageProjection,
+  writeProductConversionCoverageProjection,
 } from "~/server/repo/product";
 import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
-import { computeAttentionItems } from "~/server/repo/project";
 import { countStaleRecipeTotals } from "~/server/repo/recipe/totals";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
+import { runDiagnostic } from "~/server/services/problem-diagnostics.service";
 import {
   countViewProblem,
   findViewProblems,
+  runProblem,
 } from "~/server/services/problem-views.service";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
 import { traceAll, traceAllSeq } from "~/server/tracing";
@@ -130,11 +113,6 @@ import { traceAll, traceAllSeq } from "~/server/tracing";
 // either, so it would cheerfully enqueue thousands of jobs that all throw at
 // `embedTexts`. Report nothing rather than an unfixable wall. Mirrors the
 // degradation the semantic read paths already do.
-const findMissingEmbeddings = async (db: Database) =>
-  semanticEmbeddingsConfigured()
-    ? findEntitiesMissingEmbeddings(db, getSemanticEmbeddingConfig())
-    : [];
-
 const countMissingEmbeddings = async (db: Database) =>
   semanticEmbeddingsConfigured()
     ? countEntitiesMissingEmbeddings(db, getSemanticEmbeddingConfig())
@@ -163,6 +141,7 @@ const findProductCoverageProblems = async (
 ): Promise<{
   ingredientsWithPartialCoverage: IngredientWithPartialCoverage[];
   productsWithIslandedMappings: ProductWithIslandedMappings[];
+  projection: ProductConversionCoverageProjection[];
 }> => {
   // One scan, a superset of both detectors' needs: all non-deleted products with
   // their stored mappings + the linked ingredient's N/A opt-outs.
@@ -218,10 +197,32 @@ const findProductCoverageProblems = async (
   );
 
   const ingredientsWithPartialCoverage: IngredientWithPartialCoverage[] = [];
+  const projectionById = new Map<
+    ProductId,
+    ProductConversionCoverageProjection
+  >(
+    products.map((p) => [
+      p.id,
+      {
+        productId: p.id,
+        coverageTier: "none",
+        coveredKinds: [],
+        applicableKinds: [],
+        islandCount: 0,
+        status: "ready",
+      },
+    ]),
+  );
   for (const cand of partialCandidates) {
     const p = enrichedById.get(cand.id);
     const effective = p ? effectiveById.get(p.id) : null;
-    if (!p || !effective) continue;
+    if (!p || !effective) {
+      projectionById.set(cand.id, {
+        ...projectionById.get(cand.id)!,
+        status: "unavailable",
+      });
+      continue;
+    }
 
     // partialCandidates guarantees ingredientId != null; narrow for the
     // non-nullable schema fields (the joined ingredient carries the shortcode
@@ -230,6 +231,12 @@ const findProductCoverageProblems = async (
 
     const applicable = gradedKinds(p.ingredient?.naKinds);
     const cov = conversionCoverage(effective, applicable);
+    projectionById.set(p.id, {
+      ...projectionById.get(p.id)!,
+      coverageTier: cov.tier,
+      coveredKinds: [...cov.covered],
+      applicableKinds: [...applicable],
+    });
     if (cov.tier === "complete") continue;
 
     // Flag any food whose effective graph can't reach all four base kinds. This
@@ -258,9 +265,19 @@ const findProductCoverageProblems = async (
   for (const cand of islandedCandidates) {
     const p = enrichedById.get(cand.id);
     const effective = p ? effectiveById.get(p.id) : null;
-    if (!p || !effective) continue;
+    if (!p || !effective) {
+      projectionById.set(cand.id, {
+        ...projectionById.get(cand.id)!,
+        status: "unavailable",
+      });
+      continue;
+    }
 
     const islands = wasm.detect_unit_mapping_islands(effective);
+    projectionById.set(p.id, {
+      ...projectionById.get(p.id)!,
+      islandCount: islands.length,
+    });
     if (islands.length >= 2) {
       productsWithIslandedMappings.push({
         id: unsafeProductShortcode(p.shortcode),
@@ -281,7 +298,21 @@ const findProductCoverageProblems = async (
     }
   }
 
-  return { ingredientsWithPartialCoverage, productsWithIslandedMappings };
+  return {
+    ingredientsWithPartialCoverage,
+    productsWithIslandedMappings,
+    projection: [...projectionById.values()],
+  };
+};
+
+/** Rebuild the persisted list-query projection using this exact detector scan. */
+export const rebuildProductConversionCoverageProjection = async (
+  db: Database,
+  usdaClient: USDAClient,
+): Promise<ProductConversionCoverageProjection[]> => {
+  const { projection } = await findProductCoverageProblems(db, usdaClient);
+  await writeProductConversionCoverageProjection(db, projection);
+  return projection;
 };
 
 // Apply the current parser's result to every stale ingredient line, persisting the
@@ -487,6 +518,330 @@ export async function* pruneAllUnusedAliases(
 // failure mode that exceeded the 30s limit). `findAllProblems` recomposes them
 // for the badge/homepage/MCP consumers that still want one combined payload.
 
+type ExactProblemPage = Awaited<ReturnType<typeof runProblem>>;
+
+/**
+ * Lane orchestration never chooses a detector directly for derived Problems.
+ * The typed diagnostic adapter is the sole dispatch point; this cast only
+ * restores the existing card-presenter row type after that boundary.
+ */
+const diagnosticItems = async <T extends readonly unknown[]>(
+  db: Database,
+  diagnostic: Parameters<typeof runDiagnostic>[1],
+): Promise<T> => (await runDiagnostic(db, diagnostic)).items as T;
+
+/** Run exact entity Problems on one pinned connection. */
+const runExactProblemPages = async (
+  db: Database,
+  keys: readonly ProblemKey[],
+  options?: { projectionFreshness?: ProductConversionCoverageFreshness },
+): Promise<Partial<Record<ProblemKey, ExactProblemPage>>> =>
+  withConnection(db, async (scoped) => {
+    const pages: Partial<Record<ProblemKey, ExactProblemPage>> = {};
+    for (const key of keys) {
+      pages[key] = await runProblem(scoped, key, {
+        projectionFreshness: options?.projectionFreshness,
+      });
+    }
+    return pages;
+  });
+
+const exactSectionTotals = (
+  pages: Partial<Record<ProblemKey, ExactProblemPage>>,
+): Record<string, number> =>
+  Object.fromEntries(
+    Object.entries(pages).map(([key, page]) => [key, page.count]),
+  );
+
+/**
+ * Presentation only for the two conversion cards. Membership/count/order came
+ * from `runExactProblemPages` first; this bounded hydration may enrich at most
+ * two card pages and must never remove or reorder a selected row.
+ */
+const presentCoverageExactRows = async (
+  db: Database,
+  usdaClient: USDAClient,
+  partialPage: ExactProblemPage,
+  islandPage: ExactProblemPage,
+): Promise<{
+  ingredientsWithPartialCoverage: IngredientWithPartialCoverage[];
+  productsWithIslandedMappings: ProductWithIslandedMappings[];
+}> => {
+  const selectedCodes = uniq([
+    ...partialPage.data.map((row) => row.id),
+    ...islandPage.data.map((row) => row.id),
+  ]);
+  const idsByCode = await resolveLiveShortcodes(db, selectedCodes, "product");
+  const ids = [...idsByCode.values()] as ProductId[];
+  const [products, projection] = await Promise.all([
+    loadProductsForCoverage(db, ids),
+    loadProductConversionCoverageProjection(db, ids),
+  ]);
+  // The projection already owns membership. A transient presenter-only USDA
+  // failure must not turn that durable result into an empty/erroring section.
+  const enriched = await batchEnrichWithFood(
+    products,
+    foodLookupParamFromProduct,
+    usdaClient,
+  ).catch(() => products.map((product) => ({ ...product, food: null })));
+  const byCode = new Map(enriched.map((row) => [row.shortcode, row]));
+
+  const partial = partialPage.data.map((row) => {
+    const product = byCode.get(row.id);
+    const productId = idsByCode.get(row.id) as ProductId | undefined;
+    const coverage = productId ? projection.get(productId) : undefined;
+    if (!product || !coverage || product.ingredient?.shortcode == null) {
+      throw new Error(
+        `Canonical conversion coverage Problem selected ${row.id}, but bounded presentation hydration was incomplete`,
+      );
+    }
+    return {
+      id: unsafeProductShortcode(product.shortcode),
+      name: product.name,
+      manufacturer: product.manufacturer,
+      coverage: {
+        covered:
+          coverage.coveredKinds as IngredientWithPartialCoverage["coverage"]["covered"],
+        applicable:
+          coverage.applicableKinds as IngredientWithPartialCoverage["coverage"]["applicable"],
+      },
+      hasPrice: product.price != null,
+      hasUsdaLink: product.food != null,
+      usdaUnavailable: product.usdaUnavailable ?? false,
+      ingredientId: unsafeIngredientShortcode(product.ingredient.shortcode),
+    };
+  });
+  const islands = islandPage.data.map((row) => {
+    const product = byCode.get(row.id);
+    const productId = idsByCode.get(row.id) as ProductId | undefined;
+    const coverage = productId ? projection.get(productId) : undefined;
+    if (!product || !coverage) {
+      throw new Error(
+        `Canonical mapping-island Problem selected ${row.id}, but bounded presentation hydration was incomplete`,
+      );
+    }
+    const effective = synthesizeEffectiveMappings({
+      ...product,
+      id: unsafeProductShortcode(product.shortcode),
+    });
+    // A transient presentation-time USDA miss must not change the already
+    // selected projection membership. Fall back to stored maps for the card's
+    // examples; the persisted island count remains authoritative.
+    const islandUnits = wasm.detect_unit_mapping_islands(
+      effective ?? product.unitMappings,
+    );
+    return {
+      id: unsafeProductShortcode(product.shortcode),
+      name: product.name,
+      manufacturer: product.manufacturer,
+      islandCount: coverage.islandCount,
+      islands: islandUnits.map((units) => ({
+        units: units.slice(0, 3),
+        exampleUnit: units[0] ?? "unknown",
+      })),
+      coverage: {
+        covered:
+          coverage.coveredKinds as ProductWithIslandedMappings["coverage"]["covered"],
+        applicable:
+          coverage.applicableKinds as ProductWithIslandedMappings["coverage"]["applicable"],
+      },
+    };
+  });
+  return {
+    ingredientsWithPartialCoverage: partial,
+    productsWithIslandedMappings: islands,
+  };
+};
+
+/**
+ * Card-only projections for exact fast Problems.
+ *
+ * The entity list has already chosen these rows.  This function is deliberately
+ * just a field projection: no predicate, grouping, or ordering may enter here.
+ * Keeping it next to the lane makes that boundary reviewable and prevents a
+ * rich card from accidentally becoming a second detector.
+ */
+const presentFastExactRows = <T>(
+  key: string,
+  page: ExactProblemPage,
+  hydration?: {
+    vendorExpenseCounts?: Map<string, { expenseRowCount: number }>;
+    soldTotals?: Map<
+      string,
+      {
+        soldQuantity: number;
+        proceeds: number;
+        servingLocations: { id: string; name: string }[];
+      }
+    >;
+    allocationDefects?: Map<
+      string,
+      ProblemsFast["financialTransactionAllocationDefects"][number]
+    >;
+  },
+): T[] =>
+  page.data.map((row) => {
+    const r = row as Record<string, unknown>;
+    const id = String(r.id);
+    const inventory = (r.inventoryEntry ?? []) as Array<{
+      amount?: { value?: number };
+      location?: { id?: string; name?: string };
+    }>;
+    const locations = inventory.flatMap((entry) =>
+      entry.location?.id && entry.location.name
+        ? [{ id: entry.location.id, name: entry.location.name }]
+        : [],
+    );
+    switch (key) {
+      case "duplicateInventory":
+        return {
+          id,
+          name: String(r.name),
+          manufacturer: String(r.manufacturer ?? ""),
+          expectedQuantity: (r.expectedQuantity ?? null) as number | null,
+          locations,
+        };
+      case "soldButStillStocked": {
+        const totals = hydration?.soldTotals?.get(id);
+        if (!totals)
+          throw new Error(
+            `Canonical sold-but-stocked Problem selected ${id}, but bounded presentation hydration found no row`,
+          );
+        return {
+          id,
+          name: String(r.name),
+          manufacturer: String(r.manufacturer ?? ""),
+          soldQuantity: totals.soldQuantity,
+          liveQuantity: Number(r.onHandUnits ?? 0),
+          proceeds: totals.proceeds,
+          locations: uniqBy(
+            [...locations, ...totals.servingLocations],
+            (location) => location.id,
+          ),
+        };
+      }
+      case "unlinkedExitExpenses":
+        return {
+          id,
+          name: String(r.name),
+          cost: Number(r.cost),
+          date: (r.date ?? null) as string | null,
+          purchaseId: String(r.purchaseId),
+          vendorName: (r.vendor ?? null) as string | null,
+        };
+      case "purchaselessExitExpenses":
+        return {
+          id,
+          name: String(r.name),
+          cost: Number(r.cost),
+          date: (r.date ?? null) as string | null,
+          projectName: (r.projectName ?? null) as string | null,
+        };
+      case "productsWithNoImages":
+        return {
+          id,
+          name: String(r.name),
+          manufacturer: String(r.manufacturer ?? ""),
+          upc: (r.upc ?? null) as string | null,
+        };
+      case "unreferencedImages":
+        return {
+          id,
+          key: String(r.key),
+          filename: String(r.filename),
+          contentType: String(r.contentType),
+          size: Number(r.size),
+          createdAt: r.createdAt as Date,
+          targetType: (r.entityType ?? null) as string | null,
+          targetId: (r.entityId ?? null) as string | null,
+        };
+      case "understatedCostMeals": {
+        const recipes = (r.recipes ?? []) as Array<{
+          recipe?: {
+            totals?: { costCovered?: number; ingredientCount?: number } | null;
+          };
+        }>;
+        return {
+          id,
+          name: (r.name ?? null) as string | null,
+          date: r.date as string,
+          recipeCount: recipes.filter(
+            (entry) =>
+              (entry.recipe?.totals?.costCovered ?? 0) <
+              (entry.recipe?.totals?.ingredientCount ?? 0),
+          ).length,
+        };
+      }
+      case "unknownParkedItems":
+        return {
+          id,
+          amount: r.amount,
+          createdAt: r.createdAt,
+          product: r.product,
+          location: r.location,
+        };
+      case "inventoryWithoutPricePath":
+        return {
+          id,
+          amount: r.amount,
+          effectivePrice: Number(
+            (r.product as { effectivePrice?: number } | undefined)
+              ?.effectivePrice ?? 0,
+          ),
+          product: r.product,
+          location: r.location,
+        };
+      case "vendorsWithoutLogos": {
+        const counts = hydration?.vendorExpenseCounts?.get(id);
+        if (!counts)
+          throw new Error(
+            `Canonical vendor-logo Problem selected ${id}, but bounded presentation hydration found no row`,
+          );
+        return {
+          id,
+          name: String(r.name),
+          website: (r.website ?? null) as string | null,
+          purchaseCount: Number(r.purchaseCount ?? 0),
+          expenseRowCount: counts.expenseRowCount,
+        };
+      }
+      case "purchasesNotReconciling":
+        return {
+          id,
+          vendorName: (r.vendorName ?? null) as string | null,
+          orderId: (r.orderId ?? null) as string | null,
+          orderUrl: (r.orderUrl ?? null) as string | null,
+          date: (r.date ?? null) as string | null,
+          statedTotal: Number(r.statedTotal),
+          expenseTotal: Number(r.expenseTotal),
+          expenseCount: Number(r.expenseCount),
+          unpricedExpenseCount: Number(r.unpricedExpenseCount),
+          postedRefundTotal: Number(
+            (r.reconciliation as { postedRefundTotal?: number } | undefined)
+              ?.postedRefundTotal ?? 0,
+          ),
+        };
+      case "purchaseFinancialSettlementMismatches":
+        return {
+          id,
+          vendorName: (r.vendorName ?? null) as string | null,
+          expenseTotal: Number(r.expenseTotal),
+          financialReconciliation: r.financialReconciliation,
+        };
+      case "financialTransactionAllocationDefects": {
+        const hydrated = hydration?.allocationDefects?.get(id);
+        if (hydrated) return hydrated;
+        throw new Error(
+          `Canonical allocation Problem selected ${id}, but bounded presentation hydration found no row`,
+        );
+      }
+      default:
+        throw new Error(
+          `No exact card presenter declared for Problem "${key}"`,
+        );
+    }
+  }) as T[];
+
 // DB-only detectors — cheap (no WASM, no network). traceAll keeps a named span
 // per detector for observability.
 export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
@@ -498,106 +853,210 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
   // one connection beats 8 cold connects. See withConnection in db.ts.
   const r = await withConnection(db, (scoped) =>
     traceAllSeq({
-      duplicateInventory: () => findDuplicateInventoryProducts(scoped),
       // One extra SELECT over Product + one over ProductExternalId, grouped in
       // JS — same shape and cost class as the spelling-variant scans below.
-      duplicateProductIdentities: () => findDuplicateProductIdentities(scoped),
-      orphanedProducts: () => findOrphanedProducts(scoped),
-      soldButStillStocked: () => findSoldButStillStocked(scoped),
-      // The inverse of the line above: same disposal-Purchase predicate, but
-      // the exits with no product to group by, which that one cannot see.
-      unlinkedExitExpenses: () => findUnlinkedExitExpenses(scoped),
-      // And the rows even THAT one cannot see: no Purchase to join, so its
-      // innerJoin drops them. Advisory — see the PROBLEM_CLASS note.
-      purchaselessExitExpenses: () => findPurchaselessExitExpenses(scoped),
+      duplicateProductIdentities: () =>
+        diagnosticItems<ProblemsFast["duplicateProductIdentities"]>(
+          scoped,
+          "duplicate-product-identities",
+        ),
+      orphanedProducts: () =>
+        diagnosticItems<ProblemsFast["orphanedProducts"]>(
+          scoped,
+          "orphaned-products",
+        ),
       // One grouped scan of the product-linked Expense rows, filtered down to
       // the offenders by a HAVING rather than in JS.
       // One scan of the ~90 usage edges plus the whole-tree date fold. Cheap
       // enough for this group and it shares its single connection; the fold is
       // the same two queries `projectToolMatrix` already runs per page load.
-      toolsUsedOutsideOwnership: () => findToolsUsedOutsideOwnership(scoped),
-      productsWithNoImages: () =>
-        findProductsWithNoImages(scoped, { excludeIngredients: true }),
-      orphanedEntityEmbeddings: () => findOrphanedEntityEmbeddings(scoped),
+      toolsUsedOutsideOwnership: () =>
+        diagnosticItems<ProblemsFast["toolsUsedOutsideOwnership"]>(
+          scoped,
+          "tools-used-outside-ownership",
+        ),
+      orphanedEntityEmbeddings: () =>
+        diagnosticItems<ProblemsFast["orphanedEntityEmbeddings"]>(
+          scoped,
+          "orphaned-entity-embeddings",
+        ),
       // Six index-only scans of the small join tables plus one Image scan. Sits
       // in this group for the same reason `referentialLivenessViolations` does:
       // the cost is I/O, not the CPU the other groups exist to isolate.
-      unreferencedImages: () => findUnreferencedImages(scoped),
-      entitiesMissingEmbeddings: () => findMissingEmbeddings(scoped),
-      staleParentRecipes: () => findParentRecipesWithDeletedSubRecipes(scoped),
-      understatedCostMeals: () => findUnderstatedCostMeals(scoped),
-      unknownParkedItems: () => findUnknownParkedItems(scoped),
-      // Two indexed joins plus the same correlated effective-price subquery the
-      // Product list already sorts by — I/O, not CPU, so it belongs here.
-      inventoryWithoutPricePath: () => findInventoryWithoutPricePath(scoped),
+      entitiesMissingEmbeddings: () =>
+        diagnosticItems<ProblemsFast["entitiesMissingEmbeddings"]>(
+          scoped,
+          "entities-missing-embeddings",
+        ),
+      staleParentRecipes: () =>
+        diagnosticItems<ProblemsFast["staleParentRecipes"]>(
+          scoped,
+          "stale-parent-recipes",
+        ),
       manufacturerSpellingVariants: () =>
-        findManufacturerSpellingVariants(scoped),
+        diagnosticItems<ProblemsFast["manufacturerSpellingVariants"]>(
+          scoped,
+          "manufacturer-spelling-variants",
+        ),
       // Same shared spelling-key SQL as above, over the vendor roster instead —
       // one grouped scan of 114 rows.
-      duplicateVendors: () => findDuplicateVendors(scoped),
-      vendorsWithoutLogos: () => findVendorsWithoutLogos(scoped),
-      // One grouped SQL scan that returns only the offenders (the stated-total
-      // comparison is a HAVING, not a JS filter) — cheap enough for this group.
-      purchasesNotReconciling: () => findPurchasesNotReconciling(scoped),
-      purchaseFinancialSettlementMismatches: () =>
-        findPurchaseFinancialSettlementMismatches(scoped),
+      duplicateVendors: () =>
+        diagnosticItems<ProblemsFast["duplicateVendors"]>(
+          scoped,
+          "duplicate-vendors",
+        ),
       // Amount+date joins ~80 unlinked expenses against ~1.6k purchases, then
       // scores trigram similarity on only the handful that survive — measured at
       // ~31ms, all buffer hits. Cheap because the name comparison is post-join.
-      duplicateSpendCandidates: () => findDuplicateSpendCandidates(scoped),
+      duplicateSpendCandidates: () =>
+        diagnosticItems<ProblemsFast["duplicateSpendCandidates"]>(
+          scoped,
+          "duplicate-spend-candidates",
+        ),
       duplicateFinancialTransactionSourceRefs: () =>
-        findDuplicateFinancialTransactionSourceRefs(scoped),
+        diagnosticItems<
+          ProblemsFast["duplicateFinancialTransactionSourceRefs"]
+        >(scoped, "duplicate-financial-transaction-source-refs"),
       duplicateFinancialAccountSourceAliases: () =>
-        findDuplicateFinancialAccountSourceAliases(scoped),
-      // One grouped scan over live transactions LEFT JOINed to live
-      // allocations — DB-only and indexed on both FKs, so it belongs here
-      // rather than in a CPU group.
-      financialTransactionAllocationDefects: () =>
-        findFinancialTransactionAllocationDefects(scoped),
-      invalidFinancialJson: () => findInvalidFinancialJson(scoped),
+        diagnosticItems<ProblemsFast["duplicateFinancialAccountSourceAliases"]>(
+          scoped,
+          "duplicate-financial-account-source-aliases",
+        ),
+      invalidFinancialJson: () =>
+        diagnosticItems<ProblemsFast["invalidFinancialJson"]>(
+          scoped,
+          "invalid-financial-json",
+        ),
       // One grouped scan of the (small) import roster with a LEFT JOIN count.
       // The ONLY statement-ledger detector: unmatched rows are the drift
       // worklist, not defects, and 15k of them would make Problems unusable.
-      incompleteStatementImports: () => findIncompleteStatementImports(scoped),
+      incompleteStatementImports: () =>
+        diagnosticItems<ProblemsFast["incompleteStatementImports"]>(
+          scoped,
+          "incomplete-statement-imports",
+        ),
       referentialLivenessViolations: () =>
-        findReferentialLivenessViolations(scoped),
+        diagnosticItems<ProblemsFast["referentialLivenessViolations"]>(
+          scoped,
+          "referential-liveness-violations",
+        ),
     }),
   );
-  return {
-    duplicateInventory: r.duplicateInventory,
+  const legacy = {
     duplicateProductIdentities: r.duplicateProductIdentities,
     orphanedProducts: r.orphanedProducts,
-    soldButStillStocked: r.soldButStillStocked,
-    unlinkedExitExpenses: r.unlinkedExitExpenses,
-    purchaselessExitExpenses: r.purchaselessExitExpenses,
     toolsUsedOutsideOwnership: r.toolsUsedOutsideOwnership,
-    productsWithNoImages: r.productsWithNoImages.map((p) => ({
-      ...p,
-      id: unsafeProductShortcode(p.shortcode),
-    })),
     orphanedEntityEmbeddings: r.orphanedEntityEmbeddings,
-    unreferencedImages: r.unreferencedImages,
     entitiesMissingEmbeddings: r.entitiesMissingEmbeddings,
     staleParentRecipes: r.staleParentRecipes,
-    understatedCostMeals: r.understatedCostMeals,
-    unknownParkedItems: r.unknownParkedItems,
-    inventoryWithoutPricePath: r.inventoryWithoutPricePath,
     manufacturerSpellingVariants: r.manufacturerSpellingVariants,
     duplicateVendors: r.duplicateVendors,
-    vendorsWithoutLogos: r.vendorsWithoutLogos,
-    purchasesNotReconciling: r.purchasesNotReconciling,
-    purchaseFinancialSettlementMismatches:
-      r.purchaseFinancialSettlementMismatches,
     duplicateSpendCandidates: r.duplicateSpendCandidates,
     duplicateFinancialTransactionSourceRefs:
       r.duplicateFinancialTransactionSourceRefs,
     duplicateFinancialAccountSourceAliases:
       r.duplicateFinancialAccountSourceAliases,
-    financialTransactionAllocationDefects:
-      r.financialTransactionAllocationDefects,
     invalidFinancialJson: r.invalidFinancialJson,
     incompleteStatementImports: r.incompleteStatementImports,
     referentialLivenessViolations: r.referentialLivenessViolations,
+  } satisfies Partial<Omit<ProblemsFast, "sectionTotals">>;
+
+  const exactKeys = [
+    "duplicateInventory",
+    "soldButStillStocked",
+    "unlinkedExitExpenses",
+    "purchaselessExitExpenses",
+    "productsWithNoImages",
+    "unreferencedImages",
+    "understatedCostMeals",
+    "unknownParkedItems",
+    "inventoryWithoutPricePath",
+    "vendorsWithoutLogos",
+    "purchasesNotReconciling",
+    "purchaseFinancialSettlementMismatches",
+    "financialTransactionAllocationDefects",
+  ] as const satisfies readonly ProblemKey[];
+  const exact = await runExactProblemPages(db, exactKeys);
+  const page = (key: (typeof exactKeys)[number]): ExactProblemPage => {
+    const result = exact[key];
+    if (!result) throw new Error(`Missing canonical Problem result "${key}"`);
+    return result;
+  };
+  const [vendorExpenseCounts, allocationDefects, soldTotals] =
+    await Promise.all([
+      loadVendorLogoPresenterCounts(
+        db,
+        page("vendorsWithoutLogos").data.map((row) => row.id),
+      ),
+      loadAllocationDefectPresenters(
+        db,
+        page("financialTransactionAllocationDefects").data.map((row) => row.id),
+      ),
+      loadSoldButStockedPresenterTotals(
+        db,
+        page("soldButStillStocked").data.map((row) => row.id),
+      ),
+    ]);
+  const hydration = { vendorExpenseCounts, allocationDefects, soldTotals };
+
+  return {
+    ...legacy,
+    duplicateInventory: presentFastExactRows(
+      "duplicateInventory",
+      page("duplicateInventory"),
+    ),
+    soldButStillStocked: presentFastExactRows(
+      "soldButStillStocked",
+      page("soldButStillStocked"),
+      hydration,
+    ),
+    unlinkedExitExpenses: presentFastExactRows(
+      "unlinkedExitExpenses",
+      page("unlinkedExitExpenses"),
+    ),
+    purchaselessExitExpenses: presentFastExactRows(
+      "purchaselessExitExpenses",
+      page("purchaselessExitExpenses"),
+    ),
+    productsWithNoImages: presentFastExactRows(
+      "productsWithNoImages",
+      page("productsWithNoImages"),
+    ),
+    unreferencedImages: presentFastExactRows(
+      "unreferencedImages",
+      page("unreferencedImages"),
+    ),
+    understatedCostMeals: presentFastExactRows(
+      "understatedCostMeals",
+      page("understatedCostMeals"),
+    ),
+    unknownParkedItems: presentFastExactRows(
+      "unknownParkedItems",
+      page("unknownParkedItems"),
+    ),
+    inventoryWithoutPricePath: presentFastExactRows(
+      "inventoryWithoutPricePath",
+      page("inventoryWithoutPricePath"),
+    ),
+    vendorsWithoutLogos: presentFastExactRows(
+      "vendorsWithoutLogos",
+      page("vendorsWithoutLogos"),
+      hydration,
+    ),
+    purchasesNotReconciling: presentFastExactRows(
+      "purchasesNotReconciling",
+      page("purchasesNotReconciling"),
+    ),
+    purchaseFinancialSettlementMismatches: presentFastExactRows(
+      "purchaseFinancialSettlementMismatches",
+      page("purchaseFinancialSettlementMismatches"),
+    ),
+    financialTransactionAllocationDefects: presentFastExactRows(
+      "financialTransactionAllocationDefects",
+      page("financialTransactionAllocationDefects"),
+      hydration,
+    ),
+    sectionTotals: exactSectionTotals(exact),
   };
 };
 
@@ -623,61 +1082,83 @@ export const cleanupOrphanedEntityEmbeddings = async (
 export const findCoverageTotals = (db: Database): Promise<CoverageTotals> =>
   withConnection(db, (scoped) => findCoverageTotalsRepo(scoped));
 
-// USDA-coverage group — both sections share one product scan + USDA enrichment.
-export const findCoverageProblems = (
+/**
+ * Conversion coverage's hot path is projection-first. Rebuilding remains the
+ * explicit `rebuildProductConversionCoverageProjection` maintenance seam;
+ * stale/missing rows stay absent from exact filters and are reported on the
+ * wire instead of being synchronously recomputed during page rendering.
+ */
+export const findCoverageProblems = async (
   db: Database,
   usdaClient: USDAClient,
-): Promise<ProblemsCoverage> => findProductCoverageProblems(db, usdaClient);
+): Promise<ProblemsCoverage> => {
+  let freshness = await getProductConversionCoverageFreshness(db);
+  // Normal mutations synchronously mark affected rows stale. This isolated
+  // lane is their durable convergence point: healthy page loads are pure
+  // read-model queries, while a stale/missing projection is rebuilt once here
+  // through the shared engine and then re-read. Provider failures persist as
+  // `unavailable`, which stays fail-closed rather than becoming a healthy 0.
+  if (
+    freshness.staleCount > 0 ||
+    freshness.missingCount > 0 ||
+    freshness.unavailableCount > 0
+  ) {
+    try {
+      await rebuildProductConversionCoverageProjection(db, usdaClient);
+      freshness = await getProductConversionCoverageFreshness(db);
+    } catch (error) {
+      // The durable relation is still the authority. A USDA outage must not
+      // turn into a failed Problems page (or, worse, an empty healthy card):
+      // leave the prior stale/unavailable rows intact, let the exact filters
+      // fail closed, and return their existing freshness state to the UI.
+      console.warn(
+        `[findCoverageProblems] conversion projection rebuild failed; serving ${freshness.state} persisted projection: ${getErrorMessage(error)}`,
+      );
+    }
+  }
+  const exact = await runExactProblemPages(
+    db,
+    ["ingredientsWithPartialCoverage", "productsWithIslandedMappings"],
+    { projectionFreshness: freshness },
+  );
+  const ingredientsPage = exact.ingredientsWithPartialCoverage;
+  const islandsPage = exact.productsWithIslandedMappings;
+  if (!ingredientsPage || !islandsPage) {
+    throw new Error("Missing canonical conversion coverage Problem result");
+  }
+  const presented = await presentCoverageExactRows(
+    db,
+    usdaClient,
+    ingredientsPage,
+    islandsPage,
+  );
+  return {
+    ...presented,
+    sectionTotals: exactSectionTotals(exact),
+    freshness,
+  };
+};
 
 // UPC-lookup network detector.
 const findProductsWithBetterUpcData = async (
   db: Database,
   upcLookupClient: UPCLookupClient,
-): Promise<ProductWithBetterUpcData[]> => {
-  const candidates = await findProductsWithUpcGaps(db);
-  const lookups = await upcLookupClient.lookupBatch(
-    candidates.map((c) => c.upc),
-  );
-
-  const problems: ProductWithBetterUpcData[] = [];
-  for (const cand of candidates) {
-    const lookup = lookups.get(cand.upc);
-    if (!lookup) continue;
-
-    const proposed = {
-      manufacturer:
-        isUnspecifiedManufacturer(cand.manufacturer) &&
-        !isUnspecifiedManufacturer(lookup.manufacturer ?? lookup.brand)
-          ? (lookup.manufacturer ?? lookup.brand)
-          : null,
-      price:
-        cand.price == null && lookup.priceDollars != null
-          ? lookup.priceDollars
-          : null,
-      imageUrl:
-        !cand.hasImage && lookup.imageUrl
-          ? new URL(lookup.imageUrl, env.UPC_LOOKUP_API_URL).toString()
-          : null,
-    };
-
-    if (
-      proposed.manufacturer == null &&
-      proposed.price == null &&
-      proposed.imageUrl == null
-    ) {
-      continue;
-    }
-
-    problems.push({
-      id: cand.shortcode,
-      name: cand.name,
-      manufacturer: cand.manufacturer,
-      upc: cand.upc,
-      proposed,
-    });
+): Promise<{
+  products: ProductWithBetterUpcData[];
+  freshness: NonNullable<
+    Awaited<ReturnType<typeof runDiagnostic>>["freshness"]
+  >;
+}> => {
+  const result = await runDiagnostic(db, "products-with-better-upc-data", {
+    upcLookupClient,
+  });
+  if (!result.freshness) {
+    throw new Error("UPC diagnostic adapter omitted its freshness contract");
   }
-
-  return problems;
+  return {
+    products: result.items as ProductWithBetterUpcData[],
+    freshness: result.freshness,
+  };
 };
 
 // Household-tracker group — the seven attention rules the /projects overview
@@ -691,31 +1172,136 @@ const findProductsWithBetterUpcData = async (
 export const findTrackerProblems = async (
   db: Database,
 ): Promise<ProblemsTracker> => {
-  const items = await computeAttentionItems(db);
-  const tracker: ProblemsTracker = {
-    overdueTasks: [],
-    stalledProjects: [],
-    projectsMissingBudget: [],
-    pastDuePlannedExpenses: [],
-    unclassifiedExpenses: [],
-    blockedWorkProjects: [],
-    projectsWithDateDrift: [],
+  const exactKeys = [
+    "overdueTasks",
+    "stalledProjects",
+    "projectsMissingBudget",
+    "pastDuePlannedExpenses",
+    "unclassifiedExpenses",
+    "blockedWorkProjects",
+    "projectsWithDateDrift",
+  ] as const satisfies readonly ProblemKey[];
+  const exact = await runExactProblemPages(db, exactKeys);
+  const page = (key: (typeof exactKeys)[number]): ExactProblemPage => {
+    const result = exact[key];
+    if (!result) throw new Error(`Missing canonical Problem result "${key}"`);
+    return result;
   };
-  for (const item of items) {
-    tracker[TRACKER_PROBLEM_KEY_BY_TYPE[item.type]].push(item);
-  }
-  return tracker;
+  const rows = (key: (typeof exactKeys)[number]) => page(key).data;
+  const attention = (
+    key: Exclude<(typeof exactKeys)[number], "projectsWithDateDrift">,
+  ): ProjectAttentionItem[] =>
+    rows(key).map((row) => {
+      const r = row as Record<string, unknown>;
+      const id = String(r.id);
+      const name = String(r.name ?? "Untitled");
+      const isTask = key === "overdueTasks";
+      const isExpense =
+        key === "pastDuePlannedExpenses" || key === "unclassifiedExpenses";
+      const type =
+        key === "overdueTasks"
+          ? "overdue_task"
+          : key === "stalledProjects"
+            ? "stalled_project"
+            : key === "projectsMissingBudget"
+              ? "missing_budget"
+              : key === "pastDuePlannedExpenses"
+                ? "past_due_planned_expense"
+                : key === "unclassifiedExpenses"
+                  ? "unclassified_expense"
+                  : "blocked_work";
+      const entityType = isTask ? "task" : isExpense ? "expense" : "project";
+      const date = isTask
+        ? ((r.dueEndDate ?? r.dueDate ?? null) as string | null)
+        : isExpense
+          ? ((r.date ?? null) as string | null)
+          : key === "stalledProjects"
+            ? r.updatedAt instanceof Date
+              ? r.updatedAt.toISOString().slice(0, 10)
+              : null
+            : null;
+      const amount =
+        key === "projectsMissingBudget"
+          ? Number(
+              (
+                r.rollup as
+                  | {
+                      subtree?: {
+                        actualSpent?: number;
+                        committedSpent?: number;
+                      };
+                    }
+                  | undefined
+              )?.subtree?.actualSpent ?? 0,
+            ) +
+            Number(
+              (
+                r.rollup as
+                  | { subtree?: { committedSpent?: number } }
+                  | undefined
+              )?.subtree?.committedSpent ?? 0,
+            )
+          : null;
+      return {
+        key: `${type}:${id}`,
+        type,
+        severity:
+          key === "overdueTasks"
+            ? "critical"
+            : key === "stalledProjects" || key === "pastDuePlannedExpenses"
+              ? "warning"
+              : "info",
+        description:
+          key === "overdueTasks"
+            ? `"${name}" is overdue and still open`
+            : key === "stalledProjects"
+              ? `"${name}" has had no recent project activity`
+              : key === "projectsMissingBudget"
+                ? `"${name}" has spend but no budget estimate`
+                : key === "pastDuePlannedExpenses"
+                  ? `"${name}" is a past-due planned expense`
+                  : key === "unclassifiedExpenses"
+                    ? `"${name}" has no trade or cost recorded`
+                    : `"${name}" has blocked work and no next action`,
+        entityType,
+        entityId: id,
+        date,
+        amount,
+        href: `/${entityType === "task" ? "tasks" : entityType === "expense" ? "expenses" : "projects"}/${id}`,
+      };
+    });
+  return {
+    overdueTasks: attention("overdueTasks"),
+    stalledProjects: attention("stalledProjects"),
+    projectsMissingBudget: attention("projectsMissingBudget"),
+    pastDuePlannedExpenses: attention("pastDuePlannedExpenses"),
+    unclassifiedExpenses: attention("unclassifiedExpenses"),
+    blockedWorkProjects: attention("blockedWorkProjects"),
+    // This remains derived because one project may produce two date-window
+    // rows.  Its typed adapter computes the complete relation before sampling.
+    projectsWithDateDrift: page("projectsWithDateDrift")
+      .items as ProjectAttentionItem[],
+    sectionTotals: {
+      ...exactSectionTotals(exact),
+    },
+  };
 };
 
 export const findUpcProblems = async (
   db: Database,
   upcLookupClient: UPCLookupClient,
-): Promise<ProblemsUpc> => ({
-  productsWithBetterUpcData: await findProductsWithBetterUpcData(
-    db,
-    upcLookupClient,
-  ),
-});
+): Promise<ProblemsUpc> => {
+  const { products: productsWithBetterUpcData, freshness } =
+    await findProductsWithBetterUpcData(db, upcLookupClient);
+  return {
+    productsWithBetterUpcData,
+    // Proposal membership is materialized by UPC and can be counted exactly.
+    sectionTotals: {
+      productsWithBetterUpcData: productsWithBetterUpcData.length,
+    },
+    freshness,
+  };
+};
 
 // Combined scan for the badge/homepage/MCP — recomposed from the same groups so
 // there's one definition of each detector's membership. totalProblems is the

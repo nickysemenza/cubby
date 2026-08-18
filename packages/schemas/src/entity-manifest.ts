@@ -413,7 +413,9 @@ export const entityManifest = {
     hasImages: false,
     searchable: true,
     countable: true,
-    relationships: [],
+    relationships: [
+      path("logo", "Logo image", "image", out("Vendor.logoImageId")),
+    ],
     // Deletable in the app (blocked while live purchases reference it), and
     // mergeable — two roster rows for one real vendor is a reported defect.
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: true },

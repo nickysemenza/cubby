@@ -23,6 +23,7 @@ import {
   findUnreferencedImages,
   getImageById,
   getImagesByProjectIds,
+  imageList,
   markImageUploaded,
   updateImage,
 } from "./image";
@@ -615,13 +616,32 @@ describe("image repository — purchase (charge) documents", () => {
         .set({ coverImageId: coverOnly.id })
         .where(eq(cookbook.id, cookbookId));
 
-      const found = (await findUnreferencedImages(ctx.db, 0)).map((r) => r.id);
+      await getDb(ctx.db)
+        .update(image)
+        .set({ createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) })
+        .where(eq(image.id, orphan.id));
+
+      const found = (await findUnreferencedImages(ctx.db)).map((r) => r.id);
+      const listed = await imageList(
+        ctx.db,
+        {
+          status: "UPLOADED",
+          referencePresenceFilter: "none",
+          uploadedAgeHoursMin: 1,
+        },
+        [],
+        { pageIndex: 0, pageSize: 100 },
+      );
 
       expect(found).toContain(orphan.id);
       expect(found).not.toContain(attached.id);
       // PENDING rows belong to the pending cull, not this sweep.
       expect(found).not.toContain(pending.id);
       expect(found).not.toContain(coverOnly.id);
+      expect(listed.data.map((row) => row.id)).toContain(orphan.id);
+      expect(listed.data.map((row) => row.id)).not.toContain(attached.id);
+      expect(listed.data.map((row) => row.id)).not.toContain(pending.id);
+      expect(listed.data.map((row) => row.id)).not.toContain(coverOnly.id);
     });
 
     it("leaves a just-created row alone until the grace window passes", async () => {
