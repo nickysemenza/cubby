@@ -1,6 +1,6 @@
 import type { Amount } from "@cubby/schemas/codec";
 import { describe, expect, it, vi } from "vitest";
-import { amountCellData, entityCellData } from "./cell-data";
+import { amountCellData, dateCellData, entityCellData } from "./cell-data";
 
 interface Row {
   id: string;
@@ -29,6 +29,34 @@ describe("entityCellData clear capability", () => {
     );
     await expect(data.applyClear?.(filled)).resolves.toBeNull();
     expect(clear).toHaveBeenCalledWith(filled);
+  });
+});
+
+describe("dateCellData", () => {
+  it("normalizes natural-language clipboard text before saving", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 18, 9, 30));
+    const save = vi.fn().mockResolvedValue(undefined);
+    const data = dateCellData<null>(() => null, save);
+
+    try {
+      await expect(
+        data.applyPaste?.(null, { text: "next Friday" }),
+      ).resolves.toBe("2026-08-28");
+      expect(save).toHaveBeenCalledWith(null, "2026-08-28");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejects invalid clipboard text without saving", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const data = dateCellData<null>(() => null, save);
+
+    await expect(
+      data.applyPaste?.(null, { text: "not a date" }),
+    ).rejects.toThrow("Couldn’t understand that date");
+    expect(save).not.toHaveBeenCalled();
   });
 });
 

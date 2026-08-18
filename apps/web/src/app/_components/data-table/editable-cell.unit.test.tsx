@@ -577,6 +577,149 @@ describe("EditableCell type-to-edit seeding", () => {
   });
 });
 
+describe("EditableCell date editing", () => {
+  it("seeds the date input from type-to-edit", async () => {
+    render(
+      <CellSelectionContext.Provider value={true}>
+        <EditableCell
+          value="2026-08-18"
+          onSave={vi.fn()}
+          config={{ type: "date" }}
+          renderValue={(value) => <span>{value}</span>}
+        />
+      </CellSelectionContext.Provider>,
+    );
+
+    const trigger = screen.getByRole("button");
+    act(() => {
+      trigger.dispatchEvent(
+        new CustomEvent(CELL_EDIT_EVENT, { detail: { seedText: "8" } }),
+      );
+    });
+
+    expect(await screen.findByRole("textbox")).toHaveValue("8");
+  });
+
+  it("commits a typed date on Enter exactly once", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <EditableCell
+        value="2026-08-18"
+        onSave={onSave}
+        config={{ type: "date" }}
+        renderValue={(value) => <span>{value}</span>}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+    const input = await screen.findByRole("textbox");
+    fireEvent.change(input, { target: { value: "Aug 20, 2026" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(onSave).toHaveBeenCalledWith("2026-08-20");
+    });
+  });
+
+  it("commits a valid date on outside blur", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <div>
+        <EditableCell
+          value="2026-08-18"
+          onSave={onSave}
+          config={{ type: "date" }}
+          renderValue={(value) => <span>{value}</span>}
+        />
+        <button type="button">Outside</button>
+      </div>,
+    );
+
+    fireEvent.click(screen.getAllByRole("button")[0]!);
+    const input = await screen.findByRole("textbox");
+    fireEvent.change(input, { target: { value: "8/20/2026" } });
+    input.focus();
+    const outside = screen.getByRole("button", { name: "Outside" });
+    fireEvent.mouseDown(outside);
+    outside.focus();
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith("2026-08-20");
+    });
+  });
+
+  it("keeps an invalid outside-blurred editor open until Escape", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <div>
+        <EditableCell
+          value="2026-08-18"
+          onSave={onSave}
+          config={{ type: "date" }}
+          renderValue={(value) => <span>{value}</span>}
+        />
+        <button type="button">Outside</button>
+      </div>,
+    );
+
+    fireEvent.click(screen.getAllByRole("button")[0]!);
+    const input = await screen.findByRole("textbox");
+    fireEvent.change(input, { target: { value: "February 30, 2026" } });
+    input.focus();
+    const outside = screen.getByRole("button", { name: "Outside" });
+    fireEvent.mouseDown(outside);
+    outside.focus();
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toHaveValue("February 30, 2026");
+    expect(onSave).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(screen.getByRole("textbox"), { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    });
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("closes an invalid date editor before another cell starts editing", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <div>
+        <EditableCell
+          value="2026-08-18"
+          onSave={onSave}
+          config={{ type: "date" }}
+          renderValue={(value) => <span>{value}</span>}
+        />
+        <EditableCell
+          value="2026-08-19"
+          onSave={onSave}
+          config={{ type: "date" }}
+          renderValue={(value) => <span>{value}</span>}
+        />
+      </div>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /2026-08-18/ }));
+    const input = await screen.findByRole("textbox");
+    fireEvent.change(input, { target: { value: "February 30, 2026" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+
+    const secondTrigger = screen.getByRole("button", { name: /2026-08-19/ });
+    fireEvent.mouseDown(secondTrigger);
+    fireEvent.click(secondTrigger);
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("textbox")).toHaveLength(1);
+      expect(screen.getByRole("textbox")).toHaveValue("Aug 19, 2026");
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+    expect(onSave).not.toHaveBeenCalled();
+  });
+});
+
 describe("EditableCell rich display trigger", () => {
   it("renders a link beside the edit button instead of inside it", () => {
     render(

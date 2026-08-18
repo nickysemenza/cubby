@@ -42,8 +42,8 @@ test("calendar opens a date drawer and prefills quick creation", async ({
   const mealDialog = page.getByRole("dialog", { name: "New Meal" });
   await expect(mealDialog).toBeVisible();
   await expect(
-    mealDialog.getByRole("button", { name: "Date", exact: true }),
-  ).toContainText("Jul 14, 2026");
+    mealDialog.getByRole("textbox", { name: "Date", exact: true }),
+  ).toHaveValue("Jul 14, 2026");
   expect(pageErrors).toEqual([]);
 });
 

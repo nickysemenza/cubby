@@ -23,12 +23,16 @@ test("keeps the matrix renderer when the date range changes", async ({
 
   // `exact` matters: accessible-name matching is substring, and the footer's
   // "GitHub repository" link contains "to".
-  await page.getByLabel("From", { exact: true }).fill("2026-06-01");
+  const fromInput = page.getByLabel("From", { exact: true });
+  await fromInput.fill("2026-06-01");
+  await fromInput.press("Enter");
   await expect(page).toHaveURL(/from=2026-06-01/);
   await expect(page).toHaveURL(/view=matrix/);
   await expect(matrixToggle).toHaveAttribute("aria-pressed", "true");
 
-  await page.getByLabel("To", { exact: true }).fill("2026-06-30");
+  const toInput = page.getByLabel("To", { exact: true });
+  await toInput.fill("2026-06-30");
+  await toInput.press("Enter");
   await expect(page).toHaveURL(/to=2026-06-30/);
   await expect(page).toHaveURL(/view=matrix/);
 });
