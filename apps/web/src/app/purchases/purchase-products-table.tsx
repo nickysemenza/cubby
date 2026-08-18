@@ -25,7 +25,6 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "~/components/ui/empty";
-import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { purchaseProductMutationInvalidateKeys } from "~/lib/query-keys";
@@ -35,13 +34,13 @@ const EMPTY_KIT_ROWS: KitComponentRowOut[] = [];
 
 type PurchaseProductRow = {
   /**
-   * Table row id — namespaced `${kitId}:${componentId}` on a component row, so
-   * a component that sits in two kits (or also appears as its own row on this
-   * order) does not share expansion and React key state. `productId` carries
-   * the real shortcode. Same rule as `products/product-kit-rows.ts`.
+   * Unique table row key — namespaced `${kitId}:${componentId}` on a component
+   * row. `id` stays the real product shortcode at both depths so every link and
+   * mutation keeps working; only `getRowId` reads this. See the note on
+   * `ProductTreeRow.rowKey` for why that split matters.
    */
   id: string;
-  productId: string;
+  rowKey: string;
   name: string;
   manufacturer: string;
   price: number | null;
@@ -81,7 +80,7 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
         const components = componentsByParent.get(item.productId) ?? [];
         const row: PurchaseProductRow = {
           id: item.productId,
-          productId: item.productId,
+          rowKey: item.productId,
           name: item.productName,
           manufacturer: item.manufacturer,
           price: item.price,
@@ -98,8 +97,8 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
           // No `subRows` key at all when empty, so `getCanExpand()` is false and
           // the name column renders its leaf spacer rather than a dead chevron.
           subRows: components.map((component) => ({
-            id: `${item.productId}:${component.product.id}`,
-            productId: component.product.id,
+            id: component.product.id,
+            rowKey: `${item.productId}:${component.product.id}`,
             name: component.product.name,
             manufacturer: component.product.manufacturer,
             price: component.product.price,
@@ -135,12 +134,6 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
       createNameColumn(helper, "product", "name", {
         header: "Product",
         expandable: true,
-        // The row id is namespaced on components, so the link has to be built
-        // from the real shortcode rather than the default `row.id` resolver.
-        rowLink: (row) => ({
-          to: entities.product.routes.detail,
-          params: entityDetailParams(row.productId),
-        }),
       }),
       helper.accessor((row) => row.manufacturer, {
         id: "manufacturer",
@@ -183,9 +176,7 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
               disabled={detach.isPending}
               onSelect={(event) => {
                 event.stopPropagation();
-                // `productId`, never `id` — the latter is namespaced on a
-                // component row, and no endpoint ever minted that value.
-                detach.mutate({ purchaseId, productIds: [row.productId] });
+                detach.mutate({ purchaseId, productIds: [row.id] });
               }}
             />
           ),
@@ -199,7 +190,8 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
     columns: layout.columns,
     atoms: layout.atoms,
     meta: { defaultLayout: layout.defaultLayout },
-    getRowId: (row) => row.id,
+    // `rowKey`, not `id`: a component can appear under two kits on one order.
+    getRowId: (row) => row.rowKey,
     getSubRows: (row) => row.subRows,
     initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
   });

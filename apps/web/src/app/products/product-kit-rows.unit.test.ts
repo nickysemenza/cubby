@@ -42,12 +42,14 @@ describe("buildProductTreeRows", () => {
       ]),
     );
 
-    const childIds = rows.flatMap((row) => row.subRows ?? []).map((r) => r.id);
-    expect(childIds).toEqual(["PRD-KITA:PRD-SHRD", "PRD-KITB:PRD-SHRD"]);
-    expect(new Set(childIds).size).toBe(2);
+    const childKeys = rows
+      .flatMap((row) => row.subRows ?? [])
+      .map((r) => r.rowKey);
+    expect(childKeys).toEqual(["PRD-KITA:PRD-SHRD", "PRD-KITB:PRD-SHRD"]);
+    expect(new Set(childKeys).size).toBe(2);
     // ...and none of them collides with the component's own top-level row.
-    expect(childIds).not.toContain("PRD-SHRD");
-    expect(rows.map((r) => r.id)).toContain("PRD-SHRD");
+    expect(childKeys).not.toContain("PRD-SHRD");
+    expect(rows.map((r) => r.rowKey)).toContain("PRD-SHRD");
   });
 
   it("keeps the real shortcode on every row, at both depths", () => {
@@ -56,10 +58,14 @@ describe("buildProductTreeRows", () => {
       groupComponentsByParent([componentOf("PRD-KITA", "PRD-PART")]),
     );
 
-    expect(rows[0]?.productId).toBe("PRD-KITA");
-    // Links and per-row actions read `productId`; `id` would send them to
-    // `/products/PRD-KITA:PRD-PART`.
-    expect(rows[0]?.subRows?.[0]?.productId).toBe("PRD-PART");
+    // The regression this guards: namespacing `id` itself would send every
+    // link, inline edit, and row action on a component to `PRD-KITA:PRD-PART`,
+    // and the type system cannot catch it — a branded shortcode's *input* type
+    // is a plain string, so the bad value assigns cleanly into every mutation.
+    expect(rows[0]?.id).toBe("PRD-KITA");
+    expect(rows[0]?.subRows?.[0]?.id).toBe("PRD-PART");
+    // Uniqueness lives on `rowKey` instead, which only `getRowId` reads.
+    expect(rows[0]?.subRows?.[0]?.rowKey).toBe("PRD-KITA:PRD-PART");
   });
 
   it("omits subRows entirely when a product has no components", () => {

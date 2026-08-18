@@ -32,7 +32,6 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { dataQualityOptions } from "~/lib/data-quality-options";
 import {
@@ -82,6 +81,7 @@ import {
   groupComponentsByParent,
   isKitComponentRow,
   type ProductTreeRow,
+  productTreeRowKey,
   productTreeSubRows,
 } from "./product-kit-rows";
 import { ProductMovementViews } from "./product-movement-views";
@@ -730,13 +730,7 @@ export function ProductList({
           // row. (It had been declared but silently swallowed by a deny-list
           // until that ordering was fixed; the declaration was aspirational.)
         },
-        // Restore the real shortcode: food hydration is keyed by product id,
-        // and a component row's `id` is namespaced by its kit.
-        cell: ({ row }) => (
-          <ProductFoodCell
-            product={{ ...row.original, id: row.original.productId }}
-          />
-        ),
+        cell: ({ row }) => <ProductFoodCell product={row.original} />,
       }),
       createInventoryEntriesColumn(
         columnHelper,
@@ -827,7 +821,7 @@ export function ProductList({
           return (
             <Link
               to="/expenses"
-              search={{ productId: info.row.original.productId }}
+              search={{ productId: info.row.original.id }}
               className="font-mono text-primary tabular-nums transition-colors hover:underline"
               onClick={(e) => e.stopPropagation()}
             >
@@ -846,20 +840,20 @@ export function ProductList({
       <>
         <VerbMenuItem
           verb="editLocations"
-          onSelect={() => setQuickEditProductId(row.productId)}
+          onSelect={() => setQuickEditProductId(row.id)}
         />
         <VerbMenuItem
           verb="discard"
-          onSelect={() => setDiscardProductId(row.productId)}
+          onSelect={() => setDiscardProductId(row.id)}
         />
         <VerbMenuItem
           verb="addToInventory"
           render={<Link to="/inventory/session" />}
         />
-        {row.productId && (
+        {row.id && (
           <VerbMenuItem
             verb="printLabel"
-            render={<Link to="/labels" search={{ codes: row.productId }} />}
+            render={<Link to="/labels" search={{ codes: row.id }} />}
           />
         )}
       </>
@@ -912,14 +906,14 @@ export function ProductList({
         buildProductTreeRows(rows, componentsByParent),
       getSubRows: productTreeSubRows,
       expandable: true,
-      // A component is a Product, so it could pass as this table's entity —
-      // but its row id is namespaced, and every mutation here targets `id`.
-      // Off for children; their own affordances live one click away.
+      // `id` stays the real shortcode at both depths, so uniqueness lives here
+      // instead — see `ProductTreeRow.rowKey` for why that split matters.
+      rowKey: productTreeRowKey,
+      // A component IS a Product, so it would pass as this table's entity — but
+      // bulk delete and the row menu act on a whole selection, and a component
+      // is shown here as part of its kit rather than in its own right. Its
+      // affordances live one click away on its own page.
       rowIsEntity: (row: ProductTreeRow) => !isKitComponentRow(row),
-      rowLink: (row: ProductTreeRow) => ({
-        to: entities.product.routes.detail,
-        params: entityDetailParams(row.productId),
-      }),
     }),
     [componentsByParent],
   );
@@ -932,7 +926,7 @@ export function ProductList({
           id: "print-labels",
           minSelection: 1,
           onExecute: (rows) => {
-            const codes = rows.map((r) => r.original.productId).join(",");
+            const codes = rows.map((r) => r.original.id).join(",");
             navigate({ to: "/labels", search: { codes } });
             return Promise.resolve({ success: true });
           },
@@ -1008,13 +1002,11 @@ export function ProductList({
   }, [data]);
 
   // The Shelf view has no nesting, so it shows products only — a component
-  // expanded in the table is not a second thing on the shelf. Real shortcodes
-  // are restored on the way out.
+  // expanded in the table is not a second thing on the shelf.
   const items = table
     .getRowModel()
     .rows.map((r) => r.original)
-    .filter((row) => !isKitComponentRow(row))
-    .map((row) => ({ ...row, id: row.productId }));
+    .filter((row) => !isKitComponentRow(row));
   const discardProduct = discardProductId
     ? (data.find((p) => p.id === discardProductId) ?? null)
     : null;
