@@ -1,13 +1,9 @@
 import type { ProjectShortcode } from "@cubby/schemas/identifiers";
 import type { ProductProjectUsesOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
-import {
-  type RowSelectionState,
-  type Updater,
-  useTable,
-} from "@tanstack/react-table";
+import type { RowSelectionState, Updater } from "@tanstack/react-table";
 import { Pencil, Search } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import {
   createCurrencyColumn,
@@ -18,8 +14,9 @@ import RTable from "~/app/_components/data-table/Table";
 import {
   type CubbyColumnDef,
   createCubbyColumnHelper,
-  cubbyTableFeatures,
+  useCubbyTable,
 } from "~/app/_components/data-table/table-features";
+import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
@@ -164,7 +161,7 @@ export function ProductProjectUses({ productId }: { productId: string }) {
       data: rows,
       columns,
       tableStateOptions: EMBEDDED_TABLE_STATE,
-      columnVisibilityScope: "product-uses",
+      layoutKey: "project:product-uses",
       initialColumnVisibility: HIDDEN_RELATED_COLUMNS,
       extraActions: (row) => (
         <VerbMenuItem
@@ -240,7 +237,6 @@ export function ProductProjectUses({ productId }: { productId: string }) {
         table={table}
         entity="project"
         ariaLabel="Projects this was used on"
-        sizingKey="project:product-uses"
         embedded
         bulkActionBar={bulkActionBar}
       />
@@ -270,8 +266,6 @@ function ProjectUsesDialog({
   const api = useTRPC();
   const { rows, isLoading } = useProjectOptions();
   const [search, setSearch] = useState("");
-  const lastSelectedIdRef = useRef<string | null>(null);
-  const shiftKeyRef = useRef(false);
   // Seeded from the server set each time the dialog opens, so a cancelled edit
   // leaves nothing behind.
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -286,7 +280,6 @@ function ProjectUsesDialog({
       setSearch("");
       setSelected(new Set());
       setSeededFor(false);
-      lastSelectedIdRef.current = null;
     }
     onOpenChange(next);
   };
@@ -322,7 +315,7 @@ function ProjectUsesDialog({
   const helper = useMemo(() => createCubbyColumnHelper<ProjectOptionRow>(), []);
   const columns = useMemo<CubbyColumnDef<ProjectOptionRow>[]>(
     () => [
-      buildSelectColumn<ProjectOptionRow>(lastSelectedIdRef, shiftKeyRef),
+      buildSelectColumn<ProjectOptionRow>(),
       helper.display({
         id: "mark",
         header: "",
@@ -348,10 +341,15 @@ function ProjectUsesDialog({
     ],
     [helper],
   );
-  const table = useTable<typeof cubbyTableFeatures, ProjectOptionRow>({
-    features: cubbyTableFeatures,
-    data: visible,
+  const layout = useCubbyTableLayout({
+    key: "product:project-picker",
     columns,
+  });
+  const table = useCubbyTable({
+    data: visible,
+    columns: layout.columns,
+    atoms: layout.atoms,
+    meta: { defaultLayout: layout.defaultLayout },
     getRowId: (row) => row.id,
     enableRowSelection: true,
     state: { rowSelection },
@@ -384,7 +382,6 @@ function ProjectUsesDialog({
             table={table}
             entity="project"
             ariaLabel="Projects available for this product"
-            sizingKey="product:project-picker"
             embedded
             isLoading={isLoading}
             emptyState={<Description>No projects match.</Description>}

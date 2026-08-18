@@ -23,8 +23,6 @@ interface DataTableToolbarProps<TData extends RowData> {
   bulkActionBar?: ReactNode;
   /** Show desktop view options dropdown (column toggles) */
   showViewOptions?: boolean;
-  /** Clear this table's persisted column widths (see DataTableViewOptions). */
-  onResetColumnWidths?: () => void;
   /** Additional className for styling */
   className?: string;
   /** Previous-query rows remain visible while the next first page is loading. */
@@ -76,7 +74,6 @@ export function DataTableToolbar<TData extends RowData>({
   actions,
   bulkActionBar,
   showViewOptions = true,
-  onResetColumnWidths,
   className,
   isTransitioning = false,
   ownsPageIdentity = false,
@@ -85,12 +82,7 @@ export function DataTableToolbar<TData extends RowData>({
     <Row align="center" justify="between" gap="sm" className={className}>
       <Row align="center" gap="sm" className="min-w-0">
         {ownsPageIdentity && <ToolbarIdentity />}
-        {showViewOptions && (
-          <DataTableViewOptions
-            table={table}
-            onResetColumnWidths={onResetColumnWidths}
-          />
-        )}
+        {showViewOptions && <DataTableViewOptions table={table} />}
         <DataTableViews table={table} entity={entity} />
         <fieldset disabled={isTransitioning} className="contents">
           {bulkActionBar}

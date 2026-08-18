@@ -38,6 +38,19 @@ interface ViewFilter {
   value: string | string[];
 }
 
+interface ViewLayout {
+  columnOrder: string[];
+  columnPinning: { start: string[]; end: string[] };
+  columnVisibility: Record<string, boolean>;
+  columnSizing: Record<string, number>;
+}
+
+const DEFAULT_CURATED_LAYOUT: Omit<ViewLayout, "columnVisibility"> = {
+  columnOrder: [],
+  columnPinning: { start: [], end: [] },
+  columnSizing: {},
+};
+
 /**
  * Marks a view as ALSO being a Problems section, so one declaration produces
  * the saved view, the shareable URL, and the Problems card.
@@ -84,24 +97,9 @@ export interface ViewDefinition {
   description: string;
   filters: ViewFilter[];
   sort?: Array<{ id: string; desc: boolean }>;
-  /**
-   * Columns to force on (or off) when the view is applied, by `columnId`.
-   *
-   * A view that selects rows on a signal the table hides by default lands the
-   * operator on a filtered list with no column explaining *why* those rows are
-   * there — which is how a worklist becomes a mystery. Omitted keys are left
-   * at whatever the user already had, so this reveals what the view is about
-   * without resetting their layout.
-   *
-   * This DOES persist, and deliberately so. On a list table `useEntityList`
-   * wires `useTableColumnVisibility` in as the controlled handler, so the
-   * reveal lands in `table-columns:{entity}` like any manual toggle and
-   * survives a reload — you keep the columns while you work the list, and
-   * turning them back off sticks the same way. Anything narrower would mean
-   * fighting the controlled-visibility path to make a column vanish on
-   * navigation, which is a worse surprise than an extra column.
-   */
-  columnVisibility?: Record<string, boolean>;
+  /** Optional curated layout. Applying it replaces every layout slice after
+   * normalization against the table's current code-defined columns. */
+  layout?: ViewLayout;
   problem?: ViewProblem;
 }
 
@@ -259,7 +257,10 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       // Visible by default, but visibility persists per user — someone who has
       // hidden Quantity would otherwise land on a list selected on an invisible
       // signal, with the one field they came to edit missing.
-      columnVisibility: { productQuantity: true },
+      layout: {
+        ...DEFAULT_CURATED_LAYOUT,
+        columnVisibility: { productQuantity: true },
+      },
     },
   ],
   product: [
@@ -284,10 +285,13 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       // while sitting in no inventory row at all: eight 7-gal totes bought,
       // three in service as bins, five nowhere. Without the column the row
       // reads as a bare -5 with an empty Location cell.
-      columnVisibility: {
-        expectedQuantity: true,
-        quantityVariance: true,
-        servingAsLocations: true,
+      layout: {
+        ...DEFAULT_CURATED_LAYOUT,
+        columnVisibility: {
+          expectedQuantity: true,
+          quantityVariance: true,
+          servingAsLocations: true,
+        },
       },
     },
     {
@@ -298,7 +302,10 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       // cost but not the count leaves the expected quantity understated, and
       // nothing infers one (a nullable quantity is never read as 1).
       filters: [{ id: "expectedQuantity", value: "unknown" }],
-      columnVisibility: { expectedQuantity: true },
+      layout: {
+        ...DEFAULT_CURATED_LAYOUT,
+        columnVisibility: { expectedQuantity: true },
+      },
     },
     {
       id: "unlocated",
@@ -340,11 +347,14 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       // deliberately NOT revealed — on-hand units are NULL for this entire
       // cohort, so it renders `—` on every row, and a dash reads as "unknown"
       // when the actual fact is "none".
-      columnVisibility: {
-        expectedQuantity: true,
-        location: true,
-        servingAsLocations: true,
-        stockTracked: true,
+      layout: {
+        ...DEFAULT_CURATED_LAYOUT,
+        columnVisibility: {
+          expectedQuantity: true,
+          location: true,
+          servingAsLocations: true,
+          stockTracked: true,
+        },
       },
     },
     {
@@ -369,12 +379,15 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         { id: "category", value: ["tools", "tool-accessories", "storage"] },
       ],
       sort: [{ id: "price", desc: true }],
-      columnVisibility: {
-        expectedQuantity: true,
-        location: true,
-        servingAsLocations: true,
-        stockTracked: true,
-        category: true,
+      layout: {
+        ...DEFAULT_CURATED_LAYOUT,
+        columnVisibility: {
+          expectedQuantity: true,
+          location: true,
+          servingAsLocations: true,
+          stockTracked: true,
+          category: true,
+        },
       },
     },
     {
@@ -400,7 +413,10 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
           miscBucketFilter: "none",
         },
       },
-      columnVisibility: { price: true, location: true },
+      layout: {
+        ...DEFAULT_CURATED_LAYOUT,
+        columnVisibility: { price: true, location: true },
+      },
     },
     {
       id: "unpriced-buckets",
@@ -426,7 +442,10 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
           miscBucketFilter: "has",
         },
       },
-      columnVisibility: { price: true, location: true },
+      layout: {
+        ...DEFAULT_CURATED_LAYOUT,
+        columnVisibility: { price: true, location: true },
+      },
     },
     {
       id: "unmapped",
@@ -464,11 +483,14 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
           categoryPresenceFilter: "none",
         },
       },
-      columnVisibility: {
-        price: true,
-        food: true,
-        unitMappingQuality: true,
-        category: true,
+      layout: {
+        ...DEFAULT_CURATED_LAYOUT,
+        columnVisibility: {
+          price: true,
+          food: true,
+          unitMappingQuality: true,
+          category: true,
+        },
       },
     },
     {
@@ -504,7 +526,10 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         emptyMessage: "No product has exited more units than it acquired.",
         serverFilters: { expectedQuantityMax: -1 },
       },
-      columnVisibility: { expectedQuantity: true },
+      layout: {
+        ...DEFAULT_CURATED_LAYOUT,
+        columnVisibility: { expectedQuantity: true },
+      },
     },
   ],
   purchase: [
@@ -580,7 +605,10 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
           productPresenceFilter: "none",
         },
       },
-      columnVisibility: { ownRecipes: true },
+      layout: {
+        ...DEFAULT_CURATED_LAYOUT,
+        columnVisibility: { ownRecipes: true },
+      },
     },
     {
       id: "unused-with-product",
@@ -651,7 +679,10 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       },
       // Both hidden by default on this table, so the view has to reveal them —
       // otherwise it selects rows on a signal nothing on screen explains.
-      columnVisibility: { aiDescription: true, image: true },
+      layout: {
+        ...DEFAULT_CURATED_LAYOUT,
+        columnVisibility: { aiDescription: true, image: true },
+      },
     },
     {
       id: "stale-recounts",
@@ -690,7 +721,10 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
           lastBulkInventoryOlderThanDays: 60,
         },
       },
-      columnVisibility: { lastBulkInventory: true, inventoryEntries: true },
+      layout: {
+        ...DEFAULT_CURATED_LAYOUT,
+        columnVisibility: { lastBulkInventory: true, inventoryEntries: true },
+      },
     },
     {
       id: "empty-leaves",
@@ -720,7 +754,10 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
           childPresenceFilter: "none",
         },
       },
-      columnVisibility: { children: true, inventoryEntries: true },
+      layout: {
+        ...DEFAULT_CURATED_LAYOUT,
+        columnVisibility: { children: true, inventoryEntries: true },
+      },
     },
   ],
   recipe: [
@@ -754,7 +791,10 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
           sourceTypePresenceFilter: "none",
         },
       },
-      columnVisibility: { sourceType: true },
+      layout: {
+        ...DEFAULT_CURATED_LAYOUT,
+        columnVisibility: { sourceType: true },
+      },
     },
   ],
   meal: [
@@ -783,7 +823,10 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       },
       // The Recipes column is defaultVisible:false, so reveal the signal this
       // view selects on.
-      columnVisibility: { "related:meal.recipes": true },
+      layout: {
+        ...DEFAULT_CURATED_LAYOUT,
+        columnVisibility: { "related:meal.recipes": true },
+      },
     },
   ],
   inventory: [

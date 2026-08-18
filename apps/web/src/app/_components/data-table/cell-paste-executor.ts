@@ -11,14 +11,14 @@
  */
 
 import pMap from "p-map";
-import type { ColumnCellData } from "./cell-data";
 import type {
   CellKind,
   CellRect,
   CopiedCell,
   CopiedGrid,
   PasteOp,
-} from "./cell-range";
+} from "./cell-clipboard-model";
+import type { ColumnCellData } from "./cell-data";
 
 /**
  * Build a rectangular `CopiedGrid` from the TanStack row model. `rows` is

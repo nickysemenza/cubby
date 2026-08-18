@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
+import type { CopiedGrid } from "./cell-clipboard-model";
 import {
   bufferMatches,
   clearCopyBuffer,
   getCopyBuffer,
   setCopyBuffer,
 } from "./cell-copy-buffer";
-import type { CopiedGrid } from "./cell-range";
 
 afterEach(() => {
   clearCopyBuffer();

@@ -1,18 +1,18 @@
-import {
-  type ColumnVisibilityState,
-  type OnChangeFn,
-  type RowData,
-  type RowSelectionState,
-  type TableFeatures,
-  useTable,
+import type {
+  ColumnVisibilityState,
+  OnChangeFn,
+  RowData,
+  RowSelectionState,
 } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import {
   type CubbyColumnDef,
   type CubbyRow,
   type CubbyTable,
-  cubbyTableFeatures,
+  useCubbyTable,
 } from "./table-features";
+import type { CubbyTableLayoutController } from "./table-layout";
+import type { ServerTotals } from "./table-meta";
 import type { TableStateReturn } from "./useTableState";
 
 interface UseTableConfigOptions<TData extends RowData> {
@@ -43,12 +43,13 @@ interface UseTableConfigOptions<TData extends RowData> {
   /** Columns hidden by default (user can toggle via View menu) */
   initialColumnVisibility?: Record<string, boolean>;
   /**
-   * Controlled column visibility (e.g. the persisted per-entity store from
-   * `useTableColumnVisibility`). When provided together with
+   * Controlled column visibility for a non-persisted table. When provided together with
    * `onColumnVisibilityChange`, the internal useState fallback is bypassed.
    */
   columnVisibility?: ColumnVisibilityState;
   onColumnVisibilityChange?: OnChangeFn<ColumnVisibilityState>;
+  /** Unified persisted v9 layout owner. Preferred over visibility-only control. */
+  layout?: CubbyTableLayoutController<TData>;
   /**
    * Server-computed totals over the FULL filtered set, surfaced to footer
    * renderers via table meta — client rows only cover loaded pages.
@@ -77,32 +78,6 @@ interface UseTableConfigOptions<TData extends RowData> {
   autoResetExpanded?: boolean;
 }
 
-interface ServerTotals {
-  /** Total rows matching the current filters (not just loaded pages). */
-  totalCount: number;
-  /** Column sums over the full filtered set, keyed by column id. */
-  sums?: Record<string, number>;
-}
-
-declare module "@tanstack/react-table" {
-  // TData is required to match the library's TableMeta signature for the
-  // module augmentation to merge; it's structurally unused here.
-  interface TableMeta<TFeatures extends TableFeatures, TData extends RowData> {
-    serverTotals?: ServerTotals;
-    /**
-     * How many URL-only scopes (see `urlOnly` in `entities/filters`) are
-     * narrowing the rows. They can't live in `columnFilters` — TanStack
-     * resolves every entry there to a column — but the empty state still has
-     * to know they're on, or a scoped deep link that matches nothing reads as
-     * "you have no expenses at all". See `isNarrowed`.
-     */
-    urlScopeCount?: number;
-    /** See `UseTableConfigOptions.rowContentVersion`. */
-    rowContentVersion?: unknown;
-    _tData?: TData;
-  }
-}
-
 export function useTableConfig<TData extends RowData>({
   data,
   columns,
@@ -119,6 +94,7 @@ export function useTableConfig<TData extends RowData>({
   initialColumnVisibility,
   columnVisibility: controlledVisibility,
   onColumnVisibilityChange: controlledOnVisibilityChange,
+  layout,
   serverTotals,
   rowContentVersion,
   getSubRows,
@@ -147,17 +123,17 @@ export function useTableConfig<TData extends RowData>({
   const columnVisibility = controlledVisibility ?? internalVisibility;
   const setColumnVisibility =
     controlledOnVisibilityChange ?? setInternalVisibility;
+  const tableColumns = layout?.columns ?? columns;
 
   // Memoize table options to prevent recreating on every render
   const tableOptions = useMemo(
     () => ({
-      features: cubbyTableFeatures,
       data,
-      columns,
+      columns: tableColumns,
       onPaginationChange: setPagination,
       onSortingChange: setSorting,
       onColumnFiltersChange: setColumnFilters,
-      onColumnVisibilityChange: setColumnVisibility,
+      ...(!layout ? { onColumnVisibilityChange: setColumnVisibility } : {}),
       manualSorting,
       manualFiltering,
       manualPagination,
@@ -175,35 +151,38 @@ export function useTableConfig<TData extends RowData>({
         ...(serverTotals ? { serverTotals } : {}),
         ...(urlScopeCount > 0 ? { urlScopeCount } : {}),
         ...(rowContentVersion !== undefined ? { rowContentVersion } : {}),
+        defaultLayout: layout?.defaultLayout,
       },
       // Row selection
       ...(getRowId ? { getRowId } : {}),
       ...(enableRowSelection !== undefined ? { enableRowSelection } : {}),
       ...(onRowSelectionChange ? { onRowSelectionChange } : {}),
-      // Cubby owns Shift-range selection so TanStack's native range behavior
-      // cannot compete with the custom selectable-row rules below.
-      enableRowRangeSelection: false,
+      enableRowRangeSelection: true,
+      autoResetCellSelection: false,
+      enableMultiCellRangeSelection: false,
       ...(getSubRows ? { getSubRows } : {}),
       ...(filterFromLeafRows !== undefined ? { filterFromLeafRows } : {}),
       ...(paginateExpandedRows !== undefined ? { paginateExpandedRows } : {}),
       ...(autoResetExpanded !== undefined ? { autoResetExpanded } : {}),
+      ...(layout ? { atoms: layout.atoms } : {}),
       state: {
         sorting,
         columnFilters,
-        columnVisibility,
+        ...(!layout ? { columnVisibility } : {}),
         pagination,
         ...(rowSelection ? { rowSelection } : {}),
       },
     }),
     [
       data,
-      columns,
+      tableColumns,
       sorting,
       setSorting,
       columnFilters,
       setColumnFilters,
       columnVisibility,
       setColumnVisibility,
+      layout,
       pagination,
       setPagination,
       manualSorting,
@@ -225,5 +204,5 @@ export function useTableConfig<TData extends RowData>({
     ],
   );
 
-  return useTable(tableOptions);
+  return useCubbyTable(tableOptions) as CubbyTable<TData>;
 }

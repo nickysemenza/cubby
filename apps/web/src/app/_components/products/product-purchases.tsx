@@ -1,7 +1,6 @@
 import type { KitMembershipOut } from "@cubby/schemas/product-components";
 import type { ProductPurchaseOut } from "@cubby/schemas/purchase";
 import { useQuery } from "@tanstack/react-query";
-import { useTable } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { useMemo } from "react";
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
@@ -13,8 +12,9 @@ import RTable from "~/app/_components/data-table/Table";
 import {
   type CubbyColumnDef,
   createCubbyColumnHelper,
-  cubbyTableFeatures,
+  useCubbyTable,
 } from "~/app/_components/data-table/table-features";
+import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import {
@@ -96,10 +96,12 @@ export function ProductPurchases({ productId }: { productId: string }) {
     ],
     [detach, helper, productId],
   );
-  const table = useTable<typeof cubbyTableFeatures, PurchaseRow>({
-    features: cubbyTableFeatures,
+  const layout = useCubbyTableLayout({ key: "product:purchases", columns });
+  const table = useCubbyTable({
     data: rows,
-    columns,
+    columns: layout.columns,
+    atoms: layout.atoms,
+    meta: { defaultLayout: layout.defaultLayout },
     getRowId: (row) => row.id,
     initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
   });
@@ -155,7 +157,6 @@ export function ProductPurchases({ productId }: { productId: string }) {
       table={table}
       entity="purchase"
       ariaLabel="Purchases linked to this product"
-      sizingKey="product:purchases"
       embedded
       isLoading={
         query.isPending || (items.length === 0 && membershipQuery.isPending)

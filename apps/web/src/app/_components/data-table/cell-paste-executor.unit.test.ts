@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { CellRect, CopiedCell, PasteOp } from "./cell-clipboard-model";
 import type { ColumnCellData } from "./cell-data";
 import {
   alignExternalGrid,
@@ -7,7 +8,6 @@ import {
   runPastePlan,
   summarizePasteResult,
 } from "./cell-paste-executor";
-import type { CellRect, CopiedCell, PasteOp } from "./cell-range";
 
 interface Row {
   id: string;

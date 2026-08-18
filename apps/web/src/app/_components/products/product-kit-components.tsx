@@ -6,13 +6,9 @@ import type {
 } from "@cubby/schemas/product-components";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
-import {
-  type RowSelectionState,
-  type Updater,
-  useTable,
-} from "@tanstack/react-table";
+import type { RowSelectionState, Updater } from "@tanstack/react-table";
 import { Plus } from "lucide-react";
-import { type ReactNode, useMemo, useRef, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import {
   createActionsColumn,
@@ -25,8 +21,9 @@ import RTable from "~/app/_components/data-table/Table";
 import {
   type CubbyColumnDef,
   createCubbyColumnHelper,
-  cubbyTableFeatures,
+  useCubbyTable,
 } from "~/app/_components/data-table/table-features";
+import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -74,7 +71,7 @@ function imagesFor(id: string, name: string, url: string | null) {
 function KitTable({
   rows,
   ariaLabel,
-  sizingKey,
+  layoutKey,
   action,
   emptyState,
   nameHeader,
@@ -82,7 +79,7 @@ function KitTable({
 }: {
   rows: ProductRow[];
   ariaLabel: string;
-  sizingKey: string;
+  layoutKey: string;
   action: (row: ProductRow) => ReactNode;
   emptyState: ReactNode;
   nameHeader: "Product" | "Kit";
@@ -128,10 +125,12 @@ function KitTable({
     ],
     [action, helper, nameHeader, showPrice],
   );
-  const table = useTable<typeof cubbyTableFeatures, ProductRow>({
-    features: cubbyTableFeatures,
+  const layout = useCubbyTableLayout({ key: layoutKey, columns });
+  const table = useCubbyTable({
     data: rows,
-    columns,
+    columns: layout.columns,
+    atoms: layout.atoms,
+    meta: { defaultLayout: layout.defaultLayout },
     getRowId: (row) => row.id,
     initialState: TABLE_STATE,
   });
@@ -140,7 +139,6 @@ function KitTable({
       table={table}
       entity="product"
       ariaLabel={ariaLabel}
-      sizingKey={sizingKey}
       embedded
       emptyState={emptyState}
     />
@@ -164,8 +162,6 @@ function AddComponentsDialog({
   );
   const [searchInput, setSearchInput] = useState("");
   const [search] = useDebouncedValue(searchInput, { wait: 300 });
-  const lastSelectedIdRef = useRef<string | null>(null);
-  const shiftKeyRef = useRef(false);
 
   const searchQuery = useQuery({
     ...api.product.search.queryOptions({
@@ -192,7 +188,6 @@ function AddComponentsDialog({
     if (!next) {
       setSelected(new Map());
       setSearchInput("");
-      lastSelectedIdRef.current = null;
     }
     onOpenChange(next);
   };
@@ -229,7 +224,7 @@ function AddComponentsDialog({
   const helper = useMemo(() => createCubbyColumnHelper<PickerRow>(), []);
   const columns = useMemo<CubbyColumnDef<PickerRow>[]>(
     () => [
-      buildSelectColumn<PickerRow>(lastSelectedIdRef, shiftKeyRef),
+      buildSelectColumn<PickerRow>(),
       createImageColumn(helper, { entity: "product" }),
       createNameColumn(helper, "product", "name", { header: "Product" }),
       helper.accessor((row) => row.manufacturer, {
@@ -287,10 +282,15 @@ function AddComponentsDialog({
     ],
     [helper, selected],
   );
-  const table = useTable<typeof cubbyTableFeatures, PickerRow>({
-    features: cubbyTableFeatures,
-    data: rows,
+  const layout = useCubbyTableLayout({
+    key: "product:component-picker",
     columns,
+  });
+  const table = useCubbyTable({
+    data: rows,
+    columns: layout.columns,
+    atoms: layout.atoms,
+    meta: { defaultLayout: layout.defaultLayout },
     getRowId: (row) => row.id,
     enableRowSelection: true,
     state: { rowSelection },
@@ -319,7 +319,6 @@ function AddComponentsDialog({
             table={table}
             entity="product"
             ariaLabel="Products available as kit components"
-            sizingKey="product:component-picker"
             embedded
             isLoading={searchQuery.isPending}
             emptyState={
@@ -462,7 +461,7 @@ export function ProductKitComponents({ productId }: { productId: string }) {
         <KitTable
           rows={componentRows}
           ariaLabel="Kit components"
-          sizingKey="product:kit-components"
+          layoutKey="product:kit-components"
           action={componentAction}
           nameHeader="Product"
           showPrice
@@ -488,7 +487,7 @@ export function ProductKitComponents({ productId }: { productId: string }) {
           <KitTable
             rows={membershipRows}
             ariaLabel="Kit memberships"
-            sizingKey="product:kit-memberships"
+            layoutKey="product:kit-memberships"
             action={membershipAction}
             nameHeader="Kit"
             showPrice

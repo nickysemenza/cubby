@@ -240,6 +240,7 @@ export function LocationInventoryTable({
     Record<string, never>
   >({
     entity: "inventory",
+    layoutKey: "inventory:location-detail",
     // Forward the table's own sort/pagination — dropping the argument left the
     // Product/Amount sort headers doing nothing (manualSorting is on, so
     // TanStack doesn't sort client-side either) and made every page of a
@@ -297,7 +298,6 @@ export function LocationInventoryTable({
           isLoading={isLoading}
           error={error}
           entity="inventory"
-          sizingKey="inventory:location-detail"
           bulkActionBar={bulkActionBar}
           embedded
         />

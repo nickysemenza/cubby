@@ -4,6 +4,7 @@ import { relatedViewsFor } from "@cubby/schemas/related-view";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { QueryKey } from "@tanstack/react-query";
 import { useSearch } from "@tanstack/react-router";
+import { useStore } from "@tanstack/react-store";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -24,8 +25,8 @@ import {
   type CubbyTable,
   createCubbyColumnHelper,
 } from "../data-table/table-features";
+import { useCubbyTableLayout } from "../data-table/table-layout";
 import type { GroupConfig } from "../data-table/useGroupedList";
-import { useTableColumnVisibility } from "../data-table/useTableColumnVisibility";
 import { useTableConfig } from "../data-table/useTableConfig";
 import {
   type TableStateReturn,
@@ -38,7 +39,11 @@ import {
 import { ListBulkActionBar, useListBulkActions } from "./useListBulkActions";
 import { useOptimisticDelete } from "./useOptimisticDelete";
 import type { TRPCQueryOptionsFn } from "./usePaginatedTableCore";
-import { useRelatedPreviewColumns } from "./useRelatedPreviewColumns";
+import {
+  useRelatedPreviewColumnDefs,
+  useRelatedPreviewData,
+  useRelatedPreviewStateRef,
+} from "./useRelatedPreviewColumns";
 import { type FilterInput, useStandardColumns } from "./useStandardColumns";
 
 /** Base interface for entities in list views */
@@ -144,8 +149,12 @@ export interface UseEntityListOptions<
   extraActions?: (row: TData) => ReactNode;
   /** Columns hidden by default (user can toggle via View menu) */
   initialColumnVisibility?: Record<string, boolean>;
-  /** Separate persisted column set for an embedded table over this entity. */
-  columnVisibilityScope?: string;
+  /** Stable identity for persisted ordering, pinning, visibility, and sizing. */
+  layoutKey?: string;
+  /** Previous visibility key, used only for the one-time legacy preference import. */
+  legacyLayoutVisibilityKey?: string;
+  /** Previous sizing key, used only for the one-time legacy preference import. */
+  legacyLayoutSizingKey?: string;
   /**
    * Width class for the standard name column. Defaults to auto (`min-w-0`),
    * which is right for dense tables. Pass a fixed width (e.g. `w-64`) on sparse
@@ -273,7 +282,9 @@ export function useEntityList<
   deletable,
   deleteEmptyLabel,
   initialColumnVisibility,
-  columnVisibilityScope,
+  layoutKey,
+  legacyLayoutVisibilityKey,
+  legacyLayoutSizingKey,
   nameClassName,
   nameEditable,
   nameSuffix,
@@ -447,28 +458,15 @@ export function useEntityList<
     }),
     [initialColumnVisibility, relatedInitialVisibility],
   );
-  const { columnVisibility, onColumnVisibilityChange } =
-    useTableColumnVisibility(
-      entity,
-      mergedInitialColumnVisibility,
-      columnVisibilityScope,
-    );
-  const visibleRelatedKeys = useMemo(
-    () =>
-      relatedViews
-        .filter((view) => columnVisibility[`related:${view.key}`] !== false)
-        .map((view) => view.key),
-    [columnVisibility, relatedViews],
-  );
   const sourceIds = useMemo(() => data.map((item) => item.id), [data]);
-  const { relatedColumns, rowContentVersion } = useRelatedPreviewColumns({
+  const relatedStateRef = useRelatedPreviewStateRef();
+  const relatedColumns = useRelatedPreviewColumnDefs({
     entity,
-    sourceIds,
-    visibleRelationKeys: visibleRelatedKeys,
     relatedViews,
     columnHelper,
     filterOptions,
     supportsServerSorting: true,
+    relatedStateRef,
   });
 
   // Full-filtered-set totals for footer renderers — client rows only cover
@@ -525,13 +523,33 @@ export function useEntityList<
     rowLink: tree?.rowLink,
   });
 
+  const persistedLayoutKey = layoutKey ?? entity;
+  const layout = useCubbyTableLayout({
+    key: persistedLayoutKey,
+    columns: allColumns,
+    initialColumnVisibility: mergedInitialColumnVisibility,
+    legacyVisibilityKey: legacyLayoutVisibilityKey ?? persistedLayoutKey,
+    legacySizingKey: legacyLayoutSizingKey ?? persistedLayoutKey,
+  });
+  const columnVisibility = useStore(layout.atoms.columnVisibility);
+  const visibleRelatedKeys = useMemo(
+    () =>
+      relatedViews
+        .filter((view) => columnVisibility[`related:${view.key}`] !== false)
+        .map((view) => view.key),
+    [columnVisibility, relatedViews],
+  );
+  const rowContentVersion = useRelatedPreviewData({
+    entity,
+    sourceIds,
+    visibleRelationKeys: visibleRelatedKeys,
+    relatedStateRef,
+  });
+
   // Row identity is independent of whether selection happens to be enabled.
   // Index ids transfer virtualizer measurements and row state to the wrong
   // entity when filters, sorting, or accumulated pages change.
   const getRowId = useCallback((row: TData) => row.id, []);
-
-  // Column widths are NOT wired here — `RTable` owns them, keyed off its
-  // `entity`/`sizingKey` prop, so a hand-wired table can't miss out.
 
   // Tree mode nests the accumulated rows; every other consumer above — the
   // related-preview `sourceIds`, `mappingsMap`, the select-all-matching count —
@@ -572,8 +590,7 @@ export function useEntityList<
     rowSelection: listBulkActions.rowSelection,
     onRowSelectionChange: listBulkActions.onRowSelectionChange,
     initialColumnVisibility: mergedInitialColumnVisibility,
-    columnVisibility,
-    onColumnVisibilityChange,
+    layout,
     serverTotals,
     rowContentVersion,
   });

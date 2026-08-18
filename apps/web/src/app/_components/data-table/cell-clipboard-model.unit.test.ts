@@ -3,13 +3,11 @@ import {
   buildPastePlan,
   type CellSelection,
   type CopiedGrid,
-  clampSelection,
   gridToTsv,
-  moveFocus,
   type PasteColumnTarget,
   parseTsv,
   selectionRect,
-} from "./cell-range";
+} from "./cell-clipboard-model";
 
 describe("selectionRect", () => {
   it("normalizes a forward selection", () => {
@@ -62,126 +60,6 @@ describe("selectionRect", () => {
       bottom: 2,
       right: 2,
     });
-  });
-});
-
-describe("moveFocus", () => {
-  it("returns a selection at {0,0} when starting from null", () => {
-    expect(moveFocus(null, "right", false, 5, 5)).toEqual({
-      anchor: { row: 0, col: 0 },
-      focus: { row: 0, col: 0 },
-    });
-  });
-
-  it("returns null from null when the table is empty", () => {
-    expect(moveFocus(null, "right", false, 0, 5)).toBeNull();
-    expect(moveFocus(null, "right", false, 5, 0)).toBeNull();
-  });
-
-  it("moves both anchor and focus (collapsing a range) when extend is false", () => {
-    const sel: CellSelection = {
-      anchor: { row: 1, col: 1 },
-      focus: { row: 3, col: 3 },
-    };
-    expect(moveFocus(sel, "down", false, 10, 10)).toEqual({
-      anchor: { row: 4, col: 3 },
-      focus: { row: 4, col: 3 },
-    });
-  });
-
-  it("moves only focus, pinning anchor, when extend is true", () => {
-    const sel: CellSelection = {
-      anchor: { row: 1, col: 1 },
-      focus: { row: 1, col: 1 },
-    };
-    expect(moveFocus(sel, "right", true, 10, 10)).toEqual({
-      anchor: { row: 1, col: 1 },
-      focus: { row: 1, col: 2 },
-    });
-  });
-
-  it("clamps at the top edge", () => {
-    const sel: CellSelection = {
-      anchor: { row: 0, col: 0 },
-      focus: { row: 0, col: 0 },
-    };
-    expect(moveFocus(sel, "up", false, 5, 5)).toEqual({
-      anchor: { row: 0, col: 0 },
-      focus: { row: 0, col: 0 },
-    });
-  });
-
-  it("clamps at the bottom edge", () => {
-    const sel: CellSelection = {
-      anchor: { row: 4, col: 0 },
-      focus: { row: 4, col: 0 },
-    };
-    expect(moveFocus(sel, "down", false, 5, 5)).toEqual({
-      anchor: { row: 4, col: 0 },
-      focus: { row: 4, col: 0 },
-    });
-  });
-
-  it("clamps at the left edge", () => {
-    const sel: CellSelection = {
-      anchor: { row: 0, col: 0 },
-      focus: { row: 0, col: 0 },
-    };
-    expect(moveFocus(sel, "left", false, 5, 5)).toEqual({
-      anchor: { row: 0, col: 0 },
-      focus: { row: 0, col: 0 },
-    });
-  });
-
-  it("clamps at the right edge", () => {
-    const sel: CellSelection = {
-      anchor: { row: 0, col: 4 },
-      focus: { row: 0, col: 4 },
-    };
-    expect(moveFocus(sel, "right", false, 5, 5)).toEqual({
-      anchor: { row: 0, col: 4 },
-      focus: { row: 0, col: 4 },
-    });
-  });
-
-  it("clamps extend-mode focus at an edge without moving anchor", () => {
-    const sel: CellSelection = {
-      anchor: { row: 2, col: 2 },
-      focus: { row: 0, col: 2 },
-    };
-    expect(moveFocus(sel, "up", true, 5, 5)).toEqual({
-      anchor: { row: 2, col: 2 },
-      focus: { row: 0, col: 2 },
-    });
-  });
-});
-
-describe("clampSelection", () => {
-  it("shrinks a selection that extends beyond new bounds", () => {
-    const sel: CellSelection = {
-      anchor: { row: 0, col: 0 },
-      focus: { row: 9, col: 9 },
-    };
-    expect(clampSelection(sel, 3, 4)).toEqual({
-      anchor: { row: 0, col: 0 },
-      focus: { row: 2, col: 3 },
-    });
-  });
-
-  it("returns null when rowCount is zero", () => {
-    const sel: CellSelection = {
-      anchor: { row: 0, col: 0 },
-      focus: { row: 0, col: 0 },
-    };
-    expect(clampSelection(sel, 0, 4)).toBeNull();
-  });
-
-  it("returns null when colCount is zero", () => {
-    const sel: CellSelection = {
-      anchor: { row: 0, col: 0 },
-      focus: { row: 0, col: 0 },
-    };
-    expect(clampSelection(sel, 4, 0)).toBeNull();
   });
 });
 

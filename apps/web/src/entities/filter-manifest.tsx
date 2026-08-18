@@ -670,6 +670,18 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       expand: resolveDateRange,
     },
     {
+      columnId: "dateFrom",
+      urlOnly: true,
+      kind: "text",
+      placeholder: "Expense date from...",
+    },
+    {
+      columnId: "dateTo",
+      urlOnly: true,
+      kind: "text",
+      placeholder: "Expense date to...",
+    },
+    {
       columnId: "costType",
       kind: "multiselect",
       placeholder: "Filter by cost type...",

@@ -13,10 +13,9 @@ import type {
 } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import {
-  type ColumnFiltersState,
-  type ColumnVisibilityState,
-  useTable,
+import type {
+  ColumnFiltersState,
+  ColumnVisibilityState,
 } from "@tanstack/react-table";
 import { partition } from "es-toolkit";
 import { ListFilter, ListTodo, ShoppingCart } from "lucide-react";
@@ -55,11 +54,11 @@ import {
   type CubbyColumnHelper as ColumnHelper,
   type CubbyColumnDef,
   createCubbyColumnHelper,
-  cubbyTableFeatures,
   type CubbyFilterFn as FilterFn,
+  useCubbyTable,
 } from "~/app/_components/data-table/table-features";
+import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useBulkActions } from "~/app/_components/data-table/useBulkActions";
-import { useTableColumnVisibility } from "~/app/_components/data-table/useTableColumnVisibility";
 import { ExternalLinkIcon } from "~/app/_components/ExternalLink";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
@@ -334,8 +333,6 @@ export function TaskList({
   defaultColumnFilters?: ColumnFiltersState;
 }) {
   const api = useTRPC();
-  const lastSelectedIdRef = useRef<string | null>(null);
-  const shiftKeyRef = useRef(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(
     () => defaultColumnFilters,
   );
@@ -375,7 +372,7 @@ export function TaskList({
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateTaskMutation changes every render but is functionally stable
   const columns = useMemo<CubbyColumnDef<TaskOut>[]>(
     () => [
-      buildSelectColumn<TaskOut>(lastSelectedIdRef, shiftKeyRef),
+      buildSelectColumn<TaskOut>(),
       taskStatusColumn(
         taskHelper,
         async (status, task) => {
@@ -449,26 +446,30 @@ export function TaskList({
 
   // Own storage scope: this table's column set isn't the /tasks ledger's, so
   // sharing `table-columns:task` would let a toggle here move a column there.
-  const { columnVisibility, onColumnVisibilityChange } =
-    useTableColumnVisibility("task", EMBEDDED_TASK_COLUMNS, "embedded");
-
-  const table = useTable<typeof cubbyTableFeatures, TaskOut>({
-    features: cubbyTableFeatures,
-    data: sortedData,
+  const layout = useCubbyTableLayout({
+    key: "task:embedded",
     columns,
+    initialColumnVisibility: EMBEDDED_TASK_COLUMNS,
+    legacyVisibilityKey: "task:embedded",
+    legacySizingKey: "task:embedded",
+  });
+
+  const table = useCubbyTable({
+    data: sortedData,
+    columns: layout.columns,
+    atoms: layout.atoms,
+    meta: { defaultLayout: layout.defaultLayout },
     // Feeds the header picklists' `(count)` hints. Client-side faceting is
     // honest here (unlike on a server-paginated ledger): the table holds the
     // whole set it's filtering.
     getRowId: (row) => row.id,
     enableRowSelection: true,
-    enableRowRangeSelection: false,
+    enableRowRangeSelection: true,
     state: {
       rowSelection: bulkActionsState.rowSelection,
-      columnVisibility,
       columnFilters,
     },
     onRowSelectionChange: bulkActionsState.onRowSelectionChange,
-    onColumnVisibilityChange,
     onColumnFiltersChange: setColumnFilters,
     initialState: {
       pagination: { pageIndex: 0, pageSize: 25 },
@@ -502,7 +503,6 @@ export function TaskList({
         // Same scope as this table's column visibility: the embedded task
         // table's column set differs from the main task list's, so their
         // widths must not share a store either.
-        sizingKey="task:embedded"
         embedded
         showColumnMenu
         bulkActionBar={bulkActionBar}
@@ -1037,8 +1037,6 @@ export function ExpenseList({
   defaultColumnFilters?: ColumnFiltersState;
 }) {
   const api = useTRPC();
-  const lastSelectedIdRef = useRef<string | null>(null);
-  const shiftKeyRef = useRef(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(
     () => defaultColumnFilters,
   );
@@ -1106,7 +1104,7 @@ export function ExpenseList({
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateExpenseMutation changes every render but is functionally stable
   const columns = useMemo<CubbyColumnDef<ExpenseOut>[]>(
     () => [
-      buildSelectColumn<ExpenseOut>(lastSelectedIdRef, shiftKeyRef),
+      buildSelectColumn<ExpenseOut>(),
       createExpenseProductImageColumn(expenseHelper),
       createNameColumn(expenseHelper, "expense", "name", {
         header: "Expense",
@@ -1246,26 +1244,30 @@ export function ExpenseList({
 
   // Own storage scope — this column set isn't the /expenses ledger's, so a
   // toggle here must not move a column there.
-  const { columnVisibility, onColumnVisibilityChange } =
-    useTableColumnVisibility("expense", EMBEDDED_EXPENSE_COLUMNS, "embedded");
-
-  const table = useTable<typeof cubbyTableFeatures, ExpenseOut>({
-    features: cubbyTableFeatures,
-    data: expenses,
+  const layout = useCubbyTableLayout({
+    key: "expense:embedded",
     columns,
+    initialColumnVisibility: EMBEDDED_EXPENSE_COLUMNS,
+    legacyVisibilityKey: "expense:embedded",
+    legacySizingKey: "expense:embedded",
+  });
+
+  const table = useCubbyTable({
+    data: expenses,
+    columns: layout.columns,
+    atoms: layout.atoms,
+    meta: { defaultLayout: layout.defaultLayout },
     // Vendor counts still come from `rowVendorOptions`: table faceting keys on
     // the cell value (the vendor NAME), so it cannot hint an option whose value
     // is a vendor id.
     getRowId: (row) => row.id,
     enableRowSelection: true,
-    enableRowRangeSelection: false,
+    enableRowRangeSelection: true,
     state: {
       rowSelection: bulkActionsState.rowSelection,
-      columnVisibility,
       columnFilters,
     },
     onRowSelectionChange: bulkActionsState.onRowSelectionChange,
-    onColumnVisibilityChange,
     onColumnFiltersChange: setColumnFilters,
     initialState: {
       pagination: { pageIndex: 0, pageSize: 25 },
@@ -1320,7 +1322,6 @@ export function ExpenseList({
     <ExpenseProductImages rows={expenses}>
       <RTable
         table={table}
-        sizingKey="expense:embedded"
         embedded
         showColumnMenu
         bulkActionBar={bulkActionBar}

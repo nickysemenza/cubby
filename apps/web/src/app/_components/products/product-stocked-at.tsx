@@ -240,7 +240,7 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
     tableStateOptions: EMBEDDED_TABLE_STATE,
     // Distinct column set from the /inventory index, so it needs its own
     // persisted View settings rather than sharing `table-columns:inventory`.
-    columnVisibilityScope: "product-detail",
+    layoutKey: "inventory:product-detail",
     bulkActions,
     rowIsEntity,
     extraActions: (entry) =>
@@ -300,7 +300,6 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
           table={table}
           ariaLabel={`${product.name} inventory`}
           entity="inventory"
-          sizingKey="inventory:product-detail"
           bulkActionBar={bulkActionBar}
           embedded
         />

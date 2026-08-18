@@ -139,7 +139,8 @@ export function ProjectDataTaskList({
     nameEditable,
     bulkActions: bulk.config,
     tableStateOptions: EMBEDDED_TABLE_STATE,
-    columnVisibilityScope: "projects-data",
+    layoutKey: "task:projects-data",
+    legacyLayoutSizingKey: "task",
   });
 
   return (
@@ -239,7 +240,8 @@ export function ProjectDataExpenseList({
     nameEditable,
     bulkActions: bulk.config,
     tableStateOptions: EMBEDDED_TABLE_STATE,
-    columnVisibilityScope: "projects-data",
+    layoutKey: "expense:projects-data",
+    legacyLayoutSizingKey: "expense",
   });
 
   return (

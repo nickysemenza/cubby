@@ -1,6 +1,6 @@
+import type { CellCoord, CellSelection } from "./cell-clipboard-model";
+import { selectionRect } from "./cell-clipboard-model";
 import type { ColumnCellData } from "./cell-data";
-import type { CellCoord, CellSelection } from "./cell-range";
-import { selectionRect } from "./cell-range";
 
 export interface CellClearTarget {
   coord: CellCoord;

@@ -59,19 +59,6 @@ vi.mock("../inventory/inventory-discard-dialog", () => ({
 import { LocationInventoryTable } from "./location-inventory-table";
 
 describe("LocationInventoryTable", () => {
-  it("uses an independent persisted-width scope from the inventory index", () => {
-    render(
-      <LocationInventoryTable
-        locationId={unsafeLocationShortcode("LOC-TEST")}
-        view="table"
-      />,
-    );
-
-    expect(mocks.rTable).toHaveBeenCalledWith(
-      expect.objectContaining({ sizingKey: "inventory:location-detail" }),
-    );
-  });
-
   it("does not mount the discard dialog until a row targets one", () => {
     // `InventoryDiscardDialog` fetches the row's product so the operator sees
     // every shelf it sits on, not just this location's. Mounting it at rest

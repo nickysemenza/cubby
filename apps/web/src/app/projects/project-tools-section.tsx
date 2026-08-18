@@ -5,13 +5,9 @@ import type {
 import { TRADE_LABELS } from "@cubby/schemas/project";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  type RowSelectionState,
-  type Updater,
-  useTable,
-} from "@tanstack/react-table";
+import type { RowSelectionState, Updater } from "@tanstack/react-table";
 import { Plus, Search, Wrench } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import {
@@ -25,8 +21,9 @@ import RTable from "~/app/_components/data-table/Table";
 import {
   type CubbyColumnDef,
   createCubbyColumnHelper,
-  cubbyTableFeatures,
+  useCubbyTable,
 } from "~/app/_components/data-table/table-features";
+import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -175,10 +172,12 @@ function ResourcesTable({
     ],
     [detach, helper, projectId],
   );
-  const table = useTable<typeof cubbyTableFeatures, ResourceRow>({
-    features: cubbyTableFeatures,
+  const layout = useCubbyTableLayout({ key: "project:resources", columns });
+  const table = useCubbyTable({
     data: rows,
-    columns,
+    columns: layout.columns,
+    atoms: layout.atoms,
+    meta: { defaultLayout: layout.defaultLayout },
     getRowId: (row) => row.id,
     initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
   });
@@ -187,7 +186,6 @@ function ResourcesTable({
       table={table}
       entity="product"
       ariaLabel="Reusable project resources"
-      sizingKey="project:resources"
       embedded
       isLoading={isLoading}
       emptyState={
@@ -220,8 +218,6 @@ function SelectableResourceTable({
   suggested: boolean;
   emptyCopy: string;
 }) {
-  const lastSelectedIdRef = useRef<string | null>(null);
-  const shiftKeyRef = useRef(false);
   const rowSelection = useMemo<RowSelectionState>(
     () => Object.fromEntries([...selected].map((id) => [id, true])),
     [selected],
@@ -240,7 +236,7 @@ function SelectableResourceTable({
   const helper = useMemo(() => createCubbyColumnHelper<PickerRow>(), []);
   const columns = useMemo<CubbyColumnDef<PickerRow>[]>(
     () => [
-      buildSelectColumn<PickerRow>(lastSelectedIdRef, shiftKeyRef),
+      buildSelectColumn<PickerRow>(),
       createImageColumn(helper, { entity: "product" }),
       createNameColumn(helper, "product", "name", { header: "Product" }),
       ...(suggested
@@ -318,10 +314,15 @@ function SelectableResourceTable({
     ],
     [helper, suggested],
   );
-  const table = useTable<typeof cubbyTableFeatures, PickerRow>({
-    features: cubbyTableFeatures,
+  const layoutKey = suggested
+    ? "project:resource-suggestions"
+    : "project:resource-picker";
+  const layout = useCubbyTableLayout({ key: layoutKey, columns });
+  const table = useCubbyTable({
     data: rows,
-    columns,
+    columns: layout.columns,
+    atoms: layout.atoms,
+    meta: { defaultLayout: layout.defaultLayout },
     getRowId: (row) => row.id,
     enableRowSelection: true,
     state: { rowSelection },
@@ -337,9 +338,6 @@ function SelectableResourceTable({
           suggested
             ? "Suggested project tools"
             : "Products available as resources"
-        }
-        sizingKey={
-          suggested ? "project:resource-suggestions" : "project:resource-picker"
         }
         embedded
         isLoading={isLoading}

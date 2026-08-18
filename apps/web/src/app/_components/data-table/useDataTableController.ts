@@ -8,6 +8,7 @@ import { cn } from "~/lib/utils";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { useTableVirtualizer } from "./hooks/useTableVirtualizer";
 import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
+import { columnWidthVariables } from "./table-layout";
 import { useCellSelection } from "./useCellSelection";
 import { useDesktopGroupedRows } from "./useDesktopGroupedRows";
 import type { GroupConfig } from "./useGroupedList";
@@ -141,17 +142,14 @@ export function useDataTableController<TItem extends RowData>({
     [flatRowToVirtualIndex, scrollToIndex],
   );
 
-  const {
-    selection,
-    getRowCellSelection,
-    containerProps: cellSelectionContainerProps,
-  } = useCellSelection({
-    enabled: !isMobile && !isTransitioning,
-    rows,
-    table,
-    scrollToFlatRow,
-    onOpenRow: onRowClick,
-  });
+  const { selection, containerProps: cellSelectionContainerProps } =
+    useCellSelection({
+      enabled: !isMobile && !isTransitioning,
+      rows,
+      table,
+      scrollToFlatRow,
+      onOpenRow: onRowClick,
+    });
 
   // Focused-row ring follows the selection's focus cell (flat row index). No
   // separate state — cell selection is the single source of truth.
@@ -212,6 +210,15 @@ export function useDataTableController<TItem extends RowData>({
     .getVisibleLeafColumns()
     .map((c) => c.id)
     .join(",");
+  const columnSizesKey = table
+    .getVisibleLeafColumns()
+    .map((column) => `${column.id}:${column.getSize()}`)
+    .join(",");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scalar signature stands in for TanStack's fresh column array
+  const columnSizeVars = useMemo(
+    () => columnWidthVariables(table.getVisibleLeafColumns()),
+    [columnSizesKey],
+  );
 
   // Columns the table actually renders. Use VISIBLE leaves: getAllColumns()
   // counts hidden columns too, so a colSpan built from it exceeds the rendered
@@ -228,9 +235,9 @@ export function useDataTableController<TItem extends RowData>({
     cellSelectionContainerProps,
     colSpan,
     columnsKey,
+    columnSizeVars,
     dConfig,
     focusedRowIndex,
-    getRowCellSelection,
     hydrated,
     isDebugEnabled,
     isFetchingNextPage,

@@ -3,13 +3,9 @@ import type { ProductPickerItemOut } from "@cubby/schemas/product";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
-import {
-  type RowSelectionState,
-  type Updater,
-  useTable,
-} from "@tanstack/react-table";
+import type { RowSelectionState, Updater } from "@tanstack/react-table";
 import { Search } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   createCurrencyColumn,
   createImageColumn,
@@ -20,8 +16,9 @@ import RTable from "~/app/_components/data-table/Table";
 import {
   type CubbyColumnDef,
   createCubbyColumnHelper,
-  cubbyTableFeatures,
+  useCubbyTable,
 } from "~/app/_components/data-table/table-features";
+import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -61,8 +58,6 @@ export function LinkProductsDialog({
   const [selected, setSelected] = useState<Set<ProductShortcode>>(new Set());
   const [searchInput, setSearchInput] = useState("");
   const [search] = useDebouncedValue(searchInput, { wait: 300 });
-  const lastSelectedIdRef = useRef<string | null>(null);
-  const shiftKeyRef = useRef(false);
 
   const searchQuery = useQuery({
     ...api.product.search.queryOptions({
@@ -95,7 +90,6 @@ export function LinkProductsDialog({
     if (!next) {
       setSelected(new Set());
       setSearchInput("");
-      lastSelectedIdRef.current = null;
     }
     onOpenChange(next);
   };
@@ -126,7 +120,7 @@ export function LinkProductsDialog({
   const helper = useMemo(() => createCubbyColumnHelper<PickerRow>(), []);
   const columns = useMemo<CubbyColumnDef<PickerRow>[]>(
     () => [
-      buildSelectColumn<PickerRow>(lastSelectedIdRef, shiftKeyRef),
+      buildSelectColumn<PickerRow>(),
       createImageColumn(helper, { entity: "product" }),
       createNameColumn(helper, "product", "name", { header: "Product" }),
       helper.accessor((row) => row.manufacturer, {
@@ -146,10 +140,15 @@ export function LinkProductsDialog({
     ],
     [helper],
   );
-  const table = useTable<typeof cubbyTableFeatures, PickerRow>({
-    features: cubbyTableFeatures,
-    data: rows,
+  const layout = useCubbyTableLayout({
+    key: "purchase:product-picker",
     columns,
+  });
+  const table = useCubbyTable({
+    data: rows,
+    columns: layout.columns,
+    atoms: layout.atoms,
+    meta: { defaultLayout: layout.defaultLayout },
     getRowId: (row) => row.id,
     enableRowSelection: true,
     state: { rowSelection },
@@ -185,7 +184,6 @@ export function LinkProductsDialog({
             table={table}
             entity="product"
             ariaLabel="Products available to attach"
-            sizingKey="purchase:product-picker"
             embedded
             isLoading={searchQuery.isPending}
             emptyState={

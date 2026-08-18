@@ -1,3 +1,4 @@
+import { useStore } from "@tanstack/react-store";
 import type { RowData } from "@tanstack/react-table";
 import * as React from "react";
 import { toast } from "sonner";
@@ -6,6 +7,14 @@ import { copyText } from "~/lib/clipboard";
 import { getErrorMessage } from "~/lib/error-utils";
 import { resolveCellClearTarget } from "./cell-clear";
 import { flashElement } from "./cell-clipboard";
+import {
+  buildPastePlan,
+  type CellSelection,
+  gridToTsv,
+  type PasteColumnTarget,
+  parseTsv,
+  selectionRect,
+} from "./cell-clipboard-model";
 import {
   bufferMatches,
   getCopyBuffer,
@@ -20,34 +29,11 @@ import {
   summarizePasteResult,
 } from "./cell-paste-executor";
 import {
-  buildPastePlan,
-  type CellCoord,
-  type CellSelection,
-  clampSelection,
-  gridToTsv,
-  moveFocus,
-  type PasteColumnTarget,
-  parseTsv,
-  selectionRect,
-} from "./cell-range";
-import {
   CELL_EDIT_EVENT,
   type CellEditEventDetail,
   NON_SELECTABLE_COLUMN_IDS,
 } from "./cell-selection-context";
 import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
-
-/**
- * Per-row projection of the current selection, handed to each `DesktopDataRow`.
- * Rows outside the selection rect get `undefined` (memo-stable); rows inside
- * share one `colsKey`, and only the anchor row carries a non-null `anchorColId`.
- */
-export interface RowCellSelection {
-  /** Comma-joined selected column ids (identical for every row in the rect). */
-  colsKey: string;
-  /** The anchor column id — non-null only on the anchor row. */
-  anchorColId: string | null;
-}
 
 interface UseCellSelectionArgs<TItem extends RowData> {
   /** !isMobile. When false the hook is fully inert (no listeners, null state). */
@@ -63,25 +49,14 @@ interface UseCellSelectionArgs<TItem extends RowData> {
 interface ContainerProps {
   onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
   onMouseDown?: React.MouseEventHandler<HTMLDivElement>;
-  onMouseOver?: React.MouseEventHandler<HTMLDivElement>;
-  /** Present while dragging so the container can `select-none` (kills the
-   * native text selection a drag would otherwise paint across cells). */
-  "data-cell-dragging"?: string;
 }
 
 interface UseCellSelectionResult {
   selection: CellSelection | null;
-  getRowCellSelection: (rowIndex: number) => RowCellSelection | undefined;
   containerProps: ContainerProps;
 }
 
 const EMPTY_CONTAINER_PROPS: ContainerProps = {};
-
-// Environment-stable: the choice never changes within a runtime, so the same
-// hook is called every render. Avoids React's "useLayoutEffect does nothing on
-// the server" warning (RTable renders during SSR).
-const useIsomorphicLayoutEffect =
-  typeof window !== "undefined" ? React.useLayoutEffect : React.useEffect;
 
 function isTypingTarget(el: Element | null): boolean {
   if (!(el instanceof HTMLElement)) return false;
@@ -104,7 +79,7 @@ const FIREFOX_PASTE_FALLBACK_MS = 150;
 /** Max cells a single paste may touch (source or target) before it's rejected. */
 const PASTE_CELL_CAP = 100;
 
-/** Arrow key → movement direction (mirrors DIRECTION_DELTA's style in cell-range.ts). */
+/** Arrow key → native v9 cell-selection direction. */
 const ARROW_DIRECTION: Record<string, "up" | "down" | "left" | "right"> = {
   ArrowUp: "up",
   ArrowDown: "down",
@@ -122,11 +97,9 @@ function emitPasteToast(summary: PasteSummary): void {
 }
 
 /**
- * Spreadsheet-style cell selection for the desktop RTable: index-based
- * `{anchor, focus}` over the flat visible row model × selectable columns, with
- * keyboard (arrows/shift-arrows/Enter/Escape) and mouse (click, shift-click,
- * drag) driving it. Copy/paste EXECUTION is a later phase — this hook only owns
- * the selection state + input; it deliberately does NOT intercept Cmd/Ctrl+C/V.
+ * Cubby's domain behavior layered over v9 cell selection. TanStack owns the
+ * durable id corners, focus, drag, Shift extension, and keyboard movement;
+ * this hook derives integer rectangles only for typed copy/paste/clear/editing.
  */
 export function useCellSelection<TItem extends RowData>({
   enabled,
@@ -135,19 +108,15 @@ export function useCellSelection<TItem extends RowData>({
   scrollToFlatRow,
   onOpenRow,
 }: UseCellSelectionArgs<TItem>): UseCellSelectionResult {
-  const [selection, setSelection] = React.useState<CellSelection | null>(null);
-  const [dragging, setDragging] = React.useState(false);
-  // Ref mirror so the window-level mouseup listener (which closes over one
-  // render) reads live drag state; and so unmount cleanup can detach it.
-  const draggingRef = React.useRef(false);
-  const windowMouseUpRef = React.useRef<(() => void) | null>(null);
-
-  // Selectable columns, in render order — the col-index space for coords. The
-  // signature captures visible-column changes (toggle/reorder) so this recomputes.
+  const nativeSelection = useStore(table.atoms.cellSelection!);
   const columnsSignature = table
     .getVisibleLeafColumns()
-    .map((c) => c.id)
-    .join(",");
+    .map(
+      (column) =>
+        `${column.id}:${column.columnDef.enableCellSelection !== false}`,
+    )
+    .join(",")
+    .concat(`:${table.options.enableCellSelection !== false}`);
   // columnsSignature (a string) is the observable trigger; keying on it rather
   // than the table.getVisibleLeafColumns() array is intentional and stable.
   // biome-ignore lint/correctness/useExhaustiveDependencies: signature stands in for the column list
@@ -155,12 +124,37 @@ export function useCellSelection<TItem extends RowData>({
     () =>
       table
         .getVisibleLeafColumns()
-        .filter((c) => !NON_SELECTABLE_COLUMN_IDS.has(c.id))
-        .map((c) => c.id),
+        .filter(
+          (column) =>
+            table.options.enableCellSelection !== false &&
+            column.columnDef.enableCellSelection !== false &&
+            !NON_SELECTABLE_COLUMN_IDS.has(column.id),
+        )
+        .map((column) => column.id),
     [columnsSignature],
   );
   const colCount = selectableColumnIds.length;
   const rowCount = rows.length;
+
+  // Cubby's clipboard/paste layer still consumes a normalized integer rect.
+  // Derive that view from v9's durable row/column-id corners; the ids are the
+  // source of truth and remain correct as infinite pages append.
+  const selection = React.useMemo<CellSelection | null>(() => {
+    const range = nativeSelection.at(-1);
+    if (!range) return null;
+    const anchor = {
+      row: rows.findIndex((row) => row.id === range.anchorRowId),
+      col: selectableColumnIds.indexOf(range.anchorColumnId),
+    };
+    const focus = {
+      row: rows.findIndex((row) => row.id === range.focusRowId),
+      col: selectableColumnIds.indexOf(range.focusColumnId),
+    };
+    if (anchor.row < 0 || anchor.col < 0 || focus.row < 0 || focus.col < 0) {
+      return null;
+    }
+    return { anchor, focus };
+  }, [nativeSelection, rows, selectableColumnIds]);
 
   // Live refs for the DOM-delegated handlers (recreated cheaply each render, but
   // the window mouseup handler needs stable access to the latest values).
@@ -172,23 +166,16 @@ export function useCellSelection<TItem extends RowData>({
   // render) read the current row model without re-installing on every data tick.
   const rowsRef = React.useRef(rows);
   rowsRef.current = rows;
-  // The scroll container (holds the data-cell-row/col cells), captured from the
-  // first pointer/key interaction — needed by the document paste listener, which
-  // has no event target of its own.
+  // The scroll container is the clipboard/flash query root. Capture it from
+  // both keyboard and pointer interaction so a mouse selection can be pasted
+  // immediately, before the user presses any other key.
   const containerElRef = React.useRef<HTMLElement | null>(null);
   const clearPendingRef = React.useRef(false);
   // Firefox paste fallback timer id, shared so the document paste handler can
   // synchronously cancel it (the double-paste guard).
   const fallbackPasteTimerRef = React.useRef<number | null>(null);
 
-  // Clear selection whenever the data window shifts under it — sort, filters,
-  // global filter, or pagination all remap row indices, so a stale rect would
-  // highlight the wrong cells. Composed as a signature string; the effect fires
-  // only when it actually changes.
   const state = table.state;
-  // The four state slices are referentially stable between actual changes, so
-  // memoizing keeps the JSON.stringify off every render (incl. per-tick drag
-  // updates), running it only when one of them changes.
   const dataSignature = React.useMemo(
     () =>
       JSON.stringify({
@@ -200,141 +187,38 @@ export function useCellSelection<TItem extends RowData>({
   );
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataSignature is the intended trigger
   React.useEffect(() => {
-    setSelection(null);
+    table.resetCellSelection(true);
   }, [dataSignature]);
 
-  // Clamp into bounds when the row count or column count shrinks (a delete, a
-  // hidden column). Returns the SAME reference when nothing moved so unrelated
-  // length changes (growth) don't churn every row's memo.
-  useIsomorphicLayoutEffect(() => {
-    setSelection((prev) => {
-      if (!prev) return prev;
-      const clamped = clampSelection(prev, rowCount, colCount);
-      if (
-        clamped &&
-        clamped.anchor.row === prev.anchor.row &&
-        clamped.anchor.col === prev.anchor.col &&
-        clamped.focus.row === prev.focus.row &&
-        clamped.focus.col === prev.focus.col
-      ) {
-        return prev;
-      }
-      return clamped;
-    });
-  }, [rowCount, colCount]);
-
-  // Per-row selection projection: computed once per selection change into a
-  // Map, so each in-rect row gets ONE stable object across renders (out-of-rect
-  // rows resolve to `undefined`). The DesktopDataRow memo compares field values,
-  // so even a fresh Map on a new selection only re-renders rows whose highlight
-  // actually differs.
-  const rowSelectionMap = React.useMemo(() => {
-    if (!selection) return null;
-    const rect = selectionRect(selection);
-    const cols = selectableColumnIds.slice(rect.left, rect.right + 1);
-    const colsKey = cols.join(",");
-    const anchorColId = selectableColumnIds[selection.anchor.col] ?? null;
-    const map = new Map<number, RowCellSelection>();
-    for (let r = rect.top; r <= rect.bottom; r++) {
-      map.set(r, {
-        colsKey,
-        anchorColId: r === selection.anchor.row ? anchorColId : null,
-      });
-    }
-    return map;
-  }, [selection, selectableColumnIds]);
-
-  const getRowCellSelection = React.useCallback(
-    (rowIndex: number): RowCellSelection | undefined =>
-      rowSelectionMap?.get(rowIndex),
-    [rowSelectionMap],
+  const layoutSignature = React.useMemo(
+    () =>
+      JSON.stringify({
+        order: state.columnOrder,
+        pinning: state.columnPinning,
+        visibility: state.columnVisibility,
+      }),
+    [state.columnOrder, state.columnPinning, state.columnVisibility],
   );
-
-  const endDrag = React.useCallback(() => {
-    draggingRef.current = false;
-    setDragging(false);
-    if (windowMouseUpRef.current) {
-      window.removeEventListener("mouseup", windowMouseUpRef.current);
-      windowMouseUpRef.current = null;
-    }
-  }, []);
-
-  // Detach a lingering window listener on unmount.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: serialized layout signature is the intentional reset trigger
   React.useEffect(() => {
-    return () => {
-      if (windowMouseUpRef.current) {
-        window.removeEventListener("mouseup", windowMouseUpRef.current);
-      }
-    };
-  }, []);
+    table.resetCellSelection(true);
+  }, [layoutSignature, table]);
 
-  const resolveCoord = React.useCallback(
-    (target: EventTarget | null): CellCoord | null => {
-      if (!(target instanceof HTMLElement)) return null;
-      const td = target.closest("td[data-cell-col]");
-      const tr = target.closest("tr[data-cell-row]");
-      if (!td || !tr) return null;
-      const colId = td.getAttribute("data-cell-col");
-      const rowAttr = tr.getAttribute("data-cell-row");
-      if (colId === null || rowAttr === null) return null;
-      const col = selectableColumnIdsRef.current.indexOf(colId);
-      const row = Number(rowAttr);
-      if (col < 0 || Number.isNaN(row)) return null;
-      return { row, col };
-    },
-    [],
-  );
-
-  const onMouseDown = React.useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      // Left button only; let ctrl/meta-click through (native context menu /
-      // OS-level multi-select gestures, and Phase-5 additive selection).
-      if (e.button !== 0 || e.ctrlKey || e.metaKey) return;
-      const coord = resolveCoord(e.target);
-      if (!coord) return;
-      // Capture the container for the document paste listener (a mouse-built
-      // selection may be pasted into before any keydown fires).
-      containerElRef.current = e.currentTarget;
-
-      if (e.shiftKey) {
-        // Extend from the existing anchor. preventDefault kills the text
-        // selection a shift-click would otherwise sweep from the last caret.
-        e.preventDefault();
-        setSelection((prev) =>
-          prev
-            ? { anchor: prev.anchor, focus: coord }
-            : { anchor: coord, focus: coord },
-        );
-        return;
-      }
-
-      // Plain mousedown: collapse to this cell and arm a drag. NOT
-      // preventDefault'd — buttons/links inside the cell still need their click.
-      setSelection({ anchor: coord, focus: coord });
-      draggingRef.current = true;
-      setDragging(true);
-      const handler = () => endDrag();
-      windowMouseUpRef.current = handler;
-      window.addEventListener("mouseup", handler);
-    },
-    [resolveCoord, endDrag],
-  );
-
-  const onMouseOver = React.useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!draggingRef.current) return;
-      const coord = resolveCoord(e.target);
-      if (!coord) return;
-      setSelection((prev) => {
-        if (!prev) return prev;
-        if (prev.focus.row === coord.row && prev.focus.col === coord.col) {
-          return prev; // same cell — skip the state churn
-        }
-        return { anchor: prev.anchor, focus: coord };
-      });
-    },
-    [resolveCoord],
-  );
+  // Appends preserve id corners. A replacement/removal clears only when a
+  // corner actually disappeared; width and density changes never touch ids.
+  React.useEffect(() => {
+    if (nativeSelection.length === 0) return;
+    const rowIds = new Set(rows.map((row) => row.id));
+    const columnIds = new Set(selectableColumnIds);
+    const valid = nativeSelection.every(
+      (range) =>
+        rowIds.has(range.anchorRowId) &&
+        rowIds.has(range.focusRowId) &&
+        columnIds.has(range.anchorColumnId) &&
+        columnIds.has(range.focusColumnId),
+    );
+    if (!valid) table.resetCellSelection(true);
+  }, [nativeSelection, rows, selectableColumnIds, table]);
 
   const openEditorAt = React.useCallback(
     (container: HTMLElement, row: number, col: number, seedText?: string) => {
@@ -624,15 +508,22 @@ export function useCellSelection<TItem extends RowData>({
 
       if (dir && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
-        const next = moveFocus(
-          selectionRef.current,
-          dir,
-          e.shiftKey,
-          rowCount,
-          colCount,
-        );
-        setSelection(next);
-        if (next) scrollToFlatRow(next.focus.row);
+        if (!selectionRef.current) {
+          const firstRow = rows[0];
+          const firstColumnId = selectableColumnIdsRef.current[0];
+          if (firstRow && firstColumnId) {
+            table.setFocusedCell(firstRow.id, firstColumnId);
+          }
+        } else if (e.shiftKey) {
+          table.extendCellSelection(dir);
+        } else {
+          table.moveCellSelection(dir);
+        }
+        const focused = table.getFocusedCell();
+        if (focused) {
+          const nextRow = rows.findIndex((row) => row.id === focused.row.id);
+          if (nextRow >= 0) scrollToFlatRow(nextRow);
+        }
         return;
       }
 
@@ -653,7 +544,7 @@ export function useCellSelection<TItem extends RowData>({
       if (e.key === "Escape") {
         if (selectionRef.current) {
           e.preventDefault();
-          setSelection(null);
+          table.resetCellSelection(true);
         }
         return;
       }
@@ -681,6 +572,7 @@ export function useCellSelection<TItem extends RowData>({
       doCopy,
       doPaste,
       doClear,
+      table,
     ],
   );
 
@@ -688,19 +580,14 @@ export function useCellSelection<TItem extends RowData>({
     if (!enabled) return EMPTY_CONTAINER_PROPS;
     return {
       onKeyDown,
-      onMouseDown,
-      onMouseOver,
-      "data-cell-dragging": dragging ? "" : undefined,
+      onMouseDown: (event) => {
+        containerElRef.current = event.currentTarget;
+      },
     };
-  }, [enabled, onKeyDown, onMouseDown, onMouseOver, dragging]);
+  }, [enabled, onKeyDown]);
 
   return {
     selection: enabled ? selection : null,
-    getRowCellSelection: enabled ? getRowCellSelection : returnUndefined,
     containerProps,
   };
-}
-
-function returnUndefined(): undefined {
-  return undefined;
 }

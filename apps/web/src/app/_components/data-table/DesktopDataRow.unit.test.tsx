@@ -10,21 +10,35 @@ interface TestRow {
 describe("DesktopDataRow", () => {
   it("re-renders memoized cells when external row content changes", () => {
     let preview = "…";
+    const cell = {
+      id: "related:product.vendors",
+      column: {
+        id: "related:product.vendors",
+        columnDef: { cell: () => preview, meta: {} },
+        getIsPinned: () => false,
+        getSize: () => 256,
+      },
+      getContext: () => ({
+        table: {
+          getStartVisibleLeafColumns: () => [],
+          getEndVisibleLeafColumns: () => [],
+        },
+      }),
+      getIsSelected: () => false,
+      getCanSelect: () => true,
+      getIsFocused: () => false,
+      getTabIndex: () => -1,
+      getSelectionStartHandler: () => undefined,
+      getSelectionExtendHandler: () => undefined,
+    };
     const row = {
       id: "row-1",
       original: { id: "PRD-TEST" },
       getIsSelected: () => false,
       getIsExpanded: () => false,
-      getVisibleCells: () => [
-        {
-          id: "related:product.vendors",
-          column: {
-            id: "related:product.vendors",
-            columnDef: { cell: () => preview, meta: {} },
-          },
-          getContext: () => ({}),
-        },
-      ],
+      getStartVisibleCells: () => [],
+      getCenterVisibleCells: () => [cell],
+      getEndVisibleCells: () => [],
     } as unknown as Row<TestRow>;
     const props = {
       row,

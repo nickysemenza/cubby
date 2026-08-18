@@ -3,14 +3,8 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
-import {
-  ArrowDown,
-  ArrowUp,
-  ArrowUpDown,
-  LayoutList,
-  List,
-} from "lucide-react";
-import type { ReactNode } from "react";
+import { LayoutList, List } from "lucide-react";
+import { lazy, type ReactNode, Suspense } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Stack } from "~/components/layout";
@@ -20,7 +14,6 @@ import {
   TableBody,
   TableCell,
   TableFooter,
-  TableHead,
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
@@ -28,7 +21,6 @@ import { ENTITY_ACCENTS } from "~/entities/entity-accents";
 import type { QueryTiming } from "~/lib/query-timing";
 import { cn } from "~/lib/utils";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
-import { ColumnResizeHandle } from "./ColumnResizeHandle";
 import { CellSelectionContext } from "./cell-selection-context";
 import { DesktopDataRow as DataRow } from "./DesktopDataRow";
 import { DataTablePagination } from "./data-table-pagination";
@@ -43,9 +35,11 @@ import { MobileListScreen } from "./MobileListScreen";
 import { RowsPerPageSelect } from "./rows-per-page-select";
 import { SectionHeader } from "./SectionHeader";
 import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
+import { columnWidthValue } from "./table-layout";
 import { useDataTableController } from "./useDataTableController";
 import type { GroupConfig } from "./useGroupedList";
-import { useTableColumnSizing } from "./useTableColumnSizing";
+
+const TableHeaderLayout = lazy(() => import("./TableHeaderLayout"));
 
 // Faint row guides every `rowHeight` px so the virtualized spacer (the gap the
 // renderer hasn't filled yet on a fast scroll) reads as empty table rows
@@ -130,14 +124,6 @@ interface TTableProps<TItem extends RowData> {
    * when provided.
    */
   emptyState?: ReactNode;
-  /**
-   * localStorage key for this table's persisted column widths. Defaults to
-   * `entity`, which covers every list page; pass it explicitly for a table with
-   * no single entity (a relationship summary) or for a second table over the
-   * same entity with a different column set (`"task:embedded"`). A table with
-   * neither `entity` nor `sizingKey` simply isn't resizable.
-   */
-  sizingKey?: string;
 }
 
 export default function RTable<TItem extends RowData>(
@@ -165,22 +151,14 @@ export default function RTable<TItem extends RowData>(
     embedded = false,
     showColumnMenu = false,
     emptyState,
-    sizingKey,
   } = props;
-
-  // Column widths are owned here rather than threaded through table meta, so
-  // every RTable surface is resizable — including the hand-wired ones that
-  // don't go through useEntityList.
-  const { columnSizing, setColumnSize, resetColumnSize, resetAllColumnSizes } =
-    useTableColumnSizing(sizingKey ?? entity);
-
   const {
     cellSelectionContainerProps,
     colSpan,
+    columnSizeVars,
     columnsKey,
     dConfig,
     focusedRowIndex,
-    getRowCellSelection,
     hydrated,
     isDebugEnabled,
     isFetchingNextPage,
@@ -349,37 +327,74 @@ export default function RTable<TItem extends RowData>(
           // rowIndex is a valid position into the rows array (flat index when
           // ungrouped, or the row's flat index when grouped).
           const row = rows[item.rowIndex]!;
+          const rowSelectionProjection = (
+            ranges: typeof table.state.cellSelection,
+          ) =>
+            ranges
+              .filter((range) => {
+                const anchor = rows.findIndex(
+                  (candidate) => candidate.id === range.anchorRowId,
+                );
+                const focus = rows.findIndex(
+                  (candidate) => candidate.id === range.focusRowId,
+                );
+                return (
+                  anchor >= 0 &&
+                  focus >= 0 &&
+                  item.rowIndex >= Math.min(anchor, focus) &&
+                  item.rowIndex <= Math.max(anchor, focus)
+                );
+              })
+              .map(
+                (range) =>
+                  `${range.anchorColumnId}:${range.focusColumnId}:${range.operation ?? "include"}`,
+              )
+              .join("|");
           return (
-            <DataRow
+            <table.Subscribe
               key={row.id}
-              row={row}
-              rowIndex={item.rowIndex}
-              isSelected={row.getIsSelected()}
-              isExpanded={row.getIsExpanded()}
-              // Flat-index compare: focusedRowIndex is the selection's focus row
-              // in the same `rows` space as item.rowIndex (row.index can diverge
-              // under grouping/expansion).
-              isFocused={focusedRowIndex === item.rowIndex}
-              isDebugEnabled={isDebugEnabled}
-              onRowClick={onRowClick}
-              onRowHover={onRowHover}
-              cellSelection={getRowCellSelection(item.rowIndex)}
-              suppressCellRowClick={cellSelectionEnabled}
-              rowClassName={cn(
-                styles.row,
-                // Zebra keyed off the flat row index, not nth-child: the body
-                // is window-virtualized behind a spacer <tr>, so DOM-child
-                // parity shifts as the window scrolls. In grouped mode the
-                // within-group index restarts stripes at each section header.
-                (item.groupRowIndex ?? item.rowIndex) % 2 === 1 &&
-                  "table-row-zebra",
-                getRowClassName?.(row),
+              source={table.atoms.cellSelection!}
+              selector={rowSelectionProjection}
+            >
+              {(selectionVersion) => (
+                <table.Subscribe
+                  source={table.atoms.rowSelection!}
+                  selector={(selection) => selection[row.id] === true}
+                >
+                  {(isSelected) => (
+                    <DataRow
+                      row={row}
+                      rowIndex={item.rowIndex}
+                      isSelected={isSelected}
+                      isExpanded={row.getIsExpanded()}
+                      // Flat-index compare: focusedRowIndex is the selection's focus row
+                      // in the same `rows` space as item.rowIndex (row.index can diverge
+                      // under grouping/expansion).
+                      isFocused={focusedRowIndex === item.rowIndex}
+                      isDebugEnabled={isDebugEnabled}
+                      onRowClick={onRowClick}
+                      onRowHover={onRowHover}
+                      suppressCellRowClick={cellSelectionEnabled}
+                      rowClassName={cn(
+                        styles.row,
+                        // Zebra keyed off the flat row index, not nth-child: the body
+                        // is window-virtualized behind a spacer <tr>, so DOM-child
+                        // parity shifts as the window scrolls. In grouped mode the
+                        // within-group index restarts stripes at each section header.
+                        (item.groupRowIndex ?? item.rowIndex) % 2 === 1 &&
+                          "table-row-zebra",
+                        getRowClassName?.(row),
+                      )}
+                      cellClassName={styles.cell}
+                      columnsKey={columnsKey}
+                      rowContentVersion={rowContentVersion}
+                      selectionVersion={selectionVersion}
+                      height={`${virtualRow.size}px`}
+                    />
+                  )}
+                </table.Subscribe>
               )}
-              cellClassName={styles.cell}
-              columnsKey={columnsKey}
-              rowContentVersion={rowContentVersion}
-              height={`${virtualRow.size}px`}
-            />
+            </table.Subscribe>
           );
         })}
 
@@ -454,11 +469,6 @@ export default function RTable<TItem extends RowData>(
                   table={table}
                   entity={entity}
                   ownsPageIdentity={!embedded}
-                  onResetColumnWidths={
-                    resetAllColumnSizes && Object.keys(columnSizing).length > 0
-                      ? resetAllColumnSizes
-                      : undefined
-                  }
                   additionalContent={
                     // flex-wrap: an embedded table in the aside rail can't fit
                     // a search box, a summary, and the View menu on one line —
@@ -520,161 +530,18 @@ export default function RTable<TItem extends RowData>(
                 // own `overflow-x-auto` here would nest a second scroller and
                 // re-bind the sticky header to it.
                 containerClassName="overflow-visible"
+                style={columnSizeVars}
               >
                 {/* Sticks to the pane's own top, so there is no offset to keep
                   in sync with the nav and toolbar heights. */}
                 <TableHeader className="sticky top-0 z-30 bg-card shadow-[0_1px_0_var(--border)] [&_th]:bg-card [&_tr]:border-b-0">
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <TableRow
-                      key={headerGroup.id}
-                      className="border-border/50 border-b"
-                    >
-                      {headerGroup.headers.map((header) => {
-                        const sortDirection = header.column.getIsSorted();
-                        const canSort = header.column.getCanSort();
-                        const numeric =
-                          header.column.columnDef.meta?.numeric ?? false;
-                        const sortingArrows =
-                          sortDirection === "desc" ? (
-                            <ArrowDown
-                              className={styles.sortIcon}
-                              aria-hidden="true"
-                            />
-                          ) : sortDirection === "asc" ? (
-                            <ArrowUp
-                              className={styles.sortIcon}
-                              aria-hidden="true"
-                            />
-                          ) : canSort ? (
-                            <ArrowUpDown
-                              className={cn(
-                                styles.sortIcon,
-                                "opacity-40 group-hover:opacity-100",
-                              )}
-                              aria-hidden="true"
-                            />
-                          ) : null;
-
-                        const titleContent = (
-                          <>
-                            {header.isPlaceholder
-                              ? null
-                              : flexRender(
-                                  header.column.columnDef.header,
-                                  header.getContext(),
-                                )}
-                            {sortingArrows}
-                            {/* Sort-stack position (1-based) — only shown
-                                  when 2+ columns are stacked via shift-click */}
-                            {sortDirection &&
-                              table.state.sorting.length > 1 && (
-                                <span className="text-3xs text-muted-foreground tabular-nums">
-                                  {header.column.getSortIndex() + 1}
-                                </span>
-                              )}
-                          </>
-                        );
-
-                        // User-resized width (persisted): under table-fixed,
-                        // sizing the header cell drives the whole column.
-                        const resizedWidth = columnSizing[header.column.id];
-                        const isResizable =
-                          header.column.id !== "select" &&
-                          header.column.id !== "actions";
-                        return (
-                          <TableHead
-                            key={header.id}
-                            colSpan={header.colSpan}
-                            aria-sort={
-                              sortDirection === "asc"
-                                ? "ascending"
-                                : sortDirection === "desc"
-                                  ? "descending"
-                                  : "none"
-                            }
-                            className={cn(
-                              // group/th: the resize handle only inks up
-                              // when its own header is hovered.
-                              "group/th relative",
-                              styles.header,
-                              numeric && "text-right",
-                              header.column.columnDef.meta?.className,
-                              sortDirection && "bg-muted/50",
-                            )}
-                            style={
-                              resizedWidth
-                                ? {
-                                    width: resizedWidth,
-                                    minWidth: resizedWidth,
-                                    maxWidth: resizedWidth,
-                                  }
-                                : undefined
-                            }
-                          >
-                            {canSort ? (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className={cn(
-                                  // select-none: shift-click (multi-sort) must
-                                  // not start a text selection
-                                  "group h-6 select-none gap-1 px-2 font-semibold text-2xs uppercase tracking-wider hover:bg-muted/60",
-                                  // Mirror the cell's right-align: pull the label
-                                  // to the column's right edge for numeric cols,
-                                  // else keep the left-edge compensation.
-                                  numeric
-                                    ? "-mr-2 justify-end"
-                                    : "-ml-2 justify-start",
-                                )}
-                                // Canonical TanStack handler: routes
-                                // shift-click through isMultiSortEvent so
-                                // stacked sorts work without custom logic.
-                                onClick={header.column.getToggleSortingHandler()}
-                              >
-                                {titleContent}
-                              </Button>
-                            ) : (
-                              <span className="inline-flex items-center gap-1">
-                                {titleContent}
-                              </span>
-                            )}
-                            {isResizable && (
-                              <ColumnResizeHandle
-                                columnId={header.column.id}
-                                onCommit={setColumnSize}
-                                onReset={resetColumnSize}
-                              />
-                            )}
-                          </TableHead>
-                        );
-                      })}
-                      {isDebugEnabled && (
-                        <TableHead className={cn(styles.header)}>
-                          Debug
-                        </TableHead>
-                      )}
-                      {/* Trailing gutter, pinned to zero so the COLUMNS get
-                            the table's leftover width. Left unsized it's the
-                            only auto cell under `table-fixed`, so it swallows
-                            every surplus pixel and the columns sit at exactly
-                            their declared `w-*` — that's what left several
-                            hundred px of dead space beside columns that were
-                            clipping. At w-0 the surplus spreads across the
-                            sized columns in proportion to their widths, so each
-                            `w-*` reads as a share.
-
-                            Only the HEADER spacer needs this — under
-                            table-fixed the first row sizes every column, so the
-                            body spacer (DesktopDataRow) stays untouched and row
-                            memoization is unaffected. */}
-                      <TableHead
-                        data-spacer
-                        aria-hidden
-                        scope={undefined}
-                        className={cn(styles.header, "w-0")}
-                      />
-                    </TableRow>
-                  ))}
+                  <Suspense fallback={null}>
+                    <TableHeaderLayout
+                      table={table as unknown as ITable<RowData>}
+                      styles={styles}
+                      isDebugEnabled={isDebugEnabled}
+                    />
+                  </Suspense>
                 </TableHeader>
                 <TableBody
                   inert={isTransitioning ? true : undefined}
@@ -688,7 +555,26 @@ export default function RTable<TItem extends RowData>(
                   row loaded client-side. */}
                 {rows.length > 0 &&
                   (() => {
-                    const footerGroups = table.getFooterGroups();
+                    const startFooterGroups = table.getStartFooterGroups();
+                    const centerFooterGroups = table.getCenterFooterGroups();
+                    const endFooterGroups = table.getEndFooterGroups();
+                    const footerGroups = Array.from(
+                      {
+                        length: Math.max(
+                          startFooterGroups.length,
+                          centerFooterGroups.length,
+                          endFooterGroups.length,
+                        ),
+                      },
+                      (_, index) => ({
+                        id: `footer-${index}`,
+                        headers: [
+                          ...(startFooterGroups[index]?.headers ?? []),
+                          ...(centerFooterGroups[index]?.headers ?? []),
+                          ...(endFooterGroups[index]?.headers ?? []),
+                        ],
+                      }),
+                    );
                     const hasFooter = footerGroups.some((fg) =>
                       fg.headers.some((h) => h.column.columnDef.footer),
                     );
@@ -700,23 +586,61 @@ export default function RTable<TItem extends RowData>(
                             key={footerGroup.id}
                             className="hover:bg-muted/50"
                           >
-                            {footerGroup.headers.map((header) => (
-                              <TableCell
-                                key={header.id}
-                                colSpan={header.colSpan}
-                                className={cn(
-                                  "px-2 py-1",
-                                  header.column.columnDef.meta?.className,
-                                )}
-                              >
-                                {header.isPlaceholder
-                                  ? null
-                                  : flexRender(
-                                      header.column.columnDef.footer,
-                                      header.getContext(),
-                                    )}
-                              </TableCell>
-                            ))}
+                            {footerGroup.headers.map((header) => {
+                              const pinned = header.column.getIsPinned();
+                              const width = columnWidthValue(header.column.id);
+                              const pinnedColumns =
+                                pinned === "start"
+                                  ? table.getStartVisibleLeafColumns()
+                                  : pinned === "end"
+                                    ? table.getEndVisibleLeafColumns()
+                                    : [];
+                              const pinnedIndex = pinnedColumns.findIndex(
+                                (column) => column.id === header.column.id,
+                              );
+                              const boundaryClass =
+                                pinned === "start" &&
+                                pinnedIndex === pinnedColumns.length - 1
+                                  ? "shadow-[3px_0_4px_-3px_rgb(15_23_42_/_0.35)]"
+                                  : pinned === "end" && pinnedIndex === 0
+                                    ? "shadow-[-3px_0_4px_-3px_rgb(15_23_42_/_0.35)]"
+                                    : undefined;
+                              return (
+                                <TableCell
+                                  key={header.id}
+                                  colSpan={header.colSpan}
+                                  className={cn(
+                                    "px-2 py-1",
+                                    header.column.columnDef.meta?.className,
+                                    pinned && "sticky z-20 bg-card",
+                                    boundaryClass,
+                                  )}
+                                  style={{
+                                    width,
+                                    minWidth: width,
+                                    maxWidth: width,
+                                    ...(pinned === "start"
+                                      ? {
+                                          insetInlineStart:
+                                            header.column.getStart("start"),
+                                        }
+                                      : pinned === "end"
+                                        ? {
+                                            insetInlineEnd:
+                                              header.column.getAfter("end"),
+                                          }
+                                        : {}),
+                                  }}
+                                >
+                                  {header.isPlaceholder
+                                    ? null
+                                    : flexRender(
+                                        header.column.columnDef.footer,
+                                        header.getContext(),
+                                      )}
+                                </TableCell>
+                              );
+                            })}
                             <TableCell data-spacer aria-hidden />
                           </TableRow>
                         ))}

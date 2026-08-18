@@ -161,7 +161,7 @@ export function ProjectPurchasesTable({
     columns,
     tree,
     tableStateOptions: EMBEDDED_TABLE_STATE,
-    columnVisibilityScope: "project-detail",
+    layoutKey: "purchase:project-detail",
     initialColumnVisibility: INITIAL_COLUMN_VISIBILITY,
     hiddenFilterColumns: ["project"],
   });
@@ -173,7 +173,6 @@ export function ProjectPurchasesTable({
       error={list.error}
       timing={list.timing}
       entity="purchase"
-      sizingKey="purchase:project-detail"
       ariaLabel="Purchases charged to this project"
       bulkActionBar={list.bulkActionBar}
       embedded

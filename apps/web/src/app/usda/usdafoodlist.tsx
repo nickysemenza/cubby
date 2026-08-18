@@ -10,6 +10,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
@@ -241,6 +242,11 @@ export function USDAFoodList() {
   ];
 
   // Configure the table
+  const layout = useCubbyTableLayout({
+    key: "usdaFood",
+    columns,
+    legacySizingKey: "usdaFood",
+  });
   const table = useTableConfig({
     data,
     columns,
@@ -250,6 +256,7 @@ export function USDAFoodList() {
     // While name-searching, results are relevance-ranked server-side, so the
     // column sort UI would be misleading — disable it until the filter clears.
     enableSorting: !nameFilter,
+    layout,
   });
 
   return (
@@ -259,7 +266,6 @@ export function USDAFoodList() {
         isLoading={isLoading}
         error={error}
         ariaLabel="USDA Foods Table"
-        sizingKey="usdaFood"
         timing={timing}
         onRowClick={onRowClick}
         onRowHover={onRowHover}

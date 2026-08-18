@@ -671,6 +671,8 @@ describe("expense URL-only scopes", () => {
       getEntityFilters("expense"),
     );
     expect(urlOnly.map((spec) => spec.columnId)).toEqual([
+      "dateFrom",
+      "dateTo",
       "costMin",
       "costMax",
       "productQuantityMin",

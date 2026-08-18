@@ -2,7 +2,6 @@ import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import type { TaskOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useTable } from "@tanstack/react-table";
 import { type FC, useMemo } from "react";
 import {
   createNameColumn,
@@ -19,8 +18,9 @@ import { taskMutationInvalidateKeys } from "~/lib/query-keys";
 import { ShelfEmpty } from "../data-table/shelf";
 import {
   createCubbyColumnHelper,
-  cubbyTableFeatures,
+  useCubbyTable,
 } from "../data-table/table-features";
+import { useCubbyTableLayout } from "../data-table/table-layout";
 
 const EMPTY_TASKS: TaskOut[] = [];
 
@@ -93,10 +93,15 @@ export const ProductTaskHistory: FC<{ product: ProductWithFoodOut }> = ({
     [helper, nameEditable],
   );
   const ordered = useMemo(() => orderProductTasks(tasks), [tasks]);
-  const table = useTable({
-    features: cubbyTableFeatures,
-    data: ordered,
+  const layout = useCubbyTableLayout({
+    key: "task:product-history",
     columns,
+  });
+  const table = useCubbyTable({
+    data: ordered,
+    columns: layout.columns,
+    atoms: layout.atoms,
+    meta: { defaultLayout: layout.defaultLayout },
     getRowId: (task) => task.id,
   });
 

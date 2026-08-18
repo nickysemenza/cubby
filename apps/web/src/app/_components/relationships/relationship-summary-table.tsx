@@ -5,7 +5,6 @@ import type {
 } from "@cubby/schemas/related-view";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
-import { useTable } from "@tanstack/react-table";
 import { ImageIcon, Search } from "lucide-react";
 import { type FC, useCallback, useMemo, useRef, useState } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
@@ -21,8 +20,9 @@ import RTable from "../data-table/Table";
 import {
   type CubbyColumnDef,
   createCubbyColumnHelper,
-  cubbyTableFeatures,
+  useCubbyTable,
 } from "../data-table/table-features";
+import { useCubbyTableLayout } from "../data-table/table-layout";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 
 const PAGE_SIZE = 25;
@@ -328,10 +328,17 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
     [sorting],
   );
 
-  const table = useTable<typeof cubbyTableFeatures, SummaryTableRow>({
-    features: cubbyTableFeatures,
-    data: rows,
+  const layoutKey = `related-summary:${relationKey}`;
+  const layout = useCubbyTableLayout({
+    key: layoutKey,
     columns: tableColumns,
+    legacySizingKey: layoutKey,
+  });
+  const table = useCubbyTable({
+    data: rows,
+    columns: layout.columns,
+    atoms: layout.atoms,
+    meta: { defaultLayout: layout.defaultLayout },
     getRowId: (row) => row.id,
     manualSorting: true,
     manualFiltering: true,
@@ -399,7 +406,6 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
         entity={targetEntity}
         ariaLabel={`${relationKey} summary`}
         embedded
-        sizingKey={`related-summary:${relationKey}`}
         isLoading={query.isPending}
         error={query.error}
         infiniteScroll={infiniteScroll}

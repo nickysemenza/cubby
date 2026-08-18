@@ -3,13 +3,9 @@ import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
-import {
-  type RowSelectionState,
-  type Updater,
-  useTable,
-} from "@tanstack/react-table";
+import type { RowSelectionState, Updater } from "@tanstack/react-table";
 import { sumBy } from "es-toolkit";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { match } from "ts-pattern";
 import {
   createCurrencyColumn,
@@ -20,8 +16,9 @@ import RTable from "~/app/_components/data-table/Table";
 import {
   type CubbyColumnDef,
   createCubbyColumnHelper,
-  cubbyTableFeatures,
+  useCubbyTable,
 } from "~/app/_components/data-table/table-features";
+import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { TradeBadge } from "~/app/projects/trade-options";
@@ -73,8 +70,6 @@ export function LinkExpensesDialog({
   const [scope, setScope] = useState<CandidateScope>("vendorOrUnattached");
   const [searchInput, setSearchInput] = useState("");
   const [search] = useDebouncedValue(searchInput, { wait: 300 });
-  const lastSelectedIdRef = useRef<string | null>(null);
-  const shiftKeyRef = useRef(false);
 
   const filters = useMemo<ExpenseFilters>(() => {
     const term = search.trim() || undefined;
@@ -116,7 +111,6 @@ export function LinkExpensesDialog({
       setSelectedRows(new Map());
       setSearchInput("");
       setScope("vendorOrUnattached");
-      lastSelectedIdRef.current = null;
     }
     onOpenChange(next);
   };
@@ -149,7 +143,7 @@ export function LinkExpensesDialog({
   const helper = useMemo(() => createCubbyColumnHelper<ExpenseOut>(), []);
   const columns = useMemo<CubbyColumnDef<ExpenseOut>[]>(
     () => [
-      buildSelectColumn<ExpenseOut>(lastSelectedIdRef, shiftKeyRef),
+      buildSelectColumn<ExpenseOut>(),
       createNameColumn(helper, "expense", "name", { header: "Expense" }),
       helper.accessor((row) => row.date, {
         id: "date",
@@ -206,10 +200,15 @@ export function LinkExpensesDialog({
     ],
     [helper],
   );
-  const table = useTable<typeof cubbyTableFeatures, ExpenseOut>({
-    features: cubbyTableFeatures,
-    data: candidates,
+  const layout = useCubbyTableLayout({
+    key: "purchase:expense-picker",
     columns,
+  });
+  const table = useCubbyTable({
+    data: candidates,
+    columns: layout.columns,
+    atoms: layout.atoms,
+    meta: { defaultLayout: layout.defaultLayout },
     getRowId: (row) => row.id,
     enableRowSelection: true,
     state: { rowSelection },
@@ -252,7 +251,6 @@ export function LinkExpensesDialog({
             table={table}
             entity="expense"
             ariaLabel="Expenses available to attach"
-            sizingKey="purchase:expense-picker"
             embedded
             isLoading={candidatesQuery.isPending}
             emptyState={

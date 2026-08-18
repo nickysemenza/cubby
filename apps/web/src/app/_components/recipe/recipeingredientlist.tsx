@@ -1,5 +1,4 @@
 import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
-import { useTable } from "@tanstack/react-table";
 import { mapValues } from "es-toolkit";
 import { useMemo, useState } from "react";
 import { match } from "ts-pattern";
@@ -28,8 +27,9 @@ import RTable from "../data-table/Table";
 import {
   type CubbyColumnDef,
   createCubbyColumnHelper,
-  cubbyTableFeatures,
+  useCubbyTable,
 } from "../data-table/table-features";
+import { useCubbyTableLayout } from "../data-table/table-layout";
 import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
@@ -459,10 +459,16 @@ export const RecipeIngredientList: React.FC<{
     ),
   ];
 
-  const table = useTable<typeof cubbyTableFeatures, ScalingRow>({
-    features: cubbyTableFeatures,
-    data: displayData,
+  const layout = useCubbyTableLayout({
+    key: "recipe:ingredients",
     columns,
+    legacySizingKey: "recipe:ingredients",
+  });
+  const table = useCubbyTable({
+    data: displayData,
+    columns: layout.columns,
+    atoms: layout.atoms,
+    meta: { defaultLayout: layout.defaultLayout },
     enableFilters: false,
     getRowId: getScalingRowId,
     rowCount: ingredients.length,
@@ -505,7 +511,6 @@ export const RecipeIngredientList: React.FC<{
         isLoading={displayData.length === 0}
         error={undefined}
         ariaLabel="Recipe Ingredients Table"
-        sizingKey="recipe:ingredients"
         verticalAlign="top"
         embedded
         getRowClassName={(row) =>

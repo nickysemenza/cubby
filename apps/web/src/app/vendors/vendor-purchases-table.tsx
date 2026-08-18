@@ -148,7 +148,7 @@ export function VendorPurchasesTable({ vendor }: { vendor: VendorOut }) {
     scopeFilters: scope,
     columns,
     tableStateOptions: EMBEDDED_TABLE_STATE,
-    columnVisibilityScope: "vendor-detail",
+    layoutKey: "purchase:vendor-detail",
     hiddenFilterColumns: ["vendor"],
   });
 
@@ -159,7 +159,6 @@ export function VendorPurchasesTable({ vendor }: { vendor: VendorOut }) {
       isLoading={list.isLoading}
       error={list.error}
       timing={list.timing}
-      sizingKey="purchase:vendor-detail"
       ariaLabel={`${vendor.name} purchases`}
       bulkActionBar={list.bulkActionBar}
       embedded

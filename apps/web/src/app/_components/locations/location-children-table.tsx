@@ -160,7 +160,8 @@ export function LocationChildrenTable({
     tableStateOptions: EMBEDDED_TABLE_STATE,
     // Distinct column set from the /locations index, so it needs its own
     // persisted View settings rather than sharing `table-columns:location`.
-    columnVisibilityScope: "location-contents",
+    layoutKey: "location:contents",
+    legacyLayoutVisibilityKey: "location:location-contents",
   });
 
   // Reveal deep matches while filtering by name, then collapse back — the
@@ -180,7 +181,6 @@ export function LocationChildrenTable({
       error={error}
       ariaLabel="Sub-locations"
       entity="location"
-      sizingKey="location:contents"
       bulkActionBar={bulkActionBar}
       embedded
       actions={

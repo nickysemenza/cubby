@@ -173,6 +173,8 @@ const filterSearchKeys = {
   expense: [
     "q",
     "date",
+    "dateFrom",
+    "dateTo",
     "costType",
     "lineKind",
     "lineBasis",
