@@ -24,9 +24,8 @@ const completionYearParam = urlStringParam
   .catch(undefined);
 /**
  * Which renderer the Data tab's Projects section uses. Piped through the enum
- * rather than left a loose string so the value arrives typed AND an unknown
- * renderer fails validation instead of silently falling back to flat — the URL
- * would otherwise claim a view the page isn't showing.
+ * rather than left a loose string so the value arrives typed. Unknown renderers
+ * are dropped so stale URLs fall back to the canonical default.
  */
 const rowsRendererParam = urlStringParam
   .pipe(z.enum(PROJECT_ROWS_RENDERERS).optional())

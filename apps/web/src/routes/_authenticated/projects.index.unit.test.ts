@@ -28,19 +28,14 @@ describe("project route search validation", () => {
     });
   });
 
-  it("accepts the two row renderers and rejects anything else", () => {
+  it("accepts the two row renderers and drops anything else", () => {
     expect(projectSearchSchema.parse({ rows: "tree" })).toMatchObject({
       rows: "tree",
     });
     expect(projectSearchSchema.parse({ rows: "flat" })).toMatchObject({
       rows: "flat",
     });
-    // An unknown renderer must fail validation rather than silently falling
-    // back — the Data tab would otherwise render a flat list from a URL that
-    // says otherwise.
-    expect(projectSearchSchema.safeParse({ rows: "gantt" }).success).toBe(
-      false,
-    );
+    expect(projectSearchSchema.parse({ rows: "gantt" }).rows).toBeUndefined();
   });
 
   it("rejects invalid multi-filter values instead of widening the query", () => {
