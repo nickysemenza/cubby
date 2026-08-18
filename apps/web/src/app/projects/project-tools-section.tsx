@@ -5,14 +5,31 @@ import type {
 import { TRADE_LABELS } from "@cubby/schemas/project";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Trash2, Wrench } from "lucide-react";
-import { useMemo, useState } from "react";
+import {
+  type RowSelectionState,
+  type Updater,
+  useTable,
+} from "@tanstack/react-table";
+import { Plus, Search, Wrench } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
+import {
+  createActionsColumn,
+  createCurrencyColumn,
+  createImageColumn,
+  createNameColumn,
+} from "~/app/_components/data-table/columnHelpers";
+import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
+import RTable from "~/app/_components/data-table/Table";
+import {
+  type CubbyColumnDef,
+  createCubbyColumnHelper,
+  cubbyTableFeatures,
+} from "~/app/_components/data-table/table-features";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
 import {
   Dialog,
@@ -29,10 +46,10 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
-import { Separator } from "~/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
+import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import {
   cancelTRPCQueries,
   invalidateTRPCQueries,
@@ -43,48 +60,38 @@ import { formatCurrency } from "~/lib/utils";
 const EMPTY_RESOURCES: ProjectResourceOut[] = [];
 const EMPTY_SUGGESTIONS: ProjectToolSuggestionOut[] = [];
 
-function toolEconomicsLabel(tool: {
-  projectUseCount: number;
-  netLifetimeCost: number;
-  costPerProjectUse: number | null;
-}) {
-  const uses = `${tool.projectUseCount} project use${tool.projectUseCount === 1 ? "" : "s"}`;
-  const lifetime = `${formatCurrency(tool.netLifetimeCost)} net lifetime cost`;
-  const perUse =
-    tool.costPerProjectUse === null
-      ? "cost/use pending"
-      : `${formatCurrency(tool.costPerProjectUse)} per use`;
-  return `${uses} · ${lifetime} · ${perUse}`;
-}
-
-function ResourceIdentity({
-  id,
-  name,
-  manufacturer,
-}: {
+type ResourceRow = {
   id: string;
   name: string;
   manufacturer: string;
-}) {
-  return (
-    <div className="min-w-0">
-      <EntityInlineLink
-        entity="product"
-        data={{ id, name, manufacturer }}
-        truncate
-      />
-    </div>
-  );
+  category: string;
+  images: Array<{ id: string; url: string; filename: string }>;
+  uses: number;
+  lifetimeCost: number;
+  costPerUse: number | null;
+  projectPurchaseCost: number | null;
+  sharedSpend: string | null;
+};
+
+type PickerRow = ResourceRow & {
+  reasons: string[];
+  trade: string | null;
+};
+
+function imagesFor(id: string, name: string, url: string | null) {
+  return url ? [{ id: `cover:${id}`, url, filename: name }] : [];
 }
 
-function AttachedResourceRow({
+function ResourcesTable({
+  rows,
   projectId,
-  resource,
   resourcesKey,
+  isLoading,
 }: {
+  rows: ResourceRow[];
   projectId: string;
-  resource: ProjectResourceOut;
   resourcesKey: QueryKey;
+  isLoading: boolean;
 }) {
   const api = useTRPC();
   const queryClient = useQueryClient();
@@ -103,8 +110,7 @@ function AttachedResourceRow({
       );
       return { previous };
     },
-    onSuccess: () =>
-      toast.success(`Removed ${resource.productName} from this project`),
+    onSuccess: () => toast.success("Removed resource from this project"),
     onError: (error, _variables, context) => {
       if (context?.previous)
         queryClient.setQueryData(resourcesKey, context.previous);
@@ -113,95 +119,233 @@ function AttachedResourceRow({
     onSettled: () =>
       invalidateTRPCQueries(queryClient, projectResourceMutationInvalidateKeys),
   });
-
+  const helper = useMemo(() => createCubbyColumnHelper<ResourceRow>(), []);
+  const columns = useMemo<CubbyColumnDef<ResourceRow>[]>(
+    () => [
+      createImageColumn(helper, { entity: "product" }),
+      createNameColumn(helper, "product", "name", { header: "Product" }),
+      helper.accessor((row) => row.category, {
+        id: "type",
+        header: "Type",
+        meta: { className: "w-24", mobile: { slot: "subtitle" } },
+        cell: (info) => (info.getValue() === "software" ? "Software" : "Tool"),
+      }),
+      helper.accessor((row) => row.uses, {
+        id: "uses",
+        header: "Uses",
+        meta: { className: "w-20", numeric: true, mobile: { slot: "meta" } },
+      }),
+      createCurrencyColumn(helper, "lifetimeCost", {
+        header: "Lifetime cost",
+        mobile: { slot: "meta", priority: 20 },
+      }),
+      helper.accessor((row) => row, {
+        id: "effectiveCost",
+        header: "Cost / use or project",
+        enableSorting: false,
+        meta: {
+          className: "w-44",
+          numeric: true,
+          mobile: { slot: "meta", priority: 30, label: "Effective" },
+        },
+        cell: (info) => {
+          const row = info.row.original;
+          if (row.sharedSpend)
+            return <Description size="xs">{row.sharedSpend}</Description>;
+          if (row.projectPurchaseCost != null && row.projectPurchaseCost > 0) {
+            return `${formatCurrency(row.projectPurchaseCost)} bought here`;
+          }
+          return row.costPerUse == null
+            ? "Cost/use pending"
+            : `${formatCurrency(row.costPerUse)} / use`;
+        },
+      }),
+      createActionsColumn(helper, "product", {
+        extraActions: (row) => (
+          <VerbMenuItem
+            verb="removeFromProject"
+            disabled={detach.isPending}
+            onSelect={(event) => {
+              event.stopPropagation();
+              detach.mutate({ projectId, productIds: [row.id] });
+            }}
+          />
+        ),
+      }),
+    ],
+    [detach, helper, projectId],
+  );
+  const table = useTable<typeof cubbyTableFeatures, ResourceRow>({
+    features: cubbyTableFeatures,
+    data: rows,
+    columns,
+    getRowId: (row) => row.id,
+    initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
+  });
   return (
-    <Row
-      align="center"
-      justify="between"
-      gap="md"
-      className="border border-[var(--border)] p-4"
-    >
-      <Stack gap="xs" className="min-w-0">
-        <ResourceIdentity
-          id={resource.productId}
-          name={resource.productName}
-          manufacturer={resource.manufacturer}
-        />
-        <Description size="xs">
-          {resource.category === "tools"
-            ? toolEconomicsLabel(resource)
-            : `${resource.projectUseCount} project use${resource.projectUseCount === 1 ? "" : "s"} · ${formatCurrency(resource.netLifetimeCost)} lifetime household spend`}
-        </Description>
-        {resource.category === "tools" &&
-          resource.projectPurchaseCost !== null &&
-          resource.projectPurchaseCost > 0 && (
-            <Badge variant="outline" className="w-fit">
-              {formatCurrency(resource.projectPurchaseCost)} bought here
-            </Badge>
-          )}
-        {resource.category === "software" && resource.sharedWindow && (
-          <Description size="xs">
-            {formatCurrency(resource.sharedWindow.netCost)} shared spend during
-            project ({resource.sharedWindow.startDate}–
-            {resource.sharedWindow.endDate}); contextual and non-additive
-          </Description>
-        )}
-        {resource.category === "software" && !resource.sharedWindow && (
-          <Description size="xs">
-            Shared project-window spend is unavailable until the project has a
-            valid date window.
-          </Description>
-        )}
-      </Stack>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label={`Remove ${resource.productName} from this project`}
-        disabled={detach.isPending}
-        onClick={() =>
-          detach.mutate({ projectId, productIds: [resource.productId] })
-        }
-      >
-        <Trash2 />
-      </Button>
-    </Row>
+    <RTable
+      table={table}
+      entity="product"
+      ariaLabel="Reusable project resources"
+      sizingKey="project:resources"
+      embedded
+      isLoading={isLoading}
+      emptyState={
+        <Empty variant="minimal" className="py-6">
+          <EmptyHeader>
+            <EmptyTitle>No reusable resources recorded</EmptyTitle>
+            <EmptyDescription>
+              Add meaningful durable tools and shared software. Small
+              consumables do not need to become project-use records.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      }
+    />
   );
 }
 
-function SuggestionRow({
-  suggestion,
-  checked,
-  onCheckedChange,
+function SelectableResourceTable({
+  rows,
+  selected,
+  setSelected,
+  isLoading,
+  suggested,
+  emptyCopy,
 }: {
-  suggestion: ProjectToolSuggestionOut;
-  checked: boolean;
-  onCheckedChange: (checked: boolean) => void;
+  rows: PickerRow[];
+  selected: Set<string>;
+  setSelected: React.Dispatch<React.SetStateAction<Set<string>>>;
+  isLoading: boolean;
+  suggested: boolean;
+  emptyCopy: string;
 }) {
+  const lastSelectedIdRef = useRef<string | null>(null);
+  const shiftKeyRef = useRef(false);
+  const rowSelection = useMemo<RowSelectionState>(
+    () => Object.fromEntries([...selected].map((id) => [id, true])),
+    [selected],
+  );
+  const onRowSelectionChange = (updater: Updater<RowSelectionState>) => {
+    const next =
+      typeof updater === "function" ? updater(rowSelection) : updater;
+    setSelected(
+      new Set(
+        Object.entries(next)
+          .filter(([, value]) => value)
+          .map(([id]) => id),
+      ),
+    );
+  };
+  const helper = useMemo(() => createCubbyColumnHelper<PickerRow>(), []);
+  const columns = useMemo<CubbyColumnDef<PickerRow>[]>(
+    () => [
+      buildSelectColumn<PickerRow>(lastSelectedIdRef, shiftKeyRef),
+      createImageColumn(helper, { entity: "product" }),
+      createNameColumn(helper, "product", "name", { header: "Product" }),
+      ...(suggested
+        ? [
+            helper.accessor((row) => row.reasons, {
+              id: "reasons",
+              header: "Reasons / trade",
+              enableSorting: false,
+              meta: { className: "w-52", mobile: { slot: "subtitle" } },
+              cell: (info) => (
+                <Row wrap gap="xs">
+                  {info.getValue().map((reason) => (
+                    <Badge key={reason} variant="outline">
+                      {reason}
+                    </Badge>
+                  ))}
+                  {info.row.original.trade && (
+                    <Badge variant="outline">{info.row.original.trade}</Badge>
+                  )}
+                </Row>
+              ),
+            }),
+            helper.accessor((row) => row.uses, {
+              id: "uses",
+              header: "Uses",
+              meta: {
+                className: "w-20",
+                numeric: true,
+                mobile: { slot: "meta" },
+              },
+            }),
+            createCurrencyColumn(helper, "lifetimeCost", {
+              header: "Lifetime cost",
+              mobile: { slot: "meta", priority: 20 },
+            }),
+            helper.accessor((row) => row, {
+              id: "effectiveCost",
+              header: "Cost / use",
+              enableSorting: false,
+              meta: {
+                className: "w-36",
+                numeric: true,
+                mobile: { slot: "meta", priority: 30 },
+              },
+              cell: (info) => {
+                const row = info.row.original;
+                return row.projectPurchaseCost != null &&
+                  row.projectPurchaseCost > 0
+                  ? `${formatCurrency(row.projectPurchaseCost)} bought here`
+                  : row.costPerUse == null
+                    ? "Pending"
+                    : formatCurrency(row.costPerUse);
+              },
+            }),
+          ]
+        : [
+            helper.accessor((row) => row.manufacturer, {
+              id: "manufacturer",
+              header: "Manufacturer",
+              meta: {
+                className: "w-40",
+                mobile: { slot: "subtitle", label: "Maker" },
+              },
+              cell: (info) =>
+                isUnspecifiedManufacturer(info.getValue())
+                  ? "—"
+                  : info.getValue(),
+            }),
+            helper.accessor((row) => row.category, {
+              id: "category",
+              header: "Category",
+              meta: { className: "w-32", mobile: { slot: "meta" } },
+            }),
+          ]),
+    ],
+    [helper, suggested],
+  );
+  const table = useTable<typeof cubbyTableFeatures, PickerRow>({
+    features: cubbyTableFeatures,
+    data: rows,
+    columns,
+    getRowId: (row) => row.id,
+    enableRowSelection: true,
+    state: { rowSelection },
+    onRowSelectionChange,
+    initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
+  });
   return (
-    <Row
-      as="label"
-      align="start"
-      gap="sm"
-      className="cursor-pointer border border-[var(--border)] p-4"
-    >
-      <Checkbox checked={checked} onCheckedChange={onCheckedChange} />
-      <Stack gap="xs" className="min-w-0 flex-1">
-        <ResourceIdentity
-          id={suggestion.productId}
-          name={suggestion.productName}
-          manufacturer={suggestion.manufacturer}
-        />
-        <Row wrap gap="xs">
-          {suggestion.reasons.map((reason) => (
-            <Badge key={reason} variant="outline">
-              {reason}
-            </Badge>
-          ))}
-        </Row>
-        <Description size="xs">{toolEconomicsLabel(suggestion)}</Description>
-      </Stack>
-    </Row>
+    <div className="max-h-96 overflow-y-auto">
+      <RTable
+        table={table}
+        entity="product"
+        ariaLabel={
+          suggested
+            ? "Suggested project tools"
+            : "Products available as resources"
+        }
+        sizingKey={
+          suggested ? "project:resource-suggestions" : "project:resource-picker"
+        }
+        embedded
+        isLoading={isLoading}
+        emptyState={<Description>{emptyCopy}</Description>}
+      />
+    </div>
   );
 }
 
@@ -227,7 +371,7 @@ function ResourcePickerDialog({
   );
   const toolSearchQuery = useQuery({
     ...api.product.search.queryOptions({
-      filters: { nameFilter: search, categoryFilter: "tools" },
+      filters: { nameFilter: search || undefined, categoryFilter: "tools" },
       pagination: { pageIndex: 0, pageSize: 50 },
       sort: [{ orderBy: "name", direction: "asc" }],
     }),
@@ -235,23 +379,72 @@ function ResourcePickerDialog({
   });
   const softwareSearchQuery = useQuery({
     ...api.product.search.queryOptions({
-      filters: { nameFilter: search, categoryFilter: "software" },
+      filters: { nameFilter: search || undefined, categoryFilter: "software" },
       pagination: { pageIndex: 0, pageSize: 50 },
       sort: [{ orderBy: "name", direction: "asc" }],
     }),
     enabled: open,
   });
   const suggestions = suggestionsQuery.data?.items ?? EMPTY_SUGGESTIONS;
-  const purchasedHere = suggestions.filter(
-    (suggestion) => suggestion.lane === "purchased_here",
+  const suggestionRows = useMemo<PickerRow[]>(
+    () =>
+      suggestions.map((item) => ({
+        id: item.productId,
+        name: item.productName,
+        manufacturer: item.manufacturer,
+        category: "tools",
+        images: imagesFor(item.productId, item.productName, item.coverImageUrl),
+        uses: item.projectUseCount,
+        lifetimeCost: item.netLifetimeCost,
+        costPerUse: item.costPerProjectUse,
+        projectPurchaseCost: item.projectPurchaseCost,
+        sharedSpend: null,
+        reasons: item.reasons,
+        trade: item.matchedTrade
+          ? (TRADE_LABELS[item.matchedTrade] ?? item.matchedTrade)
+          : null,
+      })),
+    [suggestions],
   );
-  const browseTools = (toolSearchQuery.data?.items ?? []).filter(
-    (item) => !attachedIds.has(item.id),
+  const browseRows = useCallback(
+    (
+      items: NonNullable<typeof toolSearchQuery.data>["items"],
+      category: string,
+    ) =>
+      items
+        .filter((item) => !attachedIds.has(item.id))
+        .map<PickerRow>((item) => ({
+          id: item.id,
+          name: item.name,
+          manufacturer: item.manufacturer,
+          category,
+          images: imagesFor(item.id, item.name, item.coverImageUrl),
+          uses: 0,
+          lifetimeCost: 0,
+          costPerUse: null,
+          projectPurchaseCost: null,
+          sharedSpend: null,
+          reasons: [],
+          trade: null,
+        })),
+    [attachedIds],
   );
-  const browseSoftware = (softwareSearchQuery.data?.items ?? []).filter(
-    (item) => !attachedIds.has(item.id),
+  const toolRows = useMemo(
+    () => browseRows(toolSearchQuery.data?.items ?? [], "Tools"),
+    [browseRows, toolSearchQuery.data?.items],
+  );
+  const softwareRows = useMemo(
+    () => browseRows(softwareSearchQuery.data?.items ?? [], "Software"),
+    [browseRows, softwareSearchQuery.data?.items],
   );
 
+  const resetAndClose = (next: boolean) => {
+    if (!next) {
+      setSelected(new Set());
+      setSearch("");
+    }
+    onOpenChange(next);
+  };
   const attachBase = api.project.attachResources.mutationOptions();
   const attach = useMutation({
     mutationKey: attachBase.mutationKey,
@@ -260,42 +453,23 @@ function ResourcePickerDialog({
       await cancelTRPCQueries(queryClient, [resourcesKey]);
       const previous =
         queryClient.getQueryData<ProjectResourceOut[]>(resourcesKey);
-      const browsed = [
-        ...(toolSearchQuery.data?.items ?? []).map((item) => ({
-          id: item.id,
-          name: item.name,
-          manufacturer: item.manufacturer ?? "",
-          category: "tools" as const,
-        })),
-        ...(softwareSearchQuery.data?.items ?? []).map((item) => ({
-          id: item.id,
-          name: item.name,
-          manufacturer: item.manufacturer ?? "",
-          category: "software" as const,
-        })),
-      ];
-      const selectedSuggestions = suggestions.filter((item) =>
-        variables.productIds.includes(item.productId),
-      );
+      const candidates = [...suggestionRows, ...toolRows, ...softwareRows];
       const optimistic = variables.productIds.map((productId) => {
-        const typedProductId = productId as ProjectResourceOut["productId"];
-        const suggestion = selectedSuggestions.find(
-          (item) => item.productId === productId,
-        );
-        const product = browsed.find((item) => item.id === productId);
+        const item = candidates.find((candidate) => candidate.id === productId);
         return {
-          productId: typedProductId,
-          productName: suggestion?.productName ?? product?.name ?? productId,
-          manufacturer: suggestion?.manufacturer ?? product?.manufacturer ?? "",
-          category: product?.category ?? ("tools" as const),
+          productId: productId as ProjectResourceOut["productId"],
+          productName: item?.name ?? productId,
+          manufacturer: item?.manufacturer ?? "",
+          category:
+            item?.category.toLowerCase() === "software" ? "software" : "tools",
+          coverImageUrl: item?.images[0]?.url ?? null,
           attachedAt: new Date(),
-          projectPurchaseCost: suggestion?.projectPurchaseCost ?? null,
+          projectPurchaseCost: item?.projectPurchaseCost ?? null,
           sharedWindow: null,
-          projectUseCount: suggestion?.projectUseCount ?? 0,
-          netLifetimeCost: suggestion?.netLifetimeCost ?? 0,
-          costPerProjectUse: suggestion?.costPerProjectUse ?? null,
-          grossLifetimeAcquisitionCost:
-            suggestion?.grossLifetimeAcquisitionCost ?? null,
+          projectUseCount: item?.uses ?? 0,
+          netLifetimeCost: item?.lifetimeCost ?? 0,
+          costPerProjectUse: item?.costPerUse ?? null,
+          grossLifetimeAcquisitionCost: null,
         } satisfies ProjectResourceOut;
       });
       queryClient.setQueryData<ProjectResourceOut[]>(
@@ -313,11 +487,10 @@ function ResourcePickerDialog({
       onOpenChange(false);
       return { previous, previousSelection };
     },
-    onSuccess: (result) => {
+    onSuccess: (result) =>
       toast.success(
         `Attached ${result.changed} resource${result.changed === 1 ? "" : "s"}`,
-      );
-    },
+      ),
     onError: (error, _variables, context) => {
       if (context?.previous)
         queryClient.setQueryData(resourcesKey, context.previous);
@@ -325,37 +498,9 @@ function ResourcePickerDialog({
       onOpenChange(true);
       toast.error(getErrorMessage(error));
     },
-    onSettled: () => {
-      invalidateTRPCQueries(queryClient, projectResourceMutationInvalidateKeys);
-    },
+    onSettled: () =>
+      invalidateTRPCQueries(queryClient, projectResourceMutationInvalidateKeys),
   });
-
-  const toggle = (id: string, checked: boolean) => {
-    setSelected((current) => {
-      const next = new Set(current);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  };
-
-  const tradeGroups = useMemo(() => {
-    const groups = new Map<string, ProjectToolSuggestionOut[]>();
-    for (const suggestion of suggestions) {
-      if (suggestion.lane !== "trade_match") continue;
-      const key = suggestion.matchedTrade ?? "other";
-      groups.set(key, [...(groups.get(key) ?? []), suggestion]);
-    }
-    return [...groups.entries()];
-  }, [suggestions]);
-
-  const resetAndClose = (next: boolean) => {
-    if (!next) {
-      setSelected(new Set());
-      setSearch("");
-    }
-    onOpenChange(next);
-  };
 
   return (
     <Dialog open={open} onOpenChange={resetAndClose}>
@@ -364,11 +509,10 @@ function ResourcePickerDialog({
           <DialogTitle>Add reusable resources</DialogTitle>
           <DialogDescription>
             Review physical-tool suggestions or browse tool and software
-            Products. Attaching a resource records use; it does not change
-            project spend, budgets, or inventory.
+            Products. Attaching records use; it does not change spend or
+            inventory.
           </DialogDescription>
         </DialogHeader>
-
         <Tabs defaultValue="suggested">
           <TabsList>
             <TabsTrigger value="suggested">
@@ -380,148 +524,59 @@ function ResourcePickerDialog({
             <TabsTrigger value="tools">Browse tools</TabsTrigger>
             <TabsTrigger value="software">Browse software</TabsTrigger>
           </TabsList>
-
           <TabsContent value="suggested">
-            {suggestionsQuery.isPending ? (
-              <Description>Finding likely tools…</Description>
-            ) : suggestions.length === 0 ? (
-              <Empty variant="minimal" className="py-8">
-                <EmptyHeader>
-                  <EmptyTitle>No suggestions yet</EmptyTitle>
-                  <EmptyDescription>
-                    Browse tools to attach one manually. Future suggestions
-                    learn from explicit reuse and the project&apos;s trades.
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            ) : (
-              <Stack gap="md">
-                {purchasedHere.length > 0 && (
-                  <Stack gap="xs">
-                    <p className="eyebrow my-0">Purchased for this project</p>
-                    {purchasedHere.map((suggestion) => (
-                      <SuggestionRow
-                        key={suggestion.productId}
-                        suggestion={suggestion}
-                        checked={selected.has(suggestion.productId)}
-                        onCheckedChange={(checked) =>
-                          toggle(suggestion.productId, checked)
-                        }
-                      />
-                    ))}
-                  </Stack>
-                )}
-                {purchasedHere.length > 0 && tradeGroups.length > 0 && (
-                  <Separator />
-                )}
-                {tradeGroups.map(([trade, rows]) => (
-                  <Stack key={trade} gap="xs">
-                    <p className="eyebrow my-0">
-                      {TRADE_LABELS[trade as keyof typeof TRADE_LABELS] ??
-                        trade}
-                    </p>
-                    {rows.map((suggestion) => (
-                      <SuggestionRow
-                        key={suggestion.productId}
-                        suggestion={suggestion}
-                        checked={selected.has(suggestion.productId)}
-                        onCheckedChange={(checked) =>
-                          toggle(suggestion.productId, checked)
-                        }
-                      />
-                    ))}
-                  </Stack>
-                ))}
+            <SelectableResourceTable
+              rows={suggestionRows}
+              selected={selected}
+              setSelected={setSelected}
+              isLoading={suggestionsQuery.isPending}
+              suggested
+              emptyCopy="No suggestions yet. Browse tools to attach one manually."
+            />
+          </TabsContent>
+          {[
+            {
+              value: "tools",
+              placeholder: "Search tool products…",
+              rows: toolRows,
+              loading: toolSearchQuery.isPending,
+            },
+            {
+              value: "software",
+              placeholder: "Search software products…",
+              rows: softwareRows,
+              loading: softwareSearchQuery.isPending,
+            },
+          ].map((tab) => (
+            <TabsContent key={tab.value} value={tab.value}>
+              <Stack gap="sm">
+                <Row align="center" gap="sm">
+                  <Search
+                    className="size-4 shrink-0 text-muted-foreground"
+                    aria-hidden
+                  />
+                  <Input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder={tab.placeholder}
+                  />
+                </Row>
+                <SelectableResourceTable
+                  rows={tab.rows}
+                  selected={selected}
+                  setSelected={setSelected}
+                  isLoading={tab.loading}
+                  suggested={false}
+                  emptyCopy={`No unattached ${tab.value} match this search.`}
+                />
               </Stack>
-            )}
-          </TabsContent>
-
-          <TabsContent value="tools">
-            <Stack gap="sm">
-              <Row align="center" gap="sm">
-                <Search className="size-4 shrink-0 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search tool products…"
-                />
-              </Row>
-              {toolSearchQuery.isPending ? (
-                <Description>Loading tools…</Description>
-              ) : browseTools.length === 0 ? (
-                <Description>
-                  No unattached tools match this search.
-                </Description>
-              ) : (
-                <Stack gap="xs" className="max-h-96 overflow-y-auto">
-                  {browseTools.map((item) => (
-                    <Row
-                      as="label"
-                      key={item.id}
-                      align="center"
-                      gap="sm"
-                      className="cursor-pointer border border-[var(--border)] p-4"
-                    >
-                      <Checkbox
-                        checked={selected.has(item.id)}
-                        onCheckedChange={(checked) => toggle(item.id, checked)}
-                      />
-                      <ResourceIdentity
-                        id={item.id}
-                        name={item.name}
-                        manufacturer={item.manufacturer}
-                      />
-                    </Row>
-                  ))}
-                </Stack>
-              )}
-            </Stack>
-          </TabsContent>
-
-          <TabsContent value="software">
-            <Stack gap="sm">
-              <Row align="center" gap="sm">
-                <Search className="size-4 shrink-0 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search software products…"
-                />
-              </Row>
-              {softwareSearchQuery.isPending ? (
-                <Description>Loading software…</Description>
-              ) : browseSoftware.length === 0 ? (
-                <Description>
-                  No unattached software matches this search.
-                </Description>
-              ) : (
-                <Stack gap="xs" className="max-h-96 overflow-y-auto">
-                  {browseSoftware.map((item) => (
-                    <Row
-                      as="label"
-                      key={item.id}
-                      align="center"
-                      gap="sm"
-                      className="cursor-pointer border border-[var(--border)] p-4"
-                    >
-                      <Checkbox
-                        checked={selected.has(item.id)}
-                        onCheckedChange={(checked) => toggle(item.id, checked)}
-                      />
-                      <ResourceIdentity
-                        id={item.id}
-                        name={item.name}
-                        manufacturer={item.manufacturer}
-                      />
-                    </Row>
-                  ))}
-                </Stack>
-              )}
-            </Stack>
-          </TabsContent>
+            </TabsContent>
+          ))}
         </Tabs>
-
         <DialogFooter showCloseButton>
+          <Description size="xs" className="mr-auto">
+            {selected.size} selected
+          </Description>
           <Button
             type="button"
             disabled={selected.size === 0 || attach.isPending}
@@ -549,6 +604,26 @@ export function ProjectResourcesSection({ projectId }: { projectId: string }) {
     api.project.toolSuggestions.queryOptions({ projectId }),
   );
   const resources = resourcesQuery.data ?? EMPTY_RESOURCES;
+  const resourceRows = useMemo<ResourceRow[]>(
+    () =>
+      resources.map((item) => ({
+        id: item.productId,
+        name: item.productName,
+        manufacturer: item.manufacturer,
+        category: item.category,
+        images: imagesFor(item.productId, item.productName, item.coverImageUrl),
+        uses: item.projectUseCount,
+        lifetimeCost: item.netLifetimeCost,
+        costPerUse: item.costPerProjectUse,
+        projectPurchaseCost: item.projectPurchaseCost,
+        sharedSpend: item.sharedWindow
+          ? `${formatCurrency(item.sharedWindow.netCost)} during ${item.sharedWindow.startDate}–${item.sharedWindow.endDate}`
+          : item.category === "software"
+            ? "Shared spend unavailable"
+            : null,
+      })),
+    [resources],
+  );
   const suggestionCount = suggestionsQuery.data?.items.length ?? 0;
   const unlinked = suggestionsQuery.data?.unlinkedExpensivePurchases;
   const timelineConflicts = suggestionsQuery.data?.timelineConflicts.count ?? 0;
@@ -576,7 +651,6 @@ export function ProjectResourcesSection({ projectId }: { projectId: string }) {
           )}
         </Button>
       </Row>
-
       {unlinked && unlinked.count > 0 && (
         <div className="border border-[var(--border)] bg-muted p-4">
           <Description size="xs">
@@ -592,41 +666,19 @@ export function ProjectResourcesSection({ projectId }: { projectId: string }) {
           </Description>
         </div>
       )}
-
       {timelineConflicts > 0 && (
         <Description size="xs">
           {timelineConflicts} tool{timelineConflicts === 1 ? "" : "s"} matching
-          this project&rsquo;s trades {timelineConflicts === 1 ? "was" : "were"}{" "}
-          hidden — we didn&rsquo;t own {timelineConflicts === 1 ? "it" : "them"}{" "}
-          while this project ran.
+          this project&apos;s trades {timelineConflicts === 1 ? "was" : "were"}{" "}
+          hidden because it was not owned while this project ran.
         </Description>
       )}
-
-      {resourcesQuery.isPending ? (
-        <Description>Loading reusable resources…</Description>
-      ) : resources.length === 0 ? (
-        <Empty variant="minimal" className="py-6">
-          <EmptyHeader>
-            <EmptyTitle>No reusable resources recorded</EmptyTitle>
-            <EmptyDescription>
-              Add meaningful durable tools and shared software. Small
-              consumables do not need to become project-use records.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <Stack gap="xs">
-          {resources.map((resource) => (
-            <AttachedResourceRow
-              key={resource.productId}
-              projectId={projectId}
-              resource={resource}
-              resourcesKey={resourcesKey}
-            />
-          ))}
-        </Stack>
-      )}
-
+      <ResourcesTable
+        rows={resourceRows}
+        projectId={projectId}
+        resourcesKey={resourcesKey}
+        isLoading={resourcesQuery.isPending}
+      />
       <ResourcePickerDialog
         open={pickerOpen}
         onOpenChange={setPickerOpen}

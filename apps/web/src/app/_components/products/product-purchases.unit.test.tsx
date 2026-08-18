@@ -4,6 +4,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { KitMembershipOut } from "@cubby/schemas/product-components";
 import type { ProductPurchaseOut } from "@cubby/schemas/purchase";
+import { flexRender } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -53,6 +54,58 @@ vi.mock("~/app/_components/EntityInlineLink", () => ({
     </a>
   ),
 }));
+vi.mock("~/app/_components/data-table/Table", () => ({
+  default: ({
+    table,
+    emptyState,
+  }: {
+    table: {
+      getRowModel: () => {
+        rows: Array<{
+          id: string;
+          getVisibleCells: () => Array<{
+            id: string;
+            column: { columnDef: { cell?: unknown } };
+            getContext: () => never;
+          }>;
+        }>;
+      };
+    };
+    emptyState?: React.ReactNode;
+  }) => {
+    const rows = table.getRowModel().rows;
+    if (rows.length === 0) return emptyState;
+    return (
+      <table>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id}>
+              {row.getVisibleCells().map((cell) => (
+                <td key={cell.id}>
+                  {flexRender(
+                    cell.column.columnDef.cell as never,
+                    cell.getContext(),
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  },
+}));
+vi.mock("~/app/_components/table/TableLink", () => ({
+  TableLink: ({
+    to,
+    params,
+    children,
+  }: {
+    to: string;
+    params: { shortcode: string };
+    children: React.ReactNode;
+  }) => <a href={to.replace("$shortcode", params.shortcode)}>{children}</a>,
+}));
 
 import { ProductPurchases } from "./product-purchases";
 
@@ -70,6 +123,7 @@ const membershipEntry: KitMembershipOut = {
   parentProductName: "18V Combo Kit",
   manufacturer: "Milwaukee",
   quantity: 2,
+  coverImageUrl: null,
   attachedAt: new Date("2026-01-01"),
   price: 249,
   expenseCount: 1,

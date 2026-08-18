@@ -115,6 +115,7 @@ import {
   derivedPriceFilterSql,
   effectiveProductPriceSql,
   enrichProductRowsWithPricing,
+  loadEffectiveProductPricesById,
   loadProductPricing,
   resolveProductPricing,
 } from "./pricing";
@@ -978,14 +979,16 @@ export const productSearch = async (
   );
 
   const resultIds = results.map((result) => result.id);
-  const [quantities, coverImageUrls] = await Promise.all([
+  const [quantities, coverImageUrls, prices] = await Promise.all([
     loadProductPickerQuantities(db, resultIds),
     loadProductCoverImageUrls(db, resultIds),
+    loadEffectiveProductPricesById(db, resultIds),
   ]);
   const data = results.map((result) =>
     dbProductToPickerItemAPI({
       ...result,
       ...quantities.get(result.id)!,
+      price: prices.get(result.id) ?? null,
       coverImageUrl: coverImageUrls.get(result.id) ?? null,
     }),
   );
@@ -1011,9 +1014,10 @@ export const getProductPickerItemsByIds = async (
     },
   });
   const rowIds = rows.map((row) => row.id);
-  const [quantities, coverImageUrls] = await Promise.all([
+  const [quantities, coverImageUrls, prices] = await Promise.all([
     loadProductPickerQuantities(db, rowIds),
     loadProductCoverImageUrls(db, rowIds),
+    loadEffectiveProductPricesById(db, rowIds),
   ]);
   const byId = new Map(
     rows.map((row) => [
@@ -1021,6 +1025,7 @@ export const getProductPickerItemsByIds = async (
       dbProductToPickerItemAPI({
         ...row,
         ...quantities.get(row.id)!,
+        price: prices.get(row.id) ?? null,
         coverImageUrl: coverImageUrls.get(row.id) ?? null,
       }),
     ]),

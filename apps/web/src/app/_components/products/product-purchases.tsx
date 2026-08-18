@@ -1,13 +1,22 @@
 import type { KitMembershipOut } from "@cubby/schemas/product-components";
 import type { ProductPurchaseOut } from "@cubby/schemas/purchase";
 import { useQuery } from "@tanstack/react-query";
+import { useTable } from "@tanstack/react-table";
 import { format } from "date-fns";
-import { Trash2 } from "lucide-react";
+import { useMemo } from "react";
+import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
+import {
+  createActionsColumn,
+  createNameColumn,
+} from "~/app/_components/data-table/columnHelpers";
+import RTable from "~/app/_components/data-table/Table";
+import {
+  type CubbyColumnDef,
+  createCubbyColumnHelper,
+  cubbyTableFeatures,
+} from "~/app/_components/data-table/table-features";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Description } from "~/components/ui/description";
 import {
   Empty,
   EmptyDescription,
@@ -21,78 +30,8 @@ import { purchaseProductMutationInvalidateKeys } from "~/lib/query-keys";
 
 const EMPTY_PURCHASES: ProductPurchaseOut[] = [];
 const EMPTY_MEMBERSHIP: KitMembershipOut[] = [];
+type PurchaseRow = ProductPurchaseOut & { id: string; name: string };
 
-function purchaseSubtitle(item: ProductPurchaseOut): string | null {
-  const parts = [
-    item.vendorName,
-    format(parsePlainDate(item.date), "MMM d, yyyy"),
-  ].filter((part): part is string => Boolean(part));
-  return parts.length > 0 ? parts.join(" · ") : null;
-}
-
-function ProductPurchaseRow({
-  productId,
-  item,
-}: {
-  productId: string;
-  item: ProductPurchaseOut;
-}) {
-  const api = useTRPC();
-  const label = purchaseLabel(item);
-  const detach = useActionMutation({
-    mutationFn: api.purchase.detachProducts.mutationOptions,
-    success: `Removed from ${label}`,
-    invalidateKeys: purchaseProductMutationInvalidateKeys,
-  });
-  const subtitle = purchaseSubtitle(item);
-
-  return (
-    <Row
-      align="center"
-      justify="between"
-      gap="md"
-      className="border border-[var(--border)] p-4"
-    >
-      <Stack gap="xs" className="min-w-0">
-        <EntityInlineLink
-          entity="purchase"
-          data={{
-            id: item.purchaseId,
-            orderId: item.orderId,
-            displayLabel: item.displayLabel,
-            vendorName: item.vendorName,
-            date: item.date,
-          }}
-          truncate
-        />
-        {subtitle && <Description size="xs">{subtitle}</Description>}
-      </Stack>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label={`Remove ${label}`}
-        disabled={detach.isPending}
-        onClick={() =>
-          detach.mutate({
-            purchaseId: item.purchaseId,
-            productIds: [productId],
-          })
-        }
-      >
-        <Trash2 />
-      </Button>
-    </Row>
-  );
-}
-
-/**
- * The Purchases one Product is linked to — the transpose of
- * `PurchaseProductsTable`. This is how a product-first read answers "which
- * order(s) did this come from," including lump-sum/installment orders whose
- * Expenses can't carry a `productId` at all (see
- * `packages/schemas/src/purchase.ts`). No money or quantity lives here.
- */
 export function ProductPurchases({ productId }: { productId: string }) {
   const api = useTRPC();
   const query = useQuery(api.product.purchases.queryOptions({ productId }));
@@ -106,75 +45,122 @@ export function ProductPurchases({ productId }: { productId: string }) {
     api.product.kitMembership.queryOptions({ productId }),
   );
   const membership = membershipQuery.data ?? EMPTY_MEMBERSHIP;
-
-  if (query.isPending) {
-    return <Description>Loading purchases…</Description>;
-  }
-
-  if (items.length === 0) {
-    if (membershipQuery.isPending) {
-      return <Description>Loading purchases…</Description>;
-    }
-    const [primaryKit, ...restKits] = membership;
-    if (primaryKit) {
-      return (
-        <Empty variant="minimal" className="py-6">
-          <EmptyHeader>
-            <EmptyTitle>No purchases of its own</EmptyTitle>
-            <EmptyDescription>
-              This product is a component of{" "}
-              <EntityInlineLink
-                entity="product"
-                data={{
-                  id: primaryKit.parentProductId,
-                  name: primaryKit.parentProductName,
-                  manufacturer: primaryKit.manufacturer,
-                }}
-                compact
-              />
-              {restKits.length > 0 &&
-                ` (and ${restKits.length} other kit${restKits.length === 1 ? "" : "s"})`}
-              . Attaching this product to an order directly would misrepresent
-              it as bought on its own — the kit's own order is the real one.
-            </EmptyDescription>
-          </EmptyHeader>
-          {primaryKit.purchase && (
-            <EntityInlineLink
-              entity="purchase"
-              data={{
-                id: primaryKit.purchase.purchaseId,
-                orderId: primaryKit.purchase.orderId,
-                displayLabel: primaryKit.purchase.displayLabel,
-                vendorName: primaryKit.purchase.vendorName,
-                date: primaryKit.purchase.date,
-              }}
-            />
-          )}
-        </Empty>
-      );
-    }
-    return (
-      <Empty variant="minimal" className="py-6">
-        <EmptyHeader>
-          <EmptyTitle>No purchases linked</EmptyTitle>
-          <EmptyDescription>
-            Attach this product from a purchase&apos;s Products section to
-            record which order it came from.
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    );
-  }
+  const rows = useMemo<PurchaseRow[]>(
+    () =>
+      items.map((item) => ({
+        ...item,
+        id: item.purchaseId,
+        name: purchaseLabel(item),
+      })),
+    [items],
+  );
+  const detach = useActionMutation({
+    mutationFn: api.purchase.detachProducts.mutationOptions,
+    success: "Removed from purchase",
+    invalidateKeys: purchaseProductMutationInvalidateKeys,
+  });
+  const helper = useMemo(() => createCubbyColumnHelper<PurchaseRow>(), []);
+  const columns = useMemo<CubbyColumnDef<PurchaseRow>[]>(
+    () => [
+      createNameColumn(helper, "purchase", "name", { header: "Purchase" }),
+      helper.accessor((row) => row.vendorName, {
+        id: "vendor",
+        header: "Vendor",
+        meta: {
+          className: "w-40",
+          mobile: { slot: "subtitle", priority: 10 },
+        },
+      }),
+      helper.accessor((row) => row.date, {
+        id: "date",
+        header: "Date",
+        meta: {
+          className: "w-32",
+          mono: true,
+          mobile: { slot: "meta", priority: 20 },
+        },
+        cell: (info) => format(parsePlainDate(info.getValue()), "MMM d, yyyy"),
+      }),
+      createActionsColumn(helper, "purchase", {
+        extraActions: (row) => (
+          <VerbMenuItem
+            verb="removeFromPurchase"
+            disabled={detach.isPending}
+            onSelect={(event) => {
+              event.stopPropagation();
+              detach.mutate({ purchaseId: row.id, productIds: [productId] });
+            }}
+          />
+        ),
+      }),
+    ],
+    [detach, helper, productId],
+  );
+  const table = useTable<typeof cubbyTableFeatures, PurchaseRow>({
+    features: cubbyTableFeatures,
+    data: rows,
+    columns,
+    getRowId: (row) => row.id,
+    initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
+  });
+  const [primaryKit, ...restKits] = membership;
+  const emptyState = primaryKit ? (
+    <Empty variant="minimal" className="py-6">
+      <EmptyHeader>
+        <EmptyTitle>No purchases of its own</EmptyTitle>
+        <EmptyDescription>
+          This product is a component of{" "}
+          <EntityInlineLink
+            entity="product"
+            data={{
+              id: primaryKit.parentProductId,
+              name: primaryKit.parentProductName,
+              manufacturer: primaryKit.manufacturer,
+            }}
+            compact
+          />
+          {restKits.length > 0 &&
+            ` (and ${restKits.length} other kit${restKits.length === 1 ? "" : "s"})`}
+          . Attaching this product to an order directly would misrepresent it as
+          bought on its own — the kit&apos;s own order is the real one.
+        </EmptyDescription>
+      </EmptyHeader>
+      {primaryKit.purchase && (
+        <EntityInlineLink
+          entity="purchase"
+          data={{
+            id: primaryKit.purchase.purchaseId,
+            orderId: primaryKit.purchase.orderId,
+            displayLabel: primaryKit.purchase.displayLabel,
+            vendorName: primaryKit.purchase.vendorName,
+            date: primaryKit.purchase.date,
+          }}
+        />
+      )}
+    </Empty>
+  ) : (
+    <Empty variant="minimal" className="py-6">
+      <EmptyHeader>
+        <EmptyTitle>No purchases linked</EmptyTitle>
+        <EmptyDescription>
+          Attach this product from a purchase&apos;s Products section to record
+          which order it came from.
+        </EmptyDescription>
+      </EmptyHeader>
+    </Empty>
+  );
 
   return (
-    <Stack gap="xs">
-      {items.map((item) => (
-        <ProductPurchaseRow
-          key={item.purchaseId}
-          productId={productId}
-          item={item}
-        />
-      ))}
-    </Stack>
+    <RTable
+      table={table}
+      entity="purchase"
+      ariaLabel="Purchases linked to this product"
+      sizingKey="product:purchases"
+      embedded
+      isLoading={
+        query.isPending || (items.length === 0 && membershipQuery.isPending)
+      }
+      emptyState={emptyState}
+    />
   );
 }

@@ -1,14 +1,30 @@
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
+import type { ProductPickerItemOut } from "@cubby/schemas/product";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
+import {
+  type RowSelectionState,
+  type Updater,
+  useTable,
+} from "@tanstack/react-table";
 import { Search } from "lucide-react";
-import { useState } from "react";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { useMemo, useRef, useState } from "react";
+import {
+  createCurrencyColumn,
+  createImageColumn,
+  createNameColumn,
+} from "~/app/_components/data-table/columnHelpers";
+import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
+import RTable from "~/app/_components/data-table/Table";
+import {
+  type CubbyColumnDef,
+  createCubbyColumnHelper,
+  cubbyTableFeatures,
+} from "~/app/_components/data-table/table-features";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { Row, Stack } from "~/components/layout";
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
 import {
   Dialog,
@@ -21,18 +37,15 @@ import {
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
 import { useTRPC } from "~/integrations/trpc/react";
+import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { purchaseProductMutationInvalidateKeys } from "~/lib/query-keys";
 
-/** Generous typeahead page within MAX_PAGE_SIZE; the search box narrows it further. */
 const SEARCH_PAGE_SIZE = 50;
+type PickerRow = ProductPickerItemOut & {
+  images: Array<{ id: string; url: string; filename: string }>;
+};
 
-/**
- * Attach Products to a Purchase — the provenance link for lump-sum/installment
- * orders whose Expenses are `lineBasis: "allocation"` and so can never carry a
- * `productId` (see `packages/schemas/src/purchase.ts`). Attaching records
- * which goods this order bought; it changes no spend, quantity, or inventory.
- */
 export function LinkProductsDialog({
   open,
   onOpenChange,
@@ -48,6 +61,8 @@ export function LinkProductsDialog({
   const [selected, setSelected] = useState<Set<ProductShortcode>>(new Set());
   const [searchInput, setSearchInput] = useState("");
   const [search] = useDebouncedValue(searchInput, { wait: 300 });
+  const lastSelectedIdRef = useRef<string | null>(null);
+  const shiftKeyRef = useRef(false);
 
   const searchQuery = useQuery({
     ...api.product.search.queryOptions({
@@ -57,22 +72,33 @@ export function LinkProductsDialog({
     }),
     enabled: open,
   });
-
-  const results = (searchQuery.data?.items ?? []).filter(
-    (item) => !attachedIds.has(item.id),
+  const rows = useMemo<PickerRow[]>(
+    () =>
+      (searchQuery.data?.items ?? [])
+        .filter((item) => !attachedIds.has(item.id))
+        .map((item) => ({
+          ...item,
+          images: item.coverImageUrl
+            ? [
+                {
+                  id: `cover:${item.id}`,
+                  url: item.coverImageUrl,
+                  filename: item.name,
+                },
+              ]
+            : [],
+        })),
+    [attachedIds, searchQuery.data?.items],
   );
 
-  // The ONLY close path. Every dismissal — Escape, overlay click, Cancel, and a
-  // successful attach — goes through here, so the next open can't inherit a
-  // stale selection or search term from the last one.
   const resetAndClose = (next: boolean) => {
     if (!next) {
       setSelected(new Set());
       setSearchInput("");
+      lastSelectedIdRef.current = null;
     }
     onOpenChange(next);
   };
-
   const attach = useActionMutation({
     mutationFn: api.purchase.attachProducts.mutationOptions,
     success: (result) =>
@@ -81,14 +107,55 @@ export function LinkProductsDialog({
     onSuccess: () => resetAndClose(false),
   });
 
-  const toggle = (id: ProductShortcode, checked: boolean) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
+  const rowSelection = useMemo<RowSelectionState>(
+    () => Object.fromEntries([...selected].map((id) => [id, true])),
+    [selected],
+  );
+  const onRowSelectionChange = (updater: Updater<RowSelectionState>) => {
+    const next =
+      typeof updater === "function" ? updater(rowSelection) : updater;
+    setSelected(
+      new Set(
+        Object.entries(next)
+          .filter(([, value]) => value)
+          .map(([id]) => id as ProductShortcode),
+      ),
+    );
   };
+
+  const helper = useMemo(() => createCubbyColumnHelper<PickerRow>(), []);
+  const columns = useMemo<CubbyColumnDef<PickerRow>[]>(
+    () => [
+      buildSelectColumn<PickerRow>(lastSelectedIdRef, shiftKeyRef),
+      createImageColumn(helper, { entity: "product" }),
+      createNameColumn(helper, "product", "name", { header: "Product" }),
+      helper.accessor((row) => row.manufacturer, {
+        id: "manufacturer",
+        header: "Manufacturer",
+        meta: {
+          className: "w-40",
+          mobile: { slot: "subtitle", label: "Maker" },
+        },
+        cell: (info) =>
+          isUnspecifiedManufacturer(info.getValue()) ? "—" : info.getValue(),
+      }),
+      createCurrencyColumn(helper, "price", {
+        header: "Price",
+        mobile: { slot: "meta", priority: 20 },
+      }),
+    ],
+    [helper],
+  );
+  const table = useTable<typeof cubbyTableFeatures, PickerRow>({
+    features: cubbyTableFeatures,
+    data: rows,
+    columns,
+    getRowId: (row) => row.id,
+    enableRowSelection: true,
+    state: { rowSelection },
+    onRowSelectionChange,
+    initialState: { pagination: { pageIndex: 0, pageSize: SEARCH_PAGE_SIZE } },
+  });
 
   return (
     <Dialog open={open} onOpenChange={resetAndClose}>
@@ -99,11 +166,9 @@ export function LinkProductsDialog({
           </DialogTitle>
           <DialogDescription>
             Record which products this purchase bought. The link carries no
-            money or quantity — spend always stays on the purchase&apos;s
-            Expenses.
+            money or quantity — spend stays on the purchase&apos;s Expenses.
           </DialogDescription>
         </DialogHeader>
-
         <Row align="center" gap="sm">
           <Search
             className="size-3.5 shrink-0 text-muted-foreground"
@@ -115,48 +180,24 @@ export function LinkProductsDialog({
             placeholder="Search products…"
           />
         </Row>
-
-        {searchQuery.isPending ? (
-          <Description>Loading products…</Description>
-        ) : results.length === 0 ? (
-          <Empty variant="minimal" className="py-6">
-            <EmptyTitle>No products found</EmptyTitle>
-            <EmptyDescription>
-              Adjust the search, or every match is already attached.
-            </EmptyDescription>
-          </Empty>
-        ) : (
-          <Stack gap="xs" className="max-h-96 overflow-y-auto">
-            {results.map((item) => (
-              <Row
-                as="label"
-                key={item.id}
-                align="center"
-                gap="sm"
-                className="cursor-pointer border border-[var(--border)] p-4"
-              >
-                <Checkbox
-                  checked={selected.has(item.id)}
-                  onCheckedChange={(checked) =>
-                    toggle(item.id, checked === true)
-                  }
-                />
-                <div className="min-w-0">
-                  <EntityInlineLink
-                    entity="product"
-                    data={{
-                      id: item.id,
-                      name: item.name,
-                      manufacturer: item.manufacturer,
-                    }}
-                    truncate
-                  />
-                </div>
-              </Row>
-            ))}
-          </Stack>
-        )}
-
+        <div className="max-h-96 overflow-y-auto">
+          <RTable
+            table={table}
+            entity="product"
+            ariaLabel="Products available to attach"
+            sizingKey="purchase:product-picker"
+            embedded
+            isLoading={searchQuery.isPending}
+            emptyState={
+              <Empty variant="minimal" className="py-6">
+                <EmptyTitle>No products found</EmptyTitle>
+                <EmptyDescription>
+                  Adjust the search, or every match is already attached.
+                </EmptyDescription>
+              </Empty>
+            }
+          />
+        </div>
         <DialogFooter>
           <Description size="xs" className="mr-auto">
             {selected.size} selected
@@ -173,9 +214,7 @@ export function LinkProductsDialog({
               })
             }
           >
-            {attach.isPending
-              ? "Attaching..."
-              : `Attach ${selected.size || ""}`.trim()}
+            {attach.isPending ? "Attaching..." : `Attach ${selected.size}`}
           </Button>
         </DialogFooter>
       </DialogContent>

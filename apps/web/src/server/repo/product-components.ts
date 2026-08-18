@@ -216,17 +216,21 @@ export async function listKitMembership(
     .orderBy(desc(productComponent.createdAt));
 
   const parentProductIds = uniq(rows.map((row) => row.parentId));
-  const [prices, expenseCounts, purchases] = await Promise.all([
-    loadEffectiveProductPricesById(db, parentProductIds),
-    loadLiveExpenseCountsByProductId(db, parentProductIds),
-    loadMostRecentPurchaseByProductId(db, parentProductIds),
-  ]);
+  const [prices, expenseCounts, purchases, imagesByProduct] = await Promise.all(
+    [
+      loadEffectiveProductPricesById(db, parentProductIds),
+      loadLiveExpenseCountsByProductId(db, parentProductIds),
+      loadMostRecentPurchaseByProductId(db, parentProductIds),
+      getProductImagesByProductIds(db, parentProductIds),
+    ],
+  );
 
   return rows.map((row) => ({
     parentProductId: unsafeProductShortcode(row.parentCode),
     parentProductName: row.parentName,
     manufacturer: row.manufacturer,
     quantity: row.quantity,
+    coverImageUrl: imagesByProduct[row.parentId]?.[0]?.url ?? null,
     attachedAt: row.attachedAt,
     price: prices.get(row.parentId) ?? null,
     expenseCount: expenseCounts.get(row.parentId) ?? 0,

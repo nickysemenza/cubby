@@ -57,6 +57,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { foldAssociation } from "~/server/repo/merge";
+import { getProductImagesByProductIds } from "~/server/repo/product";
 import { loadProductOwnershipTimelines } from "~/server/repo/product/ownership";
 import { maxPlainDate } from "./helpers";
 import { collectDescendantIds, loadProjectDateWindows } from "./subtree";
@@ -411,11 +412,13 @@ export async function listProjectResources(
   const softwareIds = reusableRows
     .filter((row) => row.category === "software")
     .map((row) => row.productId);
-  const [metrics, purchaseCosts, loadedWindows] = await Promise.all([
-    loadResourceMetrics(dbc, productIds),
-    loadProjectPurchaseCosts(dbc, projectId, toolIds),
-    softwareIds.length > 0 ? loadProjectDateWindows(db) : null,
-  ]);
+  const [metrics, purchaseCosts, loadedWindows, imagesByProduct] =
+    await Promise.all([
+      loadResourceMetrics(dbc, productIds),
+      loadProjectPurchaseCosts(dbc, projectId, toolIds),
+      softwareIds.length > 0 ? loadProjectDateWindows(db) : null,
+      getProductImagesByProductIds(db, productIds),
+    ]);
   const windowContext = loadedWindows
     ? (buildResourceWindowContexts(
         loadedWindows,
@@ -436,6 +439,7 @@ export async function listProjectResources(
       productName: row.productName,
       manufacturer: row.manufacturer,
       category,
+      coverImageUrl: imagesByProduct[row.productId]?.[0]?.url ?? null,
       attachedAt: row.attachedAt,
       projectPurchaseCost:
         category === "tools" ? (purchaseCosts.get(row.productId) ?? 0) : null,
@@ -1238,9 +1242,10 @@ export async function suggestProjectTools(
     ...directRows.map((row) => row.productId),
     ...tradeRows.map((row) => row.productId),
   ]);
-  const [metrics, ownership] = await Promise.all([
+  const [metrics, ownership, imagesByProduct] = await Promise.all([
     loadResourceMetrics(dbc, candidateProductIds),
     loadProductOwnershipTimelines(dbc, candidateProductIds, { today }),
+    getProductImagesByProductIds(db, candidateProductIds),
   ]);
 
   /**
@@ -1268,6 +1273,7 @@ export async function suggestProjectTools(
       productId: unsafeProductShortcode(row.productCode),
       productName: row.productName,
       manufacturer: row.manufacturer,
+      coverImageUrl: imagesByProduct[row.productId]?.[0]?.url ?? null,
       lane: "purchased_here" as const,
       matchedTrade: null,
       // Not `formatCurrency`: that helper lives in `~/lib/utils`, a
@@ -1341,6 +1347,7 @@ export async function suggestProjectTools(
         productId: unsafeProductShortcode(row.productCode),
         productName: row.productName,
         manufacturer: row.manufacturer,
+        coverImageUrl: imagesByProduct[row.productId]?.[0]?.url ?? null,
         lane: "trade_match",
         matchedTrade: row.trade,
         reasons: [

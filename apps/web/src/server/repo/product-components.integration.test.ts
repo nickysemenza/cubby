@@ -16,7 +16,7 @@ import {
   productComponent,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "./database-helpers";
-import { deleteProducts } from "./product";
+import { deleteProducts, updateProduct } from "./product";
 import {
   attachProductComponents,
   detachProductComponents,
@@ -28,6 +28,7 @@ import {
   detachPurchaseProducts,
 } from "./purchase-products";
 import {
+  createImageFixture,
   createProductFixture as createProduct,
   makeProductInput,
 } from "./repo.fixtures";
@@ -64,6 +65,13 @@ describe("product ⟷ product component links (kit composition)", () => {
       makeProductInput({ name: "Battery Pack" }),
       ctx.actor,
     );
+    const kitCover = await createImageFixture(ctx.db, "combo-kit-cover");
+    await updateProduct(
+      ctx.db,
+      kit.entityId,
+      { pendingImageIds: [kitCover.id] },
+      ctx.actor,
+    );
 
     const first = await attachProductComponents(
       ctx.db,
@@ -97,6 +105,7 @@ describe("product ⟷ product component links (kit composition)", () => {
     expect(kits).toHaveLength(1);
     expect(kits[0]?.parentProductName).toBe("Combo Kit");
     expect(kits[0]?.quantity).toBe(2);
+    expect(kits[0]?.coverImageUrl).toBe(kitCover.url);
 
     const detached = await detachProductComponents(
       ctx.db,

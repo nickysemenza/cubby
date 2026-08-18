@@ -1,22 +1,32 @@
 import type { ProjectShortcode } from "@cubby/schemas/identifiers";
 import type { ProductProjectUsesOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
+import {
+  type RowSelectionState,
+  type Updater,
+  useTable,
+} from "@tanstack/react-table";
 import { Pencil, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import {
   createCurrencyColumn,
   createTimestampColumn,
 } from "~/app/_components/data-table/columnHelpers";
+import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
 import RTable from "~/app/_components/data-table/Table";
-import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import {
+  type CubbyColumnDef,
+  createCubbyColumnHelper,
+  cubbyTableFeatures,
+} from "~/app/_components/data-table/table-features";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
+import { ProjectMark } from "~/app/projects/project-mark";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
 import {
   Dialog,
@@ -258,8 +268,10 @@ function ProjectUsesDialog({
   selectedIds: string[];
 }) {
   const api = useTRPC();
-  const { options, isLoading } = useProjectOptions();
+  const { rows, isLoading } = useProjectOptions();
   const [search, setSearch] = useState("");
+  const lastSelectedIdRef = useRef<string | null>(null);
+  const shiftKeyRef = useRef(false);
   // Seeded from the server set each time the dialog opens, so a cancelled edit
   // leaves nothing behind.
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -269,33 +281,86 @@ function ProjectUsesDialog({
     setSeededFor(true);
   }
   if (!open && seededFor) setSeededFor(false);
+  const resetAndClose = (next: boolean) => {
+    if (!next) {
+      setSearch("");
+      setSelected(new Set());
+      setSeededFor(false);
+      lastSelectedIdRef.current = null;
+    }
+    onOpenChange(next);
+  };
 
   const save = useActionMutation({
     mutationFn: api.product.setProjectUses.mutationOptions,
     success: "Project uses updated",
     invalidateKeys: projectResourceMutationInvalidateKeys,
-    onSuccess: () => onOpenChange(false),
+    onSuccess: () => resetAndClose(false),
   });
 
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return options;
-    return options.filter((option) =>
-      option.label.toLowerCase().includes(term),
+    if (!term) return rows;
+    return rows.filter((row) => row.name.toLowerCase().includes(term));
+  }, [rows, search]);
+  const rowSelection = useMemo<RowSelectionState>(
+    () => Object.fromEntries([...selected].map((id) => [id, true])),
+    [selected],
+  );
+  const onRowSelectionChange = (updater: Updater<RowSelectionState>) => {
+    const next =
+      typeof updater === "function" ? updater(rowSelection) : updater;
+    setSelected(
+      new Set(
+        Object.entries(next)
+          .filter(([, value]) => value)
+          .map(([id]) => id),
+      ),
     );
-  }, [options, search]);
-
-  const toggle = (value: string, checked: boolean) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(value);
-      else next.delete(value);
-      return next;
-    });
   };
+  type ProjectOptionRow = (typeof rows)[number];
+  const helper = useMemo(() => createCubbyColumnHelper<ProjectOptionRow>(), []);
+  const columns = useMemo<CubbyColumnDef<ProjectOptionRow>[]>(
+    () => [
+      buildSelectColumn<ProjectOptionRow>(lastSelectedIdRef, shiftKeyRef),
+      helper.display({
+        id: "mark",
+        header: "",
+        meta: { className: "w-10", mobile: { slot: "image" } },
+        cell: (info) => <ProjectMark icon={info.row.original.icon} size={20} />,
+      }),
+      helper.accessor((row) => row.name, {
+        id: "name",
+        header: "Project",
+        meta: { className: "w-64", mobile: { slot: "title" } },
+      }),
+      helper.accessor((row) => row, {
+        id: "effectiveDates",
+        header: "Effective dates",
+        enableSorting: false,
+        meta: { className: "w-48", mobile: { slot: "meta", label: "Dates" } },
+        cell: (info) => {
+          const row = info.row.original;
+          if (!row.effectiveStart && !row.effectiveEnd) return "—";
+          return `${row.effectiveStart ?? "…"} – ${row.effectiveEnd ?? "…"}`;
+        },
+      }),
+    ],
+    [helper],
+  );
+  const table = useTable<typeof cubbyTableFeatures, ProjectOptionRow>({
+    features: cubbyTableFeatures,
+    data: visible,
+    columns,
+    getRowId: (row) => row.id,
+    enableRowSelection: true,
+    state: { rowSelection },
+    onRowSelectionChange,
+    initialState: { pagination: { pageIndex: 0, pageSize: 100 } },
+  });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={resetAndClose}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Projects this was used on</DialogTitle>
@@ -314,35 +379,23 @@ function ProjectUsesDialog({
           />
         </Row>
 
-        <Stack gap="xs" className="max-h-80 overflow-y-auto">
-          {isLoading && <Description>Loading projects…</Description>}
-          {!isLoading && visible.length === 0 && (
-            <Description>No projects match.</Description>
-          )}
-          {visible.map((option) => (
-            <Row
-              key={option.value}
-              as="label"
-              align="center"
-              gap="sm"
-              className="cursor-pointer border border-[var(--border)] px-2 py-1"
-            >
-              <Checkbox
-                checked={selected.has(option.value)}
-                onCheckedChange={(checked) =>
-                  toggle(option.value, checked === true)
-                }
-              />
-              <span className="truncate">{option.label}</span>
-            </Row>
-          ))}
-        </Stack>
+        <div className="max-h-80 overflow-y-auto">
+          <RTable
+            table={table}
+            entity="project"
+            ariaLabel="Projects available for this product"
+            sizingKey="product:project-picker"
+            embedded
+            isLoading={isLoading}
+            emptyState={<Description>No projects match.</Description>}
+          />
+        </div>
 
         <DialogFooter>
           <Row align="center" gap="sm" className="mr-auto">
             <Description size="xs">{selected.size} selected</Description>
           </Row>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => resetAndClose(false)}>
             Cancel
           </Button>
           <Button

@@ -1,18 +1,35 @@
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
+import type { ProductPickerItemOut } from "@cubby/schemas/product";
 import type {
   KitMembershipOut,
   ProductComponentOut,
 } from "@cubby/schemas/product-components";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import {
+  type RowSelectionState,
+  type Updater,
+  useTable,
+} from "@tanstack/react-table";
+import { Plus } from "lucide-react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
+import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
+import {
+  createActionsColumn,
+  createCurrencyColumn,
+  createImageColumn,
+  createNameColumn,
+} from "~/app/_components/data-table/columnHelpers";
+import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
+import RTable from "~/app/_components/data-table/Table";
+import {
+  type CubbyColumnDef,
+  createCubbyColumnHelper,
+  cubbyTableFeatures,
+} from "~/app/_components/data-table/table-features";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
 import {
   Dialog,
@@ -32,145 +49,104 @@ import { Input } from "~/components/ui/input";
 import { useTRPC } from "~/integrations/trpc/react";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { productComponentMutationInvalidateKeys } from "~/lib/query-keys";
-import { formatCurrency } from "~/lib/utils";
 
 const EMPTY_COMPONENTS: ProductComponentOut[] = [];
 const EMPTY_MEMBERSHIP: KitMembershipOut[] = [];
 const SEARCH_PAGE_SIZE = 50;
+const TABLE_STATE = {
+  pagination: { pageIndex: 0, pageSize: SEARCH_PAGE_SIZE },
+} as const;
 
-function componentSubtitle(item: ProductComponentOut): string | null {
-  const parts = [
-    isUnspecifiedManufacturer(item.manufacturer) ? null : item.manufacturer,
-    // This is the blended effective price — the kit's own price divided across
-    // its components' projected share, not a per-component purchase history.
-    // The kit itself still keeps the one real Expense; nothing here is spend.
-    item.price != null ? formatCurrency(item.price) : null,
-  ].filter((part): part is string => Boolean(part));
-  return parts.length > 0 ? parts.join(" · ") : null;
+type ProductRow = {
+  id: string;
+  name: string;
+  manufacturer: string;
+  quantity: number;
+  price: number | null;
+  images: Array<{ id: string; url: string; filename: string }>;
+};
+type PickerRow = ProductPickerItemOut & { images: ProductRow["images"] };
+
+function imagesFor(id: string, name: string, url: string | null) {
+  return url ? [{ id: `cover:${id}`, url, filename: name }] : [];
 }
 
-/** The kit's own price, for the transpose row — this component carries none. */
-function membershipSubtitle(item: KitMembershipOut): string | null {
-  return item.price != null ? `${formatCurrency(item.price)} kit price` : null;
-}
-
-function ComponentRow({
-  parentProductId,
-  item,
+function KitTable({
+  rows,
+  ariaLabel,
+  sizingKey,
+  action,
+  emptyState,
+  nameHeader,
+  showPrice,
 }: {
-  parentProductId: string;
-  item: ProductComponentOut;
+  rows: ProductRow[];
+  ariaLabel: string;
+  sizingKey: string;
+  action: (row: ProductRow) => ReactNode;
+  emptyState: ReactNode;
+  nameHeader: "Product" | "Kit";
+  showPrice: boolean;
 }) {
-  const api = useTRPC();
-  const detach = useActionMutation({
-    mutationFn: api.product.detachComponents.mutationOptions,
-    success: `Removed ${item.productName}`,
-    invalidateKeys: productComponentMutationInvalidateKeys,
+  const helper = useMemo(() => createCubbyColumnHelper<ProductRow>(), []);
+  const columns = useMemo<CubbyColumnDef<ProductRow>[]>(
+    () => [
+      createImageColumn(helper, { entity: "product" }),
+      createNameColumn(helper, "product", "name", {
+        header: nameHeader,
+      }),
+      helper.accessor((row) => row.manufacturer, {
+        id: "manufacturer",
+        header: "Manufacturer",
+        meta: {
+          className: "w-40",
+          mobile: { slot: "subtitle", priority: 10, label: "Maker" },
+        },
+        cell: (info) =>
+          isUnspecifiedManufacturer(info.getValue()) ? "—" : info.getValue(),
+      }),
+      helper.accessor((row) => row.quantity, {
+        id: "quantity",
+        header: "Quantity",
+        meta: {
+          className: "w-24",
+          numeric: true,
+          mobile: { slot: "meta", priority: 20, label: "Qty" },
+        },
+        cell: (info) => `×${info.getValue()}`,
+      }),
+      ...(showPrice
+        ? [
+            createCurrencyColumn(helper, "price", {
+              header: "Price",
+              className: "w-32",
+              mobile: { slot: "meta", priority: 30 },
+            }),
+          ]
+        : []),
+      createActionsColumn(helper, "product", { extraActions: action }),
+    ],
+    [action, helper, nameHeader, showPrice],
+  );
+  const table = useTable<typeof cubbyTableFeatures, ProductRow>({
+    features: cubbyTableFeatures,
+    data: rows,
+    columns,
+    getRowId: (row) => row.id,
+    initialState: TABLE_STATE,
   });
-  const subtitle = componentSubtitle(item);
-
   return (
-    <Row
-      align="center"
-      justify="between"
-      gap="md"
-      className="border border-[var(--border)] p-4"
-    >
-      <Stack gap="xs" className="min-w-0">
-        <Row align="center" gap="sm">
-          <EntityInlineLink
-            entity="product"
-            data={{
-              id: item.productId,
-              name: item.productName,
-              manufacturer: item.manufacturer,
-            }}
-            truncate
-          />
-          <Badge variant="outline">×{item.quantity}</Badge>
-        </Row>
-        {subtitle && <Description size="xs">{subtitle}</Description>}
-      </Stack>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label={`Remove ${item.productName}`}
-        disabled={detach.isPending}
-        onClick={() =>
-          detach.mutate({
-            parentProductId,
-            componentProductIds: [item.productId],
-          })
-        }
-      >
-        <Trash2 />
-      </Button>
-    </Row>
+    <RTable
+      table={table}
+      entity="product"
+      ariaLabel={ariaLabel}
+      sizingKey={sizingKey}
+      embedded
+      emptyState={emptyState}
+    />
   );
 }
 
-function MembershipRow({
-  productId,
-  item,
-}: {
-  productId: string;
-  item: KitMembershipOut;
-}) {
-  const api = useTRPC();
-  const detach = useActionMutation({
-    mutationFn: api.product.detachComponents.mutationOptions,
-    success: `Removed from ${item.parentProductName}`,
-    invalidateKeys: productComponentMutationInvalidateKeys,
-  });
-  const subtitle = membershipSubtitle(item);
-
-  return (
-    <Row
-      align="center"
-      justify="between"
-      gap="md"
-      className="border border-[var(--border)] p-4"
-    >
-      <Stack gap="xs" className="min-w-0">
-        <Row align="center" gap="sm">
-          <EntityInlineLink
-            entity="product"
-            data={{
-              id: item.parentProductId,
-              name: item.parentProductName,
-              manufacturer: item.manufacturer,
-            }}
-            truncate
-          />
-          <Badge variant="outline">×{item.quantity}</Badge>
-        </Row>
-        {subtitle && <Description size="xs">{subtitle}</Description>}
-      </Stack>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label={`Remove from ${item.parentProductName}`}
-        disabled={detach.isPending}
-        onClick={() =>
-          detach.mutate({
-            parentProductId: item.parentProductId,
-            componentProductIds: [productId],
-          })
-        }
-      >
-        <Trash2 />
-      </Button>
-    </Row>
-  );
-}
-
-/**
- * Add components to a kit — search for a Product and set how many of it the
- * kit contains. Mirrors `LinkProductsDialog` (purchases), plus a per-row
- * quantity: `ProductComponent` carries one, `PurchaseProduct` doesn't.
- */
 function AddComponentsDialog({
   open,
   onOpenChange,
@@ -188,6 +164,8 @@ function AddComponentsDialog({
   );
   const [searchInput, setSearchInput] = useState("");
   const [search] = useDebouncedValue(searchInput, { wait: 300 });
+  const lastSelectedIdRef = useRef<string | null>(null);
+  const shiftKeyRef = useRef(false);
 
   const searchQuery = useQuery({
     ...api.product.search.queryOptions({
@@ -197,19 +175,27 @@ function AddComponentsDialog({
     }),
     enabled: open,
   });
-
-  const results = (searchQuery.data?.items ?? []).filter(
-    (item) => !attachedIds.has(item.id) && item.id !== parentProductId,
+  const rows = useMemo(
+    () =>
+      (searchQuery.data?.items ?? [])
+        .filter(
+          (item) => !attachedIds.has(item.id) && item.id !== parentProductId,
+        )
+        .map((item) => ({
+          ...item,
+          images: imagesFor(item.id, item.name, item.coverImageUrl),
+        })),
+    [attachedIds, parentProductId, searchQuery.data?.items],
   );
 
   const resetAndClose = (next: boolean) => {
     if (!next) {
       setSelected(new Map());
       setSearchInput("");
+      lastSelectedIdRef.current = null;
     }
     onOpenChange(next);
   };
-
   const attach = useActionMutation({
     mutationFn: api.product.attachComponents.mutationOptions,
     success: (result) =>
@@ -218,23 +204,99 @@ function AddComponentsDialog({
     onSuccess: () => resetAndClose(false),
   });
 
-  const toggle = (id: ProductShortcode, checked: boolean) => {
-    setSelected((prev) => {
-      const next = new Map(prev);
-      if (checked) next.set(id, next.get(id) ?? 1);
-      else next.delete(id);
-      return next;
+  const rowSelection = useMemo<RowSelectionState>(
+    () => Object.fromEntries([...selected.keys()].map((id) => [id, true])),
+    [selected],
+  );
+  const onRowSelectionChange = (updater: Updater<RowSelectionState>) => {
+    const next =
+      typeof updater === "function" ? updater(rowSelection) : updater;
+    setSelected((previous) => {
+      const quantities = new Map(previous);
+      for (const id of Object.keys(rowSelection)) {
+        if (!next[id]) quantities.delete(id as ProductShortcode);
+      }
+      for (const id of Object.keys(next)) {
+        if (next[id]) {
+          const productId = id as ProductShortcode;
+          quantities.set(productId, quantities.get(productId) ?? 1);
+        }
+      }
+      return quantities;
     });
   };
 
-  const setQuantity = (id: ProductShortcode, quantity: number) => {
-    setSelected((prev) => {
-      if (!prev.has(id)) return prev;
-      const next = new Map(prev);
-      next.set(id, quantity);
-      return next;
-    });
-  };
+  const helper = useMemo(() => createCubbyColumnHelper<PickerRow>(), []);
+  const columns = useMemo<CubbyColumnDef<PickerRow>[]>(
+    () => [
+      buildSelectColumn<PickerRow>(lastSelectedIdRef, shiftKeyRef),
+      createImageColumn(helper, { entity: "product" }),
+      createNameColumn(helper, "product", "name", { header: "Product" }),
+      helper.accessor((row) => row.manufacturer, {
+        id: "manufacturer",
+        header: "Manufacturer",
+        meta: {
+          className: "w-40",
+          mobile: { slot: "subtitle", label: "Maker" },
+        },
+        cell: (info) =>
+          isUnspecifiedManufacturer(info.getValue()) ? "—" : info.getValue(),
+      }),
+      createCurrencyColumn(helper, "price", {
+        header: "Price",
+        className: "w-28",
+        mobile: { slot: "meta", priority: 20 },
+      }),
+      helper.accessor((row) => selected.get(row.id), {
+        id: "quantity",
+        header: "Quantity",
+        enableSorting: false,
+        meta: {
+          className: "w-24",
+          numeric: true,
+          mobile: {
+            slot: "meta",
+            priority: 30,
+            interactive: true,
+            label: "Qty",
+          },
+        },
+        cell: (info) => {
+          const quantity = selected.get(info.row.original.id);
+          return quantity === undefined ? null : (
+            <Input
+              type="number"
+              min={1}
+              max={9999}
+              value={quantity}
+              aria-label={`Quantity of ${info.row.original.name}`}
+              className="h-7 w-20"
+              onClick={(event) => event.stopPropagation()}
+              onChange={(event) => {
+                const next = Math.max(1, Number(event.target.value) || 1);
+                setSelected((previous) => {
+                  const quantities = new Map(previous);
+                  quantities.set(info.row.original.id, next);
+                  return quantities;
+                });
+              }}
+            />
+          );
+        },
+      }),
+    ],
+    [helper, selected],
+  );
+  const table = useTable<typeof cubbyTableFeatures, PickerRow>({
+    features: cubbyTableFeatures,
+    data: rows,
+    columns,
+    getRowId: (row) => row.id,
+    enableRowSelection: true,
+    state: { rowSelection },
+    onRowSelectionChange,
+    initialState: TABLE_STATE,
+  });
 
   return (
     <Dialog open={open} onOpenChange={resetAndClose}>
@@ -247,72 +309,29 @@ function AddComponentsDialog({
             attaching creates no money and moves no barcode.
           </DialogDescription>
         </DialogHeader>
-
         <Input
           value={searchInput}
           onChange={(event) => setSearchInput(event.target.value)}
           placeholder="Search products…"
         />
-
-        {searchQuery.isPending ? (
-          <Description>Loading products…</Description>
-        ) : results.length === 0 ? (
-          <Empty variant="minimal" className="py-6">
-            <EmptyTitle>No products found</EmptyTitle>
-            <EmptyDescription>
-              Adjust the search, or every match is already a component.
-            </EmptyDescription>
-          </Empty>
-        ) : (
-          <Stack gap="xs" className="max-h-96 overflow-y-auto">
-            {results.map((item) => {
-              const quantity = selected.get(item.id);
-              return (
-                <Row
-                  key={item.id}
-                  align="center"
-                  gap="sm"
-                  className="border border-[var(--border)] p-4"
-                >
-                  <Checkbox
-                    checked={quantity !== undefined}
-                    onCheckedChange={(checked) =>
-                      toggle(item.id, checked === true)
-                    }
-                  />
-                  <div className="min-w-0 flex-1">
-                    <EntityInlineLink
-                      entity="product"
-                      data={{
-                        id: item.id,
-                        name: item.name,
-                        manufacturer: item.manufacturer,
-                      }}
-                      truncate
-                    />
-                  </div>
-                  {quantity !== undefined && (
-                    <Input
-                      type="number"
-                      min={1}
-                      max={9999}
-                      value={quantity}
-                      aria-label={`Quantity of ${item.name}`}
-                      onChange={(event) =>
-                        setQuantity(
-                          item.id,
-                          Math.max(1, Number(event.target.value) || 1),
-                        )
-                      }
-                      className="w-20"
-                    />
-                  )}
-                </Row>
-              );
-            })}
-          </Stack>
-        )}
-
+        <div className="max-h-96 overflow-y-auto">
+          <RTable
+            table={table}
+            entity="product"
+            ariaLabel="Products available as kit components"
+            sizingKey="product:component-picker"
+            embedded
+            isLoading={searchQuery.isPending}
+            emptyState={
+              <Empty variant="minimal" className="py-6">
+                <EmptyTitle>No products found</EmptyTitle>
+                <EmptyDescription>
+                  Adjust the search, or every match is already a component.
+                </EmptyDescription>
+              </Empty>
+            }
+          />
+        </div>
         <DialogFooter>
           <Description size="xs" className="mr-auto">
             {selected.size} selected
@@ -332,9 +351,7 @@ function AddComponentsDialog({
               })
             }
           >
-            {attach.isPending
-              ? "Adding..."
-              : `Add ${selected.size || ""}`.trim()}
+            {attach.isPending ? "Adding..." : `Add ${selected.size}`}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -342,13 +359,6 @@ function AddComponentsDialog({
   );
 }
 
-/**
- * Kit composition, both directions: what this Product is made of (if it's a
- * kit or multi-pack), and every kit it's listed inside (if it's a part). See
- * `packages/schemas/src/product-components.ts` for what the edge means — the
- * kit keeps its own Expense and its own UPC/model/ASIN; this table records
- * composition only, never money or identity.
- */
 export function ProductKitComponents({ productId }: { productId: string }) {
   const api = useTRPC();
   const [addOpen, setAddOpen] = useState(false);
@@ -360,6 +370,77 @@ export function ProductKitComponents({ productId }: { productId: string }) {
   );
   const components = componentsQuery.data ?? EMPTY_COMPONENTS;
   const membership = membershipQuery.data ?? EMPTY_MEMBERSHIP;
+  const componentRows = useMemo<ProductRow[]>(
+    () =>
+      components.map((item) => ({
+        id: item.productId,
+        name: item.productName,
+        manufacturer: item.manufacturer,
+        quantity: item.quantity,
+        price: item.price,
+        images: imagesFor(item.productId, item.productName, item.coverImageUrl),
+      })),
+    [components],
+  );
+  const membershipRows = useMemo<ProductRow[]>(
+    () =>
+      membership.map((item) => ({
+        id: item.parentProductId,
+        name: item.parentProductName,
+        manufacturer: item.manufacturer,
+        quantity: item.quantity,
+        price: item.price,
+        images: imagesFor(
+          item.parentProductId,
+          item.parentProductName,
+          item.coverImageUrl,
+        ),
+      })),
+    [membership],
+  );
+
+  const detachComponent = useActionMutation({
+    mutationFn: api.product.detachComponents.mutationOptions,
+    success: "Component removed",
+    invalidateKeys: productComponentMutationInvalidateKeys,
+  });
+  const detachMembership = useActionMutation({
+    mutationFn: api.product.detachComponents.mutationOptions,
+    success: "Removed from kit",
+    invalidateKeys: productComponentMutationInvalidateKeys,
+  });
+  const componentAction = useMemo(
+    () => (row: ProductRow) => (
+      <VerbMenuItem
+        verb="removeComponent"
+        disabled={detachComponent.isPending}
+        onSelect={(event) => {
+          event.stopPropagation();
+          detachComponent.mutate({
+            parentProductId: productId,
+            componentProductIds: [row.id],
+          });
+        }}
+      />
+    ),
+    [detachComponent, productId],
+  );
+  const membershipAction = useMemo(
+    () => (row: ProductRow) => (
+      <VerbMenuItem
+        verb="removeFromKit"
+        disabled={detachMembership.isPending}
+        onSelect={(event) => {
+          event.stopPropagation();
+          detachMembership.mutate({
+            parentProductId: row.id,
+            componentProductIds: [productId],
+          });
+        }}
+      />
+    ),
+    [detachMembership, productId],
+  );
 
   if (componentsQuery.isPending || membershipQuery.isPending) {
     return <Description>Loading kit composition…</Description>;
@@ -378,27 +459,25 @@ export function ProductKitComponents({ productId }: { productId: string }) {
             Add component
           </Button>
         </Row>
-        {components.length === 0 ? (
-          <Empty variant="minimal" className="py-6">
-            <EmptyHeader>
-              <EmptyTitle>Not a kit</EmptyTitle>
-              <EmptyDescription>
-                Add the products this one contains — a 4-pack of one part is one
-                component at quantity 4.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <Stack gap="xs">
-            {components.map((item) => (
-              <ComponentRow
-                key={item.productId}
-                parentProductId={productId}
-                item={item}
-              />
-            ))}
-          </Stack>
-        )}
+        <KitTable
+          rows={componentRows}
+          ariaLabel="Kit components"
+          sizingKey="product:kit-components"
+          action={componentAction}
+          nameHeader="Product"
+          showPrice
+          emptyState={
+            <Empty variant="minimal" className="py-6">
+              <EmptyHeader>
+                <EmptyTitle>Not a kit</EmptyTitle>
+                <EmptyDescription>
+                  Add the products this one contains — a 4-pack of one part is
+                  one component at quantity 4.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          }
+        />
       </Stack>
 
       {membership.length > 0 && (
@@ -406,15 +485,15 @@ export function ProductKitComponents({ productId }: { productId: string }) {
           <Description size="xs">
             Kits this product is listed inside.
           </Description>
-          <Stack gap="xs">
-            {membership.map((item) => (
-              <MembershipRow
-                key={item.parentProductId}
-                productId={productId}
-                item={item}
-              />
-            ))}
-          </Stack>
+          <KitTable
+            rows={membershipRows}
+            ariaLabel="Kit memberships"
+            sizingKey="product:kit-memberships"
+            action={membershipAction}
+            nameHeader="Kit"
+            showPrice
+            emptyState={null}
+          />
         </Stack>
       )}
 

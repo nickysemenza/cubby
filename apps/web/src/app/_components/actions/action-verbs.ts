@@ -104,6 +104,9 @@ export const actionVerbs = {
 
   // — removal ————————————————————————————————————————————————————————
   delete: { label: "Delete", icon: Trash, tone: "destructive" },
+  removeComponent: { label: "Remove component", icon: X },
+  removeFromKit: { label: "Remove from kit", icon: X },
+  removeFromPurchase: { label: "Remove from purchase", icon: X },
   removeFromProject: { label: "Remove from project", icon: X },
 } as const satisfies Record<string, ActionVerb>;
 
