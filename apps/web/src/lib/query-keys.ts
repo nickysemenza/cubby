@@ -322,6 +322,15 @@ export const purchaseProductMutationInvalidateKeys = [
   queryKeys.relatedData.all,
 ] as const satisfies readonly QueryKey[];
 
+/** A ProductComponent edge is a Product→Product link, visible from both ends
+ * (a kit's own component list, and the transpose kit-membership list). It
+ * carries no money of its own — the kit keeps its own Expense — so there's no
+ * spend, inventory, or calendar state to invalidate, only both product reads. */
+export const productComponentMutationInvalidateKeys = [
+  queryKeys.product.all,
+  queryKeys.relatedData.all,
+] as const satisfies readonly QueryKey[];
+
 export const taskMutationInvalidateKeys = [
   queryKeys.task.all,
   queryKeys.project.all,

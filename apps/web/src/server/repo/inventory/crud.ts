@@ -132,6 +132,18 @@ export const syncInventoryValuationsForProduct = async (
     mappings,
   );
 
+  // Compared with `===` against a value read back from a `real` (float4)
+  // column, which looks fragile and isn't: Postgres emits floats as the
+  // SHORTEST text that round-trips to the same float4, so a stored 37.98 comes
+  // back as "37.98" and parses to the identical float64. Verified against this
+  // database, and it holds even at `extra_float_digits = -1` and at eight
+  // significant figures — well past the ~$12k ceiling of any real valuation.
+  //
+  // Where it would stop skipping: a magnitude large enough that float4 can no
+  // longer round-trip the cent (~8+ significant figures), where Postgres
+  // switches to scientific notation. The failure is benign — the row is
+  // rewritten with the number it already had — so this stays a plain compare
+  // rather than a cents-scaled one that would imply the equality is unsound.
   const updates = entries.flatMap((entry, index) => {
     const valuation = valuations[index] ?? null;
     return entry.valuation === valuation ? [] : [{ id: entry.id, valuation }];

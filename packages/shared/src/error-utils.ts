@@ -76,6 +76,13 @@ export const AppErrors = {
   PRODUCT_HAS_KIT_LINKS: "PRECONDITION_FAILED",
   // Caller tried to attach a product as a component of itself.
   PRODUCT_COMPONENT_SELF_REFERENCE: "BAD_REQUEST",
+  // Attach-side counterpart of PRODUCT_MERGE_COMPONENT_CYCLE: the DB CHECK only
+  // catches the one-hop self-reference, so a multi-hop cycle (A lists B, B
+  // lists A several hops down) is only visible by walking the WHOLE live
+  // ProductComponent edge set with the proposed new edges projected on top —
+  // see findMergeComponentCycle in repo/product/merge.ts, reused (not
+  // reimplemented) by attachProductComponents.
+  PRODUCT_COMPONENT_CYCLE: "BAD_REQUEST",
   INGREDIENT_HAS_PRODUCTS: "PRECONDITION_FAILED",
   INGREDIENT_HAS_RECIPES: "PRECONDITION_FAILED",
   INGREDIENT_MERGE_INVALID: "BAD_REQUEST",

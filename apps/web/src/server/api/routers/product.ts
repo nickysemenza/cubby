@@ -55,6 +55,16 @@ import {
   productWithFoodOut,
 } from "@cubby/schemas/product";
 import {
+  type AttachProductComponentsInput,
+  attachProductComponentsInput,
+  detachProductComponentsInput,
+  kitMembershipsInput,
+  kitMembershipsOut,
+  productComponentMutationOut,
+  productComponentsInput,
+  productComponentsOut,
+} from "@cubby/schemas/product-components";
+import {
   productProjectUsesInput,
   productProjectUsesOut,
   productProjectUsesSetInput,
@@ -86,6 +96,12 @@ import {
   productSearch,
   quickCreateProduct,
 } from "~/server/repo/product";
+import {
+  attachProductComponents,
+  detachProductComponents,
+  listKitMembership,
+  listProductComponents,
+} from "~/server/repo/product-components";
 import {
   listProductProjectUses,
   setProductProjectUses,
@@ -754,6 +770,84 @@ const purchases = protectedProcedure
     return listProductPurchases(ctx.db, id);
   });
 
+/** A kit's own component list — what it's made of. See `ProductComponent` in
+ * `packages/schemas/src/product-components.ts` for what the edge means. */
+const components = protectedProcedure
+  .input(productComponentsInput)
+  .output(strictOutput(productComponentsOut))
+  .query(async ({ ctx, input }) => {
+    const id = await resolveProductId(ctx.db, input.parentProductId);
+    return listProductComponents(ctx.db, id);
+  });
+
+/** The transpose of `components`: every kit this Product is listed inside. */
+const kitMembership = protectedProcedure
+  .input(kitMembershipsInput)
+  .output(strictOutput(kitMembershipsOut))
+  .query(async ({ ctx, input }) => {
+    const id = await resolveProductId(ctx.db, input.productId);
+    return listKitMembership(ctx.db, id);
+  });
+
+/**
+ * Resolve both the kit's shortcode and every component entry's shortcode in
+ * one batched pass, keeping each entry's quantity paired with its resolved id.
+ * `resolveProductIds` returns one id per input code, in the same order — the
+ * same guarantee `resolveAllOrThrow` documents at its own `!` — so zipping by
+ * index is sound, not a guess.
+ */
+async function resolveComponentEntries(
+  db: Parameters<typeof resolveOrThrow>[0],
+  input: AttachProductComponentsInput,
+) {
+  const [parentProductId, componentIds] = await Promise.all([
+    resolveProductId(db, input.parentProductId),
+    resolveProductIds(
+      db,
+      input.components.map((component) => component.productId),
+    ),
+  ]);
+  return {
+    parentProductId,
+    components: input.components.map((component, i) => ({
+      productId: componentIds[i]!,
+      quantity: component.quantity,
+    })),
+  };
+}
+
+const attachComponents = protectedProcedure
+  .input(attachProductComponentsInput)
+  .output(strictOutput(productComponentMutationOut))
+  .mutation(async ({ ctx, input }) => {
+    const { parentProductId, components } = await resolveComponentEntries(
+      ctx.db,
+      input,
+    );
+    return attachProductComponents(
+      ctx.db,
+      parentProductId,
+      components,
+      ctx.actorContext,
+    );
+  });
+
+const detachComponents = protectedProcedure
+  .input(detachProductComponentsInput)
+  .output(strictOutput(productComponentMutationOut))
+  .mutation(async ({ ctx, input }) => {
+    const [parentProductId, componentProductIds] = await Promise.all([
+      resolveProductId(ctx.db, input.parentProductId),
+      resolveProductIds(ctx.db, input.componentProductIds),
+    ]);
+    return detachProductComponents(
+      ctx.db,
+      parentProductId,
+      componentProductIds,
+      ctx.actorContext,
+    );
+  });
+
 /**
  * Replace the set of projects this tool was used on, from the tool's own page.
  * Returns only the count that moved — see `productProjectUsesSetOut` for why
@@ -879,6 +973,10 @@ export const productRouter = createTRPCRouter({
   verifyImages,
   projectUses,
   purchases,
+  components,
+  kitMembership,
+  attachComponents,
+  detachComponents,
   merge,
   setProjectUses,
 });

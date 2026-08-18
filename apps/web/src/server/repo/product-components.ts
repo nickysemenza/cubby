@@ -29,7 +29,7 @@ import type {
 } from "@cubby/schemas/product-components";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { uniq, uniqBy } from "es-toolkit";
-import type { Database, DrizzleClient } from "~/server/db";
+import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { product, productComponent } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
@@ -39,6 +39,13 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { getProductImagesByProductIds } from "~/server/repo/product";
+// `findMergeComponentCycle` is the SAME question `mergeProducts` already
+// answers — "does identifying/adding these edges make a product reach
+// itself" — reused here rather than reimplemented. Called with `loserIds: []`
+// it degrades from "would identifying these nodes create a cycle" to plain
+// "does keepId reach itself over this edge set", which is exactly the attach
+// question: no node identification happens on attach, only new edges.
+import { findMergeComponentCycle } from "~/server/repo/product/merge";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
 
 /** One entry to attach: which Product, and how many of it the kit contains. */
@@ -131,6 +138,37 @@ export async function listKitMembership(
   }));
 }
 
+/** Every LIVE `ProductComponent` edge, for the cycle guard — it needs the
+ * whole graph, not just the rows touching the attach's own parent, because a
+ * kit several hops above a proposed component can close a loop the touched
+ * edges alone would never reveal. */
+async function allLiveComponentEdges(
+  dbc: DrizzleClient | DrizzleTransaction,
+): Promise<{ parentProductId: ProductId; componentProductId: ProductId }[]> {
+  return dbc
+    .select({
+      parentProductId: productComponent.parentProductId,
+      componentProductId: productComponent.componentProductId,
+    })
+    .from(productComponent)
+    .where(notDeleted(productComponent));
+}
+
+/** Render an id path as shortcodes for an error message — a uuid must never
+ * reach a client. Mirrors the same-named helper in `repo/product/merge.ts`
+ * (not exported there, so duplicated rather than imported). */
+async function describeComponentPath(
+  dbc: DrizzleClient | DrizzleTransaction,
+  path: readonly ProductId[],
+): Promise<string> {
+  const rows = await dbc
+    .select({ id: product.id, shortcode: product.shortcode })
+    .from(product)
+    .where(inArray(product.id, uniq([...path])));
+  const byId = new Map(rows.map((row) => [row.id, row.shortcode]));
+  return path.map((id) => byId.get(id) ?? "?").join(" → ");
+}
+
 async function liveComponentShortcodes(
   dbc: DrizzleClient,
   parentProductId: ProductId,
@@ -186,6 +224,29 @@ export async function attachProductComponents(
       throw createAppError(
         "PRODUCT_NOT_FOUND",
         "Every component Product must exist and be live.",
+      );
+    }
+
+    // Multi-hop cycle guard: the one-hop self-reference is already refused
+    // above (and backstopped by the DB CHECK), but A→B→A several hops down is
+    // only visible by walking the WHOLE live edge set with the proposed new
+    // edges projected on top. See the `findMergeComponentCycle` import comment.
+    const liveEdges = await allLiveComponentEdges(tx);
+    const cycle = findMergeComponentCycle({
+      edges: [
+        ...liveEdges,
+        ...uniqueComponents.map(({ productId }) => ({
+          parentProductId,
+          componentProductId: productId,
+        })),
+      ],
+      keepId: parentProductId,
+      loserIds: [],
+    });
+    if (cycle) {
+      throw createAppError(
+        "PRODUCT_COMPONENT_CYCLE",
+        `Attaching would make a product contain itself (${await describeComponentPath(tx, cycle)}). Detach the conflicting link first.`,
       );
     }
 

@@ -12,6 +12,13 @@ import {
   productMcpListOut,
   productMcpOut,
 } from "@cubby/schemas/product";
+import {
+  attachProductComponentsInput,
+  detachProductComponentsInput,
+  productComponentMutationOut,
+  productComponentsInput,
+  productComponentsOut,
+} from "@cubby/schemas/product-components";
 import type { mcpUnitMappingInput } from "@cubby/schemas/unitmapping";
 import { upc } from "@cubby/usda-schemas";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -24,6 +31,7 @@ import {
   registerBatchTool,
   registerEntityCrudToolset,
   registerMcpTool,
+  registerRouterTool,
   rejectDuplicateIds,
   respond,
   slimProduct,
@@ -218,5 +226,35 @@ export function registerProductTools(server: McpServer) {
       });
       return respond(product, slimProduct);
     },
+  });
+
+  registerRouterTool(server, {
+    name: "list_product_components",
+    description:
+      "List what's inside one kit or multi-pack Product — the ProductComponent edge. A kit Product (a combo tool kit, a multi-pack, a bundle) is a Product like any other, with its OWN UPC, model, ASIN, image, and purchase history; this is the only place that records what it's MADE OF. One row per distinct component: a 4-pack of one part is a single row at quantity 4, a 9-piece kit is nine separate rows. The kit keeps its OWN Expense — it is never split into per-component expenses. Instead each row's `price` is the component PRODUCT's effective price, which ALREADY BLENDS its own purchase history with its quantity-weighted share of every kit it belongs to (that share being the kit's cost × this quantity ÷ the kit's total component units, derived at read time). So do NOT compute a share yourself on top of this number — it is already in there, and doing so double-counts. A part that was only ever bought inside a kit still returns a real price here, from the kit. An explicit price set on the component product overrides the blend entirely. For the reverse question — every kit a Product is listed inside — read that Product's own detail page; the transpose has no separate MCP tool.",
+    inputSchema: productComponentsInput.shape,
+    outputSchema: productComponentsOut,
+    annotations: READ_ONLY_CLOSED,
+    call: (caller, params) => caller.product.components(params),
+  });
+
+  registerRouterTool(server, {
+    name: "attach_product_components",
+    description:
+      "Record that one or more existing Products are inside a kit or multi-pack Product — the ProductComponent edge. `parentProductId` is the kit; each entry in `components` names one component Product and how many of it the kit contains (a 4-pack of one part is one entry at quantity 4, a 9-piece kit is nine entries). This creates no money and splits nothing: the kit keeps its own Expense and its own price, exactly as before attaching — use split_expense instead if the goal is a real per-component cost basis, not a composition record. A barcode/model identifies the PACKAGE: the kit keeps its OWN UPC/model/ASIN, and a component's identifiers stay its own — never copy the kit's barcode onto a component or a component's onto the kit just because they ship together. REFUSES a self-referencing entry (a Product cannot be its own component) and REFUSES any component that does not exist or is not live. Quantity is set at attach time; to change it, detach and reattach — there is no in-place update. Repeating an already-live pair is idempotent and reports nothing changed.",
+    inputSchema: attachProductComponentsInput.shape,
+    outputSchema: productComponentMutationOut,
+    annotations: WRITE_CLOSED,
+    call: (caller, params) => caller.product.attachComponents(params),
+  });
+
+  registerRouterTool(server, {
+    name: "detach_product_components",
+    description:
+      "Soft-delete one or more component links from one kit Product. This only removes the composition record — the kit's Expense was never split across its components, so detaching touches no money, no inventory, and no price. Idempotent: detaching a link that is already gone reports nothing changed rather than erroring.",
+    inputSchema: detachProductComponentsInput.shape,
+    outputSchema: productComponentMutationOut,
+    annotations: WRITE_DESTRUCTIVE_CLOSED,
+    call: (caller, params) => caller.product.detachComponents(params),
   });
 }

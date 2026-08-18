@@ -207,6 +207,92 @@ describe("product ⟷ product component links (kit composition)", () => {
     });
   });
 
+  describe("multi-hop cycle guard — the DB CHECK only catches one hop", () => {
+    it("refuses a two-step attach that closes a cycle several hops down", async () => {
+      const a = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Cycle A" }),
+        ctx.actor,
+      );
+      const b = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Cycle B" }),
+        ctx.actor,
+      );
+      const c = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Cycle C" }),
+        ctx.actor,
+      );
+
+      // A lists B, B lists C — individually acyclic, two hops deep.
+      await attachProductComponents(
+        ctx.db,
+        a.entityId,
+        [{ productId: b.entityId, quantity: 1 }],
+        ctx.actor,
+      );
+      await attachProductComponents(
+        ctx.db,
+        b.entityId,
+        [{ productId: c.entityId, quantity: 1 }],
+        ctx.actor,
+      );
+
+      // Closing the loop — C lists A — makes A reach itself three hops later.
+      // Neither the one-hop self-reference check nor the DB CHECK sees this;
+      // only walking the whole live edge set does.
+      await expect(
+        attachProductComponents(
+          ctx.db,
+          c.entityId,
+          [{ productId: a.entityId, quantity: 1 }],
+          ctx.actor,
+        ),
+      ).rejects.toMatchObject({
+        cause: { reason: "PRODUCT_COMPONENT_CYCLE" },
+      });
+
+      // The refused attach wrote nothing.
+      expect(await livePairs(c.entityId)).toHaveLength(0);
+    });
+
+    it("allows a legitimate deep chain — a kit inside a kit inside a kit", async () => {
+      const outer = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Outer Kit" }),
+        ctx.actor,
+      );
+      const middle = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Middle Kit" }),
+        ctx.actor,
+      );
+      const inner = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Inner Part" }),
+        ctx.actor,
+      );
+
+      await attachProductComponents(
+        ctx.db,
+        outer.entityId,
+        [{ productId: middle.entityId, quantity: 1 }],
+        ctx.actor,
+      );
+      const result = await attachProductComponents(
+        ctx.db,
+        middle.entityId,
+        [{ productId: inner.entityId, quantity: 3 }],
+        ctx.actor,
+      );
+
+      expect(result).toEqual({ changed: 1, attached: 1 });
+      const components = await listProductComponents(ctx.db, middle.entityId);
+      expect(components[0]?.quantity).toBe(3);
+    });
+  });
+
   describe("delete disposition — the two edges are asymmetric on purpose", () => {
     it("blocks deleting a product still listed inside a live kit, and allows it once detached", async () => {
       const kit = await createProduct(
