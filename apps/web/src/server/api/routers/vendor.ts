@@ -127,7 +127,7 @@ const fetchLogo = protectedProcedure
     );
     await runMutationSideEffects(ctx.db, {
       action: "updated",
-      entity: { entityType: "vendor", entityId: unsafeVendorId(entityId) },
+      entity: { entityType: "vendor", entityId },
       source: "vendor.fetchLogo",
     });
     return output;

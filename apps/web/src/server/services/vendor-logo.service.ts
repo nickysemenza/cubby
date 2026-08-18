@@ -1,5 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { VendorShortcode } from "@cubby/schemas/identifiers";
+import type { VendorId, VendorShortcode } from "@cubby/schemas/identifiers";
 import {
   ALLOWED_IMAGE_TYPES,
   MAX_IMAGE_UPLOAD_BYTES,
@@ -130,7 +130,7 @@ export async function fetchAndAttachVendorLogo(
   db: Database,
   id: VendorShortcode,
   actor: ActorContext,
-): Promise<{ output: VendorOut; entityId: string }> {
+): Promise<{ output: VendorOut; entityId: VendorId }> {
   const current = await getVendorByShortcode(db, id);
   if (!current) {
     throw createAppError("VENDOR_NOT_FOUND", `Vendor not found: ${id}`);
