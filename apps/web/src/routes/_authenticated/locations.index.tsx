@@ -1,3 +1,4 @@
+import { locationTypeValues } from "@cubby/shared";
 import {
   createFileRoute,
   stripSearchParams,
@@ -23,10 +24,7 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { getEntityFilters } from "~/entities/filter-manifest";
-import {
-  entityFilterSearchFields,
-  routeFilterValues,
-} from "~/entities/filter-search-fields";
+import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
 import { urlEnumListParam, urlShortcodeListParam } from "~/lib/search-params";
 
@@ -43,9 +41,9 @@ export const locationSearchSchema = z.object({
   view: z.enum(viewOptions).optional().catch(undefined),
   ...tableSearchFields,
   ...entityFilterSearchFields("location"),
-  type: urlEnumListParam(z.enum(routeFilterValues.locationType)),
-  product: urlShortcodeListParam("PRD"),
-  parent: urlShortcodeListParam("LOC"),
+  type: urlEnumListParam(z.enum(locationTypeValues)),
+  product: urlShortcodeListParam("product"),
+  parent: urlShortcodeListParam("location"),
 });
 
 const searchDefaults = { view: undefined } as const;

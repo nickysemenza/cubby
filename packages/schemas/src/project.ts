@@ -30,6 +30,8 @@ import {
 } from "./identifiers";
 import {
   createPaginatedResponseSchema,
+  entityFilter,
+  entityFilterList,
   oneOrMany,
   presenceFilter,
   relativeDateFilter,
@@ -373,7 +375,7 @@ export const projectFilterFields = {
   /** Exclude sub-projects (rows with a non-null `parentProjectId`) from the list. */
   topLevelOnly: z.boolean().optional(),
   /** Only these parents' live sub-projects. */
-  parentProjectId: oneOrMany(projectShortcode).optional(),
+  parentProjectId: entityFilterList(projectShortcode).optional(),
   // Only meaningful alongside `parentProjectId`: expands the filter to the
   // whole live subtree under that parent, not just direct children.
   includeSubProjects: z.boolean().optional(),
@@ -615,14 +617,14 @@ export const taskFilterFields = {
   ...auditDateFilterFields,
   ...taskRelatedFilterFields,
   status: oneOrMany(taskStatusSchema).optional(),
-  projectId: oneOrMany(projectShortcode).optional(),
-  subjectProductId: oneOrMany(productShortcode).optional(),
+  projectId: entityFilterList(projectShortcode).optional(),
+  subjectProductId: entityFilterList(productShortcode).optional(),
   trade: oneOrMany(tradeSchema).optional(),
   search: z.string().optional(),
   /** Exclude subtasks (rows with a non-null `parentTaskId`) from the list. */
   topLevelOnly: z.boolean().optional(),
   /** Only these parents' live subtasks. */
-  parentTaskId: oneOrMany(taskShortcode).optional(),
+  parentTaskId: entityFilterList(taskShortcode).optional(),
   parentTaskPresenceFilter: presenceFilter,
   /**
    * When combined with `projectId`, also match tasks in that project's live
@@ -963,7 +965,7 @@ export const expenseFilterFields = {
   lineKind: oneOrMany(expenseLineKindSchema).optional(),
   lineBasis: oneOrMany(expenseLineBasisSchema).optional(),
   trade: oneOrMany(tradeSchema).optional(),
-  projectId: oneOrMany(projectShortcode).optional(),
+  projectId: entityFilterList(projectShortcode).optional(),
   // Only meaningful alongside `projectId`: expands the filter to the project
   // plus every live descendant (sub-project subtree).
   includeSubProjects: z.boolean().optional(),
@@ -973,7 +975,7 @@ export const expenseFilterFields = {
    * OR-with-`projectId` semantics documented there.
    */
   projectPresenceFilter: presenceFilter,
-  productId: productShortcode.optional(),
+  productId: entityFilter(productShortcode).optional(),
   productPresenceFilter: presenceFilter,
   /**
    * Vendor **ids**, resolved through `expense.purchaseId → Purchase.vendorId`.
@@ -988,7 +990,7 @@ export const expenseFilterFields = {
    * `search` term would mean `name ILIKE q AND vendor matches q` — and most rows
    * have no vendor, which would silently zero out expense search.
    */
-  vendorId: oneOrMany(vendorShortcode).optional(),
+  vendorId: entityFilterList(vendorShortcode).optional(),
   /**
    * `"none"` matches expenses with no purchase attached — the
    * where-did-this-come-from worklist. Since `purchase.vendorId` is NOT NULL,
@@ -1134,7 +1136,7 @@ export const expenseFilterFields = {
    * No dedicated presence field: `vendorPresenceFilter` already means
    * `purchaseId IS NULL`, since `purchase.vendorId` is NOT NULL (see above).
    */
-  purchaseId: oneOrMany(purchaseShortcode).optional(),
+  purchaseId: entityFilterList(purchaseShortcode).optional(),
   projectScope: embeddedProjectScopeSchema.optional(),
 };
 export const expenseFiltersSchema = z.object(expenseFilterFields);

@@ -20,10 +20,7 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { getEntityFilters } from "~/entities/filter-manifest";
-import {
-  entityFilterSearchFields,
-  routeFilterValues,
-} from "~/entities/filter-search-fields";
+import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import {
   buildFiltersFromManifest,
   filterGetterFromSearch,
@@ -57,10 +54,9 @@ const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
   { value: "list", label: "List" },
 ];
 
-const taskStatusParam = urlStringParam.refine(
-  isValidTaskStatusFilter,
-  "Invalid task status filter",
-);
+const taskStatusParam = urlStringParam
+  .refine(isValidTaskStatusFilter, "Invalid task status filter")
+  .catch(undefined);
 
 export const taskSearchSchema = z
   .object({
@@ -68,13 +64,13 @@ export const taskSearchSchema = z
     ...entityFilterSearchFields("task"),
     q: urlStringParam,
     status: taskStatusParam,
-    trade: urlEnumListParam(z.enum(routeFilterValues.trade)),
-    project: urlShortcodeListParam("PRJ"),
-    parentTask: urlShortcodeListParam("TSK"),
+    trade: urlEnumListParam(tradeSchema),
+    project: urlShortcodeListParam("project"),
+    parentTask: urlShortcodeListParam("task"),
     // Declared by name as well as through the manifest so typed links can set an
     // exact product scope and the visible "For" presence filter.
-    productId: urlShortcodeListParam("PRD"),
-    subjectProduct: urlShortcodeListParam("PRD"),
+    productId: urlShortcodeListParam("product"),
+    subjectProduct: urlShortcodeListParam("product"),
     view: urlStringParam,
     // Board layout: column axis + swimlane axis. `lane` is normalized to only
     // apply when `cols === "status"` inside TasksBoardView.
@@ -175,3 +171,5 @@ function TasksPage() {
     </Page>
   );
 }
+
+import { tradeSchema } from "@cubby/schemas/project";

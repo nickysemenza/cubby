@@ -22,7 +22,7 @@ export const purchaseSearchSchema = z.object({
   ...entityFilterSearchFields("purchase"),
   q: urlStringParam,
   label: urlStringParam,
-  vendor: urlShortcodeListParam("VEN"),
+  vendor: urlShortcodeListParam("vendor"),
   orderId: urlStringParam,
   date: urlStringParam,
   statedTotal: urlStringParam,

@@ -19,6 +19,7 @@ import { imageOut } from "./image";
 import {
   createItemsResponseSchema,
   createPaginatedResponseSchema,
+  entityFilterList,
   oneOrMany,
   presenceFilter,
 } from "./pagination";
@@ -281,7 +282,7 @@ export const recipeFilterFields = {
   ...recipeRelatedFilterFields,
   nameFilter: z.string().optional(),
   tagFilters: z.array(z.string()).optional(),
-  cookbookId: oneOrMany(cookbookShortcode).optional(),
+  cookbookId: entityFilterList(cookbookShortcode).optional(),
   /**
    * `"none"` matches recipes with no cookbook; `"has"` matches those with
    * any cookbook. Combined with `cookbookId` it **widens** rather than

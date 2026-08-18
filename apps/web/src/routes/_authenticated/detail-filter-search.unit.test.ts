@@ -1,3 +1,4 @@
+import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { describe, expect, it } from "vitest";
 import { mealCalendarSearchSchema } from "~/app/meals/meal-search";
 import { expenseSearchSchema } from "./expenses.index";
@@ -48,8 +49,8 @@ describe("detail filter link route contracts", () => {
 
     expect(
       inventorySearchSchema.parse({
-        productId: "PRD-4K7M",
-        locationId: "LOC-2ABC",
+        productId: "prd-4k7m",
+        locationId: " loc-2abc ",
       }),
     ).toMatchObject({
       productId: "PRD-4K7M",
@@ -174,50 +175,82 @@ describe("detail filter link route contracts", () => {
     });
   });
 
-  it("rejects malformed enum, multi-value, and exact-inventory state", () => {
-    expect(taskSearchSchema.safeParse({ status: "almost_done" }).success).toBe(
-      false,
-    );
+  it("keeps malformed filters safe without widening exact entity scopes", () => {
     expect(
       projectSearchSchema.safeParse({ statuses: "planning,almost_done" })
         .success,
     ).toBe(false);
-    expect(
-      inventorySearchSchema.safeParse({ productId: "Milwaukee drill" }).success,
-    ).toBe(false);
-    expect(
-      inventorySearchSchema.safeParse({ locationId: "LOC-0OIL" }).success,
-    ).toBe(false);
 
     const malformedKnownValues = [
-      [productSearchSchema, { category: "not_a_category" }],
-      [productSearchSchema, { ingredient: "ingredient name" }],
-      [locationSearchSchema, { type: "planet" }],
-      [locationSearchSchema, { parent: "Kitchen" }],
-      [projectSearchSchema, { parent: "Project name" }],
-      [taskSearchSchema, { trade: "magic" }],
-      [taskSearchSchema, { project: "Project name" }],
-      [expenseSearchSchema, { lineKind: "subtotal" }],
-      [expenseSearchSchema, { costType: "unknown" }],
-      [expenseSearchSchema, { lineBasis: "guess" }],
-      [expenseSearchSchema, { future: "maybe" }],
-      [purchaseSearchSchema, { vendor: "Vendor name" }],
-      [financialAccountSearchSchema, { identity: "mortgage" }],
-      [financialAccountSearchSchema, { provisional: "maybe" }],
-      [financialTransactionSearchSchema, { kind: "withdrawal" }],
-      [financialTransactionSearchSchema, { status: "settled" }],
-      [financialTransactionSearchSchema, { accountId: "Visa" }],
-      [mealCalendarSearchSchema, { mealType: "supper" }],
-      [mealCalendarSearchSchema, { mealKind: "delivery" }],
-      [recipeListSearchSchema, { sourceType: "Magazine" }],
-      [recipeListSearchSchema, { source: "Joy of Cooking" }],
-      [imageListSearchSchema, { status: "PROCESSING" }],
+      [taskSearchSchema, { status: "almost_done" }, undefined],
+      [productSearchSchema, { category: "not_a_category" }, undefined],
+      [
+        productSearchSchema,
+        { ingredient: "ingredient name" },
+        UNRESOLVABLE_ENTITY_FILTER,
+      ],
+      [locationSearchSchema, { type: "planet" }, undefined],
+      [locationSearchSchema, { parent: "Kitchen" }, UNRESOLVABLE_ENTITY_FILTER],
+      [
+        projectSearchSchema,
+        { parent: "Project name" },
+        UNRESOLVABLE_ENTITY_FILTER,
+      ],
+      [taskSearchSchema, { trade: "magic" }, undefined],
+      [
+        taskSearchSchema,
+        { project: "Project name" },
+        UNRESOLVABLE_ENTITY_FILTER,
+      ],
+      [expenseSearchSchema, { lineKind: "subtotal" }, undefined],
+      [expenseSearchSchema, { costType: "unknown" }, undefined],
+      [expenseSearchSchema, { lineBasis: "guess" }, undefined],
+      [expenseSearchSchema, { future: "maybe" }, undefined],
+      [
+        purchaseSearchSchema,
+        { vendor: "Vendor name" },
+        UNRESOLVABLE_ENTITY_FILTER,
+      ],
+      [financialAccountSearchSchema, { identity: "mortgage" }, undefined],
+      [financialAccountSearchSchema, { provisional: "maybe" }, undefined],
+      [financialTransactionSearchSchema, { kind: "withdrawal" }, undefined],
+      [financialTransactionSearchSchema, { status: "settled" }, undefined],
+      [
+        financialTransactionSearchSchema,
+        { accountId: "Visa" },
+        UNRESOLVABLE_ENTITY_FILTER,
+      ],
+      [mealCalendarSearchSchema, { mealType: "supper" }, undefined],
+      [mealCalendarSearchSchema, { mealKind: "delivery" }, undefined],
+      [recipeListSearchSchema, { sourceType: "Magazine" }, undefined],
+      [
+        recipeListSearchSchema,
+        { source: "Joy of Cooking" },
+        UNRESOLVABLE_ENTITY_FILTER,
+      ],
+      [imageListSearchSchema, { status: "PROCESSING" }, undefined],
+      [
+        inventorySearchSchema,
+        { productId: "Milwaukee drill" },
+        UNRESOLVABLE_ENTITY_FILTER,
+      ],
+      [
+        inventorySearchSchema,
+        { locationId: "LOC-0OIL" },
+        UNRESOLVABLE_ENTITY_FILTER,
+      ],
     ] as const;
 
-    for (const [schema, search] of malformedKnownValues) {
-      expect(schema.safeParse(search).success, JSON.stringify(search)).toBe(
-        false,
-      );
+    for (const [schema, search, expected] of malformedKnownValues) {
+      const result = schema.safeParse(search);
+      expect(result.success, JSON.stringify(search)).toBe(true);
+      if (!result.success) continue;
+      const parsedSearch = result.data as Record<string, unknown>;
+      for (const key of Object.keys(search)) {
+        expect(parsedSearch[key], `${JSON.stringify(search)}: ${key}`).toBe(
+          expected,
+        );
+      }
     }
   });
 });

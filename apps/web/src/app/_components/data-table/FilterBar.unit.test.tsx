@@ -1,3 +1,4 @@
+import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { FilterBar } from "./FilterBar";
@@ -126,5 +127,23 @@ describe("FilterBar", () => {
         values: [],
       },
     ]);
+  });
+
+  it("surfaces an invalid entity link filter instead of rendering a blank value", () => {
+    renderBar([
+      {
+        id: "filter-status",
+        field: "status",
+        operator: "is",
+        values: [UNRESOLVABLE_ENTITY_FILTER],
+      },
+    ]);
+
+    expect(screen.getByRole("combobox", { name: "Filter Status" })).toHaveValue(
+      "Invalid link filter",
+    );
+    expect(
+      screen.getByRole("button", { name: "Remove Status filter" }),
+    ).toBeVisible();
   });
 });

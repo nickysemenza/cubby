@@ -1,4 +1,5 @@
 import { plainDate } from "@cubby/schemas/project";
+import { productCategoryValues } from "@cubby/shared";
 import {
   createFileRoute,
   Link,
@@ -11,10 +12,7 @@ import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { ProductList, type ProductListView } from "~/app/products/productlist";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
-import {
-  entityFilterSearchFields,
-  routeFilterValues,
-} from "~/entities/filter-search-fields";
+import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
 import {
   urlEnumListParam,
@@ -31,7 +29,7 @@ export const productSearchSchema = z.object({
   movementOrder: z.enum(["asc", "desc"]).optional().catch(undefined),
   ...tableSearchFields,
   ...entityFilterSearchFields("product"),
-  category: urlEnumListParam(z.enum(routeFilterValues.productCategory)),
+  category: urlEnumListParam(z.enum(productCategoryValues)),
   // `entityFilterSearchFields` returns a `Record<string, …>`, so its keys are
   // not statically known to `<Link search={…}>`. Re-declaring the keys we
   // navigate to programmatically (the "Fits With" tag chips; the Problems
@@ -42,7 +40,7 @@ export const productSearchSchema = z.object({
   tags: urlStringParam,
   manufacturer: urlStringParam,
   model: urlStringParam,
-  ingredient: urlShortcodeListParam("ING"),
+  ingredient: urlShortcodeListParam("ingredient"),
 });
 
 const searchDefaults = {

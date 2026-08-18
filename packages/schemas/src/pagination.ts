@@ -1,3 +1,4 @@
+import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { z } from "zod";
 
 export const MAX_PAGE_SIZE = 500;
@@ -97,6 +98,40 @@ export type RelativeDateFilter = z.infer<typeof relativeDateFilter>;
  */
 export const oneOrMany = <T extends z.ZodTypeAny>(schema: T) =>
   z.union([schema, z.array(schema)]);
+
+/**
+ * A route asked for an exact entity filter, but its value was not a valid
+ * shortcode. This value is deliberately NOT a shortcode: the route boundary
+ * produces it, then `resolveFilterIds` resolves it to an empty id set so the
+ * request matches nothing. Ordinary entity-id inputs keep the canonical
+ * shortcode schema, inferred brand, and published regex.
+ *
+ * Keeping this distinct from omission is load-bearing. Omitted filters are
+ * unrestricted; a requested but invalid filter must never widen into one.
+ */
+/**
+ * A single exact-entity filter that accepts only the internal match-nothing
+ * value in addition to its canonical shortcode schema.
+ *
+ * The union's JSON metadata is DERIVED from the canonical schema. Publishing
+ * its pattern at the field level keeps MCP clients on the public shortcode
+ * contract: the internal value can round-trip through tRPC, but it is not
+ * advertised as a valid external id. The return type likewise stays the
+ * canonical branded type because application code must never mint the
+ * internal value as an entity id; only the URL filter boundary produces it.
+ */
+export const entityFilter = <T extends z.ZodTypeAny>(schema: T): T => {
+  const jsonSchema = z.toJSONSchema(schema);
+  return z.union([schema, z.literal(UNRESOLVABLE_ENTITY_FILTER)]).meta({
+    type: jsonSchema.type,
+    pattern: jsonSchema.pattern,
+    description: jsonSchema.description,
+  }) as unknown as T;
+};
+
+/** One-or-many exact-entity filters with the same internal value. */
+export const entityFilterList = <T extends z.ZodTypeAny>(schema: T) =>
+  oneOrMany(entityFilter(schema));
 
 const paginationParams = z.object({
   pageIndex: z.number().int().min(0).default(0),

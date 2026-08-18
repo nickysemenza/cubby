@@ -1,5 +1,6 @@
 import type { TaskShortcode } from "@cubby/schemas/identifiers";
 import type { TaskOut } from "@cubby/schemas/project";
+import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -214,9 +215,10 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
   const tasksSearch = tasksRoute.useSearch();
   const tasksNavigate = tasksRoute.useNavigate();
   const scopedProductId = tasksSearch.productId;
+  const hasInvalidProductScope = scopedProductId === UNRESOLVABLE_ENTITY_FILTER;
   const scopedProductQuery = useQuery({
     ...api.product.getByID.queryOptions({ id: scopedProductId ?? "" }),
-    enabled: Boolean(scopedProductId),
+    enabled: Boolean(scopedProductId) && !hasInvalidProductScope,
   });
   const clearProductScope = useCallback(() => {
     void tasksNavigate({
@@ -225,11 +227,11 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
     });
   }, [tasksNavigate]);
   const toolbarActions =
-    scopedProductId && scopedProductQuery.data ? (
+    scopedProductId && (hasInvalidProductScope || scopedProductQuery.data) ? (
       <Row gap="sm" align="center">
         <ScopeChip
           name="Product"
-          value={scopedProductQuery.data.name}
+          value={scopedProductQuery.data?.name ?? scopedProductId}
           onClear={clearProductScope}
         />
         {actions}
