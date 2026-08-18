@@ -129,6 +129,7 @@ const membershipEntry: KitMembershipOut = {
   parentProductName: "18V Combo Kit",
   manufacturer: "Milwaukee",
   quantity: 2,
+  coverImageUrl: null,
   attachedAt: new Date("2026-01-01"),
   price: 249,
   expenseCount: 1,

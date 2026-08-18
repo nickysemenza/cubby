@@ -798,6 +798,7 @@ export const productPickerItemOut = z.object({
   name: z.string(),
   manufacturer: z.string(),
   category: productCategory.nullable(),
+  price: z.number().nonnegative().nullable(),
   coverImageUrl: z.string().nullable(),
   quantityLedger: productQuantityLedgerOut,
   onHand: z.discriminatedUnion("state", [

@@ -9,6 +9,13 @@ const NO_PROJECT_OPTIONS: Array<{
   icon: ReturnType<typeof createElement>;
 }> = [];
 const NO_PROJECT_ICONS = new Map<string, string | null>();
+const NO_PROJECT_ROWS: Array<{
+  id: string;
+  name: string;
+  icon: string | null;
+  effectiveStart: string | null;
+  effectiveEnd: string | null;
+}> = [];
 
 /**
  * Full project list as icon-bearing `{value,label}` options, name-sorted — feeds the
@@ -39,5 +46,5 @@ export function useProjectOptions() {
     [data],
   );
 
-  return { options, iconById, isLoading };
+  return { options, iconById, rows: data ?? NO_PROJECT_ROWS, isLoading };
 }

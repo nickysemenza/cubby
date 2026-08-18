@@ -94,6 +94,7 @@ export const kitMembershipOut = z.object({
   parentProductName: z.string(),
   manufacturer: z.string(),
   quantity: componentQuantity,
+  coverImageUrl: z.url().nullable(),
   attachedAt: z.date(),
   price: z
     .number()

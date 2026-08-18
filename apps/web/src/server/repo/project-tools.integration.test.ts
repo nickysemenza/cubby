@@ -26,6 +26,7 @@ import {
   suggestProjectTools,
 } from "./project/tools";
 import {
+  createImageFixture,
   createInventoryFixture as createInventoryEntry,
   createLocationFixture as createLocation,
   createProductFixture as createProduct,
@@ -55,6 +56,13 @@ describe("project reusable resources", () => {
         name: "Track saw",
         category: "tools",
       }),
+      ctx.actor,
+    );
+    const toolCover = await createImageFixture(ctx.db, "track-saw-cover");
+    await updateProduct(
+      ctx.db,
+      tool.entityId,
+      { pendingImageIds: [toolCover.id] },
       ctx.actor,
     );
 
@@ -92,6 +100,7 @@ describe("project reusable resources", () => {
     await expect(listProjectResources(ctx.db, kitchenId)).resolves.toEqual([
       expect.objectContaining({
         productId: tool.id,
+        coverImageUrl: toolCover.url,
         category: "tools",
         projectPurchaseCost: 300,
         sharedWindow: null,
@@ -174,7 +183,7 @@ describe("project reusable resources", () => {
     );
 
     await expect(listProjectResources(ctx.db, projectId)).resolves.toEqual([
-      expect.objectContaining({ productId: software.id }),
+      expect.objectContaining({ productId: software.id, coverImageUrl: null }),
     ]);
   });
 
@@ -443,6 +452,23 @@ describe("project reusable resources", () => {
       }),
       ctx.actor,
     );
+    const purchasedCover = await createImageFixture(
+      ctx.db,
+      "circuit-tracer-cover",
+    );
+    const reusedCover = await createImageFixture(ctx.db, "wire-stripper-cover");
+    await updateProduct(
+      ctx.db,
+      purchasedHere.entityId,
+      { pendingImageIds: [purchasedCover.id] },
+      ctx.actor,
+    );
+    await updateProduct(
+      ctx.db,
+      reusedTradeTool.entityId,
+      { pendingImageIds: [reusedCover.id] },
+      ctx.actor,
+    );
     const oneUseCheapTool = await createProduct(
       ctx.db,
       makeProductInput({
@@ -544,11 +570,13 @@ describe("project reusable resources", () => {
       expect.arrayContaining([
         expect.objectContaining({
           productId: purchasedHere.id,
+          coverImageUrl: purchasedCover.url,
           lane: "purchased_here",
           projectPurchaseCost: 160,
         }),
         expect.objectContaining({
           productId: reusedTradeTool.id,
+          coverImageUrl: reusedCover.url,
           lane: "trade_match",
           matchedTrade: "electrical",
           projectUseCount: 2,

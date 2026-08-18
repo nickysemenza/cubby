@@ -136,6 +136,7 @@ const dbProductToPickerItemShape = (
     "id" | "shortcode" | "name" | "manufacturer" | "category"
   > & {
     coverImageUrl: ProductPickerItemOut["coverImageUrl"];
+    price: ProductPickerItemOut["price"];
     quantityLedger: ProductPickerItemOut["quantityLedger"];
     onHand: ProductPickerItemOut["onHand"];
   },
@@ -144,6 +145,7 @@ const dbProductToPickerItemShape = (
   name: productData.name,
   manufacturer: productData.manufacturer,
   category: productData.category,
+  price: productData.price,
   coverImageUrl: productData.coverImageUrl,
   quantityLedger: productData.quantityLedger,
   onHand: productData.onHand,
@@ -155,6 +157,7 @@ export const dbProductToPickerItemAPI = (
     "id" | "shortcode" | "name" | "manufacturer" | "category"
   > & {
     coverImageUrl: ProductPickerItemOut["coverImageUrl"];
+    price: ProductPickerItemOut["price"];
     quantityLedger: ProductPickerItemOut["quantityLedger"];
     onHand: ProductPickerItemOut["onHand"];
   },

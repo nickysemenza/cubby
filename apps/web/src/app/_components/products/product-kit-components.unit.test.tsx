@@ -3,6 +3,7 @@ import type {
   KitMembershipOut,
   ProductComponentOut,
 } from "@cubby/schemas/product-components";
+import { flexRender } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -35,6 +36,49 @@ vi.mock("~/integrations/trpc/react", () => ({
     },
   }),
 }));
+// Keep the table shell lightweight while exercising the real column
+// definitions and TanStack row model used by the embedded roster.
+vi.mock("~/app/_components/data-table/Table", () => ({
+  default: ({
+    table,
+    emptyState,
+  }: {
+    table: {
+      getRowModel: () => {
+        rows: Array<{
+          id: string;
+          getVisibleCells: () => Array<{
+            id: string;
+            column: { columnDef: { cell?: unknown } };
+            getContext: () => never;
+          }>;
+        }>;
+      };
+    };
+    emptyState?: React.ReactNode;
+  }) => {
+    const rows = table.getRowModel().rows;
+    if (rows.length === 0) return emptyState;
+    return (
+      <table>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id}>
+              {row.getVisibleCells().map((cell) => (
+                <td key={cell.id}>
+                  {flexRender(
+                    cell.column.columnDef.cell as never,
+                    cell.getContext(),
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  },
+}));
 // The real link renders a hover-preview card that needs a query client; the
 // name and href are all this test asserts on.
 vi.mock("../EntityInlineLink", () => ({
@@ -49,6 +93,17 @@ vi.mock("../EntityInlineLink", () => ({
       {data.name}
     </a>
   ),
+}));
+vi.mock("~/app/_components/table/TableLink", () => ({
+  TableLink: ({
+    to,
+    params,
+    children,
+  }: {
+    to: string;
+    params: { shortcode: string };
+    children: React.ReactNode;
+  }) => <a href={to.replace("$shortcode", params.shortcode)}>{children}</a>,
 }));
 
 import { ProductKitComponents } from "./product-kit-components";
@@ -71,7 +126,7 @@ describe("ProductKitComponents", () => {
         manufacturer: "Milwaukee",
         quantity: 1,
         price: 89,
-        coverImageUrl: null,
+        coverImageUrl: "https://example.com/drill.png",
         attachedAt: new Date("2026-01-01"),
       },
       {
@@ -92,6 +147,10 @@ describe("ProductKitComponents", () => {
     expect(screen.getByRole("link", { name: "Battery Pack" })).toBeVisible();
     expect(screen.getByText("×1")).toBeInTheDocument();
     expect(screen.getByText("×2")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Image" })).toHaveAttribute(
+      "src",
+      "https://example.com/drill.png",
+    );
     expect(screen.queryByText("Not a kit")).not.toBeInTheDocument();
     // No membership rows: this product isn't listed inside any other kit.
     expect(
@@ -114,6 +173,7 @@ describe("ProductKitComponents", () => {
           parentProductName: "18V Combo Kit",
           manufacturer: "Milwaukee",
           quantity: 2,
+          coverImageUrl: null,
           attachedAt: new Date("2026-01-01"),
           price: 249,
           expenseCount: 1,
