@@ -303,6 +303,7 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
               <VendorCell
                 vendor={v.name}
                 vendorId={persistedVendorId(v.name, expense)}
+                logo={expense.vendorLogo}
               />
             ) : (
               <NoneValue />

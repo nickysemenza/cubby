@@ -28,11 +28,11 @@ export function CalendarFilterBar({
   const vendorOptionsQuery = useQuery(api.expense.vendorOptions.queryOptions());
   const vendorOptions = useMemo<FilterableComboboxItem[]>(
     () =>
-      vendorOptionsQuery.data?.map(({ id, name, count }) => ({
+      vendorOptionsQuery.data?.map(({ id, name, count, logo }) => ({
         value: id,
         label: name,
         hint: String(count),
-        icon: <VendorMark vendor={name} vendorId={id} />,
+        icon: <VendorMark vendor={name} vendorId={id} logo={logo} />,
       })) ?? NO_VENDOR_OPTIONS,
     [vendorOptionsQuery.data],
   );

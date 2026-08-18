@@ -7,6 +7,7 @@
  */
 import type { UPCLookupResponse } from "@cubby/upc-contract";
 import { inArray, sql } from "drizzle-orm";
+import { PartialUpcBatchLookupError } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
 import { upcLookupCache } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
@@ -164,14 +165,34 @@ export const readCachedUpcLookups = async (
         "[readCachedUpcLookups] UPC provider refresh failed:",
         error,
       );
+      const failed =
+        error instanceof PartialUpcBatchLookupError
+          ? new Set(error.failedUpcs)
+          : new Set(refresh);
+      const completed = refresh.filter((upc) => !failed.has(upc));
+      if (error instanceof PartialUpcBatchLookupError) {
+        await writeLookups(db, completed, error.results, checkedAt);
+        for (const upc of completed) {
+          const hit = error.results.get(upc);
+          cached.set(upc, {
+            upc,
+            manufacturer: hit?.manufacturer ?? null,
+            brand: hit?.brand ?? null,
+            priceDollars: hit?.priceDollars ?? null,
+            imageUrl: hit?.imageUrl ?? null,
+            status: "ready",
+            fetchedAt: checkedAt,
+          });
+        }
+      }
       // Preserve an earlier ready row (the stale proposal), but materialize a
       // first-time outage. A later successful refresh overwrites this state.
       await writeUnavailable(
         db,
-        refresh.filter((upc) => !cached.has(upc)),
+        [...failed].filter((upc) => !cached.has(upc)),
         checkedAt,
       );
-      for (const upc of refresh) {
+      for (const upc of failed) {
         if (!cached.has(upc)) {
           cached.set(upc, {
             upc,

@@ -4,9 +4,8 @@ import { sumBy } from "es-toolkit";
 import { FileText } from "lucide-react";
 import { useMemo } from "react";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
-import { VendorMark } from "~/components/entity/vendor-cell";
+import { VendorCell, VendorMark } from "~/components/entity/vendor-cell";
 import { Grid, Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
@@ -66,11 +65,11 @@ export function PurchaseList() {
   const { options: projectOptions } = useProjectOptions();
   const vendorOptions = useMemo<FilterableComboboxItem[]>(
     () =>
-      vendorOptionsQuery.data?.map(({ id, name, count }) => ({
+      vendorOptionsQuery.data?.map(({ id, name, count, logo }) => ({
         value: id,
         label: name,
         hint: String(count),
-        icon: <VendorMark vendor={name} vendorId={id} />,
+        icon: <VendorMark vendor={name} vendorId={id} logo={logo} />,
       })) ?? NO_VENDOR_OPTIONS,
     [vendorOptionsQuery.data],
   );
@@ -122,13 +121,11 @@ export function PurchaseList() {
         cell: (info) => {
           const row = info.row.original;
           return row.vendorName && row.vendorId ? (
-            <EntityInlineLink
-              entity="vendor"
-              data={{
-                id: row.vendorId,
-                name: row.vendorName,
-              }}
-              truncate
+            <VendorCell
+              vendor={row.vendorName}
+              vendorId={row.vendorId}
+              logo={row.vendorLogo}
+              compactOnMobile
             />
           ) : (
             <NoneValue />

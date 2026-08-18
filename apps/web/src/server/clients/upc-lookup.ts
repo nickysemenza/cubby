@@ -119,6 +119,7 @@ export class UPCLookupClient {
 
     return this.traced("lookupBatch", async () => {
       let failure: Error | null = null;
+      const failedUpcs: string[] = [];
       for (const batch of chunk(upcs, BULK_MAX_UPCS)) {
         try {
           const res = await this.fetcher(
@@ -139,6 +140,7 @@ export class UPCLookupClient {
               `[UPC Lookup] Batch failed: ${res.status} ${res.statusText}${await this.errorBody(res)}`,
             );
             failure ??= new Error(`UPC batch lookup failed (${res.status})`);
+            failedUpcs.push(...batch);
             continue;
           }
 
@@ -151,6 +153,7 @@ export class UPCLookupClient {
             failure ??= new Error(
               "UPC batch lookup returned an invalid response",
             );
+            failedUpcs.push(...batch);
             continue;
           }
 
@@ -170,13 +173,16 @@ export class UPCLookupClient {
             error instanceof Error
               ? error
               : new Error("UPC batch lookup failed");
+          failedUpcs.push(...batch);
         }
       }
       // Callers that need a truthful health state (the cached Problems
       // projection) must be able to distinguish an empty, successful provider
       // result from a transport/provider failure. The old best-effort return
       // silently collapsed those two states into the same empty Map.
-      if (failure) throw failure;
+      if (failure) {
+        throw new PartialUpcBatchLookupError(failure, result, failedUpcs);
+      }
       return result;
     });
   }
@@ -217,5 +223,17 @@ export class UPCLookupClient {
         return { products: [], total: 0 };
       }
     });
+  }
+}
+
+/** A multi-chunk lookup failed partially; completed chunks remain usable. */
+export class PartialUpcBatchLookupError extends Error {
+  constructor(
+    cause: Error,
+    readonly results: ReadonlyMap<string, UPCLookupResponse>,
+    readonly failedUpcs: readonly string[],
+  ) {
+    super(cause.message, { cause });
+    this.name = "PartialUpcBatchLookupError";
   }
 }

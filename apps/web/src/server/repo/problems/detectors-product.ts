@@ -13,21 +13,15 @@ import type {
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import {
-  unsafeExpenseShortcode,
   unsafeLocationShortcode,
   unsafeProductShortcode,
   unsafeProjectShortcode,
-  unsafePurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
   DuplicateProductIdentity,
-  DuplicateUniqueProduct,
   OrphanedProduct,
   ProductWithBetterUpcData,
-  PurchaselessExitExpense,
-  SoldButStillStocked,
   ToolUsedOutsideOwnership,
-  UnlinkedExitExpense,
 } from "@cubby/schemas/problems";
 import { isMiscProduct } from "@cubby/shared";
 import { format } from "date-fns";
@@ -43,7 +37,7 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
-import { uniq, uniqBy } from "es-toolkit";
+import { uniq } from "es-toolkit";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
@@ -60,13 +54,11 @@ import {
   productUnitMappings,
   project,
   projectToolUsage,
-  purchase,
   purchaseProduct,
   recipe,
   recipeSection,
   recipeSectionIngredient,
   task,
-  vendor,
   wishCandidate,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -82,7 +74,6 @@ import {
   loadProductOwnershipTimelines,
 } from "~/server/repo/product/ownership";
 import { loadProductPricing } from "~/server/repo/product/pricing";
-import { loadProductPickerQuantities } from "~/server/repo/product/quantity-ledger";
 import { loadProjectDateWindows } from "~/server/repo/project/subtree";
 import { buildTimelineGates } from "~/server/repo/project/tools";
 
@@ -98,70 +89,6 @@ type ProductWithUpcGapCandidate = {
   upc: string;
   price: number | null;
   hasImage: boolean;
-};
-
-// Find products with expectedQuantity=1 that appear in multiple locations.
-// Named for the `duplicateInventory` Problems key it feeds — not to be
-// confused with product/analytics.ts's identically-shaped but independently
-// implemented findDuplicateUniqueProducts, which serves the inventory
-// router's own (differently-named, self-consistent) duplicate-check surface.
-const findDuplicateInventoryProducts = async (
-  db: Database,
-): Promise<DuplicateUniqueProduct[]> => {
-  const duplicates = await getDb(db).query.product.findMany({
-    where: notDeleted(product),
-    columns: {
-      id: true,
-      name: true,
-      manufacturer: true,
-      shortcode: true,
-      expectedQuantity: true,
-    },
-    with: {
-      inventoryEntry: {
-        where: notDeleted(inventoryEntry),
-        columns: {
-          id: true,
-          locationId: true,
-          placement: true,
-        },
-        with: {
-          location: {
-            columns: {
-              id: true,
-              name: true,
-              shortcode: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  return duplicates
-    .filter((prod) => {
-      if (prod.expectedQuantity !== 1) return false;
-      // Compare within placement only: a spare on the shelf plus one
-      // installed in the wall is the normal correct state for a
-      // single-unit product, not a duplicate.
-      const stockEntries = prod.inventoryEntry.filter(
-        (entry) => entry.placement === "stock",
-      );
-      const installedEntries = prod.inventoryEntry.filter(
-        (entry) => entry.placement === "installed",
-      );
-      return stockEntries.length > 1 || installedEntries.length > 1;
-    })
-    .map((prod) => ({
-      id: unsafeProductShortcode(prod.shortcode),
-      name: prod.name,
-      manufacturer: prod.manufacturer,
-      expectedQuantity: prod.expectedQuantity,
-      locations: prod.inventoryEntry.map((entry) => ({
-        id: unsafeLocationShortcode(entry.location.shortcode),
-        name: entry.location.name,
-      })),
-    }));
 };
 
 /**
@@ -349,308 +276,6 @@ export const findOrphanedProducts = async (
     id: unsafeProductShortcode(row.shortcode),
   }));
 };
-
-// Find disposal lines that name no product — the exact inverse of
-// `findSoldButStillStocked` below.
-//
-// That detector groups by `expense.productId`, so a sale with a null one is
-// invisible to it BY CONSTRUCTION rather than by oversight. Those are the norm
-// for marketplace sales: the row arrives from a statement or a payout export
-// with a description and an amount and nothing tying it to a shelf, so the
-// ledger records that money came in and cannot say what left.
-//
-// The predicate is the same disposal-Purchase test its mirror uses, and the
-// reasoning behind that choice is the essay above `findSoldButStillStocked` —
-// worth reading rather than restating here. The short version: bare negative
-// Expense lines are overwhelmingly refunds, price adjustments, and family
-// contributions, and keying on them instead was wrong about half the time on
-// production data.
-const findUnlinkedExitExpenses = async (
-  db: Database,
-): Promise<UnlinkedExitExpense[]> => {
-  const dbClient = getDb(db);
-
-  const rows = await dbClient
-    .select({
-      shortcode: expense.shortcode,
-      name: expense.name,
-      cost: expense.cost,
-      date: expense.date,
-      purchaseShortcode: purchase.shortcode,
-      vendorName: vendor.name,
-    })
-    .from(expense)
-    .innerJoin(
-      purchase,
-      and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
-    )
-    .leftJoin(vendor, and(eq(vendor.id, purchase.vendorId), notDeleted(vendor)))
-    .where(
-      and(
-        notDeleted(expense),
-        eq(expense.future, false),
-        lt(expense.cost, 0),
-        isNull(expense.productId),
-        inArray(expense.purchaseId, disposalPurchaseIds(dbClient)),
-      ),
-    )
-    .orderBy(sql`${expense.date} DESC NULLS LAST`);
-
-  return rows.map((row) => ({
-    id: unsafeExpenseShortcode(row.shortcode),
-    name: row.name,
-    cost: Number(row.cost),
-    date: row.date,
-    purchaseId: unsafePurchaseShortcode(row.purchaseShortcode),
-    vendorName: row.vendorName,
-  }));
-};
-
-// Find negative lines that have no Purchase at all — the blind spot of
-// `findUnlinkedExitExpenses` directly above.
-//
-// That detector's `innerJoin` on `purchase` drops a purchase-less row before
-// its predicate runs, so those rows are invisible to it BY CONSTRUCTION. They
-// are the hand-entered end of the ledger: an item handed over for cash with no
-// order number, no payout export, nothing but a name and an amount.
-//
-// This is `coverage`, not `defect`, and the reason is precision. On production
-// six rows match and three are real sales; the other three are money that never
-// bought anything — two family contributions and a neighbour's share of a
-// shared cost. Nothing on the row or one join out separates them: `costType`
-// splits them today only by accident, and `FinancialTransaction.kind` is
-// absent because none of these were ever settled through an account.
-//
-// The alternative — relaxing the disposal-Purchase test in the mirror detector
-// so it covers these too — was rejected. It would import this ambiguity into a
-// detector that is currently precise, which is the failure the essay above
-// `findSoldButStillStocked` describes: bare negative lines were "wrong about
-// half the time on production data". Keeping them apart lets one stay red and
-// this one stay advisory.
-const findPurchaselessExitExpenses = async (
-  db: Database,
-): Promise<PurchaselessExitExpense[]> => {
-  const dbClient = getDb(db);
-
-  const rows = await dbClient
-    .select({
-      shortcode: expense.shortcode,
-      name: expense.name,
-      cost: expense.cost,
-      date: expense.date,
-      projectName: project.name,
-    })
-    .from(expense)
-    .leftJoin(
-      project,
-      and(eq(project.id, expense.projectId), notDeleted(project)),
-    )
-    .where(
-      and(
-        notDeleted(expense),
-        eq(expense.future, false),
-        lt(expense.cost, 0),
-        isNull(expense.productId),
-        isNull(expense.purchaseId),
-        // Adjustments (tax, discount, fee, …) are productless by definition, and
-        // an allocation may not carry a productId at all — neither is a missing
-        // link. Without these two the detector would report every credit line
-        // in the ledger.
-        eq(expense.lineKind, "principal"),
-        eq(expense.lineBasis, "item_line"),
-      ),
-    )
-    .orderBy(sql`${expense.date} DESC NULLS LAST`);
-
-  return rows.map((row) => ({
-    id: unsafeExpenseShortcode(row.shortcode),
-    name: row.name,
-    cost: Number(row.cost),
-    date: row.date,
-    projectName: row.projectName,
-  }));
-};
-
-// Find products that were sold off but are still sitting on a shelf.
-//
-// The exact mirror of the `product/unpriced-stocked` view, and it exists for the same
-// reason: `inventoryEntry.valuation` is precomputed from the product's
-// effective price, so a stale entry keeps contributing its full value to the
-// location rollup. An unpriced product makes the rollup silently *omit* value;
-// this one makes it silently *invent* value.
-//
-// Nothing else can catch this. Inventory never auto-decrements (a binding
-// tenet), so no write path walks the shelf back when a disposal is recorded —
-// the divergence is invisible by construction, and detection is the only
-// mechanism left. `findOrphanedProducts` deliberately cannot help: it treats
-// `expense` as a *retaining* edge precisely so a bought-then-sold tool is not
-// reported as an orphan (see the note above it), which is exactly what blinds
-// it here.
-//
-// Two predicate choices carry the correctness, both learned from live data:
-//
-//  1. *Disposal Purchases, not negative lines.* A disposal is modelled as a
-//     Purchase whose Expenses are negative — the shape documented on
-//     `purchaseSettlementKinds`. Negative Expense lines on their own are
-//     common and mostly innocent (refunds, price adjustments, family
-//     contributions), and the looser predicate was wrong about half the time
-//     on production: 43 products matched, only 20 were genuine disposals.
-//
-//  2. *Fully disposed, not merely touched.* The quantity ledger is the
-//     authority: a row is reported only when the known movements leave zero or
-//     fewer units expected. Comparing units sold with units currently stocked
-//     is not equivalent — buying 2, selling 1 and stocking the remaining 1
-//     made both numbers equal and produced a false positive. An unknown
-//     acquisition keeps the result out because it may be the missing remainder.
-//
-// A later re-acquisition is already represented in that net balance, so this
-// detector does not maintain a second, date-only ownership rule beside it.
-//
-// Cost-0 exits used to be an outright blind spot here: a broken or gifted item
-// is recorded at cost 0, and cost 0 is also how a free promotional
-// *acquisition* is recorded (the Harbor Freight bucket, the M12 promo pack), so
-// the two were indistinguishable and `cost <= 0` would have flagged every
-// freebie as sold. `Expense.productQuantity` is now **signed**, which is the
-// real signal on the row that resolves it: a $0 discard carries a negative
-// quantity, a $0 freebie a positive one.
-//
-// This detector still keys on disposal Purchases anyway, and that is not an
-// oversight. A discard minted through the Discard action carries no
-// `purchaseId` at all and clears its own inventory in the same transaction, so
-// it cannot produce a sold-but-still-stocked row in the first place. Widening
-// the exit predicate to
-// `or(inArray(purchaseId, disposalPurchaseIds), and(eq(cost, 0), lt(productQuantity, 0)))`
-// would only catch a hand-entered $0 discard whose shelf was left behind —
-// coherent, and a reasonable follow-on, but a different question from the one
-// this detector answers today.
-const findSoldButStillStocked = async (
-  db: Database,
-): Promise<SoldButStillStocked[]> => {
-  const dbClient = getDb(db);
-
-  const disposals = await dbClient
-    .select({
-      productId: expense.productId,
-      // A bare sale row carries no `productQuantity`; read it as one unit, the
-      // same way the ledger itself reads it.
-      //
-      // `abs`, because this query is filtered to `cost < 0` where the ledger
-      // reads an exit as `−|qty|` and therefore leaves BOTH signs legal — 302
-      // live rows store a positive quantity there, a hand-entered one may store
-      // a negative. Without it a negative row makes `soldQuantity` negative,
-      // which both fails the `soldQuantity < liveQuantity` comparison below
-      // (a silent false negative) and renders a negative "sold" count in the
-      // UI. `abs(NULL)` is `NULL`, so the coalesce default still applies.
-      soldQuantity: sql<number>`sum(coalesce(abs(${expense.productQuantity}), 1))::double precision`,
-      proceeds: sql<number>`sum(${expense.cost})::double precision`,
-    })
-    .from(expense)
-    .where(
-      and(
-        notDeleted(expense),
-        eq(expense.future, false),
-        lt(expense.cost, 0),
-        isNotNull(expense.productId),
-        inArray(expense.purchaseId, disposalPurchaseIds(dbClient)),
-      ),
-    )
-    .groupBy(expense.productId);
-
-  const byProduct = new Map(
-    disposals.flatMap((row) =>
-      row.productId ? ([[row.productId, row]] as const) : [],
-    ),
-  );
-  if (byProduct.size === 0) return [];
-
-  // includes-installed: sold-but-still-stocked is an ownership/identity
-  // question — a fixture the ledger says was sold is exactly as wrong as a
-  // shelf item, and should still surface here.
-  const candidates = await dbClient.query.product.findMany({
-    where: and(notDeleted(product), inArray(product.id, [...byProduct.keys()])),
-    columns: { id: true, name: true, manufacturer: true, shortcode: true },
-    with: {
-      inventoryEntry: {
-        where: notDeleted(inventoryEntry),
-        columns: { id: true, amount: true },
-        with: {
-          location: {
-            columns: {
-              id: true,
-              name: true,
-              shortcode: true,
-              deletedAt: true,
-            },
-          },
-        },
-      },
-      locations: {
-        where: notDeleted(location),
-        columns: { id: true, name: true, shortcode: true },
-      },
-    },
-  });
-  const quantities = await loadProductPickerQuantities(
-    db,
-    candidates.map((candidate) => candidate.id),
-  );
-
-  const rows: SoldButStillStocked[] = [];
-
-  for (const prod of candidates) {
-    const disposal = byProduct.get(prod.id);
-    if (!disposal) continue;
-
-    const quantity = quantities.get(prod.id);
-    // A mixed-unit shelf has no honest numeric `liveQuantity`, and no stock is
-    // already the normal post-sale state.
-    if (quantity?.onHand.state !== "counted") continue;
-    const liveQuantity = quantity.onHand.units;
-    if (liveQuantity <= 0) continue;
-    // A positive known balance is a partial exit. Unknown acquisitions may be
-    // the missing balance, so they suppress this high-confidence defect too.
-    if (
-      quantity.quantityLedger.expectedQuantity > 0 ||
-      quantity.quantityLedger.unknownAcquisitionLines > 0
-    ) {
-      continue;
-    }
-
-    const liveLocations = uniqBy(
-      [
-        ...prod.inventoryEntry.flatMap((entry) =>
-          entry.location.deletedAt === null ? [entry.location] : [],
-        ),
-        ...prod.locations,
-      ],
-      (item) => item.id,
-    );
-
-    rows.push({
-      id: unsafeProductShortcode(prod.shortcode),
-      name: prod.name,
-      manufacturer: prod.manufacturer,
-      soldQuantity: disposal.soldQuantity,
-      liveQuantity,
-      proceeds: disposal.proceeds,
-      locations: liveLocations.map((item) => ({
-        id: unsafeLocationShortcode(item.shortcode),
-        name: item.name,
-      })),
-    });
-  }
-
-  return rows;
-};
-
-// Retained temporarily for their focused historical fixtures; runtime Problem
-// membership is now exclusively the canonical entity-list path.
-void [
-  findDuplicateInventoryProducts,
-  findUnlinkedExitExpenses,
-  findPurchaselessExitExpenses,
-  findSoldButStillStocked,
-];
 
 /**
  * Disposal totals for card rows selected by the canonical Product list.

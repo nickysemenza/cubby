@@ -44,6 +44,15 @@ describe("Problem Query registry", () => {
     expect(problemQuery("duplicateVendors")?.source.kind).toBe("derived");
   });
 
+  it("reuses the validated registry and indexed definition objects", () => {
+    expect(problemQueryDeclarations()).toBe(problemQueryDeclarations());
+    const definition = problemQuery("duplicateVendors");
+    expect(definition).toBe(
+      problemQueryDeclarations().find(({ key }) => key === "duplicateVendors"),
+    );
+    expect(problemQuery("duplicateVendors")).toBe(definition);
+  });
+
   it("gives every definition explicit freshness and a legal continuation", () => {
     for (const definition of problemQueryDeclarations()) {
       expect(definition.freshness).toBeDefined();

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { imageOut } from "./image";
+import { imageUrlSummary } from "./image-summary";
 import { vendorRelatedFilterFields } from "./related-view";
 import {
   auditDateFilterFields,
@@ -112,6 +113,7 @@ export const vendorOptionsOut = z.array(
     id: vendorShortcode,
     name: z.string(),
     count: z.number().int(),
+    logo: imageUrlSummary.nullable(),
   }),
 );
 export type VendorOptionsOut = z.infer<typeof vendorOptionsOut>;

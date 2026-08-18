@@ -8,6 +8,7 @@ import {
   findCoverageProblems,
   rebuildProductConversionCoverageProjection,
 } from "~/server/services/problems.service";
+import { updateIngredient } from "../ingredient";
 import {
   attachProductComponents,
   detachProductComponents,
@@ -248,6 +249,67 @@ describe("ProductConversionCoverage projection", () => {
         })
       )?.status,
     ).toBe("stale");
+  });
+
+  it("invalidates linked products and containing kits when ingredient NA kinds change", async () => {
+    const ingredient = await createIngredient(
+      ctx.db,
+      { name: "Projection NA Ingredient", aliases: [] },
+      ctx.actor,
+    );
+    const component = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Projection NA Component",
+        ingredientId: ingredient.id,
+      }),
+      ctx.actor,
+    );
+    const kit = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Projection NA Kit" }),
+      ctx.actor,
+    );
+    await attachProductComponents(
+      ctx.db,
+      kit.entityId,
+      [{ productId: component.entityId, quantity: 1 }],
+      ctx.actor,
+    );
+    await writeProductConversionCoverageProjection(ctx.db, [
+      {
+        productId: component.entityId,
+        coverageTier: "complete",
+        coveredKinds: [],
+        applicableKinds: [],
+        islandCount: 1,
+        status: "ready",
+      },
+      {
+        productId: kit.entityId,
+        coverageTier: "complete",
+        coveredKinds: [],
+        applicableKinds: [],
+        islandCount: 1,
+        status: "ready",
+      },
+    ]);
+
+    await updateIngredient(
+      ctx.db,
+      ingredient.entityId,
+      { naKinds: ["volume"] },
+      ctx.actor,
+    );
+
+    const rows = await getDb(ctx.db).query.productConversionCoverage.findMany();
+    expect(
+      rows
+        .filter((row) =>
+          [component.entityId, kit.entityId].includes(row.productId),
+        )
+        .map((row) => row.status),
+    ).toEqual(["stale", "stale"]);
   });
 
   it("invalidates the survivor projection after a merge", async () => {

@@ -30,7 +30,10 @@ import { describe, expect, it, vi } from "vitest";
 import { compileProblemFilters } from "~/entities/problem-filter-semantics";
 import { viewProblemDeclarations } from "~/entities/view-manifest";
 import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
-import type { UPCLookupClient } from "~/server/clients/upc-lookup";
+import {
+  PartialUpcBatchLookupError,
+  type UPCLookupClient,
+} from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import {
   financialTransaction,
@@ -192,6 +195,42 @@ describe("problems repo", () => {
       });
       expect(stale.freshness).toMatchObject({ status: "stale" });
       expect(stale.lookups.get(UPC)?.brand).toBe("Acme");
+    });
+
+    it("persists successful chunks and marks only failed UPCs unavailable", async () => {
+      const completed = `${UPC}-completed`;
+      const failed = `${UPC}-failed`;
+      const result = await readCachedUpcLookups(
+        ctx.db,
+        [completed, failed],
+        async () => {
+          throw new PartialUpcBatchLookupError(
+            new Error("second chunk failed"),
+            new Map([
+              [completed, upcResponse(completed, { brand: "Preserved" })],
+            ]),
+            [failed],
+          );
+        },
+      );
+
+      expect(result.lookups.get(completed)?.brand).toBe("Preserved");
+      expect(result.lookups.has(failed)).toBe(false);
+      expect(result.freshness).toMatchObject({
+        status: "stale",
+        unavailableCount: 1,
+      });
+      expect(
+        await getDb(ctx.db).query.upcLookupCache.findMany({
+          where: (row, { inArray }) => inArray(row.upc, [completed, failed]),
+          columns: { upc: true, status: true },
+        }),
+      ).toEqual(
+        expect.arrayContaining([
+          { upc: completed, status: "ready" },
+          { upc: failed, status: "unavailable" },
+        ]),
+      );
     });
   });
 
@@ -2469,7 +2508,7 @@ describe("problems — duplicate vendors", () => {
     if (!row) throw new Error("expected a duplicate-vendor row");
     expect(row.value).toBe("Lowe's");
 
-    const keeper = await mergeVendors(
+    const { output: keeper } = await mergeVendors(
       ctx.db,
       {
         keepId: row.canonicalSampleId,

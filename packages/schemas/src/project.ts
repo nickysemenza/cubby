@@ -4,6 +4,7 @@ import {
   expenseLineKindSchema,
 } from "./expense-line-kind";
 import { financialReconciliationSummary } from "./financial-reconciliation";
+import { imageUrlSummary } from "./image-summary";
 import { wholeCentAmount } from "./money";
 import {
   expenseRelatedFilterFields,
@@ -1173,6 +1174,8 @@ export const expenseOut = z.object({
   purchaseDisplayLabel: z.string().nullable(),
   /** The purchase's vendor, denormalized onto the expense so tables can link it. */
   vendorId: vendorShortcode.nullable(),
+  /** The linked vendor's displayable logo, resolved with the vendor identity. */
+  vendorLogo: imageUrlSummary.nullable(),
   /**
    * Link out to the vendor's own order page for this expense's purchase,
    * derived from `vendor.orderUrlTemplate` + `orderId` (see `purchaseOrderUrl`).

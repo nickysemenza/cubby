@@ -9,8 +9,12 @@ import { describe, expect, it } from "vitest";
 import type { Database } from "~/server/db";
 import { financialTransactionAllocation } from "~/server/db/schema";
 import { getDb, insertAndReturn } from "~/server/repo/database-helpers";
+import { listFinancialTransactions } from "~/server/repo/financial-transaction";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { findFinancialTransactionAllocationDefects } from "./detectors-financial";
+import {
+  findFinancialTransactionAllocationDefects,
+  loadAllocationDefectPresenters,
+} from "./detectors-financial";
 
 /**
  * Backstop coverage for `findFinancialTransactionAllocationDefects`.
@@ -82,6 +86,12 @@ const allocate = (
     amount,
   });
 
+const liveDefects = async (db: Database) =>
+  listFinancialTransactions(db, { allocationIntegrity: "defect" }, [], {
+    pageIndex: 0,
+    pageSize: 100,
+  });
+
 describe("findFinancialTransactionAllocationDefects", () => {
   const ctx = withTestDb();
 
@@ -94,6 +104,7 @@ describe("findFinancialTransactionAllocationDefects", () => {
     await allocate(ctx.db, txn.id, b.id, -7.8);
 
     expect(await findFinancialTransactionAllocationDefects(ctx.db)).toEqual([]);
+    expect((await liveDefects(ctx.db)).data).toEqual([]);
   });
 
   it("passes a single allocation whose mirror agrees, and an unallocated transaction", async () => {
@@ -120,6 +131,13 @@ describe("findFinancialTransactionAllocationDefects", () => {
     expect(defect?.allocationCount).toBe(2);
     expect(defect?.allocatedTotal).toBeCloseTo(-15.96, 2);
     expect(defect?.purchaseIds).toHaveLength(2);
+    const live = await liveDefects(ctx.db);
+    expect(live.data.map((row) => row.id)).toEqual([txn.shortcode]);
+    expect(
+      (await loadAllocationDefectPresenters(ctx.db, [txn.shortcode])).get(
+        txn.shortcode,
+      )?.reasons,
+    ).toContain("sum-mismatch");
   });
 
   it("flags a non-settlement kind carrying allocations", async () => {
@@ -129,6 +147,9 @@ describe("findFinancialTransactionAllocationDefects", () => {
 
     const [defect] = await findFinancialTransactionAllocationDefects(ctx.db);
     expect(defect?.reasons).toContain("non-settlement-kind");
+    expect((await liveDefects(ctx.db)).data.map((row) => row.id)).toEqual([
+      txn.shortcode,
+    ]);
   });
 
   it("flags a kind/sign violation the DB CHECK passes vacuously on a split row", async () => {
@@ -143,6 +164,9 @@ describe("findFinancialTransactionAllocationDefects", () => {
     const [defect] = await findFinancialTransactionAllocationDefects(ctx.db);
     expect(defect?.reasons).toContain("kind-sign-violation");
     expect(defect?.reasons).not.toContain("sum-mismatch");
+    expect((await liveDefects(ctx.db)).data.map((row) => row.id)).toEqual([
+      txn.shortcode,
+    ]);
   });
 
   it("flags an allocation whose sign differs from its transaction", async () => {
@@ -155,6 +179,13 @@ describe("findFinancialTransactionAllocationDefects", () => {
     const [defect] = await findFinancialTransactionAllocationDefects(ctx.db);
     expect(defect?.reasons).toContain("allocation-sign-mismatch");
     expect(defect?.reasons).not.toContain("sum-mismatch");
+    const live = await liveDefects(ctx.db);
+    expect(live.data.map((row) => row.id)).toEqual([txn.shortcode]);
+    expect(
+      (await loadAllocationDefectPresenters(ctx.db, [txn.shortcode])).get(
+        txn.shortcode,
+      )?.reasons,
+    ).toContain("allocation-sign-mismatch");
   });
 
   it("ignores soft-deleted allocations", async () => {
@@ -166,5 +197,6 @@ describe("findFinancialTransactionAllocationDefects", () => {
     );
 
     expect(await findFinancialTransactionAllocationDefects(ctx.db)).toEqual([]);
+    expect((await liveDefects(ctx.db)).data).toEqual([]);
   });
 });

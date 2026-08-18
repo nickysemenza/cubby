@@ -96,7 +96,12 @@ const merge = protectedProcedure
   .input(mergeVendorsInput)
   .output(strictOutput(vendorOut))
   .mutation(async ({ ctx, input }) => {
-    const output = await mergeVendors(ctx.db, input, ctx.actorContext);
+    const { output, detachedImageKeys } = await mergeVendors(
+      ctx.db,
+      input,
+      ctx.actorContext,
+    );
+    await deleteStoredObjects(detachedImageKeys);
     const entityId = await resolveLiveShortcode(ctx.db, output.id, "vendor");
     if (entityId) {
       await runMutationSideEffects(ctx.db, {

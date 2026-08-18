@@ -154,12 +154,6 @@ export const defineProblem = <T extends ProblemDefinitionInput>(
   };
 };
 
-/** Return one declaration by key without making callers know its storage. */
-export const findProblemQuery = <T extends ProblemQuery>(
-  definitions: readonly T[],
-  key: ProblemKey,
-): T | undefined => definitions.find((definition) => definition.key === key);
-
 /** Fail early when a registry accidentally declares a Problem twice. */
 export const validateProblemQueries = (
   definitions: readonly ProblemQuery[],

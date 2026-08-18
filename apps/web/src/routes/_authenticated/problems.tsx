@@ -3,6 +3,7 @@ import { lazy, Suspense, useState } from "react";
 import { z } from "zod";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Section, Stack } from "~/components/layout";
+import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { RoutePending } from "~/components/route-pending";
 import { pageTitle } from "~/lib/page-title";
@@ -48,6 +49,7 @@ export const Route = createFileRoute("/_authenticated/problems")({
     );
   },
   pendingComponent: RoutePending,
+  errorComponent: RouteErrorComponent,
   component: ProblemsPage,
   head: () => ({ meta: [{ title: pageTitle("Problems") }] }),
 });

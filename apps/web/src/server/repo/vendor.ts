@@ -64,7 +64,10 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { reapUnreferencedImages } from "~/server/repo/image";
-import { displayableImageWhere } from "~/server/repo/image-displayability";
+import {
+  displayableImageSql,
+  displayableImageWhere,
+} from "~/server/repo/image-displayability";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import {
   finalizeMerge,
@@ -146,16 +149,12 @@ const vendorLatestPurchaseDate = correlated<string | null>(
 );
 
 /** Whether the direct logo FK currently resolves to an image the UI can draw. */
-const vendorHasDisplayableLogo = correlated<boolean>(
-  `(EXISTS (
-    SELECT 1 FROM "Image" logo
-    WHERE logo."id" = "Vendor"."logoImageId"
-      AND logo."deletedAt" IS NULL
-      AND logo."contentType" <> 'application/pdf'
-      AND (logo."renderStatus" IS NULL OR logo."renderStatus" <> 'failed')
-      AND (logo."storageStatus" IS NULL OR logo."storageStatus" NOT IN ('missing', 'metadata_mismatch'))
-  ))`,
-);
+const vendorHasDisplayableLogo = sql<boolean>`EXISTS (
+  SELECT 1 FROM "Image" logo
+  WHERE logo."id" = ${sql.raw('"Vendor"."logoImageId"')}
+    AND logo."deletedAt" IS NULL
+    AND ${displayableImageSql("logo")}
+)`;
 
 const vendorColumns = {
   id: vendor.id,
@@ -412,8 +411,17 @@ export const vendorOptions = async (
       shortcode: vendor.shortcode,
       name: vendor.name,
       count: vendorPurchaseCount,
+      logoUrl: image.url,
     })
     .from(vendor)
+    .leftJoin(
+      image,
+      and(
+        eq(image.id, vendor.logoImageId),
+        notDeleted(image),
+        displayableImageWhere,
+      ),
+    )
     .where(notDeleted(vendor))
     .orderBy(desc(vendorPurchaseCount), asc(vendor.name));
 
@@ -421,6 +429,7 @@ export const vendorOptions = async (
     id: unsafeVendorShortcode(row.shortcode),
     name: row.name,
     count: Number(row.count),
+    logo: row.logoUrl ? { url: row.logoUrl } : null,
   }));
 };
 
@@ -667,15 +676,17 @@ export const mergeVendors = async (
   db: Database,
   input: { keepId: VendorShortcode; mergeIds: VendorShortcode[] },
   actor: ActorContext,
-): Promise<VendorOut> => {
+): Promise<{ output: VendorOut; detachedImageKeys: string[] }> => {
   const { keepId, loserIds: losers } = await resolveMergeTargets(db, {
     entity: "vendor",
     keepId: input.keepId,
     mergeIds: input.mergeIds,
   });
-  if (losers.length === 0) return getVendorByID(db, keepId);
+  if (losers.length === 0) {
+    return { output: await getVendorByID(db, keepId), detachedImageKeys: [] };
+  }
 
-  await withTransaction(db, async (tx) => {
+  const detachedImageKeys = await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, vendor, [keepId, ...losers], "Vendor");
 
     const plan = await planVendorMerge(tx, keepId, losers);
@@ -734,10 +745,10 @@ export const mergeVendors = async (
       },
     });
 
-    await reapUnreferencedImages(tx, loserLogos);
+    return (await reapUnreferencedImages(tx, loserLogos)).deletedKeys;
   });
 
-  return getVendorByID(db, keepId);
+  return { output: await getVendorByID(db, keepId), detachedImageKeys };
 };
 
 /**

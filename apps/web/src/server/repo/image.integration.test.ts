@@ -663,6 +663,7 @@ describe("image repository — purchase (charge) documents", () => {
         .update(cookbook)
         .set({ coverImageId: coverOnly.id })
         .where(eq(cookbook.id, cookbookId));
+      await deleteCookbook(ctx.db, cookbookId, ctx.actor);
 
       await getDb(ctx.db)
         .update(image)

@@ -403,19 +403,20 @@ const imageReferenceCondition = (
 ): SQL => {
   const dbc = getDb(db);
   const byEdge = {
+    // includes-deleted: direct FKs remain live constraints after their parent
+    // is tombstoned, so reference membership must match hard-delete safety.
     "Cookbook.coverImageId": exists(
       dbc
         .select({ one: sql`1` })
         .from(cookbook)
-        .where(
-          and(eq(cookbook.coverImageId, outerImage.id), notDeleted(cookbook)),
-        ),
+        .where(eq(cookbook.coverImageId, outerImage.id)),
     ),
+    // includes-deleted: same direct-FK rule as Cookbook.coverImageId above.
     "Vendor.logoImageId": exists(
       dbc
         .select({ one: sql`1` })
         .from(vendor)
-        .where(and(eq(vendor.logoImageId, outerImage.id), notDeleted(vendor))),
+        .where(eq(vendor.logoImageId, outerImage.id)),
     ),
     "ProductImage.imageId": exists(
       dbc

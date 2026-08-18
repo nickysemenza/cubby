@@ -14,6 +14,7 @@ import {
   vendorShortcode,
 } from "./identifiers";
 import { financialReconciliationSummary } from "./financial-reconciliation";
+import { imageUrlSummary } from "./image-summary";
 import { expenseLineKindSchema } from "./expense-line-kind";
 import { purchaseRelatedFilterFields } from "./related-view";
 import {
@@ -220,6 +221,8 @@ export const purchaseOut = z.object({
   ...purchaseFields,
   /** Resolved through the join; null only if the vendor was soft-deleted. */
   vendorName: z.string().nullable(),
+  /** The vendor's displayable logo for embedded purchase surfaces. */
+  vendorLogo: imageUrlSummary.nullable(),
   /**
    * Link out to the vendor's own order page, derived at read time from
    * `vendor.orderUrlTemplate` + `orderId` (see `purchaseOrderUrl`). Read-only

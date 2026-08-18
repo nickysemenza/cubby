@@ -4,7 +4,6 @@ import { derivedProblemQueries } from "~/entities/problem-queries/derived";
 import { productCoverageProblemQueries } from "~/entities/problem-queries/product-coverage";
 import { trackerProblemQueries } from "~/entities/problem-queries/tracker";
 import {
-  findProblemQuery,
   type ProblemQuery,
   validateProblemQueries,
 } from "~/entities/problem-query";
@@ -17,20 +16,23 @@ import { entityProblemDeclarations } from "~/entities/view-manifest";
  * them and checks the registry boundary. In particular, it contains no SQL,
  * Drizzle expressions, or detector callbacks.
  */
-export function problemQueryDeclarations(): readonly ProblemQuery[] {
-  const definitions = [
-    ...entityProblemDeclarations(),
-    ...basicProblemQueries,
-    ...productCoverageProblemQueries,
-    ...trackerProblemQueries,
-    ...derivedProblemQueries,
-  ];
-  validateProblemQueries(definitions, expectedProblemKeys);
-  return definitions;
-}
-
 /** Full schema roster; it makes a new ProblemKey a registry compile/test gate. */
 export const expectedProblemKeys = Object.keys(PROBLEM_CLASS) as ProblemKey[];
 
+const definitions: readonly ProblemQuery[] = [
+  ...entityProblemDeclarations(),
+  ...basicProblemQueries,
+  ...productCoverageProblemQueries,
+  ...trackerProblemQueries,
+  ...derivedProblemQueries,
+];
+validateProblemQueries(definitions, expectedProblemKeys);
+const definitionByKey = new Map(
+  definitions.map((definition) => [definition.key, definition]),
+);
+
+export const problemQueryDeclarations = (): readonly ProblemQuery[] =>
+  definitions;
+
 export const problemQuery = (key: ProblemKey): ProblemQuery | undefined =>
-  findProblemQuery(problemQueryDeclarations(), key);
+  definitionByKey.get(key);

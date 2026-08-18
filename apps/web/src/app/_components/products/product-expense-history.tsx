@@ -195,20 +195,28 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
   }, [expenses]);
 
   const rowVendorOptions = useMemo<FilterableComboboxItem[]>(() => {
-    const byId = new Map<string, { name: string; count: number }>();
+    const byId = new Map<
+      string,
+      { name: string; count: number; logo: ExpenseOut["vendorLogo"] }
+    >();
     for (const row of expenses) {
       if (!row.vendorId || !row.vendor) continue;
       const seen = byId.get(row.vendorId);
       if (seen) seen.count += 1;
-      else byId.set(row.vendorId, { name: row.vendor, count: 1 });
+      else
+        byId.set(row.vendorId, {
+          name: row.vendor,
+          count: 1,
+          logo: row.vendorLogo,
+        });
     }
     return [...byId]
       .sort(([, a], [, b]) => a.name.localeCompare(b.name))
-      .map(([id, { name, count }]) => ({
+      .map(([id, { name, count, logo }]) => ({
         value: id,
         label: name,
         hint: String(count),
-        icon: <VendorMark vendor={name} vendorId={id} />,
+        icon: <VendorMark vendor={name} vendorId={id} logo={logo} />,
       }));
   }, [expenses]);
 

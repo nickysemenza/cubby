@@ -65,6 +65,17 @@ describe("calculateFinancialReconciliation", () => {
       delta: -0.0030000000000001137,
     },
     {
+      name: "rounds negative half-cents toward positive infinity like JavaScript",
+      input: {
+        ...base,
+        settleableExpenseTotal: -1.005,
+        postedTotal: -1.004,
+        projectedTotal: -1.004,
+      },
+      status: "match",
+      delta: 0.0009999999999998899,
+    },
+    {
       // The shape that motivated `settleableExpenseTotal`: a payment schedule
       // part-way through. Three payments posted, eight still planned. Passing
       // the FULL expense total here reports a mismatch for a purchase that is

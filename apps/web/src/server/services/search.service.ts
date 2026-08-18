@@ -104,6 +104,9 @@ async function hydrateThumbnails(
         UNION ALL
         SELECT i.url, 0 AS priority, pui."sortOrder", pui."createdAt", i.id AS "imageId" FROM "PurchaseImage" pui JOIN "Image" i ON i.id = pui."imageId"
         WHERE refs."entityType" = 'purchase' AND pui."purchaseId" = refs."entityId" AND pui."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
+        UNION ALL
+        SELECT i.url, 0 AS priority, 0 AS "sortOrder", v."createdAt", i.id AS "imageId" FROM "Vendor" v JOIN "Image" i ON i.id = v."logoImageId"
+        WHERE refs."entityType" = 'vendor' AND v.id = refs."entityId" AND v."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
       ) candidates
       ORDER BY candidates.priority, candidates."sortOrder", candidates."createdAt", candidates."imageId"
       LIMIT 1

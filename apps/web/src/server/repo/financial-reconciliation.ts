@@ -94,7 +94,7 @@ export const purchaseFinancialMismatchSql = (purchaseAlias: string) => `
       AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
       AND ft."status" <> 'void'
   ) > 0
-  AND round((
+  AND floor((
     CASE WHEN (
       SELECT count(DISTINCT a."transactionId")
       FROM "FinancialTransactionAllocation" a
@@ -115,7 +115,7 @@ export const purchaseFinancialMismatchSql = (purchaseAlias: string) => `
         AND ft."deletedAt" IS NULL AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
         AND ft."status" = 'posted'
     ) END
-  ) * 100) IS DISTINCT FROM round((${settleableExpenseTotalSql(purchaseAlias)}) * 100)`;
+  ) * 100 + 0.5) IS DISTINCT FROM floor((${settleableExpenseTotalSql(purchaseAlias)}) * 100 + 0.5)`;
 
 /**
  * `kind = 'refund' AND status = 'posted'` — the atom behind every posted-refund

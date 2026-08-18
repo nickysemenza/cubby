@@ -75,6 +75,7 @@ const expense: ExpenseOut = {
   purchaseDate: "2026-07-29",
   purchaseDisplayLabel: null,
   vendorId: unsafeVendorShortcode("VEN-2345"),
+  vendorLogo: null,
   projectName: null,
   productName: null,
   createdAt: new Date("2026-07-31T12:00:00Z"),

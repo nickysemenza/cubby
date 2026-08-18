@@ -18,15 +18,17 @@ import type {
 import { and, eq } from "drizzle-orm";
 import type { z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { ingredient } from "~/server/db/schema";
+import { ingredient, product } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   notDeleted,
   relations,
   unwrapDb,
   updateAndReturn,
+  withTransactionOn,
 } from "~/server/repo/database-helpers";
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
+import { markProductConversionCoverageInputStale } from "~/server/repo/product/conversion-coverage";
 import {
   findOrCreateWithShortcode,
   insertWithShortcode,
@@ -58,7 +60,7 @@ const ingredientCrud = createEntityCrud({
   fetchById: fetchIngredientById,
   fromDB: (db, row: IngredientDeepDB) => dbIngredientToAPI(db, row),
   toUpdate: (data: z.infer<typeof ingredientUpdateData>) => data,
-  auditUpdateFields: ["name", "aliases"],
+  auditUpdateFields: ["name", "aliases", "naKinds"],
 });
 
 export const getIngredientByID = (
@@ -106,13 +108,26 @@ export const createIngredient = async (
  * rather than opening its own, so an importer that creates a recipe and renames
  * its ingredients can keep the whole thing atomic.
  */
-export const updateIngredient = (
+export const updateIngredient = async (
   db: Database | DrizzleTransaction,
   id: IngredientId,
   data: z.infer<typeof ingredientUpdateData>,
   actor: ActorContext,
 ): Promise<IngredientWithRecipesAndProductOut> =>
-  ingredientCrud.update(db, id, data, actor);
+  withTransactionOn(db, async (tx) => {
+    const updated = await ingredientCrud.update(tx, id, data, actor);
+    if (data.naKinds !== undefined) {
+      const linked = await tx
+        .select({ id: product.id })
+        .from(product)
+        .where(and(eq(product.ingredientId, id), notDeleted(product)));
+      await markProductConversionCoverageInputStale(
+        tx,
+        linked.map((row) => row.id),
+      );
+    }
+    return updated;
+  });
 
 export const findOrCreateIngredient = async (
   db: Database | DrizzleTransaction,
