@@ -77,6 +77,13 @@ describe("expense Analyze URL configuration", () => {
     ).toMatchObject({
       comparison: "previousPeriod",
     });
+    expect(
+      expenseAnalyzeConfigFromSearch({
+        date: "30d",
+        analyzeRows: "trade",
+        analyzeCompare: "previousPeriod",
+      }),
+    ).toMatchObject({ comparison: "previousPeriod" });
   });
 
   it("swaps only legal two-dimensional axes and preserves display choices", () => {

@@ -7,6 +7,7 @@ import {
   expenseAnalyzeRowDimensionSchema,
 } from "@cubby/schemas/project";
 import { z } from "zod";
+import { isExpenseDateRangePreset } from "./expense-date-presets";
 
 const expenseAnalyzeMetricSchema = z.enum([
   "net",
@@ -60,9 +61,15 @@ interface ExpenseAnalyzeSearchLike {
   analyzeMetric?: ExpenseAnalyzeMetric;
   analyzeCompare?: ExpenseAnalyzeComparison;
   analyzeShow?: ExpenseAnalyzeProjection;
+  date?: string;
   dateFrom?: string;
   dateTo?: string;
 }
+
+type ExpenseAnalyzeDateScope = Pick<
+  ExpenseAnalyzeSearchLike,
+  "date" | "dateFrom" | "dateTo"
+>;
 
 const isColumnDimension = (
   dimension: ExpenseAnalyzeRowDimension,
@@ -71,15 +78,17 @@ const isColumnDimension = (
 
 export function normalizeExpenseAnalyzeConfig(
   config: ExpenseAnalyzeConfig,
-  dates: Pick<ExpenseAnalyzeSearchLike, "dateFrom" | "dateTo">,
+  dates: ExpenseAnalyzeDateScope,
 ): ExpenseAnalyzeConfig {
   const columnDimension =
     config.columnDimension === config.rowDimension
       ? null
       : config.columnDimension;
+  const boundedDates =
+    Boolean(dates.dateFrom && dates.dateTo) ||
+    isExpenseDateRangePreset(dates.date);
   const comparisonAllowed = Boolean(
-    dates.dateFrom &&
-      dates.dateTo &&
+    boundedDates &&
       config.rowDimension !== "month" &&
       columnDimension !== "month",
   );
@@ -99,7 +108,7 @@ export function normalizeExpenseAnalyzeConfig(
 
 export function expenseAnalyzeConfigFromSearch(
   search: ExpenseAnalyzeSearchLike,
-  resolvedDates: Pick<ExpenseAnalyzeSearchLike, "dateFrom" | "dateTo"> = search,
+  resolvedDates: ExpenseAnalyzeDateScope = search,
 ): ExpenseAnalyzeConfig {
   return normalizeExpenseAnalyzeConfig(
     {

@@ -13,7 +13,6 @@ import {
   expenseAnalyzeSearchFields,
   expenseAnalyzeSearchPatch,
 } from "~/app/expenses/expense-analyze-config";
-import { resolveDateRange } from "~/app/expenses/expense-options";
 import { ExpenseList } from "~/app/expenses/expenselist";
 import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
@@ -117,15 +116,9 @@ const searchSchema = z
   })
   .transform(({ view, ...rest }) => {
     const legacy = view ? LEGACY_VIEW_FILTERS[view] : undefined;
-    const presetDates = resolveDateRange(rest.date);
     const normalizedRest = {
       ...rest,
-      ...expenseAnalyzeSearchPatch(
-        expenseAnalyzeConfigFromSearch(rest, {
-          dateFrom: rest.dateFrom ?? presetDates.dateFrom,
-          dateTo: rest.dateTo ?? presetDates.dateTo,
-        }),
-      ),
+      ...expenseAnalyzeSearchPatch(expenseAnalyzeConfigFromSearch(rest)),
     };
     // A retired preset tab becomes the filter state it used to pin, so the
     // bookmark lands on the same rows — and now says so in the URL.
