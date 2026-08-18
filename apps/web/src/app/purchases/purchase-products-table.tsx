@@ -1,3 +1,4 @@
+import type { KitComponentRowOut } from "@cubby/schemas/product-components";
 import type { PurchaseProductOut } from "@cubby/schemas/purchase";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -16,6 +17,7 @@ import {
 } from "~/app/_components/data-table/table-features";
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { groupComponentsByParent } from "~/app/products/product-kit-rows";
 import { Badge } from "~/components/ui/badge";
 import {
   Empty,
@@ -23,45 +25,98 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "~/components/ui/empty";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { purchaseProductMutationInvalidateKeys } from "~/lib/query-keys";
 
 const EMPTY_PRODUCTS: PurchaseProductOut[] = [];
+const EMPTY_KIT_ROWS: KitComponentRowOut[] = [];
 
 type PurchaseProductRow = {
+  /**
+   * Table row id — namespaced `${kitId}:${componentId}` on a component row, so
+   * a component that sits in two kits (or also appears as its own row on this
+   * order) does not share expansion and React key state. `productId` carries
+   * the real shortcode. Same rule as `products/product-kit-rows.ts`.
+   */
   id: string;
+  productId: string;
   name: string;
   manufacturer: string;
   price: number | null;
   /** An explicit `PurchaseProduct` row exists — the only detachable case. */
   linked: boolean;
+  /** Present only on a component row. */
+  isComponent?: boolean;
   images: Array<{ id: string; url: string; filename: string }>;
+  subRows?: PurchaseProductRow[];
 };
 
 export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
   const api = useTRPC();
   const query = useQuery(api.purchase.products.queryOptions({ purchaseId }));
   const items = query.data ?? EMPTY_PRODUCTS;
+  // Kits among this order's products. Gated on `componentCount` so the vast
+  // majority of purchases (22 of ~3,450 contain a kit) fire no extra query.
+  const kitIds = useMemo(
+    () =>
+      items.filter((item) => item.componentCount > 0).map((i) => i.productId),
+    [items],
+  );
+  const kitComponentsQuery = useQuery({
+    ...api.product.kitComponentRows.queryOptions({ parentProductIds: kitIds }),
+    enabled: kitIds.length > 0,
+  });
+  const componentsByParent = useMemo(
+    () => groupComponentsByParent(kitComponentsQuery.data ?? EMPTY_KIT_ROWS),
+    [kitComponentsQuery.data],
+  );
+
   const rows = useMemo<PurchaseProductRow[]>(
     () =>
-      items.map((item) => ({
-        id: item.productId,
-        name: item.productName,
-        manufacturer: item.manufacturer,
-        price: item.price,
-        linked: item.linkAttachedAt !== null,
-        images: item.coverImageUrl
-          ? [
-              {
-                id: `cover:${item.productId}`,
-                url: item.coverImageUrl,
-                filename: item.productName,
-              },
-            ]
-          : [],
-      })),
-    [items],
+      items.map((item) => {
+        const imagesFor = (id: string, url: string | null, name: string) =>
+          url ? [{ id: `cover:${id}`, url, filename: name }] : [];
+        const components = componentsByParent.get(item.productId) ?? [];
+        const row: PurchaseProductRow = {
+          id: item.productId,
+          productId: item.productId,
+          name: item.productName,
+          manufacturer: item.manufacturer,
+          price: item.price,
+          linked: item.linkAttachedAt !== null,
+          images: imagesFor(
+            item.productId,
+            item.coverImageUrl,
+            item.productName,
+          ),
+        };
+        if (components.length === 0) return row;
+        return {
+          ...row,
+          // No `subRows` key at all when empty, so `getCanExpand()` is false and
+          // the name column renders its leaf spacer rather than a dead chevron.
+          subRows: components.map((component) => ({
+            id: `${item.productId}:${component.product.id}`,
+            productId: component.product.id,
+            name: component.product.name,
+            manufacturer: component.product.manufacturer,
+            price: component.product.price,
+            // A component was never attached to this order — the kit was.
+            linked: false,
+            isComponent: true,
+            // The list row carries the full image array rather than the single
+            // cover URL the purchase projection uses; first is the cover.
+            images: imagesFor(
+              component.product.id,
+              component.product.images[0]?.url ?? null,
+              component.product.name,
+            ),
+          })),
+        };
+      }),
+    [items, componentsByParent],
   );
   const detach = useActionMutation({
     mutationFn: api.purchase.detachProducts.mutationOptions,
@@ -77,7 +132,16 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
   const columns = useMemo<CubbyColumnDef<PurchaseProductRow>[]>(
     () => [
       createImageColumn(helper, { entity: "product" }),
-      createNameColumn(helper, "product", "name", { header: "Product" }),
+      createNameColumn(helper, "product", "name", {
+        header: "Product",
+        expandable: true,
+        // The row id is namespaced on components, so the link has to be built
+        // from the real shortcode rather than the default `row.id` resolver.
+        rowLink: (row) => ({
+          to: entities.product.routes.detail,
+          params: entityDetailParams(row.productId),
+        }),
+      }),
       helper.accessor((row) => row.manufacturer, {
         id: "manufacturer",
         header: "Manufacturer",
@@ -119,7 +183,9 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
               disabled={detach.isPending}
               onSelect={(event) => {
                 event.stopPropagation();
-                detach.mutate({ purchaseId, productIds: [row.id] });
+                // `productId`, never `id` — the latter is namespaced on a
+                // component row, and no endpoint ever minted that value.
+                detach.mutate({ purchaseId, productIds: [row.productId] });
               }}
             />
           ),
@@ -134,6 +200,7 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
     atoms: layout.atoms,
     meta: { defaultLayout: layout.defaultLayout },
     getRowId: (row) => row.id,
+    getSubRows: (row) => row.subRows,
     initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
   });
 

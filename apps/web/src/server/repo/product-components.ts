@@ -27,11 +27,13 @@ import {
   unsafePurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
+  KitComponentRowOut,
   KitMembershipOut,
   KitMembershipPurchaseOut,
   ProductComponentOut,
 } from "@cubby/schemas/product-components";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { uniq, uniqBy } from "es-toolkit";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
@@ -44,13 +46,18 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
+import { loadProductDataQualities } from "~/server/repo/data-quality";
 import {
   getDb,
   notDeleted,
+  relations,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
 import { markProductConversionCoverageInputStale } from "~/server/repo/product/conversion-coverage";
+// The list-row assembly, reused so a component row and a top-level row are the
+// same shape by construction — see `listKitComponentRows`.
+import { dbProductToListAPI } from "~/server/repo/product/mappers";
 // `findMergeComponentCycle` is the SAME question `mergeProducts` already
 // answers — "does identifying/adding these edges make a product reach
 // itself" — reused here rather than reimplemented. Called with `loserIds: []`
@@ -58,7 +65,11 @@ import { markProductConversionCoverageInputStale } from "~/server/repo/product/c
 // "does keepId reach itself over this edge set", which is exactly the attach
 // question: no node identification happens on attach, only new edges.
 import { findMergeComponentCycle } from "~/server/repo/product/merge";
-import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
+import {
+  enrichProductRowsWithPricing,
+  loadEffectiveProductPricesById,
+} from "~/server/repo/product/pricing";
+import { enrichProductRowsWithQuantityLedger } from "~/server/repo/product/quantity-ledger";
 // The one rule for "does this Expense say the order bought the product" —
 // shared rather than restated, so a kit's purchase link and the Purchases panel
 // can never disagree about which orders count.
@@ -68,6 +79,110 @@ import { expensePairPredicate } from "~/server/repo/purchase-products";
 export interface ProductComponentEntry {
   productId: ProductId;
   quantity: number;
+}
+
+/**
+ * Components of several kits at once, each shaped as a full PRODUCT LIST ROW.
+ *
+ * `listProductComponents` below answers "what is in this kit" for the detail
+ * page, and its seven fields are all that page needs. This answers a different
+ * question: the Products list renders a kit's components as ordinary rows of
+ * its own table, so a component has to fill the same ~30 columns its parent
+ * does — quantity ledger, expense totals, data quality, tags, the lot.
+ *
+ * So it deliberately reuses `productList`'s own assembly (`relations.product.list`
+ * → data qualities → pricing → quantity ledger → `dbProductToListAPI`) rather
+ * than widening `productComponentOut` field by field. A child row is then the
+ * same shape as a parent BY CONSTRUCTION; the alternative drifts the moment
+ * anyone adds a column.
+ *
+ * Batched over parents because the caller fetches every kit on the page at
+ * once. That is not an optimization — fetching per expanded row would deliver
+ * children after render, and `DesktopDataRow`'s memo compares `row.original`,
+ * so the new rows would silently never paint without a `rowContentVersion`
+ * bump. Having the data before rows are built avoids that class of bug.
+ *
+ * One product can be a component of several kits (10 are, on live data), so a
+ * component appears once per parent and the caller keys child rows by the pair.
+ */
+export async function listKitComponentRows(
+  db: Database,
+  parentProductIds: ProductId[],
+): Promise<KitComponentRowOut[]> {
+  if (parentProductIds.length === 0) return [];
+  const dbc = getDb(db);
+
+  // Live edge AND live component product — the same pair of predicates the
+  // `componentPresenceFilter` id-set and the `componentCount` scalar use, so
+  // the count on a parent row always matches the children that appear under it.
+  // The parent is joined through an alias purely to read its SHORTCODE: the
+  // uuid is a repo-private detail and must never cross the API boundary, and
+  // the caller keys child rows by `${parentShortcode}:${componentShortcode}`.
+  const parentProduct = alias(product, "kitParentProduct");
+  const edges = await dbc
+    .select({
+      parentProductId: parentProduct.shortcode,
+      componentProductId: productComponent.componentProductId,
+      quantity: productComponent.quantity,
+      componentName: product.name,
+    })
+    .from(productComponent)
+    .innerJoin(
+      product,
+      and(
+        eq(product.id, productComponent.componentProductId),
+        notDeleted(product),
+      ),
+    )
+    .innerJoin(
+      parentProduct,
+      and(
+        eq(parentProduct.id, productComponent.parentProductId),
+        notDeleted(parentProduct),
+      ),
+    )
+    .where(
+      and(
+        inArray(productComponent.parentProductId, parentProductIds),
+        notDeleted(productComponent),
+      ),
+    )
+    .orderBy(asc(product.name));
+
+  if (edges.length === 0) return [];
+
+  const componentIds = uniq(edges.map((edge) => edge.componentProductId));
+  const rows = await dbc.query.product.findMany({
+    where: and(inArray(product.id, componentIds), notDeleted(product)),
+    ...relations.product.list,
+  });
+
+  const qualities = await loadProductDataQualities(
+    db,
+    rows.map((row) => row.id),
+  );
+  const priced = await enrichProductRowsWithPricing(db, rows);
+  const ledgered = await enrichProductRowsWithQuantityLedger(db, priced);
+  const byId = new Map(
+    ledgered.map((row) => [
+      row.id,
+      dbProductToListAPI({ ...row, dataQuality: qualities.get(row.id)! }),
+    ]),
+  );
+
+  // Edge order (component name) is preserved; a component whose product row
+  // somehow did not load is dropped rather than emitted half-formed.
+  return edges.flatMap((edge) => {
+    const item = byId.get(edge.componentProductId);
+    if (!item) return [];
+    return [
+      {
+        parentProductId: unsafeProductShortcode(edge.parentProductId),
+        quantity: edge.quantity,
+        product: item,
+      },
+    ];
+  });
 }
 
 /** A kit's own component list, alphabetically by name. */

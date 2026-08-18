@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { plainDate } from "./base-entity";
 import { productShortcode, purchaseShortcode } from "./identifiers";
+import { productListItemOut } from "./product";
 
 /**
  * What's inside a kit (`ProductComponent` in schema.ts). A combo tool kit or a
@@ -28,6 +29,15 @@ export const productComponentsInput = z.object({
 
 export const kitMembershipsInput = z.object({
   productId: productShortcode,
+});
+
+/**
+ * Several kits at once — the Products list expands every kit on the page, so
+ * it asks once rather than per expanded row. Bounded well above the 21 kits
+ * that exist; the cap is a guard, not a paging scheme.
+ */
+export const kitComponentRowsInput = z.object({
+  parentProductIds: z.array(productShortcode).min(1).max(200),
 });
 
 export const productComponentEntryInput = z.object({
@@ -74,6 +84,27 @@ export const productComponentOut = z.object({
 });
 export type ProductComponentOut = z.infer<typeof productComponentOut>;
 export const productComponentsOut = z.array(productComponentOut);
+
+/**
+ * A component as a full PRODUCT LIST ROW, for tables that nest a kit's
+ * components under it as ordinary rows of their own table.
+ *
+ * Distinct from `productComponentOut` above on purpose. That one is the
+ * detail-page projection — seven fields, all a panel needs. This one embeds
+ * the entire list row so a child fills every column its parent fills; anything
+ * narrower renders blanks in columns the parent populates, and a blank reads
+ * as "zero", not as "not fetched".
+ *
+ * `parentProductId` is carried because one product can be a component of
+ * several kits, so the pair — not the product — identifies the row.
+ */
+export const kitComponentRowOut = z.object({
+  parentProductId: productShortcode,
+  quantity: componentQuantity,
+  product: productListItemOut,
+});
+export type KitComponentRowOut = z.infer<typeof kitComponentRowOut>;
+export const kitComponentRowsOut = z.array(kitComponentRowOut);
 
 /**
  * The kit's own most recent live purchase — enough to link straight to the

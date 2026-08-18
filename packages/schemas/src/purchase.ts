@@ -519,6 +519,11 @@ export const purchaseProductOut = z.object({
   coverImageUrl: z.url().nullable(),
   source: purchaseProductSource,
   linkAttachedAt,
+  /**
+   * Live `ProductComponent` edges where this product is the parent — non-zero
+   * means it is a kit, and its row can expand to show what it contains.
+   */
+  componentCount: z.number().int().nonnegative(),
 });
 export type PurchaseProductOut = z.infer<typeof purchaseProductOut>;
 export const purchaseProductsOut = z.array(purchaseProductOut);
