@@ -48,6 +48,7 @@ import type { ProductId } from "@cubby/schemas/identifiers";
 import type {
   ProductPickerOnHandOut,
   ProductQuantityLedgerOut,
+  ProductQuantitySummaryOut,
 } from "@cubby/schemas/product";
 import type { AnyColumn } from "drizzle-orm";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
@@ -469,4 +470,33 @@ export const loadProductPickerQuantities = async (
   }
 
   return quantities;
+};
+
+/**
+ * Bounded batch of the same three quantity values the product list renders.
+ *
+ * This deliberately builds on `loadProductPickerQuantities`: that loader owns
+ * the live-location, identity-location, and mixed-unit rules for on-hand
+ * quantity, so a recount cannot silently use a different interpretation.
+ */
+export const loadProductQuantitySummaries = async (
+  db: Database | DrizzleTransaction,
+  ids: readonly ProductId[],
+): Promise<Map<ProductId, ProductQuantitySummaryOut>> => {
+  const pickerQuantities = await loadProductPickerQuantities(db, ids);
+  const summaries = new Map<ProductId, ProductQuantitySummaryOut>();
+
+  for (const [id, { quantityLedger, onHand }] of pickerQuantities) {
+    const onHandUnits = onHand.state === "counted" ? onHand.units : null;
+    summaries.set(id, {
+      quantityLedger,
+      onHandUnits,
+      quantityVariance:
+        onHandUnits === null
+          ? null
+          : onHandUnits - quantityLedger.expectedQuantity,
+    });
+  }
+
+  return summaries;
 };

@@ -2,6 +2,10 @@ import type { Amount } from "@cubby/schemas/codec";
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { InfLocation } from "@cubby/schemas/location";
+import type {
+  ProductQuantitySummariesOut,
+  ProductQuantitySummaryOut,
+} from "@cubby/schemas/product";
 import { Link } from "@tanstack/react-router";
 import {
   ArrowRightLeft,
@@ -49,6 +53,7 @@ export function LocationReviewPane({
   parent,
   location,
   items,
+  quantitySummaries,
   unknownItems,
   unknownLocations,
   inventoryByLocation,
@@ -74,6 +79,7 @@ export function LocationReviewPane({
   parent: InfLocation;
   location: SessionLocation;
   items: InventoryItem[];
+  quantitySummaries: ProductQuantitySummariesOut | undefined;
   unknownItems: InventoryItem[];
   unknownLocations: InfLocation[];
   // Direct inventory keyed by location id — powers the child/Unknown-location
@@ -171,6 +177,7 @@ export function LocationReviewPane({
               <ExpectedItemReviewRow
                 key={item.id}
                 item={item}
+                quantitySummary={quantitySummaries?.[item.product.id]}
                 resolution={itemResolutions.get(item.id)}
                 isDuplicate={duplicateProductIds.has(item.product.id)}
                 onAdjust={(amount) => onAdjust(item, amount)}
@@ -330,6 +337,7 @@ function LocationContextStrip({ location }: { location: SessionLocation }) {
 
 function ExpectedItemReviewRow({
   item,
+  quantitySummary,
   resolution,
   onAdjust,
   onRemove,
@@ -342,6 +350,7 @@ function ExpectedItemReviewRow({
   isUnknownLocation,
 }: {
   item: InventoryItem;
+  quantitySummary: ProductQuantitySummaryOut | undefined;
   resolution: ItemResolution | undefined;
   isDuplicate: boolean;
   onAdjust: (amount: Amount) => void;
@@ -420,6 +429,7 @@ function ExpectedItemReviewRow({
           <Row align="baseline" gap="xs" wrap>
             <Description size="xs">{tryFormatAmount(amount)}</Description>
             <Description size="xs">{stateLabel}</Description>
+            <QuantityVarianceHint summary={quantitySummary} />
             {item.verifiedAt && (
               <AuditedHint
                 at={item.verifiedAt}
@@ -570,5 +580,26 @@ function ExpectedItemReviewRow({
         </SheetContent>
       </Sheet>
     </div>
+  );
+}
+
+export function QuantityVarianceHint({
+  summary,
+}: {
+  summary: ProductQuantitySummaryOut | undefined;
+}) {
+  if (
+    !summary ||
+    summary.quantityVariance === null ||
+    summary.quantityVariance === 0 ||
+    summary.onHandUnits === null
+  ) {
+    return null;
+  }
+
+  return (
+    <Description size="xs" className="text-warning">
+      {`Ledger ${summary.quantityLedger.expectedQuantity} · shelves ${summary.onHandUnits}`}
+    </Description>
   );
 }

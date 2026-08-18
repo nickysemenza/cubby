@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { productMcpOut } from "./product";
+import { productMcpOut, productQuantitySummaryBatchInput } from "./product";
 
 describe("productMcpOut", () => {
   it("carries product-enrichment identity and image summary fields", () => {
@@ -52,5 +52,15 @@ describe("productMcpOut", () => {
       priceOverride: 329,
       pricing: { source: "explicit", effectivePrice: 329 },
     });
+  });
+});
+
+describe("productQuantitySummaryBatchInput", () => {
+  it("accepts a whole-house recount batch larger than the old page-sized cap", () => {
+    expect(
+      productQuantitySummaryBatchInput.safeParse({
+        ids: Array.from({ length: 501 }, () => "PRD-ABCD"),
+      }).success,
+    ).toBe(true);
   });
 });
