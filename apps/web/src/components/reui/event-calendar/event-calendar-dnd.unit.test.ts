@@ -2,6 +2,7 @@ import { format } from "date-fns";
 import { describe, expect, it } from "vitest";
 import {
   type EventCalendarDragData,
+  isEventCalendarKeyboardTarget,
   proposeEventCalendarDrop,
 } from "./event-calendar-dnd";
 import { toZoned } from "./event-calendar-lib";
@@ -55,6 +56,33 @@ function drag(
 
 const local = (date: Date) =>
   format(toZoned(date, TIME_ZONE), "yyyy-MM-dd HH:mm");
+
+describe("isEventCalendarKeyboardTarget", () => {
+  it("skips the source cell so an arrow reaches the adjacent day", () => {
+    const value = segment(
+      "2026-07-14T07:00:00.000Z",
+      "2026-07-15T07:00:00.000Z",
+      "2026-07-14T07:00:00.000Z",
+      true,
+    );
+    const active = drag(value, "move");
+
+    expect(
+      isEventCalendarKeyboardTarget(active, {
+        calendarDrop: true,
+        day: value.day,
+        allDay: true,
+      }),
+    ).toBe(false);
+    expect(
+      isEventCalendarKeyboardTarget(active, {
+        calendarDrop: true,
+        day: new Date("2026-07-15T07:00:00.000Z"),
+        allDay: true,
+      }),
+    ).toBe(true);
+  });
+});
 
 describe("proposeEventCalendarDrop", () => {
   it("preserves local start time and exact duration across spring-forward", () => {

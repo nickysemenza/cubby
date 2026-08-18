@@ -5,6 +5,7 @@ import {
   DragOverlay,
   type DragEndEvent,
   type DragMoveEvent,
+  type DragOverEvent,
   type DragStartEvent,
   useDraggable,
   useDroppable,
@@ -25,7 +26,10 @@ import {
 } from "~/components/dnd/accessibility";
 import { DragPreviewFrame } from "~/components/dnd/DragPreviewFrame";
 import { createDndAutoScroller } from "~/components/dnd/auto-scroll";
-import { useCubbyDndSensors } from "~/components/dnd/sensors";
+import {
+  createValidTargetKeyboardCoordinates,
+  useCubbyDndSensors,
+} from "~/components/dnd/sensors";
 import {
   type EventCalendarInstance,
   useEventCalendar,
@@ -117,6 +121,21 @@ const isDrag = (value: unknown): value is EventCalendarDragData<unknown> =>
 const isDrop = (value: unknown): value is EventCalendarDropData =>
   !!value && typeof value === "object" && "calendarDrop" in value;
 
+export function isEventCalendarKeyboardTarget(
+  activeData: Record<string, unknown> | undefined,
+  targetData: Record<string, unknown> | undefined,
+) {
+  if (!isDrag(activeData) || !isDrop(targetData)) return false;
+  const sourceDay = activeData.segment?.day ?? activeData.day;
+  // The grip sits slightly left of its containing cell's center. Without
+  // excluding that no-op cell, ArrowRight can choose the source again.
+  return !sourceDay || sourceDay.getTime() !== targetData.day.getTime();
+}
+
+const calendarKeyboardCoordinates = createValidTargetKeyboardCoordinates(
+  isEventCalendarKeyboardTarget,
+);
+
 export function proposeEventCalendarDrop<T>(
   data: EventCalendarDragData<T>,
   target: EventCalendarDropData,
@@ -187,6 +206,7 @@ export function EventCalendarDndProvider<T>({
     pointerDistance: settings.activation?.moveDistancePx ?? 5,
     touchDelay: settings.activation?.touchDelayMs ?? 250,
     touchTolerance: settings.activation?.touchTolerancePx ?? 5,
+    keyboardCoordinates: calendarKeyboardCoordinates,
   });
   const [active, setActive] =
     useState<EventCalendarDragData<T> | null>(null);
@@ -266,7 +286,7 @@ export function EventCalendarDndProvider<T>({
     }
   }, []);
   const onMove = useCallback(
-    ({ active: item, over }: DragMoveEvent) => {
+    ({ active: item, over }: DragMoveEvent | DragOverEvent) => {
       if (!isDrag(item.data.current) || !isDrop(over?.data.current)) return;
       const data = item.data.current as EventCalendarDragData<T>;
       const target = over.data.current as EventCalendarDropData;
@@ -344,6 +364,7 @@ export function EventCalendarDndProvider<T>({
         autoScroll={false}
         onDragStart={onStart}
         onDragMove={onMove}
+        onDragOver={onMove}
         onDragEnd={onEnd}
         onDragCancel={clear}
         accessibility={{

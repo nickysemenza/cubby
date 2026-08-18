@@ -34,6 +34,8 @@ export function UnknownDock({ unknownRoot, roots }: UnknownDockProps) {
   return (
     <Stack
       ref={setNodeRef}
+      role="group"
+      aria-label="Unknown staging drop target"
       gap="sm"
       className={cn(
         "w-full shrink-0 rounded-none border border-[var(--border-strong)] border-dashed bg-background p-4 lg:w-72",

@@ -45,9 +45,11 @@ export function ArrangeColumn({
   const { setNodeRef, isOver } = useArrangeDropTarget({ roots, locationId });
 
   const isEmpty = nodes.length === 0 && items.length === 0;
+  const locationName = headerLocation?.name ?? "Home";
 
   return (
-    <div
+    <section
+      aria-label={`${locationName} column`}
       data-arrange-main-column={pinned ? undefined : ""}
       className={cn(
         "flex w-[calc(100vw-2rem)] shrink-0 snap-start flex-col border sm:w-72",
@@ -72,10 +74,11 @@ export function ArrangeColumn({
         </span>
       </div>
 
-      <div
+      <fieldset
         ref={setNodeRef}
+        aria-label={`${locationName} contents drop target`}
         className={cn(
-          "flex max-h-[calc(100dvh-14rem)] flex-1 flex-col gap-1 overflow-y-auto p-2" /* tight: dense card list */,
+          "flex max-h-[calc(100dvh-14rem)] min-w-0 flex-1 flex-col gap-1 overflow-y-auto p-2" /* tight: dense card list */,
           isOver && "bg-primary/10",
         )}
       >
@@ -105,7 +108,7 @@ export function ArrangeColumn({
               : "Nothing here"}
           </p>
         )}
-      </div>
-    </div>
+      </fieldset>
+    </section>
   );
 }

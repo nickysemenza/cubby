@@ -104,6 +104,8 @@ export function ArrangeLocationRow({
         setDropNodeRef(element);
       }}
       location={node}
+      role="group"
+      aria-label={`${node.name} location drop target`}
       depth={depth}
       active={isOver}
       faded={isDragging}
