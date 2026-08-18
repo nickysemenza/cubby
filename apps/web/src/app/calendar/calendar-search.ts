@@ -7,6 +7,11 @@ const dateParam = z
   .optional()
   .catch(undefined);
 
+export const calendarPeriodParam = z
+  .enum(["month", "week"])
+  .optional()
+  .catch(undefined);
+
 /**
  * Filter params are {@link urlStringParam}, not `z.string()`.
  *
@@ -22,6 +27,7 @@ const dateParam = z
  * `calendar-filter-specs.unit.test.tsx` asserts the two stay in step.
  */
 export const calendarSearchSchema = z.object({
+  period: calendarPeriodParam,
   date: dateParam,
   day: dateParam,
   kinds: urlStringParam,
@@ -39,6 +45,7 @@ export const calendarSearchSchema = z.object({
  * in the URL forever.
  */
 export const calendarSearchDefaults = {
+  period: undefined,
   date: undefined,
   day: undefined,
   kinds: undefined,

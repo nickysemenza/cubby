@@ -14,18 +14,20 @@ describe("meal route search", () => {
     expect(
       mealCalendarSearchSchema.parse({
         view: "table",
+        period: "week",
         week: "2026-06-24",
       }),
-    ).toEqual({ view: "table", week: "2026-06-24" });
+    ).toEqual({ view: "table", period: "week", week: "2026-06-24" });
   });
 
   it("soft-falls back for malformed calendar params", () => {
     expect(
       mealCalendarSearchSchema.parse({
         view: "board",
+        period: "agenda",
         week: "next-week",
       }),
-    ).toEqual({ view: undefined, week: undefined });
+    ).toEqual({ view: undefined, period: undefined, week: undefined });
   });
 
   /**

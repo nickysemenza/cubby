@@ -101,4 +101,29 @@ describe("groupItemsByDay", () => {
       ),
     ).toEqual([]);
   });
+
+  it("renders every Sunday-through-Saturday day for weekly planning", () => {
+    const groups = groupItemsByDay(
+      [task("TSK-1111", "2026-08-15", "2026-08-19")],
+      includesDay,
+      { startDate: "2026-08-16", endDateExclusive: "2026-08-23" },
+      true,
+    );
+
+    expect(groups.map((group) => group.day)).toEqual([
+      "2026-08-16",
+      "2026-08-17",
+      "2026-08-18",
+      "2026-08-19",
+      "2026-08-20",
+      "2026-08-21",
+      "2026-08-22",
+    ]);
+    expect(groups.slice(0, 3).every((group) => group.items.length === 1)).toBe(
+      true,
+    );
+    expect(groups.slice(3).every((group) => group.items.length === 0)).toBe(
+      true,
+    );
+  });
 });

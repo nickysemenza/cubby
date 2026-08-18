@@ -8,12 +8,14 @@ describe("calendar search params", () => {
   it("accepts linkable calendar filters and selected dates", () => {
     expect(
       calendarSearchSchema.parse({
+        period: "week",
         date: "2026-07-01",
         day: "2026-07-14",
         kinds: "meal,task",
         projectKinds: "renovation,garden",
       }),
     ).toMatchObject({
+      period: "week",
       date: "2026-07-01",
       day: "2026-07-14",
       kinds: "meal,task",
@@ -37,5 +39,11 @@ describe("calendar search params", () => {
         day: "2026-7-4",
       }),
     ).toEqual(calendarSearchDefaults);
+  });
+
+  it("falls back to the default month for an unknown period", () => {
+    expect(calendarSearchSchema.parse({ period: "agenda" })).toEqual(
+      calendarSearchDefaults,
+    );
   });
 });

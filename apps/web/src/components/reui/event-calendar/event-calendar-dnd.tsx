@@ -52,8 +52,11 @@ export type EventCalendarDropData = {
   allDay: boolean;
 };
 
-let lastGestureEndedAt = 0;
-let lastChipPressAt = 0;
+// A zero timestamp treats every click during the first suppression window
+// after hydration as a completed gesture. Start outside the window so the
+// first blank-day click is never swallowed.
+let lastGestureEndedAt = Number.NEGATIVE_INFINITY;
+let lastChipPressAt = Number.NEGATIVE_INFINITY;
 export const wasRecentDrag = () => performance.now() - lastGestureEndedAt < 250;
 export const markChipPress = () => {
   lastChipPressAt = performance.now();
@@ -263,7 +266,7 @@ export function EventCalendarDndProvider<T>({
     [apply, autoScroller, instance],
   );
   const clear = useCallback(() => {
-    lastGestureEndedAt = performance.now();
+    if (activeRef.current) lastGestureEndedAt = performance.now();
     instance.internals.setDrag(null);
     movingRef.current = null;
     autoScroller.stop();

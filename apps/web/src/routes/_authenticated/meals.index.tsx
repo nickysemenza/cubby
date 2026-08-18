@@ -4,7 +4,7 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
-// Meal planning calendar (week view).
+// Meal planning calendar (month overview and weekly focus).
 import { MealCalendarPage } from "~/app/meals/calendar-page";
 import { CreateMealDialog } from "~/app/meals/create-meal-dialog";
 import {
@@ -23,7 +23,7 @@ export const Route = createFileRoute("/_authenticated/meals/")({
 
 function MealsIndexRoute() {
   const search = Route.useSearch();
-  const { view, week } = search;
+  const { period, view, week } = search;
   const navigate = useNavigate({ from: Route.fullPath });
   const routeView = view ?? "calendar";
 
@@ -36,6 +36,7 @@ function MealsIndexRoute() {
     >
       <MealCalendarPage
         view={routeView}
+        period={period ?? "month"}
         week={week}
         onViewChange={(nextView) =>
           // Merge, don't replace — a plain object here would drop the Table
@@ -54,6 +55,16 @@ function MealsIndexRoute() {
           void navigate({
             to: "/meals",
             search: (prev) => ({ ...prev, week: nextWeek }),
+            replace: true,
+          })
+        }
+        onPeriodChange={(nextPeriod) =>
+          void navigate({
+            to: "/meals",
+            search: (prev) => ({
+              ...prev,
+              period: nextPeriod === "month" ? undefined : nextPeriod,
+            }),
             replace: true,
           })
         }

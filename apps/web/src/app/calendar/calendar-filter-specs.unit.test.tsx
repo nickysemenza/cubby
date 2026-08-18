@@ -17,7 +17,7 @@ import { calendarSearchSchema } from "./calendar-search";
 describe("calendarFilterSpecs drift guards", () => {
   it("declares exactly the URL keys the route's search schema accepts", () => {
     const routeKeys = Object.keys(calendarSearchSchema.shape)
-      .filter((key) => key !== "date" && key !== "day")
+      .filter((key) => key !== "date" && key !== "day" && key !== "period")
       .sort();
     const specKeys = calendarFilterSpecs
       .map((spec) => spec.urlKey ?? spec.columnId)

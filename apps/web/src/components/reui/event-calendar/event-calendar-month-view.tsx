@@ -16,7 +16,6 @@ import {
   useState,
 } from "react";
 import {
-  useEventCalendar,
   useEventCalendarDay,
   useEventCalendarSelector,
   useEventCalendarSettings,
@@ -29,8 +28,14 @@ import {
 } from "~/components/reui/event-calendar/event-calendar-dnd";
 import {
   EVENT_CALENDAR_GHOST,
+  EventCalendarDropPlaceholder,
   EventCalendarEvent,
 } from "~/components/reui/event-calendar/event-calendar-event";
+import {
+  captureEventCalendarChipFocus,
+  releaseEventCalendarChipFocus,
+  restoreEventCalendarChipFocus,
+} from "~/components/reui/event-calendar/event-calendar-focus";
 import {
   getRangeKey,
   toZoned,
@@ -39,7 +44,6 @@ import {
 import type {
   EventCalendarDateRange,
   EventCalendarDragState,
-  EventCalendarEventId,
   EventCalendarSegment,
 } from "~/components/reui/event-calendar/event-calendar-types";
 import {
@@ -55,42 +59,6 @@ import { cn } from "~/lib/utils";
 const useIsoLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
-// An occurrence key encodes the start instant and is also the chip's React key,
-// so committing a move re-keys the chip: React remounts it and the browser
-// drops focus to <body>. The chip that owns focus is recorded here so the cell
-// rendering its replacement can hand focus back. Module scope because the drop
-// can land in a different cell than the one the chip left, and only one element
-// holds focus at a time anyway.
-let focusedChip: {
-  node: HTMLElement;
-  eventId: EventCalendarEventId;
-} | null = null;
-
-/** Give focus back to the recorded chip's replacement, if `root` renders it. */
-function restoreChipFocus(
-  root: HTMLElement | null,
-  segments: EventCalendarSegment[],
-) {
-  const pending = focusedChip;
-  // Only a chip removed WHILE focused needs help: a node still in the tree, or
-  // a focus that has already moved on by itself, is left alone.
-  if (!root || !pending || pending.node.isConnected) return;
-  const active = document.activeElement;
-  if (active && active !== document.body) return;
-  const index = segments.findIndex(
-    (segment) =>
-      segment.occurrence.eventId === pending.eventId,
-  );
-  if (index < 0) return;
-  const chip = root.querySelectorAll<HTMLElement>(
-    "[data-slot=event-calendar-event]",
-  )[index];
-  if (!chip) return;
-  // cleared first: focus() re-records through the new chip's own onFocus
-  focusedChip = null;
-  chip.focus();
-}
-
 interface EventCalendarMonthViewProps extends useRender.ComponentProps<"div"> {}
 
 function EventCalendarMonthView({
@@ -98,7 +66,6 @@ function EventCalendarMonthView({
   render,
   ...props
 }: EventCalendarMonthViewProps) {
-  const instance = useEventCalendar();
   const settings = useEventCalendarSettings();
   const visibleRange = useEventCalendarSelector<
     unknown,
@@ -107,6 +74,7 @@ function EventCalendarMonthView({
     isEqual: (a, b) => getRangeKey(a) === getRangeKey(b),
   });
   const anchorDate = useEventCalendarSelector((state) => state.date);
+  const activeRange = useEventCalendarSelector((state) => state.activeRange);
 
   const weeks = useMemo(() => {
     const days: Date[] = [];
@@ -129,7 +97,7 @@ function EventCalendarMonthView({
   const headerDays = weeks[0] ?? [];
   const title = settings.i18n.functions.formatTitle("month", {
     date: toZoned(anchorDate, settings.timeZone),
-    activeRange: instance.api.getActiveRange(),
+    activeRange,
     visibleRange,
     locale: settings.locale,
   });
@@ -711,30 +679,18 @@ function EventCalendarMonthCell({
     [drop.setNodeRef],
   );
   useIsoLayoutEffect(() => {
-    restoreChipFocus(rootRef.current, visibleTimed);
+    restoreEventCalendarChipFocus(rootRef.current, visibleTimed);
   });
 
   // Faint dashed drop placeholder, tinted to the dragged event's color, echoing
   // the move ghost (EVENT_CALENDAR_GHOST.move); one chip-height tall so chips
   // shift by exactly one row when it is inserted.
   const dropPlaceholder = inlineDrop ? (
-    <div
+    <EventCalendarDropPlaceholder
       key="ec-drop-placeholder"
-      aria-hidden
-      data-slot="event-calendar-drop-placeholder"
-      data-drop-invalid={!inlineDrop.valid || undefined}
-      className={cn(
-        "shrink-0 border border-dashed",
-        inlineDrop.valid
-          ? "border-(--ec-event-color)/50 bg-(--ec-event-color)/8"
-          : "border-destructive/70 bg-destructive/10",
-      )}
-      style={
-        {
-          "--ec-event-color": inlineDrop.color ?? "var(--color-primary)",
-          height: "calc(var(--ec-month-bar-h, 1.75rem) - 0.125rem)",
-        } as CSSProperties
-      }
+      color={inlineDrop.color}
+      valid={inlineDrop.valid}
+      className="h-[calc(var(--ec-month-bar-h,1.75rem)-0.125rem)]"
     />
   ) : null;
 
@@ -770,15 +726,15 @@ function EventCalendarMonthCell({
               // Remember the chip holding focus so a commit that re-keys it can
               // hand focus back to the remounted one (see restoreChipFocus)
               onFocus={(e) => {
-                focusedChip = {
-                  node: e.currentTarget,
-                  eventId: segment.occurrence.eventId,
-                };
+                captureEventCalendarChipFocus(
+                  e.currentTarget,
+                  segment.occurrence.eventId,
+                );
               }}
               // A chip still in the tree lost focus on its own, so there is
               // nothing to restore; only a blur from the remount is kept.
               onBlur={(e) => {
-                if (e.currentTarget.isConnected) focusedChip = null;
+                releaseEventCalendarChipFocus(e.currentTarget);
               }}
               // Hold a fixed height like the all-day lane above; without this
               // the chip flex-shrinks to whatever room the cell has left, so
@@ -819,7 +775,7 @@ function EventCalendarMonthCell({
             onClick={(e) => {
               e.stopPropagation();
               settings.onSlotClick?.(
-                { date: day, allDay: true, view: "month" },
+                { date: day, allDay: true, period: "month" },
                 e,
               );
             }}
@@ -887,7 +843,7 @@ function EventCalendarMonthCell({
       }}
       onClick={(e) => {
         if (wasRecentDrag() || wasRecentChipPress()) return;
-        settings.onSlotClick?.({ date: day, allDay: true, view: "month" }, e);
+        settings.onSlotClick?.({ date: day, allDay: true, period: "month" }, e);
       }}
     >
       {content}

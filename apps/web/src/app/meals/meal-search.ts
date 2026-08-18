@@ -1,6 +1,7 @@
 import { addDays, format, isValid, parseISO, startOfWeek } from "date-fns";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
+import { calendarPeriodParam } from "~/app/calendar/calendar-search";
 import {
   entityFilterSearchFields,
   routeFilterValues,
@@ -22,6 +23,7 @@ export type MealCalendarView = "calendar" | "table";
 // pattern).
 export const mealCalendarSearchSchema = z.object({
   view: z.enum(["calendar", "table"]).optional().catch(undefined),
+  period: calendarPeriodParam,
   week: dateParamSchema,
   // Meals have no /meals/new route — the create is a dialog, opened by this
   // param. That makes it deep-linkable, which is what lets the action registry
@@ -35,6 +37,7 @@ export const mealCalendarSearchSchema = z.object({
 
 export const mealCalendarSearchDefaults = {
   view: undefined,
+  period: undefined,
   week: undefined,
   create: undefined,
 } as const;

@@ -11,7 +11,7 @@ import {
 } from "date-fns";
 import type {
   CalendarEvent,
-  CalendarView,
+  CalendarPeriod,
   EventCalendarDateRange,
   EventCalendarOccurrence,
   EventCalendarSegment,
@@ -38,8 +38,6 @@ function getDayKey(date: Date, timeZone: string): string {
 interface ViewRangeOptions {
   timeZone: string;
   weekStartsOn: WeekStartsOn;
-  dayCount: number;
-  agendaDayCount: number;
   fixedWeeks: boolean;
 }
 
@@ -49,12 +47,21 @@ interface ViewDateRanges {
 }
 
 function getViewDateRange(
-  _view: CalendarView,
+  period: CalendarPeriod,
   date: Date,
   opts: ViewRangeOptions,
 ): ViewDateRanges {
   const { timeZone, weekStartsOn, fixedWeeks } = opts;
   const zoned = toZoned(date, timeZone);
+
+  if (period === "week") {
+    const start = startOfWeek(zoned, { weekStartsOn });
+    const end = addWeeks(start, 1);
+    return {
+      activeRange: { start, end },
+      visibleRange: { start, end },
+    };
+  }
 
   const activeStart = startOfMonth(zoned);
   const activeEnd = startOfMonth(addMonths(zoned, 1));
@@ -75,12 +82,13 @@ function lastDayOfZonedMonth(date: Date): number {
 
 /** The anchor date stepped one period forward or backward for the view. */
 function stepDate(
-  _view: CalendarView,
+  period: CalendarPeriod,
   date: Date,
   direction: 1 | -1,
-  opts: Pick<ViewRangeOptions, "timeZone" | "dayCount" | "agendaDayCount">,
+  opts: Pick<ViewRangeOptions, "timeZone">,
 ): Date {
   const zoned = toZoned(date, opts.timeZone);
+  if (period === "week") return addWeeks(zoned, direction);
   const stepped = addMonths(zoned, direction);
   // addMonths clamps the day down into a shorter month and never restores
   // it, so next-then-prev from the 31st would leave the anchor on the 28th.
@@ -178,10 +186,6 @@ function spansMultipleDays(
   );
 }
 
-/**
- * Greedy lane packing for bar segments within one week row (7 columns).
- * Mutates lane/rowIndex/colStart/colSpan on the segments, in place.
- */
 /**
  * Build the laned month-row bars for one week: consecutive-day segments of
  * the same occurrence merge into ONE bar (colStart -> colSpan) stacked into
@@ -284,6 +288,51 @@ function packWeekRowLanes<TData>(
   }));
 }
 
+/** Re-pack already merged week bars after a renderer filters their membership. */
+function repackWeekBars<TData>(
+  bars: readonly EventCalendarSegment<TData>[],
+): EventCalendarSegment<TData>[] {
+  const placed = [...bars]
+    .sort(
+      (a, b) =>
+        (a.colStart ?? 0) - (b.colStart ?? 0) ||
+        (b.colSpan ?? 1) - (a.colSpan ?? 1) ||
+        a.occurrence.key.localeCompare(b.occurrence.key),
+    )
+    .map((bar) => ({ ...bar, lane: 0 }));
+  const lanes: boolean[][] = [];
+
+  for (const bar of placed) {
+    const start = bar.colStart ?? 0;
+    const end = start + (bar.colSpan ?? 1);
+    let lane = 0;
+    for (;;) {
+      const row = (lanes[lane] ??= new Array(7).fill(false));
+      if (row.slice(start, end).every((occupied) => !occupied)) break;
+      lane += 1;
+    }
+    const row = lanes[lane]!;
+    for (let column = start; column < end; column += 1) row[column] = true;
+    bar.lane = lane;
+  }
+
+  return placed;
+}
+
+function occurrenceSpansCalendarDays(
+  occurrence: EventCalendarOccurrence,
+  timeZone: string,
+): boolean {
+  if (occurrence.end <= occurrence.start) return false;
+  const finalCoveredInstant = new Date(occurrence.end.getTime() - 1);
+  return (
+    differenceInCalendarDays(
+      toZoned(finalCoveredInstant, timeZone),
+      toZoned(occurrence.start, timeZone),
+    ) > 0
+  );
+}
+
 interface EventCalendarDayBucket<TData = unknown> {
   allDay: EventCalendarSegment<TData>[];
   timed: EventCalendarSegment<TData>[];
@@ -300,6 +349,57 @@ interface EventCalendarIndex<TData = unknown> {
   occurrences: EventCalendarOccurrence<TData>[];
   byDay: Map<string, EventCalendarDayBucket<TData>>;
   weekRows: EventCalendarWeekRow<TData>[];
+}
+
+interface EventCalendarWeekLedgerDay<TData = unknown> {
+  day: Date;
+  segments: EventCalendarSegment<TData>[];
+}
+
+interface EventCalendarWeekLedger<TData = unknown> {
+  spans: EventCalendarSegment<TData>[];
+  days: EventCalendarWeekLedgerDay<TData>[];
+}
+
+/**
+ * Project one indexed week into the focused ledger: multi-day occurrences are
+ * continuous top lanes, while single-day occurrences appear exactly once in
+ * their day column. Filtering happens before re-packing so single-day items do
+ * not leave phantom gaps in the span lanes.
+ */
+function buildWeekLedger<TData>(
+  index: EventCalendarIndex<TData>,
+  rowStart: Date,
+  timeZone: string,
+): EventCalendarWeekLedger<TData> {
+  const normalizedStart = zonedStartOfDay(rowStart, timeZone);
+  const row = index.weekRows.find(
+    (candidate) =>
+      zonedStartOfDay(candidate.rowStart, timeZone).getTime() ===
+      normalizedStart.getTime(),
+  );
+  const spanningKeys = new Set(
+    index.occurrences
+      .filter((occurrence) => occurrenceSpansCalendarDays(occurrence, timeZone))
+      .map((occurrence) => occurrence.key),
+  );
+  const spans = repackWeekBars(
+    (row?.bars ?? []).filter((bar) => spanningKeys.has(bar.occurrence.key)),
+  );
+  const days = Array.from({ length: 7 }, (_, offset) => {
+    const day = zonedStartOfDay(
+      addDays(toZoned(normalizedStart, timeZone), offset),
+      timeZone,
+    );
+    const bucket = index.byDay.get(getDayKey(day, timeZone));
+    const segments = bucket
+      ? [...bucket.allDay, ...bucket.timed].filter(
+          (segment) => !spanningKeys.has(segment.occurrence.key),
+        )
+      : [];
+    return { day, segments };
+  });
+  return { spans, days };
 }
 
 interface BuildIndexOptions<TData> {
@@ -410,6 +510,7 @@ export type {
   WeekStartsOn,
 };
 export {
+  buildWeekLedger,
   buildEventIndex,
   defaultEventOrder,
   getDayKey,

@@ -1,5 +1,5 @@
 type EventCalendarEventId = string;
-type CalendarView = "month";
+type CalendarPeriod = "month" | "week";
 
 interface EventCalendarDateRange {
   /** Inclusive instant. */
@@ -22,7 +22,6 @@ interface CalendarEvent<TData = unknown> {
   readOnly?: boolean;
   draggable?: boolean;
   priority?: number;
-  zIndex?: number;
   data?: TData;
 }
 
@@ -60,14 +59,6 @@ interface EventCalendarDragState<TData = unknown> {
   valid: boolean;
 }
 
-interface EventCalendarRangeInfo {
-  range: EventCalendarDateRange;
-  activeRange: EventCalendarDateRange;
-  date: Date;
-  timeZone: string;
-  view: CalendarView;
-}
-
 interface EventCalendarProposedUpdate<TData = unknown> {
   event: CalendarEvent<TData>;
   occurrence: EventCalendarOccurrence<TData> | null;
@@ -85,18 +76,17 @@ type EventCalendarUpdateResult =
 interface EventCalendarSlotInfo {
   date: Date;
   allDay: true;
-  view: CalendarView;
+  period: CalendarPeriod;
 }
 
 export type {
   CalendarEvent,
-  CalendarView,
+  CalendarPeriod,
   EventCalendarDateRange,
   EventCalendarDragState,
   EventCalendarEventId,
   EventCalendarOccurrence,
   EventCalendarProposedUpdate,
-  EventCalendarRangeInfo,
   EventCalendarSegment,
   EventCalendarSlotInfo,
   EventCalendarUpdateResult,

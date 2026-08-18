@@ -4,32 +4,32 @@ import type {
   CalendarItemKind,
 } from "@cubby/schemas/calendar";
 import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
-import { TZDate } from "@date-fns/tz";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import {
-  addDays,
-  addMonths,
-  endOfMonth,
-  format,
-  startOfMonth,
-  startOfWeek,
-} from "date-fns";
+import { addDays, format } from "date-fns";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  lazy,
+  type MouseEvent as ReactMouseEvent,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
-import { CreateExpenseDialog } from "~/app/expenses/create-expense-dialog";
-import { CreateMealDialog } from "~/app/meals/create-meal-dialog";
 import { mealKindIcon } from "~/app/meals/meal-options";
-import { CreateProjectDialog } from "~/app/projects/create-project-dialog";
-import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
 import { Row, Stack } from "~/components/layout";
 import {
+  type EventCalendarRenderEventProps,
   MonthEventCalendar,
-  type MonthEventCalendarRenderEventProps,
+  WeekEventCalendar,
 } from "~/components/reui/event-calendar/event-calendar";
 import type {
   CalendarEvent,
+  CalendarPeriod,
+  EventCalendarOccurrence,
   EventCalendarProposedUpdate,
+  EventCalendarSegment,
 } from "~/components/reui/event-calendar/event-calendar-types";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -40,9 +40,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from "~/components/ui/sheet";
+import { ChoiceSwitcher } from "~/components/ui/view-switcher";
 import { ENTITY_ACCENTS } from "~/entities/entity-accents";
 import { useTRPC } from "~/integrations/trpc/react";
-import { householdLocalDate } from "~/lib/household-date";
+import { HOUSEHOLD_TIMEZONE, householdLocalDate } from "~/lib/household-date";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import {
   expenseMutationInvalidateKeys,
@@ -54,15 +55,32 @@ import { CalendarAgenda } from "./calendar-agenda";
 import type { CalendarFilters } from "./calendar-filters";
 import { itemIcon, KIND_ICONS } from "./calendar-icons";
 import { CalendarItemLink } from "./calendar-item-row";
+import {
+  formatCalendarPeriodTitle,
+  getCalendarPeriodRange,
+  householdCalendarDate,
+  shiftCalendarPeriod,
+} from "./calendar-period";
 import { itemSpanLabel } from "./calendar-span";
+import { EMPTY_DAY_SUMMARY, WeekSummaryGrid } from "./calendar-week-summary";
 
-const HOUSEHOLD_TIME_ZONE = "America/Los_Angeles";
 const CALENDAR_ACTIVATION = {
   touchDelayMs: 350,
   touchTolerancePx: 12,
 } as const;
 const ALL_KINDS: CalendarItemKind[] = ["meal", "task", "expense", "project"];
 const NO_ITEMS: CalendarItem[] = [];
+const NO_DAY_SUMMARIES: Record<string, CalendarDaySummary> = {};
+const PERIOD_OPTIONS = [
+  { value: "month", label: "Month" },
+  { value: "week", label: "Week" },
+] as const;
+
+const LazyCalendarCreateDialog = lazy(() =>
+  import("./calendar-create-dialog").then(({ CalendarCreateDialog }) => ({
+    default: CalendarCreateDialog,
+  })),
+);
 
 const KIND_LABELS: Record<CalendarItemKind, string> = {
   meal: "Meals",
@@ -80,6 +98,7 @@ const KIND_LABELS: Record<CalendarItemKind, string> = {
 type CreateKind = CalendarItemKind | null;
 
 interface UnifiedCalendarProps {
+  period: CalendarPeriod;
   date?: string;
   day?: string;
   /**
@@ -94,19 +113,10 @@ interface UnifiedCalendarProps {
    * behaviour fetched four kinds a month to throw three away.
    */
   lockedKinds?: CalendarItemKind[];
+  onPeriodChange: (period: CalendarPeriod) => void;
   onDateChange: (date?: string) => void;
   onDayChange?: (day?: string) => void;
 }
-
-const calendarDate = (plainDate: string) => {
-  const parsed = parsePlainDate(plainDate);
-  return new TZDate(
-    parsed.getFullYear(),
-    parsed.getMonth(),
-    parsed.getDate(),
-    HOUSEHOLD_TIME_ZONE,
-  );
-};
 
 const eventClassName = (item: CalendarItem, today: string) => {
   if (item.kind === "project") {
@@ -136,8 +146,8 @@ const toEvent = (
 ): CalendarEvent<CalendarItem> => ({
   id: `${item.kind}:${item.id}`,
   title: item.title,
-  start: calendarDate(item.startDate),
-  end: calendarDate(item.endDateExclusive),
+  start: householdCalendarDate(item.startDate),
+  end: householdCalendarDate(item.endDateExclusive),
   allDay: true,
   readOnly: item.interaction === "read-only",
   draggable: item.interaction === "move",
@@ -160,7 +170,7 @@ const toEvent = (
 function CalendarChip({
   occurrence,
   segment,
-}: MonthEventCalendarRenderEventProps<CalendarItem>) {
+}: EventCalendarRenderEventProps<CalendarItem>) {
   const item = occurrence.event.data;
   if (!item) return occurrence.event.title;
   const Icon = itemIcon(item);
@@ -205,68 +215,56 @@ function CalendarChip({
 const itemIncludesDay = (item: CalendarItem, day: string) =>
   item.startDate <= day && item.endDateExclusive > day;
 
-const summarizeDay = (items: CalendarItem[]): CalendarDaySummary => {
-  const summary: CalendarDaySummary = {
-    actualSpend: 0,
-    plannedSpend: 0,
-    calories: 0,
-    nutritionPending: false,
-    taskCount: 0,
-    expenseCount: 0,
-    mealCount: 0,
-    projectCount: 0,
-  };
-  for (const item of items) {
-    if (item.kind === "meal") {
-      summary.mealCount += 1;
-      summary.calories += item.calories;
-      summary.nutritionPending ||= item.nutritionPending;
-    } else if (item.kind === "task") {
-      summary.taskCount += 1;
-    } else if (item.kind === "expense") {
-      summary.expenseCount += 1;
-      if (item.future) summary.plannedSpend += item.cost ?? 0;
-      else summary.actualSpend += item.cost ?? 0;
-    } else {
-      summary.projectCount += 1;
-    }
-  }
-  return summary;
-};
-
 export function UnifiedCalendar({
+  period,
   date,
   day,
   filters,
   lockedKinds,
+  onPeriodChange,
   onDateChange,
   onDayChange,
 }: UnifiedCalendarProps) {
   const api = useTRPC();
   const today = householdLocalDate();
   const anchorDate = date ?? today;
-  const anchor = useMemo(() => calendarDate(anchorDate), [anchorDate]);
-  const activeMonth = useMemo(
-    () => ({
-      startDate: formatPlainDate(startOfMonth(anchor)),
-      endDateExclusive: formatPlainDate(addDays(endOfMonth(anchor), 1)),
-    }),
-    [anchor],
+  const anchor = useMemo(() => householdCalendarDate(anchorDate), [anchorDate]);
+  const periodRange = useMemo(
+    () => getCalendarPeriodRange(anchor, period),
+    [anchor, period],
   );
-  const monthGridStart = startOfWeek(startOfMonth(anchor), {
-    weekStartsOn: 0,
-  });
-  const monthGridEnd = addDays(
-    startOfWeek(endOfMonth(anchor), { weekStartsOn: 0 }),
-    7,
+  const activePeriod = useMemo(() => {
+    return {
+      start: periodRange.activeStart,
+      end: periodRange.activeEnd,
+      startDate: formatPlainDate(periodRange.activeStart),
+      endDateExclusive: formatPlainDate(periodRange.activeEnd),
+    };
+  }, [periodRange]);
+  const visibleRange = useMemo(() => {
+    return {
+      start: periodRange.visibleStart,
+      end: periodRange.visibleEnd,
+      startDate: formatPlainDate(periodRange.visibleStart),
+      endDateExclusive: formatPlainDate(periodRange.visibleEnd),
+    };
+  }, [periodRange]);
+  const periodDays = useMemo(
+    () =>
+      period === "week"
+        ? Array.from({ length: 7 }, (_, offset) =>
+            formatPlainDate(addDays(activePeriod.start, offset)),
+          )
+        : [],
+    [activePeriod.start, period],
   );
   const range = useMemo(
     () => ({
-      startDate: formatPlainDate(monthGridStart),
-      endDateExclusive: formatPlainDate(monthGridEnd),
+      startDate: visibleRange.startDate,
+      endDateExclusive: visibleRange.endDateExclusive,
       ...(lockedKinds ? { kinds: lockedKinds } : filters),
     }),
-    [filters, lockedKinds, monthGridEnd, monthGridStart],
+    [filters, lockedKinds, visibleRange],
   );
   const { data, isLoading, isError } = useQuery({
     ...api.calendar.range.queryOptions(range),
@@ -348,6 +346,9 @@ export function UnifiedCalendar({
     [onDayChange],
   );
   const [createKind, setCreateKind] = useState<CreateKind>(null);
+  const onCreateOpenChange = useCallback((open: boolean) => {
+    if (!open) setCreateKind(null);
+  }, []);
   const selectedItems = useMemo(
     () =>
       selectedDay
@@ -355,6 +356,41 @@ export function UnifiedCalendar({
         : NO_ITEMS,
     [items, selectedDay],
   );
+  const selectedSummary = selectedDay
+    ? (data?.days[selectedDay] ?? EMPTY_DAY_SUMMARY)
+    : EMPTY_DAY_SUMMARY;
+  const calendarInteractionProps = {
+    events,
+    date: anchor,
+    timeZone: HOUSEHOLD_TIMEZONE,
+    activation: CALENDAR_ACTIVATION,
+    loading: isLoading,
+    renderEvent: CalendarChip,
+    onEventsChange: setEvents,
+    onEventUpdate: persistMove,
+    canDropEvent: canDropCalendarEvent,
+    onEventClick: (
+      _occurrence: EventCalendarOccurrence<CalendarItem>,
+      segment: EventCalendarSegment<CalendarItem>,
+      event: ReactMouseEvent,
+    ) => {
+      event.preventDefault();
+      setSelectedDay(formatPlainDate(segment.day));
+    },
+    onSlotClick: (slot: { date: Date }) =>
+      setSelectedDay(formatPlainDate(slot.date)),
+  };
+  const periodTitle = formatCalendarPeriodTitle(
+    period === "week" ? activePeriod.start : anchor,
+    period,
+    activePeriod.end,
+  );
+  const shiftAnchor = (direction: -1 | 1) =>
+    onDateChange(
+      formatPlainDate(
+        shiftCalendarPeriod(parsePlainDate(anchorDate), period, direction),
+      ),
+    );
 
   return (
     <>
@@ -364,12 +400,8 @@ export function UnifiedCalendar({
             type="button"
             variant="outline"
             size="icon"
-            aria-label="Previous month"
-            onClick={() =>
-              onDateChange(
-                formatPlainDate(addMonths(parsePlainDate(anchorDate), -1)),
-              )
-            }
+            aria-label={`Previous ${period}`}
+            onClick={() => shiftAnchor(-1)}
           >
             <ChevronLeft />
           </Button>
@@ -385,18 +417,21 @@ export function UnifiedCalendar({
             type="button"
             variant="outline"
             size="icon"
-            aria-label="Next month"
-            onClick={() =>
-              onDateChange(
-                formatPlainDate(addMonths(parsePlainDate(anchorDate), 1)),
-              )
-            }
+            aria-label={`Next ${period}`}
+            onClick={() => shiftAnchor(1)}
           >
             <ChevronRight />
           </Button>
           <h2 className="font-heading font-semibold text-base">
-            {format(anchor, "MMMM yyyy")}
+            {periodTitle}
           </h2>
+          <ChoiceSwitcher
+            className="ml-auto"
+            ariaLabel="Calendar period"
+            options={PERIOD_OPTIONS}
+            value={period}
+            onValueChange={onPeriodChange}
+          />
         </Row>
 
         {isError && (
@@ -413,11 +448,13 @@ export function UnifiedCalendar({
           <CalendarAgenda
             items={items}
             includesDay={itemIncludesDay}
-            range={activeMonth}
+            range={activePeriod}
             today={today}
+            showAllDays={period === "week"}
+            onDayClick={setSelectedDay}
             emptyMessage={
               <Description>
-                Nothing planned this month.{" "}
+                Nothing planned this {period}.{" "}
                 <button
                   type="button"
                   className="underline hover:text-primary"
@@ -435,67 +472,50 @@ export function UnifiedCalendar({
           />
         </div>
 
-        <MonthEventCalendar<CalendarItem>
-          events={events}
-          date={anchor}
-          timeZone={HOUSEHOLD_TIME_ZONE}
-          activation={CALENDAR_ACTIVATION}
-          loading={isLoading}
-          className="hidden min-h-[620px] overflow-hidden border md:block"
-          renderEvent={CalendarChip}
-          onEventsChange={setEvents}
-          onEventUpdate={persistMove}
-          canDropEvent={canDropCalendarEvent}
-          onEventClick={(occurrence, event) => {
-            event.preventDefault();
-            setSelectedDay(formatPlainDate(occurrence.start));
-          }}
-          onSlotClick={(slot) => setSelectedDay(formatPlainDate(slot.date))}
-          onMoreClick={(moreDay) => {
-            setSelectedDay(formatPlainDate(moreDay));
-            return false;
-          }}
-        />
+        {period === "month" ? (
+          <MonthEventCalendar<CalendarItem>
+            {...calendarInteractionProps}
+            className="hidden min-h-[620px] overflow-hidden border md:block"
+            onMoreClick={(moreDay) => {
+              setSelectedDay(formatPlainDate(moreDay));
+              return false;
+            }}
+          />
+        ) : (
+          <div className="hidden overflow-hidden border md:block">
+            <WeekSummaryGrid
+              days={periodDays}
+              summaries={data?.days ?? NO_DAY_SUMMARIES}
+              today={today}
+              onDayClick={setSelectedDay}
+            />
+            <WeekEventCalendar<CalendarItem>
+              {...calendarInteractionProps}
+              className="border-0 border-t"
+            />
+          </div>
+        )}
       </Stack>
 
       <CalendarDaySheet
         day={selectedDay}
         items={selectedItems}
+        summary={selectedSummary}
         onOpenChange={(open) => {
           if (!open) setSelectedDay(undefined);
         }}
         onCreate={setCreateKind}
       />
 
-      <CreateMealDialog
-        open={createKind === "meal"}
-        onOpenChange={(open) => {
-          if (!open) setCreateKind(null);
-        }}
-        presetDate={selectedDay}
-      />
-      <CreateTaskDialog
-        open={createKind === "task"}
-        onOpenChange={(open) => {
-          if (!open) setCreateKind(null);
-        }}
-        presetDate={selectedDay}
-      />
-      <CreateExpenseDialog
-        open={createKind === "expense"}
-        onOpenChange={(open) => {
-          if (!open) setCreateKind(null);
-        }}
-        presetDate={selectedDay}
-        presetFuture
-      />
-      <CreateProjectDialog
-        open={createKind === "project"}
-        onOpenChange={(open) => {
-          if (!open) setCreateKind(null);
-        }}
-        presetDate={selectedDay}
-      />
+      {createKind ? (
+        <Suspense fallback={null}>
+          <LazyCalendarCreateDialog
+            kind={createKind}
+            date={selectedDay}
+            onOpenChange={onCreateOpenChange}
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 }
@@ -503,21 +523,24 @@ export function UnifiedCalendar({
 function CalendarDaySheet({
   day,
   items,
+  summary,
   onOpenChange,
   onCreate,
 }: {
   day?: string;
   items: CalendarItem[];
+  summary: CalendarDaySummary;
   onOpenChange: (open: boolean) => void;
   onCreate: (kind: CalendarItemKind) => void;
 }) {
-  const summary = summarizeDay(items);
   return (
     <Sheet open={Boolean(day)} onOpenChange={onOpenChange}>
       <SheetContent className="overflow-y-auto sm:max-w-md">
         <SheetHeader>
           <SheetTitle>
-            {day ? format(calendarDate(day), "EEEE, MMMM d") : "Calendar day"}
+            {day
+              ? format(householdCalendarDate(day), "EEEE, MMMM d")
+              : "Calendar day"}
           </SheetTitle>
           <SheetDescription>
             {items.length === 0

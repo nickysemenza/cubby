@@ -53,13 +53,13 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 - Recipes keep a `recipeSource` pointer back to the cookbook they came from
 
 **Meals**
-- Plan recipes onto a shared month calendar (plus a table view), scaled per meal
+- Plan recipes on shared month and focused week calendars (plus a table view), scaled per meal
 - Classify each meal by slot (breakfast → dessert, ordering the calendar day) and by kind — a `eating out` / `takeout` meal is a recipe-less placeholder on purpose, and only `cooked` meals feed the shopping list. Calendar chips carry the slot as their glyph; non-cooked meals read as dashed
 - Shopping list — aggregated need vs. on-hand inventory, with a per-meal breakdown, estimated trip cost, and shop-friendly units (display-only; see [Tenets](#tenets))
 - Suggestions — *"what can I make tonight?"* from what's on hand
 
 **Planning calendar**
-- One month view for meals, due tasks, expenses, and multi-day project spans — a ruled day-by-day agenda on phones, where a seven-column grid can't be read
+- Month overview and Sunday–Saturday focus views for meals, due tasks, expenses, and multi-day project spans — a ruled day-by-day agenda on phones, where a seven-column grid can't be read
 - Source and project-kind filters, date drawers with daily totals, and quick-add flows
 - Drag-to-reschedule for meals, tasks, and planned expenses; actual expenses and project spans stay read-only
 - Published iCalendar feeds (`webcal://…/api/calendar/<token>/{all,meals,tasks}.ics`) for meals and open task due dates, subscribable from macOS/iOS Calendar; read-only, and the URL's token is the only credential
@@ -551,7 +551,7 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). The can
 - **`ProjectToolUsage`** — a durable, deliberately coarse edge recording that a reusable tool or software Product was used on a project, feeding tool-lifetime-cost and cost-per-project-use rollups without double-counting the original Expense. `/projects/tools` adds a tools × projects matrix (three-state toggle cells, grouped by derived trade or manufacturer) for bulk-backfilling usage history, since attaching one project at a time through a dialog had left the ledger largely empty.
 - **Vendor / Purchase / Expense split** — the flat spend ledger became `Vendor ──< Purchase ──< Expense`. The old ledger row is now **`Expense`** (routes `/expenses`, MCP `*_expense(s)` tools); **`Purchase`** is a vendor order/receipt event holding its order id, vendor date, literal never-summed `statedTotal`, and invoice PDF; **`Vendor`** is a real roster. Create/update inputs still take `vendor` (a name) and `orderId` and resolve both on first sight. New operations: `linkExpensesToPurchase`, `splitExpense`, `mergePurchases`.
 - **Project tracker migration + maturation** — the household projects/tasks/expenses databases moved from Notion into first-class cubby entities (DB tables, full CRUD UI at `/projects` `/tasks` `/expenses`, MCP tools, dashboard + charts). Follow-ups consolidated the entities onto shared helpers and the entity manifest, added detail pages with full editing UI, wired all three into global search + semantic embeddings, and made them first-class in inline links/hovercards (with mobile dialogs). The one-time import script was removed post-cutover (recoverable from git history).
-- **Unified planning calendar** — meals, task ranges, planned/actual expenses, and project spans share a filterable month view with a day drawer, quick-add flows, and selective drag-to-reschedule. The Meals calendar tab reuses the same implementation.
+- **Unified planning calendar** — meals, task ranges, planned/actual expenses, and project spans share filterable month-overview and week-ledger views with a day drawer, quick-add flows, operational summaries, and selective drag-to-reschedule. The Meals calendar tab reuses the same implementation.
 
 ### Current and future work
 
