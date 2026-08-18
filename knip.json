@@ -14,12 +14,15 @@
         "src/integrations/**/*.{ts,tsx}!",
         "src/**/*.test.{ts,tsx}!",
         "tests/**/*.{ts,tsx}!",
-        "scripts/**/*.{ts,mjs}!",
+        "scripts/analyze-client-bundle.ts!",
+        "scripts/analyze-client-bundle.unit.test.ts!",
+        "scripts/build-sw.mjs!",
+        "scripts/ensure-db-extensions.ts!",
         "tooling/**/*.{ts,tsx}!",
         "drizzle.config.ts!",
         "instrument.server.mjs!"
       ],
-      "project": ["src/**/*.{ts,tsx}!"],
+      "project": ["src/**/*.{ts,tsx}!", "scripts/**/*.{ts,mjs}!"],
       "paths": {
         "~/*": ["./src/*"],
         "tooling/*": ["./tooling/*"]

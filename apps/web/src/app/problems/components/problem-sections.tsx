@@ -84,6 +84,7 @@ import {
   type UnitCoverageItem,
   unitCoverageGroup,
 } from "./unit-coverage-fix";
+import { VendorLogoFetchAction } from "./vendor-logo-fetch-action";
 
 /**
  * Marks a section as COVERAGE rather than defects (see `PROBLEM_CLASS` in
@@ -1309,6 +1310,7 @@ const DECLARED_SECTIONS = [
       ],
       route: entityDetailLink("vendor", vendor.id),
       editLabel: "Open vendor",
+      customActions: <VendorLogoFetchAction vendor={vendor} />,
     }),
   }),
   section({

@@ -43,6 +43,7 @@ import {
   getVendorByID,
   mergeVendors,
   previewMergeVendors,
+  replaceVendorLogo,
   updateVendor,
   vendorList,
   vendorOptions,
@@ -571,6 +572,141 @@ describe("vendor repository — deletion guard", () => {
       await getDb(ctx.db).query.image.findFirst({
         where: eq(image.id, logo!.id),
         columns: { id: true },
+      }),
+    ).toBeUndefined();
+  });
+});
+
+describe("vendor repository — replaceVendorLogo", () => {
+  const ctx = withTestDb();
+
+  const fetchedLogo = (label: string) => ({
+    url: `https://images.example/${label}.png`,
+    key: `vendor-logos/${label}.png`,
+    filename: `${label}.png`,
+    size: 256,
+    contentType: "image/png",
+    width: 128,
+    height: 128,
+    detectedContentType: "image/png",
+    sha256: `sha-${label}`,
+    renderStatus: "verified" as const,
+    storageStatus: "available" as const,
+    verifiedAt: new Date("2026-08-18T12:00:00Z"),
+  });
+
+  it("audits the replacement and reaps an exclusively owned prior logo", async () => {
+    const created = await createVendor(
+      ctx.db,
+      vendorCreateInput.parse({
+        name: "Logo Refresh Vendor",
+        website: "https://refresh.example",
+      }),
+      ctx.actor,
+    );
+    const oldLogo = await insertAndReturn(ctx.db, image, fetchedLogo("old"));
+    await getDb(ctx.db)
+      .update(vendor)
+      .set({ logoImageId: oldLogo.id })
+      .where(eq(vendor.id, created.entityId));
+
+    const result = await replaceVendorLogo(
+      ctx.db,
+      {
+        id: created.output.id,
+        expectedWebsite: "https://refresh.example",
+        image: fetchedLogo("new"),
+      },
+      ctx.actor,
+    );
+
+    expect(result.output.logo).toMatchObject({
+      filename: "new.png",
+      renderStatus: "verified",
+    });
+    expect(result.detachedImageKeys).toEqual([oldLogo.key]);
+    expect(
+      await getDb(ctx.db).query.image.findFirst({
+        where: eq(image.id, oldLogo.id),
+      }),
+    ).toBeUndefined();
+    const updates = await getDb(ctx.db)
+      .select({ changes: auditLog.changes })
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.entityType, "vendor"),
+          eq(auditLog.entityId, created.entityId),
+          eq(auditLog.action, "update"),
+        ),
+      );
+    expect(updates.at(-1)?.changes).toMatchObject({
+      logoImageId: { from: oldLogo.id, to: result.output.logo?.id },
+    });
+  });
+
+  it("preserves a prior logo that another vendor still references", async () => {
+    const first = await createVendor(
+      ctx.db,
+      vendorCreateInput.parse({
+        name: "Shared Refresh A",
+        website: "https://a.example",
+      }),
+      ctx.actor,
+    );
+    const second = await createVendor(
+      ctx.db,
+      vendorCreateInput.parse({ name: "Shared Refresh B" }),
+      ctx.actor,
+    );
+    const shared = await insertAndReturn(ctx.db, image, fetchedLogo("shared"));
+    await getDb(ctx.db)
+      .update(vendor)
+      .set({ logoImageId: shared.id })
+      .where(inArray(vendor.id, [first.entityId, second.entityId]));
+
+    const result = await replaceVendorLogo(
+      ctx.db,
+      {
+        id: first.output.id,
+        expectedWebsite: "https://a.example",
+        image: fetchedLogo("replacement"),
+      },
+      ctx.actor,
+    );
+
+    expect(result.detachedImageKeys).toEqual([]);
+    expect(
+      await getDb(ctx.db).query.image.findFirst({
+        where: eq(image.id, shared.id),
+      }),
+    ).toMatchObject({ id: shared.id });
+  });
+
+  it("refuses to attach a logo fetched for an outdated website", async () => {
+    const created = await createVendor(
+      ctx.db,
+      vendorCreateInput.parse({
+        name: "Website Race Vendor",
+        website: "https://current.example",
+      }),
+      ctx.actor,
+    );
+
+    await expect(
+      replaceVendorLogo(
+        ctx.db,
+        {
+          id: created.output.id,
+          expectedWebsite: "https://old.example",
+          image: fetchedLogo("should-not-exist"),
+        },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({ cause: { reason: "VENDOR_STALE" } });
+    expect(
+      await getDb(ctx.db).query.image.findFirst({
+        where: eq(image.key, "vendor-logos/should-not-exist.png"),
       }),
     ).toBeUndefined();
   });

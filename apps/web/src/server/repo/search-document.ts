@@ -368,52 +368,6 @@ export async function refreshSearchDocuments(
   return results;
 }
 
-export async function backfillSearchDocuments(
-  db: Database,
-  options: { entityTypes?: SearchableEntity[]; limit?: number } = {},
-): Promise<SearchDocumentRefreshResult[]> {
-  const entityTypes = options.entityTypes ?? [...searchableEntities];
-  // This intentionally enumerates source rows through the canonical loaders,
-  // not EntityEmbedding: a document backfill must heal a catalog whose vector
-  // rows have never been configured, queued, or successfully embedded.
-  const sourceRows = await getEmbeddingTextsForEntityTypes(
-    db,
-    entityTypes,
-    options.limit,
-  );
-  const sources = await getSearchDocumentSources(db, entityTypes);
-  const sourceByRef = new Map(
-    sources.map((source) => [
-      `${source.entityType}:${source.entityId}`,
-      source,
-    ]),
-  );
-  const results: SearchDocumentRefreshResult[] = [];
-  const entries: Array<{ source: SearchDocumentSource; body: string }> = [];
-  for (const row of sourceRows) {
-    const source = sourceByRef.get(`${row.entityType}:${row.entityId}`);
-    if (source) entries.push({ source, body: row.embeddingText });
-    else
-      results.push(
-        await markSearchDocumentMissing(db, row.entityType, row.entityId),
-      );
-  }
-  const batchSize = 250;
-  for (let index = 0; index < entries.length; index += batchSize) {
-    results.push(
-      ...(await upsertSearchDocumentBatch(
-        db,
-        entries.slice(index, index + batchSize),
-      )),
-    );
-  }
-  if (options.limit == null) {
-    const diagnostics = await getSearchDocumentDiagnostics(db, entityTypes);
-    await retireOrphanedSearchDocuments(db, diagnostics.orphaned);
-  }
-  return results;
-}
-
 export async function getSearchDocumentEmbeddingText(
   db: Database,
   entityType: SearchableEntity,

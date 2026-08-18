@@ -108,6 +108,14 @@ const problemActionCapabilities = {
   duplicateVendors: [
     action({ id: "merge", label: "Merge", scope: "item", target: "item" }),
   ],
+  vendorsWithoutLogos: [
+    action({
+      id: "fetch-logo",
+      label: "Fetch logo",
+      scope: "item",
+      target: "item",
+    }),
+  ],
   unknownParkedItems: [
     action({
       id: "start-recount",

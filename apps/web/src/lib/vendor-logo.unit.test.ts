@@ -1,34 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { persistedVendorId, vendorMonogram, vendorSlug } from "./vendor-logo";
-
-describe("vendorSlug", () => {
-  it("deaccents, lowercases, and hyphenates punctuation", () => {
-    expect(vendorSlug("Häfele")).toBe("hafele");
-    expect(vendorSlug("B&H Photo")).toBe("b-h-photo");
-    expect(vendorSlug("Lowe's")).toBe("lowe-s");
-  });
-
-  it("collapses runs of non-alphanumerics and trims leading/trailing hyphens", () => {
-    expect(vendorSlug("  Direct   Tools -- Outlet!! ")).toBe(
-      "direct-tools-outlet",
-    );
-    expect(vendorSlug("***Zoro***")).toBe("zoro");
-  });
-
-  it("is idempotent — re-slugging an already-slugged string is a no-op", () => {
-    // Stored slugs remain safe to normalize when a seed is refreshed.
-    for (const name of [
-      "Häfele",
-      "B&H Photo",
-      "Direct Tools Outlet",
-      "eBay",
-      "1stDibs",
-    ]) {
-      const once = vendorSlug(name);
-      expect(vendorSlug(once)).toBe(once);
-    }
-  });
-});
+import { persistedVendorId, vendorMonogram } from "./vendor-logo";
 
 describe("persistedVendorId", () => {
   const row = { vendor: "Amazon", vendorId: "VEN-2345" };

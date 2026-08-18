@@ -58,6 +58,7 @@ import {
   countWhere,
   formatSearchTerm,
   getDb,
+  insertAndReturn,
   lockAndValidateForDelete,
   notDeleted,
   updateLiveAndReturn,
@@ -530,6 +531,84 @@ export const updateVendor = async (
   });
 
   return { output: await getVendorByID(db, id), entityId: id };
+};
+
+/**
+ * Replace one vendor's direct logo relation with a freshly verified Image.
+ *
+ * The vendor row lock serializes concurrent fetch clicks. The old image is
+ * reaped only after the FK moves, through the same global reference check used
+ * by vendor merge/delete, so a logo shared with another vendor survives.
+ */
+export const replaceVendorLogo = async (
+  db: Database,
+  input: {
+    id: VendorShortcode;
+    expectedWebsite: string;
+    image: Omit<typeof image.$inferInsert, "id" | "status">;
+  },
+  actor: ActorContext,
+): Promise<{
+  output: VendorOut;
+  entityId: VendorId;
+  detachedImageKeys: string[];
+}> => {
+  const { entityId, detachedImageKeys } = await withTransaction(
+    db,
+    async (tx) => {
+      const entityId = await resolveOrThrow(tx, "vendor", input.id);
+      const [before] = await tx
+        .select({
+          website: vendor.website,
+          logoImageId: vendor.logoImageId,
+        })
+        .from(vendor)
+        .where(and(eq(vendor.id, entityId), notDeleted(vendor)))
+        .for("update");
+      if (!before) {
+        throw createAppError(
+          "VENDOR_NOT_FOUND",
+          `Vendor not found: ${input.id}`,
+        );
+      }
+      if (before.website !== input.expectedWebsite) {
+        throw createAppError(
+          "VENDOR_STALE",
+          "Vendor website changed while its logo was being fetched. Try again.",
+        );
+      }
+
+      const created = await insertAndReturn(tx, image, {
+        ...input.image,
+        status: "UPLOADED",
+        targetType: "vendor",
+        targetId: entityId,
+      });
+      await tx
+        .update(vendor)
+        .set({ logoImageId: created.id })
+        .where(eq(vendor.id, entityId));
+      await logAuditEntry(tx, actor, {
+        entityType: "vendor",
+        entityId,
+        action: "update",
+        changes: {
+          logoImageId: { from: before.logoImageId, to: created.id },
+        },
+      });
+
+      const detachedImageKeys = before.logoImageId
+        ? (await reapUnreferencedImages(tx, [before.logoImageId])).deletedKeys
+        : [];
+      return { entityId, detachedImageKeys };
+    },
+  );
+
+  return {
+    output: await getVendorByID(db, entityId),
+    entityId,
+    detachedImageKeys,
+  };
 };
 
 /** What `mergeVendors` (and `previewMergeVendors`) does with one live charge. */

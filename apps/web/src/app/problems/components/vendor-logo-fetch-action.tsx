@@ -1,0 +1,37 @@
+import type { VendorOut } from "@cubby/schemas/vendor";
+import { ImageDown } from "lucide-react";
+import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
+import { Button } from "~/components/ui/button";
+import { useTRPC } from "~/integrations/trpc/react";
+import { queryKeys, vendorMutationInvalidateKeys } from "~/lib/query-keys";
+
+type VendorLogoTarget = Pick<VendorOut, "id" | "name" | "website">;
+
+/** Explicit per-item replacement for the retired vendor-logo seeder. */
+export function VendorLogoFetchAction({
+  vendor,
+}: {
+  vendor: VendorLogoTarget;
+}) {
+  const api = useTRPC();
+  const fetchLogo = useProblemCardMutation({
+    mutationFn: api.vendor.fetchLogo.mutationOptions,
+    success: `Added logo for ${vendor.name}`,
+    invalidateKeys: [...vendorMutationInvalidateKeys, queryKeys.search.all],
+  });
+
+  // A website is a reviewed identity claim. Never guess one from the name just
+  // to make the action available; opening the vendor is the path to add it.
+  if (!vendor.website) return null;
+
+  return (
+    <Button
+      size="sm"
+      onClick={() => fetchLogo.mutate({ id: vendor.id })}
+      disabled={fetchLogo.isPending}
+    >
+      <ImageDown className="mr-1 size-3" />
+      {fetchLogo.isPending ? "Fetching…" : "Fetch logo"}
+    </Button>
+  );
+}

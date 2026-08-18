@@ -11,10 +11,6 @@
 const BUCKET_ORIGIN = "https://foobucket.nicky.fun";
 const BUCKET_HOST = new URL(BUCKET_ORIGIN).hostname;
 
-/** Build an absolute public-bucket URL from a slash-tolerant object key. */
-export const publicBucketUrl = (key: string): string =>
-  `${BUCKET_ORIGIN}/${key.replace(/^\/+/, "")}`;
-
 const isTransformable = (parsed: URL): boolean =>
   parsed.hostname === BUCKET_HOST && !parsed.pathname.startsWith("/cdn-cgi/");
 
