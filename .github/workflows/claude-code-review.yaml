@@ -103,7 +103,10 @@ jobs:
           fi
 
       - name: Require a complete Claude review
-        if: ${{ steps.claude-review.outcome == 'success' }}
+        # The action intentionally skips PRs that modify this workflow until
+        # the new workflow is on the default branch. Those runs have no
+        # execution file or tracking comment to validate.
+        if: ${{ steps.claude-review.outcome == 'success' && steps.claude-review.outputs.execution_file != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
