@@ -1,12 +1,12 @@
 import type { IngredientListItem } from "@cubby/schemas/ingredient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { createColumnHelper } from "@tanstack/react-table";
 import { uniq } from "es-toolkit";
 import { Scale, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { verbBulkAction } from "~/app/_components/actions/action-verb-ui";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { IngredientMergeDialog } from "~/app/_components/ingredient/ingredient-merge-dialog";
 import {
   ProductFoodSummariesProvider,
@@ -128,7 +128,7 @@ export function IngredientList() {
   const trpcClient = useTRPCClient();
   const queryClient = useQueryClient();
   const columnHelper = useMemo(
-    () => createColumnHelper<IngredientListItem>(),
+    () => createCubbyColumnHelper<IngredientListItem>(),
     [],
   );
   const { onRowClick, onRowHover, PreviewSheet } =

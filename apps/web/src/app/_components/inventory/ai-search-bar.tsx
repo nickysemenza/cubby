@@ -1,8 +1,8 @@
 import type { ParsedSearch } from "@cubby/schemas/ai";
-import type { Table } from "@tanstack/react-table";
 import { Sparkles, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
+import type { CubbyTable as Table } from "~/app/_components/data-table/table-features";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -11,11 +11,13 @@ import { Spinner } from "~/components/ui/spinner";
 import { useTRPCClient } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 
-interface AiSearchBarProps<T> {
+interface AiSearchBarProps<T extends Record<string, unknown>> {
   table: Table<T>;
 }
 
-export function AiSearchBar<T>({ table }: AiSearchBarProps<T>) {
+export function AiSearchBar<T extends Record<string, unknown>>({
+  table,
+}: AiSearchBarProps<T>) {
   const [query, setQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ParsedSearch | null>(null);

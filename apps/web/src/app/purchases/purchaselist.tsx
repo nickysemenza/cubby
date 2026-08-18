@@ -1,9 +1,9 @@
 import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/purchase";
 import { useQuery } from "@tanstack/react-query";
-import { createColumnHelper } from "@tanstack/react-table";
 import { sumBy } from "es-toolkit";
 import { FileText } from "lucide-react";
 import { useMemo } from "react";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { VendorMark } from "~/components/entity/vendor-cell";
@@ -51,7 +51,10 @@ const NO_VENDOR_OPTIONS: FilterableComboboxItem[] = [];
  */
 export function PurchaseList() {
   const api = useTRPC();
-  const columnHelper = useMemo(() => createColumnHelper<PurchaseOut>(), []);
+  const columnHelper = useMemo(
+    () => createCubbyColumnHelper<PurchaseOut>(),
+    [],
+  );
 
   // Runtime roster for the manifest's `vendor` spec (`optionsKey: "vendor"`).
   // The option's VALUE is the vendor id — the spec is `idMulti` on `vendorId`,

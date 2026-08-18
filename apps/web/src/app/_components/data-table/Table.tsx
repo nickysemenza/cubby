@@ -1,11 +1,8 @@
 // cf https://ui.shadcn.com/docs/components/data-table
 
 import type { Entity } from "@cubby/schemas/entity";
-import {
-  flexRender,
-  type Table as ITable,
-  type Row,
-} from "@tanstack/react-table";
+import type { RowData } from "@tanstack/react-table";
+import { flexRender } from "@tanstack/react-table";
 import {
   ArrowDown,
   ArrowUp,
@@ -45,6 +42,7 @@ import {
 import { MobileListScreen } from "./MobileListScreen";
 import { RowsPerPageSelect } from "./rows-per-page-select";
 import { SectionHeader } from "./SectionHeader";
+import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
 import { useDataTableController } from "./useDataTableController";
 import type { GroupConfig } from "./useGroupedList";
 import { useTableColumnSizing } from "./useTableColumnSizing";
@@ -61,7 +59,7 @@ function ghostRowsStyle(rowHeight: number): React.CSSProperties {
   };
 }
 
-interface TTableProps<TItem> {
+interface TTableProps<TItem extends RowData> {
   table: ITable<TItem>;
   /** Slot for additional toolbar content like summaries (e.g., "Value: $5,845.91") */
   additionalToolbarContent?: ReactNode;
@@ -142,7 +140,9 @@ interface TTableProps<TItem> {
   sizingKey?: string;
 }
 
-export default function RTable<TItem>(props: TTableProps<TItem>) {
+export default function RTable<TItem extends RowData>(
+  props: TTableProps<TItem>,
+) {
   const {
     table,
     additionalToolbarContent,
@@ -243,7 +243,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
     if (!rows.length) {
       if (emptyState) return emptyState;
-      const state = table.getState();
+      const state = table.state;
       // Narrowed-ness and clearability part ways when a URL-only scope is on:
       // the copy must say "no matches", but only column filters are resettable
       // from here (see `isNarrowed`).
@@ -567,7 +567,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                             {/* Sort-stack position (1-based) — only shown
                                   when 2+ columns are stacked via shift-click */}
                             {sortDirection &&
-                              table.getState().sorting.length > 1 && (
+                              table.state.sorting.length > 1 && (
                                 <span className="text-3xs text-muted-foreground tabular-nums">
                                   {header.column.getSortIndex() + 1}
                                 </span>

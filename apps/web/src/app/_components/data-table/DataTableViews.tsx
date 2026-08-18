@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { Table } from "@tanstack/react-table";
+import type { RowData } from "@tanstack/react-table";
 import { Bookmark, Check } from "lucide-react";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -16,8 +16,9 @@ import {
   type ViewDefinition,
   viewsForEntity,
 } from "~/entities/view-manifest";
+import type { CubbyTable as Table } from "./table-features";
 
-interface DataTableViewsProps<TData> {
+interface DataTableViewsProps<TData extends RowData> {
   table: Table<TData>;
   entity: Entity | undefined;
 }
@@ -47,14 +48,14 @@ interface SavedViewsMenuProps {
  * state through to the URL, while external navigation is reconciled back into
  * the table. That keeps views, shared links, and Back/Forward equivalent.
  */
-export function DataTableViews<TData>({
+export function DataTableViews<TData extends RowData>({
   table,
   entity,
 }: DataTableViewsProps<TData>) {
   const views = viewsForEntity(entity);
   if (views.length === 0) return null;
 
-  const { columnFilters, sorting } = table.getState();
+  const { columnFilters, sorting } = table.state;
 
   return (
     <SavedViewsMenu

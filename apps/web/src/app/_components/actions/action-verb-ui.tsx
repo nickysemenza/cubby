@@ -1,3 +1,4 @@
+import type { RowData } from "@tanstack/react-table";
 import type { ComponentProps, ReactElement } from "react";
 import { Button } from "~/components/ui/button";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
@@ -52,7 +53,7 @@ const verbActionId = (verb: ActionVerbId) =>
  * same file: `product-stocked-at` offered "Move to..." on a row and "Move" on
  * the bar for the one operation.
  */
-export function verbBulkAction<TData>(
+export function verbBulkAction<TData extends RowData>(
   verb: ActionVerbId,
   options: Omit<BulkAction<TData>, "id" | "label" | "icon" | "tone"> & {
     /** Override only where an existing id is load-bearing. */

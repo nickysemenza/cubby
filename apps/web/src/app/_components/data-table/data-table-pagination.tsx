@@ -1,6 +1,6 @@
 // cf https://ui.shadcn.com/docs/components/data-table#pagination-1
 
-import type { Table } from "@tanstack/react-table";
+import type { RowData } from "@tanstack/react-table";
 import {
   ChevronLeft,
   ChevronRight,
@@ -12,13 +12,14 @@ import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { type QueryTiming, QueryTimingIndicator } from "~/lib/query-timing";
 import { RowsPerPageSelect } from "./rows-per-page-select";
+import type { CubbyTable as Table } from "./table-features";
 
-interface DataTablePaginationProps<TData> {
+interface DataTablePaginationProps<TData extends RowData> {
   table: Table<TData>;
   timing?: QueryTiming;
 }
 
-export function DataTablePagination<TData>({
+export function DataTablePagination<TData extends RowData>({
   table,
   timing,
 }: DataTablePaginationProps<TData>) {
@@ -55,12 +56,11 @@ export function DataTablePagination<TData>({
           className="min-w-0 flex-1 font-mono text-2xs text-muted-foreground uppercase tabular-nums sm:flex-none"
         >
           <span className="hidden sm:inline">
-            Page {table.getState().pagination.pageIndex + 1} of{" "}
+            Page {table.state.pagination.pageIndex + 1} of{" "}
             {table.getPageCount()} ({table.getRowCount()} records)
           </span>
           <span className="sm:hidden">
-            {table.getState().pagination.pageIndex + 1} of{" "}
-            {table.getPageCount()}
+            {table.state.pagination.pageIndex + 1} of {table.getPageCount()}
           </span>
         </Row>
 

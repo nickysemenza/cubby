@@ -1,11 +1,5 @@
 import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
-import {
-  createColumnHelper,
-  getCoreRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
+import { useTable } from "@tanstack/react-table";
 import { mapValues } from "es-toolkit";
 import { useMemo, useState } from "react";
 import { match } from "ts-pattern";
@@ -31,6 +25,11 @@ import { cn } from "~/lib/utils";
 import { renderValueOrMissing } from "~/misc/result";
 import { createActionsColumnBase } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
+import {
+  type CubbyColumnDef,
+  createCubbyColumnHelper,
+  cubbyTableFeatures,
+} from "../data-table/table-features";
 import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
@@ -159,9 +158,9 @@ export const RecipeIngredientList: React.FC<{
     );
   }, [ingMap]);
 
-  const columnHelper = createColumnHelper<ScalingRow>();
+  const columnHelper = createCubbyColumnHelper<ScalingRow>();
 
-  const columns = [
+  const columns: CubbyColumnDef<ScalingRow>[] = [
     columnHelper.accessor((ingredient) => getIngredientName(ingredient), {
       id: "ing name",
       header: "Ingredient",
@@ -227,7 +226,10 @@ export const RecipeIngredientList: React.FC<{
       enableSorting: false,
       meta: { numeric: true, className: "w-28" },
       cell: (info) => {
-        const amounts = info.getValue();
+        // The shared column array erases heterogeneous TValue to keep every
+        // column interoperable; this accessor's value is still ScalingRow's
+        // concrete amounts field.
+        const amounts = info.getValue() as ScalingRow["amounts"];
 
         // Unmeasured estimated rows have no amount; flag the estimate here so
         // the derived weight/calorie values read as guesses, not measurements.
@@ -457,13 +459,11 @@ export const RecipeIngredientList: React.FC<{
     ),
   ];
 
-  const table = useReactTable({
+  const table = useTable<typeof cubbyTableFeatures, ScalingRow>({
+    features: cubbyTableFeatures,
     data: displayData,
     columns,
     enableFilters: false,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
     getRowId: getScalingRowId,
     rowCount: ingredients.length,
     state: {

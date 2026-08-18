@@ -1,4 +1,5 @@
-import { flexRender, type Row } from "@tanstack/react-table";
+import type { RowData } from "@tanstack/react-table";
+import { flexRender } from "@tanstack/react-table";
 import { Bug } from "lucide-react";
 import { type MouseEvent, memo } from "react";
 import { Button } from "~/components/ui/button";
@@ -6,12 +7,13 @@ import { TableCell, TableRow } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
 import { NON_SELECTABLE_COLUMN_IDS } from "./cell-selection-context";
 import { DebugDialog } from "./DebugDialog";
+import type { CubbyRow as Row } from "./table-features";
 import type { RowCellSelection } from "./useCellSelection";
 
 const NUMERIC_CELL = "text-right font-mono tabular-nums";
 const MONO_CELL = "font-mono";
 
-export interface DesktopDataRowProps<TItem> {
+export interface DesktopDataRowProps<TItem extends RowData> {
   row: Row<TItem>;
   /**
    * Flat index of this row within the controller's `rows` array — the
@@ -52,7 +54,7 @@ export interface DesktopDataRowProps<TItem> {
   suppressCellRowClick?: boolean;
 }
 
-function DesktopDataRowInner<TItem>({
+function DesktopDataRowInner<TItem extends RowData>({
   row,
   rowIndex,
   isSelected,
@@ -141,7 +143,7 @@ function DesktopDataRowInner<TItem>({
   );
 }
 
-function rowPropsAreEqual<TItem>(
+function rowPropsAreEqual<TItem extends RowData>(
   previous: DesktopDataRowProps<TItem>,
   next: DesktopDataRowProps<TItem>,
 ): boolean {

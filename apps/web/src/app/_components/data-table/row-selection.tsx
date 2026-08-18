@@ -1,6 +1,7 @@
-import type { ColumnDef } from "@tanstack/react-table";
+import type { RowData } from "@tanstack/react-table";
 import type { MutableRefObject } from "react";
 import { Checkbox } from "~/components/ui/checkbox";
+import type { CubbyColumnDef } from "./table-features";
 
 /**
  * Builds the leading row-selection checkbox column shared by every entity list.
@@ -12,10 +13,10 @@ import { Checkbox } from "~/components/ui/checkbox";
  * @param lastSelectedIdRef - mutable anchor: id of the last row whose checkbox was clicked
  * @param shiftKeyRef - mutable flag set on click-capture, read in onCheckedChange
  */
-export function buildSelectColumn<T>(
+export function buildSelectColumn<T extends RowData>(
   lastSelectedIdRef: MutableRefObject<string | null>,
   shiftKeyRef: MutableRefObject<boolean>,
-): ColumnDef<T> {
+): CubbyColumnDef<T> {
   return {
     id: "select",
     header: ({ table }) => (
@@ -24,7 +25,10 @@ export function buildSelectColumn<T>(
       <div role="presentation" onClick={(e) => e.stopPropagation()}>
         <Checkbox
           checked={table.getIsAllPageRowsSelected()}
-          indeterminate={table.getIsSomePageRowsSelected()}
+          indeterminate={
+            table.getIsSomePageRowsSelected() &&
+            !table.getIsAllPageRowsSelected()
+          }
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
           aria-label="Select all"
         />
@@ -62,15 +66,22 @@ export function buildSelectColumn<T>(
                   Math.min(anchorPos, currentPos),
                   Math.max(anchorPos, currentPos),
                 ];
-                const updates: Record<string, boolean> = {};
+                const selectedIds: string[] = [];
                 for (let i = from; i <= to; i++) {
                   const r = rows[i];
                   // Skip unselectable rows: this branch writes the selection map
                   // directly, so it would otherwise select rows the table just
                   // refused to give a checkbox.
-                  if (r?.getCanSelect()) updates[r.id] = !!value;
+                  if (r?.getCanSelect()) selectedIds.push(r.id);
                 }
-                table.setRowSelection((prev) => ({ ...prev, ...updates }));
+                table.setRowSelection((prev) => {
+                  const next = { ...prev };
+                  for (const id of selectedIds) {
+                    if (value) next[id] = true;
+                    else delete next[id];
+                  }
+                  return next;
+                });
               } else {
                 row.toggleSelected(!!value);
               }

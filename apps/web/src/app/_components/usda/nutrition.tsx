@@ -1,20 +1,20 @@
 import type { NutrientSummary, NutritionInfo } from "@cubby/usda-schemas";
-import {
-  createColumnHelper,
-  getCoreRowModel,
-  getPaginationRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
+import { useTable } from "@tanstack/react-table";
 import { useMemo } from "react";
 import RTable from "../data-table/Table";
+import {
+  type CubbyColumnDef,
+  createCubbyColumnHelper,
+  cubbyTableFeatures,
+} from "../data-table/table-features";
 
 export const NutritionInfoTable: React.FC<{
   n: NutritionInfo;
 }> = ({ n }) => {
   const { nutrientSummary } = n;
-  const columnHelper = createColumnHelper<NutrientSummary>();
+  const columnHelper = createCubbyColumnHelper<NutrientSummary>();
 
-  const columns = useMemo(
+  const columns = useMemo<CubbyColumnDef<NutrientSummary>[]>(
     () => [
       columnHelper.accessor("name", {
         header: "Nutrient",
@@ -35,13 +35,12 @@ export const NutritionInfoTable: React.FC<{
     [columnHelper],
   );
 
-  const table = useReactTable({
+  const table = useTable<typeof cubbyTableFeatures, NutrientSummary>({
+    features: cubbyTableFeatures,
     data: nutrientSummary,
     columns,
     enableSorting: false,
     enableFilters: false,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
     getRowId: (row) => `${row.name}-${row.unit}`,
     initialState: {
       pagination: {

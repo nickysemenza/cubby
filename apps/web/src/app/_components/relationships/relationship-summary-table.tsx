@@ -5,11 +5,7 @@ import type {
 } from "@cubby/schemas/related-view";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
-import {
-  createColumnHelper,
-  getCoreRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
+import { useTable } from "@tanstack/react-table";
 import { ImageIcon, Search } from "lucide-react";
 import { type FC, useCallback, useMemo, useRef, useState } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
@@ -22,6 +18,11 @@ import { useTRPC, useTRPCClient } from "~/integrations/trpc/react";
 import { formatCurrency } from "~/lib/utils";
 import { createCurrencyColumn } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
+import {
+  type CubbyColumnDef,
+  createCubbyColumnHelper,
+  cubbyTableFeatures,
+} from "../data-table/table-features";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 
 const PAGE_SIZE = 25;
@@ -188,7 +189,7 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
   // Every page carries the same full-set aggregates; the latest is the freshest.
   const summary = query.data?.pages.at(-1);
 
-  const helper = useMemo(() => createColumnHelper<SummaryTableRow>(), []);
+  const helper = useMemo(() => createCubbyColumnHelper<SummaryTableRow>(), []);
 
   // Every call site passes a fresh arrow / array literal. Column defs must not
   // churn on that: TanStack caches accessor results per row and only rebuilds
@@ -199,7 +200,7 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
   const columnsKey = columns.join(",");
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: columnsKey is the deep-compare stand-in for `columns`; expenseHref is read through a ref
-  const tableColumns = useMemo(() => {
+  const tableColumns = useMemo<CubbyColumnDef<SummaryTableRow>[]>(() => {
     const build = (column: Column) => {
       switch (column) {
         case "target":
@@ -327,10 +328,10 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
     [sorting],
   );
 
-  const table = useReactTable({
+  const table = useTable<typeof cubbyTableFeatures, SummaryTableRow>({
+    features: cubbyTableFeatures,
     data: rows,
     columns: tableColumns,
-    getCoreRowModel: getCoreRowModel(),
     getRowId: (row) => row.id,
     manualSorting: true,
     manualFiltering: true,

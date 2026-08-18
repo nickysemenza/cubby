@@ -1851,9 +1851,9 @@ export const projectToolMatrixRowOut = z.object({
    */
   visibleUseCount: z.number().int().nonnegative(),
   /**
-   * When we owned the tool, derived from the ledger (repo/product/ownership.ts).
-   * Either side null means *unknown* — 42 of 426 tools carry no acquisition
-   * Expense at all — and unknown never restricts anything.
+   * When we provably owned the tool, derived from quantified ledger movements
+   * (repo/product/ownership.ts). Multiple intervals preserve sell/re-buy gaps;
+   * history at or after `confidenceLostAt` is unknown and never restricts.
    *
    * Shipped per row rather than as a per-cell `conflict` state, and this is the
    * ONE place the grid asks the client to derive something. The reason is
@@ -1866,7 +1866,8 @@ export const projectToolMatrixRowOut = z.object({
    */
   ownership: z.object({
     acquiredAt: plainDate.nullable(),
-    disposedAt: plainDate.nullable(),
+    intervals: z.array(z.object({ start: plainDate, end: plainDate })),
+    confidenceLostAt: plainDate.nullable(),
   }),
   ...projectToolEconomicsFields,
 });

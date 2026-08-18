@@ -2,8 +2,8 @@ import type {
   FinancialAccountFilters,
   FinancialAccountOut,
 } from "@cubby/schemas/financial-account";
-import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { financialAccountMutationInvalidateKeys } from "~/lib/query-keys";
@@ -22,7 +22,10 @@ import {
 } from "./financial-account-options";
 export function FinancialAccountList() {
   const api = useTRPC();
-  const helper = useMemo(() => createColumnHelper<FinancialAccountOut>(), []);
+  const helper = useMemo(
+    () => createCubbyColumnHelper<FinancialAccountOut>(),
+    [],
+  );
   const deletable = useDeletableConfig({
     mutationFn: api.financialAccount.delete.mutationOptions,
     entityLabel: "Account",

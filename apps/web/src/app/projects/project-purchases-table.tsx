@@ -1,7 +1,6 @@
 import type { ProjectShortcode } from "@cubby/schemas/identifiers";
 import type { ExpenseOut } from "@cubby/schemas/project";
 import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/purchase";
-import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
 import {
   createNameColumn,
@@ -9,6 +8,7 @@ import {
   type RowLinkResolver,
 } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -74,7 +74,10 @@ export function ProjectPurchasesTable({
   expenses: readonly ExpenseOut[];
 }) {
   const api = useTRPC();
-  const helper = useMemo(() => createColumnHelper<ProjectPurchaseRow>(), []);
+  const helper = useMemo(
+    () => createCubbyColumnHelper<ProjectPurchaseRow>(),
+    [],
+  );
   const scope = useMemo<Partial<PurchaseFilters>>(
     () => ({ projectId }),
     [projectId],

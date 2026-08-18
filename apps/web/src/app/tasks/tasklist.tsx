@@ -2,9 +2,9 @@ import type { TaskShortcode } from "@cubby/schemas/identifiers";
 import type { TaskOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
-import { createColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import {
   taskDueColumn,
   taskStatusColumn,
@@ -66,7 +66,7 @@ interface TaskListProps {
 
 export function TaskList({ actions, initialSearch }: TaskListProps) {
   const api = useTRPC();
-  const columnHelper = useMemo(() => createColumnHelper<TaskOut>(), []);
+  const columnHelper = useMemo(() => createCubbyColumnHelper<TaskOut>(), []);
   const { options: projectOptions } = useProjectOptions();
   const productOptionsQuery = useQuery(
     api.product.list.queryOptions({

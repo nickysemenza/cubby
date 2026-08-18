@@ -6,7 +6,6 @@ import type {
   TaskOut,
 } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
-import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
 import {
   createParentLinkColumn,
@@ -14,6 +13,7 @@ import {
   createProjectLinkColumn,
 } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
@@ -61,7 +61,7 @@ export function ProjectDataTaskList({
   projectScope: EmbeddedProjectScope;
 }) {
   const api = useTRPC();
-  const helper = useMemo(() => createColumnHelper<TaskOut>(), []);
+  const helper = useMemo(() => createCubbyColumnHelper<TaskOut>(), []);
   const { options: projectOptions } = useProjectOptions();
   const parentOptionsQuery = useQuery(
     api.task.list.queryOptions({
@@ -173,7 +173,7 @@ export function ProjectDataExpenseList({
   projectScope: EmbeddedProjectScope;
 }) {
   const api = useTRPC();
-  const helper = useMemo(() => createColumnHelper<ExpenseOut>(), []);
+  const helper = useMemo(() => createCubbyColumnHelper<ExpenseOut>(), []);
   const { options: projectOptions } = useProjectOptions();
   const filterOptions = useFilterOptions({ project: projectOptions });
   const update = useUpdateMutation({

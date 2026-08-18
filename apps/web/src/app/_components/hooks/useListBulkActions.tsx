@@ -1,6 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import type { Row, Table } from "@tanstack/react-table";
 import { useMemo } from "react";
 import { copyShortcodes } from "~/lib/clipboard";
 import { verbBulkAction } from "../actions/action-verb-ui";
@@ -12,6 +11,10 @@ import type {
   BulkAction,
   BulkActionsConfig,
 } from "../data-table/bulk-actions.types";
+import type {
+  CubbyRow as Row,
+  CubbyTable as Table,
+} from "../data-table/table-features";
 import {
   type UseBulkActionsReturn,
   useBulkActions,
@@ -85,7 +88,7 @@ export function useListBulkActions<TData extends { id: string }>({
   };
 }
 
-export function ListBulkActionBar<TData>({
+export function ListBulkActionBar<TData extends { id: string }>({
   table,
   config,
   state,

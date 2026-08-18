@@ -1,8 +1,12 @@
-import type { ColumnDef, Row, Table } from "@tanstack/react-table";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { createRef, type ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 import { buildSelectColumn } from "./row-selection";
+import type {
+  CubbyColumnDef as ColumnDef,
+  CubbyRow as Row,
+  CubbyTable as Table,
+} from "./table-features";
 
 interface TestRow {
   id: string;
@@ -39,11 +43,11 @@ function renderSelectCell({
   const shiftKeyRef = createRef<boolean>() as { current: boolean };
   shiftKeyRef.current = false;
 
-  let written: Record<string, boolean> | null = null;
+  let written: Record<string, true> | null = null;
   const table = {
     getRowModel: () => ({ rows }),
     setRowSelection: (
-      updater: (prev: Record<string, boolean>) => Record<string, boolean>,
+      updater: (prev: Record<string, true>) => Record<string, true>,
     ) => {
       written = updater({});
     },
@@ -58,6 +62,24 @@ function renderSelectCell({
 
   render(<div>{column.cell({ row, table })}</div>);
   return { written: () => written };
+}
+
+function renderSelectHeader({ some, all }: { some: boolean; all: boolean }) {
+  const column = buildSelectColumn<TestRow>(
+    createRef<string | null>() as { current: string | null },
+    createRef<boolean>() as { current: boolean },
+  );
+  render(
+    <div>
+      {(column.header as (context: unknown) => ReactElement)({
+        table: {
+          getIsSomePageRowsSelected: () => some,
+          getIsAllPageRowsSelected: () => all,
+          toggleAllPageRowsSelected: () => {},
+        } as unknown as Table<TestRow>,
+      })}
+    </div>,
+  );
 }
 
 describe("buildSelectColumn", () => {
@@ -78,6 +100,13 @@ describe("buildSelectColumn", () => {
       rows: [fakeRow("wish", true)],
     });
     expect(screen.getByRole("checkbox")).toBeInTheDocument();
+  });
+
+  it("does not mark a fully selected page indeterminate", () => {
+    renderSelectHeader({ some: true, all: true });
+    expect(screen.getByRole("checkbox")).not.toHaveAttribute(
+      "data-indeterminate",
+    );
   });
 
   it("skips unselectable rows inside a shift-click range", () => {

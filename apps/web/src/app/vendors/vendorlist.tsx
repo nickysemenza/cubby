@@ -1,11 +1,11 @@
 import type { VendorFilters, VendorOut } from "@cubby/schemas/vendor";
-import { createColumnHelper } from "@tanstack/react-table";
 import { type ReactNode, useMemo } from "react";
 import {
   createCurrencyColumn,
   createPlainDateColumn,
 } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { ExternalLinkText } from "~/app/_components/ExternalLink";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
@@ -39,7 +39,7 @@ const VENDOR_NAME_PREFIX = (row: VendorOut): ReactNode => (
 
 export function VendorList() {
   const api = useTRPC();
-  const columnHelper = useMemo(() => createColumnHelper<VendorOut>(), []);
+  const columnHelper = useMemo(() => createCubbyColumnHelper<VendorOut>(), []);
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("vendor");
 
   const updateVendorMutation = useUpdateMutation({

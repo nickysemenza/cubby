@@ -5,13 +5,16 @@ import type {
   RelatedViewKey,
 } from "@cubby/schemas/related-view";
 import { useQuery } from "@tanstack/react-query";
-import type { ColumnDef, ColumnHelper } from "@tanstack/react-table";
 import { useMemo, useRef } from "react";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { getSortableFields } from "~/entities/sortable-fields";
 import { useTRPC } from "~/integrations/trpc/react";
 import { RelatedPreviewCell } from "../data-table/related-preview-cell";
+import type {
+  CubbyColumnDef as ColumnDef,
+  CubbyColumnHelper as ColumnHelper,
+} from "../data-table/table-features";
 
 interface RelatedPreviewState {
   byCell: Map<string, RelatedPreviewGroup>;

@@ -10,7 +10,6 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
-import { createColumnHelper } from "@tanstack/react-table";
 import { ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { Button } from "~/components/ui/button";
@@ -24,6 +23,7 @@ import {
   createSingleEntityInlineLinkColumn,
 } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
+import { createCubbyColumnHelper } from "../data-table/table-features";
 import { useClientEntityList } from "../hooks/useClientEntityList";
 import { LocationTypeLabel } from "./LocationTypeLabel";
 import { locationTypeOptionsWithTheme } from "./location-icons";
@@ -62,7 +62,7 @@ export function LocationChildrenTable({
   locationId: LocationShortcode;
 }) {
   const api = useTRPC();
-  const helper = useMemo(() => createColumnHelper<LocationTreeRow>(), []);
+  const helper = useMemo(() => createCubbyColumnHelper<LocationTreeRow>(), []);
 
   const {
     data = NO_LOCATIONS,

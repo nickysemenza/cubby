@@ -5,8 +5,8 @@ import {
   type MealKind,
   type MealType,
 } from "@cubby/schemas/meal-classification";
-import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { Badge } from "~/components/ui/badge";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -43,7 +43,7 @@ import {
  */
 export function MealTable() {
   const api = useTRPC();
-  const columnHelper = useMemo(() => createColumnHelper<MealOut>(), []);
+  const columnHelper = useMemo(() => createCubbyColumnHelper<MealOut>(), []);
 
   const updateMealMutation = useUpdateMutation({
     mutationFn: api.meal.update.mutationOptions,

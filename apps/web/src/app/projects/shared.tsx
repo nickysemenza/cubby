@@ -15,17 +15,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   type ColumnFiltersState,
-  type ColumnHelper,
-  createColumnHelper,
-  type FilterFn,
-  getCoreRowModel,
-  getFacetedRowModel,
-  getFacetedUniqueValues,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-  type VisibilityState,
+  type ColumnVisibilityState,
+  useTable,
 } from "@tanstack/react-table";
 import { partition } from "es-toolkit";
 import { ListFilter, ListTodo, ShoppingCart } from "lucide-react";
@@ -60,6 +51,13 @@ import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import { EditableEntityCell } from "~/app/_components/data-table/editable-entity-cell";
 import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
 import RTable from "~/app/_components/data-table/Table";
+import {
+  type CubbyColumnHelper as ColumnHelper,
+  type CubbyColumnDef,
+  createCubbyColumnHelper,
+  cubbyTableFeatures,
+  type CubbyFilterFn as FilterFn,
+} from "~/app/_components/data-table/table-features";
 import { useBulkActions } from "~/app/_components/data-table/useBulkActions";
 import { useTableColumnVisibility } from "~/app/_components/data-table/useTableColumnVisibility";
 import { ExternalLinkIcon } from "~/app/_components/ExternalLink";
@@ -186,11 +184,11 @@ export function StatusIcon({ status }: { status: ProjectStatus | TaskStatus }) {
 
 // -- Task Table --
 
-const taskHelper = createColumnHelper<TaskOut>();
+const taskHelper = createCubbyColumnHelper<TaskOut>();
 
 // These bake the renderCell + select options + editable field-mapping shared by
 // the `/tasks` & `/expenses` index pages (tasklist.tsx / expenselist.tsx, via
-// `useEntityList`) and the embedded tables below (raw `useReactTable` over a
+// `useEntityList`) and the embedded tables below (raw `useTable` over a
 // caller-supplied array). Each returns ONE column def; callers pass their own
 // `mobile` / `filterConfig` / density knobs. The project column already has its
 // own shared factory (`createProjectLinkColumn`); the name column differs per
@@ -298,7 +296,7 @@ const subtaskCountSuffix = (row: TaskOut): ReactNode =>
  * Columns off by default on the embedded task table. Provenance detail on a
  * project page, reachable from the column menu when you want it.
  */
-const EMBEDDED_TASK_COLUMNS: VisibilityState = { createdAt: false };
+const EMBEDDED_TASK_COLUMNS: ColumnVisibilityState = { createdAt: false };
 
 /**
  * The embedded task table: client-side filter/sort/pagination over a
@@ -349,7 +347,7 @@ export function TaskList({
   });
   const nameEditable = useNameEditable<TaskOut>(updateTaskMutation.mutateAsync);
 
-  // These tables are raw `useReactTable`, not `useEntityList`, so delete is
+  // These tables are raw `useTable`, not `useEntityList`, so delete is
   // hand-wired from the same primitive the list hooks use. (Migrating to
   // `useClientEntityList` would url-sync `sort`/`page`/`size` — and this
   // component renders twice on a project detail page — and would re-sort
@@ -375,7 +373,7 @@ export function TaskList({
   });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateTaskMutation changes every render but is functionally stable
-  const columns = useMemo(
+  const columns = useMemo<CubbyColumnDef<TaskOut>[]>(
     () => [
       buildSelectColumn<TaskOut>(lastSelectedIdRef, shiftKeyRef),
       taskStatusColumn(
@@ -454,20 +452,16 @@ export function TaskList({
   const { columnVisibility, onColumnVisibilityChange } =
     useTableColumnVisibility("task", EMBEDDED_TASK_COLUMNS, "embedded");
 
-  const table = useReactTable({
+  const table = useTable<typeof cubbyTableFeatures, TaskOut>({
+    features: cubbyTableFeatures,
     data: sortedData,
     columns,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
     // Feeds the header picklists' `(count)` hints. Client-side faceting is
     // honest here (unlike on a server-paginated ledger): the table holds the
     // whole set it's filtering.
-    getFacetedRowModel: getFacetedRowModel(),
-    getFacetedUniqueValues: getFacetedUniqueValues(),
     getRowId: (row) => row.id,
     enableRowSelection: true,
+    enableRowRangeSelection: false,
     state: {
       rowSelection: bulkActionsState.rowSelection,
       columnVisibility,
@@ -477,7 +471,7 @@ export function TaskList({
     onColumnVisibilityChange,
     onColumnFiltersChange: setColumnFilters,
     initialState: {
-      pagination: { pageSize: 25 },
+      pagination: { pageIndex: 0, pageSize: 25 },
     },
   });
 
@@ -524,7 +518,7 @@ export function TaskList({
 
 // -- Expense Table --
 
-const expenseHelper = createColumnHelper<ExpenseOut>();
+const expenseHelper = createCubbyColumnHelper<ExpenseOut>();
 
 export function expenseLineKindColumn(
   helper: ColumnHelper<ExpenseOut>,
@@ -994,7 +988,7 @@ export function expenseOrderIdColumn(
  * would cost more density than they return on a project page — but the column
  * menu makes them one click away.
  */
-const EMBEDDED_EXPENSE_COLUMNS: VisibilityState = {
+const EMBEDDED_EXPENSE_COLUMNS: ColumnVisibilityState = {
   vendor: false,
   orderId: false,
   product: false,
@@ -1086,7 +1080,7 @@ export function ExpenseList({
       }));
   }, [expenses]);
 
-  // Hand-wired for the same reason as `TaskList` above — raw `useReactTable`,
+  // Hand-wired for the same reason as `TaskList` above — raw `useTable`,
   // and the pivot drives `trade`'s column filter imperatively, which
   // `useClientEntityList` would funnel into url state and a page reset.
   const deletableConfig = useDeletableConfig({
@@ -1110,7 +1104,7 @@ export function ExpenseList({
   });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateExpenseMutation changes every render but is functionally stable
-  const columns = useMemo(
+  const columns = useMemo<CubbyColumnDef<ExpenseOut>[]>(
     () => [
       buildSelectColumn<ExpenseOut>(lastSelectedIdRef, shiftKeyRef),
       createExpenseProductImageColumn(expenseHelper),
@@ -1255,19 +1249,16 @@ export function ExpenseList({
   const { columnVisibility, onColumnVisibilityChange } =
     useTableColumnVisibility("expense", EMBEDDED_EXPENSE_COLUMNS, "embedded");
 
-  const table = useReactTable({
+  const table = useTable<typeof cubbyTableFeatures, ExpenseOut>({
+    features: cubbyTableFeatures,
     data: expenses,
     columns,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    // No faceted row model: the only picklist here that showed counts was
-    // Vendor, and its counts are now tallied off `expenses` in
-    // `rowVendorOptions` — faceting keys on the cell value (the vendor NAME) and
-    // so can't hint an option whose value is a vendor id.
+    // Vendor counts still come from `rowVendorOptions`: table faceting keys on
+    // the cell value (the vendor NAME), so it cannot hint an option whose value
+    // is a vendor id.
     getRowId: (row) => row.id,
     enableRowSelection: true,
+    enableRowRangeSelection: false,
     state: {
       rowSelection: bulkActionsState.rowSelection,
       columnVisibility,
@@ -1277,7 +1268,7 @@ export function ExpenseList({
     onColumnVisibilityChange,
     onColumnFiltersChange: setColumnFilters,
     initialState: {
-      pagination: { pageSize: 25 },
+      pagination: { pageIndex: 0, pageSize: 25 },
     },
   });
 
@@ -1399,7 +1390,10 @@ export function ProjectTable({
   // the tree table. `ProjectTreeRow` is a structural supertype of `ProjectOut`
   // and every accessor below reads only `ProjectOut` fields, so this is a pure
   // type-parameter swap with no behavioural difference in flat mode.
-  const columnHelper = useMemo(() => createColumnHelper<ProjectTreeRow>(), []);
+  const columnHelper = useMemo(
+    () => createCubbyColumnHelper<ProjectTreeRow>(),
+    [],
+  );
   const { options: projectOptions } = useProjectOptions();
   const projectIds = useMemo(
     () => projectOptions.map((project) => project.value),

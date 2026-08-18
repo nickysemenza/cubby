@@ -1,16 +1,16 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { Table } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { CubbyTable } from "../data-table/table-features";
 
 const mocks = vi.hoisted(() => ({
   queryOptions: vi.fn((input) => ({ queryKey: ["related-summary", input] })),
   summaryQuery: vi.fn(),
   // The table object RTable was handed, so the test can drive sorting through
   // the same API RTable's own header buttons use.
-  lastTable: { current: null as Table<unknown> | null },
+  lastTable: { current: null as CubbyTable<Record<string, unknown>> | null },
 }));
 
 const page = (relationKey: string) => ({
@@ -62,7 +62,7 @@ vi.mock("../data-table/Table", () => ({
     table,
     additionalToolbarContent,
   }: {
-    table: Table<unknown>;
+    table: CubbyTable<Record<string, unknown>>;
     additionalToolbarContent: ReactNode;
   }) => {
     mocks.lastTable.current = table;

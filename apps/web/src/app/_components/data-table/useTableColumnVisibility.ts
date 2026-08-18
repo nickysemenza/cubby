@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { OnChangeFn, VisibilityState } from "@tanstack/react-table";
+import type { ColumnVisibilityState, OnChangeFn } from "@tanstack/react-table";
 import { useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 
 /**
@@ -17,7 +17,7 @@ import { useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 type Store = {
   /** Parsed object cached for referential stability (useSyncExternalStore
    *  bails out via Object.is, so the snapshot must not re-parse per read). */
-  value: VisibilityState | null | undefined;
+  value: ColumnVisibilityState | null | undefined;
   listeners: Set<() => void>;
 };
 
@@ -43,7 +43,7 @@ function getStore(entity: string): Store {
   return store;
 }
 
-function readStored(entity: string): VisibilityState | null {
+function readStored(entity: string): ColumnVisibilityState | null {
   const store = getStore(entity);
   if (store.value !== undefined) return store.value;
   if (typeof window === "undefined") return null;
@@ -52,7 +52,7 @@ function readStored(entity: string): VisibilityState | null {
     const parsed: unknown = raw ? JSON.parse(raw) : null;
     store.value =
       parsed && typeof parsed === "object" && !Array.isArray(parsed)
-        ? (parsed as VisibilityState)
+        ? (parsed as ColumnVisibilityState)
         : null;
   } catch {
     store.value = null;
@@ -60,7 +60,7 @@ function readStored(entity: string): VisibilityState | null {
   return store.value;
 }
 
-function writeStored(entity: string, next: VisibilityState) {
+function writeStored(entity: string, next: ColumnVisibilityState) {
   const store = getStore(entity);
   store.value = next;
   localStorage.setItem(storageKey(entity), JSON.stringify(next));
@@ -71,7 +71,7 @@ const getServerSnapshot = () => null;
 
 export function useTableColumnVisibility(
   entity: Entity,
-  initial?: VisibilityState,
+  initial?: ColumnVisibilityState,
   scope?: string,
 ) {
   const key = scopedKey(entity, scope);
@@ -101,13 +101,17 @@ export function useTableColumnVisibility(
     [stored],
   );
 
-  const onColumnVisibilityChange: OnChangeFn<VisibilityState> = useCallback(
-    (updater) => {
-      const prev = { ...initialRef.current, ...readStored(key) };
-      writeStored(key, typeof updater === "function" ? updater(prev) : updater);
-    },
-    [key],
-  );
+  const onColumnVisibilityChange: OnChangeFn<ColumnVisibilityState> =
+    useCallback(
+      (updater) => {
+        const prev = { ...initialRef.current, ...readStored(key) };
+        writeStored(
+          key,
+          typeof updater === "function" ? updater(prev) : updater,
+        );
+      },
+      [key],
+    );
 
   return { columnVisibility, onColumnVisibilityChange } as const;
 }

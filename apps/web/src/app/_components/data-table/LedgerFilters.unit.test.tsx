@@ -1,12 +1,9 @@
-import type {
-  ColumnFiltersState,
-  OnChangeFn,
-  Table,
-} from "@tanstack/react-table";
+import type { ColumnFiltersState, OnChangeFn } from "@tanstack/react-table";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Filter } from "~/components/reui/filters";
 import { LedgerFilters } from "./LedgerFilters";
+import type { CubbyTable } from "./table-features";
 
 vi.mock("~/components/reui/filters", () => ({
   Filters: ({
@@ -131,9 +128,11 @@ function makeTable() {
   const table = {
     options: { columns },
     getAllLeafColumns: () => columns,
-    getState: () => ({ columnFilters }),
+    get state() {
+      return { columnFilters };
+    },
     setColumnFilters,
-  } as unknown as Table<{ id: string }>;
+  } as unknown as CubbyTable<{ id: string }>;
 
   return {
     table,

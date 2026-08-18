@@ -1,6 +1,6 @@
-import type { Column } from "@tanstack/react-table";
 import { describe, expect, it } from "vitest";
 import { columnLabel } from "./data-table-view-options";
+import type { CubbyColumn as Column } from "./table-features";
 
 /**
  * The View menu used to render `{column.id}` with a `capitalize` CSS class —
@@ -10,8 +10,14 @@ import { columnLabel } from "./data-table-view-options";
  * instead of "Quantity Variance". `columnLabel` is the same header-first,
  * `humanize`-fallback derivation `LedgerFilters` uses.
  */
-function column(id: string, header?: unknown): Column<unknown, unknown> {
-  return { id, columnDef: { header } } as unknown as Column<unknown, unknown>;
+function column(
+  id: string,
+  header?: unknown,
+): Column<Record<string, unknown>, unknown> {
+  return { id, columnDef: { header } } as unknown as Column<
+    Record<string, unknown>,
+    unknown
+  >;
 }
 
 describe("columnLabel", () => {

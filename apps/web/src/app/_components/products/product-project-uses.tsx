@@ -1,7 +1,6 @@
 import type { ProjectShortcode } from "@cubby/schemas/identifiers";
 import type { ProductProjectUsesOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
-import { createColumnHelper } from "@tanstack/react-table";
 import { Pencil, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
@@ -10,6 +9,7 @@ import {
   createTimestampColumn,
 } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
@@ -90,7 +90,7 @@ export function ProductProjectUses({ productId }: { productId: string }) {
     [data],
   );
 
-  const helper = useMemo(() => createColumnHelper<ProjectUseRow>(), []);
+  const helper = useMemo(() => createCubbyColumnHelper<ProjectUseRow>(), []);
   const category = data?.category;
   const columns = useMemo(
     () => [

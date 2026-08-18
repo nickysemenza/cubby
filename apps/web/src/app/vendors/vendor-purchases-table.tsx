@@ -1,6 +1,5 @@
 import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/purchase";
 import type { VendorOut } from "@cubby/schemas/vendor";
-import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
 import {
   createCurrencyColumn,
@@ -9,6 +8,7 @@ import {
 } from "~/app/_components/data-table/columnHelpers";
 import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import RTable from "~/app/_components/data-table/Table";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
@@ -35,7 +35,7 @@ const EMBEDDED_TABLE_STATE = {
  */
 export function VendorPurchasesTable({ vendor }: { vendor: VendorOut }) {
   const api = useTRPC();
-  const helper = useMemo(() => createColumnHelper<PurchaseOut>(), []);
+  const helper = useMemo(() => createCubbyColumnHelper<PurchaseOut>(), []);
   const scope = useMemo<Partial<PurchaseFilters>>(
     () => ({ vendorId: vendor.id }),
     [vendor.id],

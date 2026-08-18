@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { Table } from "@tanstack/react-table";
+import type { RowData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { Row } from "~/components/layout";
 import { usePageIdentity } from "~/components/page/Page";
@@ -8,8 +8,9 @@ import { cn, formatCount } from "~/lib/utils";
 import { DataTableViews } from "./DataTableViews";
 import { DataTableViewOptions } from "./data-table-view-options";
 import { LedgerFilters } from "./LedgerFilters";
+import type { CubbyTable as Table } from "./table-features";
 
-interface DataTableToolbarProps<TData> {
+interface DataTableToolbarProps<TData extends RowData> {
   table: Table<TData>;
   /** Which entity this table lists — drives the saved-views menu, which
    *  renders nothing for an entity with no declared views. */
@@ -68,7 +69,7 @@ function PageIdentityActions() {
   return <>{identity.actions}</>;
 }
 
-export function DataTableToolbar<TData>({
+export function DataTableToolbar<TData extends RowData>({
   table,
   entity,
   additionalContent,

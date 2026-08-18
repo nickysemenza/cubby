@@ -1,12 +1,17 @@
-import type { OnChangeFn, Row, RowSelectionState } from "@tanstack/react-table";
+import type {
+  OnChangeFn,
+  RowData,
+  RowSelectionState,
+} from "@tanstack/react-table";
 import { useCallback, useState } from "react";
 import type { BulkAction, BulkActionsConfig } from "./bulk-actions.types";
+import type { CubbyRow as Row } from "./table-features";
 
-interface UseBulkActionsOptions<TData> {
+interface UseBulkActionsOptions<TData extends RowData> {
   config: BulkActionsConfig<TData>;
 }
 
-export interface UseBulkActionsReturn<TData> {
+export interface UseBulkActionsReturn<TData extends RowData> {
   rowSelection: RowSelectionState;
   onRowSelectionChange: OnChangeFn<RowSelectionState>;
   selectedCount: number;
@@ -20,7 +25,7 @@ export interface UseBulkActionsReturn<TData> {
   clearSelection: () => void;
 }
 
-export function useBulkActions<TData>({
+export function useBulkActions<TData extends RowData>({
   config,
 }: UseBulkActionsOptions<TData>): UseBulkActionsReturn<TData> {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});

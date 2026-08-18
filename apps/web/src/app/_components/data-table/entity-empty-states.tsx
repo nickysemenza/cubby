@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
-import type { Table } from "@tanstack/react-table";
+import type { RowData } from "@tanstack/react-table";
 import { createActionFor } from "~/app/_components/actions/action-items";
 import { IconPattern } from "~/components/common/icon-pattern";
 import { Button } from "~/components/ui/button";
@@ -13,6 +13,7 @@ import {
 } from "~/components/ui/empty";
 import { InkStamp } from "~/components/ui/ink-stamp";
 import { EntityIcon, entities } from "~/entities/entities";
+import type { CubbyTable as Table } from "./table-features";
 
 interface EntityEmptyConfig {
   title: string;
@@ -212,9 +213,11 @@ export function hasActiveFilters(columnFilters: unknown[]): boolean {
  * filters" button still keys off column filters alone rather than offering a
  * button that wouldn't change anything.
  */
-export function isNarrowed<TData>(table: Table<TData>): boolean {
+export function isNarrowed<TData extends RowData>(
+  table: Table<TData>,
+): boolean {
   return (
-    hasActiveFilters(table.getState().columnFilters) ||
+    hasActiveFilters(table.state.columnFilters) ||
     (table.options.meta?.urlScopeCount ?? 0) > 0
   );
 }

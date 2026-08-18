@@ -1,6 +1,5 @@
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { Link } from "@tanstack/react-router";
-import { createColumnHelper } from "@tanstack/react-table";
 import { ImageIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import type { z } from "zod";
@@ -8,6 +7,7 @@ import {
   VerbMenuItem,
   verbBulkAction,
 } from "~/app/_components/actions/action-verb-ui";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { Row as FlexRow, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { NoneValue } from "~/components/ui/none-value";
@@ -63,7 +63,7 @@ function InventoryProductImageCell({ productId }: { productId: string }) {
 export function InventoryItemList() {
   const api = useTRPC();
   const columnHelper = useMemo(
-    () => createColumnHelper<InventoryListItem>(),
+    () => createCubbyColumnHelper<InventoryListItem>(),
     [],
   );
   const { onRowClick, onRowHover, PreviewSheet } =
