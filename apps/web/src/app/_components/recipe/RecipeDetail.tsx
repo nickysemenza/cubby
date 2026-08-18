@@ -314,6 +314,7 @@ const RecipeDetailInner: React.FC<{
           recipe={scaledRecipe}
           totals={totals}
           costing={costing}
+          kitchenProgressKey={recipe.id}
         />
       )}
       {viewMode === "spec" &&

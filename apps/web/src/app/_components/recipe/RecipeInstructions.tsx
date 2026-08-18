@@ -1,33 +1,75 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
+import {
+  readKitchenProgress,
+  recipeInstructionStepKey,
+  recipeInstructionStepKeys,
+  recipeKitchenProgressStorageKey,
+  toggleKitchenStep,
+  writeKitchenProgress,
+} from "./recipe-kitchen-progress";
 import { formatRichText } from "./richtext";
 import { SectionHeading } from "./section-heading";
 
 interface RecipeInstructionsProps {
   recipe: RecipeOut;
+  /** Recipe shortcode enables durable kitchen-mode progress in the detail view. */
+  kitchenProgressKey?: string;
 }
 
-export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
+export function RecipeInstructions({
+  recipe,
+  kitchenProgressKey,
+}: RecipeInstructionsProps) {
   // Kitchen mode: tap a step to mark it done (dim + strike) so you don't lose
-  // your place after glancing away. Local-only — no persistence needed.
   // Steps have no stable id, so key by section id + step index (matching the
   // list key), which is stable for a given recipe render.
   const [doneSteps, setDoneSteps] = useState<Set<string>>(new Set());
-  const toggleStep = (key: string) => {
-    setDoneSteps((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
-      return next;
-    });
-  };
+  const validStepKeys = useMemo(
+    () => recipeInstructionStepKeys(recipe),
+    [recipe],
+  );
+  const progressScope = useMemo(
+    () =>
+      kitchenProgressKey
+        ? `${kitchenProgressKey}\u0000${[...validStepKeys].join("\u0000")}`
+        : null,
+    [kitchenProgressKey, validStepKeys],
+  );
+  const [hydratedScope, setHydratedScope] = useState<string | null>(null);
+
+  // Read after hydration so server markup stays deterministic. Scope prevents
+  // a route change from writing the prior recipe's state into the next recipe.
+  useEffect(() => {
+    if (!kitchenProgressKey || !progressScope) {
+      setDoneSteps(new Set());
+      setHydratedScope(null);
+      return;
+    }
+    setDoneSteps(
+      readKitchenProgress(
+        recipeKitchenProgressStorageKey(kitchenProgressKey),
+        validStepKeys,
+      ),
+    );
+    setHydratedScope(progressScope);
+  }, [kitchenProgressKey, progressScope, validStepKeys]);
+
+  useEffect(() => {
+    if (!kitchenProgressKey || hydratedScope !== progressScope) return;
+    writeKitchenProgress(
+      recipeKitchenProgressStorageKey(kitchenProgressKey),
+      doneSteps,
+    );
+  }, [doneSteps, hydratedScope, kitchenProgressKey, progressScope]);
+
+  const toggleStep = useCallback((key: string) => {
+    setDoneSteps((prev) => toggleKitchenStep(prev, key));
+  }, []);
 
   // Extract all ingredient names for rich text highlighting
   const ingredientNames = useMemo(() => {
@@ -56,7 +98,7 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
           {/* Instructions list */}
           <Stack as="ol" gap="md" className="my-0 ml-0 list-none">
             {section.instructions.map((instruction, stepIndex) => {
-              const stepKey = `${section.id}-${stepIndex}`;
+              const stepKey = recipeInstructionStepKey(section.id, stepIndex);
               const isDone = doneSteps.has(stepKey);
               return (
                 <li key={stepKey}>

@@ -136,9 +136,8 @@ decision value.
   (`EntityPreviewContent.tsx`) — still no browsable/filterable facet on the
   cookbook list; list has no search/sort/filter (incl. a "partially imported"
   filter from `sourceRecipeCount - recipeCount`).
-- [ ] **Kitchen-mode persistence**: step check-off is `useState` in
-  `RecipeInstructions` — lost on nav or scale change; no ingredient check-off in
-  Read view; no timers derived from step text.
+- [ ] **Kitchen-mode helpers**: no ingredient check-off in Read view; no timers
+  derived from step text.
 - [ ] **Export "Read" format**: the print/export sheet offers prep/nested/matrix/
   flow (all spec- or diagram-flavored, the last an AI-assembled step flow chart)
   but no plain recipe-as-a-page format (`RecipeMagazineView` would drop in); no

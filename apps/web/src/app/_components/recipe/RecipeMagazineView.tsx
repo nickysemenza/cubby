@@ -172,6 +172,8 @@ interface RecipeMagazineViewProps {
    * "2 tsp ground ginger" → "3 g"), so the ledger matches the table view.
    */
   costing: RecipeCosting | null;
+  /** Opt-in only on the regular recipe detail; exports stay stateless. */
+  kitchenProgressKey?: string;
 }
 
 /** Broadsheet section heading: heavy top rule + serif title. */
@@ -289,6 +291,7 @@ export function RecipeMagazineView({
   recipe,
   totals,
   costing,
+  kitchenProgressKey,
 }: RecipeMagazineViewProps) {
   const servings = getEffectiveServings(recipe);
   // Per-portion basis: explicit servings, else the yield count labelled by unit
@@ -359,7 +362,10 @@ export function RecipeMagazineView({
         <main>
           <SpreadHeading>Method</SpreadHeading>
           <div className="mt-4">
-            <RecipeInstructions recipe={recipe} />
+            <RecipeInstructions
+              recipe={recipe}
+              kitchenProgressKey={kitchenProgressKey}
+            />
           </div>
         </main>
       </div>
