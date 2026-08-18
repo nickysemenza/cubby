@@ -134,6 +134,8 @@ export const AppErrors = {
   PRODUCT_ALREADY_EXISTS: "CONFLICT",
   // Optimistic-concurrency: the data changed since the client loaded its snapshot.
   INVENTORY_STALE: "CONFLICT",
+  // A long-running external logo fetch raced a vendor website edit.
+  VENDOR_STALE: "CONFLICT",
 
   // Generic database constraint violations (translated centrally from Postgres
   // error codes — see server/errors/db-errors.ts)

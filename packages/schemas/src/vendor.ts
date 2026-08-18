@@ -54,6 +54,10 @@ export const vendorUpdateInput = z.object({
 });
 export type VendorUpdateInput = z.infer<typeof vendorUpdateInput>;
 
+/** Explicit, per-vendor logo sourcing from the website a human recorded. */
+export const fetchVendorLogoInput = z.object({ id: vendorShortcode });
+export type FetchVendorLogoInput = z.infer<typeof fetchVendorLogoInput>;
+
 export const vendorFilterFields = {
   ...auditDateFilterFields,
   ...vendorRelatedFilterFields,

@@ -251,8 +251,8 @@ runtime CDN) are all shipped. Target is iOS Safari only. Remaining:
   as `N +M?` in the products table's Expected column, and 125 of the 218
   shelf-vs-ledger mismatches are stocked products with no product-linked
   Expense at all (a provenance gap, not a counting one). The variance filter
-  already excludes that second group; the first is ordinary data entry, with
-  `scripts/report-product-quantity-backfill.ts` as the evidence manifest.
+  already excludes that second group; the first is ordinary data entry through
+  Expenses → Missing quantities, where the quantity field is editable in place.
 - [ ] **Problems detectors for cookbooks**: partially-imported cookbooks
   (`sourceRecipeCount > recipeCount` — visible only if you open that book).
   The meal/recipe ones shipped: `emptyCookedMeals`, `understatedCostMeals`

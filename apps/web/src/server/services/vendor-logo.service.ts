@@ -1,0 +1,189 @@
+import type { ActorContext } from "@cubby/schemas/context";
+import type { VendorShortcode } from "@cubby/schemas/identifiers";
+import {
+  ALLOWED_IMAGE_TYPES,
+  MAX_IMAGE_UPLOAD_BYTES,
+} from "@cubby/schemas/image";
+import type { VendorOut } from "@cubby/schemas/vendor";
+import {
+  assertResponseContentType,
+  fetchExternalResponse,
+  readResponseWithLimit,
+  validateExternalHttpUrl,
+} from "@cubby/shared/external-fetch";
+import type { Database } from "~/server/db";
+import { createAppError } from "~/server/errors/app-error";
+import { getVendorByShortcode, replaceVendorLogo } from "~/server/repo/vendor";
+import {
+  filenameForContentType,
+  type InspectedImageFile,
+  inspectImageFile,
+} from "~/server/services/image-integrity";
+import { deleteStoredObjects } from "~/server/services/image-storage.service";
+import {
+  contentTypeToExtension,
+  deleteS3Object,
+  generateImageKey,
+  getS3ObjectUrl,
+  uploadToS3,
+} from "~/server/utils/s3";
+
+type LogoCandidate = {
+  bytes: Buffer;
+  inspected: InspectedImageFile;
+  source: "apple-touch-icon" | "google-favicon";
+};
+
+type CandidateDependencies = {
+  fetchResponse?: typeof fetchExternalResponse;
+  inspect?: typeof inspectImageFile;
+};
+
+/** Normalize free-text website input into a safe public origin and hostname. */
+export function normalizeVendorWebsite(website: string): {
+  origin: string;
+  hostname: string;
+} {
+  const raw = website.trim();
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//iu.test(raw)
+    ? raw
+    : `https://${raw}`;
+  let parsed: URL;
+  try {
+    parsed = validateExternalHttpUrl(withScheme);
+  } catch (error) {
+    throw createAppError(
+      "IMAGE_ATTACH_FAILED",
+      "Record a valid public vendor website before fetching its logo.",
+      error,
+    );
+  }
+  const hostname = parsed.hostname.toLowerCase().replace(/^www\./u, "");
+  if (!hostname.includes(".")) {
+    throw createAppError(
+      "IMAGE_ATTACH_FAILED",
+      "Record a valid public vendor website before fetching its logo.",
+    );
+  }
+  return { origin: parsed.origin, hostname };
+}
+
+async function readCandidate(
+  url: string,
+  source: LogoCandidate["source"],
+  dependencies: CandidateDependencies,
+): Promise<LogoCandidate | null> {
+  try {
+    const response = await (
+      dependencies.fetchResponse ?? fetchExternalResponse
+    )(url);
+    if (!response.ok) return null;
+    const contentType = assertResponseContentType(
+      response,
+      ALLOWED_IMAGE_TYPES,
+    );
+    const bytes = Buffer.from(
+      await readResponseWithLimit(response, MAX_IMAGE_UPLOAD_BYTES),
+    );
+    if (bytes.length === 0) return null;
+    const inspected = await (dependencies.inspect ?? inspectImageFile)(
+      bytes,
+      contentType,
+    );
+    return { bytes, inspected, source };
+  } catch {
+    return null;
+  }
+}
+
+/** Fetch the best Workers-decodable logo candidate without writing anything. */
+export async function fetchVendorLogoCandidate(
+  website: string,
+  dependencies: CandidateDependencies = {},
+): Promise<LogoCandidate | null> {
+  const { origin, hostname } = normalizeVendorWebsite(website);
+  const candidates = await Promise.all([
+    readCandidate(
+      new URL("/apple-touch-icon.png", origin).toString(),
+      "apple-touch-icon",
+      dependencies,
+    ),
+    readCandidate(
+      `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=128`,
+      "google-favicon",
+      dependencies,
+    ),
+  ]);
+  return (
+    candidates
+      .filter((candidate): candidate is LogoCandidate => candidate !== null)
+      .sort((a, b) => {
+        const aSize = Math.max(a.inspected.width ?? 0, a.inspected.height ?? 0);
+        const bSize = Math.max(b.inspected.width ?? 0, b.inspected.height ?? 0);
+        return bSize - aSize;
+      })[0] ?? null
+  );
+}
+
+/** Fetch, verify, store, and attach one vendor logo from its recorded website. */
+export async function fetchAndAttachVendorLogo(
+  db: Database,
+  id: VendorShortcode,
+  actor: ActorContext,
+): Promise<{ output: VendorOut; entityId: string }> {
+  const current = await getVendorByShortcode(db, id);
+  if (!current) {
+    throw createAppError("VENDOR_NOT_FOUND", `Vendor not found: ${id}`);
+  }
+  if (!current.website) {
+    throw createAppError(
+      "IMAGE_ATTACH_FAILED",
+      "Record a vendor website before fetching its logo.",
+    );
+  }
+
+  const candidate = await fetchVendorLogoCandidate(current.website);
+  if (!candidate) {
+    throw createAppError(
+      "IMAGE_ATTACH_FAILED",
+      "No usable logo was found at the recorded vendor website.",
+    );
+  }
+
+  const extension = contentTypeToExtension(candidate.inspected.contentType);
+  const filename = filenameForContentType(
+    `vendor-${id}.${extension}`,
+    candidate.inspected.contentType,
+  );
+  const key = generateImageKey(filename);
+  await uploadToS3({
+    key,
+    body: candidate.bytes,
+    contentType: candidate.inspected.contentType,
+  });
+
+  try {
+    const result = await replaceVendorLogo(
+      db,
+      {
+        id,
+        expectedWebsite: current.website,
+        image: {
+          key,
+          url: getS3ObjectUrl(key),
+          filename,
+          size: candidate.bytes.length,
+          ...candidate.inspected,
+        },
+      },
+      actor,
+    );
+    await deleteStoredObjects(result.detachedImageKeys);
+    return { output: result.output, entityId: result.entityId };
+  } catch (error) {
+    await deleteS3Object(key).catch((cleanupError) => {
+      console.error("Failed to roll back vendor logo object:", cleanupError);
+    });
+    throw error;
+  }
+}

@@ -11,6 +11,7 @@ import {
   vendorShortcode,
 } from "@cubby/schemas/identifiers";
 import {
+  fetchVendorLogoInput,
   mergeVendorsInput,
   vendorCreateInput,
   vendorFiltersSchema,
@@ -32,6 +33,7 @@ import {
 } from "~/server/repo/vendor";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
+import { fetchAndAttachVendorLogo } from "~/server/services/vendor-logo.service";
 import { createSearchableEntityCrudProcedures } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
@@ -113,8 +115,27 @@ const merge = protectedProcedure
     return output;
   });
 
+/** Explicitly source one missing logo from the vendor website on record. */
+const fetchLogo = protectedProcedure
+  .input(fetchVendorLogoInput)
+  .output(strictOutput(vendorOut))
+  .mutation(async ({ ctx, input }) => {
+    const { output, entityId } = await fetchAndAttachVendorLogo(
+      ctx.db,
+      input.id,
+      ctx.actorContext,
+    );
+    await runMutationSideEffects(ctx.db, {
+      action: "updated",
+      entity: { entityType: "vendor", entityId: unsafeVendorId(entityId) },
+      source: "vendor.fetchLogo",
+    });
+    return output;
+  });
+
 export const vendorRouter = createTRPCRouter({
   ...procedures,
   options,
   merge,
+  fetchLogo,
 });
