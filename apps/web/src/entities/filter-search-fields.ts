@@ -142,6 +142,7 @@ export const entityFilterSemantics = {
     "conversionTopology",
     "unitMappingQuality",
     "stockTracked",
+    "components",
     "tags",
     "related-vendor",
     "related-project",

@@ -27,6 +27,7 @@ import {
   updateProduct,
 } from "./product";
 import { loadProductQuantityLedgers } from "./product/quantity-ledger";
+import { attachProductComponents } from "./product-components";
 import { createProject } from "./project";
 import {
   attachPurchaseProducts,
@@ -886,6 +887,67 @@ describe("product repository", () => {
         { pageIndex: 0, pageSize: 10 },
       );
       expect(exactLocation.data.map((p) => p.id)).toEqual([stocked.id]);
+    });
+
+    // The generic filter-application guard classifies a presenceFilter as
+    // `skip:closed-domain`, so it only proves this field doesn't crash the
+    // query builder. This is the only place the predicate itself is exercised
+    // — and `check-soft-delete-filters.mjs` can't see the hoisted subquery
+    // either, so it's also the only guard on its `notDeleted`.
+    it("componentPresenceFilter selects kits, and 'none' means no live components", async () => {
+      const kit = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Presence Combo Kit", upc: "700000000101" }),
+        ctx.actor,
+      );
+      const part = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Presence Kit Part", upc: "700000000102" }),
+        ctx.actor,
+      );
+      const plain = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Presence Plain Tool", upc: "700000000103" }),
+        ctx.actor,
+      );
+
+      await attachProductComponents(
+        ctx.db,
+        kit.entityId,
+        [{ productId: part.entityId, quantity: 2 }],
+        ctx.actor,
+      );
+
+      const kits = await productList(
+        ctx.db,
+        { componentPresenceFilter: "has" },
+        [{ orderBy: "name", direction: "asc" }],
+        { pageIndex: 0, pageSize: 50 },
+      );
+      expect(kits.data.map((p) => p.id)).toContain(kit.id);
+      // A component is not itself a kit — the filter tests the parent side of
+      // the edge, not membership (which is the transpose, `kitMembership`).
+      expect(kits.data.map((p) => p.id)).not.toContain(part.id);
+      expect(kits.data.map((p) => p.id)).not.toContain(plain.id);
+
+      // `none` must return the ordinary products, not zero rows — the
+      // NOT-IN-over-a-subquery shape is where that goes wrong.
+      const notKits = await productList(
+        ctx.db,
+        { componentPresenceFilter: "none" },
+        [{ orderBy: "name", direction: "asc" }],
+        { pageIndex: 0, pageSize: 50 },
+      );
+      expect(notKits.data.map((p) => p.id)).toContain(plain.id);
+      expect(notKits.data.map((p) => p.id)).toContain(part.id);
+      expect(notKits.data.map((p) => p.id)).not.toContain(kit.id);
+
+      // The rendered cell must agree with the filter that selected the row.
+      const kitRow = kits.data.find((p) => p.id === kit.id);
+      expect(kitRow?.componentCount).toBe(1);
+      expect(notKits.data.find((p) => p.id === plain.id)?.componentCount).toBe(
+        0,
+      );
     });
 
     it("inventoryPresenceFilter: none counts a soft-deleted-only inventory entry as none", async () => {

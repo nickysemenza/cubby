@@ -1534,6 +1534,20 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       ],
     },
     {
+      // Hand-written options for the same reason as `stockTracked` above:
+      // `presenceFilterOptions("components")` would emit "Has components" /
+      // "(none)", which buries the concept the filter actually names. A
+      // product that contains components IS a kit, so say that.
+      columnId: "components",
+      field: "componentPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter kits...",
+      options: [
+        { value: "has", label: "Is a kit" },
+        { value: "none", label: "Not a kit" },
+      ],
+    },
+    {
       // Compatibility/grouping tags — the same value sits on a tool and on the
       // consumables that fit it, so this answers "what's in the 4.5in grinder
       // ecosystem". Options come from `product.tagOptions` at runtime (free

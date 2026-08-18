@@ -78,6 +78,7 @@ const baseProduct = {
   usdaUnavailable: null,
   stockTracked: null,
   expenseCount: 0,
+  componentCount: 0,
   expenseTotal: 42.5,
   purchaseDate: null,
   quantityLedger: EMPTY_QUANTITY_LEDGER,

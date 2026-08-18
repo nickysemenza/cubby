@@ -140,10 +140,13 @@ describe("ProductPurchases empty states", () => {
   it("shows the ordinary empty state for a plain product with no purchases", () => {
     renderWith([]);
 
-    expect(screen.getByText("No purchases linked")).toBeInTheDocument();
+    expect(screen.getByText("No purchases recorded")).toBeInTheDocument();
+    // "Linked" would now be wrong: the panel also lists orders derived from
+    // this product's own acquisition expenses, so reaching this state means
+    // neither source has anything.
     expect(
       screen.getByText(
-        "Attach this product from a purchase's Products section to record which order it came from.",
+        "No expense on this product names an order, and no order has been linked to it directly. Record the spend on an expense, or attach it from a purchase's Products section when the order was never itemized.",
       ),
     ).toBeInTheDocument();
   });
@@ -184,14 +187,45 @@ describe("ProductPurchases empty states", () => {
         vendorName: "Amazon",
         date: "2026-08-01",
         orderId: "#999",
-        attachedAt: new Date("2026-08-01"),
+        source: "link",
+        linkAttachedAt: new Date("2026-08-01"),
       },
     ]);
 
     expect(screen.getByRole("link", { name: "#999" })).toBeInTheDocument();
-    expect(screen.queryByText("No purchases linked")).not.toBeInTheDocument();
+    expect(screen.queryByText("No purchases recorded")).not.toBeInTheDocument();
     expect(
       screen.queryByText("No purchases of its own"),
     ).not.toBeInTheDocument();
+  });
+
+  it("badges only the explicitly-linked row, not the expense-derived one", () => {
+    renderWith([
+      {
+        purchaseId: unsafePurchaseShortcode("PUR-LINK"),
+        displayLabel: null,
+        vendorName: "Ferguson",
+        date: "2026-08-02",
+        orderId: "#link",
+        source: "link",
+        linkAttachedAt: new Date("2026-08-02"),
+      },
+      {
+        purchaseId: unsafePurchaseShortcode("PUR-EXPN"),
+        displayLabel: null,
+        vendorName: "Home Depot",
+        date: "2026-08-01",
+        orderId: "#expense",
+        // Derived from an itemized acquisition Expense: nothing was ever
+        // attached, so there is no link to stamp and none to remove.
+        source: "expense",
+        linkAttachedAt: null,
+      },
+    ]);
+
+    expect(screen.getByRole("link", { name: "#link" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "#expense" })).toBeInTheDocument();
+    // One badge for two rows — the marker belongs to the rarer, detachable kind.
+    expect(screen.getAllByText("Linked")).toHaveLength(1);
   });
 });

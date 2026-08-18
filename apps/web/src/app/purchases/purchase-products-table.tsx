@@ -16,6 +16,7 @@ import {
 } from "~/app/_components/data-table/table-features";
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { Badge } from "~/components/ui/badge";
 import {
   Empty,
   EmptyDescription,
@@ -33,6 +34,8 @@ type PurchaseProductRow = {
   name: string;
   manufacturer: string;
   price: number | null;
+  /** An explicit `PurchaseProduct` row exists — the only detachable case. */
+  linked: boolean;
   images: Array<{ id: string; url: string; filename: string }>;
 };
 
@@ -47,6 +50,7 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
         name: item.productName,
         manufacturer: item.manufacturer,
         price: item.price,
+        linked: item.linkAttachedAt !== null,
         images: item.coverImageUrl
           ? [
               {
@@ -61,7 +65,9 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
   );
   const detach = useActionMutation({
     mutationFn: api.purchase.detachProducts.mutationOptions,
-    success: "Product removed from purchase",
+    // See the twin in `product-purchases.tsx`: detaching clears the explicit
+    // link only, and an expense-backed row stays listed.
+    success: "Link removed — any itemized expense still relates these",
     invalidateKeys: purchaseProductMutationInvalidateKeys,
   });
   const helper = useMemo(
@@ -86,17 +92,33 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
         header: "Price",
         mobile: { slot: "meta", priority: 20 },
       }),
+      // Badge the exception: most rows are derived from this order's itemized
+      // expenses, and the explicit link is both rarer and the only detachable
+      // one. Mirrors the marker in `product-purchases.tsx`.
+      helper.accessor((row) => row.linked, {
+        id: "link",
+        header: "",
+        meta: {
+          className: "w-24",
+          mobile: { slot: "meta", priority: 30 },
+        },
+        cell: (info) =>
+          info.getValue() ? <Badge variant="outline">Linked</Badge> : null,
+      }),
       createActionsColumn(helper, "product", {
-        extraActions: (row) => (
-          <VerbMenuItem
-            verb="removeFromPurchase"
-            disabled={detach.isPending}
-            onSelect={(event) => {
-              event.stopPropagation();
-              detach.mutate({ purchaseId, productIds: [row.id] });
-            }}
-          />
-        ),
+        // Expense-derived rows have no link to remove; detach would no-op and
+        // leave the row in place. Clear the Expense's product instead.
+        extraActions: (row) =>
+          !row.linked ? null : (
+            <VerbMenuItem
+              verb="removeFromPurchase"
+              disabled={detach.isPending}
+              onSelect={(event) => {
+                event.stopPropagation();
+                detach.mutate({ purchaseId, productIds: [row.id] });
+              }}
+            />
+          ),
       }),
     ],
     [detach, helper, purchaseId],
@@ -121,11 +143,11 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
       emptyState={
         <Empty variant="minimal" className="py-6">
           <EmptyHeader>
-            <EmptyTitle>No products linked</EmptyTitle>
+            <EmptyTitle>No products recorded</EmptyTitle>
             <EmptyDescription>
-              Attach the products this purchase bought — most useful for
-              lump-sum or installment orders whose expenses can&apos;t carry a
-              product.
+              No expense on this order names a product, and none has been
+              attached directly. Attaching is most useful for lump-sum or
+              installment orders whose expenses can&apos;t carry a product.
             </EmptyDescription>
           </EmptyHeader>
         </Empty>

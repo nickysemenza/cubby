@@ -591,6 +591,22 @@ export const productList = async (
     .from(productUnitMappings)
     .where(notDeleted(productUnitMappings));
 
+  // Kits: products that CONTAIN components. Edge-level liveness only, which is
+  // exact rather than approximate because three rules bracket it — attach
+  // requires both the parent and every component Product live
+  // (`product-components.ts`), deleting a parent soft-deletes the rows keyed by
+  // `parentProductId` (below), and deleting a *component* is refused outright
+  // while a live edge points at it (`edge-roles.ts`). It is that last,
+  // asymmetric guard that makes the component side safe; the parent cascade
+  // alone would not.
+  //
+  // `componentCount` in `relations.ts` MUST stay on this same predicate: a
+  // filter and a rendered cell that disagree is the #428 failure mode.
+  const productIdsWithComponents = dbClient
+    .select({ productId: productComponent.parentProductId })
+    .from(productComponent)
+    .where(notDeleted(productComponent));
+
   // This is the entity-list form of the sold-but-still-stocked diagnostic.
   // The quantity ledger remains the authority for expected quantity and unknown
   // acquisition lines; the disposal purchase predicate prevents ordinary
@@ -806,6 +822,11 @@ export const productList = async (
         product.id,
         filters.unitMappingPresenceFilter,
         productIdsWithUnitMappings,
+      ),
+      idSetPresence(
+        product.id,
+        filters.componentPresenceFilter,
+        productIdsWithComponents,
       ),
       // `isMiscProduct` is a case-insensitive prefix test on the name, so this
       // is a LIKE rather than a presence over a column or an id set. `lower()`

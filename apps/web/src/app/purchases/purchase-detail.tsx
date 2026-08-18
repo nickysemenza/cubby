@@ -68,8 +68,15 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
     api.purchase.products.queryOptions({ purchaseId: purchase.id }),
   );
   const linkedProducts = productsQuery.data ?? EMPTY_PURCHASE_PRODUCTS;
+  // Explicitly-linked products only. This list feeds the link dialog's picker,
+  // which hides what is already attached — and since `purchase.products` now
+  // also returns products derived from this order's itemized expenses, taking
+  // every row would hide exactly the products you might still want to link,
+  // making an expense-derived pair impossible to promote to a real link.
   const attachedProductIds = new Set(
-    linkedProducts.map((item) => item.productId),
+    linkedProducts
+      .filter((item) => item.linkAttachedAt !== null)
+      .map((item) => item.productId),
   );
 
   const updateMutation = useUpdateMutation({
@@ -303,8 +310,9 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
       content: (
         <Stack gap="sm">
           <Description>
-            Which products this purchase bought. Useful for a lump-sum or
-            installment order whose expenses can&apos;t carry a product — this
+            Which products this order acquired — from its own itemized expenses,
+            plus any attached directly. Attaching is for a lump-sum or
+            installment order whose expenses can&apos;t carry a product; that
             link carries no money or quantity of its own.
           </Description>
           <PurchaseProductsTable purchaseId={purchase.id} />

@@ -5,13 +5,15 @@
  * sides already name the same pair (a bare re-point would abort the whole
  * transaction on the unique index rather than produce a wrong answer).
  */
-import type { PurchaseId } from "@cubby/schemas/identifiers";
+import type { ProductShortcode, PurchaseId } from "@cubby/schemas/identifiers";
 import { unsafePurchaseShortcode } from "@cubby/schemas/identifiers";
+import { expenseCreateInput } from "@cubby/schemas/project";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { auditLog, purchaseProduct } from "~/server/db/schema";
 import { getDb, notDeleted } from "./database-helpers";
+import { createExpense } from "./expense";
 import { deleteProducts } from "./product";
 import { mergeProducts } from "./product/merge";
 import { mergePurchases } from "./purchase";
@@ -23,8 +25,10 @@ import {
 } from "./purchase-products";
 import {
   createProductFixture as createProduct,
+  makeExpenseInput,
   makeProductInput,
 } from "./repo.fixtures";
+import { resolveOrThrow } from "./shortcode-resolver";
 import { insertWithShortcode } from "./shortcode-utils";
 import { findOrCreateVendor } from "./vendor";
 
@@ -50,6 +54,230 @@ describe("purchase ↔ product links", () => {
           notDeleted(purchaseProduct),
         ),
       );
+
+  // The Expense leg. These reads answer "which order acquired this", and the
+  // Expense ledger — not `PurchaseProduct` — establishes that for all but a
+  // handful of pairs. Every case below was invisible before the union landed.
+  describe("expense-derived rows", () => {
+    // `productId` here is the product SHORTCODE — `createExpense` resolves it,
+    // unlike the list functions below, which take the branded id (`entityId`).
+    const expenseOn = async (args: {
+      name: string;
+      cost: number;
+      productId: ProductShortcode;
+      productQuantity: number | null;
+      orderId: string;
+      future?: boolean;
+    }) =>
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({
+            date: "2026-03-01",
+            vendor: "Expense Leg Vendor",
+            ...args,
+          }),
+        ),
+        ctx.actor,
+      );
+
+    it("lists an order named only by an itemized expense, undetachable", async () => {
+      const drill = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Union Drill" }),
+        ctx.actor,
+      );
+      await expenseOn({
+        name: "Union Drill",
+        cost: 99,
+        productId: drill.id,
+        productQuantity: 1,
+        orderId: "UNION-1",
+      });
+
+      const purchases = await listProductPurchases(ctx.db, drill.entityId);
+      expect(purchases).toHaveLength(1);
+      expect(purchases[0]?.source).toBe("expense");
+      // No link exists, so there is nothing for a detach to remove — this is
+      // what the UI reads to hide the action.
+      expect(purchases[0]?.linkAttachedAt).toBeNull();
+    });
+
+    it("collapses several expense lines for one pair into one row", async () => {
+      const bolt = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Union Bolt" }),
+        ctx.actor,
+      );
+      // A 30-line hardware order naming the same bolt three times is ordinary.
+      // The panel renders one row per PAIR, unlike the movement timeline which
+      // renders one per expense — so dedup is this module's own problem.
+      for (const suffix of ["a", "b", "c"]) {
+        await expenseOn({
+          name: `Union Bolt ${suffix}`,
+          cost: 3,
+          productId: bolt.id,
+          productQuantity: 1,
+          orderId: "UNION-DEDUP",
+        });
+      }
+
+      const purchases = await listProductPurchases(ctx.db, bolt.entityId);
+      expect(purchases).toHaveLength(1);
+
+      const purchaseId = unsafePurchaseShortcode(
+        purchases[0]?.purchaseId ?? "",
+      );
+      const products = await listPurchaseProducts(
+        ctx.db,
+        await resolveOrThrow(ctx.db, "purchase", purchaseId),
+      );
+      expect(products.filter((row) => row.productId === bolt.id)).toHaveLength(
+        1,
+      );
+    });
+
+    it("does NOT list an order whose only expense is an exit", async () => {
+      const camera = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Union Camera" }),
+        ctx.actor,
+      );
+      // A negative line is a sale/return/disposal. A disposal Purchase must not
+      // claim to have BOUGHT the thing it sold — the section's contract says
+      // acquired. 181 live pairs depend on this exclusion.
+      await expenseOn({
+        name: "Union Camera sold",
+        cost: -250,
+        productId: camera.id,
+        productQuantity: -1,
+        orderId: "UNION-SALE",
+      });
+
+      expect(await listProductPurchases(ctx.db, camera.entityId)).toEqual([]);
+    });
+
+    it("keeps an order whose refund sits beside a real acquisition", async () => {
+      const saw = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Union Saw" }),
+        ctx.actor,
+      );
+      await expenseOn({
+        name: "Union Saw",
+        cost: 120,
+        productId: saw.id,
+        productQuantity: 1,
+        orderId: "UNION-REFUND",
+      });
+      // A partial refund on a kept item, and a returned second unit, are both
+      // ordinary inside an order that still bought something.
+      await expenseOn({
+        name: "Union Saw price adjustment",
+        cost: -20,
+        productId: saw.id,
+        productQuantity: 0,
+        orderId: "UNION-REFUND",
+      });
+
+      const purchases = await listProductPurchases(ctx.db, saw.entityId);
+      expect(purchases).toHaveLength(1);
+      expect(purchases[0]?.source).toBe("expense");
+    });
+
+    it("counts a $0 line as an acquisition but a $0 discard as an exit", async () => {
+      const promo = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Union Promo" }),
+        ctx.actor,
+      );
+      const tossed = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Union Tossed" }),
+        ctx.actor,
+      );
+      // With no money to read, the quantity's sign IS the fact — the ledger
+      // rule this predicate borrows. A free promo item arrived; a write-off
+      // left.
+      await expenseOn({
+        name: "Union Promo freebie",
+        cost: 0,
+        productId: promo.id,
+        productQuantity: 1,
+        orderId: "UNION-ZERO",
+      });
+      await expenseOn({
+        name: "Union Tossed write-off",
+        cost: 0,
+        productId: tossed.id,
+        productQuantity: -1,
+        orderId: "UNION-ZERO-OUT",
+      });
+
+      expect(await listProductPurchases(ctx.db, promo.entityId)).toHaveLength(
+        1,
+      );
+      expect(await listProductPurchases(ctx.db, tossed.entityId)).toEqual([]);
+    });
+
+    it("ignores a planned expense", async () => {
+      const planned = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Union Planned" }),
+        ctx.actor,
+      );
+      // A planned expense has not bought anything yet. Decided on its own
+      // terms rather than inherited from movement-timeline, which excludes
+      // future rows to answer a different question.
+      await expenseOn({
+        name: "Union Planned buy",
+        cost: 500,
+        productId: planned.id,
+        productQuantity: 1,
+        orderId: "UNION-FUTURE",
+        future: true,
+      });
+
+      expect(await listProductPurchases(ctx.db, planned.entityId)).toEqual([]);
+    });
+
+    it("reports a pair carrying both edges once, and keeps it detachable", async () => {
+      const both = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Union Both" }),
+        ctx.actor,
+      );
+      await expenseOn({
+        name: "Union Both",
+        cost: 60,
+        productId: both.id,
+        productQuantity: 1,
+        orderId: "UNION-BOTH",
+      });
+      const [row] = await listProductPurchases(ctx.db, both.entityId);
+      const orderId = await resolveOrThrow(
+        ctx.db,
+        "purchase",
+        unsafePurchaseShortcode(row?.purchaseId ?? ""),
+      );
+      await attachPurchaseProducts(ctx.db, orderId, [both.entityId], ctx.actor);
+
+      const purchases = await listProductPurchases(ctx.db, both.entityId);
+      // One row, not two: the overlap is folded, and unlike the movement
+      // timeline the Expense does NOT suppress the link — losing it would make
+      // a real link undetachable.
+      expect(purchases).toHaveLength(1);
+      expect(purchases[0]?.source).toBe("both");
+      expect(purchases[0]?.linkAttachedAt).not.toBeNull();
+
+      // Detaching drops to expense-only rather than removing the row.
+      await detachPurchaseProducts(ctx.db, orderId, [both.entityId], ctx.actor);
+      const after = await listProductPurchases(ctx.db, both.entityId);
+      expect(after).toHaveLength(1);
+      expect(after[0]?.source).toBe("expense");
+      expect(after[0]?.linkAttachedAt).toBeNull();
+    });
+  });
 
   it("attaches idempotently, lists both directions, and detaches", async () => {
     const order = await mkPurchase("appliances");

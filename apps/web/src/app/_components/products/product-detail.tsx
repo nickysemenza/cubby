@@ -162,10 +162,12 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       ),
       content: <ProductExpenseHistory product={product} />,
     },
-    // Custom section: Purchases — the orders this product is linked to via
-    // `PurchaseProduct`, the transpose of a purchase's own Products section.
-    // Distinct from "Vendors" below: that's the derived vendor/spend rollup,
-    // this is the explicit per-order provenance link.
+    // Custom section: Purchases — the orders that acquired this product, the
+    // transpose of a purchase's own Products section. Two sources: the orders
+    // named by this product's own acquisition expenses, and any explicit
+    // `PurchaseProduct` link (which exists for orders whose expenses can't
+    // carry a product at all). Distinct from "Vendors" below: that's the
+    // derived vendor/spend rollup, this is per-order provenance.
     {
       title: "Purchases",
       icon: ReceiptText,

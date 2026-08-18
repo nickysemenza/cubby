@@ -384,6 +384,31 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       },
     },
     {
+      id: "kits",
+      label: "Kits",
+      description: "Products made of other products",
+      // A category, not a defect — so no `problem` key. Nothing here converges
+      // to zero and nothing here is wrong; buying a combo kit is the normal
+      // way these arrive.
+      //
+      // Earns a view because no other facet finds them: kit categories are
+      // scattered across `hardware`, `tools`, `storage`, and `household`, since
+      // a kit takes the category of what it contains.
+      filters: [{ id: "components", value: "has" }],
+      layout: {
+        ...DEFAULT_CURATED_LAYOUT,
+        // `components` is the filtered column and must be revealed. `expected`
+        // and `price` come along because a kit's own numbers are the ones that
+        // project down to its parts — the kit keeps one Expense, and that row
+        // is what gives every component its cost basis and its units.
+        columnVisibility: {
+          components: true,
+          expectedQuantity: true,
+          price: true,
+        },
+      },
+    },
+    {
       id: "unpriced-stocked",
       label: "Stocked but unpriced",
       description: "On a shelf, with no price to value it by",

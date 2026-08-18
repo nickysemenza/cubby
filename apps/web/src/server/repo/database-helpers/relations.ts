@@ -265,6 +265,16 @@ export const relations = {
           sql<number>`(SELECT count(*) FROM "Expense" pu WHERE pu."productId" = "product"."id" AND pu."deletedAt" IS NULL)`.as(
             "expenseCount",
           ),
+        // How many distinct components this product contains — non-zero makes
+        // it a kit. Same live-edge predicate as `productIdsWithComponents` in
+        // product/crud.ts, deliberately: the filter selects rows and this
+        // renders the cell, and the two disagreeing is the #428 failure mode.
+        // Counts edges, not units, so a 4-pack recorded as one row with
+        // `quantity: 4` reads as 1 — the column says "made of N things".
+        componentCount:
+          sql<number>`(SELECT count(*) FROM "ProductComponent" pc WHERE pc."parentProductId" = "product"."id" AND pc."deletedAt" IS NULL)`.as(
+            "componentCount",
+          ),
         // Net basis: SUM(expense.cost) over this product's live expenses.
         // Plain sum IS the net basis — negative rows (refunds, disposals) are
         // real in this ledger. COALESCE matters: a product with no expenses

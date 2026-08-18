@@ -17,6 +17,7 @@ import {
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { Badge } from "~/components/ui/badge";
 import {
   Empty,
   EmptyDescription,
@@ -56,7 +57,11 @@ export function ProductPurchases({ productId }: { productId: string }) {
   );
   const detach = useActionMutation({
     mutationFn: api.purchase.detachProducts.mutationOptions,
-    success: "Removed from purchase",
+    // Not "removed from purchase": detaching clears only the explicit link, and
+    // a row that also has an itemized Expense stays right where it is, now
+    // reading `source: "expense"`. Claiming removal would be a lie on exactly
+    // the rows where the distinction matters.
+    success: "Link removed — any itemized expense still relates these",
     invalidateKeys: purchaseProductMutationInvalidateKeys,
   });
   const helper = useMemo(() => createCubbyColumnHelper<PurchaseRow>(), []);
@@ -81,17 +86,36 @@ export function ProductPurchases({ productId }: { productId: string }) {
         },
         cell: (info) => format(parsePlainDate(info.getValue()), "MMM d, yyyy"),
       }),
+      // Badge the rare case, not the common one. Nearly every row here is
+      // derived from an itemized Expense; the explicit `PurchaseProduct` link
+      // is the exception (13 in the whole ledger) and the only detachable one,
+      // so it is what earns a marker.
+      helper.accessor((row) => row.linkAttachedAt !== null, {
+        id: "link",
+        header: "",
+        meta: {
+          className: "w-24",
+          mobile: { slot: "meta", priority: 30 },
+        },
+        cell: (info) =>
+          info.getValue() ? <Badge variant="outline">Linked</Badge> : null,
+      }),
       createActionsColumn(helper, "purchase", {
-        extraActions: (row) => (
-          <VerbMenuItem
-            verb="removeFromPurchase"
-            disabled={detach.isPending}
-            onSelect={(event) => {
-              event.stopPropagation();
-              detach.mutate({ purchaseId: row.id, productIds: [productId] });
-            }}
-          />
-        ),
+        // Only an explicit link can be detached. An expense-derived row has no
+        // `PurchaseProduct` row to remove, and offering the verb there would
+        // "succeed" (detach is a no-op on a missing pair) while the row stayed
+        // on screen. To break that relation you edit the Expense's product.
+        extraActions: (row) =>
+          row.linkAttachedAt === null ? null : (
+            <VerbMenuItem
+              verb="removeFromPurchase"
+              disabled={detach.isPending}
+              onSelect={(event) => {
+                event.stopPropagation();
+                detach.mutate({ purchaseId: row.id, productIds: [productId] });
+              }}
+            />
+          ),
       }),
     ],
     [detach, helper, productId],
@@ -143,10 +167,12 @@ export function ProductPurchases({ productId }: { productId: string }) {
   ) : (
     <Empty variant="minimal" className="py-6">
       <EmptyHeader>
-        <EmptyTitle>No purchases linked</EmptyTitle>
+        <EmptyTitle>No purchases recorded</EmptyTitle>
         <EmptyDescription>
-          Attach this product from a purchase&apos;s Products section to record
-          which order it came from.
+          No expense on this product names an order, and no order has been
+          linked to it directly. Record the spend on an expense, or attach it
+          from a purchase&apos;s Products section when the order was never
+          itemized.
         </EmptyDescription>
       </EmptyHeader>
     </Empty>
