@@ -99,6 +99,7 @@ export function normalizeExpenseAnalyzeConfig(
 
 export function expenseAnalyzeConfigFromSearch(
   search: ExpenseAnalyzeSearchLike,
+  resolvedDates: Pick<ExpenseAnalyzeSearchLike, "dateFrom" | "dateTo"> = search,
 ): ExpenseAnalyzeConfig {
   return normalizeExpenseAnalyzeConfig(
     {
@@ -111,7 +112,7 @@ export function expenseAnalyzeConfigFromSearch(
       projection:
         search.analyzeShow ?? DEFAULT_EXPENSE_ANALYZE_CONFIG.projection,
     },
-    search,
+    resolvedDates,
   );
 }
 

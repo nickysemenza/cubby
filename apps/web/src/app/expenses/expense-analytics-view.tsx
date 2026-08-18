@@ -78,8 +78,8 @@ export function ExpenseAnalyticsView() {
     staleTime: 60 * 1000,
   });
   const analyzeConfig = useMemo(
-    () => expenseAnalyzeConfigFromSearch(search),
-    [search],
+    () => expenseAnalyzeConfigFromSearch(search, filters),
+    [filters, search],
   );
   const handleAnalyzeConfigChange = useCallback(
     (next: ExpenseAnalyzeConfig) => {

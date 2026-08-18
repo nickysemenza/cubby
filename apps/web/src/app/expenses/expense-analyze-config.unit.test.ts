@@ -65,6 +65,20 @@ describe("expense Analyze URL configuration", () => {
     ).toMatchObject({ comparison: "none", projection: "current" });
   });
 
+  it("restores comparison from manifest-resolved preset dates", () => {
+    expect(
+      expenseAnalyzeConfigFromSearch(
+        {
+          analyzeRows: "trade",
+          analyzeCompare: "previousPeriod",
+        },
+        boundedDates,
+      ),
+    ).toMatchObject({
+      comparison: "previousPeriod",
+    });
+  });
+
   it("swaps only legal two-dimensional axes and preserves display choices", () => {
     const config = normalizeExpenseAnalyzeConfig(
       {
