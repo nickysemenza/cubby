@@ -2,6 +2,7 @@ import { X } from "lucide-react";
 import type { FC } from "react";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
+import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { cn } from "~/lib/utils";
 import {
   getTagColor,
@@ -77,6 +78,7 @@ export const RecipeTag: FC<RecipeTagProps> = ({
 interface RecipeTagListProps {
   tags: string[];
   onRemove?: (tag: string) => void;
+  filterable?: boolean;
   className?: string;
   size?: "sm" | "default";
 }
@@ -87,6 +89,7 @@ interface RecipeTagListProps {
 export const RecipeTagList: FC<RecipeTagListProps> = ({
   tags,
   onRemove,
+  filterable = false,
   className,
   size = "default",
 }) => {
@@ -94,14 +97,30 @@ export const RecipeTagList: FC<RecipeTagListProps> = ({
 
   return (
     <Row wrap gap="xs" className={className}>
-      {tags.map((tag) => (
-        <RecipeTag
-          key={tag}
-          tag={tag}
-          size={size}
-          onRemove={onRemove ? () => onRemove(tag) : undefined}
-        />
-      ))}
+      {tags.map((tag) => {
+        const rendered = (
+          <RecipeTag
+            key={tag}
+            tag={tag}
+            size={size}
+            onRemove={onRemove ? () => onRemove(tag) : undefined}
+          />
+        );
+        return filterable && !onRemove ? (
+          <EntityFilterLink
+            key={tag}
+            to="/recipes"
+            search={{ tags: tag }}
+            label={`Show all recipes tagged ${tag}`}
+            variant="value"
+            className="no-underline"
+          >
+            {rendered}
+          </EntityFilterLink>
+        ) : (
+          <span key={tag}>{rendered}</span>
+        );
+      })}
     </Row>
   );
 };

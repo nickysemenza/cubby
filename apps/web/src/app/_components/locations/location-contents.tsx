@@ -11,14 +11,23 @@ import type { InfLocation } from "@cubby/schemas/location";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { sortBy } from "es-toolkit";
-import { ChevronDown, FolderPlus, Plus } from "lucide-react";
+import { ChevronDown, EllipsisVertical, FolderPlus, Plus } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { VerbButton } from "~/app/_components/actions/action-verb-ui";
+import {
+  VerbButton,
+  VerbMenuItem,
+} from "~/app/_components/actions/action-verb-ui";
 import { Row, Stack } from "~/components/layout";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { Collapsible, CollapsibleContent } from "~/components/ui/collapsible";
 import { Description } from "~/components/ui/description";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import {
   Popover,
@@ -50,6 +59,7 @@ import {
   LocationInventoryTable,
   locationInventoryListInput,
 } from "./location-inventory-table";
+import { LocationPhotoAction } from "./location-photo-action";
 import {
   getLocationGlyph,
   getLocationTypeGroup,
@@ -287,58 +297,123 @@ export function LocationContents({ location }: { location: InfLocation }) {
   return (
     <Stack gap="md">
       {/* Toolbar — every contents operation in one place. */}
-      <Row align="center" gap="sm" wrap>
+      <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
         <Button
           variant={addOpen ? "secondary" : "outline"}
           size="sm"
+          className="col-span-2 h-12 sm:col-span-1 sm:h-7"
           onClick={toggleAdd}
         >
-          <Plus className="mr-2 size-4" />
+          <Plus />
           Add item
         </Button>
-        <Button variant="outline" size="sm" onClick={openCreateChild}>
-          <FolderPlus className="mr-2 size-4" />
-          Add child
-        </Button>
+        <LocationPhotoAction location={location} className="h-12 sm:h-7" />
         <VerbButton
           verb="recount"
+          className="h-12 sm:h-7"
           render={
             <Link to="/inventory/session" search={{ parent: location.id }} />
           }
         />
-        <VerbButton
-          verb="photoPass"
-          render={
-            <Link to="/locations/photo-pass" search={{ parent: location.id }} />
-          }
-        />
-        <VerbButton
-          verb="bulkEdit"
-          render={
-            <Link
-              to="/inventory/bulk-edit"
-              search={{ locationId: location.id }}
-            />
-          }
-        />
-        {hasChildren && (
-          <>
-            <VerbButton
-              verb="validate"
+        <div className="hidden items-center gap-2 sm:flex">
+          <Button variant="outline" size="sm" onClick={openCreateChild}>
+            <FolderPlus />
+            Add child
+          </Button>
+          <VerbButton
+            verb="photoPass"
+            render={
+              <Link
+                to="/locations/photo-pass"
+                search={{ parent: location.id }}
+              />
+            }
+          />
+          <VerbButton
+            verb="bulkEdit"
+            render={
+              <Link
+                to="/inventory/bulk-edit"
+                search={{ locationId: location.id }}
+              />
+            }
+          />
+          {hasChildren && (
+            <>
+              <VerbButton
+                verb="validate"
+                render={
+                  <Link
+                    to="/problems"
+                    search={{ validateParent: location.id }}
+                  />
+                }
+              />
+              <VerbButton verb="printLabels" onClick={handlePrintLabels} />
+            </>
+          )}
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className="sm:hidden"
+            render={
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-10 w-full"
+                aria-label="More location actions"
+              >
+                <EllipsisVertical />
+                More
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="end" className="w-44 sm:hidden">
+            <DropdownMenuItem onClick={openCreateChild}>
+              <FolderPlus />
+              Add child
+            </DropdownMenuItem>
+            <VerbMenuItem
+              verb="photoPass"
               render={
-                <Link to="/problems" search={{ validateParent: location.id }} />
+                <Link
+                  to="/locations/photo-pass"
+                  search={{ parent: location.id }}
+                />
               }
             />
-            <VerbButton verb="printLabels" onClick={handlePrintLabels} />
-          </>
-        )}
+            <VerbMenuItem
+              verb="bulkEdit"
+              render={
+                <Link
+                  to="/inventory/bulk-edit"
+                  search={{ locationId: location.id }}
+                />
+              }
+            />
+            {hasChildren && (
+              <>
+                <VerbMenuItem
+                  verb="validate"
+                  render={
+                    <Link
+                      to="/problems"
+                      search={{ validateParent: location.id }}
+                    />
+                  }
+                />
+                <VerbMenuItem verb="printLabels" onSelect={handlePrintLabels} />
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
         <ViewSwitcher
           options={SHELF_VIEW_OPTIONS}
           value={view}
           onValueChange={setView}
-          className="ml-auto"
+          className="justify-self-end sm:ml-auto"
         />
-      </Row>
+      </div>
 
       {/* Quick-add rides collapsed behind the toolbar's Add item button. */}
       <Collapsible open={addOpen}>

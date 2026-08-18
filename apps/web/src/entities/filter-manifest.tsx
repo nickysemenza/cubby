@@ -1688,6 +1688,26 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
 
   inventory: [
     {
+      // Exact deep-link scope from an Inventory detail page. The visible
+      // Product column keeps its human-friendly name search below.
+      columnId: "productId",
+      field: "productIdFilter",
+      urlOnly: true,
+      kind: "id",
+      brand: unsafeProductId,
+      placeholder: "Filter by product id...",
+    },
+    {
+      // Exact deep-link scope from an Inventory detail page. Location names
+      // are not unique, so the readable column filter cannot stand in for it.
+      columnId: "locationId",
+      field: "locationIdFilter",
+      urlOnly: true,
+      kind: "id",
+      brand: unsafeLocationId,
+      placeholder: "Filter by location id...",
+    },
+    {
       columnId: "product",
       field: "productNameFilter",
       kind: "text",

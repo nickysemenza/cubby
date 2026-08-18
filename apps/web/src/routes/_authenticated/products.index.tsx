@@ -11,20 +11,27 @@ import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { ProductList, type ProductListView } from "~/app/products/productlist";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
-import { entityFilterSearchFields } from "~/entities/filter-search-fields";
+import {
+  entityFilterSearchFields,
+  routeFilterValues,
+} from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
-import { urlStringParam } from "~/lib/search-params";
+import {
+  urlEnumListParam,
+  urlShortcodeListParam,
+  urlStringParam,
+} from "~/lib/search-params";
 
 const productListView = z.enum(["table", "shelf", "events", "lifecycles"]);
 
 export const productSearchSchema = z.object({
-  category: urlStringParam,
   view: productListView.optional().catch(undefined),
   movementFrom: plainDate.optional().catch(undefined),
   movementTo: plainDate.optional().catch(undefined),
   movementOrder: z.enum(["asc", "desc"]).optional().catch(undefined),
   ...tableSearchFields,
   ...entityFilterSearchFields("product"),
+  category: urlEnumListParam(z.enum(routeFilterValues.productCategory)),
   // `entityFilterSearchFields` returns a `Record<string, …>`, so its keys are
   // not statically known to `<Link search={…}>`. Re-declaring the keys we
   // navigate to programmatically (the "Fits With" tag chips; the Problems
@@ -34,6 +41,8 @@ export const productSearchSchema = z.object({
   // string schema would reinstate the silently-dropped-value hole.
   tags: urlStringParam,
   manufacturer: urlStringParam,
+  model: urlStringParam,
+  ingredient: urlShortcodeListParam("ING"),
 });
 
 const searchDefaults = {

@@ -9,6 +9,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { Row } from "~/components/layout";
+import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { Image } from "~/components/ui/image";
 import { RecipeSourceLink } from "./recipe-source";
 import { recipeTimeEntries } from "./recipe-utils";
@@ -88,7 +89,43 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
         </a>
       )}
       {recipe.source?.type === "book" && (
-        <RecipeSourceLink source={recipe.source} iconSize={12} />
+        <Row align="center" gap="tight">
+          <RecipeSourceLink source={recipe.source} iconSize={12} />
+          <EntityFilterLink
+            to="/recipes"
+            search={
+              recipe.source.cookbookId
+                ? { source: recipe.source.cookbookId }
+                : { sourceType: "Book" }
+            }
+            label={
+              recipe.source.cookbookId
+                ? `Show all recipes from ${recipe.source.book}`
+                : "Show all recipes from books"
+            }
+          />
+        </Row>
+      )}
+      {recipe.source?.type === "website" && (
+        <EntityFilterLink
+          to="/recipes"
+          search={{ sourceType: "Website" }}
+          label="Show all recipes from websites"
+        />
+      )}
+      {recipe.source?.type === "notion" && (
+        <EntityFilterLink
+          to="/recipes"
+          search={{ sourceType: "Notion" }}
+          label="Show all recipes from Notion"
+        />
+      )}
+      {recipe.source?.type === "other" && (
+        <EntityFilterLink
+          to="/recipes"
+          search={{ sourceType: "Other" }}
+          label="Show all recipes from other sources"
+        />
       )}
     </Row>
   );

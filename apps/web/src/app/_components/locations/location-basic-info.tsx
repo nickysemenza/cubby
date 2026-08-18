@@ -5,6 +5,7 @@ import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
+import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { useTRPC } from "~/integrations/trpc/react";
 import { locationMutationInvalidateKeys } from "~/lib/query-keys";
 import { EntityInlineLink } from "../EntityInlineLink";
@@ -56,15 +57,36 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
       ? {
           label: "Is a",
           value: <EntityInlineLink entity="product" data={location.product} />,
+          filterAction: (
+            <EntityFilterLink
+              to="/locations"
+              search={{ view: "table", product: location.product.id }}
+              label={`Show all locations that are ${location.product.name}`}
+            />
+          ),
         }
       : {
           label: "Type",
           value: <LocationTypeLabel type={location.type} product={null} />,
+          filterAction: location.type ? (
+            <EntityFilterLink
+              to="/locations"
+              search={{ view: "table", type: location.type }}
+              label={`Show all ${location.type} locations`}
+            />
+          ) : undefined,
         },
     {
       label: "Parent Location",
       value: location.parent ? (
         <EntityInlineLink entity="location" data={location.parent} />
+      ) : undefined,
+      filterAction: location.parent ? (
+        <EntityFilterLink
+          to="/locations"
+          search={{ view: "table", parent: location.parent.id }}
+          label={`Show all locations inside ${location.parent.name}`}
+        />
       ) : undefined,
     },
     {

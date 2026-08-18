@@ -5,6 +5,7 @@ import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { BasicInfo } from "~/components/common/basic-info";
 import { Page } from "~/components/page/Page";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
+import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { useTRPC } from "~/integrations/trpc/react";
 import { financialAccountMutationInvalidateKeys } from "~/lib/query-keys";
 import { renderOptionCell } from "../_components/data-table/columnHelpers";
@@ -61,12 +62,30 @@ export function FinancialAccountDetail({
                       account.identity.kind,
                       accountIdentityKindOptions,
                     ),
+                    filterAction: (
+                      <EntityFilterLink
+                        to="/financial-accounts"
+                        search={{ identity: account.identity.kind }}
+                        label={`Show all ${account.identity.kind.replaceAll("_", " ")} accounts`}
+                      />
+                    ),
                   },
                   {
                     label: "Provisional",
                     value: renderOptionCell(
                       account.provisional ? "true" : "false",
                       provisionalOptions,
+                    ),
+                    filterAction: (
+                      <EntityFilterLink
+                        to="/financial-accounts"
+                        search={{ provisional: String(account.provisional) }}
+                        label={
+                          account.provisional
+                            ? "Show all provisional accounts"
+                            : "Show all known accounts"
+                        }
+                      />
                     ),
                   },
                   {

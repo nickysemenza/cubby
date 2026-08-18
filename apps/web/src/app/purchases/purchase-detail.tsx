@@ -21,6 +21,7 @@ import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
+import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseLabel } from "~/lib/purchase-label";
@@ -135,6 +136,13 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
           }
         />
       ),
+      filterAction: purchase.vendorId ? (
+        <EntityFilterLink
+          to="/purchases"
+          search={{ vendor: purchase.vendorId }}
+          label={`Show all purchases from ${purchase.vendorName ?? "this vendor"}`}
+        />
+      ) : undefined,
     },
     {
       label: "Order #",

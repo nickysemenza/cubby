@@ -246,7 +246,7 @@ const RecipeDetailInner: React.FC<{
         className="print:hidden"
       >
         {recipe.tags && recipe.tags.length > 0 && (
-          <RecipeTagList tags={recipe.tags} />
+          <RecipeTagList tags={recipe.tags} filterable />
         )}
         <Row align="center" wrap gap="sm" className="ml-auto">
           {/* Kitchen mode: hold the screen awake while cooking. Feature-detected —

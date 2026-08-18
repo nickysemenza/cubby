@@ -29,6 +29,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
+import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { Input } from "~/components/ui/input";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityDetailLink } from "~/entities/entities";
@@ -228,44 +229,60 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
             />
           </Stack>
           <Stack gap="sm">
-            <EditableCell
-              value={meal.mealType}
-              config={{ type: "select", options: mealTypeOptions }}
-              onSave={async (mealType) => {
-                // Nullable on purpose — clearing it means "unslotted", which
-                // is a real state, not a rejected edit.
-                await updateMeal.mutateAsync({
-                  id: mealId,
-                  data: { mealType: (mealType as MealType | null) || null },
-                });
-              }}
-              renderValue={(value) =>
-                value ? (
-                  <Badge variant="outline">
-                    {MEAL_TYPE_LABELS[value as MealType]}
+            <Row align="center" gap="tight">
+              <EditableCell
+                value={meal.mealType}
+                config={{ type: "select", options: mealTypeOptions }}
+                onSave={async (mealType) => {
+                  // Nullable on purpose — clearing it means "unslotted", which
+                  // is a real state, not a rejected edit.
+                  await updateMeal.mutateAsync({
+                    id: mealId,
+                    data: { mealType: (mealType as MealType | null) || null },
+                  });
+                }}
+                renderValue={(value) =>
+                  value ? (
+                    <Badge variant="outline">
+                      {MEAL_TYPE_LABELS[value as MealType]}
+                    </Badge>
+                  ) : (
+                    <NoneValue />
+                  )
+                }
+              />
+              {meal.mealType ? (
+                <EntityFilterLink
+                  to="/meals"
+                  search={{ view: "table", mealType: meal.mealType }}
+                  label={`Show all ${MEAL_TYPE_LABELS[meal.mealType]} meals`}
+                />
+              ) : null}
+            </Row>
+            <Row align="center" gap="tight">
+              <EditableCell
+                value={meal.mealKind}
+                config={{ type: "select", options: mealKindOptions }}
+                onSave={async (mealKind) => {
+                  // NOT NULL — a cleared select is a no-op, not a null write.
+                  if (!mealKind) return;
+                  await updateMeal.mutateAsync({
+                    id: mealId,
+                    data: { mealKind: mealKind as MealKind },
+                  });
+                }}
+                renderValue={(value) => (
+                  <Badge variant={mealKindBadgeVariant[value as MealKind]}>
+                    {MEAL_KIND_LABELS[value as MealKind]}
                   </Badge>
-                ) : (
-                  <NoneValue />
-                )
-              }
-            />
-            <EditableCell
-              value={meal.mealKind}
-              config={{ type: "select", options: mealKindOptions }}
-              onSave={async (mealKind) => {
-                // NOT NULL — a cleared select is a no-op, not a null write.
-                if (!mealKind) return;
-                await updateMeal.mutateAsync({
-                  id: mealId,
-                  data: { mealKind: mealKind as MealKind },
-                });
-              }}
-              renderValue={(value) => (
-                <Badge variant={mealKindBadgeVariant[value as MealKind]}>
-                  {MEAL_KIND_LABELS[value as MealKind]}
-                </Badge>
-              )}
-            />
+                )}
+              />
+              <EntityFilterLink
+                to="/meals"
+                search={{ view: "table", mealKind: meal.mealKind }}
+                label={`Show all ${MEAL_KIND_LABELS[meal.mealKind]} meals`}
+              />
+            </Row>
           </Stack>
         </Row>
 

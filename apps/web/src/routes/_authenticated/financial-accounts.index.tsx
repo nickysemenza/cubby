@@ -8,13 +8,18 @@ import {
 import { CreateFinancialAccountDialog } from "~/app/finance/create-financial-account-dialog";
 import { FinancialAccountList } from "~/app/finance/financial-account-list";
 import { Page } from "~/components/page/Page";
-import { entityFilterSearchFields } from "~/entities/filter-search-fields";
+import {
+  entityFilterSearchFields,
+  routeFilterValues,
+} from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
-import { urlStringParam } from "~/lib/search-params";
+import { urlEnumListParam, urlStringParam } from "~/lib/search-params";
 
-const searchSchema = z.object({
+export const financialAccountSearchSchema = z.object({
   ...entityFilterSearchFields("financialAccount"),
   q: urlStringParam,
+  identity: urlEnumListParam(z.enum(routeFilterValues.accountIdentity)),
+  provisional: urlEnumListParam(z.enum(routeFilterValues.boolean)),
   ...tableSearchFields,
   ...createDialogSearchField,
 });
@@ -22,7 +27,7 @@ const searchSchema = z.object({
 const searchDefaults = { q: undefined, create: undefined } as const;
 
 export const Route = createFileRoute("/_authenticated/financial-accounts/")({
-  validateSearch: searchSchema,
+  validateSearch: financialAccountSearchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: () => (
     <Page

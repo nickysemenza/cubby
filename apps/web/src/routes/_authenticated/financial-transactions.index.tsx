@@ -8,13 +8,25 @@ import {
 import { CreateFinancialTransactionDialog } from "~/app/finance/create-financial-transaction-dialog";
 import { FinancialTransactionList } from "~/app/finance/financial-transaction-list";
 import { Page } from "~/components/page/Page";
-import { entityFilterSearchFields } from "~/entities/filter-search-fields";
+import {
+  entityFilterSearchFields,
+  routeFilterValues,
+} from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
-import { urlStringParam } from "~/lib/search-params";
+import {
+  urlEnumListParam,
+  urlShortcodeListParam,
+  urlStringParam,
+} from "~/lib/search-params";
 
-const searchSchema = z.object({
+export const financialTransactionSearchSchema = z.object({
   ...entityFilterSearchFields("financialTransaction"),
   q: urlStringParam,
+  merchant: urlStringParam,
+  kind: urlEnumListParam(z.enum(routeFilterValues.transactionKind)),
+  status: urlEnumListParam(z.enum(routeFilterValues.transactionStatus)),
+  accountId: urlShortcodeListParam("FAC"),
+  purchaseId: urlShortcodeListParam("PUR"),
   ...tableSearchFields,
   ...createDialogSearchField,
 });
@@ -23,7 +35,7 @@ const searchDefaults = { q: undefined, create: undefined } as const;
 
 export const Route = createFileRoute("/_authenticated/financial-transactions/")(
   {
-    validateSearch: searchSchema,
+    validateSearch: financialTransactionSearchSchema,
     search: { middlewares: [stripSearchParams(searchDefaults)] },
     component: () => (
       <Page

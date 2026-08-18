@@ -1,7 +1,11 @@
 import { addDays, format, isValid, parseISO, startOfWeek } from "date-fns";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
-import { urlStringParam } from "~/lib/search-params";
+import {
+  entityFilterSearchFields,
+  routeFilterValues,
+} from "~/entities/filter-search-fields";
+import { urlEnumListParam, urlStringParam } from "~/lib/search-params";
 
 const dateParamSchema = z
   .string()
@@ -24,6 +28,9 @@ export const mealCalendarSearchSchema = z.object({
   // and the empty-state CTA point at it (they can only express a destination).
   create: z.boolean().optional().catch(undefined),
   ...tableSearchFields,
+  ...entityFilterSearchFields("meal"),
+  mealType: urlEnumListParam(z.enum(routeFilterValues.mealType)),
+  mealKind: urlEnumListParam(z.enum(routeFilterValues.mealKind)),
 });
 
 export const mealCalendarSearchDefaults = {

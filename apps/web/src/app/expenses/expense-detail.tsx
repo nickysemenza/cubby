@@ -22,6 +22,7 @@ import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
 import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
@@ -172,6 +173,13 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           }
         />
       ),
+      filterAction: (
+        <EntityFilterLink
+          to="/expenses"
+          search={{ lineKind: expense.lineKind }}
+          label={`Show all ${expenseLineKindLabels[expense.lineKind].toLowerCase()} expenses`}
+        />
+      ),
     },
     {
       label: "Cost Type",
@@ -198,6 +206,13 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           }
         />
       ),
+      filterAction: (
+        <EntityFilterLink
+          to="/expenses"
+          search={{ costType: expense.costType }}
+          label={`Show all ${costTypeLabels[expense.costType].toLowerCase()} expenses`}
+        />
+      ),
     },
     {
       label: "Trade",
@@ -214,6 +229,13 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
             });
           }}
           renderValue={(v) => renderOptionCell(v, tradeOptions)}
+        />
+      ),
+      filterAction: (
+        <EntityFilterLink
+          to="/expenses"
+          search={{ trade: expense.trade }}
+          label={`Show all expenses for trade ${expense.trade}`}
         />
       ),
     },
@@ -235,6 +257,17 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
             ) : (
               <Badge variant="positive">Already made</Badge>
             )
+          }
+        />
+      ),
+      filterAction: (
+        <EntityFilterLink
+          to="/expenses"
+          search={{ future: String(expense.future) }}
+          label={
+            expense.future
+              ? "Show all planned expenses"
+              : "Show all completed expenses"
           }
         />
       ),
@@ -311,6 +344,13 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           }
         />
       ),
+      filterAction: expense.vendorId ? (
+        <EntityFilterLink
+          to="/expenses"
+          search={{ vendor: expense.vendorId }}
+          label={`Show all expenses from ${expense.vendor ?? "this vendor"}`}
+        />
+      ) : undefined,
     },
     {
       label: "Order #",
@@ -392,6 +432,13 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           }
         />
       ),
+      filterAction: expense.projectId ? (
+        <EntityFilterLink
+          to="/expenses"
+          search={{ project: expense.projectId }}
+          label={`Show all expenses for ${expense.projectName ?? "this project"}`}
+        />
+      ) : undefined,
     },
     ...(expense.lineKind === "principal"
       ? [
@@ -443,6 +490,13 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
                 }
               />
             ),
+            filterAction: expense.productId ? (
+              <EntityFilterLink
+                to="/expenses"
+                search={{ productId: expense.productId }}
+                label={`Show all expenses for ${expense.productName ?? "this product"}`}
+              />
+            ) : undefined,
           },
           {
             // Sits beside Product, deliberately not beside Line kind: its whole
@@ -475,6 +529,13 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
                     <NoneValue />
                   )
                 }
+              />
+            ),
+            filterAction: (
+              <EntityFilterLink
+                to="/expenses"
+                search={{ lineBasis: expense.lineBasis }}
+                label={`Show all ${expenseLineBasisLabels[expense.lineBasis].toLowerCase()} expenses`}
               />
             ),
           },

@@ -4,6 +4,7 @@ import type { z } from "zod";
 import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { MutedBox } from "~/components/layout/muted-box";
+import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { EntityInlineLink } from "../EntityInlineLink";
 import { UnitMappingGraph } from "../units/unit-mapping-graph";
 import { showAmountAndPrice } from "./format-amount";
@@ -32,10 +33,24 @@ export const InventoryBasicInfo: FC<InventoryBasicInfoProps> = ({
       value: (
         <EntityInlineLink entity="location" data={inventoryitem.location} />
       ),
+      filterAction: (
+        <EntityFilterLink
+          to="/inventory"
+          search={{ locationId: inventoryitem.location.id }}
+          label={`Show all inventory in ${inventoryitem.location.name}`}
+        />
+      ),
     },
     {
       label: "Product",
       value: <EntityInlineLink entity="product" data={inventoryitem.product} />,
+      filterAction: (
+        <EntityFilterLink
+          to="/inventory"
+          search={{ productId: inventoryitem.product.id }}
+          label={`Show all inventory entries for ${inventoryitem.product.name}`}
+        />
+      ),
     },
     {
       // Last deliberate recount, not `updatedAt` — inventory truth is only
