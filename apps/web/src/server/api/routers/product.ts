@@ -57,6 +57,8 @@ import {
   type AttachProductComponentsInput,
   attachProductComponentsInput,
   detachProductComponentsInput,
+  kitComponentRowsInput,
+  kitComponentRowsOut,
   kitMembershipsInput,
   kitMembershipsOut,
   productComponentMutationOut,
@@ -98,6 +100,7 @@ import {
 import {
   attachProductComponents,
   detachProductComponents,
+  listKitComponentRows,
   listKitMembership,
   listProductComponents,
 } from "~/server/repo/product-components";
@@ -768,6 +771,20 @@ const components = protectedProcedure
     return listProductComponents(ctx.db, id);
   });
 
+/**
+ * The same components, but shaped as full product LIST rows, for tables that
+ * nest them under their kit as ordinary rows. Batched over kits because the
+ * Products list asks once for every kit on the page rather than once per
+ * expanded row — see `listKitComponentRows` for why that ordering matters.
+ */
+const kitComponentRows = protectedProcedure
+  .input(kitComponentRowsInput)
+  .output(strictOutput(kitComponentRowsOut))
+  .query(async ({ ctx, input }) => {
+    const ids = await productShortcodes.all(ctx.db, input.parentProductIds);
+    return listKitComponentRows(ctx.db, ids);
+  });
+
 /** The transpose of `components`: every kit this Product is listed inside. */
 const kitMembership = protectedProcedure
   .input(kitMembershipsInput)
@@ -957,6 +974,7 @@ export const productRouter = createTRPCRouter({
   projectUses,
   purchases,
   components,
+  kitComponentRows,
   kitMembership,
   attachComponents,
   detachComponents,

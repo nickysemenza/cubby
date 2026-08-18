@@ -1,4 +1,5 @@
 import type { ProductFilters, ProductListItem } from "@cubby/schemas/product";
+import type { KitComponentRowOut } from "@cubby/schemas/product-components";
 import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -75,6 +76,14 @@ import { productCategoryOptionsWithTheme } from "../_components/products/product
 import { ProductDiscardDialog } from "../_components/products/product-discard-dialog";
 import { ProductShelf } from "../_components/products/product-shelf";
 import { TruncatedList } from "../_components/TruncatedList";
+import {
+  buildProductTreeRows,
+  groupComponentsByParent,
+  isKitComponentRow,
+  type ProductTreeRow,
+  productTreeRowKey,
+  productTreeSubRows,
+} from "./product-kit-rows";
 import { ProductMovementViews } from "./product-movement-views";
 
 export type ProductListView = "table" | "shelf" | "events" | "lifecycles";
@@ -98,6 +107,8 @@ interface ProductListProps {
 // filter configuration).
 const NO_VENDOR_OPTIONS: FilterableComboboxItem[] = [];
 const NO_FILTER_OPTIONS: FilterableComboboxItem[] = [];
+/** Stable empty default so `nest` keeps its identity while kits load. */
+const EMPTY_KIT_ROWS: KitComponentRowOut[] = [];
 
 // The generic tones fit here: tracked really is the resolved/good outcome.
 const STOCK_TRACKED_OPTIONS = booleanCellOptions({
@@ -194,7 +205,7 @@ export function ProductList({
   const api = useTRPC();
   const navigate = useNavigate();
   const columnHelper = useMemo(
-    () => createCubbyColumnHelper<ProductListItem>(),
+    () => createCubbyColumnHelper<ProductTreeRow>(),
     [],
   );
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("product");
@@ -323,7 +334,7 @@ export function ProductList({
   });
   const createInventoryMutation = useCreateInventoryMutation();
 
-  const nameEditable = useNameEditable<ProductListItem>(
+  const nameEditable = useNameEditable<ProductTreeRow>(
     updateProductMutation.mutateAsync,
   );
 
@@ -825,7 +836,7 @@ export function ProductList({
 
   // Memoize filters to prevent recreating on every render
   const extraActions = useCallback(
-    (row: ProductListItem) => (
+    (row: ProductTreeRow) => (
       <>
         <VerbMenuItem
           verb="editLocations"
@@ -851,7 +862,7 @@ export function ProductList({
   );
 
   const groupKeyFn = useCallback(
-    (item: ProductListItem) => formatCategoryLabel(item.category),
+    (item: ProductTreeRow) => formatCategoryLabel(item.category),
     [],
   );
   const groupColorFn = useCallback(
@@ -864,7 +875,7 @@ export function ProductList({
     [],
   );
   const groupConfig = useMemo(
-    (): GroupConfig<ProductListItem> => ({
+    (): GroupConfig<ProductTreeRow> => ({
       field: "category",
       keyFn: groupKeyFn,
       colorFn: groupColorFn,
@@ -874,11 +885,44 @@ export function ProductList({
 
   const queryOptions = api.product.list.queryOptions;
 
+  // Kits on the currently loaded pages. Fetched for the whole page rather than
+  // per expanded row: on a typical page there are none (21 kits across 5,614
+  // products), and fetching on expand would deliver children AFTER render,
+  // where `DesktopDataRow`'s memo — which compares `row.original` — cannot see
+  // them without a `rowContentVersion` bump. Nesting before rows are built
+  // sidesteps that class of bug rather than managing it.
+  const [kitIds, setKitIds] = useState<string[]>([]);
+  const kitComponentsQuery = useQuery({
+    ...api.product.kitComponentRows.queryOptions({ parentProductIds: kitIds }),
+    enabled: kitIds.length > 0,
+  });
+  const componentsByParent = useMemo(
+    () => groupComponentsByParent(kitComponentsQuery.data ?? EMPTY_KIT_ROWS),
+    [kitComponentsQuery.data],
+  );
+  const productTree = useMemo(
+    () => ({
+      nest: (rows: ProductListItem[]) =>
+        buildProductTreeRows(rows, componentsByParent),
+      getSubRows: productTreeSubRows,
+      expandable: true,
+      // `id` stays the real shortcode at both depths, so uniqueness lives here
+      // instead — see `ProductTreeRow.rowKey` for why that split matters.
+      rowKey: productTreeRowKey,
+      // A component IS a Product, so it would pass as this table's entity — but
+      // bulk delete and the row menu act on a whole selection, and a component
+      // is shown here as part of its kit rather than in its own right. Its
+      // affordances live one click away on its own page.
+      rowIsEntity: (row: ProductTreeRow) => !isKitComponentRow(row),
+    }),
+    [componentsByParent],
+  );
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: navigate is stable
   const bulkActions = useMemo(
     () => ({
       actions: [
-        verbBulkAction<ProductListItem>("printLabels", {
+        verbBulkAction<ProductTreeRow>("printLabels", {
           id: "print-labels",
           minSelection: 1,
           onExecute: (rows) => {
@@ -907,7 +951,7 @@ export function ProductList({
     onGroupedChange,
     totalCount,
     currentFilters,
-  } = useEntityList<ProductListItem, ProductFilters>({
+  } = useEntityList<ProductTreeRow, ProductFilters, ProductListItem>({
     entity: "product",
     queryOptions,
     getMappings: getProductListMappings,
@@ -938,10 +982,31 @@ export function ProductList({
       components: false,
     },
     groupConfig,
+    tree: productTree,
   });
   usePageCount(totalCount);
 
-  const items = table.getRowModel().rows.map((r) => r.original);
+  // Same shape as the food-hydration effect below: derive the id set from the
+  // loaded rows, and keep the previous array when it hasn't changed so the
+  // query key stays stable across renders.
+  useEffect(() => {
+    const nextKitIds = uniq(
+      data.filter((product) => product.componentCount > 0).map((p) => p.id),
+    ).sort();
+    setKitIds((current) =>
+      current.length === nextKitIds.length &&
+      current.every((id, index) => id === nextKitIds[index])
+        ? current
+        : nextKitIds,
+    );
+  }, [data]);
+
+  // The Shelf view has no nesting, so it shows products only — a component
+  // expanded in the table is not a second thing on the shelf.
+  const items = table
+    .getRowModel()
+    .rows.map((r) => r.original)
+    .filter((row) => !isKitComponentRow(row));
   const discardProduct = discardProductId
     ? (data.find((p) => p.id === discardProductId) ?? null)
     : null;

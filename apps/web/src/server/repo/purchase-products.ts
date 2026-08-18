@@ -43,12 +43,13 @@ import type {
   ProductPurchaseOut,
   PurchaseProductOut,
 } from "@cubby/schemas/purchase";
-import { and, asc, eq, inArray, type SQL, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database, DrizzleClient } from "~/server/db";
 import {
   expense,
   product,
+  productComponent,
   purchase,
   purchaseProduct,
   vendor,
@@ -151,6 +152,45 @@ const mergeSources = <T>(
   return [...merged.values()];
 };
 
+/**
+ * Live component-edge counts for a batch of products — how many things each is
+ * made of, and therefore whether its row can be expanded.
+ *
+ * Same live-edge predicate as `componentCount` on the product list row and as
+ * the `componentPresenceFilter` id-set, deliberately: a row that offers a
+ * chevron must have children to show, and the three disagreeing is the #428
+ * failure mode.
+ */
+const loadComponentCountsByProductId = async (
+  dbc: DrizzleClient,
+  productIds: ProductId[],
+): Promise<Map<ProductId, number>> => {
+  const counts = new Map<ProductId, number>();
+  if (productIds.length === 0) return counts;
+  const rows = await dbc
+    .select({
+      parentProductId: productComponent.parentProductId,
+      count: count(),
+    })
+    .from(productComponent)
+    .innerJoin(
+      product,
+      and(
+        eq(product.id, productComponent.componentProductId),
+        notDeleted(product),
+      ),
+    )
+    .where(
+      and(
+        inArray(productComponent.parentProductId, productIds),
+        notDeleted(productComponent),
+      ),
+    )
+    .groupBy(productComponent.parentProductId);
+  for (const row of rows) counts.set(row.parentProductId, Number(row.count));
+  return counts;
+};
+
 /** The Products linked to one Purchase, alphabetically by name. */
 export async function listPurchaseProducts(
   db: Database,
@@ -194,9 +234,10 @@ export async function listPurchaseProducts(
   ).sort((a, b) => a.productName.localeCompare(b.productName));
 
   const productIds = rows.map((row) => row.productId);
-  const [prices, coverImageUrls] = await Promise.all([
+  const [prices, coverImageUrls, componentCounts] = await Promise.all([
     loadEffectiveProductPricesById(db, productIds),
     getProductCoverImageUrlsByProductIds(db, productIds),
+    loadComponentCountsByProductId(dbc, productIds),
   ]);
 
   return rows.map((row) => ({
@@ -207,6 +248,7 @@ export async function listPurchaseProducts(
     coverImageUrl: coverImageUrls.get(row.productId) ?? null,
     source: row.source,
     linkAttachedAt: row.linkAttachedAt,
+    componentCount: componentCounts.get(row.productId) ?? 0,
   }));
 }
 

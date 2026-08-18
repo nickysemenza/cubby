@@ -95,6 +95,23 @@ interface EntityListTreeConfig<TData, TRow> {
    * own detail page, one click away through `rowLink`.
    */
   rowIsEntity?: (row: TData) => boolean;
+  /**
+   * Unique table row key, when `id` alone is not unique across depths.
+   *
+   * `getRowId` below defaults to `row.id`, which is right for a flat list and
+   * for a tree whose children are foreign entities. It is WRONG when the same
+   * entity can appear at two depths — a kit's component is a Product that may
+   * sit in several kits and also have its own top-level row, so `id` would
+   * collide and those rows would share expansion, selection, and React keys.
+   *
+   * Supplying this keeps `id` meaning "the entity's real shortcode" — so every
+   * link, mutation, and row action can go on using it — while TanStack gets a
+   * distinct key. The alternative (namespacing `id` itself) silently poisons
+   * every `row.id` read in the table, which is a bug the type system cannot
+   * catch: a branded shortcode's *input* type is a plain string, so a
+   * namespaced id assigns cleanly into every mutation.
+   */
+  rowKey?: (row: TData) => string;
 }
 
 export interface UseEntityListOptions<
@@ -437,7 +454,11 @@ export function useEntityList<
   // Row identity is independent of whether selection happens to be enabled.
   // Index ids transfer virtualizer measurements and row state to the wrong
   // entity when filters, sorting, or accumulated pages change.
-  const getRowId = useCallback((row: TData) => row.id, []);
+  const treeRowKey = tree?.rowKey;
+  const getRowId = useCallback(
+    (row: TData) => treeRowKey?.(row) ?? row.id,
+    [treeRowKey],
+  );
 
   // Tree mode nests the accumulated rows; every other consumer above — the
   // related-preview `sourceIds`, `mappingsMap`, the select-all-matching count —

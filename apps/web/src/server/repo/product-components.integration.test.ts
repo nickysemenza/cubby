@@ -21,6 +21,7 @@ import { deleteProducts, updateProduct } from "./product";
 import {
   attachProductComponents,
   detachProductComponents,
+  listKitComponentRows,
   listKitMembership,
   listProductComponents,
 } from "./product-components";
@@ -240,6 +241,143 @@ describe("product ⟷ product component links (kit composition)", () => {
       ),
     ).rejects.toMatchObject({
       cause: { reason: "PRODUCT_COMPONENT_SELF_REFERENCE" },
+    });
+  });
+
+  // The batched, list-shaped read behind kit row expansion. Distinct from
+  // `listProductComponents` above: that returns the 7-field detail projection,
+  // this returns whole product list rows so a component can render in the same
+  // columns as its parent.
+  describe("listKitComponentRows — components as full list rows", () => {
+    it("returns list-shaped rows for several kits at once, keyed by parent shortcode", async () => {
+      const kitA = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Rows Kit A" }),
+        ctx.actor,
+      );
+      const kitB = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Rows Kit B" }),
+        ctx.actor,
+      );
+      const shared = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Rows Shared Charger", price: 39 }),
+        ctx.actor,
+      );
+      const only = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Rows Only Drill" }),
+        ctx.actor,
+      );
+
+      await attachProductComponents(
+        ctx.db,
+        kitA.entityId,
+        [
+          { productId: shared.entityId, quantity: 2 },
+          { productId: only.entityId, quantity: 1 },
+        ],
+        ctx.actor,
+      );
+      await attachProductComponents(
+        ctx.db,
+        kitB.entityId,
+        [{ productId: shared.entityId, quantity: 1 }],
+        ctx.actor,
+      );
+
+      const rows = await listKitComponentRows(ctx.db, [
+        kitA.entityId,
+        kitB.entityId,
+      ]);
+      expect(rows).toHaveLength(3);
+
+      // One product, two parents — the pair identifies the row, which is why
+      // the UI keys child rows by parent+component rather than by product.
+      const sharedRows = rows.filter((r) => r.product.id === shared.id);
+      expect(sharedRows).toHaveLength(2);
+      expect(sharedRows.map((r) => r.parentProductId).sort()).toEqual(
+        [kitA.id, kitB.id].sort(),
+      );
+      // The edge quantity travels with the row, and differs per parent.
+      expect(
+        sharedRows.find((r) => r.parentProductId === kitA.id)?.quantity,
+      ).toBe(2);
+      expect(
+        sharedRows.find((r) => r.parentProductId === kitB.id)?.quantity,
+      ).toBe(1);
+
+      // List-shaped, not the 7-field projection: these are the fields a child
+      // row needs to fill the columns its parent fills.
+      const sharedRow = sharedRows[0]?.product;
+      expect(sharedRow?.quantityLedger).toBeDefined();
+      expect(sharedRow?.dataQuality).toBeDefined();
+      expect(sharedRow?.componentCount).toBe(0);
+      expect(sharedRow?.pricing).toBeDefined();
+    });
+
+    it("omits a detached edge and a soft-deleted component product", async () => {
+      const kit = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Rows Liveness Kit" }),
+        ctx.actor,
+      );
+      const kept = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Rows Kept Part" }),
+        ctx.actor,
+      );
+      const detached = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Rows Detached Part" }),
+        ctx.actor,
+      );
+      const removed = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Rows Removed Part" }),
+        ctx.actor,
+      );
+      await attachProductComponents(
+        ctx.db,
+        kit.entityId,
+        [
+          { productId: kept.entityId, quantity: 1 },
+          { productId: detached.entityId, quantity: 1 },
+          { productId: removed.entityId, quantity: 1 },
+        ],
+        ctx.actor,
+      );
+
+      await detachProductComponents(
+        ctx.db,
+        kit.entityId,
+        [detached.entityId],
+        ctx.actor,
+      );
+      // Deleting a component product is refused while a live edge points at
+      // it, so the edge has to go first — which is exactly why the edge-level
+      // predicate is sufficient for the filter and this count.
+      await detachProductComponents(
+        ctx.db,
+        kit.entityId,
+        [removed.entityId],
+        ctx.actor,
+      );
+      await deleteProducts(ctx.db, [removed.entityId], ctx.actor);
+
+      const rows = await listKitComponentRows(ctx.db, [kit.entityId]);
+      expect(rows.map((r) => r.product.id)).toEqual([kept.id]);
+    });
+
+    it("returns nothing for a kit with no components, and for an empty request", async () => {
+      const bare = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Rows Bare Product" }),
+        ctx.actor,
+      );
+      expect(await listKitComponentRows(ctx.db, [bare.entityId])).toEqual([]);
+      expect(await listKitComponentRows(ctx.db, [])).toEqual([]);
     });
   });
 
