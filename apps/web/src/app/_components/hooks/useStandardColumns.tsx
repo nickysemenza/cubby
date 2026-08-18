@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { ReactNode } from "react";
-import { useMemo, useRef } from "react";
+import { useMemo } from "react";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { entities } from "~/entities/entities";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
@@ -145,11 +145,6 @@ export function useStandardColumns<TData extends BaseListRow>({
   expandable,
   hiddenFilterColumns,
 }: UseStandardColumnsOptions<TData>): AnyColumnDef<TData>[] {
-  // Shift-click range selection: anchor (last clicked row id) + modifier flag.
-  // Refs are stable across renders, so they don't perturb the useMemo deps below.
-  const lastSelectedIdRef = useRef<string | null>(null);
-  const shiftKeyRef = useRef(false);
-
   // Stabilize filters array - only update when serialized content changes
   // This prevents re-renders when consumer passes new array literal each render
   const filtersKey = JSON.stringify(filters);
@@ -235,7 +230,7 @@ export function useStandardColumns<TData extends BaseListRow>({
 
     // Prepend select column if row selection is enabled
     if (enableRowSelection) {
-      cols.push(buildSelectColumn<TData>(lastSelectedIdRef, shiftKeyRef));
+      cols.push(buildSelectColumn<TData>());
     }
 
     // Prepend standard columns

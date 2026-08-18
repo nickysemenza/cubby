@@ -156,7 +156,8 @@ function PurchaseExpenseRows({
     scopeFilters: scope,
     columns,
     tableStateOptions: EMBEDDED_TABLE_STATE,
-    columnVisibilityScope: `purchase-detail-${kind}`,
+    layoutKey: `expense:purchase-detail:${kind}`,
+    legacyLayoutVisibilityKey: `expense:purchase-detail-${kind}`,
     hiddenFilterColumns: ["vendor", "orderId"],
     deletable,
     nameEditable,
@@ -178,7 +179,6 @@ function PurchaseExpenseRows({
         isLoading={list.isLoading}
         error={list.error}
         timing={list.timing}
-        sizingKey={`expense:purchase-detail:${kind}`}
         ariaLabel={
           kind === "principal"
             ? "Purchase principal expenses"

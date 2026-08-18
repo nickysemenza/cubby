@@ -1,12 +1,12 @@
 /**
  * Module-level typed copy buffer for range copy/paste. Pure, alias-free
- * (only imports types from `./cell-range`) — a single in-memory slot that
+ * (only imports types from `./cell-clipboard-model`) — a single in-memory slot that
  * remembers the last copied grid alongside its TSV serialization, so a
  * same-app paste can recover the typed `json`/`kind` payload even though the
  * system clipboard only round-trips plain text.
  */
 
-import type { CopiedGrid } from "./cell-range";
+import type { CopiedGrid } from "./cell-clipboard-model";
 
 interface CopyBufferEntry {
   grid: CopiedGrid;

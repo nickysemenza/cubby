@@ -61,12 +61,6 @@ vi.mock("~/integrations/trpc/react", () => ({
     relatedData: { previews: { queryOptions: () => ({}) } },
   }),
 }));
-vi.mock("../data-table/useTableColumnVisibility", () => ({
-  useTableColumnVisibility: () => ({
-    columnVisibility: {},
-    onColumnVisibilityChange: vi.fn(),
-  }),
-}));
 vi.mock("../data-table/useTableConfig", () => ({
   useTableConfig: mocks.useTableConfig,
 }));

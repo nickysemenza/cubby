@@ -89,6 +89,8 @@ const searchSchema = z
     subprojects: urlStringParam,
     future: urlStringParam,
     date: urlStringParam,
+    dateFrom: urlStringParam,
+    dateTo: urlStringParam,
     productId: urlStringParam,
     product: urlStringParam,
     // `order` (the manifest's `orderIdExact` url key) and `vendor` are set
@@ -129,6 +131,8 @@ const searchDefaults = {
   subprojects: undefined,
   future: undefined,
   date: undefined,
+  dateFrom: undefined,
+  dateTo: undefined,
   productId: undefined,
   product: undefined,
   order: undefined,

@@ -17,6 +17,10 @@ import {
   viewsForEntity,
 } from "~/entities/view-manifest";
 import type { CubbyTable as Table } from "./table-features";
+import {
+  type CubbySavedTableLayout,
+  normalizeTableLayout,
+} from "./table-layout";
 
 interface DataTableViewsProps<TData extends RowData> {
   table: Table<TData>;
@@ -30,14 +34,8 @@ interface SavedViewsMenuProps {
   onApplyFilters: (filters: ViewDefinition["filters"]) => void;
   onApplySort: (sort: NonNullable<ViewDefinition["sort"]>) => void;
   onResetPage?: () => void;
-  /**
-   * Reveal the columns a view selects on. Optional because the decoupled
-   * consumers (the projects dashboard) render cards, not columns — a view with
-   * a `columnVisibility` block simply has nothing to reveal there.
-   */
-  onApplyColumnVisibility?: (
-    visibility: NonNullable<ViewDefinition["columnVisibility"]>,
-  ) => void;
+  /** Tables apply exact layouts; dashboard/card consumers simply omit it. */
+  onApplyLayout?: (layout: CubbySavedTableLayout) => void;
 }
 
 /**
@@ -64,11 +62,30 @@ export function DataTableViews<TData extends RowData>({
       sorting={sorting}
       onApplyFilters={(filters) => table.setColumnFilters(filters)}
       onApplySort={(sort) => table.setSorting(sort)}
-      onApplyColumnVisibility={(visibility) =>
-        // Merged, not replaced: a view names only the columns it needs to
-        // reveal, and everything else stays as the user left it.
-        table.setColumnVisibility((current) => ({ ...current, ...visibility }))
-      }
+      onApplyLayout={(savedLayout) => {
+        const defaults = table.options.meta?.defaultLayout;
+        if (!defaults) return;
+        const layout = normalizeTableLayout(
+          {
+            ...defaults,
+            ...savedLayout,
+            columnPinning: {
+              start: savedLayout.columnPinning?.start ?? [],
+              end: savedLayout.columnPinning?.end ?? [],
+            },
+            columnVisibility: {
+              ...defaults.columnVisibility,
+              ...savedLayout.columnVisibility,
+            },
+            columnSizing: savedLayout.columnSizing ?? {},
+          },
+          defaults,
+        );
+        table.setColumnOrder(layout.columnOrder);
+        table.setColumnPinning(layout.columnPinning);
+        table.setColumnVisibility(layout.columnVisibility);
+        table.setColumnSizing(layout.columnSizing);
+      }}
       onResetPage={() => table.setPageIndex(0)}
     />
   );
@@ -82,7 +99,7 @@ export function SavedViewsMenu({
   onApplyFilters,
   onApplySort,
   onResetPage,
-  onApplyColumnVisibility,
+  onApplyLayout,
 }: SavedViewsMenuProps) {
   const views = viewsForEntity(entity);
   if (views.length === 0) return null;
@@ -90,9 +107,9 @@ export function SavedViewsMenu({
   const applyView = (view: ViewDefinition) => {
     onApplyFilters(view.filters);
     if (view.sort) onApplySort(view.sort);
-    // Before the page reset, so the revealed columns are already on when the
-    // first page renders.
-    if (view.columnVisibility) onApplyColumnVisibility?.(view.columnVisibility);
+    // Layout does not participate in active-state matching: manual column
+    // adjustments keep the view checked while its filter/sort contract holds.
+    if (view.layout) onApplyLayout?.(view.layout);
     onResetPage?.();
   };
 

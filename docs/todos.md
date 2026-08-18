@@ -806,6 +806,15 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 
 ## Architecture / engineering
 
+- [ ] **Converge every remaining drag surface on dnd-kit.** React Table layout
+  now establishes the shared pointer, keyboard, and touch foundation. Migrate
+  the Task Board and Location Arrange tree/board/dock first, then extract shared
+  auto-scroll and evaluate the calendar and Gantt interactions against the same
+  primitives. Each migration must retain virtualization, keyboard and touch
+  parity, and existing invalid-drop behavior before its old implementation is
+  removed. Delete all three Atlassian drag-and-drop packages when their final
+  consumer is gone; do not carry parallel drag stacks indefinitely.
+
 - [ ] **Finish the production query-cost sweep (#730 follow-ups).** A Neon
   `pg_stat_statements` dump prompted an audit against the live catalog. The
   index sweep (#733), the search-document batching, the orphan-embedding
@@ -1002,11 +1011,10 @@ for old bookmarks. `unclassified` stopped needing a special case once the Cost c
 got a real presence filter. The `productId` deep link now has a `ScopeChip`.
 
 What's left is **persistence**: letting the user name and save their own filter sets
-rather than only picking from the hardcoded three. Storage should follow the existing
-per-entity table-state pattern — module cache + `localStorage` + `useSyncExternalStore`,
-as in `useTableColumnVisibility.ts` / `useTableColumnSizing.ts`
-(`table-columns:{entity}`). A saved view is the same shape `view-manifest.ts` already
-uses, so `DataTableViews` should just render two groups.
+rather than only picking from the hardcoded three. Storage should follow the stable
+external-atom pattern now owned by `data-table/table-layout.ts`, with its own versioned
+key rather than reviving the retired visibility/sizing stores. A saved view is the same
+shape `view-manifest.ts` already uses, so `DataTableViews` should just render two groups.
 
 The invariant is now explicit: a **renderer changes presentation** and a
 **saved view selects records**. Projects History, Tasks History, and Tasks

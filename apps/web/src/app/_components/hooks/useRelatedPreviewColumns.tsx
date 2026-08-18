@@ -5,7 +5,7 @@ import type {
   RelatedViewKey,
 } from "@cubby/schemas/related-view";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useRef } from "react";
+import { type RefObject, useMemo, useRef } from "react";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { getSortableFields } from "~/entities/sortable-fields";
@@ -16,9 +16,105 @@ import type {
   CubbyColumnHelper as ColumnHelper,
 } from "../data-table/table-features";
 
-interface RelatedPreviewState {
+export interface RelatedPreviewState {
   byCell: Map<string, RelatedPreviewGroup>;
   loading: boolean;
+}
+
+export function useRelatedPreviewStateRef() {
+  return useRef<RelatedPreviewState>({ byCell: new Map(), loading: false });
+}
+
+export function useRelatedPreviewColumnDefs<TData extends { id: string }>({
+  entity,
+  relatedViews,
+  columnHelper,
+  filterOptions,
+  supportsServerSorting,
+  relatedStateRef,
+}: {
+  entity: Entity;
+  relatedViews: readonly RelatedViewDefinition[];
+  columnHelper: ColumnHelper<TData>;
+  filterOptions?: Record<string, FilterableComboboxItem[]>;
+  supportsServerSorting: boolean;
+  relatedStateRef: RefObject<RelatedPreviewState>;
+}): ColumnDef<TData>[] {
+  return useMemo(
+    () =>
+      relatedViews.map((view) => {
+        const columnId = `related:${view.key}`;
+        const filterConfig = supportsServerSorting
+          ? manifestFilterConfig(entity, columnId, filterOptions)
+          : undefined;
+        return columnHelper.display({
+          id: columnId,
+          header: view.label,
+          size: 256,
+          enableSorting:
+            supportsServerSorting &&
+            getSortableFields(entity).includes(columnId),
+          meta: {
+            mobile: { slot: "meta", priority: 80 },
+            ...(filterConfig ? { filterConfig } : {}),
+          },
+          cell: (info) => (
+            <RelatedPreviewCell
+              group={relatedStateRef.current?.byCell.get(
+                `${info.row.original.id}:${view.key}`,
+              )}
+              loading={relatedStateRef.current?.loading ?? false}
+            />
+          ),
+        });
+      }),
+    [
+      columnHelper,
+      entity,
+      filterOptions,
+      relatedStateRef,
+      relatedViews,
+      supportsServerSorting,
+    ],
+  );
+}
+
+export function useRelatedPreviewData({
+  entity,
+  sourceIds,
+  visibleRelationKeys,
+  relatedStateRef,
+}: {
+  entity: Entity;
+  sourceIds: string[];
+  visibleRelationKeys: RelatedViewKey[];
+  relatedStateRef: RefObject<RelatedPreviewState>;
+}): unknown {
+  const api = useTRPC();
+  const relatedQuery = useQuery({
+    ...api.relatedData.previews.queryOptions({
+      source: entity,
+      sourceIds,
+      relationKeys: visibleRelationKeys,
+    }),
+    enabled: sourceIds.length > 0 && visibleRelationKeys.length > 0,
+  });
+  const relatedByCell = useMemo(() => {
+    const map = new Map<string, RelatedPreviewGroup>();
+    for (const group of relatedQuery.data ?? []) {
+      map.set(`${group.sourceId}:${group.relationKey}`, group);
+    }
+    return map;
+  }, [relatedQuery.data]);
+  relatedStateRef.current = {
+    byCell: relatedByCell,
+    loading: relatedQuery.isLoading,
+  };
+
+  return useMemo(
+    () => ({ byCell: relatedByCell, loading: relatedQuery.isLoading }),
+    [relatedByCell, relatedQuery.isLoading],
+  );
 }
 
 /**
@@ -48,69 +144,21 @@ export function useRelatedPreviewColumns<TData extends { id: string }>({
   relatedColumns: ColumnDef<TData, any>[];
   rowContentVersion: unknown;
 } {
-  const api = useTRPC();
-  const relatedQuery = useQuery({
-    ...api.relatedData.previews.queryOptions({
-      source: entity,
-      sourceIds,
-      relationKeys: visibleRelationKeys,
-    }),
-    enabled: sourceIds.length > 0 && visibleRelationKeys.length > 0,
+  const relatedStateRef = useRelatedPreviewStateRef();
+  const relatedColumns = useRelatedPreviewColumnDefs({
+    entity,
+    relatedViews,
+    columnHelper,
+    filterOptions,
+    supportsServerSorting,
+    relatedStateRef,
   });
-  const relatedByCell = useMemo(() => {
-    const map = new Map<string, RelatedPreviewGroup>();
-    for (const group of relatedQuery.data ?? []) {
-      map.set(`${group.sourceId}:${group.relationKey}`, group);
-    }
-    return map;
-  }, [relatedQuery.data]);
-  const relatedStateRef = useRef<RelatedPreviewState>({
-    byCell: relatedByCell,
-    loading: relatedQuery.isLoading,
+  const rowContentVersion = useRelatedPreviewData({
+    entity,
+    sourceIds,
+    visibleRelationKeys,
+    relatedStateRef,
   });
-  relatedStateRef.current = {
-    byCell: relatedByCell,
-    loading: relatedQuery.isLoading,
-  };
-
-  const relatedColumns = useMemo(
-    () =>
-      relatedViews.map((view) => {
-        const columnId = `related:${view.key}`;
-        const filterConfig = supportsServerSorting
-          ? manifestFilterConfig(entity, columnId, filterOptions)
-          : undefined;
-        return columnHelper.display({
-          id: columnId,
-          header: view.label,
-          enableSorting:
-            supportsServerSorting &&
-            getSortableFields(entity).includes(columnId),
-          meta: {
-            className: "w-64",
-            mobile: { slot: "meta", priority: 80 },
-            ...(filterConfig ? { filterConfig } : {}),
-          },
-          cell: (info) => (
-            <RelatedPreviewCell
-              group={relatedStateRef.current.byCell.get(
-                `${info.row.original.id}:${view.key}`,
-              )}
-              loading={relatedStateRef.current.loading}
-            />
-          ),
-        });
-      }),
-    [columnHelper, entity, filterOptions, relatedViews, supportsServerSorting],
-  );
-
-  // The map and loading boolean each change only when a cell can render a
-  // different preview. This object is passed through table meta to all row
-  // render surfaces; do not replace it with the ref itself.
-  const rowContentVersion = useMemo(
-    () => ({ byCell: relatedByCell, loading: relatedQuery.isLoading }),
-    [relatedByCell, relatedQuery.isLoading],
-  );
 
   return { relatedColumns, rowContentVersion };
 }

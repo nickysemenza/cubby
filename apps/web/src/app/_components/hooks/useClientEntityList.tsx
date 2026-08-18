@@ -1,4 +1,5 @@
 import { relatedViewsFor } from "@cubby/schemas/related-view";
+import { useStore } from "@tanstack/react-store";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { entities } from "~/entities/entities";
 import { getEntityFilters } from "~/entities/filter-manifest";
@@ -7,7 +8,7 @@ import {
   createCubbyColumnHelper,
   type CubbyRow as Row,
 } from "../data-table/table-features";
-import { useTableColumnVisibility } from "../data-table/useTableColumnVisibility";
+import { useCubbyTableLayout } from "../data-table/table-layout";
 import { useTableConfig } from "../data-table/useTableConfig";
 import { useTableState } from "../data-table/useTableState";
 import type {
@@ -17,7 +18,11 @@ import type {
 } from "./useEntityList";
 import { ListBulkActionBar, useListBulkActions } from "./useListBulkActions";
 import { useOptimisticDelete } from "./useOptimisticDelete";
-import { useRelatedPreviewColumns } from "./useRelatedPreviewColumns";
+import {
+  useRelatedPreviewColumnDefs,
+  useRelatedPreviewData,
+  useRelatedPreviewStateRef,
+} from "./useRelatedPreviewColumns";
 import { type FilterInput, useStandardColumns } from "./useStandardColumns";
 
 /** Stable empty-filters default (avoids a fresh `[]` reference each render). */
@@ -57,7 +62,9 @@ type SharedListOptions<TData extends BaseListRow> = Pick<
   | "nameSuffix"
   | "tableStateOptions"
   | "initialColumnVisibility"
-  | "columnVisibilityScope"
+  | "layoutKey"
+  | "legacyLayoutVisibilityKey"
+  | "legacyLayoutSizingKey"
   | "deleteEmptyLabel"
   | "hiddenFilterColumns"
 >;
@@ -118,7 +125,9 @@ export function useClientEntityList<TData extends BaseListRow>({
   nameSuffix,
   tableStateOptions,
   initialColumnVisibility,
-  columnVisibilityScope,
+  layoutKey,
+  legacyLayoutVisibilityKey,
+  legacyLayoutSizingKey,
   tree,
   rowIsEntity,
   bulkActions,
@@ -193,19 +202,6 @@ export function useClientEntityList<TData extends BaseListRow>({
       }) as Record<string, boolean>,
     [relatedViews, initialColumnVisibility],
   );
-  const { columnVisibility, onColumnVisibilityChange } =
-    useTableColumnVisibility(
-      entity,
-      relatedInitialVisibility,
-      columnVisibilityScope,
-    );
-  const visibleRelatedKeys = useMemo(
-    () =>
-      relatedViews
-        .filter((view) => columnVisibility[`related:${view.key}`] !== false)
-        .map((view) => view.key),
-    [columnVisibility, relatedViews],
-  );
   const sourceIds = useMemo(() => {
     const ids: string[] = [];
     const visit = (rows: TData[]) => {
@@ -218,13 +214,13 @@ export function useClientEntityList<TData extends BaseListRow>({
     visit(data);
     return ids;
   }, [data]);
-  const { relatedColumns, rowContentVersion } = useRelatedPreviewColumns({
+  const relatedStateRef = useRelatedPreviewStateRef();
+  const relatedColumns = useRelatedPreviewColumnDefs({
     entity,
-    sourceIds,
-    visibleRelationKeys: visibleRelatedKeys,
     relatedViews,
     columnHelper,
     supportsServerSorting: false,
+    relatedStateRef,
   });
   const combinedCustomColumns = useMemo(
     () => [...customColumns, ...relatedColumns],
@@ -246,6 +242,29 @@ export function useClientEntityList<TData extends BaseListRow>({
     nameEditable,
     nameSuffix,
     expandable: tree?.expandable,
+  });
+
+  const persistedLayoutKey = layoutKey ?? entity;
+  const layout = useCubbyTableLayout({
+    key: persistedLayoutKey,
+    columns: allColumns,
+    initialColumnVisibility: relatedInitialVisibility,
+    legacyVisibilityKey: legacyLayoutVisibilityKey ?? persistedLayoutKey,
+    legacySizingKey: legacyLayoutSizingKey ?? persistedLayoutKey,
+  });
+  const columnVisibility = useStore(layout.atoms.columnVisibility);
+  const visibleRelatedKeys = useMemo(
+    () =>
+      relatedViews
+        .filter((view) => columnVisibility[`related:${view.key}`] !== false)
+        .map((view) => view.key),
+    [columnVisibility, relatedViews],
+  );
+  const rowContentVersion = useRelatedPreviewData({
+    entity,
+    sourceIds,
+    visibleRelationKeys: visibleRelatedKeys,
+    relatedStateRef,
   });
 
   const getRowId = useCallback((row: TData) => row.id, []);
@@ -276,8 +295,7 @@ export function useClientEntityList<TData extends BaseListRow>({
     enableRowSelection: rowSelectionEnabled,
     rowSelection: listBulkActions.rowSelection,
     onRowSelectionChange: listBulkActions.onRowSelectionChange,
-    columnVisibility,
-    onColumnVisibilityChange,
+    layout,
     initialColumnVisibility: relatedInitialVisibility,
     getSubRows: tree?.getSubRows,
     filterFromLeafRows: tree?.filterFromLeafRows,

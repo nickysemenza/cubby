@@ -22,6 +22,7 @@ import {
   TradeCostMatrixAggregate,
 } from "./charts/trade-cost-aggregate";
 import { VendorBreakdown } from "./charts/vendor-breakdown";
+import { ExpenseAggregateExplorer } from "./expense-aggregate-explorer";
 import { ExpenseSummaryStrip } from "./expense-summary-strip";
 
 const route = getRouteApi("/_authenticated/expenses/");
@@ -85,6 +86,21 @@ export function ExpenseAnalyticsView() {
     },
     [navigate, activeCell],
   );
+  const handleOpenLedger = useCallback(
+    (filter: {
+      trade?: string;
+      costType?: string;
+      project?: string;
+      vendor?: string;
+      dateFrom?: string;
+      dateTo?: string;
+    }) => {
+      void navigate({
+        search: (prev) => ({ ...prev, ...filter, view: "ledger" as const }),
+      });
+    },
+    [navigate],
+  );
 
   if (isLoading || !data) {
     return (
@@ -109,6 +125,16 @@ export function ExpenseAnalyticsView() {
   return (
     <Stack gap="lg">
       <ExpenseSummaryStrip summary={summary} adjustmentsNet={adjustments.net} />
+
+      <Section
+        title="Aggregate Explorer"
+        description="Complete server-calculated buckets over the same filters as the Ledger. No raw rows are grouped in the browser."
+      >
+        <ExpenseAggregateExplorer
+          analytics={data}
+          onOpenLedger={handleOpenLedger}
+        />
+      </Section>
 
       <Grid cols="pair">
         <Section

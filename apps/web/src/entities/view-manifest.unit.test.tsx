@@ -146,7 +146,7 @@ describe("expense views produce the filters their old tabs pinned", () => {
     const view = viewsForEntity("expense").find(
       (candidate) => candidate.id === "unknown-quantities",
     );
-    expect(view?.columnVisibility).toEqual({ productQuantity: true });
+    expect(view?.layout?.columnVisibility).toEqual({ productQuantity: true });
   });
 });
 
@@ -325,7 +325,7 @@ describe("views reveal the columns they select on", () => {
   it("turns on Expected and Variance for the products worklists", () => {
     const productViews = viewManifest.product ?? [];
     const shelfDisagrees = productViews.find((v) => v.id === "shelf-disagrees");
-    expect(shelfDisagrees?.columnVisibility).toEqual({
+    expect(shelfDisagrees?.layout?.columnVisibility).toEqual({
       expectedQuantity: true,
       quantityVariance: true,
       // A product can be short while sitting in no inventory row at all, so
@@ -338,7 +338,7 @@ describe("views reveal the columns they select on", () => {
     for (const view of productViews) {
       for (const filter of view.filters) {
         expect(
-          view.columnVisibility?.[filter.id],
+          view.layout?.columnVisibility?.[filter.id],
           `${view.id} filters on ${filter.id} without revealing it`,
         ).toBe(true);
       }
@@ -404,7 +404,7 @@ describe("the unlocated views stay one question at two widths", () => {
     // `onHandUnitsSql` returns NULL on a zero-entry shelf, so the variance
     // subtraction is NULL across the whole cohort by construction.
     for (const view of [broad, durables]) {
-      expect(view?.columnVisibility?.quantityVariance).toBeUndefined();
+      expect(view?.layout?.columnVisibility?.quantityVariance).toBeUndefined();
     }
   });
 });

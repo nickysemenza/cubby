@@ -285,7 +285,7 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
       tableStateOptions: EMBEDDED_TABLE_STATE,
       // Distinct column set from the /expenses ledger, so it needs its own
       // persisted View settings rather than sharing `table-columns:expense`.
-      columnVisibilityScope: "product-detail",
+      layoutKey: "expense:product-detail",
       initialColumnVisibility: INITIAL_COLUMN_VISIBILITY,
       hiddenFilterColumns: SELF_FILTERED_COLUMNS,
     });
@@ -384,7 +384,6 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
           table={table}
           ariaLabel={`${product.name} expense history`}
           entity="expense"
-          sizingKey="expense:product-detail"
           bulkActionBar={bulkActionBar}
           embedded
           showColumnMenu

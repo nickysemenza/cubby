@@ -1,5 +1,5 @@
 /**
- * Pure, alias-free spreadsheet-style cell selection + range copy/paste logic
+ * Pure, alias-free clipboard and paste-planning model
  * for data tables. No React, no `~/` imports — importable from vitest unit
  * tests per repo convention (see `vitest.config.ts`'s `unit` project).
  *
@@ -41,74 +41,6 @@ export function selectionRect(sel: CellSelection): CellRect {
     bottom: Math.max(sel.anchor.row, sel.focus.row),
     left: Math.min(sel.anchor.col, sel.focus.col),
     right: Math.max(sel.anchor.col, sel.focus.col),
-  };
-}
-
-function clampCoord(
-  coord: CellCoord,
-  rowCount: number,
-  colCount: number,
-): CellCoord {
-  return {
-    row: Math.min(Math.max(coord.row, 0), rowCount - 1),
-    col: Math.min(Math.max(coord.col, 0), colCount - 1),
-  };
-}
-
-const DIRECTION_DELTA: Record<
-  "up" | "down" | "left" | "right",
-  { row: number; col: number }
-> = {
-  up: { row: -1, col: 0 },
-  down: { row: 1, col: 0 },
-  left: { row: 0, col: -1 },
-  right: { row: 0, col: 1 },
-};
-
-/** Arrow-key movement. See module doc for the full contract. */
-export function moveFocus(
-  sel: CellSelection | null,
-  dir: "up" | "down" | "left" | "right",
-  extend: boolean,
-  rowCount: number,
-  colCount: number,
-): CellSelection | null {
-  if (rowCount <= 0 || colCount <= 0) return null;
-
-  if (!sel) {
-    const origin = clampCoord({ row: 0, col: 0 }, rowCount, colCount);
-    return { anchor: origin, focus: origin };
-  }
-
-  const delta = DIRECTION_DELTA[dir];
-
-  if (!extend) {
-    const moved = clampCoord(
-      { row: sel.focus.row + delta.row, col: sel.focus.col + delta.col },
-      rowCount,
-      colCount,
-    );
-    return { anchor: moved, focus: moved };
-  }
-
-  const movedFocus = clampCoord(
-    { row: sel.focus.row + delta.row, col: sel.focus.col + delta.col },
-    rowCount,
-    colCount,
-  );
-  return { anchor: sel.anchor, focus: movedFocus };
-}
-
-/** Clamp both anchor and focus into bounds; null if the table is empty. */
-export function clampSelection(
-  sel: CellSelection,
-  rowCount: number,
-  colCount: number,
-): CellSelection | null {
-  if (rowCount <= 0 || colCount <= 0) return null;
-  return {
-    anchor: clampCoord(sel.anchor, rowCount, colCount),
-    focus: clampCoord(sel.focus, rowCount, colCount),
   };
 }
 

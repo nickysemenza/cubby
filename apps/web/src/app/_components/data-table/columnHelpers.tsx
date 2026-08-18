@@ -12,7 +12,7 @@ import {
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { LocationType } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
-import type { CellData, RowData, TableFeatures } from "@tanstack/react-table";
+import type { RowData } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { uniqBy } from "es-toolkit";
 import {
@@ -95,16 +95,9 @@ import type {
   CubbyCellContext as CellContext,
   CubbyColumnHelper as ColumnHelper,
 } from "./table-features";
+import type { FilterConfig, MobileColumnMeta } from "./table-meta";
 
-/** Configuration for inline column header filters */
-export interface FilterConfig {
-  placeholder: string;
-  filterType?: "text" | "select" | "multiselect";
-  options?: FilterableComboboxItem[];
-  // Add matching-row hints from TanStack's client-side faceting. Off by
-  // default because server-backed tables only hold their loaded pages.
-  facetCount?: boolean;
-}
+export type { FilterConfig, MobileColumnMeta, MobileSlot } from "./table-meta";
 
 /**
  * Options for a relation-presence header filter: pages map the selected value
@@ -148,63 +141,6 @@ function entityRefSortingFn(
   if (left === null) return 1;
   if (right === null) return -1;
   return left.localeCompare(right);
-}
-
-export type MobileSlot =
-  | "title"
-  | "subtitle"
-  | "meta"
-  | "trailing"
-  | "image"
-  | "actions"
-  | "hidden";
-
-export interface MobileColumnMeta {
-  slot?: MobileSlot;
-  /** Lower values are rendered first within a slot */
-  priority?: number;
-  /**
-   * The rendered cell contains an interactive control (e.g. an
-   * `EditableEntityCell`/`EditableCell` edit-trigger or a quick-edit pencil
-   * button). When set, and the cell lands in the mobile card's meta/trailing
-   * right-values bucket, the card skips the truncating `text-2xs` wrapper so
-   * the control isn't clipped or cramped below a usable tap target. Set this
-   * on columns whose cell renders an editor — don't rely on DOM sniffing.
-   */
-  interactive?: boolean;
-  /**
-   * Shorter label for the mobile spec grid's label gutter, which is much
-   * narrower than a desktop header cell. Defaults to the column's own string
-   * `header`; set this only where that would truncate (e.g. "Manufacturer").
-   */
-  label?: string;
-}
-
-// Extend TanStack Table's meta type to include our custom properties
-declare module "@tanstack/react-table" {
-  interface ColumnMeta<
-    TFeatures extends TableFeatures,
-    TData extends RowData,
-    TValue extends CellData,
-  > {
-    mobile?: MobileColumnMeta;
-    className?: string;
-    /** Right-align + tabular figures for numeric/quantity columns. */
-    numeric?: boolean;
-    /**
-     * Mono font for code-like data cells (UPCs, timestamps, ids) without the
-     * numeric right-align. Names/descriptions stay sans for scanability.
-     */
-    mono?: boolean;
-    /** Filter configuration for inline header filter */
-    filterConfig?: FilterConfig;
-    /**
-     * Column-level copy/paste descriptor. Set by the column factories; read by
-     * the range copy/paste engine (and adapted per-row into a single-cell
-     * `CellClipboardSpec` via `specFromCellData`).
-     */
-    cellData?: ColumnCellData<TData>;
-  }
 }
 
 interface BaseRow {
@@ -855,8 +791,12 @@ export function createActionsColumnBase<T extends RowData>(
     id: "actions",
     header: "",
     enableSorting: false,
+    enableHiding: false,
+    enableCellSelection: false,
+    size: 40,
+    minSize: 40,
+    maxSize: 72,
     meta: {
-      className: "w-10",
       mobile: { slot: "actions", priority: 100 },
     },
     cell: (info) => {
@@ -1385,7 +1325,7 @@ export function renderOptionCell(
  * motivating case, where `null` is the backlog the saved view filters on.
  *
  * Encoded over the existing `select` machinery rather than a new cell kind:
- * paste compatibility is keyed on the base kind (`cell-range.ts`), so reusing
+ * paste compatibility is keyed on the base kind (`cell-clipboard-model.ts`), so reusing
  * `"select"` means a copied "Tracked" pastes into any boolean column, and
  * `selectCellData`'s label-or-value matching already accepts the human label as
  * text. A dedicated `"boolean"` kind would have been paste-incompatible with

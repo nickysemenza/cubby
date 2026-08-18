@@ -785,7 +785,8 @@ function ServerProjectGallery({
     queryOptions: api.project.list.queryOptions,
     columns,
     filterOptions,
-    columnVisibilityScope: "gallery",
+    layoutKey: "project:gallery",
+    legacyLayoutSizingKey: "project",
   });
   const ids = useMemo(
     () => list.data.map((project) => project.id),

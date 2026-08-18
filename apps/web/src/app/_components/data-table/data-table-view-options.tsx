@@ -1,34 +1,26 @@
 import type { RowData } from "@tanstack/react-table";
-import {
-  AlignJustify,
-  Columns3,
-  LayoutList,
-  List,
-  RotateCcw,
-  Settings2,
-} from "lucide-react";
-import { useState } from "react";
+import { AlignJustify, LayoutList, List, Settings2 } from "lucide-react";
+import { lazy, Suspense } from "react";
 
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import { Input } from "~/components/ui/input";
 import { humanize } from "~/entities/filters";
 import type {
   CubbyColumn as Column,
   CubbyTable as Table,
 } from "./table-features";
 import { type TableDensity, useTableDensity } from "./useTableDensity";
+
+const TableLayoutCustomizer = lazy(() => import("./TableLayoutCustomizer"));
 
 const densityOptions: {
   value: TableDensity;
@@ -42,12 +34,6 @@ const densityOptions: {
 
 interface DataTableViewOptionsProps<TData extends RowData> {
   table: Table<TData>;
-  /**
-   * Clear this table's persisted column widths. Passed only when the user has
-   * actually resized something, so the item stays out of the menu on a table
-   * still at its code-defined widths.
-   */
-  onResetColumnWidths?: () => void;
 }
 
 /**
@@ -70,23 +56,8 @@ export function columnLabel<TData extends RowData>(
 
 export function DataTableViewOptions<TData extends RowData>({
   table,
-  onResetColumnWidths,
 }: DataTableViewOptionsProps<TData>) {
   const { density, setDensity } = useTableDensity();
-  const [columnSearch, setColumnSearch] = useState("");
-
-  const toggleableColumns = table
-    .getAllColumns()
-    .filter(
-      (column) =>
-        typeof column.accessorFn !== "undefined" && column.getCanHide(),
-    );
-  const query = columnSearch.trim().toLowerCase();
-  const visibleColumns = query
-    ? toggleableColumns.filter((column) =>
-        columnLabel(column).toLowerCase().includes(query),
-      )
-    : toggleableColumns;
 
   return (
     <DropdownMenu>
@@ -102,7 +73,10 @@ export function DataTableViewOptions<TData extends RowData>({
         <Settings2 className="size-3.5" />
         View
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-[240px]">
+      <DropdownMenuContent
+        align="end"
+        className="max-h-[75vh] w-[480px] overflow-y-auto"
+      >
         <DropdownMenuGroup>
           <DropdownMenuLabel>Density</DropdownMenuLabel>
           <DropdownMenuRadioGroup
@@ -117,58 +91,16 @@ export function DataTableViewOptions<TData extends RowData>({
             ))}
           </DropdownMenuRadioGroup>
         </DropdownMenuGroup>
-        {onResetColumnWidths && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem onClick={onResetColumnWidths}>
-                <Columns3 />
-                Reset column widths
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-          </>
-        )}
         <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
-          <div className="px-2 pb-1.5" /* tight */>
-            <Input
-              value={columnSearch}
-              onChange={(e) => setColumnSearch(e.target.value)}
-              onKeyDown={(e) => {
-                // The menu's roving focus otherwise eats every keystroke as
-                // typeahead navigation instead of letting it reach the input.
-                if (e.key !== "Escape") e.stopPropagation();
-              }}
-              placeholder="Search columns…"
-              className="h-6 text-xs"
-            />
-          </div>
-          <DropdownMenuItem onClick={() => table.setColumnVisibility({})}>
-            <RotateCcw />
-            Reset to default
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          {visibleColumns.length === 0 ? (
-            <div
-              className="px-2 py-1.5 text-muted-foreground text-xs" /* tight */
-            >
-              No columns match "{columnSearch}".
+        <Suspense
+          fallback={
+            <div className="p-4 text-center text-muted-foreground text-xs">
+              Loading layout controls…
             </div>
-          ) : (
-            visibleColumns.map((column) => {
-              return (
-                <DropdownMenuCheckboxItem
-                  key={column.id}
-                  checked={column.getIsVisible()}
-                  onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                >
-                  {columnLabel(column)}
-                </DropdownMenuCheckboxItem>
-              );
-            })
-          )}
-        </DropdownMenuGroup>
+          }
+        >
+          <TableLayoutCustomizer table={table as unknown as Table<RowData>} />
+        </Suspense>
       </DropdownMenuContent>
     </DropdownMenu>
   );

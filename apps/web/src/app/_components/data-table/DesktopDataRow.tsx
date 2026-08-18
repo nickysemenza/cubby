@@ -8,7 +8,7 @@ import { cn } from "~/lib/utils";
 import { NON_SELECTABLE_COLUMN_IDS } from "./cell-selection-context";
 import { DebugDialog } from "./DebugDialog";
 import type { CubbyRow as Row } from "./table-features";
-import type { RowCellSelection } from "./useCellSelection";
+import { columnWidthValue } from "./table-layout";
 
 const NUMERIC_CELL = "text-right font-mono tabular-nums";
 const MONO_CELL = "font-mono";
@@ -39,13 +39,9 @@ export interface DesktopDataRowProps<TItem extends RowData> {
   columnsKey: string;
   /** External cell-render state snapshot; see useTableConfig. */
   rowContentVersion?: unknown;
+  /** Per-row native cell-selection projection from table.Subscribe. */
+  selectionVersion?: string;
   height?: string;
-  /**
-   * This row's slice of the current cell selection, or undefined when the row
-   * is outside the selection rect. Referentially stable per selection (see
-   * `useCellSelection`), so the memo compare below rests on its field values.
-   */
-  cellSelection?: RowCellSelection;
   /**
    * When true (cell-selection tables), a click landing on an editable cell
    * selects rather than firing the row's onClick — the row-nav/preview open
@@ -65,14 +61,8 @@ function DesktopDataRowInner<TItem extends RowData>({
   rowClassName,
   cellClassName,
   height,
-  cellSelection,
   suppressCellRowClick,
 }: DesktopDataRowProps<TItem>) {
-  // Split the selected-columns key once per render (rows in the rect share it).
-  const selectedCols = cellSelection
-    ? new Set(cellSelection.colsKey.split(","))
-    : null;
-
   const handleRowClick = onRowClick
     ? (e: MouseEvent<HTMLTableRowElement>) => {
         // In cell-selection mode a click on an editable cell selects it (via the
@@ -98,19 +88,45 @@ function DesktopDataRowInner<TItem extends RowData>({
       onMouseEnter={onRowHover ? () => onRowHover(row) : undefined}
       style={height ? { height } : undefined}
     >
-      {row.getVisibleCells().map((cell) => {
-        const selectable = !NON_SELECTABLE_COLUMN_IDS.has(cell.column.id);
-        const cellSelected = selectable
-          ? (selectedCols?.has(cell.column.id) ?? false)
-          : false;
-        const cellAnchor =
-          cellSelected && cellSelection?.anchorColId === cell.column.id;
+      {[
+        ...row.getStartVisibleCells(),
+        ...row.getCenterVisibleCells(),
+        ...row.getEndVisibleCells(),
+      ].map((cell) => {
+        const selectable =
+          cell.getCanSelect() && !NON_SELECTABLE_COLUMN_IDS.has(cell.column.id);
+        const cellSelected = selectable && cell.getIsSelected();
+        const cellAnchor = cellSelected && cell.getIsFocused();
+        const pinned = cell.column.getIsPinned();
+        const pinnedColumns =
+          pinned === "start"
+            ? cell.getContext().table.getStartVisibleLeafColumns()
+            : pinned === "end"
+              ? cell.getContext().table.getEndVisibleLeafColumns()
+              : [];
+        const pinnedIndex = pinnedColumns.findIndex(
+          (column) => column.id === cell.column.id,
+        );
+        const boundaryClass =
+          pinned === "start" && pinnedIndex === pinnedColumns.length - 1
+            ? "shadow-[3px_0_4px_-3px_rgb(15_23_42_/_0.35)]"
+            : pinned === "end" && pinnedIndex === 0
+              ? "shadow-[-3px_0_4px_-3px_rgb(15_23_42_/_0.35)]"
+              : undefined;
+        const width = columnWidthValue(cell.column.id);
         return (
           <TableCell
             key={cell.id}
             data-cell-col={selectable ? cell.column.id : undefined}
             data-cell-selected={cellSelected ? "" : undefined}
             data-cell-anchor={cellAnchor ? "" : undefined}
+            tabIndex={selectable ? cell.getTabIndex() : undefined}
+            onMouseDown={
+              selectable ? cell.getSelectionStartHandler() : undefined
+            }
+            onMouseEnter={
+              selectable ? cell.getSelectionExtendHandler() : undefined
+            }
             className={cn(
               cellClassName,
               cell.column.columnDef.meta?.numeric && NUMERIC_CELL,
@@ -118,7 +134,19 @@ function DesktopDataRowInner<TItem extends RowData>({
               cell.column.columnDef.meta?.className,
               cellSelected && "bg-primary/10",
               cellAnchor && "ring-2 ring-ring ring-inset",
+              pinned && "sticky z-10 bg-background",
+              boundaryClass,
             )}
+            style={{
+              width,
+              minWidth: width,
+              maxWidth: width,
+              ...(pinned === "start"
+                ? { insetInlineStart: cell.column.getStart("start") }
+                : pinned === "end"
+                  ? { insetInlineEnd: cell.column.getAfter("end") }
+                  : {}),
+            }}
           >
             {flexRender(cell.column.columnDef.cell, cell.getContext())}
           </TableCell>
@@ -163,16 +191,10 @@ function rowPropsAreEqual<TItem extends RowData>(
     previous.cellClassName === next.cellClassName &&
     previous.columnsKey === next.columnsKey &&
     Object.is(previous.rowContentVersion, next.rowContentVersion) &&
+    previous.selectionVersion === next.selectionVersion &&
     previous.height === next.height &&
     previous.rowIndex === next.rowIndex &&
-    previous.suppressCellRowClick === next.suppressCellRowClick &&
-    // Field compare (not identity): getRowCellSelection hands each in-rect row a
-    // fresh object on every selection change, but its highlight only differs
-    // when these two fields do. undefined?.x === undefined handles the
-    // in-rect ↔ out-of-rect transitions (object with colsKey "a" vs undefined →
-    // "a" !== undefined → correctly re-renders).
-    previous.cellSelection?.colsKey === next.cellSelection?.colsKey &&
-    previous.cellSelection?.anchorColId === next.cellSelection?.anchorColId
+    previous.suppressCellRowClick === next.suppressCellRowClick
   );
 }
 

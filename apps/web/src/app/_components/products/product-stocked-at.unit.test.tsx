@@ -176,13 +176,6 @@ describe("ProductStockedAt", () => {
     );
   });
 
-  it("keeps its own persisted-width scope, separate from the /inventory index", () => {
-    render(<ProductStockedAt product={product} />);
-    expect(mocks.rTable).toHaveBeenCalledWith(
-      expect.objectContaining({ sizingKey: "inventory:product-detail" }),
-    );
-  });
-
   it("renders the empty shelf state instead of a table when nothing is stocked", () => {
     render(
       <ProductStockedAt

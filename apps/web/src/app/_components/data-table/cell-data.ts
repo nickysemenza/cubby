@@ -27,7 +27,7 @@ import { wasm } from "~/lib/wasm";
 import type { ComboboxItem } from "../combobox/combobox-types";
 import { tryFormatAmount } from "../inventory/format-amount";
 import type { CellClipboardSpec } from "./cell-clipboard";
-import type { CellKind } from "./cell-range";
+import type { CellKind } from "./cell-clipboard-model";
 import type { FilterableComboboxItem } from "./editable-cell";
 
 /**
