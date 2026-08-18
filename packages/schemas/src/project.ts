@@ -29,6 +29,7 @@ import {
   vendorShortcode,
 } from "./identifiers";
 import {
+  createItemsResponseSchema,
   createPaginatedResponseSchema,
   entityFilter,
   entityFilterList,
@@ -1784,6 +1785,12 @@ export const projectResourceOut = z.object({
 });
 export type ProjectResourceOut = z.infer<typeof projectResourceOut>;
 export const projectResourcesOut = z.array(projectResourceOut);
+
+/** The MCP envelope: same rows, `{items}` root. See `productComponentsMcpOut`
+ * (`./product-components`) — an array root fails the SDK's own re-validation of
+ * `structuredContent`, so it broke every `list_project_resources` call. */
+export const projectResourcesMcpOut =
+  createItemsResponseSchema(projectResourceOut);
 
 /**
  * Why a tool was suggested. `purchased_here` is exact — the tool's own purchase

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { plainDate } from "./base-entity";
 import { productShortcode, purchaseShortcode } from "./identifiers";
+import { createItemsResponseSchema } from "./pagination";
 import { productListItemOut } from "./product";
 
 /**
@@ -84,6 +85,17 @@ export const productComponentOut = z.object({
 });
 export type ProductComponentOut = z.infer<typeof productComponentOut>;
 export const productComponentsOut = z.array(productComponentOut);
+
+/**
+ * The same rows in the `{items}` envelope every MCP list tool returns.
+ *
+ * A tool whose declared output root is a bare array is unusable over MCP: the
+ * SDK re-validates `structuredContent` against an object, so the array root
+ * that serves the tRPC callers fine failed EVERY `list_product_components`
+ * call. The router keeps returning the array — only the MCP boundary wraps.
+ */
+export const productComponentsMcpOut =
+  createItemsResponseSchema(productComponentOut);
 
 /**
  * A component as a full PRODUCT LIST ROW, for tables that nest a kit's

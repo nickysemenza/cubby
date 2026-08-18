@@ -33,7 +33,7 @@ import {
   projectResourceMutationInput,
   projectResourceMutationOut,
   projectResourceProjectInput,
-  projectResourcesOut,
+  projectResourcesMcpOut,
   projectTaskStatusBreakdown,
   projectToolSuggestionsOut,
   projectUpdateData,
@@ -203,9 +203,12 @@ export function registerProjectTools(server: McpServer) {
     description:
       "List the reusable tools and software explicitly used on one exact project. Tools include lifetime acquisition/use economics; software includes non-additive household spend charged during the project's effective window. Sub-project uses remain separate and count independently.",
     inputSchema: projectResourceProjectInput.shape,
-    outputSchema: projectResourcesOut,
+    // `{items}`, like every other list tool — see `projectResourcesMcpOut`.
+    outputSchema: projectResourcesMcpOut,
     annotations: READ_ONLY_CLOSED,
-    call: (caller, params) => caller.project.resources(params),
+    call: async (caller, params) => ({
+      items: await caller.project.resources(params),
+    }),
   });
 
   registerRouterTool(server, {

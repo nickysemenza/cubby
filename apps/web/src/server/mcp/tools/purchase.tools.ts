@@ -52,7 +52,7 @@ import {
   purchaseProductMutationInput,
   purchaseProductMutationOut,
   purchaseProductsInput,
-  purchaseProductsOut,
+  purchaseProductsMcpOut,
   purchaseUpdateData,
   reclassifyPurchaseDocumentInput,
   splitExpenseDelta,
@@ -256,9 +256,12 @@ export function registerPurchaseTools(server: McpServer) {
     description:
       'List the Products one Purchase acquired. Rows come from TWO sources and `source` says which: "expense" means one of this order\'s own itemized Expenses names the product (the common case), "link" means an explicit PurchaseProduct row, and "both" means each exists for that pair. Only Expenses that ACQUIRE count — a negative Expense records an exit (sale, return, disposal), so a disposal order does not list the goods it sold. This is PROVENANCE, not money: nothing here carries an amount or quantity or appears in any spend total. The explicit link exists because an order paid in installments has Expenses with lineBasis "allocation" — a slice of a total that was never itemized, either by payment schedule (a deposit buys no particular item) or by an estimated materials/labor split — and such a row can never carry a productId. Where spend IS itemized per product (lineBasis "item_line"), the Expense\'s own productId already records it and is the better source; those pairs appear here with source "expense" and need no link. `linkAttachedAt` is when the explicit link was recorded, and is null on a source "expense" row — it is also the test for whether detach_purchase_products has anything to remove.',
     inputSchema: purchaseProductsInput.shape,
-    outputSchema: purchaseProductsOut,
+    // `{items}`, like every other list tool — see `purchaseProductsMcpOut`.
+    outputSchema: purchaseProductsMcpOut,
     annotations: READ_ONLY_CLOSED,
-    call: (caller, params) => caller.purchase.products(params),
+    call: async (caller, params) => ({
+      items: await caller.purchase.products(params),
+    }),
   });
 
   registerRouterTool(server, {

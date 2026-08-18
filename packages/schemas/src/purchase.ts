@@ -18,6 +18,7 @@ import { imageUrlSummary } from "./image-summary";
 import { expenseLineKindSchema } from "./expense-line-kind";
 import { purchaseRelatedFilterFields } from "./related-view";
 import {
+  createItemsResponseSchema,
   createPaginatedResponseSchema,
   entityFilterList,
   oneOrMany,
@@ -527,6 +528,12 @@ export const purchaseProductOut = z.object({
 });
 export type PurchaseProductOut = z.infer<typeof purchaseProductOut>;
 export const purchaseProductsOut = z.array(purchaseProductOut);
+
+/** The MCP envelope: same rows, `{items}` root. See `productComponentsMcpOut`
+ * (`./product-components`) — an array root fails the SDK's own re-validation of
+ * `structuredContent`, so it broke every `list_purchase_products` call. */
+export const purchaseProductsMcpOut =
+  createItemsResponseSchema(purchaseProductOut);
 
 /** The transpose: one Product's row on another Purchase's link list. */
 export const productPurchaseOut = z.object({

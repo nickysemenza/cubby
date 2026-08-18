@@ -17,7 +17,7 @@ import {
   detachProductComponentsInput,
   productComponentMutationOut,
   productComponentsInput,
-  productComponentsOut,
+  productComponentsMcpOut,
 } from "@cubby/schemas/product-components";
 import type { mcpUnitMappingInput } from "@cubby/schemas/unitmapping";
 import { upc } from "@cubby/usda-schemas";
@@ -233,9 +233,13 @@ export function registerProductTools(server: McpServer) {
     description:
       "List what's inside one kit or multi-pack Product — the ProductComponent edge. A kit Product (a combo tool kit, a multi-pack, a bundle) is a Product like any other, with its OWN UPC, model, ASIN, image, and purchase history; this is the only place that records what it's MADE OF. One row per distinct component: a 4-pack of one part is a single row at quantity 4, a 9-piece kit is nine separate rows. The kit keeps its OWN Expense — it is never split into per-component expenses. Instead each row's `price` is the component PRODUCT's effective price, which ALREADY BLENDS its own purchase history with its quantity-weighted share of every kit it belongs to (that share being the kit's cost × this quantity ÷ the kit's total component units, derived at read time). So do NOT compute a share yourself on top of this number — it is already in there, and doing so double-counts. A part that was only ever bought inside a kit still returns a real price here, from the kit. An explicit price set on the component product overrides the blend entirely. For the reverse question — every kit a Product is listed inside — read that Product's own detail page; the transpose has no separate MCP tool.",
     inputSchema: productComponentsInput.shape,
-    outputSchema: productComponentsOut,
+    // `{items}`, like every other list tool — the router's own array root is a
+    // shape the MCP SDK rejects outright. See `productComponentsMcpOut`.
+    outputSchema: productComponentsMcpOut,
     annotations: READ_ONLY_CLOSED,
-    call: (caller, params) => caller.product.components(params),
+    call: async (caller, params) => ({
+      items: await caller.product.components(params),
+    }),
   });
 
   registerRouterTool(server, {
