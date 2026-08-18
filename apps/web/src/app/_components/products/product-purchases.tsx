@@ -93,6 +93,12 @@ export function ProductPurchases({ productId }: { productId: string }) {
       helper.accessor((row) => row.linkAttachedAt !== null, {
         id: "link",
         header: "",
+        // A blank header MUST also disable sorting. The sort control renders as
+        // a button labelled by the header text, so an empty one is a button
+        // with no accessible name — a `serious` Axe violation that fails the
+        // accessibility smoke E2E. Same pairing as the `url` column in
+        // `expenses/expenselist.tsx`.
+        enableSorting: false,
         meta: {
           className: "w-24",
           mobile: { slot: "meta", priority: 30 },

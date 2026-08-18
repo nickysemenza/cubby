@@ -228,4 +228,12 @@ describe("ProductPurchases empty states", () => {
     // One badge for two rows — the marker belongs to the rarer, detachable kind.
     expect(screen.getAllByText("Linked")).toHaveLength(1);
   });
+
+  // NOT tested here, deliberately: that the blank-header `link` column disables
+  // sorting. A sortable column renders its header as a button labelled by the
+  // header text, so a blank one is a button with no accessible name — Axe rates
+  // it `serious`. This tier cannot see it: the `RTable` mock above renders only
+  // `tbody`, so an assertion about header buttons passes whether or not the bug
+  // is present (verified by reintroducing it). `tests/e2e/accessibility.smoke`
+  // is the tier that can fail, and it is what caught this.
 });

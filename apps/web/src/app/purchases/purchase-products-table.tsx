@@ -98,6 +98,10 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
       helper.accessor((row) => row.linked, {
         id: "link",
         header: "",
+        // Blank header ⇒ no sorting: the sort control is a button labelled by
+        // the header text, so an empty one has no accessible name. See the
+        // twin in `_components/products/product-purchases.tsx`.
+        enableSorting: false,
         meta: {
           className: "w-24",
           mobile: { slot: "meta", priority: 30 },
