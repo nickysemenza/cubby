@@ -1,5 +1,6 @@
 import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
 import type { ProductTopLevelOut } from "@cubby/schemas/product";
+import type { AnyColumn } from "drizzle-orm";
 import { and, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { product } from "~/server/db/schema";
@@ -295,21 +296,53 @@ export const loadIngredientIdsForProducts = async (
   );
 };
 
+/** Divide, round to cents — shared by the sort twin and the filter twin below. */
+const PROJECTED_DERIVED_PRICE = `round((${PROJECTED_KNOWN_COST} / NULLIF(${PROJECTED_KNOWN_UNITS}, 0))::numeric, 2)::double precision`;
+
 /**
- * Correlated SQL used only by Product root-list filtering/sorting/aggregation.
- * `productAlias` must be the query's known SQL alias (RQB uses `product`).
+ * Correlated SQL for Product root-list sorting and aggregation (filtering goes
+ * through {@link derivedPriceFilterSql}). `productAlias` must be the query's
+ * known SQL alias (RQB uses `product`).
  *
  * The twin of {@link loadProductPricing}, and no longer a restatement of it: the
- * Expense predicates, the `abs()`, the kit walk, and the weighting all come from
- * the same two constants the loader builds on. What is left here is the one
- * thing a scalar has to say for itself — divide, round to cents. A divergence
- * here would sort by a number the user is never shown, which is why there is
- * nothing left to diverge.
+ * Expense predicates, the `abs()`, the kit walk, the weighting, and the divide
+ * all come from the same constants the loader builds on. All that is left here
+ * is how the seed names its product — a hand-qualified alias. A divergence here
+ * would sort by a number the user is never shown, which is why there is nothing
+ * left to diverge.
  */
 const derivedProductPriceSql = (productAlias = '"product"') =>
   `(${kitAncestorCteText(kitSeedForProductAlias(productAlias))}
-    SELECT round((${PROJECTED_KNOWN_COST} / NULLIF(${PROJECTED_KNOWN_UNITS}, 0))::numeric, 2)::double precision
+    SELECT ${PROJECTED_DERIVED_PRICE}
     ${PRICING_PROJECTION_FROM})`;
 
 export const effectiveProductPriceSql = (productAlias = '"product"') =>
   `COALESCE(${productAlias}."price", ${derivedProductPriceSql(productAlias)})`;
+
+/**
+ * The same derived price as a Drizzle fragment, for the Product list's shared
+ * `whereClause` — NULL exactly when no acquisition, own or projected, prices
+ * this product.
+ *
+ * Interpolates `product.id` rather than hand-qualifying an alias, the opposite
+ * of the sort twin above and for the reason `expectedQuantityFilterSql`
+ * (quantity-ledger.ts) spells out: one `whereClause` reaches three query
+ * builders under three different aliases, and only an interpolated Drizzle
+ * column is rewritten to whichever is in scope.
+ *
+ * It exists because a price filter written any other way is a fourth definition
+ * of "an acquisition" free to drift from the three above — and it did. The flat
+ * `Expense`-keyed `IN` list this replaced predated the kit projection, so the
+ * "Stocked but unpriced" view listed components whose own price column rendered
+ * the projected number the filter could not see.
+ *
+ * The `kpe` alias inside {@link PRICING_OWN_AGGREGATE} is not cosmetic: the
+ * footer-total query nests this whole where-clause inside a statement that
+ * already has `"Expense"` in scope.
+ */
+export const derivedPriceFilterSql = (productId: AnyColumn) =>
+  sql`(${kitAncestorCteSql(
+    sql`SELECT ${productId}, ${productId}, 1::numeric, 1::numeric, 0`,
+  )}
+      SELECT ${sql.raw(PROJECTED_DERIVED_PRICE)}
+      ${sql.raw(PRICING_PROJECTION_FROM)})`;

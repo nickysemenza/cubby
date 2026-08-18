@@ -38,6 +38,7 @@ import {
   inventoryEntry,
   location as locationTable,
   product,
+  productComponent,
   productImage,
   projectToolUsage,
   vendor as vendorTable,
@@ -429,6 +430,39 @@ describe("problems repo", () => {
         ctx.actor,
       );
 
+      // A kit component carries no Expense of its own — the money stays on the
+      // kit — so its price is the share projected down through
+      // `ProductComponent` (kit-projection.ts). It IS priced, and the row on
+      // this very view renders that projected number, so the filter selecting
+      // the rows must agree with the column rendering them.
+      const kit = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Nine Piece Combo Kit", price: null }),
+        ctx.actor,
+      );
+      const kitPart = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Combo Kit Part", price: null }),
+        ctx.actor,
+      );
+      await getDb(ctx.db).insert(productComponent).values({
+        parentProductId: kit.entityId,
+        componentProductId: kitPart.entityId,
+        quantity: 1,
+      });
+      await createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({
+            name: "bought the combo kit",
+            cost: 199,
+            productId: kit.id,
+            productQuantity: 1,
+          }),
+        ),
+        ctx.actor,
+      );
+
       const unpricedEntry = await createInventoryEntry(
         ctx.db,
         {
@@ -438,7 +472,7 @@ describe("problems repo", () => {
         },
         ctx.actor,
       );
-      for (const productId of [priced.id, bucket.id]) {
+      for (const productId of [priced.id, bucket.id, kitPart.id]) {
         await createInventoryEntry(
           ctx.db,
           { productId, locationId: loc.id, amount: { value: 1, unit: "each" } },
@@ -457,8 +491,9 @@ describe("problems repo", () => {
       expect(flagged?.inventoryQuantity).toBe(3);
       expect(flagged?.locations.map((l) => l.id)).toEqual([loc.id]);
 
-      // A price, no inventory, or misc-bucket status each keep it out.
-      for (const id of [priced.id, bucket.id, unstocked.id]) {
+      // A price (explicit OR projected from a kit), no inventory, or
+      // misc-bucket status each keep it out.
+      for (const id of [priced.id, bucket.id, unstocked.id, kitPart.id]) {
         expect(found.productsMissingPrice.some((p) => p.id === id)).toBe(false);
       }
       expect(found.unvaluedBucketProducts.some((p) => p.id === bucket.id)).toBe(

@@ -1,4 +1,5 @@
 import type { ProductId } from "@cubby/schemas/identifiers";
+import type { ProductFilters } from "@cubby/schemas/product";
 import {
   type ExpenseCreateInput,
   expenseCreateInput,
@@ -15,6 +16,7 @@ import {
   makeExpenseInput,
   makeProductInput,
 } from "../repo.fixtures";
+import { productList } from "./crud";
 import {
   effectiveProductPriceSql,
   loadExactEffectivePrices,
@@ -78,6 +80,12 @@ describe("kit component projection", () => {
     (await loadProductPricing(ctx.db, [{ id, price: null }])).get(id)
       ?.derivedPrice ?? null;
 
+  const listWith = (filters: ProductFilters) =>
+    productList(ctx.db, filters, [{ orderBy: "name", direction: "asc" }], {
+      pageIndex: 0,
+      pageSize: 50,
+    });
+
   const listSortPriceFor = async (id: ProductId) => {
     const rows = await getDb(ctx.db).execute(
       sql`SELECT ${sql.raw(effectiveProductPriceSql('"Product"'))} AS price
@@ -139,7 +147,7 @@ describe("kit component projection", () => {
     expect(pricing.get(double.entityId)?.derivedPrice).toBe(10);
   });
 
-  it("agrees across all four pricing paths on one component", async () => {
+  it("agrees across all five pricing paths on one component", async () => {
     const ingredient = await createIngredientFixture(
       ctx.db,
       { name: "Kit Part Ingredient" },
@@ -149,6 +157,8 @@ describe("kit component projection", () => {
     const part = await makeProduct("Packed Unit", {
       ingredientId: ingredient.entityId,
     });
+    // Nothing was ever booked against this one, on its own or through a kit.
+    const unbought = await makeProduct("Unbought Part");
     await attach(kit.entityId, [{ productId: part.entityId, quantity: 4 }]);
     await seedExpense({
       name: "bought the four pack",
@@ -168,6 +178,21 @@ describe("kit component projection", () => {
     expect(exact.get(part.entityId)).toBe(5);
     expect(ingredientLoader.get(part.entityId)?.derivedPrice).toBe(5);
     expect(listSort).toBe(5);
+
+    // The fifth path: the Product list's price-presence FILTER, a separate SQL
+    // twin from the sort scalar above and the one the projection was missed on.
+    // A row rendering $5 that the filter calls unpriced is the "Stocked but
+    // unpriced" view listing a product with a price in its own price column.
+    const hasPrice = (await listWith({ pricePresenceFilter: "has" })).data.map(
+      (row) => row.id,
+    );
+    const noPrice = (await listWith({ pricePresenceFilter: "none" })).data.map(
+      (row) => row.id,
+    );
+    expect(hasPrice).toContain(part.id);
+    expect(noPrice).not.toContain(part.id);
+    expect(noPrice).toContain(unbought.id);
+    expect(hasPrice).not.toContain(unbought.id);
   });
 
   it("blends a component's own expenses with its projected share", async () => {

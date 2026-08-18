@@ -34,12 +34,10 @@ import {
   arrayOverlaps,
   asc,
   eq,
-  gt,
   inArray,
   isNotNull,
   isNull,
   ne,
-  notInArray,
   or,
   sql,
   sum,
@@ -114,6 +112,7 @@ import {
   dbProductToTopLevelAPI,
 } from "./mappers";
 import {
+  derivedPriceFilterSql,
   effectiveProductPriceSql,
   enrichProductRowsWithPricing,
   loadProductPricing,
@@ -497,38 +496,6 @@ export const productList = async (
     .from(expense)
     .where(and(notDeleted(expense), isNotNull(expense.productId)));
 
-  // Effective price exists when either Product carries an explicit override or
-  // at least one actual, positive Expense has a known product quantity. Keep
-  // this uncorrelated for the shared RQB/count/aggregate where clause below.
-  //
-  // It deliberately does NOT repeat two predicates `derivedProductPriceSql`
-  // (product/pricing.ts) carries, and the apparent divergence is worth reading
-  // twice before "fixing" it — both are already guaranteed by CHECK
-  // constraints, so restating them here would only cost a scan:
-  //
-  //  - `lineKind = 'principal'` — `Expense_lineKind_productId_check` is
-  //    `lineKind = 'principal' OR productId IS NULL`, so every row this
-  //    subquery can see (it requires `productId IS NOT NULL`) is principal.
-  //  - the `NULLIF(sum(abs(productQuantity)), 0)` guard —
-  //    `Expense_productQuantity_check` forbids a zero quantity outright, so a
-  //    sum of absolute values over non-null quantities is never zero.
-  //
-  // Neither constraint is visible from this file, which is why this note is
-  // here rather than left for the next reader to re-derive.
-  const productIdsWithDerivedPrice = dbClient
-    .select({ productId: expense.productId })
-    .from(expense)
-    .where(
-      and(
-        notDeleted(expense),
-        eq(expense.future, false),
-        gt(expense.cost, 0),
-        isNotNull(expense.productId),
-        isNotNull(expense.productQuantity),
-      ),
-    )
-    .groupBy(expense.productId);
-
   const productIdsWithPurchases = dbClient
     .select({ productId: expense.productId })
     .from(expense)
@@ -801,15 +768,18 @@ export const productList = async (
         filters.usdaPresenceFilter,
         NO_USDA_KEY,
       ),
+      // Effective price is `explicit ?? derived`, so both directions read the
+      // derived half through `derivedPriceFilterSql` — the same projection the
+      // price column renders and the list sorts by, kit share included.
       filters.pricePresenceFilter === "none"
         ? and(
             isNull(product.price),
-            notInArray(product.id, productIdsWithDerivedPrice),
+            sql`${derivedPriceFilterSql(product.id)} IS NULL`,
           )
         : filters.pricePresenceFilter === "has"
           ? or(
               isNotNull(product.price),
-              inArray(product.id, productIdsWithDerivedPrice),
+              sql`${derivedPriceFilterSql(product.id)} IS NOT NULL`,
             )
           : undefined,
       // OR-ed with the tag column's presence sentinel so "M18 or untagged" is

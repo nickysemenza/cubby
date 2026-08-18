@@ -22,15 +22,26 @@
 
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProductId } from "@cubby/schemas/identifiers";
-import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
+import {
+  unsafeProductShortcode,
+  unsafePurchaseShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   KitMembershipOut,
+  KitMembershipPurchaseOut,
   ProductComponentOut,
 } from "@cubby/schemas/product-components";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { uniq, uniqBy } from "es-toolkit";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
-import { product, productComponent } from "~/server/db/schema";
+import {
+  expense,
+  product,
+  productComponent,
+  purchase,
+  purchaseProduct,
+  vendor,
+} from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
@@ -102,6 +113,80 @@ export async function listProductComponents(
   }));
 }
 
+/**
+ * Live Expense count per parent id — the kit's own cost-basis row count. A
+ * component has none of its own, so this is what an empty Expense History
+ * points at instead.
+ */
+async function loadLiveExpenseCountsByProductId(
+  db: Database,
+  parentProductIds: ProductId[],
+): Promise<Map<ProductId, number>> {
+  if (parentProductIds.length === 0) return new Map();
+  const rows = await getDb(db)
+    .select({ productId: expense.productId })
+    .from(expense)
+    .where(
+      and(inArray(expense.productId, parentProductIds), notDeleted(expense)),
+    );
+  const counts = new Map<ProductId, number>();
+  for (const row of rows) {
+    if (row.productId === null) continue;
+    counts.set(row.productId, (counts.get(row.productId) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * The kit's own most recent live purchase per parent id, for a direct link —
+ * mirrors `listProductPurchases` in `repo/purchase-products.ts` but batched
+ * and reduced client-side to one (most recent) row per product, since there
+ * is no cheap `DISTINCT ON` helper in this codebase's Drizzle usage yet.
+ */
+async function loadMostRecentPurchaseByProductId(
+  db: Database,
+  parentProductIds: ProductId[],
+): Promise<Map<ProductId, KitMembershipPurchaseOut>> {
+  if (parentProductIds.length === 0) return new Map();
+  const rows = await getDb(db)
+    .select({
+      productId: purchaseProduct.productId,
+      purchaseCode: purchase.shortcode,
+      displayLabel: purchase.displayLabel,
+      date: purchase.date,
+      orderId: purchase.orderId,
+      vendorName: vendor.name,
+    })
+    .from(purchaseProduct)
+    .innerJoin(
+      purchase,
+      and(eq(purchase.id, purchaseProduct.purchaseId), notDeleted(purchase)),
+    )
+    .leftJoin(vendor, and(eq(vendor.id, purchase.vendorId), notDeleted(vendor)))
+    .where(
+      and(
+        inArray(purchaseProduct.productId, parentProductIds),
+        notDeleted(purchaseProduct),
+      ),
+    )
+    .orderBy(desc(purchase.date));
+
+  const byProduct = new Map<ProductId, KitMembershipPurchaseOut>();
+  for (const row of rows) {
+    // Rows arrive most-recent-date-first; the first row seen per product is
+    // the one to keep.
+    if (byProduct.has(row.productId)) continue;
+    byProduct.set(row.productId, {
+      purchaseId: unsafePurchaseShortcode(row.purchaseCode),
+      displayLabel: row.displayLabel,
+      vendorName: row.vendorName,
+      date: row.date,
+      orderId: row.orderId,
+    });
+  }
+  return byProduct;
+}
+
 /** The transpose: every kit one Product is listed inside, most recent first. */
 export async function listKitMembership(
   db: Database,
@@ -110,6 +195,7 @@ export async function listKitMembership(
   const parent = product;
   const rows = await getDb(db)
     .select({
+      parentId: parent.id,
       parentCode: parent.shortcode,
       parentName: parent.name,
       manufacturer: parent.manufacturer,
@@ -129,12 +215,22 @@ export async function listKitMembership(
     )
     .orderBy(desc(productComponent.createdAt));
 
+  const parentProductIds = uniq(rows.map((row) => row.parentId));
+  const [prices, expenseCounts, purchases] = await Promise.all([
+    loadEffectiveProductPricesById(db, parentProductIds),
+    loadLiveExpenseCountsByProductId(db, parentProductIds),
+    loadMostRecentPurchaseByProductId(db, parentProductIds),
+  ]);
+
   return rows.map((row) => ({
     parentProductId: unsafeProductShortcode(row.parentCode),
     parentProductName: row.parentName,
     manufacturer: row.manufacturer,
     quantity: row.quantity,
     attachedAt: row.attachedAt,
+    price: prices.get(row.parentId) ?? null,
+    expenseCount: expenseCounts.get(row.parentId) ?? 0,
+    purchase: purchases.get(row.parentId) ?? null,
   }));
 }
 

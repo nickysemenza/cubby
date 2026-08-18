@@ -1,3 +1,4 @@
+import type { KitMembershipOut } from "@cubby/schemas/product-components";
 import type { ProductPurchaseOut } from "@cubby/schemas/purchase";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -19,6 +20,7 @@ import { purchaseLabel } from "~/lib/purchase-label";
 import { purchaseProductMutationInvalidateKeys } from "~/lib/query-keys";
 
 const EMPTY_PURCHASES: ProductPurchaseOut[] = [];
+const EMPTY_MEMBERSHIP: KitMembershipOut[] = [];
 
 function purchaseSubtitle(item: ProductPurchaseOut): string | null {
   const parts = [
@@ -95,12 +97,62 @@ export function ProductPurchases({ productId }: { productId: string }) {
   const api = useTRPC();
   const query = useQuery(api.product.purchases.queryOptions({ productId }));
   const items = query.data ?? EMPTY_PURCHASES;
+  // Only consulted when `items` is empty (below) — a component of a kit is
+  // never itself attached to a purchase, so the generic "attach this
+  // product" advice is not just unhelpful there, it's wrong: attaching would
+  // reintroduce the per-component modelling that was deliberately removed in
+  // favor of the kit carrying one Expense.
+  const membershipQuery = useQuery(
+    api.product.kitMembership.queryOptions({ productId }),
+  );
+  const membership = membershipQuery.data ?? EMPTY_MEMBERSHIP;
 
   if (query.isPending) {
     return <Description>Loading purchases…</Description>;
   }
 
   if (items.length === 0) {
+    if (membershipQuery.isPending) {
+      return <Description>Loading purchases…</Description>;
+    }
+    const [primaryKit, ...restKits] = membership;
+    if (primaryKit) {
+      return (
+        <Empty variant="minimal" className="py-6">
+          <EmptyHeader>
+            <EmptyTitle>No purchases of its own</EmptyTitle>
+            <EmptyDescription>
+              This product is a component of{" "}
+              <EntityInlineLink
+                entity="product"
+                data={{
+                  id: primaryKit.parentProductId,
+                  name: primaryKit.parentProductName,
+                  manufacturer: primaryKit.manufacturer,
+                }}
+                compact
+              />
+              {restKits.length > 0 &&
+                ` (and ${restKits.length} other kit${restKits.length === 1 ? "" : "s"})`}
+              . Attaching this product to an order directly would misrepresent
+              it as bought on its own — the kit's own order is the real one.
+            </EmptyDescription>
+          </EmptyHeader>
+          {primaryKit.purchase && (
+            <EntityInlineLink
+              entity="purchase"
+              data={{
+                id: primaryKit.purchase.purchaseId,
+                orderId: primaryKit.purchase.orderId,
+                displayLabel: primaryKit.purchase.displayLabel,
+                vendorName: primaryKit.purchase.vendorName,
+                date: primaryKit.purchase.date,
+              }}
+            />
+          )}
+        </Empty>
+      );
+    }
     return (
       <Empty variant="minimal" className="py-6">
         <EmptyHeader>

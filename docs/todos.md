@@ -53,8 +53,8 @@ the evidence required before promotion.
 - UPC duplicate collapsing, aggregate-range materiality, Sentry lazy-init,
   selective-SSR expansion, selection-control consolidation, budget-aware MCP
   pagination, and all three additional MCP Apps.
-- `PurchaseLine`, `ExpenseProduct`, the service/product advisory, and
-  repeat-purchase ranking.
+- `PurchaseLine`, `ExpenseProduct`, the service/product advisory, the
+  returned-unit price advisory, and repeat-purchase ranking.
 - Product external-id collisions are **already queryable** through
   `product.externalIdCollisions`; revisit a broader Problems surface only if an
   auto-minting import creates a persistent operator worklist.
@@ -637,6 +637,29 @@ lives on the `PurchaseProduct` link instead.
   ranking that cross-product view by purchase count or total (the current Expenses column
   intentionally cannot sort). **Trigger**: enough productized repeat buys to be worth
   ranking — 6 at the 2026-07 audit, so not yet.
+
+- [ ] **`returnedUnitInflatesPrice` advisory detector** — the derived-price aggregate filters
+  to `cost > 0`, so a **returned** unit contributes both its cost and its unit while the
+  offsetting refund is filtered out. The per-unit price then blends in a unit that was sent
+  back. Found on a 90-piece bit set whose returned combo pulled its basis from $19.99 to
+  $26.65, a $6.66/unit overstatement on everything stocked; fixed there with an override.
+
+  **The blocker is that `Expense` cannot tell a return from a sale.** Both are a negative
+  cost with a negative quantity. For a **sale** the acquisition cost *should* stay in the
+  basis — you owned the thing — and only a **return** should drop out. 435 live products
+  carry negative-quantity rows and ~$28k of basis sits on them, but 333 are fully returned
+  (no inventory, so the skewed price multiplies against nothing) and a survey of the
+  stocked remainder found the rest within pennies. So this is one real row, not a class.
+
+  **Ship it as a detector, not as a pricing change.** A detector changes no money, can use
+  a heuristic ("negative row against the same vendor and order as the acquisition") without
+  that heuristic having to be right every time, and turns a wrong guess into a false
+  positive on a worklist rather than a wrong valuation in the location rollup. It also
+  converges: each row is either overridden or dismissed. Same reasoning as
+  `servicesWithProduct` above, which is deliberately advisory because its dimension is
+  sometimes an estimate. **Trigger**: a second stocked product whose derived price is
+  materially wrong from a return, or any structural signal that separates the two.
+  Promote the aggregate change itself only if the detector fills up.
 
 **`PurchaseLine`'s trigger is still NOT met by this** (see the deferred phase above). Unbundling
 that *moves money* is `splitExpense`, which exists and is money-bearing; `PurchaseLine` is
