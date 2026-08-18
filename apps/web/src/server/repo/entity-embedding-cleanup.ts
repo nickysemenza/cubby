@@ -493,12 +493,21 @@ export async function findOrphanedEntityEmbeddings(
     sql` UNION ALL `,
   );
 
+  // `createdAt` is typed as the string it actually is. A raw `execute` returns
+  // timestamps unparsed, so the previous `Date` here was an assertion the
+  // driver never satisfied — and `orphanedEntityEmbeddingSchema` validates it
+  // as `z.date()`. The two only ever agreed while this query returned nothing,
+  // which is its normal state, so the mismatch stayed invisible until the
+  // first real orphan: then the detector built to surface a problem instead
+  // took the whole Problems page down with an output-validation error. Parsed
+  // into a real Date below rather than loosening the schema, so the wire
+  // contract stays a date everywhere it is consumed.
   const result = await getDb(db).execute<{
     id: string;
     entityType: SearchableEntity;
     entityId: string;
     model: string;
-    createdAt: Date;
+    createdAt: string;
   }>(sql`
     WITH live AS (${live})
     SELECT ee."id"::text AS id, ee."entityType", ee."entityId"::text AS "entityId",
@@ -510,5 +519,8 @@ export async function findOrphanedEntityEmbeddings(
     WHERE ee."deletedAt" IS NULL
       AND live."entityId" IS NULL
   `);
-  return result.rows;
+  return result.rows.map((row) => ({
+    ...row,
+    createdAt: new Date(row.createdAt),
+  }));
 }
