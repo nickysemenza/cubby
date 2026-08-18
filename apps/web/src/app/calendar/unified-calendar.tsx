@@ -8,18 +8,16 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { addDays, format } from "date-fns";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import {
+  lazy,
   type MouseEvent as ReactMouseEvent,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
   useState,
 } from "react";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
-import { CreateExpenseDialog } from "~/app/expenses/create-expense-dialog";
-import { CreateMealDialog } from "~/app/meals/create-meal-dialog";
 import { mealKindIcon } from "~/app/meals/meal-options";
-import { CreateProjectDialog } from "~/app/projects/create-project-dialog";
-import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
 import { Row, Stack } from "~/components/layout";
 import {
   type EventCalendarRenderEventProps,
@@ -76,6 +74,12 @@ const PERIOD_OPTIONS = [
   { value: "month", label: "Month" },
   { value: "week", label: "Week" },
 ] as const;
+
+const LazyCalendarCreateDialog = lazy(() =>
+  import("./calendar-create-dialog").then(({ CalendarCreateDialog }) => ({
+    default: CalendarCreateDialog,
+  })),
+);
 
 const KIND_LABELS: Record<CalendarItemKind, string> = {
   meal: "Meals",
@@ -341,6 +345,9 @@ export function UnifiedCalendar({
     [onDayChange],
   );
   const [createKind, setCreateKind] = useState<CreateKind>(null);
+  const onCreateOpenChange = useCallback((open: boolean) => {
+    if (!open) setCreateKind(null);
+  }, []);
   const selectedItems = useMemo(
     () =>
       selectedDay
@@ -499,35 +506,15 @@ export function UnifiedCalendar({
         onCreate={setCreateKind}
       />
 
-      <CreateMealDialog
-        open={createKind === "meal"}
-        onOpenChange={(open) => {
-          if (!open) setCreateKind(null);
-        }}
-        presetDate={selectedDay}
-      />
-      <CreateTaskDialog
-        open={createKind === "task"}
-        onOpenChange={(open) => {
-          if (!open) setCreateKind(null);
-        }}
-        presetDate={selectedDay}
-      />
-      <CreateExpenseDialog
-        open={createKind === "expense"}
-        onOpenChange={(open) => {
-          if (!open) setCreateKind(null);
-        }}
-        presetDate={selectedDay}
-        presetFuture
-      />
-      <CreateProjectDialog
-        open={createKind === "project"}
-        onOpenChange={(open) => {
-          if (!open) setCreateKind(null);
-        }}
-        presetDate={selectedDay}
-      />
+      {createKind ? (
+        <Suspense fallback={null}>
+          <LazyCalendarCreateDialog
+            kind={createKind}
+            date={selectedDay}
+            onOpenChange={onCreateOpenChange}
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 }
