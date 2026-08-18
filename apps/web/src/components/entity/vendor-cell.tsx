@@ -54,9 +54,8 @@ export function VendorMark({
 
   const shared = cn("size-4 shrink-0", className);
 
-  // The `failedSlug` half covers the offline PWA and a manifest that has drifted
-  // ahead of the bucket; the manifest lookup is what keeps the common logo-less
-  // vendor from costing a failed request in the first place.
+  // Null relations avoid a request entirely. A failed DB-resolved image URL
+  // falls back to the same first-class monogram without guessing another key.
   if (!hasVendorLogo(logo) || failedUrl === logo.url) {
     return (
       <span

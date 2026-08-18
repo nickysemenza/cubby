@@ -9,6 +9,7 @@ import {
   image,
   projectImage,
   purchaseImage,
+  vendor,
 } from "~/server/db/schema";
 import { deleteCookbook, upsertCookbook } from "./cookbook";
 import { getDb, insertAndReturn, withTransaction } from "./database-helpers";
@@ -71,6 +72,46 @@ describe("image repository", () => {
         filename: "nope.jpg",
       }),
     ).rejects.toThrow();
+  });
+
+  it("returns every direct vendor-logo association for a shared image", async () => {
+    const logo = await createUploadedImageRecord(ctx.db, {
+      key: `vendors/${crypto.randomUUID()}.png`,
+      url: "https://example.com/shared-logo.png",
+      filename: "shared-logo.png",
+      contentType: "image/png",
+      size: 1024,
+    });
+    const firstId = await findOrCreateVendor(ctx.db, "Shared Image Vendor A");
+    const secondId = await findOrCreateVendor(ctx.db, "Shared Image Vendor B");
+    await getDb(ctx.db)
+      .update(vendor)
+      .set({ logoImageId: logo.id })
+      .where(eq(vendor.id, firstId));
+    await getDb(ctx.db)
+      .update(vendor)
+      .set({ logoImageId: logo.id })
+      .where(eq(vendor.id, secondId));
+
+    const found = await getImageById(ctx.db, logo.id);
+    const { associations } = found;
+
+    expect(associations).toEqual([
+      expect.objectContaining({
+        entityType: "vendor",
+        entityName: "Shared Image Vendor A",
+        role: "logo",
+      }),
+      expect.objectContaining({
+        entityType: "vendor",
+        entityName: "Shared Image Vendor B",
+        role: "logo",
+      }),
+    ]);
+    expect(associations.map(({ entityId }) => entityId)).toEqual([
+      (await getVendorByID(ctx.db, firstId)).id,
+      (await getVendorByID(ctx.db, secondId)).id,
+    ]);
   });
 
   it("markImageUploaded flips PENDING to UPLOADED, and the row is then not returned by the pending cull", async () => {
@@ -195,6 +236,13 @@ describe("image repository", () => {
 
     const stillThere = await getImageById(ctx.db, pending.id);
     expect(stillThere.status).toEqual("PENDING");
+    expect(stillThere.associations).toEqual([
+      expect.objectContaining({
+        entityType: "cookbook",
+        entityName: "Cover Test Book",
+        role: "cover",
+      }),
+    ]);
   });
 
   // The non-obvious half of the guard above: deleteCookbook tombstones the

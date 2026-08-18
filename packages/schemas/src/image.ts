@@ -365,6 +365,24 @@ export const imageOut = z.object({
 
 export type ImageOut = z.infer<typeof imageOut>;
 
+export const imageAssociationEntity = z.enum([
+  "product",
+  "location",
+  "recipe",
+  "cookbook",
+  "project",
+  "purchase",
+  "vendor",
+]);
+export const imageAssociationRole = z.enum(["attachment", "cover", "logo"]);
+export const imageAssociationSchema = z.object({
+  entityType: imageAssociationEntity,
+  entityId: z.string().min(1),
+  entityName: z.string().min(1),
+  role: imageAssociationRole,
+});
+export type ImageAssociation = z.infer<typeof imageAssociationSchema>;
+
 export const initiateUploadWithoutEntityResponseSchema = z.object({
   uploadUrl: z.url(),
   imageId: id,
@@ -392,6 +410,8 @@ export const imageWithEntitySchema = z.object({
   entityType: entityImage.nullable(),
   entityId: attachableImageEntityId.nullable(),
   entityName: z.string().nullable(),
+  /** Complete incoming ownership/reference relation. Images may be shared. */
+  associations: z.array(imageAssociationSchema),
 });
 
 export type ImageWithEntity = z.infer<typeof imageWithEntitySchema>;

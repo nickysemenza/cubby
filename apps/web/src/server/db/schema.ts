@@ -2198,6 +2198,7 @@ export const imageRelations = relations(image, ({ many }) => ({
   recipeImages: many(recipeImage),
   projectImages: many(projectImage),
   purchaseImages: many(purchaseImage),
+  cookbookCovers: many(cookbook),
   vendorLogos: many(vendor),
 }));
 

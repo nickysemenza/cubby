@@ -1,6 +1,7 @@
 import type { VendorOut } from "@cubby/schemas/vendor";
 import { Info, Receipt } from "lucide-react";
 import type { FC } from "react";
+import { EntityHero } from "~/app/_components/EntityHero";
 import { ExternalLinkText } from "~/app/_components/ExternalLink";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -233,6 +234,9 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
     { label: "Purchases", value: vendor.purchaseCount },
     { label: "Spend", value: formatCurrency(vendor.spend, 0) },
   ];
+  const heroMedia = vendor.logo ? (
+    <EntityHero images={[vendor.logo]} title="Logo" />
+  ) : undefined;
 
   return (
     <Page
@@ -251,6 +255,7 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
           : undefined
       }
       heroStats={heroStats}
+      heroMedia={heroMedia}
       actions={deleteButton}
     >
       <DetailSections sections={sections} rawData={vendor} />

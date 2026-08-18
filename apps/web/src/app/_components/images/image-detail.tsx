@@ -1,17 +1,14 @@
 import type { ImageWithEntity } from "@cubby/schemas/image";
-import { Link } from "@tanstack/react-router";
 import { ImageIcon } from "lucide-react";
 import prettyBytes from "pretty-bytes";
-import { match } from "ts-pattern";
 import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
+import { ImageAssociationLinks } from "~/app/_components/images/image-associations";
 import { imageStatusOptions } from "~/app/images/image-options";
 import { Row, Stack } from "~/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
-import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { imageMutationInvalidateKeys, queryKeys } from "~/lib/query-keys";
 import { EditableCell } from "../data-table/editable-cell";
@@ -49,78 +46,6 @@ export function ImageDetail({ image }: ImageDetailProps) {
     invalidateKeys: IMAGE_INVALIDATE_KEYS,
     redirectTo: "/images",
   });
-
-  const renderEntityLink = () => {
-    // Destructure to locals so the guard's narrowing survives into the match
-    // closures below (property narrowing on `image` would be lost in callbacks).
-    const { entityType, entityId, entityName } = image;
-    if (!entityType || !entityId || !entityName) {
-      return (
-        <Description as="span" className="italic">
-          Not associated with any entity
-        </Description>
-      );
-    }
-
-    return match(entityType)
-      .with("PRODUCT", () => (
-        <EntityInlineLink
-          entity="product"
-          data={{
-            id: entityId,
-            name: entityName,
-            manufacturer: "",
-          }}
-        />
-      ))
-      .with("LOCATION", () => (
-        <EntityInlineLink
-          entity="location"
-          data={{
-            id: entityId,
-            name: entityName,
-            type: "room",
-          }}
-        />
-      ))
-      .with("RECIPE", () => (
-        <EntityInlineLink
-          entity="recipe"
-          data={{ id: entityId, name: entityName }}
-        />
-      ))
-      .with("PROJECT", () => (
-        <Link
-          to={entities.project.routes.detail}
-          params={entityDetailParams(entityId)}
-          className="font-medium text-sm hover:underline"
-        >
-          {entityName}
-        </Link>
-      ))
-      .with("COOKBOOK", () => (
-        // Cookbook covers are tracked by FK, not the join-table ownership this
-        // view resolves, so entityId/entityName are unset and the guard above
-        // returns first — this case exists only for exhaustiveness.
-        <Link
-          to={entities.cookbook.routes.detail}
-          params={entityDetailParams(entityId)}
-          className="font-medium text-sm hover:underline"
-        >
-          {entityName}
-        </Link>
-      ))
-      .with("PURCHASE", () => (
-        <Link
-          to={entities.purchase.routes.detail}
-          params={entityDetailParams(entityId)}
-          className="font-medium text-sm hover:underline"
-        >
-          {entityName}
-        </Link>
-      ))
-      .exhaustive();
-  };
 
   return (
     <Stack>
@@ -188,8 +113,13 @@ export function ImageDetail({ image }: ImageDetailProps) {
             {renderOptionCell(image.status, imageStatusOptions)}
           </Row>
           <div>
-            <span className="text-muted-foreground">Entity:</span>{" "}
-            {renderEntityLink()}
+            <span className="text-muted-foreground">Associated entities:</span>
+            <div className="mt-1">
+              <ImageAssociationLinks
+                associations={image.associations}
+                showRole
+              />
+            </div>
           </div>
           <div>
             <span className="text-muted-foreground">Created:</span>{" "}

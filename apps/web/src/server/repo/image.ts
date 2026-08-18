@@ -41,6 +41,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import type {
   AttachableImageEntity,
+  ImageAssociation,
   ImageUpdateInput,
   ImageWithEntity,
 } from "@cubby/schemas/image";
@@ -210,6 +211,16 @@ type ImageWithRelations = typeof image.$inferSelect & {
       deletedAt: Date | null;
     };
   }>;
+  cookbookCovers: Array<{
+    name: string;
+    shortcode: string;
+    deletedAt: Date | null;
+  }>;
+  vendorLogos: Array<{
+    name: string;
+    shortcode: string;
+    deletedAt: Date | null;
+  }>;
 };
 
 /**
@@ -220,124 +231,79 @@ type ImageWithRelations = typeof image.$inferSelect & {
 const imageWithRelationsToAPI = (
   imageData: ImageWithRelations,
 ): ImageWithEntity => {
-  // Check product associations (join table filtered, but still check entity)
-  const productAssoc = imageData.productImages.find((assoc) =>
-    isNotDeleted(assoc.product),
+  const associations: ImageAssociation[] = [
+    ...imageData.productImages
+      .filter(({ product }) => isNotDeleted(product))
+      .map(({ product }) => ({
+        entityType: "product" as const,
+        entityId: product.shortcode,
+        entityName: product.name,
+        role: "attachment" as const,
+      })),
+    ...imageData.locationImages
+      .filter(({ location }) => isNotDeleted(location))
+      .map(({ location }) => ({
+        entityType: "location" as const,
+        entityId: location.shortcode,
+        entityName: location.name,
+        role: "attachment" as const,
+      })),
+    ...imageData.recipeImages
+      .filter(({ recipe }) => isNotDeleted(recipe))
+      .map(({ recipe }) => ({
+        entityType: "recipe" as const,
+        entityId: recipe.shortcode,
+        entityName: recipe.name,
+        role: "attachment" as const,
+      })),
+    ...imageData.projectImages
+      .filter(({ project }) => isNotDeleted(project))
+      .map(({ project }) => ({
+        entityType: "project" as const,
+        entityId: project.shortcode,
+        entityName: project.name,
+        role: "attachment" as const,
+      })),
+    ...imageData.purchaseImages
+      .filter(({ purchase }) => isNotDeleted(purchase))
+      .map(({ purchase }) => ({
+        entityType: "purchase" as const,
+        entityId: purchase.shortcode,
+        entityName:
+          (purchase.orderId
+            ? purchase.displayLabel?.trim()
+              ? `${purchase.orderId} (${purchase.displayLabel.trim()})`
+              : purchase.orderId
+            : purchase.displayLabel?.trim()) ?? purchase.shortcode,
+        role: "attachment" as const,
+      })),
+    ...imageData.cookbookCovers.filter(isNotDeleted).map((book) => ({
+      entityType: "cookbook" as const,
+      entityId: book.shortcode,
+      entityName: book.name,
+      role: "cover" as const,
+    })),
+    ...imageData.vendorLogos.filter(isNotDeleted).map((logoVendor) => ({
+      entityType: "vendor" as const,
+      entityId: logoVendor.shortcode,
+      entityName: logoVendor.name,
+      role: "logo" as const,
+    })),
+  ];
+  const legacyAssociation = associations.find(
+    ({ entityType }) => entityType !== "cookbook" && entityType !== "vendor",
   );
-  if (productAssoc) {
-    return {
-      id: imageData.id,
-      url: imageData.url,
-      key: imageData.key,
-      filename: imageData.filename,
-      size: imageData.size,
-      contentType: imageData.contentType,
-      status: imageData.status,
-      ...imageIntegrityFields(imageData),
-      createdAt: imageData.createdAt,
-      updatedAt: imageData.updatedAt,
-      entityType: "PRODUCT",
-      entityId: attachableImageEntityId.parse(productAssoc.product.shortcode),
-      entityName: productAssoc.product.name,
-    };
-  }
+  const legacyEntityType = legacyAssociation
+    ? match(legacyAssociation.entityType)
+        .with("product", () => "PRODUCT" as const)
+        .with("location", () => "LOCATION" as const)
+        .with("recipe", () => "RECIPE" as const)
+        .with("project", () => "PROJECT" as const)
+        .with("purchase", () => "PURCHASE" as const)
+        .with("cookbook", "vendor", () => null)
+        .exhaustive()
+    : null;
 
-  // Check location associations (join table filtered, but still check entity)
-  const locationAssoc = imageData.locationImages.find((assoc) =>
-    isNotDeleted(assoc.location),
-  );
-  if (locationAssoc) {
-    return {
-      id: imageData.id,
-      url: imageData.url,
-      key: imageData.key,
-      filename: imageData.filename,
-      size: imageData.size,
-      contentType: imageData.contentType,
-      status: imageData.status,
-      ...imageIntegrityFields(imageData),
-      createdAt: imageData.createdAt,
-      updatedAt: imageData.updatedAt,
-      entityType: "LOCATION",
-      entityId: attachableImageEntityId.parse(locationAssoc.location.shortcode),
-      entityName: locationAssoc.location.name,
-    };
-  }
-
-  // Check recipe associations (join table filtered, but still check entity)
-  const recipeAssoc = imageData.recipeImages.find((assoc) =>
-    isNotDeleted(assoc.recipe),
-  );
-  if (recipeAssoc) {
-    return {
-      id: imageData.id,
-      url: imageData.url,
-      key: imageData.key,
-      filename: imageData.filename,
-      size: imageData.size,
-      contentType: imageData.contentType,
-      status: imageData.status,
-      ...imageIntegrityFields(imageData),
-      createdAt: imageData.createdAt,
-      updatedAt: imageData.updatedAt,
-      entityType: "RECIPE",
-      entityId: attachableImageEntityId.parse(recipeAssoc.recipe.shortcode),
-      entityName: recipeAssoc.recipe.name,
-    };
-  }
-
-  // Check project associations (join table filtered, but still check entity)
-  const projectAssoc = imageData.projectImages.find((assoc) =>
-    isNotDeleted(assoc.project),
-  );
-  if (projectAssoc) {
-    return {
-      id: imageData.id,
-      url: imageData.url,
-      key: imageData.key,
-      filename: imageData.filename,
-      size: imageData.size,
-      contentType: imageData.contentType,
-      status: imageData.status,
-      ...imageIntegrityFields(imageData),
-      createdAt: imageData.createdAt,
-      updatedAt: imageData.updatedAt,
-      entityType: "PROJECT",
-      entityId: attachableImageEntityId.parse(projectAssoc.project.shortcode),
-      entityName: projectAssoc.project.name,
-    };
-  }
-
-  // Check Purchase associations (vendor documents — join table filtered,
-  // but still check entity). No `notDeleted(purchase)` guard is needed beyond
-  // that: `deletePurchases` refuses while live expenses reference the Purchase,
-  // unlike the four entities above whose deletion always leaves images behind.
-  const purchaseAssoc = imageData.purchaseImages.find((assoc) =>
-    isNotDeleted(assoc.purchase),
-  );
-  if (purchaseAssoc) {
-    return {
-      id: imageData.id,
-      url: imageData.url,
-      key: imageData.key,
-      filename: imageData.filename,
-      size: imageData.size,
-      contentType: imageData.contentType,
-      status: imageData.status,
-      ...imageIntegrityFields(imageData),
-      createdAt: imageData.createdAt,
-      updatedAt: imageData.updatedAt,
-      entityType: "PURCHASE",
-      entityId: attachableImageEntityId.parse(purchaseAssoc.purchase.shortcode),
-      entityName: purchaseAssoc.purchase.orderId
-        ? purchaseAssoc.purchase.displayLabel?.trim()
-          ? `${purchaseAssoc.purchase.orderId} (${purchaseAssoc.purchase.displayLabel.trim()})`
-          : purchaseAssoc.purchase.orderId
-        : purchaseAssoc.purchase.displayLabel,
-    };
-  }
-
-  // No entity association found
   return {
     id: imageData.id,
     url: imageData.url,
@@ -349,9 +315,18 @@ const imageWithRelationsToAPI = (
     ...imageIntegrityFields(imageData),
     createdAt: imageData.createdAt,
     updatedAt: imageData.updatedAt,
-    entityType: null,
-    entityId: null,
-    entityName: null,
+    entityType: legacyEntityType,
+    entityId:
+      legacyEntityType && legacyAssociation
+        ? attachableImageEntityId.parse(legacyAssociation.entityId)
+        : null,
+    entityName: legacyAssociation?.entityName ?? null,
+    associations: associations.sort(
+      (a, b) =>
+        a.entityType.localeCompare(b.entityType) ||
+        a.entityName.localeCompare(b.entityName) ||
+        a.entityId.localeCompare(b.entityId),
+    ),
   };
 };
 
@@ -406,6 +381,14 @@ const imageEntityRelations = {
       },
     },
     columns: { purchaseId: true },
+  },
+  cookbookCovers: {
+    where: notDeleted(cookbook),
+    columns: { name: true, shortcode: true, deletedAt: true },
+  },
+  vendorLogos: {
+    where: notDeleted(vendor),
+    columns: { name: true, shortcode: true, deletedAt: true },
   },
 } as const;
 
