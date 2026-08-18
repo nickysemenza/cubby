@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { productShortcode } from "./identifiers";
+import { plainDate } from "./base-entity";
+import { productShortcode, purchaseShortcode } from "./identifiers";
 
 /**
  * What's inside a kit (`ProductComponent` in schema.ts). A combo tool kit or a
@@ -74,6 +75,19 @@ export const productComponentOut = z.object({
 export type ProductComponentOut = z.infer<typeof productComponentOut>;
 export const productComponentsOut = z.array(productComponentOut);
 
+/**
+ * The kit's own most recent live purchase — enough to link straight to the
+ * order that actually carries the money, since the component itself has none.
+ */
+export const kitMembershipPurchaseOut = z.object({
+  purchaseId: purchaseShortcode,
+  displayLabel: z.string().nullable(),
+  vendorName: z.string().nullable(),
+  date: plainDate,
+  orderId: z.string().nullable(),
+});
+export type KitMembershipPurchaseOut = z.infer<typeof kitMembershipPurchaseOut>;
+
 /** The transpose: one kit a Product is listed inside, most recent first. */
 export const kitMembershipOut = z.object({
   parentProductId: productShortcode,
@@ -81,6 +95,24 @@ export const kitMembershipOut = z.object({
   manufacturer: z.string(),
   quantity: componentQuantity,
   attachedAt: z.date(),
+  price: z
+    .number()
+    .nullable()
+    .describe(
+      "The kit's own effective valuation/costing price — display only, not spend.",
+    ),
+  expenseCount: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      "Live Expenses recorded on the kit itself — this component carries none of its own.",
+    ),
+  purchase: kitMembershipPurchaseOut
+    .nullable()
+    .describe(
+      "The kit's most recent purchase, if any — this component was never purchased separately.",
+    ),
 });
 export type KitMembershipOut = z.infer<typeof kitMembershipOut>;
 export const kitMembershipsOut = z.array(kitMembershipOut);

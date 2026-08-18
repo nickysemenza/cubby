@@ -1,4 +1,5 @@
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
+import type { KitMembershipOut } from "@cubby/schemas/product-components";
 import type { ExpenseOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -34,15 +35,21 @@ import { VendorMark } from "~/components/entity/vendor-cell";
 import { Row, Stack } from "~/components/layout";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { Description } from "~/components/ui/description";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "~/components/ui/empty";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { FILTER_NONE } from "~/entities/filters";
 import { useTRPC } from "~/integrations/trpc/react";
 import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
-import { ShelfEmpty } from "../data-table/shelf";
 import { createCubbyColumnHelper } from "../data-table/table-features";
 
 const EMPTY_EXPENSES: ExpenseOut[] = [];
+const EMPTY_MEMBERSHIP: KitMembershipOut[] = [];
 const QUANTITY_TARGET_PREFIX = "product-expense-quantity-";
 
 /** A section table must not write the product route's URL. */
@@ -129,6 +136,13 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
     api.expense.chartData.queryOptions({ productId: product.id }),
   );
   const expenses = data ?? EMPTY_EXPENSES;
+  // Only consulted when `expenses` is empty (below) — a component of a kit
+  // legitimately has zero Expenses of its own, and the generic "link one"
+  // empty state is actively misleading there.
+  const membershipQuery = useQuery(
+    api.product.kitMembership.queryOptions({ productId: product.id }),
+  );
+  const membership = membershipQuery.data ?? EMPTY_MEMBERSHIP;
   const update = useUpdateMutation({
     mutationFn: api.expense.update.mutationOptions,
     entity: "expense",
@@ -278,23 +292,70 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
 
   if (isPending) return <Description>Loading expenses…</Description>;
   if (expenses.length === 0) {
+    // A component of a kit legitimately has zero Expenses of its own — the
+    // kit keeps the one real Expense, and this component's price (shown
+    // above) is a derived share of it, not spend. Wait on the membership
+    // query too, so this doesn't flash the generic "link one" copy first.
+    if (membershipQuery.isPending) {
+      return <Description>Loading expenses…</Description>;
+    }
+    const [primaryKit, ...restKits] = membership;
+    if (primaryKit) {
+      return (
+        <Empty variant="minimal" className="py-6">
+          <EmptyHeader>
+            <EmptyTitle>No expenses of its own</EmptyTitle>
+            <EmptyDescription>
+              This product is a component of{" "}
+              <EntityInlineLink
+                entity="product"
+                data={{
+                  id: primaryKit.parentProductId,
+                  name: primaryKit.parentProductName,
+                  manufacturer: primaryKit.manufacturer,
+                }}
+                compact
+              />
+              {restKits.length > 0 &&
+                ` (and ${restKits.length} other kit${restKits.length === 1 ? "" : "s"})`}
+              . The kit carries the real Expense — this component's price is a
+              derived share, not spend of its own.
+            </EmptyDescription>
+          </EmptyHeader>
+          {primaryKit.expenseCount > 0 && (
+            <Link
+              to="/expenses"
+              search={{ productId: primaryKit.parentProductId }}
+              className="text-primary text-xs hover:underline"
+            >
+              See the kit's expenses →
+            </Link>
+          )}
+        </Empty>
+      );
+    }
     return (
-      <ShelfEmpty
-        entity="expense"
-        // Don't claim the cost basis is missing when it isn't. A product priced
-        // from a quote or invoice carries an explicit `priceOverride`, which
-        // wins unconditionally over the derived aggregate and is what values
-        // its inventory — so "link one to track this product's cost basis" was
-        // false, and the action it invited is refused anyway on the orders this
-        // most often applies to: an installment order's Expenses are
-        // `lineBasis: "allocation"` and cannot carry a productId at all.
-        label={
-          product.pricing.source === "explicit" &&
-          product.pricing.effectivePrice !== null
-            ? `No expenses linked — cost basis is the manual price of ${formatCurrency(product.pricing.effectivePrice)}`
-            : "No expenses linked — link one to track this product's cost basis"
-        }
-      />
+      <Empty variant="minimal" className="py-6">
+        <EmptyHeader>
+          <EmptyTitle>No expenses linked</EmptyTitle>
+          <EmptyDescription>
+            {
+              // Don't claim the cost basis is missing when it isn't. A product
+              // priced from a quote or invoice carries an explicit
+              // `priceOverride`, which wins unconditionally over the derived
+              // aggregate and is what values its inventory — so "link one to
+              // track this product's cost basis" was false, and the action it
+              // invited is refused anyway on the orders this most often
+              // applies to: an installment order's Expenses are
+              // `lineBasis: "allocation"` and cannot carry a productId at all.
+              product.pricing.source === "explicit" &&
+              product.pricing.effectivePrice !== null
+                ? `Cost basis is the manual price of ${formatCurrency(product.pricing.effectivePrice)}.`
+                : "Link one to track this product's cost basis."
+            }
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     );
   }
 

@@ -9,7 +9,12 @@ import type { ProductId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { auditLog, product, productComponent } from "~/server/db/schema";
+import {
+  auditLog,
+  expense as expenseTable,
+  product,
+  productComponent,
+} from "~/server/db/schema";
 import { getDb, notDeleted } from "./database-helpers";
 import { deleteProducts } from "./product";
 import {
@@ -19,9 +24,15 @@ import {
   listProductComponents,
 } from "./product-components";
 import {
+  attachPurchaseProducts,
+  detachPurchaseProducts,
+} from "./purchase-products";
+import {
   createProductFixture as createProduct,
   makeProductInput,
 } from "./repo.fixtures";
+import { insertWithShortcode } from "./shortcode-utils";
+import { findOrCreateVendor } from "./vendor";
 
 describe("product ⟷ product component links (kit composition)", () => {
   const ctx = withTestDb();
@@ -437,6 +448,174 @@ describe("product ⟷ product component links (kit composition)", () => {
           quantity: 2,
         }),
       ).rejects.toThrow();
+    });
+  });
+
+  describe("kit membership provenance — price, expense count, and most recent purchase", () => {
+    it("names the kit's price, live expense count, and most recent purchase on the transpose", async () => {
+      const kit = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Priced Combo Kit", price: 249 }),
+        ctx.actor,
+      );
+      const battery = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Provenance Battery" }),
+        ctx.actor,
+      );
+      await attachProductComponents(
+        ctx.db,
+        kit.entityId,
+        [{ productId: battery.entityId, quantity: 1 }],
+        ctx.actor,
+      );
+
+      // Two live Expenses on the kit itself — the component carries neither.
+      await insertWithShortcode(ctx.db, "expense", {
+        name: "Kit deposit",
+        cost: 100,
+        date: "2026-01-01",
+        lineKind: "principal",
+        costType: "materials",
+        trade: "other",
+        future: false,
+        productId: kit.entityId,
+        productQuantity: 1,
+      });
+      await insertWithShortcode(ctx.db, "expense", {
+        name: "Kit balance",
+        cost: 149,
+        date: "2026-01-02",
+        lineKind: "principal",
+        costType: "materials",
+        trade: "other",
+        future: false,
+        productId: kit.entityId,
+        productQuantity: null,
+      });
+
+      // Two purchases attached to the kit, so the query must pick the more
+      // recent one by date, not just the last one inserted.
+      const vendorId = await findOrCreateVendor(ctx.db, "Provenance Vendor");
+      const earlierPurchase = await insertWithShortcode(ctx.db, "purchase", {
+        vendorId,
+        date: "2026-01-01",
+        orderId: "#EARLY",
+      });
+      const laterPurchase = await insertWithShortcode(ctx.db, "purchase", {
+        vendorId,
+        date: "2026-01-05",
+        orderId: "#LATE",
+      });
+      await attachPurchaseProducts(
+        ctx.db,
+        earlierPurchase.id,
+        [kit.entityId],
+        ctx.actor,
+      );
+      await attachPurchaseProducts(
+        ctx.db,
+        laterPurchase.id,
+        [kit.entityId],
+        ctx.actor,
+      );
+
+      const membership = await listKitMembership(ctx.db, battery.entityId);
+      expect(membership).toHaveLength(1);
+      const [entry] = membership;
+      expect(entry?.parentProductName).toBe("Priced Combo Kit");
+      // The manual price wins outright — no Expense on the component itself.
+      expect(entry?.price).toBe(249);
+      expect(entry?.expenseCount).toBe(2);
+      expect(entry?.purchase?.orderId).toBe("#LATE");
+      expect(entry?.purchase?.vendorName).toBe("Provenance Vendor");
+    });
+
+    it("reports zero expenses and no purchase for a kit that hasn't been bought yet", async () => {
+      const kit = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Unbought Kit" }),
+        ctx.actor,
+      );
+      const part = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Unbought Part" }),
+        ctx.actor,
+      );
+      await attachProductComponents(
+        ctx.db,
+        kit.entityId,
+        [{ productId: part.entityId, quantity: 1 }],
+        ctx.actor,
+      );
+
+      const [entry] = await listKitMembership(ctx.db, part.entityId);
+      expect(entry?.price).toBeNull();
+      expect(entry?.expenseCount).toBe(0);
+      expect(entry?.purchase).toBeNull();
+    });
+
+    it("ignores a soft-deleted Expense and a soft-deleted purchase link when counting the kit's own provenance", async () => {
+      const kit = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Soft-Deleted Provenance Kit" }),
+        ctx.actor,
+      );
+      const part = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Soft-Deleted Provenance Part" }),
+        ctx.actor,
+      );
+      await attachProductComponents(
+        ctx.db,
+        kit.entityId,
+        [{ productId: part.entityId, quantity: 1 }],
+        ctx.actor,
+      );
+
+      const deletedExpense = await insertWithShortcode(ctx.db, "expense", {
+        name: "Retracted expense",
+        cost: 50,
+        date: "2026-01-01",
+        lineKind: "principal",
+        costType: "materials",
+        trade: "other",
+        future: false,
+        productId: kit.entityId,
+        productQuantity: 1,
+      });
+      await getDb(ctx.db)
+        .update(expenseTable)
+        .set({ deletedAt: new Date() })
+        .where(eq(expenseTable.id, deletedExpense.id));
+
+      const vendorId = await findOrCreateVendor(
+        ctx.db,
+        "Soft-Deleted Provenance Vendor",
+      );
+      const purchase = await insertWithShortcode(ctx.db, "purchase", {
+        vendorId,
+        date: "2026-01-01",
+        orderId: "#SOFT",
+      });
+      const attach = await attachPurchaseProducts(
+        ctx.db,
+        purchase.id,
+        [kit.entityId],
+        ctx.actor,
+      );
+      expect(attach.changed).toBe(1);
+      const detach = await detachPurchaseProducts(
+        ctx.db,
+        purchase.id,
+        [kit.entityId],
+        ctx.actor,
+      );
+      expect(detach.changed).toBe(1);
+
+      const [entry] = await listKitMembership(ctx.db, part.entityId);
+      expect(entry?.expenseCount).toBe(0);
+      expect(entry?.purchase).toBeNull();
     });
   });
 });

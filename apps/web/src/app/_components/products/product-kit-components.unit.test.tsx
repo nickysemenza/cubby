@@ -115,6 +115,9 @@ describe("ProductKitComponents", () => {
           manufacturer: "Milwaukee",
           quantity: 2,
           attachedAt: new Date("2026-01-01"),
+          price: 249,
+          expenseCount: 1,
+          purchase: null,
         },
       ],
     );

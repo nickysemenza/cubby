@@ -41,11 +41,17 @@ const SEARCH_PAGE_SIZE = 50;
 function componentSubtitle(item: ProductComponentOut): string | null {
   const parts = [
     isUnspecifiedManufacturer(item.manufacturer) ? null : item.manufacturer,
-    // Each component's OWN price (its own purchase/override history), never a
-    // share of the kit's — the kit keeps its own Expense, never split.
-    item.price != null ? `${formatCurrency(item.price)} on its own` : null,
+    // This is the blended effective price — the kit's own price divided across
+    // its components' projected share, not a per-component purchase history.
+    // The kit itself still keeps the one real Expense; nothing here is spend.
+    item.price != null ? formatCurrency(item.price) : null,
   ].filter((part): part is string => Boolean(part));
   return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+/** The kit's own price, for the transpose row — this component carries none. */
+function membershipSubtitle(item: KitMembershipOut): string | null {
+  return item.price != null ? `${formatCurrency(item.price)} kit price` : null;
 }
 
 function ComponentRow({
@@ -117,6 +123,7 @@ function MembershipRow({
     success: `Removed from ${item.parentProductName}`,
     invalidateKeys: productComponentMutationInvalidateKeys,
   });
+  const subtitle = membershipSubtitle(item);
 
   return (
     <Row
@@ -138,6 +145,7 @@ function MembershipRow({
           />
           <Badge variant="outline">×{item.quantity}</Badge>
         </Row>
+        {subtitle && <Description size="xs">{subtitle}</Description>}
       </Stack>
       <Button
         type="button"
