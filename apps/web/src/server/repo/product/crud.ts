@@ -37,7 +37,6 @@ import {
   inArray,
   isNotNull,
   isNull,
-  lt,
   ne,
   or,
   sql,
@@ -117,7 +116,7 @@ import {
   dbProductToPickerItemAPI,
   dbProductToTopLevelAPI,
 } from "./mappers";
-import { disposalPurchaseIds } from "./ownership";
+import { ownershipExitExpensePredicate } from "./ownership";
 import {
   derivedPriceFilterSql,
   effectiveProductPriceSql,
@@ -609,8 +608,9 @@ export const productList = async (
 
   // This is the entity-list form of the sold-but-still-stocked diagnostic.
   // The quantity ledger remains the authority for expected quantity and unknown
-  // acquisition lines; the disposal purchase predicate prevents ordinary
-  // refunds/adjustments from reading as an ownership exit.
+  // acquisition lines; the shared exit predicate prevents ordinary
+  // refunds/adjustments from reading as an ownership exit while including $0
+  // hand-entered discards.
   const productIdsWithRecordedDisposal = dbClient
     .select({ productId: expense.productId })
     .from(expense)
@@ -618,9 +618,8 @@ export const productList = async (
       and(
         notDeleted(expense),
         eq(expense.future, false),
-        lt(expense.cost, 0),
         isNotNull(expense.productId),
-        inArray(expense.purchaseId, disposalPurchaseIds(dbClient)),
+        ownershipExitExpensePredicate(dbClient),
       ),
     );
 
