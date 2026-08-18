@@ -70,6 +70,7 @@ const CALENDAR_ACTIVATION = {
 } as const;
 const ALL_KINDS: CalendarItemKind[] = ["meal", "task", "expense", "project"];
 const NO_ITEMS: CalendarItem[] = [];
+const NO_DAY_SUMMARIES: Record<string, CalendarDaySummary> = {};
 const PERIOD_OPTIONS = [
   { value: "month", label: "Month" },
   { value: "week", label: "Week" },
@@ -484,7 +485,7 @@ export function UnifiedCalendar({
           <div className="hidden overflow-hidden border md:block">
             <WeekSummaryGrid
               days={periodDays}
-              summaries={data?.days ?? {}}
+              summaries={data?.days ?? NO_DAY_SUMMARIES}
               today={today}
               onDayClick={setSelectedDay}
             />
