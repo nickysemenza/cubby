@@ -1,4 +1,4 @@
-import type { Column, Table as ITable } from "@tanstack/react-table";
+import type { RowData } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown, Check } from "lucide-react";
 import { type RefObject, useEffect, useState } from "react";
 import { Row, Stack } from "~/components/layout";
@@ -11,6 +11,10 @@ import {
   SheetTitle,
 } from "~/components/ui/sheet";
 import { cn } from "~/lib/utils";
+import type {
+  CubbyColumn as Column,
+  CubbyTable as ITable,
+} from "./table-features";
 import { mobileColumnLabel } from "./useMobileListModel";
 
 /**
@@ -40,7 +44,7 @@ function useOwnsViewportMidline(ref: RefObject<HTMLElement | null>): boolean {
 }
 
 /** The columns a phone may sort by — the same set the desktop headers expose. */
-function sortableColumns<TItem>(
+function sortableColumns<TItem extends RowData>(
   table: ITable<TItem>,
 ): Column<TItem, unknown>[] {
   const visible = table
@@ -49,7 +53,7 @@ function sortableColumns<TItem>(
   // A sort can outlive the column that set it (a saved view, a shared link, a
   // hidden column). Append it rather than hiding it: the sheet has to be able
   // to show — and undo — the sort the list is actually in.
-  const activeId = table.getState().sorting[0]?.id;
+  const activeId = table.state.sorting[0]?.id;
   if (!activeId || visible.some((column) => column.id === activeId)) {
     return visible;
   }
@@ -63,7 +67,7 @@ function sortableColumns<TItem>(
  * Sorting otherwise lives on desktop column headers, and mobile cards have no
  * headers — so "what did I buy most recently" was a desktop-only question. It
  * drives the SAME `sorting` table state the headers do (read from
- * `table.getState()`, written through `table.setSorting`), so the URL
+ * `table.state`, written through `table.setSorting`), so the URL
  * round-trip, the server query, and the desktop headers stay one source of
  * truth rather than two that drift.
  *
@@ -71,7 +75,7 @@ function sortableColumns<TItem>(
  * and picking a column here replaces the stack rather than silently editing an
  * invisible one.
  */
-export function MobileSortSheet<TItem>({
+export function MobileSortSheet<TItem extends RowData>({
   table,
   listRef,
   disabled = false,
@@ -89,7 +93,7 @@ export function MobileSortSheet<TItem>({
   // here would be a lie.
   const columns = sortableColumns(table);
 
-  const [activeSort] = table.getState().sorting;
+  const [activeSort] = table.state.sorting;
   const activeDesc = activeSort?.desc ?? false;
   const activeColumn = activeSort
     ? columns.find((column) => column.id === activeSort.id)

@@ -1,6 +1,5 @@
 import type { EntityImage } from "@cubby/schemas/entity";
 import type { ImageWithEntity } from "@cubby/schemas/image";
-import { createColumnHelper } from "@tanstack/react-table";
 import prettyBytes from "pretty-bytes";
 import { useMemo } from "react";
 import {
@@ -9,6 +8,7 @@ import {
   renderOptionCell,
 } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
@@ -47,7 +47,10 @@ const IMAGE_ENTITY_LINK_KIND: Record<
 
 export default function ImageList() {
   const api = useTRPC();
-  const columnHelper = useMemo(() => createColumnHelper<ImageWithEntity>(), []);
+  const columnHelper = useMemo(
+    () => createCubbyColumnHelper<ImageWithEntity>(),
+    [],
+  );
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("image");
 
   // Images DO have a `deletedAt` column (like every other entity), but

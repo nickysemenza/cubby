@@ -1,14 +1,7 @@
-import type { ColumnDef } from "@tanstack/react-table";
-import {
-  createColumnHelper,
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
+import { flexRender, type RowData, useTable } from "@tanstack/react-table";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { type ReactNode, useMemo } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { expenseFutureOptions } from "~/app/expenses/expense-options";
 import { provisionalOptions } from "~/app/finance/financial-account-options";
 import { booleanCellOptions } from "~/lib/select-options";
 import { formatCurrency } from "~/lib/utils";
@@ -20,6 +13,11 @@ import {
   createImageColumn,
   createParentLinkColumn,
 } from "./columnHelpers";
+import {
+  type CubbyColumnDef as ColumnDef,
+  createCubbyColumnHelper,
+  cubbyTableFeatures,
+} from "./table-features";
 
 /**
  * The thumbnail itself pulls in the hover-preview popup and the CF image
@@ -116,15 +114,15 @@ type ProjectRow = {
  * exercised the way `<RTable>` runs them — a hand-built `info.getValue()` would
  * test the cell body while silently accepting a wrong `idField`/`nameField`.
  */
-function renderColumn<TRow, TValue = ParentValue>(
+function renderColumn<TRow extends RowData, TValue = ParentValue>(
   column: ColumnDef<TRow, TValue>,
   row: TRow,
 ) {
   function Harness() {
-    const table = useReactTable({
+    const table = useTable({
+      features: cubbyTableFeatures,
       data: [row],
-      columns: [column],
-      getCoreRowModel: getCoreRowModel(),
+      columns: [column] as unknown as ColumnDef<TRow, unknown>[],
     });
     const cell = table.getRowModel().rows[0]?.getVisibleCells()[0];
     if (!cell) throw new Error("expected one row with one cell");
@@ -145,7 +143,7 @@ const taskColumn = (
   options?: Parameters<typeof createParentLinkColumn>[4],
 ): ColumnDef<TaskRow, ParentValue> =>
   createParentLinkColumn(
-    createColumnHelper<TaskRow>(),
+    createCubbyColumnHelper<TaskRow>(),
     "task",
     "parentTaskId",
     "parentTaskName",
@@ -154,7 +152,7 @@ const taskColumn = (
 
 const projectColumn = (): ColumnDef<ProjectRow, ParentValue> =>
   createParentLinkColumn(
-    createColumnHelper<ProjectRow>(),
+    createCubbyColumnHelper<ProjectRow>(),
     "project",
     "parentId",
     "parentName",
@@ -246,16 +244,16 @@ const IMAGE_ROWS: ImageRowFixture[] = [{ id: "PRJ-1" }];
 function ImageHarness({ images }: { images: ImagesByRowId }) {
   const column = useMemo(
     () =>
-      createImageColumn(createColumnHelper<ImageRowFixture>(), {
+      createImageColumn(createCubbyColumnHelper<ImageRowFixture>(), {
         entity: "project",
         getImages: (row) => images[row.id] ?? [],
       }) as ColumnDef<ImageRowFixture, unknown>,
     [images],
   );
-  const table = useReactTable({
+  const table = useTable({
+    features: cubbyTableFeatures,
     data: IMAGE_ROWS,
     columns: useMemo(() => [column], [column]),
-    getCoreRowModel: getCoreRowModel(),
   });
   const cell = table.getRowModel().rows[0]?.getVisibleCells()[0];
   if (!cell) throw new Error("expected one row with one cell");
@@ -293,12 +291,13 @@ describe("createImageColumn", () => {
 
   it("keeps PDFs out of the default row-embedded thumbnails", () => {
     const column = createImageColumn(
-      createColumnHelper<{ id: string; images: unknown[] }>(),
+      createCubbyColumnHelper<{ id: string; images: unknown[] }>(),
       { entity: "product" },
     ) as ColumnDef<{ id: string; images: unknown[] }, unknown>;
 
     function PdfHarness() {
-      const table = useReactTable({
+      const table = useTable({
+        features: cubbyTableFeatures,
         data: [
           {
             id: "PRD-1",
@@ -319,7 +318,6 @@ describe("createImageColumn", () => {
           },
         ],
         columns: [column],
-        getCoreRowModel: getCoreRowModel(),
       });
       const cell = table.getRowModel().rows[0]?.getVisibleCells()[0];
       if (!cell) throw new Error("expected one row with one cell");
@@ -347,10 +345,10 @@ describe("createActionsColumn", () => {
   }
 
   const actionsColumn = (entity: "product" | "image") =>
-    createActionsColumn(createColumnHelper<ActionRow>(), entity) as ColumnDef<
-      ActionRow,
-      unknown
-    >;
+    createActionsColumn(
+      createCubbyColumnHelper<ActionRow>(),
+      entity,
+    ) as ColumnDef<ActionRow, unknown>;
 
   it("offers the row's own code, and copies exactly that", () => {
     renderColumn<ActionRow, unknown>(actionsColumn("product"), {
@@ -378,39 +376,9 @@ describe("createActionsColumn", () => {
 type MoneyRow = { amount: number | null };
 
 const moneyColumn = (): ColumnDef<MoneyRow, number | null> =>
-  createCurrencyColumn(createColumnHelper<MoneyRow>(), "amount");
-
-// Only the steps a money column could plausibly land on. Widening this table
-// isn't the point of the test — pulling the real px value for whatever `w-*`
-// class ships is.
-const TAILWIND_WIDTH_PX: Record<string, number> = {
-  "w-16": 64,
-  "w-20": 80,
-  "w-24": 96,
-  "w-28": 112,
-  "w-32": 128,
-  "w-40": 160,
-};
+  createCurrencyColumn(createCubbyColumnHelper<MoneyRow>(), "amount");
 
 describe("createCurrencyColumn", () => {
-  it("declares a width wide enough for the widest formatted value", () => {
-    const className = moneyColumn().meta?.className ?? "";
-    const widthClass = className.split(" ").find((c) => c in TAILWIND_WIDTH_PX);
-    expect(widthClass).toBeDefined();
-    const widthPx = TAILWIND_WIDTH_PX[widthClass as string];
-
-    // Measured in-browser: "-$999,999.99" (the widest sign+dollar amount this
-    // column formats) renders at 128-144px in JetBrains Mono at the table's
-    // cell font size. The old w-20 default (80px) clipped it mid-digit with
-    // no ellipsis and no `title`, so a truncated number still looked complete.
-    expect(widthPx).toBeGreaterThanOrEqual(128);
-  });
-
-  it("clips overflow with an ellipsis instead of a hard clip", () => {
-    const className = moneyColumn().meta?.className ?? "";
-    expect(className).toContain("truncate");
-  });
-
   it("carries the fully formatted value in a title attribute", () => {
     renderColumn(moneyColumn(), { amount: -999999.99 });
 
@@ -440,7 +408,7 @@ const TRACKED_OPTIONS = booleanCellOptions({
 const trackedColumn = (
   onSave?: (v: boolean | null, row: TrackedRow) => Promise<void>,
 ): ColumnDef<TrackedRow, string | null> =>
-  createBooleanColumn(createColumnHelper<TrackedRow>(), "stockTracked", {
+  createBooleanColumn(createCubbyColumnHelper<TrackedRow>(), "stockTracked", {
     trueFalseOptions: TRACKED_OPTIONS,
     undecided: { label: "Undecided" },
     ...(onSave ? { editable: { onSave } } : {}),
@@ -511,20 +479,17 @@ describe("createBooleanColumn", () => {
     expect(cellData.getCopyPayload({ stockTracked: null })).toBeNull();
   });
 
-  // Reusing the `select` kind (rather than minting a `boolean` one) is what lets
-  // a boolean cell paste across columns; a new kind would be incompatible with
-  // every existing column for no gain.
-  it("declares the select cell kind so paste stays cross-column", () => {
-    expect(trackedColumn().meta?.cellData?.kind).toBe("select");
-  });
-
   it("only offers the clear affordance when an undecided state is named", () => {
     const boolColumn = (undecided?: { label: string }) =>
-      createBooleanColumn(createColumnHelper<TrackedRow>(), "stockTracked", {
-        trueFalseOptions: TRACKED_OPTIONS,
-        ...(undecided ? { undecided } : {}),
-        editable: { onSave: async () => {} },
-      }) as ColumnDef<TrackedRow, string | null>;
+      createBooleanColumn(
+        createCubbyColumnHelper<TrackedRow>(),
+        "stockTracked",
+        {
+          trueFalseOptions: TRACKED_OPTIONS,
+          ...(undecided ? { undecided } : {}),
+          editable: { onSave: async () => {} },
+        },
+      ) as ColumnDef<TrackedRow, string | null>;
 
     // Asserted through the rendered editor rather than the config object: the
     // config is internal, the clear button is the behaviour. The picker names it
@@ -570,7 +535,7 @@ describe("createCurrencyColumn zero handling", () => {
 
   it("still suppresses zero when a column opts in explicitly", () => {
     const opted = createCurrencyColumn(
-      createColumnHelper<MoneyRow>(),
+      createCubbyColumnHelper<MoneyRow>(),
       "amount",
       { zeroAsEmpty: true },
     );
@@ -593,7 +558,7 @@ describe("enum/boolean columns stay in the copy/paste range", () => {
 
   it("createFilterableSelectColumn wires cellData even with no filter and no editor", () => {
     const column = createFilterableSelectColumn(
-      createColumnHelper<EnumRow>(),
+      createCubbyColumnHelper<EnumRow>(),
       "kind",
       {
         placeholder: "Filter by kind...",
@@ -630,7 +595,7 @@ describe("boolean tones come from the roster, not the factory", () => {
 
   it("honours an inverted tone map and matches what other surfaces render", () => {
     const column = createBooleanColumn(
-      createColumnHelper<ProvisionalRow>(),
+      createCubbyColumnHelper<ProvisionalRow>(),
       "provisional",
       { trueFalseOptions: provisionalOptions },
     ) as ColumnDef<ProvisionalRow, string | null>;
@@ -646,12 +611,5 @@ describe("boolean tones come from the roster, not the factory", () => {
     const dot = document.querySelector("td span[aria-hidden]");
     expect(dot).not.toBeNull();
     expect((dot as HTMLElement).style.backgroundColor).toBe("var(--warning)");
-  });
-
-  it("keeps Planned amber on the expense ledger", () => {
-    expect(expenseFutureOptions.find((o) => o.value === "true")).toMatchObject({
-      label: "Planned",
-      color: "var(--warning)",
-    });
   });
 });

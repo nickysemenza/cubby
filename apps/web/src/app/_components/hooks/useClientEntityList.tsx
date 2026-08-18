@@ -1,10 +1,12 @@
 import { relatedViewsFor } from "@cubby/schemas/related-view";
-import type { ColumnHelper, Row } from "@tanstack/react-table";
-import { createColumnHelper } from "@tanstack/react-table";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { entities } from "~/entities/entities";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
+import {
+  createCubbyColumnHelper,
+  type CubbyRow as Row,
+} from "../data-table/table-features";
 import { useTableColumnVisibility } from "../data-table/useTableColumnVisibility";
 import { useTableConfig } from "../data-table/useTableConfig";
 import { useTableState } from "../data-table/useTableState";
@@ -88,7 +90,7 @@ interface UseClientEntityListOptions<TData extends BaseListRow>
 }
 
 /** Subset of `useEntityList`'s return relevant to the client-data variant. */
-type UseClientEntityListReturn<TData> = Pick<
+type UseClientEntityListReturn<TData extends BaseListRow> = Pick<
   UseEntityListReturn<TData>,
   "table" | "bulkActionBar" | "deleteDialog" | "requestDelete"
 >;
@@ -123,10 +125,7 @@ export function useClientEntityList<TData extends BaseListRow>({
   deleteEmptyLabel,
 }: UseClientEntityListOptions<TData>): UseClientEntityListReturn<TData> {
   // Create columnHelper once — CRITICAL to prevent infinite re-renders.
-  const columnHelper = useMemo(
-    () => createColumnHelper<TData>() as ColumnHelper<TData>,
-    [],
-  );
+  const columnHelper = useMemo(() => createCubbyColumnHelper<TData>(), []);
 
   // Optimistic delete: mutation, bulk action, extra actions, dialog.
   const {

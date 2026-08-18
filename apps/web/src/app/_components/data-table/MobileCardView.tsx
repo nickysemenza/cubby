@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { useNavigate } from "@tanstack/react-router";
-import type { Table as ITable } from "@tanstack/react-table";
+import type { RowData } from "@tanstack/react-table";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { Bug } from "lucide-react";
 import {
@@ -20,6 +20,7 @@ import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { DebugDialog } from "./DebugDialog";
 import { EntityEmptyState, isNarrowed } from "./entity-empty-states";
 import { SectionHeader } from "./SectionHeader";
+import type { CubbyTable as ITable } from "./table-features";
 import type { GroupConfig } from "./useGroupedList";
 import { useGroupedList } from "./useGroupedList";
 import {
@@ -58,7 +59,7 @@ function VirtualRow({
   );
 }
 
-interface MobileCardViewProps<TItem> {
+interface MobileCardViewProps<TItem extends RowData> {
   table: ITable<TItem>;
   /** Entity type for navigation - when provided, cards show a view button */
   entity?: Entity;
@@ -73,7 +74,7 @@ interface MobileCardViewProps<TItem> {
   rowContentVersion?: unknown;
 }
 
-export function MobileCardView<TItem>({
+export function MobileCardView<TItem extends RowData>({
   table,
   entity,
   infiniteScroll,
@@ -86,7 +87,7 @@ export function MobileCardView<TItem>({
   const navigate = useNavigate();
   const mobileRows = useMobileListModel({ table, entity, rowContentVersion });
 
-  // Group the live mobile models themselves. `useReactTable` keeps its table
+  // Group the live mobile models themselves. `useTable` keeps its table
   // instance stable while replacing the row model as infinite pages arrive,
   // so deriving from `table` would leave grouped mobile lists on stale data.
   // Keeping each model as the grouped item also prevents a sorted section from

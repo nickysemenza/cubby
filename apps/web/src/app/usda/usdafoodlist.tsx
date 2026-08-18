@@ -8,8 +8,8 @@ import {
   dataTypeLabel,
 } from "@cubby/usda-schemas";
 import { useQuery } from "@tanstack/react-query";
-import { createColumnHelper } from "@tanstack/react-table";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
@@ -114,7 +114,7 @@ export function USDAFoodList() {
       })),
     [foodsResp?.items, enrichmentsQuery.data],
   );
-  const columnHelper = createColumnHelper<Flatten<typeof data>>();
+  const columnHelper = createCubbyColumnHelper<Flatten<typeof data>>();
 
   const columns = [
     columnHelper.accessor("fdc_id", {

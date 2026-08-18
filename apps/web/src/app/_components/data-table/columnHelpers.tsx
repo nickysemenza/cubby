@@ -12,7 +12,7 @@ import {
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { LocationType } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
-import type { CellContext, ColumnHelper } from "@tanstack/react-table";
+import type { CellData, RowData, TableFeatures } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { uniqBy } from "es-toolkit";
 import {
@@ -91,6 +91,10 @@ import type {
 } from "./inventory-column-helpers";
 import { InventoryEntriesCell } from "./inventory-entries-cell";
 import { nameLabel } from "./name-label";
+import type {
+  CubbyCellContext as CellContext,
+  CubbyColumnHelper as ColumnHelper,
+} from "./table-features";
 
 /** Configuration for inline column header filters */
 export interface FilterConfig {
@@ -178,7 +182,11 @@ export interface MobileColumnMeta {
 
 // Extend TanStack Table's meta type to include our custom properties
 declare module "@tanstack/react-table" {
-  interface ColumnMeta<TData, TValue> {
+  interface ColumnMeta<
+    TFeatures extends TableFeatures,
+    TData extends RowData,
+    TValue extends CellData,
+  > {
     mobile?: MobileColumnMeta;
     className?: string;
     /** Right-align + tabular figures for numeric/quantity columns. */
@@ -838,7 +846,7 @@ export function createActionsColumn<T extends { id: string | number }>(
  * Use `createActionsColumn` for standard entity tables.
  * Call this directly for polymorphic rows where entity type varies per row.
  */
-export function createActionsColumnBase<T>(
+export function createActionsColumnBase<T extends RowData>(
   columnHelper: ColumnHelper<T>,
   getLinkProps: RowLinkResolver<T>,
   extraActions?: (row: T) => ReactNode,
@@ -1960,7 +1968,7 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
     {
       id: "project",
       header: options?.header ?? "Project",
-      sortingFn: entityRefSortingFn,
+      sortFn: entityRefSortingFn,
       // Client-side tables (the embedded project-detail lists) filter this
       // column by project id. The accessor yields an object, which the default
       // stringifying comparison turns into "[object Object]" — so the roster
@@ -2075,7 +2083,7 @@ export function createProductLinkColumn<T extends ProductRefRow>(
     {
       id: "product",
       header: options?.header ?? "Product",
-      sortingFn: entityRefSortingFn,
+      sortFn: entityRefSortingFn,
       meta: {
         className: options?.className,
         mobile: options?.mobile,
@@ -2161,7 +2169,7 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
     {
       id: "subjectProduct",
       header: "For",
-      sortingFn: entityRefSortingFn,
+      sortFn: entityRefSortingFn,
       meta: {
         className: options?.className,
         mobile: options?.mobile,

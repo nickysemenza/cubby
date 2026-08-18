@@ -10,10 +10,10 @@ import type {
 import { projectStatusValues } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
-import { createColumnHelper } from "@tanstack/react-table";
 import { Calendar, DollarSign, Hammer, Wallet } from "lucide-react";
 import { lazy, type ReactNode, Suspense, useMemo } from "react";
 import { SavedViewsMenu } from "~/app/_components/data-table/DataTableViews";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
@@ -760,7 +760,7 @@ function ServerProjectGallery({
   completionYears: string[];
 }) {
   const api = useTRPC();
-  const helper = useMemo(() => createColumnHelper<ProjectOut>(), []);
+  const helper = useMemo(() => createCubbyColumnHelper<ProjectOut>(), []);
   const { options: projectOptions } = useProjectOptions();
   const filterOptions = useFilterOptions({
     project: projectOptions,

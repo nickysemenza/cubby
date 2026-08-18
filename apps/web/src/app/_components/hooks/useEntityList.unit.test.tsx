@@ -1,6 +1,9 @@
-import type { ColumnDef, Table } from "@tanstack/react-table";
 import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type {
+  CubbyColumnDef as ColumnDef,
+  CubbyTable as Table,
+} from "../data-table/table-features";
 
 interface TestRow {
   id: string;

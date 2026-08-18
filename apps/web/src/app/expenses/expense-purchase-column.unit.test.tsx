@@ -4,10 +4,10 @@ import {
   unsafeVendorShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ExpenseOut } from "@cubby/schemas/project";
-import { createColumnHelper } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
@@ -62,7 +62,7 @@ const LINKED: ExpenseOut = {
 
 const renderCell = (expense: ExpenseOut) => {
   const column = expenseVendorColumn(
-    createColumnHelper<ExpenseOut>(),
+    createCubbyColumnHelper<ExpenseOut>(),
     vi.fn(async () => undefined),
     { asPurchase: true },
   );

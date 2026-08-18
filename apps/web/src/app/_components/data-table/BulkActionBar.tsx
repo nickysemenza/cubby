@@ -1,11 +1,12 @@
-import type { Row } from "@tanstack/react-table";
+import type { RowData } from "@tanstack/react-table";
 import { X } from "lucide-react";
 import { Row as LayoutRow } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import type { BulkAction } from "./bulk-actions.types";
+import type { CubbyRow as Row } from "./table-features";
 
-export interface BulkActionBarProps<TData> {
+export interface BulkActionBarProps<TData extends RowData> {
   selectedCount: number;
   selectedRows: Row<TData>[];
   actions: BulkAction<TData>[];
@@ -35,7 +36,7 @@ export interface BulkActionBarProps<TData> {
  * Toolbar component that appears when rows are selected.
  * Shows selection count, available actions, and a clear button.
  */
-export function BulkActionBar<TData>({
+export function BulkActionBar<TData extends RowData>({
   selectedCount,
   selectedRows,
   actions,

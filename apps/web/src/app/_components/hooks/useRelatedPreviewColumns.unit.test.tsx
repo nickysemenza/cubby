@@ -1,6 +1,6 @@
-import { createColumnHelper } from "@tanstack/react-table";
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { createCubbyColumnHelper } from "../data-table/table-features";
 
 const queryState = vi.hoisted(() => ({
   current: { data: undefined as unknown, isLoading: true },
@@ -27,7 +27,7 @@ interface TestRow {
   id: string;
 }
 
-const columnHelper = createColumnHelper<TestRow>();
+const columnHelper = createCubbyColumnHelper<TestRow>();
 const relatedViews = [
   {
     key: "product.vendors",

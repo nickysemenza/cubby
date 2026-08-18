@@ -5,7 +5,6 @@ import type {
 } from "@cubby/schemas/identifiers";
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { Link } from "@tanstack/react-router";
-import { createColumnHelper } from "@tanstack/react-table";
 import { ImageIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { z } from "zod";
@@ -22,6 +21,7 @@ import {
 } from "../data-table/columnHelpers";
 import type { ShelfView } from "../data-table/shelf";
 import RTable from "../data-table/Table";
+import { createCubbyColumnHelper } from "../data-table/table-features";
 import { useEntityList } from "../hooks/useEntityList";
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
 import { DeleteInventoryDialog } from "../inventory/delete-inventory-dialog";
@@ -84,7 +84,10 @@ export function LocationInventoryTable({
   placement = "stock",
 }: LocationInventoryTableProps) {
   const api = useTRPC();
-  const columnHelper = useMemo(() => createColumnHelper<InventoryItem>(), []);
+  const columnHelper = useMemo(
+    () => createCubbyColumnHelper<InventoryItem>(),
+    [],
+  );
   const [unitMappingProductIds, setUnitMappingProductIds] = useState<string[]>(
     [],
   );

@@ -2,7 +2,6 @@ import type { ProductFilters, ProductListItem } from "@cubby/schemas/product";
 import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { createColumnHelper } from "@tanstack/react-table";
 import { uniq } from "es-toolkit";
 import { CalendarRange, Clock3, Rows3, Table2 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -11,6 +10,7 @@ import {
   VerbMenuItem,
   verbBulkAction,
 } from "~/app/_components/actions/action-verb-ui";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import {
   ProductFoodSummariesProvider,
   useHydratedProductFood,
@@ -191,7 +191,10 @@ export function ProductList({
 }: ProductListProps) {
   const api = useTRPC();
   const navigate = useNavigate();
-  const columnHelper = useMemo(() => createColumnHelper<ProductListItem>(), []);
+  const columnHelper = useMemo(
+    () => createCubbyColumnHelper<ProductListItem>(),
+    [],
+  );
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("product");
   // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
   const { options: tagOptions } = useProductTagOptions();

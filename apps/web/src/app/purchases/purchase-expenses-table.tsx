@@ -1,13 +1,13 @@
 import { expenseLineKindValues } from "@cubby/schemas/expense-line-kind";
 import type { PurchaseShortcode } from "@cubby/schemas/identifiers";
 import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
-import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
 import {
   createProductLinkColumn,
   createProjectLinkColumn,
 } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
@@ -71,7 +71,7 @@ function PurchaseExpenseRows({
   kind: "principal" | "adjustment";
 }) {
   const api = useTRPC();
-  const helper = useMemo(() => createColumnHelper<ExpenseOut>(), []);
+  const helper = useMemo(() => createCubbyColumnHelper<ExpenseOut>(), []);
   const scope = useMemo<Partial<ExpenseFilters>>(
     () => ({
       purchaseId,

@@ -2045,8 +2045,8 @@ export const getEntityFilters = (entity: Entity): readonly FilterSpec[] => {
  * The `FilterConfig` for one column, straight from the manifest.
  *
  * `useStandardColumns` applies this to every column automatically. Tables that
- * bypass that hook (the embedded project-detail tables, which are raw
- * `useReactTable` over a caller-supplied array) call it explicitly through
+ * bypass that hook (the embedded project-detail tables, which call `useTable`
+ * over a caller-supplied array) call it explicitly through
  * their column factories, so their controls match the index pages' instead of
  * silently staying single-select.
  */

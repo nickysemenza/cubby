@@ -1,4 +1,4 @@
-import type { Column, Table } from "@tanstack/react-table";
+import type { RowData } from "@tanstack/react-table";
 import {
   AlignJustify,
   Columns3,
@@ -24,6 +24,10 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { Input } from "~/components/ui/input";
 import { humanize } from "~/entities/filters";
+import type {
+  CubbyColumn as Column,
+  CubbyTable as Table,
+} from "./table-features";
 import { type TableDensity, useTableDensity } from "./useTableDensity";
 
 const densityOptions: {
@@ -36,7 +40,7 @@ const densityOptions: {
   { value: "dense", label: "Dense", icon: AlignJustify },
 ];
 
-interface DataTableViewOptionsProps<TData> {
+interface DataTableViewOptionsProps<TData extends RowData> {
   table: Table<TData>;
   /**
    * Clear this table's persisted column widths. Passed only when the user has
@@ -57,12 +61,14 @@ interface DataTableViewOptionsProps<TData> {
  * of the list into one meaningless bucket. Search is what makes 26 items
  * navigable instead.
  */
-export function columnLabel<TData>(column: Column<TData, unknown>): string {
+export function columnLabel<TData extends RowData>(
+  column: Column<TData, unknown>,
+): string {
   const header = column.columnDef.header;
   return typeof header === "string" ? header : humanize(column.id);
 }
 
-export function DataTableViewOptions<TData>({
+export function DataTableViewOptions<TData extends RowData>({
   table,
   onResetColumnWidths,
 }: DataTableViewOptionsProps<TData>) {

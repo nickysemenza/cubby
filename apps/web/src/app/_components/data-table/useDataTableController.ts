@@ -1,5 +1,5 @@
 import { useLocation } from "@tanstack/react-router";
-import type { Table as ITable, Row } from "@tanstack/react-table";
+import type { RowData } from "@tanstack/react-table";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useDebug } from "~/hooks/useDebug";
 import { useHydrated } from "~/hooks/useHydrated";
@@ -7,6 +7,7 @@ import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { useTableVirtualizer } from "./hooks/useTableVirtualizer";
+import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
 import { useCellSelection } from "./useCellSelection";
 import { useDesktopGroupedRows } from "./useDesktopGroupedRows";
 import type { GroupConfig } from "./useGroupedList";
@@ -14,7 +15,7 @@ import { densityConfig, useTableDensity } from "./useTableDensity";
 
 const scrollPositionCache = new Map<string, number>();
 
-export function useDataTableController<TItem>({
+export function useDataTableController<TItem extends RowData>({
   table,
   infiniteScroll,
   groupConfig,

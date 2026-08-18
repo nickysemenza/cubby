@@ -1,7 +1,6 @@
 import type { InventoryShortcode } from "@cubby/schemas/identifiers";
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import { Link } from "@tanstack/react-router";
-import { createColumnHelper } from "@tanstack/react-table";
 import { type FC, useMemo, useState } from "react";
 import {
   VerbMenuItem,
@@ -13,6 +12,7 @@ import {
   createSingleEntityInlineLinkColumn,
 } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { DeleteInventoryDialog } from "~/app/_components/inventory/delete-inventory-dialog";
@@ -84,7 +84,7 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
   product,
 }) => {
   const api = useTRPC();
-  const helper = useMemo(() => createColumnHelper<StockedRow>(), []);
+  const helper = useMemo(() => createCubbyColumnHelper<StockedRow>(), []);
   const [dialog, setDialog] = useState<DialogState>(CLOSED);
   const update = useUpdateMutation({
     mutationFn: api.inventory.update.mutationOptions,

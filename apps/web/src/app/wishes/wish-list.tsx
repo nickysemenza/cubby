@@ -1,11 +1,11 @@
 import type { WishFilters, WishOut } from "@cubby/schemas/wish";
 import { useQuery } from "@tanstack/react-query";
-import { createColumnHelper } from "@tanstack/react-table";
 import { uniq } from "es-toolkit";
 import { ImageIcon } from "lucide-react";
 import { useMemo } from "react";
 import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
@@ -71,7 +71,7 @@ const WISH_TREE_CONFIG = {
 
 export function WishList() {
   const api = useTRPC();
-  const columnHelper = useMemo(() => createColumnHelper<WishRow>(), []);
+  const columnHelper = useMemo(() => createCubbyColumnHelper<WishRow>(), []);
 
   const deletableConfig = useDeletableConfig({
     mutationFn: api.wish.delete.mutationOptions,

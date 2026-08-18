@@ -6,13 +6,13 @@ import {
 import { getLocationTypeColor } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { createColumnHelper } from "@tanstack/react-table";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   VerbMenuItem,
   verbBulkAction,
 } from "~/app/_components/actions/action-verb-ui";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { usePageCount } from "~/components/page/Page";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -45,7 +45,7 @@ export function LocationList() {
   const api = useTRPC();
   const navigate = useNavigate();
   const columnHelper = useMemo(
-    () => createColumnHelper<LocationListItemOut>(),
+    () => createCubbyColumnHelper<LocationListItemOut>(),
     [],
   );
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("location");
