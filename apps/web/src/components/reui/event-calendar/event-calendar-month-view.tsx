@@ -26,7 +26,8 @@ import {
   useEventCalendarWeek,
 } from "~/components/reui/event-calendar/event-calendar";
 import {
-  useEventCalendarGestures,
+  useEventCalendarCreateDrag,
+  useEventCalendarDrop,
   wasRecentChipPress,
   wasRecentDrag,
 } from "~/components/reui/event-calendar/event-calendar-dnd";
@@ -657,7 +658,11 @@ function EventCalendarMonthCell({
 }) {
   const settings = useEventCalendarSettings();
   const viewConfig = useEventCalendarViewConfig();
-  const gestures = useEventCalendarGestures();
+  const selectSlotOn = useEventCalendarSelector<unknown, boolean>(
+    (state) => state.interactions.selectSlot,
+  );
+  const createDrag = useEventCalendarCreateDrag(day, true, !selectSlotOn);
+  const drop = useEventCalendarDrop(day, true);
   const { segments, isToday, isOutside } = useEventCalendarDay(day);
 
   const dayStart = zonedStartOfDay(day, settings.timeZone);
@@ -823,6 +828,14 @@ function EventCalendarMonthCell({
   // appear on any re-render of any cell, and a cell with nothing to restore
   // bails after two comparisons.
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const registerCell = useCallback(
+    (node: HTMLDivElement | null) => {
+      rootRef.current = node;
+      createDrag.setNodeRef(node);
+      drop.setNodeRef(node);
+    },
+    [createDrag.setNodeRef, drop.setNodeRef],
+  );
   useIsoLayoutEffect(() => {
     restoreChipFocus(rootRef.current, visibleTimed);
   });
@@ -985,9 +998,12 @@ function EventCalendarMonthCell({
 
   return (
     <div
-      ref={rootRef}
+      ref={registerCell}
+      {...(selectSlotOn ? createDrag.attributes : {})}
+      {...(selectSlotOn ? createDrag.listeners : {})}
       role="gridcell"
       data-slot="event-calendar-month-cell"
+      data-dnd-distance="4"
       data-today={isToday || undefined}
       data-outside={isOutside || undefined}
       data-weekend={
@@ -1025,7 +1041,7 @@ function EventCalendarMonthCell({
         const target = e.target as HTMLElement;
         if (target.closest("[data-slot=event-calendar-event]")) return;
         if (target.closest("[data-slot=event-calendar-more]")) return;
-        gestures.beginCreate(e, day, true);
+        createDrag.listeners?.onPointerDown?.(e);
       }}
       onClick={(e) => {
         if (wasRecentDrag() || wasRecentChipPress()) return;

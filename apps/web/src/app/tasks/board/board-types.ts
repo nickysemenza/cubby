@@ -6,10 +6,9 @@ import type { TaskStatus, Trade } from "@cubby/schemas/project";
 import { match } from "ts-pattern";
 
 /**
- * pragmatic-drag-and-drop payloads for the task board. A card is the drag
- * source; a cell (a column, optionally inside a swimlane row) is the drop
- * target. Data rides the wire as `Record<string | symbol, unknown>`; the
- * `as*` guards below narrow it back. Mirrors `locations/arrange/arrange-types`.
+ * dnd-kit payloads for the task board. A card is the drag source; a cell (a
+ * column, optionally inside a swimlane row) is the drop target. The `as*`
+ * guards keep surface-specific data from leaking into generic drag handlers.
  */
 
 /** The moved task's current coordinates — lets the drop handler diff for no-ops. */

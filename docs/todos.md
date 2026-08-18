@@ -812,7 +812,7 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
   server-paginated page is never an analytical population and must not be grouped
   or counted as though it were complete.
 
-- [ ] **Converge every remaining drag surface on dnd-kit.** React Table layout
+- [x] **Converge every remaining drag surface on dnd-kit.** React Table layout
   now establishes the shared pointer, keyboard, and touch foundation. Migrate
   the Task Board and Location Arrange tree/board/dock first, then extract shared
   auto-scroll and evaluate the calendar and Gantt interactions against the same

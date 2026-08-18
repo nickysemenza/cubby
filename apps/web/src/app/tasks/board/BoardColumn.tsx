@@ -1,7 +1,7 @@
 import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
 import { TRADE_LABELS } from "@cubby/schemas/project";
 import { Plus } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { match } from "ts-pattern";
 import { getTradeColor } from "~/app/projects/charts/gantt/trade-colors";
 import { ProjectMarkById } from "~/app/projects/project-mark";
@@ -29,6 +29,7 @@ export interface CardRenderProps {
   showStatus: boolean;
   onSetStatus: (taskId: TaskOut["id"], status: TaskStatus) => void;
   onRequestDelete: (task: TaskOut) => void;
+  dropTarget?: { taskId: TaskOut["id"]; edge: "top" | "bottom" } | null;
 }
 
 /** Stable React key for a column/lane key. */
@@ -159,8 +160,7 @@ export function BoardCell({
    */
   doneCountOverride?: number;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const isOver = useBoardDropTarget({ ref, column, lane });
+  const { setNodeRef, isOver } = useBoardDropTarget({ column, lane });
   // Reveals the cell's hidden done work — see cellTasks' `expanded` doc.
   const [expanded, setExpanded] = useState(false);
   const {
@@ -186,10 +186,10 @@ export function BoardCell({
 
   return (
     <div
-      ref={ref}
+      ref={setNodeRef}
       className={cn(
-        "min-h-16 bg-muted/30 p-1 transition-shadow",
-        isOver && "ring-2 ring-primary ring-inset",
+        "min-h-16 border border-transparent bg-muted/30 p-1 transition-colors",
+        isOver && "border-primary bg-primary/5",
         className,
       )}
     >
@@ -220,6 +220,11 @@ export function BoardCell({
             showStatus={cardProps.showStatus}
             onSetStatus={(status) => cardProps.onSetStatus(task.id, status)}
             onRequestDelete={cardProps.onRequestDelete}
+            dropEdge={
+              cardProps.dropTarget?.taskId === task.id
+                ? cardProps.dropTarget.edge
+                : null
+            }
           />
         ))}
         {!expanded && hiddenDoneCount > 0 && (

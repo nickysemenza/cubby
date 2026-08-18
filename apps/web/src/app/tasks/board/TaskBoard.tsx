@@ -1,8 +1,28 @@
 import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
+import {
+  type CollisionDetection,
+  closestCorners,
+  DndContext,
+  type DragMoveEvent,
+  type DragOverEvent,
+  DragOverlay,
+  type DragStartEvent,
+  pointerWithin,
+} from "@dnd-kit/core";
 import { keyBy } from "es-toolkit";
-import { Fragment, useMemo, useRef, useState } from "react";
-import { useAutoScroll } from "~/app/_components/hooks/use-auto-scroll";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createDndAnnouncements,
+  cubbyDndScreenReaderInstructions,
+} from "~/components/dnd/accessibility";
+import { createDndAutoScroller } from "~/components/dnd/auto-scroll";
+import { DragPreviewFrame } from "~/components/dnd/DragPreviewFrame";
+import {
+  createValidTargetKeyboardCoordinates,
+  useCubbyDndSensors,
+} from "~/components/dnd/sensors";
 import { Row } from "~/components/layout";
+import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
 import { CreateTaskDialog } from "../create-task-dialog";
 import { BoardAgenda } from "./BoardAgenda";
@@ -16,10 +36,20 @@ import {
   ColumnHeader,
 } from "./BoardColumn";
 import type { BoardColsMode, BoardLaneMode } from "./board-model";
-import { buildColumns, buildLanes, cellTasks } from "./board-model";
-import type { TaskCreatePreset } from "./board-types";
+import {
+  buildColumns,
+  buildLanes,
+  cellTasks,
+  computeMove,
+} from "./board-model";
+import {
+  asCardDropData,
+  asDragData,
+  asDropData,
+  type TaskCreatePreset,
+} from "./board-types";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
-import { useBoardDnd } from "./use-board-dnd";
+import { edgeForDrop, useBoardDnd } from "./use-board-dnd";
 import {
   type BoardCacheTarget,
   useBoardMutations,
@@ -81,11 +111,41 @@ export function TaskBoard({
   doneCountOverride,
 }: TaskBoardProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  useAutoScroll(scrollRef);
+  const autoScroller = useRef<ReturnType<typeof createDndAutoScroller> | null>(
+    null,
+  );
+  useEffect(() => {
+    autoScroller.current = createDndAutoScroller({ axis: "both" });
+    return () => autoScroller.current?.stop();
+  }, []);
+  const isMobile = useIsMobile();
 
   const { moveTask, reorderTasks, deleteTask, isDeleting } =
     useBoardMutations(cacheTarget);
-  useBoardDnd({ tasks, moveTask, reorderTasks });
+  const onDragEnd = useBoardDnd({ tasks, moveTask, reorderTasks });
+  const [activeTaskId, setActiveTaskId] = useState<TaskOut["id"] | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    taskId: TaskOut["id"];
+    edge: "top" | "bottom";
+  } | null>(null);
+  const keyboardCoordinates = useMemo(
+    () =>
+      createValidTargetKeyboardCoordinates((activeData, targetData) => {
+        const drag = asDragData(activeData ?? {});
+        if (!drag || !targetData) return false;
+        const card = asCardDropData(targetData);
+        if (card) return card.targetTaskId !== drag.taskId;
+        const cell = asDropData(targetData);
+        return cell ? computeMove(drag, cell) != null : false;
+      }),
+    [],
+  );
+  const sensors = useCubbyDndSensors({
+    pointerDistance: 4,
+    touchDelay: 250,
+    touchTolerance: 8,
+    keyboardCoordinates,
+  });
 
   // One hoisted quick-add dialog (not one per column/cell) — the "+" in a
   // column header or an empty cell sets this, which mounts the dialog fresh
@@ -121,8 +181,9 @@ export function TaskBoard({
       onSetStatus: (taskId: TaskOut["id"], status: TaskStatus) =>
         moveTask(taskId, { status }),
       onRequestDelete: setPendingDelete,
+      dropTarget,
     }),
-    [taskById, showProjectOnCards, cols, lane, moveTask],
+    [taskById, showProjectOnCards, cols, lane, moveTask, dropTarget],
   );
 
   // Column header counts span every lane; project/trade columns count only
@@ -225,20 +286,87 @@ export function TaskBoard({
       </div>
     );
 
+  const activeTask = activeTaskId ? taskById[activeTaskId] : null;
+  const onDragStart = ({ active }: DragStartEvent) => {
+    const drag = asDragData(active.data.current ?? {});
+    setActiveTaskId(drag?.taskId ?? null);
+  };
+  const onDragMove = (event: DragMoveEvent) => {
+    const rect = event.active.rect.current.translated;
+    const scrollRoot = scrollRef.current;
+    if (rect && scrollRoot) {
+      autoScroller.current?.update(
+        { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+        [scrollRoot, document.scrollingElement as HTMLElement | null],
+      );
+    }
+  };
+  const onDragOver = (event: DragOverEvent) => {
+    const target = event.over
+      ? asCardDropData(event.over.data.current ?? {})
+      : null;
+    setDropTarget(
+      target ? { taskId: target.targetTaskId, edge: edgeForDrop(event) } : null,
+    );
+  };
+  const clearDragState = () => {
+    autoScroller.current?.stop();
+    setActiveTaskId(null);
+    setDropTarget(null);
+  };
+
   return (
     <>
-      {/* Both trees render; the BREAKPOINT decides, not JS — same reasoning
-          as `unified-calendar.tsx`'s agenda fallback: `useIsMobile` reports
-          false on the server, so a JS-only switch would paint the
-          horizontally-scrolling columns on a phone until hydration. */}
-      <div className="md:hidden">
-        <BoardAgenda
-          tasks={tasks}
-          cardProps={cardProps}
-          doneCountOverride={doneCountOverride}
-        />
-      </div>
-      <div className="hidden md:block">{board}</div>
+      <DndContext
+        sensors={sensors}
+        autoScroll={false}
+        collisionDetection={boardCollisionDetection}
+        onDragStart={onDragStart}
+        onDragMove={onDragMove}
+        onDragOver={onDragOver}
+        onDragCancel={clearDragState}
+        onDragEnd={(event) => {
+          onDragEnd(event);
+          clearDragState();
+        }}
+        accessibility={{
+          container:
+            typeof document === "undefined" ? undefined : document.body,
+          screenReaderInstructions: cubbyDndScreenReaderInstructions,
+          announcements: createDndAnnouncements({
+            item: (id) =>
+              taskById[id.replace("task-board:drag:", "") as TaskOut["id"]]
+                ?.name ?? "task",
+            target: (id) => id.replace("task-board:", "").replaceAll(":", " "),
+          }),
+        }}
+      >
+        {isMobile ? (
+          <div
+            ref={scrollRef}
+            className={cn("overflow-y-auto", maxHeightClassName)}
+          >
+            <BoardAgenda
+              tasks={tasks}
+              cardProps={cardProps}
+              doneCountOverride={doneCountOverride}
+              showEmptyDropTargets={activeTaskId !== null}
+            />
+          </div>
+        ) : (
+          board
+        )}
+        <DragOverlay dropAnimation={null}>
+          {activeTask && (
+            <DragPreviewFrame className="w-64 p-2">
+              <p className="font-medium text-sm">{activeTask.name}</p>
+              <p className="mt-1 font-mono text-2xs text-muted-foreground">
+                Moving task
+              </p>
+            </DragPreviewFrame>
+          )}
+        </DragOverlay>
+      </DndContext>
       {pendingPreset && (
         <CreateTaskDialog
           open
@@ -265,3 +393,31 @@ export function TaskBoard({
     </>
   );
 }
+
+const boardCollisionDetection: CollisionDetection = (args) => {
+  const active = asDragData(args.active.data.current ?? {});
+  const targetDataFor = (collision: ReturnType<typeof pointerWithin>[number]) =>
+    (
+      collision.data?.droppableContainer as
+        | { data?: { current?: Record<string, unknown> } }
+        | undefined
+    )?.data?.current ?? {};
+  const isValid = (collision: ReturnType<typeof pointerWithin>[number]) => {
+    const targetData = targetDataFor(collision);
+    const card = asCardDropData(targetData);
+    if (card) return !active || card.targetTaskId !== active.taskId;
+    const cell = asDropData(targetData);
+    return !active || (cell ? computeMove(active, cell) != null : false);
+  };
+  const preferCards = (collisions: ReturnType<typeof pointerWithin>) => {
+    const validCollisions = collisions.filter(isValid);
+    const cards = validCollisions.filter((collision) =>
+      asCardDropData(targetDataFor(collision)),
+    );
+    return cards.length > 0 ? cards : validCollisions;
+  };
+  const pointerCollisions = preferCards(pointerWithin(args));
+  return pointerCollisions.length > 0
+    ? pointerCollisions
+    : preferCards(closestCorners(args));
+};

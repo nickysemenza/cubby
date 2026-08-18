@@ -35,9 +35,8 @@ export type ArrangeMoveTarget =
 
 /**
  * The pointer-free way to move something on the arrange surface.
- * pragmatic-drag-and-drop is HTML5-drag-only, so on iOS Safari nothing here is
- * draggable at all — this picker is the move affordance there, and the keyboard
- * path everywhere else. Desktop drag stays primary; this is a quiet icon button.
+ * A pointer-free alternative to drag and drop, useful for deliberate moves and
+ * whenever a destination is easier to search than reach spatially.
  */
 export function ArrangeMoveTo({ target }: { target: ArrangeMoveTarget }) {
   const [open, setOpen] = useState(false);
@@ -71,8 +70,8 @@ export function ArrangeMoveTo({ target }: { target: ArrangeMoveTarget }) {
 /**
  * Mounted only while open, so the per-row trigger costs nothing until used and
  * the location search stays off the surface's critical path. Commits through
- * the very `moveLocation` / `moveItem` handlers `useArrangeDnd`'s drop monitor
- * calls, so optimistic tree surgery, rollback and invalidation are identical.
+ * the same mutation handlers as drag-and-drop, so optimistic tree surgery,
+ * rollback and invalidation are identical.
  */
 function MoveToDialog({
   target,

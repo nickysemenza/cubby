@@ -60,7 +60,7 @@ interface ArrangeThumbProps {
  *  - the popup is `pointer-events-none`, so it can't shadow pdnd's innermost
  *    drop-target hit test or the tree row's spring-load enter/leave timers;
  *  - while a drag is in flight the whole tile stops taking pointer events (the
- *    `arrange-dragging` body class set by `useArrangeDnd`), so no preview can
+ *    `arrange-dragging` body class set by the dnd provider), so no preview can
  *    open — or linger — under the drop indicator.
  */
 export function ArrangeThumb({
@@ -81,8 +81,8 @@ export function ArrangeThumb({
     params: { shortcode },
     // `draggable={false}` is load-bearing: an <a> is a native drag source, so
     // without it a drag started here would carry the link's URL instead of the
-    // card's pragmatic-drag-and-drop payload. Disabling it hands the drag up to
-    // the nearest draggable ancestor — the card itself — which is what we want.
+    // dnd-kit draggable node. Drag activation is deliberately limited to the
+    // dedicated grip, while the link stays a normal navigation affordance.
     draggable: false,
     title: `Open ${alt}`,
     "aria-label": `Open ${alt}`,
@@ -94,7 +94,7 @@ export function ArrangeThumb({
       // clamped by the min-height, so the tile would silently stop growing at
       // its floor instead of following the row.
       fill && "self-stretch",
-      // Inert while a drag is in flight (class set by useArrangeDnd), so the
+      // Inert while a drag is in flight (class set by the dnd provider), so the
       // hover preview can't open — or stay open — over a drop target.
       "[.arrange-dragging_&]:pointer-events-none",
       className,

@@ -1,10 +1,13 @@
 import type { TaskOut } from "@cubby/schemas/project";
 import { taskStatusValues } from "@cubby/schemas/project";
-import { Stack } from "~/components/layout";
-import { axisColorChip, axisLabel, type CardRenderProps } from "./BoardColumn";
+import {
+  axisColorChip,
+  axisLabel,
+  BoardCell,
+  type CardRenderProps,
+} from "./BoardColumn";
 import { cellTasks } from "./board-model";
 import type { BoardColumnKey } from "./board-types";
-import { TaskCard } from "./TaskCard";
 
 /**
  * The phone form of the task board.
@@ -26,69 +29,60 @@ export function BoardAgenda({
   tasks,
   cardProps,
   doneCountOverride,
+  showEmptyDropTargets,
 }: {
   tasks: TaskOut[];
   cardProps: CardRenderProps;
   /** See `TaskBoardProps.doneCountOverride` — the server's true Done count
    * when `tasks` only carries a capped slice of done work. */
   doneCountOverride?: number;
+  /** Empty statuses become compact targets only while a task is carried. */
+  showEmptyDropTargets: boolean;
 }) {
-  const groups = taskStatusValues
-    .map((status) => {
-      const column: BoardColumnKey = { kind: "status", status };
-      const { cards, totalCount } = cellTasks(tasks, column, null);
-      const count =
-        status === "done" && doneCountOverride !== undefined
-          ? doneCountOverride
-          : totalCount;
-      return { column, cards, count };
-    })
-    // Empty statuses collapse away, mirroring CalendarAgenda's empty-day fold —
-    // a phone screen has no room for five headers, four of them "No tasks".
-    .filter((group) => group.count > 0);
+  const groups = taskStatusValues.map((status) => {
+    const column: BoardColumnKey = { kind: "status", status };
+    const { totalCount } = cellTasks(tasks, column, null);
+    const count =
+      status === "done" && doneCountOverride !== undefined
+        ? doneCountOverride
+        : totalCount;
+    return { column, count };
+  });
 
-  if (groups.length === 0) {
+  const visibleGroups = showEmptyDropTargets
+    ? groups
+    : groups.filter((group) => group.count > 0);
+
+  if (visibleGroups.length === 0) {
     return (
-      <p className="flex min-h-16 items-center justify-center border border-muted-foreground/20 border-dashed p-4 text-muted-foreground text-sm">
+      <p className="flex min-h-32 items-center justify-center border border-muted-foreground/20 border-dashed p-4 text-muted-foreground text-sm">
         No tasks to show
       </p>
     );
   }
 
   return (
-    <div className="border">
-      {groups.map((group) => (
-        <section key={group.column.status}>
-          <h3 className="sticky top-0 z-10 flex items-center gap-2 border-b bg-muted px-2 py-1 font-mono text-2xs uppercase tracking-wider">
+    <div className="space-y-2">
+      {visibleGroups.map((group) => (
+        <section
+          key={group.column.status}
+          className="border border-border bg-card"
+        >
+          <h3 className="sticky top-0 z-10 flex items-center gap-2 border-b-2 border-b-foreground bg-card px-2 py-1 font-mono text-2xs uppercase tracking-wider">
             {axisColorChip(group.column)}
             <span>{axisLabel(group.column)}</span>
             <span className="ml-auto text-slate tabular-nums">
               {group.count}
             </span>
           </h3>
-          <Stack gap="snug" className="p-2">
-            {group.cards.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                column={group.column}
-                lane={null}
-                taskById={cardProps.taskById}
-                showProject={cardProps.showProject}
-                showTrade={cardProps.showTrade}
-                // The section header already names the status.
-                showStatus={false}
-                onSetStatus={(status) => cardProps.onSetStatus(task.id, status)}
-                onRequestDelete={cardProps.onRequestDelete}
-              />
-            ))}
-            {group.column.status === "done" &&
-              group.count > group.cards.length && (
-                <p className="px-1 text-2xs text-muted-foreground">
-                  Showing {group.cards.length} of {group.count}.
-                </p>
-              )}
-          </Stack>
+          <BoardCell
+            tasks={tasks}
+            column={group.column}
+            lane={null}
+            cardProps={{ ...cardProps, showStatus: false }}
+            doneCountOverride={doneCountOverride}
+            className="border-0 bg-transparent p-2"
+          />
         </section>
       ))}
     </div>

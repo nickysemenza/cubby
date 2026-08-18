@@ -2,7 +2,6 @@ import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { ChevronRight, CornerDownRight } from "lucide-react";
 import { useRef } from "react";
-import { useAutoScroll } from "~/app/_components/hooks/use-auto-scroll";
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { cn } from "~/lib/utils";
@@ -25,10 +24,9 @@ interface ArrangeTreeProps {
 /**
  * The Tree view of the arrange surface: a zoomable, indented location tree
  * (as opposed to the Board's Miller columns) with a breadcrumb trail and a
- * docked "Unknown" staging panel. Drag/drop mutations are dispatched globally
- * by `useArrangeDnd`'s monitor (registered by the parent) — this component
- * only registers draggables/drop targets and hover state; the zoom lives in
- * the URL, shared with the Board's column path.
+ * docked "Unknown" staging panel. The parent dnd-kit boundary owns commits;
+ * this component registers typed draggables/drop targets while the zoom lives
+ * in the URL shared with the Board's column path.
  */
 export function ArrangeTree({
   roots,
@@ -38,7 +36,6 @@ export function ArrangeTree({
   onSelect,
 }: ArrangeTreeProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  useAutoScroll(scrollRef);
 
   // The URL carries only the zoomed-to node; its ancestors are whatever the
   // live tree says they are, so a location moved underneath us stays zoomed
@@ -89,7 +86,8 @@ export function ArrangeTree({
 
         <div
           ref={scrollRef}
-          className="min-h-0 flex-1 overflow-y-auto rounded border border-[var(--border)] bg-background p-2"
+          data-arrange-scroll
+          className="min-h-0 flex-1 overflow-y-auto rounded-none border border-[var(--border)] bg-background p-2"
         >
           {resolvedZoom.length > 0 && zoomItems.length > 0 && (
             <Stack gap="tight" className="mb-2">
@@ -205,9 +203,7 @@ interface CollapsedRowProps {
  * expanding it first), and clicking/drilling expands the real tree there.
  */
 function CollapsedRow({ node, roots, depth, onDrill }: CollapsedRowProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  const isOver = useArrangeDropTarget({
-    ref,
+  const { setNodeRef, isOver } = useArrangeDropTarget({
     roots,
     locationId: node.id,
   });
@@ -216,7 +212,7 @@ function CollapsedRow({ node, roots, depth, onDrill }: CollapsedRowProps) {
 
   return (
     <Row
-      ref={ref}
+      ref={setNodeRef}
       align="center"
       gap="sm"
       onClick={() => onDrill(node.id)}
@@ -248,12 +244,11 @@ function BreadcrumbSegment({
   active,
   onClick,
 }: BreadcrumbSegmentProps) {
-  const ref = useRef<HTMLButtonElement>(null);
-  const isOver = useArrangeDropTarget({ ref, roots, locationId });
+  const { setNodeRef, isOver } = useArrangeDropTarget({ roots, locationId });
 
   return (
     <button
-      ref={ref}
+      ref={setNodeRef}
       type="button"
       onClick={onClick}
       className={cn(

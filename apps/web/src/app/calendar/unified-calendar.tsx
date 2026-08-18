@@ -261,6 +261,13 @@ export function UnifiedCalendar({
   const today = householdLocalDate();
   const anchorDate = date ?? today;
   const anchor = calendarDate(anchorDate);
+  const activeMonth = useMemo(
+    () => ({
+      startDate: formatPlainDate(startOfMonth(anchor)),
+      endDateExclusive: formatPlainDate(addDays(endOfMonth(anchor), 1)),
+    }),
+    [anchor],
+  );
   const monthGridStart = startOfWeek(startOfMonth(anchor), {
     weekStartsOn: 0,
   });
@@ -421,6 +428,7 @@ export function UnifiedCalendar({
           <CalendarAgenda
             items={items}
             includesDay={itemIncludesDay}
+            range={activeMonth}
             today={today}
             emptyMessage={
               <Description>

@@ -43,7 +43,7 @@ export function BoardControls({
 }: BoardControlsProps) {
   return (
     <Row align="center" justify="between" gap="md" wrap>
-      <Row align="center" gap="md" wrap>
+      <Row align="center" gap="md" wrap className="hidden md:flex">
         <Row align="center" gap="sm">
           <span className="text-muted-foreground text-sm">Columns</span>
           <ViewSwitcher

@@ -57,6 +57,7 @@ import type {
 } from "~/components/reui/event-calendar/event-calendar-types";
 
 import { cn } from "~/lib/utils";
+import { EventCalendarDndProvider } from "./event-calendar-dnd";
 
 const BASE_VIEWS: CalendarView[] = ["month", "week", "day", "days", "agenda"];
 const ALL_VIEWS: CalendarView[] = [...BASE_VIEWS, "resource"];
@@ -1874,11 +1875,13 @@ function EventCalendar<TData = unknown>({
   return (
     <EventCalendarContext.Provider value={instance}>
       <EventCalendarViewConfigContext.Provider value={viewConfig}>
-        {useRender({
-          defaultTagName: "div",
-          render,
-          props: mergeProps<"div">(defaultProps, rest),
-        })}
+        <EventCalendarDndProvider>
+          {useRender({
+            defaultTagName: "div",
+            render,
+            props: mergeProps<"div">(defaultProps, rest),
+          })}
+        </EventCalendarDndProvider>
       </EventCalendarViewConfigContext.Provider>
     </EventCalendarContext.Provider>
   );

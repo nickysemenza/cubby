@@ -1,8 +1,8 @@
-import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
-import { Focus } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useDraggable } from "@dnd-kit/core";
+import { Focus, GripVertical } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { LocationTreeRow } from "~/app/_components/locations/location-tree-row";
 import { resolveLocationPrimaryVisual } from "~/app/_components/locations/location-visual-resolver";
@@ -12,6 +12,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { cn } from "~/lib/utils";
 import { ArrangeMoveTo } from "./ArrangeMoveTo";
 import { ArrangeThumb } from "./ArrangeThumb";
 import { parentIdOf } from "./arrange-tree-utils";
@@ -43,8 +44,15 @@ export function ArrangeLocationRow({
   depth,
   onDrill,
 }: ArrangeLocationRowProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = useState(false);
+  const { setNodeRef, setActivatorNodeRef, listeners, attributes, isDragging } =
+    useDraggable({
+      id: `arrange-location:${node.id}`,
+      data: {
+        arrangeDrag: "location",
+        locationId: node.id,
+        parentId: parentIdOf(roots, node.id),
+      } satisfies LocationDragData,
+    });
   const springTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Always call the latest onDrill without re-registering the drop target.
@@ -60,8 +68,7 @@ export function ArrangeLocationRow({
     }
   };
 
-  const isOver = useArrangeDropTarget({
-    ref,
+  const { setNodeRef: setDropNodeRef, isOver } = useArrangeDropTarget({
     roots,
     locationId: node.id,
     onDragEnter: () => {
@@ -74,21 +81,6 @@ export function ArrangeLocationRow({
     onDragLeave: clearSpringTimer,
     onDrop: clearSpringTimer,
   });
-
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    return draggable({
-      element,
-      getInitialData: (): LocationDragData & Record<string, unknown> => ({
-        arrangeDrag: "location",
-        locationId: node.id,
-        parentId: parentIdOf(roots, node.id),
-      }),
-      onDragStart: () => setDragging(true),
-      onDrop: () => setDragging(false),
-    });
-  }, [node.id, roots]);
 
   useEffect(
     () => () => {
@@ -107,11 +99,14 @@ export function ArrangeLocationRow({
 
   return (
     <LocationTreeRow
-      ref={ref}
+      ref={(element) => {
+        setNodeRef(element);
+        setDropNodeRef(element);
+      }}
       location={node}
       depth={depth}
       active={isOver}
-      faded={dragging}
+      faded={isDragging}
       primaryMeta={`${itemCount} item${itemCount === 1 ? "" : "s"}`}
       secondaryMeta={
         childCount > 0
@@ -135,6 +130,16 @@ export function ArrangeLocationRow({
       }
       trailing={
         <Row align="center" gap="tight" className="shrink-0">
+          <button
+            ref={setActivatorNodeRef}
+            type="button"
+            aria-label={`Drag ${node.name}`}
+            className="touch-none rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            {...listeners}
+            {...attributes}
+          >
+            <GripVertical className="size-3.5" />
+          </button>
           {hasChildren && (
             // Zooms the tree to this node (it sets the breadcrumb root), so the
             // icon must not read as download or as expand/collapse.
@@ -164,7 +169,7 @@ export function ArrangeLocationRow({
           />
         </Row>
       }
-      className="cursor-grab select-none rounded py-1 active:cursor-grabbing"
+      className={cn("select-none rounded py-1", isDragging && "opacity-40")}
     />
   );
 }

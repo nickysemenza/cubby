@@ -1,25 +1,20 @@
-import {
-  closestCenter,
-  DndContext,
-  type DragEndEvent,
-  KeyboardSensor,
-  PointerSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
+import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
 import {
   arrayMove,
   horizontalListSortingStrategy,
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Header, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown, GripVertical } from "lucide-react";
+import {
+  createDndAnnouncements,
+  cubbyDndScreenReaderInstructions,
+} from "~/components/dnd/accessibility";
+import { useCubbyDndSensors } from "~/components/dnd/sensors";
 import { Button } from "~/components/ui/button";
 import { TableHead, TableRow } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
@@ -180,15 +175,7 @@ export default function TableHeaderLayout<TData extends RowData>({
   styles: HeaderStyles;
   isDebugEnabled: boolean;
 }) {
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 150, tolerance: 5 },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    }),
-  );
+  const sensors = useCubbyDndSensors({ touchDelay: 150, touchTolerance: 5 });
   const region = (id: string) => table.getColumn(id)?.getIsPinned() || "center";
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
@@ -231,6 +218,11 @@ export default function TableHeaderLayout<TData extends RowData>({
       onDragEnd={onDragEnd}
       accessibility={{
         container: typeof document === "undefined" ? undefined : document.body,
+        screenReaderInstructions: cubbyDndScreenReaderInstructions,
+        announcements: createDndAnnouncements({
+          item: (id) => `${id} column`,
+          target: (id) => `${id} column position`,
+        }),
       }}
     >
       <SortableContext

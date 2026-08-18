@@ -19,7 +19,7 @@ import { invalidateTRPCQueries } from "~/lib/query-keys";
 import { ArrangeBoard } from "./ArrangeBoard";
 import { ArrangeTree } from "./ArrangeTree";
 import { findUnknownRoot } from "./arrange-tree-utils";
-import { useArrangeDnd } from "./use-arrange-dnd";
+import { ArrangeDndProvider } from "./use-arrange-dnd";
 import { useArrangeMutations } from "./use-arrange-mutations";
 
 type ArrangeView = "board" | "tree";
@@ -65,7 +65,6 @@ export function ArrangeSurface({
     api.location.makeTree.queryOptions(),
   );
   const { moveLocation, moveItem } = useArrangeMutations();
-  useArrangeDnd({ roots, moveLocation, moveItem });
   const depthId = useId();
 
   const [depth, setDepth] = useState(readDepth);
@@ -139,25 +138,31 @@ export function ArrangeSurface({
         </Row>
       </Row>
 
-      <ProductImageSummariesProvider productIds={productIds}>
-        {view === "board" ? (
-          <ArrangeBoard
-            roots={roots}
-            depth={depth}
-            unknownRoot={unknownRoot}
-            at={at}
-            onSelect={onSelect}
-          />
-        ) : (
-          <ArrangeTree
-            roots={roots}
-            depth={depth}
-            unknownRoot={unknownRoot}
-            at={at}
-            onSelect={onSelect}
-          />
-        )}
-      </ProductImageSummariesProvider>
+      <ArrangeDndProvider
+        roots={roots}
+        moveLocation={moveLocation}
+        moveItem={moveItem}
+      >
+        <ProductImageSummariesProvider productIds={productIds}>
+          {view === "board" ? (
+            <ArrangeBoard
+              roots={roots}
+              depth={depth}
+              unknownRoot={unknownRoot}
+              at={at}
+              onSelect={onSelect}
+            />
+          ) : (
+            <ArrangeTree
+              roots={roots}
+              depth={depth}
+              unknownRoot={unknownRoot}
+              at={at}
+              onSelect={onSelect}
+            />
+          )}
+        </ProductImageSummariesProvider>
+      </ArrangeDndProvider>
     </Stack>
   );
 }
