@@ -11,6 +11,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { LocationType } from "@cubby/schemas/location";
+import type { ProductPricingOut } from "@cubby/schemas/product";
 import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 import { format } from "date-fns";
@@ -21,6 +22,8 @@ import {
   Eye,
   ImageIcon,
   MoreHorizontal,
+  Pin,
+  Sigma,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
@@ -1308,6 +1311,73 @@ export function renderOptionCell(
       {option?.label ?? value}
     </DotLabel>
   );
+}
+
+/**
+ * `Product.pricing.source` in prose — the one place this ternary is spelled
+ * out, so the detail-page caption and the cell tooltip (below) can't drift
+ * apart on what "explicit" / "derived" / "none" mean to a reader.
+ */
+export function describeProductPricingSource(
+  pricing: Pick<ProductPricingOut, "source" | "knownExpenseCount" | "partial">,
+): string {
+  switch (pricing.source) {
+    case "explicit":
+      return "Manual override";
+    case "derived":
+      return `Derived from ${pricing.knownExpenseCount} expense${pricing.knownExpenseCount === 1 ? "" : "s"}${pricing.partial ? " · partial history" : ""}`;
+    case "none":
+      return "No override or quantified purchase history";
+  }
+}
+
+/**
+ * `Product.price`'s `EditableCell` edits the manual override, but *displays*
+ * `pricing.effectivePrice` — the override OR the Expense-derived fallback.
+ * Both render as a plain number, so without a cue an override and a derived
+ * price (and a cleared override that happens to land on the same digits as
+ * the old one) are visually identical. The icon + tooltip here is that cue;
+ * shared by the detail page and the list column so the two surfaces can't
+ * disagree about what the cell means.
+ */
+export function renderProductPriceValue(
+  pricing: Pick<
+    ProductPricingOut,
+    "effectivePrice" | "source" | "knownExpenseCount" | "partial"
+  >,
+): ReactNode {
+  if (pricing.effectivePrice === null) return <NoneValue />;
+  const Icon = pricing.source === "explicit" ? Pin : Sigma;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span className="inline-flex items-center gap-1 text-positive" />
+        }
+      >
+        <Icon aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+        {formatCurrency(pricing.effectivePrice)}
+      </TooltipTrigger>
+      <TooltipContent side="top">
+        {describeProductPricingSource(pricing)}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * Label for `Product.price`'s currency-clear control: names the state
+ * clearing the override lands on, so the button reads as "go back to the
+ * derived price" rather than an unlabelled "clear". Shared by the detail
+ * page and the list column so a clear affordance can't say something
+ * different on one surface than the other.
+ */
+export function productPriceClearLabel(
+  pricing: Pick<ProductPricingOut, "derivedPrice">,
+): string {
+  return pricing.derivedPrice !== null
+    ? `Revert to ${formatCurrency(pricing.derivedPrice)} (derived)`
+    : "Clear override (no derived price on record)";
 }
 
 /**

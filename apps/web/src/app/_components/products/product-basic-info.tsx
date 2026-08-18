@@ -7,7 +7,6 @@ import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
-import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
@@ -15,7 +14,11 @@ import {
   productValuationMutationInvalidateKeys,
 } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
-import { formatCurrency } from "~/lib/utils";
+import {
+  describeProductPricingSource,
+  productPriceClearLabel,
+  renderProductPriceValue,
+} from "../data-table/columnHelpers";
 import { EditableCell } from "../data-table/editable-cell";
 import { EntityInlineLink } from "../EntityInlineLink";
 import { useEntityDelete } from "../hooks/useEntityDelete";
@@ -88,21 +91,14 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
                 data: { price: newPrice },
               });
             }}
-            config={{ type: "currency" }}
-            renderValue={() =>
-              product.pricing.effectivePrice !== null ? (
-                formatCurrency(product.pricing.effectivePrice)
-              ) : (
-                <NoneValue />
-              )
-            }
+            config={{
+              type: "currency",
+              clearable: { label: productPriceClearLabel(product.pricing) },
+            }}
+            renderValue={() => renderProductPriceValue(product.pricing)}
           />
           <span className="text-muted-foreground text-xs">
-            {product.pricing.source === "explicit"
-              ? "Manual override"
-              : product.pricing.source === "derived"
-                ? `Derived from ${product.pricing.knownExpenseCount} expense${product.pricing.knownExpenseCount === 1 ? "" : "s"}${product.pricing.partial ? " · partial history" : ""}`
-                : "No override or quantified purchase history"}
+            {describeProductPricingSource(product.pricing)}
           </span>
         </Stack>
       ),

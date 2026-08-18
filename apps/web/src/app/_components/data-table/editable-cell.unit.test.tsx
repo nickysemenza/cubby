@@ -214,6 +214,76 @@ describe("EditableCell component", () => {
   });
 });
 
+describe("EditableCell currency editor (clearable)", () => {
+  // `clearable` lets a currency field with a fallback (Product.price reverting
+  // to an Expense-derived price) be returned to null with one click, instead
+  // of requiring "select all, delete, Save" — and its `label` names what
+  // clearing lands on, since an emptied box and a value that happens to equal
+  // the fallback look identical otherwise.
+  it("saves null through the clear affordance when clearable, without touching the input", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <EditableCell
+        value={20}
+        onSave={onSave}
+        config={{
+          type: "currency",
+          clearable: { label: "Revert to $12.00 (derived)" },
+        }}
+        renderValue={(v) => <span data-testid="display">{String(v)}</span>}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+    const input = await screen.findByRole("spinbutton");
+    // The clear button commits null directly — the input is left untouched.
+    expect(input).toHaveValue(20);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Revert to $12.00 (derived)" }),
+    );
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith(null);
+    });
+  });
+
+  it("offers no clear affordance by default", async () => {
+    render(
+      <EditableCell
+        value={20}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+        config={{ type: "currency" }}
+        renderValue={(v) => <span>{String(v)}</span>}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+    await screen.findByRole("spinbutton");
+
+    expect(screen.queryByRole("button", { name: /revert|clear/i })).toBeNull();
+  });
+
+  it("offers no clear affordance when there is nothing to clear (value already null)", async () => {
+    render(
+      <EditableCell
+        value={null}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+        config={{
+          type: "currency",
+          clearable: { label: "Revert to $12.00 (derived)" },
+        }}
+        renderValue={(v) => <span>{String(v)}</span>}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+    await screen.findByRole("spinbutton");
+
+    expect(screen.queryByRole("button", { name: /revert|clear/i })).toBeNull();
+  });
+});
+
 describe("EditableCell select editor (commit-on-pick)", () => {
   const OPTIONS = [
     { value: "a", label: "Apple" },

@@ -12,7 +12,11 @@ import {
   createFilterableSelectColumn,
   createImageColumn,
   createParentLinkColumn,
+  describeProductPricingSource,
+  productPriceClearLabel,
+  renderProductPriceValue,
 } from "./columnHelpers";
+import { EditableCell } from "./editable-cell";
 import {
   type CubbyColumnDef as ColumnDef,
   createCubbyColumnHelper,
@@ -611,5 +615,105 @@ describe("boolean tones come from the roster, not the factory", () => {
     const dot = document.querySelector("td span[aria-hidden]");
     expect(dot).not.toBeNull();
     expect((dot as HTMLElement).style.backgroundColor).toBe("var(--warning)");
+  });
+});
+
+// `Product.price`'s EditableCell edits the manual override but displays
+// `pricing.effectivePrice` (override OR the Expense-derived fallback), so an
+// override and a derived price render as the same bare number with nothing
+// telling them apart. `renderProductPriceValue` / `describeProductPricingSource`
+// / `productPriceClearLabel` are the shared fix — both the product detail page
+// and the product list column call the same three functions, so the two
+// surfaces cannot disagree about what the cell means.
+describe("Product pricing cell (explicit vs derived legibility)", () => {
+  const explicitPricing = {
+    effectivePrice: 20,
+    derivedPrice: 12,
+    source: "explicit" as const,
+    knownExpenseCount: 3,
+    partial: false,
+  };
+  const derivedPricing = {
+    effectivePrice: 12,
+    derivedPrice: 12,
+    source: "derived" as const,
+    knownExpenseCount: 3,
+    partial: false,
+  };
+  const nonePricing = {
+    effectivePrice: null,
+    derivedPrice: null,
+    source: "none" as const,
+    knownExpenseCount: 0,
+    partial: false,
+  };
+
+  it("describes each pricing source in prose, shared by the caption and the cell tooltip", () => {
+    expect(describeProductPricingSource(explicitPricing)).toBe(
+      "Manual override",
+    );
+    expect(describeProductPricingSource(derivedPricing)).toBe(
+      "Derived from 3 expenses",
+    );
+    expect(
+      describeProductPricingSource({ ...derivedPricing, partial: true }),
+    ).toBe("Derived from 3 expenses · partial history");
+    expect(describeProductPricingSource(nonePricing)).toBe(
+      "No override or quantified purchase history",
+    );
+  });
+
+  it("renders an explicit override and a derived price with different glyphs, not just the same bare number", () => {
+    const { unmount } = render(
+      <div>{renderProductPriceValue(explicitPricing)}</div>,
+    );
+    expect(screen.getByText("$20.00")).toBeInTheDocument();
+    expect(document.querySelector("svg.lucide-pin")).not.toBeNull();
+    expect(document.querySelector("svg.lucide-sigma")).toBeNull();
+    unmount();
+
+    render(<div>{renderProductPriceValue(derivedPricing)}</div>);
+    expect(screen.getByText("$12.00")).toBeInTheDocument();
+    expect(document.querySelector("svg.lucide-sigma")).not.toBeNull();
+    expect(document.querySelector("svg.lucide-pin")).toBeNull();
+  });
+
+  it("renders the muted dash when there is no price at all", () => {
+    render(<div>{renderProductPriceValue(nonePricing)}</div>);
+    expect(screen.getByText("—")).toBeInTheDocument();
+  });
+
+  it("names the derived fallback when clearing has one to return to, and says so plainly when it doesn't", () => {
+    expect(productPriceClearLabel({ derivedPrice: 12 })).toBe(
+      "Revert to $12.00 (derived)",
+    );
+    expect(productPriceClearLabel({ derivedPrice: null })).toBe(
+      "Clear override (no derived price on record)",
+    );
+  });
+
+  // The bug this cell rework fixes: the display showed `pricing.effectivePrice`
+  // (override OR derived) while the editor seeded from the raw `value`
+  // (override only) — so a derived-only product showed a real number, but
+  // opening it landed on a blank box with nothing on the cell explaining why.
+  // The glyph now tells the reader it's derived *before* they click; the blank
+  // box on open is then legible ("nothing WAS overridden") instead of looking
+  // like a lost value.
+  it("a derived-only product's cell shows the derived cue, and its editor opens blank — the raw stored override, not the displayed fallback", async () => {
+    render(
+      <EditableCell
+        value={null}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+        config={{ type: "currency" }}
+        renderValue={() => renderProductPriceValue(derivedPricing)}
+      />,
+    );
+
+    expect(screen.getByText("$12.00")).toBeInTheDocument();
+    expect(document.querySelector("svg.lucide-sigma")).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button"));
+    const input = await screen.findByRole("spinbutton");
+    expect(input).toHaveValue(null);
   });
 });

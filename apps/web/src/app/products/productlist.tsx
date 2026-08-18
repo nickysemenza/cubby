@@ -50,7 +50,9 @@ import {
   createPlainDateColumn,
   createSingleEntityInlineLinkColumn,
   createTextColumn,
+  productPriceClearLabel,
   renderOptionCell,
+  renderProductPriceValue,
 } from "../_components/data-table/columnHelpers";
 import { DataTableToolbar } from "../_components/data-table/data-table-toolbar";
 import { EditableCell } from "../_components/data-table/editable-cell";
@@ -580,16 +582,11 @@ export function ProductList({
                   data: { price },
                 });
               }}
-              config={{ type: "currency" }}
-              renderValue={() =>
-                product.pricing.effectivePrice === null ? (
-                  <NoneValue />
-                ) : (
-                  <span className="text-positive">
-                    {formatCurrency(product.pricing.effectivePrice)}
-                  </span>
-                )
-              }
+              config={{
+                type: "currency",
+                clearable: { label: productPriceClearLabel(product.pricing) },
+              }}
+              renderValue={() => renderProductPriceValue(product.pricing)}
             />
           );
         },
