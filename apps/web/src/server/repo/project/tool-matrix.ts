@@ -46,7 +46,6 @@ import {
   UNASSIGNED_TRADE_LABEL,
   UNKNOWN_MANUFACTURER_LABEL,
 } from "@cubby/schemas/project";
-import { format } from "date-fns";
 import {
   and,
   asc,
@@ -60,6 +59,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
+import { householdLocalDate } from "~/lib/household-date";
 import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import type { Database, DrizzleClient } from "~/server/db";
 import {
@@ -193,7 +193,7 @@ export async function projectToolMatrix(
   options: { today?: string } = {},
 ): Promise<ProjectToolMatrixOut> {
   const dbc = getDb(db);
-  const today = options.today ?? format(new Date(), "yyyy-MM-dd");
+  const today = options.today ?? householdLocalDate();
   const wantsLane = (lane: ProjectToolSuggestionLane): boolean =>
     filters.suggestionLanes === undefined ||
     filters.suggestionLanes.includes(lane);

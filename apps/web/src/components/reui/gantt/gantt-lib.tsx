@@ -1,4 +1,3 @@
-import { expandRecurrence } from "~/components/reui/gantt/gantt-recurrence"
 import type {
   GanttDateRange,
   GanttEvent,
@@ -14,7 +13,6 @@ import {
   addMonths,
   addWeeks,
   addYears,
-  differenceInMinutes,
   format,
   startOfDay,
   startOfMonth,
@@ -46,19 +44,6 @@ function zonedStartOfDay(date: Date, timeZone: string): TZDate {
 /** Stable per-day key in the display time zone. */
 function getDayKey(date: Date, timeZone: string): string {
   return format(toZoned(date, timeZone), "yyyy-MM-dd")
-}
-
-/** Day length in minutes; 1380/1500 on DST transition days - never assume 1440. */
-function getDayTotalMinutes(dayStart: Date, timeZone: string): number {
-  const next = zonedStartOfDay(
-    addDays(toZoned(dayStart, timeZone), 1),
-    timeZone
-  )
-  return differenceInMinutes(next, dayStart)
-}
-
-function snapMinutes(minutes: number, snap: number): number {
-  return Math.round(minutes / snap) * snap
 }
 
 interface ViewRangeOptions {
@@ -139,23 +124,14 @@ function eventsOverlap(
   return a.start < b.end && a.end > b.start
 }
 
-function spansMultipleDays(occ: { start: Date; end: Date }): boolean {
-  // An event ending exactly at the next midnight is still single-day
-  // (exclusive end), so compare against a strictly-later instant.
-  return occ.end.getTime() - occ.start.getTime() > 24 * 60 * 60 * 1000
-}
-
 /**
  * Identity of a schedule ACROSS time edits. `occurrence.key` embeds the start
  * instant, so it changes the moment a schedule is moved or start-resized -
  * useless as lane memory. This key survives the edit: the event id plus, for a
- * recurring series, the occurrence's position in it.
+ * the event identifier.
  */
-function getLaneKey(occurrence: {
-  eventId: string
-  recurrenceIndex?: number
-}): string {
-  return `${occurrence.eventId}::${occurrence.recurrenceIndex ?? 0}`
+function getLaneKey(occurrence: { eventId: string }): string {
+  return occurrence.eventId
 }
 
 /**
@@ -364,12 +340,6 @@ function defaultEventOrder(a: GanttOccurrence, b: GanttOccurrence): number {
 
 interface BuildIndexOptions<TData = unknown> {
   timeZone: string
-  /** Escape hatch for exotic recurrence: return the expanded occurrences. */
-  getOccurrences?: (
-    event: GanttEvent<TData>,
-    range: GanttDateRange,
-    ctx: { timeZone: string }
-  ) => Array<{ start: Date; end: Date }> | null | undefined
   eventOrder?: (a: GanttOccurrence<TData>, b: GanttOccurrence<TData>) => number
 }
 
@@ -382,49 +352,23 @@ function buildEventIndex<TData>(
   visibleRange: GanttDateRange,
   opts: BuildIndexOptions<TData>
 ): GanttIndex<TData> {
-  const { timeZone } = opts
   const order = opts.eventOrder ?? defaultEventOrder
-
-  // RECURRENCE-ID override replacement: an event carrying recurringEventId +
-  // originalStart is an edited single occurrence of that series. The parent's
-  // expansion drops the replaced instant; the override renders as its own
-  // occurrence through the normal path below.
-  const overrideTimes = new Map<string, Set<number>>()
-  for (const event of events) {
-    if (!event.recurringEventId || !event.originalStart) continue
-    let times = overrideTimes.get(event.recurringEventId)
-    if (!times) overrideTimes.set(event.recurringEventId, (times = new Set()))
-    times.add(event.originalStart.getTime())
-  }
 
   const occurrences: GanttOccurrence<TData>[] = []
   for (const event of events) {
-    const replaced = overrideTimes.get(event.id)
-    const custom = opts.getOccurrences?.(event, visibleRange, { timeZone })
-    if (custom) {
-      custom.forEach((occ, i) => {
-        if (replaced?.has(occ.start.getTime())) return
-        if (!rangesIntersect({ start: occ.start, end: occ.end }, visibleRange))
-          return
-        occurrences.push({
-          key: `${event.id}::${occ.start.toISOString()}`,
-          eventId: event.id,
-          event,
-          start: occ.start,
-          end: occ.end,
-          allDay: event.allDay ?? false,
-          isRecurring: true,
-          recurrenceIndex: i,
-        })
-      })
-      continue
-    }
-    const expanded = expandRecurrence(event, visibleRange, { timeZone })
-    occurrences.push(
-      ...(replaced
-        ? expanded.filter((occ) => !replaced.has(occ.start.getTime()))
-        : expanded)
-    )
+    const isPoint = event.end.getTime() === event.start.getTime()
+    if (
+      !rangesIntersect({ start: event.start, end: event.end }, visibleRange) &&
+      !(isPoint && event.start >= visibleRange.start && event.start < visibleRange.end)
+    ) continue
+    occurrences.push({
+      key: `${event.id}::${event.start.toISOString()}`,
+      eventId: event.id,
+      event,
+      start: event.start,
+      end: event.end,
+      allDay: event.allDay ?? false,
+    })
   }
   occurrences.sort(order)
   return { occurrences }
@@ -451,81 +395,6 @@ function flattenResources(
 }
 
 /** Depth-first lookup of one node in the tree. */
-function findResource(
-  resources: GanttResource[],
-  id: string
-): GanttResource | null {
-  for (const resource of resources) {
-    if (resource.id === id) return resource
-    const found = resource.children?.length
-      ? findResource(resource.children, id)
-      : null
-    if (found) return found
-  }
-  return null
-}
-
-/**
- * Pure tree move: removes `resourceId` from wherever it sits and reinserts it
- * under `parentId` (null = root) at `index`. Returns a new tree; the original
- * is untouched. Returns null for impossible moves (unknown ids, or dropping a
- * node into its own subtree).
- */
-function reorderResources(
-  resources: GanttResource[],
-  resourceId: string,
-  parentId: string | null,
-  index: number
-): GanttResource[] | null {
-  let moved: GanttResource | null = null
-
-  const strip = (nodes: GanttResource[]): GanttResource[] =>
-    nodes.flatMap((node) => {
-      if (node.id === resourceId) {
-        moved = node
-        return []
-      }
-      if (!node.children?.length) return [node]
-      return [{ ...node, children: strip(node.children) }]
-    })
-
-  const stripped = strip(resources)
-  if (!moved) return null
-
-  const contains = (node: GanttResource, id: string): boolean =>
-    node.id === id || !!node.children?.some((child) => contains(child, id))
-  if (parentId !== null && contains(moved, parentId)) return null
-
-  const insert = (nodes: GanttResource[]): GanttResource[] => {
-    if (parentId === null) {
-      const next = [...nodes]
-      next.splice(Math.min(Math.max(index, 0), next.length), 0, moved!)
-      return next
-    }
-    return nodes.map((node) => {
-      if (node.id === parentId) {
-        const children = [...(node.children ?? [])]
-        children.splice(
-          Math.min(Math.max(index, 0), children.length),
-          0,
-          moved!
-        )
-        return { ...node, children }
-      }
-      if (!node.children?.length) return node
-      return { ...node, children: insert(node.children) }
-    })
-  }
-
-  const next = insert(stripped)
-  // unknown parentId: the node vanished - reject
-  if (parentId !== null) {
-    const flat = flattenResources(next)
-    if (!flat.some(({ resource }) => resource.id === resourceId)) return null
-  }
-  return next
-}
-
 const DEFAULT_WEEKEND_DAYS = [0, 6]
 
 /** Resolves whether a day is an off day (non-working) in the display zone. */
@@ -552,30 +421,15 @@ export {
   buildEventIndex,
   defaultEventOrder,
   eventsOverlap,
-  findResource,
   flattenResources,
   getDayKey,
-  getDayTotalMinutes,
   getGanttDateRange,
   getLaneKey,
   getRangeKey,
-  MIN_PACK_SLOT,
   packTimedSegments,
-  rangesIntersect,
-  reorderResources,
   resolveOffDay,
-  snapMinutes,
-  spansMultipleDays,
   stepGanttDate,
   toZoned,
   zonedStartOfDay,
 }
-export type {
-  BuildIndexOptions,
-  GanttIndex,
-  GanttLaneMemo,
-  PackOptions,
-  ViewDateRanges,
-  ViewRangeOptions,
-  WeekStartsOn,
-}
+export type { GanttIndex, GanttLaneMemo, WeekStartsOn }

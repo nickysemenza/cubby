@@ -4,6 +4,7 @@ import type {
   AuditLogListOut,
 } from "@cubby/schemas/audit";
 import type { ActorContext, AuditSource } from "@cubby/schemas/context";
+import { entityRefKey } from "@cubby/schemas/entity";
 import {
   entityManifest,
   type ShortcodeEntity,
@@ -17,7 +18,6 @@ import {
   type EntityRef,
   lookupEntityLabels,
   lookupShortcodes,
-  refKey,
 } from "~/server/repo/shortcode-resolver";
 
 type AuditAction = "create" | "update" | "delete";
@@ -279,7 +279,7 @@ function remapChangeShortcodes(
     value: unknown,
   ): AuditJsonValue | undefined =>
     typeof value === "string" && value.length > 0
-      ? asJson(shortcodeByRef.get(refKey(targetEntity, value)) ?? value)
+      ? asJson(shortcodeByRef.get(entityRefKey(targetEntity, value)) ?? value)
       : asJson(value);
 
   const remapped: Record<
@@ -414,8 +414,10 @@ export async function getAuditLog(
     entries: returnEntries.map(({ id, entityId, changes, ...entry }) => ({
       ...entry,
       entryKey: encodeAuditCursor({ id, createdAt: entry.createdAt }),
-      entityId: shortcodeByRef.get(refKey(entry.entityType, entityId)) ?? null,
-      entityName: nameByRef.get(refKey(entry.entityType, entityId)) ?? null,
+      entityId:
+        shortcodeByRef.get(entityRefKey(entry.entityType, entityId)) ?? null,
+      entityName:
+        nameByRef.get(entityRefKey(entry.entityType, entityId)) ?? null,
       changes: remapChangeShortcodes(entry.entityType, changes, shortcodeByRef),
     })),
     nextCursor,

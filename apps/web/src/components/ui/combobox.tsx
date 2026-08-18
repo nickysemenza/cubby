@@ -71,6 +71,7 @@ interface FilterableComboboxProps {
    * in multiple mode, which doesn't fit a compact filter control.)
    */
   clearable?: boolean;
+  ariaLabel?: string;
 }
 
 export function FilterableCombobox({
@@ -85,6 +86,7 @@ export function FilterableCombobox({
   isLoading,
   autoFocus,
   clearable,
+  ariaLabel,
 }: FilterableComboboxProps) {
   const [inputValue, setInputValue] = React.useState("");
   const [open, setOpen] = React.useState(false);
@@ -142,6 +144,7 @@ export function FilterableCombobox({
       >
         {/* Input for filtering when open, display value when closed */}
         <ComboboxPrimitive.Input
+          aria-label={ariaLabel}
           autoFocus={autoFocus}
           className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
           placeholder={placeholder}
@@ -314,5 +317,102 @@ function ComboboxPopup({
         </ComboboxPrimitive.Positioner>
       </ComboboxPrimitive.Portal>
     </>
+  );
+}
+
+interface MultiFilterableComboboxProps {
+  items: FilterableComboboxItem[];
+  value: string[];
+  onValueChange: (value: string[]) => void;
+  placeholder?: string;
+  className?: string;
+  disabled?: boolean;
+  ariaLabel?: string;
+}
+
+/** Dense, searchable any-of picker for manifest-backed table filters. */
+export function MultiFilterableCombobox({
+  items,
+  value,
+  onValueChange,
+  placeholder,
+  className,
+  disabled,
+  ariaLabel,
+}: MultiFilterableComboboxProps) {
+  const [inputValue, setInputValue] = React.useState("");
+  const [open, setOpen] = React.useState(false);
+  const anchorRef = React.useRef<HTMLDivElement>(null);
+
+  const filteredItems = React.useMemo(() => {
+    if (!inputValue) return items;
+    const lower = inputValue.toLowerCase();
+    return items.filter((item) => item.label.toLowerCase().includes(lower));
+  }, [items, inputValue]);
+
+  const summaryLabel = React.useMemo(() => {
+    const first = value[0];
+    if (first === undefined) return "";
+    const firstLabel = items.find((item) => item.value === first)?.label ?? first;
+    return value.length > 1 ? `${firstLabel} +${value.length - 1}` : firstLabel;
+  }, [items, value]);
+
+  return (
+    <ComboboxPrimitive.Root
+      multiple={true}
+      value={value}
+      onValueChange={(newValue: string[]) => {
+        onValueChange(newValue);
+        setInputValue("");
+      }}
+      open={open}
+      onOpenChange={setOpen}
+      disabled={disabled}
+    >
+      <ComboboxPrimitive.InputGroup
+        ref={anchorRef}
+        className={cn(
+          "flex h-7 w-full items-center justify-between gap-1.5 rounded-none border border-border bg-input/20 px-2 text-xs/relaxed outline-none transition-colors duration-150 hover:bg-input/30 focus-visible:border-ring focus-visible:ring-[2px] focus-visible:ring-ring/30 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50",
+          className,
+        )}
+      >
+        <ComboboxPrimitive.Input
+          aria-label={ariaLabel}
+          className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
+          placeholder={placeholder}
+          value={open ? inputValue : summaryLabel}
+          onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
+            setInputValue(event.target.value)
+          }
+        />
+        {value.length > 0 && (
+          <button
+            type="button"
+            aria-label="Clear filter"
+            onMouseDown={(event: React.MouseEvent) => event.preventDefault()}
+            onClick={(event: React.MouseEvent) => {
+              event.stopPropagation();
+              setInputValue("");
+              onValueChange([]);
+            }}
+            className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <XIcon className="size-3" />
+          </button>
+        )}
+        <ComboboxPrimitive.Trigger
+          aria-label={`Open ${placeholder ?? "options"}`}
+          className="-mr-2 flex h-full min-w-7 shrink-0 items-center justify-center"
+        >
+          <ChevronDownIcon
+            className={cn(
+              "size-3.5 text-muted-foreground transition-transform duration-150",
+              open && "rotate-180",
+            )}
+          />
+        </ComboboxPrimitive.Trigger>
+      </ComboboxPrimitive.InputGroup>
+      <ComboboxPopup items={filteredItems} anchorRef={anchorRef} />
+    </ComboboxPrimitive.Root>
   );
 }

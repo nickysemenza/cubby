@@ -1,8 +1,8 @@
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import { useEffect, useRef, useState } from "react";
-import type { Filter } from "~/components/reui/filters";
 import {
+  type Filter,
   type FilterBarField,
   filterStateKey,
   normalizeBarFilters,
@@ -10,7 +10,7 @@ import {
 
 interface UseFilterBarDraftArgs {
   /** Filters as the owning state (table columns, URL) currently has them. */
-  externalFilters: Filter<string>[];
+  externalFilters: Filter[];
   fields: FilterBarField[];
   /** Write accepted draft state back to the owner. */
   commit: (columnFilters: ColumnFiltersState) => void;
@@ -29,8 +29,7 @@ export function useFilterBarDraft({
   fields,
   commit,
 }: UseFilterBarDraftArgs) {
-  const [draftFilters, setDraftFilters] =
-    useState<Filter<string>[]>(externalFilters);
+  const [draftFilters, setDraftFilters] = useState<Filter[]>(externalFilters);
   const [debouncedDraftFilters] = useDebouncedValue(draftFilters, {
     wait: 500,
   });
@@ -73,7 +72,7 @@ export function useFilterBarDraft({
     fields,
   ]);
 
-  const handleChange = (nextFilters: Filter<string>[]) => {
+  const handleChange = (nextFilters: Filter[]) => {
     const previousByField = new Map(
       draftFilters.map((filter) => [filter.field, filter]),
     );

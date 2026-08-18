@@ -9,7 +9,6 @@
 import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import {
   type IngredientId,
-  type ProductId,
   type ProductShortcode,
   productShortcode,
   unsafeExpenseShortcode,
@@ -108,10 +107,9 @@ import {
 } from "~/server/repo/project";
 import { listProductPurchases } from "~/server/repo/purchase-products";
 import {
-  resolveAllOrThrow,
+  bindShortcodeResolver,
   resolveLiveShortcode,
   resolveLiveShortcodes,
-  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { shouldUseSemanticComboboxFallback } from "~/server/semantic/combobox-fallback";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
@@ -144,19 +142,9 @@ import {
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
-async function resolveProductId(
-  db: Parameters<typeof resolveOrThrow>[0],
-  shortcode: ProductShortcode,
-): Promise<ProductId> {
-  return resolveOrThrow(db, "product", shortcode);
-}
-
-async function resolveProductIds(
-  db: Parameters<typeof resolveAllOrThrow>[0],
-  shortcodes: ProductShortcode[],
-): Promise<ProductId[]> {
-  return resolveAllOrThrow(db, "product", shortcodes);
-}
+const productShortcodes = bindShortcodeResolver("product");
+const projectShortcodes = bindShortcodeResolver("project");
+const inventoryShortcodes = bindShortcodeResolver("inventory");
 
 // Product lists are lean DB rows. Detail/create/update are enriched with USDA
 // food and recipe usages, so the list contract is split from the detail one.
@@ -226,7 +214,7 @@ const { getByID, getByShortcode } = createEntityDetailReadProcedures({
   },
   repository: {
     getByID: async (services, shortcode: ProductShortcode) => {
-      const id = await resolveProductId(services.db, shortcode);
+      const id = await productShortcodes.one(services.db, shortcode);
       return await getProductWithFood(services.db, services.usdaClient, id);
     },
     // Resolves the shortcode itself rather than reusing a plain repo-level
@@ -341,7 +329,7 @@ const update = protectedProcedure
   .input(productUpdateInput)
   .output(strictOutput(productWithFoodAndSideEffectsOut))
   .mutation(async ({ ctx, input }) => {
-    const id = await resolveProductId(ctx.db, input.id);
+    const id = await productShortcodes.one(ctx.db, input.id);
     return await updateProductWithSideEffects(
       {
         db: ctx.db,
@@ -365,7 +353,7 @@ const applyUpcData = protectedProcedure
   .input(productApplyUpcInput)
   .output(strictOutput(productWithFoodAndSideEffectsOut))
   .mutation(async ({ ctx, input }) => {
-    const id = await resolveProductId(ctx.db, input.id);
+    const id = await productShortcodes.one(ctx.db, input.id);
     return await applyUpcDataWithSideEffects(
       {
         db: ctx.db,
@@ -409,7 +397,7 @@ const quickCreate = protectedProcedure
       },
       ctx.actorContext,
     );
-    const entityId = await resolveProductId(ctx.db, product.id);
+    const entityId = await productShortcodes.one(ctx.db, product.id);
     await runMutationSideEffects(ctx.db, {
       action: "created",
       entity: { entityType: "product", entityId },
@@ -504,7 +492,7 @@ const tagSiblings = protectedProcedure
   .input(productShortcode)
   .output(strictOutput(productTagSiblingsOut))
   .query(async ({ ctx, input }) => {
-    const id = await resolveProductId(ctx.db, input);
+    const id = await productShortcodes.one(ctx.db, input);
     const [siblings, tagStorage] = await Promise.all([
       getProductsSharingTags(ctx.db, id),
       getTagSiblingStorage(ctx.db, id),
@@ -537,7 +525,7 @@ const patchExternalIds = protectedProcedure
   .input(patchProductExternalIdsInput)
   .output(strictOutput(productWithFoodOut))
   .mutation(async ({ ctx, input }) => {
-    const id = await resolveProductId(ctx.db, input.id);
+    const id = await productShortcodes.one(ctx.db, input.id);
     await patchProductExternalIds(ctx.db, id, input, ctx.actorContext);
     return await getProductWithFood(ctx.db, ctx.usdaClient, id);
   });
@@ -546,7 +534,7 @@ const verifyImages = protectedProcedure
   .input(productShortcode)
   .output(strictOutput(productWithFoodOut))
   .mutation(async ({ ctx, input }) => {
-    const id = await resolveProductId(ctx.db, input);
+    const id = await productShortcodes.one(ctx.db, input);
     await verifyProductImages(ctx.db, id);
     return await getProductWithFood(ctx.db, ctx.usdaClient, id);
   });
@@ -631,7 +619,7 @@ const markUsdaUnavailableMany = protectedProcedure
     yield* streamItems<(typeof input.ids)[number], never, { updated: number }>(
       input.ids,
       async (shortcode) => {
-        const id = await resolveProductId(ctx.db, shortcode);
+        const id = await productShortcodes.one(ctx.db, shortcode);
         await updateProductWithFood(
           ctx.db,
           ctx.usdaClient,
@@ -663,7 +651,7 @@ const deleteItem = createDeleteProcedure<ProductShortcode>(
     // Before the delete: the products (and their ingredient links) are
     // unreadable once soft-deleted.
     const ingredientIds = await linkedIngredientIds(services.db, shortcodes);
-    const ids = await resolveProductIds(services.db, shortcodes);
+    const ids = await productShortcodes.all(services.db, shortcodes);
     const { detachedImageKeys } = await deleteProducts(
       services.db,
       ids,
@@ -753,7 +741,7 @@ const projectUses = protectedProcedure
   .input(productProjectUsesInput)
   .output(strictOutput(productProjectUsesOut))
   .query(async ({ ctx, input }) => {
-    const id = await resolveProductId(ctx.db, input.productId);
+    const id = await productShortcodes.one(ctx.db, input.productId);
     return listProductProjectUses(ctx.db, id);
   });
 
@@ -766,7 +754,7 @@ const purchases = protectedProcedure
   .input(productPurchasesInput)
   .output(strictOutput(productPurchasesOut))
   .query(async ({ ctx, input }) => {
-    const id = await resolveProductId(ctx.db, input.productId);
+    const id = await productShortcodes.one(ctx.db, input.productId);
     return listProductPurchases(ctx.db, id);
   });
 
@@ -776,7 +764,7 @@ const components = protectedProcedure
   .input(productComponentsInput)
   .output(strictOutput(productComponentsOut))
   .query(async ({ ctx, input }) => {
-    const id = await resolveProductId(ctx.db, input.parentProductId);
+    const id = await productShortcodes.one(ctx.db, input.parentProductId);
     return listProductComponents(ctx.db, id);
   });
 
@@ -785,24 +773,23 @@ const kitMembership = protectedProcedure
   .input(kitMembershipsInput)
   .output(strictOutput(kitMembershipsOut))
   .query(async ({ ctx, input }) => {
-    const id = await resolveProductId(ctx.db, input.productId);
+    const id = await productShortcodes.one(ctx.db, input.productId);
     return listKitMembership(ctx.db, id);
   });
 
 /**
  * Resolve both the kit's shortcode and every component entry's shortcode in
  * one batched pass, keeping each entry's quantity paired with its resolved id.
- * `resolveProductIds` returns one id per input code, in the same order — the
- * same guarantee `resolveAllOrThrow` documents at its own `!` — so zipping by
- * index is sound, not a guess.
+ * `productShortcodes.all` returns one id per input code, in the same order, so
+ * zipping by index is sound, not a guess.
  */
 async function resolveComponentEntries(
-  db: Parameters<typeof resolveOrThrow>[0],
+  db: Parameters<typeof productShortcodes.one>[0],
   input: AttachProductComponentsInput,
 ) {
   const [parentProductId, componentIds] = await Promise.all([
-    resolveProductId(db, input.parentProductId),
-    resolveProductIds(
+    productShortcodes.one(db, input.parentProductId),
+    productShortcodes.all(
       db,
       input.components.map((component) => component.productId),
     ),
@@ -837,8 +824,8 @@ const detachComponents = protectedProcedure
   .output(strictOutput(productComponentMutationOut))
   .mutation(async ({ ctx, input }) => {
     const [parentProductId, componentProductIds] = await Promise.all([
-      resolveProductId(ctx.db, input.parentProductId),
-      resolveProductIds(ctx.db, input.componentProductIds),
+      productShortcodes.one(ctx.db, input.parentProductId),
+      productShortcodes.all(ctx.db, input.componentProductIds),
     ]);
     return detachProductComponents(
       ctx.db,
@@ -857,12 +844,8 @@ const setProjectUses = protectedProcedure
   .input(productProjectUsesSetInput)
   .output(strictOutput(productProjectUsesSetOut))
   .mutation(async ({ ctx, input }) => {
-    const id = await resolveProductId(ctx.db, input.productId);
-    const projectIds = await resolveAllOrThrow(
-      ctx.db,
-      "project",
-      input.projectIds,
-    );
+    const id = await productShortcodes.one(ctx.db, input.productId);
+    const projectIds = await projectShortcodes.all(ctx.db, input.projectIds);
     return setProductProjectUses(ctx.db, id, projectIds, ctx.actorContext);
   });
 
@@ -876,10 +859,10 @@ const discard = protectedProcedure
   .input(productDiscardInput)
   .output(strictOutput(productDiscardOut))
   .mutation(async ({ ctx, input }) => {
-    const productId = await resolveProductId(ctx.db, input.productId);
+    const productId = await productShortcodes.one(ctx.db, input.productId);
     const inventoryEntryId =
       input.adjustInventory && input.inventoryEntryId
-        ? await resolveOrThrow(ctx.db, "inventory", input.inventoryEntryId)
+        ? await inventoryShortcodes.one(ctx.db, input.inventoryEntryId)
         : null;
 
     const result = await discardProductUnits(

@@ -1,6 +1,5 @@
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import { useCallback, useMemo } from "react";
-import { Filters } from "~/components/reui/filters";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import {
   type FilterSpec,
@@ -8,6 +7,7 @@ import {
 } from "~/entities/filter-manifest";
 import { decodeFilters, encodeFilters } from "~/entities/filters";
 import { cn } from "~/lib/utils";
+import { FilterBar } from "./FilterBar";
 import { filterStateToBarFilters } from "./filter-bar-core";
 import { useFilterBarDraft } from "./useFilterBarDraft";
 
@@ -73,15 +73,10 @@ export function ManifestFilterBar({
   if (fields.length === 0) return null;
 
   return (
-    <Filters
+    <FilterBar
       filters={draftFilters}
       fields={fields}
       onChange={handleChange}
-      allowMultiple={false}
-      collapseAddButton
-      showSearchInput
-      size="sm"
-      variant="solid"
       className={cn("min-w-0", className)}
     />
   );

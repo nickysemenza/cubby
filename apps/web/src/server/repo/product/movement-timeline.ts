@@ -13,9 +13,9 @@ import type {
   ProductMovementTimelineInput,
   ProductMovementTimelineOut,
 } from "@cubby/schemas/product";
-import { format } from "date-fns";
 import { and, eq, inArray } from "drizzle-orm";
 import { groupBy, sumBy } from "es-toolkit";
+import { householdLocalDate } from "~/lib/household-date";
 import {
   buildConfidentOwnershipIntervals,
   classifyProductMovement,
@@ -298,7 +298,7 @@ export async function getProductMovementTimeline(
             ),
           );
   const usagesByProduct = groupBy(usageRows, (row) => row.productId);
-  const today = format(new Date(), "yyyy-MM-dd");
+  const today = householdLocalDate();
   const products: ProductMovementProductOut[] = cohort.data.flatMap((item) => {
     if (!productCodesWithMovements.has(item.id)) return [];
     const privateId = idByCode.get(item.id);

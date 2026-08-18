@@ -28,6 +28,7 @@ import {
 } from "../repo/product";
 import {
   resolveAllOrThrow,
+  resolveCreatedOrInvariant,
   resolveLiveShortcode,
   resolveOrThrow,
 } from "../repo/shortcode-resolver";
@@ -188,11 +189,7 @@ export const createProductWithFood = async (
   // Dependent recipes are recomputed eagerly at the router (the single `create`
   // proc per product, `createMany` once over the deduped union) — covers UI +
   // MCP. No mark-stale; there is no drain anymore.
-  const entityId = await resolveLiveShortcode(db, product.id, "product");
-  if (!entityId) {
-    throw new Error(`Created product ${product.id} could not be resolved`);
-  }
-  const productId = unsafeProductId(entityId);
+  const productId = await resolveCreatedOrInvariant(db, "product", product.id);
   return {
     output: await getProductWithFood(db, usdaClient, productId),
     entityId: productId,

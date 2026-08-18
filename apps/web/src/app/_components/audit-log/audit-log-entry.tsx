@@ -5,10 +5,10 @@ import { useState } from "react";
 import { Row, Stack } from "~/components/layout";
 import { MutedBox } from "~/components/layout/muted-box";
 import {
-  TimelineContent,
-  TimelineIndicator,
-  TimelineItem,
-  TimelineSeparator,
+  AuditTimelineContent,
+  AuditTimelineIndicator,
+  AuditTimelineItem,
+  AuditTimelineSeparator,
 } from "~/components/reui/timeline";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Badge } from "~/components/ui/badge";
@@ -248,10 +248,10 @@ export function AuditLogEntryComponent({
       entry.action === "update" ? summarizeChanges(entry.changes) : null;
 
     return (
-      <TimelineItem step={step} className="not-last:pb-2">
-        <TimelineIndicator className="size-2 border-0 bg-primary ring-2 ring-background" />
-        <TimelineSeparator className="left-[-1.5rem] h-[calc(100%-0.5rem)] translate-y-2 bg-border" />
-        <TimelineContent>
+      <AuditTimelineItem step={step} className="not-last:pb-2">
+        <AuditTimelineIndicator className="size-2 border-0 bg-primary ring-2 ring-background" />
+        <AuditTimelineSeparator className="left-[-1.5rem] h-[calc(100%-0.5rem)] translate-y-2 bg-border" />
+        <AuditTimelineContent>
           {/* Desktop keeps the dense 28px ledger row; phones raise it to the
               44px floor, since each row is a link to the entity it names. */}
           <Row
@@ -298,8 +298,8 @@ export function AuditLogEntryComponent({
               <HoverableTimestamp timestamp={entry.createdAt} />
             </span>
           </Row>
-        </TimelineContent>
-      </TimelineItem>
+        </AuditTimelineContent>
+      </AuditTimelineItem>
     );
   }
 
@@ -313,10 +313,10 @@ export function AuditLogEntryComponent({
     : "SY";
 
   return (
-    <TimelineItem step={step}>
-      <TimelineIndicator className="size-3 border-0 bg-primary ring-4 ring-background" />
-      <TimelineSeparator className="bg-border" />
-      <TimelineContent>
+    <AuditTimelineItem step={step}>
+      <AuditTimelineIndicator className="size-3 border-0 bg-primary ring-4 ring-background" />
+      <AuditTimelineSeparator className="bg-border" />
+      <AuditTimelineContent>
         <Collapsible open={isOpen} onOpenChange={setIsOpen}>
           <Row align="start" gap="sm">
             <Avatar className="size-6 flex-shrink-0">
@@ -407,7 +407,7 @@ export function AuditLogEntryComponent({
             </div>
           </Row>
         </Collapsible>
-      </TimelineContent>
-    </TimelineItem>
+      </AuditTimelineContent>
+    </AuditTimelineItem>
   );
 }

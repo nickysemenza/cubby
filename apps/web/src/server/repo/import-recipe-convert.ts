@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { entityRefKey } from "@cubby/schemas/entity";
 import type { IngredientShortcode, RecipeId } from "@cubby/schemas/identifiers";
 import {
   unsafeIngredientShortcode,
@@ -19,7 +20,7 @@ import {
   upsertNotionRecipe,
   upsertRecipe,
 } from "./recipe/crud";
-import { lookupShortcodes, refKey } from "./shortcode-resolver";
+import { lookupShortcodes } from "./shortcode-resolver";
 
 /**
  * Per-import shared state, threaded through the converter when importing a whole
@@ -143,7 +144,9 @@ const importRecipeToRecipeInput = async (
                   const codes = await lookupShortcodes(exec, [
                     { entity: "recipe", id: targetRecipeId },
                   ]);
-                  const recipeId = codes.get(refKey("recipe", targetRecipeId));
+                  const recipeId = codes.get(
+                    entityRefKey("recipe", targetRecipeId),
+                  );
                   if (!recipeId) {
                     throw new Error(
                       `Recipe ${targetRecipeId} could not be resolved`,

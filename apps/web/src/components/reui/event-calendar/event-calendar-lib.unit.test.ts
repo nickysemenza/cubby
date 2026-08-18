@@ -1,6 +1,6 @@
 import { addDays } from "date-fns";
 import { describe, expect, it } from "vitest";
-import { packWeekRowLanes } from "./event-calendar-lib";
+import { buildEventIndex, packWeekRowLanes } from "./event-calendar-lib";
 import type {
   CalendarEvent,
   EventCalendarOccurrence,
@@ -26,7 +26,6 @@ const occurrence = (
     start,
     end,
     allDay: true,
-    isRecurring: false,
   };
 };
 
@@ -92,5 +91,53 @@ describe("ReUI month span packing", () => {
     expect(
       bars.find((bar) => bar.occurrence.eventId === "expense")?.lane,
     ).toBe(0);
+  });
+});
+
+describe("buildEventIndex month boundaries", () => {
+  const range = {
+    start: new Date("2026-03-01T08:00:00.000Z"),
+    end: new Date("2026-04-01T07:00:00.000Z"),
+  };
+  const index = (events: CalendarEvent[]) =>
+    buildEventIndex(events, range, {
+      timeZone: "America/Los_Angeles",
+      weekStartsOn: 0,
+    });
+
+  it("keeps point events inside the range and excludes points at its end", () => {
+    expect(
+      index([
+        { id: "inside", title: "inside", start: range.start, end: range.start },
+        { id: "end", title: "end", start: range.end, end: range.end },
+      ]).occurrences.map((item) => item.eventId),
+    ).toEqual(["inside"]);
+  });
+
+  it("includes only spans that intersect the exclusive range", () => {
+    expect(
+      index([
+        { id: "before", title: "before", start: new Date("2026-02-27T08:00:00Z"), end: range.start },
+        { id: "cross", title: "cross", start: new Date("2026-02-28T08:00:00Z"), end: new Date("2026-03-02T08:00:00Z") },
+        { id: "after", title: "after", start: range.end, end: new Date("2026-04-02T07:00:00Z") },
+      ]).occurrences.map((item) => item.eventId),
+    ).toEqual(["cross"]);
+  });
+
+  it("places a DST-crossing span in each Pacific calendar day", () => {
+    const result = index([
+      {
+        id: "dst",
+        title: "DST",
+        start: new Date("2026-03-07T08:00:00.000Z"),
+        end: new Date("2026-03-10T07:00:00.000Z"),
+        allDay: true,
+      },
+    ]);
+    expect(
+      [...result.byDay.entries()]
+        .filter(([, bucket]) => bucket.allDay.some((segment) => segment.occurrence.eventId === "dst"))
+        .map(([day]) => day),
+    ).toEqual(["2026-03-07", "2026-03-08", "2026-03-09"]);
   });
 });

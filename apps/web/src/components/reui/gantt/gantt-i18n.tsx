@@ -25,11 +25,6 @@ interface GanttI18nConfig {
     week: (weekNumber: number) => string
     resources: string
     goToDate: string
-    /** Hover hint over empty row space, click-only create. */
-    scheduleHint: string
-    /** Same hint where dragCreate is on and a drag paints a range. */
-    scheduleHintDrag: string
-    reorder: string
     /** Scale switcher label ("Timeline scale"). */
     selectView: string
     zoomIn: string
@@ -40,8 +35,6 @@ interface GanttI18nConfig {
     jumpToBar: (title: string) => string
     /** Read to screen readers as part of the bar label. */
     progress: (percent: number) => string
-    /** Live duration readout on the resize indicator. */
-    durationDays: (days: number) => string
     /** Appended to the bar aria-label when its segment is clipped by the range. */
     continues: string
     scales: {
@@ -100,16 +93,12 @@ const DEFAULT_LABELS: GanttI18nConfig["labels"] = {
   week: (weekNumber) => `W${weekNumber}`,
   resources: "Resources",
   goToDate: "Go to date",
-  scheduleHint: "Click to add a schedule",
-  scheduleHintDrag: "Click or drag to add a schedule",
-  reorder: "Reorder",
   selectView: "Select view",
   zoomIn: "Zoom in",
   zoomOut: "Zoom out",
   resizePanel: "Resize panel",
   jumpToBar: (title) => `Scroll to "${title}"`,
   progress: (percent) => `${percent}% complete`,
-  durationDays: (days) => (days === 1 ? "1 day" : `${days} days`),
   continues: "continues",
   scales: {
     day: "Day",
@@ -262,5 +251,5 @@ function mergeGanttI18n(overrides?: GanttI18nOverrides): GanttI18nConfig {
   }
 }
 
-export { DEFAULT_GANTT_I18N, mergeGanttI18n }
+export { mergeGanttI18n }
 export type { GanttI18nConfig, GanttI18nOverrides }

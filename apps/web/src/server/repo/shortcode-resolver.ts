@@ -12,7 +12,7 @@
  * onto every id it returns.
  */
 
-import type { Entity } from "@cubby/schemas/entity";
+import { entityRefKey } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   type BrandForEntity,
@@ -172,6 +172,27 @@ export async function resolveOrThrow<E extends ShortcodeEntity>(
 }
 
 /**
+ * Resolve a shortcode minted by the operation immediately before this call.
+ *
+ * This is deliberately an invariant error, not `resolveOrThrow`: a missing row
+ * here means the write path violated its own contract, not that a caller asked
+ * for an absent record.
+ */
+export async function resolveCreatedOrInvariant<E extends ShortcodeEntity>(
+  db: Database | DrizzleTransaction,
+  entity: E,
+  code: string,
+): Promise<BrandForEntity<E>> {
+  const id = await resolveLiveShortcode(db, code, entity);
+  if (!id) {
+    throw new Error(
+      `Created ${ENTITY_LABEL[entity].toLowerCase()} ${code} could not be resolved`,
+    );
+  }
+  return unsafeIdForEntity[entity](id);
+}
+
+/**
  * Resolve many shortcodes to LIVE branded ids, throwing if ANY is missing —
  * and naming every one that was, not just the first.
  *
@@ -230,6 +251,18 @@ export async function resolveAllPresent<E extends ShortcodeEntity>(
     return id === undefined ? [] : [unsafeIdForEntity[entity](id)];
   });
 }
+
+/** Bind one entity at a router boundary without hiding resolution semantics. */
+export const bindShortcodeResolver = <E extends ShortcodeEntity>(
+  entity: E,
+) => ({
+  one: (db: Database | DrizzleTransaction, code: string) =>
+    resolveOrThrow(db, entity, code),
+  all: (db: Database | DrizzleTransaction, codes: readonly string[]) =>
+    resolveAllOrThrow(db, entity, codes),
+  present: (db: Database | DrizzleTransaction, codes: readonly string[]) =>
+    resolveAllPresent(db, entity, codes),
+});
 
 /**
  * Resolve a list FILTER's shortcode value to live branded ids.
@@ -321,7 +354,7 @@ export async function lookupShortcodes(
         .from(table)
         .where(inArray(table.id, [...ids]))) as IdAndCode[];
       for (const row of rows) {
-        codes.set(refKey(entity, row.id), row.shortcode);
+        codes.set(entityRefKey(entity, row.id), row.shortcode);
       }
     }),
   );
@@ -374,7 +407,7 @@ const DISPLAY_NAME_COLUMN = {
  * its callers want an id, not a label.
  *
  * Refs whose entity has no display column, or whose row has a null/empty one,
- * are simply absent from the map. Keyed by {@link refKey}, same as
+ * are simply absent from the map. Keyed by {@link entityRefKey}, same as
  * `lookupShortcodes`.
  */
 export async function lookupEntityLabels(
@@ -393,7 +426,7 @@ export async function lookupEntityLabels(
     [...byEntity].map(async ([entity, ids]) => {
       if (entity === "inventory") {
         for (const [id, label] of await inventoryEntryLabels(db, ids)) {
-          names.set(refKey(entity, id), label);
+          names.set(entityRefKey(entity, id), label);
         }
         return;
       }
@@ -411,7 +444,7 @@ export async function lookupEntityLabels(
         name: string | null;
       }[];
       for (const row of rows) {
-        if (row.name) names.set(refKey(entity, row.id), row.name);
+        if (row.name) names.set(entityRefKey(entity, row.id), row.name);
       }
     }),
   );
@@ -464,9 +497,6 @@ async function inventoryEntryLabels(
   }
   return labels;
 }
-
-/** The key `lookupShortcodes` returns results under. */
-export const refKey = (entity: Entity, id: string): string => `${entity}:${id}`;
 
 /** One entity's codes → ids. Split out so both resolve paths share the query. */
 async function resolveParsed(

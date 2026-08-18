@@ -15,7 +15,6 @@ import {
   taskBulkTradeInput,
   taskCreateInput,
   taskFiltersSchema,
-  taskListAndSideEffectsOut,
   taskOut,
   taskSortableFields,
   taskSummaryOut,
@@ -23,10 +22,7 @@ import {
   taskUpdateData,
 } from "@cubby/schemas/project";
 import { z } from "zod";
-import {
-  resolveAllPresent,
-  resolveOrThrow,
-} from "~/server/repo/shortcode-resolver";
+import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import {
   createTask,
   deleteTasks,
@@ -44,8 +40,10 @@ import {
   taskList,
   updateTask,
 } from "~/server/repo/task";
-import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
-import { createSearchableEntityCrudProcedures } from "../crud-factory";
+import {
+  createBulkUpdatedMutation,
+  createSearchableEntityCrudProcedures,
+} from "../crud-factory";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const {
@@ -90,18 +88,6 @@ const {
 });
 
 /**
- * Batch-resolve the shortcodes a bulk-write result carries into the internal
- * uuids `runMutationSideEffectsForEntities` keys on — one query for the
- * whole batch, not one per row.
- */
-async function taskEntityIds(
-  db: Parameters<typeof resolveAllPresent>[0],
-  ids: TaskShortcode[],
-) {
-  return resolveAllPresent(db, "task", ids);
-}
-
-/**
  * The computed "what can I actually do" read behind the /tasks Next view:
  * every live, non-done task partitioned into unblocked-`next`,
  * unblocked-`later`, and `blocked` (with transitive why-chains). No input,
@@ -135,111 +121,58 @@ const chartData = protectedProcedure
 // inbox. Mirrors inventory.bulkMove's shape: one repo call inside a
 // transaction, then one wave-wide runMutationSideEffectsForEntities so the
 // embedding refresh for every moved task batches into a single dispatch.
-const bulkMove = protectedProcedure
-  .input(taskBulkMoveInput)
-  .output(strictOutput(taskListAndSideEffectsOut))
-  .mutation(async ({ ctx, input }) => {
-    const items = await moveTasks(ctx.db, input, ctx.actorContext);
-    const ids = await taskEntityIds(
-      ctx.db,
-      items.map((item) => item.id),
-    );
-    const backgroundBatches = await runMutationSideEffectsForEntities(
-      ctx.db,
-      ids.map((entityId) => ({
-        action: "updated" as const,
-        entity: { entityType: "task" as const, entityId },
-        source: "task.bulkMove",
-      })),
-    );
-    return { items, sideEffects: { backgroundBatches } };
-  });
+const bulkMove = createBulkUpdatedMutation({
+  input: taskBulkMoveInput,
+  itemOutput: taskOut,
+  entity: "task",
+  source: "task.bulkMove",
+  mutate: (ctx, input) => moveTasks(ctx.db, input, ctx.actorContext),
+  entityShortcodes: (items) => items.map((item) => item.id),
+});
 
 // Bulk status write, same shape as bulkMove above.
-const bulkSetStatus = protectedProcedure
-  .input(taskBulkStatusInput)
-  .output(strictOutput(taskListAndSideEffectsOut))
-  .mutation(async ({ ctx, input }) => {
-    const items = await setTasksStatus(ctx.db, input, ctx.actorContext);
-    const ids = await taskEntityIds(
-      ctx.db,
-      items.map((item) => item.id),
-    );
-    const backgroundBatches = await runMutationSideEffectsForEntities(
-      ctx.db,
-      ids.map((entityId) => ({
-        action: "updated" as const,
-        entity: { entityType: "task" as const, entityId },
-        source: "task.bulkSetStatus",
-      })),
-    );
-    return { items, sideEffects: { backgroundBatches } };
-  });
+const bulkSetStatus = createBulkUpdatedMutation({
+  input: taskBulkStatusInput,
+  itemOutput: taskOut,
+  entity: "task",
+  source: "task.bulkSetStatus",
+  mutate: (ctx, input) => setTasksStatus(ctx.db, input, ctx.actorContext),
+  entityShortcodes: (items) => items.map((item) => item.id),
+});
 
 // Bulk trade write, same shape as bulkSetStatus above.
-const bulkSetTrade = protectedProcedure
-  .input(taskBulkTradeInput)
-  .output(strictOutput(taskListAndSideEffectsOut))
-  .mutation(async ({ ctx, input }) => {
-    const items = await setTasksTrade(ctx.db, input, ctx.actorContext);
-    const ids = await taskEntityIds(
-      ctx.db,
-      items.map((item) => item.id),
-    );
-    const backgroundBatches = await runMutationSideEffectsForEntities(
-      ctx.db,
-      ids.map((entityId) => ({
-        action: "updated" as const,
-        entity: { entityType: "task" as const, entityId },
-        source: "task.bulkSetTrade",
-      })),
-    );
-    return { items, sideEffects: { backgroundBatches } };
-  });
+const bulkSetTrade = createBulkUpdatedMutation({
+  input: taskBulkTradeInput,
+  itemOutput: taskOut,
+  entity: "task",
+  source: "task.bulkSetTrade",
+  mutate: (ctx, input) => setTasksTrade(ctx.db, input, ctx.actorContext),
+  entityShortcodes: (items) => items.map((item) => item.id),
+});
 
 // Bulk due-date write, same shape as bulkSetTrade above.
-const bulkSetDueDate = protectedProcedure
-  .input(taskBulkDueDateInput)
-  .output(strictOutput(taskListAndSideEffectsOut))
-  .mutation(async ({ ctx, input }) => {
-    const items = await setTasksDueDate(ctx.db, input, ctx.actorContext);
-    const ids = await taskEntityIds(
-      ctx.db,
-      items.map((item) => item.id),
-    );
-    const backgroundBatches = await runMutationSideEffectsForEntities(
-      ctx.db,
-      ids.map((entityId) => ({
-        action: "updated" as const,
-        entity: { entityType: "task" as const, entityId },
-        source: "task.bulkSetDueDate",
-      })),
-    );
-    return { items, sideEffects: { backgroundBatches } };
-  });
+const bulkSetDueDate = createBulkUpdatedMutation({
+  input: taskBulkDueDateInput,
+  itemOutput: taskOut,
+  entity: "task",
+  source: "task.bulkSetDueDate",
+  mutate: (ctx, input) => setTasksDueDate(ctx.db, input, ctx.actorContext),
+  entityShortcodes: (items) => items.map((item) => item.id),
+});
 
 // Board drag-to-prioritize "materialize" path (see board-model.ts
 // computeRank). One repo call inside a transaction re-ranks a run of cards and
 // optionally applies the dragged card's axis move. Side-effects (embedding
 // refresh) run ONLY for the axis-moved card — a pure sortOrder write doesn't
 // change embedding text — not for every re-ranked row.
-const bulkReorder = protectedProcedure
-  .input(taskBulkReorderInput)
-  .output(strictOutput(taskListAndSideEffectsOut))
-  .mutation(async ({ ctx, input }) => {
-    const items = await reorderTasks(ctx.db, input, ctx.actorContext);
-    const movedIds = input.move ? [input.move.id] : [];
-    const ids = await taskEntityIds(ctx.db, movedIds);
-    const backgroundBatches = await runMutationSideEffectsForEntities(
-      ctx.db,
-      ids.map((entityId) => ({
-        action: "updated" as const,
-        entity: { entityType: "task" as const, entityId },
-        source: "task.bulkReorder",
-      })),
-    );
-    return { items, sideEffects: { backgroundBatches } };
-  });
+const bulkReorder = createBulkUpdatedMutation({
+  input: taskBulkReorderInput,
+  itemOutput: taskOut,
+  entity: "task",
+  source: "task.bulkReorder",
+  mutate: (ctx, input) => reorderTasks(ctx.db, input, ctx.actorContext),
+  entityShortcodes: (_items, input) => (input.move ? [input.move.id] : []),
+});
 
 /**
  * Cheap counts for the /tasks summary strip — `totalOpen`/`next`/`later`/

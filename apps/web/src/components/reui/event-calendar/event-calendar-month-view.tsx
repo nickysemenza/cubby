@@ -2,7 +2,7 @@
 
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
-import { addDays, format, getWeek } from "date-fns";
+import { addDays, format } from "date-fns";
 import { PlusIcon } from "lucide-react";
 import {
   type CSSProperties,
@@ -16,17 +16,13 @@ import {
   useState,
 } from "react";
 import {
-  EventCalendarViewContext,
   useEventCalendar,
   useEventCalendarDay,
   useEventCalendarSelector,
   useEventCalendarSettings,
-  useEventCalendarViewConfig,
-  useEventCalendarViewSettings,
   useEventCalendarWeek,
 } from "~/components/reui/event-calendar/event-calendar";
 import {
-  useEventCalendarCreateDrag,
   useEventCalendarDrop,
   wasRecentChipPress,
   wasRecentDrag,
@@ -36,9 +32,7 @@ import {
   EventCalendarEvent,
 } from "~/components/reui/event-calendar/event-calendar-event";
 import {
-  getDayKey,
   getRangeKey,
-  resolveOffDay,
   toZoned,
   zonedStartOfDay,
 } from "~/components/reui/event-calendar/event-calendar-lib";
@@ -70,7 +64,6 @@ const useIsoLayoutEffect =
 let focusedChip: {
   node: HTMLElement;
   eventId: EventCalendarEventId;
-  recurrenceIndex?: number;
 } | null = null;
 
 /** Give focus back to the recorded chip's replacement, if `root` renders it. */
@@ -86,8 +79,7 @@ function restoreChipFocus(
   if (active && active !== document.body) return;
   const index = segments.findIndex(
     (segment) =>
-      segment.occurrence.eventId === pending.eventId &&
-      segment.occurrence.recurrenceIndex === pending.recurrenceIndex,
+      segment.occurrence.eventId === pending.eventId,
   );
   if (index < 0) return;
   const chip = root.querySelectorAll<HTMLElement>(
@@ -99,19 +91,15 @@ function restoreChipFocus(
   chip.focus();
 }
 
-interface EventCalendarMonthViewProps extends useRender.ComponentProps<"div"> {
-  maxEventsPerCell?: number | "auto";
-}
+interface EventCalendarMonthViewProps extends useRender.ComponentProps<"div"> {}
 
 function EventCalendarMonthView({
   className,
   render,
-  maxEventsPerCell,
   ...props
 }: EventCalendarMonthViewProps) {
   const instance = useEventCalendar();
   const settings = useEventCalendarSettings();
-  const viewConfig = useEventCalendarViewConfig();
   const visibleRange = useEventCalendarSelector<
     unknown,
     EventCalendarDateRange
@@ -120,7 +108,6 @@ function EventCalendarMonthView({
   });
   const anchorDate = useEventCalendarSelector((state) => state.date);
 
-  const { effective } = useEventCalendarViewSettings();
   const weeks = useMemo(() => {
     const days: Date[] = [];
     let cursor = zonedStartOfDay(visibleRange.start, settings.timeZone);
@@ -133,20 +120,10 @@ function EventCalendarMonthView({
     }
     const rows: Date[][] = [];
     for (let i = 0; i < days.length; i += 7) rows.push(days.slice(i, i + 7));
-    if (effective.weekends) return rows;
-    return rows.map((row) =>
-      row.filter(
-        (day) =>
-          !settings.weekendDays.includes(
-            toZoned(day, settings.timeZone).getDay(),
-          ),
-      ),
-    );
+    return rows;
   }, [
     visibleRange,
     settings.timeZone,
-    settings.weekendDays,
-    effective.weekends,
   ]);
 
   const headerDays = weeks[0] ?? [];
@@ -157,20 +134,19 @@ function EventCalendarMonthView({
     locale: settings.locale,
   });
 
-  const gridTemplateColumns = `${effective.weekNumbers ? "var(--ec-week-number-w, 2.75rem) " : ""}repeat(${headerDays.length}, minmax(0, 1fr))`;
-  const cap = maxEventsPerCell ?? viewConfig.maxEventsPerCell;
-  const contained = viewConfig.scrollMode !== "page";
+  const gridTemplateColumns = `repeat(${headerDays.length}, minmax(0, 1fr))`;
+  const contained = false;
 
   // "auto" fits as many event rows as the cell height allows and rolls the rest
   // into "+N more". Only the contained mode gives a cell a bounded height to
   // measure; page mode grows to fit, so "auto" there keeps the fixed fallback.
-  const autoFit = cap === "auto" && contained;
+  const autoFit = false;
   // slotProbe resolves the event-row height (--ec-month-bar-h) to px, honoring
   // the current font size and any consumer override; contentProbe is the first
   // cell's flex-1 content area, whose height is the event space per cell.
   const slotProbeRef = useRef<HTMLDivElement | null>(null);
   const contentProbeRef = useRef<HTMLDivElement | null>(null);
-  const [autoCap, setAutoCap] = useState<number | null>(null);
+  const [, setAutoCap] = useState<number | null>(null);
   const measureCap = useCallback(() => {
     const content = contentProbeRef.current;
     const slot = slotProbeRef.current;
@@ -196,7 +172,7 @@ function EventCalendarMonthView({
     return () => observer.disconnect();
     // re-observe the first cell after a re-layout (row count or month change)
   }, [autoFit, measureCap, weeks.length, anchorDate]);
-  const resolvedCap = cap === "auto" ? (autoFit ? (autoCap ?? 3) : 3) : cap;
+  const resolvedCap = 5;
 
   const defaultProps = {
     "data-slot": "event-calendar-month-view",
@@ -206,7 +182,6 @@ function EventCalendarMonthView({
     className: cn(
       "flex flex-col border-t",
       contained && "min-h-0 flex-1 overflow-hidden",
-      viewConfig.classNames?.monthView,
       className,
     ),
     children: (
@@ -217,37 +192,20 @@ function EventCalendarMonthView({
           // @container scopes the narrow-label breakpoint to the header row
           className={cn(
             "@container grid border-b",
-            viewConfig.classNames?.monthHeader,
+            "bg-muted",
           )}
           style={{ gridTemplateColumns }}
         >
-          {effective.weekNumbers && (
-            <div
-              role="columnheader"
-              aria-hidden
-              className={cn(
-                "border-e px-2 py-1.5",
-                viewConfig.classNames?.weekNumber,
-              )}
-            />
-          )}
           {headerDays.map((day) => (
             <div
               key={day.getTime()}
               role="columnheader"
               className={cn(
                 "truncate px-2 py-1.5 font-medium text-muted-foreground",
-                viewConfig.classNames?.monthDayHeader,
+                "font-mono uppercase tracking-wider",
               )}
             >
-              {viewConfig.renderDayHeader?.({
-                day,
-                view: "month",
-                isToday:
-                  getDayKey(day, settings.timeZone) ===
-                  getDayKey(new Date(), settings.timeZone),
-              }) ?? (
-                <>
+              <>
                   <span className="@max-[36rem]:hidden">
                     {format(
                       toZoned(day, settings.timeZone),
@@ -262,8 +220,7 @@ function EventCalendarMonthView({
                       { locale: settings.locale },
                     )}
                   </span>
-                </>
-              )}
+              </>
             </div>
           ))}
         </div>
@@ -272,7 +229,6 @@ function EventCalendarMonthView({
           className={cn(
             "grid",
             contained && "min-h-0 flex-1",
-            viewConfig.classNames?.monthBody,
           )}
           style={{
             gridTemplateRows: contained
@@ -285,7 +241,6 @@ function EventCalendarMonthView({
               key={rowIndex}
               week={week}
               gridTemplateColumns={gridTemplateColumns}
-              showWeekNumber={effective.weekNumbers}
               cap={resolvedCap}
               autoFit={autoFit}
               contentRef={rowIndex === 0 ? contentProbeRef : undefined}
@@ -303,15 +258,11 @@ function EventCalendarMonthView({
     ),
   };
 
-  return (
-    <EventCalendarViewContext.Provider value={{ view: "month" }}>
-      {useRender({
-        defaultTagName: "div",
-        render,
-        props: mergeProps<"div">(defaultProps, props),
-      })}
-    </EventCalendarViewContext.Provider>
-  );
+  return useRender({
+    defaultTagName: "div",
+    render,
+    props: mergeProps<"div">(defaultProps, props),
+  });
 }
 
 /**
@@ -324,14 +275,12 @@ function EventCalendarMonthView({
 function EventCalendarMonthWeek({
   week,
   gridTemplateColumns,
-  showWeekNumber,
   cap,
   autoFit,
   contentRef,
 }: {
   week: Date[];
   gridTemplateColumns: string;
-  showWeekNumber: boolean;
   cap: number;
   autoFit: boolean;
   /** Set on the first week only: forwarded to its first cell's content area so
@@ -339,10 +288,9 @@ function EventCalendarMonthWeek({
   contentRef?: Ref<HTMLDivElement>;
 }) {
   const settings = useEventCalendarSettings();
-  const viewConfig = useEventCalendarViewConfig();
   const firstDay = week[0]!;
   const { bars, rowStart } = useEventCalendarWeek(firstDay);
-  const colOffset = showWeekNumber ? 1 : 0;
+  const colOffset = 0;
   const dayMs = 86400000;
   const rowStartMs = zonedStartOfDay(
     rowStart ?? firstDay,
@@ -480,31 +428,9 @@ function EventCalendarMonthWeek({
       data-slot="event-calendar-month-row"
       className={cn(
         "relative grid min-h-0 border-b last:border-b-0",
-        viewConfig.classNames?.monthRow,
       )}
       style={{ gridTemplateColumns }}
     >
-      {showWeekNumber && (
-        <div
-          role="rowheader"
-          data-slot="event-calendar-week-number"
-          className={cn(
-            "border-e px-2 pt-1 text-muted-foreground tabular-nums",
-            viewConfig.classNames?.weekNumber,
-          )}
-        >
-          {settings.i18n.labels.week(
-            getWeek(toZoned(firstDay, settings.timeZone), {
-              // locale supplies firstWeekContainsDate, so a de/ISO calendar
-              // numbers the year-boundary weeks its own way instead of falling
-              // back to US numbering; weekStartsOn stays explicit so the number
-              // keeps matching the rendered grid
-              locale: settings.locale,
-              weekStartsOn: settings.weekStartsOn,
-            }),
-          )}
-        </div>
-      )}
       {week.map((day, col) => (
         <EventCalendarMonthCell
           key={day.getTime()}
@@ -534,7 +460,6 @@ function EventCalendarMonthWeek({
           data-slot="event-calendar-month-bar-overlay"
           className={cn(
             "pointer-events-none absolute inset-x-0 top-0 z-10 grid pt-1.5",
-            viewConfig.classNames?.monthBarOverlay,
           )}
           style={{
             gridTemplateColumns,
@@ -548,8 +473,7 @@ function EventCalendarMonthWeek({
               <div
                 key={bar.occurrence.key}
                 className={cn(
-                  "pointer-events-auto min-w-0 px-1",
-                  viewConfig.classNames?.monthBar,
+                  "pointer-events-auto z-10 min-w-0 px-1",
                 )}
                 style={{
                   gridColumn: `${colOffset + pos.col + 1} / span ${pos.span}`,
@@ -567,7 +491,7 @@ function EventCalendarMonthWeek({
           {dragGhost && ghostPos && ghostIsBar && (
             <div
               aria-hidden
-              className={cn("min-w-0 px-1", viewConfig.classNames?.monthBar)}
+              className="z-10 min-w-0 px-1"
               style={{
                 gridColumn: `${colOffset + ghostPos.col + 1} / span ${ghostPos.span}`,
                 gridRow: ghostLane + 1,
@@ -590,7 +514,6 @@ function EventCalendarMonthWeek({
                         EVENT_CALENDAR_GHOST.resize,
                         !dragGhost.valid && EVENT_CALENDAR_GHOST.invalidResize,
                       ),
-                  viewConfig.classNames?.dragGhost,
                 )}
                 style={
                   {
@@ -657,30 +580,11 @@ function EventCalendarMonthCell({
   contentRef?: Ref<HTMLDivElement>;
 }) {
   const settings = useEventCalendarSettings();
-  const viewConfig = useEventCalendarViewConfig();
-  const selectSlotOn = useEventCalendarSelector<unknown, boolean>(
-    (state) => state.interactions.selectSlot,
-  );
-  const createDrag = useEventCalendarCreateDrag(day, true, !selectSlotOn);
   const drop = useEventCalendarDrop(day, true);
   const { segments, isToday, isOutside } = useEventCalendarDay(day);
 
   const dayStart = zonedStartOfDay(day, settings.timeZone);
   const dayEnd = addDays(toZoned(dayStart, settings.timeZone), 1);
-  const { effective } = useEventCalendarViewSettings();
-  const isOff = resolveOffDay(
-    day,
-    settings.timeZone,
-    effective.offDays
-      ? typeof viewConfig.offDays === "object"
-        ? viewConfig.offDays
-        : true
-      : false,
-    settings.weekendDays,
-  );
-  const offClassName =
-    (typeof viewConfig.offDays === "object" && viewConfig.offDays.className) ||
-    "bg-muted/25";
 
   const isDropTarget = useEventCalendarSelector<
     unknown,
@@ -692,37 +596,6 @@ function EventCalendarMonthCell({
     if (!covered) return null;
     return drag.valid ? "valid" : "invalid";
   });
-  // Hide hover affordances mid-gesture: the only intent is the drop target.
-  // Gated on the one thing that reads it: a plain global boolean flips for all
-  // 42 cells the moment a gesture starts and again when it ends, which is pure
-  // waste in the default configuration where no add button renders.
-  const isInteracting = useEventCalendarSelector<unknown, boolean>((state) =>
-    viewConfig.showDayAddButton
-      ? state.drag !== null || state.slotDraft !== null
-      : false,
-  );
-  const inDraft = useEventCalendarSelector<
-    unknown,
-    { isStart: boolean; isEnd: boolean } | null
-  >(
-    (state) => {
-      const draft = state.slotDraft;
-      if (!draft || !draft.allDay) return null;
-      if (draft.start >= dayEnd || draft.end <= dayStart) return null;
-      return {
-        isStart: draft.start >= dayStart,
-        isEnd: draft.end <= dayEnd,
-      };
-    },
-    {
-      isEqual: (a, b) =>
-        a === b ||
-        (a !== null &&
-          b !== null &&
-          a.isStart === b.isStart &&
-          a.isEnd === b.isEnd),
-    },
-  );
   // A single-day timed MOVE landing on THIS day: expose the proposed
   // minute-of-day (+ color/validity) so the cell can render a drop placeholder
   // at the correct time-sorted position, instead of the overlay marking a bar
@@ -806,7 +679,9 @@ function EventCalendarMonthCell({
     // rank of the dragged chip in the resulting time-sorted list (chips are
     // time-ordered, so this is the count starting at or before its time)
     const insertRank = segments.timed.filter(
-      (s) => (s.startMin ?? 0) <= inlineDrop.min,
+      (s) =>
+        (s.occurrence.start.getTime() - dayStart.getTime()) / 60_000 <=
+        inlineDrop.min,
     ).length;
     const dropOverflow = extraHidden > 0 || m + 1 > timedSlots;
     // rows for timed items INCLUDING the phantom, before the "+N more" row
@@ -831,10 +706,9 @@ function EventCalendarMonthCell({
   const registerCell = useCallback(
     (node: HTMLDivElement | null) => {
       rootRef.current = node;
-      createDrag.setNodeRef(node);
       drop.setNodeRef(node);
     },
-    [createDrag.setNodeRef, drop.setNodeRef],
+    [drop.setNodeRef],
   );
   useIsoLayoutEffect(() => {
     restoreChipFocus(rootRef.current, visibleTimed);
@@ -854,7 +728,6 @@ function EventCalendarMonthCell({
         inlineDrop.valid
           ? "border-(--ec-event-color)/50 bg-(--ec-event-color)/8"
           : "border-destructive/70 bg-destructive/10",
-        viewConfig.classNames?.dragGhost,
       )}
       style={
         {
@@ -874,8 +747,7 @@ function EventCalendarMonthCell({
           // below; changing the gap requires renderMonthCell
           // px-1 matches the all-day bar wrapper inset so single-day chips and
           // multi-day bars line up on the same left/right edge in a cell
-          "flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden px-1 pt-1.5",
-          viewConfig.classNames?.monthCellContent,
+          "flex min-h-24 min-h-0 flex-1 flex-col gap-0.5 overflow-hidden px-1 pt-1.5 sm:min-h-28",
         )}
       >
         {reservedLanes > 0 && (
@@ -901,7 +773,6 @@ function EventCalendarMonthCell({
                 focusedChip = {
                   node: e.currentTarget,
                   eventId: segment.occurrence.eventId,
-                  recurrenceIndex: segment.occurrence.recurrenceIndex,
                 };
               }}
               // A chip still in the tree lost focus on its own, so there is
@@ -938,19 +809,13 @@ function EventCalendarMonthCell({
       <div
         className={cn(
           "flex items-center justify-end gap-1 px-2 pb-1.5",
-          viewConfig.classNames?.monthCellFooter,
         )}
       >
-        {viewConfig.showDayAddButton && !isInteracting && (
-          <button
+        <button
             type="button"
             data-slot="event-calendar-day-add"
             aria-label={settings.i18n.labels.addEvent}
-            // a different icon/markup is a renderMonthCell job
-            className={cn(
-              "flex size-5 cursor-pointer items-center justify-center rounded-sm bg-primary text-primary-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover/ec-cell:opacity-100",
-              viewConfig.classNames?.dayAddButton,
-            )}
+            className="flex size-5 cursor-pointer items-center justify-center rounded-sm bg-primary text-primary-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover/ec-cell:opacity-100"
             onClick={(e) => {
               e.stopPropagation();
               settings.onSlotClick?.(
@@ -961,7 +826,6 @@ function EventCalendarMonthCell({
           >
             <PlusIcon className="size-3.5" aria-hidden="true" />
           </button>
-        )}
         <span
           data-slot="event-calendar-month-day-number"
           className={cn(
@@ -973,7 +837,6 @@ function EventCalendarMonthCell({
             // way white digits on the filled circle read bolder/larger than the
             // dark-on-light numbers around them.
             isToday && "bg-primary font-light text-primary-foreground",
-            viewConfig.classNames?.monthDayNumber,
           )}
         >
           {format(
@@ -986,21 +849,11 @@ function EventCalendarMonthCell({
     </>
   );
 
-  const content =
-    viewConfig.renderMonthCell?.({
-      day,
-      segments,
-      isToday,
-      isOutside,
-      overflowCount,
-      defaultContent,
-    }) ?? defaultContent;
+  const content = defaultContent;
 
   return (
     <div
       ref={registerCell}
-      {...(selectSlotOn ? createDrag.attributes : {})}
-      {...(selectSlotOn ? createDrag.listeners : {})}
       role="gridcell"
       data-slot="event-calendar-month-cell"
       data-dnd-distance="4"
@@ -1013,8 +866,6 @@ function EventCalendarMonthCell({
       }
       data-ec-day={dayStart.getTime()}
       data-drop-target={isDropTarget ?? undefined}
-      data-off={isOff || undefined}
-      data-draft={inDraft ? "" : undefined}
       aria-label={format(
         toZoned(day, settings.timeZone),
         settings.i18n.formats.monthCellAriaLabel,
@@ -1024,42 +875,21 @@ function EventCalendarMonthCell({
         "group/ec-cell relative flex min-h-0 min-w-0 flex-col overflow-hidden",
         !isLast && "border-e",
         isOutside && !settings.showOutsideDays && "invisible",
-        isOff && offClassName,
-        isToday &&
-          cn(
-            "relative border-b-2 border-b-primary/40 bg-primary/3",
-            viewConfig.todayClassName,
-          ),
-        viewConfig.dayClassName?.(day),
+        isToday && "relative border-b-2 border-b-primary/40 bg-primary/3",
         // No drop-target bg fill on move/resize - the dragged bar + not-allowed
         // cursor carry the feedback; a cell-wide color wash is too distracting.
         // data-drop-target stays as an opt-in styling hook.
-        inDraft && "bg-primary/5",
-        viewConfig.classNames?.monthCell,
       )}
       onPointerDown={(e) => {
         const target = e.target as HTMLElement;
         if (target.closest("[data-slot=event-calendar-event]")) return;
         if (target.closest("[data-slot=event-calendar-more]")) return;
-        createDrag.listeners?.onPointerDown?.(e);
       }}
       onClick={(e) => {
         if (wasRecentDrag() || wasRecentChipPress()) return;
         settings.onSlotClick?.({ date: day, allDay: true, view: "month" }, e);
       }}
     >
-      {inDraft && (
-        <span
-          aria-hidden
-          data-slot="event-calendar-slot-draft"
-          className={cn(
-            "pointer-events-none absolute inset-0 z-10 border-primary/40 border-y border-dashed",
-            inDraft.isStart && "border-s",
-            inDraft.isEnd && "border-e",
-            viewConfig.classNames?.slotDraft,
-          )}
-        />
-      )}
       {content}
     </div>
   );
@@ -1088,7 +918,6 @@ function EventCalendarMoreIndicator({
   dropInto,
 }: EventCalendarMoreIndicatorProps) {
   const settings = useEventCalendarSettings();
-  const viewConfig = useEventCalendarViewConfig();
   const [open, setOpen] = useState(false);
   const headerId = useId();
 
@@ -1119,7 +948,6 @@ function EventCalendarMoreIndicator({
                 ? "border-(--ec-event-color)/50 bg-(--ec-event-color)/8 text-foreground"
                 : "border-destructive/70 bg-destructive/10 text-destructive",
             ),
-          viewConfig.classNames?.moreIndicator,
         )}
         style={
           dropInto
@@ -1142,48 +970,25 @@ function EventCalendarMoreIndicator({
           }
         }}
       >
-        {viewConfig.renderMoreIndicator?.({ day, count, segments }) ??
-          settings.i18n.labels.more(count)}
+        {settings.i18n.labels.more(count)}
       </PopoverTrigger>
       <PopoverContent
         data-slot="event-calendar-more-popover"
-        align={viewConfig.morePopoverAlign}
+        align="start"
         // The popover is a dialog, so it needs a name. The built-in body already
         // renders the day header this list belongs to, so point at that; a
         // consumer body has no header to point at and gets the same formatted
         // day as a label instead.
-        aria-labelledby={viewConfig.renderMoreContent ? undefined : headerId}
-        aria-label={
-          viewConfig.renderMoreContent
-            ? format(
-                toZoned(day, settings.timeZone),
-                settings.i18n.formats.moreDayHeader,
-                { locale: settings.locale },
-              )
-            : undefined
-        }
+        aria-labelledby={headerId}
         // PopoverContent is unlayered (flex-col gap-4 p-4); override with !.
         // text-xs re-establishes the calendar's base type here because this
         // content is portaled out of the root subtree and cannot inherit it.
         className={cn(
           "w-64 gap-1! p-2! text-xs",
-          viewConfig.classNames?.morePopover,
         )}
         onClick={(e: React.MouseEvent) => e.stopPropagation()}
       >
-        {viewConfig.renderMoreContent ? (
-          viewConfig.renderMoreContent({
-            day,
-            segments,
-            close: () => setOpen(false),
-          })
-        ) : (
-          <EventCalendarMoreDefaultContent
-            day={day}
-            segments={segments}
-            headerId={headerId}
-          />
-        )}
+        <EventCalendarMoreDefaultContent day={day} segments={segments} headerId={headerId} />
       </PopoverContent>
     </Popover>
   );
@@ -1201,14 +1006,12 @@ function EventCalendarMoreDefaultContent({
   headerId?: string;
 }) {
   const settings = useEventCalendarSettings();
-  const viewConfig = useEventCalendarViewConfig();
   return (
     <>
       <div
         id={headerId}
         className={cn(
           "px-1 py-1 font-medium text-muted-foreground text-xs",
-          viewConfig.classNames?.morePopoverHeader,
         )}
       >
         {format(
@@ -1222,11 +1025,7 @@ function EventCalendarMoreDefaultContent({
             back (ps-1 aligns with the header, pe-4 clears the ~10px bar with a
             gap) and adds py-1 so the first/last focus ring is not clipped by
             the overflow. Layout is identical with or without a scrollbar. */}
-      {viewConfig.scrollbars === "native" ? (
-        <div
-          data-ec-native-scroll=""
-          className="-me-2 max-h-(--ec-more-max-height,16rem) min-h-0 overflow-y-auto"
-        >
+      <ScrollArea className="-me-2 min-h-0 **:data-[slot=scroll-area-viewport]:max-h-(--ec-more-max-height,16rem)">
           <div className="flex flex-col gap-1 py-1 ps-1 pe-4">
             {segments.map((segment) => (
               <EventCalendarEvent
@@ -1236,23 +1035,9 @@ function EventCalendarMoreDefaultContent({
               />
             ))}
           </div>
-        </div>
-      ) : (
-        <ScrollArea className="-me-2 min-h-0 **:data-[slot=scroll-area-viewport]:max-h-(--ec-more-max-height,16rem)">
-          <div className="flex flex-col gap-1 py-1 ps-1 pe-4">
-            {segments.map((segment) => (
-              <EventCalendarEvent
-                key={segment.occurrence.key}
-                segment={segment}
-                className="py-0.5"
-              />
-            ))}
-          </div>
-        </ScrollArea>
-      )}
+      </ScrollArea>
     </>
   );
 }
 
-export type { EventCalendarMonthViewProps, EventCalendarMoreIndicatorProps };
-export { EventCalendarMonthView, EventCalendarMoreIndicator };
+export { EventCalendarMonthView };

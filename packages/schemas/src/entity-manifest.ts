@@ -1,6 +1,6 @@
 import { SHORTCODE_PREFIX } from "@cubby/shared";
 import { z } from "zod";
-import type { Entity } from "./entity";
+import type { Entity } from "./entity-core";
 import {
   type EntityRelationship,
   entityLifecycleSchema,

@@ -7,8 +7,8 @@
  * full disposal and preserves real sell/re-buy gaps.
  */
 import type { ProductId } from "@cubby/schemas/identifiers";
-import { format } from "date-fns";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { householdLocalDate } from "~/lib/household-date";
 import {
   buildConfidentOwnershipIntervals,
   classifyProductMovement,
@@ -93,7 +93,7 @@ export async function loadProductOwnershipTimelines(
     rowsByProduct.set(row.productId, bucket);
   }
 
-  const today = options.today ?? format(new Date(), "yyyy-MM-dd");
+  const today = options.today ?? householdLocalDate();
   for (const productId of productIds) {
     const productRows = rowsByProduct.get(productId) ?? [];
     const acquisitionDates = productRows.flatMap((row) =>

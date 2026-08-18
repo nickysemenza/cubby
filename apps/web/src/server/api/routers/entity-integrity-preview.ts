@@ -1,3 +1,4 @@
+import { entityRefKey } from "@cubby/schemas/entity";
 import type {
   ImpactItem,
   MergeCandidate,
@@ -51,7 +52,6 @@ import {
 import { previewDeleteRecipes } from "~/server/repo/recipe/crud";
 import {
   lookupShortcodes,
-  refKey,
   resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
 import { previewDeleteTasks } from "~/server/repo/task/crud";
@@ -261,7 +261,7 @@ const plan = async (
           (codes) =>
             new Map(
               [...entityIdsByPublicId.values()].flatMap((id) => {
-                const code = codes.get(refKey(entity, id));
+                const code = codes.get(entityRefKey(entity, id));
                 return code ? [[id, code] as const] : [];
               }),
             ),

@@ -1,33 +1,35 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import {
-  Timeline,
-  TimelineIndicator,
-  TimelineItem,
-  TimelineSeparator,
+  AuditTimeline,
+  AuditTimelineIndicator,
+  AuditTimelineItem,
+  AuditTimelineSeparator,
 } from "./timeline";
 
-describe("Timeline chronological mode", () => {
-  it("renders connectors without progress completion semantics", () => {
+describe("AuditTimeline", () => {
+  it("renders the fixed chronological connector without progress semantics", () => {
     render(
-      <Timeline mode="chronological">
-        <TimelineItem step={1}>
-          <TimelineIndicator />
-          <TimelineSeparator />
+      <AuditTimeline>
+        <AuditTimelineItem step={1}>
+          <AuditTimelineIndicator />
+          <AuditTimelineSeparator />
           First
-        </TimelineItem>
-        <TimelineItem step={2}>Second</TimelineItem>
-      </Timeline>,
+        </AuditTimelineItem>
+        <AuditTimelineItem step={2}>Second</AuditTimelineItem>
+      </AuditTimeline>,
     );
 
     expect(screen.getByText("First")).not.toHaveAttribute("data-completed");
-    expect(screen.getByText("First").closest("[data-slot=timeline-item]")).not
+    expect(
+      screen.getByText("First").closest("[data-slot=audit-timeline-item]"),
+    ).not
       .toHaveAttribute("data-completed");
     expect(
       screen
         .getByText("First")
-        .closest("[data-slot=timeline-item]")
-        ?.querySelector("[data-slot=timeline-separator]"),
+        .closest("[data-slot=audit-timeline-item]")
+        ?.querySelector("[data-slot=audit-timeline-separator]"),
     ).toBeInTheDocument();
   });
 });

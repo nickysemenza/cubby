@@ -24,7 +24,6 @@ import type {
   ToolUsedOutsideOwnership,
 } from "@cubby/schemas/problems";
 import { isMiscProduct } from "@cubby/shared";
-import { format } from "date-fns";
 import {
   and,
   eq,
@@ -38,6 +37,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
+import { householdLocalDate } from "~/lib/household-date";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
@@ -371,7 +371,7 @@ export const findToolsUsedOutsideOwnership = async (
   options: { today?: string } = {},
 ): Promise<ToolUsedOutsideOwnership[]> => {
   const dbClient = getDb(db);
-  const today = options.today ?? format(new Date(), "yyyy-MM-dd");
+  const today = options.today ?? householdLocalDate();
 
   const edges = await dbClient
     .select({

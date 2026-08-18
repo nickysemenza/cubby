@@ -7,7 +7,6 @@
  */
 
 import {
-  type LocationId,
   type LocationShortcode,
   locationShortcode,
 } from "@cubby/schemas/identifiers";
@@ -51,10 +50,7 @@ import {
   updateLocation,
   updateLocationAiDescription,
 } from "~/server/repo/location";
-import {
-  resolveAllOrThrow,
-  resolveOrThrow,
-} from "~/server/repo/shortcode-resolver";
+import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
   runMutationSideEffects,
@@ -67,19 +63,7 @@ import {
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
-async function resolveLocationId(
-  db: Parameters<typeof resolveOrThrow>[0],
-  shortcode: LocationShortcode,
-): Promise<LocationId> {
-  return resolveOrThrow(db, "location", shortcode);
-}
-
-async function resolveLocationIds(
-  db: Parameters<typeof resolveAllOrThrow>[0],
-  shortcodes: LocationShortcode[],
-): Promise<LocationId[]> {
-  return uniq(await resolveAllOrThrow(db, "location", shortcodes));
-}
+const locationShortcodes = bindShortcodeResolver("location");
 
 const { list } = createEntityListProcedure({
   schemas: {
@@ -184,7 +168,7 @@ const { getByID, getByShortcode, create, update } =
     },
     repository: {
       getByID: async (services, shortcode: LocationShortcode) => {
-        const id = await resolveLocationId(services.db, shortcode);
+        const id = await locationShortcodes.one(services.db, shortcode);
         return await getLocationById(services.db, id);
       },
       getByShortcode: (services, shortcode) =>
@@ -195,7 +179,7 @@ const { getByID, getByShortcode, create, update } =
           data,
           services.actorContext,
         );
-        const entityId = await resolveLocationId(services.db, location.id);
+        const entityId = await locationShortcodes.one(services.db, location.id);
         const backgroundBatches = await runMutationSideEffects(services.db, {
           action: "created",
           entity: { entityType: "location", entityId },
@@ -208,7 +192,7 @@ const { getByID, getByShortcode, create, update } =
         return { ...location, sideEffects: { backgroundBatches } };
       },
       update: async (services, shortcode: LocationShortcode, data) => {
-        const id = await resolveLocationId(services.db, shortcode);
+        const id = await locationShortcodes.one(services.db, shortcode);
         const imagesChanged =
           (data.pendingImageIds?.length ?? 0) > 0 ||
           (data.removeImageIds?.length ?? 0) > 0;
@@ -256,7 +240,7 @@ const subtree = protectedProcedure
     async ({ ctx, input }) =>
       await buildLocationTree(
         ctx.db,
-        await resolveLocationId(ctx.db, input.shortcode),
+        await locationShortcodes.one(ctx.db, input.shortcode),
       ),
   );
 
@@ -267,7 +251,7 @@ const inventoryBreakdown = protectedProcedure
   .query(async ({ ctx, input }) =>
     getLocationInventoryBreakdown(
       ctx.db,
-      await resolveLocationId(ctx.db, input.shortcode),
+      await locationShortcodes.one(ctx.db, input.shortcode),
     ),
   );
 
@@ -288,7 +272,7 @@ const ensureGlobalUnknown = protectedProcedure
       ctx.db,
       ctx.actorContext,
     );
-    const entityId = await resolveLocationId(ctx.db, location.id);
+    const entityId = await locationShortcodes.one(ctx.db, location.id);
     await runMutationSideEffects(ctx.db, {
       action: "updated",
       entity: { entityType: "location", entityId },
@@ -308,9 +292,9 @@ const bulkUpdateParent = protectedProcedure
       );
     }
 
-    const ids = await resolveLocationIds(ctx.db, input.ids);
+    const ids = uniq(await locationShortcodes.all(ctx.db, input.ids));
     const parentId = input.parentId
-      ? await resolveLocationId(ctx.db, input.parentId)
+      ? await locationShortcodes.one(ctx.db, input.parentId)
       : null;
 
     await bulkReparentLocations(ctx.db, ids, parentId, ctx.actorContext);
@@ -336,7 +320,7 @@ const getByShortcodes = protectedProcedure
 
 const deleteItem = createDeleteProcedure<LocationShortcode>(
   async (services, shortcodes) => {
-    const ids = await resolveLocationIds(services.db, shortcodes);
+    const ids = uniq(await locationShortcodes.all(services.db, shortcodes));
     const { detachedImageKeys } = await deleteLocations(
       services.db,
       ids,

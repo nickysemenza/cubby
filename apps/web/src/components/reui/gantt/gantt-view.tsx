@@ -1,18 +1,6 @@
 "use client"
 
 import {
-  closestCenter,
-  DndContext,
-  DragOverlay,
-  type DragOverEvent,
-} from "@dnd-kit/core"
-import { restrictToVerticalAxis } from "@dnd-kit/modifiers"
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable"
-import {
   memo,
   useCallback,
   useEffect,
@@ -21,13 +9,9 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type RefObject,
 } from "react"
 import {
-  DEFAULT_ROW_ALIGN,
-  resolveScheduleMode,
-  resolveTimelineLines,
   useGantt,
   useGanttSelector,
   useGanttSettings,
@@ -36,20 +20,10 @@ import {
 } from "~/components/reui/gantt/gantt"
 import { GanttBar } from "~/components/reui/gantt/gantt-bar"
 import {
-  cancelActiveGanttGestures,
-  GanttDndProvider,
-  markGestureEnd,
-  useGanttCreateDraggable,
-  useGanttGestureTeardown,
-  wasRecentDrag,
-} from "~/components/reui/gantt/gantt-dnd"
-import {
   getDayKey,
   getLaneKey,
   getRangeKey,
-  MIN_PACK_SLOT,
   packTimedSegments,
-  reorderResources,
   resolveOffDay,
   toZoned,
   zonedStartOfDay,
@@ -61,7 +35,6 @@ import type {
   GanttEvent,
   GanttOccurrence,
   GanttResource,
-  GanttResourceReorder,
   GanttSegment,
 } from "~/components/reui/gantt/gantt-types"
 import { mergeProps } from "@base-ui/react/merge-props"
@@ -87,19 +60,7 @@ import {
 } from "date-fns"
 
 import { cn } from "~/lib/utils"
-import {
-  createDndAnnouncements,
-  cubbyDndScreenReaderInstructions,
-} from "~/components/dnd/accessibility"
-import { DragPreviewFrame } from "~/components/dnd/DragPreviewFrame"
-import { useCubbyDndSensors } from "~/components/dnd/sensors"
 import { Button } from "~/components/ui/button"
-import { Checkbox } from "~/components/ui/checkbox"
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuTrigger,
-} from "~/components/ui/context-menu"
 import { ScrollArea, ScrollBar } from "~/components/ui/scroll-area"
 import {
   Tooltip,
@@ -107,7 +68,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "~/components/ui/tooltip"
-import { PlusIcon, MinusIcon, GripVerticalIcon, ChevronRightIcon, ChevronLeftIcon } from "lucide-react"
+import { PlusIcon, MinusIcon, ChevronRightIcon, ChevronLeftIcon } from "lucide-react"
 
 /** Current time, refreshed on an interval and on tab focus. */
 function useNow(intervalMs = 30_000): Date {
@@ -152,33 +113,6 @@ function useTodayKey(timeZone: string): string {
 }
 
 /**
- * Lowest lane free for [startMs, endMs) among a row's segments, padded by
- * MIN_PACK_SLOT exactly as packTimedSegments pads its own occupancy test.
- * Comparing raw instants instead lets a sub-slot bar read as clear, so an
- * affordance would promise a lane the packer then refuses.
- *
- * Shared by the hover hint and the drag placeholder on purpose: two copies of
- * this is how the ring and the range it paints end up on different tracks.
- */
-function lowestFreeLane(
-  segments: GanttSegment[],
-  startMs: number,
-  endMs: number
-): number {
-  const padMs = MIN_PACK_SLOT * 60000
-  const to = Math.max(endMs, startMs + padMs)
-  const busy = new Set<number>()
-  for (const segment of segments) {
-    const segStart = segment.occurrence.start.getTime()
-    const segEnd = Math.max(segment.occurrence.end.getTime(), segStart + padMs)
-    if (segStart < to && segEnd > startMs) busy.add(segment.column ?? 0)
-  }
-  let lane = 0
-  while (busy.has(lane)) lane += 1
-  return lane
-}
-
-/**
  * Pointer x resolved against the element's TIME axis: the 0..1 fraction and
  * the same measurement in CSS pixels from the axis start. Mirrored in RTL,
  * where the range start renders at the element's right edge. One rect read
@@ -204,11 +138,6 @@ function trackPoint(
   }
 }
 
-/** Fraction only, for the call sites that do not place anything. */
-function trackFraction(el: HTMLElement, clientX: number): number {
-  return trackPoint(el, clientX).fraction
-}
-
 /**
  * Row geometry is three numbers: a bar is LANE_HEIGHT_REM tall, stacked bars
  * are separated by LANE_GAP_REM, and the block as a whole is inset from the
@@ -220,8 +149,6 @@ function trackFraction(el: HTMLElement, clientX: number): number {
 const LANE_HEIGHT_REM = 1.25
 const LANE_GAP_REM = 0.1875
 const ROW_PADDING_REM = 0.5
-/** Drop-indicator height (h-5); it is centered inside its lane band. */
-const GHOST_HEIGHT_REM = 1.25
 /** Bars narrower than this flip their title outside in barLabel "auto". */
 const AUTO_LABEL_MIN_REM = 7
 const DEFAULT_TREE_PANEL = {
@@ -236,7 +163,6 @@ const DEFAULT_ZOOM_RANGE = { min: 0.5, max: 3 }
 /** Timeline pane never shrinks below this so it stays usable on narrow screens. */
 const MIN_TIMELINE_WIDTH = 200
 /** Scroll distance from an edge that triggers infinite-range growth. */
-const INFINITE_EDGE_PX = 160
 
 interface TimelineUnit {
   key: string
@@ -266,16 +192,6 @@ interface TimelineRow {
 interface TimelineRowBars {
   segments: GanttSegment[]
   laneCount: number
-  /**
-   * Lane a drag-create in flight would land on, or null when none is aimed at
-   * this row. The row reserves the track, so it grows exactly as it will on
-   * commit and the placeholder never has to overlap the bar it is going under.
-   * Computed here, once, because BOTH panes size themselves from this object -
-   * deriving it a second time in the timeline row is how the two would drift.
-   */
-  draftLane: number | null
-  /** Mode this row was packed under; the draft overlay must honour it. */
-  scheduleMode: "single" | "multiple"
   heightRem: number
   /** Gap above the first bar; equal to every other gap in the row. */
   laneOffsetRem: number
@@ -299,14 +215,6 @@ interface TimelineRowBars {
    * present only on group rows without bars of their own.
    */
   summary: { from: number; to: number; progress: number | null } | null
-}
-
-interface TimelineReorderState {
-  resourceId: string
-  /** Insertion offset (px) within the tree pane. */
-  top: number
-  valid: boolean
-  proposal: GanttResourceReorder | null
 }
 
 interface GanttViewProps extends useRender.ComponentProps<"div"> {
@@ -462,7 +370,6 @@ function GanttView({
   const occurrences = useGanttSelector<unknown, GanttOccurrence[]>(
     () => instance.api.getOccurrences(),
     {
-      calendar: instance,
       isEqual: (a, b) =>
         a.length === b.length &&
         a.every(
@@ -475,32 +382,26 @@ function GanttView({
     }
   )
 
-  // Tree expand/collapse: controlled (collapsedGroups/onCollapsedGroupsChange)
-  // or uncontrolled (defaultCollapsedGroups) - same pattern as selectedRows.
-  const [internalCollapsed, setInternalCollapsed] = useState<string[]>(
-    () => viewConfig.defaultCollapsedGroups ?? []
-  )
+  // Tree expand/collapse is controlled when the project owns its open groups.
+  const [internalCollapsed, setInternalCollapsed] = useState<string[]>([])
   const collapsedIds = viewConfig.collapsedGroups ?? internalCollapsed
   const collapsedGroups = useMemo(() => new Set(collapsedIds), [collapsedIds])
 
   const scale = useGanttSelector((state) => state.scale)
   const interval = Math.min(
-    Math.max(intervalProp ?? viewConfig.interval, 15),
+    Math.max(intervalProp ?? 60, 15),
     240
   )
-  // Every layout metric is consumer-overridable; unset keys keep defaults.
-  const metrics = viewConfig.metrics
-  const laneHeightRem = metrics?.laneHeight ?? LANE_HEIGHT_REM
-  const rowPaddingRem = metrics?.rowPadding ?? ROW_PADDING_REM
-  const laneGapRem = metrics?.laneGap ?? LANE_GAP_REM
-  const minRowRem = metrics?.minRowHeight ?? 2.5
-  const minTimelineWidth = metrics?.minTimelineWidth ?? MIN_TIMELINE_WIDTH
-  const infiniteEdgePx = metrics?.infiniteScrollEdge ?? INFINITE_EDGE_PX
+  const laneHeightRem = LANE_HEIGHT_REM
+  const rowPaddingRem = ROW_PADDING_REM
+  const laneGapRem = LANE_GAP_REM
+  const minRowRem = 2.5
+  const minTimelineWidth = MIN_TIMELINE_WIDTH
   const timeZone = settings.timeZone
   const rangeStartMs = range.start.getTime()
   const rangeEndMs = range.end.getTime()
   const rangeKey = getRangeKey(range)
-  const snapMin = scale === "day" ? settings.snapDuration : 24 * 60
+  const snapMin = 24 * 60
   // day-granular time input so the today highlight rolls over at midnight
   // without the whole grid re-rendering on the 30s now tick
   const todayDayKey = useTodayKey(timeZone)
@@ -546,7 +447,7 @@ function GanttView({
         const dayOff = resolveOffDay(
           dayCursor,
           timeZone,
-          viewConfig.offDays ?? true
+          true
         )
         let span = 0
         for (let m = 0; m < dayMinutes; m += interval) {
@@ -576,7 +477,7 @@ function GanttView({
         units,
         groups,
         unitWidthRem:
-          metrics?.unitWidths?.day ?? Math.max(2.5, 5 * (interval / 60)),
+          Math.max(2.5, 5 * (interval / 60)),
       }
     }
     if (scale === "quarter") {
@@ -609,7 +510,7 @@ function GanttView({
         }
         cursor = next
       }
-      return { units, groups, unitWidthRem: metrics?.unitWidths?.quarter ?? 8 }
+      return { units, groups, unitWidthRem: 8 }
     }
     if (scale === "year") {
       // units are calendar months (weight = real duration), groups are quarters
@@ -642,7 +543,7 @@ function GanttView({
         }
         cursor = next
       }
-      return { units, groups, unitWidthRem: metrics?.unitWidths?.year ?? 10 }
+      return { units, groups, unitWidthRem: 10 }
     }
     // week/month: units are days, groups are ISO-ish weeks
     let cursor = zonedStartOfDay(range.start, timeZone)
@@ -657,7 +558,7 @@ function GanttView({
         ms: cursor.getTime(),
         weight,
         isToday: getDayKey(cursor, timeZone) === todayDayKey,
-        isOff: resolveOffDay(cursor, timeZone, viewConfig.offDays ?? true),
+        isOff: resolveOffDay(cursor, timeZone, true),
       })
       // locale supplies firstWeekContainsDate so W-numbers match the locale's
       // week numbering (ISO in de/fr, US-style otherwise); the explicit
@@ -687,7 +588,7 @@ function GanttView({
     return {
       units,
       groups,
-      unitWidthRem: metrics?.unitWidths?.[scale] ?? (scale === "week" ? 10 : 4),
+      unitWidthRem: scale === "week" ? 10 : 4,
     }
   }, [
     scale,
@@ -698,25 +599,18 @@ function GanttView({
     settings.i18n,
     settings.locale,
     settings.weekStartsOn,
-    viewConfig.offDays,
     todayDayKey,
-    metrics,
   ])
 
   // Zoom multiplies the minimum unit width; the flex track still fills when
-  // the zoomed width is narrower than the pane. Controlled (zoom/onZoomChange)
-  // or uncontrolled (defaultZoom) - same pattern as selectedRows.
-  const zoomRange = { ...DEFAULT_ZOOM_RANGE, ...viewConfig.zoomRange }
+  // the zoomed width is narrower than the pane.
+  const zoomRange = DEFAULT_ZOOM_RANGE
   const clampZoom = (value: number) =>
     Math.min(Math.max(value, zoomRange.min), zoomRange.max)
-  const [internalZoom, setInternalZoom] = useState(
-    () => viewConfig.defaultZoom ?? 1
-  )
-  const zoom = clampZoom(viewConfig.zoom ?? internalZoom)
+  const [zoom, setInternalZoom] = useState(1)
   const setZoomValue = (next: number) => {
     const clamped = clampZoom(next)
-    if (viewConfig.zoom === undefined) setInternalZoom(clamped)
-    viewConfig.onZoomChange?.(clamped)
+    setInternalZoom(clamped)
   }
   const canZoomIn = zoom < zoomRange.max - 1e-9
   const canZoomOut = zoom > zoomRange.min + 1e-9
@@ -737,26 +631,6 @@ function GanttView({
       return { unit, start, width: unit.weight / totalWeight }
     })
   }, [units, totalWeight])
-  /** Snap a track fraction to its unit (hint preview target). */
-  const resolveHintStop = useMemo(() => {
-    return (
-      fraction: number
-    ): { index: number; center: number; ms: number; endMs: number } | null => {
-      for (let i = 0; i < unitFractions.length; i++) {
-        const { unit, start, width } = unitFractions[i]!
-        if (fraction < start + width || i === unitFractions.length - 1) {
-          return {
-            index: i,
-            center: start + width / 2,
-            ms: unit.ms,
-            endMs: unitFractions[i + 1]?.unit.ms ?? unit.ms,
-          }
-        }
-      }
-      return null
-    }
-  }, [unitFractions])
-
   /** Group boundary fractions; spans are in unit-weight terms everywhere. */
   const groupBoundaries = useMemo(() => {
     const fractions: number[] = []
@@ -788,30 +662,6 @@ function GanttView({
     (state) => state.events
   )
   const subtreeProgress = useMemo(() => {
-    // consumer-owned rollup math: hand each group its descendant events
-    if (viewConfig.getSummaryProgress) {
-      const byResource = new Map<string, GanttEvent[]>()
-      for (const ev of allEvents) {
-        if (!ev.resourceId) continue
-        const list = byResource.get(ev.resourceId)
-        if (list) list.push(ev)
-        else byResource.set(ev.resourceId, [ev])
-      }
-      const map = new Map<string, number | null>()
-      for (const row of rows) {
-        if (!row.isGroup) continue
-        const events: GanttEvent[] = []
-        for (const id of descendantIds.get(row.resource.id) ?? []) {
-          const list = byResource.get(id)
-          if (list) events.push(...list)
-        }
-        map.set(
-          row.resource.id,
-          viewConfig.getSummaryProgress({ resource: row.resource, events })
-        )
-      }
-      return map
-    }
     // default: one pass over events -> per-resource aggregates, then a cheap
     // descendant sum per group; never O(rows x events)
     const perResource = new Map<
@@ -855,7 +705,7 @@ function GanttView({
       )
     }
     return map
-  }, [rows, allEvents, descendantIds, viewConfig.getSummaryProgress])
+  }, [rows, allEvents, descendantIds])
 
   // Lane memory across layout passes, keyed by getLaneKey (event identity,
   // NOT the time-stamped occurrence key). It stores the TIMES alongside the
@@ -865,36 +715,6 @@ function GanttView({
   // idempotent - feeding its own output back in produces the same assignment -
   // so a StrictMode double render is a no-op.
   const laneMemory = useRef(new Map<string, GanttLaneMemo>())
-  const scheduleMode = viewConfig.scheduleMode
-
-  // Per-row packed bars, hoisted so the tree and timeline rows share heights
-  // A drag-create in flight. Reduced to the three fields the layout needs, and
-  // compared by value, so this re-runs only when the SNAPPED range moves - the
-  // gesture engine already gates setSlotDraft on exactly that, so it is a
-  // handful of recomputes per drag rather than one per frame.
-  const draftLayout = useGanttSelector<
-    unknown,
-    { resourceId: string; startMs: number; endMs: number } | null
-  >(
-    (state) => {
-      const slotDraft = state.slotDraft
-      if (!slotDraft?.resourceId) return null
-      return {
-        resourceId: slotDraft.resourceId,
-        startMs: slotDraft.start.getTime(),
-        endMs: slotDraft.end.getTime(),
-      }
-    },
-    {
-      isEqual: (a, b) =>
-        a === b ||
-        (a !== null &&
-          b !== null &&
-          a.resourceId === b.resourceId &&
-          a.startMs === b.startMs &&
-          a.endMs === b.endMs),
-    }
-  )
 
   const baseRowBars = useMemo(() => {
     const map = new Map<string, TimelineRowBars>()
@@ -944,7 +764,7 @@ function GanttView({
           totalMin
         ),
       }))
-      const mode = resolveScheduleMode(row.resource, scheduleMode)
+      const mode = "single"
       packTimedSegments(segments, { mode, preferredLanes: previousLanes })
       for (const segment of segments) {
         nextLanes.set(getLaneKey(segment.occurrence), {
@@ -967,7 +787,7 @@ function GanttView({
       // Parent rollup from the subtree's bars: envelope clamped to the range,
       // progress weighted by each bar's full duration
       let summary: TimelineRowBars["summary"] = null
-      if (row.isGroup && segments.length === 0 && viewConfig.summaryBars) {
+      if (row.isGroup && segments.length === 0) {
         let sumFrom = Infinity
         let sumTo = -Infinity
         for (const id of descendantIds.get(row.resource.id) ?? []) {
@@ -998,8 +818,6 @@ function GanttView({
       map.set(row.resource.id, {
         segments,
         laneCount,
-        draftLane: null,
-        scheduleMode: mode,
         heightRem,
         laneOffsetRem,
         bandRem: laneHeightRem + laneOffsetRem * 2,
@@ -1037,14 +855,12 @@ function GanttView({
     rangeStartMs,
     rangeEndMs,
     settings.i18n,
-    viewConfig.summaryBars,
     descendantIds,
     subtreeProgress,
     laneHeightRem,
     rowPaddingRem,
     laneGapRem,
     minRowRem,
-    scheduleMode,
   ])
 
   // ----- split panes: width state, splitter drag/keyboard, scroll sync -----
@@ -1056,55 +872,7 @@ function GanttView({
   const columns = viewConfig.columns ?? []
 
   // "Add task" hint at the foot of the tree, gated by validation
-  /**
-   * Reserve the track a drag-create in flight will land on - as a THIN overlay
-   * over the layout above, never as an input to it. Rebuilding the whole map
-   * per snapped step would hand every row a new `bars` object and defeat
-   * GanttTimelineRow's memo across the entire grid, so only the drafted row's
-   * entry is replaced; every other row keeps its identity and never re-renders.
-   *
-   * `laneOffsetRem` and `bandRem` are deliberately carried over UNCHANGED.
-   * Deriving them from the grown track count re-centres the row, which drags
-   * the settled bars and the tree label box with it - a 2px wobble by default
-   * and, under a consumer `metrics.minRowHeight` big enough to swallow the
-   * growth, an 11.5px jerk that snaps back on release. Growing a row must add
-   * space BELOW what is already there and move nothing.
-   */
-  const rowBars = useMemo(() => {
-    if (!draftLayout) return baseRowBars
-    const base = baseRowBars.get(draftLayout.resourceId)
-    if (!base) return baseRowBars
-    const next = new Map(baseRowBars)
-    // "single" packs every bar onto lane 0, so that is where the draft goes
-    // too and the row never grows. Recorded rather than left null so the
-    // placeholder's data-lane still names a real destination.
-    if (base.scheduleMode === "single") {
-      next.set(draftLayout.resourceId, { ...base, draftLane: 0 })
-      return next
-    }
-    const draftLane = lowestFreeLane(
-      base.segments,
-      draftLayout.startMs,
-      draftLayout.endMs
-    )
-    const trackCount = Math.max(base.laneCount, draftLane + 1)
-    const draftBlockRem =
-      trackCount * laneHeightRem + (trackCount - 1) * laneGapRem
-    next.set(draftLayout.resourceId, {
-      ...base,
-      draftLane,
-      heightRem: Math.max(
-        base.heightRem,
-        base.laneOffsetRem * 2 + draftBlockRem
-      ),
-    })
-    return next
-  }, [baseRowBars, draftLayout, laneHeightRem, laneGapRem])
-
-  const showCreateTask =
-    viewConfig.displayCreateTaskHint &&
-    !!settings.onCreateTask &&
-    (settings.canCreateTask?.({ parentId: null }) ?? true)
+  const rowBars = baseRowBars
 
   // Responsive guard: the timeline must always keep a usable width, so on
   // narrow containers the tree pane yields down toward its minWidth. Measured
@@ -1127,37 +895,10 @@ function GanttView({
       mid-drag re-render can't snap the pane back to stale state. */
   const liveTreeWidthRef = useRef<number | null>(null)
 
-  // In-flight gestures must never outlive the view (leaked window listeners,
-  // body overlays and the drag cursor), and must never keep running against
-  // geometry they measured before it changed - a gesture snapshots the axis
-  // and row rects once at activation, so any of these invalidates it.
-  // Cancel-and-revert is the safe contract; all of this is a no-op in normal
-  // flows (none of these values can change during an ordinary pointer drag).
-  useGanttGestureTeardown()
-  useEffect(() => {
-    cancelActiveGanttGestures()
-  }, [zoom, scale, rangeKey, clampedTreeWidth, rows.length])
-
-  // Leaf-row checkbox selection: uncontrolled unless selectedRows is passed
-  const [internalSelected, setInternalSelected] = useState<string[]>([])
-  const selectedRows = viewConfig.selectedRows ?? internalSelected
-  const selectedSet = useMemo(() => new Set(selectedRows), [selectedRows])
   // Latest-value refs so the row handlers keep ONE identity across renders -
   // the row components are memoized and must not re-render per state change
   const viewConfigRef = useRef(viewConfig)
   viewConfigRef.current = viewConfig
-  const selectedRowsRef = useRef(selectedRows)
-  selectedRowsRef.current = selectedRows
-  const toggleRowSelected = useCallback((id: string, checked: boolean) => {
-    const current = selectedRowsRef.current
-    const next = checked
-      ? [...current.filter((rowId) => rowId !== id), id]
-      : current.filter((rowId) => rowId !== id)
-    if (viewConfigRef.current.selectedRows === undefined) {
-      setInternalSelected(next)
-    }
-    viewConfigRef.current.onSelectedRowsChange?.(next)
-  }, [])
 
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const treePaneRef = useRef<HTMLDivElement | null>(null)
@@ -1218,7 +959,6 @@ function GanttView({
       liveTreeWidthRef.current = null
       if (liveWidth !== startWidth) {
         setTreeWidth(liveWidth)
-        viewConfigRef.current.treePanel?.onWidthChange?.(liveWidth)
       }
     }
     window.addEventListener("pointermove", onMove)
@@ -1311,7 +1051,7 @@ function GanttView({
       unlinkTimeline()
       unforward?.()
     }
-  }, [scale, viewConfig.scrollbars])
+  }, [scale])
 
   // Linked row hover: mirror data-hover onto the row's twin in the other pane
   useEffect(() => {
@@ -1362,7 +1102,7 @@ function GanttView({
       : viewConfig.initialCenter
   const manageRef = useRef({ key: "", buffered: false, userTook: false })
   useLayoutEffect(() => {
-    const key = `${scale}:${anchorMs}:${viewConfig.scrollbars}`
+    const key = `${scale}:${anchorMs}`
     if (manageRef.current.key !== key) {
       // An anchor change from an extendRange window SLIDE continues the
       // user's own travel: the guard survives, or the pre-buffer branch
@@ -1394,13 +1134,6 @@ function GanttView({
         return
       }
       // pre-buffer once; the re-run after the range grows lands the center
-      if (viewConfig.infiniteScroll && !manageRef.current.buffered) {
-        manageRef.current.buffered = true
-        extendLockRef.current = true
-        instance.internals.extendRange("before")
-        instance.internals.extendRange("after")
-        return
-      }
       extendLockRef.current = false
       if (viewport.scrollWidth <= viewport.clientWidth) return
       // read the clock at run time - the effect must not depend on a
@@ -1408,19 +1141,8 @@ function GanttView({
       // Target now ONLY when the anchor period itself contains it: keying
       // on the whole (buffered) visible range would re-center prev/next
       // navigation right back onto today.
-      const active = instance.getState().activeRange
       let target: number
-      if (typeof initialCenter === "number") {
-        target = initialCenter
-      } else if (initialCenter === "anchor") {
-        target = anchorMs
-      } else {
-        const nowMs = Date.now()
-        target =
-          nowMs >= active.start.getTime() && nowMs < active.end.getTime()
-            ? nowMs
-            : anchorMs
-      }
+      target = initialCenter
       const fraction = Math.min(
         Math.max((target - rangeStartMs) / (rangeEndMs - rangeStartMs), 0),
         1
@@ -1438,8 +1160,6 @@ function GanttView({
     scale,
     anchorMs,
     initialCenter,
-    viewConfig.scrollbars,
-    viewConfig.infiniteScroll,
     rangeKey,
     rangeStartMs,
     rangeEndMs,
@@ -1503,82 +1223,6 @@ function GanttView({
     }
   }, [])
 
-  useEffect(() => {
-    if (!viewConfig.infiniteScroll) return
-    const viewport = getPaneViewport(timelinePaneRef.current)
-    if (!viewport) return
-    const tryExtend = (direction: "before" | "after") => {
-      // anchor the left edge as an instant, from the LIVE axis range
-      const axis = viewport.querySelector<HTMLElement>("[data-gantt-axis]")
-      const liveStart = Number(axis?.dataset.ganttRangeStart)
-      const liveEnd = Number(axis?.dataset.ganttRangeEnd)
-      if (!axis || Number.isNaN(liveStart) || Number.isNaN(liveEnd)) return
-      extendLockRef.current = true
-      manageRef.current.userTook = true
-      pendingRestoreRef.current = {
-        ms:
-          liveStart +
-          (getScrollStart(viewport) / viewport.scrollWidth) *
-            (liveEnd - liveStart),
-        align: "start",
-      }
-      if (!instance.internals.extendRange(direction)) {
-        pendingRestoreRef.current = null
-        extendLockRef.current = false
-      }
-    }
-    // scrollLeft is signed by direction; all edge math runs on the
-    // distance-from-inline-start so RTL panes behave identically
-    const isRtl = getComputedStyle(viewport).direction === "rtl"
-    const onScroll = () => {
-      if (extendLockRef.current) return
-      if (performance.now() - lastUserScrollRef.current > 1200) return
-      // a track that fits the pane has no scroll gesture to extend from
-      if (viewport.scrollWidth <= viewport.clientWidth + 8) return
-      const fromStart = getScrollStart(viewport)
-      const fromEnd = viewport.scrollWidth - fromStart - viewport.clientWidth
-      const direction =
-        fromStart < infiniteEdgePx
-          ? ("before" as const)
-          : fromEnd < infiniteEdgePx
-            ? ("after" as const)
-            : null
-      if (!direction) return
-      tryExtend(direction)
-    }
-    // parked exactly on an edge, further wheeling emits no scroll event -
-    // the wheel itself is the growth gesture then
-    const onWheel = (e: WheelEvent) => {
-      // a zoom gesture must never grow the range: the track is rescaling
-      // under the pointer, so an edge reading mid-gesture is meaningless
-      if (e.ctrlKey || e.metaKey) return
-      if (extendLockRef.current || e.deltaX === 0) return
-      if (viewport.scrollWidth <= viewport.clientWidth + 8) return
-      const towardStart = isRtl ? e.deltaX > 0 : e.deltaX < 0
-      if (towardStart && getScrollStart(viewport) <= 0) {
-        tryExtend("before")
-      } else if (
-        !towardStart &&
-        getScrollStart(viewport) + viewport.clientWidth >=
-          viewport.scrollWidth - 1
-      ) {
-        tryExtend("after")
-      }
-    }
-    viewport.addEventListener("scroll", onScroll)
-    viewport.addEventListener("wheel", onWheel, { passive: true })
-    return () => {
-      viewport.removeEventListener("scroll", onScroll)
-      viewport.removeEventListener("wheel", onWheel)
-    }
-  }, [
-    instance,
-    viewConfig.infiniteScroll,
-    scale,
-    viewConfig.scrollbars,
-    infiniteEdgePx,
-  ])
-
   // Report the visible-center instant so the nav title names what you are
   // looking at. Throttled to period boundaries (a coarse key) so scrolling
   // within a period never re-renders the grid.
@@ -1625,7 +1269,7 @@ function GanttView({
       viewport.removeEventListener("scroll", schedule)
       if (raf) cancelAnimationFrame(raf)
     }
-  }, [instance, scale, timeZone, viewConfig.scrollbars, rangeKey])
+  }, [instance, scale, timeZone, rangeKey])
 
   // Re-seat the viewport on its anchored instant before paint. Runs for range
   // growth, window slides, and zoom changes; a slide moves the anchor date,
@@ -1683,7 +1327,6 @@ function GanttView({
     rangeStartMs,
     rangeEndMs,
     scale,
-    viewConfig.scrollbars,
     instance,
   ])
 
@@ -1737,7 +1380,6 @@ function GanttView({
   const wheelZoomRef = useRef<((e: WheelEvent) => void) | null>(null)
   useEffect(() => {
     wheelZoomRef.current = (e: WheelEvent) => {
-      if (!viewConfig.wheelZoom) return
       // Browsers deliver a trackpad pinch as wheel + ctrlKey on every
       // platform; metaKey is the Mac keyboard idiom the same gesture implies.
       if (!e.ctrlKey && !e.metaKey) return
@@ -1750,9 +1392,7 @@ function GanttView({
       // zoom still works for anyone who relies on it.
       if (Math.abs(next - zoom) < 1e-4) return
       e.preventDefault()
-      // Controlled zoom anchors via fineCenterRef when the parent adopts;
-      // pre-setting an anchor would leak stale if the parent ignores it.
-      if (viewConfig.zoom === undefined) anchorZoomPointer(e.clientX)
+      anchorZoomPointer(e.clientX)
       setZoomValue(+next.toFixed(4))
     }
   })
@@ -1762,7 +1402,7 @@ function GanttView({
     const onWheel = (e: WheelEvent) => wheelZoomRef.current?.(e)
     viewport.addEventListener("wheel", onWheel, { passive: false })
     return () => viewport.removeEventListener("wheel", onWheel)
-  }, [viewConfig.scrollbars, scale])
+  }, [scale])
 
   // Drag-to-pan from the header (intent-based: activates after 4px)
   const beginHeaderPan = (e: React.PointerEvent) => {
@@ -1777,10 +1417,6 @@ function GanttView({
       if (ev.pointerId !== pointerId) return
       const dx = ev.clientX - startX
       if (!active && Math.abs(dx) < 4) return
-      if (!active) {
-        markGestureEnd()
-        setIsPanning(true)
-      }
       active = true
       // panning is a user scroll: keep the infinite-scroll gate open
       lastUserScrollRef.current = performance.now()
@@ -1795,7 +1431,6 @@ function GanttView({
       window.removeEventListener("pointercancel", finish)
       document.body.style.cursor = ""
       document.body.style.userSelect = ""
-      if (active) setIsPanning(false)
     }
     window.addEventListener("pointermove", onMove)
     window.addEventListener("pointerup", finish)
@@ -1803,82 +1438,6 @@ function GanttView({
   }
 
   // Panning suppresses the placement hints (scroll intent, not create intent)
-  const [isPanning, setIsPanning] = useState(false)
-
-  // ----- tree-row drag reorder: dnd-kit owns pointer/touch/keyboard input;
-  // the existing immutable tree proposal remains the policy boundary. -----
-  const [reorder, setReorder] = useState<TimelineReorderState | null>(null)
-  const reorderRef = useRef<TimelineReorderState | null>(null)
-  const [activeReorderId, setActiveReorderId] = useState<string | null>(null)
-  const reorderEnabled = !!settings.onResourceReorder
-  const reorderSensors = useCubbyDndSensors()
-  const updateReorder = useCallback(
-    ({ active, over }: DragOverEvent) => {
-      if (!over) return
-      const dragRow = active.data.current?.row as TimelineRow | undefined
-      if (!dragRow) return
-      const overIndex = rows.findIndex(
-        (candidate) => candidate.resource.id === over.id
-      )
-      if (overIndex < 0) return
-      const translated = active.rect.current.translated
-      const after =
-        translated !== null &&
-        translated.top + translated.height / 2 > over.rect.top + over.rect.height / 2
-      const boundary = Math.min(overIndex + (after ? 1 : 0), rows.length)
-      const below = rows[boundary]
-      const parentId =
-        below?.parentId ?? rows[rows.length - 1]?.parentId ?? null
-      let index = 0
-      for (let rowIndex = 0; rowIndex < boundary; rowIndex += 1) {
-        if (
-          rows[rowIndex]?.parentId === parentId &&
-          rows[rowIndex]?.resource.id !== dragRow.resource.id
-        ) {
-          index += 1
-        }
-      }
-      const resources = reorderResources(
-        settings.resources,
-        dragRow.resource.id,
-        parentId,
-        index
-      )
-      const proposal: GanttResourceReorder | null = resources
-        ? { resourceId: dragRow.resource.id, parentId, index, resources }
-        : null
-      const valid =
-        !!proposal && (settings.canReorderResource?.(proposal) ?? true)
-      const paneRect = treePaneRef.current?.getBoundingClientRect()
-      const rowElements = treeRowsRef.current?.querySelectorAll<HTMLElement>(
-        "[data-slot=gantt-row-group]"
-      )
-      const boundaryRect = rowElements?.[boundary]?.getBoundingClientRect()
-      const lastRect = rowElements?.[rowElements.length - 1]?.getBoundingClientRect()
-      const top = paneRect
-        ? (boundaryRect?.top ?? lastRect?.bottom ?? paneRect.top) - paneRect.top
-        : 0
-      const next = { resourceId: dragRow.resource.id, top, valid, proposal }
-      reorderRef.current = next
-      setReorder(next)
-    },
-    [rows, settings]
-  )
-
-  const finishReorder = useCallback(
-    (commit: boolean) => {
-      const current = reorderRef.current
-      if (commit && current?.proposal && !current.valid) {
-        settings.onResourceReorderReject?.(current.proposal)
-      } else if (commit && current?.valid && current.proposal) {
-        settings.onResourceReorder?.(current.proposal)
-      }
-      reorderRef.current = null
-      setReorder(null)
-      setActiveReorderId(null)
-    },
-    [settings]
-  )
 
   const collapsedIdsRef = useRef(collapsedIds)
   collapsedIdsRef.current = collapsedIds
@@ -1895,17 +1454,12 @@ function GanttView({
   }, [])
 
   const loading = useGanttSelector<unknown, boolean>((state) => state.loading)
-  const customScrollbars = viewConfig.scrollbars !== "native"
-  const gridLines = resolveTimelineLines(viewConfig.timelineLines)
+  const customScrollbars = true
+  const gridLines = { vertical: "solid" as const, horizontal: "solid" as const }
   const showVerticalLines = gridLines.vertical !== null
-  const offDayClassName =
-    (typeof viewConfig.offDays === "object" && viewConfig.offDays.className) ||
-    "bg-muted/40"
+  const offDayClassName = "bg-muted/40"
   // Body texture: default off-days carry a whisper-faint diagonal hatch over
-  // a lighter wash (header cells stay flat). A custom offDays.className
-  // replaces both surfaces verbatim.
   const offDayBodyClassName =
-    (typeof viewConfig.offDays === "object" && viewConfig.offDays.className) ||
     "bg-muted/25 bg-[repeating-linear-gradient(135deg,transparent,transparent_5px,color-mix(in_oklab,var(--color-border)_35%,transparent)_5px,color-mix(in_oklab,var(--color-border)_35%,transparent)_6px)]"
 
   // Header-only unit lines, and ONE mechanism for every vertical line in the
@@ -1918,12 +1472,9 @@ function GanttView({
 
   // ----- tree pane content -----
   // Header label offset = the row cell's ps-3 (0.75rem) left gutter + the
-  // toggle/checkbox gutter (w-5 + me-1 = 1.5rem) + the reorder grip (0.875rem)
-  // when present, so "Resources" lines up with the row titles below it.
-  const namePaddingStart = reorderEnabled ? "3.125rem" : "2.25rem"
-  const activeReorderRow = rows.find(
-    (row) => row.resource.id === activeReorderId
-  )
+  // collapse-toggle gutter (w-5 + me-1 = 1.5rem), so "Resources" lines up
+  // with the row titles below it.
+  const namePaddingStart = "2.25rem"
   const treeContent = (
     <div
       className={cn(
@@ -1972,46 +1523,9 @@ function GanttView({
             ))}
             <div className="min-w-0 flex-1" />
           </div>
-          {viewConfig.columnsMenu && (
-            <div
-              data-slot="gantt-columns-menu"
-              // gradient lead-in: scrolled column headers dissolve into this
-              // sticky control instead of hard-clipping against its background
-              className="bg-background before:from-background sticky end-0 z-10 flex h-full shrink-0 items-center ps-1.5 pe-2.5 before:pointer-events-none before:absolute before:inset-y-0 before:-start-5 before:w-5 before:bg-linear-to-l before:to-transparent rtl:before:bg-linear-to-r"
-            >
-              {viewConfig.columnsMenu}
-            </div>
-          )}
         </div>
       </div>
-      <DndContext
-        sensors={reorderSensors}
-        autoScroll={false}
-        collisionDetection={closestCenter}
-        modifiers={[restrictToVerticalAxis]}
-        onDragStart={({ active }) => {
-          const row = active.data.current?.row as TimelineRow | undefined
-          setActiveReorderId(row?.resource.id ?? null)
-        }}
-        onDragOver={updateReorder}
-        onDragEnd={() => finishReorder(true)}
-        onDragCancel={() => finishReorder(false)}
-        accessibility={{
-          container: typeof document === "undefined" ? undefined : document.body,
-          screenReaderInstructions: cubbyDndScreenReaderInstructions,
-          announcements: createDndAnnouncements({
-            item: (id) =>
-              rows.find((row) => row.resource.id === id)?.resource.title ?? id,
-            target: (id) =>
-              rows.find((row) => row.resource.id === id)?.resource.title ?? id,
-          }),
-        }}
-      >
-        <SortableContext
-          items={rows.map((row) => row.resource.id)}
-          strategy={verticalListSortingStrategy}
-        >
-          <div ref={treeRowsRef} className="flex flex-col">
+      <div ref={treeRowsRef} className="flex flex-col">
             {rows.map((row) => (
               <GanttTreeRow
                 key={row.resource.id}
@@ -2020,54 +1534,11 @@ function GanttView({
                 bandRem={rowBars.get(row.resource.id)?.bandRem ?? minRowRem}
                 columns={columns}
                 nameWidth={treeConfig.nameColumnWidth}
-                dimmed={reorder?.resourceId === row.resource.id}
-                selected={selectedSet.has(row.resource.id)}
-                onSelectedChange={row.isGroup ? undefined : toggleRowSelected}
-                reorderEnabled={reorderEnabled}
+                dimmed={false}
                 onToggle={onToggleRow}
               />
             ))}
-          </div>
-        </SortableContext>
-        <DragOverlay dropAnimation={null}>
-          {activeReorderRow ? (
-            <DragPreviewFrame
-              valid={reorder?.valid ?? true}
-              className="min-w-48 px-3 py-2 text-xs font-medium"
-            >
-              {activeReorderRow.resource.title}
-            </DragPreviewFrame>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
-      {showCreateTask && (
-          <button
-            type="button"
-            data-slot="gantt-create-task"
-            // mirror the tree row's left structure so the + lands in the same
-            // column as the row toggle chevrons, and the label lines up with
-            // the task titles above
-            className="text-muted-foreground hover:text-foreground hover:bg-muted/40 flex h-10 w-full shrink-0 items-center border-b ps-3 pe-3"
-            onClick={() =>
-              settings.onCreateTask?.({
-                parentId: null,
-                index: settings.resources.length,
-              })
-            }
-          >
-            <span className="flex h-full w-full items-center">
-              {reorderEnabled && (
-                <span aria-hidden className="w-3.5 shrink-0" />
-              )}
-              {/* group chevrons sit centered in a size-5 button that fills
-                  this w-5 gutter, so the + must center here too */}
-              <span className="me-1 flex w-5 shrink-0 items-center justify-center">
-                <PlusIcon className="size-3.5" aria-hidden="true" />
-              </span>
-              <span>{settings.i18n.labels.addTask}</span>
-            </span>
-          </button>
-        )}
+      </div>
     </div>
   )
 
@@ -2187,16 +1658,12 @@ function GanttView({
                   // a dashed rule is a repeating gradient, not a border: the
                   // line is a 1px span, and border-dashed on a zero-width box
                   // paints nothing
-                  gridLines.vertical === "dashed"
-                    ? "bg-[repeating-linear-gradient(to_bottom,var(--color-border)_0,var(--color-border)_3px,transparent_3px,transparent_6px)]"
-                    : "bg-border"
+                  "bg-border"
                 )}
                 style={{ insetInlineStart: `calc(${start * 100}% - 1px)` }}
               />
             ))}
-          {viewConfig.nowIndicator && (
-            <GanttNowDot rangeStartMs={rangeStartMs} rangeEndMs={rangeEndMs} />
-          )}
+          <GanttNowDot rangeStartMs={rangeStartMs} rangeEndMs={rangeEndMs} />
         </div>
       </div>
       {/* Rows over a shared backdrop (off days, today, boundaries, now);
@@ -2252,31 +1719,23 @@ function GanttView({
                   data-axis="vertical"
                   className={cn(
                     "absolute inset-y-0 w-px",
-                    gridLines.vertical === "dashed"
-                      ? "bg-[repeating-linear-gradient(to_bottom,var(--color-border)_0,var(--color-border)_3px,transparent_3px,transparent_6px)]"
-                      : "bg-border"
+                    "bg-border"
                   )}
                   style={{ insetInlineStart: `calc(${start * 100}% - 1px)` }}
                 />
               ))}
-          {viewConfig.nowIndicator && (
-            <GanttNowLine rangeStartMs={rangeStartMs} rangeEndMs={rangeEndMs} />
-          )}
+          <GanttNowLine rangeStartMs={rangeStartMs} rangeEndMs={rangeEndMs} />
         </div>
-        {rows.map((row, rowIndex) => (
+        {rows.map((row) => (
           <GanttTimelineRow
             key={row.resource.id}
             row={row}
-            rowIndex={rowIndex}
             bars={rowBars.get(row.resource.id)}
             rangeStartMs={rangeStartMs}
             rangeEndMs={rangeEndMs}
             trackWidth={trackWidth}
             trackRemWidth={trackRemWidth}
             rowBorder={gridLines.horizontal}
-            selected={selectedSet.has(row.resource.id)}
-            resolveHintStop={resolveHintStop}
-            isPanning={isPanning}
             laneHeightRem={laneHeightRem}
             laneGapRem={laneGapRem}
             minRowRem={minRowRem}
@@ -2297,14 +1756,6 @@ function GanttView({
           >
             {viewConfig.renderNoResources()}
           </div>
-        )}
-        {showCreateTask && (
-          <div
-            aria-hidden
-            data-slot="gantt-create-task-spacer"
-            className="h-10 border-b"
-            style={{ minWidth: trackWidth }}
-          />
         )}
       </div>
     </div>
@@ -2327,7 +1778,6 @@ function GanttView({
     "aria-busy": loading || undefined,
     className: cn(
       "flex min-h-0 flex-1 flex-col overflow-hidden",
-      viewConfig.classNames?.view,
       className
     ),
     children: (
@@ -2378,30 +1828,6 @@ function GanttView({
               className="bg-background border-t-border pointer-events-none absolute inset-x-0 bottom-0 h-4 border-t"
             />
           )}
-          {/* Reorder insertion indicator, pinned to the visible pane */}
-          {reorder && (
-            <div
-              data-slot="gantt-reorder-indicator"
-              data-invalid={!reorder.valid || undefined}
-              className="pointer-events-none absolute inset-x-0 flex items-center"
-              style={{ top: reorder.top - 4, zIndex: 110 }}
-            >
-              {/* caret head pointing along the insertion line; the whole
-                  indicator sits above the row carry overlay (z 100) */}
-              <span
-                className={cn(
-                  "ms-0.5 size-0 shrink-0 border-y-4 border-s-8 border-y-transparent",
-                  reorder.valid ? "border-s-primary" : "border-s-destructive"
-                )}
-              />
-              <span
-                className={cn(
-                  "h-px min-w-0 flex-1",
-                  reorder.valid ? "bg-primary" : "bg-destructive"
-                )}
-              />
-            </div>
-          )}
         </div>
         {/* Splitter */}
         {treeConfig.resizable ? (
@@ -2429,7 +1855,6 @@ function GanttView({
             onPointerDown={beginSplit}
             onDoubleClick={() => {
               setTreeWidth(treeConfig.width)
-              treeConfig.onWidthChange?.(treeConfig.width)
             }}
             onKeyDown={(e) => {
               if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
@@ -2439,7 +1864,6 @@ function GanttView({
                 const delta = (e.key === "ArrowLeft" ? -16 : 16) * dir
                 const next = clampTree(clampedTreeWidth + delta)
                 setTreeWidth(next)
-                treeConfig.onWidthChange?.(next)
               }
             }}
           >
@@ -2459,7 +1883,7 @@ function GanttView({
           data-slot="gantt-timeline-pane"
           className="relative h-full min-w-0 flex-1"
         >
-          {viewConfig.zoomControl && (
+          {(
             <div
               data-slot="gantt-zoom"
               className="bg-background absolute end-3 bottom-5 z-40 flex flex-col border shadow-sm"
@@ -2478,12 +1902,9 @@ function GanttView({
                         className="text-muted-foreground hover:text-foreground size-5! rounded-b-none aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-transparent"
                         onClick={() => {
                           if (!canZoomIn) return
-                          // controlled zoom anchors via fineCenterRef when
-                          // the parent adopts; a pre-set anchor would leak
-                          // stale if the parent ignores the proposal
-                          if (viewConfig.zoom === undefined) anchorZoomCenter()
+                          anchorZoomCenter()
                           setZoomValue(
-                            +(zoom + (zoomRange.step ?? 0.25)).toFixed(2)
+                            +(zoom + 0.25).toFixed(2)
                           )
                         }}
                       />
@@ -2506,9 +1927,9 @@ function GanttView({
                         className="text-muted-foreground hover:text-foreground size-5! rounded-t-none border-t aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-transparent"
                         onClick={() => {
                           if (!canZoomOut) return
-                          if (viewConfig.zoom === undefined) anchorZoomCenter()
+                          anchorZoomCenter()
                           setZoomValue(
-                            +(zoom - (zoomRange.step ?? 0.25)).toFixed(2)
+                            +(zoom - 0.25).toFixed(2)
                           )
                         }}
                       />
@@ -2540,7 +1961,7 @@ function GanttView({
                 the last row and leave the rest of the pane dead space. As a
                 flex parent it can hand the leftover height down instead. */}
               <ScrollAreaPrimitive.Content className="flex min-h-full flex-col">
-                <GanttDndProvider>{timelineContent}</GanttDndProvider>
+                {timelineContent}
               </ScrollAreaPrimitive.Content>
               {horizontalScrollbar}
             </ScrollArea>
@@ -2550,7 +1971,7 @@ function GanttView({
               data-gantt-native-scroll=""
               className="h-full overflow-auto overscroll-contain"
             >
-              <GanttDndProvider>{timelineContent}</GanttDndProvider>
+              {timelineContent}
             </div>
           )}
           {/* Reserved scrollbar rail - the twin of the tree rail. Keeps the
@@ -2565,14 +1986,12 @@ function GanttView({
               className="bg-background border-t-border pointer-events-none absolute inset-x-0 bottom-0 h-4 border-t"
             />
           )}
-          {viewConfig.offscreenIndicators && (
-            <GanttOffscreenChips
+          <GanttOffscreenChips
               paneRef={timelinePaneRef}
               occurrences={occurrences}
               locale={settings.locale}
-              refreshKey={`${scale}:${rangeKey}:${zoom}:${rows.length}:${clampedTreeWidth}:${viewConfig.scrollbars}`}
+              refreshKey={`${scale}:${rangeKey}:${zoom}:${rows.length}:${clampedTreeWidth}`}
             />
-          )}
         </div>
         {loading && (
           <div
@@ -2583,9 +2002,6 @@ function GanttView({
               {settings.i18n.labels.loading}
             </span>
           </div>
-        )}
-        {(viewConfig.renderDragPreview || viewConfig.renderResizeIndicator) && (
-          <GanttCustomDragLayer />
         )}
       </div>
     ),
@@ -2650,44 +2066,6 @@ function GanttNowDot({
   )
 }
 
-/**
- * Consumer-owned drag/resize indicators (renderDragPreview /
- * renderResizeIndicator): content is React and re-renders per snap step from
- * drag state; the dnd engine adopts this wrapper and writes its
- * cursor-tracking transform imperatively, flipping visibility on the first
- * positioned frame so nothing flashes at the viewport origin.
- */
-function GanttCustomDragLayer() {
-  const viewConfig = useGanttViewConfig()
-  const drag = useGanttSelector((state) => state.drag)
-  if (!drag) return null
-  const render =
-    drag.kind === "move"
-      ? viewConfig.renderDragPreview
-      : viewConfig.renderResizeIndicator
-  if (!render) return null
-  return (
-    <div
-      data-slot={
-        drag.kind === "move" ? "gantt-drag-overlay" : "gantt-resize-indicator"
-      }
-      data-custom=""
-      // physical left-0 anchor: positioned by the engine's translate3d from
-      // raw clientX (physical); a logical start-0 would break in RTL
-      className="pointer-events-none fixed top-0 left-0 z-100 will-change-transform"
-      style={{ visibility: "hidden" }}
-    >
-      {render({
-        occurrence: drag.occurrence,
-        kind: drag.kind,
-        start: drag.proposedStart,
-        end: drag.proposedEnd,
-        valid: drag.valid,
-      })}
-    </div>
-  )
-}
-
 /** Memoized: only rows whose props actually changed re-render. */
 const GanttTreeRow = memo(function GanttTreeRow({
   row,
@@ -2696,9 +2074,6 @@ const GanttTreeRow = memo(function GanttTreeRow({
   columns,
   nameWidth,
   dimmed,
-  selected,
-  onSelectedChange,
-  reorderEnabled,
   onToggle,
 }: {
   row: TimelineRow
@@ -2707,24 +2082,9 @@ const GanttTreeRow = memo(function GanttTreeRow({
   columns: GanttColumn[]
   nameWidth: number
   dimmed: boolean
-  selected: boolean
-  onSelectedChange?: (id: string, checked: boolean) => void
-  reorderEnabled: boolean
   onToggle: (row: TimelineRow) => void
 }) {
-  const settings = useGanttSettings()
   const viewConfig = useGanttViewConfig()
-  const {
-    attributes,
-    listeners,
-    setActivatorNodeRef,
-    setNodeRef,
-    isDragging,
-  } = useSortable({
-    id: row.resource.id,
-    data: { kind: "gantt-resource", row },
-    disabled: !reorderEnabled,
-  })
   const ctx = {
     resource: row.resource,
     depth: row.depth,
@@ -2732,45 +2092,21 @@ const GanttTreeRow = memo(function GanttTreeRow({
     collapsed: row.collapsed,
   }
 
-  // consumer-owned right-click menu, same contract as the bar menu
-  const menu = viewConfig.renderResourceMenu?.(ctx)
-
   // A node with several schedules grows its row; "start" keeps the label and
   // its columns on the FIRST schedule's baseline instead of floating them to
   // the middle of a tall row. Every cell's inner box is minRowHeight tall, so
   // a single-lane row renders identically either way.
-  const alignStart = (viewConfig.rowAlign ?? DEFAULT_ROW_ALIGN) === "start"
+  const alignStart = false
 
   const rowNode = (
     <div
-      ref={setNodeRef}
       data-slot="gantt-row-group"
       data-gantt-row-id={row.resource.id}
-      data-selected={selected || undefined}
       className={cn(
-        "group/gantt-row data-hover:bg-muted/40 data-selected:bg-primary/5 data-selected:data-hover:bg-primary/5 flex border-b",
-        (dimmed || isDragging) && "opacity-50"
+        "group/gantt-row data-hover:bg-muted/40 flex border-b",
+        dimmed && "opacity-50"
       )}
       style={{ height: `${heightRem}rem` }}
-      onClick={
-        settings.onResourceClick
-          ? (e: React.MouseEvent) => {
-              // chrome clicks (chevron, checkbox, grip) are their own actions
-              if ((e.target as HTMLElement).closest("button, [role=checkbox]"))
-                return
-              settings.onResourceClick?.(ctx, e)
-            }
-          : undefined
-      }
-      onDoubleClick={
-        settings.onResourceDoubleClick
-          ? (e: React.MouseEvent) => {
-              if ((e.target as HTMLElement).closest("button, [role=checkbox]"))
-                return
-              settings.onResourceDoubleClick?.(ctx, e)
-            }
-          : undefined
-      }
     >
       <div className="flex h-full w-full min-w-0">
         {/* In-flow name cell: the whole tree row scrolls horizontally as one;
@@ -2792,33 +2128,13 @@ const GanttTreeRow = memo(function GanttTreeRow({
             className="flex w-full min-w-0 items-center"
             style={{ height: `${bandRem}rem` }}
           >
-            {reorderEnabled && (
-              <button
-                ref={setActivatorNodeRef}
-                type="button"
-                data-slot="gantt-row-grip"
-                aria-label={settings.i18n.labels.reorder}
-                // pointer-coarse keeps the grip visible on touch (no hover there).
-                // -ms-1.5/me-1.5 nudge the grip toward the row edge and open a
-                // gap before the checkbox so it's easy to grab without catching
-                // the checkbox; the equal start/end margins keep the grip's
-                // footprint net-zero, so the title stays aligned with the header.
-                className="text-muted-foreground/60 hover:text-foreground -ms-1.5 me-1.5 flex w-3.5 shrink-0 cursor-grab touch-none items-center justify-center opacity-0 group-hover/gantt-row:opacity-100 group-data-hover/gantt-row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
-                {...attributes}
-                {...listeners}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <GripVerticalIcon className="size-3" aria-hidden="true" />
-              </button>
-            )}
             {/* per-level indent keeps sibling titles on one x */}
             <span
               aria-hidden
               className="shrink-0"
               style={{ width: `${row.depth * 0.875}rem` }}
             />
-            {/* fixed gutter: groups toggle here, leaves carry the checkbox -
-              titles of one level share the same x either way */}
+            {/* Fixed collapse-toggle gutter keeps titles aligned by level. */}
             <span className="me-1 flex w-5 shrink-0 items-center justify-start">
               {row.isGroup ? (
                 <Button
@@ -2839,23 +2155,7 @@ const GanttTreeRow = memo(function GanttTreeRow({
                                                         !row.collapsed && "rotate-90"
                                                       )} aria-hidden="true" />
                 </Button>
-              ) : (
-                viewConfig.rowCheckboxes &&
-                onSelectedChange && (
-                  <Checkbox
-                    data-slot="gantt-row-checkbox"
-                    checked={selected}
-                    onCheckedChange={(checked: boolean) =>
-                      onSelectedChange(row.resource.id, checked)
-                    }
-                    aria-label={row.resource.title}
-                    className={cn(
-                      "size-3.5 opacity-0 transition-opacity group-hover/gantt-row:opacity-100 group-data-hover/gantt-row:opacity-100 focus-visible:opacity-100",
-                      selected && "opacity-100"
-                    )}
-                  />
-                )
-              )}
+              ) : null}
             </span>
             {viewConfig.renderResourceLabel?.(ctx) ?? (
               <span className="truncate">{row.resource.title}</span>
@@ -2891,427 +2191,74 @@ const GanttTreeRow = memo(function GanttTreeRow({
     </div>
   )
 
-  if (!menu) return rowNode
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger render={rowNode} />
-      <ContextMenuContent data-slot="gantt-resource-menu" className="min-w-44">
-        {menu}
-      </ContextMenuContent>
-    </ContextMenu>
-  )
+  return rowNode
 })
 
 const GanttTimelineRow = memo(function GanttTimelineRow({
   row,
-  rowIndex,
   bars,
   rangeStartMs,
   rangeEndMs,
   trackWidth,
   trackRemWidth,
   rowBorder,
-  selected,
-  resolveHintStop,
-  isPanning,
   laneHeightRem,
   laneGapRem,
   minRowRem,
 }: {
   row: TimelineRow
-  rowIndex: number
   bars: TimelineRowBars | undefined
   rangeStartMs: number
   rangeEndMs: number
   trackWidth: string
   trackRemWidth: number
   rowBorder: "solid" | "dashed" | null
-  selected: boolean
-  resolveHintStop: (
-    fraction: number
-  ) => { index: number; center: number; ms: number; endMs: number } | null
-  isPanning: boolean
   laneHeightRem: number
   laneGapRem: number
   minRowRem: number
 }) {
-  const instance = useGantt()
-  const settings = useGanttSettings()
   const viewConfig = useGanttViewConfig()
   const segments = bars?.segments ?? []
-  // parents aggregate their subtree; they take no direct scheduling gestures
-  const schedulable = !row.isGroup || viewConfig.parentScheduling
   const heightRem = bars?.heightRem ?? minRowRem
   const laneCount = bars?.laneCount ?? 1
-  const singleTrack =
-    resolveScheduleMode(row.resource, viewConfig.scheduleMode) === "single"
+  const singleTrack = true
   // shared with the tree pane so the two can never drift apart
   const laneOffsetRem = bars?.laneOffsetRem ?? (minRowRem - laneHeightRem) / 2
 
-  // Hover affordance over empty track space: the ghost tile snaps to the
-  // unit under the cursor, so the (real) tooltip re-anchors per unit
-  const [hintStop, setHintStop] = useState<{
-    index: number
-    center: number
-    ms: number
-    endMs: number
-  } | null>(null)
-  // Gated on an active hint: rows without one read a stable false, so a
-  // gesture starting/ending anywhere doesn't re-render every row.
-  const hintSuppressed = useGanttSelector<unknown, boolean>(
-    (state) =>
-      hintStop !== null && (state.drag !== null || state.slotDraft !== null)
-  )
-  const canSchedule = useGanttSelector<unknown, boolean>(
-    (state) => state.interactions.selectSlot
-  )
-  const createDrag = useGanttCreateDraggable(
-    row.resource.id,
-    !viewConfig.dragCreate ||
-      !schedulable ||
-      !canSchedule ||
-      !settings.onSelectSlot
-  )
-  // The affordance is offered ANYWHERE on a schedulable row - over bare track
-  // and over existing bars alike - because a row can always take another
-  // schedule on a free lane. The primitive deliberately owns NO opinion about
-  // what may land where: that is `canSelectSlot`, the consumer's call. (It
-  // used to withhold the hint on a one-track row that already held a
-  // schedule, which also blocked adding a second NON-overlapping one.)
-  // The lowest track FREE at the hovered time. Two jobs, kept separate on
-  // purpose:
-  //  - VISIBILITY: `hintFreeLane < laneCount` is what proves an empty track
-  //    actually exists to draw on. It is computed regardless of mode, because
-  //    a "single" row whose only track is booked has nowhere free either, and
-  //    pinning the placement to 0 there would put the ring straight on the bar.
-  //  - PLACEMENT: "single" packs everything onto track 0, so that is where its
-  //    ring belongs; otherwise the ring sits on the track the schedule will
-  //    actually land on. Lane is a function of TIME only, so moving the pointer
-  //    down onto the ring never moves it away from you.
-  const hintFreeLane = hintStop
-    ? lowestFreeLane(segments, hintStop.ms, hintStop.endMs)
-    : 0
-  const hintLane = bars?.scheduleMode === "single" ? 0 : hintFreeLane
-  const hintTopRem = Math.min(
-    laneOffsetRem + hintLane * (laneHeightRem + laneGapRem) + laneHeightRem / 2,
-    Math.max(heightRem - laneHeightRem / 2, laneHeightRem / 2)
-  )
-  // Single source of truth for "the add affordance is live at this spot". The
-  // ring renders on it AND the row takes its cursor from it, so the pointer can
-  // never promise something the ring is not offering.
-  const hintVisible =
-    hintStop !== null &&
-    hintFreeLane < laneCount &&
-    !hintSuppressed &&
-    !isPanning
-  // name the gesture that is actually wired, not a generic one
-  const hintLabel = viewConfig.dragCreate
-    ? settings.i18n.labels.scheduleHintDrag
-    : settings.i18n.labels.scheduleHint
-  const showHint =
-    viewConfig.displayScheduleHint &&
-    schedulable &&
-    canSchedule &&
-    !isPanning &&
-    !!(settings.onSelectSlot || settings.onSlotClick)
-
   const fractionOf = (ms: number) =>
     Math.min(Math.max((ms - rangeStartMs) / (rangeEndMs - rangeStartMs), 0), 1)
-
-  const dragTarget = useGanttSelector<unknown, "valid" | "invalid" | null>(
-    (state) => {
-      const drag = state.drag
-      if (!drag || drag.proposedResourceId !== row.resource.id) return null
-      return drag.valid ? "valid" : "invalid"
-    }
-  )
-  const ghost = useGanttSelector<
-    unknown,
-    {
-      from: number
-      to: number
-      color?: string
-      valid: boolean
-      title: string
-      kind: string
-      occurrenceKey: string
-    } | null
-  >(
-    (state) => {
-      const drag = state.drag
-      if (!drag || drag.proposedResourceId !== row.resource.id) return null
-      return {
-        from: fractionOf(drag.proposedStart.getTime()),
-        to: fractionOf(drag.proposedEnd.getTime()),
-        color: drag.occurrence.event.color,
-        valid: drag.valid,
-        title: drag.occurrence.event.title,
-        kind: drag.kind,
-        occurrenceKey: drag.occurrence.key,
-      }
-    },
-    {
-      isEqual: (a, b) =>
-        a === b ||
-        (a !== null &&
-          b !== null &&
-          a.from === b.from &&
-          a.to === b.to &&
-          a.valid === b.valid),
-    }
-  )
-  const draft = useGanttSelector<
-    unknown,
-    {
-      from: number
-      to: number
-      startMs: number
-      endMs: number
-    } | null
-  >(
-    (state) => {
-      const slotDraft = state.slotDraft
-      if (!slotDraft || slotDraft.resourceId !== row.resource.id) return null
-      const startMs = slotDraft.start.getTime()
-      const endMs = slotDraft.end.getTime()
-      return {
-        from: fractionOf(startMs),
-        to: fractionOf(endMs),
-        startMs,
-        endMs,
-      }
-    },
-    {
-      // from/to as well as the instants: they are derived through fractionOf,
-      // which closes over the range. An extendRange mid-gesture moves every
-      // bar while an instants-only compare serves the cached (stale) fractions,
-      // leaving the placeholder pinned to where the range used to be.
-      isEqual: (a, b) =>
-        a === b ||
-        (a !== null &&
-          b !== null &&
-          a.startMs === b.startMs &&
-          a.endMs === b.endMs &&
-          a.from === b.from &&
-          a.to === b.to),
-    }
-  )
-
-  /**
-   * Where the schedule being painted will land - resolved in the shared layout
-   * memo, which also RESERVES that track, so the row has already grown to hold
-   * it. The clamp is only a backstop for the frame between a draft appearing
-   * and the layout catching up.
-   */
-  const draftLane = bars?.draftLane ?? 0
-  const draftTopRem = Math.min(
-    laneOffsetRem + draftLane * (laneHeightRem + laneGapRem),
-    Math.max(heightRem - laneHeightRem, 0)
-  )
-  // the range you are painting, named while you paint it - a drag that shows
-  // no times asks you to guess where you let go
-  const draftLabel = draft
-    ? settings.i18n.functions.formatEventTime(
-        toZoned(new Date(draft.startMs), settings.timeZone),
-        toZoned(new Date(draft.endMs), settings.timeZone),
-        false,
-        settings.locale
-      )
-    : ""
-
-  /**
-   * The row's create contract, in one place: onSlotClick if the consumer
-   * wired it, else a ready-made slot draft. Both the hint tile and a plain
-   * click on bare track go through this, so clicking anywhere placeable
-   * behaves the same as clicking the tile.
-   */
-  const createAt = (
-    stop: { ms: number; endMs: number },
-    e: React.MouseEvent
-  ) => {
-    if (settings.onSlotClick) {
-      settings.onSlotClick(
-        { date: new Date(stop.ms), allDay: false, resourceId: row.resource.id },
-        e
-      )
-    } else {
-      settings.onSelectSlot?.({
-        start: new Date(stop.ms),
-        end: new Date(Math.max(stop.endMs, stop.ms + 1)),
-        allDay: false,
-        resourceId: row.resource.id,
-      })
-    }
-  }
-
-  // The drop indicator belongs on the lane the dragged schedule actually
-  // occupies. The gesture has not committed, so the segment is still packed
-  // under its pre-drag key - no second packing pass, just a lookup.
-  const ghostLane = ghost
-    ? (segments.find(
-        (segment) => segment.occurrence.key === ghost.occurrenceKey
-      )?.column ?? 0)
-    : 0
-  const ghostLaneOffsetRem =
-    laneOffsetRem +
-    ghostLane * (laneHeightRem + laneGapRem) +
-    (laneHeightRem - GHOST_HEIGHT_REM) / 2
 
   return (
     <div
       data-gantt-row=""
       data-gantt-resource={row.resource.id}
       data-gantt-row-id={row.resource.id}
-      data-gantt-row-static={!schedulable || undefined}
       data-gantt-bar-min={bars?.extent?.from}
       data-gantt-bar-max={bars?.extent?.to}
       data-gantt-bar-color={bars?.extent?.color}
       data-gantt-bar-label={bars?.extent?.label}
       data-gantt-bar-start-ms={bars?.extent?.startMs}
-      data-dnd-distance="4"
-      data-drop-target={dragTarget ?? undefined}
-      data-selected={selected || undefined}
       className={cn(
-        "data-hover:bg-muted/30 data-selected:bg-primary/5 data-selected:data-hover:bg-primary/5 relative w-full min-w-0",
-        // The ring is pointer-events-none, so a cursor set on IT can never be
-        // reached - the row is the element actually under the pointer, so the
-        // cursor belongs here. Gated on the same flag as the ring: wherever the
-        // add affordance shows, the pointer says "add", and nowhere else.
-        hintVisible && "cursor-crosshair",
+        "relative w-full min-w-0",
         // horizontal separators mirror the tree node borders across panes.
         // No special case for the last row: the columns run the full height of
         // the pane, so the grid closes on the container edge on its own.
         rowBorder !== null && "border-b",
-        rowBorder === "dashed" && "border-dashed",
-        dragTarget === "valid" && "bg-muted/40",
-        dragTarget === "invalid" && "bg-destructive/10"
+        rowBorder === "dashed" && "border-dashed"
       )}
       style={{
         height: `${heightRem}rem`,
         minWidth: trackWidth,
       }}
-      onPointerDown={(e) => {
-        // Opt-in drag-create owns presses on empty schedulable track (the
-        // onSelectSlot contract); otherwise the press bubbles to the
-        // container and pans the timeline.
-        if (
-          viewConfig.dragCreate &&
-          e.button === 0 &&
-          schedulable &&
-          canSchedule &&
-          // the bare track, or the hint tile that spawns under the cursor -
-          // a sub-threshold press still ends as the tile's own click
-          (e.target === e.currentTarget ||
-            !!(e.target as HTMLElement).closest?.(
-              "[data-slot=gantt-schedule-hint]"
-            )) &&
-          !!settings.onSelectSlot
-        ) {
-          // validate BEFORE claiming the press: on a vetoed slot (e.g. the
-          // one-schedule-per-task rule) the press falls through to the pan
-          const stop = resolveHintStop(
-            trackFraction(e.currentTarget, e.clientX)
-          )
-          const allowed =
-            stop !== null &&
-            (settings.canSelectSlot?.({
-              start: new Date(stop.ms),
-              end: new Date(Math.max(stop.endMs, stop.ms + 1)),
-              allDay: false,
-              resourceId: row.resource.id,
-            }) ??
-              true)
-          if (!allowed) return
-          e.stopPropagation()
-          createDrag.listeners?.onPointerDown?.(e)
-        }
-      }}
-      ref={createDrag.setNodeRef}
-      onPointerMove={(e) => {
-        // read interaction state imperatively - a subscription here would
-        // re-render the row for every gesture anywhere on the grid
-        const interacting =
-          instance.getState().drag !== null ||
-          instance.getState().slotDraft !== null
-        if (!showHint || e.pointerType !== "mouse" || interacting) {
-          if (hintStop) setHintStop(null)
-          return
-        }
-        // EMPTY TRACK ONLY. A bar under the pointer means the pointer is not
-        // on an empty slot, so the affordance goes away entirely rather than
-        // hovering over booked time - and the bar is left completely alone,
-        // hover and click both. (No "pointer is over the tile" bail: the ring
-        // is pointer-events-none, so it is never the target; a bail on it would
-        // freeze it on the spot, since it rides under the cursor.)
-        if (e.target !== e.currentTarget) {
-          if (hintStop) setHintStop(null)
-          return
-        }
-        const { fraction, offset } = trackPoint(e.currentTarget, e.clientX)
-        // The dot follows the pointer FREELY - it is a cursor, not a cell, so
-        // it is never quantised to the interval grid. Its position is written
-        // as a CSS custom property straight onto the row: the cursor moves
-        // every frame and a state update per frame would re-render the row and
-        // every bar in it. React state still owns WHICH slot is offered, and
-        // that changes only once per interval.
-        //
-        // In pixels rather than a percentage, pre-snapped by trackPoint to the
-        // viewport pixel grid: a fractional inset makes the browser antialias
-        // the ring and the glyph across two device pixels, which reads as a
-        // furry, smudged dot. -translate-x-1/2 of an even-sized box keeps it on
-        // the grid, so the result is crisp.
-        e.currentTarget.style.setProperty("--gantt-hint-x", `${offset}px`)
-        const stop = resolveHintStop(fraction)
-        // validate placement before offering it: a consumer canSelectSlot
-        // veto (e.g. a locked span) hides the hint entirely
-        const allowed =
-          stop !== null &&
-          (settings.canSelectSlot?.({
-            start: new Date(stop.ms),
-            end: new Date(Math.max(stop.endMs, stop.ms + 1)),
-            allDay: false,
-            resourceId: row.resource.id,
-          }) ??
-            true)
-        const next = allowed ? stop : null
-        // state changes only when the cursor crosses into another unit
-        if (next?.index !== hintStop?.index) setHintStop(next)
-      }}
-      onPointerLeave={() => {
-        if (hintStop) setHintStop(null)
-      }}
-      onClick={(e) => {
-        // With dragCreate the press belongs to the create GESTURE, which only
-        // activates past its movement threshold - so a click that never moved
-        // committed nothing and the row felt dead. Treat it as a create at the
-        // hovered slot, using the same validation the hint tile uses.
-        if (!viewConfig.dragCreate || e.target !== e.currentTarget) return
-        if (!schedulable || !canSchedule) return
-        if (wasRecentDrag()) return
-        if (!settings.onSlotClick && !settings.onSelectSlot) return
-        const stop = resolveHintStop(trackFraction(e.currentTarget, e.clientX))
-        if (!stop) return
-        const allowed =
-          settings.canSelectSlot?.({
-            start: new Date(stop.ms),
-            end: new Date(Math.max(stop.endMs, stop.ms + 1)),
-            allDay: false,
-            resourceId: row.resource.id,
-          }) ?? true
-        if (!allowed) return
-        createAt(stop, e)
-        setHintStop(null)
-      }}
     >
-      {/* row CONTENT (bars, labels, ghosts). Pointer-transparent so
+      {/* Row content (bars and labels). Pointer-transparent so
           empty-track presses still hit the row itself.
           content-visibility lets the browser skip rendering this layer for
           rows scrolled out of view (large trees stay cheap on low-end
           devices). Safe here: the layer is absolute inset-0 (geometry comes
           from the row, never from content), its paint containment keeps it
           a stacking context, and nothing inside escapes the row box - the
-          schedule hint deliberately lives OUTSIDE this layer. Browsers
-          without support simply ignore it. */}
+          Browsers without support simply ignore it. */}
       <div
         className="pointer-events-none absolute inset-0"
         style={{ contentVisibility: "auto" }}
@@ -3327,11 +2274,7 @@ const GanttTimelineRow = memo(function GanttTimelineRow({
           // short in "auto"), flipped before the bar near the range end, and
           // back inside when the bar spans the whole view.
           const barRemWidth = (to - from) * trackRemWidth
-          const wantsOutside =
-            viewConfig.barLabel === "outside" ||
-            (viewConfig.barLabel === "auto" &&
-              barRemWidth <
-                (viewConfig.metrics?.autoLabelMin ?? AUTO_LABEL_MIN_REM))
+          const wantsOutside = barRemWidth < AUTO_LABEL_MIN_REM
           const placement = !wantsOutside
             ? "inside"
             : to <= 0.92
@@ -3343,14 +2286,9 @@ const GanttTimelineRow = memo(function GanttTimelineRow({
           // state, same notify as the bar's own attribute) so the hide rules
           // below use plain attribute selectors instead of :has(), which
           // older Firefox (<121) does not support
-          const segDragKind =
-            ghost && ghost.occurrenceKey === segment.occurrence.key
-              ? ghost.kind
-              : undefined
           return (
             <div
               key={segment.occurrence.key}
-              data-drag-kind={segDragKind}
               // lane position is headless state: a consumer can read it to
               // label the bar ("2 of 4") or drive its own manage UI
               data-lane={lane}
@@ -3363,7 +2301,7 @@ const GanttTimelineRow = memo(function GanttTimelineRow({
               // px-px keeps back-to-back bars off each other; the vertical
               // breathing room is the lane gap itself, not padding here, so
               // the bar is exactly laneHeight tall
-              className="group/gantt-seg pointer-events-auto absolute px-px data-[drag-kind=move]:opacity-0"
+              className="group/gantt-seg absolute px-px"
               // insetInlineStart, not left: in RTL the axis mirrors and bars
               // must mirror with it (fractions measure from the range start)
               style={{
@@ -3390,9 +2328,6 @@ const GanttTimelineRow = memo(function GanttTimelineRow({
                   data-placement={placement}
                   className={cn(
                     "text-foreground pointer-events-none absolute top-1/2 z-10 max-w-60 -translate-y-1/2 truncate font-medium",
-                    // one label at a time: the resize ghost carries it while
-                    // this bar is the faded placeholder
-                    "group-data-[drag-kind^=resize]/gantt-seg:opacity-0",
                     placement === "after" ? "start-full ms-2" : "end-full me-2"
                   )}
                 >
@@ -3453,200 +2388,7 @@ const GanttTimelineRow = memo(function GanttTimelineRow({
             )}
           </div>
         )}
-        {ghost && (
-          <div
-            data-slot="gantt-drag-ghost"
-            data-kind={ghost.kind}
-            data-drop-invalid={!ghost.valid || undefined}
-            className={cn(
-              // Slight dashed indicator, never a dramatic restyle. Move shows a
-              // faint drop-target placeholder (the smooth cursor clone carries
-              // the visual); resize shows the event at its new size in its own
-              // color with just a dashed border.
-              "pointer-events-none absolute z-40 h-5 border border-dashed font-medium",
-              !ghost.valid &&
-                "border-destructive bg-destructive/10 text-destructive",
-              ghost.valid &&
-                ghost.kind === "move" &&
-                "border-(--gantt-event-color)/50 bg-(--gantt-event-color)/8",
-              ghost.valid &&
-                ghost.kind !== "move" &&
-                "text-foreground border-(--gantt-event-color)/70 bg-(--gantt-event-color)/22"
-            )}
-            style={
-              {
-                insetInlineStart: `${ghost.from * 100}%`,
-                width: `${Math.max((ghost.to - ghost.from) * 100, 0.5)}%`,
-                // sit on the dragged schedule's OWN lane. Centering the ghost
-                // in the row put it on no lane at all once a node stacked, so
-                // a 3-lane row showed the drop target floating in the middle.
-                top: `${ghostLaneOffsetRem}rem`,
-                "--gantt-event-color": ghost.color ?? "var(--color-primary)",
-              } as CSSProperties
-            }
-          >
-            {ghost.kind !== "move" && (
-              // label rides OUTSIDE after the bar, exactly like the resting
-              // outside placement - never inside the schedule
-              <span className="pointer-events-none absolute start-full top-1/2 ms-2 max-w-60 -translate-y-1/2 truncate whitespace-nowrap">
-                {ghost.title}
-              </span>
-            )}
-          </div>
-        )}
-        {draft && (
-          <div
-            data-slot="gantt-slot-draft"
-            data-lane={draftLane}
-            // OPAQUE. When the destination lane does not exist yet the row has
-            // not grown, so the placeholder rides the bottom edge and overlaps
-            // the bar it is going under - as a tint that read as a smudge over
-            // the bar's own label. Punched out of the backdrop it reads as a
-            // distinct object sliding underneath, which is what it is.
-            className="border-primary bg-background pointer-events-none absolute z-40 overflow-hidden border border-dashed"
-            style={{
-              insetInlineStart: `${draft.from * 100}%`,
-              width: `${Math.max((draft.to - draft.from) * 100, 0.5)}%`,
-              // the destination lane, not the row's middle (which on a stacked
-              // row is the GAP between two lanes), and the real lane height
-              // rather than a hardcoded h-5 a consumer's metrics would break
-              top: `${draftTopRem}rem`,
-              height: `${laneHeightRem}rem`,
-            }}
-          >
-            {/* the accent tint, over the opaque base rather than over whatever
-                happens to be beneath the row */}
-            <span aria-hidden className="bg-primary/15 absolute inset-0" />
-          </div>
-        )}
       </div>
-      {/* OUTSIDE the content layer for the same reason as the hint bubble: the
-          layer's paint containment would CLIP a chip that overhangs the row.
-          Centred on the range being painted, so the times track the drag. */}
-      {draft && draftLabel && (
-        <div
-          data-slot="gantt-slot-draft-label"
-          className="pointer-events-none absolute z-40"
-          style={{
-            // anchored to the range's END and riding after it, exactly like the
-            // drag ghost's own label. Centred above the placeholder it covered
-            // the schedule on the track above - and the one thing a create
-            // gesture must never hide is what is already booked.
-            insetInlineStart: `${draft.to * 100}%`,
-            top: `${draftTopRem}rem`,
-            height: `${laneHeightRem}rem`,
-          }}
-        >
-          <span className="bg-foreground text-background absolute start-full top-1/2 ms-2 inline-flex w-max -translate-y-1/2 items-center rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap">
-            {draftLabel}
-            {/* Same arrow as every other bubble, one size down. A 45-degree
-                square is symmetric, so size-2.5 spans ~14px whichever edge it
-                straddles: a small nub under a ~120px-wide chip, but most of the
-                short edge of a ~26px-TALL one. size-1.5 spans ~8.5px and
-                protrudes ~4px, the usual tooltip-arrow proportion, so the side
-                arrow reads the same weight as the ones above and below. */}
-            <span
-              aria-hidden
-              className="bg-foreground absolute start-0 top-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[1px]"
-            />
-          </span>
-        </div>
-      )}
-      {/* OUTSIDE the content layer: its paint containment creates a stacking
-          context that would trap the bubble's z-index under neighboring rows.
-          As a direct row child its z-30 stacks above every row in the pane. */}
-      {/* `hintLane < laneCount` is the second half of "empty slots only": the
-          pointer being on bare track can still mean the row's own padding above
-          a column that is booked on every track. There is no free track to
-          draw on there, so the clamp would park the ring on top of a bar -
-          exactly what must never happen. Booking such an instant is a drag from
-          a free point, not a click. */}
-      {hintVisible && hintStop && (
-        <div
-          data-slot="gantt-schedule-hint"
-          // rtl flips the translate sign: insetInlineStart anchors the box's
-          // inline-start edge, which is the RIGHT edge under rtl, so centring
-          // on the anchor shifts the opposite way there
-          className="pointer-events-none absolute z-30 -translate-x-1/2 -translate-y-1/2 rtl:translate-x-1/2"
-          style={{
-            // the live cursor position, written without React (see onPointerMove)
-            insetInlineStart: "var(--gantt-hint-x, 50%)",
-            // first track, centred on it - z-30 on this wrapper keeps the dot
-            // above every bar, so a busy span still offers the affordance
-            top: `${hintTopRem}rem`,
-          }}
-        >
-          {viewConfig.renderScheduleHint ? (
-            // consumer-owned hint: the wrapper stays snapped + validated;
-            // the content drives its own create flow
-            viewConfig.renderScheduleHint({
-              start: new Date(hintStop.ms),
-              end: new Date(Math.max(hintStop.endMs, hintStop.ms + 1)),
-              resource: row.resource,
-            })
-          ) : (
-            <>
-              {/* the band IS the placement affordance: it covers the interval
-              under the pointer, so what you see is the slot you get. Clicking
-              books it; pressing and dragging paints a longer range. The bubble
-              mirrors the tooltip theme, arrow included. */}
-              {/* The dot IS the cursor: an open ring, so whatever it is standing
-              on stays readable through it. The outer background ring is what
-              keeps it visible on a dark bar - an outline, not a fill.
-              The GLYPH is the native cursor rather than an icon: `cell` is the
-              range-select cursor every spreadsheet uses, which is exactly the
-              drag-a-range gesture, and `copy` carries a plus for the
-              click-to-add case. Clicking books the interval it is standing in;
-              pressing and dragging paints a range whose ends snap to the
-              nearest boundary. */}
-              <button
-                type="button"
-                data-slot="gantt-schedule-hint-tile"
-                aria-label={hintLabel}
-                // pointer-events-NONE: the ring rides under the cursor, so any
-                // press it accepts is a press stolen from whatever it is
-                // standing on - which is how it swallowed every click meant for
-                // a bar. Passing pointers straight through makes the element
-                // physically underneath the thing you click: a bar opens its
-                // job, bare track creates (the row's own handlers, which the
-                // ring merely previews). The button and its onClick stay for
-                // KEYBOARD use - pointer-events never blocks Enter/Space.
-                // No cursor class here: pointer-events-none makes it unreachable.
-                // The row carries it (see `hintVisible`).
-                className="border-primary ring-background/80 pointer-events-none block size-5 rounded-full border-2 bg-transparent ring-1"
-                onPointerDown={(e) => {
-                  // with drag-create on the press belongs to the row's create
-                  // gesture; a sub-threshold press still ends as this click
-                  if (!viewConfig.dragCreate) e.stopPropagation()
-                }}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  // a completed drag-create already committed via onSelectSlot
-                  if (wasRecentDrag()) return
-                  createAt(hintStop, e)
-                  setHintStop(null)
-                }}
-              />
-              <span
-                data-slot="gantt-schedule-hint-bubble"
-                className={cn(
-                  "bg-foreground text-background absolute start-1/2 inline-flex w-max -translate-x-1/2 items-center rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap",
-                  rowIndex === 0 ? "top-full mt-2" : "bottom-full mb-2"
-                )}
-              >
-                {hintLabel}
-                <span
-                  aria-hidden
-                  className={cn(
-                    "bg-foreground absolute start-1/2 size-2.5 -translate-x-1/2 rotate-45 rounded-[2px]",
-                    rowIndex === 0 ? "-top-1" : "-bottom-1"
-                  )}
-                />
-              </span>
-            </>
-          )}
-        </div>
-      )}
     </div>
   )
 })
@@ -3854,4 +2596,3 @@ function GanttOffscreenChips({
 }
 
 export { GanttView }
-export type { GanttViewProps }

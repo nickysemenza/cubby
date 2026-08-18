@@ -54,12 +54,6 @@ interface CubbyGanttProps {
 const NO_CHAIN_IDS: ReadonlySet<string> = new Set<string>();
 const NO_EDGES: ReadonlyArray<readonly [string, string]> = [];
 
-const READ_ONLY_INTERACTIONS = {
-  drag: false,
-  resize: false,
-  selectSlot: false,
-} as const;
-
 const TREE_PANEL = {
   width: 340,
   minWidth: 240,
@@ -127,7 +121,6 @@ export function buildResources(rows: GanttRow[]): GanttResource[] {
         id: row.id,
         title: `${row.label} (${row.count})`,
         children: [],
-        scheduleMode: "single",
       };
       roots.push(activeGroup);
       stack.length = 0;
@@ -139,7 +132,6 @@ export function buildResources(rows: GanttRow[]): GanttResource[] {
       title: row.name,
       color: colorFor(row),
       children: [],
-      scheduleMode: "single",
     };
     while (stack.length > row.depth) stack.pop();
     const parent = stack[row.depth - 1] ?? activeGroup;
@@ -197,7 +189,6 @@ export function buildEvents(
         allDay: true,
         color: colorFor(row),
         progress: progressFor(row),
-        readOnly: true,
         priority: 10,
         data: {
           rowId: row.id,
@@ -219,7 +210,6 @@ export function buildEvents(
         end: dateForDay(row.envelope.endDay + 1),
         allDay: true,
         color: "var(--chart-neutral)",
-        readOnly: true,
         priority: 0,
         zIndex: 1,
         data: {
@@ -331,18 +321,11 @@ export function CubbyGantt({
         min: dateForDay(window.startDay),
         max: dateForDay(window.endDay + 1),
       }}
-      defaultInteractions={READ_ONLY_INTERACTIONS}
-      rowCheckboxes={false}
-      scheduleMode="single"
-      rowAlign="center"
       treePanel={TREE_PANEL}
       columns={columns}
       collapsedGroups={collapsedGroups}
       onCollapsedGroupsChange={onCollapsedGroupsChange}
       dependencyEdges={dependencyEdges}
-      timelineLines="both"
-      barLabel="auto"
-      infiniteScroll={false}
       initialCenter={dateForDay(centerDay)}
       className="h-[34rem] overflow-hidden border border-[var(--border)] bg-background"
       getEventClassName={({ occurrence }) => {

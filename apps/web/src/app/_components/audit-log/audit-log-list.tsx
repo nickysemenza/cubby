@@ -5,7 +5,7 @@ import { uniqBy } from "es-toolkit";
 import { Activity } from "lucide-react";
 import { useMemo } from "react";
 import { Row } from "~/components/layout";
-import { Timeline } from "~/components/reui/timeline";
+import { AuditTimeline } from "~/components/reui/timeline";
 import { Button } from "~/components/ui/button";
 import {
   Empty,
@@ -94,7 +94,7 @@ export function AuditLogList({
 
   return (
     <div>
-      <Timeline mode="chronological">
+      <AuditTimeline>
         {entries.map((entry, index) => (
           <AuditLogEntryComponent
             key={entry.entryKey}
@@ -104,7 +104,7 @@ export function AuditLogList({
             variant={variant}
           />
         ))}
-      </Timeline>
+      </AuditTimeline>
 
       {hasNextPage && (
         <Row justify="center" className="pt-4">

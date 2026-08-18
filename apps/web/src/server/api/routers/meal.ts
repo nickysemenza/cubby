@@ -41,10 +41,7 @@ import {
   updateMeal,
   updateMealRecipeWithEntityId,
 } from "~/server/repo/meal";
-import {
-  resolveAllOrThrow,
-  resolveOrThrow,
-} from "~/server/repo/shortcode-resolver";
+import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import type { PlannedLine } from "~/server/services/availability.service";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import { createSearchableEntityCrudProcedures } from "../crud-factory";
@@ -68,7 +65,7 @@ const {
   },
   repository: {
     getByID: async (services, shortcode: MealShortcode) => {
-      const id = await resolveMealEntityId(services.db, shortcode);
+      const id = await mealShortcodes.one(services.db, shortcode);
       const res = await getMealByID(services.db, id);
       if (!res) {
         throw createAppError("MEAL_NOT_FOUND", "Meal not found");
@@ -82,7 +79,7 @@ const {
     create: (services, data) =>
       createMealWithEntityId(services.db, data, services.actorContext),
     update: async (services, shortcode: MealShortcode, data) => {
-      const id = await resolveMealEntityId(services.db, shortcode);
+      const id = await mealShortcodes.one(services.db, shortcode);
       const output = await updateMeal(
         services.db,
         id,
@@ -92,7 +89,7 @@ const {
       return { output, entityId: id };
     },
     delete: async (services, shortcodes: MealShortcode[]) => {
-      const ids = await resolveMealEntityIds(services.db, shortcodes);
+      const ids = await mealShortcodes.all(services.db, shortcodes);
       await deleteMeals(services.db, ids, services.actorContext);
       return undefined;
     },
@@ -100,19 +97,7 @@ const {
   entityName: "meal",
 });
 
-const resolveMealEntityId = async (
-  db: Parameters<typeof resolveOrThrow>[0],
-  shortcode: MealShortcode,
-): Promise<MealId> => {
-  return resolveOrThrow(db, "meal", shortcode);
-};
-
-const resolveMealEntityIds = async (
-  db: Parameters<typeof resolveAllOrThrow>[0],
-  shortcodes: MealShortcode[],
-): Promise<MealId[]> => {
-  return resolveAllOrThrow(db, "meal", shortcodes);
-};
+const mealShortcodes = bindShortcodeResolver("meal");
 
 // A meal's embedding text is mostly its planned recipes' names, so the child
 // mutations count as an update to the meal itself.
@@ -136,7 +121,7 @@ const addRecipe = protectedProcedure
   .input(mealAddRecipeInput)
   .output(strictOutput(mealOut))
   .mutation(async ({ ctx, input }) => {
-    const mealId = await resolveMealEntityId(ctx.db, input.mealId);
+    const mealId = await mealShortcodes.one(ctx.db, input.mealId);
     const updated = await addRecipeToMeal(
       ctx.db,
       mealId,

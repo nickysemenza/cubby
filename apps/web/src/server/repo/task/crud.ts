@@ -7,6 +7,7 @@
  * rows) inside the same transaction as the column update.
  */
 import type { ActorContext } from "@cubby/schemas/context";
+import { entityRefKey } from "@cubby/schemas/entity";
 import type {
   ImpactItem,
   OperationDisposition,
@@ -61,7 +62,6 @@ import { removeEntity } from "~/server/repo/removal";
 import {
   type EntityRef,
   lookupShortcodes,
-  refKey,
   resolveAllOrThrow,
   resolveAllPresent,
   resolveOrThrow,
@@ -137,7 +137,9 @@ export async function taskDependencyIds(
   const refs: EntityRef[] = allTaskIds.map((id) => ({ entity: "task", id }));
   const codes = await lookupShortcodes(db, refs);
   const toShortcodes = (ids: TaskId[]): TaskShortcode[] =>
-    ids.map((id) => unsafeTaskShortcode(codes.get(refKey("task", id)) ?? ""));
+    ids.map((id) =>
+      unsafeTaskShortcode(codes.get(entityRefKey("task", id)) ?? ""),
+    );
 
   return {
     blockedBy: new Map(

@@ -1,28 +1,15 @@
 "use client"
 
-import {
-  createContext,
-  useContext,
-  useMemo,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from "react"
+import { useMemo, useState, type CSSProperties, type ReactNode } from "react"
 import {
   useGantt,
-  useGanttSelector,
   useGanttViewConfig,
 } from "~/components/reui/gantt/gantt"
-import {
-  useGanttBarDraggable,
-  wasRecentDrag,
-} from "~/components/reui/gantt/gantt-dnd"
 import {
   flattenResources,
   toZoned,
 } from "~/components/reui/gantt/gantt-lib"
 import type {
-  GanttOccurrence,
   GanttSegment,
 } from "~/components/reui/gantt/gantt-types"
 import { mergeProps } from "@base-ui/react/merge-props"
@@ -30,57 +17,15 @@ import { useRender } from "@base-ui/react/use-render"
 
 import { cn } from "~/lib/utils"
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuTrigger,
-} from "~/components/ui/context-menu"
-import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "~/components/ui/tooltip"
-import { RepeatIcon, CheckIcon } from "lucide-react"
-
-/**
- * Effective Tailwind palette presets for bar colors; every entry works on
- * light and dark surfaces through the bar's alpha background + accent border.
- */
-const GANTT_COLORS: Array<{ name: string; value: string }> = [
-  { name: "Blue", value: "var(--color-blue-500)" },
-  { name: "Emerald", value: "var(--color-emerald-500)" },
-  { name: "Violet", value: "var(--color-violet-500)" },
-  { name: "Rose", value: "var(--color-rose-500)" },
-  { name: "Amber", value: "var(--color-amber-500)" },
-  { name: "Cyan", value: "var(--color-cyan-500)" },
-  { name: "Orange", value: "var(--color-orange-500)" },
-  { name: "Pink", value: "var(--color-pink-500)" },
-  { name: "Teal", value: "var(--color-teal-500)" },
-  { name: "Indigo", value: "var(--color-indigo-500)" },
-]
-
-interface GanttBarContextValue<TData = unknown> {
-  occurrence: GanttOccurrence<TData>
-  segment: GanttSegment<TData>
-  isDragging: boolean
-  isSelected: boolean
-}
-
-const GanttBarContext =
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  createContext<GanttBarContextValue<any> | null>(null)
-
-/** The bar's subject; usable inside renderEvent content and bar children. */
-function useGanttBarContext<TData = unknown>(): GanttBarContextValue<TData> {
-  const ctx = useContext(GanttBarContext)
-  if (!ctx) {
-    throw new Error("useGanttBarContext must be used within <GanttBar>")
-  }
-  return ctx as GanttBarContextValue<TData>
-}
+import { CheckIcon } from "lucide-react"
 
 interface GanttBarProps<TData = unknown> extends Omit<
-  useRender.ComponentProps<"button">,
+  useRender.ComponentProps<"div">,
   "children"
 > {
   segment: GanttSegment<TData>
@@ -99,9 +44,9 @@ interface GanttBarProps<TData = unknown> extends Omit<
 }
 
 /**
- * The one interactive bar element. The wrapper owns positioning hooks, a11y,
- * selection, drag/resize listeners, and data attributes; content comes from
- * children, the root renderEvent override, or the built-in default.
+ * Read-only project bar. The wrapper owns positioning, labelling, tooltips,
+ * and data attributes; content comes from children, renderEvent, or the
+ * built-in default.
  */
 function GanttBar<TData = unknown>({
   segment,
@@ -118,32 +63,9 @@ function GanttBar<TData = unknown>({
   const occurrence = segment.occurrence
   const event = occurrence.event
 
-  const isSelected = useGanttSelector<TData, boolean>(
-    (state) => state.selection.eventKeys.includes(occurrence.key),
-    { calendar: instance }
-  )
-  const isDragging = useGanttSelector<TData, boolean>(
-    (state) => state.drag?.occurrence.key === occurrence.key,
-    { calendar: instance }
-  )
-  // Which gesture owns this bar: a move hides the original (the smooth clone
-  // stands in for it); a resize keeps it as a faint placeholder behind the
-  // dashed preview so you can see the original extent.
-  const dragKind = useGanttSelector<TData, string | null>(
-    (state) =>
-      state.drag?.occurrence.key === occurrence.key ? state.drag.kind : null,
-    { calendar: instance }
-  )
-  // Hover-only range tooltip. Focus opens are ignored (the known button+
-  // tooltip flash: clicking a bar opens a dialog, focus returns, and a
-  // focus-triggered tooltip would pop). Hidden while dragging/resizing.
+  // Hover-only range tooltip. Focus opens are ignored so it does not flash
+  // after an overlay returns focus to the bar.
   const [tipOpen, setTipOpen] = useState(false)
-  // Gated on tipOpen: with the tooltip closed the selector returns a stable
-  // false, so gesture start/end doesn't re-render every mounted bar.
-  const anyInteracting = useGanttSelector<TData, boolean>(
-    (state) => tipOpen && (state.drag !== null || state.slotDraft !== null),
-    { calendar: instance }
-  )
 
   const progress =
     typeof event.progress === "number"
@@ -152,9 +74,6 @@ function GanttBar<TData = unknown>({
 
   const defaultContent = (
     <>
-      {occurrence.isRecurring && (
-        <RepeatIcon className="size-2.5 shrink-0 opacity-70" aria-hidden="true" />
-      )}
       <span className="truncate font-medium">{event.title}</span>
       {!occurrence.allDay && segment.isStart && (
         <span className="text-muted-foreground hidden truncate @[8rem]:inline">
@@ -169,7 +88,7 @@ function GanttBar<TData = unknown>({
     </>
   )
 
-  const renderProps = { occurrence, segment, isDragging, isSelected }
+  const renderProps = { occurrence, segment }
   const content =
     children ??
     viewConfig.renderEvent?.(renderProps) ??
@@ -199,78 +118,11 @@ function GanttBar<TData = unknown>({
   )
   const rowTitle = rowTitleProp ?? fallbackRowTitle
 
-  const canDrag =
-    instance.getState().interactions.drag &&
-    !event.readOnly &&
-    event.draggable !== false
-  const canResize =
-    instance.getState().interactions.resize &&
-    !event.readOnly &&
-    event.resizable !== false
-  const move = useGanttBarDraggable(segment, "move", !canDrag)
-  const resizeStart = useGanttBarDraggable(segment, "resize-start", !canResize)
-  const resizeEnd = useGanttBarDraggable(segment, "resize-end", !canResize)
-  const showResize = canResize
-  const resizeHandles = showResize && (
-    <>
-      {segment.isStart && (
-        <span
-          data-slot="gantt-resize-handle"
-          data-edge="start"
-          data-dnd-immediate=""
-          // grip hugs the start edge (justify-start + tight inset) so the
-          // indicator reads as "resize this end", not a centered pill.
-          // pointer-coarse keeps it visible on touch, where hover never fires
-          className="absolute inset-y-0 start-0.5 flex w-2 cursor-ew-resize items-center justify-start opacity-0 group-hover/gantt-bar-group:opacity-100 pointer-coarse:opacity-100"
-          ref={resizeStart.setNodeRef}
-          {...resizeStart.attributes}
-          {...resizeStart.listeners}
-          onPointerDown={(e) => {
-            resizeStart.listeners?.onPointerDown?.(e)
-            e.stopPropagation()
-          }}
-        >
-          <span
-            aria-hidden
-            className="bg-foreground/40 h-2.5 w-0.5 rounded-full"
-          />
-        </span>
-      )}
-      {segment.isEnd && (
-        <span
-          data-slot="gantt-resize-handle"
-          data-edge="end"
-          data-dnd-immediate=""
-          // grip hugs the end edge (justify-end + tight inset) so the
-          // indicator reads as "resize this end", not a centered pill.
-          // pointer-coarse keeps it visible on touch, where hover never fires
-          className="absolute inset-y-0 end-0.5 flex w-2 cursor-ew-resize items-center justify-end opacity-0 group-hover/gantt-bar-group:opacity-100 pointer-coarse:opacity-100"
-          ref={resizeEnd.setNodeRef}
-          {...resizeEnd.attributes}
-          {...resizeEnd.listeners}
-          onPointerDown={(e) => {
-            resizeEnd.listeners?.onPointerDown?.(e)
-            e.stopPropagation()
-          }}
-        >
-          <span
-            aria-hidden
-            className="bg-foreground/40 h-2.5 w-0.5 rounded-full"
-          />
-        </span>
-      )}
-    </>
-  )
 
   const defaultProps = {
-    type: "button" as const,
     "data-slot": "gantt-bar",
     "data-event-id": event.id,
     "data-all-day": occurrence.allDay || undefined,
-    "data-recurring": occurrence.isRecurring || undefined,
-    "data-selected": isSelected || undefined,
-    "data-dragging": isDragging || undefined,
-    "data-drag-kind": dragKind ?? undefined,
     "data-past": occurrence.end.getTime() < Date.now() || undefined,
     "data-label-outside": labelOutside || undefined,
     "data-progress": progress ?? undefined,
@@ -286,34 +138,13 @@ function GanttBar<TData = unknown>({
     style: {
       "--gantt-event-color": event.color ?? "var(--color-primary)",
     } as CSSProperties,
-    ref: move.setNodeRef,
-    ...move.listeners,
-    ...move.attributes,
-    onClick: (e: React.MouseEvent) => {
-      e.stopPropagation()
-      if (wasRecentDrag()) return
-      instance.api.selectEvent(occurrence.key)
-      settings.onEventClick?.(occurrence, e)
-    },
-    onDoubleClick: (e: React.MouseEvent) => {
-      e.stopPropagation()
-      settings.onEventDoubleClick?.(occurrence, e)
-    },
     className: cn(
-      "group/gantt-bar-group text-foreground @container relative flex w-full min-w-0 cursor-pointer touch-none items-center gap-1.5 overflow-hidden rounded-sm px-1.5 py-0.5 text-start leading-normal select-none",
-      "focus-visible:ring-ring/50 outline-none focus-visible:ring-2",
+      "group/gantt-bar-group text-foreground @container relative flex w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-sm px-1.5 py-0.5 text-start leading-normal select-none",
       // the unfilled remainder has to be legible on its own - at /12 a bar
       // with a progress fill read as a floating segment with no basement
       "bg-(--gantt-event-color)/20 hover:bg-(--gantt-event-color)/30",
-      // move: hide the original (the smooth cursor clone represents it)
-      "data-[drag-kind=move]:opacity-0",
-      // resize: keep the original event exactly, just fade it to a soft
-      // placeholder behind the dashed preview - no dramatic restyle
-      "data-[drag-kind=resize-start]:opacity-40 data-[drag-kind=resize-end]:opacity-40",
-      "data-selected:bg-(--gantt-event-color)/30",
       segment.continuesBefore && "rounded-s-none",
       segment.continuesAfter && "rounded-e-none",
-      viewConfig.classNames?.event,
       viewConfig.getEventClassName?.(renderProps),
       className
     ),
@@ -338,41 +169,28 @@ function GanttBar<TData = unknown>({
           <CheckIcon className="relative size-2.5 shrink-0 opacity-80" aria-hidden="true" />
         )}
         {content}
-        {resizeHandles}
       </>
     ),
   }
 
-  const barButton = useRender({
-    defaultTagName: "button",
+  const bar = useRender({
+    defaultTagName: "div",
     render,
-    props: mergeProps<"button">(defaultProps, props),
+    props: mergeProps<"div">(defaultProps, props),
   })
-
-  // Consumer-owned right-click menu (headless): the primitive only wires the
-  // ContextMenu; the items and their handlers come entirely from the block.
-  const menu = viewConfig.renderEventMenu?.(renderProps)
-
-  // The bar is simultaneously the tooltip trigger and (when a menu exists)
-  // the context-menu trigger; Base UI composes both via render props.
-  const trigger = menu ? (
-    <ContextMenuTrigger render={<TooltipTrigger render={barButton} />} />
-  ) : (
-    <TooltipTrigger render={barButton} />
-  )
 
   const barTree = (
     <TooltipProvider delay={500} closeDelay={0} timeout={300}>
       <Tooltip
-        open={tipOpen && !anyInteracting}
+        open={tipOpen}
         onOpenChange={(next: boolean, details: { reason?: string }) => {
           // opens only on hover; focus/press opens are dropped
           if (next && details?.reason !== "trigger-hover") return
           setTipOpen(next)
         }}
       >
-        {trigger}
-        {tipOpen && !anyInteracting && (
+        <TooltipTrigger render={bar} />
+        {tipOpen && (
           <TooltipContent side="top" className="pointer-events-none">
             <div className="font-medium">{event.title}</div>
             <div className="opacity-80">{timeLabel}</div>
@@ -382,23 +200,7 @@ function GanttBar<TData = unknown>({
     </TooltipProvider>
   )
 
-  return (
-    <GanttBarContext.Provider
-      value={{ occurrence, segment, isDragging, isSelected }}
-    >
-      {menu ? (
-        <ContextMenu>
-          {barTree}
-          <ContextMenuContent data-slot="gantt-bar-menu" className="min-w-44">
-            {menu}
-          </ContextMenuContent>
-        </ContextMenu>
-      ) : (
-        barTree
-      )}
-    </GanttBarContext.Provider>
-  )
+  return barTree
 }
 
-export { GANTT_COLORS, GanttBar, useGanttBarContext }
-export type { GanttBarContextValue, GanttBarProps }
+export { GanttBar }

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { FilterFieldConfig } from "~/components/reui/filters";
+import type { FilterFieldConfig } from "./filter-bar-core";
 import {
   barFiltersToFilterState,
   filterStateToBarFilters,
 } from "./filter-bar-core";
 
-type TestField = FilterFieldConfig<string> & {
+type TestField = FilterFieldConfig & {
   key: string;
   type: "text" | "select" | "multiselect";
 };

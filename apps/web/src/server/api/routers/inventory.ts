@@ -7,13 +7,8 @@
  */
 
 import {
-  type InventoryId,
   type InventoryShortcode,
   inventoryShortcode,
-  type LocationId,
-  type LocationShortcode,
-  type ProductId,
-  type ProductShortcode,
   unsafeInventoryId,
   unsafeLocationId,
   unsafeLocationShortcode,
@@ -59,42 +54,24 @@ import {
 } from "~/server/repo/inventory";
 import { findDuplicateUniqueProducts } from "~/server/repo/product";
 import {
-  resolveAllOrThrow,
+  bindShortcodeResolver,
   resolveLiveShortcodes,
-  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
 import {
+  createBulkUpdatedMutation,
   createDeleteProcedure,
   createEntityCrudWithoutListProcedures,
   createEntityListProcedure,
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
-/** Resolve the public product id once before entering UUID-only repo code. */
-async function resolveProductId(
-  db: Parameters<typeof resolveOrThrow>[0],
-  shortcode: ProductShortcode,
-): Promise<ProductId> {
-  return resolveOrThrow(db, "product", shortcode);
-}
-
-async function resolveLocationId(
-  db: Parameters<typeof resolveOrThrow>[0],
-  shortcode: LocationShortcode,
-): Promise<LocationId> {
-  return resolveOrThrow(db, "location", shortcode);
-}
-
-async function resolveInventoryId(
-  db: Parameters<typeof resolveOrThrow>[0],
-  shortcode: InventoryShortcode,
-): Promise<InventoryId> {
-  return resolveOrThrow(db, "inventory", shortcode);
-}
+const productShortcodes = bindShortcodeResolver("product");
+const locationShortcodes = bindShortcodeResolver("location");
+const inventoryShortcodes = bindShortcodeResolver("inventory");
 
 async function resolveEntityIds<T extends string>(
   db: Parameters<typeof resolveLiveShortcodes>[0],
@@ -115,13 +92,6 @@ async function resolveEntityIds<T extends string>(
     );
   }
   return resolved as Map<T, string>;
-}
-
-async function inventoryEntityIds(
-  db: Parameters<typeof resolveAllOrThrow>[0],
-  shortcodes: InventoryShortcode[],
-): Promise<InventoryId[]> {
-  return resolveAllOrThrow(db, "inventory", shortcodes);
 }
 
 const { list } = createEntityListProcedure({
@@ -157,7 +127,7 @@ const { getByID, getByShortcode, create, update } =
     },
     repository: {
       getByID: async (services, shortcode: InventoryShortcode) => {
-        const id = await resolveInventoryId(services.db, shortcode);
+        const id = await inventoryShortcodes.one(services.db, shortcode);
         const res = await getInventoryEntryByID(services.db, id);
         if (res === null) {
           throw createAppError(
@@ -171,8 +141,8 @@ const { getByID, getByShortcode, create, update } =
         getInventoryEntryByShortcode(services.db, shortcode),
       create: async (services, data) => {
         const [productId, locationId] = await Promise.all([
-          resolveProductId(services.db, data.productId),
-          resolveLocationId(services.db, data.locationId),
+          productShortcodes.one(services.db, data.productId),
+          locationShortcodes.one(services.db, data.locationId),
         ]);
         // Check if this is a unique product that already exists elsewhere
         const duplicate = await checkUniqueProductDuplicate(
@@ -193,7 +163,7 @@ const { getByID, getByShortcode, create, update } =
           { ...data, productId, locationId },
           services.actorContext,
         );
-        const entityId = await resolveInventoryId(services.db, created.id);
+        const entityId = await inventoryShortcodes.one(services.db, created.id);
         const backgroundBatches = await runMutationSideEffects(services.db, {
           action: "created",
           entity: { entityType: "inventory", entityId },
@@ -202,12 +172,12 @@ const { getByID, getByShortcode, create, update } =
         return { ...created, sideEffects: { backgroundBatches } };
       },
       update: async (services, shortcode: InventoryShortcode, data) => {
-        const id = await resolveInventoryId(services.db, shortcode);
+        const id = await inventoryShortcodes.one(services.db, shortcode);
         const productId = data.productId
-          ? await resolveProductId(services.db, data.productId)
+          ? await productShortcodes.one(services.db, data.productId)
           : undefined;
         const locationId = data.locationId
-          ? await resolveLocationId(services.db, data.locationId)
+          ? await locationShortcodes.one(services.db, data.locationId)
           : undefined;
         const updated = await updateInventoryEntry(
           services.db,
@@ -227,7 +197,7 @@ const { getByID, getByShortcode, create, update } =
 
 const deleteItem = createDeleteProcedure<InventoryShortcode>(
   async (services, shortcodes) => {
-    const ids = await inventoryEntityIds(services.db, shortcodes);
+    const ids = await inventoryShortcodes.all(services.db, shortcodes);
     await deleteInventoryEntries(services.db, ids, services.actorContext);
     return await runMutationSideEffectsForEntities(
       services.db,
@@ -242,10 +212,12 @@ const deleteItem = createDeleteProcedure<InventoryShortcode>(
 );
 
 // Bulk process inventory entries (creates and updates in one call)
-const bulkProcess = protectedProcedure
-  .input(inventoryBulkOperationPayload)
-  .output(strictOutput(inventoryWithLocationAndProductListAndSideEffectsOut))
-  .mutation(async ({ ctx, input }) => {
+const bulkProcess = createBulkUpdatedMutation({
+  input: inventoryBulkOperationPayload,
+  itemOutput: inventoryWithLocationAndProductOut,
+  entity: "inventory",
+  source: "inventory.bulkProcess",
+  mutate: async (ctx, input) => {
     const productShortcodes = uniq(input.items.map((i) => i.productId));
     const resolvedProducts = await resolveLiveShortcodes(
       ctx.db,
@@ -275,7 +247,7 @@ const bulkProcess = protectedProcedure
     const locationId = unsafeLocationId(
       resolvedLocations.get(input.locationId)!,
     );
-    const result = await bulkProcessInventoryEntries(
+    return await bulkProcessInventoryEntries(
       ctx.db,
       locationId,
       input.items.map((item) => ({
@@ -289,26 +261,17 @@ const bulkProcess = protectedProcedure
       ctx.actorContext,
       input.loadedAt,
     );
-    const entityIds = await inventoryEntityIds(
-      ctx.db,
-      result.map((entry) => entry.id),
-    );
-    const backgroundBatches = await runMutationSideEffectsForEntities(
-      ctx.db,
-      entityIds.map((entityId) => ({
-        action: "updated" as const,
-        entity: { entityType: "inventory" as const, entityId },
-        source: "inventory.bulkProcess",
-      })),
-    );
-    return { items: result, sideEffects: { backgroundBatches } };
-  });
+  },
+  entityShortcodes: (items) => items.map((item) => item.id),
+});
 
 // Bulk move inventory entries between locations
-const bulkMove = protectedProcedure
-  .input(bulkMovePayload)
-  .output(strictOutput(inventoryWithLocationAndProductListAndSideEffectsOut))
-  .mutation(async ({ ctx, input }) => {
+const bulkMove = createBulkUpdatedMutation({
+  input: bulkMovePayload,
+  itemOutput: inventoryWithLocationAndProductOut,
+  entity: "inventory",
+  source: "inventory.bulkMove",
+  mutate: async (ctx, input) => {
     const locationCodes = [input.sourceLocationId, input.targetLocationId];
     const [resolvedLocations, resolvedInventories] = await Promise.all([
       resolveEntityIds(ctx.db, locationCodes, "location"),
@@ -318,7 +281,7 @@ const bulkMove = protectedProcedure
         "inventory",
       ),
     ]);
-    const result = await bulkMoveInventoryEntries(
+    return await bulkMoveInventoryEntries(
       ctx.db,
       {
         sourceLocationId: unsafeLocationId(
@@ -336,28 +299,19 @@ const bulkMove = protectedProcedure
       },
       ctx.actorContext,
     );
-    const entityIds = await inventoryEntityIds(
-      ctx.db,
-      result.map((entry) => entry.id),
-    );
-    const backgroundBatches = await runMutationSideEffectsForEntities(
-      ctx.db,
-      entityIds.map((entityId) => ({
-        action: "updated" as const,
-        entity: { entityType: "inventory" as const, entityId },
-        source: "inventory.bulkMove",
-      })),
-    );
-    return { items: result, sideEffects: { backgroundBatches } };
-  });
+  },
+  entityShortcodes: (items) => items.map((item) => item.id),
+});
 
 // Move entries to per-item destinations. The general form of a move: one call
 // fans a shelf out across many drawers, or consolidates many drawers onto one
 // shelf, atomically. `bulkMove` above is the one-source/one-target case.
-const moveEntries = protectedProcedure
-  .input(moveInventoryEntriesPayload)
-  .output(strictOutput(inventoryWithLocationAndProductListAndSideEffectsOut))
-  .mutation(async ({ ctx, input }) => {
+const moveEntries = createBulkUpdatedMutation({
+  input: moveInventoryEntriesPayload,
+  itemOutput: inventoryWithLocationAndProductOut,
+  entity: "inventory",
+  source: "inventory.moveEntries",
+  mutate: async (ctx, input) => {
     const [resolvedLocations, resolvedInventories] = await Promise.all([
       resolveEntityIds(
         ctx.db,
@@ -370,7 +324,7 @@ const moveEntries = protectedProcedure
         "inventory",
       ),
     ]);
-    const result = await moveInventoryEntries(
+    return await moveInventoryEntries(
       ctx.db,
       {
         items: input.items.map((item) => ({
@@ -385,20 +339,9 @@ const moveEntries = protectedProcedure
       },
       ctx.actorContext,
     );
-    const entityIds = await inventoryEntityIds(
-      ctx.db,
-      result.map((entry) => entry.id),
-    );
-    const backgroundBatches = await runMutationSideEffectsForEntities(
-      ctx.db,
-      entityIds.map((entityId) => ({
-        action: "updated" as const,
-        entity: { entityType: "inventory" as const, entityId },
-        source: "inventory.moveEntries",
-      })),
-    );
-    return { items: result, sideEffects: { backgroundBatches } };
-  });
+  },
+  entityShortcodes: (items) => items.map((item) => item.id),
+});
 
 // Commit an audit-session recount: apply the staged verify/adjust/remove diff +
 // stamp lastBulkInventory. Only dispatch a valuation recompute if something
@@ -459,7 +402,7 @@ const reconcileSession = protectedProcedure
       await reconcileLocationSession(ctx.db, resolvedInput, ctx.actorContext);
     // Surviving entries get "updated" side-effects; removed (soft-deleted) ones
     // get "deleted" so their embedding is cleaned up too (they're not in items).
-    const survivingEntityIds = await inventoryEntityIds(
+    const survivingEntityIds = await inventoryShortcodes.all(
       ctx.db,
       items.map((entry) => entry.id),
     );
@@ -486,7 +429,7 @@ const findDuplicates = protectedProcedure
   .output(strictOutput(inventoryDuplicateUniqueProductsOut))
   .query(async ({ ctx, input }) => {
     const excludeLocationId = input.excludeLocationId
-      ? await resolveLocationId(ctx.db, input.excludeLocationId)
+      ? await locationShortcodes.one(ctx.db, input.excludeLocationId)
       : undefined;
     const duplicates = await findDuplicateUniqueProducts(ctx.db, {
       excludeLocationId,
