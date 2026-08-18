@@ -197,9 +197,7 @@ describe("useCubbyTableLayout", () => {
         const layout = useCubbyTableLayout({ key: "product", columns });
         useRevealTableColumnsOnce(
           layout,
-          worklist
-            ? { key: worklist, visibility: { cost: true } }
-            : undefined,
+          worklist ? { key: worklist, visibility: { cost: true } } : undefined,
         );
         return layout;
       },

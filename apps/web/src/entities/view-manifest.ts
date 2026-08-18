@@ -810,8 +810,8 @@ export function viewProblemDeclarations(): ViewProblemDeclaration[] {
           entity: entity as Entity,
           filters: view.filters,
           ...(view.sort ? { sort: view.sort } : {}),
-          ...(view.columnVisibility
-            ? { columnVisibility: view.columnVisibility }
+          ...(view.layout?.columnVisibility
+            ? { columnVisibility: view.layout.columnVisibility }
             : {}),
         };
         return {
