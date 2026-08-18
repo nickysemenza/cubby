@@ -7,6 +7,7 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import {
+  BookOpen,
   GitBranch,
   Grid3x3,
   ListChecks,
@@ -14,7 +15,6 @@ import {
   Printer,
 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import { z } from "zod";
 import { useRecipeCostingData } from "~/app/_components/hooks/useRecipeCostingData";
 import { CopyDebugButton } from "~/app/_components/recipe/copy-debug-button";
 import {
@@ -23,6 +23,7 @@ import {
 } from "~/app/_components/recipe/IngredientQuantities";
 import { RecipeFlowView } from "~/app/_components/recipe/RecipeFlowView";
 import { RecipeIngredientMatrixView } from "~/app/_components/recipe/RecipeIngredientMatrixView";
+import { RecipeMagazineView } from "~/app/_components/recipe/RecipeMagazineView";
 import { RecipePrepSheetView } from "~/app/_components/recipe/RecipePrepSheetView";
 import { RecipeScaleControl } from "~/app/_components/recipe/RecipeScaleControl";
 import { RecipeSpecView } from "~/app/_components/recipe/RecipeSpecView";
@@ -42,30 +43,24 @@ import {
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
 import { pageTitle } from "~/lib/page-title";
+import { recipeExportSearchSchema } from "./recipe-export-search";
 
-type ExportFormat = "prep" | "nested" | "matrix" | "flow";
+export type ExportFormat = "prep" | "read" | "nested" | "matrix" | "flow";
 
 const FORMAT_OPTIONS: ViewSwitcherOption<ExportFormat>[] = [
   { value: "prep", label: "Prep sheet", icon: ListChecks },
+  { value: "read", label: "Read", icon: BookOpen },
   { value: "nested", label: "Spec", icon: ListTree },
   { value: "matrix", label: "Matrix", icon: Grid3x3 },
   { value: "flow", label: "Flow", icon: GitBranch },
 ];
-
-const searchSchema = z.object({
-  format: z
-    .enum(["prep", "nested", "matrix", "flow"])
-    .optional()
-    .catch(undefined),
-  scale: z.number().positive().optional().catch(undefined),
-});
 
 const searchDefaults = { format: undefined, scale: undefined } as const;
 
 export const Route = createFileRoute(
   "/_authenticated/recipes/$shortcode_/export",
 )({
-  validateSearch: searchSchema,
+  validateSearch: recipeExportSearchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   loader: async ({ params, context }) => {
     const data = await context.queryClient.ensureQueryData(
@@ -120,7 +115,8 @@ function RecipeExportBody({ recipe }: { recipe: RecipeOut }) {
     recipeMap,
     format !== "flow",
   );
-  const totals = costingById?.get(recipe.id)?.totals ?? null;
+  const rootCosting = costingById?.get(recipe.id) ?? null;
+  const totals = rootCosting?.totals ?? null;
 
   const setFormat = (next: ExportFormat) =>
     navigate({
@@ -137,7 +133,7 @@ function RecipeExportBody({ recipe }: { recipe: RecipeOut }) {
     });
 
   const getMarkdown = () =>
-    format !== "flow" && tree
+    format !== "flow" && format !== "read" && tree
       ? recipeTreeToMarkdown(tree, {
           flavor: format,
           quantityText: (node, row) => {
@@ -168,7 +164,7 @@ function RecipeExportBody({ recipe }: { recipe: RecipeOut }) {
             onFactorChange={setScale}
           />
           <Row align="center" gap="sm" className="ml-auto">
-            {format !== "flow" && (
+            {format !== "flow" && format !== "read" && (
               <CopyDebugButton
                 getText={getMarkdown}
                 label="Copy Markdown"
@@ -189,7 +185,13 @@ function RecipeExportBody({ recipe }: { recipe: RecipeOut }) {
           </Row>
         </Row>
 
-        {format === "flow" ? (
+        {format === "read" ? (
+          <RecipeMagazineView
+            recipe={scaledRecipe}
+            totals={totals}
+            costing={rootCosting}
+          />
+        ) : format === "flow" ? (
           <RecipeFlowView
             recipe={recipe}
             scaledRecipe={scaledRecipe}

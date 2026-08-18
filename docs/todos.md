@@ -134,10 +134,9 @@ decision value.
 - [ ] **Kitchen-mode persistence**: step check-off is `useState` in
   `RecipeInstructions` — lost on nav or scale change; no ingredient check-off in
   Read view; no timers derived from step text.
-- [ ] **Export "Read" format**: the print/export sheet offers prep/nested/matrix/
-  flow (all spec- or diagram-flavored, the last an AI-assembled step flow chart)
-  but no plain recipe-as-a-page format (`RecipeMagazineView` would drop in); no
-  multi-recipe/cookbook export.
+- [ ] **Multi-recipe/cookbook export**: the print/export sheet now includes the
+  plain `RecipeMagazineView` Read format alongside prep/nested/matrix/flow, but
+  still exports only one recipe at a time.
 - [ ] **EPUB recipe hero photos**: `recipe-epub` already identifies an in-archive
   hero `ImageRef` (`path` + `mime`), but recipebridge emits `None` and
   `importRecipeSchema` models only public scraper image URLs. Emit the reference,
