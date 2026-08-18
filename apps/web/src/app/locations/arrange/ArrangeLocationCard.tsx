@@ -51,6 +51,8 @@ export function ArrangeLocationCard({
           setDragNodeRef(element);
           setDropNodeRef(element);
         }}
+        role="group"
+        aria-label={`${node.name} location drop target`}
         align="center"
         gap="tight"
         className={cn(

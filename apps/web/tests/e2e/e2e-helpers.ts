@@ -1,4 +1,6 @@
+import type { TaskStatus } from "@cubby/schemas/project";
 import { expect, type Locator, type Page } from "@playwright/test";
+import { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
 
 /**
  * Wait for React to hydrate a form after SSR.
@@ -140,10 +142,21 @@ export async function openCommandPalette(page: Page): Promise<Locator> {
   return palette;
 }
 
-export async function createLocation(page: Page, name: string) {
+export async function createLocation(
+  page: Page,
+  name: string,
+  opts: { parentName?: string } = {},
+): Promise<string> {
   await page.goto("/locations/new");
   await waitForFormHydration(page);
   await page.getByPlaceholder("Enter location name").fill(name);
+  if (opts.parentName) {
+    await selectComboboxItem(
+      page,
+      page.getByRole("combobox", { name: /parent location/i }),
+      opts.parentName,
+    );
+  }
   await page.getByRole("button", { name: /^Create$/ }).click();
   await expect(page).toHaveURL(
     /\/locations\/LOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
@@ -152,6 +165,71 @@ export async function createLocation(page: Page, name: string) {
     },
   );
   await expect(page.getByText(name).first()).toBeVisible({ timeout: 10000 });
+  const shortcode = new URL(page.url()).pathname.match(
+    /\/locations\/(LOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4})/,
+  )?.[1];
+  if (!shortcode)
+    throw new Error(`Location shortcode missing from ${page.url()}`);
+  return shortcode;
+}
+
+export async function createTask(
+  page: Page,
+  name: string,
+  opts: { dueDate?: string; status?: TaskStatus } = {},
+) {
+  await page.goto("/tasks");
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+
+  const dialog = page.getByRole("dialog", { name: "New Task" });
+  await expect(dialog).toBeVisible({ timeout: 10000 });
+  await dialog.getByLabel("Name").fill(name);
+  if (opts.status && opts.status !== "not_started") {
+    await selectComboboxItem(
+      page,
+      dialog.getByRole("combobox", { name: "Status" }),
+      TASK_STATUS_LABELS[opts.status],
+    );
+  }
+  if (opts.dueDate) {
+    const [year, month, day] = opts.dueDate.split("-").map(Number);
+    if (!year || !month || !day) {
+      throw new Error(`Invalid task due date: ${opts.dueDate}`);
+    }
+    const target = new Date(year, month - 1, day);
+    const today = new Date();
+    const monthDelta =
+      year * 12 + month - 1 - (today.getFullYear() * 12 + today.getMonth());
+    await dialog.getByLabel("Due date").click();
+    const navName =
+      monthDelta < 0 ? "Go to the Previous Month" : "Go to the Next Month";
+    for (let step = 0; step < Math.abs(monthDelta); step++) {
+      await page.getByRole("button", { name: navName }).click();
+    }
+    const ordinal =
+      day % 10 === 1 && day % 100 !== 11
+        ? "st"
+        : day % 10 === 2 && day % 100 !== 12
+          ? "nd"
+          : day % 10 === 3 && day % 100 !== 13
+            ? "rd"
+            : "th";
+    const weekday = new Intl.DateTimeFormat("en-US", {
+      weekday: "long",
+    }).format(target);
+    const monthName = new Intl.DateTimeFormat("en-US", {
+      month: "long",
+    }).format(target);
+    await page
+      .getByRole("button", {
+        name: `${weekday}, ${monthName} ${day}${ordinal}, ${year}`,
+        exact: true,
+      })
+      .click();
+  }
+  await dialog.getByRole("button", { name: /^Create$/ }).click();
+  await expect(dialog).not.toBeVisible({ timeout: 10000 });
 }
 
 export async function createProduct(

@@ -183,12 +183,16 @@ export function BoardCell({
     column.status === "done" &&
     totalCount > DONE_COLUMN_CAP;
   const canCollapse = hiddenDoneCount > 0 || isCappedDoneColumn;
+  const dropTargetLabel = lane
+    ? `${axisLabel(column)}, ${axisLabel(lane)} task drop target`
+    : `${axisLabel(column)} task drop target`;
 
   return (
-    <div
+    <fieldset
       ref={setNodeRef}
+      aria-label={dropTargetLabel}
       className={cn(
-        "min-h-16 border border-transparent bg-muted/30 p-1 transition-colors",
+        "min-h-16 min-w-0 border border-transparent bg-muted/30 p-1 transition-colors",
         isOver && "border-primary bg-primary/5",
         className,
       )}
@@ -255,7 +259,7 @@ export function BoardCell({
           </button>
         )}
       </Stack>
-    </div>
+    </fieldset>
   );
 }
 

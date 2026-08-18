@@ -62,7 +62,10 @@ export function ArrangeSurface({
   const api = useTRPC();
   const queryClient = useQueryClient();
   const { data: roots } = useSuspenseQuery(
-    api.location.makeTree.queryOptions(),
+    // Arrange is a live mutation surface. The shared tree is normally warm for
+    // two minutes, but restoring a pre-move persisted cache after an immediate
+    // reload must revalidate instead of showing the old hierarchy as current.
+    api.location.makeTree.queryOptions(undefined, { staleTime: 0 }),
   );
   const { moveLocation, moveItem } = useArrangeMutations();
   const depthId = useId();
