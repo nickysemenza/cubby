@@ -297,13 +297,9 @@ runtime CDN) are all shipped. Target is iOS Safari only. Remaining:
   alternative if it stays small: photograph those bins instead of widening the
   query.
 
-- [ ] **Surface shelf-vs-ledger variance inside the session**: the review pane's
-  "Expected contents" is the *shelf* record; the ledger's net-units figure never
-  appears, so the one signal that says "this bin is probably wrong" is invisible
-  exactly when you are standing in front of it. Two slices, independently
-  shippable: (1) show the ledger figure on a row when it disagrees, reusing the
-  `quantityVariance` scalar the products list already renders; (2) seed a pass
-  from the variance worklist rather than a location subtree, so a walk visits
+- [ ] **Seed a recount pass from the shelf-vs-ledger variance worklist**: the
+  review pane now shows a ledger mismatch inline; the remaining slice is a pass
+  root that is a product set rather than a location subtree, so a walk visits
   the disagreeing products wherever they live. Scale check: 606 entries are
   unverified but only 22 products actually disagree, so an untargeted sweep
   spends most of its time confirming what two independent sources already agree

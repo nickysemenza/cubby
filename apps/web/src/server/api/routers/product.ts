@@ -40,6 +40,8 @@ import {
   productMovementTimelineInput,
   productMovementTimelineOut,
   productPickerItemOut,
+  productQuantitySummariesOut,
+  productQuantitySummaryBatchInput,
   productQuickCreatePayload,
   productShortcodeListOut,
   productShortcodesInput,
@@ -97,6 +99,7 @@ import {
   productSearch,
   quickCreateProduct,
 } from "~/server/repo/product";
+import { loadProductQuantitySummaries } from "~/server/repo/product/quantity-ledger";
 import {
   attachProductComponents,
   detachProductComponents,
@@ -380,6 +383,26 @@ const summaries = protectedProcedure
       input.ids,
       input.include,
     );
+  });
+
+// Recount needs the list's shelf-versus-ledger values, but only for the
+// distinct products already in its bounded pass. This is intentionally a
+// shortcode-keyed batch rather than a paginated `product.list` read.
+const quantitySummaries = protectedProcedure
+  .input(productQuantitySummaryBatchInput)
+  .output(strictOutput(productQuantitySummariesOut))
+  .query(async ({ ctx, input }) => {
+    const ids = await productShortcodes.all(ctx.db, input.ids);
+    const summariesById = await loadProductQuantitySummaries(ctx.db, ids);
+    const summaries: Record<
+      string,
+      import("@cubby/schemas/product").ProductQuantitySummaryOut
+    > = {};
+    for (const [index, shortcode] of input.ids.entries()) {
+      // `loadProductQuantitySummaries` returns one entry per resolved input id.
+      summaries[shortcode] = summariesById.get(ids[index]!)!;
+    }
+    return summaries;
   });
 
 // Quick create a product with minimal data (just name required)
@@ -950,6 +973,7 @@ export const productRouter = createTRPCRouter({
   getByShortcodes,
   list,
   summaries,
+  quantitySummaries,
   search,
   create,
   createMany,

@@ -212,6 +212,16 @@ export const productSummaryBatchInput = z.object({
   ids: z.array(productShortcode).max(PRODUCT_SUMMARY_BATCH_MAX),
 });
 
+// A recount reads every distinct product in one pass-scoped request. Keep that
+// request bounded without forcing the client back to a paginated product list;
+// 5,000 covers a whole-house pass (2,764 is the documented live scale) while
+// remaining comfortably below PostgreSQL's bind-parameter ceiling.
+export const PRODUCT_QUANTITY_SUMMARY_BATCH_MAX = 5_000;
+
+export const productQuantitySummaryBatchInput = z.object({
+  ids: z.array(productShortcode).max(PRODUCT_QUANTITY_SUMMARY_BATCH_MAX),
+});
+
 export const productApplyUpcInput = z.object({
   id: productShortcode,
   upc,
@@ -863,6 +873,21 @@ export const productQuantityFields = {
    */
   quantityVariance: z.number().nullable(),
 };
+
+/** The quantity contract for a bounded batch reader such as a recount pass. */
+export const productQuantitySummaryOut = z.object(productQuantityFields);
+export type ProductQuantitySummaryOut = z.infer<
+  typeof productQuantitySummaryOut
+>;
+
+/** Public product shortcode → canonical shelf-versus-ledger quantity shape. */
+export const productQuantitySummariesOut = z.record(
+  z.string(),
+  productQuantitySummaryOut,
+);
+export type ProductQuantitySummariesOut = z.infer<
+  typeof productQuantitySummariesOut
+>;
 
 export const productWithIngredientAndInventoryAndMappingsOut = z.object({
   ...productTopLevelFields,

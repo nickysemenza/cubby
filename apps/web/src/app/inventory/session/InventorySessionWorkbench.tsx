@@ -148,6 +148,30 @@ export function InventorySessionWorkbench({
     return map;
   }, [inventoryQuery.data]);
 
+  const sessionLocationIds = useMemo(
+    () => new Set(sessionLocations.map((location) => location.id)),
+    [sessionLocations],
+  );
+  // One request for the complete pass, not a product-list page or a request per
+  // expected row. Unknown's holding tray is deliberately outside this set.
+  const sessionProductIds = useMemo(
+    () => [
+      ...new Set(
+        (inventoryQuery.data ?? [])
+          .filter((item) => sessionLocationIds.has(item.location.id))
+          .map((item) => item.product.id),
+      ),
+    ],
+    [inventoryQuery.data, sessionLocationIds],
+  );
+  const quantitySummariesQuery = useQuery({
+    ...api.product.quantitySummaries.queryOptions({ ids: sessionProductIds }),
+    enabled: sessionProductIds.length > 0,
+    // A pass is a point-in-time review. Keep its ledger comparison stable while
+    // the pass itself writes recount adjustments.
+    staleTime: Infinity,
+  });
+
   const currentItems = currentLocation
     ? (inventoryByLocation.get(currentLocation.id) ?? [])
     : [];
@@ -553,6 +577,7 @@ export function InventorySessionWorkbench({
             parent={parent}
             location={currentLocation}
             items={currentItems}
+            quantitySummaries={quantitySummariesQuery.data}
             unknownItems={unknownItems}
             unknownLocations={unknownChildLocations}
             inventoryByLocation={inventoryByLocation}

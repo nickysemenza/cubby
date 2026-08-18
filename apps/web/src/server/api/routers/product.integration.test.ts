@@ -479,6 +479,110 @@ describe("product.list quantity ledger", () => {
   });
 });
 
+describe("product.quantitySummaries", () => {
+  const ctx = withTestDb();
+
+  const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
+    createExpense(
+      ctx.db,
+      expenseCreateInput.parse(makeExpenseInput(overrides)),
+      ctx.actor,
+    );
+
+  it("returns the list's comparable and mixed-unit quantity semantics by shortcode", async () => {
+    const shelfA = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Summary shelf A" }),
+      ctx.actor,
+    );
+    const shelfB = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Summary shelf B" }),
+      ctx.actor,
+    );
+    const agreeing = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Summary agreeing" }),
+      ctx.actor,
+    );
+    const mismatched = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Summary mismatched" }),
+      ctx.actor,
+    );
+    const mixed = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Summary mixed" }),
+      ctx.actor,
+    );
+
+    await Promise.all([
+      createInventoryFixture(
+        ctx.db,
+        {
+          productId: agreeing.entityId,
+          locationId: shelfA.entityId,
+          amount: { value: 3, unit: "each" },
+        },
+        ctx.actor,
+      ),
+      createInventoryFixture(
+        ctx.db,
+        {
+          productId: mismatched.entityId,
+          locationId: shelfA.entityId,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      ),
+      createInventoryFixture(
+        ctx.db,
+        {
+          productId: mixed.entityId,
+          locationId: shelfA.entityId,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      ),
+      createInventoryFixture(
+        ctx.db,
+        {
+          productId: mixed.entityId,
+          locationId: shelfB.entityId,
+          amount: { value: 1, unit: "can" },
+        },
+        ctx.actor,
+      ),
+    ]);
+    await Promise.all([
+      seedLine({ productId: agreeing.id, productQuantity: 3, cost: 3 }),
+      seedLine({ productId: mismatched.id, productQuantity: 2, cost: 2 }),
+      seedLine({ productId: mixed.id, productQuantity: 2, cost: 2 }),
+    ]);
+
+    const summaries = await createTestCaller(
+      productRouter,
+      ctx.db,
+    ).quantitySummaries({ ids: [agreeing.id, mismatched.id, mixed.id] });
+
+    expect(summaries[agreeing.id]).toMatchObject({
+      quantityLedger: { expectedQuantity: 3 },
+      onHandUnits: 3,
+      quantityVariance: 0,
+    });
+    expect(summaries[mismatched.id]).toMatchObject({
+      quantityLedger: { expectedQuantity: 2 },
+      onHandUnits: 1,
+      quantityVariance: -1,
+    });
+    expect(summaries[mixed.id]).toMatchObject({
+      quantityLedger: { expectedQuantity: 2 },
+      onHandUnits: null,
+      quantityVariance: null,
+    });
+  });
+});
+
 /**
  * The `unlocated` saved views select on `expectedQuantityMin` + an inventory
  * presence of `none` — two filters that already existed but were never combined
