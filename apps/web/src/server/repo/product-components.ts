@@ -49,7 +49,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { getProductImagesByProductIds } from "~/server/repo/product";
+import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
 // `findMergeComponentCycle` is the SAME question `mergeProducts` already
 // answers — "does identifying/adding these edges make a product reach
 // itself" — reused here rather than reimplemented. Called with `loserIds: []`
@@ -97,9 +97,9 @@ export async function listProductComponents(
     .orderBy(asc(product.name));
 
   const componentProductIds = rows.map((row) => row.productId);
-  const [prices, imagesByProduct] = await Promise.all([
+  const [prices, coverImageUrls] = await Promise.all([
     loadEffectiveProductPricesById(db, componentProductIds),
-    getProductImagesByProductIds(db, componentProductIds),
+    getProductCoverImageUrlsByProductIds(db, componentProductIds),
   ]);
 
   return rows.map((row) => ({
@@ -108,7 +108,7 @@ export async function listProductComponents(
     manufacturer: row.manufacturer,
     quantity: row.quantity,
     price: prices.get(row.productId) ?? null,
-    coverImageUrl: imagesByProduct[row.productId]?.[0]?.url ?? null,
+    coverImageUrl: coverImageUrls.get(row.productId) ?? null,
     attachedAt: row.attachedAt,
   }));
 }
@@ -216,21 +216,19 @@ export async function listKitMembership(
     .orderBy(desc(productComponent.createdAt));
 
   const parentProductIds = uniq(rows.map((row) => row.parentId));
-  const [prices, expenseCounts, purchases, imagesByProduct] = await Promise.all(
-    [
-      loadEffectiveProductPricesById(db, parentProductIds),
-      loadLiveExpenseCountsByProductId(db, parentProductIds),
-      loadMostRecentPurchaseByProductId(db, parentProductIds),
-      getProductImagesByProductIds(db, parentProductIds),
-    ],
-  );
+  const [prices, expenseCounts, purchases, coverImageUrls] = await Promise.all([
+    loadEffectiveProductPricesById(db, parentProductIds),
+    loadLiveExpenseCountsByProductId(db, parentProductIds),
+    loadMostRecentPurchaseByProductId(db, parentProductIds),
+    getProductCoverImageUrlsByProductIds(db, parentProductIds),
+  ]);
 
   return rows.map((row) => ({
     parentProductId: unsafeProductShortcode(row.parentCode),
     parentProductName: row.parentName,
     manufacturer: row.manufacturer,
     quantity: row.quantity,
-    coverImageUrl: imagesByProduct[row.parentId]?.[0]?.url ?? null,
+    coverImageUrl: coverImageUrls.get(row.parentId) ?? null,
     attachedAt: row.attachedAt,
     price: prices.get(row.parentId) ?? null,
     expenseCount: expenseCounts.get(row.parentId) ?? 0,

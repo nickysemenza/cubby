@@ -890,11 +890,10 @@ export const productList = async (
 
 /**
  * First displayable product image in explicit display order, loaded once for a
- * picker page. Keeping this separate from the product relation graph preserves
- * the lightweight typeahead while restoring the cover its rows previously got
- * from global-search thumbnail hydration.
+ * batch of picker or relationship rows. This intentionally returns only the
+ * cover URL; full image projections still use `getProductImagesByProductIds`.
  */
-const loadProductCoverImageUrls = async (
+export const getProductCoverImageUrlsByProductIds = async (
   db: Database,
   ids: ProductId[],
 ): Promise<Map<ProductId, string>> => {
@@ -981,7 +980,7 @@ export const productSearch = async (
   const resultIds = results.map((result) => result.id);
   const [quantities, coverImageUrls, prices] = await Promise.all([
     loadProductPickerQuantities(db, resultIds),
-    loadProductCoverImageUrls(db, resultIds),
+    getProductCoverImageUrlsByProductIds(db, resultIds),
     loadEffectiveProductPricesById(db, resultIds),
   ]);
   const data = results.map((result) =>
@@ -1016,7 +1015,7 @@ export const getProductPickerItemsByIds = async (
   const rowIds = rows.map((row) => row.id);
   const [quantities, coverImageUrls, prices] = await Promise.all([
     loadProductPickerQuantities(db, rowIds),
-    loadProductCoverImageUrls(db, rowIds),
+    getProductCoverImageUrlsByProductIds(db, rowIds),
     loadEffectiveProductPricesById(db, rowIds),
   ]);
   const byId = new Map(

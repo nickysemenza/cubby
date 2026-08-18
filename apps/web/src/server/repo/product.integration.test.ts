@@ -1,3 +1,4 @@
+import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import type { ProductFilters } from "@cubby/schemas/product";
 import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
 import { eq, sql } from "drizzle-orm";
@@ -139,7 +140,7 @@ describe("product repository", () => {
   // a JS array in a template into a row constructor, so the query went out as
   // `= ANY(($1))` and postgres rejected it — the product combobox's semantic
   // fallback 500'd at every id count, one included.
-  it("hydrates picker items by id in both single and multi-id form", async () => {
+  it("hydrates picker items with the first displayable cover", async () => {
     const first = await createProduct(
       ctx.db,
       makeProductInput({ name: "Picker hydrate A" }),
@@ -151,10 +152,22 @@ describe("product repository", () => {
       ctx.actor,
     );
     const cover = await createImageFixture(ctx.db, "picker-hydrate-cover");
+    const manual = await createImageFixture(ctx.db, "picker-hydrate-manual", {
+      contentType: PDF_CONTENT_TYPE,
+    });
+    const missing = await createImageFixture(ctx.db, "picker-hydrate-missing", {
+      storageStatus: "missing",
+    });
     await updateProduct(
       ctx.db,
       first.entityId,
-      { pendingImageIds: [cover.id] },
+      { pendingImageIds: [manual.id, cover.id] },
+      ctx.actor,
+    );
+    await updateProduct(
+      ctx.db,
+      second.entityId,
+      { pendingImageIds: [missing.id] },
       ctx.actor,
     );
 
@@ -167,6 +180,7 @@ describe("product repository", () => {
       second.entityId,
     ]);
     expect(both.map((item) => item.id)).toEqual([first.id, second.id]);
+    expect(both.map((item) => item.coverImageUrl)).toEqual([cover.url, null]);
   });
 
   it("supports typed identifier replacement and slot-level patches", async () => {

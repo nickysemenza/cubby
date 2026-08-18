@@ -6,6 +6,7 @@
  * listed inside a live kit is blocked), and quantity round-tripping.
  */
 import type { ProductId } from "@cubby/schemas/identifiers";
+import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -65,11 +66,24 @@ describe("product ⟷ product component links (kit composition)", () => {
       makeProductInput({ name: "Battery Pack" }),
       ctx.actor,
     );
+    const kitManual = await createImageFixture(ctx.db, "combo-kit-manual", {
+      contentType: PDF_CONTENT_TYPE,
+    });
     const kitCover = await createImageFixture(ctx.db, "combo-kit-cover");
+    const drillMissing = await createImageFixture(ctx.db, "drill-missing", {
+      storageStatus: "missing",
+    });
+    const drillCover = await createImageFixture(ctx.db, "drill-cover");
     await updateProduct(
       ctx.db,
       kit.entityId,
-      { pendingImageIds: [kitCover.id] },
+      { pendingImageIds: [kitManual.id, kitCover.id] },
+      ctx.actor,
+    );
+    await updateProduct(
+      ctx.db,
+      drill.entityId,
+      { pendingImageIds: [drillMissing.id, drillCover.id] },
       ctx.actor,
     );
 
@@ -100,6 +114,8 @@ describe("product ⟷ product component links (kit composition)", () => {
       { name: "Bare Drill", quantity: 1 },
       { name: "Battery Pack", quantity: 2 },
     ]);
+    expect(components[0]?.coverImageUrl).toBe(drillCover.url);
+    expect(components[1]?.coverImageUrl).toBeNull();
 
     const kits = await listKitMembership(ctx.db, battery.entityId);
     expect(kits).toHaveLength(1);
