@@ -18,14 +18,10 @@ contradicts one belongs in a **Rejected** block, not in the open list.
 
 ### Now
 
-Keep **Now** deliberately small. Promote one item into README's active slot when
-work starts; do not treat this table as permission to work all rows in parallel.
-Shape is a rough delivery size: S is one bounded surface; M crosses layers or
-needs multi-surface verification.
+Keep **Now** deliberately small. Promote at most one catalog item here when work
+starts.
 
-| Order | Work | Why now | Shape |
-|---:|---|---|---|
-| 1 | [Root-cause the E2E workerd crash](#architecture--engineering) | Intermittently blocks every merge; the diagnostic artifact is now shipped, so the next crash should expose the native assertion | M |
+_No item is currently promoted._
 
 ### Next
 
@@ -874,47 +870,6 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
     index the column rather than the `::vector(1536)` expression. It would drop
     the per-insert cast, but the partial index exists precisely so integration
     tests can seed 3-dimension vectors. Bigger migration than the win justifies.
-
-- [ ] **Root-cause the E2E workerd crash.** A shard dies mid-run and takes the
-  rest of its specs with it. Over ~40 first-attempt jobs it measured **shard 1 =
-  20/20, shard 2 = 17/21**, which read as shard-2-specific — **that was sampling
-  noise, and the original framing here was wrong.** Shard 1 crashed on #680 with
-  the identical signature. Treat it as one bug that either shard can hit, more
-  often whichever one's spec mix loads the dashboard hardest; do not go looking
-  for a shard-2-specific cause. It also hits unrelated PRs (#670, a renovate
-  bump), and because E2E gates deploy with no `continue-on-error` (deliberately —
-  see the comment on the job), every occurrence blocks a merge until someone
-  re-runs.
-  - **Shape:** wrangler prints an empty `✘ [ERROR]` and `Logs were written to
-    <path>`, workerd exits, and every remaining spec fails
-    `ERR_CONNECTION_REFUSED`. One crash, dozens of reported failures — reading the
-    failure list is misleading, only the first event matters.
-  - **Signature (n=2, identical):** the last thing before the abort is
-    `dashboard.counts` taking its USDA-unavailable path, then
-    `Uncaught Error: Network connection lost.` In one instance a
-    `kj/async-io-unix.c++:186: disconnected: ::write(...)` with a native workerd
-    stack immediately preceded it. That fatal is a **late, unhandled** rejection:
-    `dashboard.ts`'s `getCounts().catch(...)` handles the awaited promise, so
-    something rejecting *after* it settles is escaping — most likely an in-flight
-    subrequest abandoned when Playwright navigates away mid-response.
-  - **Why USDA is always in the picture:** `e2e-global-setup.ts` points
-    `USDA_API_URL` at a dead port on purpose, so E2E never depends on a remote
-    service. That is the right call, but it means every dashboard load takes an
-    error path, widening the window in which a client disconnect can land.
-  - **Not a cubby-only bug:** `kj/async-io-unix` disconnect errors escaping and
-    destabilising the process are a known workerd fragility
-    ([workerd#3119](https://github.com/cloudflare/workerd/issues/3119),
-    [workerd#1401](https://github.com/cloudflare/workerd/issues/1401)); pinned
-    version here is workerd 1.20260801.1.
-  - **Next step:** CI now uploads each failed shard's Wrangler log directory as
-    a seven-day artifact. Read that artifact on the next red shard; it should
-    contain the native assertion workerd died on. Do not change the dashboard or
-    USDA harness until that evidence distinguishes an abandoned subrequest from
-    a broader workerd cancellation defect.
-  - **Candidate fixes, once that log confirms the cause:** stub USDA with a
-    local server returning valid empty JSON instead of a dead port, or make the
-    harness fail fast with a clear message when the server dies rather than
-    emitting N confusing spec failures.
 
 - [ ] **Measure and expand selective SSR only if the product-detail pilot wins.**
   Product detail now uses a request-scoped tRPC local link during SSR, preserving
