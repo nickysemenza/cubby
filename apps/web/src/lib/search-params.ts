@@ -1,3 +1,4 @@
+import { type ShortcodeType, shortcodeSchema } from "@cubby/shared";
 import { z } from "zod";
 
 /**
@@ -53,39 +54,43 @@ export const urlStringParam = z
 
 /** A comma-encoded, one-or-many enum filter that retains URL string coercion. */
 export const urlEnumListParam = <T extends z.ZodType<string>>(itemSchema: T) =>
-  urlStringParam.refine(
-    (value) =>
-      value === undefined ||
-      value
-        .split(",")
-        .every((item) => item.length > 0 && itemSchema.safeParse(item).success),
-    "Invalid filter value",
-  );
-
-const SHORTCODE_SUFFIX = /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/;
-
-/** A canonical, comma-encoded exact-entity filter without a domain import. */
-export const urlShortcodeListParam = (prefix: string) =>
   urlStringParam
-    .transform((value) => value?.toUpperCase())
     .refine(
       (value) =>
         value === undefined ||
-        value.split(",").every((item) => {
-          const [actualPrefix, suffix, extra] = item.split("-");
-          return (
-            extra === undefined &&
-            actualPrefix === prefix &&
-            suffix !== undefined &&
-            SHORTCODE_SUFFIX.test(suffix)
-          );
-        }),
+        value
+          .split(",")
+          .every(
+            (item) => item.length > 0 && itemSchema.safeParse(item).success,
+          ),
+      "Invalid filter value",
+    )
+    .catch(undefined);
+
+/** A canonical, comma-encoded exact-entity filter. */
+export const urlShortcodeListParam = (type: ShortcodeType) =>
+  urlStringParam
+    .refine(
+      (value) =>
+        value === undefined ||
+        value
+          .split(",")
+          .every((item) => shortcodeSchema(type).safeParse(item).success),
       "Invalid entity shortcode filter",
-    );
+    )
+    .transform((value) =>
+      value
+        ?.split(",")
+        .map((item) => shortcodeSchema(type).parse(item))
+        .join(","),
+    )
+    .catch(undefined);
 
 /** A single exact shortcode scope (not a multi-select). */
-export const urlShortcodeParam = (prefix: string) =>
-  urlShortcodeListParam(prefix).refine(
-    (value) => value === undefined || !value.includes(","),
-    "Expected one entity shortcode",
-  );
+export const urlShortcodeParam = (type: ShortcodeType) =>
+  urlShortcodeListParam(type)
+    .refine(
+      (value) => value === undefined || !value.includes(","),
+      "Expected one entity shortcode",
+    )
+    .catch(undefined);

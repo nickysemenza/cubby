@@ -21,10 +21,7 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import {
-  entityFilterSearchFields,
-  routeFilterValues,
-} from "~/entities/filter-search-fields";
+import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
 import {
   urlEnumListParam,
@@ -92,25 +89,25 @@ export const expenseSearchSchema = z
     // comment). Three of these keys hit it in practice — `?q=486242` and
     // `?order=11334` parse as numbers, `?future=true` as a boolean.
     q: urlStringParam,
-    trade: urlEnumListParam(z.enum(routeFilterValues.trade)),
-    costType: urlEnumListParam(z.enum(routeFilterValues.costType)),
-    lineKind: urlEnumListParam(z.enum(routeFilterValues.expenseLineKind)),
-    lineBasis: urlEnumListParam(z.enum(routeFilterValues.expenseLineBasis)),
+    trade: urlEnumListParam(tradeSchema),
+    costType: urlEnumListParam(costTypeSchema),
+    lineKind: urlEnumListParam(expenseLineKindSchema),
+    lineBasis: urlEnumListParam(expenseLineBasisSchema),
     cost: urlStringParam,
-    project: urlShortcodeListParam("PRJ"),
+    project: urlShortcodeListParam("project"),
     subprojects: urlStringParam,
-    future: urlEnumListParam(z.enum(routeFilterValues.boolean)),
+    future: urlEnumListParam(z.enum(["true", "false"])),
     date: urlStringParam,
     dateFrom: urlStringParam,
     dateTo: urlStringParam,
-    productId: urlShortcodeListParam("PRD"),
+    productId: urlShortcodeListParam("product"),
     product: urlStringParam,
     // `order` (the manifest's `orderIdExact` url key) and `vendor` are set
     // together as a pair by the "Same Order" section and the ledger's Order #
     // cell — an order id only identifies an order within one vendor. Declared
     // by name so those `<Link search={{ order, vendor }}>` calls typecheck.
     order: urlStringParam,
-    vendor: urlShortcodeListParam("VEN"),
+    vendor: urlShortcodeListParam("vendor"),
     orderId: urlStringParam,
     // Deep link from a charge's own detail page — the exact-charge scope,
     // same treatment as `productId` above.
@@ -206,3 +203,9 @@ function ExpensesPage() {
     </Page>
   );
 }
+
+import {
+  expenseLineBasisSchema,
+  expenseLineKindSchema,
+} from "@cubby/schemas/expense-line-kind";
+import { costTypeSchema, tradeSchema } from "@cubby/schemas/project";

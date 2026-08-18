@@ -11,8 +11,8 @@ import { urlShortcodeParam } from "~/lib/search-params";
 export const inventorySearchSchema = z.object({
   ...tableSearchFields,
   ...entityFilterSearchFields("inventory"),
-  productId: urlShortcodeParam("PRD"),
-  locationId: urlShortcodeParam("LOC"),
+  productId: urlShortcodeParam("product"),
+  locationId: urlShortcodeParam("location"),
 });
 const searchDefaults = {} as const;
 

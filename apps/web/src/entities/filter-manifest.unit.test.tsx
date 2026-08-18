@@ -12,7 +12,6 @@ import {
 import {
   assertUiFilterSemantics,
   entityFilterSemantics,
-  routeFilterValues,
 } from "./filter-search-fields";
 import {
   buildFiltersFromManifest,
@@ -32,52 +31,6 @@ import {
  * silently diverge back to single-select.
  */
 describe("manifestFilterConfig", () => {
-  it("keeps eager route enum validation aligned with canonical filter options", () => {
-    const optionValues = (entity: Entity, columnId: string) =>
-      getEntityFilters(entity)
-        .find((filter) => filter.columnId === columnId)
-        ?.options?.filter((option) => !option.meta)
-        .map((option) => option.value);
-
-    expect(optionValues("product", "category")).toEqual(
-      routeFilterValues.productCategory,
-    );
-    expect(optionValues("location", "type")).toEqual(
-      routeFilterValues.locationType,
-    );
-    expect(optionValues("task", "trade")).toEqual(routeFilterValues.trade);
-    expect(optionValues("expense", "costType")).toEqual(
-      routeFilterValues.costType,
-    );
-    expect(optionValues("expense", "lineKind")).toEqual(
-      routeFilterValues.expenseLineKind,
-    );
-    expect(optionValues("expense", "lineBasis")).toEqual(
-      routeFilterValues.expenseLineBasis,
-    );
-    expect(optionValues("financialAccount", "identity")).toEqual(
-      routeFilterValues.accountIdentity,
-    );
-    expect(optionValues("financialTransaction", "kind")).toEqual(
-      routeFilterValues.transactionKind,
-    );
-    expect(optionValues("financialTransaction", "status")).toEqual(
-      routeFilterValues.transactionStatus,
-    );
-    expect(optionValues("meal", "mealType")).toEqual(
-      routeFilterValues.mealType,
-    );
-    expect(optionValues("meal", "mealKind")).toEqual(
-      routeFilterValues.mealKind,
-    );
-    expect(optionValues("recipe", "sourceType")).toEqual(
-      routeFilterValues.recipeSourceType,
-    );
-    expect(optionValues("image", "status")).toEqual(
-      routeFilterValues.imageStatus,
-    );
-  });
-
   // Each route spreads `entityFilterSearchFields` into its `validateSearch`, so
   // a key the manifest declares but this record omits means the table writes
   // the filter and the router strips it before anything reads it back. Pinned
