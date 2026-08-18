@@ -23,7 +23,6 @@ import {
   expenseFacetCountsInput,
   expenseFacetCountsOut,
   expenseFiltersSchema,
-  expenseListAndSideEffectsOut,
   expenseMatchInput,
   expenseMatchOut,
   expenseOut,
@@ -56,14 +55,15 @@ import {
   getPurchaseLinkIdentityByID,
 } from "~/server/repo/purchase";
 import {
-  resolveAllPresent,
   resolveLiveShortcode,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { vendorOptions as loadVendorOptions } from "~/server/repo/vendor";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
-import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
-import { createSearchableEntityCrudProcedures } from "../crud-factory";
+import {
+  createBulkUpdatedMutation,
+  createSearchableEntityCrudProcedures,
+} from "../crud-factory";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const {
@@ -162,18 +162,6 @@ const deleteWithPurchaseEffects = protectedProcedure
     );
     return deletion.result;
   });
-
-/**
- * Batch-resolve the shortcodes a bulk-write result carries into the internal
- * uuids `runMutationSideEffectsForEntities` keys on — one query for the
- * whole batch, not one per row.
- */
-async function expenseEntityIds(
-  db: Parameters<typeof resolveAllPresent>[0],
-  ids: ExpenseShortcode[],
-) {
-  return resolveAllPresent(db, "expense", ids);
-}
 
 /**
  * Every expense matching the filters, in one round trip — chart aggregates
@@ -310,67 +298,34 @@ const match = protectedProcedure
 // inside a transaction, then one wave-wide runMutationSideEffectsForEntities
 // so the embedding refresh for every moved expense batches into a single
 // dispatch.
-const bulkMove = protectedProcedure
-  .input(expenseBulkMoveInput)
-  .output(strictOutput(expenseListAndSideEffectsOut))
-  .mutation(async ({ ctx, input }) => {
-    const items = await moveExpenses(ctx.db, input, ctx.actorContext);
-    const ids = await expenseEntityIds(
-      ctx.db,
-      items.map((item) => item.id),
-    );
-    const backgroundBatches = await runMutationSideEffectsForEntities(
-      ctx.db,
-      ids.map((entityId) => ({
-        action: "updated" as const,
-        entity: { entityType: "expense" as const, entityId },
-        source: "expense.bulkMove",
-      })),
-    );
-    return { items, sideEffects: { backgroundBatches } };
-  });
+const bulkMove = createBulkUpdatedMutation({
+  input: expenseBulkMoveInput,
+  itemOutput: expenseOut,
+  entity: "expense",
+  source: "expense.bulkMove",
+  mutate: (ctx, input) => moveExpenses(ctx.db, input, ctx.actorContext),
+  entityShortcodes: (items) => items.map((item) => item.id),
+});
 
 // Bulk trade write, same wave-wide side-effect shape as bulkMove above.
-const bulkSetTrade = protectedProcedure
-  .input(expenseBulkTradeInput)
-  .output(strictOutput(expenseListAndSideEffectsOut))
-  .mutation(async ({ ctx, input }) => {
-    const items = await setExpensesTrade(ctx.db, input, ctx.actorContext);
-    const ids = await expenseEntityIds(
-      ctx.db,
-      items.map((item) => item.id),
-    );
-    const backgroundBatches = await runMutationSideEffectsForEntities(
-      ctx.db,
-      ids.map((entityId) => ({
-        action: "updated" as const,
-        entity: { entityType: "expense" as const, entityId },
-        source: "expense.bulkSetTrade",
-      })),
-    );
-    return { items, sideEffects: { backgroundBatches } };
-  });
+const bulkSetTrade = createBulkUpdatedMutation({
+  input: expenseBulkTradeInput,
+  itemOutput: expenseOut,
+  entity: "expense",
+  source: "expense.bulkSetTrade",
+  mutate: (ctx, input) => setExpensesTrade(ctx.db, input, ctx.actorContext),
+  entityShortcodes: (items) => items.map((item) => item.id),
+});
 
 // Bulk cost-type write, same shape as bulkSetTrade.
-const bulkSetCostType = protectedProcedure
-  .input(expenseBulkCostTypeInput)
-  .output(strictOutput(expenseListAndSideEffectsOut))
-  .mutation(async ({ ctx, input }) => {
-    const items = await setExpensesCostType(ctx.db, input, ctx.actorContext);
-    const ids = await expenseEntityIds(
-      ctx.db,
-      items.map((item) => item.id),
-    );
-    const backgroundBatches = await runMutationSideEffectsForEntities(
-      ctx.db,
-      ids.map((entityId) => ({
-        action: "updated" as const,
-        entity: { entityType: "expense" as const, entityId },
-        source: "expense.bulkSetCostType",
-      })),
-    );
-    return { items, sideEffects: { backgroundBatches } };
-  });
+const bulkSetCostType = createBulkUpdatedMutation({
+  input: expenseBulkCostTypeInput,
+  itemOutput: expenseOut,
+  entity: "expense",
+  source: "expense.bulkSetCostType",
+  mutate: (ctx, input) => setExpensesCostType(ctx.db, input, ctx.actorContext),
+  entityShortcodes: (items) => items.map((item) => item.id),
+});
 
 export const expenseRouter = createTRPCRouter({
   getByID,

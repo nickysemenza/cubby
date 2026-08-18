@@ -23,9 +23,14 @@ import { type ZodSchema, z } from "zod";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
+import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 import type { AvailabilityService } from "~/server/services/availability.service";
 import type { LocationValuationService } from "~/server/services/location-valuation.service";
-import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
+import {
+  mutationSideEffectEventSchema,
+  runMutationSideEffects,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import { protectedProcedure, strictOutput } from "./trpc";
 
@@ -87,6 +92,70 @@ interface ProtectedCrudServices extends CrudServices {
  */
 const asResolvedOutput = <T>(value: T): T extends TRPCUnsetMarker ? never : T =>
   value as T extends TRPCUnsetMarker ? never : T;
+
+/**
+ * One committed bulk write followed by one embedding/derived-data wave.
+ *
+ * Deliberately narrow: every migrated operation changes one searchable entity
+ * kind and returns rows with public ids. Mixed actions, deletes, and operations
+ * with conditional side effects remain explicit at their call sites.
+ */
+export function createBulkUpdatedMutation<
+  SInput extends ZodSchema,
+  SItem extends ZodSchema,
+  TEntity extends SearchableEntity & ShortcodeEntity,
+>({
+  input,
+  itemOutput,
+  entity,
+  source,
+  mutate,
+  entityShortcodes,
+}: {
+  input: SInput;
+  itemOutput: SItem;
+  source: string;
+  entity: TEntity;
+  mutate: (
+    ctx: ProtectedCrudServices,
+    input: z.output<SInput>,
+  ) => Promise<z.output<SItem>[]>;
+  entityShortcodes: (
+    items: z.output<SItem>[],
+    input: z.output<SInput>,
+  ) => string[];
+}) {
+  const output = z.object({
+    items: z.array(itemOutput),
+    sideEffects: mutationSideEffectsSchema,
+  });
+  return protectedProcedure
+    .input(input)
+    .output(strictOutput(output))
+    .mutation(async ({ ctx, input: values }) => {
+      const typedValues = values as z.output<SInput>;
+      const items = await mutate(ctx, typedValues);
+      const ids = await resolveAllPresent(
+        ctx.db,
+        entity,
+        entityShortcodes(items, typedValues),
+      );
+      const backgroundBatches = await runMutationSideEffectsForEntities(
+        ctx.db,
+        ids.map((entityId) =>
+          mutationSideEffectEventSchema.parse({
+            action: "updated",
+            entity: { entityType: entity, entityId },
+            source,
+          }),
+        ),
+      );
+      return asResolvedOutput({
+        items,
+        sideEffects: { backgroundBatches },
+      });
+    });
+}
 
 // Reusable procedure builders
 const createDeleteProcedure = <TId extends string = string>(

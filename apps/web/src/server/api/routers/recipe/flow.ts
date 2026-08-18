@@ -4,19 +4,14 @@ import {
   recipeFlowGetInputSchema,
   recipeFlowStateSchema,
 } from "@cubby/schemas/recipe-flow";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import {
   generateRecipeFlow,
   getRecipeFlowState,
 } from "~/server/services/recipe-flow/recipe-flow.service";
 import { protectedProcedure, strictOutput } from "../../trpc";
 
-const resolveRecipeEntityId = async (
-  db: Parameters<typeof resolveOrThrow>[0],
-  shortcode: string,
-) => {
-  return resolveOrThrow(db, "recipe", shortcode);
-};
+const recipeShortcodes = bindShortcodeResolver("recipe");
 
 const getFlow = protectedProcedure
   .input(recipeFlowGetInputSchema)
@@ -24,7 +19,7 @@ const getFlow = protectedProcedure
   .query(async ({ ctx, input }) => {
     return await getRecipeFlowState(
       ctx.db,
-      await resolveRecipeEntityId(ctx.db, input.id),
+      await recipeShortcodes.one(ctx.db, input.id),
     );
   });
 
@@ -34,7 +29,7 @@ const generateFlow = protectedProcedure
   .mutation(async ({ ctx, input }) => {
     return await generateRecipeFlow(ctx.db, {
       ...input,
-      id: await resolveRecipeEntityId(ctx.db, input.id),
+      id: await recipeShortcodes.one(ctx.db, input.id),
     });
   });
 

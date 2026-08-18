@@ -105,6 +105,11 @@ describe("findFinancialTransactionAllocationDefects", () => {
 
     expect(await findFinancialTransactionAllocationDefects(ctx.db)).toEqual([]);
     expect((await liveDefects(ctx.db)).data).toEqual([]);
+    expect(
+      (await loadAllocationDefectPresenters(ctx.db, [txn.shortcode])).get(
+        txn.shortcode,
+      )?.reasons,
+    ).toEqual([]);
   });
 
   it("passes a single allocation whose mirror agrees, and an unallocated transaction", async () => {

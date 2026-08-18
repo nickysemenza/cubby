@@ -50,6 +50,7 @@
  * independently. They still participate in `tasksById`/`taskEdgesByOwner`, so
  * a why-chain can walk through one if an edge points at it.
  */
+import { entityRefKey } from "@cubby/schemas/entity";
 import {
   type ProjectId,
   type TaskId,
@@ -81,7 +82,6 @@ import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
 import {
   type EntityRef,
   lookupShortcodes,
-  refKey,
 } from "~/server/repo/shortcode-resolver";
 import { taskSubtaskCounts } from "./crud";
 import { dbTaskToAPI } from "./helpers";
@@ -407,7 +407,9 @@ export async function listActionableTasks(
   const taskShortcodesById = await lookupShortcodes(db, taskRefs);
   const toTaskShortcodes = (ids: TaskId[]): TaskShortcode[] =>
     ids.map((id) =>
-      unsafeTaskShortcode(taskShortcodesById.get(refKey("task", id)) ?? ""),
+      unsafeTaskShortcode(
+        taskShortcodesById.get(entityRefKey("task", id)) ?? "",
+      ),
     );
 
   const next: ActionableTaskOut[] = [];

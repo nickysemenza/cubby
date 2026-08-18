@@ -5,7 +5,6 @@ import {
   useGanttNavigation,
   useGanttScale,
   useGanttSettings,
-  useGanttViewConfig,
 } from "~/components/reui/gantt/gantt"
 import { toZoned } from "~/components/reui/gantt/gantt-lib"
 import type { GanttScale } from "~/components/reui/gantt/gantt-types"
@@ -15,7 +14,6 @@ import { format } from "date-fns"
 
 import { cn } from "~/lib/utils"
 import { Button } from "~/components/ui/button"
-import { Calendar } from "~/components/ui/calendar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,31 +23,24 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover"
-import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "~/components/ui/tooltip"
-import { ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon, CalendarIcon } from "lucide-react"
+import { ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon } from "lucide-react"
 
 const GANTT_SCALES: GanttScale[] = ["day", "week", "month", "quarter", "year"]
 
-/** Configured nav button variant/size (viewConfig.navButtonVariant/Size). */
 function useNavButtonProps(): {
   variant: "ghost" | "outline" | "secondary" | "default"
   size: "sm" | "default"
   iconSize: "icon-sm" | "icon"
 } {
-  const viewConfig = useGanttViewConfig()
   return {
-    variant: viewConfig.navButtonVariant,
-    size: viewConfig.navButtonSize,
-    iconSize: viewConfig.navButtonSize === "sm" ? "icon-sm" : "icon",
+    variant: "ghost",
+    size: "sm",
+    iconSize: "icon-sm",
   }
 }
 
@@ -315,93 +306,19 @@ function GanttScaleSwitcher({
   )
 }
 
-interface GanttDatePickerProps {
-  className?: string
-}
-
-/**
- * Compact go-to-date picker (shadcn Calendar in a popover). No tooltip by
- * design: it opens an overlay (see the NavButtonProps tooltip policy).
- */
-function GanttDatePicker({ className }: GanttDatePickerProps) {
-  const { date, goTo } = useGanttNavigation()
-  const settings = useGanttSettings()
-  const nav = useNavButtonProps()
-  const [open, setOpen] = useState(false)
-  const zoned = toZoned(date, settings.timeZone)
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        render={
-          <Button
-            variant={nav.variant}
-            size={nav.iconSize}
-            data-slot="gantt-date-picker"
-            aria-label={settings.i18n.labels.goToDate}
-            className={cn(className)}
-          />
-        }
-      >
-        <CalendarIcon className="size-4" aria-hidden="true" />
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-auto p-0!">
-        <Calendar
-          mode="single"
-          selected={zoned}
-          defaultMonth={zoned}
-          locale={settings.locale}
-          weekStartsOn={settings.weekStartsOn}
-          onSelect={(next: Date | undefined) => {
-            if (next) {
-              goTo(next)
-              setOpen(false)
-            }
-          }}
-        />
-      </PopoverContent>
-    </Popover>
-  )
-}
-
-type GanttToolbarProps = useRender.ComponentProps<"div">
-
-/** Free slot for consumer toolbar buttons; pure layout shell. */
-function GanttToolbar({ className, render, ...props }: GanttToolbarProps) {
-  const viewConfig = useGanttViewConfig()
-  const defaultProps = {
-    "data-slot": "gantt-toolbar",
-    className: cn(
-      "flex items-center gap-2",
-      viewConfig.classNames?.toolbar,
-      className
-    ),
-    children: props.children,
-  }
-  return useRender({
-    defaultTagName: "div",
-    render,
-    props: mergeProps<"div">(defaultProps, props),
-  })
-}
-
 type GanttNavProps = useRender.ComponentProps<"div">
 
 /**
  * Default composed nav (event-calendar parity): Today, time-period switcher,
- * prev/next, title, spacer. GanttDatePicker stays available for custom
- * compositions. Pass children to use it as a pure layout shell instead.
+ * prev/next, title, and spacer. Pass children to use it as a pure layout shell instead.
  */
 function GanttNav({ className, render, children, ...props }: GanttNavProps) {
-  const viewConfig = useGanttViewConfig()
   const defaultProps = {
     "data-slot": "gantt-nav",
     className: cn(
       // px so the toolbar controls do not hug the container edge; border-b
       // separates the toolbar from the column header below it
       "flex min-w-0 flex-wrap items-center gap-2 border-b px-3 py-2",
-      viewConfig.stickyNav && "bg-background sticky top-0 z-30",
-      viewConfig.classNames?.nav,
       className
     ),
     children: children ?? (
@@ -425,20 +342,4 @@ function GanttNav({ className, render, children, ...props }: GanttNavProps) {
   })
 }
 
-export {
-  GANTT_SCALES,
-  GanttDatePicker,
-  GanttNav,
-  GanttNavNext,
-  GanttNavPrev,
-  GanttNavToday,
-  GanttScaleSwitcher,
-  GanttTitle,
-  GanttToolbar,
-}
-export type {
-  GanttNavProps,
-  GanttScaleSwitcherProps,
-  GanttTitleProps,
-  GanttToolbarProps,
-}
+export { GanttNav }

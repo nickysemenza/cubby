@@ -26,7 +26,6 @@ function segment(
     start: new Date(start),
     end: new Date(end),
     allDay,
-    resourceId: "old-resource",
   };
   const occurrence: EventCalendarOccurrence = {
     key: `event::${start}`,
@@ -35,7 +34,6 @@ function segment(
     start: event.start,
     end: event.end,
     allDay,
-    isRecurring: false,
   };
   return {
     occurrence,
@@ -47,11 +45,8 @@ function segment(
   };
 }
 
-function drag(
-  value: EventCalendarSegment,
-  kind: "move" | "resize-start" | "resize-end",
-): EventCalendarDragData<unknown> {
-  return { calendarGesture: true, kind, segment: value };
+function drag(value: EventCalendarSegment): EventCalendarDragData<unknown> {
+  return { calendarGesture: true, kind: "move", segment: value };
 }
 
 const local = (date: Date) =>
@@ -65,7 +60,7 @@ describe("isEventCalendarKeyboardTarget", () => {
       "2026-07-14T07:00:00.000Z",
       true,
     );
-    const active = drag(value, "move");
+    const active = drag(value);
 
     expect(
       isEventCalendarKeyboardTarget(active, {
@@ -93,12 +88,11 @@ describe("proposeEventCalendarDrop", () => {
     );
 
     const update = proposeEventCalendarDrop(
-      drag(value, "move"),
+      drag(value),
       {
         calendarDrop: true,
         day: new Date("2026-03-09T07:00:00.000Z"),
         allDay: false,
-        resourceId: "new-resource",
       },
       TIME_ZONE,
     );
@@ -106,7 +100,6 @@ describe("proposeEventCalendarDrop", () => {
     expect(update).not.toBeNull();
     expect(local(update!.start)).toBe("2026-03-09 15:00");
     expect(update!.end.getTime() - update!.start.getTime()).toBe(60 * 60_000);
-    expect(update!.resourceId).toBe("new-resource");
   });
 
   it("uses the grabbed segment day instead of re-anchoring a spanning bar", () => {
@@ -118,7 +111,7 @@ describe("proposeEventCalendarDrop", () => {
     );
 
     const update = proposeEventCalendarDrop(
-      drag(value, "move"),
+      drag(value),
       {
         calendarDrop: true,
         day: new Date("2026-03-11T07:00:00.000Z"),
@@ -130,43 +123,4 @@ describe("proposeEventCalendarDrop", () => {
     expect(local(update!.start)).toBe("2026-03-10 00:00");
   });
 
-  it("keeps a cross-midnight resize end on the pointed day", () => {
-    const value = segment(
-      "2026-08-02T06:30:00.000Z",
-      "2026-08-02T07:30:00.000Z",
-      "2026-08-02T07:00:00.000Z",
-    );
-
-    const update = proposeEventCalendarDrop(
-      drag(value, "resize-end"),
-      {
-        calendarDrop: true,
-        day: new Date("2026-08-03T07:00:00.000Z"),
-        allDay: false,
-      },
-      TIME_ZONE,
-    );
-
-    expect(local(update!.end)).toBe("2026-08-03 00:30");
-  });
-
-  it("rejects a resize that would invert the occurrence", () => {
-    const value = segment(
-      "2026-08-02T16:00:00.000Z",
-      "2026-08-02T17:00:00.000Z",
-      "2026-08-02T07:00:00.000Z",
-    );
-
-    expect(
-      proposeEventCalendarDrop(
-        drag(value, "resize-start"),
-        {
-          calendarDrop: true,
-          day: new Date("2026-08-03T07:00:00.000Z"),
-          allDay: false,
-        },
-        TIME_ZONE,
-      ),
-    ).toBeNull();
-  });
 });

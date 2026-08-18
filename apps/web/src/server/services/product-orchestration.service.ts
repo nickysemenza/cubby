@@ -13,7 +13,6 @@ import {
   type IngredientShortcode,
   type ProductId,
   unsafeIngredientId,
-  unsafeProductId,
 } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type {
@@ -35,7 +34,10 @@ import {
   findProductsWithNoImages,
   quickCreateProduct,
 } from "~/server/repo/product";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import {
+  resolveCreatedOrInvariant,
+  resolveLiveShortcode,
+} from "~/server/repo/shortcode-resolver";
 import { readCachedUpcLookups } from "~/server/repo/upc-lookup-cache";
 import { importImageFromUPC } from "./image-import";
 import type { LocationValuationService } from "./location-valuation.service";
@@ -340,11 +342,7 @@ export async function findOrCreateByUPC(
   const emitCreated = async (
     product: ProductTopLevelOut,
   ): Promise<FindOrCreateByUPCResult> => {
-    const resolved = await resolveLiveShortcode(db, product.id, "product");
-    if (!resolved) {
-      throw new Error(`Created product ${product.id} could not be resolved`);
-    }
-    const entityId = unsafeProductId(resolved);
+    const entityId = await resolveCreatedOrInvariant(db, "product", product.id);
     await runMutationSideEffects(db, {
       action: "created",
       entity: { entityType: "product", entityId },
@@ -400,21 +398,11 @@ export async function findOrCreateByUPC(
         // Import image from UPC lookup if available (non-blocking)
         if (upcLookup.imageUrl) {
           try {
-            const resolved = await resolveLiveShortcode(
-              db,
-              newProduct.id,
-              "product",
-            );
-            if (!resolved) {
-              throw new Error(
-                `Created product ${newProduct.id} could not be resolved`,
-              );
-            }
             await importImageFromUPC(
               db,
               upcLookupClient,
               upc,
-              unsafeProductId(resolved),
+              await resolveCreatedOrInvariant(db, "product", newProduct.id),
             );
           } catch (error) {
             console.error(`[findOrCreateByUPC] Image import failed:`, error);

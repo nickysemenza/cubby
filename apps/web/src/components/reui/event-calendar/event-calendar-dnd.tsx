@@ -14,7 +14,6 @@ import { addDays, differenceInCalendarDays } from "date-fns";
 import {
   createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -41,19 +40,16 @@ import type {
   EventCalendarSegment,
 } from "./event-calendar-types";
 
-type GestureKind = "move" | "resize-start" | "resize-end" | "create";
+type GestureKind = "move";
 export type EventCalendarDragData<T> = {
   calendarGesture: true;
   kind: GestureKind;
-  segment?: EventCalendarSegment<T>;
-  day?: Date;
-  allDay?: boolean;
+  segment: EventCalendarSegment<T>;
 };
 export type EventCalendarDropData = {
   calendarDrop: true;
   day: Date;
   allDay: boolean;
-  resourceId?: string;
 };
 
 let lastGestureEndedAt = 0;
@@ -65,18 +61,17 @@ export const markChipPress = () => {
 export const wasRecentChipPress = () =>
   performance.now() - lastChipPressAt < 300;
 
-/** Preserve feedback for a genuine drag attempt on a locked event. */
+/** Preserve feedback for a genuine move attempt on a locked event. */
 export function beginBlockedEventCalendarGesture<T>(
   instance: EventCalendarInstance<T>,
   startEvent: PointerEvent,
   segment: EventCalendarSegment<T>,
-  gesture: "move" | "resize",
 ) {
   const { clientX: startX, clientY: startY, pointerId } = startEvent;
   const event = segment.occurrence.event;
   const reason = event.readOnly
     ? "readOnly"
-    : (gesture === "move" ? event.draggable : event.resizable) === false
+    : event.draggable === false
       ? "disabled"
       : "interactions-off";
   let activated = false;
@@ -104,7 +99,7 @@ export function beginBlockedEventCalendarGesture<T>(
     document.body.classList.add("ec-drag-blocked");
     window.addEventListener("blur", cleanup);
     instance.settings.onDragBlocked?.(segment.occurrence, {
-      gesture,
+      gesture: "move",
       reason,
     });
   };
@@ -126,7 +121,7 @@ export function isEventCalendarKeyboardTarget(
   targetData: Record<string, unknown> | undefined,
 ) {
   if (!isDrag(activeData) || !isDrop(targetData)) return false;
-  const sourceDay = activeData.segment?.day ?? activeData.day;
+  const sourceDay = activeData.segment.day;
   // The grip sits slightly left of its containing cell's center. Without
   // excluding that no-op cell, ArrowRight can choose the source again.
   return !sourceDay || sourceDay.getTime() !== targetData.day.getTime();
@@ -141,8 +136,7 @@ export function proposeEventCalendarDrop<T>(
   target: EventCalendarDropData,
   timeZone: string,
 ): EventCalendarProposedUpdate<T> | null {
-  const occurrence = data.segment?.occurrence;
-  if (!occurrence) return null;
+  const occurrence = data.segment.occurrence;
   const sourceDay = zonedStartOfDay(
     data.segment?.day ?? occurrence.start,
     timeZone,
@@ -152,28 +146,9 @@ export function proposeEventCalendarDrop<T>(
     toZoned(targetDay, timeZone),
     toZoned(sourceDay, timeZone),
   );
-  let start = occurrence.start;
-  let end = occurrence.end;
-  if (data.kind === "move") {
-    const duration = occurrence.end.getTime() - occurrence.start.getTime();
-    start = addDays(toZoned(occurrence.start, timeZone), delta);
-    end = new Date(start.getTime() + duration);
-  } else if (data.kind === "resize-start") {
-    const time =
-      occurrence.start.getTime() -
-      zonedStartOfDay(occurrence.start, timeZone).getTime();
-    start = new Date(targetDay.getTime() + time);
-  } else {
-    const time = occurrence.allDay
-      ? 0
-      : occurrence.end.getTime() -
-        zonedStartOfDay(occurrence.end, timeZone).getTime();
-    end = occurrence.allDay
-      ? addDays(targetDay, 1)
-      : new Date(
-          addDays(targetDay, time > 0 ? 0 : 1).getTime() + time,
-        );
-  }
+  const duration = occurrence.end.getTime() - occurrence.start.getTime();
+  const start = addDays(toZoned(occurrence.start, timeZone), delta);
+  const end = new Date(start.getTime() + duration);
   if (start >= end) return null;
   return {
     event: occurrence.event,
@@ -181,11 +156,7 @@ export function proposeEventCalendarDrop<T>(
     start,
     end,
     allDay: occurrence.allDay,
-    resourceId: target.resourceId,
-    source:
-      data.kind === "move"
-        ? "drag"
-        : (data.kind as "resize-start" | "resize-end"),
+    source: "drag",
   };
 }
 
@@ -213,7 +184,7 @@ export function EventCalendarDndProvider<T>({
   const activeRef = useRef(false);
   const scopeKey = useEventCalendarSelector<T, string>(
     (state) =>
-      `${state.view}:${state.visibleRange.start.getTime()}:${state.visibleRange.end.getTime()}`,
+      `${state.visibleRange.start.getTime()}:${state.visibleRange.end.getTime()}`,
     { calendar: instance },
   );
   const previousScopeKey = useRef(scopeKey);
@@ -228,21 +199,6 @@ export function EventCalendarDndProvider<T>({
       target: EventCalendarDropData | null,
     ) => {
       if (!target) return;
-      if (data.kind === "create") {
-        const anchor = data.day ?? target.day;
-        const start = anchor <= target.day ? anchor : target.day;
-        const end = addDays(anchor <= target.day ? target.day : anchor, 1);
-        const draft = {
-          start,
-          end,
-          allDay: target.allDay,
-          view: instance.getState().view,
-        };
-        const allowed = settings.canSelectSlot?.(draft) ?? true;
-        setValid(allowed);
-        if (allowed) instance.internals.setSlotDraft(draft);
-        return;
-      }
       const update = proposeEventCalendarDrop(
         data,
         target,
@@ -252,13 +208,12 @@ export function EventCalendarDndProvider<T>({
       const allowed = settings.canDropEvent?.(update) ?? true;
       setValid(allowed);
       instance.internals.setDrag({
-        kind: data.kind,
+        kind: "move",
         occurrence: update.occurrence!,
         proposedStart: update.start,
         proposedEnd: update.end,
         proposedAllDay: update.allDay,
         proposedDayGranular: target.allDay,
-        proposedResourceId: target.resourceId,
         valid: allowed,
       });
     },
@@ -310,7 +265,6 @@ export function EventCalendarDndProvider<T>({
   const clear = useCallback(() => {
     lastGestureEndedAt = performance.now();
     instance.internals.setDrag(null);
-    instance.internals.setSlotDraft(null);
     movingRef.current = null;
     autoScroller.stop();
     activeRef.current = false;
@@ -331,27 +285,16 @@ export function EventCalendarDndProvider<T>({
       const data = item.data.current;
       const target = over?.data.current;
       if (!isDrag(data) || !isDrop(target)) return clear();
-      if (data.kind === "create") {
-        const draft = instance.getState().slotDraft;
-        if (draft && (settings.canSelectSlot?.(draft) ?? true)) {
-          instance.api.select({
-            slot: { start: draft.start, end: draft.end, allDay: draft.allDay },
-          });
-          settings.onSelectSlot?.(draft);
-        }
-      } else {
-        const drag = instance.getState().drag;
-        if (drag?.valid)
-          instance.internals.applyProposedUpdate({
-            event: drag.occurrence.event,
-            occurrence: drag.occurrence,
-            start: drag.proposedStart,
-            end: drag.proposedEnd,
-            allDay: drag.proposedAllDay,
-            resourceId: drag.proposedResourceId,
-            source: data.kind === "move" ? "drag" : data.kind,
-          });
-      }
+      const drag = instance.getState().drag;
+      if (drag?.valid)
+        instance.internals.applyProposedUpdate({
+          event: drag.occurrence.event,
+          occurrence: drag.occurrence,
+          start: drag.proposedStart,
+          end: drag.proposedEnd,
+          allDay: drag.proposedAllDay,
+          source: "drag",
+        });
       clear();
     },
     [clear, instance, settings],
@@ -389,50 +332,28 @@ export function EventCalendarDndProvider<T>({
 
 export function useEventCalendarDrag<T>(
   segment: EventCalendarSegment<T>,
-  kind: Exclude<GestureKind, "create">,
   disabled = false,
 ) {
   return useDraggable({
-    id: `calendar:${kind}:${segment.occurrence.key}:${segment.day.getTime()}`,
+    id: `calendar:move:${segment.occurrence.key}:${segment.day.getTime()}`,
     data: {
       calendarGesture: true,
-      kind,
+      kind: "move",
       segment,
     } satisfies EventCalendarDragData<T>,
-    disabled,
-  });
-}
-export function useEventCalendarCreateDrag(
-  day: Date,
-  allDay: boolean,
-  disabled = false,
-) {
-  return useDraggable({
-    id: `calendar:create:${day.getTime()}:${allDay}`,
-    data: {
-      calendarGesture: true,
-      kind: "create",
-      day,
-      allDay,
-    } satisfies EventCalendarDragData<unknown>,
     disabled,
   });
 }
 export function useEventCalendarDrop(
   day: Date,
   allDay: boolean,
-  resourceId?: string,
 ) {
   return useDroppable({
-    id: `calendar:drop:${day.getTime()}:${allDay}:${resourceId ?? ""}`,
+    id: `calendar:drop:${day.getTime()}:${allDay}`,
     data: {
       calendarDrop: true,
       day,
       allDay,
-      resourceId,
     } satisfies EventCalendarDropData,
   });
-}
-export function useEventCalendarDndState<T>() {
-  return useContext(CalendarDndContext) as State<T>;
 }

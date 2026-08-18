@@ -10,13 +10,13 @@ variant from:
 Copied registry items:
 
 - `gantt` → `components/reui/gantt/`
-- `filters` → `components/reui/filters.tsx`
-- `timeline` → `components/reui/timeline.tsx`
-- `use-file-upload` → `hooks/use-file-upload.ts`
+- `timeline` → `components/reui/timeline.tsx` (now specialized as the audit timeline)
 
 Cubby-specific adaptations add strict TypeScript compatibility, the Gantt
-dependency overlay and event-class hooks, chronological Timeline mode, upload
-preview cleanup, and first-party adapters for Cubby entities.
+dependency overlay and event-class hooks, a read-only project timeline, and
+first-party adapters for Cubby entities. The former copied filters and file
+upload hook were replaced with Cubby-owned modules and are no longer covered
+by this provenance notice.
 
 Copyright (c) 2026 KeenThemes
 

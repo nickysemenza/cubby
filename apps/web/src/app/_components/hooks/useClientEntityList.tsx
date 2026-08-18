@@ -1,32 +1,18 @@
-import { relatedViewsFor } from "@cubby/schemas/related-view";
-import { useStore } from "@tanstack/react-store";
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import { entities } from "~/entities/entities";
-import { getEntityFilters } from "~/entities/filter-manifest";
+import { useCallback, useMemo } from "react";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
-import {
-  createCubbyColumnHelper,
-  type CubbyRow as Row,
-} from "../data-table/table-features";
-import { useCubbyTableLayout } from "../data-table/table-layout";
+import type { CubbyRow as Row } from "../data-table/table-features";
 import { useTableConfig } from "../data-table/useTableConfig";
-import { useTableState } from "../data-table/useTableState";
 import type {
   BaseListRow,
   UseEntityListOptions,
   UseEntityListReturn,
 } from "./useEntityList";
-import { ListBulkActionBar, useListBulkActions } from "./useListBulkActions";
-import { useOptimisticDelete } from "./useOptimisticDelete";
 import {
-  useRelatedPreviewColumnDefs,
-  useRelatedPreviewData,
-  useRelatedPreviewStateRef,
-} from "./useRelatedPreviewColumns";
-import { type FilterInput, useStandardColumns } from "./useStandardColumns";
-
-/** Stable empty-filters default (avoids a fresh `[]` reference each render). */
-const NO_FILTERS: FilterInput[] = [];
+  useEntityListPresentation,
+  useEntityListPresentationState,
+} from "./useEntityListPresentation";
+import { ListBulkActionBar } from "./useListBulkActions";
+import type { FilterInput } from "./useStandardColumns";
 
 /** Client-side pageSize default — smaller than the server list default (100). */
 const DEFAULT_CLIENT_PAGE_SIZE = 25;
@@ -133,139 +119,45 @@ export function useClientEntityList<TData extends BaseListRow>({
   bulkActions,
   deleteEmptyLabel,
 }: UseClientEntityListOptions<TData>): UseClientEntityListReturn<TData> {
-  // Create columnHelper once — CRITICAL to prevent infinite re-renders.
-  const columnHelper = useMemo(() => createCubbyColumnHelper<TData>(), []);
-
-  // Optimistic delete: mutation, bulk action, extra actions, dialog.
-  const {
-    deleteBulkAction,
-    combinedExtraActions,
-    deleteDialog,
-    requestDelete,
-  } = useOptimisticDelete<TData>({
-    deletable,
-    extraActions,
-    emptyLabel: deleteEmptyLabel,
-  });
-
-  const listBulkActions = useListBulkActions({
-    entity,
-    bulkActions,
-    deleteBulkAction,
-  });
-
-  // Entity default sort (mirrors useEntityList).
-  const defaultSort = useMemo(
-    () => entities[entity].list?.defaultSort ?? "createdAt",
-    [entity],
-  );
-
-  const mergedTableStateOptions = useMemo(
+  const clientTableStateOptions = useMemo(
     () => ({
-      initialSort: defaultSort,
       initialPagination: { pageIndex: 0, pageSize: DEFAULT_CLIENT_PAGE_SIZE },
-      // Mirror sort + pagination + filters to the URL (bookmarkable /
-      // shareable). Overridable — one URL writer per page.
-      urlSync: true,
-      filterSpecs: getEntityFilters(entity),
       ...tableStateOptions,
     }),
-    [defaultSort, entity, tableStateOptions],
+    [tableStateOptions],
   );
-
-  const tableState = useTableState(mergedTableStateOptions);
-
-  const filterScopeKey = useMemo(
-    () => JSON.stringify(tableState.allFilters),
-    [tableState.allFilters],
-  );
-  const previousFilterScopeKeyRef = useRef(filterScopeKey);
-  useEffect(() => {
-    if (previousFilterScopeKeyRef.current === filterScopeKey) return;
-    previousFilterScopeKeyRef.current = filterScopeKey;
-    listBulkActions.state.clearSelection();
-  }, [filterScopeKey, listBulkActions.state.clearSelection]);
-
-  const relatedViews = useMemo(() => relatedViewsFor(entity), [entity]);
-  const relatedInitialVisibility = useMemo(
-    () =>
-      ({
-        createdAt: false,
-        updatedAt: false,
-        ...Object.fromEntries(
-          relatedViews.map((view) => [
-            `related:${view.key}`,
-            view.defaultVisible,
-          ]),
-        ),
-        ...initialColumnVisibility,
-      }) as Record<string, boolean>,
-    [relatedViews, initialColumnVisibility],
-  );
-  const sourceIds = useMemo(() => {
-    const ids: string[] = [];
-    const visit = (rows: TData[]) => {
-      for (const item of rows) {
-        ids.push(item.id);
-        const children = (item as TData & { subRows?: TData[] }).subRows;
-        if (children) visit(children);
-      }
-    };
-    visit(data);
-    return ids;
-  }, [data]);
-  const relatedStateRef = useRelatedPreviewStateRef();
-  const relatedColumns = useRelatedPreviewColumnDefs({
+  const presentationState = useEntityListPresentationState<TData>({
     entity,
-    relatedViews,
-    columnHelper,
-    supportsServerSorting: false,
-    relatedStateRef,
+    tableStateOptions: clientTableStateOptions,
+    deletable,
+    extraActions,
+    bulkActions,
+    deleteEmptyLabel,
+    selectionScope: (state) => state.allFilters,
   });
-  const combinedCustomColumns = useMemo(
-    () => [...customColumns, ...relatedColumns],
-    [customColumns, relatedColumns],
-  );
-
-  // Standard columns (name link/inline-edit/nameSuffix + actions column with
-  // delete). No unit mappings in the client variant.
-  const allColumns = useStandardColumns<TData>({
+  const { tableState } = presentationState;
+  const presentation = useEntityListPresentation<TData>({
     entity,
-    columnHelper,
-    customColumns: combinedCustomColumns,
-    filters: filters ?? NO_FILTERS,
+    data,
+    columns: customColumns,
+    filters,
+    initialColumnVisibility,
+    layoutKey,
+    legacyLayoutVisibilityKey,
+    legacyLayoutSizingKey,
+    state: presentationState,
+    supportsServerSorting: false,
     hiddenFilterColumns,
-    enableRowSelection: listBulkActions.enableRowSelection,
-    combinedExtraActions,
-    mappingsMap: null,
-    hasUnitMappings: false,
     nameEditable,
     nameSuffix,
     expandable: tree?.expandable,
   });
-
-  const persistedLayoutKey = layoutKey ?? entity;
-  const layout = useCubbyTableLayout({
-    key: persistedLayoutKey,
-    columns: allColumns,
-    initialColumnVisibility: relatedInitialVisibility,
-    legacyVisibilityKey: legacyLayoutVisibilityKey ?? persistedLayoutKey,
-    legacySizingKey: legacyLayoutSizingKey ?? persistedLayoutKey,
-  });
-  const columnVisibility = useStore(layout.atoms.columnVisibility);
-  const visibleRelatedKeys = useMemo(
-    () =>
-      relatedViews
-        .filter((view) => columnVisibility[`related:${view.key}`] !== false)
-        .map((view) => view.key),
-    [columnVisibility, relatedViews],
-  );
-  const rowContentVersion = useRelatedPreviewData({
-    entity,
-    sourceIds,
-    visibleRelationKeys: visibleRelatedKeys,
-    relatedStateRef,
-  });
+  const {
+    allColumns,
+    layout,
+    initialColumnVisibility: mergedInitialColumnVisibility,
+    rowContentVersion,
+  } = presentation;
 
   const getRowId = useCallback((row: TData) => row.id, []);
 
@@ -273,12 +165,12 @@ export function useClientEntityList<TData extends BaseListRow>({
   // for the table (which rows it applies to).
   const rowSelectionEnabled = useMemo(
     () =>
-      !listBulkActions.enableRowSelection
+      !presentationState.listBulkActions.enableRowSelection
         ? false
         : rowIsEntity
           ? (row: Row<TData>) => rowIsEntity(row.original)
           : true,
-    [listBulkActions.enableRowSelection, rowIsEntity],
+    [presentationState.listBulkActions.enableRowSelection, rowIsEntity],
   );
 
   // Client-side everything: manual* all false. Expansion wired only when a
@@ -293,10 +185,11 @@ export function useClientEntityList<TData extends BaseListRow>({
     manualFiltering: false,
     getRowId,
     enableRowSelection: rowSelectionEnabled,
-    rowSelection: listBulkActions.rowSelection,
-    onRowSelectionChange: listBulkActions.onRowSelectionChange,
+    rowSelection: presentationState.listBulkActions.rowSelection,
+    onRowSelectionChange:
+      presentationState.listBulkActions.onRowSelectionChange,
     layout,
-    initialColumnVisibility: relatedInitialVisibility,
+    initialColumnVisibility: mergedInitialColumnVisibility,
     getSubRows: tree?.getSubRows,
     filterFromLeafRows: tree?.filterFromLeafRows,
     paginateExpandedRows: tree?.paginateExpandedRows,
@@ -304,18 +197,18 @@ export function useClientEntityList<TData extends BaseListRow>({
     rowContentVersion,
   });
 
-  const bulkActionBar = listBulkActions.config ? (
+  const bulkActionBar = presentationState.listBulkActions.config ? (
     <ListBulkActionBar
       table={table}
-      config={listBulkActions.config}
-      state={listBulkActions.state}
+      config={presentationState.listBulkActions.config}
+      state={presentationState.listBulkActions.state}
     />
   ) : null;
 
   return {
     table,
     bulkActionBar,
-    deleteDialog,
-    requestDelete,
+    deleteDialog: presentationState.deleteDialog,
+    requestDelete: presentationState.requestDelete,
   };
 }

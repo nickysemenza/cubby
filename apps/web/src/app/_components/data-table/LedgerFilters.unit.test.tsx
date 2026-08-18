@@ -1,17 +1,17 @@
 import type { ColumnFiltersState, OnChangeFn } from "@tanstack/react-table";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Filter } from "~/components/reui/filters";
+import type { Filter } from "./filter-bar-core";
 import { LedgerFilters } from "./LedgerFilters";
 import type { CubbyTable } from "./table-features";
 
-vi.mock("~/components/reui/filters", () => ({
-  Filters: ({
+vi.mock("./FilterBar", () => ({
+  FilterBar: ({
     filters,
     onChange,
   }: {
-    filters: Filter<string>[];
-    onChange: (filters: Filter<string>[]) => void;
+    filters: Filter[];
+    onChange: (filters: Filter[]) => void;
   }) => (
     <div>
       <output data-testid="ledger-filters">{JSON.stringify(filters)}</output>

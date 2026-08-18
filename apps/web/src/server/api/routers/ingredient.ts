@@ -7,7 +7,6 @@
  */
 
 import {
-  type IngredientId,
   type IngredientShortcode,
   ingredientShortcode,
   recipeShortcode,
@@ -43,9 +42,8 @@ import {
   resolveOrCreateIngredients,
 } from "~/server/repo/ingredient";
 import {
-  resolveAllOrThrow,
+  bindShortcodeResolver,
   resolveLiveShortcode,
-  resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import {
   createIngredient as createIngredientService,
@@ -67,19 +65,8 @@ import {
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
-const resolveIngredientEntityId = async (
-  db: Parameters<typeof resolveOrThrow>[0],
-  shortcode: IngredientShortcode,
-): Promise<IngredientId> => {
-  return resolveOrThrow(db, "ingredient", shortcode);
-};
-
-const resolveIngredientEntityIds = async (
-  db: Parameters<typeof resolveAllOrThrow>[0],
-  shortcodes: IngredientShortcode[],
-): Promise<IngredientId[]> => {
-  return resolveAllOrThrow(db, "ingredient", shortcodes);
-};
+const ingredientShortcodes = bindShortcodeResolver("ingredient");
+const recipeShortcodes = bindShortcodeResolver("recipe");
 
 // Update is customized so it can eagerly recompute dependent recipes and report side-effects.
 // List returns a lean summary (lean ingredient + food + {id,name} recipe refs, no
@@ -119,7 +106,7 @@ const { getByID, getByShortcode, create } =
         return await getIngredientByID(
           services.db,
           services.usdaClient,
-          await resolveIngredientEntityId(services.db, id),
+          await ingredientShortcodes.one(services.db, id),
         );
       },
       // Resolves the shortcode itself: `getByID` above returns the
@@ -147,7 +134,7 @@ const { getByID, getByShortcode, create } =
           data,
           services.actorContext,
         );
-        const entityId = await resolveIngredientEntityId(
+        const entityId = await ingredientShortcodes.one(
           services.db,
           ingredient.id,
         );
@@ -168,7 +155,7 @@ const update = protectedProcedure
   .input(ingredientUpdateInput)
   .output(strictOutput(ingredientWithFoodAndSideEffectsOut))
   .mutation(async ({ ctx, input }) => {
-    const entityId = await resolveIngredientEntityId(ctx.db, input.id);
+    const entityId = await ingredientShortcodes.one(ctx.db, input.id);
     const result = await updateIngredientService(
       ctx.db,
       ctx.usdaClient,
@@ -198,7 +185,7 @@ const merge = protectedProcedure
   .input(ingredientMergeInput)
   .output(strictOutput(ingredientMergeOut))
   .mutation(async ({ ctx, input }) => {
-    const [target, ...aliases] = await resolveIngredientEntityIds(ctx.db, [
+    const [target, ...aliases] = await ingredientShortcodes.all(ctx.db, [
       input.target,
       ...input.aliases,
     ]);
@@ -279,10 +266,10 @@ const enrichmentWorkbench = protectedProcedure
   .output(strictOutput(enrichmentRowsOut))
   .query(async ({ ctx, input }) => {
     const recipeId = input?.recipeId
-      ? await resolveOrThrow(ctx.db, "recipe", input.recipeId)
+      ? await recipeShortcodes.one(ctx.db, input.recipeId)
       : undefined;
     const focusId = input?.focusId
-      ? await resolveOrThrow(ctx.db, "ingredient", input.focusId)
+      ? await ingredientShortcodes.one(ctx.db, input.focusId)
       : undefined;
     return await enrichmentWorkbenchService(ctx.db, ctx.usdaClient, {
       recipeId,
@@ -300,7 +287,7 @@ const recipeUsages = protectedProcedure
   .query(async ({ ctx, input }) => {
     const usages = await getRecipeUsagesForIngredient(
       ctx.db,
-      await resolveIngredientEntityId(ctx.db, input.id),
+      await ingredientShortcodes.one(ctx.db, input.id),
     );
     return usages.recipeUsages;
   });
@@ -359,13 +346,13 @@ const getManyByIDs = protectedProcedure
     return await getIngredientsByIDs(
       ctx.db,
       ctx.usdaClient,
-      await resolveIngredientEntityIds(ctx.db, input.ids),
+      await ingredientShortcodes.all(ctx.db, input.ids),
     );
   });
 
 const deleteItem = createDeleteProcedure<IngredientShortcode>(
   async (services, shortcodes) => {
-    const ids = await resolveIngredientEntityIds(services.db, shortcodes);
+    const ids = await ingredientShortcodes.all(services.db, shortcodes);
     await deleteIngredients(services.db, ids, services.actorContext);
     return await runMutationSideEffectsForEntities(
       services.db,

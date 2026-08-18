@@ -9,7 +9,6 @@ import {
 } from "@cubby/schemas/pagination";
 import type { TaskFilters, TaskOut } from "@cubby/schemas/project";
 import { taskSortableFields } from "@cubby/schemas/project";
-import { parseShortcode } from "@cubby/shared";
 import {
   type AnyColumn,
   and,
@@ -48,7 +47,7 @@ import {
   loadProjectTree,
 } from "~/server/repo/project/subtree";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { resolveShortcodes } from "~/server/repo/shortcode-resolver";
+import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 import { taskDependencyIds, taskSubtaskCounts } from "./crud";
 import { dbTaskToAPI, effectiveTaskDueDateSql } from "./helpers";
 
@@ -60,23 +59,15 @@ import { dbTaskToAPI, effectiveTaskDueDateSql } from "./helpers";
  * task filter) is silently dropped rather than matching an unrelated row —
  * mirrors `expense/lookup.ts`'s and `project/lookup.ts`'s siblings.
  *
- * `resolveShortcodes` keys its result Map by the CANONICAL code (its docstring
- * says so explicitly), so the lookup below goes through `parseShortcode(code)
- * .shortcode` rather than the raw input `code` — otherwise a lowercase or
- * legacy-prefix code resolves fine in SQL but misses the Map here.
+ * `resolveAllPresent` applies the same live-row semantics as the list itself,
+ * including canonical/legacy shortcode normalization.
  */
 const toUuids = async (
   db: Database,
   codes: readonly string[],
   entity: ShortcodeEntity,
 ): Promise<string[]> => {
-  if (codes.length === 0) return [];
-  const resolved = await resolveShortcodes(db, codes);
-  return codes.flatMap((code) => {
-    const parsed = parseShortcode(code);
-    const ref = parsed ? resolved.get(parsed.shortcode) : undefined;
-    return ref?.entity === entity ? [ref.id] : [];
-  });
+  return resolveAllPresent(db, entity, codes);
 };
 
 /**

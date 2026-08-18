@@ -39,10 +39,7 @@ import {
   updateRecipe,
 } from "~/server/repo/recipe";
 import { findParentRecipeIdsBatch } from "~/server/repo/recipe/totals";
-import {
-  resolveAllOrThrow,
-  resolveOrThrow,
-} from "~/server/repo/shortcode-resolver";
+import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
   runMutationSideEffects,
@@ -55,19 +52,7 @@ import {
 } from "../../crud-factory";
 import { protectedProcedure, strictOutput } from "../../trpc";
 
-const resolveRecipeEntityId = async (
-  db: Parameters<typeof resolveOrThrow>[0],
-  shortcode: RecipeShortcode,
-): Promise<RecipeId> => {
-  return resolveOrThrow(db, "recipe", shortcode);
-};
-
-const resolveRecipeEntityIds = async (
-  db: Parameters<typeof resolveAllOrThrow>[0],
-  shortcodes: RecipeShortcode[],
-): Promise<RecipeId[]> => {
-  return resolveAllOrThrow(db, "recipe", shortcodes);
-};
+const recipeShortcodes = bindShortcodeResolver("recipe");
 
 // List returns the lean summary (no section graph); detail keeps full recipeOut — split the factory so each carries its own output schema.
 const { list } = createEntityListProcedure({
@@ -105,7 +90,7 @@ const { getByID, getByShortcode, create, update } =
       getByID: async (services, id: RecipeShortcode) => {
         const res = await getRecipeByID(
           services.db,
-          await resolveRecipeEntityId(services.db, id),
+          await recipeShortcodes.one(services.db, id),
         );
         if (res === null) {
           throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
@@ -120,7 +105,7 @@ const { getByID, getByShortcode, create, update } =
           data,
           services.actorContext,
         );
-        const entityId = await resolveRecipeEntityId(services.db, created.id);
+        const entityId = await recipeShortcodes.one(services.db, created.id);
         // Persist recompute work through the background dispatcher. In dev this
         // still drains inline, but the operation is visible on Background Jobs.
         const recipeBatches =
@@ -141,7 +126,7 @@ const { getByID, getByShortcode, create, update } =
         };
       },
       update: async (services, shortcode: RecipeShortcode, data) => {
-        const id = await resolveRecipeEntityId(services.db, shortcode);
+        const id = await recipeShortcodes.one(services.db, shortcode);
         const { recipe: updated, detachedImageKeys } = await updateRecipe(
           services.db,
           id,
@@ -179,13 +164,13 @@ const getManyByIDs = protectedProcedure
   .query(async ({ ctx, input }) => {
     return await getRecipesByIDs(
       ctx.db,
-      await resolveRecipeEntityIds(ctx.db, input.ids),
+      await recipeShortcodes.all(ctx.db, input.ids),
     );
   });
 
 const deleteItem = createDeleteProcedure<RecipeShortcode>(
   async (services, shortcodes) => {
-    const ids = await resolveRecipeEntityIds(services.db, shortcodes);
+    const ids = await recipeShortcodes.all(services.db, shortcodes);
     // Resolve parent recipes (recipe-as-ingredient) BEFORE deleting: a deleted
     // sub-recipe's cost is baked into every parent's persisted totals, but the
     // recipe manifest has onDelete: [] and needsValuationRecompute is false for
@@ -242,13 +227,13 @@ const duplicate = protectedProcedure
   .input(recipeIdInput)
   .output(strictOutput(recipeWithSideEffectsOut))
   .mutation(async ({ ctx, input }) => {
-    const sourceId = await resolveRecipeEntityId(ctx.db, input.id);
+    const sourceId = await recipeShortcodes.one(ctx.db, input.id);
     const duplicated = await duplicateRecipe(
       ctx.db,
       sourceId,
       ctx.actorContext,
     );
-    const entityId = await resolveRecipeEntityId(ctx.db, duplicated.id);
+    const entityId = await recipeShortcodes.one(ctx.db, duplicated.id);
     const recipeBatches = await ctx.services.recipeCosting.dispatchRecompute(
       [entityId],
       {

@@ -6,6 +6,7 @@
  * pre-check, which any concurrent writer can invalidate) is what holds the line.
  */
 
+import { entityRefKey } from "@cubby/schemas/entity";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { parseShortcode, SHORTCODE_PREFIX } from "@cubby/shared";
 import { eq, sql } from "drizzle-orm";
@@ -25,7 +26,6 @@ import {
 } from "./repo.fixtures";
 import {
   lookupShortcodes,
-  refKey,
   resolveLiveShortcode,
   resolveShortcode,
   resolveShortcodes,
@@ -319,8 +319,8 @@ describe("resolution", () => {
       { entity: "product", id: prod.entityId },
       { entity: "location", id: loc.entityId },
     ]);
-    expect(codes.get(refKey("product", prod.entityId))).toBe(prod.id);
-    expect(codes.get(refKey("location", loc.entityId))).toBe(loc.id);
+    expect(codes.get(entityRefKey("product", prod.entityId))).toBe(prod.id);
+    expect(codes.get(entityRefKey("location", loc.entityId))).toBe(loc.id);
   });
 
   it("resolveLiveShortcode pins the entity and excludes deleted rows", async () => {

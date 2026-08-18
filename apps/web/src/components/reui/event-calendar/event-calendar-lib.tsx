@@ -4,27 +4,21 @@ import {
   addMonths,
   addWeeks,
   differenceInCalendarDays,
-  differenceInMinutes,
   format,
   startOfDay,
   startOfMonth,
   startOfWeek,
 } from "date-fns";
-import { expandRecurrence } from "~/components/reui/event-calendar/event-calendar-recurrence";
 import type {
   CalendarEvent,
   CalendarView,
   EventCalendarDateRange,
   EventCalendarOccurrence,
-  EventCalendarOffDaysConfig,
-  EventCalendarResource,
   EventCalendarSegment,
 } from "~/components/reui/event-calendar/event-calendar-types";
 
 type WeekStartsOn = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
-/** Packing-effective minimum in minutes so tiny events do not stack invisibly. */
-const MIN_PACK_SLOT = 30;
 
 /** The instant re-expressed in the display time zone (TZDate extends Date). */
 function toZoned(date: Date, timeZone: string): TZDate {
@@ -41,19 +35,6 @@ function getDayKey(date: Date, timeZone: string): string {
   return format(toZoned(date, timeZone), "yyyy-MM-dd");
 }
 
-/** Day length in minutes; 1380/1500 on DST transition days - never assume 1440. */
-function getDayTotalMinutes(dayStart: Date, timeZone: string): number {
-  const next = zonedStartOfDay(
-    addDays(toZoned(dayStart, timeZone), 1),
-    timeZone,
-  );
-  return differenceInMinutes(next, dayStart);
-}
-
-function snapMinutes(minutes: number, snap: number): number {
-  return Math.round(minutes / snap) * snap;
-}
-
 interface ViewRangeOptions {
   timeZone: string;
   weekStartsOn: WeekStartsOn;
@@ -68,52 +49,23 @@ interface ViewDateRanges {
 }
 
 function getViewDateRange(
-  view: CalendarView,
+  _view: CalendarView,
   date: Date,
   opts: ViewRangeOptions,
 ): ViewDateRanges {
-  const { timeZone, weekStartsOn, dayCount, agendaDayCount, fixedWeeks } = opts;
+  const { timeZone, weekStartsOn, fixedWeeks } = opts;
   const zoned = toZoned(date, timeZone);
 
-  if (view === "month") {
-    const activeStart = startOfMonth(zoned);
-    const activeEnd = startOfMonth(addMonths(zoned, 1));
-    const visibleStart = startOfWeek(activeStart, { weekStartsOn });
-    let visibleEnd: Date;
-    if (fixedWeeks) {
-      visibleEnd = addDays(visibleStart, 42);
-    } else {
-      visibleEnd = startOfWeek(addDays(activeEnd, -1), { weekStartsOn });
-      visibleEnd = addWeeks(visibleEnd, 1);
-    }
-    return {
-      activeRange: { start: activeStart, end: activeEnd },
-      visibleRange: { start: visibleStart, end: visibleEnd },
-    };
-  }
-
-  if (view === "week") {
-    const start = startOfWeek(zoned, { weekStartsOn });
-    const range = { start, end: addWeeks(start, 1) };
-    return { activeRange: range, visibleRange: range };
-  }
-
-  if (view === "day" || view === "resource") {
-    const start = startOfDay(zoned);
-    const range = { start, end: addDays(start, 1) };
-    return { activeRange: range, visibleRange: range };
-  }
-
-  if (view === "days") {
-    const start = startOfDay(zoned);
-    const range = { start, end: addDays(start, Math.max(1, dayCount)) };
-    return { activeRange: range, visibleRange: range };
-  }
-
-  // agenda
-  const start = startOfDay(zoned);
-  const range = { start, end: addDays(start, Math.max(1, agendaDayCount)) };
-  return { activeRange: range, visibleRange: range };
+  const activeStart = startOfMonth(zoned);
+  const activeEnd = startOfMonth(addMonths(zoned, 1));
+  const visibleStart = startOfWeek(activeStart, { weekStartsOn });
+  const visibleEnd = fixedWeeks
+    ? addDays(visibleStart, 42)
+    : addWeeks(startOfWeek(addDays(activeEnd, -1), { weekStartsOn }), 1);
+  return {
+    activeRange: { start: activeStart, end: activeEnd },
+    visibleRange: { start: visibleStart, end: visibleEnd },
+  };
 }
 
 /** Day of month of the last day of the month containing the zoned date. */
@@ -123,39 +75,22 @@ function lastDayOfZonedMonth(date: Date): number {
 
 /** The anchor date stepped one period forward or backward for the view. */
 function stepDate(
-  view: CalendarView,
+  _view: CalendarView,
   date: Date,
   direction: 1 | -1,
   opts: Pick<ViewRangeOptions, "timeZone" | "dayCount" | "agendaDayCount">,
 ): Date {
   const zoned = toZoned(date, opts.timeZone);
-  if (view === "month") {
-    const stepped = addMonths(zoned, direction);
-    // addMonths clamps the day down into a shorter month and never restores
-    // it, so next-then-prev from the 31st would leave the anchor on the 28th.
-    // Sticking a month end to the target month's end keeps stepping
-    // invertible, which matters because the anchor is what day and week view
-    // open on after a month navigation.
-    if (zoned.getDate() !== lastDayOfZonedMonth(zoned)) return stepped;
-    return addDays(stepped, lastDayOfZonedMonth(stepped) - stepped.getDate());
-  }
-  if (view === "week") return addWeeks(zoned, direction);
-  if (view === "day" || view === "resource") return addDays(zoned, direction);
-  if (view === "days")
-    return addDays(zoned, direction * Math.max(1, opts.dayCount));
-  return addDays(zoned, direction * Math.max(1, opts.agendaDayCount));
+  const stepped = addMonths(zoned, direction);
+  // addMonths clamps the day down into a shorter month and never restores
+  // it, so next-then-prev from the 31st would leave the anchor on the 28th.
+  if (zoned.getDate() !== lastDayOfZonedMonth(zoned)) return stepped;
+  return addDays(stepped, lastDayOfZonedMonth(stepped) - stepped.getDate());
 }
 
 function rangesIntersect(
   a: EventCalendarDateRange,
   b: EventCalendarDateRange,
-): boolean {
-  return a.start < b.end && a.end > b.start;
-}
-
-function eventsOverlap(
-  a: { start: Date; end: Date },
-  b: { start: Date; end: Date },
 ): boolean {
   return a.start < b.end && a.end > b.start;
 }
@@ -205,15 +140,6 @@ function segmentOccurrence<TData>(
         isEnd,
         continuesBefore: !isStart,
         continuesAfter: !isEnd,
-        startMin: occurrence.allDay
-          ? undefined
-          : differenceInMinutes(segStart, cursor),
-        endMin: occurrence.allDay
-          ? undefined
-          : Math.max(
-              differenceInMinutes(segEnd, cursor),
-              differenceInMinutes(segStart, cursor),
-            ),
       });
     }
     if (isZeroLength) break;
@@ -250,89 +176,6 @@ function spansMultipleDays(
     occ.end.getTime() - occ.start.getTime() >
     nextDayStart.getTime() - dayStart.getTime()
   );
-}
-
-/**
- * Google-style overlap packing for one day's timed segments.
- * Mutates column/columnCount/columnSpan on the segments, in place.
- * z resolution happens at render: event.zIndex verbatim, else 10 + column.
- */
-function packTimedSegments<TData>(
-  segments: EventCalendarSegment<TData>[],
-): void {
-  if (segments.length === 0) return;
-
-  type Working = {
-    seg: EventCalendarSegment<TData>;
-    startMin: number;
-    effEnd: number;
-  };
-
-  const items: Working[] = segments
-    .map((seg) => {
-      const startMin = seg.startMin ?? 0;
-      const endMin = seg.endMin ?? startMin;
-      return {
-        seg,
-        startMin,
-        effEnd: Math.max(endMin, startMin + MIN_PACK_SLOT),
-      };
-    })
-    .sort(
-      (a, b) =>
-        a.startMin - b.startMin ||
-        b.effEnd - b.startMin - (a.effEnd - a.startMin) ||
-        a.seg.occurrence.key.localeCompare(b.seg.occurrence.key),
-    );
-
-  // Sweep into connected clusters
-  const clusters: Working[][] = [];
-  let current: Working[] = [];
-  let clusterEnd = -Infinity;
-  for (const item of items) {
-    if (item.startMin >= clusterEnd) {
-      current = [];
-      clusters.push(current);
-      clusterEnd = -Infinity;
-    }
-    current.push(item);
-    clusterEnd = Math.max(clusterEnd, item.effEnd);
-  }
-
-  for (const cluster of clusters) {
-    // Greedy column assignment
-    const colEnds: number[] = [];
-    const byColumn = new Map<number, Working[]>();
-    for (const item of cluster) {
-      let col = colEnds.findIndex((end) => end <= item.startMin);
-      if (col === -1) {
-        col = colEnds.length;
-        colEnds.push(0);
-      }
-      colEnds[col] = item.effEnd;
-      item.seg.column = col;
-      const bucket = byColumn.get(col) ?? [];
-      bucket.push(item);
-      byColumn.set(col, bucket);
-    }
-    const columnCount = colEnds.length;
-
-    // Partial-overlap expansion: widen rightward into free columns
-    for (const item of cluster) {
-      let span = 1;
-      const col = item.seg.column ?? 0;
-      while (col + span < columnCount) {
-        const occupants = byColumn.get(col + span) ?? [];
-        const blocked = occupants.some(
-          (o) => o.startMin < item.effEnd && o.effEnd > item.startMin,
-        );
-        if (blocked) break;
-        span++;
-      }
-      item.seg.columnCount = columnCount;
-      item.seg.columnSpan = span;
-    }
-  }
 }
 
 /**
@@ -466,11 +309,6 @@ interface BuildIndexOptions<TData> {
     a: EventCalendarOccurrence<TData>,
     b: EventCalendarOccurrence<TData>,
   ) => number;
-  getOccurrences?: (
-    event: CalendarEvent<TData>,
-    range: EventCalendarDateRange,
-    ctx: { timeZone: string },
-  ) => Array<{ start: Date; end: Date }> | null;
 }
 
 function defaultEventOrder(
@@ -494,46 +332,21 @@ function buildEventIndex<TData>(
   const { timeZone, weekStartsOn } = opts;
   const order = opts.eventOrder ?? defaultEventOrder;
 
-  // RECURRENCE-ID override replacement: an event carrying recurringEventId +
-  // originalStart is an edited single occurrence of that series. The parent's
-  // expansion drops the replaced instant; the override renders as its own
-  // occurrence through the normal path below.
-  const overrideTimes = new Map<string, Set<number>>();
-  for (const event of events) {
-    if (!event.recurringEventId || !event.originalStart) continue;
-    let times = overrideTimes.get(event.recurringEventId);
-    if (!times) overrideTimes.set(event.recurringEventId, (times = new Set()));
-    times.add(event.originalStart.getTime());
-  }
-
   const occurrences: EventCalendarOccurrence<TData>[] = [];
   for (const event of events) {
-    const replaced = overrideTimes.get(event.id);
-    const custom = opts.getOccurrences?.(event, visibleRange, { timeZone });
-    if (custom) {
-      custom.forEach((occ, i) => {
-        if (replaced?.has(occ.start.getTime())) return;
-        if (!rangesIntersect({ start: occ.start, end: occ.end }, visibleRange))
-          return;
-        occurrences.push({
-          key: `${event.id}::${occ.start.toISOString()}`,
-          eventId: event.id,
-          event,
-          start: occ.start,
-          end: occ.end,
-          allDay: event.allDay ?? false,
-          isRecurring: true,
-          recurrenceIndex: i,
-        });
-      });
-      continue;
-    }
-    const expanded = expandRecurrence(event, visibleRange, { timeZone });
-    occurrences.push(
-      ...(replaced
-        ? expanded.filter((occ) => !replaced.has(occ.start.getTime()))
-        : expanded),
-    );
+    const isPoint = event.end.getTime() === event.start.getTime();
+    if (
+      !rangesIntersect({ start: event.start, end: event.end }, visibleRange) &&
+      !(isPoint && event.start >= visibleRange.start && event.start < visibleRange.end)
+    ) continue;
+    occurrences.push({
+      key: `${event.id}::${event.start.toISOString()}`,
+      eventId: event.id,
+      event,
+      start: event.start,
+      end: event.end,
+      allDay: event.allDay ?? false,
+    });
   }
   occurrences.sort(order);
 
@@ -571,10 +384,6 @@ function buildEventIndex<TData>(
     }
   }
 
-  for (const bucket of byDay.values()) {
-    packTimedSegments(bucket.timed);
-  }
-
   const weekRows: EventCalendarWeekRow<TData>[] = [];
   for (const [rowIndex, segs] of barSegmentsByRow) {
     const rowStart = addWeeks(firstRowStart, rowIndex);
@@ -594,77 +403,19 @@ function getRangeKey(range: EventCalendarDateRange): string {
   return `${range.start.getTime()}-${range.end.getTime()}`;
 }
 
-/** Depth-first flatten of the resource tree (parents included). */
-function flattenResources(
-  resources: EventCalendarResource[],
-  depth = 0,
-): Array<{ resource: EventCalendarResource; depth: number }> {
-  const rows: Array<{ resource: EventCalendarResource; depth: number }> = [];
-  for (const resource of resources) {
-    rows.push({ resource, depth });
-    if (resource.children?.length) {
-      rows.push(...flattenResources(resource.children, depth + 1));
-    }
-  }
-  return rows;
-}
-
-const DEFAULT_WEEKEND_DAYS = [0, 6];
-
-/**
- * Resolves whether a day is an off day (non-working) in the display zone.
- * Callers pass the calendar's own weekendDays so the shading cannot contradict
- * the weekend the rest of the calendar renders; an explicit offDays.weekendDays
- * still wins over it.
- */
-function resolveOffDay(
-  day: Date,
-  timeZone: string,
-  config: boolean | EventCalendarOffDaysConfig | undefined,
-  defaultWeekendDays?: number[],
-): boolean {
-  if (!config) return false;
-  const resolved: EventCalendarOffDaysConfig = config === true ? {} : config;
-  const weekendDays =
-    resolved.weekendDays ?? defaultWeekendDays ?? DEFAULT_WEEKEND_DAYS;
-  const zoned = toZoned(day, timeZone);
-  if (weekendDays.includes(zoned.getDay())) return true;
-  if (resolved.dates?.length) {
-    const key = getDayKey(day, timeZone);
-    if (resolved.dates.some((date) => getDayKey(date, timeZone) === key)) {
-      return true;
-    }
-  }
-  return resolved.isOffDay?.(day) ?? false;
-}
 
 export type {
-  BuildIndexOptions,
   EventCalendarDayBucket,
   EventCalendarIndex,
-  EventCalendarWeekRow,
-  ViewDateRanges,
-  ViewRangeOptions,
   WeekStartsOn,
 };
 export {
   buildEventIndex,
   defaultEventOrder,
-  eventsOverlap,
-  flattenResources,
   getDayKey,
-  getDayTotalMinutes,
   getRangeKey,
   getViewDateRange,
-  isBarOccurrence,
-  MIN_PACK_SLOT,
-  packTimedSegments,
   packWeekRowLanes,
-  rangesIntersect,
-  resolveOffDay,
-  segmentOccurrence,
-  snapMinutes,
-  spansMultipleDays,
   stepDate,
   toZoned,
   zonedStartOfDay,

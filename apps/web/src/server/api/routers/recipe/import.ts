@@ -9,8 +9,6 @@
  */
 
 import {
-  type CookbookId,
-  type CookbookShortcode,
   type RecipeId,
   type RecipeShortcode,
   unsafeRecipeShortcode,
@@ -67,7 +65,7 @@ import {
   getNotionRecipesForDiff,
 } from "~/server/repo/recipe";
 import { findParentRecipeIdsBatch } from "~/server/repo/recipe/totals";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import { importRecipeImageFromUrl } from "~/server/services/image-import";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
@@ -85,12 +83,7 @@ import {
 } from "~/server/utils/scraper";
 import { protectedProcedure, strictOutput } from "../../trpc";
 
-const resolveCookbookEntityId = async (
-  db: Parameters<typeof resolveOrThrow>[0],
-  shortcode: CookbookShortcode,
-): Promise<CookbookId> => {
-  return resolveOrThrow(db, "cookbook", shortcode);
-};
+const cookbookShortcodes = bindShortcodeResolver("cookbook");
 
 const scrape = protectedProcedure
   .input(scrapeRecipeInput)
@@ -157,7 +150,7 @@ const getCookbookSourceEndpoint = protectedProcedure
   .query(async ({ ctx, input }) => {
     const source = await getCookbookSource(
       ctx.db,
-      await resolveCookbookEntityId(ctx.db, input.cookbookId),
+      await cookbookShortcodes.one(ctx.db, input.cookbookId),
     );
     return { ...source, id: input.cookbookId };
   });
@@ -187,7 +180,7 @@ const importCookbookStream = protectedProcedure
   }): AsyncGenerator<BulkProgressEvent<ImportItemResult, ImportSummary>> {
     const actor = { ...ctx.actorContext, source: "epub_import" as const };
     // Recipes live in the cookbook's stored extraction; indices address it directly.
-    const cookbookId = await resolveCookbookEntityId(ctx.db, input.cookbookId);
+    const cookbookId = await cookbookShortcodes.one(ctx.db, input.cookbookId);
     const { name, recipes } = await getCookbookSource(ctx.db, cookbookId);
     const cookbookRef = { id: cookbookId, name };
     // One shared context for the whole loop: a running (title → id) map (seeded
@@ -429,7 +422,7 @@ const deleteCookbookEndpoint = protectedProcedure
   .input(cookbookIdInput)
   .output(strictOutput(deleteCookbookOut))
   .mutation(async ({ ctx, input }) => {
-    const cookbookId = await resolveCookbookEntityId(ctx.db, input.cookbookId);
+    const cookbookId = await cookbookShortcodes.one(ctx.db, input.cookbookId);
     const recipeIds = (await getCookbookRecipesForDiff(ctx.db, cookbookId)).map(
       (row) => row.entityId,
     );
@@ -473,7 +466,7 @@ const reprocessCookbookStreamEndpoint = protectedProcedure
   .input(cookbookIdInput)
   // A mutation (it re-derives + writes recipes); streams progress like a query.
   .mutation(async function* ({ ctx, input }) {
-    const cookbookId = await resolveCookbookEntityId(ctx.db, input.cookbookId);
+    const cookbookId = await cookbookShortcodes.one(ctx.db, input.cookbookId);
     yield* streamProgress(
       reprocessCookbookStream(ctx.db, cookbookId, ctx.actorContext),
       async ({ recipeIds, reprocessed, importableExtras }) => {

@@ -1,6 +1,23 @@
 import type { ColumnFiltersState } from "@tanstack/react-table";
-import type { Filter, FilterFieldConfig } from "~/components/reui/filters";
+import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import type { FilterConfig } from "./columnHelpers";
+
+type FilterOption = FilterableComboboxItem;
+
+export type FilterFieldConfig = {
+  key: string;
+  label?: string;
+  type: "text" | "select" | "multiselect";
+  options?: FilterOption[];
+  placeholder?: string;
+};
+
+export type Filter = {
+  id: string;
+  field: string;
+  operator: string;
+  values: string[];
+};
 
 /**
  * The table-agnostic half of the manifest filter bar.
@@ -17,14 +34,7 @@ import type { FilterConfig } from "./columnHelpers";
  * `decodeFilters` returns and what `filterGetterFromColumnFilters` reads.
  */
 
-export type FilterBarField = FilterFieldConfig<string> & {
-  key: string;
-  type: "text" | "select" | "multiselect";
-};
-
-const TEXT_OPERATORS = [{ value: "contains", label: "contains" }];
-const SELECT_OPERATORS = [{ value: "is", label: "is" }];
-const MULTISELECT_OPERATORS = [{ value: "is_any_of", label: "is any of" }];
+export type FilterBarField = FilterFieldConfig;
 
 function operatorFor(field: FilterBarField): string {
   if (field.type === "text") return "contains";
@@ -35,7 +45,7 @@ function operatorFor(field: FilterBarField): string {
 export function filterStateToBarFilters(
   columnFilters: ColumnFiltersState,
   fields: FilterBarField[],
-): Filter<string>[] {
+): Filter[] {
   const fieldsByKey = new Map(fields.map((field) => [field.key, field]));
   return columnFilters.flatMap((columnFilter) => {
     const field = fieldsByKey.get(columnFilter.id);
@@ -58,7 +68,7 @@ export function filterStateToBarFilters(
 }
 
 export function barFiltersToFilterState(
-  filters: Filter<string>[],
+  filters: Filter[],
   fields: FilterBarField[],
 ): ColumnFiltersState {
   const fieldsByKey = new Map(fields.map((field) => [field.key, field]));
@@ -76,7 +86,7 @@ export function barFiltersToFilterState(
   });
 }
 
-export const filterStateKey = (filters: Filter<string>[]): string =>
+export const filterStateKey = (filters: Filter[]): string =>
   JSON.stringify(
     filters
       .map(({ field, operator, values }) => ({ field, operator, values }))
@@ -84,7 +94,7 @@ export const filterStateKey = (filters: Filter<string>[]): string =>
   );
 
 export function normalizeBarFilters(
-  filters: Filter<string>[],
+  filters: Filter[],
   fields: FilterBarField[],
 ): { columnFilters: ColumnFiltersState; externalKey: string } {
   const columnFilters = barFiltersToFilterState(filters, fields);
@@ -106,25 +116,13 @@ export function barFieldFromConfig(
   optionHints?: Readonly<Record<string, string>>,
 ): FilterBarField {
   const type = config.filterType ?? "text";
-  const operators =
-    type === "text"
-      ? TEXT_OPERATORS
-      : type === "multiselect"
-        ? MULTISELECT_OPERATORS
-        : SELECT_OPERATORS;
-
   return {
     key,
     label,
     type,
-    operators,
-    defaultOperator: operators[0]!.value,
     placeholder: type === "text" ? `Filter ${label.toLowerCase()}…` : undefined,
-    searchable: type !== "text",
     options: config.options?.map((option) => ({
-      value: option.value,
-      label: option.label,
-      icon: option.icon,
+      ...option,
       hint: optionHints?.[option.value] ?? option.hint,
     })),
   };

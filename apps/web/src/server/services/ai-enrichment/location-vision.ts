@@ -19,7 +19,6 @@ import {
   type LocationId,
   type ProductId,
   type ProductShortcode,
-  unsafeInventoryId,
   unsafeProductId,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
@@ -55,6 +54,7 @@ import {
   quickCreateProduct,
 } from "~/server/repo/product";
 import {
+  resolveCreatedOrInvariant,
   resolveLiveShortcode,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
@@ -530,11 +530,7 @@ export async function approveDetectedInventoryItem(
         },
         actor,
       );
-      const resolved = await resolveLiveShortcode(db, created.id, "product");
-      if (!resolved) {
-        throw new Error(`Created product ${created.id} could not be resolved`);
-      }
-      productId = unsafeProductId(resolved);
+      productId = await resolveCreatedOrInvariant(db, "product", created.id);
       productShortcode = created.id;
       productNameForToast = created.name;
       createdProduct = true;
@@ -572,22 +568,17 @@ export async function approveDetectedInventoryItem(
     },
     actor,
   );
-  const inventoryEntityId = await resolveLiveShortcode(
+  const inventoryEntityId = await resolveCreatedOrInvariant(
     db,
-    createdInventory.id,
     "inventory",
+    createdInventory.id,
   );
-  if (!inventoryEntityId) {
-    throw new Error(
-      `Created inventory ${createdInventory.id} could not be resolved`,
-    );
-  }
   backgroundBatches.push(
     ...(await runMutationSideEffects(db, {
       action: "created",
       entity: {
         entityType: "inventory",
-        entityId: unsafeInventoryId(inventoryEntityId),
+        entityId: inventoryEntityId,
       },
       source: "location-ai.inventory.approve",
     })),

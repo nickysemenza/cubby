@@ -13,12 +13,6 @@ import {
   type EquivalenceReport,
   equivalenceReportSchema,
 } from "@cubby/schemas/equivalences";
-import type {
-  CookbookId,
-  CookbookShortcode,
-  RecipeId,
-  RecipeShortcode,
-} from "@cubby/schemas/identifiers";
 import {
   type IngredientCooccurrence,
   ingredientCooccurrenceSchema,
@@ -50,24 +44,12 @@ import {
   getIngredientUsage,
   getRecipeDependencyGraph,
 } from "~/server/repo/recipe";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import { getIngredientsByIDs } from "~/server/services/ingredient.service";
 import { protectedProcedure, strictOutput } from "../../trpc";
 
-const resolveRecipeId = async (
-  db: Parameters<typeof resolveOrThrow>[0],
-  shortcode: RecipeShortcode,
-): Promise<RecipeId> => {
-  return resolveOrThrow(db, "recipe", shortcode);
-};
-
-const resolveCookbookId = async (
-  db: Parameters<typeof resolveOrThrow>[0],
-  shortcode: CookbookShortcode | undefined,
-): Promise<CookbookId | undefined> => {
-  if (!shortcode) return undefined;
-  return resolveOrThrow(db, "cookbook", shortcode);
-};
+const recipeShortcodes = bindShortcodeResolver("recipe");
+const cookbookShortcodes = bindShortcodeResolver("cookbook");
 
 const getIngredientCooccurrenceEndpoint = protectedProcedure
   .input(recipeCooccurrenceInput)
@@ -82,7 +64,9 @@ const getDependencyGraphEndpoint = protectedProcedure
   .query(async ({ ctx, input }): Promise<RecipeDependencyGraph> => {
     return await getRecipeDependencyGraph(
       ctx.db,
-      await resolveCookbookId(ctx.db, input?.cookbookId),
+      input?.cookbookId
+        ? await cookbookShortcodes.one(ctx.db, input.cookbookId)
+        : undefined,
     );
   });
 
@@ -92,7 +76,9 @@ const getIngredientUsageEndpoint = protectedProcedure
   .query(async ({ ctx, input }): Promise<IngredientUsage> => {
     return await getIngredientUsage(
       ctx.db,
-      await resolveCookbookId(ctx.db, input?.cookbookId),
+      input?.cookbookId
+        ? await cookbookShortcodes.one(ctx.db, input.cookbookId)
+        : undefined,
     );
   });
 
@@ -139,7 +125,7 @@ const recomputeOne = protectedProcedure
   .output(strictOutput(recipeRecomputeAllOut))
   .mutation(async ({ ctx, input }) => {
     const processed = await ctx.services.recipeCosting.recompute([
-      await resolveRecipeId(ctx.db, input.id),
+      await recipeShortcodes.one(ctx.db, input.id),
     ]);
     return { processed };
   });
@@ -162,7 +148,7 @@ const explainCosting = protectedProcedure
   .output(strictOutput(recipeCostingExplain))
   .query(async ({ ctx, input }) => {
     return await ctx.services.recipeCosting.explainRecipe(
-      await resolveRecipeId(ctx.db, input.id),
+      await recipeShortcodes.one(ctx.db, input.id),
     );
   });
 

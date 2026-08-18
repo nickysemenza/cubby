@@ -11,7 +11,9 @@ test("calendar opens a date drawer and prefills quick creation", async ({
   await expect(
     page.getByRole("heading", { level: 1, name: "Calendar" }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Filter" })).toBeVisible();
+  await expect(
+    page.getByRole("combobox", { name: "Add filter" }),
+  ).toBeVisible();
 
   const july14 = page
     .locator(
@@ -57,14 +59,17 @@ test("calendar filters are URL-backed and survive a reload", async ({
   );
   await page.waitForLoadState("networkidle");
 
-  const bar = page.getByRole("button", { name: "Filter" }).locator("..");
-  await expect(bar.getByText("Show")).toBeVisible();
-  await expect(bar.getByText("Project kind")).toBeVisible();
-  await expect(bar.getByText("Renovation")).toBeVisible();
+  await expect(
+    page.getByRole("combobox", { name: "Filter Show" }),
+  ).toBeVisible();
+  const projectKind = page.getByRole("combobox", {
+    name: "Filter Project kind",
+  });
+  await expect(projectKind).toHaveValue("Renovation");
 
   await page.reload();
   await page.waitForLoadState("networkidle");
   await expect(page).toHaveURL(/kinds=meal%2Ctask|kinds=meal,task/);
-  await expect(bar.getByText("Renovation")).toBeVisible();
+  await expect(projectKind).toHaveValue("Renovation");
   expect(pageErrors).toEqual([]);
 });

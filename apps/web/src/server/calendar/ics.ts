@@ -40,11 +40,14 @@ export type IcsFeed = "meals" | "tasks" | "all";
  * since "no kinds" would silently mean "no events" rather than "everything". */
 type FeedKinds = readonly [CalendarItem["kind"], ...CalendarItem["kind"][]];
 
-const FEED_KINDS: Record<IcsFeed, FeedKinds> = {
+const FEED_KINDS = {
   meals: ["meal"],
   tasks: ["task"],
   all: ["meal", "task"],
-};
+} as const satisfies Record<IcsFeed, FeedKinds>;
+
+type PublishableKind = (typeof FEED_KINDS)[IcsFeed][number];
+type PublishableCalendarItem = Extract<CalendarItem, { kind: PublishableKind }>;
 
 const FEED_NAMES: Record<IcsFeed, string> = {
   meals: "Cubby Meals",
@@ -106,8 +109,8 @@ const icsDate = (plain: string) => plain.replace(/-/g, "");
 const icsTimestamp = (at: Date) =>
   `${at.toISOString().replace(/[-:]/g, "").split(".")[0]}Z`;
 
-type ItemOfKind<K extends CalendarItem["kind"]> = Extract<
-  CalendarItem,
+type ItemOfKind<K extends PublishableKind> = Extract<
+  PublishableCalendarItem,
   { kind: K }
 >;
 
@@ -123,7 +126,7 @@ type ItemOfKind<K extends CalendarItem["kind"]> = Extract<
  * generalize — a meal has one date, a task a two-column range, and a project's
  * window is derived from its subtree rather than stored at all.
  */
-interface CalendarKindSpec<K extends CalendarItem["kind"]> {
+interface CalendarKindSpec<K extends PublishableKind> {
   /**
    * Detail-route prefix; the item's shortcode is appended. Shortcodes are the
    * public id (`CalendarItem.id` is a shortcode brand), so no uuid reaches a URL.
@@ -139,7 +142,7 @@ interface CalendarKindSpec<K extends CalendarItem["kind"]> {
 }
 
 const KIND_SPECS: {
-  [K in CalendarItem["kind"]]: CalendarKindSpec<K>;
+  [K in PublishableKind]: CalendarKindSpec<K>;
 } = {
   meal: {
     detailBase: "/meals",
@@ -174,26 +177,6 @@ const KIND_SPECS: {
       return parts.join("\n");
     },
   },
-  // Reachable by `getCalendarRange` but published by no feed today — add the
-  // kind to a FEED_KINDS entry to turn either on.
-  expense: {
-    detailBase: "/expenses",
-    includes: () => true,
-    summary: (item) =>
-      item.vendor ? `${item.vendor}: ${item.title}` : item.title,
-    description: (item) => {
-      const parts = [item.future ? "Planned" : "Actual"];
-      if (item.cost !== null) parts.push(`$${item.cost.toFixed(2)}`);
-      if (item.projectName) parts.push(`Project: ${item.projectName}`);
-      return parts.join("\n");
-    },
-  },
-  project: {
-    detailBase: "/projects",
-    includes: () => true,
-    summary: (item) => item.title,
-    description: (item) => `Status: ${item.status.replace(/_/g, " ")}`,
-  },
 };
 
 /**
@@ -204,16 +187,21 @@ const KIND_SPECS: {
  * index into a mapped type. Confining it here is the point: one asserted line
  * instead of a `kind ===` ladder repeated per property.
  */
-const specFor = (item: CalendarItem) =>
-  KIND_SPECS[item.kind] as CalendarKindSpec<CalendarItem["kind"]>;
+const specFor = (item: PublishableCalendarItem) =>
+  KIND_SPECS[item.kind] as CalendarKindSpec<PublishableKind>;
 
 /** Whether this feed publishes the item: kind membership, then the kind's own filter. */
-function isPublishable(item: CalendarItem, feed: IcsFeed): boolean {
+function isPublishable(
+  item: CalendarItem,
+  feed: IcsFeed,
+): item is PublishableCalendarItem {
   const kinds: readonly CalendarItem["kind"][] = FEED_KINDS[feed];
-  return kinds.includes(item.kind) && specFor(item).includes(item);
+  if (!kinds.includes(item.kind)) return false;
+  const publishable = item as PublishableCalendarItem;
+  return specFor(publishable).includes(publishable);
 }
 
-function toEvent(item: CalendarItem, opts: IcsOptions): string[] {
+function toEvent(item: PublishableCalendarItem, opts: IcsOptions): string[] {
   const spec = specFor(item);
   // UID must be stable across polls so an edit updates the event in place
   // rather than duplicating it. Shortcodes are permanent and never reassigned

@@ -1,3 +1,4 @@
+import { entityRefKey } from "@cubby/schemas/entity";
 import {
   type SearchableEntity,
   searchableEntities,
@@ -327,23 +328,21 @@ export async function refreshSearchDocuments(
     getEmbeddingTextsForRefs(db, idsByType),
   ]);
 
-  const refKey = (entityType: SearchableEntity, entityId: string) =>
-    `${entityType}:${entityId}`;
   const sourceByRef = new Map(
     sources.map((source) => [
-      refKey(source.entityType, source.entityId),
+      entityRefKey(source.entityType, source.entityId),
       source,
     ]),
   );
   const textByRef = new Map(
-    texts.map((text) => [refKey(text.entityType, text.entityId), text]),
+    texts.map((text) => [entityRefKey(text.entityType, text.entityId), text]),
   );
 
   const results: SearchDocumentRefreshResult[] = [];
   const entries: Array<{ source: SearchDocumentSource; body: string }> = [];
   const seen = new Set<string>();
   for (const ref of refs) {
-    const key = refKey(ref.entityType, ref.entityId);
+    const key = entityRefKey(ref.entityType, ref.entityId);
     if (seen.has(key)) continue;
     seen.add(key);
     const source = sourceByRef.get(key);
@@ -531,38 +530,37 @@ export async function getSearchDocumentDiagnostics(
         )})
     `),
   ]);
-  const refKey = (entityType: SearchableEntity, entityId: string) =>
-    `${entityType}:${entityId}`;
   const textByRef = new Map(
-    texts.map((text) => [refKey(text.entityType, text.entityId), text]),
+    texts.map((text) => [entityRefKey(text.entityType, text.entityId), text]),
   );
   const sourceByRef = new Map(
     sources.map((source) => [
-      refKey(source.entityType, source.entityId),
+      entityRefKey(source.entityType, source.entityId),
       source,
     ]),
   );
   const documentByRef = new Map(
     documentResult.rows.map((document) => [
-      refKey(document.entityType, document.entityId),
+      entityRefKey(document.entityType, document.entityId),
       document,
     ]),
   );
   const missing = texts
     .filter(
-      (text) => !documentByRef.has(refKey(text.entityType, text.entityId)),
+      (text) =>
+        !documentByRef.has(entityRefKey(text.entityType, text.entityId)),
     )
     .map(({ entityType, entityId }) => ({ entityType, entityId }));
   const orphaned = documentResult.rows
     .filter(
       (document) =>
-        !textByRef.has(refKey(document.entityType, document.entityId)),
+        !textByRef.has(entityRefKey(document.entityType, document.entityId)),
     )
     .map(({ entityType, entityId }) => ({ entityType, entityId }));
 
   const stale: Array<{ entityType: SearchableEntity; entityId: string }> = [];
   for (const document of documentResult.rows) {
-    const key = refKey(document.entityType, document.entityId);
+    const key = entityRefKey(document.entityType, document.entityId);
     const source = sourceByRef.get(key);
     const text = textByRef.get(key);
     // No live source is orphaned, not stale — reported above, retired by repair.

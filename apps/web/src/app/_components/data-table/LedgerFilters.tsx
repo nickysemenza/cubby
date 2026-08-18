@@ -1,8 +1,8 @@
 import type { RowData } from "@tanstack/react-table";
 import { useCallback, useMemo } from "react";
-import { Filters } from "~/components/reui/filters";
 import { humanize } from "~/entities/filters";
 import type { FilterConfig } from "./columnHelpers";
+import { FilterBar } from "./FilterBar";
 import {
   barFieldFromConfig,
   type FilterBarField,
@@ -64,15 +64,10 @@ export function LedgerFilters<TData extends RowData>({
   if (fields.length === 0) return null;
 
   return (
-    <Filters
+    <FilterBar
       filters={draftFilters}
       fields={fields}
       onChange={handleChange}
-      allowMultiple={false}
-      collapseAddButton
-      showSearchInput
-      size="sm"
-      variant="solid"
       className="min-w-0"
     />
   );

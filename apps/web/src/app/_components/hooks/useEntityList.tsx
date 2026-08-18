@@ -1,12 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { PreviewDeleteEntity } from "@cubby/schemas/entity-integrity";
-import { relatedViewsFor } from "@cubby/schemas/related-view";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { QueryKey } from "@tanstack/react-query";
 import { useSearch } from "@tanstack/react-router";
-import { useStore } from "@tanstack/react-store";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { entities } from "~/entities/entities";
@@ -21,34 +19,24 @@ import type { QueryTiming } from "~/lib/query-timing";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import type { RowLinkResolver } from "../data-table/columnHelpers";
 import { problemWorklistState } from "../data-table/problem-worklist";
-import {
-  type CubbyColumnDef,
-  type CubbyTable,
-  createCubbyColumnHelper,
-} from "../data-table/table-features";
-import {
-  useCubbyTableLayout,
-  useRevealTableColumnsOnce,
-} from "../data-table/table-layout";
+import type { CubbyColumnDef, CubbyTable } from "../data-table/table-features";
 import type { GroupConfig } from "../data-table/useGroupedList";
 import { useTableConfig } from "../data-table/useTableConfig";
-import {
-  type TableStateReturn,
+import type {
+  TableStateReturn,
   useTableState,
 } from "../data-table/useTableState";
+import {
+  useEntityListPresentation,
+  useEntityListPresentationState,
+} from "./useEntityListPresentation";
 import {
   type InfiniteScrollControls,
   useInfiniteTableList,
 } from "./useInfiniteTableList";
-import { ListBulkActionBar, useListBulkActions } from "./useListBulkActions";
-import { useOptimisticDelete } from "./useOptimisticDelete";
+import { ListBulkActionBar } from "./useListBulkActions";
 import type { TRPCQueryOptionsFn } from "./usePaginatedTableCore";
-import {
-  useRelatedPreviewColumnDefs,
-  useRelatedPreviewData,
-  useRelatedPreviewStateRef,
-} from "./useRelatedPreviewColumns";
-import { type FilterInput, useStandardColumns } from "./useStandardColumns";
+import type { FilterInput } from "./useStandardColumns";
 
 /** Base interface for entities in list views */
 export interface BaseListRow {
@@ -61,9 +49,6 @@ export interface BaseListRow {
 
 // biome-ignore lint/suspicious/noExplicitAny: intentional
 type AnyColumnDef<TData extends BaseListRow> = CubbyColumnDef<TData, any>;
-
-/** Stable empty-filters default (avoids a fresh `[]` reference each render). */
-const NO_FILTERS: FilterInput[] = [];
 
 /**
  * Expandable-tree rendering for a server-backed list.
@@ -310,91 +295,7 @@ export function useEntityList<
   // Derive the groupBy field for server queries (only when grouped + groupConfig)
   const groupByField = grouped && groupConfig ? groupConfig.field : undefined;
 
-  // Create columnHelper once - CRITICAL to prevent infinite re-renders
-  const columnHelper = useMemo(() => createCubbyColumnHelper<TData>(), []);
-
-  // Optimistic delete: mutation, bulk action, extra actions, dialog
-  const {
-    deleteBulkAction,
-    combinedExtraActions,
-    deleteDialog,
-    requestDelete,
-  } = useOptimisticDelete<TData>({
-    deletable,
-    extraActions,
-    emptyLabel: deleteEmptyLabel,
-  });
-
-  const listBulkActions = useListBulkActions({
-    entity,
-    bulkActions,
-    deleteBulkAction,
-  });
-
-  // Memoize entity config to prevent re-renders when entity doesn't change
-  const { hasUnitMappings, defaultSort } = useMemo(() => {
-    const entityConfig = entities[entity];
-    const listConfig = entityConfig.list;
-    return {
-      hasUnitMappings: listConfig?.hasUnitMappings ?? false,
-      defaultSort: listConfig?.defaultSort ?? "createdAt",
-    };
-  }, [entity]);
-
-  // Memoize table state options to prevent recreating on every render
-  const mergedTableStateOptions = useMemo(
-    () => ({
-      initialSort: defaultSort,
-      // Mirror sort + pagination + filters to the URL (bookmarkable /
-      // shareable). Overridable: `useTableState` wants exactly ONE writer per
-      // page, so a table embedded alongside others must opt out.
-      urlSync: true,
-      syncPaginationToUrl: false,
-      filterSpecs: getEntityFilters(entity),
-      ...tableStateOptions,
-    }),
-    [defaultSort, entity, tableStateOptions],
-  );
-
-  // One tableState owns the server-backed list. Infinite lists still use page
-  // size internally, but never expose meaningless page/pageSize URL state.
-  const tableState = useTableState(mergedTableStateOptions);
-
-  // `worklist` is orientation only. The ordinary URL filters and sort above
-  // already decide membership; an exact match merely reveals the columns that
-  // explain why this Problem selected the row. Editing either state leaves the
-  // worklist in place as a visibly modified source without reapplying it.
-  const routeSearch = useSearch({ strict: false }) as Record<string, unknown>;
-  const worklist = problemWorklistState(
-    entity,
-    routeSearch.worklist,
-    tableState.columnFilters,
-    tableState.sorting,
-  );
-
-  // Tab title: `Products: packout ↓price | cubby`, so several list tabs of the
-  // same entity are tellable apart.
-  //
-  // Summarized HERE rather than in the route's `head` on purpose. `head` runs in
-  // the route module, which is part of TanStack Router's eager graph — importing
-  // the icon/options-bearing filter manifest there is exactly the hydration
-  // weight `filter-search-fields` was extracted to avoid. This hook already has
-  // the manifest loaded (the table needs it), so the summary is free here, and
-  // it can use the real option labels ("Last 30 days", not the raw `30d`).
-  //
-  // Gated on `urlSync` because that already marks the ONE list that owns the
-  // page's URL state; an embedded table (the project detail page's tasks and
-  // expenses) opts out of it and must not retitle the page either.
-  useDocumentTitle(
-    mergedTableStateOptions.urlSync
-      ? [
-          entities[entity].pluralLabel,
-          summarizeListState(getEntityFilters(entity), routeSearch),
-        ]
-          .filter(Boolean)
-          .join(": ")
-      : undefined,
-  );
+  const hasUnitMappings = entities[entity].list?.hasUnitMappings ?? false;
 
   // Column-filter state → the server's `*Filters` object, driven by the
   // entity's manifest. This replaced a hand-written `buildFilters` on every
@@ -418,30 +319,48 @@ export function useEntityList<
   );
 
   const effectiveBuildFilters = buildFilters ?? manifestBuildFilters;
+  const serverTableStateOptions = useMemo(
+    () => ({ syncPaginationToUrl: false, ...tableStateOptions }),
+    [tableStateOptions],
+  );
+
+  const presentationState = useEntityListPresentationState<TData>({
+    entity,
+    tableStateOptions: serverTableStateOptions,
+    deletable,
+    extraActions,
+    bulkActions,
+    deleteEmptyLabel,
+    selectionScope: effectiveBuildFilters,
+  });
+  const { tableState } = presentationState;
 
   // The exact filter object the list query runs with. Returned so a page
   // needing the same set (the expenses ledger's totals row calls
   // `expense.analytics` with it) reads it rather than rebuilding it from
   // table state — two builds that disagree by so much as a scalar-vs-array
   // shape open a second React Query cache entry for identical results.
-  const currentFilters = useMemo(
-    () => effectiveBuildFilters(tableState),
-    [effectiveBuildFilters, tableState],
-  );
+  const currentFilters = presentationState.currentSelectionScope as TFilters;
 
-  // Selection belongs to a filtered result set. Keeping ids selected after
-  // the filter scope changes makes the toolbar count disagree with the rows it
-  // can actually act on. Sorting alone deliberately does not clear selection.
-  const filterScopeKey = useMemo(
-    () => JSON.stringify(currentFilters),
-    [currentFilters],
+  // `worklist` is orientation only: exact matches reveal explanatory columns
+  // but never change the ordinary URL-derived membership.
+  const routeSearch = useSearch({ strict: false }) as Record<string, unknown>;
+  const worklist = problemWorklistState(
+    entity,
+    routeSearch.worklist,
+    tableState.columnFilters,
+    tableState.sorting,
   );
-  const previousFilterScopeKeyRef = useRef(filterScopeKey);
-  useEffect(() => {
-    if (previousFilterScopeKeyRef.current === filterScopeKey) return;
-    previousFilterScopeKeyRef.current = filterScopeKey;
-    listBulkActions.state.clearSelection();
-  }, [filterScopeKey, listBulkActions.state.clearSelection]);
+  useDocumentTitle(
+    presentationState.urlSync
+      ? [
+          entities[entity].pluralLabel,
+          summarizeListState(getEntityFilters(entity), routeSearch),
+        ]
+          .filter(Boolean)
+          .join(": ")
+      : undefined,
+  );
 
   const infiniteResult = useInfiniteTableList<TFilters, TRow>({
     queryOptions,
@@ -452,40 +371,6 @@ export function useEntityList<
 
   const { data, totalCount, sums, isLoading, error, timing, refreshControls } =
     infiniteResult;
-
-  const relatedViews = useMemo(() => relatedViewsFor(entity), [entity]);
-  const relatedInitialVisibility = useMemo(
-    () =>
-      Object.fromEntries(
-        relatedViews.map((view) => [
-          `related:${view.key}`,
-          view.defaultVisible,
-        ]),
-      ),
-    [relatedViews],
-  );
-  const mergedInitialColumnVisibility = useMemo(
-    () => ({
-      createdAt: false,
-      updatedAt: false,
-      ...relatedInitialVisibility,
-      ...(worklist?.exact && worklist.query.source.kind === "entity"
-        ? worklist.query.source.columnVisibility
-        : {}),
-      ...initialColumnVisibility,
-    }),
-    [initialColumnVisibility, relatedInitialVisibility, worklist],
-  );
-  const sourceIds = useMemo(() => data.map((item) => item.id), [data]);
-  const relatedStateRef = useRelatedPreviewStateRef();
-  const relatedColumns = useRelatedPreviewColumnDefs({
-    entity,
-    relatedViews,
-    columnHelper,
-    filterOptions,
-    supportsServerSorting: true,
-    relatedStateRef,
-  });
 
   // Full-filtered-set totals for footer renderers — client rows only cover
   // the loaded pages, so footers must not sum/count them.
@@ -507,29 +392,30 @@ export function useEntityList<
   const shouldUseMappings = hasUnitMappings && getMappings;
   const effectiveMappingsMap = shouldUseMappings ? mappingsMap : null;
 
-  const combinedCustomColumns = useMemo(
-    () => [...customColumns, ...relatedColumns],
-    [customColumns, relatedColumns],
-  );
-
-  // A foreign child row gets no row-action menu and no checkbox: both act
-  // through `entity`'s mutations, which don't know that id. See
-  // `EntityListTreeConfig.rowIsEntity`.
   const rowActionsGuard = tree?.rowIsEntity;
-  const guardedExtraActions = useMemo(() => {
-    if (!rowActionsGuard) return combinedExtraActions;
-    return (row: TData) =>
-      rowActionsGuard(row) ? combinedExtraActions?.(row) : null;
-  }, [combinedExtraActions, rowActionsGuard]);
-
-  const allColumns = useStandardColumns<TData>({
+  const presentation = useEntityListPresentation<TData>({
     entity,
-    columnHelper,
-    customColumns: combinedCustomColumns,
-    filters: filters ?? NO_FILTERS,
+    data,
+    columns: customColumns,
+    filters,
     filterOptions,
-    enableRowSelection: listBulkActions.enableRowSelection,
-    combinedExtraActions: guardedExtraActions,
+    initialColumnVisibility,
+    transientColumnVisibility:
+      worklist?.exact && worklist.query.source.kind === "entity"
+        ? worklist.query.source.columnVisibility
+        : undefined,
+    revealColumns:
+      worklist?.exact && worklist.query.source.kind === "entity"
+        ? {
+            key: worklist.query.key,
+            visibility: worklist.query.source.columnVisibility ?? {},
+          }
+        : undefined,
+    layoutKey,
+    legacyLayoutVisibilityKey,
+    legacyLayoutSizingKey,
+    state: presentationState,
+    supportsServerSorting: true,
     mappingsMap: effectiveMappingsMap,
     hasUnitMappings,
     nameClassName,
@@ -539,39 +425,14 @@ export function useEntityList<
     hiddenFilterColumns,
     expandable: tree?.expandable,
     rowLink: tree?.rowLink,
+    rowActionGuard: rowActionsGuard,
   });
-
-  const persistedLayoutKey = layoutKey ?? entity;
-  const layout = useCubbyTableLayout({
-    key: persistedLayoutKey,
-    columns: allColumns,
-    initialColumnVisibility: mergedInitialColumnVisibility,
-    legacyVisibilityKey: legacyLayoutVisibilityKey ?? persistedLayoutKey,
-    legacySizingKey: legacyLayoutSizingKey ?? persistedLayoutKey,
-  });
-  useRevealTableColumnsOnce(
+  const {
+    allColumns,
     layout,
-    worklist?.exact && worklist.query.source.kind === "entity"
-      ? {
-          key: worklist.query.key,
-          visibility: worklist.query.source.columnVisibility ?? {},
-        }
-      : undefined,
-  );
-  const columnVisibility = useStore(layout.atoms.columnVisibility);
-  const visibleRelatedKeys = useMemo(
-    () =>
-      relatedViews
-        .filter((view) => columnVisibility[`related:${view.key}`] !== false)
-        .map((view) => view.key),
-    [columnVisibility, relatedViews],
-  );
-  const rowContentVersion = useRelatedPreviewData({
-    entity,
-    sourceIds,
-    visibleRelationKeys: visibleRelatedKeys,
-    relatedStateRef,
-  });
+    initialColumnVisibility: mergedInitialColumnVisibility,
+    rowContentVersion,
+  } = presentation;
 
   // Row identity is independent of whether selection happens to be enabled.
   // Index ids transfer virtualizer measurements and row state to the wrong
@@ -612,10 +473,12 @@ export function useEntityList<
     getRowId,
     enableRowSelection: rowActionsGuard
       ? (row) =>
-          listBulkActions.enableRowSelection && rowActionsGuard(row.original)
-      : listBulkActions.enableRowSelection,
-    rowSelection: listBulkActions.rowSelection,
-    onRowSelectionChange: listBulkActions.onRowSelectionChange,
+          presentationState.listBulkActions.enableRowSelection &&
+          rowActionsGuard(row.original)
+      : presentationState.listBulkActions.enableRowSelection,
+    rowSelection: presentationState.listBulkActions.rowSelection,
+    onRowSelectionChange:
+      presentationState.listBulkActions.onRowSelectionChange,
     initialColumnVisibility: mergedInitialColumnVisibility,
     layout,
     serverTotals,
@@ -653,11 +516,11 @@ export function useEntityList<
   // is loaded ROWS, `totalCount` is matching ROOTS — so the "select all N
   // matching" offer simply never fires. That's the honest outcome: it would
   // otherwise promise a count the selection can't match.
-  const bulkActionBar = listBulkActions.config ? (
+  const bulkActionBar = presentationState.listBulkActions.config ? (
     <ListBulkActionBar
       table={table}
-      config={listBulkActions.config}
-      state={listBulkActions.state}
+      config={presentationState.listBulkActions.config}
+      state={presentationState.listBulkActions.state}
       selectAllMatching={{
         totalCount,
         loadedCount: data.length,
@@ -677,8 +540,8 @@ export function useEntityList<
     error,
     timing,
     bulkActionBar,
-    deleteDialog,
-    requestDelete,
+    deleteDialog: presentationState.deleteDialog,
+    requestDelete: presentationState.requestDelete,
     infiniteScroll: infiniteResult.infiniteScroll,
     refreshControls,
     grouped,

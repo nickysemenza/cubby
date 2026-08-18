@@ -24,13 +24,11 @@ import { CreateProjectDialog } from "~/app/projects/create-project-dialog";
 import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
 import { Row, Stack } from "~/components/layout";
 import {
-  EventCalendar,
-  type EventCalendarRenderEventProps,
+  MonthEventCalendar,
+  type MonthEventCalendarRenderEventProps,
 } from "~/components/reui/event-calendar/event-calendar";
-import { EventCalendarMonthView } from "~/components/reui/event-calendar/event-calendar-month-view";
 import type {
   CalendarEvent,
-  CalendarView,
   EventCalendarProposedUpdate,
 } from "~/components/reui/event-calendar/event-calendar-types";
 import { Button } from "~/components/ui/button";
@@ -59,21 +57,9 @@ import { CalendarItemLink } from "./calendar-item-row";
 import { itemSpanLabel } from "./calendar-span";
 
 const HOUSEHOLD_TIME_ZONE = "America/Los_Angeles";
-const CALENDAR_VIEWS: CalendarView[] = ["month"];
-const CALENDAR_INTERACTIONS = {
-  drag: true,
-  resize: false,
-  selectSlot: false,
-} as const;
 const CALENDAR_ACTIVATION = {
   touchDelayMs: 350,
   touchTolerancePx: 12,
-} as const;
-const CALENDAR_CLASS_NAMES = {
-  monthHeader: "bg-muted",
-  monthDayHeader: "font-mono uppercase tracking-wider",
-  monthCellContent: "min-h-24 sm:min-h-28",
-  monthBar: "z-10",
 } as const;
 const ALL_KINDS: CalendarItemKind[] = ["meal", "task", "expense", "project"];
 const NO_ITEMS: CalendarItem[] = [];
@@ -155,7 +141,6 @@ const toEvent = (
   allDay: true,
   readOnly: item.interaction === "read-only",
   draggable: item.interaction === "move",
-  resizable: false,
   priority:
     item.kind === "project"
       ? 100
@@ -175,7 +160,7 @@ const toEvent = (
 function CalendarChip({
   occurrence,
   segment,
-}: EventCalendarRenderEventProps<CalendarItem>) {
+}: MonthEventCalendarRenderEventProps<CalendarItem>) {
   const item = occurrence.event.data;
   if (!item) return occurrence.event.title;
   const Icon = itemIcon(item);
@@ -260,7 +245,7 @@ export function UnifiedCalendar({
   const api = useTRPC();
   const today = householdLocalDate();
   const anchorDate = date ?? today;
-  const anchor = calendarDate(anchorDate);
+  const anchor = useMemo(() => calendarDate(anchorDate), [anchorDate]);
   const activeMonth = useMemo(
     () => ({
       startDate: formatPlainDate(startOfMonth(anchor)),
@@ -450,22 +435,13 @@ export function UnifiedCalendar({
           />
         </div>
 
-        <EventCalendar<CalendarItem>
+        <MonthEventCalendar<CalendarItem>
           events={events}
-          view="month"
-          views={CALENDAR_VIEWS}
           date={anchor}
           timeZone={HOUSEHOLD_TIME_ZONE}
-          fixedWeeks
-          interactions={CALENDAR_INTERACTIONS}
           activation={CALENDAR_ACTIVATION}
           loading={isLoading}
-          maxEventsPerCell={5}
-          showOutsideDays
-          showDayAddButton
-          scrollMode="page"
           className="hidden min-h-[620px] overflow-hidden border md:block"
-          classNames={CALENDAR_CLASS_NAMES}
           renderEvent={CalendarChip}
           onEventsChange={setEvents}
           onEventUpdate={persistMove}
@@ -479,9 +455,7 @@ export function UnifiedCalendar({
             setSelectedDay(formatPlainDate(moreDay));
             return false;
           }}
-        >
-          <EventCalendarMonthView maxEventsPerCell={5} />
-        </EventCalendar>
+        />
       </Stack>
 
       <CalendarDaySheet

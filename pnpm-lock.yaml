@@ -216,9 +216,6 @@ importers:
       '@better-auth/passkey':
         specifier: ^1.6.25
         version: 1.6.25(3b1d90567613b616d78179b0e34b01e1)
-      '@cfworker/json-schema':
-        specifier: ^4.1.1
-        version: 4.1.1
       '@cloudflare/tanstack-ai':
         specifier: 0.2.1
         version: 0.2.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(@tanstack/ai@0.44.1(@opentelemetry/api@1.9.1)(zod@4.4.3))(ws@8.21.2)(zod@4.4.3)
@@ -396,15 +393,6 @@ importers:
       '@ts-rest/core':
         specifier: 3.53.0-rc.1
         version: 3.53.0-rc.1(@types/node@26.2.0)
-      '@types/d3-force':
-        specifier: ^3.0.10
-        version: 3.0.10
-      '@types/d3-hierarchy':
-        specifier: ^3.1.7
-        version: 3.1.7
-      '@types/qrcode':
-        specifier: ^1.5.6
-        version: 1.5.6
       aws4fetch:
         specifier: ^1.0.20
         version: 1.0.20
@@ -489,6 +477,9 @@ importers:
       react-dom:
         specifier: ^19.2.7
         version: 19.2.7(react@19.2.7)
+      react-dropzone:
+        specifier: ^18.3.0
+        version: 18.3.0(@types/react@19.2.17)(react@19.2.7)
       react-hook-form:
         specifier: ^7.82.0
         version: 7.85.0(react@19.2.7)
@@ -556,6 +547,12 @@ importers:
       '@testing-library/react':
         specifier: ^16.3.2
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@types/d3-force':
+        specifier: ^3.0.10
+        version: 3.0.10
+      '@types/d3-hierarchy':
+        specifier: ^3.1.7
+        version: 3.1.7
       '@types/node':
         specifier: ^26.1.1
         version: 26.2.0
@@ -565,6 +562,9 @@ importers:
       '@types/pluralize':
         specifier: ^0.0.33
         version: 0.0.33
+      '@types/qrcode':
+        specifier: ^1.5.6
+        version: 1.5.6
       '@types/react':
         specifier: ^19.2.17
         version: 19.2.17
@@ -5482,6 +5482,10 @@ packages:
     resolution: {integrity: sha512-Xcz9l0z7y9yQ9rdDaxlmaI4uJHf/T8g9hOEzJcsEqX2SjCj4J20uK7+ldkDHMbpJDK76wF7xEIgxc/vSlsfw5w==}
     engines: {node: '>=10.12.0'}
 
+  attr-accept@2.2.5:
+    resolution: {integrity: sha512-0bDNnY/u6pPwHDMoF0FieU354oBi0a8rD9FcsLwzcGWbc8KS8KPIi7y+s13OlVY+gMWc/9xEMUgNE6Qm8ZllYQ==}
+    engines: {node: '>=4'}
+
   aws4fetch@1.0.20:
     resolution: {integrity: sha512-/djoAN709iY65ETD6LKCtyyEI04XIBP5xVvfmNxsEP0uJB5tyaGBztSryRr4HqMStr9R06PisQE7m9zDTXKu6g==}
 
@@ -6420,6 +6424,10 @@ packages:
   figures@6.1.0:
     resolution: {integrity: sha512-d+l3qxjSesT4V7v2fh+QnmFnUWv9lSpjarhShNTgBOfA0ttejbQUAlHLitbjkoRiDulW0OPoQPYIGhIC8ohejg==}
     engines: {node: '>=18'}
+
+  file-selector@4.1.0:
+    resolution: {integrity: sha512-Io1mP8CI3zec5Bxy3P3TxdrKnt35Cm8vNIHnZsvyj43l4YFjD4NRInBp240S5bDJQ0EP1jnh7nCAwXsO818OCg==}
+    engines: {node: '>= 20'}
 
   file-uri-to-path@1.0.0:
     resolution: {integrity: sha512-0Zt+s3L7Vf1biwWZ29aARiVYLx7iMGnEUl9x33fbB/j3jR81u/O2LbqK+Bm1CDSNDKVtJ/YjwY7TUd5SkeLQLw==}
@@ -7975,6 +7983,16 @@ packages:
     peerDependencies:
       react: ^19.2.7
 
+  react-dropzone@18.3.0:
+    resolution: {integrity: sha512-fViAc2xA+Xn/27is4tgAC12ZVOuA1zJtMjxUPnCoLMzoSE9TuCNgTC5donp2IrAwJbQww6EHbKLl2p3w/yMwBg==}
+    engines: {node: '>= 20'}
+    peerDependencies:
+      '@types/react': '*'
+      react: '>= 18'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+
   react-google-recaptcha@3.1.0:
     resolution: {integrity: sha512-cYW2/DWas8nEKZGD7SCu9BSuVz8iOcOLHChHyi7upUuVhkpkhYG/6N3KDiTQ3XAiZ2UAZkfvYKMfAHOzBOcGEg==}
     peerDependencies:
@@ -9513,7 +9531,8 @@ snapshots:
 
   '@captchafox/types@1.6.0': {}
 
-  '@cfworker/json-schema@4.1.1': {}
+  '@cfworker/json-schema@4.1.1':
+    optional: true
 
   '@cloudflare/kv-asset-handler@0.5.0': {}
 
@@ -13884,6 +13903,8 @@ snapshots:
 
   atomically@1.7.0: {}
 
+  attr-accept@2.2.5: {}
+
   aws4fetch@1.0.20: {}
 
   axe-core@4.13.0: {}
@@ -14753,6 +14774,8 @@ snapshots:
   figures@6.1.0:
     dependencies:
       is-unicode-supported: 2.1.0
+
+  file-selector@4.1.0: {}
 
   file-uri-to-path@1.0.0:
     optional: true
@@ -16510,6 +16533,14 @@ snapshots:
     dependencies:
       react: 19.2.7
       scheduler: 0.27.0
+
+  react-dropzone@18.3.0(@types/react@19.2.17)(react@19.2.7):
+    dependencies:
+      attr-accept: 2.2.5
+      file-selector: 4.1.0
+      react: 19.2.7
+    optionalDependencies:
+      '@types/react': 19.2.17
 
   react-google-recaptcha@3.1.0(react@19.2.7):
     dependencies:

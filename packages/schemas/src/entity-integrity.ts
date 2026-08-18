@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { entitySchema } from "./entity";
+import { entitySchema } from "./entity-core";
 import {
   anyShortcodeSchema,
   cookbookShortcode,

@@ -23,7 +23,16 @@ import {
   parseISO,
   subDays,
 } from "date-fns";
-import { and, eq, ne, notExists, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  isNotNull,
+  ne,
+  notExists,
+  type SQL,
+  type SQLWrapper,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Database } from "~/server/db";
 import { expense, project, purchase, vendor } from "~/server/db/schema";
@@ -48,6 +57,60 @@ type AggregateRow = {
 };
 type BucketRow = AggregateRow & { key: string; label: string };
 type CellRow = AggregateRow & { rowKey: string; columnKey: string | null };
+type FacetId = ExpenseFacetCountsInput["facetIds"][number];
+
+/**
+ * The analyzer's closed set of axes. Project and vendor deliberately carry
+ * their live-join requirement here: a dangling or soft-deleted relation is an
+ * unattributed expense, not a bucket with a stale label.
+ */
+const dimensionSpecs = {
+  trade: { key: expense.trade, label: expense.trade, relation: "expense" },
+  costType: {
+    key: expense.costType,
+    label: expense.costType,
+    relation: "expense",
+  },
+  month: {
+    key: EXPENSE_MONTH_BUCKET,
+    label: EXPENSE_MONTH_BUCKET,
+    relation: "expense",
+  },
+  project: { key: project.shortcode, label: project.name, relation: "project" },
+  vendor: { key: vendor.shortcode, label: vendor.name, relation: "vendor" },
+} as const satisfies Record<
+  Dimension,
+  {
+    key: SQLWrapper;
+    label: SQLWrapper;
+    relation: "expense" | "project" | "vendor";
+  }
+>;
+
+type DirectDimension = Exclude<Dimension, "project" | "vendor">;
+
+/** Scalar facets all share the same cardinality query and null label policy. */
+const scalarFacetSpecs = {
+  costType: { value: expense.costType },
+  lineKind: { value: expense.lineKind },
+  lineBasis: { value: expense.lineBasis },
+  trade: { value: expense.trade },
+  future: {
+    value: sql<string>`case when ${expense.future} then 'true' else 'false' end`,
+  },
+  productPresence: {
+    value: sql<string>`case when ${expense.productId} is null then 'none' else 'has' end`,
+  },
+} as const satisfies Record<
+  Exclude<FacetId, "project" | "vendor" | "orderIdPresence">,
+  { value: SQLWrapper }
+>;
+
+type ScalarFacetId = keyof typeof scalarFacetSpecs;
+
+function isScalarFacetId(id: FacetId): id is ScalarFacetId {
+  return Object.hasOwn(scalarFacetSpecs, id);
+}
 
 const zeroAggregate = (): ExpenseAnalyzeAggregate => ({
   actual: 0,
@@ -111,18 +174,8 @@ const bucketFilter = (
   }
 };
 
-const dimensionColumns = (
-  dimension: Exclude<Dimension, "project" | "vendor">,
-) => {
-  switch (dimension) {
-    case "trade":
-      return { key: expense.trade, label: expense.trade };
-    case "costType":
-      return { key: expense.costType, label: expense.costType };
-    case "month":
-      return { key: EXPENSE_MONTH_BUCKET, label: EXPENSE_MONTH_BUCKET };
-  }
-};
+const dimensionColumns = (dimension: DirectDimension) =>
+  dimensionSpecs[dimension];
 
 const hasPrincipalAxis = (input: ExpenseAnalyzeInput) =>
   input.rowDimension === "trade" ||
@@ -149,54 +202,34 @@ async function groupedDimension(
   dimension: Dimension,
 ): Promise<BucketRow[]> {
   const database = getDb(db);
-  if (dimension === "project") {
-    return await database
-      .select({
-        key: project.shortcode,
-        label: project.name,
-        ...expenseAggregateFields(),
-      })
-      .from(expense)
-      .innerJoin(
-        project,
-        and(eq(expense.projectId, project.id), notDeleted(project)),
-      )
-      .where(where)
-      .groupBy(project.shortcode, project.name)
-      .orderBy(project.name);
-  }
-  if (dimension === "vendor") {
-    const charge = alias(purchase, "analyzeCharge");
-    return await database
-      .select({
-        key: vendor.shortcode,
-        label: vendor.name,
-        ...expenseAggregateFields(),
-      })
-      .from(expense)
-      .innerJoin(
-        charge,
-        and(eq(expense.purchaseId, charge.id), notDeleted(charge)),
-      )
-      .innerJoin(
-        vendor,
-        and(eq(charge.vendorId, vendor.id), notDeleted(vendor)),
-      )
-      .where(where)
-      .groupBy(vendor.shortcode, vendor.name)
-      .orderBy(vendor.name);
-  }
-  const columns = dimensionColumns(dimension);
-  return await database
+  const spec = dimensionSpecs[dimension];
+  const charge = alias(purchase, "analyzeDimensionCharge");
+  const rows = await database
     .select({
-      key: columns.key,
-      label: columns.label,
+      key: spec.key,
+      label: spec.label,
       ...expenseAggregateFields(),
     })
     .from(expense)
-    .where(where)
-    .groupBy(columns.key, columns.label)
-    .orderBy(columns.label);
+    .leftJoin(
+      project,
+      and(eq(expense.projectId, project.id), notDeleted(project)),
+    )
+    .leftJoin(
+      charge,
+      and(eq(expense.purchaseId, charge.id), notDeleted(charge)),
+    )
+    .leftJoin(vendor, and(eq(charge.vendorId, vendor.id), notDeleted(vendor)))
+    .where(
+      spec.relation === "expense" ? where : and(where, isNotNull(spec.key)),
+    )
+    .groupBy(spec.key, spec.label)
+    .orderBy(spec.label);
+  return rows.map((row) => ({
+    ...row,
+    key: String(row.key),
+    label: String(row.label),
+  }));
 }
 
 async function groupedCells(
@@ -214,55 +247,29 @@ async function groupedCells(
     }));
   }
   const database = getDb(db);
+  const row = dimensionSpecs[rowDimension];
   const column = dimensionColumns(columnDimension);
-  if (rowDimension === "project") {
-    return await database
-      .select({
-        rowKey: project.shortcode,
-        columnKey: column.key,
-        ...expenseAggregateFields(),
-      })
-      .from(expense)
-      .innerJoin(
-        project,
-        and(eq(expense.projectId, project.id), notDeleted(project)),
-      )
-      .where(where)
-      .groupBy(project.shortcode, column.key)
-      .orderBy(project.shortcode, column.key);
-  }
-  if (rowDimension === "vendor") {
-    const charge = alias(purchase, "analyzeCellCharge");
-    return await database
-      .select({
-        rowKey: vendor.shortcode,
-        columnKey: column.key,
-        ...expenseAggregateFields(),
-      })
-      .from(expense)
-      .innerJoin(
-        charge,
-        and(eq(expense.purchaseId, charge.id), notDeleted(charge)),
-      )
-      .innerJoin(
-        vendor,
-        and(eq(charge.vendorId, vendor.id), notDeleted(vendor)),
-      )
-      .where(where)
-      .groupBy(vendor.shortcode, column.key)
-      .orderBy(vendor.shortcode, column.key);
-  }
-  const row = dimensionColumns(rowDimension);
-  return await database
+  const charge = alias(purchase, "analyzeCellCharge");
+  const rows = await database
     .select({
       rowKey: row.key,
       columnKey: column.key,
       ...expenseAggregateFields(),
     })
     .from(expense)
-    .where(where)
+    .leftJoin(
+      project,
+      and(eq(expense.projectId, project.id), notDeleted(project)),
+    )
+    .leftJoin(
+      charge,
+      and(eq(expense.purchaseId, charge.id), notDeleted(charge)),
+    )
+    .leftJoin(vendor, and(eq(charge.vendorId, vendor.id), notDeleted(vendor)))
+    .where(row.relation === "expense" ? where : and(where, isNotNull(row.key)))
     .groupBy(row.key, column.key)
     .orderBy(row.key, column.key);
+  return rows.map((row) => ({ ...row, rowKey: String(row.rowKey) }));
 }
 
 function previousFilters(filters: ExpenseFilters): {
@@ -388,6 +395,81 @@ function includeSelectedZeroOptions(
     ...selected
       .filter((value) => !present.has(value))
       .map((value) => ({ value, label: null, count: 0 })),
+  ];
+}
+
+type FacetOption = ExpenseFacetCountsOut["facets"][number]["options"][number];
+
+async function scalarFacetOptions(
+  db: Database,
+  where: SQL | undefined,
+  spec: (typeof scalarFacetSpecs)[keyof typeof scalarFacetSpecs],
+): Promise<FacetOption[]> {
+  const rows = await getDb(db)
+    .select({ value: spec.value, count: sql<number>`count(*)::int` })
+    .from(expense)
+    .where(where)
+    .groupBy(spec.value);
+  return rows.map((row) => ({
+    value: String(row.value),
+    label: null,
+    count: Number(row.count),
+  }));
+}
+
+/**
+ * Facet entity buckets intentionally use the same live relation definition as
+ * analyzer axes. Presence below remains raw-FK based, so it can distinguish a
+ * linked row from no link without changing the existing filter semantics.
+ */
+async function entityFacetOptions(
+  db: Database,
+  where: SQL | undefined,
+  dimension: "project" | "vendor",
+): Promise<FacetOption[]> {
+  const spec = dimensionSpecs[dimension];
+  const charge = alias(purchase, "facetDimensionCharge");
+  const rows = await getDb(db)
+    .select({
+      value: spec.key,
+      label: spec.label,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(expense)
+    .leftJoin(
+      project,
+      and(eq(expense.projectId, project.id), notDeleted(project)),
+    )
+    .leftJoin(
+      charge,
+      and(eq(expense.purchaseId, charge.id), notDeleted(charge)),
+    )
+    .leftJoin(vendor, and(eq(charge.vendorId, vendor.id), notDeleted(vendor)))
+    .where(and(where, isNotNull(spec.key)))
+    .groupBy(spec.key, spec.label)
+    .orderBy(spec.label);
+  return rows.map((row) => ({
+    value: String(row.value),
+    label: String(row.label),
+    count: Number(row.count),
+  }));
+}
+
+async function presenceFacetOptions(
+  db: Database,
+  where: SQL | undefined,
+  column: typeof expense.projectId | typeof expense.purchaseId,
+): Promise<FacetOption[]> {
+  const [presence] = await getDb(db)
+    .select({
+      any: sql<number>`count(*) filter (where ${column} is not null)::int`,
+      none: sql<number>`count(*) filter (where ${column} is null)::int`,
+    })
+    .from(expense)
+    .where(where);
+  return [
+    { value: "__any__", label: null, count: presence?.any ?? 0 },
+    { value: "__none__", label: null, count: presence?.none ?? 0 },
   ];
 }
 
@@ -622,72 +704,13 @@ export async function expenseFacetCounts(
         emptyFacetFilters(input.filters, id),
       );
       const database = getDb(db);
+      if (isScalarFacetId(id)) {
+        return {
+          id,
+          options: await scalarFacetOptions(db, where, scalarFacetSpecs[id]),
+        };
+      }
       switch (id) {
-        case "costType": {
-          const rows = await database
-            .select({
-              value: expense.costType,
-              count: sql<number>`count(*)::int`,
-            })
-            .from(expense)
-            .where(where)
-            .groupBy(expense.costType);
-          return { id, options: rows.map((row) => ({ ...row, label: null })) };
-        }
-        case "lineKind": {
-          const rows = await database
-            .select({
-              value: expense.lineKind,
-              count: sql<number>`count(*)::int`,
-            })
-            .from(expense)
-            .where(where)
-            .groupBy(expense.lineKind);
-          return { id, options: rows.map((row) => ({ ...row, label: null })) };
-        }
-        case "lineBasis": {
-          const rows = await database
-            .select({
-              value: expense.lineBasis,
-              count: sql<number>`count(*)::int`,
-            })
-            .from(expense)
-            .where(where)
-            .groupBy(expense.lineBasis);
-          return { id, options: rows.map((row) => ({ ...row, label: null })) };
-        }
-        case "trade": {
-          const rows = await database
-            .select({ value: expense.trade, count: sql<number>`count(*)::int` })
-            .from(expense)
-            .where(where)
-            .groupBy(expense.trade);
-          return { id, options: rows.map((row) => ({ ...row, label: null })) };
-        }
-        case "future": {
-          const rows = await database
-            .select({
-              value: sql<string>`case when ${expense.future} then 'true' else 'false' end`,
-              count: sql<number>`count(*)::int`,
-            })
-            .from(expense)
-            .where(where)
-            .groupBy(expense.future);
-          return { id, options: rows.map((row) => ({ ...row, label: null })) };
-        }
-        case "productPresence": {
-          const rows = await database
-            .select({
-              value: sql<string>`case when ${expense.productId} is null then 'none' else 'has' end`,
-              count: sql<number>`count(*)::int`,
-            })
-            .from(expense)
-            .where(where)
-            .groupBy(
-              sql`case when ${expense.productId} is null then 'none' else 'has' end`,
-            );
-          return { id, options: rows.map((row) => ({ ...row, label: null })) };
-        }
         case "orderIdPresence": {
           const charge = alias(purchase, "facetOrderCharge");
           const rows = await database
@@ -707,74 +730,23 @@ export async function expenseFacetCounts(
           return { id, options: rows.map((row) => ({ ...row, label: null })) };
         }
         case "project": {
-          const [rows, [presence]] = await Promise.all([
-            database
-              .select({
-                value: project.shortcode,
-                label: project.name,
-                count: sql<number>`count(*)::int`,
-              })
-              .from(expense)
-              .innerJoin(
-                project,
-                and(eq(expense.projectId, project.id), notDeleted(project)),
-              )
-              .where(where)
-              .groupBy(project.shortcode, project.name)
-              .orderBy(project.name),
-            database
-              .select({
-                any: sql<number>`count(*) filter (where ${expense.projectId} is not null)::int`,
-                none: sql<number>`count(*) filter (where ${expense.projectId} is null)::int`,
-              })
-              .from(expense)
-              .where(where),
+          const [rows, presence] = await Promise.all([
+            entityFacetOptions(db, where, "project"),
+            presenceFacetOptions(db, where, expense.projectId),
           ]);
           return {
             id,
-            options: [
-              { value: "__any__", label: null, count: presence?.any ?? 0 },
-              { value: "__none__", label: null, count: presence?.none ?? 0 },
-              ...rows,
-            ],
+            options: [...presence, ...rows],
           };
         }
         case "vendor": {
-          const charge = alias(purchase, "facetVendorCharge");
-          const [rows, [presence]] = await Promise.all([
-            database
-              .select({
-                value: vendor.shortcode,
-                label: vendor.name,
-                count: sql<number>`count(*)::int`,
-              })
-              .from(expense)
-              .innerJoin(
-                charge,
-                and(eq(expense.purchaseId, charge.id), notDeleted(charge)),
-              )
-              .innerJoin(
-                vendor,
-                and(eq(charge.vendorId, vendor.id), notDeleted(vendor)),
-              )
-              .where(where)
-              .groupBy(vendor.shortcode, vendor.name)
-              .orderBy(vendor.name),
-            database
-              .select({
-                any: sql<number>`count(*) filter (where ${expense.purchaseId} is not null)::int`,
-                none: sql<number>`count(*) filter (where ${expense.purchaseId} is null)::int`,
-              })
-              .from(expense)
-              .where(where),
+          const [rows, presence] = await Promise.all([
+            entityFacetOptions(db, where, "vendor"),
+            presenceFacetOptions(db, where, expense.purchaseId),
           ]);
           return {
             id,
-            options: [
-              { value: "__any__", label: null, count: presence?.any ?? 0 },
-              { value: "__none__", label: null, count: presence?.none ?? 0 },
-              ...rows,
-            ],
+            options: [...presence, ...rows],
           };
         }
       }

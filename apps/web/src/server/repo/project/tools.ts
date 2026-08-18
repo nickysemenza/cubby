@@ -14,7 +14,6 @@ import type {
   Trade,
 } from "@cubby/schemas/project";
 import { isLiveProjectStatus } from "@cubby/schemas/project";
-import { format } from "date-fns";
 import {
   and,
   asc,
@@ -34,6 +33,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
+import { householdLocalDate } from "~/lib/household-date";
 import {
   describeToolTimelineConflict,
   type ToolTimelineProjectWindow,
@@ -423,7 +423,7 @@ export async function listProjectResources(
     ? (buildResourceWindowContexts(
         loadedWindows,
         [projectId],
-        options.today ?? format(new Date(), "yyyy-MM-dd"),
+        options.today ?? householdLocalDate(),
       ).get(projectId) ?? null)
     : null;
   const softwareWindowCosts = await loadProjectSoftwareWindowCosts(
@@ -514,7 +514,7 @@ async function assertNoTimelineConflict(
 ): Promise<void> {
   if (pairs.length === 0) return;
   const dbc = getDb(db);
-  const today = options.today ?? format(new Date(), "yyyy-MM-dd");
+  const today = options.today ?? householdLocalDate();
   const projectIds = uniq(pairs.map((pair) => pair.projectId));
   const productIds = uniq(pairs.map((pair) => pair.productId));
 
@@ -1067,7 +1067,7 @@ export async function suggestProjectTools(
   options: ResourceReadOptions = {},
 ): Promise<ProjectToolSuggestionsOut> {
   const dbc = getDb(db);
-  const today = options.today ?? format(new Date(), "yyyy-MM-dd");
+  const today = options.today ?? householdLocalDate();
   const [
     attachedRows,
     taskTrades,
@@ -1530,7 +1530,7 @@ export async function listProductProjectUses(
     ? buildResourceWindowContexts(
         loadedWindows,
         projectIds,
-        options.today ?? format(new Date(), "yyyy-MM-dd"),
+        options.today ?? householdLocalDate(),
       )
     : new Map<ProjectId, ResourceWindowContext | null>();
   const softwareExpenses =
