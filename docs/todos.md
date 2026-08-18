@@ -27,19 +27,14 @@ _No item is currently promoted._
 
 Ordered within each domain only; choose based on which surface is seeing real use.
 
-- **Recipe data:** decide the persisted shape for imported times, then carry them
-  through import/detail/list sorting and filtering. Follow with ingredient editing
-  parity, then macro-aware nutrition. The portion solver stays behind nutrition and
-  real evidence that agent iteration is painful.
-- **Shopping:** split Shopping list v1.5 into independently shippable slices:
-  (1) manual items + durable check-off, (2) shopper units + pack rounding,
-  (3) estimated cost, then (4) URL exclusions + text/print export.
-- **House:** recurring maintenance; then the tracker data gaps as separate
-  changes (`completedAt`, portfolio figures, mobile renderer, activity
-  filter), not one omnibus PR.
-- **Engineering:** close the three coverage/exhaustiveness gaps, then document
-  test-placement criteria. Keep symmetry-only refactors behind live correctness
-  or maintenance work.
+- **Recipe data:** ingredient editing parity, then macro-aware nutrition. The
+  portion solver stays behind nutrition and real evidence that agent iteration is
+  painful.
+- **Shopping:** finish Shopping list v1.6 with manual/ad-hoc items + durable
+  check-off, pack rounding, then cross-device check-off.
+- **House:** recurring maintenance.
+- **Engineering:** keep symmetry-only refactors behind live correctness or
+  maintenance work.
 
 ### Promote only when triggered
 
@@ -890,7 +885,6 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
   the planned cold-cache Chromium and mobile-WebKit comparison before migrating any
   other detail family; keep the remaining routes `ssr: false` unless the measured
   LCP threshold is met without an INP/CLS or Worker-error regression.
-- [ ] **Document test placement criteria** (unit vs integration vs e2e)
 - [ ] **Selection-control consolidation — non-form phase.** Form and inline-edit
   pickers share the Base UI assignment-picker shell; remaining selectors are
   intentionally specialized. If visual or keyboard inconsistencies remain painful,
@@ -921,11 +915,10 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
   repointing it at `getByShortcode` would silently swap a thrown-and-caught
   "Failed to load X" state (`entity-preview-panel.tsx`) for a
   quietly-successful `data: null` render, so all three preview consumers need
-  an explicit null branch first. The one concrete double-fetch today is
-  `meals.$shortcode.tsx`'s loader (`getByShortcode`, suspense-warmed)
-  followed by `meal-detail-page.tsx` firing its own cold `getByID` for the
-  same row — every other detail page (product, recipe, …) takes the entity as
-  a prop instead of re-querying.
+  an explicit null branch first. Meal detail no longer demonstrates a duplicate
+  fetch: its loader and `meal-detail-page.tsx` both use `getByShortcode` with the
+  same query key. Every other detail page (product, recipe, …) takes the entity
+  as a prop instead of re-querying.
 - [ ] **Two duplicate detectors have no fix action.** `problems/detectors-financial.ts`'s
   `findDuplicateFinancialTransactionSourceRefs` and
   `findDuplicateFinancialAccountSourceAliases` surface Problems-page findings
