@@ -6,8 +6,7 @@ import {
   unsafeVendorId,
 } from "@cubby/schemas/identifiers";
 import { urlStringParam } from "~/lib/search-params";
-import { buildFiltersFromManifest, type FilterSpecCore } from "./filters";
-import type { FilterAssembly } from "./problem-query";
+import type { FilterSpecCore } from "./filters";
 
 /**
  * Dependency-light semantic filter core for URL state.
@@ -553,38 +552,6 @@ export function entityFilterSearchFields(
   const fields: Record<string, typeof urlStringParam> = {};
   for (const key of entityFilterUrlKeys(entity)) fields[key] = urlStringParam;
   return fields;
-}
-
-/** Compile a Problem assembly through the same server-safe semantic registry. */
-export function compileProblemFilters(
-  entity: Entity,
-  assembly: FilterAssembly,
-): Record<string, unknown> {
-  const specs: readonly FilterSpecCore[] =
-    (
-      problemFilterSemantics as Partial<
-        Record<Entity, readonly FilterSpecCore[]>
-      >
-    )[entity] ?? [];
-  const values = new Map(assembly.map(({ id, value }) => [id, value]));
-  const byColumn = new Map(specs.map((spec) => [spec.columnId, spec]));
-  const unknown = assembly.find(({ id }) => !byColumn.has(id));
-  if (unknown) {
-    throw new Error(
-      `No server-safe Problem filter semantic for ${entity}.${unknown.id}`,
-    );
-  }
-  const urlKeys = new Set(entityFilterUrlKeys(entity));
-  const nonSerializable = assembly.find(({ id }) => {
-    const spec = byColumn.get(id);
-    return !spec || !urlKeys.has(spec.urlKey ?? spec.columnId);
-  });
-  if (nonSerializable) {
-    throw new Error(
-      `Problem filter ${entity}.${nonSerializable.id} has no canonical URL semantic`,
-    );
-  }
-  return buildFiltersFromManifest(specs, (columnId) => values.get(columnId));
 }
 
 /**
