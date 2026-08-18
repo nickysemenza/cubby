@@ -25,9 +25,7 @@ export function householdDaysAgo(
   days: number,
   from: Date = new Date(),
 ): string {
-  return householdLocalDate(
-    new Date(from.getTime() - days * 24 * 60 * 60 * 1000),
-  );
+  return shiftHouseholdCalendarDate(from, -days);
 }
 
 /** Household-local calendar date `days` from now, for "due within" checks. */
@@ -35,7 +33,20 @@ export function householdDaysFromNow(
   days: number,
   from: Date = new Date(),
 ): string {
-  return householdLocalDate(
-    new Date(from.getTime() + days * 24 * 60 * 60 * 1000),
-  );
+  return shiftHouseholdCalendarDate(from, days);
+}
+
+/**
+ * Shift the household's calendar date, not an elapsed 24-hour duration.
+ * Spring-forward days are 23 hours and fall-back days are 25; subtracting
+ * milliseconds can therefore skip or repeat a local date near midnight.
+ */
+function shiftHouseholdCalendarDate(from: Date, days: number): string {
+  const [year, month, day] = householdLocalDate(from).split("-").map(Number);
+  if (year == null || month == null || day == null) {
+    throw new Error("Could not resolve household calendar date");
+  }
+  return new Date(Date.UTC(year, month - 1, day + days))
+    .toISOString()
+    .slice(0, 10);
 }

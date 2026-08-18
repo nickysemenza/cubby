@@ -398,6 +398,7 @@ export const financialTransactionFilterFields = {
   accountId: oneOrMany(financialAccountShortcode).optional(),
   purchaseId: oneOrMany(purchaseShortcode).optional(),
   purchasePresenceFilter: presenceFilter,
+  allocationIntegrity: z.enum(["defect"]).optional(),
   kind: oneOrMany(financialTransactionKind).optional(),
   status: oneOrMany(financialTransactionStatus).optional(),
   source: oneOrMany(z.string().min(1)).optional(),

@@ -7,6 +7,7 @@ import type {
   LocationWithoutAiDescription,
   NegativeExpectedQuantity,
   NeverVerifiedInventory,
+  ProblemKey,
   ProblemsViewsOut,
   ProductMissingPrice,
   ProductWithoutMappings,
@@ -15,17 +16,46 @@ import type {
   StaleLocation,
   UnusedIngredient,
 } from "@cubby/schemas/problems";
+import { compileProblemFilters } from "~/entities/problem-filter-semantics";
+import type {
+  DiagnosticKey,
+  EntityProblemSource,
+  ProblemFreshness,
+  ProblemSource,
+} from "~/entities/problem-query";
+import {
+  problemQuery,
+  problemQueryDeclarations,
+} from "~/entities/problem-registry";
+import { validateCompleteProblemRegistry } from "~/entities/problem-registry-validation";
 import {
   type ViewProblemDeclaration,
   viewProblemDeclarations,
 } from "~/entities/view-manifest";
 import { type Database, withConnection } from "~/server/db";
+import { expenseList } from "~/server/repo/expense";
+import { listFinancialTransactions } from "~/server/repo/financial-transaction";
+import { imageList } from "~/server/repo/image";
 import { ingredientList } from "~/server/repo/ingredient";
 import { inventoryentryList } from "~/server/repo/inventory";
 import { locationList } from "~/server/repo/location";
 import { mealList } from "~/server/repo/meal";
 import { productList } from "~/server/repo/product";
+import {
+  getProductConversionCoverageFreshness,
+  type ProductConversionCoverageFreshness,
+} from "~/server/repo/product/conversion-coverage";
+import { projectList } from "~/server/repo/project";
+import { purchaseList } from "~/server/repo/purchase";
 import { recipeList } from "~/server/repo/recipe";
+import { taskList } from "~/server/repo/task";
+import { vendorList } from "~/server/repo/vendor";
+import {
+  type DiagnosticRunOptions,
+  type DiagnosticStatus,
+  diagnosticAdapters,
+  runDiagnostic,
+} from "~/server/services/problem-diagnostics.service";
 import { traceAllSeq } from "~/server/tracing";
 
 /**
@@ -57,10 +87,10 @@ const SAMPLE_SIZE = 12;
  *
  * `filters` is `never` on purpose: each repo wants its own `*Filters` type and
  * they have no common supertype, so the registry below casts once at the call
- * site. The cast is safe because the pinning test in
- * `view-manifest.unit.test.tsx` parses every `serverFilters` through the real
- * manifest, and the filter guard in `filter-application.integration.test.ts`
- * proves each declared field is actually applied.
+ * site. The cast is safe because the Problem filter compiler is the only
+ * server-side translation from a canonical assembly, and the filter guard in
+ * `filter-application.integration.test.ts` proves each declared field is
+ * actually applied.
  */
 type ListRow = Record<string, unknown> & { id: string };
 type ListFn = (
@@ -71,20 +101,189 @@ type ListFn = (
 ) => Promise<{ data: ListRow[]; count: number }>;
 
 const LIST_FN = {
+  expense: expenseList,
+  financialTransaction: listFinancialTransactions,
+  image: imageList,
   ingredient: ingredientList,
   inventory: inventoryentryList,
   location: locationList,
   meal: mealList,
   product: productList,
+  project: projectList,
+  purchase: purchaseList,
   recipe: recipeList,
+  task: taskList,
+  vendor: vendorList,
 } as unknown as Partial<Record<Entity, ListFn>>;
 
+validateCompleteProblemRegistry(problemQueryDeclarations(), {
+  listEntities: new Set(Object.keys(LIST_FN) as Entity[]),
+  diagnostics: new Set(Object.keys(diagnosticAdapters) as DiagnosticKey[]),
+});
+
 /** A view's `{id, desc}` sort, in the shape the repos' `buildOrderBy` wants. */
-const toSortParams = (sort: ViewProblemDeclaration["sort"]): SortParams[] =>
+const toSortParams = (
+  sort: readonly { id: string; desc: boolean }[] | undefined,
+): SortParams[] =>
   (sort ?? []).map(({ id, desc }) => ({
     orderBy: id,
     direction: desc ? "desc" : "asc",
   }));
+
+const entityFiltersFor = (
+  declaration: ViewProblemDeclaration,
+): Record<string, unknown> => {
+  const source = declaration.problem.source;
+  if (source.kind !== "entity") {
+    throw new Error(
+      `View problem "${declaration.problem.key}" is not entity-backed`,
+    );
+  }
+  return compileProblemFilters(source.entity, source.filters);
+};
+
+const entityProblemForKey = (
+  key: ProblemKey,
+): { source: EntityProblemSource } => {
+  const definition = problemQuery(key);
+  if (definition?.source.kind !== "entity") {
+    throw new Error(`No entity Problem declares "${key}"`);
+  }
+  return definition as { source: EntityProblemSource };
+};
+
+/**
+ * Execute one registered entity-grain Problem.  The result is deliberately
+ * the list contract (exact count plus a page) so callers cannot accidentally
+ * derive a total from the card sample.
+ */
+type ProblemRunStatus =
+  | { state: "healthy" }
+  | {
+      state: "stale";
+      message: string;
+      projection?: ProductConversionCoverageFreshness;
+    }
+  | {
+      state: "unavailable";
+      message: string;
+      projection?: ProductConversionCoverageFreshness;
+    };
+
+export type ProblemRunResult = {
+  /** `data` is retained while old list-card callers migrate to `items`. */
+  data: ListRow[];
+  items: readonly unknown[];
+  count: number;
+  source: ProblemSource;
+  status: ProblemRunStatus;
+  freshness?: Awaited<ReturnType<typeof runDiagnostic>>["freshness"];
+};
+
+const statusForFreshness = (freshness: ProblemFreshness): ProblemRunStatus =>
+  freshness.kind === "external"
+    ? {
+        state: "stale",
+        message: `${freshness.provider} freshness is supplied by its diagnostic adapter.`,
+      }
+    : { state: "healthy" };
+
+const statusForProjection = (
+  freshness: ProductConversionCoverageFreshness,
+): ProblemRunStatus => {
+  if (freshness.state === "fresh") return { state: "healthy" };
+  const missing = freshness.missingCount + freshness.staleCount;
+  return freshness.state === "unavailable"
+    ? {
+        state: "unavailable",
+        message: `${freshness.unavailableCount} conversion projection row${freshness.unavailableCount === 1 ? " is" : "s are"} unavailable; exact filters fail closed until enrichment recovers.`,
+        projection: freshness,
+      }
+    : {
+        state: "stale",
+        message: `${missing} conversion projection row${missing === 1 ? " is" : "s are"} stale or missing; exact filters fail closed until the projection is rebuilt.`,
+        projection: freshness,
+      };
+};
+
+const usesConversionCoverageProjection = (key: ProblemKey): boolean =>
+  key === "ingredientsWithPartialCoverage" ||
+  key === "productsWithIslandedMappings";
+
+/**
+ * Run a registered Problem through its one canonical source declaration.
+ * Entity membership compiles to the ordinary list path; derived membership is
+ * delegated only by typed DiagnosticKey, never a callback in the manifest.
+ */
+export const runProblem = async (
+  db: Database,
+  key: ProblemKey,
+  options: {
+    pageIndex?: number;
+    sampleSize?: number;
+    diagnostic?: DiagnosticRunOptions;
+    /** Lane orchestration may reuse one metadata read across exact pages. */
+    projectionFreshness?: ProductConversionCoverageFreshness;
+  } = {},
+): Promise<ProblemRunResult> => {
+  const definition = problemQuery(key);
+  if (!definition) throw new Error(`No registered Problem declares "${key}"`);
+  if (definition.source.kind === "derived") {
+    const diagnostic = await runDiagnostic(
+      db,
+      definition.source.diagnostic,
+      options.diagnostic,
+    );
+    const offset =
+      (options.pageIndex ?? 0) * (options.sampleSize ?? SAMPLE_SIZE);
+    const items = diagnostic.items.slice(
+      offset,
+      offset + (options.sampleSize ?? SAMPLE_SIZE),
+    );
+    return {
+      // Derived rows intentionally have no common list row contract. Keeping
+      // this empty prevents entity presenters from treating a pair/group as an
+      // entity; consumers use `items` and the declared grain instead.
+      data: [],
+      items,
+      count: diagnostic.count,
+      source: definition.source,
+      status: diagnostic.status as DiagnosticStatus,
+      freshness: diagnostic.freshness,
+    };
+  }
+  const entityDefinition = definition as { source: EntityProblemSource };
+  const list = LIST_FN[entityDefinition.source.entity];
+  if (!list) {
+    throw new Error(
+      `No list function registered for entity "${entityDefinition.source.entity}"`,
+    );
+  }
+  const page = await list(
+    db,
+    compileProblemFilters(
+      entityDefinition.source.entity,
+      entityDefinition.source.filters,
+    ) as never,
+    toSortParams(entityDefinition.source.sort),
+    {
+      pageIndex: options.pageIndex ?? 0,
+      pageSize: options.sampleSize ?? SAMPLE_SIZE,
+    },
+  );
+  const projection = usesConversionCoverageProjection(key)
+    ? (options.projectionFreshness ??
+      (await getProductConversionCoverageFreshness(db)))
+    : undefined;
+  return {
+    ...page,
+    items: page.data,
+    source: entityDefinition.source,
+    status: projection
+      ? statusForProjection(projection)
+      : statusForFreshness(definition.freshness),
+  };
+};
 
 /**
  * Narrow a list row to the card's contract.
@@ -296,7 +495,7 @@ export const findViewProblems = async (
             }
             return list(
               scoped,
-              declaration.problem.serverFilters as never,
+              entityFiltersFor(declaration) as never,
               toSortParams(declaration.sort),
               { pageIndex: 0, pageSize: SAMPLE_SIZE },
             );
@@ -365,16 +564,13 @@ export const findViewProblems = async (
  */
 export const findAllViewProblemIds = async (
   db: Database,
-  key: string,
+  key: ProblemKey,
 ): Promise<string[]> => {
-  const declaration = viewProblemDeclarations().find(
-    (candidate) => candidate.problem.key === key,
-  );
-  if (!declaration) throw new Error(`No view declares problem "${key}"`);
-  const list = LIST_FN[declaration.entity];
+  const definition = entityProblemForKey(key);
+  const list = LIST_FN[definition.source.entity];
   if (!list) {
     throw new Error(
-      `No list function registered for entity "${declaration.entity}"`,
+      `No list function registered for entity "${definition.source.entity}"`,
     );
   }
 
@@ -386,7 +582,10 @@ export const findAllViewProblemIds = async (
   for (let pageIndex = 0; ; pageIndex++) {
     const { data, count } = await list(
       db,
-      declaration.problem.serverFilters as never,
+      compileProblemFilters(
+        definition.source.entity,
+        definition.source.filters,
+      ) as never,
       [],
       { pageIndex, pageSize: PAGE },
     );
@@ -405,21 +604,21 @@ export const findAllViewProblemIds = async (
  */
 export const countViewProblem = async (
   db: Database,
-  key: string,
+  key: ProblemKey,
 ): Promise<number> => {
-  const declaration = viewProblemDeclarations().find(
-    (candidate) => candidate.problem.key === key,
-  );
-  if (!declaration) throw new Error(`No view declares problem "${key}"`);
-  const list = LIST_FN[declaration.entity];
+  const definition = entityProblemForKey(key);
+  const list = LIST_FN[definition.source.entity];
   if (!list) {
     throw new Error(
-      `No list function registered for entity "${declaration.entity}"`,
+      `No list function registered for entity "${definition.source.entity}"`,
     );
   }
   const { count } = await list(
     db,
-    declaration.problem.serverFilters as never,
+    compileProblemFilters(
+      definition.source.entity,
+      definition.source.filters,
+    ) as never,
     [],
     { pageIndex: 0, pageSize: 1 },
   );

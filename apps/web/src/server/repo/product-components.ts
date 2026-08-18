@@ -50,6 +50,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
+import { markProductConversionCoverageInputStale } from "~/server/repo/product/conversion-coverage";
 // `findMergeComponentCycle` is the SAME question `mergeProducts` already
 // answers — "does identifying/adding these edges make a product reach
 // itself" — reused here rather than reimplemented. Called with `loserIds: []`
@@ -363,6 +364,7 @@ export async function attachProductComponents(
     const after = await liveComponentShortcodes(tx, parentProductId);
 
     if (inserted.length > 0) {
+      await markProductConversionCoverageInputStale(tx, [parentProductId]);
       await logAuditEntry(tx, actor, {
         entityType: "product",
         entityId: parentProductId,
@@ -397,6 +399,7 @@ export async function detachProductComponents(
     const after = await liveComponentShortcodes(tx, parentProductId);
 
     if (removed.length > 0) {
+      await markProductConversionCoverageInputStale(tx, [parentProductId]);
       await logAuditEntry(tx, actor, {
         entityType: "product",
         entityId: parentProductId,

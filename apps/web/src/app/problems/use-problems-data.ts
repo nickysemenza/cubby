@@ -63,7 +63,20 @@ export function useProblemsData(opts?: {
     combine: ([fast, views, coverage, upc, tracker]) => {
       // The views group carries its section rows alongside the totals that
       // describe them; only the rows belong in `sections`.
+      const { sectionTotals: fastTotals, ...fastSections } = fast.data ?? {};
       const { sectionTotals: viewTotals, ...viewSections } = views.data ?? {};
+      const {
+        sectionTotals: coverageTotals,
+        freshness: conversionCoverageFreshness,
+        ...coverageSections
+      } = coverage.data ?? {};
+      const {
+        sectionTotals: upcTotals,
+        freshness: upcFreshness,
+        ...upcSections
+      } = upc.data ?? {};
+      const { sectionTotals: trackerTotals, ...trackerSections } =
+        tracker.data ?? {};
       // Each group's own shape supplies its keys, so a group that hasn't
       // resolved yet falls through to the derived empties rather than to 42
       // hand-written `?? []` defaults that a new detector would have to be
@@ -71,11 +84,11 @@ export function useProblemsData(opts?: {
       // spreads are exhaustive once all four have loaded.
       const sections: ProblemArrays = {
         ...EMPTY_PROBLEM_ARRAYS,
-        ...fast.data,
+        ...fastSections,
         ...viewSections,
-        ...coverage.data,
-        ...upc.data,
-        ...tracker.data,
+        ...coverageSections,
+        ...upcSections,
+        ...trackerSections,
       };
       const results = [fast, views, coverage, upc, tracker];
       // A view-backed section renders a PAGE, so its `items.length` is the page
@@ -83,11 +96,22 @@ export function useProblemsData(opts?: {
       // 212-row backlog reports as 12. Falls back to the shared frozen empty
       // while the group loads, so a not-yet-resolved query can't churn the
       // memos downstream (same reason as `EMPTY_PROBLEM_ARRAYS`).
-      const sectionTotals = viewTotals ?? EMPTY_SECTION_TOTALS;
+      const sectionTotals =
+        fastTotals || viewTotals || coverageTotals || upcTotals || trackerTotals
+          ? {
+              ...fastTotals,
+              ...viewTotals,
+              ...coverageTotals,
+              ...upcTotals,
+              ...trackerTotals,
+            }
+          : EMPTY_SECTION_TOTALS;
       return {
         problems: {
           ...sections,
           sectionTotals,
+          upcFreshness,
+          conversionCoverageFreshness,
           // Defect sections only — must match `assembleAllProblems`, hence the
           // shared helper rather than a second local sum.
           totalProblems: sumProblemSections(sections, "defect", sectionTotals),

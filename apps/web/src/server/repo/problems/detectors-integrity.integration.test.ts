@@ -28,6 +28,7 @@ import {
   locationImage,
   mealRecipe,
   productComponent,
+  productConversionCoverage,
   productExternalId,
   productImage,
   productUnitMappings,
@@ -51,7 +52,7 @@ import { findReferentialLivenessViolations } from "./detectors-integrity";
 /**
  * Regression suite for `findReferentialLivenessViolations` (detectors-integrity.ts)
  * — the audit that finds every LIVE row whose FK points at a SOFT-DELETED target,
- * across the 47 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
+ * across the 49 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
  *
  * The matrix below is driven from `INCOMING_EDGES` × `ENTITY_EDGE_SEMANTICS`
  * themselves (not a hand-copied edge list), so a newly-added `must-target-live`
@@ -175,7 +176,7 @@ const mkRecipeSection = async (db: Database) => {
 };
 
 /** One live-row factory per entity that appears as a `targetEntity` among the
- * 47 must-target-live edges below. */
+ * 48 must-target-live edges below. */
 const TARGET_FACTORIES: Partial<
   Record<Entity, (db: Database) => Promise<{ id: string }>>
 > = {
@@ -232,6 +233,12 @@ const SOURCE_FACTORIES: Record<
       sourceLabel: "test",
       rawJson: [],
       coverImageId: targetId,
+    }),
+
+  "Vendor.logoImageId": (db, targetId) =>
+    insertWithShortcode(db, "vendor", {
+      name: uniq("Vendor"),
+      logoImageId: targetId,
     }),
 
   "ProductImage.imageId": async (db, targetId) => {
@@ -592,6 +599,19 @@ const SOURCE_FACTORIES: Record<
       componentProductId: unsafeProductId(targetId),
     });
   },
+
+  "ProductConversionCoverage.productId": async (db, targetId) => {
+    await getDb(db)
+      .insert(productConversionCoverage)
+      .values({
+        productId: unsafeProductId(targetId),
+        coverageTier: "complete",
+        status: "ready",
+        engineVersion: "liveness-fixture",
+        computedAt: new Date(),
+      });
+    return { id: targetId };
+  },
 };
 
 // Derive the must-target-live edge list from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS
@@ -613,6 +633,7 @@ interface DerivedEdgeSpec {
 
 const HARD_DELETE_ONLY_SOURCE_TABLES = new Set([
   "ProjectDependency",
+  "ProductConversionCoverage",
   "TaskDependency",
 ]);
 
@@ -653,11 +674,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 47 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 49 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(47);
+    expect(derivedMustTargetLiveEdges).toHaveLength(49);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {
@@ -672,7 +693,7 @@ describe("findReferentialLivenessViolations", () => {
     }
   });
 
-  it("the hard-delete-only (no deletedAt column) source tables are exactly ProjectDependency and TaskDependency", () => {
+  it("tracks the exact hard-delete-only source tables", () => {
     const skipped = new Set(
       derivedMustTargetLiveEdges
         .filter((s) => !s.sourceSoftDeletable)

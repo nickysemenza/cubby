@@ -53,6 +53,16 @@ import {
 const STALE_ACTIVITY_DAYS = 30;
 
 /**
+ * List-facing names for project-grain attention rules. Both Problems and the
+ * Project list reuse this mapping instead of copying detector predicates.
+ */
+export const projectAttentionFilterTypes = {
+  stalled: "stalled_project",
+  missing_budget: "missing_budget",
+  blocked_no_next_action: "blocked_work",
+} as const;
+
+/**
  * Build an item's stable `key`.
  *
  * Most rules emit at most one row per entity, so `type:entityId` identifies

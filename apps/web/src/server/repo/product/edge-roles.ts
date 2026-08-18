@@ -139,7 +139,7 @@ export type ProductDeleteDisposition =
        *  (e.g. "inventory entries", "expenses"). */
       label: string;
     })
-  | (OperationDisposition & { effect: "soft-delete" });
+  | (OperationDisposition & { effect: "soft-delete" | "hard-delete" });
 
 export const PRODUCT_DELETE_EDGE_POLICY = {
   "InventoryEntry.productId": {
@@ -228,5 +228,11 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
       "A product still listed inside a live kit's component list can't be deleted — remove it from the kit first.",
     reason: "PRODUCT_HAS_KIT_LINKS",
     label: "kits it's listed inside",
+  },
+  "ProductConversionCoverage.productId": {
+    code: "hard-delete-conversion-projection",
+    effect: "hard-delete",
+    description:
+      "The rebuildable conversion coverage projection is deleted with the product.",
   },
 } as const satisfies IncomingEdgePolicy<"product", ProductDeleteDisposition>;

@@ -88,7 +88,18 @@ export const inventoryFilterFields = {
     .describe(
       "Filter by placement. Omitted defaults to 'stock' (movable stock only); 'installed' returns fixtures; 'all' returns both.",
     ),
+  locationRole: z
+    .enum(["global_unknown"])
+    .optional()
+    .describe("Filter by a stable household location role."),
   verifiedPresenceFilter: z.enum(["has", "none"]).optional(),
+  /**
+   * Derived valuation integrity. `missing_with_priced_product` is the precise
+   * "the Product has a price, but this stored unit cannot reach it" state.
+   */
+  valuationStatus: z
+    .enum(["valued", "missing", "missing_with_priced_product"])
+    .optional(),
   verifiedFrom: plainDate.optional(),
   verifiedTo: plainDate.optional(),
 };

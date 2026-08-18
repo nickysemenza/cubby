@@ -1,4 +1,3 @@
-import type { EntityImage } from "@cubby/schemas/entity";
 import type { ImageWithEntity } from "@cubby/schemas/image";
 import prettyBytes from "pretty-bytes";
 import { useMemo } from "react";
@@ -9,41 +8,20 @@ import {
 } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
+import { ImageAssociationLinks } from "~/app/_components/images/image-associations";
 import { imageStatusOptions } from "~/app/images/image-options";
 import { usePageCount } from "~/components/page/Page";
-import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
 import { imageMutationInvalidateKeys, queryKeys } from "~/lib/query-keys";
 import { UploadImageDialog } from "./upload-image-dialog";
 
 /** Module-level so the deletable config keeps a stable identity. */
 const IMAGE_INVALIDATE_KEYS = [queryKeys.image.list] as const;
-
-/**
- * Owning-entity kind → EntityInlineLink entity. A full Record over
- * `EntityImage` on purpose: adding a new image-owner enum member is a compile
- * error until it's mapped here (a missing key used to flow `undefined` into
- * EntityInlineLink's exhaustive ts-pattern match and crash the whole page —
- * that's how PROJECT-owned images broke /images). `null` = no inline-link arm
- * exists; the cell falls back to plain text.
- */
-const IMAGE_ENTITY_LINK_KIND: Record<
-  EntityImage,
-  "product" | "location" | "recipe" | "project" | "purchase" | null
-> = {
-  PRODUCT: "product",
-  LOCATION: "location",
-  RECIPE: "recipe",
-  PROJECT: "project",
-  COOKBOOK: null,
-  PURCHASE: "purchase",
-};
 
 export default function ImageList() {
   const api = useTRPC();
@@ -121,63 +99,17 @@ export default function ImageList() {
           renderOptionCell(getValue(), imageStatusOptions),
       }),
       // Associated entity
-      columnHelper.accessor(
-        (row) => ({
-          entityType: row.entityType,
-          entityId: row.entityId,
-          entityName: row.entityName,
-        }),
-        {
-          id: "entity",
-          header: "Associated Entity",
-          meta: {
-            className: "w-40",
-            mobile: { slot: "meta", priority: 30 },
-          },
-          cell: ({ getValue }) => {
-            const { entityType, entityId, entityName } = getValue();
-
-            if (!entityType || !entityId || !entityName) {
-              return <NoneValue />;
-            }
-
-            const entity = IMAGE_ENTITY_LINK_KIND[entityType];
-            if (!entity) {
-              // Owner kind without an EntityInlineLink arm (COOKBOOK today) —
-              // show the name as plain text rather than crashing the page.
-              return <span className="truncate">{entityName}</span>;
-            }
-
-            // A purchase has no `name` column, so its inline-link arm takes the
-            // charge's identity fields instead. The image row's `entityName` is
-            // already the resolved charge label (the vendor's order id), so it
-            // feeds `orderId` — `purchaseLabel` then renders it verbatim.
-            if (entity === "purchase") {
-              return (
-                <EntityInlineLink
-                  entity="purchase"
-                  data={{
-                    id: entityId,
-                    orderId: entityName,
-                  }}
-                  compact
-                />
-              );
-            }
-
-            return (
-              <EntityInlineLink
-                entity={entity}
-                data={{
-                  id: entityId,
-                  name: entityName,
-                }}
-                compact
-              />
-            );
-          },
+      columnHelper.accessor("associations", {
+        id: "entity",
+        header: "Associated Entities",
+        meta: {
+          className: "w-40",
+          mobile: { slot: "meta", priority: 30 },
         },
-      ),
+        cell: ({ getValue }) => (
+          <ImageAssociationLinks associations={getValue()} compact />
+        ),
+      }),
     ],
     [columnHelper, nameEditable],
   );

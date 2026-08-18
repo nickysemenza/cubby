@@ -10,7 +10,6 @@ import {
 import {
   unsafeFinancialAccountShortcode,
   unsafeFinancialTransactionShortcode,
-  unsafePurchaseId,
   unsafePurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
@@ -19,20 +18,10 @@ import type {
   FinancialTransactionAllocationDefect,
   IncompleteStatementImport,
   InvalidFinancialJson,
-  PurchaseFinancialSettlementMismatch,
 } from "@cubby/schemas/problems";
 import { sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
-import {
-  calculateFinancialReconciliation,
-  settleableExpenseTotalSql,
-  settleableUnpricedExpenseCountSql,
-} from "~/server/repo/financial-reconciliation";
-import {
-  emptyPurchaseFinancialAggregate,
-  loadPurchaseFinancialAggregates,
-} from "~/server/repo/purchase-financial-aggregates";
 
 /** Finance JSON is evidence received from imports/MCP; one malformed legacy row
  * must produce a defect, never make the complete Problems scan unavailable. */
@@ -194,6 +183,83 @@ export async function findFinancialTransactionAllocationDefects(
   }));
 }
 
+/**
+ * Presentation hydration for the canonical transaction page. Unlike the
+ * detector this accepts the already-selected shortcodes and deliberately has
+ * no HAVING membership test.
+ */
+export async function loadAllocationDefectPresenters(
+  db: Database,
+  shortcodes: readonly string[],
+): Promise<Map<string, FinancialTransactionAllocationDefect>> {
+  if (shortcodes.length === 0) return new Map();
+  const allocationCount = sql`count(a.id)`;
+  const allocatedCents = sql`round((sum(a."amount") * 100)::numeric)`;
+  const amountCents = sql`round((ft."amount" * 100)::numeric)`;
+  const kindAllowed = sql.raw(
+    purchaseSettlementKindAllowedExpression("ft.kind"),
+  );
+  const signSatisfied = sql.raw(
+    purchaseSettlementSignSatisfiedExpression({
+      kind: "ft.kind",
+      amount: `ft."amount"`,
+    }),
+  );
+  const sumMismatch = sql`(${allocationCount} > 0 AND ${allocatedCents} IS DISTINCT FROM ${amountCents})`;
+  const nonSettlementKind = sql`(${allocationCount} > 0 AND NOT (${kindAllowed}))`;
+  const kindSignViolation = sql`(${allocationCount} > 0 AND ${kindAllowed} AND NOT ${signSatisfied})`;
+  const allocationSignMismatch = sql`COALESCE(bool_or(sign(a."amount") <> sign(ft."amount")), false)`;
+  const ids = sql.join(
+    shortcodes.map((shortcode) => sql`${shortcode}`),
+    sql`, `,
+  );
+  const result = await getDb(db).execute<{
+    id: string;
+    kind: string;
+    amount: number;
+    allocationCount: number;
+    allocatedTotal: number;
+    purchaseIds: string[] | null;
+    sumMismatch: boolean;
+    nonSettlementKind: boolean;
+    kindSignViolation: boolean;
+    allocationSignMismatch: boolean;
+  }>(sql`
+    SELECT ft.shortcode AS id, ft.kind AS kind, ft."amount" AS amount,
+      ${allocationCount}::int AS "allocationCount",
+      COALESCE(sum(a."amount"), 0)::double precision AS "allocatedTotal",
+      array_remove(array_agg(p.shortcode), NULL) AS "purchaseIds",
+      ${sumMismatch} AS "sumMismatch", ${nonSettlementKind} AS "nonSettlementKind",
+      ${kindSignViolation} AS "kindSignViolation", ${allocationSignMismatch} AS "allocationSignMismatch"
+    FROM "FinancialTransaction" ft
+    LEFT JOIN "FinancialTransactionAllocation" a ON a."transactionId" = ft.id AND a."deletedAt" IS NULL
+    LEFT JOIN "Purchase" p ON p.id = a."purchaseId"
+    WHERE ft."deletedAt" IS NULL AND ft.shortcode IN (${ids})
+    GROUP BY ft.id
+  `);
+  return new Map(
+    result.rows.map((row) => [
+      row.id,
+      {
+        id: unsafeFinancialTransactionShortcode(row.id),
+        kind: row.kind,
+        amount: Number(row.amount),
+        allocationCount: Number(row.allocationCount),
+        allocatedTotal: Number(row.allocatedTotal),
+        purchaseIds: (row.purchaseIds ?? []).map(unsafePurchaseShortcode),
+        reasons: [
+          ...(row.sumMismatch ? (["sum-mismatch"] as const) : []),
+          ...(row.nonSettlementKind ? (["non-settlement-kind"] as const) : []),
+          ...(row.kindSignViolation ? (["kind-sign-violation"] as const) : []),
+          ...(row.allocationSignMismatch
+            ? (["allocation-sign-mismatch"] as const)
+            : []),
+        ],
+      },
+    ]),
+  );
+}
+
 export async function findDuplicateFinancialAccountSourceAliases(
   db: Database,
 ): Promise<DuplicateFinancialAccountSourceAlias[]> {
@@ -212,68 +278,6 @@ export async function findDuplicateFinancialAccountSourceAliases(
     ...row,
     accountIds: row.accountIds.map(unsafeFinancialAccountShortcode),
   }));
-}
-
-export async function findPurchaseFinancialSettlementMismatches(
-  db: Database,
-): Promise<PurchaseFinancialSettlementMismatch[]> {
-  const result = await getDb(db).execute<{
-    uuid: string;
-    id: string;
-    vendorName: string | null;
-    expenseTotal: number;
-    settleableExpenseTotal: number;
-    settleableUnpriced: number;
-  }>(sql`
-    SELECT p.id AS uuid, p.shortcode AS id, v.name AS "vendorName",
-      COALESCE(e."expenseTotal", 0)::double precision AS "expenseTotal",
-      -- The incurred-only rule comes from the shared fragments in
-      -- repo/financial-reconciliation, not a third hand-written FILTER. The
-      -- reported expenseTotal stays the full figure so the worklist row still
-      -- names the purchase's real size; the outer deletedAt predicate below is
-      -- this query's half of the fragments' purchase-liveness contract.
-      ${sql.raw(settleableExpenseTotalSql("p"))} AS "settleableExpenseTotal",
-      ${sql.raw(settleableUnpricedExpenseCountSql("p"))} AS "settleableUnpriced"
-    FROM "Purchase" p
-    LEFT JOIN "Vendor" v ON v.id = p."vendorId" AND v."deletedAt" IS NULL
-    LEFT JOIN LATERAL (
-      SELECT COALESCE(sum(e.cost), 0) AS "expenseTotal"
-      FROM "Expense" e WHERE e."purchaseId" = p.id AND e."deletedAt" IS NULL
-    ) e ON TRUE
-    WHERE p."deletedAt" IS NULL
-  `);
-  const purchaseIds = result.rows.map((row) => unsafePurchaseId(row.uuid));
-  const financialByPurchase = await loadPurchaseFinancialAggregates(
-    db,
-    purchaseIds,
-  );
-  return result.rows.flatMap((row) => {
-    const financial =
-      financialByPurchase.get(unsafePurchaseId(row.uuid)) ??
-      emptyPurchaseFinancialAggregate();
-    const financialReconciliation = calculateFinancialReconciliation({
-      settleableExpenseTotal: row.settleableExpenseTotal,
-      settleableUnpricedExpenseCount: row.settleableUnpriced,
-      ...financial,
-    });
-    if (
-      financialReconciliation.status !== "mismatch" ||
-      financialReconciliation.delta === null
-    )
-      return [];
-    return [
-      {
-        id: unsafePurchaseShortcode(row.id),
-        vendorName: row.vendorName,
-        expenseTotal: Number(row.expenseTotal),
-        financialReconciliation: {
-          ...financialReconciliation,
-          status: "mismatch" as const,
-          delta: financialReconciliation.delta,
-        },
-      },
-    ];
-  });
 }
 
 /**

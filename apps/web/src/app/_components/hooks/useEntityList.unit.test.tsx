@@ -21,7 +21,8 @@ const mocks = vi.hoisted(() => ({
   clearSelection: vi.fn(),
 }));
 
-vi.mock("@cubby/schemas/related-view", () => ({
+vi.mock("@cubby/schemas/related-view", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@cubby/schemas/related-view")>()),
   relatedViewRegistry: [],
   relatedViewsFor: () => [],
 }));
@@ -51,7 +52,8 @@ vi.mock("~/entities/entities", () => ({
 vi.mock("~/entities/filter-manifest", () => ({
   getEntityFilters: () => [],
 }));
-vi.mock("~/entities/filters", () => ({
+vi.mock("~/entities/filters", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/entities/filters")>()),
   buildFiltersFromManifest: () => ({}),
   filterGetterFromColumnFilters: () => () => undefined,
   summarizeListState: () => undefined,

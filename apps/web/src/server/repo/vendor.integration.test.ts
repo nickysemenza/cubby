@@ -11,7 +11,7 @@ import {
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -24,13 +24,14 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { getDb, insertAndReturn, notDeleted } from "./database-helpers";
-import { createExpense, deleteExpenses } from "./expense";
+import { createExpense, deleteExpenses, expenseList } from "./expense";
 import {
   createPurchase,
   deletePurchases,
   findOrCreatePurchase,
   getPurchaseByID,
   getPurchaseExpenses,
+  purchaseList,
 } from "./purchase";
 import { makeExpenseInput } from "./repo.fixtures";
 import { resolveLiveShortcode } from "./shortcode-resolver";
@@ -386,7 +387,7 @@ describe("vendor repository — spend rollup", () => {
 describe("vendor repository — vendorOptions picklist", () => {
   const ctx = withTestDb();
 
-  it("returns {id, name, count} over LIVE charges, keeps a zero-charge vendor, and hides deleted vendors", async () => {
+  it("returns logo-bearing options over LIVE charges, keeps a zero-charge vendor, and hides deleted vendors", async () => {
     const busyId = await findOrCreateVendor(ctx.db, "Busy Vendor");
     const quietId = await findOrCreateVendor(ctx.db, "Quiet Vendor");
     // A vendor can exist before any money went there — the whole point of a
@@ -433,11 +434,63 @@ describe("vendor repository — vendorOptions picklist", () => {
 
     // Ranked by live-charge count desc, then name asc.
     expect(options).toEqual([
-      { id: busy, name: "Busy Vendor", count: 2 },
-      { id: quiet, name: "Quiet Vendor", count: 1 },
-      { id: empty, name: "Aspirational Vendor", count: 0 },
+      { id: busy, name: "Busy Vendor", count: 2, logo: null },
+      { id: quiet, name: "Quiet Vendor", count: 1, logo: null },
+      { id: empty, name: "Aspirational Vendor", count: 0, logo: null },
     ]);
     expect(options.map((o) => o.id)).not.toContain(doomed);
+  });
+
+  it("propagates the resolved logo through options, purchase rows, and expense rows", async () => {
+    const [logo] = await getDb(ctx.db)
+      .insert(image)
+      .values({
+        url: "https://example.com/propagated-vendor-logo.png",
+        key: "propagated-vendor-logo.png",
+        filename: "propagated-vendor-logo.png",
+        size: 1,
+        contentType: "image/png",
+      })
+      .returning({ id: image.id, url: image.url });
+    const created = await createVendor(
+      ctx.db,
+      vendorCreateInput.parse({ name: "Logo Propagation Vendor" }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(vendor)
+      .set({ logoImageId: logo!.id })
+      .where(eq(vendor.id, created.entityId));
+    const charge = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        vendorId: created.output.id,
+        date: "2026-08-17",
+        orderId: "LOGO-1",
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "Logo propagation line",
+          purchaseId: charge.output.id,
+        }),
+      ),
+      ctx.actor,
+    );
+
+    const [options, purchases, expenses] = await Promise.all([
+      vendorOptions(ctx.db),
+      purchaseList(ctx.db, { vendorId: created.output.id }, [], page),
+      expenseList(ctx.db, { vendorId: created.output.id }, [], page),
+    ]);
+    expect(options.find((row) => row.id === created.output.id)?.logo).toEqual({
+      url: logo!.url,
+    });
+    expect(purchases.data[0]?.vendorLogo).toEqual({ url: logo!.url });
+    expect(expenses.data[0]?.vendorLogo).toEqual({ url: logo!.url });
   });
 });
 
@@ -473,6 +526,53 @@ describe("vendor repository — deletion guard", () => {
       cause: { reason: "VENDOR_NOT_FOUND" },
     });
     expect((await vendorList(ctx.db, {}, [], page)).count).toBe(0);
+  });
+
+  it("reaps an exclusive logo but preserves an image shared by another vendor", async () => {
+    const [logo] = await getDb(ctx.db)
+      .insert(image)
+      .values({
+        url: "https://example.com/shared-vendor-logo.png",
+        key: "shared-vendor-logo.png",
+        filename: "shared-vendor-logo.png",
+        size: 1,
+        contentType: "image/png",
+      })
+      .returning({ id: image.id, key: image.key });
+    const first = await createVendor(
+      ctx.db,
+      vendorCreateInput.parse({ name: "Shared Logo A" }),
+      ctx.actor,
+    );
+    const second = await createVendor(
+      ctx.db,
+      vendorCreateInput.parse({ name: "Shared Logo B" }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(vendor)
+      .set({ logoImageId: logo!.id })
+      .where(inArray(vendor.id, [first.entityId, second.entityId]));
+
+    expect(await deleteVendors(ctx.db, [first.output.id], ctx.actor)).toEqual({
+      detachedImageKeys: [],
+    });
+    expect(
+      await getDb(ctx.db).query.image.findFirst({
+        where: eq(image.id, logo!.id),
+        columns: { deletedAt: true },
+      }),
+    ).toMatchObject({ deletedAt: null });
+
+    expect(await deleteVendors(ctx.db, [second.output.id], ctx.actor)).toEqual({
+      detachedImageKeys: [logo!.key],
+    });
+    expect(
+      await getDb(ctx.db).query.image.findFirst({
+        where: eq(image.id, logo!.id),
+        columns: { id: true },
+      }),
+    ).toBeUndefined();
   });
 });
 
@@ -562,6 +662,60 @@ describe("vendor repository — mergeVendors", () => {
       ctx.actor,
     );
 
+  it("returns the R2 key when a losing logo becomes unreferenced", async () => {
+    const [keeperLogo, loserLogo] = await getDb(ctx.db)
+      .insert(image)
+      .values([
+        {
+          url: "https://example.com/keeper-logo.png",
+          key: "keeper-logo.png",
+          filename: "keeper-logo.png",
+          size: 1,
+          contentType: "image/png",
+        },
+        {
+          url: "https://example.com/loser-logo.png",
+          key: "loser-logo.png",
+          filename: "loser-logo.png",
+          size: 1,
+          contentType: "image/png",
+        },
+      ])
+      .returning({ id: image.id, key: image.key });
+    const keeper = await createVendor(
+      ctx.db,
+      vendorCreateInput.parse({ name: "Logo Merge Keeper" }),
+      ctx.actor,
+    );
+    const loser = await createVendor(
+      ctx.db,
+      vendorCreateInput.parse({ name: "Logo Merge Loser" }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(vendor)
+      .set({ logoImageId: keeperLogo!.id })
+      .where(eq(vendor.id, keeper.entityId));
+    await getDb(ctx.db)
+      .update(vendor)
+      .set({ logoImageId: loserLogo!.id })
+      .where(eq(vendor.id, loser.entityId));
+
+    const result = await mergeVendors(
+      ctx.db,
+      { keepId: keeper.output.id, mergeIds: [loser.output.id] },
+      ctx.actor,
+    );
+
+    expect(result.output.logo?.id).toBe(keeperLogo!.id);
+    expect(result.detachedImageKeys).toEqual([loserLogo!.key]);
+    expect(
+      await getDb(ctx.db).query.image.findFirst({
+        where: eq(image.id, loserLogo!.id),
+      }),
+    ).toBeUndefined();
+  });
+
   /** An UPLOADED image + its `PurchaseImage` join row, filed against `id`. */
   const attachDocumentRow = async (purchaseId: PurchaseId, label: string) => {
     const img = await insertAndReturn(ctx.db, image, {
@@ -619,7 +773,7 @@ describe("vendor repository — mergeVendors", () => {
 
     const moneyBefore = await liveExpenseTotal();
 
-    const merged = await mergeVendors(
+    const { output: merged } = await mergeVendors(
       ctx.db,
       { keepId: await vendorCode(keeper), mergeIds: [await vendorCode(loser)] },
       ctx.actor,
@@ -667,7 +821,7 @@ describe("vendor repository — mergeVendors", () => {
     const moneyBefore = await liveExpenseTotal();
 
     // Does not throw — the fold happens BEFORE the bulk re-point.
-    const merged = await mergeVendors(
+    const { output: merged } = await mergeVendors(
       ctx.db,
       { keepId: await vendorCode(keeper), mergeIds: [await vendorCode(loser)] },
       ctx.actor,
@@ -785,7 +939,7 @@ describe("vendor repository — mergeVendors", () => {
     const loserCharge = await charge(loser, "MS-ONLY");
     await addLine("loser only line", 55, loserCharge);
 
-    const merged = await mergeVendors(
+    const { output: merged } = await mergeVendors(
       ctx.db,
       { keepId: await vendorCode(keeper), mergeIds: [await vendorCode(loser)] },
       ctx.actor,
@@ -819,7 +973,7 @@ describe("vendor repository — mergeVendors", () => {
 
     const moneyBefore = await liveExpenseTotal();
 
-    const merged = await mergeVendors(
+    const { output: merged } = await mergeVendors(
       ctx.db,
       {
         keepId: await vendorCode(keeper),
@@ -867,7 +1021,7 @@ describe("vendor repository — mergeVendors", () => {
     await addLine("loser cash A", 22, loserCashA);
     await addLine("loser cash B", 33, loserCashB);
 
-    const merged = await mergeVendors(
+    const { output: merged } = await mergeVendors(
       ctx.db,
       { keepId: await vendorCode(keeper), mergeIds: [await vendorCode(loser)] },
       ctx.actor,
@@ -901,7 +1055,7 @@ describe("vendor repository — mergeVendors", () => {
       ctx.actor,
     );
 
-    const merged = await mergeVendors(
+    const { output: merged } = await mergeVendors(
       ctx.db,
       { keepId: keeper.id, mergeIds: [loser.id] },
       ctx.actor,
@@ -1018,12 +1172,12 @@ describe("vendor repository — mergeVendors", () => {
     await addLine("self line", 77, keeperCharge);
     const keeperCode = await vendorCode(keeper);
 
-    const selfOnly = await mergeVendors(
+    const { output: selfOnly } = await mergeVendors(
       ctx.db,
       { keepId: keeperCode, mergeIds: [keeperCode] },
       ctx.actor,
     );
-    const emptySet = await mergeVendors(
+    const { output: emptySet } = await mergeVendors(
       ctx.db,
       { keepId: keeperCode, mergeIds: [] },
       ctx.actor,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { oneOrMany, presenceFilter } from "./pagination";
 import { auditDateFilterFields } from "./base-entity";
 import { purchaseDocumentKind } from "./purchase";
 import type { ShortcodeEntity } from "./entity-manifest";
@@ -147,6 +148,16 @@ export type ImageUpdateInput = z.infer<typeof imageUpdateInput>;
 export const imageFilterFields = {
   ...auditDateFilterFields,
   nameFilter: z.string().optional().describe("Filter by filename (substring)"),
+  status: oneOrMany(ImageStatus).optional().describe("Filter by upload status"),
+  referencePresenceFilter: presenceFilter.describe(
+    "Filter to images that are or are not referenced by any owning entity.",
+  ),
+  uploadedAgeHoursMin: z.coerce
+    .number()
+    .positive()
+    .max(24 * 365 * 10)
+    .optional()
+    .describe("Only images uploaded more than this many hours ago."),
 };
 
 export const imageListFiltersSchema = z.object(imageFilterFields);
@@ -354,6 +365,24 @@ export const imageOut = z.object({
 
 export type ImageOut = z.infer<typeof imageOut>;
 
+export const imageAssociationEntity = z.enum([
+  "product",
+  "location",
+  "recipe",
+  "cookbook",
+  "project",
+  "purchase",
+  "vendor",
+]);
+export const imageAssociationRole = z.enum(["attachment", "cover", "logo"]);
+export const imageAssociationSchema = z.object({
+  entityType: imageAssociationEntity,
+  entityId: z.string().min(1),
+  entityName: z.string().min(1),
+  role: imageAssociationRole,
+});
+export type ImageAssociation = z.infer<typeof imageAssociationSchema>;
+
 export const initiateUploadWithoutEntityResponseSchema = z.object({
   uploadUrl: z.url(),
   imageId: id,
@@ -381,6 +410,8 @@ export const imageWithEntitySchema = z.object({
   entityType: entityImage.nullable(),
   entityId: attachableImageEntityId.nullable(),
   entityName: z.string().nullable(),
+  /** Complete incoming ownership/reference relation. Images may be shared. */
+  associations: z.array(imageAssociationSchema),
 });
 
 export type ImageWithEntity = z.infer<typeof imageWithEntitySchema>;

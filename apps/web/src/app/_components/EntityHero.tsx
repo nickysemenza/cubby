@@ -14,6 +14,8 @@ interface HeroImage {
 
 interface EntityHeroProps {
   images: HeroImage[];
+  /** Relationship label for sourced single-image media such as Vendor.logo. */
+  title?: string;
 }
 
 /**
@@ -21,7 +23,10 @@ interface EntityHeroProps {
  * Renders as a Card in the grid with a prominent primary image
  * and optional thumbnail strip for multiple images.
  */
-export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
+export const EntityHero: FC<EntityHeroProps> = ({
+  images,
+  title = "Images",
+}) => {
   const [activeIndex, setActiveIndex] = useState(0);
 
   if (images.length === 0) return null;
@@ -38,7 +43,7 @@ export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
       <CardHeader className="pb-4">
         <Row align="center" gap="sm">
           <ImageIcon className="size-3.5 text-slate" />
-          <CardTitle>Images</CardTitle>
+          <CardTitle>{title}</CardTitle>
         </Row>
       </CardHeader>
       <CardContent className="space-y-2">

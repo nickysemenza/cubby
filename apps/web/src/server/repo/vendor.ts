@@ -42,6 +42,7 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   expense,
   financialTransactionAllocation,
+  image,
   purchase,
   purchaseImage,
   vendor,
@@ -62,6 +63,11 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { reapUnreferencedImages } from "~/server/repo/image";
+import {
+  displayableImageSql,
+  displayableImageWhere,
+} from "~/server/repo/image-displayability";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import {
   finalizeMerge,
@@ -142,6 +148,14 @@ const vendorLatestPurchaseDate = correlated<string | null>(
      WHERE p."vendorId" = "Vendor"."id" AND p."deletedAt" IS NULL)`,
 );
 
+/** Whether the direct logo FK currently resolves to an image the UI can draw. */
+const vendorHasDisplayableLogo = sql<boolean>`EXISTS (
+  SELECT 1 FROM "Image" logo
+  WHERE logo."id" = ${sql.raw('"Vendor"."logoImageId"')}
+    AND logo."deletedAt" IS NULL
+    AND ${displayableImageSql("logo")}
+)`;
+
 const vendorColumns = {
   id: vendor.id,
   shortcode: vendor.shortcode,
@@ -154,6 +168,24 @@ const vendorColumns = {
   purchaseCount: vendorPurchaseCount,
   spend: vendorSpend,
   latestPurchaseDate: vendorLatestPurchaseDate,
+  logo: {
+    id: image.id,
+    url: image.url,
+    key: image.key,
+    filename: image.filename,
+    size: image.size,
+    contentType: image.contentType,
+    status: image.status,
+    width: image.width,
+    height: image.height,
+    detectedContentType: image.detectedContentType,
+    sha256: image.sha256,
+    renderStatus: image.renderStatus,
+    storageStatus: image.storageStatus,
+    verifiedAt: image.verifiedAt,
+    createdAt: image.createdAt,
+    updatedAt: image.updatedAt,
+  },
 } as const;
 
 type VendorRow = {
@@ -168,6 +200,29 @@ type VendorRow = {
   purchaseCount: number;
   spend: number;
   latestPurchaseDate: string | null;
+  logo: {
+    id: string;
+    url: string;
+    key: string;
+    filename: string;
+    size: number;
+    contentType: string;
+    status: "PENDING" | "UPLOADED" | "FAILED";
+    width: number | null;
+    height: number | null;
+    detectedContentType: string | null;
+    sha256: string | null;
+    renderStatus: "unverified" | "verified" | "failed" | null;
+    storageStatus:
+      | "unverified"
+      | "available"
+      | "missing"
+      | "metadata_mismatch"
+      | null;
+    verifiedAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+  } | null;
 };
 
 const dbVendorToAPI = (row: VendorRow): VendorOut => ({
@@ -182,6 +237,7 @@ const dbVendorToAPI = (row: VendorRow): VendorOut => ({
   // product/mappers.ts applies to its own aggregates.
   spend: Number(row.spend),
   latestPurchaseDate: row.latestPurchaseDate,
+  logo: row.logo,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });
@@ -215,6 +271,11 @@ const buildVendorWhereClause = (filters: VendorFilters) =>
       filters.latestPurchaseDateTo
         ? sql`${vendorLatestPurchaseDate} <= ${filters.latestPurchaseDateTo}`
         : undefined,
+      filters.logoPresenceFilter === "has"
+        ? sql`${vendorHasDisplayableLogo}`
+        : filters.logoPresenceFilter === "none"
+          ? sql`NOT ${vendorHasDisplayableLogo}`
+          : undefined,
       ...relatedWhereConditions("vendor", filters, vendor.id),
       filters.search
         ? or(
@@ -261,6 +322,14 @@ export const vendorList = async (
     getDb(db)
       .select(vendorColumns)
       .from(vendor)
+      .leftJoin(
+        image,
+        and(
+          eq(image.id, vendor.logoImageId),
+          notDeleted(image),
+          displayableImageWhere,
+        ),
+      )
       .where(whereClause)
       .orderBy(
         ...buildOrderBy(vendor, sorts, [...vendorSortableFields], {
@@ -296,6 +365,14 @@ export const getVendorByID = async (
   const [row] = await getDb(db)
     .select(vendorColumns)
     .from(vendor)
+    .leftJoin(
+      image,
+      and(
+        eq(image.id, vendor.logoImageId),
+        notDeleted(image),
+        displayableImageWhere,
+      ),
+    )
     .where(and(eq(vendor.id, id), notDeleted(vendor)))
     .limit(1);
   if (!row) {
@@ -334,8 +411,17 @@ export const vendorOptions = async (
       shortcode: vendor.shortcode,
       name: vendor.name,
       count: vendorPurchaseCount,
+      logoUrl: image.url,
     })
     .from(vendor)
+    .leftJoin(
+      image,
+      and(
+        eq(image.id, vendor.logoImageId),
+        notDeleted(image),
+        displayableImageWhere,
+      ),
+    )
     .where(notDeleted(vendor))
     .orderBy(desc(vendorPurchaseCount), asc(vendor.name));
 
@@ -343,6 +429,7 @@ export const vendorOptions = async (
     id: unsafeVendorShortcode(row.shortcode),
     name: row.name,
     count: Number(row.count),
+    logo: row.logoUrl ? { url: row.logoUrl } : null,
   }));
 };
 
@@ -456,7 +543,7 @@ type VendorMergePlan = {
     vendorId: VendorId;
   }>;
   /** Fields the keeper is missing that a source vendor would fill. */
-  carried: { website?: string; notes?: string };
+  carried: { website?: string; notes?: string; logoImageId?: string };
 };
 
 /**
@@ -486,12 +573,20 @@ const planVendorMerge = async (
   // better-populated duplicate is rarely the one with more charges. The real
   // first case was `B&H` (website, 1 charge) vs `B&H Photo` (none, 4 charges).
   const [keeperRow] = await tx
-    .select({ website: vendor.website, notes: vendor.notes })
+    .select({
+      website: vendor.website,
+      notes: vendor.notes,
+      logoImageId: vendor.logoImageId,
+    })
     .from(vendor)
     .where(eq(vendor.id, keepId))
     .limit(1);
   const loserRows = await tx
-    .select({ website: vendor.website, notes: vendor.notes })
+    .select({
+      website: vendor.website,
+      notes: vendor.notes,
+      logoImageId: vendor.logoImageId,
+    })
     .from(vendor)
     .where(inArray(vendor.id, losers));
 
@@ -503,6 +598,10 @@ const planVendorMerge = async (
   if (keeperRow?.notes == null) {
     const found = loserRows.find((r) => r.notes != null)?.notes;
     if (found != null) carried.notes = found;
+  }
+  if (keeperRow?.logoImageId == null) {
+    const found = loserRows.find((r) => r.logoImageId != null)?.logoImageId;
+    if (found != null) carried.logoImageId = found;
   }
 
   // Every live charge across the merge set, so collisions can be resolved
@@ -577,15 +676,17 @@ export const mergeVendors = async (
   db: Database,
   input: { keepId: VendorShortcode; mergeIds: VendorShortcode[] },
   actor: ActorContext,
-): Promise<VendorOut> => {
+): Promise<{ output: VendorOut; detachedImageKeys: string[] }> => {
   const { keepId, loserIds: losers } = await resolveMergeTargets(db, {
     entity: "vendor",
     keepId: input.keepId,
     mergeIds: input.mergeIds,
   });
-  if (losers.length === 0) return getVendorByID(db, keepId);
+  if (losers.length === 0) {
+    return { output: await getVendorByID(db, keepId), detachedImageKeys: [] };
+  }
 
-  await withTransaction(db, async (tx) => {
+  const detachedImageKeys = await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, vendor, [keepId, ...losers], "Vendor");
 
     const plan = await planVendorMerge(tx, keepId, losers);
@@ -606,6 +707,20 @@ export const mergeVendors = async (
       to: keepId,
       liveOnly: true,
     });
+
+    // Vendor logos are direct references rather than child rows. Clear losers
+    // before tombstoning them so a logo that was not carried to the keeper is
+    // eligible for the same shared-reference reap as an ordinary vendor delete.
+    const loserLogos = (
+      await tx
+        .select({ logoImageId: vendor.logoImageId })
+        .from(vendor)
+        .where(inArray(vendor.id, losers))
+    ).flatMap((row) => (row.logoImageId ? [row.logoImageId] : []));
+    await tx
+      .update(vendor)
+      .set({ logoImageId: null })
+      .where(inArray(vendor.id, losers));
 
     await finalizeMerge(tx, {
       entity: "vendor",
@@ -629,9 +744,11 @@ export const mergeVendors = async (
           : {}),
       },
     });
+
+    return (await reapUnreferencedImages(tx, loserLogos)).deletedKeys;
   });
 
-  return getVendorByID(db, keepId);
+  return { output: await getVendorByID(db, keepId), detachedImageKeys };
 };
 
 /**
@@ -652,12 +769,12 @@ export const deleteVendors = async (
   db: Database,
   shortcodes: VendorShortcode[],
   actor: ActorContext,
-): Promise<void> => {
-  if (shortcodes.length === 0) return;
+): Promise<{ detachedImageKeys: string[] }> => {
+  if (shortcodes.length === 0) return { detachedImageKeys: [] };
 
   const ids = await resolveAllOrThrow(db, "vendor", shortcodes);
 
-  await withTransaction(db, async (tx) => {
+  return await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, vendor, ids, "Vendor");
 
     const blocking = await countByTarget(tx, purchase, purchase.vendorId, ids);
@@ -672,7 +789,24 @@ export const deleteVendors = async (
       );
     }
 
+    // A logo is a direct FK, not a gallery join row, so collect it before the
+    // vendor is tombstoned. Reaping uses every image incoming edge, preserving
+    // an intentionally shared image rather than assuming logo exclusivity.
+    const logoRows = await tx
+      .select({ logoImageId: vendor.logoImageId })
+      .from(vendor)
+      .where(inArray(vendor.id, ids));
+    const logoIds = logoRows.flatMap((row) =>
+      row.logoImageId ? [row.logoImageId] : [],
+    );
+
+    await tx
+      .update(vendor)
+      .set({ logoImageId: null })
+      .where(inArray(vendor.id, ids));
     await removeEntity(tx, { entity: "vendor", ids, removal: "soft", actor });
+    const reaped = await reapUnreferencedImages(tx, logoIds);
+    return { detachedImageKeys: reaped.deletedKeys };
   });
 };
 

@@ -465,7 +465,7 @@ type SummaryDefinition = {
   targetJoin: string;
   /** Null targets are meaningful only for incomplete purchase/project provenance. */
   targetPresence: "required" | "optional";
-  imageTarget: "product" | "project" | null;
+  imageTarget: "product" | "project" | "vendor" | null;
 };
 
 const SUMMARY_DEFINITIONS: Record<
@@ -494,7 +494,7 @@ const SUMMARY_DEFINITIONS: Record<
     targetEntity: "vendor",
     targetJoin: `LEFT JOIN "Vendor" t ON t."id" = se."vendorId" AND t."deletedAt" IS NULL`,
     targetPresence: "optional",
-    imageTarget: null,
+    imageTarget: "vendor",
   },
   "project.purchasedProducts": {
     targetEntity: "product",
@@ -506,7 +506,7 @@ const SUMMARY_DEFINITIONS: Record<
     targetEntity: "vendor",
     targetJoin: `LEFT JOIN "Vendor" t ON t."id" = se."vendorId" AND t."deletedAt" IS NULL`,
     targetPresence: "optional",
-    imageTarget: null,
+    imageTarget: "vendor",
   },
 };
 
@@ -585,7 +585,18 @@ export async function loadRelatedSummary(
     )`;
   })();
   const imageJoin = definition.imageTarget
-    ? `LEFT JOIN LATERAL (
+    ? definition.imageTarget === "vendor"
+      ? `LEFT JOIN LATERAL (
+        SELECT i."id", i."url", i."filename", i."contentType"
+        FROM "Image" i
+        WHERE i."id" = t."logoImageId"
+          AND i."deletedAt" IS NULL
+          AND i."contentType" <> 'application/pdf'
+          AND (i."renderStatus" IS NULL OR i."renderStatus" <> 'failed')
+          AND (i."storageStatus" IS NULL OR i."storageStatus" NOT IN ('missing', 'metadata_mismatch'))
+        LIMIT 1
+      ) img ON TRUE`
+      : `LEFT JOIN LATERAL (
         SELECT i."id", i."url", i."filename", i."contentType"
         FROM "${definition.imageTarget === "product" ? "ProductImage" : "ProjectImage"}" ti
         JOIN "Image" i ON i."id" = ti."imageId" AND i."deletedAt" IS NULL

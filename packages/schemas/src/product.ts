@@ -265,6 +265,28 @@ export const productFilterFields = {
     .optional()
     .describe("Filter by category"),
   inventoryPresenceFilter: presenceFilter,
+  inventoryMultiplicity: z
+    .enum(["duplicate_within_placement"])
+    .optional()
+    .describe(
+      "Products expected once but recorded more than once within stock or installed placement.",
+    ),
+  ownershipReconciliation: z
+    .enum(["disposed_still_on_hand"])
+    .optional()
+    .describe(
+      "Products with a recorded disposal, no remaining known quantity, and a positive single-unit on-hand count.",
+    ),
+  conversionCoverage: z
+    .enum(["partial"])
+    .optional()
+    .describe("Products whose persisted conversion coverage is partial."),
+  conversionTopology: z
+    .enum(["islanded"])
+    .optional()
+    .describe(
+      "Products whose persisted conversion graph has multiple islands.",
+    ),
   /**
    * Whether any Location IS this product — a bin, tote or rack in service,
    * rather than stock held on a shelf.

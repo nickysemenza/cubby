@@ -1,30 +1,22 @@
-import { unsafeVendorShortcode } from "@cubby/schemas/identifiers";
-import type { VendorWithoutLogo } from "@cubby/schemas/problems";
-import { and, count, countDistinct, eq } from "drizzle-orm";
-import { VENDOR_LOGO_BY_SHORTCODE } from "~/lib/vendor-logos.generated";
+import { and, count, eq, inArray } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { expense, purchase, vendor } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
 /**
- * Active vendors whose mini logo has not been seeded yet. The generated
- * manifest is authoritative: checking R2 per row would turn a cheap Problems
- * scan into external fan-out. Vendors with no purchases are omitted because
- * their mark is not appearing in either ledger.
+ * Hydrate card aggregates for an already-selected canonical vendor page.
+ * This intentionally has no logo/purchase membership predicate: callers hand
+ * it the exact list IDs, and this query only supplies display counts.
  */
-export const findVendorsWithoutLogos = async (
+export const loadVendorLogoPresenterCounts = async (
   db: Database,
-): Promise<VendorWithoutLogo[]> => {
+  shortcodes: readonly string[],
+): Promise<Map<string, { expenseRowCount: number }>> => {
+  if (shortcodes.length === 0) return new Map();
   const rows = await getDb(db)
-    .select({
-      shortcode: vendor.shortcode,
-      name: vendor.name,
-      website: vendor.website,
-      purchaseCount: countDistinct(purchase.id),
-      expenseRowCount: count(expense.id),
-    })
+    .select({ shortcode: vendor.shortcode, expenseRowCount: count(expense.id) })
     .from(vendor)
-    .innerJoin(
+    .leftJoin(
       purchase,
       and(eq(purchase.vendorId, vendor.id), notDeleted(purchase)),
     )
@@ -32,22 +24,12 @@ export const findVendorsWithoutLogos = async (
       expense,
       and(eq(expense.purchaseId, purchase.id), notDeleted(expense)),
     )
-    .where(notDeleted(vendor))
+    .where(and(notDeleted(vendor), inArray(vendor.shortcode, [...shortcodes])))
     .groupBy(vendor.id);
-
-  return rows
-    .filter((row) => VENDOR_LOGO_BY_SHORTCODE[row.shortcode] === undefined)
-    .map((row) => ({
-      id: unsafeVendorShortcode(row.shortcode),
-      name: row.name,
-      website: row.website,
-      purchaseCount: Number(row.purchaseCount),
-      expenseRowCount: Number(row.expenseRowCount),
-    }))
-    .sort(
-      (a, b) =>
-        b.expenseRowCount - a.expenseRowCount ||
-        b.purchaseCount - a.purchaseCount ||
-        a.name.localeCompare(b.name),
-    );
+  return new Map(
+    rows.map((row) => [
+      row.shortcode,
+      { expenseRowCount: Number(row.expenseRowCount) },
+    ]),
+  );
 };

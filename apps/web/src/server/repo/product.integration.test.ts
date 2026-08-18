@@ -751,6 +751,84 @@ describe("product repository", () => {
   });
 
   describe("presence filters", () => {
+    it("finds expected-single products duplicated within one placement only", async () => {
+      const first = await createLocation(
+        ctx.db,
+        makeLocationInput({ name: "Duplicate placement A" }),
+        ctx.actor,
+      );
+      const second = await createLocation(
+        ctx.db,
+        makeLocationInput({ name: "Duplicate placement B" }),
+        ctx.actor,
+      );
+      const duplicate = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Duplicated single", expectedQuantity: 1 }),
+        ctx.actor,
+      );
+      const splitPlacement = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Shelf plus installed", expectedQuantity: 1 }),
+        ctx.actor,
+      );
+      const expectedMany = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Expected multiple", expectedQuantity: 2 }),
+        ctx.actor,
+      );
+      for (const productId of [duplicate.id, expectedMany.id]) {
+        await createInventoryEntry(
+          ctx.db,
+          {
+            productId,
+            locationId: first.id,
+            amount: { value: 1, unit: "each" },
+          },
+          ctx.actor,
+        );
+        await createInventoryEntry(
+          ctx.db,
+          {
+            productId,
+            locationId: second.id,
+            amount: { value: 1, unit: "each" },
+          },
+          ctx.actor,
+        );
+      }
+      await createInventoryEntry(
+        ctx.db,
+        {
+          productId: splitPlacement.id,
+          locationId: first.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+      await createInventoryEntry(
+        ctx.db,
+        {
+          productId: splitPlacement.id,
+          locationId: second.id,
+          amount: { value: 1, unit: "each" },
+          placement: "installed",
+        },
+        ctx.actor,
+      );
+
+      const result = await productList(
+        ctx.db,
+        { inventoryMultiplicity: "duplicate_within_placement" },
+        [{ orderBy: "name", direction: "asc" }],
+        { pageIndex: 0, pageSize: 20 },
+      );
+
+      expect(result.data.map((row) => row.id)).toContain(duplicate.id);
+      expect(result.data.map((row) => row.id)).not.toContain(splitPlacement.id);
+      expect(result.data.map((row) => row.id)).not.toContain(expectedMany.id);
+    });
+
     it("inventoryPresenceFilter: none returns only products with no live inventory entry", async () => {
       const location = await createLocation(
         ctx.db,

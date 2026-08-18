@@ -51,6 +51,13 @@ export const ENTITY_EDGE_SEMANTICS = {
         "The cover photo for a cookbook, shown in cookbook lists and detail headers.",
       liveness: { kind: "must-target-live" },
     },
+    "Vendor.logoImageId": {
+      role: "media",
+      label: "vendor logos",
+      description:
+        "An optional brand mark for a vendor; absence deliberately falls back to the vendor monogram.",
+      liveness: { kind: "must-target-live" },
+    },
     "ProductImage.imageId": {
       role: "media",
       label: "product photos",
@@ -230,6 +237,13 @@ export const ENTITY_EDGE_SEMANTICS = {
       label: "kits it's listed inside",
       description:
         "This Product cited as a part of another (kit) Product's component list, with its own quantity. The kit and the part remain independently real products; this only says the part is currently accounted for inside the kit.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ProductConversionCoverage.productId": {
+      role: "metadata",
+      label: "conversion coverage projections",
+      description:
+        "A rebuildable conversion-graph projection owned by this product.",
       liveness: { kind: "must-target-live" },
     },
   },

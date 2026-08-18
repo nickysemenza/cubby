@@ -92,6 +92,17 @@ const withProjectAndProductNameOnly = {
             orderUrlTemplate: true,
             deletedAt: true,
           },
+          with: {
+            logo: {
+              columns: {
+                url: true,
+                contentType: true,
+                renderStatus: true,
+                storageStatus: true,
+                deletedAt: true,
+              },
+            },
+          },
         },
       },
     },

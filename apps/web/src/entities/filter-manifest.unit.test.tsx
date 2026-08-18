@@ -10,6 +10,10 @@ import {
   manifestFilterConfig,
 } from "./filter-manifest";
 import {
+  assertUiFilterSemantics,
+  entityFilterSemantics,
+} from "./filter-search-fields";
+import {
   buildFiltersFromManifest,
   decodeFilters,
   encodeFilters,
@@ -38,6 +42,26 @@ describe("manifestFilterConfig", () => {
         getEntityFilters(entity).map((spec) => spec.urlKey ?? spec.columnId),
       );
     }
+  });
+
+  it("generates route fields from the dependency-light semantic registry", () => {
+    for (const entity of entitySchema.options) {
+      expect(Object.keys(entityFilterSearchFields(entity))).toEqual(
+        entityFilterSemantics[entity],
+      );
+      expect(() =>
+        assertUiFilterSemantics(entity, getEntityFilters(entity)),
+      ).not.toThrow();
+    }
+  });
+
+  it("rejects a UI adapter that invents a route-only filter", () => {
+    expect(() =>
+      assertUiFilterSemantics("vendor", [
+        ...getEntityFilters("vendor"),
+        { columnId: "not-in-core" },
+      ]),
+    ).toThrow("UI filter adapter drift");
   });
 
   it.each([
@@ -436,6 +460,7 @@ describe("vendor filters", () => {
       "purchaseCount",
       "spend",
       "latestPurchaseDate",
+      "logo",
       "related:vendor.expenses",
       "related:vendor.purchases",
       "related:vendor.products",
@@ -603,6 +628,7 @@ describe("purchase filters", () => {
       "updatedAt",
     ]);
     expect(urlOnly.map((spec) => spec.columnId)).toEqual([
+      "financialReconciliation",
       "expenseTotalMin",
       "expenseTotalMax",
       "expenseId",
@@ -673,8 +699,11 @@ describe("expense URL-only scopes", () => {
     expect(urlOnly.map((spec) => spec.columnId)).toEqual([
       "dateFrom",
       "dateTo",
+      "dateRelative",
       "costMin",
       "costMax",
+      "costSign",
+      "disposalPurchasePresenceFilter",
       "productQuantityMin",
       "productQuantityMax",
       "notesSearch",
@@ -894,6 +923,7 @@ describe("finance filters", () => {
       "updatedAt",
     ]);
     expect(urlOnly.map((spec) => spec.columnId)).toEqual([
+      "allocationIntegrity",
       "purchaseId",
       "externalId",
       "amountMin",
@@ -1028,8 +1058,6 @@ describe("every server filter field is reachable from the manifest", () => {
       "tree shaping: the table renders parents with expandable subtasks, so the renderer owns this. Advertised on MCP list_tasks",
     "project.topLevelOnly":
       "same tree shaping for sub-projects. Advertised on MCP list_projects",
-    "task.completion":
-      "the board and the actionable-task queries pick this scope server-side; the table's visible control is `status`, whose values it summarizes",
     "meal.from":
       "Meals has no filterable list table — the calendar owns its window through ?week= and the shopping list through its own ?from=/?to=. This is the MCP window",
     "meal.to": "the other half of meal.from",

@@ -16,7 +16,19 @@ import {
   type SortParams,
 } from "@cubby/schemas/pagination";
 import type { ProductCategory } from "@cubby/schemas/product";
-import { and, asc, count, desc, eq, inArray, not, sql, sum } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  not,
+  sql,
+  sum,
+} from "drizzle-orm";
 import {
   computeInventoryValuation,
   computeInventoryValuations,
@@ -54,7 +66,11 @@ import {
   present,
   sideEffect,
 } from "~/server/repo/impact";
-import { loadProductPricing } from "~/server/repo/product/pricing";
+import { isGlobalUnknownLocation } from "~/server/repo/location";
+import {
+  effectiveProductPriceSql,
+  loadProductPricing,
+} from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import { resolveFilterIds } from "~/server/repo/shortcode-resolver";
@@ -238,9 +254,11 @@ interface InventoryFilters {
   manufacturerFilter?: string;
   categoryFilter?: ProductCategory | ProductCategory[];
   verifiedPresenceFilter?: "has" | "none";
+  valuationStatus?: "valued" | "missing" | "missing_with_priced_product";
   verifiedFrom?: string;
   verifiedTo?: string;
   placementFilter?: InventoryPlacement | "all";
+  locationRole?: "global_unknown";
 }
 
 /**
@@ -335,11 +353,24 @@ export const inventoryentryList = async (
       eqAnyRequested(inventoryEntry.locationId, locationIds),
       eqAnyRequested(inventoryEntry.productId, productIds),
       eqAny(product.category, filters.categoryFilter),
+      filters.locationRole === "global_unknown"
+        ? isGlobalUnknownLocation()
+        : undefined,
       filters.verifiedPresenceFilter === "has"
         ? sql`${inventoryEntry.verifiedAt} IS NOT NULL`
         : filters.verifiedPresenceFilter === "none"
           ? sql`${inventoryEntry.verifiedAt} IS NULL`
           : undefined,
+      filters.valuationStatus === "valued"
+        ? isNotNull(inventoryEntry.valuation)
+        : filters.valuationStatus === "missing"
+          ? isNull(inventoryEntry.valuation)
+          : filters.valuationStatus === "missing_with_priced_product"
+            ? and(
+                isNull(inventoryEntry.valuation),
+                sql`${sql.raw(effectiveProductPriceSql('"Product"'))} IS NOT NULL`,
+              )
+            : undefined,
       filters.verifiedFrom
         ? sql`${inventoryEntry.verifiedAt} >= ${filters.verifiedFrom}::date`
         : undefined,

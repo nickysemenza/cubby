@@ -13,7 +13,10 @@ import {
   inventoryentryList,
   updateInventoryEntry,
 } from "~/server/repo/inventory";
-import { createLocation } from "~/server/repo/location";
+import {
+  createLocation,
+  ensureGlobalUnknownLocation,
+} from "~/server/repo/location";
 import { createProduct } from "~/server/repo/product";
 import {
   makeLocationInput,
@@ -154,6 +157,44 @@ describe("inventoryentryList product-attribute filters", () => {
     expect(result.data.length).toEqual(1);
     expect(result.data[0]?.product.manufacturer).toEqual("Milwaukee");
     expect(result.count).toEqual(1);
+  });
+
+  it("filters the canonical global Unknown location by semantic role", async () => {
+    const unknown = await ensureGlobalUnknownLocation(ctx.db, TEST_ACTOR);
+    const other = await createTestLocation(
+      makeLocationInput({ name: "Unknown-looking spare room" }),
+    );
+    const productRow = await createTestProduct(
+      makeProductInput({ name: "Unfiled filter fixture" }),
+    );
+    await createInventoryEntry(
+      ctx.db,
+      {
+        productId: productRow.entityId,
+        locationId: unsafeLocationId(
+          await requireResolvedId(unknown.id, "location"),
+        ),
+        amount: { value: 1, unit: "each" },
+      },
+      TEST_ACTOR,
+    );
+    await createInventoryEntry(
+      ctx.db,
+      {
+        productId: productRow.entityId,
+        locationId: other.entityId,
+        amount: { value: 1, unit: "each" },
+      },
+      TEST_ACTOR,
+    );
+
+    const result = await list({
+      placementFilter: "all",
+      locationRole: "global_unknown",
+    });
+
+    expect(result.count).toBe(1);
+    expect(result.data[0]?.location.id).toBe(unknown.id);
   });
 
   it("categoryFilter scopes to the matching category", async () => {
@@ -309,6 +350,56 @@ describe("inventoryentryList product-attribute filters", () => {
     expect(result.data.length).toEqual(1);
     expect(result.count).toEqual(2);
     expect(result.sums.valuation).toEqual(22);
+  });
+
+  it("distinguishes an unpriceable stored unit from an unpriced product", async () => {
+    const { entityId: locationId } = await createTestLocation(
+      makeLocationInput({ name: "Valuation shelf" }),
+    );
+    const priced = await createTestProduct(
+      makeProductInput({ name: "Priced pack", price: 20 }),
+    );
+    const unpriced = await createTestProduct(
+      makeProductInput({ name: "Unpriced pack", price: null }),
+    );
+    const valued = await createTestProduct(
+      makeProductInput({ name: "Valued each", price: 5 }),
+    );
+    const unpriceableEntry = await createInventoryEntry(
+      ctx.db,
+      {
+        productId: priced.entityId,
+        locationId,
+        amount: { value: 2, unit: "roll" },
+      },
+      TEST_ACTOR,
+    );
+    await createInventoryEntry(
+      ctx.db,
+      {
+        productId: unpriced.entityId,
+        locationId,
+        amount: { value: 1, unit: "each" },
+      },
+      TEST_ACTOR,
+    );
+    await createInventoryEntry(
+      ctx.db,
+      {
+        productId: valued.entityId,
+        locationId,
+        amount: { value: 1, unit: "each" },
+      },
+      TEST_ACTOR,
+    );
+
+    const result = await list({
+      placementFilter: "all",
+      valuationStatus: "missing_with_priced_product",
+    });
+
+    expect(result.count).toBe(1);
+    expect(result.data.map((row) => row.id)).toEqual([unpriceableEntry.id]);
   });
 
   it("a soft-deleted product does not leak an entry through the join", async () => {

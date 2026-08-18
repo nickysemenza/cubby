@@ -26,11 +26,14 @@ import type { FoodSummary } from "@cubby/usda-schemas";
 import { eq } from "drizzle-orm";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { compileProblemFilters } from "~/entities/problem-filter-semantics";
 import { viewProblemDeclarations } from "~/entities/view-manifest";
 import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
-import { VENDOR_LOGO_BY_SHORTCODE } from "~/lib/vendor-logos.generated";
-import type { UPCLookupClient } from "~/server/clients/upc-lookup";
+import {
+  PartialUpcBatchLookupError,
+  type UPCLookupClient,
+} from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import {
   financialTransaction,
@@ -41,6 +44,7 @@ import {
   productComponent,
   productImage,
   projectToolUsage,
+  upcLookupCache,
   vendor as vendorTable,
 } from "~/server/db/schema";
 import { findViewProblems } from "../services/problem-views.service";
@@ -48,6 +52,7 @@ import {
   findAllProblems,
   findFastProblems,
   findTrackerProblems,
+  rebuildProductConversionCoverageProjection,
   reparseStaleIngredientParses,
 } from "../services/problems.service";
 import { getDb } from "./database-helpers";
@@ -77,6 +82,7 @@ import {
 import { resolveLiveShortcode } from "./shortcode-resolver";
 import { insertWithShortcode } from "./shortcode-utils";
 import { createTask, deleteTasks } from "./task";
+import { readCachedUpcLookups } from "./upc-lookup-cache";
 import { findOrCreateVendor, getVendorByID, mergeVendors } from "./vendor";
 
 /**
@@ -151,6 +157,82 @@ const fakeUsdaClient = (foods: (FoodSummary | null)[] = []) =>
 
 describe("problems repo", () => {
   const ctx = withTestDb();
+
+  describe("UPC enrichment cache", () => {
+    const UPC = "cache-test-upc";
+
+    it("reports unavailable, recovers into a durable answer, and serves stale data on a later outage", async () => {
+      const unavailable = await readCachedUpcLookups(
+        ctx.db,
+        [UPC],
+        async () => {
+          throw new Error("provider down");
+        },
+      );
+      expect(unavailable.freshness).toMatchObject({
+        status: "unavailable",
+        unavailableCount: 1,
+      });
+      expect(unavailable.lookups.size).toBe(0);
+
+      const lookupBatch = vi
+        .fn()
+        .mockResolvedValue(
+          new Map([[UPC, upcResponse(UPC, { brand: "Acme" })]]),
+        );
+      const recovered = await readCachedUpcLookups(ctx.db, [UPC], lookupBatch);
+      expect(recovered.freshness.status).toBe("fresh");
+      expect(recovered.lookups.get(UPC)?.brand).toBe("Acme");
+
+      // An expired answer must try the provider again. A failure retains the
+      // known proposal and advertises it as stale rather than empty/healthy.
+      await getDb(ctx.db)
+        .update(upcLookupCache)
+        .set({ fetchedAt: new Date(0) })
+        .where(eq(upcLookupCache.upc, UPC));
+      const stale = await readCachedUpcLookups(ctx.db, [UPC], async () => {
+        throw new Error("provider down again");
+      });
+      expect(stale.freshness).toMatchObject({ status: "stale" });
+      expect(stale.lookups.get(UPC)?.brand).toBe("Acme");
+    });
+
+    it("persists successful chunks and marks only failed UPCs unavailable", async () => {
+      const completed = `${UPC}-completed`;
+      const failed = `${UPC}-failed`;
+      const result = await readCachedUpcLookups(
+        ctx.db,
+        [completed, failed],
+        async () => {
+          throw new PartialUpcBatchLookupError(
+            new Error("second chunk failed"),
+            new Map([
+              [completed, upcResponse(completed, { brand: "Preserved" })],
+            ]),
+            [failed],
+          );
+        },
+      );
+
+      expect(result.lookups.get(completed)?.brand).toBe("Preserved");
+      expect(result.lookups.has(failed)).toBe(false);
+      expect(result.freshness).toMatchObject({
+        status: "stale",
+        unavailableCount: 1,
+      });
+      expect(
+        await getDb(ctx.db).query.upcLookupCache.findMany({
+          where: (row, { inArray }) => inArray(row.upc, [completed, failed]),
+          columns: { upc: true, status: true },
+        }),
+      ).toEqual(
+        expect.arrayContaining([
+          { upc: completed, status: "ready" },
+          { upc: failed, status: "unavailable" },
+        ]),
+      );
+    });
+  });
 
   // A recipe whose single ingredient row stores `amounts`/`rawLine`; a mismatch
   // between rawLine's fresh parse and the stored amounts is parse drift.
@@ -1487,6 +1569,12 @@ describe("problems repo", () => {
       ).toBe(true);
 
       // With the bridging USDA portion, the product is one component → not flagged.
+      // Provider-backed conversion membership is materialized; refresh the
+      // projection through its maintenance seam before reading the exact list.
+      await rebuildProductConversionCoverageProjection(
+        ctx.db,
+        fakeUsdaClient([sugarFood]),
+      );
       const withFood = await findAllProblems(
         ctx.db,
         fakeUpcClient().client,
@@ -1824,7 +1912,8 @@ describe("problems service — tracker slice", () => {
     await deleteProjects(ctx.db, [project.id], ctx.actor);
 
     const after = await findTrackerProblems(ctx.db);
-    const everyEntityId = Object.values(after).flatMap((items) =>
+    const { sectionTotals: _sectionTotals, ...sections } = after;
+    const everyEntityId = Object.values(sections).flatMap((items) =>
       items.map((i) => i.entityId),
     );
     expect(everyEntityId).not.toContain(task.id);
@@ -1966,6 +2055,13 @@ describe("problems service — recount staleness", () => {
     if (!declaration) throw new Error("neverVerifiedInventory view is gone");
     return declaration.problem;
   };
+  const neverVerifiedFilters = () => {
+    const source = neverVerifiedView().source;
+    if (source.kind !== "entity") {
+      throw new Error("neverVerifiedInventory must remain entity-backed");
+    }
+    return source.filters;
+  };
 
   it("lists never-verified entries, and drops them once verified or deleted", async () => {
     const unverified = await seedStocked("Unverified bin");
@@ -1979,13 +2075,13 @@ describe("problems service — recount staleness", () => {
 
     // Drives the SAVED VIEW's own declared filters through the ordinary list
     // path — this is the parity assertion that let the detector be deleted.
-    // Taking `serverFilters` from the manifest rather than retyping it here is
+    // Taking the canonical assembly from the manifest rather than retyping it here is
     // the point: a test that restated the predicate could agree with itself
     // while disagreeing with what the app actually runs.
     const { data } = await inventoryentryList(
       ctx.db,
       {
-        ...neverVerifiedView().serverFilters,
+        ...compileProblemFilters("inventory", neverVerifiedFilters()),
         // Scopes to this test's fixtures; the describe shares one database, and
         // the predicate is what's under test, not the pagination. Filters by
         // NAME rather than id because the repo takes resolved uuids while the
@@ -2002,7 +2098,7 @@ describe("problems service — recount staleness", () => {
     const verifiedRows = await inventoryentryList(
       ctx.db,
       {
-        ...neverVerifiedView().serverFilters,
+        ...compileProblemFilters("inventory", neverVerifiedFilters()),
         locationNameFilter: "Verified bin",
       },
       [],
@@ -2412,7 +2508,7 @@ describe("problems — duplicate vendors", () => {
     if (!row) throw new Error("expected a duplicate-vendor row");
     expect(row.value).toBe("Lowe's");
 
-    const keeper = await mergeVendors(
+    const { output: keeper } = await mergeVendors(
       ctx.db,
       {
         keepId: row.canonicalSampleId,
@@ -2549,15 +2645,22 @@ describe("problems — vendor mini-logo coverage", () => {
     expect((await findCoverageTotals(ctx.db)).vendorsWithPurchases).toBe(2);
   });
 
-  it("excludes a vendor whose public shortcode is in the generated manifest", async () => {
-    const [seededShortcode] = Object.keys(VENDOR_LOGO_BY_SHORTCODE);
-    if (!seededShortcode) throw new Error("expected a seeded vendor logo");
-
-    await seedLine("Manifest-backed Vendor", "M-1");
-    const vendorId = await findOrCreateVendor(ctx.db, "Manifest-backed Vendor");
+  it("excludes a vendor with a persisted logo image", async () => {
+    await seedLine("Logo-backed Vendor", "M-1");
+    const vendorId = await findOrCreateVendor(ctx.db, "Logo-backed Vendor");
+    const [logo] = await getDb(ctx.db)
+      .insert(image)
+      .values({
+        url: "https://example.com/vendor-logo.png",
+        key: `vendor-logo-${vendorId}`,
+        filename: "vendor-logo.png",
+        size: 1,
+        contentType: "image/png",
+      })
+      .returning({ id: image.id });
     await getDb(ctx.db)
       .update(vendorTable)
-      .set({ shortcode: seededShortcode })
+      .set({ logoImageId: logo!.id })
       .where(eq(vendorTable.id, vendorId));
 
     const { vendorsWithoutLogos } = await findFastProblems(ctx.db);

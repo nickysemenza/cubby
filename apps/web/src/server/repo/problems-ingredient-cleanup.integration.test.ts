@@ -2,8 +2,10 @@ import type { SearchableEntity } from "@cubby/schemas/search";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { compileProblemFilters } from "~/entities/problem-filter-semantics";
 import { viewProblemDeclarations } from "~/entities/view-manifest";
 import { entityEmbedding, ingredient } from "~/server/db/schema";
+import { findAllViewProblemIds } from "~/server/services/problem-views.service";
 import { deleteUnusedIngredients } from "../services/problems.service";
 import { getDb } from "./database-helpers";
 import { upsertImportRecipe } from "./import-recipe-convert";
@@ -23,8 +25,8 @@ import { generateUniqueShortcode } from "./shortcode-utils";
  * The unused-ingredient split, resolved the way the app now resolves it: through
  * the two saved views' own declared filters.
  *
- * Reading `serverFilters` from the manifest rather than restating the predicate
- * is what makes this a parity gate — it's the assertion that let
+ * Reading the canonical filter assembly rather than restating the predicate is
+ * what makes this a parity gate — it's the assertion that let
  * `findUnusedIngredients` be deleted, and it keeps failing if the views drift.
  */
 const unusedIngredients = async (db: Parameters<typeof ingredientList>[0]) => {
@@ -35,7 +37,12 @@ const unusedIngredients = async (db: Parameters<typeof ingredientList>[0]) => {
     if (!declaration) throw new Error(`no view declares ${key}`);
     const { data } = await ingredientList(
       db,
-      declaration.problem.serverFilters as never,
+      compileProblemFilters(
+        declaration.entity,
+        declaration.problem.source.kind === "entity"
+          ? declaration.problem.source.filters
+          : [],
+      ) as never,
       [],
       { pageIndex: 0, pageSize: 100 },
     );
@@ -95,6 +102,16 @@ describe("unused ingredients (saved-view backed)", () => {
     const allNames = [...withProduct, ...withoutProduct].map((i) => i.name);
     expect(allNames).not.toContain("carrot");
     expect(allNames).not.toContain("Recipe: sub");
+
+    // The destructive header actions receive a Problem key, never the sampled
+    // card IDs. Their server path re-runs this exact registered query so an
+    // item beyond a card page cannot be silently skipped.
+    await expect(
+      findAllViewProblemIds(ctx.db, "unusedIngredientsWithProduct"),
+    ).resolves.toEqual(withProduct.map((row) => row.id));
+    await expect(
+      findAllViewProblemIds(ctx.db, "unusedIngredientsWithoutProduct"),
+    ).resolves.toEqual(withoutProduct.map((row) => row.id));
   });
 });
 

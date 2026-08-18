@@ -13,6 +13,11 @@ import {
   unsafePurchaseShortcode,
   unsafeVendorShortcode,
 } from "@cubby/schemas/identifiers";
+import {
+  type ImageRenderStatus,
+  type ImageStorageStatus,
+  isDisplayableImageFile,
+} from "@cubby/schemas/image";
 import type { ExpenseOut } from "@cubby/schemas/project";
 import { HOUSEHOLD_PROJECT_SHORTCODE } from "@cubby/schemas/project";
 import { purchaseOrderUrl } from "@cubby/schemas/vendor";
@@ -136,6 +141,13 @@ export type ExpenseRow = {
       shortcode: string;
       orderUrlTemplate: string | null;
       deletedAt: Date | null;
+      logo: {
+        url: string;
+        contentType: string;
+        renderStatus: ImageRenderStatus | null;
+        storageStatus: ImageStorageStatus | null;
+        deletedAt: Date | null;
+      } | null;
     } | null;
   } | null;
 };
@@ -184,6 +196,12 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
         ? unsafeVendorShortcode(purchaseRow.vendor.shortcode)
         : null,
     vendor: purchaseRow ? resolveLiveJoinName(purchaseRow.vendor) : null,
+    vendorLogo:
+      purchaseRow?.vendor?.deletedAt === null &&
+      purchaseRow.vendor.logo?.deletedAt === null &&
+      isDisplayableImageFile(purchaseRow.vendor.logo)
+        ? { url: purchaseRow.vendor.logo.url }
+        : null,
     orderId: purchaseRow?.orderId ?? null,
     // Derived, never stored: the vendor's own order page for this order. Gated
     // on the vendor's liveness like `vendor` above — a soft-deleted vendor's

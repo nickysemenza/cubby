@@ -98,7 +98,11 @@ function targetImage(
   if (target?.entity === "vendor") {
     return (
       <div className="flex h-full items-center justify-center">
-        <VendorMark vendor={target.label} vendorId={target.id} />
+        <VendorMark
+          vendor={target.label}
+          vendorId={target.id}
+          logo={target.image ? { url: target.image.url } : null}
+        />
       </div>
     );
   }

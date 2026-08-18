@@ -92,13 +92,14 @@ describe("entity manifest", () => {
     }
   });
 
-  it("an entity references `image` iff it is image-bearing", () => {
-    // Guards the reference graph against missing image edges (product/recipe/
-    // location reach image through join tables, not a direct FK column).
+  it("every gallery-bearing entity references `image`", () => {
+    // `hasImages` drives the polymorphic Image.entityType gallery enum. A
+    // relationship to one specific Image (such as Vendor.logoImageId) belongs
+    // in the reference graph without making the entity a gallery owner.
     for (const entity of allEntities) {
-      expect(entityReferences(entity).includes("image")).toBe(
-        entityManifest[entity].hasImages,
-      );
+      if (entityManifest[entity].hasImages) {
+        expect(entityReferences(entity)).toContain("image");
+      }
     }
   });
 

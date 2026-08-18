@@ -15,11 +15,13 @@ export function EmptyLocationsList({
   locations,
   coverage,
   count,
+  assembly,
 }: {
   locations: EmptyLocation[];
   coverage?: ProblemSectionCoverage;
   /** True population — `locations` is a page of it. */
   count?: number;
+  assembly?: ReactNode;
 }) {
   const [addDialogLocation, setAddDialogLocation] =
     useState<EmptyLocation | null>(null);
@@ -32,6 +34,7 @@ export function EmptyLocationsList({
         entity="location"
         items={locations}
         count={count}
+        assembly={assembly}
         coverage={coverage}
         emptyMessage="All leaf locations have inventory entries."
         renderItem={(location) => {

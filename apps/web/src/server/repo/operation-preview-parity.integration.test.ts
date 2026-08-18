@@ -355,7 +355,7 @@ describe("operation preview / mutation parity", () => {
             remove: () => deleteVendors(ctx.db, [vendor.id], ctx.actor),
             clearBlocker: () =>
               deletePurchases(ctx.db, [purchase.id], ctx.actor),
-            expectResolved: resolvesVoid,
+            expectResolved: detachesNoImages,
           };
         },
       ],

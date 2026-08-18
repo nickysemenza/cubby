@@ -71,7 +71,11 @@ export function buildSearchHitComboboxItem<TId extends string>(
   const fallback = locationKind ? (
     <LocationPickerThumb imageUrl={hit.imageUrl} type={locationKind} />
   ) : entity === "vendor" ? (
-    <VendorMark vendor={hit.title} vendorId={unsafeVendorShortcode(hit.id)} />
+    <VendorMark
+      vendor={hit.title}
+      vendorId={unsafeVendorShortcode(hit.id)}
+      logo={hit.imageUrl ? { url: hit.imageUrl } : null}
+    />
   ) : (
     <SearchPickerIcon
       entity={entity}
@@ -402,6 +406,7 @@ export const buildVendorNameComboboxItem = (vendor: {
   id: VendorShortcode;
   name: string;
   count?: number;
+  logo?: { url: string } | null;
 }): ComboboxItem<string> => ({
   id: vendor.name,
   shortcode: vendor.id,
@@ -414,13 +419,16 @@ export const buildVendorNameComboboxItem = (vendor: {
             `${vendor.count} ${vendor.count === 1 ? "purchase" : "purchases"}`,
           ],
         },
-  icon: <VendorMark vendor={vendor.name} vendorId={vendor.id} />,
+  icon: (
+    <VendorMark vendor={vendor.name} vendorId={vendor.id} logo={vendor.logo} />
+  ),
 });
 
 export const buildVendorShortcodeComboboxItem = (vendor: {
   id: VendorShortcode;
   name: string;
   count?: number;
+  logo?: { url: string } | null;
 }): ComboboxItem<VendorShortcode> => ({
   id: vendor.id,
   shortcode: vendor.id,
@@ -433,5 +441,7 @@ export const buildVendorShortcodeComboboxItem = (vendor: {
             `${vendor.count} ${vendor.count === 1 ? "purchase" : "purchases"}`,
           ],
         },
-  icon: <VendorMark vendor={vendor.name} vendorId={vendor.id} />,
+  icon: (
+    <VendorMark vendor={vendor.name} vendorId={vendor.id} logo={vendor.logo} />
+  ),
 });

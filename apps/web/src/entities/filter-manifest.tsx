@@ -55,6 +55,7 @@ import {
   amountRangeOptions,
   resolveAmountFilter,
 } from "~/app/finance/financial-transaction-options";
+import { imageStatusOptions } from "~/app/images/image-options";
 import { mealKindOptions, mealTypeOptions } from "~/app/meals/meal-options";
 import {
   PROJECT_STATUS_OPTIONS,
@@ -435,6 +436,23 @@ const auditFilterSpecs: readonly FilterSpec[] = [
   },
 ];
 
+const imageAuditFilterSpecs: readonly FilterSpec[] = [
+  {
+    columnId: "createdAt",
+    kind: "range",
+    placeholder: "Filter by created date...",
+    options: [
+      { value: "olderThan1h", label: "Older than 1 hour" },
+      ...dateRangeOptions,
+    ],
+    expand: (value) =>
+      value === "olderThan1h"
+        ? { uploadedAgeHoursMin: 1 }
+        : resolveAuditDateRange("created")(value),
+  },
+  auditFilterSpecs[1]!,
+];
+
 /** The control a kind renders as. */
 const filterTypeForKind = (
   kind: FilterKind,
@@ -518,6 +536,12 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
   ],
 
   financialTransaction: [
+    {
+      columnId: "allocationIntegrity",
+      urlOnly: true,
+      kind: "select",
+      placeholder: "Filter allocation integrity...",
+    },
     {
       columnId: "transaction",
       field: "search",
@@ -682,6 +706,14 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       placeholder: "Expense date to...",
     },
     {
+      // Server-relative dates keep Problem links stable across midnight instead
+      // of freezing today's ISO date into a saved URL.
+      columnId: "dateRelative",
+      urlOnly: true,
+      kind: "select",
+      placeholder: "Filter by relative date...",
+    },
+    {
       columnId: "costType",
       kind: "multiselect",
       placeholder: "Filter by cost type...",
@@ -752,6 +784,22 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       urlOnly: true,
       kind: "text",
       placeholder: "Maximum cost...",
+    },
+    {
+      // Strict direction is needed by exit worklists; the friendly Cost
+      // picker deliberately keeps zero-dollar rows with credits instead.
+      columnId: "costSign",
+      urlOnly: true,
+      kind: "select",
+      placeholder: "Filter by cost direction...",
+    },
+    {
+      // A disposal is a Purchase relationship fact from the ownership ledger,
+      // not simply a negative Expense line.
+      columnId: "disposalPurchasePresenceFilter",
+      urlOnly: true,
+      kind: "presence",
+      placeholder: "Filter disposal purchase presence...",
     },
     {
       // Like Cost, the header owns one slot and combines presence with the
@@ -939,6 +987,13 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       options: [...presenceFilterOptions("purchase"), ...dateRangeOptions],
       expand: resolveLatestPurchaseDate,
     },
+    {
+      columnId: "logo",
+      field: "logoPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter logos...",
+      options: presenceFilterOptions("logo"),
+    },
   ],
 
   // One row per vendor purchase. These specs cover `purchaseFiltersSchema`,
@@ -946,6 +1001,12 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
   // values outside the UI presets. A purchase has its own detail route, so there
   // is no expense-style exact-order-id scope here.
   purchase: [
+    {
+      columnId: "financialReconciliation",
+      urlOnly: true,
+      kind: "select",
+      placeholder: "Filter financial reconciliation...",
+    },
     {
       // `?q=`, the money family's search key — and it hangs on `purchase`, not
       // `orderId`. `purchase` IS purchase's name column (`standardColumns` is
@@ -1132,6 +1193,25 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       placeholder: "Filter by due date...",
       options: [...presenceFilterOptions("due date"), ...dueRangeOptions],
       expand: resolveTaskDueFilter,
+    },
+    {
+      // Exact Problem continuation: unlike the friendly inclusive `overdue`
+      // preset, this resolves server-side as strictly before today.
+      columnId: "dueRelative",
+      urlOnly: true,
+      kind: "select",
+      placeholder: "Filter by relative due date...",
+      options: [{ value: "beforeToday", label: "Before today" }],
+    },
+    {
+      columnId: "completion",
+      urlOnly: true,
+      kind: "select",
+      placeholder: "Filter task completion...",
+      options: [
+        { value: "open", label: "Open" },
+        { value: "done", label: "Done" },
+      ],
     },
     {
       columnId: "project",
@@ -1385,6 +1465,46 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       options: presenceFilterOptions("image"),
     },
     {
+      // Exact entity-grain duplicate placement worklist. This is not a generic
+      // quantity range: it preserves the stock-vs-installed distinction.
+      columnId: "inventoryMultiplicity",
+      field: "inventoryMultiplicity",
+      kind: "select",
+      placeholder: "Filter inventory multiplicity...",
+      options: [
+        {
+          value: "duplicate_within_placement",
+          label: "Duplicate within placement",
+        },
+      ],
+    },
+    {
+      columnId: "ownershipReconciliation",
+      field: "ownershipReconciliation",
+      kind: "select",
+      placeholder: "Filter ownership reconciliation...",
+      options: [
+        {
+          value: "disposed_still_on_hand",
+          label: "Disposed but still on hand",
+        },
+      ],
+    },
+    {
+      columnId: "conversionCoverage",
+      field: "conversionCoverage",
+      kind: "select",
+      placeholder: "Filter conversion coverage...",
+      options: [{ value: "partial", label: "Partial coverage" }],
+    },
+    {
+      columnId: "conversionTopology",
+      field: "conversionTopology",
+      kind: "select",
+      placeholder: "Filter conversion topology...",
+      options: [{ value: "islanded", label: "Islanded mappings" }],
+    },
+    {
       // Bare presence, not a quality tier — and it has to stay that way. The
       // cell's tier is conversion COVERAGE: graph reachability through the unit
       // engine over stored edges PLUS USDA-derived ones (portions, servings,
@@ -1440,6 +1560,13 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       kind: "multiselect",
       placeholder: "Filter by kind...",
       options: mealKindOptions,
+    },
+    {
+      columnId: "recipeCostCoverage",
+      field: "recipeCostCoverage",
+      kind: "select",
+      placeholder: "Filter recipe cost coverage...",
+      options: [{ value: "understated", label: "Understated" }],
     },
   ],
   recipe: [
@@ -1607,6 +1734,27 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
         { value: "all", label: "Stock and installed" },
       ],
     },
+    {
+      columnId: "locationRole",
+      field: "locationRole",
+      kind: "select",
+      placeholder: "Filter location role...",
+      options: [{ value: "global_unknown", label: "Global Unknown" }],
+    },
+    {
+      columnId: "valuationStatus",
+      field: "valuationStatus",
+      kind: "select",
+      placeholder: "Filter valuation...",
+      options: [
+        { value: "valued", label: "Valued" },
+        { value: "missing", label: "Missing valuation" },
+        {
+          value: "missing_with_priced_product",
+          label: "Missing despite product price",
+        },
+      ],
+    },
   ],
 
   location: [
@@ -1711,6 +1859,19 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       kind: "text",
       placeholder: "Filter by filename...",
     },
+    {
+      columnId: "status",
+      kind: "multiselect",
+      placeholder: "Filter by upload status...",
+      options: imageStatusOptions,
+    },
+    {
+      columnId: "entity",
+      field: "referencePresenceFilter",
+      kind: "presence",
+      placeholder: "Filter references...",
+      options: presenceFilterOptions("reference"),
+    },
   ],
 
   project: [
@@ -1746,6 +1907,19 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       kind: "multiselect",
       placeholder: "Filter by kind...",
       options: projectKindOptions,
+    },
+    {
+      columnId: "attention",
+      kind: "select",
+      placeholder: "Filter tracker attention...",
+      options: [
+        { value: "stalled", label: "Stalled" },
+        { value: "missing_budget", label: "Missing budget" },
+        {
+          value: "blocked_no_next_action",
+          label: "Blocked with no next action",
+        },
+      ],
     },
     {
       columnId: "locations",
@@ -2047,7 +2221,11 @@ export const getEntityFilters = (entity: Entity): readonly FilterSpec[] => {
   const specs = [
     ...declaredFilters(entity),
     ...(relatedFilterSpecs[entity] ?? []),
-    ...(auditFilterEntities.has(entity) ? auditFilterSpecs : []),
+    ...(auditFilterEntities.has(entity)
+      ? entity === "image"
+        ? imageAuditFilterSpecs
+        : auditFilterSpecs
+      : []),
   ];
   filterSpecCache.set(entity, specs);
   return specs;

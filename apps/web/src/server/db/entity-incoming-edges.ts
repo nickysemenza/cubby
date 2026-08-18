@@ -53,6 +53,7 @@ import {
   mealRecipe,
   product,
   productComponent,
+  productConversionCoverage,
   productExternalId,
   productImage,
   productUnitMappings,
@@ -70,6 +71,7 @@ import {
   statementRow,
   task,
   taskDependency,
+  vendor,
   wishCandidate,
 } from "./schema";
 
@@ -114,6 +116,7 @@ export const INCOMING_EDGES = {
   }),
   image: edges({
     "Cookbook.coverImageId": { column: cookbook.coverImageId },
+    "Vendor.logoImageId": { column: vendor.logoImageId },
     "ProductImage.imageId": { column: productImage.imageId },
     "LocationImage.imageId": { column: locationImage.imageId },
     "RecipeImage.imageId": { column: recipeImage.imageId },
@@ -153,6 +156,9 @@ export const INCOMING_EDGES = {
     },
     "ProductComponent.componentProductId": {
       column: productComponent.componentProductId,
+    },
+    "ProductConversionCoverage.productId": {
+      column: productConversionCoverage.productId,
     },
   }),
   location: edges({

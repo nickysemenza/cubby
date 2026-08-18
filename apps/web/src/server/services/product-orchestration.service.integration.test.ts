@@ -25,7 +25,23 @@ const fakeUsdaClient = (
 
 const fakeUpcLookupClient = (
   lookup: (upc: string) => Promise<UPCLookupResponse | null> = async () => null,
-): UPCLookupClient => ({ lookup: vi.fn(lookup) }) as unknown as UPCLookupClient;
+): UPCLookupClient => {
+  const single = vi.fn(lookup);
+  return {
+    lookup: single,
+    lookupBatch: vi.fn(async (upcs: string[]) => {
+      const entries = await Promise.all(
+        upcs.map(async (upc) => [upc, await single(upc)] as const),
+      );
+      return new Map(
+        entries.filter(
+          (entry): entry is readonly [string, UPCLookupResponse] =>
+            entry[1] != null,
+        ),
+      );
+    }),
+  } as unknown as UPCLookupClient;
+};
 
 const upcResponse = (
   overrides: Partial<UPCLookupResponse> = {},

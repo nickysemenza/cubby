@@ -33,6 +33,7 @@ const EXPENSE: ExpenseOut = {
   purchaseDate: null,
   purchaseDisplayLabel: null,
   vendorId: null,
+  vendorLogo: null,
   vendor: null,
   orderId: null,
   orderUrl: null,

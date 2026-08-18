@@ -122,6 +122,7 @@ import {
 import {
   calculateFinancialReconciliation,
   postedRefundTotalSql,
+  purchaseFinancialMismatchSql,
   settleableExpenseTotalSql,
   settleableUnpricedExpenseCountSql,
 } from "~/server/repo/financial-reconciliation";
@@ -131,6 +132,7 @@ import {
   transactionIdsAllocatedTo,
 } from "~/server/repo/financial-transaction-allocations";
 import { detachImagesFromEntity } from "~/server/repo/image";
+import { displayableImageSql } from "~/server/repo/image-displayability";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import {
@@ -289,6 +291,15 @@ const purchaseVendorOrderUrlTemplate = correlated<string | null>(
      WHERE v."id" = "Purchase"."vendorId" AND v."deletedAt" IS NULL)`,
 );
 
+const purchaseVendorLogoUrl = sql<string | null>`(
+  SELECT logo."url" FROM "Vendor" v
+  JOIN "Image" logo ON logo."id" = v."logoImageId"
+  WHERE v."id" = ${sql.raw('"Purchase"."vendorId"')}
+    AND v."deletedAt" IS NULL
+    AND logo."deletedAt" IS NULL
+    AND ${displayableImageSql("logo")}
+)`;
+
 const purchaseColumns = {
   id: purchase.id,
   shortcode: purchase.shortcode,
@@ -302,6 +313,7 @@ const purchaseColumns = {
   vendorName: purchaseVendorName,
   vendorShortcode: purchaseVendorShortcode,
   vendorOrderUrlTemplate: purchaseVendorOrderUrlTemplate,
+  vendorLogoUrl: purchaseVendorLogoUrl,
   expenseCount: purchaseExpenseCount,
   unpricedExpenseCount: purchaseUnpricedExpenseCount,
   expenseTotal: purchaseExpenseTotal,
@@ -323,6 +335,7 @@ type PurchaseRow = {
   vendorName: string | null;
   vendorShortcode: string;
   vendorOrderUrlTemplate: string | null;
+  vendorLogoUrl: string | null;
   expenseCount: number;
   unpricedExpenseCount: number;
   expenseTotal: number;
@@ -345,6 +358,7 @@ const dbPurchaseToAPI = (
   statedTotal: row.statedTotal,
   notes: row.notes,
   vendorName: row.vendorName,
+  vendorLogo: row.vendorLogoUrl ? { url: row.vendorLogoUrl } : null,
   orderUrl: purchaseOrderUrl({
     orderUrlTemplate: row.vendorOrderUrlTemplate,
     orderId: row.orderId,
@@ -550,6 +564,9 @@ const buildPurchaseWhereClause = (
       ),
       expenseStatusCondition(filters.expenseStatus),
       reconciliationCondition(filters.reconciliation),
+      filters.financialReconciliation === "mismatch"
+        ? sql.raw(purchaseFinancialMismatchSql('"Purchase"'))
+        : undefined,
       documentPresenceCondition(filters.documentPresenceFilter),
       filters.dataStatus === "needs_data"
         ? purchaseNeedsDataCondition()
@@ -580,6 +597,9 @@ const resolvePurchaseSort = (sort: SortParams) => {
   if (sort.orderBy === "vendor") return [dir(purchaseVendorName)];
   if (sort.orderBy === "expenseCount") return [dir(purchaseExpenseCount)];
   if (sort.orderBy === "expenseTotal") return [dir(purchaseExpenseTotal)];
+  if (sort.orderBy === "reconciliationGap") {
+    return [dir(sql`abs(${purchaseExpenseTotal} - ${purchase.statedTotal})`)];
+  }
   if (sort.orderBy === "documentCount") return [dir(purchaseDocumentCount)];
   return null;
 };

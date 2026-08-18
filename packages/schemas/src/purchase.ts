@@ -14,6 +14,7 @@ import {
   vendorShortcode,
 } from "./identifiers";
 import { financialReconciliationSummary } from "./financial-reconciliation";
+import { imageUrlSummary } from "./image-summary";
 import { expenseLineKindSchema } from "./expense-line-kind";
 import { purchaseRelatedFilterFields } from "./related-view";
 import {
@@ -177,6 +178,7 @@ export const purchaseFilterFields = {
   expenseStatus: oneOrMany(purchaseExpenseStatus).optional(),
   /** Shared soft verdict over statedTotal versus SUM(expense.cost). */
   reconciliation: oneOrMany(purchaseReconciliation).optional(),
+  financialReconciliation: z.enum(["mismatch"]).optional(),
   /** `"none"` matches purchases with no live invoice/receipt document. */
   documentPresenceFilter: presenceFilter,
   dataStatus: dataQualityStatus.optional(),
@@ -207,6 +209,7 @@ export const purchaseSortableFields = [
   "vendor",
   "expenseCount",
   "expenseTotal",
+  "reconciliationGap",
   "documentCount",
   "createdAt",
   "updatedAt",
@@ -218,6 +221,8 @@ export const purchaseOut = z.object({
   ...purchaseFields,
   /** Resolved through the join; null only if the vendor was soft-deleted. */
   vendorName: z.string().nullable(),
+  /** The vendor's displayable logo for embedded purchase surfaces. */
+  vendorLogo: imageUrlSummary.nullable(),
   /**
    * Link out to the vendor's own order page, derived at read time from
    * `vendor.orderUrlTemplate` + `orderId` (see `purchaseOrderUrl`). Read-only

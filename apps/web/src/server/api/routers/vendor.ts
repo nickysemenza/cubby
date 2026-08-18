@@ -30,6 +30,7 @@ import {
   vendorList,
   vendorOptions,
 } from "~/server/repo/vendor";
+import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import { createSearchableEntityCrudProcedures } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
@@ -65,11 +66,12 @@ const procedures = createSearchableEntityCrudProcedures({
         ctx.actorContext,
       ),
     delete: async (ctx, ids) => {
-      await deleteVendors(
+      const { detachedImageKeys } = await deleteVendors(
         ctx.db,
         ids.map(unsafeVendorShortcode),
         ctx.actorContext,
       );
+      await deleteStoredObjects(detachedImageKeys);
       return [];
     },
   },
@@ -94,7 +96,12 @@ const merge = protectedProcedure
   .input(mergeVendorsInput)
   .output(strictOutput(vendorOut))
   .mutation(async ({ ctx, input }) => {
-    const output = await mergeVendors(ctx.db, input, ctx.actorContext);
+    const { output, detachedImageKeys } = await mergeVendors(
+      ctx.db,
+      input,
+      ctx.actorContext,
+    );
+    await deleteStoredObjects(detachedImageKeys);
     const entityId = await resolveLiveShortcode(ctx.db, output.id, "vendor");
     if (entityId) {
       await runMutationSideEffects(ctx.db, {

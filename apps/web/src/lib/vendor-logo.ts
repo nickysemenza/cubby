@@ -1,6 +1,6 @@
 // Pure vendor-logo helpers shared by the render path and seeding script. The
-// generated manifest owns vendor identity; the name-derived slug below is only
-// used when a vendor receives its first logo.
+// persisted Vendor.logoImageId relation owns runtime identity; the name-derived
+// slug below is only used when a vendor receives its first logo.
 
 /**
  * R2 key prefix for vendor logos. Deliberately outside `R2_KEY_PREFIX`

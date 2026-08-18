@@ -138,6 +138,8 @@ type ProblemSectionProps<T> = {
   groupBy?: (items: T[]) => { [key: string]: T[] };
   /** Only rendered when items exist */
   headerAction?: ReactNode;
+  /** Read-only explanation of the canonical Problem query. */
+  assembly?: ReactNode;
   coverage?: ProblemSectionCoverage;
 } & IconProp;
 
@@ -151,6 +153,7 @@ export function ProblemSection<T>({
   renderItem,
   groupBy,
   headerAction,
+  assembly,
   coverage,
   count,
 }: ProblemSectionProps<T>) {
@@ -181,6 +184,7 @@ export function ProblemSection<T>({
             {title}
           </CardTitle>
           <CardDescription>{emptyMessage}</CardDescription>
+          {assembly}
         </CardHeader>
       </Card>
     );
@@ -224,6 +228,7 @@ export function ProblemSection<T>({
           )}
         </div>
         <CardDescription>{description}</CardDescription>
+        {assembly}
         {meter && (
           <Stack gap="xs" className="pt-2">
             <Progress value={meter.total - total} max={meter.total} />

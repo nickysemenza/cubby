@@ -15,11 +15,10 @@
  * brand assets out of a public git repo, and off the service worker's precache
  * budget (`scripts/build-sw.mjs`).
  *
- * Everything is normalized to PNG on the way in. The committed manifest
- * (`src/lib/vendor-logos.generated.ts`) maps each stable public vendor shortcode
- * to its stored name-derived slug. A rename therefore keeps using the original
- * R2 object instead of orphaning it, while a manifest miss renders a monogram
- * without first paying for a failed image request.
+ * Everything is normalized to PNG on the way in. Existing objects are located
+ * from the frozen one-time shortcode-to-object backfill input; runtime rendering
+ * uses Vendor.logoImageId and falls back to a monogram when that relation is null
+ * or its Image is unavailable.
  *
  * Usage: pnpm --filter web seed-vendor-logos [--dry-run]
  */
@@ -29,24 +28,19 @@ import { execFile, spawn } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import {
   MAX_EXTERNAL_IMAGE_BYTES,
   readResponseWithLimit,
 } from "@cubby/shared/external-fetch";
 import { Pool } from "pg";
+import { publicBucketUrl } from "../src/lib/image-url";
 import { VENDOR_LOGO_PREFIX, vendorSlug } from "../src/lib/vendor-logo";
-import { VENDOR_LOGO_BY_SHORTCODE } from "../src/lib/vendor-logos.generated";
+// Frozen input for the one-time database backfill. Runtime rendering never
+// imports this mapping; Vendor.logoImageId is now the source of truth.
+import { VENDOR_LOGO_BY_SHORTCODE } from "./vendor-logo-backfill-input";
 
 const execFileAsync = promisify(execFile);
-
-// Resolved against this file, not cwd — the script is equally runnable from the
-// repo root and from apps/web, and a cwd-relative path silently writes the
-// manifest to whichever one you happened to be in.
-const MANIFEST_PATH = fileURLToPath(
-  new URL("../src/lib/vendor-logos.generated.ts", import.meta.url),
-);
 
 const DRY_RUN = process.argv.includes("--dry-run");
 
@@ -200,7 +194,115 @@ async function upload(key: string, buf: Buffer, dir: string) {
   ]);
 }
 
+/**
+ * Persist the ownership relation after R2 has accepted the bytes. This is
+ * deliberately idempotent: a re-run refreshes the same Image row by R2 key,
+ * then reasserts the Vendor FK. Existing pre-migration R2 objects use exactly
+ * this path as their database backfill.
+ */
+async function persistLogo(
+  vendor: VendorRow,
+  slug: string,
+  candidate: Candidate,
+): Promise<void> {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl)
+    throw new Error("DATABASE_URL is required to persist logos.");
+  const pool = new Pool({ connectionString: databaseUrl });
+  const key = `${VENDOR_LOGO_PREFIX}/${slug}.png`;
+  try {
+    const existing = await pool.query<{ id: string }>(
+      `SELECT id FROM "Image" WHERE key = $1 AND "deletedAt" IS NULL LIMIT 1`,
+      [key],
+    );
+    const imageId =
+      existing.rows[0]?.id ??
+      (
+        await pool.query<{ id: string }>(
+          `INSERT INTO "Image" (url, key, filename, size, "contentType", status, width, height, "renderStatus", "storageStatus", "verifiedAt")
+         VALUES ($1, $2, $3, $4, 'image/png', 'UPLOADED', $5, $5, 'verified', 'available', now())
+         RETURNING id`,
+          [
+            publicBucketUrl(key),
+            key,
+            `${slug}.png`,
+            candidate.buf.byteLength,
+            candidate.size,
+          ],
+        )
+      ).rows[0]?.id;
+    if (!imageId) throw new Error(`Could not create Image row for ${key}`);
+    if (existing.rows[0]) {
+      await pool.query(
+        `UPDATE "Image" SET url = $1, filename = $2, size = $3, "contentType" = 'image/png', status = 'UPLOADED', width = $4, height = $4, "renderStatus" = 'verified', "storageStatus" = 'available', "verifiedAt" = now(), "updatedAt" = now() WHERE id = $5`,
+        [
+          publicBucketUrl(key),
+          `${slug}.png`,
+          candidate.buf.byteLength,
+          candidate.size,
+          imageId,
+        ],
+      );
+    }
+    await pool.query(`UPDATE "Vendor" SET "logoImageId" = $1 WHERE id = $2`, [
+      imageId,
+      vendor.id,
+    ]);
+  } finally {
+    await pool.end();
+  }
+}
+
+/**
+ * Preserve a failed historical mapping as explicit domain state. A broken R2
+ * source still gets its deterministic Image key and Vendor relation, but the
+ * unavailable storage status makes VendorOut.logo resolve to null and the UI
+ * intentionally renders a monogram. A later successful seed updates this same
+ * row back to available.
+ */
+async function persistBrokenLogo(
+  vendor: VendorRow,
+  slug: string,
+): Promise<void> {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl)
+    throw new Error("DATABASE_URL is required to record broken logos.");
+  const pool = new Pool({ connectionString: databaseUrl });
+  const key = `${VENDOR_LOGO_PREFIX}/${slug}.png`;
+  try {
+    const existing = await pool.query<{ id: string }>(
+      `SELECT id FROM "Image" WHERE key = $1 AND "deletedAt" IS NULL LIMIT 1`,
+      [key],
+    );
+    const imageId =
+      existing.rows[0]?.id ??
+      (
+        await pool.query<{ id: string }>(
+          `INSERT INTO "Image" (url, key, filename, size, "contentType", status, "storageStatus", "verifiedAt")
+           VALUES ($1, $2, $3, 1, 'image/png', 'UPLOADED', 'missing', now())
+           RETURNING id`,
+          [publicBucketUrl(key), key, `${slug}.png`],
+        )
+      ).rows[0]?.id;
+    if (!imageId)
+      throw new Error(`Could not record broken Image row for ${key}`);
+    if (existing.rows[0]) {
+      await pool.query(
+        `UPDATE "Image" SET "storageStatus" = 'missing', "verifiedAt" = now(), "updatedAt" = now() WHERE id = $1`,
+        [imageId],
+      );
+    }
+    await pool.query(`UPDATE "Vendor" SET "logoImageId" = $1 WHERE id = $2`, [
+      imageId,
+      vendor.id,
+    ]);
+  } finally {
+    await pool.end();
+  }
+}
+
 interface VendorRow {
+  id: string;
   shortcode: string;
   name: string;
   website: string | null;
@@ -226,12 +328,13 @@ async function loadVendors(): Promise<VendorRow[]> {
   const pool = new Pool({ connectionString: url });
   try {
     const { rows } = await pool.query<{
+      id: string;
       shortcode: string;
       name: string;
       website: string | null;
       spend_rows: string;
     }>(
-      `SELECT v.shortcode, v."name", v."website", count(e.id) AS spend_rows
+      `SELECT v.id, v.shortcode, v."name", v."website", count(e.id) AS spend_rows
          FROM "Vendor" v
          LEFT JOIN "Purchase" p ON p."vendorId" = v.id AND p."deletedAt" IS NULL
          LEFT JOIN "Expense" e ON e."purchaseId" = p.id AND e."deletedAt" IS NULL
@@ -240,6 +343,7 @@ async function loadVendors(): Promise<VendorRow[]> {
         ORDER BY count(e.id) DESC, v."name"`,
     );
     return rows.map((r) => ({
+      id: r.id,
       shortcode: r.shortcode,
       name: r.name,
       website: r.website,
@@ -280,6 +384,9 @@ function websiteHost(website: string): string | null {
 }
 
 const vendors = await loadVendors();
+const vendorByShortcode = new Map(
+  vendors.map((vendor) => [vendor.shortcode, vendor]),
+);
 
 const tmp = await mkdtemp(path.join(tmpdir(), "vendor-logos-"));
 /** Public vendor shortcode -> stable stored slug. */
@@ -293,6 +400,26 @@ const noIcon: VendorRow[] = [];
 const badWebsite: VendorRow[] = [];
 /** No website set yet, so no logo is even attempted. */
 const noWebsite: VendorRow[] = [];
+const retainedAccounting = new Map<
+  string,
+  {
+    slug: string;
+    outcome:
+      | "associated"
+      | "recorded-broken"
+      | "pending-dry-run"
+      | "no-live-vendor";
+  }
+>();
+
+for (const [shortcode, slug] of Object.entries(VENDOR_LOGO_BY_SHORTCODE)) {
+  retainedAccounting.set(shortcode, {
+    slug,
+    outcome: vendorByShortcode.has(shortcode)
+      ? "pending-dry-run"
+      : "no-live-vendor",
+  });
+}
 
 for (const vendor of vendors) {
   const existingSlug = VENDOR_LOGO_BY_SHORTCODE[vendor.shortcode];
@@ -303,6 +430,33 @@ for (const vendor of vendors) {
 
 try {
   for (const vendor of vendors) {
+    const retainedSlug = VENDOR_LOGO_BY_SHORTCODE[vendor.shortcode];
+    if (retainedSlug && !DRY_RUN) {
+      // Do this before inspecting website so retired domains do not strand a
+      // previously seeded logo outside the new relational model.
+      const retainedRaw = await fetchBinary(
+        publicBucketUrl(`${VENDOR_LOGO_PREFIX}/${retainedSlug}.png`),
+      );
+      const retainedPng = retainedRaw && (await toPng(retainedRaw));
+      const retainedSize = retainedPng && pngSize(retainedPng);
+      if (retainedPng && retainedSize) {
+        await persistLogo(vendor, retainedSlug, {
+          buf: retainedPng,
+          size: retainedSize,
+          source: "existing-r2",
+        });
+        retainedAccounting.set(vendor.shortcode, {
+          slug: retainedSlug,
+          outcome: "associated",
+        });
+      } else {
+        await persistBrokenLogo(vendor, retainedSlug);
+        retainedAccounting.set(vendor.shortcode, {
+          slug: retainedSlug,
+          outcome: "recorded-broken",
+        });
+      }
+    }
     if (!vendor.website) {
       noWebsite.push(vendor);
       continue;
@@ -323,7 +477,27 @@ try {
       // from VENDOR_LOGO_BY_SHORTCODE above and keeps that logo untouched —
       // it's not missing an icon, this refresh attempt just found nothing
       // new. Only genuinely-iconless vendors count toward the summary.
-      if (!VENDOR_LOGO_BY_SHORTCODE[vendor.shortcode]) {
+      const retainedSlug = VENDOR_LOGO_BY_SHORTCODE[vendor.shortcode];
+      if (retainedSlug) {
+        // Backfill an old manifest entry even if the vendor site no longer
+        // yields a favicon: the R2 object is already the known-good source.
+        const retainedRaw = await fetchBinary(
+          publicBucketUrl(`${VENDOR_LOGO_PREFIX}/${retainedSlug}.png`),
+        );
+        const retainedPng = retainedRaw && (await toPng(retainedRaw));
+        const retainedSize = retainedPng && pngSize(retainedPng);
+        if (!DRY_RUN && retainedPng && retainedSize) {
+          await persistLogo(vendor, retainedSlug, {
+            buf: retainedPng,
+            size: retainedSize,
+            source: "existing-r2",
+          });
+          retainedAccounting.set(vendor.shortcode, {
+            slug: retainedSlug,
+            outcome: "associated",
+          });
+        }
+      } else {
         noIcon.push(vendor);
       }
       continue;
@@ -344,6 +518,13 @@ try {
 
     if (!DRY_RUN) {
       await upload(`${VENDOR_LOGO_PREFIX}/${slug}.png`, best.buf, tmp);
+      await persistLogo(vendor, slug, best);
+      if (VENDOR_LOGO_BY_SHORTCODE[vendor.shortcode]) {
+        retainedAccounting.set(vendor.shortcode, {
+          slug,
+          outcome: "associated",
+        });
+      }
     }
     manifest[vendor.shortcode] = slug;
     report.push(
@@ -354,22 +535,6 @@ try {
   await rm(tmp, { recursive: true, force: true });
 }
 
-const contents = `// GENERATED by scripts/seed-vendor-logos.ts — do not edit by hand.
-//
-// Every live vendor with a logo in R2 under vendors/<slug>.png. The public
-// shortcode is stable across renames; the stored slug remains the asset key chosen
-// when the logo was first seeded. Absence means VendorMark renders a monogram.
-
-export const VENDOR_LOGO_BY_SHORTCODE: Readonly<Record<string, string>> = {
-${Object.entries(manifest)
-  .sort(([, a], [, b]) => a.localeCompare(b))
-  .map(([id, slug]) => `  "${id}": "${slug}",`)
-  .join("\n")}
-};
-`;
-
-if (!DRY_RUN) await writeFile(MANIFEST_PATH, contents);
-
 console.log(
   "vendor                     domain                         source            size",
 );
@@ -378,6 +543,33 @@ for (const line of report) console.log(line);
 console.log(
   `\n${report.length} logo(s) ${DRY_RUN ? "found (dry run, nothing uploaded)" : "uploaded"}.`,
 );
+
+const retainedOutcomes = [...retainedAccounting.entries()].map(
+  ([shortcode, result]) => ({ shortcode, ...result }),
+);
+const retainedAssociated = retainedOutcomes.filter(
+  ({ outcome }) => outcome === "associated",
+).length;
+const retainedBroken = retainedOutcomes.filter(
+  ({ outcome }) => outcome === "recorded-broken",
+).length;
+const retainedWithoutVendor = retainedOutcomes.filter(
+  ({ outcome }) => outcome === "no-live-vendor",
+);
+const retainedPending = retainedOutcomes.filter(
+  ({ outcome }) => outcome === "pending-dry-run",
+).length;
+console.log(
+  `Frozen mapping accounting: ${retainedAssociated} associated, ${retainedBroken} explicitly recorded broken, ${retainedPending} pending dry-run verification, ${retainedWithoutVendor.length} without a live Vendor.`,
+);
+if (retainedWithoutVendor.length > 0) {
+  console.error(
+    `Frozen mappings with no live Vendor: ${retainedWithoutVendor
+      .map(({ shortcode, slug }) => `${shortcode} -> ${slug}`)
+      .join(", ")}`,
+  );
+  if (!DRY_RUN) process.exitCode = 1;
+}
 
 /**
  * Cross-check the roster against what actually got a logo.

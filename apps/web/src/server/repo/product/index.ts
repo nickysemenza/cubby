@@ -30,6 +30,13 @@ export {
   getTagSiblingStorage,
 } from "./analytics";
 export {
+  getProductConversionCoverageFreshness,
+  loadProductConversionCoverageProjection,
+  type ProductConversionCoverageFreshness,
+  type ProductConversionCoverageProjection,
+  writeProductConversionCoverageProjection,
+} from "./conversion-coverage";
+export {
   createProduct,
   deleteProducts,
   getProductByID,

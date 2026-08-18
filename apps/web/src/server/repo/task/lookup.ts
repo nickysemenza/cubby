@@ -17,6 +17,7 @@ import {
   gte,
   inArray,
   isNull,
+  lt,
   lte,
   ne,
   or,
@@ -24,6 +25,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
+import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { product, task } from "~/server/db/schema";
 import {
@@ -255,6 +257,11 @@ export const taskList = async (
         ? gte(effectiveTaskDueDateSql(), filters.dueFrom)
         : undefined,
       filters.dueTo ? lte(effectiveTaskDueDateSql(), filters.dueTo) : undefined,
+      filters.dueRelative === "beforeToday"
+        ? lt(effectiveTaskDueDateSql(), householdLocalDate())
+        : filters.dueRelative === "onOrBeforeToday"
+          ? lte(effectiveTaskDueDateSql(), householdLocalDate())
+          : undefined,
       presenceCondition(
         task.dueDate,
         filters.duePresenceFilter,

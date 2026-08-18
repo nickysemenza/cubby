@@ -277,6 +277,15 @@ export const hasUnknownQuantityLinesSql = (productId: AnyColumn) =>
                  AND uq_e."future" = false
                  AND uq_e."productQuantity" IS NULL)`;
 
+/** Does this product carry an acquisition whose quantity is unknown? */
+export const hasUnknownAcquisitionLinesSql = (productId: AnyColumn) =>
+  sql`EXISTS (SELECT 1 FROM "Expense" uaq_e
+               WHERE uaq_e."productId" = ${productId}
+                 AND uaq_e."deletedAt" IS NULL
+                 AND uaq_e."future" = false
+                 AND uaq_e."productQuantity" IS NULL
+                 AND (uaq_e."cost" IS NULL OR uaq_e."cost" >= 0))`;
+
 /**
  * Batch-load the quantity ledger for a page of products.
  *

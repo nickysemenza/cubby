@@ -80,4 +80,13 @@ describe("PROBLEM_SECTIONS", () => {
     const rendered = PROBLEM_SECTIONS.flatMap(keysReadBy);
     expect(sorted(rendered)).toEqual(sorted(ALL_PROBLEM_KEYS));
   });
+
+  it.each(PROBLEM_SECTIONS.map((s) => [s.id, s] as const))(
+    "%s shows the assembly for exactly the detector keys it renders",
+    (_id, section) => {
+      expect(sorted(section.problemKeys ?? [])).toEqual(
+        sorted(keysReadBy(section)),
+      );
+    },
+  );
 });

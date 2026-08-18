@@ -157,10 +157,9 @@ const deleteUnused = protectedProcedure
     // `allFromProblem` re-runs the section's own view filters here rather than
     // trusting the rows the card rendered — see the input schema.
     const shortcodes = (input.ingredientIds ??
-      (await findAllViewProblemIds(
-        ctx.db,
-        input.allFromProblem as string,
-      ))) as IngredientShortcode[];
+      (input.allFromProblem
+        ? await findAllViewProblemIds(ctx.db, input.allFromProblem)
+        : [])) as IngredientShortcode[];
     const entityIds = await resolveAllOrThrow(ctx.db, "ingredient", shortcodes);
     const result = await deleteUnusedIngredients(
       ctx.db,

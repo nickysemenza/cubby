@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import {
   type ActorContext,
   type AuditSource,
@@ -27,6 +28,77 @@ import { ensureDbExtensions } from "./db-extensions";
 const integreSQL = new IntegreSQLClient({ url: "http://localhost:5000" });
 
 let hash = "";
+
+/**
+ * Test-only SQL counter.  It wraps the file-local pool at its lowest shared
+ * point, so it sees both ordinary `pool.query()` calls and the checked-out
+ * client queries used by `withConnection()`.  The async scope makes parallel
+ * work within a lane count correctly without leaking setup/fixture SQL into a
+ * measurement.
+ */
+const queryMeasurement = new AsyncLocalStorage<{ count: number }>();
+const QUERY_COUNTED = Symbol("test-query-counted");
+
+type QueryCountedClient = {
+  query: (...args: unknown[]) => unknown;
+  [QUERY_COUNTED]?: boolean;
+};
+
+const countClientQueries = <T extends QueryCountedClient>(client: T): T => {
+  if (client[QUERY_COUNTED]) return client;
+  const query = client.query.bind(client);
+  client.query = (...args: unknown[]) => {
+    const measurement = queryMeasurement.getStore();
+    if (measurement) measurement.count += 1;
+    return query(...args);
+  };
+  client[QUERY_COUNTED] = true;
+  return client;
+};
+
+const countPoolQueries = (pool: Pool): Pool => {
+  const connect = pool.connect.bind(pool);
+  pool.connect = ((...args: unknown[]) => {
+    const callback = args[0];
+    // `pool.query()` calls `connect(callback)` internally. Preserve that
+    // overload exactly; awaiting it would turn its `undefined` return into the
+    // "client" and break every ordinary Drizzle query.
+    if (typeof callback === "function") {
+      return connect((error, client, done) =>
+        callback(
+          error,
+          client
+            ? (countClientQueries(
+                client as unknown as QueryCountedClient,
+              ) as typeof client)
+            : client,
+          done,
+        ),
+      );
+    }
+    return connect().then(
+      (client) =>
+        countClientQueries(
+          client as unknown as QueryCountedClient,
+        ) as typeof client,
+    );
+  }) as typeof pool.connect;
+  return pool;
+};
+
+/**
+ * Count SQL statements issued by one operation against this integration
+ * file's database.  This deliberately measures statements, not wall time:
+ * CI and a shared local PostgreSQL instance make time budgets flaky, while an
+ * accidental per-row query is deterministic and actionable.
+ */
+export async function countTestDbQueries<T>(
+  run: () => Promise<T>,
+): Promise<{ result: T; queryCount: number }> {
+  const measurement = { count: 0 };
+  const result = await queryMeasurement.run(measurement, run);
+  return { result, queryCount: measurement.count };
+}
 
 // Standard test IDs used across all tests
 export const TEST_USER_ID = "test-user-id";
@@ -211,7 +283,7 @@ async function getFileDb() {
   const connectionUrl = integreSQL.databaseConfigToConnectionUrl(
     remapDBConfig(databaseConfig),
   );
-  const pool = new Pool({ connectionString: connectionUrl });
+  const pool = countPoolQueries(new Pool({ connectionString: connectionUrl }));
   // `resetTestDb` terminates this pool's own idle backends; node-postgres
   // surfaces that as an 'error' on the idle client, and an unhandled one takes
   // the whole worker down. Swallow it — the pool just opens a fresh connection.
