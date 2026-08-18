@@ -59,6 +59,10 @@ import { markProductConversionCoverageInputStale } from "~/server/repo/product/c
 // question: no node identification happens on attach, only new edges.
 import { findMergeComponentCycle } from "~/server/repo/product/merge";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
+// The one rule for "does this Expense say the order bought the product" —
+// shared rather than restated, so a kit's purchase link and the Purchases panel
+// can never disagree about which orders count.
+import { expensePairPredicate } from "~/server/repo/purchase-products";
 
 /** One entry to attach: which Product, and how many of it the kit contains. */
 export interface ProductComponentEntry {
@@ -140,42 +144,72 @@ async function loadLiveExpenseCountsByProductId(
 
 /**
  * The kit's own most recent live purchase per parent id, for a direct link —
- * mirrors `listProductPurchases` in `repo/purchase-products.ts` but batched
- * and reduced client-side to one (most recent) row per product, since there
- * is no cheap `DISTINCT ON` helper in this codebase's Drizzle usage yet.
+ * mirrors `listProductPurchases` in `repo/purchase-products.ts`, including its
+ * two-legged shape, but batched and reduced to one (most recent) row per
+ * product.
+ *
+ * The reduction is client-side because the rows arrive from two queries and
+ * have to be ordered against each other anyway. (`.selectDistinctOn` does
+ * exist — see `repo/project/tool-matrix.ts` — so the old note here claiming it
+ * didn't was wrong, but it wouldn't help across a two-leg union.)
  */
 async function loadMostRecentPurchaseByProductId(
   db: Database,
   parentProductIds: ProductId[],
 ): Promise<Map<ProductId, KitMembershipPurchaseOut>> {
   if (parentProductIds.length === 0) return new Map();
-  const rows = await getDb(db)
-    .select({
-      productId: purchaseProduct.productId,
-      purchaseCode: purchase.shortcode,
-      displayLabel: purchase.displayLabel,
-      date: purchase.date,
-      orderId: purchase.orderId,
-      vendorName: vendor.name,
-    })
-    .from(purchaseProduct)
-    .innerJoin(
-      purchase,
-      and(eq(purchase.id, purchaseProduct.purchaseId), notDeleted(purchase)),
-    )
-    .leftJoin(vendor, and(eq(vendor.id, purchase.vendorId), notDeleted(vendor)))
-    .where(
-      and(
-        inArray(purchaseProduct.productId, parentProductIds),
-        notDeleted(purchaseProduct),
+  const dbc = getDb(db);
+  const purchaseColumns = {
+    purchaseCode: purchase.shortcode,
+    displayLabel: purchase.displayLabel,
+    date: purchase.date,
+    orderId: purchase.orderId,
+    vendorName: vendor.name,
+  };
+  const liveVendor = and(eq(vendor.id, purchase.vendorId), notDeleted(vendor));
+
+  // Both legs, for the same reason `listProductPurchases` needs both: a kit
+  // whose order is itemized per product has no `PurchaseProduct` row at all,
+  // so the link-only query returned null for exactly the kits this carve-out
+  // exists to link to.
+  const [linkRows, expenseRows] = await Promise.all([
+    dbc
+      .select({ productId: purchaseProduct.productId, ...purchaseColumns })
+      .from(purchaseProduct)
+      .innerJoin(
+        purchase,
+        and(eq(purchase.id, purchaseProduct.purchaseId), notDeleted(purchase)),
+      )
+      .leftJoin(vendor, liveVendor)
+      .where(
+        and(
+          inArray(purchaseProduct.productId, parentProductIds),
+          notDeleted(purchaseProduct),
+        ),
       ),
-    )
-    .orderBy(desc(purchase.date));
+    dbc
+      .selectDistinct({ productId: expense.productId, ...purchaseColumns })
+      .from(expense)
+      .innerJoin(
+        purchase,
+        and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
+      )
+      .leftJoin(vendor, liveVendor)
+      .where(
+        expensePairPredicate(inArray(expense.productId, parentProductIds)),
+      ),
+  ]);
+
+  // `date` is a plain-date string, so a lexical compare is a date compare.
+  const rows = [...linkRows, ...expenseRows].sort((a, b) =>
+    b.date.localeCompare(a.date),
+  );
 
   const byProduct = new Map<ProductId, KitMembershipPurchaseOut>();
   for (const row of rows) {
     // Rows arrive most-recent-date-first; the first row seen per product is
     // the one to keep.
+    if (row.productId === null) continue;
     if (byProduct.has(row.productId)) continue;
     byProduct.set(row.productId, {
       purchaseId: unsafePurchaseShortcode(row.purchaseCode),

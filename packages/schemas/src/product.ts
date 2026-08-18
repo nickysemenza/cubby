@@ -408,6 +408,15 @@ export const productFilterFields = {
     "Filter to products that do / don't have at least one unit mapping (conversion edge).",
   ),
   /**
+   * Products that CONTAIN components — kits and multi-packs. Named for what it
+   * tests rather than for "kit", because `kitMembership` already names the
+   * transpose (the kits a product is *inside*), and a `kitPresenceFilter` would
+   * read as either one.
+   */
+  componentPresenceFilter: presenceFilter.describe(
+    "Filter to products that are / aren't kits — i.e. that do or don't contain at least one component product.",
+  ),
+  /**
    * `product.stockTracked` is a nullable column on the root table (like
    * `pricePresenceFilter`): `null` = undecided (the review worklist),
    * `false`/`true` = reviewed either way. `"none"` is the undecided worklist;
@@ -888,6 +897,10 @@ export const productListItemOut = z.object({
   // product — backs the list's "Expenses" column + its deep link to
   // `/expenses?productId=`.
   expenseCount: z.number().int(),
+  // Live `ProductComponent` edges where this product is the parent — non-zero
+  // means it's a kit or multi-pack. Counts distinct components, not units: a
+  // 4-pack stored as one edge with `quantity: 4` reads as 1.
+  componentCount: z.number().int().nonnegative(),
   // Net basis: SUM(expense.cost) over this product's live expenses. Plain sum
   // IS the net basis here — negative rows (refunds, disposals) are real in
   // this ledger, so they telescope correctly. 0 for a product with no

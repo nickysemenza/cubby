@@ -481,6 +481,33 @@ export type PurchaseProductMutationOut = z.infer<
   typeof purchaseProductMutationOut
 >;
 
+/**
+ * How a purchase⟷product row came to exist.
+ *
+ * `"link"` is an explicit `PurchaseProduct` row — the sparse provenance edge
+ * that exists for allocation-basis orders, whose Expenses can never carry a
+ * `productId`. `"expense"` is derived: a live acquisition Expense on that
+ * purchase names that product. That case is the overwhelmingly common one and
+ * was invisible to these reads until 2026-08, which is the bug this enum was
+ * introduced to fix. `"both"` is a pair carrying each edge.
+ *
+ * Three values rather than a boolean because the overlap is real and neither
+ * half may be hidden: only a row with a link can be detached, and only an
+ * expense-backed row survives that detach still relating the two.
+ */
+export const purchaseProductSource = z.enum(["expense", "link", "both"]);
+export type PurchaseProductSource = z.infer<typeof purchaseProductSource>;
+
+/**
+ * When the explicit link was recorded, or null on an expense-derived row —
+ * which has no link to stamp. Deliberately NOT backfilled from the Expense's
+ * own `createdAt`: that would report a link time that never happened.
+ *
+ * This is the detachability test. `source` names where a row came from;
+ * `linkAttachedAt !== null` is what says a link exists to remove.
+ */
+const linkAttachedAt = z.date().nullable();
+
 export const purchaseProductOut = z.object({
   productId: productShortcode,
   productName: z.string(),
@@ -490,7 +517,8 @@ export const purchaseProductOut = z.object({
     .nullable()
     .describe("Effective valuation/costing price — display only, not spend."),
   coverImageUrl: z.url().nullable(),
-  attachedAt: z.date(),
+  source: purchaseProductSource,
+  linkAttachedAt,
 });
 export type PurchaseProductOut = z.infer<typeof purchaseProductOut>;
 export const purchaseProductsOut = z.array(purchaseProductOut);
@@ -502,7 +530,8 @@ export const productPurchaseOut = z.object({
   date: plainDate,
   vendorName: z.string().nullable(),
   orderId: z.string().nullable(),
-  attachedAt: z.date(),
+  source: purchaseProductSource,
+  linkAttachedAt,
 });
 export type ProductPurchaseOut = z.infer<typeof productPurchaseOut>;
 export const productPurchasesOut = z.array(productPurchaseOut);

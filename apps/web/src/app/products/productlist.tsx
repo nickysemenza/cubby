@@ -630,6 +630,23 @@ export function ProductList({
         },
         cell: (info) => info.getValue(),
       }),
+      // What this product is made of. Non-zero means it's a kit, which is the
+      // column the "Is a kit" manifest spec hangs on — without it the spec
+      // would render nothing at all, silently.
+      //
+      // Renders a literal `0` for the same reason `servingAsLocations` does:
+      // `componentCount` is a count and never null, so "contains nothing" is a
+      // known fact and a dash would claim it's unknown.
+      columnHelper.accessor((row) => row.componentCount, {
+        id: "components",
+        header: "Components",
+        meta: {
+          numeric: true,
+          className: "w-28",
+          mobile: { slot: "meta", priority: 44 },
+        },
+        cell: (info) => info.getValue(),
+      }),
       columnHelper.accessor((row) => row.quantityLedger.expectedQuantity, {
         id: "expectedQuantity",
         header: "Expected",
@@ -918,6 +935,7 @@ export function ProductList({
       upcPresence: false,
       notesPresence: false,
       stockTracked: false,
+      components: false,
     },
     groupConfig,
   });
