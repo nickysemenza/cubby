@@ -232,14 +232,6 @@ runtime CDN) are all shipped. Target is iOS Safari only. Remaining:
 
 ## Inventory & recount (2026-07 audit residue)
 
-- [ ] **Widen `findSoldButStillStocked` to hand-entered $0 discards**: now that
-  `Expense.productQuantity` is signed, a $0 exit is distinguishable from a $0
-  freebie, so the detector *could* key on
-  `or(inArray(purchaseId, disposalPurchaseIds), and(eq(cost, 0), lt(productQuantity, 0)))`.
-  It deliberately does not today: a discard minted through the Discard action
-  carries no `purchaseId` and clears its own shelf in the same transaction, so
-  it can't produce a stale row — only a hand-entered one could. Small, and the
-  essay above the detector already spells out the reasoning.
 - [ ] **Backfill the 98 products with unquantified expense lines**: they render
   as `N +M?` in the products table's Expected column, and 125 of the 218
   shelf-vs-ledger mismatches are stocked products with no product-linked

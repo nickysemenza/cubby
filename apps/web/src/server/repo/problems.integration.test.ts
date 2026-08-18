@@ -62,7 +62,7 @@ import { deleteInventoryEntries, inventoryentryList } from "./inventory";
 import { ensureGlobalUnknownLocation } from "./location";
 import { addRecipeToMeal, updateMeal } from "./meal";
 import { findCoverageTotals, findStaleIngredientParses } from "./problems";
-import { deleteProducts, updateProduct } from "./product";
+import { deleteProducts, productList, updateProduct } from "./product";
 import { createProject, deleteProjects } from "./project";
 import { detachProjectResources } from "./project/tools";
 import { updatePurchase } from "./purchase";
@@ -763,6 +763,147 @@ describe("problems repo", () => {
       expect(after.soldButStillStocked.some((p) => p.id === sold.id)).toBe(
         false,
       );
+    });
+
+    it("shares $0 discard eligibility with the canonical Product filter", async () => {
+      const shelf = await createLocation(
+        ctx.db,
+        makeLocationInput({ name: "Hand-entered discard shelf" }),
+        ctx.actor,
+      );
+      const zeroDiscard = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Hand-entered zero discard", price: 10 }),
+        ctx.actor,
+      );
+      const freebie = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Zero-cost free acquisition", price: 10 }),
+        ctx.actor,
+      );
+      const refund = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Ordinary purchase refund", price: 10 }),
+        ctx.actor,
+      );
+      const futureDiscard = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Future zero discard", price: 10 }),
+        ctx.actor,
+      );
+      const deletedDiscard = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Deleted zero discard", price: 10 }),
+        ctx.actor,
+      );
+      const partialOwnership = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Partially discarded stock", price: 10 }),
+        ctx.actor,
+      );
+
+      for (const item of [
+        zeroDiscard,
+        freebie,
+        refund,
+        futureDiscard,
+        deletedDiscard,
+        partialOwnership,
+      ]) {
+        await createInventoryEntry(
+          ctx.db,
+          {
+            productId: item.id,
+            locationId: shelf.id,
+            amount: { value: 1, unit: "each" },
+          },
+          ctx.actor,
+        );
+      }
+
+      await seedLine({
+        name: "hand-entered discard",
+        cost: 0,
+        productId: zeroDiscard.id,
+        productQuantity: -1,
+      });
+      await seedLine({
+        name: "free promotional item",
+        cost: 0,
+        productId: freebie.id,
+        productQuantity: 1,
+      });
+      await seedLine({
+        name: "original ordinary purchase",
+        cost: 20,
+        vendor: "Ordinary Store",
+        orderId: "ORDINARY-REFUND",
+        productId: refund.id,
+        productQuantity: 1,
+      });
+      await seedLine({
+        name: "ordinary refund",
+        cost: -5,
+        vendor: "Ordinary Store",
+        orderId: "ORDINARY-REFUND",
+        productId: refund.id,
+        productQuantity: -1,
+      });
+      await seedLine({
+        name: "planned discard",
+        cost: 0,
+        future: true,
+        productId: futureDiscard.id,
+        productQuantity: -1,
+      });
+      const deletedLine = await seedLine({
+        name: "removed discard",
+        cost: 0,
+        productId: deletedDiscard.id,
+        productQuantity: -1,
+      });
+      await deleteExpenses(ctx.db, [deletedLine.id], ctx.actor);
+      await seedLine({
+        name: "two units acquired",
+        cost: 20,
+        productId: partialOwnership.id,
+        productQuantity: 2,
+      });
+      await seedLine({
+        name: "one unit discarded",
+        cost: 0,
+        productId: partialOwnership.id,
+        productQuantity: -1,
+      });
+
+      const [problems, canonical] = await Promise.all([
+        findFastProblems(ctx.db),
+        productList(
+          ctx.db,
+          { ownershipReconciliation: "disposed_still_on_hand" },
+          [{ orderBy: "name", direction: "asc" }],
+          { pageIndex: 0, pageSize: 100 },
+        ),
+      ]);
+      const problemIds = new Set(
+        problems.soldButStillStocked.map((row) => row.id),
+      );
+      const canonicalIds = new Set(canonical.data.map((row) => row.id));
+
+      for (const item of [zeroDiscard]) {
+        expect(problemIds.has(item.id)).toBe(true);
+        expect(canonicalIds.has(item.id)).toBe(true);
+      }
+      for (const item of [
+        freebie,
+        refund,
+        futureDiscard,
+        deletedDiscard,
+        partialOwnership,
+      ]) {
+        expect(problemIds.has(item.id)).toBe(false);
+        expect(canonicalIds.has(item.id)).toBe(false);
+      }
     });
 
     it("reports a positive sold quantity even when the disposal stores a negative one", async () => {

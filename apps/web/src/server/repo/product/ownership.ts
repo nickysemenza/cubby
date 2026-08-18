@@ -7,7 +7,16 @@
  * full disposal and preserves real sell/re-buy gaps.
  */
 import type { ProductId } from "@cubby/schemas/identifiers";
-import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  lt,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import { householdLocalDate } from "~/lib/household-date";
 import {
   buildConfidentOwnershipIntervals,
@@ -40,6 +49,24 @@ export const disposalPurchaseIds = (dbc: DrizzleClient) =>
     )
     .groupBy(expense.purchaseId)
     .having(sql`sum(${expense.cost}) < 0`);
+
+/**
+ * Expenses that close ownership for the stale-stock detector.
+ *
+ * A negative line needs a net-negative Purchase to distinguish a disposal from
+ * an ordinary refund. With no money moving, though, the signed quantity is the
+ * fact: a negative quantity is a hand-entered discard while a positive one is
+ * a free acquisition. Keep this shared by the canonical Product filter and
+ * Problems presenter so selection and card totals cannot drift.
+ */
+export const ownershipExitExpensePredicate = (dbc: DrizzleClient): SQL =>
+  or(
+    and(
+      lt(expense.cost, 0),
+      inArray(expense.purchaseId, disposalPurchaseIds(dbc)),
+    ),
+    and(eq(expense.cost, 0), lt(expense.productQuantity, 0)),
+  )!;
 
 type OwnershipLoadOptions = {
   /** Plain-date override for deterministic project/timeline tests. */
