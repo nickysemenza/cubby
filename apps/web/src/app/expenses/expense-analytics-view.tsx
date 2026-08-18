@@ -22,6 +22,12 @@ import {
   TradeCostMatrixAggregate,
 } from "./charts/trade-cost-aggregate";
 import { VendorBreakdown } from "./charts/vendor-breakdown";
+import {
+  type ExpenseAnalyzeConfig,
+  expenseAnalyzeConfigFromSearch,
+  expenseAnalyzeSearchPatch,
+  normalizeExpenseAnalyzeConfig,
+} from "./expense-analyze-config";
 import { ExpenseSummaryStrip } from "./expense-summary-strip";
 
 const route = getRouteApi("/_authenticated/expenses/");
@@ -71,6 +77,22 @@ export function ExpenseAnalyticsView() {
     ...api.expense.analytics.queryOptions(filters),
     staleTime: 60 * 1000,
   });
+  const analyzeConfig = useMemo(
+    () => expenseAnalyzeConfigFromSearch(search, filters),
+    [filters, search],
+  );
+  const handleAnalyzeConfigChange = useCallback(
+    (next: ExpenseAnalyzeConfig) => {
+      const normalized = normalizeExpenseAnalyzeConfig(next, filters);
+      void navigate({
+        search: (prev) => ({
+          ...prev,
+          ...expenseAnalyzeSearchPatch(normalized),
+        }),
+      });
+    },
+    [filters, navigate],
+  );
 
   // A matrix cell is one (trade, costType) pair, so it can only mirror a
   // single-valued filter. With several trades selected nothing is highlighted
@@ -150,6 +172,8 @@ export function ExpenseAnalyticsView() {
         <Suspense fallback={<Skeleton className="h-[300px] w-full" />}>
           <ExpenseAggregateExplorer
             filters={filters}
+            config={analyzeConfig}
+            onConfigChange={handleAnalyzeConfigChange}
             onOpenLedger={handleOpenLedger}
           />
         </Suspense>

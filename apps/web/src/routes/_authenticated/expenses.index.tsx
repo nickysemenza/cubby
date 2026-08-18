@@ -8,6 +8,11 @@ import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import { CreateExpenseDialog } from "~/app/expenses/create-expense-dialog";
+import {
+  expenseAnalyzeConfigFromSearch,
+  expenseAnalyzeSearchFields,
+  expenseAnalyzeSearchPatch,
+} from "~/app/expenses/expense-analyze-config";
 import { ExpenseList } from "~/app/expenses/expenselist";
 import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
@@ -103,6 +108,7 @@ const searchSchema = z
     // Deep link from a charge's own detail page — the exact-charge scope,
     // same treatment as `productId` above.
     purchaseId: urlStringParam,
+    ...expenseAnalyzeSearchFields,
     // Quick-capture deep link (navbar "+" / command palette) — there is no
     // /expenses/new route, so the create dialog is opened by this param.
     create: z.boolean().optional().catch(undefined),
@@ -110,11 +116,15 @@ const searchSchema = z
   })
   .transform(({ view, ...rest }) => {
     const legacy = view ? LEGACY_VIEW_FILTERS[view] : undefined;
+    const normalizedRest = {
+      ...rest,
+      ...expenseAnalyzeSearchPatch(expenseAnalyzeConfigFromSearch(rest)),
+    };
     // A retired preset tab becomes the filter state it used to pin, so the
     // bookmark lands on the same rows — and now says so in the URL.
-    if (legacy) return { ...rest, ...legacy, view: undefined };
+    if (legacy) return { ...normalizedRest, ...legacy, view: undefined };
     return {
-      ...rest,
+      ...normalizedRest,
       view: isViewOption(view) ? view : undefined,
     };
   });
@@ -139,6 +149,11 @@ const searchDefaults = {
   vendor: undefined,
   orderId: undefined,
   purchaseId: undefined,
+  analyzeRows: undefined,
+  analyzeColumns: undefined,
+  analyzeMetric: undefined,
+  analyzeCompare: undefined,
+  analyzeShow: undefined,
   create: undefined,
 } as const;
 

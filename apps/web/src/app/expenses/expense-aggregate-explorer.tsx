@@ -8,7 +8,14 @@ import type {
 } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import type { SortingState } from "@tanstack/react-table";
+import {
+  ArrowLeftRight,
+  ClipboardCopy,
+  Download,
+  RotateCcw,
+} from "lucide-react";
 import { useId, useMemo, useState } from "react";
+import { toast } from "sonner";
 import RTable from "~/app/_components/data-table/Table";
 import {
   type CubbyColumnDef,
@@ -22,12 +29,23 @@ import { Button } from "~/components/ui/button";
 import { NativeSelect } from "~/components/ui/native-select";
 import { Switch } from "~/components/ui/switch";
 import { useTRPC } from "~/integrations/trpc/react";
+import { copyText } from "~/lib/clipboard";
 import { cn, formatCount, formatCurrency } from "~/lib/utils";
+import {
+  canSwapExpenseAnalyzeAxes,
+  DEFAULT_EXPENSE_ANALYZE_CONFIG,
+  type ExpenseAnalyzeConfig,
+  type ExpenseAnalyzeMetric,
+  type ExpenseAnalyzeProjection,
+  normalizeExpenseAnalyzeConfig,
+  swapExpenseAnalyzeAxes,
+} from "./expense-analyze-config";
+import {
+  expenseAnalyzeCsv,
+  expenseAnalyzeCsvFilename,
+} from "./expense-analyze-csv";
 
-type Metric = keyof ExpenseAnalyzeAggregate;
-type ComparisonProjection = "current" | "previous" | "delta" | "percent";
-
-const METRICS: readonly { value: Metric; label: string }[] = [
+const METRICS: readonly { value: ExpenseAnalyzeMetric; label: string }[] = [
   { value: "net", label: "Net" },
   { value: "actual", label: "Actual" },
   { value: "committed", label: "Committed" },
@@ -79,7 +97,7 @@ export function initialExpenseAnalyzeSorting(
 
 export function expenseAnalyzeDrilldownFilter(
   data: ExpenseAnalyzeReadyOut,
-  projection: ComparisonProjection,
+  projection: ExpenseAnalyzeProjection,
   axisFilter: Record<string, string>,
 ): Record<string, string> | null {
   if (projection === "current") return axisFilter;
@@ -103,7 +121,7 @@ function addAggregate(
 function valueForProjection(
   current: number,
   previous: number | null,
-  projection: ComparisonProjection,
+  projection: ExpenseAnalyzeProjection,
 ) {
   if (projection === "current") return current;
   if (projection === "previous") return previous;
@@ -113,7 +131,7 @@ function valueForProjection(
   return (current - previous) / Math.abs(previous);
 }
 
-function formatMetric(value: number | null, metric: Metric) {
+function formatMetric(value: number | null, metric: ExpenseAnalyzeMetric) {
   if (value === null) return "—";
   return metric === "count" ? formatCount(value) : formatCurrency(value);
 }
@@ -121,8 +139,8 @@ function formatMetric(value: number | null, metric: Metric) {
 export function formatExpenseAnalyzeValue(
   current: number,
   previous: number | null,
-  metric: Metric,
-  projection: ComparisonProjection,
+  metric: ExpenseAnalyzeMetric,
+  projection: ExpenseAnalyzeProjection,
 ) {
   const value = valueForProjection(current, previous, projection);
   if (projection !== "percent") return formatMetric(value, metric);
@@ -190,12 +208,79 @@ function tailLabel(data: ExpenseAnalyzeReadyOut) {
   return "Purchase adjustments";
 }
 
+export function expenseAnalyzeGridTotalFilter(
+  data: ExpenseAnalyzeReadyOut,
+  filters: Pick<ExpenseFilters, "dateFrom" | "dateTo" | "dateRelative"> = {},
+): Record<string, string> | null {
+  if (data.rowDimension === "project" || data.rowDimension === "vendor") {
+    return null;
+  }
+  const principalOnly =
+    data.rowDimension === "trade" ||
+    data.rowDimension === "costType" ||
+    data.columnDimension === "trade" ||
+    data.columnDimension === "costType";
+  const filter: Record<string, string> = principalOnly
+    ? { lineKind: "principal" }
+    : {};
+  const monthBuckets =
+    data.rowDimension === "month"
+      ? data.rows
+      : data.columnDimension === "month"
+        ? data.columns
+        : [];
+  const dateAlreadyBound = Boolean(
+    filters.dateFrom || filters.dateTo || filters.dateRelative,
+  );
+  if (monthBuckets.length > 0 && !dateAlreadyBound) {
+    const dateFrom = monthBuckets.at(0)?.filter.dateFrom;
+    const dateTo = monthBuckets.at(-1)?.filter.dateTo;
+    if (!dateFrom || !dateTo) return null;
+    filter.dateFrom = dateFrom;
+    filter.dateTo = dateTo;
+  }
+  return filter;
+}
+
+function AnalyzeLedgerValue({
+  children,
+  filter,
+  label,
+  onOpenLedger,
+  className,
+}: {
+  children: React.ReactNode;
+  filter: Record<string, string> | null;
+  label: string;
+  onOpenLedger: (filter: Record<string, string>) => void;
+  className?: string;
+}) {
+  if (!filter) return <span className={className}>{children}</span>;
+  return (
+    <button
+      type="button"
+      className={cn(
+        "underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        className,
+      )}
+      aria-label={label}
+      onClick={() => onOpenLedger(filter)}
+    >
+      {children}
+    </button>
+  );
+}
+
 function ReconciliationNote({
   data,
+  filters,
   metric,
+  onOpenLedger,
 }: {
   data: ExpenseAnalyzeReadyOut;
-  metric: Metric;
+  filters: ExpenseFilters;
+  metric: ExpenseAnalyzeMetric;
+  onOpenLedger: (filter: Record<string, string>) => void;
 }) {
   const causeEntries: [
     string,
@@ -209,15 +294,55 @@ function ReconciliationNote({
     ([, value]) =>
       value.current[metric] !== 0 || (value.previous?.[metric] ?? 0) !== 0,
   );
+  const renderPeriodTotals = (
+    label: string,
+    value: {
+      current: ExpenseAnalyzeAggregate;
+      previous: ExpenseAnalyzeAggregate | null;
+    },
+    filter: Record<string, string> | null,
+  ) => (
+    <>
+      {label}{" "}
+      <AnalyzeLedgerValue
+        filter={expenseAnalyzeDrilldownFilter(data, "current", filter ?? {})}
+        label={`Open current-period ${label.toLowerCase()} in the Ledger`}
+        onOpenLedger={onOpenLedger}
+      >
+        {formatMetric(value.current[metric], metric)}
+      </AnalyzeLedgerValue>
+      {value.previous && (
+        <>
+          {" "}
+          (previous{" "}
+          <AnalyzeLedgerValue
+            filter={expenseAnalyzeDrilldownFilter(
+              data,
+              "previous",
+              filter ?? {},
+            )}
+            label={`Open previous-period ${label.toLowerCase()} in the Ledger`}
+            onOpenLedger={onOpenLedger}
+          >
+            {formatMetric(value.previous[metric], metric)}
+          </AnalyzeLedgerValue>
+          )
+        </>
+      )}
+    </>
+  );
   const current = (value: { current: ExpenseAnalyzeAggregate }) =>
     formatMetric(value.current[metric], metric);
+  const gridFilter = expenseAnalyzeGridTotalFilter(data, filters);
 
   return (
     <Stack gap="xs" className="text-muted-foreground text-xs">
       <p>
-        Scope total {current(data.totals.scope)} · grid total{" "}
-        {current(data.totals.grid)} · {tailLabel(data).toLowerCase()}{" "}
-        {current(data.reconciliation.tail)}.
+        {renderPeriodTotals("Scope total", data.totals.scope, {})} ·{" "}
+        {gridFilter
+          ? renderPeriodTotals("Grid total", data.totals.grid, gridFilter)
+          : `Grid total ${current(data.totals.grid)}`}{" "}
+        · {tailLabel(data).toLowerCase()} {current(data.reconciliation.tail)}.
       </p>
       {causes.length > 0 && (
         <p>
@@ -236,13 +361,15 @@ const helper = createCubbyColumnHelper<ExpenseAnalyzeTableRow>();
 
 function ExpenseAnalyzeOneDimension({
   data,
+  filters,
   comparison,
   metric,
   onOpenLedger,
 }: {
   data: ExpenseAnalyzeReadyOut;
+  filters: ExpenseFilters;
   comparison: ExpenseAnalyzeComparison;
-  metric: Metric;
+  metric: ExpenseAnalyzeMetric;
   onOpenLedger: (filter: Record<string, string>) => void;
 }) {
   const [sorting, setSorting] = useState<SortingState>(() =>
@@ -260,7 +387,20 @@ function ExpenseAnalyzeOneDimension({
           size: accessor === "count" ? 88 : 128,
           minSize: accessor === "count" ? 72 : 104,
           meta: numericMeta,
-          cell: (info) => formatMetric(info.getValue(), accessor),
+          cell: (info) => (
+            <AnalyzeLedgerValue
+              filter={expenseAnalyzeDrilldownFilter(
+                data,
+                "current",
+                info.row.original.filter,
+              )}
+              label={`Open current-period Ledger rows for ${info.row.original.label}`}
+              onOpenLedger={onOpenLedger}
+              className="w-full text-right"
+            >
+              {formatMetric(info.getValue(), accessor)}
+            </AnalyzeLedgerValue>
+          ),
           footer: () => formatMetric(tail.current[accessor], accessor),
           enableCellSelection: false,
         }),
@@ -268,7 +408,7 @@ function ExpenseAnalyzeOneDimension({
     const compareColumn = (
       id: string,
       header: string,
-      projection: ComparisonProjection,
+      projection: ExpenseAnalyzeProjection,
     ) =>
       helper.accessor(
         (row) =>
@@ -283,15 +423,31 @@ function ExpenseAnalyzeOneDimension({
           size: projection === "percent" ? 96 : 122,
           minSize: projection === "percent" ? 84 : 100,
           meta: numericMeta,
-          cell: (info) =>
-            projection === "percent"
-              ? formatExpenseAnalyzeValue(
-                  info.row.original.current[metric],
-                  info.row.original.previous?.[metric] ?? null,
-                  metric,
+          cell: (info) => {
+            const display =
+              projection === "percent"
+                ? formatExpenseAnalyzeValue(
+                    info.row.original.current[metric],
+                    info.row.original.previous?.[metric] ?? null,
+                    metric,
+                    projection,
+                  )
+                : formatMetric(info.getValue(), metric);
+            return (
+              <AnalyzeLedgerValue
+                filter={expenseAnalyzeDrilldownFilter(
+                  data,
                   projection,
-                )
-              : formatMetric(info.getValue(), metric),
+                  info.row.original.filter,
+                )}
+                label={`Open ${projection}-period Ledger rows for ${info.row.original.label}`}
+                onOpenLedger={onOpenLedger}
+                className="w-full text-right"
+              >
+                {display}
+              </AnalyzeLedgerValue>
+            );
+          },
           footer: () =>
             formatExpenseAnalyzeValue(
               tail.current[metric],
@@ -318,24 +474,6 @@ function ExpenseAnalyzeOneDimension({
             compareColumn("delta", "Delta", "delta"),
             compareColumn("percent", "Delta %", "percent"),
           ]),
-      helper.display({
-        id: "actions",
-        header: "",
-        size: 88,
-        minSize: 88,
-        enableHiding: false,
-        enableCellSelection: false,
-        cell: ({ row }) => (
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label={`Open current-period Ledger rows for ${row.original.label}`}
-            onClick={() => onOpenLedger(row.original.filter)}
-          >
-            Ledger
-          </Button>
-        ),
-      }),
     ] as CubbyColumnDef<ExpenseAnalyzeTableRow>[];
   }, [comparison, data, metric, onOpenLedger]);
   const layout = useCubbyTableLayout({ key: "expense:analyze", columns });
@@ -362,7 +500,9 @@ function ExpenseAnalyzeOneDimension({
       />
       <ReconciliationNote
         data={data}
+        filters={filters}
         metric={comparison === "none" ? "net" : metric}
+        onOpenLedger={onOpenLedger}
       />
     </Stack>
   );
@@ -396,13 +536,15 @@ function aggregateCells(
 
 function ExpenseAnalyzeCrossTab({
   data,
+  filters,
   metric,
   projection,
   onOpenLedger,
 }: {
   data: ExpenseAnalyzeReadyOut;
-  metric: Metric;
-  projection: ComparisonProjection;
+  filters: ExpenseFilters;
+  metric: ExpenseAnalyzeMetric;
+  projection: ExpenseAnalyzeProjection;
   onOpenLedger: (filter: Record<string, string>) => void;
 }) {
   const cells = useMemo(() => cellLookup(data), [data]);
@@ -416,6 +558,19 @@ function ExpenseAnalyzeCrossTab({
       ),
     [data],
   );
+  const columnTotals = useMemo(
+    () =>
+      new Map(
+        data.columns.map((column) => [
+          column.key,
+          aggregateCells(
+            data.cells.filter((cell) => cell.columnKey === column.key),
+          ),
+        ]),
+      ),
+    [data],
+  );
+  const exactGridFilter = expenseAnalyzeGridTotalFilter(data, filters);
   const heatMax = useMemo(() => {
     const values = data.cells
       .map((cell) =>
@@ -508,7 +663,21 @@ function ExpenseAnalyzeCrossTab({
         pinned={[{ key: "total", label: "Total", stickyRight: "right-0" }]}
         renderPinnedCell={(row) => {
           const total = rowTotals.get(row.key);
-          return total ? display(total.current, total.previous) : "—";
+          if (!total) return "—";
+          return (
+            <AnalyzeLedgerValue
+              filter={expenseAnalyzeDrilldownFilter(
+                data,
+                projection,
+                row.data.filter,
+              )}
+              label={`Open ${projection}-period Ledger rows for ${row.data.label}`}
+              onOpenLedger={onOpenLedger}
+              className="block w-full px-2 py-2 text-right"
+            >
+              {display(total.current, total.previous)}
+            </AnalyzeLedgerValue>
+          );
         }}
         footer={[
           {
@@ -516,17 +685,57 @@ function ExpenseAnalyzeCrossTab({
             label: "Grid total",
             emphasis: "rule",
             cell: (columnKey) => {
-              const total = aggregateCells(
-                data.cells.filter((cell) => cell.columnKey === columnKey),
+              const total = columnTotals.get(columnKey);
+              const column = data.columns.find(
+                (candidate) => candidate.key === columnKey,
               );
-              return display(total.current, total.previous);
+              if (!total || !column) return "—";
+              return (
+                <AnalyzeLedgerValue
+                  filter={
+                    exactGridFilter
+                      ? expenseAnalyzeDrilldownFilter(
+                          data,
+                          projection,
+                          column.filter,
+                        )
+                      : null
+                  }
+                  label={`Open ${projection}-period Ledger rows for ${column.label}`}
+                  onOpenLedger={onOpenLedger}
+                  className="w-full text-right"
+                >
+                  {display(total.current, total.previous)}
+                </AnalyzeLedgerValue>
+              );
             },
-            pinnedCell: () =>
-              display(data.totals.grid.current, data.totals.grid.previous),
+            pinnedCell: () => (
+              <AnalyzeLedgerValue
+                filter={
+                  exactGridFilter
+                    ? expenseAnalyzeDrilldownFilter(
+                        data,
+                        projection,
+                        exactGridFilter,
+                      )
+                    : null
+                }
+                label={`Open ${projection}-period grid total in the Ledger`}
+                onOpenLedger={onOpenLedger}
+                className="w-full text-right"
+              >
+                {display(data.totals.grid.current, data.totals.grid.previous)}
+              </AnalyzeLedgerValue>
+            ),
           },
         ]}
       />
-      <ReconciliationNote data={data} metric={metric} />
+      <ReconciliationNote
+        data={data}
+        filters={filters}
+        metric={metric}
+        onOpenLedger={onOpenLedger}
+      />
       <p className="text-muted-foreground text-xs">
         {projection === "delta" || projection === "percent"
           ? "Delta views combine two periods. Show Current or Previous to open exact Ledger rows."
@@ -538,20 +747,18 @@ function ExpenseAnalyzeCrossTab({
 
 export function ExpenseAggregateExplorer({
   filters,
+  config,
+  onConfigChange,
   onOpenLedger,
 }: {
   filters: ExpenseFilters;
+  config: ExpenseAnalyzeConfig;
+  onConfigChange: (config: ExpenseAnalyzeConfig) => void;
   onOpenLedger: (filter: Record<string, string>) => void;
 }) {
   const api = useTRPC();
-  const [rowDimension, setRowDimension] =
-    useState<ExpenseAnalyzeRowDimension>("trade");
-  const [columnDimension, setColumnDimension] =
-    useState<ExpenseAnalyzeColumnDimension | null>(null);
-  const [comparison, setComparison] =
-    useState<ExpenseAnalyzeComparison>("none");
-  const [metric, setMetric] = useState<Metric>("net");
-  const [projection, setProjection] = useState<ComparisonProjection>("current");
+  const { rowDimension, columnDimension, comparison, metric, projection } =
+    config;
   const rowsId = useId();
   const columnsId = useId();
   const metricId = useId();
@@ -562,25 +769,63 @@ export function ExpenseAggregateExplorer({
     rowDimension,
     columnDimension,
   );
-  const effectiveComparison = comparisonAllowed ? comparison : "none";
   const query = useQuery({
     ...api.expense.analyze.queryOptions({
       filters,
       rowDimension,
       columnDimension,
-      comparison: effectiveComparison,
+      comparison,
     }),
     staleTime: 60 * 1000,
   });
+  const resetConfig = normalizeExpenseAnalyzeConfig(
+    DEFAULT_EXPENSE_ANALYZE_CONFIG,
+    filters,
+  );
+  const isReset =
+    config.rowDimension === resetConfig.rowDimension &&
+    config.columnDimension === resetConfig.columnDimension &&
+    config.metric === resetConfig.metric &&
+    config.comparison === resetConfig.comparison &&
+    config.projection === resetConfig.projection;
 
   const handleColumnDimension = (value: string) => {
     const next =
       value === "none" ? null : (value as ExpenseAnalyzeColumnDimension);
-    setColumnDimension(next === rowDimension ? null : next);
+    onConfigChange(
+      normalizeExpenseAnalyzeConfig(
+        { ...config, columnDimension: next },
+        filters,
+      ),
+    );
   };
   const handleRowDimension = (value: ExpenseAnalyzeRowDimension) => {
-    setRowDimension(value);
-    if (columnDimension === value) setColumnDimension(null);
+    onConfigChange(
+      normalizeExpenseAnalyzeConfig(
+        { ...config, rowDimension: value },
+        filters,
+      ),
+    );
+  };
+  const downloadReady = query.data?.status === "ready";
+  const handleDownload = () => {
+    if (!downloadReady || query.data?.status !== "ready") return;
+    const blob = new Blob([expenseAnalyzeCsv(query.data)], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = expenseAnalyzeCsvFilename(query.data);
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+  const handleCopyLink = async () => {
+    if (await copyText(window.location.href)) {
+      toast.success("Analysis link copied");
+      return;
+    }
+    toast.error("Couldn't copy the analysis link");
   };
 
   return (
@@ -621,7 +866,7 @@ export function ExpenseAggregateExplorer({
             </option>
           ))}
         </NativeSelect>
-        {(columnDimension || effectiveComparison !== "none") && (
+        {(columnDimension || comparison !== "none") && (
           <>
             <label htmlFor={metricId} className="ml-2 text-xs">
               Metric
@@ -629,7 +874,12 @@ export function ExpenseAggregateExplorer({
             <NativeSelect
               id={metricId}
               value={metric}
-              onChange={(event) => setMetric(event.target.value as Metric)}
+              onChange={(event) =>
+                onConfigChange({
+                  ...config,
+                  metric: event.target.value as ExpenseAnalyzeMetric,
+                })
+              }
             >
               {METRICS.map((item) => (
                 <option key={item.value} value={item.value}>
@@ -639,7 +889,7 @@ export function ExpenseAggregateExplorer({
             </NativeSelect>
           </>
         )}
-        {columnDimension && effectiveComparison !== "none" && (
+        {columnDimension && comparison !== "none" && (
           <>
             <label htmlFor={projectionId} className="ml-2 text-xs">
               Show
@@ -648,7 +898,10 @@ export function ExpenseAggregateExplorer({
               id={projectionId}
               value={projection}
               onChange={(event) =>
-                setProjection(event.target.value as ComparisonProjection)
+                onConfigChange({
+                  ...config,
+                  projection: event.target.value as ExpenseAnalyzeProjection,
+                })
               }
             >
               <option value="current">Current</option>
@@ -673,21 +926,60 @@ export function ExpenseAggregateExplorer({
           Compare previous period
           <Switch
             id={compareId}
-            checked={effectiveComparison === "previousPeriod"}
+            checked={comparison === "previousPeriod"}
             disabled={!comparisonAllowed}
             onCheckedChange={(checked) =>
-              setComparison(checked ? "previousPeriod" : "none")
+              onConfigChange(
+                normalizeExpenseAnalyzeConfig(
+                  {
+                    ...config,
+                    comparison: checked ? "previousPeriod" : "none",
+                  },
+                  filters,
+                ),
+              )
             }
           />
         </label>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!canSwapExpenseAnalyzeAxes(config)}
+          title={
+            canSwapExpenseAnalyzeAxes(config)
+              ? "Swap rows and columns"
+              : "Swap needs two column-compatible dimensions"
+          }
+          onClick={() =>
+            onConfigChange(swapExpenseAnalyzeAxes(config, filters))
+          }
+        >
+          <ArrowLeftRight />
+          Swap
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={isReset}
+          onClick={() => onConfigChange(resetConfig)}
+        >
+          <RotateCcw />
+          Reset
+        </Button>
+        <Button variant="outline" size="sm" onClick={handleCopyLink}>
+          <ClipboardCopy />
+          Copy link
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!downloadReady}
+          onClick={handleDownload}
+        >
+          <Download />
+          Download CSV
+        </Button>
       </Row>
-
-      {!comparisonAllowed && comparison === "previousPeriod" && (
-        <p className="text-muted-foreground text-xs">
-          Comparison needs both start and end dates and cannot use Month as an
-          axis.
-        </p>
-      )}
 
       {query.isLoading ? (
         <div
@@ -724,6 +1016,7 @@ export function ExpenseAggregateExplorer({
         query.data.columnDimension ? (
           <ExpenseAnalyzeCrossTab
             data={query.data}
+            filters={filters}
             metric={metric}
             projection={
               query.data.comparison.mode === "previousPeriod"
@@ -736,6 +1029,7 @@ export function ExpenseAggregateExplorer({
           <ExpenseAnalyzeOneDimension
             key={query.data.comparison.mode}
             data={query.data}
+            filters={filters}
             comparison={query.data.comparison.mode}
             metric={metric}
             onOpenLedger={onOpenLedger}
