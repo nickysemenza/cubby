@@ -12,11 +12,11 @@ import { CalendarPlus, TriangleAlert } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { StaticPicker } from "~/app/_components/combobox/static-picker";
+import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { DialogFooter } from "~/components/ui/dialog";
-import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
@@ -162,12 +162,13 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
         <Stack gap="sm">
           <Stack gap="xs">
             <Label htmlFor={dateInputId}>Day</Label>
-            <Input
+            <DatePickerInput
               id={dateInputId}
-              type="date"
               value={date}
-              onChange={(event) => {
-                setDate(event.target.value);
+              required
+              onChange={(value) => {
+                if (!value) return;
+                setDate(value);
                 setTarget(NEW_MEAL);
               }}
             />

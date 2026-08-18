@@ -8,13 +8,13 @@ import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { ArrowDown, ArrowUp, CalendarClock } from "lucide-react";
 import { useId, useMemo } from "react";
+import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import { Grid, Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { DotLabel } from "~/components/ui/dot-label";
-import { Input } from "~/components/ui/input";
 import { Skeleton } from "~/components/ui/skeleton";
 import { StatTile } from "~/components/ui/stat-tile";
 import {
@@ -66,16 +66,16 @@ function MovementControls({ order }: { order: "asc" | "desc" }) {
     <Row align="end" wrap gap="sm">
       <label htmlFor={fromId} className="text-muted-foreground text-xs">
         From
-        <Input
+        <DatePickerInput
           id={fromId}
-          type="date"
+          value={search.movementFrom ?? null}
           max={search.movementTo}
-          value={search.movementFrom ?? ""}
-          onChange={(event) =>
+          clearable
+          onChange={(value) =>
             navigate({
               search: (previous) => ({
                 ...previous,
-                movementFrom: event.target.value || undefined,
+                movementFrom: value ?? undefined,
               }),
               replace: true,
             })
@@ -85,16 +85,16 @@ function MovementControls({ order }: { order: "asc" | "desc" }) {
       </label>
       <label htmlFor={toId} className="text-muted-foreground text-xs">
         To
-        <Input
+        <DatePickerInput
           id={toId}
-          type="date"
+          value={search.movementTo ?? null}
           min={search.movementFrom}
-          value={search.movementTo ?? ""}
-          onChange={(event) =>
+          clearable
+          onChange={(value) =>
             navigate({
               search: (previous) => ({
                 ...previous,
-                movementTo: event.target.value || undefined,
+                movementTo: value ?? undefined,
               }),
               replace: true,
             })

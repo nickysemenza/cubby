@@ -5,7 +5,10 @@ import {
 } from "@cubby/schemas/financial-transaction";
 import type { UseFormReturn } from "react-hook-form";
 import { z } from "zod";
-import { NullableTextareaField } from "~/app/_components/form-utils";
+import {
+  NullableTextareaField,
+  PlainDateField,
+} from "~/app/_components/form-utils";
 import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
 import {
   SelectField,
@@ -27,8 +30,8 @@ export const financialTransactionFormSchema = z
       .number()
       .finite()
       .refine((amount) => amount !== 0, "Amount must be non-zero"),
-    transactionDate: z.string(),
-    postedDate: z.string(),
+    transactionDate: z.string().nullable(),
+    postedDate: z.string().nullable(),
     merchant: z.string(),
     rawDescription: z.string(),
     sourceCategory: z.string(),
@@ -39,7 +42,7 @@ export const financialTransactionFormSchema = z
   })
   .refine(
     (transaction) =>
-      transaction.status !== "posted" || transaction.postedDate !== "",
+      transaction.status !== "posted" || Boolean(transaction.postedDate),
     {
       message: "Posted transactions require a posted date",
       path: ["postedDate"],
@@ -141,18 +144,12 @@ export function FinancialTransactionFormFields({
         values={transactionStatuses}
       />
       <TextField form={form} name="amount" label="Amount" type="number" />
-      <TextField
+      <PlainDateField
         form={form}
         name="transactionDate"
         label="Transaction date"
-        type="date"
       />
-      <TextField
-        form={form}
-        name="postedDate"
-        label="Posted date"
-        type="date"
-      />
+      <PlainDateField form={form} name="postedDate" label="Posted date" />
       <TextField form={form} name="merchant" label="Merchant" />
       <TextField
         form={form}

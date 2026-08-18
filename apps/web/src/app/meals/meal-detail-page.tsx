@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { WithRecipeSearch } from "~/app/_components/combobox/with-search-hook";
+import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import { RelationshipExplorer } from "~/app/_components/relationships/relationship-explorer";
 import { relationshipsSectionIcon as RelationshipsIcon } from "~/app/_components/relationships/relationship-tree";
@@ -212,15 +213,16 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
                 }
               }}
             />
-            <Input
-              type="date"
+            <DatePickerInput
               value={meal.date}
-              className="h-8 w-44"
-              onChange={(e) => {
-                if (!e.target.value) return;
+              aria-label="Meal date"
+              className="w-44"
+              required
+              onChange={(value) => {
+                if (!value) return;
                 updateMeal.mutate({
                   id: mealId,
-                  data: { date: e.target.value },
+                  data: { date: value },
                 });
               }}
             />

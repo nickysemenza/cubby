@@ -325,9 +325,7 @@ export function RequiredTextareaField<
 /**
  * A plain "YYYY-MM-DD" calendar-date field (task due date, expense date,
  * project start/end date) — backed by the shared `DatePickerInput`, which
- * speaks the same "YYYY-MM-DD" string end to end (see `add-to-meal.tsx` for
- * the raw `<input type="date">` pattern this intentionally doesn't share —
- * that page's native inputs are out of scope for this component).
+ * speaks the same "YYYY-MM-DD" string end to end.
  */
 export function PlainDateField<TFieldValues extends FieldValues = FieldValues>({
   form,
@@ -350,10 +348,14 @@ export function PlainDateField<TFieldValues extends FieldValues = FieldValues>({
           error={fieldState.error}
         >
           <DatePickerInput
+            id={name}
+            name={name}
             value={(field.value as string | null) ?? null}
             onChange={(v) => field.onChange(v)}
+            onBlur={field.onBlur}
             clearable
             aria-label={label}
+            aria-invalid={fieldState.invalid}
           />
         </FormFieldGroup>
       )}

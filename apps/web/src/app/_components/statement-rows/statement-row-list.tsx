@@ -10,6 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
@@ -272,20 +273,20 @@ function StatementRowFilterBar({
       </NativeSelect>
       <Row align="center" gap="xs" className="text-muted-foreground text-sm">
         <span>From</span>
-        <Input
-          type="date"
+        <DatePickerInput
           aria-label="Statement date from"
-          value={search.dateFrom ?? ""}
-          onChange={(e) => onUpdate({ dateFrom: e.target.value || undefined })}
-          className="w-auto"
+          value={search.dateFrom ?? null}
+          clearable
+          onChange={(value) => onUpdate({ dateFrom: value ?? undefined })}
+          className="w-44"
         />
         <span>to</span>
-        <Input
-          type="date"
+        <DatePickerInput
           aria-label="Statement date to"
-          value={search.dateTo ?? ""}
-          onChange={(e) => onUpdate({ dateTo: e.target.value || undefined })}
-          className="w-auto"
+          value={search.dateTo ?? null}
+          clearable
+          onChange={(value) => onUpdate({ dateTo: value ?? undefined })}
+          className="w-44"
         />
       </Row>
     </Row>

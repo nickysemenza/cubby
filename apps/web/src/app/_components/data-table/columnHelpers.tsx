@@ -75,6 +75,7 @@ import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import {
   amountCellData,
   type ColumnCellData,
+  dateCellData,
   entityCellData,
   numberCellData,
   selectCellData,
@@ -1865,8 +1866,7 @@ export function createPlainDateColumn<
     );
 
   // Copy the raw "YYYY-MM-DD" string; paste only when editable (kind "date").
-  const cellData = textCellData<T>(
-    "date",
+  const cellData = dateCellData<T>(
     (row) =>
       options?.editValue
         ? options.editValue(row)

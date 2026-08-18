@@ -197,36 +197,9 @@ export async function createTask(
     if (!year || !month || !day) {
       throw new Error(`Invalid task due date: ${opts.dueDate}`);
     }
-    const target = new Date(year, month - 1, day);
-    const today = new Date();
-    const monthDelta =
-      year * 12 + month - 1 - (today.getFullYear() * 12 + today.getMonth());
-    await dialog.getByLabel("Due date").click();
-    const navName =
-      monthDelta < 0 ? "Go to the Previous Month" : "Go to the Next Month";
-    for (let step = 0; step < Math.abs(monthDelta); step++) {
-      await page.getByRole("button", { name: navName }).click();
-    }
-    const ordinal =
-      day % 10 === 1 && day % 100 !== 11
-        ? "st"
-        : day % 10 === 2 && day % 100 !== 12
-          ? "nd"
-          : day % 10 === 3 && day % 100 !== 13
-            ? "rd"
-            : "th";
-    const weekday = new Intl.DateTimeFormat("en-US", {
-      weekday: "long",
-    }).format(target);
-    const monthName = new Intl.DateTimeFormat("en-US", {
-      month: "long",
-    }).format(target);
-    await page
-      .getByRole("button", {
-        name: `${weekday}, ${monthName} ${day}${ordinal}, ${year}`,
-        exact: true,
-      })
-      .click();
+    const dueDateInput = dialog.getByLabel("Due date");
+    await dueDateInput.fill(opts.dueDate);
+    await dueDateInput.press("Enter");
   }
   await dialog.getByRole("button", { name: /^Create$/ }).click();
   await expect(dialog).not.toBeVisible({ timeout: 10000 });

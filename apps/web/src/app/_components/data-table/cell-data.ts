@@ -15,14 +15,17 @@
  * Builders throw on invalid pastes — the clipboard surfaces the message as a
  * toast — and resolve with the saved value for the cell's optimistic display.
  *
- * Logic-only module (no React components of its own). Its one runtime dependency
- * is the WASM boundary — reached via `tryFormatAmount` for the canonical amount
- * rendering and `wasm.parse_amount` for reading amount text back. Amount
- * formatting and parsing belong to the Rust engine; a TS reimplementation of
- * either is what this module used to have, and it corrupted saved data.
+ * Logic-only module (no React components of its own). Amount values reach the
+ * WASM boundary via `tryFormatAmount` for canonical rendering and
+ * `wasm.parse_amount` for reading amount text back. Date values similarly use
+ * the shared plain-date parser instead of inventing a clipboard-only grammar.
+ * Amount formatting and parsing belong to the Rust engine; a TS
+ * reimplementation of either is what this module used to have, and it
+ * corrupted saved data.
  */
 
 import type { Amount } from "@cubby/schemas/codec";
+import { parsePlainDateInput } from "~/lib/plain-date-input";
 import { wasm } from "~/lib/wasm";
 import type { ComboboxItem } from "../combobox/combobox-types";
 import { tryFormatAmount } from "../inventory/format-amount";
@@ -95,6 +98,30 @@ export function textCellData<TData>(
           const next = raw.trim() === "" ? null : raw.trim();
           await save(row, next);
           return next;
+        }
+      : undefined,
+  };
+}
+
+export function dateCellData<TData>(
+  getValue: (row: TData) => string | null,
+  save?: (row: TData, value: string | null) => Promise<void>,
+): ColumnCellData<TData> {
+  return {
+    kind: "date",
+    getCopyPayload: (row) => {
+      const value = getValue(row);
+      return value == null || value === ""
+        ? null
+        : { text: value, json: value };
+    },
+    applyPaste: save
+      ? async (row, { json, text }) => {
+          const raw = typeof json === "string" ? json : (text ?? "");
+          const parsed = parsePlainDateInput(raw);
+          if (!parsed.ok) throw new Error(parsed.error);
+          await save(row, parsed.value);
+          return parsed.value;
         }
       : undefined,
   };

@@ -79,10 +79,13 @@ const OVERLAY_GUARDED_KEYS = new Set([
 export function CellEditorOverlay({
   anchorEl,
   onRequestCancel,
+  cancelOnOutside = true,
   children,
 }: {
   anchorEl: HTMLElement | null;
   onRequestCancel: () => void;
+  /** Date inputs commit on composite blur, so their outside press must not cancel first. */
+  cancelOnOutside?: boolean;
   children: React.ReactNode;
 }) {
   const style = useAnchoredOverlayStyle(anchorEl);
@@ -115,11 +118,18 @@ export function CellEditorOverlay({
       )
         return;
       if (anchorEl?.contains(target)) return;
-      onRequestCancel();
+      // Even editors that preserve invalid drafts on ordinary outside focus
+      // must yield when another cell starts editing. Each cell owns local edit
+      // state, so this is the shared single-editor coordinator.
+      if (target.closest?.("[data-cell-edit-trigger]")) {
+        onRequestCancel();
+        return;
+      }
+      if (cancelOnOutside) onRequestCancel();
     };
     document.addEventListener("mousedown", handleMouseDown);
     return () => document.removeEventListener("mousedown", handleMouseDown);
-  }, [anchorEl, onRequestCancel]);
+  }, [anchorEl, cancelOnOutside, onRequestCancel]);
 
   if (typeof document === "undefined" || !style) return null;
 

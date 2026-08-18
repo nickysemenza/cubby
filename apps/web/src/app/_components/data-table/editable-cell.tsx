@@ -754,11 +754,13 @@ function EditableDateCellInternal({
         <CellEditorOverlay
           anchorEl={edit.triggerRef.current}
           onRequestCancel={edit.cancel}
+          cancelOnOutside={false}
         >
           <EditableDateEditor
             value={value}
             onSave={onSave}
             placeholder={placeholder}
+            initialText={edit.seedText ?? undefined}
             onCancel={edit.cancel}
             onCommit={(nextValue) => {
               setOptimisticValue(nextValue);
@@ -772,20 +774,21 @@ function EditableDateCellInternal({
 }
 
 /**
- * Unlike the text/select editors, picking a day commits immediately — there's
- * no separate Check/X confirm step. `DatePickerInput`'s own popover owns
- * open/close; this just wires its `onChange` straight to `onSave`.
+ * Unlike the text/select editors, a valid typed date, cleared value, or picked
+ * day commits immediately — there's no separate Check/X confirm step.
  */
 function EditableDateEditor({
   value,
   onSave,
   placeholder,
+  initialText,
   onCancel,
   onCommit,
 }: {
   value: string | null;
   onSave: (value: string | null) => Promise<void>;
   placeholder?: string;
+  initialText?: string;
   onCancel: () => void;
   onCommit: (value: string | null) => void;
 }) {
@@ -810,6 +813,7 @@ function EditableDateEditor({
         value={value}
         onChange={(next) => void handleChange(next)}
         placeholder={placeholder}
+        initialText={initialText}
         clearable
         autoFocus
         className={cn("w-40", isPending && "pointer-events-none opacity-50")}

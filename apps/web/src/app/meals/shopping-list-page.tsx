@@ -4,13 +4,13 @@ import { Copy, RotateCcw } from "lucide-react";
 import { useId } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
+import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { Input } from "~/components/ui/input";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 import { copyText } from "~/lib/clipboard";
 import { cn, formatCurrency } from "~/lib/utils";
@@ -72,13 +72,13 @@ export function ShoppingListPage({
           <label htmlFor={fromId} className="text-muted-foreground text-xs">
             From
           </label>
-          <Input
+          <DatePickerInput
             id={fromId}
-            type="date"
-            value={range.from}
-            className="h-8 w-40"
-            onChange={(e) =>
-              onRangeChange({ from: e.target.value || undefined, to })
+            value={range.from || null}
+            clearable
+            className="w-44"
+            onChange={(value) =>
+              onRangeChange({ from: value ?? undefined, to })
             }
           />
         </Stack>
@@ -86,13 +86,13 @@ export function ShoppingListPage({
           <label htmlFor={toId} className="text-muted-foreground text-xs">
             To
           </label>
-          <Input
+          <DatePickerInput
             id={toId}
-            type="date"
-            value={range.to}
-            className="h-8 w-40"
-            onChange={(e) =>
-              onRangeChange({ from, to: e.target.value || undefined })
+            value={range.to || null}
+            clearable
+            className="w-44"
+            onChange={(value) =>
+              onRangeChange({ from, to: value ?? undefined })
             }
           />
         </Stack>
