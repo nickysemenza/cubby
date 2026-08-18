@@ -21,9 +21,16 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import { entityFilterSearchFields } from "~/entities/filter-search-fields";
+import {
+  entityFilterSearchFields,
+  routeFilterValues,
+} from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
-import { urlStringParam } from "~/lib/search-params";
+import {
+  urlEnumListParam,
+  urlShortcodeListParam,
+  urlStringParam,
+} from "~/lib/search-params";
 
 // The analytics view is entirely Nivo charts and its tab is unmounted until
 // selected — lazy so the chart stack stays out of the default Ledger view.
@@ -68,7 +75,7 @@ const isViewOption = (v: string | undefined): v is ViewOption =>
 // a product's "See all in ledger"); `product` is the presence value
 // ("has"/"none"), deliberately a separate key since the product column's
 // filter offers presence rather than a specific-product select.
-const searchSchema = z
+export const expenseSearchSchema = z
   .object({
     // Deliberately `string`, not `z.enum(viewOptions)`: a legacy `?view=planned`
     // must survive validation long enough for the transform below to translate
@@ -85,25 +92,25 @@ const searchSchema = z
     // comment). Three of these keys hit it in practice — `?q=486242` and
     // `?order=11334` parse as numbers, `?future=true` as a boolean.
     q: urlStringParam,
-    trade: urlStringParam,
-    costType: urlStringParam,
-    lineKind: urlStringParam,
-    lineBasis: urlStringParam,
+    trade: urlEnumListParam(z.enum(routeFilterValues.trade)),
+    costType: urlEnumListParam(z.enum(routeFilterValues.costType)),
+    lineKind: urlEnumListParam(z.enum(routeFilterValues.expenseLineKind)),
+    lineBasis: urlEnumListParam(z.enum(routeFilterValues.expenseLineBasis)),
     cost: urlStringParam,
-    project: urlStringParam,
+    project: urlShortcodeListParam("PRJ"),
     subprojects: urlStringParam,
-    future: urlStringParam,
+    future: urlEnumListParam(z.enum(routeFilterValues.boolean)),
     date: urlStringParam,
     dateFrom: urlStringParam,
     dateTo: urlStringParam,
-    productId: urlStringParam,
+    productId: urlShortcodeListParam("PRD"),
     product: urlStringParam,
     // `order` (the manifest's `orderIdExact` url key) and `vendor` are set
     // together as a pair by the "Same Order" section and the ledger's Order #
     // cell — an order id only identifies an order within one vendor. Declared
     // by name so those `<Link search={{ order, vendor }}>` calls typecheck.
     order: urlStringParam,
-    vendor: urlStringParam,
+    vendor: urlShortcodeListParam("VEN"),
     orderId: urlStringParam,
     // Deep link from a charge's own detail page — the exact-charge scope,
     // same treatment as `productId` above.
@@ -158,7 +165,7 @@ const searchDefaults = {
 } as const;
 
 export const Route = createFileRoute("/_authenticated/expenses/")({
-  validateSearch: searchSchema,
+  validateSearch: expenseSearchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: ExpensesPage,
   head: () => ({ meta: [{ title: pageTitle("Expenses") }] }),

@@ -50,3 +50,42 @@ export const urlStringParam = z
   .transform(String)
   .optional()
   .catch(undefined);
+
+/** A comma-encoded, one-or-many enum filter that retains URL string coercion. */
+export const urlEnumListParam = <T extends z.ZodType<string>>(itemSchema: T) =>
+  urlStringParam.refine(
+    (value) =>
+      value === undefined ||
+      value
+        .split(",")
+        .every((item) => item.length > 0 && itemSchema.safeParse(item).success),
+    "Invalid filter value",
+  );
+
+const SHORTCODE_SUFFIX = /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/;
+
+/** A canonical, comma-encoded exact-entity filter without a domain import. */
+export const urlShortcodeListParam = (prefix: string) =>
+  urlStringParam
+    .transform((value) => value?.toUpperCase())
+    .refine(
+      (value) =>
+        value === undefined ||
+        value.split(",").every((item) => {
+          const [actualPrefix, suffix, extra] = item.split("-");
+          return (
+            extra === undefined &&
+            actualPrefix === prefix &&
+            suffix !== undefined &&
+            SHORTCODE_SUFFIX.test(suffix)
+          );
+        }),
+      "Invalid entity shortcode filter",
+    );
+
+/** A single exact shortcode scope (not a multi-select). */
+export const urlShortcodeParam = (prefix: string) =>
+  urlShortcodeListParam(prefix).refine(
+    (value) => value === undefined || !value.includes(","),
+    "Expected one entity shortcode",
+  );

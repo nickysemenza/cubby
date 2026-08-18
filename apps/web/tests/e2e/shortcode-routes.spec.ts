@@ -22,27 +22,48 @@ const toLegacy = (code: string): string =>
   `${code[0]}-${code.slice(code.indexOf("-") + 1)}`;
 
 test.describe("shortcode URLs", () => {
-  test("a location scan lands on the in-place scan view, canonical and legacy", async ({
+  test("a location scan redirects to the canonical detail, canonical and legacy", async ({
     page,
   }) => {
     const name = `E2E Scan Location ${Date.now()}`;
     await createLocation(page, name);
     const code = codeFromUrl(page.url());
 
-    // The compact route renders the phone-first scan landing IN PLACE — a
-    // scanned bin is a physical entry point, not a cue to open the desktop
-    // detail page. So the URL must still be /<code>, not /locations/<code>.
     await page.goto(`/${code}`);
-    await expect(page).toHaveURL(new RegExp(`/${code}$`));
-    await expect(page.getByText("Add item here")).toBeVisible({
+    await expect(page).toHaveURL(new RegExp(`/locations/${code}$`), {
       timeout: 15000,
     });
+    await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
+    await expect(page.getByText("Contents", { exact: true })).toBeVisible();
+    await expect(page.getByText("Full details", { exact: false })).toHaveCount(
+      0,
+    );
+    await expect(page.getByRole("button", { name: "Add item" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /^(Photo|Retake photo)$/ }),
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: "Recount" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Add child" })).toBeVisible();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByRole("button", { name: "Add item" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /^(Photo|Retake photo)$/ }),
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: "Recount" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "More location actions" }),
+    ).toBeVisible();
 
     // A label printed before the cutover carries L-XXXX. Same destination.
     await page.goto(`/${toLegacy(code)}`);
-    await expect(page.getByText("Add item here")).toBeVisible({
+    await expect(page).toHaveURL(new RegExp(`/locations/${code}$`), {
       timeout: 15000,
     });
+    await expect(page.getByText("Contents", { exact: true })).toBeVisible();
+    await expect(page.getByText("Full details", { exact: false })).toHaveCount(
+      0,
+    );
   });
 
   test("a product scan redirects to the canonical detail URL, never a uuid", async ({

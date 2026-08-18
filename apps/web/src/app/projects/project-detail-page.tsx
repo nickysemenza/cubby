@@ -56,6 +56,7 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "~/components/ui/empty";
+import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Textarea } from "~/components/ui/textarea";
@@ -174,14 +175,22 @@ function EditableLocations({
           <NoneValue />
         ) : (
           locations.map((loc) => (
-            <Badge
+            <EntityFilterLink
               key={loc}
-              variant="outline"
-              // Free-form location names — opt out of the mono-uppercase stamp.
-              className="font-sans normal-case tracking-normal"
+              to="/projects"
+              search={{ view: "data", locations: [loc] }}
+              label={`Show all projects at ${loc}`}
+              variant="value"
+              className="no-underline"
             >
-              {loc}
-            </Badge>
+              <Badge
+                variant="outline"
+                // Free-form location names — opt out of the mono-uppercase stamp.
+                className="font-sans normal-case tracking-normal"
+              >
+                {loc}
+              </Badge>
+            </EntityFilterLink>
           ))
         )}
         <Button
@@ -674,6 +683,13 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           }
         />
       ),
+      filterAction: (
+        <EntityFilterLink
+          to="/projects"
+          search={{ view: "data", statuses: [project.status] }}
+          label={`Show all ${PROJECT_STATUS_LABELS[project.status].toLowerCase()} projects`}
+        />
+      ),
     },
     {
       label: "Kind",
@@ -690,6 +706,13 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           renderValue={(v) => renderOptionCell(v, projectKindOptions)}
         />
       ),
+      filterAction: project.kind ? (
+        <EntityFilterLink
+          to="/projects"
+          search={{ view: "data", kinds: [project.kind] }}
+          label={`Show all projects of kind ${project.kind}`}
+        />
+      ) : undefined,
     },
     {
       // Displays the EFFECTIVE start (rolled up from tasks/expenses/live
@@ -791,6 +814,13 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           }
         />
       ),
+      filterAction: project.parentProjectId ? (
+        <EntityFilterLink
+          to="/projects"
+          search={{ view: "data", parent: project.parentProjectId }}
+          label={`Show all projects inside ${project.parentProjectName ?? "this project"}`}
+        />
+      ) : undefined,
     },
     {
       label: "Locations",

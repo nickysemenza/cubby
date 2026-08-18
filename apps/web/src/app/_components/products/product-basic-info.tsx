@@ -7,6 +7,7 @@ import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
+import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
@@ -77,8 +78,32 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
           },
         ]
       : []),
-    { label: "Manufacturer", value: product.manufacturer },
-    { label: "Model", value: product.model },
+    {
+      label: "Manufacturer",
+      value: product.manufacturer ? (
+        <EntityFilterLink
+          to="/products"
+          search={{ view: "table", manufacturer: product.manufacturer }}
+          label={`Show all products by ${product.manufacturer}`}
+          variant="value"
+        >
+          {product.manufacturer}
+        </EntityFilterLink>
+      ) : undefined,
+    },
+    {
+      label: "Model",
+      value: product.model ? (
+        <EntityFilterLink
+          to="/products"
+          search={{ view: "table", model: product.model }}
+          label={`Show all products matching model ${product.model}`}
+          variant="value"
+        >
+          {product.model}
+        </EntityFilterLink>
+      ) : undefined,
+    },
     {
       label: "Valuation price",
       value: (
@@ -122,6 +147,13 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
           renderValue={(cat) => <CategoryLabel category={cat} />}
         />
       ),
+      filterAction: product.category ? (
+        <EntityFilterLink
+          to="/products"
+          search={{ view: "table", category: product.category }}
+          label={`Show all products in ${product.category}`}
+        />
+      ) : undefined,
     },
     {
       label: "UPC",
@@ -156,6 +188,13 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
             name: product.ingredient.name,
             id: product.ingredient.id,
           }}
+        />
+      ) : undefined,
+      filterAction: product.ingredient ? (
+        <EntityFilterLink
+          to="/products"
+          search={{ view: "table", ingredient: product.ingredient.id }}
+          label={`Show all products for ${product.ingredient.name}`}
         />
       ) : undefined,
     },
@@ -201,9 +240,16 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
             value: (
               <Row gap="xs" wrap justify="end">
                 {product.tags.map((tag) => (
-                  <Link key={tag} to="/products" search={{ tags: tag }}>
+                  <EntityFilterLink
+                    key={tag}
+                    to="/products"
+                    search={{ view: "table", tags: tag }}
+                    label={`Show all products tagged ${tag}`}
+                    variant="value"
+                    className="no-underline"
+                  >
                     <Badge variant="outline">{tag}</Badge>
-                  </Link>
+                  </EntityFilterLink>
                 ))}
               </Row>
             ),

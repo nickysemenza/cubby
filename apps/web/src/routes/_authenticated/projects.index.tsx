@@ -11,7 +11,7 @@ import {
   PROJECT_ROWS_RENDERERS,
 } from "~/lib/list-view-normalization";
 import { pageTitle } from "~/lib/page-title";
-import { urlStringParam } from "~/lib/search-params";
+import { urlShortcodeListParam, urlStringParam } from "~/lib/search-params";
 
 const dateFilterParam = urlStringParam.refine(
   isValidProjectDateFilter,
@@ -48,6 +48,7 @@ export const projectSearchSchema = z
     statuses: commaSeparatedArray(projectStatusSchema),
     kinds: commaSeparatedArray(projectKindSchema),
     locations: commaSeparatedArray(z.string()),
+    parent: urlShortcodeListParam("PRJ"),
     date: dateFilterParam,
     view: urlStringParam,
     rows: rowsRendererParam,

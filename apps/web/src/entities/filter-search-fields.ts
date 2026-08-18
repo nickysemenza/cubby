@@ -9,6 +9,96 @@ import { urlStringParam } from "~/lib/search-params";
 import type { FilterSpecCore } from "./filters";
 
 /**
+ * Small, eager-safe value sets for strict route validation.
+ *
+ * Route modules cannot import the full domain schema modules without pulling
+ * their server-heavy transitive graph into the initial client bundle. The UI
+ * manifest drift tests keep these values aligned with the canonical controls.
+ */
+export const routeFilterValues = {
+  productCategory: [
+    "food",
+    "tools",
+    "tool-consumables",
+    "tool-accessories",
+    "storage",
+    "hardware",
+    "electronics",
+    "software",
+    "household",
+    "supplies",
+  ],
+  locationType: [
+    "house",
+    "room",
+    "area",
+    "bag",
+    "box",
+    "shelf",
+    "table",
+    "drawer",
+    "cart",
+    "cabinet",
+  ],
+  trade: [
+    "planning",
+    "demolition",
+    "building",
+    "drywall",
+    "electrical",
+    "plumbing",
+    "mechanical",
+    "cabinetry",
+    "countertop",
+    "flooring",
+    "millwork",
+    "finishes",
+    "appliances",
+    "landscaping",
+    "logistics",
+    "metalworking",
+    "crafts",
+    "auto",
+    "other",
+  ],
+  costType: ["materials", "tools", "services"],
+  expenseLineKind: [
+    "principal",
+    "tax",
+    "shipping",
+    "discount",
+    "fee",
+    "tip",
+    "other_adjustment",
+  ],
+  expenseLineBasis: ["item_line", "allocation"],
+  accountIdentity: [
+    "credit_card",
+    "bank_account",
+    "stored_value",
+    "cash",
+    "other",
+  ],
+  transactionKind: [
+    "purchase",
+    "refund",
+    "account_transfer",
+    "credit_card_payment",
+    "fee",
+    "interest",
+    "income",
+    "adjustment",
+    "other",
+  ],
+  transactionStatus: ["expected", "pending", "posted", "void"],
+  mealType: ["breakfast", "brunch", "lunch", "dinner", "snack", "dessert"],
+  mealKind: ["cooked", "leftovers", "eating_out", "takeout", "other"],
+  recipeSourceType: ["Book", "Website", "Other", "Notion"],
+  imageStatus: ["PENDING", "UPLOADED", "FAILED"],
+  boolean: ["true", "false"],
+} as const;
+
+/**
  * Dependency-light semantic filter core for URL state.
  *
  * Route modules are part of TanStack Router's eager graph. Importing the full
@@ -79,6 +169,8 @@ export const entityFilterSemantics = {
     "updatedAt",
   ],
   inventory: [
+    "productId",
+    "locationId",
     "product",
     "location",
     "manufacturer",

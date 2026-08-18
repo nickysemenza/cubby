@@ -40,7 +40,7 @@ interface MobileCardProps {
   onLongPress?: () => void;
   /**
    * Display variant:
-   * - "card" (default): bordered card, used by LocationCardGrid, ProblemSection
+   * - "card" (default): bordered card, used by ProblemSection
    * - "row": compact row with bottom divider, used by MobileCardView for dense lists
    */
   variant?: "card" | "row";
@@ -228,7 +228,7 @@ export const MOBILE_SPEC_GRID_CLASS =
  * Used by:
  * - MobileCardView for entity lists (with optional selection)
  * - LocationInventoryTable for inventory items with inline editing
- * - ProblemSection and LocationCardGrid for entity previews
+ * - ProblemSection for entity previews
  */
 export function MobileCard({
   selectable,

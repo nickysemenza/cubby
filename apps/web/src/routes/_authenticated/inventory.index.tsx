@@ -6,15 +6,18 @@ import { InventoryItemList } from "~/app/inventory/inventoryitemlist";
 import { Page } from "~/components/page/Page";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
+import { urlShortcodeParam } from "~/lib/search-params";
 
-const searchSchema = z.object({
+export const inventorySearchSchema = z.object({
   ...tableSearchFields,
   ...entityFilterSearchFields("inventory"),
+  productId: urlShortcodeParam("PRD"),
+  locationId: urlShortcodeParam("LOC"),
 });
 const searchDefaults = {} as const;
 
 export const Route = createFileRoute("/_authenticated/inventory/")({
-  validateSearch: searchSchema,
+  validateSearch: inventorySearchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: InventoryPage,
   head: () => ({ meta: [{ title: pageTitle("Inventory") }] }),

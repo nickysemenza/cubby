@@ -5,6 +5,8 @@ import { InfoRow } from "./info-row";
 export interface BasicInfoField {
   label: string;
   value: ReactNode;
+  /** Secondary browse/filter action kept outside editable values and links. */
+  filterAction?: ReactNode;
   hide?: boolean;
 }
 
@@ -29,7 +31,11 @@ export const BasicInfo: FC<BasicInfoProps> = ({
       {/* Fact sheet: each InfoRow carries its own dotted leader — no dividers */}
       <div>
         {visibleFields.map((field) => (
-          <InfoRow key={field.label} label={field.label}>
+          <InfoRow
+            key={field.label}
+            label={field.label}
+            action={field.filterAction}
+          >
             {field.value}
           </InfoRow>
         ))}

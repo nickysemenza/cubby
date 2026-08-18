@@ -6,6 +6,7 @@ import { BasicInfo } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
+import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { financialTransactionMutationInvalidateKeys } from "~/lib/query-keys";
@@ -58,13 +59,47 @@ export function FinancialTransactionDetail({
             content: (
               <BasicInfo
                 fields={[
-                  { label: "Merchant", value: transaction.merchant ?? "—" },
+                  {
+                    label: "Merchant",
+                    value: transaction.merchant ? (
+                      <EntityFilterLink
+                        to="/financial-transactions"
+                        search={{ merchant: transaction.merchant }}
+                        label={`Show all transactions matching ${transaction.merchant}`}
+                        variant="value"
+                      >
+                        {transaction.merchant}
+                      </EntityFilterLink>
+                    ) : (
+                      "—"
+                    ),
+                  },
                   {
                     label: "Amount",
                     value: formatCurrency(transaction.amount),
                   },
-                  { label: "Kind", value: transaction.kind },
-                  { label: "Status", value: transaction.status },
+                  {
+                    label: "Kind",
+                    value: transaction.kind,
+                    filterAction: (
+                      <EntityFilterLink
+                        to="/financial-transactions"
+                        search={{ kind: transaction.kind }}
+                        label={`Show all ${transaction.kind.replaceAll("_", " ")} transactions`}
+                      />
+                    ),
+                  },
+                  {
+                    label: "Status",
+                    value: transaction.status,
+                    filterAction: (
+                      <EntityFilterLink
+                        to="/financial-transactions"
+                        search={{ status: transaction.status }}
+                        label={`Show all ${transaction.status} transactions`}
+                      />
+                    ),
+                  },
                   {
                     label: "Account",
                     value: (
@@ -74,6 +109,13 @@ export function FinancialTransactionDetail({
                       >
                         {transaction.accountName ?? transaction.accountId}
                       </TableLink>
+                    ),
+                    filterAction: (
+                      <EntityFilterLink
+                        to="/financial-transactions"
+                        search={{ accountId: transaction.accountId }}
+                        label={`Show all transactions for ${transaction.accountName ?? transaction.accountId}`}
+                      />
                     ),
                   },
                   {
@@ -95,15 +137,24 @@ export function FinancialTransactionDetail({
                               justify="between"
                               gap="sm"
                             >
-                              <TableLink
-                                to={entities.purchase.routes.detail}
-                                params={entityDetailParams(
-                                  allocation.purchaseId,
-                                )}
-                                variant="mono"
-                              >
-                                {allocation.purchaseId}
-                              </TableLink>
+                              <Row align="center" gap="tight">
+                                <TableLink
+                                  to={entities.purchase.routes.detail}
+                                  params={entityDetailParams(
+                                    allocation.purchaseId,
+                                  )}
+                                  variant="mono"
+                                >
+                                  {allocation.purchaseId}
+                                </TableLink>
+                                <EntityFilterLink
+                                  to="/financial-transactions"
+                                  search={{
+                                    purchaseId: allocation.purchaseId,
+                                  }}
+                                  label={`Show all transactions allocated to ${allocation.purchaseId}`}
+                                />
+                              </Row>
                               {transaction.allocations.length > 1 ? (
                                 <span className="font-mono tabular-nums">
                                   {formatCurrency(allocation.amount)}

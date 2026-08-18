@@ -1,11 +1,36 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  stripSearchParams,
+} from "@tanstack/react-router";
 import { BookOpen, Link2, Plus, Share2 } from "lucide-react";
+import { z } from "zod";
+import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { RecipeList } from "~/app/recipes/recipelist";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
+import {
+  entityFilterSearchFields,
+  routeFilterValues,
+} from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
+import {
+  urlEnumListParam,
+  urlShortcodeListParam,
+  urlStringParam,
+} from "~/lib/search-params";
+
+export const recipeListSearchSchema = z.object({
+  ...tableSearchFields,
+  ...entityFilterSearchFields("recipe"),
+  tags: urlStringParam,
+  source: urlShortcodeListParam("CKB"),
+  sourceType: urlEnumListParam(z.enum(routeFilterValues.recipeSourceType)),
+});
 
 export const Route = createFileRoute("/_authenticated/recipes/")({
+  validateSearch: recipeListSearchSchema,
+  search: { middlewares: [stripSearchParams({})] },
   component: RecipesPage,
   head: () => ({ meta: [{ title: pageTitle("Recipes") }] }),
 });

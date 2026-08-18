@@ -7,6 +7,7 @@ import { cn } from "~/lib/utils";
 interface InfoRowProps {
   label: string;
   children?: ReactNode;
+  action?: ReactNode;
   className?: string;
 }
 
@@ -15,7 +16,12 @@ interface InfoRowProps {
  * label, a dotted leader, and the value flush right. The leader is the row's
  * own rule, so stacks of InfoRows need no dividers between them.
  */
-export const InfoRow = ({ label, children, className }: InfoRowProps) => (
+export const InfoRow = ({
+  label,
+  children,
+  action,
+  className,
+}: InfoRowProps) => (
   <Row align="baseline" gap="sm" className={cn("py-2", className)}>
     <Eyebrow as="span" className="shrink-0">
       {label}
@@ -26,8 +32,15 @@ export const InfoRow = ({ label, children, className }: InfoRowProps) => (
       aria-hidden
       className="min-w-6 flex-1 border-border/80 border-b-2 border-dotted"
     />
-    <span className="min-w-0 max-w-[65%] text-right text-sm">
-      {children ?? <NoneValue />}
-    </span>
+    <Row
+      as="span"
+      align="center"
+      justify="end"
+      gap="tight"
+      className="min-w-0 max-w-[65%] text-right text-sm"
+    >
+      <span className="min-w-0">{children ?? <NoneValue />}</span>
+      {action}
+    </Row>
   </Row>
 );

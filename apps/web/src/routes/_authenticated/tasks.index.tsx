@@ -20,7 +20,10 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { getEntityFilters } from "~/entities/filter-manifest";
-import { entityFilterSearchFields } from "~/entities/filter-search-fields";
+import {
+  entityFilterSearchFields,
+  routeFilterValues,
+} from "~/entities/filter-search-fields";
 import {
   buildFiltersFromManifest,
   filterGetterFromSearch,
@@ -31,7 +34,11 @@ import {
   type TaskRenderer,
 } from "~/lib/list-view-normalization";
 import { pageTitle } from "~/lib/page-title";
-import { urlStringParam } from "~/lib/search-params";
+import {
+  urlEnumListParam,
+  urlShortcodeListParam,
+  urlStringParam,
+} from "~/lib/search-params";
 
 // Timeline is the Gantt + the Nivo calendar heatmap, and its tab is unmounted
 // until selected — lazy so that stack stays out of the default List view.
@@ -61,12 +68,13 @@ export const taskSearchSchema = z
     ...entityFilterSearchFields("task"),
     q: urlStringParam,
     status: taskStatusParam,
-    project: urlStringParam,
-    parentTask: urlStringParam,
+    trade: urlEnumListParam(z.enum(routeFilterValues.trade)),
+    project: urlShortcodeListParam("PRJ"),
+    parentTask: urlShortcodeListParam("TSK"),
     // Declared by name as well as through the manifest so typed links can set an
     // exact product scope and the visible "For" presence filter.
-    productId: urlStringParam,
-    subjectProduct: urlStringParam,
+    productId: urlShortcodeListParam("PRD"),
+    subjectProduct: urlShortcodeListParam("PRD"),
     view: urlStringParam,
     // Board layout: column axis + swimlane axis. `lane` is normalized to only
     // apply when `cols === "status"` inside TasksBoardView.

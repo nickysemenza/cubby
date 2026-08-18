@@ -28,6 +28,7 @@ import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
+import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { Input } from "~/components/ui/input";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -351,6 +352,13 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           }
         />
       ),
+      filterAction: (
+        <EntityFilterLink
+          to="/tasks"
+          search={{ view: "list", status: task.status }}
+          label={`Show all ${TASK_STATUS_LABELS[task.status].toLowerCase()} tasks`}
+        />
+      ),
     },
     {
       label: "Trade",
@@ -367,6 +375,13 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
             });
           }}
           renderValue={(v) => renderOptionCell(v, tradeOptions)}
+        />
+      ),
+      filterAction: (
+        <EntityFilterLink
+          to="/tasks"
+          search={{ view: "list", trade: task.trade }}
+          label={`Show all tasks for trade ${task.trade}`}
         />
       ),
     },
@@ -442,6 +457,13 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           }
         />
       ),
+      filterAction: task.projectId ? (
+        <EntityFilterLink
+          to="/tasks"
+          search={{ view: "list", project: task.projectId }}
+          label={`Show all tasks in ${task.projectName ?? "this project"}`}
+        />
+      ) : undefined,
     },
     {
       label: "For",
@@ -484,6 +506,13 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           }
         />
       ),
+      filterAction: task.subjectProductId ? (
+        <EntityFilterLink
+          to="/tasks"
+          search={{ view: "list", productId: task.subjectProductId }}
+          label={`Show all tasks for ${task.subjectProductName ?? "this product"}`}
+        />
+      ) : undefined,
     },
   ];
 
@@ -560,14 +589,21 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           {
             label: "Subtask of",
             value: (
-              <EntityInlineLink
-                entity="task"
-                data={{
-                  id: task.parentTaskId,
-                  name: task.parentTaskName,
-                }}
-                truncate
-              />
+              <Row align="center" gap="tight">
+                <EntityInlineLink
+                  entity="task"
+                  data={{
+                    id: task.parentTaskId,
+                    name: task.parentTaskName,
+                  }}
+                  truncate
+                />
+                <EntityFilterLink
+                  to="/tasks"
+                  search={{ view: "list", parentTask: task.parentTaskId }}
+                  label={`Show all subtasks of ${task.parentTaskName}`}
+                />
+              </Row>
             ),
           } satisfies DetailHeroStat,
         ]

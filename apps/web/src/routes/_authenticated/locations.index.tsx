@@ -23,8 +23,12 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { getEntityFilters } from "~/entities/filter-manifest";
-import { entityFilterSearchFields } from "~/entities/filter-search-fields";
+import {
+  entityFilterSearchFields,
+  routeFilterValues,
+} from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
+import { urlEnumListParam, urlShortcodeListParam } from "~/lib/search-params";
 
 const viewOptions = ["gallery", "table", "visualizations"] as const;
 type ViewOption = (typeof viewOptions)[number];
@@ -35,16 +39,19 @@ const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
   { value: "visualizations", label: "Visualizations" },
 ];
 
-const searchSchema = z.object({
+export const locationSearchSchema = z.object({
   view: z.enum(viewOptions).optional().catch(undefined),
   ...tableSearchFields,
   ...entityFilterSearchFields("location"),
+  type: urlEnumListParam(z.enum(routeFilterValues.locationType)),
+  product: urlShortcodeListParam("PRD"),
+  parent: urlShortcodeListParam("LOC"),
 });
 
 const searchDefaults = { view: undefined } as const;
 
 export const Route = createFileRoute("/_authenticated/locations/")({
-  validateSearch: searchSchema,
+  validateSearch: locationSearchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: LocationsPage,
   head: () => ({ meta: [{ title: pageTitle("Locations") }] }),

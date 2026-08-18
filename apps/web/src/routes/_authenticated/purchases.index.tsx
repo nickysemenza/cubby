@@ -10,7 +10,7 @@ import { PurchaseList } from "~/app/purchases/purchaselist";
 import { Page } from "~/components/page/Page";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
-import { urlStringParam } from "~/lib/search-params";
+import { urlShortcodeListParam, urlStringParam } from "~/lib/search-params";
 
 // Spread first so ANY spec in purchase's filter manifest survives this strict
 // schema — a new filter can't be silently stripped by being forgotten here. The
@@ -18,11 +18,11 @@ import { urlStringParam } from "~/lib/search-params";
 // literal key types for `<Link search>`/`Route.useSearch()` to expose. Each is a
 // `urlStringParam`, never a bare `z.string()`: `?q=486242` and `?date=30` parse
 // as numbers and would otherwise be silently dropped.
-const searchSchema = z.object({
+export const purchaseSearchSchema = z.object({
   ...entityFilterSearchFields("purchase"),
   q: urlStringParam,
   label: urlStringParam,
-  vendor: urlStringParam,
+  vendor: urlShortcodeListParam("VEN"),
   orderId: urlStringParam,
   date: urlStringParam,
   statedTotal: urlStringParam,
@@ -59,7 +59,7 @@ const searchDefaults = {
 } as const;
 
 export const Route = createFileRoute("/_authenticated/purchases/")({
-  validateSearch: searchSchema,
+  validateSearch: purchaseSearchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: PurchasesPage,
   head: () => ({ meta: [{ title: pageTitle("Purchases") }] }),

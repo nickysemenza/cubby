@@ -8,6 +8,7 @@ import { imageStatusOptions } from "~/app/images/image-options";
 import { Row, Stack } from "~/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
+import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { Image } from "~/components/ui/image";
 import { useTRPC } from "~/integrations/trpc/react";
 import { imageMutationInvalidateKeys, queryKeys } from "~/lib/query-keys";
@@ -111,6 +112,11 @@ export function ImageDetail({ image }: ImageDetailProps) {
           <Row align="center" gap="sm">
             <span className="text-muted-foreground">Status:</span>
             {renderOptionCell(image.status, imageStatusOptions)}
+            <EntityFilterLink
+              to="/images"
+              search={{ status: image.status }}
+              label={`Show all ${image.status.toLowerCase()} images`}
+            />
           </Row>
           <div>
             <span className="text-muted-foreground">Associated entities:</span>
