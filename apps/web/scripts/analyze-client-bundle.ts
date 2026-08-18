@@ -12,8 +12,21 @@ import { gzipSync } from "node:zlib";
 // macOS. Headroom here is deliberately small — this budget exists to catch a
 // route or dependency that adds tens of KiB, and it only keeps working if
 // raising it stays a decision rather than a reflex.
+//
+// Raised 516 -> 517 KiB for the purchase↔product union + Kit facet (#803), but
+// the growth is mostly NOT that PR: the filter-contract refactors (#801, #802)
+// landed with this job SKIPPED, because ci-scope judged them not to touch
+// client-bundle paths. So their eager-closure growth was never measured, and
+// #803 — whose own additions are config entries in already-eager manifests, no
+// new module edges — is the first build to weigh the accumulated total. It came
+// in ~0.1 KiB over on Linux (515.9 KiB measured on macOS here).
+//
+// ⚠️ The lesson is about the guard, not the number: a change can grow the eager
+// closure and never be measured, so the next PR that happens to touch a client
+// path inherits the overage and looks like the culprit. Before trimming code to
+// fit, check whether this job actually RAN on the commits that preceded you.
 export const CLIENT_BUNDLE_BUDGET = {
-  gzipBytes: 516 * 1024,
+  gzipBytes: 517 * 1024,
   chunks: 145,
 } as const;
 
