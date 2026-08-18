@@ -1,5 +1,5 @@
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
-import { Link } from "@tanstack/react-router";
+import { getRouteApi, Link } from "@tanstack/react-router";
 import { ImageIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import type { z } from "zod";
@@ -22,6 +22,7 @@ import {
   createSingleEntityInlineLinkColumn,
   createTimestampColumn,
 } from "../_components/data-table/columnHelpers";
+import { ScopeChip } from "../_components/data-table/ScopeChip";
 import {
   SHELF_VIEW_OPTIONS,
   type ShelfView,
@@ -48,6 +49,8 @@ import { TableLink } from "../_components/table/TableLink";
 
 type InventoryListItem = z.infer<typeof inventoryListItemOut>;
 
+const inventoryRoute = getRouteApi("/_authenticated/inventory/");
+
 function InventoryProductImageCell({ productId }: { productId: string }) {
   const images = useHydratedProductImages(productId);
   return (
@@ -62,6 +65,8 @@ function InventoryProductImageCell({ productId }: { productId: string }) {
 
 export function InventoryItemList() {
   const api = useTRPC();
+  const inventorySearch = inventoryRoute.useSearch();
+  const inventoryNavigate = inventoryRoute.useNavigate();
   const columnHelper = useMemo(
     () => createCubbyColumnHelper<InventoryListItem>(),
     [],
@@ -70,6 +75,19 @@ export function InventoryItemList() {
     useEntityPreview("inventory");
   const [moveTarget, setMoveTarget] = useState<InventoryListItem | null>(null);
   const [bulkMoveItems, setBulkMoveItems] = useState<InventoryListItem[]>([]);
+
+  const clearProductScope = useCallback(() => {
+    void inventoryNavigate({
+      search: (prev) => ({ ...prev, productId: undefined }),
+      replace: true,
+    });
+  }, [inventoryNavigate]);
+  const clearLocationScope = useCallback(() => {
+    void inventoryNavigate({
+      search: (prev) => ({ ...prev, locationId: undefined }),
+      replace: true,
+    });
+  }, [inventoryNavigate]);
 
   const updateMutation = useUpdateMutation({
     mutationFn: api.inventory.update.mutationOptions,
@@ -283,12 +301,32 @@ export function InventoryItemList() {
   const [view, setView] = useState<ShelfView>("table");
   const items = table.getRowModel().rows.map((r) => r.original);
   const productIds = useMemo(() => data.map((item) => item.product.id), [data]);
+  const scopeChips =
+    inventorySearch.productId || inventorySearch.locationId ? (
+      <FlexRow align="center" gap="sm" wrap>
+        {inventorySearch.productId && (
+          <ScopeChip
+            name="Product"
+            value={inventorySearch.productId}
+            onClear={clearProductScope}
+          />
+        )}
+        {inventorySearch.locationId && (
+          <ScopeChip
+            name="Location"
+            value={inventorySearch.locationId}
+            onClear={clearLocationScope}
+          />
+        )}
+      </FlexRow>
+    ) : null;
 
   return (
     <ProductImageSummariesProvider productIds={productIds}>
       <AiSearchBar table={table} />
       <FlexRow align="center" justify="between" gap="sm" className="mb-4">
-        <div className="min-w-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {scopeChips}
           {view === "shelf" && (
             <InventoryValuationSummary
               items={data as InventoryItem[]}

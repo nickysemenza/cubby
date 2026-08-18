@@ -25,6 +25,7 @@ import {
 } from "./financial-account";
 import {
   createPaginatedResponseSchema,
+  entityFilterList,
   oneOrMany,
   presenceFilter,
 } from "./pagination";
@@ -395,8 +396,8 @@ export const financialTransactionFilterFields = {
   ...auditDateFilterFields,
   ...financialTransactionRelatedFilterFields,
   search: z.string().optional(),
-  accountId: oneOrMany(financialAccountShortcode).optional(),
-  purchaseId: oneOrMany(purchaseShortcode).optional(),
+  accountId: entityFilterList(financialAccountShortcode).optional(),
+  purchaseId: entityFilterList(purchaseShortcode).optional(),
   purchasePresenceFilter: presenceFilter,
   allocationIntegrity: z.enum(["defect"]).optional(),
   kind: oneOrMany(financialTransactionKind).optional(),

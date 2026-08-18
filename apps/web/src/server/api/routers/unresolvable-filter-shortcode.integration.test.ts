@@ -3,7 +3,7 @@ import {
   unsafeLocationShortcode,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
-import { SHORTCODE_PREFIX } from "@cubby/shared";
+import { SHORTCODE_PREFIX, UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { seedFromCSV, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import {
@@ -87,6 +87,36 @@ describe("a list filter naming an unresolvable shortcode matches nothing", () =>
         filters: {
           cookbookId: unsafeCookbookShortcode(unresolvable("cookbook")),
         },
+      }),
+    );
+    expect(filtered.items).toEqual([]);
+    expect(filtered.meta.totalCount).toEqual(0);
+  });
+
+  it("preserves a malformed route filter as an empty inventory cohort", async () => {
+    const caller = createTestCaller(inventoryRouter, ctx.db);
+    await seedInventory();
+
+    const filtered = await caller.list(
+      listParams({
+        filters: { productIdFilter: UNRESOLVABLE_ENTITY_FILTER },
+      }),
+    );
+    expect(filtered.items).toEqual([]);
+    expect(filtered.meta.totalCount).toEqual(0);
+  });
+
+  it("preserves a malformed route filter as an empty relationship cohort", async () => {
+    const caller = createTestCaller(recipeRouter, ctx.db);
+    await createRecipeFixture(
+      ctx.db,
+      makeRecipeInput({ name: "Route-filter loaf" }),
+      TEST_ACTOR,
+    );
+
+    const filtered = await caller.list(
+      listParams({
+        filters: { cookbookId: UNRESOLVABLE_ENTITY_FILTER },
       }),
     );
     expect(filtered.items).toEqual([]);

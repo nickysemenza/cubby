@@ -18,6 +18,7 @@ import {
 import { type ImageOut, imageOut, isDisplayableImageFile } from "./image";
 import {
   createPaginatedResponseSchema,
+  entityFilterList,
   oneOrMany,
   presenceFilter,
 } from "./pagination";
@@ -43,11 +44,11 @@ export const locationFilterFields = {
    * Locations that ARE this product. Matches the identity link, not stock
    * held at the location — for that, use the inventory list.
    */
-  productId: oneOrMany(productShortcode).optional(),
+  productId: entityFilterList(productShortcode).optional(),
   productPresenceFilter: presenceFilter.describe(
     'Filter to locations that are / aren\'t an instance of a Product. "has" is the vessel set (totes, bins, racks); "none" is rooms, areas and drawers.',
   ),
-  parentId: oneOrMany(locationShortcode).optional(),
+  parentId: entityFilterList(locationShortcode).optional(),
   parentPresenceFilter: presenceFilter,
   /**
    * `"none"` is the empty-shelf worklist. Counts only entries whose product is

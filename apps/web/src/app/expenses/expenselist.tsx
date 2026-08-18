@@ -1,4 +1,5 @@
 import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
+import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
@@ -342,9 +343,10 @@ export function ExpenseList() {
   const expensesSearch = expensesRoute.useSearch();
   const expensesNavigate = expensesRoute.useNavigate();
   const scopedProductId = expensesSearch.productId;
+  const hasInvalidProductScope = scopedProductId === UNRESOLVABLE_ENTITY_FILTER;
   const scopedProductQuery = useQuery({
     ...api.product.getByID.queryOptions({ id: scopedProductId ?? "" }),
-    enabled: Boolean(scopedProductId),
+    enabled: Boolean(scopedProductId) && !hasInvalidProductScope,
   });
   const clearProductScope = useCallback(() => {
     void expensesNavigate({
@@ -353,10 +355,10 @@ export function ExpenseList() {
     });
   }, [expensesNavigate]);
   const productScopeChip =
-    scopedProductId && scopedProductQuery.data ? (
+    scopedProductId && (hasInvalidProductScope || scopedProductQuery.data) ? (
       <ScopeChip
         name="Product"
-        value={scopedProductQuery.data.name}
+        value={scopedProductQuery.data?.name ?? scopedProductId}
         onClear={clearProductScope}
       />
     ) : undefined;
@@ -386,9 +388,11 @@ export function ExpenseList() {
   // than showing the raw id — `purchaseLabel` over the fetched `PurchaseOut`,
   // the same helper `link-expenses-dialog.tsx` uses for a Purchase's identity.
   const scopedPurchaseId = expensesSearch.purchaseId;
+  const hasInvalidPurchaseScope =
+    scopedPurchaseId === UNRESOLVABLE_ENTITY_FILTER;
   const scopedPurchaseQuery = useQuery({
     ...api.purchase.getByID.queryOptions({ id: scopedPurchaseId ?? "" }),
-    enabled: Boolean(scopedPurchaseId),
+    enabled: Boolean(scopedPurchaseId) && !hasInvalidPurchaseScope,
   });
   const clearPurchaseScope = useCallback(() => {
     void expensesNavigate({
@@ -397,10 +401,15 @@ export function ExpenseList() {
     });
   }, [expensesNavigate]);
   const purchaseScopeChip =
-    scopedPurchaseId && scopedPurchaseQuery.data ? (
+    scopedPurchaseId &&
+    (hasInvalidPurchaseScope || scopedPurchaseQuery.data) ? (
       <ScopeChip
         name="Purchase"
-        value={purchaseLabel(scopedPurchaseQuery.data)}
+        value={
+          scopedPurchaseQuery.data
+            ? purchaseLabel(scopedPurchaseQuery.data)
+            : scopedPurchaseId
+        }
         onClear={clearPurchaseScope}
       />
     ) : undefined;

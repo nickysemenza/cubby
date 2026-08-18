@@ -1,3 +1,4 @@
+import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { z } from "zod";
 
 export const MAX_PAGE_SIZE = 500;
@@ -97,6 +98,26 @@ export type RelativeDateFilter = z.infer<typeof relativeDateFilter>;
  */
 export const oneOrMany = <T extends z.ZodTypeAny>(schema: T) =>
   z.union([schema, z.array(schema)]);
+
+/**
+ * A route asked for an exact entity filter, but its value was not a valid
+ * shortcode. This value is deliberately NOT a shortcode: the filter-only
+ * schema's failure path produces it, then `resolveFilterIds` resolves it to an
+ * empty id set so the request matches nothing. Ordinary entity-id inputs keep
+ * the canonical shortcode schema, inferred brand, and published regex.
+ *
+ * Keeping this distinct from omission is load-bearing. Omitted filters are
+ * unrestricted; a requested but invalid filter must never widen into one.
+ */
+/** A single exact-entity filter with a match-nothing validation fallback. */
+export const entityFilter = <T extends z.ZodTypeAny>(schema: T) =>
+  schema.catch(() => UNRESOLVABLE_ENTITY_FILTER as z.output<T>);
+
+/** One-or-many exact-entity filters with the same match-nothing fallback. */
+export const entityFilterList = <T extends z.ZodTypeAny>(schema: T) => {
+  const list = oneOrMany(schema);
+  return list.catch(() => UNRESOLVABLE_ENTITY_FILTER as z.output<typeof list>);
+};
 
 const paginationParams = z.object({
   pageIndex: z.number().int().min(0).default(0),

@@ -1,3 +1,4 @@
+import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { X } from "lucide-react";
 import { useMemo } from "react";
 import { Button } from "~/components/ui/button";
@@ -47,6 +48,19 @@ export function FilterBar({
       {filters.flatMap((filter) => {
         const field = fieldsByKey.get(filter.field);
         if (!field) return [];
+        const options = field.options ?? [];
+        const visibleOptions =
+          filter.values.includes(UNRESOLVABLE_ENTITY_FILTER) &&
+          !options.some((option) => option.value === UNRESOLVABLE_ENTITY_FILTER)
+            ? [
+                {
+                  value: UNRESOLVABLE_ENTITY_FILTER,
+                  label: "Invalid link filter",
+                  meta: true,
+                },
+                ...options,
+              ]
+            : options;
         return (
           <div
             key={filter.id}
@@ -64,7 +78,7 @@ export function FilterBar({
               />
             ) : field.type === "multiselect" ? (
               <MultiFilterableCombobox
-                items={field.options ?? []}
+                items={visibleOptions}
                 value={filter.values}
                 onValueChange={(values) => update(filter.id, values)}
                 placeholder={`Filter ${field.label ?? field.key}`}
@@ -73,7 +87,7 @@ export function FilterBar({
               />
             ) : (
               <FilterableCombobox
-                items={field.options ?? []}
+                items={visibleOptions}
                 value={filter.values[0] ?? null}
                 onValueChange={(value) =>
                   update(filter.id, value === null ? [] : [value])
