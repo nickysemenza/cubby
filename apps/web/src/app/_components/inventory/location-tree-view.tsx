@@ -20,7 +20,7 @@ import { Label } from "~/components/ui/label";
 import { EntityIcon } from "~/entities/entities";
 import { useLocationTree } from "~/hooks/useLocationTree";
 import { cn } from "~/lib/utils";
-import { LocationIcon } from "../locations/location-icons";
+import { LocationVisual } from "../locations/location-visual";
 
 interface LocationTreeProps {
   data: InfLocation[];
@@ -358,14 +358,15 @@ function LocationBranch({
         <Link
           to="/locations/$shortcode"
           params={{ shortcode: location.id }}
+          aria-label={location.name}
           className="flex min-h-10 min-w-0 flex-1 items-center gap-2 py-1 font-medium text-foreground text-sm underline-offset-2 hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 sm:min-h-0 sm:text-xs"
           title={location.name}
         >
-          <LocationIcon
-            type={location.type}
-            product={location.product}
-            size={14}
-            className="shrink-0 text-muted-foreground transition-colors duration-100 group-hover:text-foreground"
+          <LocationVisual
+            location={location}
+            variant="compact"
+            size={24}
+            className="transition-colors duration-100 ease-cozy group-hover:border-foreground/30"
           />
           <span className="truncate">{location.name}</span>
         </Link>
