@@ -32,10 +32,10 @@ function ImportPage() {
   // cookbook tab and the click would appear to do nothing.
   const activeTab = from ? "cookbook" : tab;
 
-  // NotionImport auto-fetches the whole Notion recipes DB on mount (staleTime
-  // 0), so it must NOT mount while hidden behind the default cookbook tab.
-  // Activate on first visit to the tab, then keep it mounted (sticky) so an
-  // in-flight import survives switching back to the cookbook tab.
+  // NotionImport reads the whole Notion recipes DB when first mounted, so it
+  // must NOT mount while hidden behind the default cookbook tab. Activate on
+  // first visit to the tab, then keep it mounted (sticky) so its cached preview
+  // and any in-flight import survive switching back to the cookbook tab.
   const [notionActivated, setNotionActivated] = useState(
     activeTab === "notion",
   );

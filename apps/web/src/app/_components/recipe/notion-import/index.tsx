@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Import } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { AlertCircle, Import, RotateCcw, Search } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { Row } from "~/components/layout/row";
 import { Stack } from "~/components/layout/stack";
@@ -9,6 +10,8 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
+import { Input } from "~/components/ui/input";
+import { NativeSelect } from "~/components/ui/native-select";
 import { Spinner } from "~/components/ui/spinner";
 import {
   type RouterOutputs,
@@ -22,6 +25,11 @@ import {
 } from "~/lib/query-keys";
 import type { ImportResult } from "../cookbook-import/types";
 import { RecipeImportCard } from "../recipe-import-card";
+import {
+  filterNotionPreview,
+  type NotionPreviewFilter,
+  updateVisibleSelection,
+} from "./preview-filters";
 
 // Sourced from the procedure's `.output(z.array(notionPreviewItem))` so this
 // can never drift from the server shape.
@@ -41,18 +49,22 @@ export function NotionImport() {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [results, setResults] = useState<Map<string, ImportResult>>(new Map());
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<NotionPreviewFilter>("all");
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState<{
     done: number;
     total: number;
   } | null>(null);
 
-  // Auto-loads on mount: reading the Notion Recipes DB is the whole point of the
-  // page, so there's no reason to gate it behind a click. staleTime: 0 means every
-  // visit (refresh or in-app nav) refetches the current Notion state, which is what
-  // a refresh button would have done — so we don't need one.
+  // Notion previews are expensive (a complete database read and parse), so they
+  // remain fresh for this session. Refresh is deliberate; successful imports
+  // invalidate this cache so statuses reflect the committed recipes.
   const preview = useQuery(
-    api.recipe.previewNotionSync.queryOptions(undefined, { staleTime: 0 }),
+    api.recipe.previewNotionSync.queryOptions(undefined, {
+      staleTime: Infinity,
+      gcTime: Infinity,
+    }),
   );
   // Per-page outcome streamed back from importNotionSyncStream, keyed by page id.
   const { start: startNotionImport } = useBulkStream<
@@ -67,15 +79,20 @@ export function NotionImport() {
   >();
 
   const items: PreviewItem[] = preview.data ?? [];
-  // Checkbox is enabled for anything that isn't malformed (incl. unchanged, in
-  // case you want to force a re-import); "select all" only ticks the actionable
-  // ones (new + will-update) since re-importing an unchanged recipe is a no-op.
-  const actionable = useMemo(
-    () => items.filter((i) => i.status === "new" || i.status === "will-update"),
-    [items],
+  const filteredItems = useMemo(
+    () => filterNotionPreview(items, search, filter),
+    [items, search, filter],
   );
-  const allActionableSelected =
-    actionable.length > 0 && actionable.every((i) => selected.has(i.pageId));
+  const visibleActionable = useMemo(
+    () =>
+      filteredItems.filter(
+        (i) => i.status === "new" || i.status === "will-update",
+      ),
+    [filteredItems],
+  );
+  const allVisibleActionableSelected =
+    visibleActionable.length > 0 &&
+    visibleActionable.every((i) => selected.has(i.pageId));
 
   const toggle = useCallback((pageId: string) => {
     setSelected((prev) => {
@@ -87,12 +104,8 @@ export function NotionImport() {
   }, []);
 
   const toggleAll = useCallback(() => {
-    setSelected((prev) =>
-      actionable.every((i) => prev.has(i.pageId))
-        ? new Set()
-        : new Set(actionable.map((i) => i.pageId)),
-    );
-  }, [actionable]);
+    setSelected((prev) => updateVisibleSelection(prev, visibleActionable));
+  }, [visibleActionable]);
 
   const runImport = useCallback(async () => {
     const pageIds = [...selected];
@@ -121,6 +134,9 @@ export function NotionImport() {
           // Refresh the recipe list + re-run the preview (flips new → will-update).
           if (r.succeeded > 0) {
             invalidateTRPCQueries(queryClient, recipeAllMutationInvalidateKeys);
+            invalidateTRPCQueries(queryClient, [
+              api.recipe.previewNotionSync.queryKey(),
+            ]);
           }
         },
         successToast: (r) =>
@@ -131,9 +147,9 @@ export function NotionImport() {
     );
     setImporting(false);
     setProgress(null);
-  }, [selected, client, startNotionImport, queryClient]);
+  }, [selected, client, startNotionImport, queryClient, api]);
 
-  const summary = useMemo(() => {
+  const summaryCounts = useMemo(() => {
     const c = { new: 0, update: 0, unchanged: 0, needs: 0 };
     for (const i of items) {
       if (i.status === "new") c.new++;
@@ -141,13 +157,18 @@ export function NotionImport() {
       else if (i.status === "unchanged") c.unchanged++;
       else c.needs++;
     }
+    return c;
+  }, [items]);
+
+  const summary = useMemo(() => {
     const parts: string[] = [];
+    const c = summaryCounts;
     if (c.new) parts.push(`${c.new} new`);
     if (c.update) parts.push(`${c.update} to update`);
     if (c.unchanged) parts.push(`${c.unchanged} unchanged`);
     if (c.needs) parts.push(`${c.needs} need formatting`);
     return parts.join(" · ");
-  }, [items]);
+  }, [summaryCounts]);
 
   return (
     <Stack>
@@ -159,6 +180,16 @@ export function NotionImport() {
           </Description>
         )}
         <div className="flex-1" />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void preview.refetch()}
+          disabled={preview.isFetching || importing}
+        >
+          <RotateCcw className="mr-1 size-3" />
+          Refresh
+        </Button>
         {items.length > 0 && (
           <Button
             type="button"
@@ -201,33 +232,117 @@ export function NotionImport() {
         <Card size="sm">
           <CardHeader className="flex-row items-center gap-2 space-y-0">
             <Checkbox
-              aria-label="Select all new and changed"
-              checked={allActionableSelected}
-              disabled={actionable.length === 0}
+              aria-label="Select all visible new and changed recipes"
+              checked={allVisibleActionableSelected}
+              disabled={visibleActionable.length === 0}
               onCheckedChange={toggleAll}
             />
-            <Description as="span">
-              Select all new &amp; changed ({actionable.length})
-            </Description>
+            <Row wrap align="center" gap="sm" className="min-w-0 flex-1">
+              <Description as="span">
+                Select visible new &amp; changed ({visibleActionable.length})
+              </Description>
+              <div className="relative min-w-40 flex-1 sm:max-w-xs">
+                <Search className="pointer-events-none absolute top-1/2 left-2 size-3 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search recipes"
+                  aria-label="Search Notion recipes"
+                  className="pl-8"
+                />
+              </div>
+              <NativeSelect
+                value={filter}
+                onChange={(event) =>
+                  setFilter(event.target.value as NotionPreviewFilter)
+                }
+                aria-label="Filter Notion recipes by status"
+              >
+                <option value="all">All ({items.length})</option>
+                <option value="new">New ({summaryCounts.new})</option>
+                <option value="will-update">
+                  Update ({summaryCounts.update})
+                </option>
+                <option value="unchanged">
+                  Unchanged ({summaryCounts.unchanged})
+                </option>
+                <option value="needs-formatting">
+                  Needs formatting ({summaryCounts.needs})
+                </option>
+              </NativeSelect>
+            </Row>
           </CardHeader>
-          <CardContent className="space-y-2">
-            {items.map((item) => (
+          <CardContent>
+            {filteredItems.length > 0 ? (
+              <NotionRecipeList
+                items={filteredItems}
+                selected={selected}
+                results={results}
+                onToggle={toggle}
+              />
+            ) : (
+              <Description className="py-4 text-center" size="xs">
+                No recipes match this search and status filter.
+              </Description>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </Stack>
+  );
+}
+
+function NotionRecipeList({
+  items,
+  selected,
+  results,
+  onToggle,
+}: {
+  items: PreviewItem[];
+  selected: ReadonlySet<string>;
+  results: ReadonlyMap<string, ImportResult>;
+  onToggle: (pageId: string) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 360,
+    getItemKey: (index) => items[index]!.pageId,
+    overscan: 4,
+  });
+
+  return (
+    <div ref={scrollRef} className="max-h-[70vh] overflow-auto">
+      <div
+        className="relative w-full"
+        style={{ height: `${virtualizer.getTotalSize()}px` }}
+      >
+        {virtualizer.getVirtualItems().map((virtualItem) => {
+          const item = items[virtualItem.index]!;
+          return (
+            <div
+              key={virtualItem.key}
+              data-index={virtualItem.index}
+              ref={virtualizer.measureElement}
+              className="absolute top-0 left-0 w-full pb-2"
+              style={{ transform: `translateY(${virtualItem.start}px)` }}
+            >
               <RecipeImportCard
-                key={item.pageId}
                 recipe={item.recipe}
                 status={item.status}
                 existingId={item.existingId ?? undefined}
                 reasons={item.reasons}
                 selected={selected.has(item.pageId)}
                 disabled={item.status === "needs-formatting"}
-                onToggle={() => toggle(item.pageId)}
+                onToggle={() => onToggle(item.pageId)}
                 result={results.get(item.pageId)}
                 externalUrl={item.notionUrl}
               />
-            ))}
-          </CardContent>
-        </Card>
-      )}
-    </Stack>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
