@@ -109,8 +109,12 @@ export function useCellSelection<TItem extends RowData>({
   onOpenRow,
 }: UseCellSelectionArgs<TItem>): UseCellSelectionResult {
   const nativeSelection = useStore(table.atoms.cellSelection!);
-  const columnsSignature = table
-    .getVisibleLeafColumns()
+  const displayColumns = [
+    ...table.getStartVisibleLeafColumns(),
+    ...table.getCenterVisibleLeafColumns(),
+    ...table.getEndVisibleLeafColumns(),
+  ];
+  const columnsSignature = displayColumns
     .map(
       (column) =>
         `${column.id}:${column.columnDef.enableCellSelection !== false}`,
@@ -118,12 +122,15 @@ export function useCellSelection<TItem extends RowData>({
     .join(",")
     .concat(`:${table.options.enableCellSelection !== false}`);
   // columnsSignature (a string) is the observable trigger; keying on it rather
-  // than the table.getVisibleLeafColumns() array is intentional and stable.
+  // than the fresh display-order arrays is intentional and stable.
   // biome-ignore lint/correctness/useExhaustiveDependencies: signature stands in for the column list
   const selectableColumnIds = React.useMemo(
     () =>
-      table
-        .getVisibleLeafColumns()
+      [
+        ...table.getStartVisibleLeafColumns(),
+        ...table.getCenterVisibleLeafColumns(),
+        ...table.getEndVisibleLeafColumns(),
+      ]
         .filter(
           (column) =>
             table.options.enableCellSelection !== false &&
@@ -176,6 +183,7 @@ export function useCellSelection<TItem extends RowData>({
   const fallbackPasteTimerRef = React.useRef<number | null>(null);
 
   const state = table.state;
+  const resetCellSelection = table.resetCellSelection;
   const dataSignature = React.useMemo(
     () =>
       JSON.stringify({
@@ -187,8 +195,8 @@ export function useCellSelection<TItem extends RowData>({
   );
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataSignature is the intended trigger
   React.useEffect(() => {
-    table.resetCellSelection(true);
-  }, [dataSignature]);
+    resetCellSelection(true);
+  }, [dataSignature, resetCellSelection]);
 
   const layoutSignature = React.useMemo(
     () =>
@@ -201,8 +209,8 @@ export function useCellSelection<TItem extends RowData>({
   );
   // biome-ignore lint/correctness/useExhaustiveDependencies: serialized layout signature is the intentional reset trigger
   React.useEffect(() => {
-    table.resetCellSelection(true);
-  }, [layoutSignature, table]);
+    resetCellSelection(true);
+  }, [layoutSignature, resetCellSelection]);
 
   // Appends preserve id corners. A replacement/removal clears only when a
   // corner actually disappeared; width and density changes never touch ids.
@@ -217,8 +225,8 @@ export function useCellSelection<TItem extends RowData>({
         columnIds.has(range.anchorColumnId) &&
         columnIds.has(range.focusColumnId),
     );
-    if (!valid) table.resetCellSelection(true);
-  }, [nativeSelection, rows, selectableColumnIds, table]);
+    if (!valid) resetCellSelection(true);
+  }, [nativeSelection, rows, selectableColumnIds, resetCellSelection]);
 
   const openEditorAt = React.useCallback(
     (container: HTMLElement, row: number, col: number, seedText?: string) => {

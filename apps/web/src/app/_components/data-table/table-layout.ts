@@ -12,6 +12,14 @@ import type { CubbyColumnDef } from "./table-features";
 const MIN_COLUMN_WIDTH = 48;
 const MAX_COLUMN_WIDTH = 1200;
 
+/** Structural columns that always lead the desktop table in this order. */
+const LOCKED_START_COLUMN_IDS = ["select", "image"] as const;
+const lockedStartColumnIdSet = new Set<string>(LOCKED_START_COLUMN_IDS);
+
+export function isLockedStartColumnId(id: string) {
+  return lockedStartColumnIdSet.has(id);
+}
+
 function columnIdHash(id: string) {
   let hash = 0;
   for (let index = 0; index < id.length; index += 1) {
@@ -130,24 +138,36 @@ export function normalizeTableLayout(
 ): CubbyTableLayoutV1 {
   const columnIds = defaults.columnOrder;
   const known = new Set(columnIds);
-  const requestedOrder = dedupeKnown(candidate?.columnOrder ?? [], known);
+  const lockedStart = LOCKED_START_COLUMN_IDS.filter((id) => known.has(id));
+  const requestedOrder = dedupeKnown(
+    candidate?.columnOrder ?? [],
+    known,
+  ).filter((id) => !isLockedStartColumnId(id));
   const requestedSet = new Set(requestedOrder);
   const columnOrder = [
+    ...lockedStart,
     ...requestedOrder,
-    ...columnIds.filter((id) => !requestedSet.has(id)),
+    ...columnIds.filter(
+      (id) => !isLockedStartColumnId(id) && !requestedSet.has(id),
+    ),
   ];
 
-  const start = dedupeKnown(candidate?.columnPinning?.start ?? [], known);
+  const requestedStart = dedupeKnown(
+    candidate?.columnPinning?.start ?? [],
+    known,
+  ).filter((id) => !isLockedStartColumnId(id));
+  const start = [...lockedStart, ...requestedStart];
   const startSet = new Set(start);
   const end = dedupeKnown(candidate?.columnPinning?.end ?? [], known).filter(
-    (id) => !startSet.has(id),
+    (id) => !isLockedStartColumnId(id) && !startSet.has(id),
   );
 
   const columnVisibility: ColumnVisibilityState = {};
   for (const id of columnIds) {
     const requested = candidate?.columnVisibility?.[id];
-    columnVisibility[id] =
-      typeof requested === "boolean"
+    columnVisibility[id] = isLockedStartColumnId(id)
+      ? true
+      : typeof requested === "boolean"
         ? requested
         : defaults.columnVisibility[id] !== false;
   }
@@ -259,8 +279,17 @@ function normalizeColumnDefinitions<TData extends RowData>(
       (size != null
         ? Math.max(size * 2, minSize ?? MIN_COLUMN_WIDTH)
         : undefined);
+    const id = columnIdsFromDefs([definition])[0];
+    const lockedStart = id != null && isLockedStartColumnId(id);
     return {
       ...definition,
+      ...(lockedStart
+        ? {
+            enablePinning: false,
+            enableHiding: false,
+            enableCellSelection: false,
+          }
+        : {}),
       ...(size != null ? { size } : {}),
       ...(minSize != null ? { minSize } : {}),
       ...(maxSize != null ? { maxSize } : {}),

@@ -60,6 +60,42 @@ describe("normalizeTableLayout", () => {
       columnSizing: { cost: 48 },
     });
   });
+
+  it("keeps Select and Image first, visible, and pinned to the start", () => {
+    const structuralDefaults: CubbyTableLayoutV1 = {
+      version: 1,
+      columnOrder: ["select", "image", "name", "cost"],
+      columnPinning: { start: [], end: [] },
+      columnVisibility: {
+        select: true,
+        image: true,
+        name: true,
+        cost: true,
+      },
+      columnSizing: {},
+    };
+
+    expect(
+      normalizeTableLayout(
+        {
+          columnOrder: ["cost", "image", "name", "select"],
+          columnPinning: {
+            start: ["cost"],
+            end: ["image", "select", "name"],
+          },
+          columnVisibility: { select: false, image: false },
+        },
+        structuralDefaults,
+      ),
+    ).toMatchObject({
+      columnOrder: ["select", "image", "cost", "name"],
+      columnPinning: {
+        start: ["select", "image", "cost"],
+        end: ["name"],
+      },
+      columnVisibility: { select: true, image: true },
+    });
+  });
 });
 
 describe("useCubbyTableLayout", () => {

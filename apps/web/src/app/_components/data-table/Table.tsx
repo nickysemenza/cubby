@@ -601,9 +601,9 @@ export default function RTable<TItem extends RowData>(
                               const boundaryClass =
                                 pinned === "start" &&
                                 pinnedIndex === pinnedColumns.length - 1
-                                  ? "shadow-[3px_0_4px_-3px_rgb(15_23_42_/_0.35)]"
+                                  ? "shadow-[var(--shadow-pin-start)]"
                                   : pinned === "end" && pinnedIndex === 0
-                                    ? "shadow-[-3px_0_4px_-3px_rgb(15_23_42_/_0.35)]"
+                                    ? "shadow-[var(--shadow-pin-end)]"
                                     : undefined;
                               return (
                                 <TableCell

@@ -170,6 +170,9 @@
   --shadow-chunky-destructive: none;
   --shadow-chunky-destructive-hover: none;
   --shadow-inset-gloss: none;
+  /* Logical sticky-column boundary shadows shared by header, body, and footer. */
+  --shadow-pin-start: 3px 0 4px -3px rgb(15 23 42 / 0.35);
+  --shadow-pin-end: -3px 0 4px -3px rgb(15 23 42 / 0.35);
   /* Barcode-scanner viewfinder: just the flat dark edge scrim, no success glow
      (matte instrument panel — no glow anywhere). Both vars resolve to the scrim. */
   --shadow-scan-scrim: 0 0 0 9999px oklch(0 0 0 / 0.55);

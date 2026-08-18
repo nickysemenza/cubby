@@ -519,6 +519,9 @@ export function createImageColumn<T extends BaseRow>(
     id: "image",
     header: () => <ImageIcon className="size-3 text-muted-foreground" />,
     enableSorting: false,
+    enableHiding: false,
+    enablePinning: false,
+    enableCellSelection: false,
     // h-px trick: setting height:1px on td makes h-full work on children
     // overflow-hidden prevents image from expanding the row. w-16 (not w-10):
     // a select-combobox header filter renders in this column and needs room

@@ -9,13 +9,19 @@ import type {
 type TestRow = Record<string, unknown>;
 
 function layoutHarness() {
-  let order = ["select", "name", "actions"];
+  let order = ["select", "image", "name", "actions"];
   const pinning: Record<string, false | "start" | "end"> = {
-    select: false,
+    select: "start",
+    image: "start",
     name: false,
     actions: false,
   };
-  const visibility = { select: true, name: true, actions: true };
+  const visibility = {
+    select: true,
+    image: true,
+    name: true,
+    actions: true,
+  };
   const table = {
     state: {
       get columnPinning() {
@@ -29,9 +35,14 @@ function layoutHarness() {
       meta: {
         defaultLayout: {
           version: 1,
-          columnOrder: ["select", "name", "actions"],
-          columnPinning: { start: [], end: [] },
-          columnVisibility: { select: true, name: true, actions: true },
+          columnOrder: ["select", "image", "name", "actions"],
+          columnPinning: { start: ["select", "image"], end: [] },
+          columnVisibility: {
+            select: true,
+            image: true,
+            name: true,
+            actions: true,
+          },
           columnSizing: {},
         },
       },
@@ -56,7 +67,13 @@ function layoutHarness() {
         table,
         columnDef: {
           header:
-            id === "name" ? "Name" : id === "select" ? "Select" : "Actions",
+            id === "name"
+              ? "Name"
+              : id === "select"
+                ? "Select"
+                : id === "image"
+                  ? "Image"
+                  : "Actions",
         },
         getIsPinned: () => pinning[id] ?? false,
         pin: (region: false | "start" | "end") => {
@@ -80,17 +97,30 @@ function layoutHarness() {
 }
 
 describe("TableLayoutCustomizer", () => {
-  it("keeps Select and Actions movable and pinnable but not hideable", () => {
+  it("locks Select and Image while keeping Actions movable and pinnable", () => {
     const harness = layoutHarness();
     render(<TableLayoutCustomizer table={harness.table} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Move Select later" }));
-    expect(harness.getOrder()).toEqual(["name", "select", "actions"]);
+    expect(
+      screen.queryByRole("button", { name: "Drag Select" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Drag Image" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Move Select later" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Unpin Image" }),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Pin Actions to end" }));
     expect(harness.pinning.actions).toBe("end");
     expect(
       screen.queryByRole("button", { name: "Hide Select" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Hide Image" }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Hide Actions" }),
@@ -107,15 +137,17 @@ describe("TableLayoutCustomizer", () => {
     fireEvent.click(screen.getByRole("button", { name: "Reset layout" }));
     expect(harness.table.setColumnOrder).toHaveBeenLastCalledWith([
       "select",
+      "image",
       "name",
       "actions",
     ]);
     expect(harness.table.setColumnPinning).toHaveBeenCalledWith({
-      start: [],
+      start: ["select", "image"],
       end: [],
     });
     expect(harness.table.setColumnVisibility).toHaveBeenCalledWith({
       select: true,
+      image: true,
       name: true,
       actions: true,
     });
@@ -124,14 +156,16 @@ describe("TableLayoutCustomizer", () => {
 
   it("moves a pinned column through the pinning array", () => {
     const harness = layoutHarness();
-    harness.pinning.select = "start";
     harness.pinning.name = "start";
+    harness.pinning.actions = "start";
     render(<TableLayoutCustomizer table={harness.table} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Move Name earlier" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Move Actions earlier" }),
+    );
 
     expect(harness.table.setColumnPinning).toHaveBeenCalledWith({
-      start: ["name", "select"],
+      start: ["select", "image", "actions", "name"],
       end: [],
     });
   });

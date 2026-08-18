@@ -1,4 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+} from "@testing-library/react";
 import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 import { buildSelectColumn } from "./row-selection";
@@ -7,6 +13,7 @@ import type {
   CubbyRow as Row,
   CubbyTable as Table,
 } from "./table-features";
+import { createCubbyColumnHelper, useCubbyTable } from "./table-features";
 
 interface TestRow {
   id: string;
@@ -90,6 +97,49 @@ describe("buildSelectColumn", () => {
     expect(received).toMatchObject({
       target: { checked: true },
       nativeEvent: { shiftKey: true },
+    });
+  });
+
+  it("skips unselectable intermediate rows in a native Shift range", () => {
+    const helper = createCubbyColumnHelper<{
+      id: string;
+      selectable: boolean;
+    }>();
+    const columns = helper.columns([
+      helper.accessor("id", { id: "id", header: "ID" }),
+    ]);
+    const data = [
+      { id: "wish-a", selectable: true },
+      { id: "candidate", selectable: false },
+      { id: "wish-b", selectable: true },
+    ];
+    const { result } = renderHook(() =>
+      useCubbyTable({
+        data,
+        columns,
+        getRowId: (row) => row.id,
+        enableRowSelection: (row) => row.original.selectable,
+      }),
+    );
+
+    act(() => {
+      result.current
+        .getRow("wish-a")
+        .getToggleSelectedHandler({ selectChildren: false })({
+        target: { checked: true },
+        nativeEvent: { shiftKey: false },
+      });
+      result.current
+        .getRow("wish-b")
+        .getToggleSelectedHandler({ selectChildren: false })({
+        target: { checked: true },
+        nativeEvent: { shiftKey: true },
+      });
+    });
+
+    expect(result.current.atoms.rowSelection?.get()).toEqual({
+      "wish-a": true,
+      "wish-b": true,
     });
   });
 });

@@ -49,6 +49,7 @@ export function buildSelectColumn<T extends RowData>(): CubbyColumnDef<T> {
       ),
     enableSorting: false,
     enableHiding: false,
+    enablePinning: false,
     enableCellSelection: false,
     size: 40,
     minSize: 40,
