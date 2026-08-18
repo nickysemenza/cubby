@@ -8,10 +8,7 @@ import {
 import { CreateFinancialTransactionDialog } from "~/app/finance/create-financial-transaction-dialog";
 import { FinancialTransactionList } from "~/app/finance/financial-transaction-list";
 import { Page } from "~/components/page/Page";
-import {
-  entityFilterSearchFields,
-  routeFilterValues,
-} from "~/entities/filter-search-fields";
+import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
 import {
   urlEnumListParam,
@@ -23,10 +20,10 @@ export const financialTransactionSearchSchema = z.object({
   ...entityFilterSearchFields("financialTransaction"),
   q: urlStringParam,
   merchant: urlStringParam,
-  kind: urlEnumListParam(z.enum(routeFilterValues.transactionKind)),
-  status: urlEnumListParam(z.enum(routeFilterValues.transactionStatus)),
-  accountId: urlShortcodeListParam("FAC"),
-  purchaseId: urlShortcodeListParam("PUR"),
+  kind: urlEnumListParam(financialTransactionKind),
+  status: urlEnumListParam(financialTransactionStatus),
+  accountId: urlShortcodeListParam("financialAccount"),
+  purchaseId: urlShortcodeListParam("purchase"),
   ...tableSearchFields,
   ...createDialogSearchField,
 });
@@ -54,3 +51,8 @@ export const Route = createFileRoute("/_authenticated/financial-transactions/")(
     head: () => ({ meta: [{ title: pageTitle("Transactions") }] }),
   },
 );
+
+import {
+  financialTransactionKind,
+  financialTransactionStatus,
+} from "@cubby/schemas/financial-transaction";

@@ -48,8 +48,8 @@ describe("detail filter link route contracts", () => {
 
     expect(
       inventorySearchSchema.parse({
-        productId: "PRD-4K7M",
-        locationId: "LOC-2ABC",
+        productId: "prd-4k7m",
+        locationId: " loc-2abc ",
       }),
     ).toMatchObject({
       productId: "PRD-4K7M",
@@ -174,22 +174,14 @@ describe("detail filter link route contracts", () => {
     });
   });
 
-  it("rejects malformed enum, multi-value, and exact-inventory state", () => {
-    expect(taskSearchSchema.safeParse({ status: "almost_done" }).success).toBe(
-      false,
-    );
+  it("drops malformed URL filters instead of failing the whole list route", () => {
     expect(
       projectSearchSchema.safeParse({ statuses: "planning,almost_done" })
         .success,
     ).toBe(false);
-    expect(
-      inventorySearchSchema.safeParse({ productId: "Milwaukee drill" }).success,
-    ).toBe(false);
-    expect(
-      inventorySearchSchema.safeParse({ locationId: "LOC-0OIL" }).success,
-    ).toBe(false);
 
     const malformedKnownValues = [
+      [taskSearchSchema, { status: "almost_done" }],
       [productSearchSchema, { category: "not_a_category" }],
       [productSearchSchema, { ingredient: "ingredient name" }],
       [locationSearchSchema, { type: "planet" }],
@@ -212,12 +204,20 @@ describe("detail filter link route contracts", () => {
       [recipeListSearchSchema, { sourceType: "Magazine" }],
       [recipeListSearchSchema, { source: "Joy of Cooking" }],
       [imageListSearchSchema, { status: "PROCESSING" }],
+      [inventorySearchSchema, { productId: "Milwaukee drill" }],
+      [inventorySearchSchema, { locationId: "LOC-0OIL" }],
     ] as const;
 
     for (const [schema, search] of malformedKnownValues) {
-      expect(schema.safeParse(search).success, JSON.stringify(search)).toBe(
-        false,
-      );
+      const result = schema.safeParse(search);
+      expect(result.success, JSON.stringify(search)).toBe(true);
+      if (!result.success) continue;
+      const parsedSearch = result.data as Record<string, unknown>;
+      for (const key of Object.keys(search)) {
+        expect(parsedSearch[key], `${JSON.stringify(search)}: ${key}`).toBe(
+          undefined,
+        );
+      }
     }
   });
 });

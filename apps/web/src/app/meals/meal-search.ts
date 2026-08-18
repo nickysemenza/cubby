@@ -1,11 +1,12 @@
+import {
+  mealKindSchema,
+  mealTypeSchema,
+} from "@cubby/schemas/meal-classification";
 import { addDays, format, isValid, parseISO, startOfWeek } from "date-fns";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { calendarPeriodParam } from "~/app/calendar/calendar-search";
-import {
-  entityFilterSearchFields,
-  routeFilterValues,
-} from "~/entities/filter-search-fields";
+import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { urlEnumListParam, urlStringParam } from "~/lib/search-params";
 
 const dateParamSchema = z
@@ -31,8 +32,8 @@ export const mealCalendarSearchSchema = z.object({
   create: z.boolean().optional().catch(undefined),
   ...tableSearchFields,
   ...entityFilterSearchFields("meal"),
-  mealType: urlEnumListParam(z.enum(routeFilterValues.mealType)),
-  mealKind: urlEnumListParam(z.enum(routeFilterValues.mealKind)),
+  mealType: urlEnumListParam(mealTypeSchema),
+  mealKind: urlEnumListParam(mealKindSchema),
 });
 
 export const mealCalendarSearchDefaults = {

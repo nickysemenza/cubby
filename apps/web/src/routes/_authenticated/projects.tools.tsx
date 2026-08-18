@@ -19,10 +19,12 @@ const commaSeparatedArray = <T extends z.ZodType>(itemSchema: T) =>
     z.array(itemSchema).optional(),
   );
 
-const completionYearParam = urlStringParam.refine(
-  (value) => value === undefined || /^\d{4}$/.test(value),
-  "Invalid completion year",
-);
+const completionYearParam = urlStringParam
+  .refine(
+    (value) => value === undefined || /^\d{4}$/.test(value),
+    "Invalid completion year",
+  )
+  .catch(undefined);
 
 /**
  * Everything here except a future `focus`/`collapsed` is a server input and

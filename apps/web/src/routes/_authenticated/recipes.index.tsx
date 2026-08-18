@@ -9,10 +9,7 @@ import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { RecipeList } from "~/app/recipes/recipelist";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
-import {
-  entityFilterSearchFields,
-  routeFilterValues,
-} from "~/entities/filter-search-fields";
+import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
 import {
   urlEnumListParam,
@@ -24,8 +21,8 @@ export const recipeListSearchSchema = z.object({
   ...tableSearchFields,
   ...entityFilterSearchFields("recipe"),
   tags: urlStringParam,
-  source: urlShortcodeListParam("CKB"),
-  sourceType: urlEnumListParam(z.enum(routeFilterValues.recipeSourceType)),
+  source: urlShortcodeListParam("cookbook"),
+  sourceType: urlEnumListParam(z.enum(recipeSourceValues)),
 });
 
 export const Route = createFileRoute("/_authenticated/recipes/")({
@@ -71,3 +68,5 @@ function RecipesPage() {
     </Page>
   );
 }
+
+import { recipeSourceValues } from "@cubby/schemas/recipe-shared";

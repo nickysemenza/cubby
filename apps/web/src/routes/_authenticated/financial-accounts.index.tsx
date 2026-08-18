@@ -8,18 +8,15 @@ import {
 import { CreateFinancialAccountDialog } from "~/app/finance/create-financial-account-dialog";
 import { FinancialAccountList } from "~/app/finance/financial-account-list";
 import { Page } from "~/components/page/Page";
-import {
-  entityFilterSearchFields,
-  routeFilterValues,
-} from "~/entities/filter-search-fields";
+import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
 import { urlEnumListParam, urlStringParam } from "~/lib/search-params";
 
 export const financialAccountSearchSchema = z.object({
   ...entityFilterSearchFields("financialAccount"),
   q: urlStringParam,
-  identity: urlEnumListParam(z.enum(routeFilterValues.accountIdentity)),
-  provisional: urlEnumListParam(z.enum(routeFilterValues.boolean)),
+  identity: urlEnumListParam(financialAccountIdentityKind),
+  provisional: urlEnumListParam(z.enum(["true", "false"])),
   ...tableSearchFields,
   ...createDialogSearchField,
 });
@@ -43,3 +40,5 @@ export const Route = createFileRoute("/_authenticated/financial-accounts/")({
   ),
   head: () => ({ meta: [{ title: pageTitle("Accounts") }] }),
 });
+
+import { financialAccountIdentityKind } from "@cubby/schemas/financial-account";

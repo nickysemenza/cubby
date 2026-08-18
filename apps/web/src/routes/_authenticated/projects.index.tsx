@@ -13,23 +13,24 @@ import {
 import { pageTitle } from "~/lib/page-title";
 import { urlShortcodeListParam, urlStringParam } from "~/lib/search-params";
 
-const dateFilterParam = urlStringParam.refine(
-  isValidProjectDateFilter,
-  "Invalid project date filter",
-);
-const completionYearParam = urlStringParam.refine(
-  (value) => value === undefined || /^\d{4}$/.test(value),
-  "Invalid completion year",
-);
+const dateFilterParam = urlStringParam
+  .refine(isValidProjectDateFilter, "Invalid project date filter")
+  .catch(undefined);
+const completionYearParam = urlStringParam
+  .refine(
+    (value) => value === undefined || /^\d{4}$/.test(value),
+    "Invalid completion year",
+  )
+  .catch(undefined);
 /**
  * Which renderer the Data tab's Projects section uses. Piped through the enum
  * rather than left a loose string so the value arrives typed AND an unknown
  * renderer fails validation instead of silently falling back to flat — the URL
  * would otherwise claim a view the page isn't showing.
  */
-const rowsRendererParam = urlStringParam.pipe(
-  z.enum(PROJECT_ROWS_RENDERERS).optional(),
-);
+const rowsRendererParam = urlStringParam
+  .pipe(z.enum(PROJECT_ROWS_RENDERERS).optional())
+  .catch(undefined);
 const commaSeparatedArray = <T extends z.ZodType>(itemSchema: T) =>
   z.preprocess(
     (value) =>
@@ -48,7 +49,7 @@ export const projectSearchSchema = z
     statuses: commaSeparatedArray(projectStatusSchema),
     kinds: commaSeparatedArray(projectKindSchema),
     locations: commaSeparatedArray(z.string()),
-    parent: urlShortcodeListParam("PRJ"),
+    parent: urlShortcodeListParam("project"),
     date: dateFilterParam,
     view: urlStringParam,
     rows: rowsRendererParam,

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { urlStringParam } from "./search-params";
+import { z } from "zod";
+import {
+  urlEnumListParam,
+  urlShortcodeListParam,
+  urlShortcodeParam,
+  urlStringParam,
+} from "./search-params";
 
 /**
  * These assert against the values TanStack Router's `parseSearch` actually
@@ -53,5 +59,31 @@ describe("urlStringParam", () => {
     expect(urlStringParam.parse(null)).toBeUndefined();
     expect(urlStringParam.parse({ a: 1 })).toBeUndefined();
     expect(urlStringParam.parse([1, 2])).toBeUndefined();
+  });
+});
+
+describe("validated URL filter params", () => {
+  it("drops malformed enum values after refinement", () => {
+    const statusParam = urlEnumListParam(z.enum(["open", "done"]));
+
+    expect(statusParam.parse("open,done")).toBe("open,done");
+    expect(statusParam.parse("open,unknown")).toBeUndefined();
+  });
+
+  it("uses the canonical shortcode schema for validation and normalization", () => {
+    const productsParam = urlShortcodeListParam("product");
+
+    expect(productsParam.parse("prd-4k7m, PRD-2ABC ")).toBe(
+      "PRD-4K7M,PRD-2ABC",
+    );
+    expect(productsParam.parse("LOC-4K7M")).toBeUndefined();
+    expect(productsParam.parse("PRD-0OIL")).toBeUndefined();
+  });
+
+  it("drops multiple values from exact single-entity scopes", () => {
+    const productParam = urlShortcodeParam("product");
+
+    expect(productParam.parse("PRD-4K7M")).toBe("PRD-4K7M");
+    expect(productParam.parse("PRD-4K7M,PRD-2ABC")).toBeUndefined();
   });
 });
