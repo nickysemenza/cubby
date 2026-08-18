@@ -3,7 +3,7 @@ export interface DndPoint {
   y: number;
 }
 
-export type DndAutoScrollAxis = "horizontal" | "vertical" | "both";
+type DndAutoScrollAxis = "horizontal" | "vertical" | "both";
 
 export interface DndAutoScrollOptions {
   axis?: DndAutoScrollAxis;

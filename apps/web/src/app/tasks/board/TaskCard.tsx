@@ -171,7 +171,7 @@ export function TaskCard({
               ref={setActivatorNodeRef}
               variant="ghost"
               size="icon-xs"
-              className="mt-0.5 shrink-0 cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
+              className="mt-1 shrink-0 cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
               aria-label={`Drag ${task.name}`}
               {...attributes}
               {...listeners}

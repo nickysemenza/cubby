@@ -54,7 +54,7 @@ export function ArrangeLocationCard({
         align="center"
         gap="tight"
         className={cn(
-          "min-w-0 flex-1 rounded-none border px-2 py-1.5",
+          "min-w-0 flex-1 rounded-none border px-2 py-1",
           active
             ? "border-primary bg-primary/10"
             : "border-[var(--border)] bg-background hover:bg-muted/50",
@@ -77,7 +77,7 @@ export function ArrangeLocationCard({
           alt={node.name}
           size={32}
           fill
-          className="-my-1.5"
+          className="-my-1"
           fallback={
             <LocationIcon type={node.type} product={node.product} size={14} />
           }
