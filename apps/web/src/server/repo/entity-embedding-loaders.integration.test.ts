@@ -262,6 +262,17 @@ describe("searchable entity loader maps", () => {
     expect(orphaned.map(({ entityType }) => entityType).sort()).toEqual(
       [...searchableEntities].sort(),
     );
+
+    // `createdAt` must be a real Date, not the string a raw `execute` hands
+    // back. `orphanedEntityEmbeddingSchema` validates it as `z.date()`, so a
+    // string here fails output validation for the ENTIRE problems payload —
+    // taking down the Problems page at exactly the moment this detector has
+    // something to report. The row shape was previously only asserted by a
+    // generic on the query, which the driver never honoured.
+    for (const row of orphaned) {
+      expect(row.createdAt).toBeInstanceOf(Date);
+      expect(Number.isNaN(row.createdAt.getTime())).toBe(false);
+    }
   });
 
   it("retires finance embeddings on delete and merge removal paths", async () => {
