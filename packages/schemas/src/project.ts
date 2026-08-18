@@ -1471,7 +1471,6 @@ export const expenseAnalyzeReadyOut = z.object({
       adjustments: expenseAnalyzeValuePair,
       unattributedProject: expenseAnalyzeValuePair,
       unattributedVendor: expenseAnalyzeValuePair,
-      undated: expenseAnalyzeValuePair,
     }),
   }),
 });

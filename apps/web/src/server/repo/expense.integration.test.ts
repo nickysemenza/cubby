@@ -2537,10 +2537,6 @@ describe("expense repository — expenseAnalytics", () => {
         filter: { dateFrom: "2026-07-01", dateTo: "2026-07-31" },
       }),
     ]);
-    expect(byMonth.reconciliation.causes.undated.current).toMatchObject({
-      net: 0,
-      count: 0,
-    });
 
     const facets = await expenseFacetCounts(ctx.db, {
       filters,

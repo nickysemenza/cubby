@@ -183,10 +183,10 @@ export function buildExpenseAnalyzeTableRows(
 }
 
 function tailLabel(data: ExpenseAnalyzeReadyOut) {
-  if (data.columnDimension) return "Not represented in this grid";
+  if (data.columnDimension || data.rowDimension === "month")
+    return "Not represented in this grid";
   if (data.rowDimension === "project") return "Unattributed to a project";
   if (data.rowDimension === "vendor") return "Unattributed to a vendor";
-  if (data.rowDimension === "month") return "Undated spend";
   return "Purchase adjustments";
 }
 
@@ -204,7 +204,6 @@ function ReconciliationNote({
     ["Adjustments", data.reconciliation.causes.adjustments],
     ["Unattributed project", data.reconciliation.causes.unattributedProject],
     ["Unattributed vendor", data.reconciliation.causes.unattributedVendor],
-    ["Undated", data.reconciliation.causes.undated],
   ];
   const causes = causeEntries.filter(
     ([, value]) =>

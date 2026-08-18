@@ -23,16 +23,7 @@ import {
   parseISO,
   subDays,
 } from "date-fns";
-import {
-  and,
-  eq,
-  isNotNull,
-  isNull,
-  ne,
-  notExists,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, eq, ne, notExists, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Database } from "~/server/db";
 import { expense, project, purchase, vendor } from "~/server/db/schema";
@@ -142,11 +133,6 @@ const hasPrincipalAxis = (input: ExpenseAnalyzeInput) =>
 const analysisWhere = (where: SQL | undefined, input: ExpenseAnalyzeInput) =>
   hasPrincipalAxis(input)
     ? and(where, eq(expense.lineKind, "principal"))
-    : where;
-
-const gridWhere = (where: SQL | undefined, input: ExpenseAnalyzeInput) =>
-  input.rowDimension === "month" || input.columnDimension === "month"
-    ? and(where, isNotNull(expense.date))
     : where;
 
 async function scopeAggregate(db: Database, where: SQL | undefined) {
@@ -421,8 +407,8 @@ export async function expenseAnalyze(
   const analyzedPreviousWhere = comparison
     ? analysisWhere(previousWhere, input)
     : undefined;
-  const currentGridWhere = gridWhere(analyzedCurrentWhere, input);
-  const previousGridWhere = gridWhere(analyzedPreviousWhere, input);
+  const currentGridWhere = analyzedCurrentWhere;
+  const previousGridWhere = analyzedPreviousWhere;
 
   const [
     currentRows,
@@ -533,8 +519,6 @@ export async function expenseAnalyze(
     const principalAxis = hasPrincipalAxis(input);
     const projectAxis = input.rowDimension === "project";
     const vendorAxis = input.rowDimension === "vendor";
-    const monthAxis =
-      input.rowDimension === "month" || input.columnDimension === "month";
     const missingProject = notExists(
       getDb(db)
         .select({ id: project.id })
@@ -554,7 +538,7 @@ export async function expenseAnalyze(
           and(eq(liveCharge.id, expense.purchaseId), notDeleted(liveCharge)),
         ),
     );
-    const [adjustments, unattributedProject, unattributedVendor, undated] =
+    const [adjustments, unattributedProject, unattributedVendor] =
       await Promise.all([
         principalAxis
           ? scopeAggregate(db, and(where, ne(expense.lineKind, "principal")))
@@ -565,11 +549,8 @@ export async function expenseAnalyze(
         vendorAxis
           ? scopeAggregate(db, and(where, missingVendor))
           : Promise.resolve(zeroAggregate()),
-        monthAxis
-          ? scopeAggregate(db, and(where, isNull(expense.date)))
-          : Promise.resolve(zeroAggregate()),
       ]);
-    return { adjustments, unattributedProject, unattributedVendor, undated };
+    return { adjustments, unattributedProject, unattributedVendor };
   };
   const [currentCauses, previousCauses] = await Promise.all([
     causesFor(currentWhere),
@@ -625,7 +606,6 @@ export async function expenseAnalyze(
           currentCauses.unattributedVendor,
           previousCauses?.unattributedVendor ?? null,
         ),
-        undated: pair(currentCauses.undated, previousCauses?.undated ?? null),
       },
     },
   };

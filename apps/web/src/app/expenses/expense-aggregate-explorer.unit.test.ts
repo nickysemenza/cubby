@@ -57,10 +57,6 @@ const ready = {
         current: { actual: 0, committed: 0, credits: 0, net: 0, count: 0 },
         previous: null,
       },
-      undated: {
-        current: { actual: 0, committed: 0, credits: 0, net: 0, count: 0 },
-        previous: null,
-      },
     },
   },
 } as const satisfies ExpenseAnalyzeReadyOut;
