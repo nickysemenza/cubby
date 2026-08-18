@@ -23,6 +23,21 @@ icon = "test"
 command = "pnpm run check"
 
 [[actions]]
-name = "Test"
+name = "Unit"
 icon = "test"
-command = "pnpm run test"
+command = "pnpm test:unit"
+
+[[actions]]
+name = "UI"
+icon = "test"
+command = "pnpm test:ui"
+
+[[actions]]
+name = "Integration"
+icon = "test"
+command = "pnpm test:integration"
+
+[[actions]]
+name = "E2E"
+icon = "test"
+command = "pnpm test:e2e"
