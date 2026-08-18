@@ -60,11 +60,16 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { vendorOptions as loadVendorOptions } from "~/server/repo/vendor";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
+import { TraceNames, withTrace } from "~/server/tracing";
 import {
   createBulkUpdatedMutation,
   createSearchableEntityCrudProcedures,
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
+import {
+  expenseAnalyzeTraceAttributes,
+  expenseFacetTraceAttributes,
+} from "./expense-observability";
 
 const {
   getByID,
@@ -200,7 +205,14 @@ const analytics = protectedProcedure
 const analyze = protectedProcedure
   .input(expenseAnalyzeInput)
   .output(strictOutput(expenseAnalyzeOut))
-  .query(({ ctx, input }) => expenseAnalyze(ctx.db, input));
+  .query(({ ctx, input }) =>
+    withTrace(TraceNames.service("expense", "analyze"), async (span) => {
+      span.setAttributes(expenseAnalyzeTraceAttributes(input));
+      const result = await expenseAnalyze(ctx.db, input);
+      span.setAttributes(expenseAnalyzeTraceAttributes(input, result));
+      return result;
+    }),
+  );
 
 /**
  * Filter-option counts under the canonical ledger population. A facet omits
@@ -210,7 +222,14 @@ const analyze = protectedProcedure
 const facetCounts = protectedProcedure
   .input(expenseFacetCountsInput)
   .output(strictOutput(expenseFacetCountsOut))
-  .query(({ ctx, input }) => expenseFacetCounts(ctx.db, input));
+  .query(({ ctx, input }) =>
+    withTrace(TraceNames.service("expense", "facetCounts"), async (span) => {
+      span.setAttributes(expenseFacetTraceAttributes(input));
+      const result = await expenseFacetCounts(ctx.db, input);
+      span.setAttributes(expenseFacetTraceAttributes(input, result));
+      return result;
+    }),
+  );
 
 /**
  * Vendor roster for the ledger's Vendor filter picklist. Kept on THIS router

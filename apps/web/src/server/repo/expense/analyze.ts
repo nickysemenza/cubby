@@ -156,18 +156,23 @@ const subtractAggregate = (
 const bucketFilter = (
   dimension: Dimension,
   key: string,
+  principalOnly: boolean,
 ): Record<string, string> => {
+  const principal: Record<string, string> = principalOnly
+    ? { lineKind: "principal" }
+    : {};
   switch (dimension) {
     case "trade":
-      return { trade: key };
+      return { ...principal, trade: key };
     case "costType":
-      return { costType: key };
+      return { ...principal, costType: key };
     case "project":
-      return { project: key };
+      return { ...principal, project: key };
     case "vendor":
-      return { vendor: key };
+      return { ...principal, vendor: key };
     case "month":
       return {
+        ...principal,
         dateFrom: `${key}-01`,
         dateTo: format(endOfMonth(parseISO(`${key}-01`)), "yyyy-MM-dd"),
       };
@@ -236,16 +241,8 @@ async function groupedCells(
   db: Database,
   where: SQL | undefined,
   rowDimension: ExpenseAnalyzeRowDimension,
-  columnDimension: ExpenseAnalyzeColumnDimension | null,
+  columnDimension: ExpenseAnalyzeColumnDimension,
 ): Promise<CellRow[]> {
-  if (!columnDimension) {
-    const rows = await groupedDimension(db, where, rowDimension);
-    return rows.map(({ key, ...row }) => ({
-      ...row,
-      rowKey: key,
-      columnKey: null,
-    }));
-  }
   const database = getDb(db);
   const row = dimensionSpecs[rowDimension];
   const column = dimensionColumns(columnDimension);
@@ -492,6 +489,21 @@ export async function expenseAnalyze(
   const currentGridWhere = analyzedCurrentWhere;
   const previousGridWhere = analyzedPreviousWhere;
 
+  const currentRowsPromise = groupedDimension(
+    db,
+    currentGridWhere,
+    input.rowDimension,
+  );
+  const previousRowsPromise = comparison
+    ? groupedDimension(db, previousGridWhere, input.rowDimension)
+    : Promise.resolve([]);
+  const asOneDimensionCells = (rows: BucketRow[]): CellRow[] =>
+    rows.map(({ key, ...row }) => ({
+      ...row,
+      rowKey: key,
+      columnKey: null,
+    }));
+
   const [
     currentRows,
     currentColumns,
@@ -502,31 +514,33 @@ export async function expenseAnalyze(
     previousCells,
     previousScope,
   ] = await Promise.all([
-    groupedDimension(db, currentGridWhere, input.rowDimension),
+    currentRowsPromise,
     input.columnDimension
       ? groupedDimension(db, currentGridWhere, input.columnDimension)
       : Promise.resolve([]),
-    groupedCells(
-      db,
-      currentGridWhere,
-      input.rowDimension,
-      input.columnDimension ?? null,
-    ),
+    input.columnDimension
+      ? groupedCells(
+          db,
+          currentGridWhere,
+          input.rowDimension,
+          input.columnDimension,
+        )
+      : currentRowsPromise.then(asOneDimensionCells),
     scopeAggregate(db, currentWhere),
-    comparison
-      ? groupedDimension(db, previousGridWhere, input.rowDimension)
-      : Promise.resolve([]),
+    previousRowsPromise,
     comparison && input.columnDimension
       ? groupedDimension(db, previousGridWhere, input.columnDimension)
       : Promise.resolve([]),
-    comparison
+    comparison && input.columnDimension
       ? groupedCells(
           db,
           previousGridWhere,
           input.rowDimension,
-          input.columnDimension ?? null,
+          input.columnDimension,
         )
-      : Promise.resolve([]),
+      : comparison
+        ? previousRowsPromise.then(asOneDimensionCells)
+        : Promise.resolve([]),
     comparison ? scopeAggregate(db, previousWhere) : Promise.resolve(null),
   ]);
 
@@ -642,6 +656,7 @@ export async function expenseAnalyze(
     current: ExpenseAnalyzeAggregate,
     previous: ExpenseAnalyzeAggregate | null,
   ) => ({ current, previous });
+  const principalOnly = hasPrincipalAxis(input);
 
   return {
     status: "ready",
@@ -654,13 +669,17 @@ export async function expenseAnalyze(
     rows: [...rowMap.values()].map((row) => ({
       key: row.key,
       label: row.label,
-      filter: bucketFilter(input.rowDimension, row.key),
+      filter: bucketFilter(input.rowDimension, row.key, principalOnly),
     })),
     columns: input.columnDimension
       ? [...columnMap.values()].map((column) => ({
           key: column.key,
           label: column.label,
-          filter: bucketFilter(input.columnDimension!, column.key),
+          filter: bucketFilter(
+            input.columnDimension!,
+            column.key,
+            principalOnly,
+          ),
         }))
       : [],
     cells,

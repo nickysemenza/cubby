@@ -22,7 +22,7 @@ import {
   projectCreateInput,
 } from "@cubby/schemas/project";
 import { eq } from "drizzle-orm";
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import {
   householdDaysAgo,
@@ -2413,6 +2413,18 @@ describe("expense repository — expenseAnalytics", () => {
         previous: expect.objectContaining({ net: 80, count: 1 }),
       }),
     ]);
+    expect(result.rows).toEqual([
+      expect.objectContaining({
+        key: "plumbing",
+        filter: { lineKind: "principal", trade: "plumbing" },
+      }),
+    ]);
+    expect(result.columns).toEqual([
+      expect.objectContaining({
+        key: "materials",
+        filter: { lineKind: "principal", costType: "materials" },
+      }),
+    ]);
     // Trade/cost-type is deliberately principal-only, but the scope still
     // reports all money and the tail makes the excluded tax explicit.
     expect(result.totals.scope.current).toMatchObject({ net: 132, count: 2 });
@@ -2446,6 +2458,21 @@ describe("expense repository — expenseAnalytics", () => {
         expect.objectContaining({ value: "principal", count: 1 }),
       ]),
     );
+  });
+
+  it("reuses one-dimensional grouped rows as cells", async () => {
+    const measured = await countTestDbQueries(() =>
+      expenseAnalyze(ctx.db, {
+        filters: { search: "one-dimensional query reuse" },
+        rowDimension: "month",
+        comparison: "none",
+      }),
+    );
+
+    expect(measured.result.status).toBe("ready");
+    // One grouped-row query plus one scope-total query. The cells are a
+    // projection of the grouped rows, not a duplicate database query.
+    expect(measured.queryCount).toBe(2);
   });
 
   it("keeps project/vendor omissions honest and emits exact month buckets", async () => {

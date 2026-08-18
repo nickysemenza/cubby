@@ -4,6 +4,7 @@ import {
   buildExpenseAnalyzeTableRows,
   canCompareExpenseAnalysis,
   expenseAnalyzeDrilldownFilter,
+  expenseAnalyzeGridTotalFilter,
   formatExpenseAnalyzeValue,
   initialExpenseAnalyzeSorting,
 } from "./expense-aggregate-explorer";
@@ -17,7 +18,7 @@ const ready = {
     {
       key: "electrical",
       label: "Electrical & Lighting",
-      filter: { trade: "electrical" },
+      filter: { lineKind: "principal", trade: "electrical" },
     },
   ],
   columns: [],
@@ -67,7 +68,7 @@ describe("ExpenseAggregateExplorer", () => {
       {
         id: "electrical",
         label: "Electrical & Lighting",
-        filter: { trade: "electrical" },
+        filter: { lineKind: "principal", trade: "electrical" },
         current: {
           actual: 140,
           committed: 50,
@@ -134,5 +135,43 @@ describe("ExpenseAggregateExplorer", () => {
     });
     expect(expenseAnalyzeDrilldownFilter(compared, "delta", axis)).toBeNull();
     expect(expenseAnalyzeDrilldownFilter(compared, "percent", axis)).toBeNull();
+  });
+
+  it("only exposes exact grid-total populations to Ledger drilldown", () => {
+    expect(expenseAnalyzeGridTotalFilter(ready)).toEqual({
+      lineKind: "principal",
+    });
+    expect(
+      expenseAnalyzeGridTotalFilter({
+        ...ready,
+        rowDimension: "project",
+      }),
+    ).toBeNull();
+    const byMonth = {
+      ...ready,
+      rowDimension: "month",
+      rows: [
+        {
+          key: "2026-06",
+          label: "2026-06",
+          filter: { dateFrom: "2026-06-01", dateTo: "2026-06-30" },
+        },
+        {
+          key: "2026-08",
+          label: "2026-08",
+          filter: { dateFrom: "2026-08-01", dateTo: "2026-08-31" },
+        },
+      ],
+    } satisfies ExpenseAnalyzeReadyOut;
+    expect(expenseAnalyzeGridTotalFilter(byMonth)).toEqual({
+      dateFrom: "2026-06-01",
+      dateTo: "2026-08-31",
+    });
+    expect(
+      expenseAnalyzeGridTotalFilter(byMonth, {
+        dateFrom: "2026-06-15",
+        dateTo: "2026-08-10",
+      }),
+    ).toEqual({});
   });
 });
