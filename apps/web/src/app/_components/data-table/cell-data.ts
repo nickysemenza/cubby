@@ -37,6 +37,12 @@ import type { FilterableComboboxItem } from "./editable-cell";
  */
 export interface ColumnCellData<TData> {
   kind: CellKind;
+  /**
+   * Typed numeric projection for read-only selection statistics. This is
+   * deliberately separate from clipboard text: formatted currency, localized
+   * numbers, and empty display states must never be parsed back out of the DOM.
+   */
+  getNumericValue?: (row: TData) => number | null;
   /** null → nothing to copy (empty TSV field). */
   getCopyPayload: (row: TData) => { text: string; json: unknown } | null;
   /** Absent → column is read-only for paste. Resolves with the saved value (for optimistic display). */
@@ -101,6 +107,7 @@ export function numberCellData<TData>(
 ): ColumnCellData<TData> {
   return {
     kind,
+    getNumericValue: getValue,
     getCopyPayload: (row) => {
       const value = getValue(row);
       return value == null ? null : { text: String(value), json: value };

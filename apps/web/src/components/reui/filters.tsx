@@ -444,6 +444,8 @@ export interface FilterOption<T = unknown> {
   value: T
   label: string
   icon?: React.ReactNode
+  /** Optional trailing count/annotation; kept out of the searchable label. */
+  hint?: string
   metadata?: Record<string, unknown>
   className?: string
 }
@@ -990,6 +992,11 @@ function SelectOptionsPopover<T = unknown>({
       >
         {option.icon && option.icon}
         <span className="truncate">{option.label}</span>
+        {option.hint && (
+          <span className="ml-auto shrink-0 font-mono text-2xs tabular-nums text-muted-foreground">
+            {option.hint}
+          </span>
+        )}
       </DropdownMenuCheckboxItem>
     )
   }
@@ -1469,6 +1476,11 @@ function FilterSubmenuContent<T = unknown>({
       >
         {option.icon && option.icon}
         <span className="truncate">{option.label}</span>
+        {option.hint && (
+          <span className="ml-auto shrink-0 font-mono text-2xs tabular-nums text-muted-foreground">
+            {option.hint}
+          </span>
+        )}
       </DropdownMenuCheckboxItem>
     )
   }

@@ -52,7 +52,7 @@ describe("useCellSelection", () => {
     });
 
     expect(result.current.table.atoms.cellSelection?.get()).toHaveLength(1);
-    expect(result.current.selection.selection).toEqual({
+    expect(result.current.selection.getSelection()).toEqual({
       anchor: { row: 0, col: 0 },
       focus: { row: 1, col: 1 },
     });

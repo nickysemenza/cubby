@@ -163,7 +163,7 @@ function SortableHeader<TData extends RowData>({
       </div>
       {header.column.getCanResize() && (
         <ColumnResizeHandle
-          getResizeHandler={header.getResizeHandler}
+          onResizeStart={header.getResizeHandler()}
           onReset={() => header.column.resetSize()}
         />
       )}

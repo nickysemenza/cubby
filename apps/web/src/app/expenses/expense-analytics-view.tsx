@@ -1,7 +1,7 @@
 import type { CostType, ExpenseFilters, Trade } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
-import { useCallback, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import { Grid, Section, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
 import { getEntityFilters } from "~/entities/filter-manifest";
@@ -22,10 +22,19 @@ import {
   TradeCostMatrixAggregate,
 } from "./charts/trade-cost-aggregate";
 import { VendorBreakdown } from "./charts/vendor-breakdown";
-import { ExpenseAggregateExplorer } from "./expense-aggregate-explorer";
 import { ExpenseSummaryStrip } from "./expense-summary-strip";
 
 const route = getRouteApi("/_authenticated/expenses/");
+
+// The analytics route itself is lazy from the Ledger route, and Analyze is a
+// second, table-heavy chunk inside it. That keeps the default charts useful
+// while avoiding an eager RTable/layout payload for people who only inspect
+// the chart summary.
+const ExpenseAggregateExplorer = lazy(() =>
+  import("./expense-aggregate-explorer").then((module) => ({
+    default: module.ExpenseAggregateExplorer,
+  })),
+);
 
 /**
  * `view=analytics` — chart-first read over `expense.analytics`'s
@@ -87,16 +96,24 @@ export function ExpenseAnalyticsView() {
     [navigate, activeCell],
   );
   const handleOpenLedger = useCallback(
-    (filter: {
-      trade?: string;
-      costType?: string;
-      project?: string;
-      vendor?: string;
-      dateFrom?: string;
-      dateTo?: string;
-    }) => {
+    (filter: Record<string, string>) => {
       void navigate({
-        search: (prev) => ({ ...prev, ...filter, view: "ledger" as const }),
+        search: (prev) => ({
+          ...prev,
+          // A project bucket is one exact project, while this URL-only scope
+          // deliberately widens the Ledger to its descendants. Carrying it
+          // through would make the drilldown no longer equal the aggregate.
+          subprojects: filter.project ? undefined : prev.subprojects,
+          // The date preset is a second way of describing the date range.
+          // A Month bucket supplies exact bounds, so leave no stale preset
+          // behind to expand differently when the Ledger restores URL state.
+          date: filter.dateFrom || filter.dateTo ? undefined : prev.date,
+          ...(filter.dateFrom || filter.dateTo
+            ? { dateRelative: undefined }
+            : {}),
+          ...filter,
+          view: "ledger" as const,
+        }),
       });
     },
     [navigate],
@@ -127,13 +144,15 @@ export function ExpenseAnalyticsView() {
       <ExpenseSummaryStrip summary={summary} adjustmentsNet={adjustments.net} />
 
       <Section
-        title="Aggregate Explorer"
+        title="Analyze"
         description="Complete server-calculated buckets over the same filters as the Ledger. No raw rows are grouped in the browser."
       >
-        <ExpenseAggregateExplorer
-          analytics={data}
-          onOpenLedger={handleOpenLedger}
-        />
+        <Suspense fallback={<Skeleton className="h-[300px] w-full" />}>
+          <ExpenseAggregateExplorer
+            filters={filters}
+            onOpenLedger={handleOpenLedger}
+          />
+        </Suspense>
       </Section>
 
       <Grid cols="pair">

@@ -124,6 +124,12 @@ interface TTableProps<TItem extends RowData> {
    * when provided.
    */
   emptyState?: ReactNode;
+  /** Expense-ledger-only desktop selection count/sum/average status. */
+  showCellSelectionStats?: boolean;
+  /** Server-side facet counts for the table's filter controls. */
+  filterOptionHints?: Readonly<
+    Record<string, Readonly<Record<string, string>>>
+  >;
 }
 
 export default function RTable<TItem extends RowData>(
@@ -151,6 +157,8 @@ export default function RTable<TItem extends RowData>(
     embedded = false,
     showColumnMenu = false,
     emptyState,
+    showCellSelectionStats = false,
+    filterOptionHints,
   } = props;
   const {
     cellSelectionContainerProps,
@@ -158,7 +166,6 @@ export default function RTable<TItem extends RowData>(
     columnSizeVars,
     columnsKey,
     dConfig,
-    focusedRowIndex,
     hydrated,
     isDebugEnabled,
     isFetchingNextPage,
@@ -329,8 +336,9 @@ export default function RTable<TItem extends RowData>(
           const row = rows[item.rowIndex]!;
           const rowSelectionProjection = (
             ranges: typeof table.state.cellSelection,
-          ) =>
-            ranges
+          ) => {
+            const focused = ranges.at(-1)?.focusRowId === row.id;
+            const version = ranges
               .filter((range) => {
                 const anchor = rows.findIndex(
                   (candidate) => candidate.id === range.anchorRowId,
@@ -350,13 +358,15 @@ export default function RTable<TItem extends RowData>(
                   `${range.anchorColumnId}:${range.focusColumnId}:${range.operation ?? "include"}`,
               )
               .join("|");
+            return { focused, version };
+          };
           return (
             <table.Subscribe
               key={row.id}
               source={table.atoms.cellSelection!}
               selector={rowSelectionProjection}
             >
-              {(selectionVersion) => (
+              {(selection) => (
                 <table.Subscribe
                   source={table.atoms.rowSelection!}
                   selector={(selection) => selection[row.id] === true}
@@ -367,10 +377,9 @@ export default function RTable<TItem extends RowData>(
                       rowIndex={item.rowIndex}
                       isSelected={isSelected}
                       isExpanded={row.getIsExpanded()}
-                      // Flat-index compare: focusedRowIndex is the selection's focus row
-                      // in the same `rows` space as item.rowIndex (row.index can diverge
-                      // under grouping/expansion).
-                      isFocused={focusedRowIndex === item.rowIndex}
+                      // Focus follows v9's durable focus corner and is subscribed at the
+                      // row, not the virtualized body owner.
+                      isFocused={selection.focused}
                       isDebugEnabled={isDebugEnabled}
                       onRowClick={onRowClick}
                       onRowHover={onRowHover}
@@ -388,7 +397,7 @@ export default function RTable<TItem extends RowData>(
                       cellClassName={styles.cell}
                       columnsKey={columnsKey}
                       rowContentVersion={rowContentVersion}
-                      selectionVersion={selectionVersion}
+                      selectionVersion={selection.version}
                       height={`${virtualRow.size}px`}
                     />
                   )}
@@ -469,6 +478,7 @@ export default function RTable<TItem extends RowData>(
                   table={table}
                   entity={entity}
                   ownsPageIdentity={!embedded}
+                  filterOptionHints={filterOptionHints}
                   additionalContent={
                     // flex-wrap: an embedded table in the aside rail can't fit
                     // a search box, a summary, and the View menu on one line —
@@ -663,9 +673,15 @@ export default function RTable<TItem extends RowData>(
             {/* The column's fixed bottom end. Page-size and page nav stay put
               while the pane scrolls between the two ends, so neither needs
               `position: sticky` to stay reachable. */}
-            {!infiniteScroll && showPagination && (
+            {((!infiniteScroll && showPagination) ||
+              showCellSelectionStats) && (
               <div className="shrink-0 border-[var(--border)] border-t bg-background px-2 py-1">
-                <DataTablePagination table={table} timing={timing} />
+                <DataTablePagination
+                  table={table}
+                  timing={timing}
+                  showPaginationControls={!infiniteScroll && showPagination}
+                  showCellSelectionStats={showCellSelectionStats}
+                />
               </div>
             )}
           </div>

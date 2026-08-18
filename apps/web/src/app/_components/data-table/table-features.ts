@@ -27,6 +27,7 @@ import {
   rowPaginationFeature,
   rowSelectionFeature,
   rowSortingFeature,
+  type TableState,
   tableFeatures,
 } from "@tanstack/react-table";
 import type { CubbyColumnMeta, CubbyTableMeta } from "./table-meta";
@@ -72,6 +73,26 @@ const cubbyTableHook = createTableHook({
 
 /** App-bound constructor: callers supply domain data/state, never feature plumbing. */
 export const useCubbyTable = cubbyTableHook.useAppTable;
+
+/**
+ * State the server-driven table owner actually renders from. Selection has
+ * dedicated subscriptions below the virtualized body, so leaving row/cell
+ * selection out prevents a drag from re-rendering every visible row.
+ */
+export function cubbyStructuralTableStateSelector(
+  state: TableState<CubbyTableFeatures>,
+) {
+  return {
+    sorting: state.sorting,
+    columnFilters: state.columnFilters,
+    pagination: state.pagination,
+    expanded: state.expanded,
+    columnOrder: state.columnOrder,
+    columnPinning: state.columnPinning,
+    columnVisibility: state.columnVisibility,
+    columnSizing: state.columnSizing,
+  };
+}
 
 type CubbyTableFeatures = typeof cubbyTableFeatures;
 export type CubbyTable<TData extends RowData> = ReactTable<

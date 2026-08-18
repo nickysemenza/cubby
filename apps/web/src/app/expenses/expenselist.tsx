@@ -62,6 +62,23 @@ const expensesRoute = getRouteApi("/_authenticated/expenses/");
 // is loading, destabilizing the `useFilterOptions`/`useMemo` chain below it.
 const NO_VENDOR_OPTIONS: FilterableComboboxItem[] = [];
 
+const EXPENSE_FACET_IDS = [
+  "costType",
+  "lineKind",
+  "lineBasis",
+  "trade",
+  "future",
+  "project",
+  "productPresence",
+  "vendor",
+  "orderIdPresence",
+] as const;
+
+const FACET_COLUMN_IDS = {
+  productPresence: "product",
+  orderIdPresence: "orderId",
+} as const;
+
 export function ExpenseList() {
   const api = useTRPC();
   const columnHelper = useMemo(() => createCubbyColumnHelper<ExpenseOut>(), []);
@@ -462,6 +479,31 @@ export function ExpenseList() {
     ...api.expense.analytics.queryOptions(currentFilters),
     placeholderData: keepPreviousData,
   });
+  // Facet counts are calculated over the complete server population, never
+  // the currently appended infinite pages. Each count omits only its own
+  // predicate in `expense.facetCounts`, so alternatives remain meaningful.
+  const facetCountsQuery = useQuery({
+    ...api.expense.facetCounts.queryOptions({
+      filters: currentFilters,
+      facetIds: [...EXPENSE_FACET_IDS],
+    }),
+    placeholderData: keepPreviousData,
+  });
+  const facetOptionHints = useMemo(() => {
+    // React Query may retain the previous successful payload after a refetch
+    // error. Counts are advisory, so hiding them is safer than presenting stale
+    // values as if they described the current filter population.
+    if (facetCountsQuery.isError) return {};
+    const hints: Record<string, Record<string, string>> = {};
+    for (const facet of facetCountsQuery.data?.facets ?? []) {
+      const columnId =
+        FACET_COLUMN_IDS[facet.id as keyof typeof FACET_COLUMN_IDS] ?? facet.id;
+      hints[columnId] = Object.fromEntries(
+        facet.options.map((option) => [option.value, String(option.count)]),
+      );
+    }
+    return hints;
+  }, [facetCountsQuery.data, facetCountsQuery.isError]);
   const summary = analyticsQuery.data?.summary;
 
   return (
@@ -485,6 +527,8 @@ export function ExpenseList() {
           bulkActionBar={bulkActionBar}
           infiniteScroll={infiniteScroll}
           refreshControls={refreshControls}
+          showCellSelectionStats
+          filterOptionHints={facetOptionHints}
           getRowClassName={(row) =>
             row.original.lineKind === "principal"
               ? undefined

@@ -7,7 +7,7 @@ describe("ColumnResizeHandle", () => {
   it("forwards mouse and touch gestures to the native v9 handler", () => {
     const resize = vi.fn();
     const { container } = render(
-      <ColumnResizeHandle getResizeHandler={() => resize} onReset={() => {}} />,
+      <ColumnResizeHandle onResizeStart={resize} onReset={() => {}} />,
     );
     const handle = container.firstElementChild as HTMLElement;
 
@@ -20,10 +20,7 @@ describe("ColumnResizeHandle", () => {
   it("resets the native column size on double click", () => {
     const onReset = vi.fn();
     const { container } = render(
-      <ColumnResizeHandle
-        getResizeHandler={() => () => {}}
-        onReset={onReset}
-      />,
+      <ColumnResizeHandle onResizeStart={() => {}} onReset={onReset} />,
     );
 
     fireEvent.doubleClick(container.firstElementChild as HTMLElement);
@@ -34,10 +31,7 @@ describe("ColumnResizeHandle", () => {
     const onHeaderClick = vi.fn();
     const { container } = render(
       <button type="button" onClick={onHeaderClick}>
-        <ColumnResizeHandle
-          getResizeHandler={() => () => {}}
-          onReset={() => {}}
-        />
+        <ColumnResizeHandle onResizeStart={() => {}} onReset={() => {}} />
       </button>,
     );
 

@@ -6,10 +6,15 @@
  * external layout atom persists that committed width.
  */
 export function ColumnResizeHandle({
-  getResizeHandler,
+  onResizeStart,
   onReset,
 }: {
-  getResizeHandler: () => (event: unknown) => void;
+  /**
+   * Must be the handler returned by `header.getResizeHandler()`, not the
+   * method itself. v9's header method reads `this`, so passing the bare
+   * prototype function loses the header instance before a resize can begin.
+   */
+  onResizeStart: (event: unknown) => void;
   onReset: () => void;
 }) {
   return (
@@ -20,11 +25,12 @@ export function ColumnResizeHandle({
       onMouseDown={(event) => {
         event.preventDefault();
         event.stopPropagation();
-        getResizeHandler()(event);
+        onResizeStart(event);
       }}
       onTouchStart={(event) => {
+        event.preventDefault();
         event.stopPropagation();
-        getResizeHandler()(event);
+        onResizeStart(event);
       }}
       onClick={(e) => e.stopPropagation()}
       onDoubleClick={(e) => {

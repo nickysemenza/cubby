@@ -41,6 +41,8 @@ import {
   deleteExpenses,
   deleteExpensesWithPurchaseEffects,
   expenseAnalytics,
+  expenseAnalyze,
+  expenseFacetCounts,
   expenseList,
   getExpenseByShortcode,
   matchExpenses,
@@ -2353,6 +2355,216 @@ describe("expense repository — expenseAnalytics", () => {
         count: 1,
       },
     ]);
+  });
+
+  it("analyzes complete principal grids, reconciles the tail, compares the preceding inclusive range, and self-excludes facet filters", async () => {
+    const create = (data: Parameters<typeof expenseCreateInput.parse>[0]) =>
+      createExpense(ctx.db, expenseCreateInput.parse(data), ctx.actor);
+
+    await create({
+      date: "2026-06-01",
+      trade: "plumbing",
+      costType: "materials",
+      name: "analyze complete current principal",
+      cost: 120,
+    });
+    await create({
+      date: "2026-06-02",
+      trade: "other",
+      costType: "services",
+      lineKind: "tax",
+      name: "analyze complete current adjustment",
+      cost: 12,
+    });
+    await create({
+      date: "2026-05-31",
+      trade: "plumbing",
+      costType: "materials",
+      name: "analyze complete previous principal",
+      cost: 80,
+    });
+
+    const filters = {
+      search: "analyze complete",
+      dateFrom: "2026-06-01",
+      dateTo: "2026-06-02",
+    };
+    const result = await expenseAnalyze(ctx.db, {
+      filters,
+      rowDimension: "trade",
+      columnDimension: "costType",
+      comparison: "previousPeriod",
+    });
+
+    expect(result.status).toBe("ready");
+    if (result.status !== "ready") throw new Error("expected ready analyzer");
+    expect(result.comparison.previousRange).toEqual({
+      dateFrom: "2026-05-30",
+      dateTo: "2026-05-31",
+    });
+    // The immediately preceding inclusive two-day range is May 30-31. The
+    // May 31 row proves both that boundary is included and that the previous
+    // query is not accidentally reusing the current date bounds.
+    expect(result.cells).toEqual([
+      expect.objectContaining({
+        rowKey: "plumbing",
+        columnKey: "materials",
+        current: expect.objectContaining({ net: 120, count: 1 }),
+        previous: expect.objectContaining({ net: 80, count: 1 }),
+      }),
+    ]);
+    // Trade/cost-type is deliberately principal-only, but the scope still
+    // reports all money and the tail makes the excluded tax explicit.
+    expect(result.totals.scope.current).toMatchObject({ net: 132, count: 2 });
+    expect(result.totals.grid.current).toMatchObject({ net: 120, count: 1 });
+    expect(result.reconciliation.tail.current).toMatchObject({
+      net: 12,
+      count: 1,
+    });
+    expect(result.reconciliation.causes.adjustments.current).toMatchObject({
+      net: 12,
+      count: 1,
+    });
+
+    const facets = await expenseFacetCounts(ctx.db, {
+      filters: { ...filters, trade: "plumbing" },
+      facetIds: ["trade", "lineKind"],
+    });
+    // Trade removes its own predicate, whereas lineKind retains trade.
+    expect(
+      facets.facets.find((facet) => facet.id === "trade")?.options,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "plumbing", count: 1 }),
+        expect.objectContaining({ value: "other", count: 1 }),
+      ]),
+    );
+    expect(
+      facets.facets.find((facet) => facet.id === "lineKind")?.options,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "principal", count: 1 }),
+      ]),
+    );
+  });
+
+  it("keeps project/vendor omissions honest and emits exact month buckets", async () => {
+    const { output: analyzerProject } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "analyzer dimensions project" }),
+      ctx.actor,
+    );
+    const linked = await unwrap(
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse({
+          name: "analyzer dimensions linked",
+          date: "2026-07-15",
+          trade: "other",
+          costType: "services",
+          projectId: analyzerProject.id,
+          vendor: "Analyzer Dimensions Vendor",
+          cost: 50,
+        }),
+        ctx.actor,
+      ),
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        name: "analyzer dimensions unattributed",
+        date: "2026-07-16",
+        trade: "other",
+        costType: "services",
+        cost: 20,
+      }),
+      ctx.actor,
+    );
+    const filters = { search: "analyzer dimensions" };
+
+    const byProject = await expenseAnalyze(ctx.db, {
+      filters,
+      rowDimension: "project",
+      comparison: "none",
+    });
+    expect(byProject.status).toBe("ready");
+    if (byProject.status !== "ready") throw new Error("expected project rows");
+    expect(byProject.rows).toEqual([
+      expect.objectContaining({
+        key: analyzerProject.id,
+        filter: { project: analyzerProject.id },
+      }),
+    ]);
+    expect(byProject.reconciliation.tail.current).toMatchObject({
+      net: 20,
+      count: 1,
+    });
+    expect(
+      byProject.reconciliation.causes.unattributedProject.current,
+    ).toMatchObject({ net: 20, count: 1 });
+    expect(byProject.reconciliation.causes.adjustments.current).toMatchObject({
+      net: 0,
+      count: 0,
+    });
+
+    const byVendor = await expenseAnalyze(ctx.db, {
+      filters,
+      rowDimension: "vendor",
+      comparison: "none",
+    });
+    expect(byVendor.status).toBe("ready");
+    if (byVendor.status !== "ready") throw new Error("expected vendor rows");
+    expect(byVendor.rows).toEqual([
+      expect.objectContaining({
+        key: vendorIdOf(linked),
+        filter: { vendor: vendorIdOf(linked) },
+      }),
+    ]);
+    expect(
+      byVendor.reconciliation.causes.unattributedVendor.current,
+    ).toMatchObject({ net: 20, count: 1 });
+
+    const byMonth = await expenseAnalyze(ctx.db, {
+      filters,
+      rowDimension: "month",
+      comparison: "none",
+    });
+    expect(byMonth.status).toBe("ready");
+    if (byMonth.status !== "ready") throw new Error("expected month rows");
+    expect(byMonth.rows).toEqual([
+      expect.objectContaining({
+        key: "2026-07",
+        filter: { dateFrom: "2026-07-01", dateTo: "2026-07-31" },
+      }),
+    ]);
+
+    const facets = await expenseFacetCounts(ctx.db, {
+      filters,
+      facetIds: ["project", "vendor"],
+    });
+    const projectOptions = facets.facets.find(
+      (facet) => facet.id === "project",
+    )?.options;
+    expect(projectOptions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          value: analyzerProject.id,
+          count: 1,
+        }),
+        expect.objectContaining({ value: "__any__", count: 1 }),
+        expect.objectContaining({ value: "__none__", count: 1 }),
+      ]),
+    );
+    const vendorOptions = facets.facets.find(
+      (facet) => facet.id === "vendor",
+    )?.options;
+    expect(vendorOptions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: vendorIdOf(linked), count: 1 }),
+        expect.objectContaining({ value: "__any__", count: 1 }),
+        expect.objectContaining({ value: "__none__", count: 1 }),
+      ]),
+    );
   });
 });
 

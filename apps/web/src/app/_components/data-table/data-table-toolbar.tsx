@@ -34,6 +34,10 @@ interface DataTableToolbarProps<TData extends RowData> {
    * already names it.
    */
   ownsPageIdentity?: boolean;
+  /** Server-side facet count hints forwarded to the mounted filter controls. */
+  filterOptionHints?: Readonly<
+    Record<string, Readonly<Record<string, string>>>
+  >;
 }
 
 /**
@@ -78,6 +82,7 @@ export function DataTableToolbar<TData extends RowData>({
   className,
   isTransitioning = false,
   ownsPageIdentity = false,
+  filterOptionHints,
 }: DataTableToolbarProps<TData>) {
   return (
     <Row align="center" justify="between" gap="sm" className={className}>
@@ -120,7 +125,7 @@ export function DataTableToolbar<TData extends RowData>({
         {additionalContent}
 
         <div className="order-last w-full min-w-0 lg:order-none lg:w-auto">
-          <LedgerFilters table={table} />
+          <LedgerFilters table={table} optionHints={filterOptionHints} />
         </div>
 
         <fieldset disabled={isTransitioning} className="contents">

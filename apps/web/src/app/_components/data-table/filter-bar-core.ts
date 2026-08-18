@@ -103,6 +103,7 @@ export function barFieldFromConfig(
   key: string,
   label: string,
   config: FilterConfig,
+  optionHints?: Readonly<Record<string, string>>,
 ): FilterBarField {
   const type = config.filterType ?? "text";
   const operators =
@@ -124,6 +125,7 @@ export function barFieldFromConfig(
       value: option.value,
       label: option.label,
       icon: option.icon,
+      hint: optionHints?.[option.value] ?? option.hint,
     })),
   };
 }
