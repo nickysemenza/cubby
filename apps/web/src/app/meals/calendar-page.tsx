@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { CalendarDays, ShoppingCart, Table as TableIcon } from "lucide-react";
 import { UnifiedCalendar } from "~/app/calendar/unified-calendar";
 import { Row, Stack } from "~/components/layout";
+import type { CalendarPeriod } from "~/components/reui/event-calendar/event-calendar-types";
 import { Button } from "~/components/ui/button";
 import {
   ViewSwitcher,
@@ -19,8 +20,10 @@ const VIEW_OPTIONS: ViewSwitcherOption<MealCalendarView>[] = [
 
 interface MealCalendarPageProps {
   view: MealCalendarView;
+  period: CalendarPeriod;
   week?: string;
   onViewChange: (view: MealCalendarView) => void;
+  onPeriodChange: (period: CalendarPeriod) => void;
   onWeekChange: (week?: string) => void;
 }
 
@@ -32,8 +35,10 @@ interface MealCalendarPageProps {
  */
 export function MealCalendarPage({
   view,
+  period,
   week,
   onViewChange,
+  onPeriodChange,
   onWeekChange,
 }: MealCalendarPageProps) {
   return (
@@ -54,8 +59,10 @@ export function MealCalendarPage({
 
       {view === "calendar" ? (
         <UnifiedCalendar
+          period={period}
           date={week}
           lockedKinds={MEAL_KINDS}
+          onPeriodChange={onPeriodChange}
           onDateChange={onWeekChange}
         />
       ) : (

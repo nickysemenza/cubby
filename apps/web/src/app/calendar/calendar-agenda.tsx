@@ -1,5 +1,5 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
-import { format, parseISO } from "date-fns";
+import { addDays, format, parseISO } from "date-fns";
 import { CalendarItemLink } from "./calendar-item-row";
 
 /**
@@ -11,11 +11,10 @@ import { CalendarItemLink } from "./calendar-item-row";
  * DESIGN.md's "repeated records use bordered or zebra-striped rows", not a
  * stack of padded cards.
  *
- * Built app-side rather than on the vendored calendar's agenda view, which
- * does not exist: only the month view was vendored, and every item here is a
- * single all-day span with no recurrence, so the library's segmentation engine
+ * Built app-side rather than into the month/week event renderers. Every item is
+ * a date-only span with no recurrence, so a separate generic agenda engine
  * would earn nothing. Reusing `CalendarItemLink` also means a row can't drift
- * from the one the month view's day drawer draws.
+ * from the one the day drawer draws.
  */
 
 /** Days carry items; empty days collapse into a single line between them. */
@@ -25,8 +24,19 @@ export const groupItemsByDay = (
   items: readonly CalendarItem[],
   includesDay: (item: CalendarItem, day: string) => boolean,
   range?: { startDate: string; endDateExclusive: string },
+  includeEmptyDays = false,
 ): AgendaGroup[] => {
   const days = new Set<string>();
+  if (range && includeEmptyDays) {
+    const end = parseISO(range.endDateExclusive);
+    for (
+      let cursor = parseISO(range.startDate);
+      cursor < end;
+      cursor = addDays(cursor, 1)
+    ) {
+      days.add(format(cursor, "yyyy-MM-dd"));
+    }
+  }
   for (const item of items) {
     // A long-running project can begin years before the month being viewed.
     // The phone agenda is an in-range reading of the current month, not an
@@ -63,6 +73,8 @@ export function CalendarAgenda({
   range,
   today,
   emptyMessage,
+  showAllDays = false,
+  onDayClick,
 }: {
   items: readonly CalendarItem[];
   includesDay: (item: CalendarItem, day: string) => boolean;
@@ -70,8 +82,11 @@ export function CalendarAgenda({
   range?: { startDate: string; endDateExclusive: string };
   today: string;
   emptyMessage: React.ReactNode;
+  /** Render the complete period, including empty ruled days. */
+  showAllDays?: boolean;
+  onDayClick?: (day: string) => void;
 }) {
-  const groups = groupItemsByDay(items, includesDay, range);
+  const groups = groupItemsByDay(items, includesDay, range, showAllDays);
 
   if (groups.length === 0) {
     return <div className="border p-4">{emptyMessage}</div>;
@@ -80,25 +95,39 @@ export function CalendarAgenda({
   return (
     // A plain bordered container: the sections are ruled and adjacent, so
     // there is no gap for a layout primitive to own.
-    <div className="border">
+    <div data-slot="calendar-agenda" className="border">
       {groups.map((group) => (
-        <section key={group.day}>
+        <section key={group.day} data-day={group.day}>
           {/* Sticky so the day you're scrolling through stays named. Mono
               uppercase matches the month view's own weekday header. */}
-          <h3 className="sticky top-0 z-10 flex items-baseline gap-2 border-b bg-muted px-2 py-1 font-mono text-2xs uppercase tracking-wider">
-            <span className={group.day === today ? "text-primary" : undefined}>
-              {group.day === today
-                ? "Today"
-                : format(parseISO(group.day), "EEE MMM d")}
-            </span>
-            <span className="ml-auto text-slate tabular-nums">
-              {group.items.length}
-            </span>
+          <h3 className="sticky top-0 z-10 border-b bg-muted font-mono text-2xs uppercase tracking-wider">
+            <button
+              type="button"
+              className="flex min-h-11 w-full items-center gap-2 px-2 py-1 text-left outline-none hover:bg-muted-foreground/5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+              onClick={() => onDayClick?.(group.day)}
+            >
+              <span
+                className={group.day === today ? "text-primary" : undefined}
+              >
+                {group.day === today
+                  ? "Today"
+                  : format(parseISO(group.day), "EEE MMM d")}
+              </span>
+              <span className="ml-auto text-slate tabular-nums">
+                {group.items.length}
+              </span>
+            </button>
           </h3>
           <div className="px-2">
-            {group.items.map((item) => (
-              <CalendarItemLink key={`${item.kind}:${item.id}`} item={item} />
-            ))}
+            {group.items.length === 0 ? (
+              <div className="py-4 text-muted-foreground text-xs">
+                Nothing planned.
+              </div>
+            ) : (
+              group.items.map((item) => (
+                <CalendarItemLink key={`${item.kind}:${item.id}`} item={item} />
+              ))
+            )}
           </div>
         </section>
       ))}

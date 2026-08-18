@@ -1,6 +1,13 @@
 import { addDays } from "date-fns";
 import { describe, expect, it } from "vitest";
-import { buildEventIndex, packWeekRowLanes } from "./event-calendar-lib";
+import {
+  buildEventIndex,
+  buildWeekLedger,
+  getDayKey,
+  getViewDateRange,
+  packWeekRowLanes,
+  stepDate,
+} from "./event-calendar-lib";
 import type {
   CalendarEvent,
   EventCalendarOccurrence,
@@ -139,5 +146,111 @@ describe("buildEventIndex month boundaries", () => {
         .filter(([, bucket]) => bucket.allDay.some((segment) => segment.occurrence.eventId === "dst"))
         .map(([day]) => day),
     ).toEqual(["2026-03-07", "2026-03-08", "2026-03-09"]);
+  });
+});
+
+describe("weekly calendar ranges", () => {
+  const options = {
+    timeZone: "America/Los_Angeles",
+    weekStartsOn: 0 as const,
+    fixedWeeks: true,
+  };
+
+  it("uses an exclusive Sunday boundary across spring-forward", () => {
+    const { activeRange, visibleRange } = getViewDateRange(
+      "week",
+      new Date("2026-03-11T19:00:00.000Z"),
+      options,
+    );
+
+    expect(getDayKey(activeRange.start, options.timeZone)).toBe("2026-03-08");
+    expect(getDayKey(activeRange.end, options.timeZone)).toBe("2026-03-15");
+    expect(activeRange).toEqual(visibleRange);
+    expect(activeRange.end.getTime() - activeRange.start.getTime()).toBe(
+      167 * 60 * 60_000,
+    );
+  });
+
+  it("steps by one local week across year and fall-back boundaries", () => {
+    const fall = stepDate(
+      "week",
+      new Date("2026-10-29T19:00:00.000Z"),
+      1,
+      options,
+    );
+    const year = stepDate(
+      "week",
+      new Date("2026-12-30T20:00:00.000Z"),
+      1,
+      options,
+    );
+
+    expect(getDayKey(fall, options.timeZone)).toBe("2026-11-05");
+    expect(getDayKey(year, options.timeZone)).toBe("2027-01-06");
+  });
+});
+
+describe("buildWeekLedger", () => {
+  const start = new Date("2026-07-05T07:00:00.000Z");
+  const end = new Date("2026-07-12T07:00:00.000Z");
+  const event = (
+    id: string,
+    startOffset: number,
+    endOffset: number,
+  ): CalendarEvent => ({
+    id,
+    title: id,
+    start: addDays(start, startOffset),
+    end: addDays(start, endOffset),
+    allDay: true,
+  });
+
+  it("separates spans from single-day items and repacks only the spans", () => {
+    const index = buildEventIndex(
+      [
+        event("single", 1, 2),
+        event("project", 1, 4),
+        event("task-range", 2, 5),
+        event("point", 3, 3),
+      ],
+      { start, end },
+      { timeZone: "America/Los_Angeles", weekStartsOn: 0 },
+    );
+    const ledger = buildWeekLedger(
+      index,
+      start,
+      "America/Los_Angeles",
+    );
+
+    expect(ledger.spans.map((span) => span.occurrence.eventId)).toEqual([
+      "project",
+      "task-range",
+    ]);
+    expect(ledger.spans.map((span) => span.lane)).toEqual([0, 1]);
+    expect(
+      ledger.days.map((day) =>
+        day.segments.map((segment) => segment.occurrence.eventId),
+      ),
+    ).toEqual([[], ["single"], [], ["point"], [], [], []]);
+  });
+
+  it("keeps a clipped cross-week occurrence in the span lanes", () => {
+    const index = buildEventIndex(
+      [event("crossing", -2, 2)],
+      { start, end },
+      { timeZone: "America/Los_Angeles", weekStartsOn: 0 },
+    );
+    const [span] = buildWeekLedger(
+      index,
+      start,
+      "America/Los_Angeles",
+    ).spans;
+
+    expect(span).toMatchObject({
+      colStart: 0,
+      colSpan: 2,
+      continuesBefore: true,
+      continuesAfter: false,
+    });
   });
 });

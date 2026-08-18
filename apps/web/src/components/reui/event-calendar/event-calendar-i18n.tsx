@@ -1,5 +1,8 @@
 import { format, type Locale } from "date-fns";
-import type { EventCalendarDateRange } from "./event-calendar-types";
+import type {
+  CalendarPeriod,
+  EventCalendarDateRange,
+} from "./event-calendar-types";
 
 interface EventCalendarI18nConfig {
   labels: {
@@ -19,7 +22,7 @@ interface EventCalendarI18nConfig {
     eventTime: string;
   };
   functions: {
-    formatTitle: (view: "month", ctx: { date: Date; activeRange: EventCalendarDateRange; visibleRange: EventCalendarDateRange; locale?: Locale }) => string;
+    formatTitle: (period: CalendarPeriod, ctx: { date: Date; activeRange: EventCalendarDateRange; visibleRange: EventCalendarDateRange; locale?: Locale }) => string;
     formatEventTime: (start: Date, end: Date, allDay: boolean, opts?: { locale?: Locale }) => string;
     formatEventLabel?: (title: string, timeLabel: string) => string | undefined;
     formatEventAriaLabel?: (title: string, timeLabel: string, continues: boolean) => string;

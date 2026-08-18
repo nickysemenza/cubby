@@ -73,3 +73,63 @@ test("calendar filters are URL-backed and survive a reload", async ({
   await expect(projectKind).toHaveValue("Renovation");
   expect(pageErrors).toEqual([]);
 });
+
+test("weekly planning is URL-backed and navigates by exact weeks", async ({
+  page,
+}) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await page.goto("/calendar?date=2026-08-18&period=week&kinds=meal,task");
+  await page.waitForLoadState("networkidle");
+
+  await expect(
+    page.getByRole("button", { name: "Week", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByRole("heading", { name: "Aug 16–22, 2026" }),
+  ).toBeVisible();
+  await expect(
+    page.locator('[data-slot="calendar-week-summary"] button'),
+  ).toHaveCount(7);
+  await expect(
+    page.locator('[data-slot="event-calendar-week-day"]'),
+  ).toHaveCount(7);
+
+  await page.getByRole("button", { name: "Next week" }).click();
+  await expect(page).toHaveURL(/date=2026-08-25/);
+  await expect(page).toHaveURL(/period=week/);
+  await expect(page).toHaveURL(/kinds=meal%2Ctask|kinds=meal,task/);
+
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  await expect(
+    page.getByRole("button", { name: "Week", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+
+  await page.getByRole("button", { name: "Today" }).click();
+  await expect(page).not.toHaveURL(/date=/);
+  await expect(page).toHaveURL(/period=week/);
+  await expect(page).toHaveURL(/kinds=meal%2Ctask|kinds=meal,task/);
+
+  await page.getByRole("button", { name: "Month", exact: true }).click();
+  await expect(page).not.toHaveURL(/period=/);
+  expect(pageErrors).toEqual([]);
+});
+
+test("the Meals calendar preserves its legacy anchor in Week mode", async ({
+  page,
+}) => {
+  await page.goto("/meals?week=2026-08-18&period=week");
+  await page.waitForLoadState("networkidle");
+
+  await expect(
+    page.getByRole("button", { name: "Week", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Next week" }).click();
+  await expect(page).toHaveURL(/week=2026-08-25/);
+  await expect(page).toHaveURL(/period=week/);
+
+  await page.getByRole("button", { name: "Month", exact: true }).click();
+  await expect(page).not.toHaveURL(/period=/);
+  await expect(page).toHaveURL(/week=2026-08-25/);
+});

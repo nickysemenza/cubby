@@ -50,9 +50,19 @@ function CalendarRoute() {
     >
       <CalendarFilterBar search={search} onSearchChange={onSearchChange} />
       <UnifiedCalendar
+        period={search.period ?? "month"}
         date={search.date}
         day={search.day}
         filters={filters}
+        onPeriodChange={(period) =>
+          void navigate({
+            search: (previous) => ({
+              ...previous,
+              period: period === "month" ? undefined : period,
+            }),
+            replace: true,
+          })
+        }
         onDateChange={(date) =>
           void navigate({
             search: (previous) => ({ ...previous, date }),

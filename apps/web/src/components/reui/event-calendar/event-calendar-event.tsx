@@ -9,8 +9,8 @@ import {
 } from "react";
 import {
   useEventCalendar,
+  useEventCalendarRenderEvent,
   useEventCalendarSelector,
-  useMonthEventCalendarRenderEvent,
 } from "~/components/reui/event-calendar/event-calendar";
 import {
   beginBlockedEventCalendarGesture,
@@ -25,8 +25,8 @@ import type {
 import { cn } from "~/lib/utils";
 
 /**
- * Standardized drag-ghost surface treatment, shared verbatim by every view
- * (month, week/day/N-days, resource). One visual language for interactions:
+ * Standardized drag-ghost surface treatment, shared by Month and Week. One
+ * visual language for interactions:
  * - move: the event is CARRIED FREELY - a cursor-attached full clone (built
  *   by the dnd engine, data-slot=event-calendar-drag-carry) travels with the
  *   pointer; the in-grid ghost is only this faint dashed placeholder marking
@@ -75,7 +75,7 @@ function EventCalendarEvent<TData = unknown>({
   ...props
 }: EventCalendarEventProps<TData>) {
   const instance = useEventCalendar<TData>();
-  const renderEvent = useMonthEventCalendarRenderEvent<TData>();
+  const renderEvent = useEventCalendarRenderEvent<TData>();
   const { settings } = instance;
   const occurrence = segment.occurrence;
   const event = occurrence.event;
@@ -187,11 +187,7 @@ function EventCalendarEvent<TData = unknown>({
     onClick: (e: React.MouseEvent) => {
       e.stopPropagation();
       if (wasRecentDrag()) return;
-      settings.onEventClick?.(occurrence, e);
-    },
-    onDoubleClick: (e: React.MouseEvent) => {
-      e.stopPropagation();
-      settings.onEventDoubleClick?.(occurrence, e);
+      settings.onEventClick?.(occurrence, segment, e);
     },
     className: cn(
       "group/ec-event relative flex w-full min-w-0 cursor-pointer touch-none select-none items-center overflow-hidden text-start text-foreground",
@@ -221,4 +217,38 @@ function EventCalendarEvent<TData = unknown>({
   return chip;
 }
 
-export { EVENT_CALENDAR_GHOST, EventCalendarEvent };
+function EventCalendarDropPlaceholder({
+  color,
+  valid,
+  className,
+}: {
+  color?: string;
+  valid: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      aria-hidden
+      data-slot="event-calendar-drop-placeholder"
+      data-drop-invalid={!valid || undefined}
+      className={cn(
+        "shrink-0 border border-dashed",
+        valid
+          ? "border-(--ec-event-color)/50 bg-(--ec-event-color)/8"
+          : "border-destructive/70 bg-destructive/10",
+        className,
+      )}
+      style={
+        {
+          "--ec-event-color": color ?? "var(--color-primary)",
+        } as CSSProperties
+      }
+    />
+  );
+}
+
+export {
+  EVENT_CALENDAR_GHOST,
+  EventCalendarDropPlaceholder,
+  EventCalendarEvent,
+};
