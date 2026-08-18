@@ -1,5 +1,8 @@
-# Agent Instructions
+# Cubby agent entrypoint
 
-Read [README.md](README.md) first for project architecture, commands, deploy targets, entities, environment, and roadmap.
+Read [CLAUDE.md](CLAUDE.md) for the universal rules and the exact pointer for
+your work. Do not load all of README or every reference by default: open the
+relevant README heading or `docs/agents/*` reference when its trigger applies.
 
-Then follow [CLAUDE.md](CLAUDE.md) for repository-specific agent rules and anti-patterns.
+`apps/web/CLAUDE.md` applies below `apps/web`; open `apps/web/DESIGN.md` only
+for UI or visual decisions.
