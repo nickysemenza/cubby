@@ -52,8 +52,18 @@ import type {
 import type { AnyColumn } from "drizzle-orm";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { expense, inventoryEntry, location } from "~/server/db/schema";
+import { inventoryEntry, location } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import {
+  kitAncestorCteSql,
+  kitAncestorCteText,
+  kitProjectionFrom,
+  kitSeedForProductAlias,
+  kitSeedForProductIds,
+  ownOnly,
+  projectionRows,
+  unitWeighted,
+} from "~/server/repo/product/kit-projection";
 
 export type QuantityLedger = ProductQuantityLedgerOut;
 
@@ -70,10 +80,11 @@ export const EMPTY_QUANTITY_LEDGER: QuantityLedger = {
  * The signed per-line contribution — the ledger rule as one SQL expression.
  *
  * Every other query in this module is derived from it rather than restating it:
- * the loader sums its positive and negative halves, and the correlated
- * subquery sums it whole. That is deliberate. A hand-written FILTER predicate
- * beside it would be a second copy of the rule, free to drift, and the failure
- * would be a list that *sorts* by a different number than it *renders*.
+ * {@link QUANTITY_OWN_AGGREGATE} splits it into its positive and negative
+ * halves, and the loader and both correlated scalars read those two numbers.
+ * That is deliberate. A hand-written FILTER predicate beside it would be a
+ * second copy of the rule, free to drift, and the failure would be a list that
+ * *sorts* by a different number than it *renders*.
  *
  * A NULL cost (an Unclassified row) falls to the ELSE and is read by its
  * quantity's sign, the same as a $0 line — cost unknown is not cost zero, but
@@ -91,6 +102,44 @@ const expenseSignedUnitsSql = (alias: string) =>
    END`;
 
 /**
+ * This product's OWN ledger lines, split into the two halves of the signed
+ * expression so `acquired - exited` is `sum(signedUnits)` by construction.
+ *
+ * Correlated on `ka."productId"`, because a kit's lines are also its parts'
+ * lines: buying one 9-piece kit brought nine parts into the house, and buying a
+ * 4-pack with `quantity: 4` brought four. `Expense` never records that — the
+ * money stays on the kit — so the units reach the parts through
+ * `ProductComponent`, weighted by the same `Πqty` the price projection uses.
+ * Returning a kit (a negative line) carries back through it unchanged, since the
+ * weight is positive and the sign lives in the halves.
+ *
+ * `GREATEST`/`LEAST` ignore NULLs, so a quantity-less line contributes 0 to both
+ * halves rather than poisoning the sum — the same reason the `productQuantity IS
+ * NOT NULL` predicate the scalars used to carry is not needed here, and the
+ * reason this one aggregate can also count the unknown lines. An unknown line
+ * has no direction of its own, so it is bucketed by its money: a NULL cost sits
+ * with the acquisitions, matching the signed expression's ELSE.
+ *
+ * `ledgerLines` is what keeps "no ledger at all" distinguishable from "a ledger
+ * that nets to zero" now that the seed emits a row per requested product.
+ */
+const QUANTITY_OWN_AGGREGATE = `SELECT COALESCE(sum(GREATEST(${expenseSignedUnitsSql("kqe")}, 0)), 0) AS "acquiredUnits",
+         COALESCE(sum(-LEAST(${expenseSignedUnitsSql("kqe")}, 0)), 0) AS "exitedUnits",
+         count(*) FILTER (WHERE kqe."productQuantity" IS NULL AND (kqe."cost" IS NULL OR kqe."cost" >= 0)) AS "unknownAcquisitionLines",
+         count(*) FILTER (WHERE kqe."productQuantity" IS NULL AND kqe."cost" < 0) AS "unknownExitLines",
+         count(*) AS "ledgerLines"
+    FROM "Expense" kqe
+   WHERE kqe."productId" = ka."productId"
+     AND kqe."deletedAt" IS NULL
+     AND kqe."future" = false`;
+
+const QUANTITY_PROJECTION_FROM = kitProjectionFrom(QUANTITY_OWN_AGGREGATE);
+
+const PROJECTED_ACQUIRED = unitWeighted(`"acquiredUnits"`);
+const PROJECTED_EXITED = unitWeighted(`"exitedUnits"`);
+const PROJECTED_EXPECTED = `COALESCE(${PROJECTED_ACQUIRED} - ${PROJECTED_EXITED}, 0)::int`;
+
+/**
  * Correlated scalar for Product root-list sorting and filtering.
  * `productAlias` must be the enclosing query's alias — the relational query
  * builder uses the lowercase `"product"`, plain selects use `"Product"`.
@@ -100,12 +149,9 @@ const expenseSignedUnitsSql = (alias: string) =>
  * and silently self-joins (see the warning block in repo/purchase.ts).
  */
 export const expectedQuantitySql = (productAlias = '"product"') =>
-  `(SELECT COALESCE(sum(${expenseSignedUnitsSql("eq_e")}), 0)::int
-      FROM "Expense" eq_e
-     WHERE eq_e."productId" = ${productAlias}."id"
-       AND eq_e."deletedAt" IS NULL
-       AND eq_e."future" = false
-       AND eq_e."productQuantity" IS NOT NULL)`;
+  `(${kitAncestorCteText(kitSeedForProductAlias(productAlias))}
+    SELECT ${PROJECTED_EXPECTED}
+    ${QUANTITY_PROJECTION_FROM})`;
 
 /**
  * Live units on shelves — NULL wherever `deriveOnHandUnits` in mappers.ts
@@ -191,12 +237,11 @@ export const quantityVarianceSql = (productAlias = '"product"') =>
  * in scope.
  */
 export const expectedQuantityFilterSql = (productId: AnyColumn) =>
-  sql`(SELECT COALESCE(sum(${sql.raw(expenseSignedUnitsSql("eq_e"))}), 0)::int
-         FROM "Expense" eq_e
-        WHERE eq_e."productId" = ${productId}
-          AND eq_e."deletedAt" IS NULL
-          AND eq_e."future" = false
-          AND eq_e."productQuantity" IS NOT NULL)`;
+  sql`(${kitAncestorCteSql(
+    sql`SELECT ${productId}, ${productId}, 1::numeric, 1::numeric, 0`,
+  )}
+      SELECT ${sql.raw(PROJECTED_EXPECTED)}
+      ${sql.raw(QUANTITY_PROJECTION_FROM)})`;
 
 /**
  * Same predicates as {@link onHandUnitsSql} — the live-Location join AND the
@@ -232,38 +277,37 @@ export const hasUnknownQuantityLinesSql = (productId: AnyColumn) =>
                  AND uq_e."future" = false
                  AND uq_e."productQuantity" IS NULL)`;
 
-/** Batch-load the quantity ledger for a page of products. One grouped query. */
+/**
+ * Batch-load the quantity ledger for a page of products.
+ *
+ * Two queries: the projected Expense ledger, then the location count. A join
+ * would multiply the already-grouped first aggregate by the second's
+ * one-to-many.
+ */
 export const loadProductQuantityLedgers = async (
   db: Database | DrizzleTransaction,
   ids: readonly ProductId[],
 ): Promise<Map<ProductId, QuantityLedger>> => {
   if (ids.length === 0) return new Map();
 
-  // `GREATEST`/`LEAST` split the one signed expression into its two halves, so
-  // `acquiredUnits - exitedUnits` is `sum(signedUnits)` by construction — the
-  // same number `expectedQuantitySql` computes for sorting and filtering.
-  const signedUnits = sql.raw(expenseSignedUnitsSql('"Expense"'));
-  const rows = await unwrapDb(db)
-    .select({
-      productId: expense.productId,
-      acquiredUnits: sql<number>`COALESCE(sum(GREATEST(${signedUnits}, 0)), 0)::int`,
-      exitedUnits: sql<number>`COALESCE(sum(-LEAST(${signedUnits}, 0)), 0)::int`,
-      // An unknown-quantity line has no direction of its own, so it is bucketed
-      // by its money: a NULL cost sits with the acquisitions, matching the
-      // signed expression's ELSE.
-      unknownAcquisitionLines: sql<number>`count(*) FILTER (WHERE ${expense.productQuantity} IS NULL AND (${expense.cost} IS NULL OR ${expense.cost} >= 0))::int`,
-      unknownExitLines: sql<number>`count(*) FILTER (WHERE ${expense.productQuantity} IS NULL AND ${expense.cost} < 0)::int`,
-    })
-    .from(expense)
-    .where(
-      and(
-        notDeleted(expense),
-        eq(expense.future, false),
-        isNotNull(expense.productId),
-        inArray(expense.productId, [...ids]),
-      ),
-    )
-    .groupBy(expense.productId);
+  const query = sql`${kitAncestorCteSql(kitSeedForProductIds(ids))}
+    SELECT ka.target AS "productId",
+           COALESCE(${sql.raw(PROJECTED_ACQUIRED)}, 0)::int AS "acquiredUnits",
+           COALESCE(${sql.raw(PROJECTED_EXITED)}, 0)::int AS "exitedUnits",
+           COALESCE(${sql.raw(ownOnly(`"unknownAcquisitionLines"`))}, 0)::int AS "unknownAcquisitionLines",
+           COALESCE(${sql.raw(ownOnly(`"unknownExitLines"`))}, 0)::int AS "unknownExitLines",
+           COALESCE(sum(ko."ledgerLines"), 0)::int AS "ledgerLines"
+      ${sql.raw(QUANTITY_PROJECTION_FROM)}
+     GROUP BY ka.target`;
+
+  const rows = projectionRows<{
+    productId: ProductId;
+    acquiredUnits: number;
+    exitedUnits: number;
+    unknownAcquisitionLines: number;
+    unknownExitLines: number;
+    ledgerLines: number;
+  }>(await unwrapDb(db).execute(query));
 
   // Second grouped query rather than a join: the Expense aggregate above is
   // grouped by product already, and folding a second one-to-many in would
@@ -290,7 +334,12 @@ export const loadProductQuantityLedgers = async (
 
   const byProduct = new Map<ProductId, QuantityLedger>();
   for (const row of rows) {
-    if (row.productId === null) continue;
+    // Absence still means "no ledger at all", the way the grouped query this
+    // replaced did — the seed produces a row per requested product whether or
+    // not any Expense matched, so the line count is what tells the two apart.
+    // A genuine net-zero product (bought five, returned five) keeps its row, and
+    // so does a component whose only lines are its kit's.
+    if (Number(row.ledgerLines) === 0) continue;
     const acquiredUnits = Number(row.acquiredUnits);
     const exitedUnits = Number(row.exitedUnits);
     byProduct.set(row.productId, {

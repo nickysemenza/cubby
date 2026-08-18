@@ -7,14 +7,14 @@ use std::{
 };
 
 use ingredient::unit::{
-    ConversionStep, Measure, MeasureKind, Unit, convert_measure_with_graph_explained,
-    find_connected_components, is_valid, make_graph,
+    ConversionStep, Measure, MeasureKind, Unit, convert_measure_with_graph,
+    convert_measure_with_graph_explained, find_connected_components, is_valid, make_graph,
 };
 use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
-use crate::{WAmount, WUnitMappings, from_js, to_js};
+use crate::{WAmount, WMeasureOk, WMeasureResult, WUnitMappings, from_js, to_js};
 
 /// One hop of an explained conversion path (mirrors `ConversionStep`). Units are
 /// the normalized graph nodes (cup amounts enter at `tsp`, money at `cent`).
@@ -263,6 +263,74 @@ pub fn conv_amount_to_kind(
     conv_to_kind_core(&mappings.to_pairs(), &kind_str, &amount_w.to_measure())
 }
 
+/// `WAmount[]` (`transparent` → `type WAmounts = WAmount[]`), the batched input
+/// for `conv_amounts_to_kind`.
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+#[serde(transparent)]
+pub struct WAmounts(pub Vec<WAmount>);
+
+/// `WMeasureResult[]` (`transparent` → `type WMeasureResults = WMeasureResult[]`),
+/// the batched output of `conv_amounts_to_kind`.
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi)]
+#[serde(transparent)]
+pub struct WMeasureResults(pub Vec<WMeasureResult>);
+
+/// The native core of `conv_amounts_to_kind`: batched sibling of
+/// `conv_to_kind_core` that builds the conversion graph ONCE (`make_graph`) and
+/// converts every measure against it, instead of the per-call rebuild that
+/// `conv_amount_to_kind`/`convert_measure_via_mappings` does. Exists for callers
+/// re-valuing many amounts against one product's mapping graph (e.g. re-pricing
+/// every inventory row for a product) — the same one-call-builds-the-graph
+/// pattern `evaluate_availability` and `cost_recipes` already use.
+///
+/// A single unconvertible measure becomes an error result at its index (the same
+/// message `conv_to_kind_core` would return for it alone) rather than aborting
+/// the batch — one bad row must not blank out every other row's valuation.
+fn conv_to_kind_core_batch(
+    pairs: &[(Measure, Measure)],
+    kind_str: &str,
+    measures: &[Measure],
+) -> Result<Vec<WMeasureResult>, String> {
+    let kind =
+        MeasureKind::from_str(kind_str).map_err(|_| format!("Invalid amount kind: {kind_str}"))?;
+    let graph = make_graph(pairs);
+    Ok(measures
+        .iter()
+        .map(
+            |measure| match convert_measure_with_graph(measure, kind.clone(), &graph) {
+                Some(converted) => {
+                    let amount = WAmount::from(converted);
+                    WMeasureResult::Ok(WMeasureOk {
+                        ok: true,
+                        value: amount.value,
+                        unit: amount.unit,
+                        upper_value: amount.upper_value,
+                    })
+                }
+                None => WMeasureResult::err(format!("Failed to convert '{measure}' to '{kind}'")),
+            },
+        )
+        .collect())
+}
+
+/// Batched sibling of `conv_amount_to_kind`: converts N amounts against ONE
+/// unit-mapping graph, built once. Output order matches input order; see
+/// `conv_to_kind_core_batch` for the per-amount error semantics. The outer
+/// `Result` is only for whole-call failures (an invalid `target_kind_w`) — a
+/// per-amount miss is carried in-band as an `Err` element instead.
+#[wasm_bindgen]
+pub fn conv_amounts_to_kind(
+    mappings: WUnitMappings,
+    target_kind_w: WAmountKind,
+    amounts: WAmounts,
+) -> Result<WMeasureResults, String> {
+    let kind_str: String = from_js(target_kind_w, "amount kind")?;
+    let measures: Vec<Measure> = amounts.0.iter().map(WAmount::to_measure).collect();
+    conv_to_kind_core_batch(&mappings.to_pairs(), &kind_str, &measures).map(WMeasureResults)
+}
+
 /// Convert an amount to a target kind AND return the conversion path traversed
 /// (which unit-mapping edges, with their factors). Result/path are null when no
 /// path exists. Powers the costing debug/explain surfaces.
@@ -501,6 +569,64 @@ mod tests {
         assert_eq!((ok.unit.as_str(), ok.value), ("g", 240.0));
         // No volume→money edge → the public fn's error path.
         assert!(conv_to_kind_core(&pairs, "money", &Measure::new("cup", 2.0)).is_err());
+    }
+
+    /// `conv_to_kind_core_batch` must agree with N sequential `conv_to_kind_core`
+    /// calls, in the same order — the whole point of building the graph once is
+    /// that it must not change what any individual conversion returns.
+    #[test]
+    fn batch_matches_sequential_individual_calls() {
+        let pairs = WUnitMappings(vec![mapping(1.0, "cup", 120.0, "g")]).to_pairs();
+        let measures = vec![
+            Measure::new("cup", 1.0),
+            Measure::new("cup", 2.0),
+            Measure::new("cup", 3.0),
+        ];
+        let batch = conv_to_kind_core_batch(&pairs, "weight", &measures).expect("batch converts");
+        assert_eq!(batch.len(), measures.len());
+        for (measure, result) in measures.iter().zip(batch.iter()) {
+            let single = conv_to_kind_core(&pairs, "weight", measure).expect("single converts");
+            match result {
+                WMeasureResult::Ok(ok) => {
+                    assert_eq!(ok.value, single.value);
+                    assert_eq!(ok.unit, single.unit);
+                }
+                WMeasureResult::Err(e) => panic!("expected Ok, got error: {}", e.error),
+            }
+        }
+    }
+
+    /// An unconvertible amount in the middle of a batch must not disturb its
+    /// neighbors — the whole reason per-amount failure is in-band rather than an
+    /// outer `Result` is so one bad row doesn't blank out every other row.
+    #[test]
+    fn a_miss_at_one_index_does_not_disturb_others() {
+        let pairs = WUnitMappings(vec![mapping(1.0, "cup", 120.0, "g")]).to_pairs();
+        let measures = vec![
+            Measure::new("cup", 1.0),    // converts
+            Measure::new("dollar", 5.0), // no volume/weight->money edge
+            Measure::new("cup", 3.0),    // converts
+        ];
+        let batch = conv_to_kind_core_batch(&pairs, "weight", &measures)
+            .expect("whole call still succeeds");
+        match &batch[0] {
+            WMeasureResult::Ok(ok) => assert_eq!((ok.unit.as_str(), ok.value), ("g", 120.0)),
+            WMeasureResult::Err(e) => panic!("expected Ok at index 0, got error: {}", e.error),
+        }
+        assert!(matches!(batch[1], WMeasureResult::Err(_)));
+        match &batch[2] {
+            WMeasureResult::Ok(ok) => assert_eq!((ok.unit.as_str(), ok.value), ("g", 360.0)),
+            WMeasureResult::Err(e) => panic!("expected Ok at index 2, got error: {}", e.error),
+        }
+    }
+
+    /// Empty input must return empty output without panicking (no `graph`
+    /// construction edge case, no index-out-of-bounds on an empty measures slice).
+    #[test]
+    fn empty_amounts_yields_empty_results() {
+        let pairs = WUnitMappings(vec![mapping(1.0, "cup", 120.0, "g")]).to_pairs();
+        let batch = conv_to_kind_core_batch(&pairs, "weight", &[]).expect("empty batch succeeds");
+        assert!(batch.is_empty());
     }
 
     /// A count target must keep its fraction. `MeasureKind::Other(_)` normalizes to

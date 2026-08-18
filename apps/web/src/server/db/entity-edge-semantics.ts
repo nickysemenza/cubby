@@ -218,6 +218,20 @@ export const ENTITY_EDGE_SEMANTICS = {
         "A Location that IS an instance of this Product — the bin, tote or rack itself, not stock held in it. Deleting the Product would leave those locations with neither a type nor an identity, since a linked location stops carrying its own `type`.",
       liveness: { kind: "must-target-live" },
     },
+    "ProductComponent.parentProductId": {
+      role: "composition",
+      label: "kit components",
+      description:
+        "A row on this Product's own component list — what's inside it, when it's a kit or multi-pack. Deleting the kit takes its component list with it.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ProductComponent.componentProductId": {
+      role: "usage",
+      label: "kits it's listed inside",
+      description:
+        "This Product cited as a part of another (kit) Product's component list, with its own quantity. The kit and the part remain independently real products; this only says the part is currently accounted for inside the kit.",
+      liveness: { kind: "must-target-live" },
+    },
   },
   location: {
     "InventoryEntry.locationId": {

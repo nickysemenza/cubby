@@ -386,6 +386,33 @@ export const splitExpenseInput = z.object({
 });
 export type SplitExpenseInput = z.infer<typeof splitExpenseInput>;
 
+/**
+ * The reconciliation cue `splitExpense` itself deliberately does not compute —
+ * see its doc comment in `repo/purchase.ts`. This exists so the MCP tool can
+ * hand a caller the same cue the web dialog shows live as the operator types,
+ * without either side back-computing or rejecting anything.
+ *
+ * Compared in **cents**, like `reconcilePurchase` above and for the same
+ * reason: both operands are dollar amounts off `double precision` columns, and
+ * a plain float subtraction makes the verdict depend on where binary floating
+ * point happens to land rather than on the actual cent gap.
+ */
+export const splitExpenseDelta = (
+  originalCost: number | null,
+  partCosts: number[],
+): { originalCost: number | null; partsSum: number; delta: number | null } => {
+  const partsSumCents = partCosts.reduce(
+    (sum, cost) => sum + Math.round(cost * 100),
+    0,
+  );
+  const partsSum = partsSumCents / 100;
+  if (originalCost === null) {
+    return { originalCost: null, partsSum, delta: null };
+  }
+  const deltaCents = partsSumCents - Math.round(originalCost * 100);
+  return { originalCost, partsSum, delta: deltaCents / 100 };
+};
+
 /** Agent-safe Purchase deletion: only already-empty vendor events qualify. */
 export const deleteEmptyPurchasesInput = z.strictObject({
   ids: z

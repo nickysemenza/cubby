@@ -34,6 +34,7 @@ describe("PROBLEM_CLASS", () => {
     financialTransactionAllocationDefects: "defect",
     incompleteStatementImports: "defect",
     ingredientsWithPartialCoverage: "defect",
+    inventoryWithoutPricePath: "defect",
     invalidFinancialJson: "defect",
     locationsWithoutAiDescription: "defect",
     manufacturerSpellingVariants: "defect",

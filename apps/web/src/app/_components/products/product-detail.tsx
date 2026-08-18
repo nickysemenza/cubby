@@ -6,6 +6,7 @@ import type {
 import { isNonFoodCategory } from "@cubby/shared";
 import {
   Apple,
+  Boxes,
   ChefHat,
   FileText,
   HandCoins,
@@ -52,6 +53,7 @@ import { ProductDiscardDialog } from "./product-discard-dialog";
 import { ProductExpenseHistory } from "./product-expense-history";
 import { ProductForm } from "./product-form";
 import { heroPresence } from "./product-hero-presence";
+import { ProductKitComponents } from "./product-kit-components";
 import { ProductProjectUses } from "./product-project-uses";
 import { ProductPurchases } from "./product-purchases";
 import { ProductStockedAt } from "./product-stocked-at";
@@ -169,6 +171,16 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       icon: ReceiptText,
       zone: "main" as const,
       content: <ProductPurchases productId={product.id} />,
+    },
+    // Custom section: Kit Components — what this Product is made of via
+    // `ProductComponent` (if it's a kit or multi-pack), and every kit it's
+    // listed inside (if it's a part). This edge carries no money: the kit
+    // keeps its own Expense History above, never split per component.
+    {
+      title: "Kit Components",
+      icon: Boxes,
+      zone: "main" as const,
+      content: <ProductKitComponents productId={product.id} />,
     },
     {
       title: "Vendors",

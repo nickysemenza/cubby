@@ -54,7 +54,7 @@
  * self-join query is most exposed to. Building one explicit `UNION ALL` of
  * hand-written, alias-qualified SQL fragments — table and column names always
  * routed through `sql.identifier()`, values always bound parameters — sidesteps
- * both problems and keeps every one of the 34 branches visually inspectable.
+ * both problems and keeps every one of the 47 branches visually inspectable.
  */
 
 import type { Entity } from "@cubby/schemas/entity";
@@ -97,7 +97,7 @@ const EXPECTED_HARD_DELETE_ONLY_TABLES = new Set([
 ]);
 
 /** The must-target-live edges this audit checks, derived (not hand-maintained) should equal this. */
-const EXPECTED_EDGE_COUNT = 45;
+const EXPECTED_EDGE_COUNT = 47;
 
 /**
  * Derive one {@link EdgeAuditSpec} per `must-target-live` edge in
@@ -108,7 +108,7 @@ const EXPECTED_EDGE_COUNT = 45;
  * (`column.table` / `column.name`), then checked against the edge's own key
  * string — a mis-derivation (wrong table, wrong column) throws instead of
  * silently querying the wrong data. The two structural counts this repo's
- * history depends on (34 audited edges, exactly `ProjectDependency` +
+ * history depends on (47 audited edges, exactly `ProjectDependency` +
  * `TaskDependency` as the hard-delete-only source tables) are asserted at the
  * end for the same reason: drift should fail loudly, not read as "0 problems
  * found" against a query that quietly stopped covering what it used to.
@@ -269,7 +269,7 @@ type CountRow = Record<string, unknown> & {
 };
 
 /**
- * Every live row whose FK points at a soft-deleted target, across all 34
+ * Every live row whose FK points at a soft-deleted target, across all 47
  * `must-target-live` incoming edges. See the file-level doc comment for the
  * invariant, why it's a regression guard, and the two audit exemptions
  * (`Ingredient.recipeId` skipped entirely, `Location.parentId` included

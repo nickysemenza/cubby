@@ -93,10 +93,13 @@ export function calculateInventoryValuation(
     const valuation = item.valuation;
 
     // Priced means "somebody set a price", not "worth something". A valuation
-    // is null exactly when the Product has no effective price (see
-    // computeInventoryValuation), so `!= null` is the faithful test — and an
-    // explicit $0 (bundled freebies) is a real answer that shouldn't keep
-    // nagging as unpriced. Adding 0 to the total is a no-op either way.
+    // is null when the entry's amount has no path to money (see
+    // computeInventoryValuation) — which is usually "no price set", but can
+    // also be a priced Product whose unit can't reach the money edge. So
+    // `!= null` is the faithful test — and an explicit $0 (bundled freebies) is
+    // a real answer that shouldn't keep nagging as unpriced. Adding 0 to the
+    // total is a no-op either way. This bucket lumps the two null causes
+    // together; `findInventoryWithoutPricePath` separates the second.
     const hasValuation = valuation != null;
 
     if (hasValuation) {

@@ -3,28 +3,38 @@
  * edge semantics — replacing the "must agree on both" prose comment that used
  * to sit next to `deleteProducts` in `crud.ts`.
  *
- * `product` has ten incoming edges (`INCOMING_EDGES.product` in
+ * `product` has twelve incoming edges (`INCOMING_EDGES.product` in
  * `entity-incoming-edges.ts`). Their *stable roles* now live in
  * `ENTITY_EDGE_SEMANTICS.product` (`~/server/db/entity-edge-semantics`)
  * alongside every other entity's, because a role describes what an edge means
  * and not what deleting does about it. Three are **acquisition** evidence —
  * proof the thing was actually owned at some point — two are durable
  * **history**, one is a retained Wishlist **association**, one is a
- * **reference** from a Location's own record, two are **metadata**, and one is
- * **media**:
+ * **reference** from a Location's own record, one is **usage** by a live kit,
+ * one is **composition** (a kit's own component list), two are **metadata**,
+ * and one is **media**:
  *
  *  - acquisition: `InventoryEntry.productId` (it's on a shelf right now) and
  *    `Expense.productId` (it was bought — the ledger's net cost and
  *    owned/sold window derive from this row, so an orphaned product would
  *    silently corrupt that derivation with no restore path).
  *  - history: `Task.subjectProductId` (work performed on the product; deleting
- *    the subject would leave that durable task history nameless).
+ *    the subject would leave that durable task history nameless) and
+ *    `ProjectToolUsage.productId` (a reusable tool's project-use history).
  *  - association: `WishCandidate.productId` (a Tool alternative remains
  *    meaningful until removed from its Wishlist entries).
  *  - reference: `Location.productId` (a Location that IS this product — the
  *    bin itself). Retaining because a linked Location deliberately carries no
  *    `type` of its own: the SKU is its form factor, so orphaning the Product
  *    leaves the Location with no identity at all, not merely a broken link.
+ *  - usage: `ProductComponent.componentProductId` — this product is cited as
+ *    a part inside another (kit) product's component list. Retaining for the
+ *    same reason as a purchase link: deleting it would silently shrink the
+ *    kit's contents with no record of what used to be there.
+ *  - composition: `ProductComponent.parentProductId` — this product's OWN
+ *    component list, when it's a kit. NOT retaining, deliberately asymmetric
+ *    with the edge above: deleting a kit is supposed to take its component
+ *    list with it, the same way deleting a recipe takes its sections.
  *  - metadata / media: `ProductExternalId.productId`,
  *    `ProductUnitMappings.productId`, `ProductImage.productId` — none of which
  *    say anything about ownership on their own.
@@ -78,14 +88,22 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 export const PRODUCT_EDGE_ROLES = ENTITY_EDGE_SEMANTICS.product;
 
 /**
- * The roles that make a product worth keeping: acquisition evidence, or
- * durable work history. An allowlist on purpose — see the file doc.
+ * The roles that make a product worth keeping: acquisition evidence, durable
+ * work history, or a live reference from another row that still needs it. An
+ * allowlist on purpose — see the file doc.
+ *
+ * `usage` joined this set for `ProductComponent.componentProductId`: a
+ * product still listed inside a live kit's component list is exactly as
+ * undeletable as one still on a purchase order, for the same reason —
+ * deleting it would silently shrink the kit's contents with no record of
+ * what used to be there.
  */
 const RETAINING_ROLES = [
   "acquisition",
   "history",
   "association",
   "reference",
+  "usage",
 ] as const;
 type RetainingRole = (typeof RETAINING_ROLES)[number];
 
@@ -196,5 +214,19 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
     effect: "soft-delete",
     description:
       "Image associations are soft-deleted with the product, and each file is\n      deleted too unless something else still references it.",
+  },
+  "ProductComponent.parentProductId": {
+    code: "soft-delete-kit-components",
+    effect: "soft-delete",
+    description:
+      "Deleting a kit takes its own component list with it — the individual component Products are untouched.",
+  },
+  "ProductComponent.componentProductId": {
+    code: "block-live-kit-membership",
+    effect: "block",
+    description:
+      "A product still listed inside a live kit's component list can't be deleted — remove it from the kit first.",
+    reason: "PRODUCT_HAS_KIT_LINKS",
+    label: "kits it's listed inside",
   },
 } as const satisfies IncomingEdgePolicy<"product", ProductDeleteDisposition>;

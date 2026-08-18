@@ -61,6 +61,35 @@
  * Every re-pointed inventory entry then re-values at the KEEPER's effective
  * price, so `syncInventoryValuationsForProduct` runs at the end — otherwise a
  * moved entry keeps a valuation derived from a product that no longer exists.
+ *
+ * ### The third rule: kit composition is a graph, not a slot
+ *
+ * `ProductComponent` points Product at Product, so a merge doesn't just move
+ * rows between two disjoint sets — it **identifies two nodes of a DAG**, and
+ * that can make a product contain itself. Both directions are real: merging a
+ * kit into one of its own (possibly several-hops-down) components, and merging
+ * a component into the kit that lists it. The DB CHECK
+ * `ProductComponent_not_self_check` only refuses the one-hop case; the
+ * multi-hop one is a reachability question, answered here by
+ * {@link findMergeComponentCycle} over the WHOLE projected post-merge edge set.
+ * Two individually-acyclic products can produce a cycle once their edge sets
+ * are unioned, so checking only the touched edge is not enough.
+ *
+ * On top of that, `(parentProductId, componentProductId)` is another partial
+ * unique slot, and the two directions want *opposite* fold rules:
+ *
+ *  - **Two kits merging, both listing the same part.** Same quantity → dedupe;
+ *    different quantities → refuse the whole merge
+ *    (`PRODUCT_MERGE_COMPONENT_QUANTITY_MISMATCH`). Only one row can survive
+ *    the index, and silently keeping either number invents or destroys units of
+ *    a real part. Same refusal shape as the inventory unit mismatch, and for
+ *    the same reason: there is no honest answer, so the operator picks one
+ *    first.
+ *  - **Two components merging, both listed in one kit.** Quantities **sum**.
+ *    Two rows saying "this kit holds 2 of A" and "this kit holds 3 of B", once
+ *    A and B are established to be the same part, say the kit holds 5 of it —
+ *    the identical argument that makes same-location stock sum rather than
+ *    collapse.
  */
 
 import type { Amount } from "@cubby/schemas/codec";
@@ -79,13 +108,14 @@ import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import type { MergeProductsInput } from "@cubby/schemas/product";
 import { and, eq, inArray } from "drizzle-orm";
 import { sumBy, uniq } from "es-toolkit";
-import type { Database } from "~/server/db";
+import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   expense,
   inventoryEntry,
   location,
   product,
+  productComponent,
   productExternalId,
   productImage,
   productUnitMappings,
@@ -180,6 +210,18 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     description:
       "Locations that ARE a merged product re-point onto the survivor. A plain repoint, not a fold: many locations legitimately share one SKU (twelve bins can all be the same tote), so there is no slot to collide on.",
   },
+  "ProductComponent.parentProductId": {
+    code: "repoint-or-dedupe-identical-component",
+    effect: "move-dedupe",
+    description:
+      "A merged kit's own component list moves onto the survivor; a part both kits list at the SAME quantity is deduped, and one they list at different quantities refuses the merge rather than inventing or destroying units.",
+  },
+  "ProductComponent.componentProductId": {
+    code: "repoint-or-sum-same-kit",
+    effect: "move-dedupe",
+    description:
+      "Kits that listed a merged product as a part now list the survivor; where one kit listed both, the two quantities are summed into the survivor's row and the absorbed one is soft-deleted.",
+  },
 } as const satisfies IncomingEdgePolicy<"product", OperationDisposition>;
 
 /**
@@ -202,6 +244,10 @@ const CARRIED_COLUMNS = [
   "category",
   "ingredientId",
   "expectedQuantity",
+  // Nullable on purpose (`presenceFilter` exposes "undecided" as a real
+  // state), so a deliberate `false` on a merged-away kit is a value the
+  // survivor's null slot should adopt — not a default to be re-derived.
+  "stockTracked",
 ] as const;
 type CarriedColumn = (typeof CARRIED_COLUMNS)[number];
 
@@ -241,6 +287,14 @@ interface ProductMergeSummary {
   projectUsesMoved: number;
   purchaseLinksMoved: number;
   wishCandidatesMoved: number;
+  /** Rows on a merged-away KIT's component list, re-pointed onto the survivor. */
+  componentsMoved: number;
+  /** Component rows dropped because the survivor already listed that part at the same quantity. */
+  componentsDeduped: number;
+  /** Rows where a merged-away product was the PART, re-pointed onto the survivor. */
+  kitLinksMoved: number;
+  /** Rows summed into the survivor's row because one kit listed two merged parts. */
+  kitLinksSummed: number;
   aliasesAdded: string[];
   /** Column names the survivor adopted from a merged-away product. */
   carriedFields: string[];
@@ -286,6 +340,195 @@ const planInventoryFold = (args: {
       .map((row) => ({ row, into })),
   );
   return { ...plan, mismatches };
+};
+
+/** One live `ProductComponent` row: a kit, one part it contains, how many. */
+interface ComponentRow {
+  id: string;
+  parentProductId: ProductId;
+  componentProductId: ProductId;
+  quantity: number;
+}
+
+/**
+ * Would merging `loserIds` into `keepId` make some product contain itself?
+ *
+ * Pure, and deliberately so — the whole question is decidable from the edge
+ * set, so it is unit-tested directly rather than only through a real merge.
+ *
+ * **The projection.** A merge identifies nodes: every occurrence of a loser id,
+ * on either end of an edge, becomes `keepId`. The check runs over that whole
+ * projected edge set, not just the edges the merge happens to re-point — a kit
+ * two hops above the survivor and a part two hops below it are individually
+ * fine and close a loop the moment the two nodes become one.
+ *
+ * **Why searching from the survivor is exhaustive.** Any cycle in the projected
+ * graph that does *not* pass through `keepId` consists entirely of edges whose
+ * endpoints the projection left alone, so it already existed and the merge did
+ * not cause it. Every cycle the merge *creates* therefore contains `keepId`,
+ * which makes "does the survivor reach itself" the exact question — and one
+ * ordinary traversal answers it, rather than a full-graph SCC pass.
+ *
+ * **Termination.** `seen` admits each node once, so a pre-existing corrupt
+ * cycle anywhere downstream is walked into and then dropped instead of spun on.
+ * That does not cost completeness: this asks whether *some* reachable node has
+ * an edge back to `keepId`, and that edge is examined when the node is expanded
+ * regardless of which path first reached it. O(V + E) over the reachable
+ * projected subgraph, one visit per node, one look per edge.
+ *
+ * Returns the offending cycle as a closed path (`[keepId, …, keepId]`, in
+ * post-merge ids), or null when the merge is safe.
+ */
+export const findMergeComponentCycle = (args: {
+  edges: readonly {
+    parentProductId: ProductId;
+    componentProductId: ProductId;
+  }[];
+  keepId: ProductId;
+  loserIds: readonly ProductId[];
+}): ProductId[] | null => {
+  const merged = new Set<ProductId>(args.loserIds);
+  const project = (id: ProductId): ProductId =>
+    merged.has(id) ? args.keepId : id;
+
+  const children = new Map<ProductId, ProductId[]>();
+  for (const edge of args.edges) {
+    const parent = project(edge.parentProductId);
+    const child = project(edge.componentProductId);
+    const bucket = children.get(parent);
+    if (bucket) bucket.push(child);
+    else children.set(parent, [child]);
+  }
+
+  const cameFrom = new Map<ProductId, ProductId>();
+  const seen = new Set<ProductId>([args.keepId]);
+  const stack: ProductId[] = [args.keepId];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (node === undefined) break;
+    for (const child of children.get(node) ?? []) {
+      if (child === args.keepId) {
+        const path: ProductId[] = [];
+        let at: ProductId | undefined = node;
+        while (at !== undefined && at !== args.keepId) {
+          path.push(at);
+          at = cameFrom.get(at);
+        }
+        path.push(args.keepId);
+        path.reverse();
+        return [...path, args.keepId];
+      }
+      if (seen.has(child)) continue;
+      seen.add(child);
+      cameFrom.set(child, node);
+      stack.push(child);
+    }
+  }
+  return null;
+};
+
+interface ComponentMergePlan {
+  /** Non-null when the merge would make a product contain itself. */
+  cycle: ProductId[] | null;
+  /** Rows where a LOSER is the kit — its component list moving to the survivor. */
+  kit: {
+    repoint: ComponentRow[];
+    /** Same part, same quantity, already on the survivor's list — drop. */
+    dedupe: ComponentRow[];
+    /** Same part, DIFFERENT quantity — the merge must refuse. */
+    conflicts: Array<{ into: ComponentRow; rows: ComponentRow[] }>;
+  };
+  /** Rows where a LOSER is the part — kits that listed it now list the survivor. */
+  part: {
+    repoint: ComponentRow[];
+    /** One kit listed two merged parts; the quantities sum into `into`. */
+    absorb: Array<{ into: ComponentRow; rows: ComponentRow[] }>;
+  };
+}
+
+/**
+ * The whole `ProductComponent` consequence of a merge, computed without
+ * writing, so `mergeProducts` and `previewMergeProducts` share one
+ * implementation of the rules rather than two readings of them. Throws
+ * nothing: both refusals come back as data (`cycle`, `kit.conflicts`) so the
+ * preview can report them as blockers before anything destructive is confirmed.
+ *
+ * `rows` is every LIVE component row, not just the touched ones — {@link
+ * findMergeComponentCycle} needs the global edge set, and the fold plans simply
+ * ignore rows that name no merged product.
+ */
+export const planProductComponentMerge = (args: {
+  keepId: ProductId;
+  loserIds: readonly ProductId[];
+  rows: readonly ComponentRow[];
+}): ComponentMergePlan => {
+  const cycle = findMergeComponentCycle({
+    edges: args.rows,
+    keepId: args.keepId,
+    loserIds: args.loserIds,
+  });
+
+  const merged = new Set<ProductId>(args.loserIds);
+  const inMergeSet = (id: ProductId) => id === args.keepId || merged.has(id);
+  // A row with BOTH ends inside the merge set folds to a self-edge — which is
+  // exactly the cycle reported above, and the reason the merge is about to be
+  // refused. Dropping it here keeps the two fold plans over disjoint rows so a
+  // preview can still describe everything else that would have happened.
+  const rows = args.rows.filter(
+    (row) =>
+      !(inMergeSet(row.parentProductId) && inMergeSet(row.componentProductId)),
+  );
+
+  const kitPlan = planSlotCollisions({
+    keeperRows: rows.filter((row) => row.parentProductId === args.keepId),
+    loserRows: rows.filter((row) => merged.has(row.parentProductId)),
+    slotKey: (row) => row.componentProductId,
+  });
+  const sameQuantity = (group: { into: ComponentRow; rows: ComponentRow[] }) =>
+    group.rows.every((row) => row.quantity === group.into.quantity);
+
+  const partPlan = planSlotCollisions({
+    keeperRows: rows.filter((row) => row.componentProductId === args.keepId),
+    loserRows: rows.filter((row) => merged.has(row.componentProductId)),
+    slotKey: (row) => row.parentProductId,
+  });
+
+  return {
+    cycle,
+    kit: {
+      repoint: kitPlan.repoint,
+      dedupe: kitPlan.absorb.filter(sameQuantity).flatMap(({ rows }) => rows),
+      conflicts: kitPlan.absorb.filter((group) => !sameQuantity(group)),
+    },
+    part: partPlan,
+  };
+};
+
+/** Every live component row. See {@link planProductComponentMerge} on why all of them. */
+const loadComponentRows = async (
+  db: DrizzleClient | DrizzleTransaction,
+): Promise<ComponentRow[]> =>
+  await db.query.productComponent.findMany({
+    where: notDeleted(productComponent),
+    columns: {
+      id: true,
+      parentProductId: true,
+      componentProductId: true,
+      quantity: true,
+    },
+  });
+
+/** Render an id path as shortcodes — a uuid must never reach a client message. */
+const describeProductPath = async (
+  db: DrizzleClient | DrizzleTransaction,
+  path: readonly ProductId[],
+): Promise<string> => {
+  const rows = await db
+    .select({ id: product.id, shortcode: product.shortcode })
+    .from(product)
+    .where(inArray(product.id, uniq([...path])));
+  const byId = new Map(rows.map((row) => [row.id, row.shortcode]));
+  return path.map((id) => byId.get(id) ?? "?").join(" → ");
 };
 
 /**
@@ -336,6 +579,7 @@ export const mergeProducts = async (
         category: true,
         ingredientId: true,
         expectedQuantity: true,
+        stockTracked: true,
       },
     })) as unknown as ProductMergeRow[];
     const keeper = rows.find((row) => row.id === keepId);
@@ -378,6 +622,38 @@ export const mergeProducts = async (
       throw createAppError(
         "PRODUCT_MERGE_INVENTORY_UNIT_MISMATCH",
         `Cannot merge products stocked in the same location under different units (${detail}). Convert one entry first.`,
+      );
+    }
+
+    // Both component refusals are computed BEFORE anything is written. The
+    // transaction would roll back either way, but a preview and a mutation that
+    // refuse for the same reason at the same point are much easier to keep
+    // honest than one that discovers it halfway through.
+    const componentPlan = planProductComponentMerge({
+      keepId,
+      loserIds,
+      rows: await loadComponentRows(tx),
+    });
+    if (componentPlan.cycle) {
+      throw createAppError(
+        "PRODUCT_MERGE_COMPONENT_CYCLE",
+        `Cannot merge: the result would contain itself (${await describeProductPath(tx, componentPlan.cycle)}). Detach the kit link first.`,
+      );
+    }
+    if (componentPlan.kit.conflicts.length > 0) {
+      const detail = await Promise.all(
+        componentPlan.kit.conflicts.map(async ({ into, rows }) => {
+          const part = await describeProductPath(tx, [into.componentProductId]);
+          const quantities = uniq([
+            into.quantity,
+            ...rows.map((row) => row.quantity),
+          ]).join(" vs ");
+          return `${part} (${quantities})`;
+        }),
+      );
+      throw createAppError(
+        "PRODUCT_MERGE_COMPONENT_QUANTITY_MISMATCH",
+        `Cannot merge kits that list the same component in different quantities: ${detail.join(", ")}. Correct one list first.`,
       );
     }
 
@@ -552,6 +828,67 @@ export const mergeProducts = async (
       now,
     });
 
+    // Composition, both directions. Nothing here needs its own audit entry:
+    // a dedupe drops a row identical to one that survives, and a sum preserves
+    // the total, so unlike a discarded external id there is no value to name.
+    if (componentPlan.kit.repoint.length > 0) {
+      await tx
+        .update(productComponent)
+        .set({ parentProductId: keepId })
+        .where(
+          inArray(
+            productComponent.id,
+            componentPlan.kit.repoint.map((row) => row.id),
+          ),
+        );
+      summary.componentsMoved = componentPlan.kit.repoint.length;
+    }
+    if (componentPlan.kit.dedupe.length > 0) {
+      await tx
+        .update(productComponent)
+        .set({ deletedAt: now })
+        .where(
+          inArray(
+            productComponent.id,
+            componentPlan.kit.dedupe.map((row) => row.id),
+          ),
+        );
+      summary.componentsDeduped = componentPlan.kit.dedupe.length;
+    }
+    if (componentPlan.part.repoint.length > 0) {
+      await tx
+        .update(productComponent)
+        .set({ componentProductId: keepId })
+        .where(
+          inArray(
+            productComponent.id,
+            componentPlan.part.repoint.map((row) => row.id),
+          ),
+        );
+      summary.kitLinksMoved = componentPlan.part.repoint.length;
+    }
+    let kitLinksSummed = 0;
+    for (const { into, rows } of componentPlan.part.absorb) {
+      // Summed per GROUP, not per row — one kit can list three parts that all
+      // merge into the survivor, and per-row updates would each read the
+      // unmutated `into.quantity` and overwrite rather than accumulate.
+      await tx
+        .update(productComponent)
+        .set({ quantity: into.quantity + sumBy(rows, (row) => row.quantity) })
+        .where(eq(productComponent.id, into.id));
+      await tx
+        .update(productComponent)
+        .set({ deletedAt: now })
+        .where(
+          inArray(
+            productComponent.id,
+            rows.map((row) => row.id),
+          ),
+        );
+      kitLinksSummed += rows.length;
+    }
+    summary.kitLinksSummed = kitLinksSummed;
+
     summary.unitMappingsMoved = (
       await repointEdge(tx, "product", "ProductUnitMappings.productId", {
         from: loserIds,
@@ -690,6 +1027,10 @@ const emptySummary = (
   projectUsesMoved: 0,
   purchaseLinksMoved: 0,
   wishCandidatesMoved: 0,
+  componentsMoved: 0,
+  componentsDeduped: 0,
+  kitLinksMoved: 0,
+  kitLinksSummed: 0,
   aliasesAdded: [],
   carriedFields: [],
 });
@@ -698,9 +1039,10 @@ const emptySummary = (
  * What `mergeProducts` would do to the given products, without doing it.
  *
  * Reads the SAME `PRODUCT_MERGE_EDGE_POLICY` the mutation writes against, and
- * runs the SAME `planInventoryFold` — so the unit-mismatch refusal shows up as
- * a blocker the dialog can disable confirmation on, instead of only surfacing
- * as an error toast after the merge was attempted.
+ * runs the SAME `planInventoryFold` and `planProductComponentMerge` — so the
+ * three refusals (unit mismatch, kit-graph cycle, disagreeing component
+ * quantities) show up as blockers the dialog can disable confirmation on,
+ * instead of only surfacing as an error toast after the merge was attempted.
  *
  * Advisory only. `mergeProducts` re-plans everything inside its own
  * transaction; nothing here is a lock or a permission.
@@ -738,6 +1080,18 @@ export const previewMergeProducts = async (
     loserRows: inventoryRows.filter((row) => row.productId !== keepId),
   });
 
+  const componentPlan = planProductComponentMerge({
+    keepId,
+    loserIds: losers,
+    rows: await loadComponentRows(dbClient),
+  });
+  // Blockers are labelled, not just described: `ImpactRow` renders
+  // total/label/code and never `description`, so naming the cycle or the
+  // disagreeing quantities anywhere else would make them invisible in the UI.
+  const cycleLabel = componentPlan.cycle
+    ? `merge would make a product contain itself (${await describeProductPath(dbClient, componentPlan.cycle)})`
+    : null;
+
   const byProduct = (rows: Array<{ productId: ProductId }>) => {
     const out: Record<string, number> = {};
     for (const row of rows) out[row.productId] = (out[row.productId] ?? 0) + 1;
@@ -745,6 +1099,36 @@ export const previewMergeProducts = async (
   };
 
   const blockers = present([
+    impact({
+      disposition: {
+        code: "block-component-cycle",
+        effect: "block",
+        description:
+          "A product cannot be its own component, at any depth. Merging these would close a loop in the kit graph; detach the kit link first.",
+      },
+      edgeKey: "ProductComponent.parentProductId",
+      label: cycleLabel ?? "kit graph cycles",
+      // One per loser: the cycle is a property of the identification itself,
+      // not of any single row, so there is no row to attribute it to.
+      byTargetId: cycleLabel
+        ? Object.fromEntries(losers.map((id) => [id, 1]))
+        : {},
+    }),
+    impact({
+      disposition: {
+        code: "block-component-quantity-mismatch",
+        effect: "block",
+        description:
+          "Both kits list the same component but disagree on how many, and only one row can survive the (parentProductId, componentProductId) index. Correct one list first.",
+      },
+      edgeKey: "ProductComponent.parentProductId",
+      label: "components listed at conflicting quantities",
+      byTargetId: byProduct(
+        componentPlan.kit.conflicts.flatMap(({ rows }) =>
+          rows.map((row) => ({ productId: row.parentProductId })),
+        ),
+      ),
+    }),
     impact({
       disposition: {
         code: "block-inventory-unit-mismatch",
@@ -862,6 +1246,58 @@ export const previewMergeProducts = async (
         wishCandidate,
         wishCandidate.productId,
         losers,
+      ),
+    }),
+    impact({
+      disposition:
+        PRODUCT_MERGE_EDGE_POLICY["ProductComponent.parentProductId"],
+      edgeKey: "ProductComponent.parentProductId",
+      label: "kit component rows moved",
+      byTargetId: byProduct(
+        componentPlan.kit.repoint.map((row) => ({
+          productId: row.parentProductId,
+        })),
+      ),
+    }),
+    impact({
+      disposition: {
+        code: "dedupe-identical-component",
+        effect: "move-dedupe",
+        description:
+          "The survivor already lists this component at the same quantity, so the duplicate row is soft-deleted rather than moved.",
+      },
+      edgeKey: "ProductComponent.parentProductId",
+      label: "duplicate component rows deduped",
+      byTargetId: byProduct(
+        componentPlan.kit.dedupe.map((row) => ({
+          productId: row.parentProductId,
+        })),
+      ),
+    }),
+    impact({
+      disposition:
+        PRODUCT_MERGE_EDGE_POLICY["ProductComponent.componentProductId"],
+      edgeKey: "ProductComponent.componentProductId",
+      label: "kit memberships moved",
+      byTargetId: byProduct(
+        componentPlan.part.repoint.map((row) => ({
+          productId: row.componentProductId,
+        })),
+      ),
+    }),
+    impact({
+      disposition: {
+        code: "sum-same-kit-quantity",
+        effect: "move-dedupe",
+        description:
+          "One kit listed two of the merged products, so their quantities are summed into the survivor's row and the absorbed row is soft-deleted.",
+      },
+      edgeKey: "ProductComponent.componentProductId",
+      label: "kit quantities summed into the survivor",
+      byTargetId: byProduct(
+        componentPlan.part.absorb.flatMap(({ rows }) =>
+          rows.map((row) => ({ productId: row.componentProductId })),
+        ),
       ),
     }),
     impact({

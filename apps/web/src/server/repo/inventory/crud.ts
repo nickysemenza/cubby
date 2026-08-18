@@ -17,7 +17,10 @@ import {
 } from "@cubby/schemas/pagination";
 import type { ProductCategory } from "@cubby/schemas/product";
 import { and, asc, count, desc, eq, inArray, not, sql, sum } from "drizzle-orm";
-import { computeInventoryValuation } from "~/lib/price-mapping-utils";
+import {
+  computeInventoryValuation,
+  computeInventoryValuations,
+} from "~/lib/price-mapping-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   entityEmbedding,
@@ -38,6 +41,7 @@ import {
   getDb,
   lockAndValidateForDelete,
   notDeleted,
+  parseInventoryAmount,
   relations,
   unwrapDb,
   updateLiveAndReturn,
@@ -50,10 +54,7 @@ import {
   present,
   sideEffect,
 } from "~/server/repo/impact";
-import {
-  loadEffectiveProductPrice,
-  loadProductPricing,
-} from "~/server/repo/product/pricing";
+import { loadProductPricing } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import { resolveFilterIds } from "~/server/repo/shortcode-resolver";
@@ -70,6 +71,7 @@ import type {
   InventoryEntryDeepDB,
   UpdateInventoryEntryData,
 } from "./types";
+import { loadValuationGraph } from "./valuation";
 
 const loadInventoryEntryPricing = async (
   db: Database,
@@ -85,63 +87,70 @@ const loadInventoryEntryPricing = async (
     })),
   );
 
+/**
+ * Value one entry's amount against its Product's conversion graph. Takes the
+ * whole `Amount`, not a scalar: the unit is what decides whether "4" means four
+ * packs or four rolls out of one.
+ */
 export const computeValuationForEntry = async (
   db: Database | DrizzleTransaction,
   productId: ProductId,
-  amountValue: number,
-): Promise<number | null> => {
-  const client = unwrapDb(db);
-  const productData = await client.query.product.findFirst({
-    where: eq(product.id, productId),
-    columns: { id: true, price: true },
-  });
-  const effectivePrice = productData
-    ? await loadEffectiveProductPrice(db, productData)
-    : null;
-  return computeInventoryValuation(amountValue, effectivePrice);
-};
+  amount: Amount,
+): Promise<number | null> =>
+  computeInventoryValuation(amount, await loadValuationGraph(db, productId));
 
+/**
+ * Re-value every live entry of a Product after its effective price moved. One
+ * graph load and ONE batched WASM call for the whole fan-out.
+ *
+ * Rows whose valuation is unchanged are skipped, so the returned count is rows
+ * *changed*, not rows examined (no current caller reads it). That matters
+ * because `batchUpdateWithCaseWhen` sets `updatedAt` unconditionally: without
+ * the skip, every price change touches every live entry of the product, which
+ * is noise in the data-quality fingerprints and can trip the `INVENTORY_STALE`
+ * guard in `bulk.ts` for a recount session that changed nothing.
+ */
 export const syncInventoryValuationsForProduct = async (
   db: Database | DrizzleTransaction,
   productId: ProductId,
 ): Promise<number> => {
   const client = unwrapDb(db);
 
-  const productData = await client.query.product.findFirst({
-    where: eq(product.id, productId),
-    columns: { id: true, price: true },
-  });
-  const productPrice = productData
-    ? await loadEffectiveProductPrice(db, productData)
-    : null;
-
   const entries = await client.query.inventoryEntry.findMany({
     where: and(
       eq(inventoryEntry.productId, productId),
       notDeleted(inventoryEntry),
     ),
-    columns: { id: true, amount: true },
+    columns: { id: true, amount: true, valuation: true },
   });
 
   if (entries.length === 0) return 0;
 
-  const updates = entries.map((entry) => {
-    const amountValue =
-      typeof entry.amount === "object" && entry.amount !== null
-        ? (entry.amount as { value: number }).value
-        : 0;
-    const valuation = computeInventoryValuation(amountValue, productPrice);
-
-    return { id: entry.id, valuation };
-  });
-
-  const updated = await batchUpdateWithCaseWhen(
-    client,
-    inventoryEntry,
-    updates,
+  const mappings = await loadValuationGraph(db, productId);
+  const valuations = computeInventoryValuations(
+    entries.map((entry) => parseInventoryAmount(entry.amount, entry.id)),
+    mappings,
   );
 
-  return updated;
+  // Compared with `===` against a value read back from a `real` (float4)
+  // column, which looks fragile and isn't: Postgres emits floats as the
+  // SHORTEST text that round-trips to the same float4, so a stored 37.98 comes
+  // back as "37.98" and parses to the identical float64. Verified against this
+  // database, and it holds even at `extra_float_digits = -1` and at eight
+  // significant figures — well past the ~$12k ceiling of any real valuation.
+  //
+  // Where it would stop skipping: a magnitude large enough that float4 can no
+  // longer round-trip the cent (~8+ significant figures), where Postgres
+  // switches to scientific notation. The failure is benign — the row is
+  // rewritten with the number it already had — so this stays a plain compare
+  // rather than a cents-scaled one that would imply the equality is unsound.
+  const updates = entries.flatMap((entry, index) => {
+    const valuation = valuations[index] ?? null;
+    return entry.valuation === valuation ? [] : [{ id: entry.id, valuation }];
+  });
+  if (updates.length === 0) return 0;
+
+  return batchUpdateWithCaseWhen(client, inventoryEntry, updates);
 };
 
 export const checkUniqueProductDuplicate = async (
@@ -430,19 +439,13 @@ export const updateInventoryEntry = async (
 
   let valuation: number | null | undefined;
   if (data.amount !== undefined || data.productId !== undefined) {
-    const effectiveProductIdRaw = data.productId ?? before?.productId;
+    const effectiveProductId = data.productId ?? before?.productId;
     const effectiveAmount = data.amount ?? before?.amount;
-    const amountValue =
-      typeof effectiveAmount === "object" && effectiveAmount !== null
-        ? (effectiveAmount as { value: number }).value
-        : 0;
-
-    if (effectiveProductIdRaw) {
-      const effectiveProductId = effectiveProductIdRaw;
+    if (effectiveProductId && effectiveAmount) {
       valuation = await computeValuationForEntry(
         db,
         effectiveProductId,
-        amountValue,
+        effectiveAmount,
       );
     }
   }
@@ -553,14 +556,10 @@ export const createInventoryEntry = async (
     locationId: data.locationId,
   });
 
-  const amountValue =
-    typeof data.amount === "object" && data.amount !== null
-      ? (data.amount as { value: number }).value
-      : 0;
   const valuation = await computeValuationForEntry(
     db,
     data.productId,
-    amountValue,
+    data.amount,
   );
 
   const created = await insertWithShortcode(db, "inventory", {

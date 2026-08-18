@@ -81,6 +81,7 @@ import {
   findIncompleteStatementImports,
   findIngredientsWithUnusedAliases,
   findInvalidFinancialJson,
+  findInventoryWithoutPricePath,
   findLinkedProductIds,
   findManufacturerSpellingVariants,
   findOrphanedProducts,
@@ -526,6 +527,9 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       staleParentRecipes: () => findParentRecipesWithDeletedSubRecipes(scoped),
       understatedCostMeals: () => findUnderstatedCostMeals(scoped),
       unknownParkedItems: () => findUnknownParkedItems(scoped),
+      // Two indexed joins plus the same correlated effective-price subquery the
+      // Product list already sorts by — I/O, not CPU, so it belongs here.
+      inventoryWithoutPricePath: () => findInventoryWithoutPricePath(scoped),
       manufacturerSpellingVariants: () =>
         findManufacturerSpellingVariants(scoped),
       // Same shared spelling-key SQL as above, over the vendor roster instead —
@@ -577,6 +581,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     staleParentRecipes: r.staleParentRecipes,
     understatedCostMeals: r.understatedCostMeals,
     unknownParkedItems: r.unknownParkedItems,
+    inventoryWithoutPricePath: r.inventoryWithoutPricePath,
     manufacturerSpellingVariants: r.manufacturerSpellingVariants,
     duplicateVendors: r.duplicateVendors,
     vendorsWithoutLogos: r.vendorsWithoutLogos,

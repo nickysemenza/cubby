@@ -101,13 +101,14 @@ describe("product retaining edges", () => {
     "Expense.productId",
     "InventoryEntry.productId",
     "Location.productId",
+    "ProductComponent.componentProductId",
     "ProjectToolUsage.productId",
     "PurchaseProduct.productId",
     "Task.subjectProductId",
     "WishCandidate.productId",
   ];
 
-  it("retains exactly the acquisition, history and reference edges", () => {
+  it("retains exactly the acquisition, history, association, reference and usage edges", () => {
     expect(
       (
         Object.keys(PRODUCT_EDGE_ROLES) as Array<

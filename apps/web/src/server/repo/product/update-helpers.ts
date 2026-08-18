@@ -52,8 +52,13 @@ export function assertNoCanonicalPriceMapping(
 /**
  * Reconcile a product's unit mappings against the desired set.
  * Mappings with no `id` are created, existing-but-absent ones are hard-deleted, and
- * matching ones are updated. Mappings are measurement-only (price is a separate
- * column), so this no longer touches price or inventory valuations.
+ * matching ones are updated. Mappings stay measurement-only — the per-each price
+ * lives on `product.price` and is never written here.
+ *
+ * It does NOT follow that mappings are valuation-neutral: `InventoryEntry.
+ * valuation` routes the amount to money THROUGH this graph, so a mapping edit
+ * can change every valuation for the product. `updateProduct` therefore calls
+ * `syncInventoryValuationsForProduct` after this, not before.
  */
 export async function syncProductUnitMappings(
   tx: DrizzleTransaction,

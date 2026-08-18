@@ -16,8 +16,9 @@
  *                                            unused ingredients, alias pruning)
  *   MEAL        → `detectors-meal.ts`       (cooked meals with nothing planned —
  *                                            eating-out placeholders excluded)
- *   INVENTORY   → `detectors-inventory.ts`  (never-verified entries, items parked
- *                                            in the global "Unknown" location)
+ *   INVENTORY   → `detectors-inventory.ts`  (items parked in the global
+ *                                            "Unknown" location, entries whose
+ *                                            unit cannot reach money)
  *   COVERAGE    → `detectors-coverage.ts`   (population denominators for the
  *                                            coverage meters — the only module
  *                                            here that counts *healthy* rows)
@@ -68,7 +69,10 @@ export {
 // Schema-wide referential-liveness audit
 export { findReferentialLivenessViolations } from "./detectors-integrity";
 // Inventory-centric detectors (recount staleness)
-export { findUnknownParkedItems } from "./detectors-inventory";
+export {
+  findInventoryWithoutPricePath,
+  findUnknownParkedItems,
+} from "./detectors-inventory";
 // Name drift (one name, two spellings) — free-text manufacturer + vendor roster
 export {
   findDuplicateVendors,

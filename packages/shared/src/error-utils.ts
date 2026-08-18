@@ -71,6 +71,18 @@ export const AppErrors = {
   TOOL_TIMELINE_CONFLICT: "PRECONDITION_FAILED",
   PRODUCT_HAS_WISH_CANDIDATES: "PRECONDITION_FAILED",
   PRODUCT_HAS_LOCATIONS: "PRECONDITION_FAILED",
+  // A product still listed inside a live kit's component list — same shape as
+  // PRODUCT_HAS_PURCHASE_LINKS, one hop over into ProductComponent.
+  PRODUCT_HAS_KIT_LINKS: "PRECONDITION_FAILED",
+  // Caller tried to attach a product as a component of itself.
+  PRODUCT_COMPONENT_SELF_REFERENCE: "BAD_REQUEST",
+  // Attach-side counterpart of PRODUCT_MERGE_COMPONENT_CYCLE: the DB CHECK only
+  // catches the one-hop self-reference, so a multi-hop cycle (A lists B, B
+  // lists A several hops down) is only visible by walking the WHOLE live
+  // ProductComponent edge set with the proposed new edges projected on top —
+  // see findMergeComponentCycle in repo/product/merge.ts, reused (not
+  // reimplemented) by attachProductComponents.
+  PRODUCT_COMPONENT_CYCLE: "BAD_REQUEST",
   INGREDIENT_HAS_PRODUCTS: "PRECONDITION_FAILED",
   INGREDIENT_HAS_RECIPES: "PRECONDITION_FAILED",
   INGREDIENT_MERGE_INVALID: "BAD_REQUEST",
@@ -95,6 +107,17 @@ export const AppErrors = {
   // "3 each" has no honest answer, so the merge refuses instead of inventing
   // one; fix the unit on one entry first.
   PRODUCT_MERGE_INVENTORY_UNIT_MISMATCH: "BAD_REQUEST",
+  // Two kits being merged both list the same component, with DIFFERENT
+  // quantities. The partial-unique (parentProductId, componentProductId) index
+  // lets only one row survive, and picking either quantity invents or destroys
+  // units of a real part, so the merge refuses. Equal quantities dedupe
+  // silently — there is nothing to lose.
+  PRODUCT_MERGE_COMPONENT_QUANTITY_MISMATCH: "BAD_REQUEST",
+  // ProductComponent is a Product->Product DAG, so identifying two nodes can
+  // make a kit contain itself several hops down (merging a kit into one of its
+  // own descendants, or a descendant into its kit). A single-row CHECK only
+  // catches the one-hop case; this is the multi-hop one.
+  PRODUCT_MERGE_COMPONENT_CYCLE: "BAD_REQUEST",
   // project.parentProjectId: arbitrary-depth sub-projects (WBS) — a project
   // can't become its own descendant.
   PROJECT_HAS_CHILDREN: "PRECONDITION_FAILED",
