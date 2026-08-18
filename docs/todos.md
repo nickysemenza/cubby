@@ -138,8 +138,6 @@ decision value.
   flow (all spec- or diagram-flavored, the last an AI-assembled step flow chart)
   but no plain recipe-as-a-page format (`RecipeMagazineView` would drop in); no
   multi-recipe/cookbook export.
-- [ ] **Notion importer hygiene**: `staleTime: 0` full-DB refetch on every
-  visit, every row runs WASM parses, no status filter/search/virtualization.
 - [ ] **EPUB recipe hero photos**: `recipe-epub` already identifies an in-archive
   hero `ImageRef` (`path` + `mime`), but recipebridge emits `None` and
   `importRecipeSchema` models only public scraper image URLs. Emit the reference,
