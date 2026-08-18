@@ -1,3 +1,4 @@
+import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { X } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 
@@ -8,10 +9,14 @@ interface ScopeChipProps {
 }
 
 export function ScopeChip({ name, value, onClear }: ScopeChipProps) {
+  const displayValue =
+    value === UNRESOLVABLE_ENTITY_FILTER ? "Invalid link filter" : value;
   return (
     <Badge variant="outline" className="gap-1 pr-1">
       <span className="text-muted-foreground">{name}:</span>
-      <span className="font-sans normal-case tracking-normal">{value}</span>
+      <span className="font-sans normal-case tracking-normal">
+        {displayValue}
+      </span>
       <button
         type="button"
         aria-label={`Clear ${name} scope`}

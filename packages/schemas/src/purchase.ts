@@ -19,6 +19,7 @@ import { expenseLineKindSchema } from "./expense-line-kind";
 import { purchaseRelatedFilterFields } from "./related-view";
 import {
   createPaginatedResponseSchema,
+  entityFilterList,
   oneOrMany,
   presenceFilter,
 } from "./pagination";
@@ -167,7 +168,7 @@ export const purchaseFilterFields = {
     .string()
     .optional()
     .describe("Substring match on the human display label only"),
-  vendorId: oneOrMany(vendorShortcode).optional(),
+  vendorId: entityFilterList(vendorShortcode).optional(),
   ...purchaseRelatedFilterFields,
   orderId: oneOrMany(z.string()).optional(),
   /** `"none"` matches purchases with no order id — the ~40% the vendor never issued one for. */

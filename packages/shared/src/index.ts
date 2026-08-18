@@ -45,6 +45,8 @@ export type {
   WishShortcode,
 } from "./shortcode";
 
+export { UNRESOLVABLE_ENTITY_FILTER } from "./filter";
+
 export {
   getErrorMessage,
   AppErrors,

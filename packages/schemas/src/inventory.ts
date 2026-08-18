@@ -19,6 +19,7 @@ import { duplicateUniqueProductSchema } from "./problems";
 import {
   createItemsResponseSchema,
   createPaginatedResponseSchema,
+  entityFilter,
   oneOrMany,
 } from "./pagination";
 import { unitMappingOut } from "./unitmapping";
@@ -70,10 +71,10 @@ export const inventoryFilterFields = {
     .string()
     .optional()
     .describe("Filter by location name (substring)"),
-  locationIdFilter: locationShortcode
+  locationIdFilter: entityFilter(locationShortcode)
     .optional()
     .describe("Filter by exact location ID"),
-  productIdFilter: productShortcode
+  productIdFilter: entityFilter(productShortcode)
     .optional()
     .describe("Filter by exact product ID"),
   manufacturerFilter: z

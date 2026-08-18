@@ -49,6 +49,7 @@ import {
 } from "./location";
 import {
   createPaginatedResponseSchema,
+  entityFilterList,
   oneOrMany,
   presenceFilter,
 } from "./pagination";
@@ -297,9 +298,9 @@ export const productFilterFields = {
   servingAsLocationPresenceFilter: presenceFilter.describe(
     "Filter to products that are / aren't in service as a Location.",
   ),
-  locationIdFilter: oneOrMany(locationShortcode).optional(),
+  locationIdFilter: entityFilterList(locationShortcode).optional(),
   ingredientPresenceFilter: presenceFilter,
-  ingredientIdFilter: oneOrMany(ingredientShortcode).optional(),
+  ingredientIdFilter: entityFilterList(ingredientShortcode).optional(),
   taskStatusFilter: oneOrMany(taskStatusSchema).optional(),
   taskOpenOnly: z.boolean().optional(),
   taskDueFrom: plainDate.optional(),

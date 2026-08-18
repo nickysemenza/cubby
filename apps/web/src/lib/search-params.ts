@@ -1,4 +1,8 @@
-import { type ShortcodeType, shortcodeSchema } from "@cubby/shared";
+import {
+  type ShortcodeType,
+  shortcodeSchema,
+  UNRESOLVABLE_ENTITY_FILTER,
+} from "@cubby/shared";
 import { z } from "zod";
 
 /**
@@ -46,11 +50,12 @@ const losslessNumber = z
   .number()
   .refine((n) => !Number.isInteger(n) || Number.isSafeInteger(n));
 
-export const urlStringParam = z
+const urlStringValue = z
   .union([z.string(), losslessNumber, z.boolean()])
   .transform(String)
-  .optional()
-  .catch(undefined);
+  .optional();
+
+export const urlStringParam = urlStringValue.catch(undefined);
 
 /** A comma-encoded, one-or-many enum filter that retains URL string coercion. */
 export const urlEnumListParam = <T extends z.ZodType<string>>(itemSchema: T) =>
@@ -69,7 +74,7 @@ export const urlEnumListParam = <T extends z.ZodType<string>>(itemSchema: T) =>
 
 /** A canonical, comma-encoded exact-entity filter. */
 export const urlShortcodeListParam = (type: ShortcodeType) =>
-  urlStringParam
+  urlStringValue
     .refine(
       (value) =>
         value === undefined ||
@@ -84,13 +89,16 @@ export const urlShortcodeListParam = (type: ShortcodeType) =>
         .map((item) => shortcodeSchema(type).parse(item))
         .join(","),
     )
-    .catch(undefined);
+    .catch(UNRESOLVABLE_ENTITY_FILTER);
 
 /** A single exact shortcode scope (not a multi-select). */
 export const urlShortcodeParam = (type: ShortcodeType) =>
   urlShortcodeListParam(type)
     .refine(
-      (value) => value === undefined || !value.includes(","),
+      (value) =>
+        value === undefined ||
+        value === UNRESOLVABLE_ENTITY_FILTER ||
+        !value.includes(","),
       "Expected one entity shortcode",
     )
-    .catch(undefined);
+    .catch(UNRESOLVABLE_ENTITY_FILTER);
