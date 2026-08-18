@@ -2,7 +2,7 @@
 
 import type { Amount } from "@cubby/schemas/codec";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import { Check, Pencil, X } from "lucide-react";
+import { Check, Pencil, RotateCcw, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -10,6 +10,11 @@ import { Button } from "~/components/ui/button";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 import { StaticPicker } from "../combobox/static-picker";
@@ -43,6 +48,17 @@ type EditableInputConfig = {
 
 type EditableCurrencyConfig = {
   type: "currency";
+  /**
+   * Offer an explicit clear control beside Save/Cancel that saves null
+   * directly, instead of requiring "empty the box, then Save". Needed for a
+   * field with a fallback — `Product.price` overrides an Expense-derived
+   * price, so an emptied box and a value that merely happens to equal the
+   * fallback are visually identical. `label` names the state clearing lands
+   * on (e.g. "Revert to $12.00 (derived)") and doubles as the button's
+   * accessible name and tooltip, so the control reads as a choice rather
+   * than an unlabelled "clear".
+   */
+  clearable?: { label: string };
 };
 
 type EditableSelectConfig = {
@@ -427,6 +443,8 @@ function EditableInputEditor<T>({
   const multiline =
     !isCurrency && "multiline" in config ? config.multiline : false;
   const rows = !isCurrency && "rows" in config ? config.rows : undefined;
+  const clearLabel =
+    config.type === "currency" ? config.clearable?.label : undefined;
 
   const parse = useCallback(
     (s: string): T | null => {
@@ -546,6 +564,24 @@ function EditableInputEditor<T>({
       >
         <X className="size-3.5" />
       </Button>
+      {clearLabel && value !== null && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label={clearLabel}
+                onClick={() => void commit(null)}
+                disabled={isPending}
+              />
+            }
+          >
+            <RotateCcw className="size-3.5" />
+          </TooltipTrigger>
+          <TooltipContent side="top">{clearLabel}</TooltipContent>
+        </Tooltip>
+      )}
     </div>
   );
 }
