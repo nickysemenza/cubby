@@ -25,7 +25,7 @@ import { TableHead, TableRow } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
 import { ColumnResizeHandle } from "./ColumnResizeHandle";
 import type { cubbyTableFeatures, CubbyTable as Table } from "./table-features";
-import { columnWidthValue } from "./table-layout";
+import { columnWidthValue, isLockedStartColumnId } from "./table-layout";
 
 type HeaderStyles = { header: string; sortIcon: string };
 
@@ -40,9 +40,9 @@ function pinBoundaryClass<TData extends RowData>(
       : header.getContext().table.getEndVisibleLeafColumns();
   const index = columns.findIndex((column) => column.id === header.column.id);
   return pinned === "start" && index === columns.length - 1
-    ? "shadow-[3px_0_4px_-3px_rgb(15_23_42_/_0.35)]"
+    ? "shadow-[var(--shadow-pin-start)]"
     : pinned === "end" && index === 0
-      ? "shadow-[-3px_0_4px_-3px_rgb(15_23_42_/_0.35)]"
+      ? "shadow-[var(--shadow-pin-end)]"
       : undefined;
 }
 
@@ -55,6 +55,7 @@ function SortableHeader<TData extends RowData>({
   table: Table<TData>;
   styles: HeaderStyles;
 }) {
+  const lockedStart = isLockedStartColumnId(header.column.id);
   const {
     attributes,
     listeners,
@@ -62,7 +63,7 @@ function SortableHeader<TData extends RowData>({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: header.column.id });
+  } = useSortable({ id: header.column.id, disabled: lockedStart });
   const sortDirection = header.column.getIsSorted();
   const canSort = header.column.getCanSort();
   const numeric = header.column.columnDef.meta?.numeric ?? false;
@@ -130,16 +131,18 @@ function SortableHeader<TData extends RowData>({
       }}
     >
       <div className={cn("flex items-center gap-1", numeric && "justify-end")}>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={`Reorder ${header.column.id} column`}
-          className="h-6 w-5 shrink-0 cursor-grab touch-none px-0 text-muted-foreground active:cursor-grabbing"
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical className="size-3" />
-        </Button>
+        {!lockedStart && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Reorder ${header.column.id} column`}
+            className="h-6 w-5 shrink-0 cursor-grab touch-none px-0 text-muted-foreground active:cursor-grabbing"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="size-3" />
+          </Button>
+        )}
         {canSort ? (
           <Button
             variant="ghost"
@@ -168,12 +171,12 @@ function SortableHeader<TData extends RowData>({
   );
 }
 
-export default function TableHeaderLayout({
+export default function TableHeaderLayout<TData extends RowData>({
   table,
   styles,
   isDebugEnabled,
 }: {
-  table: Table<RowData>;
+  table: Table<TData>;
   styles: HeaderStyles;
   isDebugEnabled: boolean;
 }) {
@@ -191,6 +194,9 @@ export default function TableHeaderLayout({
     if (!over || active.id === over.id) return;
     const activeId = String(active.id);
     const overId = String(over.id);
+    if (isLockedStartColumnId(activeId) || isLockedStartColumnId(overId)) {
+      return;
+    }
     if (region(activeId) !== region(overId)) return;
     const activeRegion = region(activeId);
     if (activeRegion === "start" || activeRegion === "end") {
@@ -223,6 +229,9 @@ export default function TableHeaderLayout({
       collisionDetection={closestCenter}
       modifiers={[restrictToHorizontalAxis]}
       onDragEnd={onDragEnd}
+      accessibility={{
+        container: typeof document === "undefined" ? undefined : document.body,
+      }}
     >
       <SortableContext
         items={table.getVisibleLeafColumns().map((column) => column.id)}

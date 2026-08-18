@@ -7,7 +7,11 @@ import * as React from "react";
  * `DesktopDataRow` (which tags selectable `<td>`s with `data-cell-col`) agree
  * on the exact same exclusion set — if they drift, column-index math skews.
  */
-export const NON_SELECTABLE_COLUMN_IDS = new Set(["select", "actions"]);
+export const NON_SELECTABLE_COLUMN_IDS = new Set([
+  "select",
+  "image",
+  "actions",
+]);
 
 /**
  * DOM `CustomEvent` name dispatched on a cell's edit-trigger button to open its

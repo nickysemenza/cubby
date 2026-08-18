@@ -35,6 +35,7 @@ import type {
   CubbyColumn as Column,
   CubbyTable as Table,
 } from "./table-features";
+import { isLockedStartColumnId } from "./table-layout";
 
 type Region = "start" | "center" | "end";
 
@@ -52,7 +53,10 @@ function SortableColumn<TData extends RowData>({
   table: Table<TData>;
 }) {
   const region = regionFor(column);
-  const regionColumns = columns.filter((item) => regionFor(item) === region);
+  const lockedStart = isLockedStartColumnId(column.id);
+  const regionColumns = columns.filter(
+    (item) => regionFor(item) === region && !isLockedStartColumnId(item.id),
+  );
   const index = regionColumns.findIndex((item) => item.id === column.id);
   const {
     attributes,
@@ -61,7 +65,11 @@ function SortableColumn<TData extends RowData>({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: column.id, data: { region } });
+  } = useSortable({
+    id: column.id,
+    data: { region },
+    disabled: lockedStart,
+  });
 
   const move = (delta: -1 | 1) => {
     const target = regionColumns[index + delta];
@@ -95,82 +103,88 @@ function SortableColumn<TData extends RowData>({
       )}
       data-column-id={column.id}
     >
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label={`Drag ${columnLabel(column)}`}
-        className="cursor-grab touch-none active:cursor-grabbing"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="size-3.5" />
-      </Button>
+      {lockedStart ? (
+        <span aria-hidden className="size-7" />
+      ) : (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Drag ${columnLabel(column)}`}
+          className="cursor-grab touch-none active:cursor-grabbing"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="size-3.5" />
+        </Button>
+      )}
       <span className="truncate text-xs">
         {columnLabel(column)}
         {!column.getIsVisible() && (
           <span className="ml-1 text-muted-foreground">Hidden</span>
         )}
       </span>
-      <div className="flex items-center">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={`Move ${columnLabel(column)} earlier`}
-          disabled={index === 0}
-          onClick={() => move(-1)}
-        >
-          <ArrowUp className="size-3" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={`Move ${columnLabel(column)} later`}
-          disabled={index === regionColumns.length - 1}
-          onClick={() => move(1)}
-        >
-          <ArrowDown className="size-3" />
-        </Button>
-        {region !== "start" && (
+      {!lockedStart && (
+        <div className="flex items-center">
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label={`Pin ${columnLabel(column)} to start`}
-            onClick={() => column.pin("start")}
+            aria-label={`Move ${columnLabel(column)} earlier`}
+            disabled={index === 0}
+            onClick={() => move(-1)}
           >
-            <PanelLeft className="size-3" />
+            <ArrowUp className="size-3" />
           </Button>
-        )}
-        {region !== "end" && (
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label={`Pin ${columnLabel(column)} to end`}
-            onClick={() => column.pin("end")}
+            aria-label={`Move ${columnLabel(column)} later`}
+            disabled={index === regionColumns.length - 1}
+            onClick={() => move(1)}
           >
-            <PanelRight className="size-3" />
+            <ArrowDown className="size-3" />
           </Button>
-        )}
-        {region !== "center" && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`Unpin ${columnLabel(column)}`}
-            onClick={() => column.pin(false)}
-          >
-            <PinOff className="size-3" />
-          </Button>
-        )}
-        {column.getCanHide() && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`${column.getIsVisible() ? "Hide" : "Show"} ${columnLabel(column)}`}
-            onClick={() => column.toggleVisibility()}
-          >
-            <EyeOff className="size-3" />
-          </Button>
-        )}
-      </div>
+          {region !== "start" && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`Pin ${columnLabel(column)} to start`}
+              onClick={() => column.pin("start")}
+            >
+              <PanelLeft className="size-3" />
+            </Button>
+          )}
+          {region !== "end" && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`Pin ${columnLabel(column)} to end`}
+              onClick={() => column.pin("end")}
+            >
+              <PanelRight className="size-3" />
+            </Button>
+          )}
+          {region !== "center" && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`Unpin ${columnLabel(column)}`}
+              onClick={() => column.pin(false)}
+            >
+              <PinOff className="size-3" />
+            </Button>
+          )}
+          {column.getCanHide() && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`${column.getIsVisible() ? "Hide" : "Show"} ${columnLabel(column)}`}
+              onClick={() => column.toggleVisibility()}
+            >
+              <EyeOff className="size-3" />
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -241,8 +255,9 @@ export default function TableLayoutCustomizer<TData extends RowData>({
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
     const activeColumn = table.getColumn(String(active.id));
-    if (!activeColumn) return;
+    if (!activeColumn || isLockedStartColumnId(activeColumn.id)) return;
     const targetColumn = table.getColumn(String(over.id));
+    if (targetColumn && isLockedStartColumnId(targetColumn.id)) return;
     const targetRegion = (over.data.current?.region ??
       (targetColumn ? regionFor(targetColumn) : undefined)) as
       | Region
