@@ -2,6 +2,7 @@ import {
   unsafeInventoryShortcode,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
+import type { ImageOut } from "@cubby/schemas/image";
 import type { InfLocation } from "@cubby/schemas/location";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -15,17 +16,20 @@ vi.mock("@tanstack/react-router", () => ({
     children,
     className,
     title,
+    "aria-label": ariaLabel,
   }: {
     to: string;
     params?: { shortcode?: string };
     children?: ReactNode;
     className?: string;
     title?: string;
+    "aria-label"?: string;
   }) => (
     <a
       href={to.replace("$shortcode", params?.shortcode ?? "")}
       className={className}
       title={title}
+      aria-label={ariaLabel}
     >
       {children}
     </a>
@@ -36,6 +40,25 @@ import { LocationTree } from "./location-tree-view";
 
 const FLOUR_ID = unsafeInventoryShortcode("INV-FLOUR");
 const RICE_ID = unsafeInventoryShortcode("INV-RICE");
+
+const kitchenImage = {
+  id: "00000000-0000-4000-8000-000000000001",
+  url: "https://example.test/kitchen.jpg",
+  key: "kitchen.jpg",
+  filename: "kitchen.jpg",
+  size: 100,
+  contentType: "image/jpeg",
+  status: "UPLOADED",
+  width: 800,
+  height: 600,
+  detectedContentType: null,
+  sha256: null,
+  renderStatus: null,
+  storageStatus: null,
+  verifiedAt: null,
+  createdAt: new Date("2026-01-01T00:00:00Z"),
+  updatedAt: new Date("2026-01-01T00:00:00Z"),
+} as ImageOut;
 
 function treeData(): InfLocation[] {
   const kitchen = sampleLocations.find(
@@ -52,6 +75,7 @@ function treeData(): InfLocation[] {
   return [
     {
       ...kitchen,
+      images: [kitchenImage],
       directItemCount: 1,
       totalItemCount: 2,
       inventoryItems: [
@@ -95,6 +119,9 @@ describe("LocationTree", () => {
       `/locations/${data[0]?.id}`,
     );
     expect(screen.getByRole("link", { name: "Top Shelf" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "Photo of Kitchen" }),
+    ).toHaveAttribute("src", kitchenImage.url);
     expect(screen.getAllByLabelText("1 item here")).toHaveLength(2);
     expect(screen.getByLabelText("2 items total")).toHaveTextContent("2 total");
 
