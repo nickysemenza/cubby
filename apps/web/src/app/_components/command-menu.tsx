@@ -41,7 +41,7 @@ import { parseCommandSearchScope } from "./command-menu/search-scope";
 import { useConversionAnswer } from "./command-menu/use-conversion-answer";
 import { useGlobalSearch } from "./command-menu/use-global-search";
 import { recordCommandMenuOpened } from "./command-menu-loader";
-import { desktopLeaves } from "./navigation/nav-items";
+import { completeNavLeaves } from "./navigation/nav-items";
 import {
   entityTypeMap,
   getSearchMatchText,
@@ -58,7 +58,7 @@ import {
  * so nothing appears twice in the browse state.
  */
 const quickActionPaths = new Set(quickActions.map((action) => action.path));
-const goToLeaves = desktopLeaves.filter(
+const goToLeaves = completeNavLeaves.filter(
   (leaf) => leaf.to !== "/settings" && !quickActionPaths.has(leaf.to as string),
 );
 

@@ -1,0 +1,279 @@
+import { Link } from "@tanstack/react-router";
+import { ChevronLeft, Search, Wrench } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { actionItems } from "~/app/_components/actions/action-items";
+import { Stack } from "~/components/layout";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
+import { cn } from "~/lib/utils";
+import {
+  completeNavLeaves,
+  desktopNav,
+  homeNavItem,
+  isNavGroup,
+  mobileHouseholdItems,
+  type NavGroup,
+  type NavItem,
+  primaryNavGroups,
+  workspaceUtilitySections,
+} from "./nav-items";
+
+export type WorkspaceNavigatorView = "household" | "utility";
+
+type SearchItem = { item: NavItem; section: string; keywords: string[] };
+
+function searchItem(item: NavItem, section: string): SearchItem {
+  return {
+    item,
+    section,
+    keywords: actionItems
+      .filter((action) => action.path === item.to)
+      .flatMap((action) => action.keywords ?? []),
+  };
+}
+
+const searchableItems: SearchItem[] = [
+  searchItem(homeNavItem, "Household"),
+  ...desktopNav.flatMap((node) =>
+    isNavGroup(node)
+      ? node.children.map((item) => searchItem(item, node.label))
+      : [searchItem(node, "Household")],
+  ),
+].filter(
+  ({ item }, index, all) =>
+    all.findIndex((candidate) => candidate.item.to === item.to) === index,
+);
+
+export function filterWorkspaceDestinations(query: string): SearchItem[] {
+  const needle = query.trim().toLocaleLowerCase();
+  if (!needle) return [];
+  return searchableItems.filter(({ item, section, keywords }) =>
+    `${item.label} ${item.railLabel ?? ""} ${section} ${keywords.join(" ")}`
+      .toLocaleLowerCase()
+      .includes(needle),
+  );
+}
+
+function NavigatorLink({
+  item,
+  activeTo,
+  section,
+  onNavigate,
+}: {
+  item: NavItem;
+  activeTo: string | undefined;
+  section?: string;
+  onNavigate: () => void;
+}) {
+  const active = item.to === activeTo;
+  const Icon = item.icon;
+  return (
+    <Link
+      to={item.to}
+      search={item.search as never}
+      onClick={onNavigate}
+      className={cn(
+        "flex min-h-11 items-center gap-2 border border-transparent px-2 py-2 text-sm transition-colors hover:bg-muted hover:text-primary",
+        !active && "text-muted-foreground",
+        active && "border-border bg-muted font-medium text-foreground",
+      )}
+      aria-current={active ? "page" : undefined}
+    >
+      <Icon className="size-4 shrink-0" aria-hidden />
+      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+      {section && (
+        <span className="shrink-0 font-mono text-2xs text-slate uppercase">
+          {section}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+function GroupDisclosure({
+  group,
+  activeTo,
+  onNavigate,
+}: {
+  group: NavGroup;
+  activeTo: string | undefined;
+  onNavigate: () => void;
+}) {
+  const Icon = group.icon;
+  return (
+    <details className="border-border border-b">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-2 py-2 font-medium text-sm hover:bg-muted [&::-webkit-details-marker]:hidden">
+        <Icon className="size-4 text-muted-foreground" aria-hidden />
+        {group.label}
+      </summary>
+      <div className="border-border border-t bg-background p-1">
+        {group.children.map((item) => (
+          <NavigatorLink
+            key={item.to}
+            item={item}
+            activeTo={activeTo}
+            onNavigate={onNavigate}
+          />
+        ))}
+      </div>
+    </details>
+  );
+}
+
+export function WorkspaceNavigator({
+  open,
+  onOpenChange,
+  initialView,
+  activeTo,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  initialView: WorkspaceNavigatorView;
+  activeTo: string | undefined;
+}) {
+  const [view, setView] = useState<WorkspaceNavigatorView>(initialView);
+  const [query, setQuery] = useState("");
+  const householdHeadingId = useId();
+  const workspaceHeadingId = useId();
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const wasOpenRef = useRef(false);
+
+  useEffect(() => {
+    if (open && !wasOpenRef.current) {
+      returnFocusRef.current =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+    } else if (!open && wasOpenRef.current) {
+      requestAnimationFrame(() => returnFocusRef.current?.focus());
+    }
+    wasOpenRef.current = open;
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setView(initialView);
+    setQuery("");
+  }, [initialView, open]);
+
+  const results = useMemo(() => {
+    return filterWorkspaceDestinations(query);
+  }, [query]);
+
+  const close = () => onOpenChange(false);
+  const searching = query.trim().length > 0;
+
+  return (
+    <ResponsiveSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title={view === "household" ? "More" : "Tools & data"}
+      description={
+        view === "household"
+          ? "Household destinations and the complete workspace."
+          : "Reference data, utilities, and developer tools."
+      }
+    >
+      <Stack gap="md">
+        <div className="relative">
+          <Search className="absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            autoFocus
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Find a destination…"
+            aria-label="Find a workspace destination"
+            className="pl-8"
+          />
+        </div>
+
+        {searching ? (
+          <section aria-label="Destination search results">
+            {results.length > 0 ? (
+              results.map(({ item, section }) => (
+                <NavigatorLink
+                  key={item.to}
+                  item={item}
+                  section={section}
+                  activeTo={activeTo}
+                  onNavigate={close}
+                />
+              ))
+            ) : (
+              <p className="py-6 text-center text-muted-foreground text-sm">
+                No destination matched “{query.trim()}”.
+              </p>
+            )}
+          </section>
+        ) : view === "household" ? (
+          <>
+            <section aria-labelledby={householdHeadingId}>
+              <h3 id={householdHeadingId} className="eyebrow px-2 pb-1">
+                Household
+              </h3>
+              {mobileHouseholdItems.map((item) => (
+                <NavigatorLink
+                  key={item.to}
+                  item={item}
+                  activeTo={activeTo}
+                  onNavigate={close}
+                />
+              ))}
+            </section>
+            <section aria-labelledby={workspaceHeadingId}>
+              <h3 id={workspaceHeadingId} className="eyebrow px-2 pb-1">
+                Workspace
+              </h3>
+              {primaryNavGroups.map((group) => (
+                <GroupDisclosure
+                  key={group.label}
+                  group={group}
+                  activeTo={activeTo}
+                  onNavigate={close}
+                />
+              ))}
+            </section>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => setView("utility")}
+            >
+              <Wrench />
+              Tools & data
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-fit"
+              onClick={() => setView("household")}
+            >
+              <ChevronLeft />
+              Back to household
+            </Button>
+            {workspaceUtilitySections.map((section) => (
+              <section key={section.title} aria-label={section.title}>
+                <h3 className="eyebrow px-2 pb-1">{section.title}</h3>
+                {section.items.map((item) => (
+                  <NavigatorLink
+                    key={item.to}
+                    item={item}
+                    activeTo={activeTo}
+                    onNavigate={close}
+                  />
+                ))}
+              </section>
+            ))}
+          </>
+        )}
+      </Stack>
+    </ResponsiveSheet>
+  );
+}
+
+export const workspaceNavigatorSearchItemsForTest = searchableItems;
+export const workspaceNavigatorLeavesForTest = completeNavLeaves;
