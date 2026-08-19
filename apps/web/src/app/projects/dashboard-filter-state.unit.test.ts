@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  activeFilterCount,
   DASHBOARD_FILTER_SEARCH_KEYS,
   dateRangeBounds,
   defaultFilters,
+  type Filters,
+  filtersFromSavedViewFilters,
   filtersFromSearch,
   filtersToScopeInput,
   filtersToSearch,
+  hasActiveFilters,
 } from "./dashboard-filter-state";
 
 describe("filtersFromSearch", () => {
@@ -41,6 +45,43 @@ describe("filtersToSearch", () => {
     expect(result.locations).toBeUndefined();
     expect(result.date).toBeUndefined();
     expect(result.completed).toBeUndefined();
+  });
+});
+
+describe("active filter affordance", () => {
+  it("stays quiet for bare /projects", () => {
+    expect(hasActiveFilters(defaultFilters)).toBe(false);
+    expect(activeFilterCount(defaultFilters)).toBe(0);
+  });
+
+  it("counts each active scope constraint", () => {
+    const filters: Filters = {
+      ...defaultFilters,
+      statuses: new Set(["in_progress"]),
+      kinds: new Set(["household"]),
+      locations: new Set(["Garage", "Kitchen"]),
+      dateRange: "3m",
+    };
+    expect(hasActiveFilters(filters)).toBe(true);
+    expect(activeFilterCount(filters)).toBe(5);
+  });
+});
+
+describe("saved project views", () => {
+  it("restores every dashboard-owned filter", () => {
+    const filters = filtersFromSavedViewFilters([
+      { id: "status", value: ["in_progress"] },
+      { id: "kind", value: ["household"] },
+      { id: "locations", value: ["Kitchen"] },
+      { id: "dateRange", value: "3m" },
+      { id: "completionYear", value: "2025" },
+    ]);
+
+    expect([...filters.statuses]).toEqual(["in_progress"]);
+    expect([...filters.kinds]).toEqual(["household"]);
+    expect([...filters.locations]).toEqual(["Kitchen"]);
+    expect(filters.dateRange).toBe("3m");
+    expect(filters.completionYear).toBe("2025");
   });
 });
 

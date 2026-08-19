@@ -81,4 +81,13 @@ describe("action registry", () => {
       expect(actionsForSurface(surface).length).toBeGreaterThan(0);
     }
   });
+
+  it("keeps Home focused on four recurring household verbs", () => {
+    expect(actionsForSurface("home-quick").map((action) => action.id)).toEqual([
+      "recount",
+      "photo-pass",
+      "what-can-i-make",
+      "shopping-list",
+    ]);
+  });
 });
