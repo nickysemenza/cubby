@@ -89,6 +89,8 @@ export function registerProductTools(server: McpServer) {
         ...params,
         // Required (nullable, not optional) on the router's create input.
         expectedQuantity: params.expectedQuantity ?? null,
+        upc: params.upc ?? null,
+        ingredientId: params.ingredientId ?? null,
         unitMappings: (params.unitMappings ?? []).map(toUnitMappingInput),
       }),
     resolveUpdateData: async (_caller, data) =>
