@@ -33,7 +33,6 @@ import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
-import { AiSearchBar } from "../_components/inventory/ai-search-bar";
 import { InventoryShelf } from "../_components/inventory/inventory-shelf";
 import { MoveInventoryDialog } from "../_components/inventory/move-inventory-dialog";
 import type { InventoryItem } from "../_components/locations/calculate-inventory-valuation";
@@ -323,7 +322,6 @@ export function InventoryItemList() {
 
   return (
     <ProductImageSummariesProvider productIds={productIds}>
-      <AiSearchBar table={table} />
       <FlexRow align="center" justify="between" gap="sm" className="mb-4">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {scopeChips}
