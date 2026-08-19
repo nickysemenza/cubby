@@ -31,7 +31,6 @@ import {
   inArray,
   isNotNull,
   isNull,
-  lt,
   notExists,
   type SQL,
   sql,
@@ -70,8 +69,8 @@ import {
   type ProductRetainingEdgeKey,
 } from "~/server/repo/product/edge-roles";
 import {
-  disposalPurchaseIds,
   loadProductOwnershipTimelines,
+  ownershipExitExpensePredicate,
 } from "~/server/repo/product/ownership";
 import { loadProductPricing } from "~/server/repo/product/pricing";
 import { loadProjectDateWindows } from "~/server/repo/project/subtree";
@@ -312,8 +311,7 @@ export const loadSoldButStockedPresenterTotals = async (
           notDeleted(product),
           inArray(product.shortcode, [...shortcodes]),
           eq(expense.future, false),
-          lt(expense.cost, 0),
-          inArray(expense.purchaseId, disposalPurchaseIds(dbClient)),
+          ownershipExitExpensePredicate(dbClient),
         ),
       )
       .groupBy(product.shortcode),
