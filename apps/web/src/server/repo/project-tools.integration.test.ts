@@ -4,11 +4,11 @@ import {
   projectToolMatrixInput,
   taskCreateInput,
 } from "@cubby/schemas/project";
-import { format } from "date-fns";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
+import { householdLocalDate } from "~/lib/household-date";
 import { auditLog, projectToolUsage } from "~/server/db/schema";
 import { getDb, notDeleted } from "./database-helpers";
 import { createExpense, deleteExpenses } from "./expense";
@@ -1638,7 +1638,7 @@ describe("project tool matrix", () => {
       ctx.db,
       matrixInput({ minNetLifetimeCost: 0 }),
     );
-    const today = format(new Date(), "yyyy-MM-dd");
+    const today = householdLocalDate();
     expect(
       matrix.rows.find((row) => row.productId === soldOnly.id)?.ownership,
     ).toEqual({
