@@ -93,7 +93,7 @@ describe("findViewProblems", () => {
       (problem) => problem.source.kind === "derived",
     );
 
-    expect(derivedProblems).toHaveLength(16);
+    expect(derivedProblems).toHaveLength(17);
     for (const problem of derivedProblems) {
       const result = await runProblem(ctx.db, problem.key, { sampleSize: 1 });
       expect(result.source.kind, problem.key).toBe("derived");

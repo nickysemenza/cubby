@@ -41,10 +41,10 @@
  * package.
  */
 
-// Population counts behind the coverage meters (the "M" in "N of M")
-export { findCoverageTotals } from "./detectors-coverage";
 // Cookbook source/import completeness
 export { findPartiallyImportedCookbooks } from "./detectors-cookbook";
+// Population counts behind the coverage meters (the "M" in "N of M")
+export { findCoverageTotals } from "./detectors-coverage";
 // Embedding-coverage detector (mirror of the orphaned-embedding sweep)
 export {
   countEntitiesMissingEmbeddings,

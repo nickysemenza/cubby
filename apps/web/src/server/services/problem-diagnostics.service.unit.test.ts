@@ -7,6 +7,7 @@ describe("Problem diagnostic adapters", () => {
     const expected = [
       "duplicate-product-identities",
       "orphaned-products",
+      "partially-imported-cookbooks",
       "tools-used-outside-ownership",
       "orphaned-entity-embeddings",
       "entities-missing-embeddings",
