@@ -63,7 +63,12 @@ function ProjectToolMatrixRoute() {
   const navigate = useNavigate({ from: Route.fullPath });
 
   return (
-    <Page variant="list" title="Tool usage matrix" eyebrow="Projects" fullWidth>
+    <Page
+      variant="list"
+      title="Tool usage matrix"
+      eyebrow="Projects"
+      layout="full"
+    >
       <ToolMatrixPage
         search={search}
         onSearchChange={(next) =>

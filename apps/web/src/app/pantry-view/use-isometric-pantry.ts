@@ -60,6 +60,16 @@ export function useIsometricPantry() {
     return buildRooms(tree, inventory, resolveCssColor);
   }, [treeQuery.data, inventory]);
 
+  const openLocation = useCallback(
+    (locationShortcode: string) => {
+      navigate({
+        to: entities.location.routes.detail,
+        params: entityDetailParams(locationShortcode),
+      });
+    },
+    [navigate],
+  );
+
   // Auto-fit camera on first data load (uses real container dimensions)
   // biome-ignore lint/correctness/useExhaustiveDependencies: size triggers re-run on resize
   useEffect(() => {
@@ -252,10 +262,7 @@ export function useIsometricPantry() {
         if (cam) {
           const hit = hitTestRooms(mouseX, mouseY, roomsRef.current, cam);
           if (hit) {
-            navigate({
-              to: entities.location.routes.detail,
-              params: entityDetailParams(hit.locationShortcode),
-            });
+            openLocation(hit.locationShortcode);
           }
         }
       }
@@ -271,7 +278,7 @@ export function useIsometricPantry() {
       canvas.removeEventListener("touchmove", handleTouchMove);
       canvas.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [navigate]);
+  }, [openLocation]);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -334,17 +341,14 @@ export function useIsometricPantry() {
           const mouseY = e.clientY - rect.top;
           const hit = hitTestRooms(mouseX, mouseY, rooms, camera);
           if (hit) {
-            navigate({
-              to: entities.location.routes.detail,
-              params: entityDetailParams(hit.locationShortcode),
-            });
+            openLocation(hit.locationShortcode);
           }
         }
       }
 
       setIsDragging(false);
     },
-    [camera, rooms, navigate],
+    [camera, rooms, openLocation],
   );
 
   const handleMouseLeave = useCallback(() => {
@@ -369,6 +373,8 @@ export function useIsometricPantry() {
     handleMouseUp,
     inventory,
     isLoading,
+    openLocation,
     resetView,
+    rooms,
   };
 }
