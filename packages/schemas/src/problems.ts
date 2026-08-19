@@ -4,6 +4,7 @@ import { shortcodeEntities, type ShortcodeEntity } from "./entity-manifest";
 import { referentialLivenessViolationSchema } from "./entity-integrity";
 import {
   anyShortcodeSchema,
+  cookbookShortcode,
   expenseShortcode,
   financialAccountShortcode,
   financialTransactionShortcode,
@@ -66,6 +67,18 @@ export const orphanedProductSchema = z.object({
   ...productProblemFields,
   createdAt: z.date(),
 });
+
+/** A cookbook whose retained source extraction has recipes not currently live. */
+export const partiallyImportedCookbookSchema = z.object({
+  id: cookbookShortcode,
+  name: z.string(),
+  sourceRecipeCount: z.number().int().nonnegative(),
+  recipeCount: z.number().int().nonnegative(),
+  missingRecipeCount: z.number().int().positive(),
+});
+export type PartiallyImportedCookbook = z.infer<
+  typeof partiallyImportedCookbookSchema
+>;
 
 // A product that is stocked but carries no `price`, so its inventory entries
 // value at nothing and the location rollup silently under-reports. Split into
@@ -825,6 +838,7 @@ const problemsFastShape = {
   duplicateInventory: z.array(duplicateUniqueProductSchema),
   duplicateProductIdentities: z.array(duplicateProductIdentitySchema),
   orphanedProducts: z.array(orphanedProductSchema),
+  partiallyImportedCookbooks: z.array(partiallyImportedCookbookSchema),
   soldButStillStocked: z.array(soldButStillStockedSchema),
   unlinkedExitExpenses: z.array(unlinkedExitExpenseSchema),
   purchaselessExitExpenses: z.array(purchaselessExitExpenseSchema),
@@ -1108,6 +1122,7 @@ export const PROBLEM_CLASS = {
   // identifiers and name stand, and there is no restore path.
   duplicateProductIdentities: "defect",
   orphanedProducts: "defect",
+  partiallyImportedCookbooks: "defect",
   productsMissingPrice: "defect",
   // Unambiguously wrong and converges to zero: the item was sold, so the shelf
   // is stale and the location total is overstated by its full value. Not

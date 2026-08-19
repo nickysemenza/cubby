@@ -27,6 +27,7 @@ import {
   findInvalidFinancialJson,
   findManufacturerSpellingVariants,
   findOrphanedProducts,
+  findPartiallyImportedCookbooks,
   findParentRecipesWithDeletedSubRecipes,
   findProductsWithUpcGaps,
   findReferentialLivenessViolations,
@@ -143,6 +144,9 @@ export const diagnosticAdapters = {
     run: (db) => healthy(findDuplicateProductIdentities(db)),
   },
   "orphaned-products": { run: (db) => healthy(findOrphanedProducts(db)) },
+  "partially-imported-cookbooks": {
+    run: (db) => healthy(findPartiallyImportedCookbooks(db)),
+  },
   "tools-used-outside-ownership": {
     run: (db) => healthy(findToolsUsedOutsideOwnership(db)),
   },
