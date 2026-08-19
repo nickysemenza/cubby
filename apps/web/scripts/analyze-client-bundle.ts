@@ -25,8 +25,14 @@ import { gzipSync } from "node:zlib";
 // closure and never be measured, so the next PR that happens to touch a client
 // path inherits the overage and looks like the culprit. Before trimming code to
 // fit, check whether this job actually RAN on the commits that preceded you.
+//
+// Raised 517 -> 519 KiB for the full Impeccable remediation (#818). The richer
+// task-first shell and destination-shaped pending UI add ~1.0 KiB over the
+// merge-base. macOS measures 516.6 KiB while Linux/Node 24 measures 517.9 KiB;
+// the workspace navigator is already route-split, so 519 KiB records the real
+// cross-platform ceiling without weakening the chunk-count guard.
 export const CLIENT_BUNDLE_BUDGET = {
-  gzipBytes: 517 * 1024,
+  gzipBytes: 519 * 1024,
   chunks: 145,
 } as const;
 
