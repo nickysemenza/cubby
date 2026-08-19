@@ -80,7 +80,7 @@ function NavigatorLink({
       )}
       aria-current={active ? "page" : undefined}
     >
-      <Icon className="size-4 shrink-0" aria-hidden />
+      <Icon className="size-3.5 shrink-0" aria-hidden />
       <span className="min-w-0 flex-1 truncate">{item.label}</span>
       {section && (
         <span className="shrink-0 font-mono text-2xs text-slate uppercase">
@@ -104,7 +104,7 @@ function GroupDisclosure({
   return (
     <details className="border-border border-b">
       <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-2 py-2 font-medium text-sm hover:bg-muted [&::-webkit-details-marker]:hidden">
-        <Icon className="size-4 text-muted-foreground" aria-hidden />
+        <Icon className="size-3.5 text-muted-foreground" aria-hidden />
         {group.label}
       </summary>
       <div className="border-border border-t bg-background p-1">
