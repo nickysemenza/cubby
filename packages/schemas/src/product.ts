@@ -1116,7 +1116,14 @@ export const mcpProductCreateInput = z.object({
   name: requiredName("Product name")
     .describe("Product name")
     .meta({ mock: "commerce.productName" }),
-  upc: upc.nullable(),
+  // Nullish, not nullable: a bare `.nullable()` still makes the KEY required,
+  // so creating a product with no barcode meant sending an explicit `null` —
+  // and an MCP client that surfaces this as a plain string field cannot express
+  // one, which made a Product with no UPC uncreatable over MCP. That is the
+  // ordinary case for a kit parent or a retailer composite, neither of which
+  // carries a barcode. `mcpProductUpdateInput` already had both fields
+  // optional; create is what diverged.
+  upc: upc.nullish(),
   manufacturer: z
     .string()
     .describe("Manufacturer or 'generic'")
@@ -1141,7 +1148,7 @@ export const mcpProductCreateInput = z.object({
   expectedQuantity: z.number().int().positive().nullable().optional(),
   category: productCategory.nullable().optional(),
   ingredientId: ingredientShortcode
-    .nullable()
+    .nullish()
     .describe(
       "Link this product to an ingredient (its id) so recipes using that ingredient can cost from this product.",
     ),
