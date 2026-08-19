@@ -115,6 +115,10 @@ function DashboardFilterControls({
           selected={filters.locations}
           onToggle={(v) => toggle("locations", v)}
         />
+        {/* Single-select: a union of date ranges isn't meaningful. Narrows
+            expenses (by date), tasks (by due date), and the project set (by
+            interval overlap) — undated projects drop out of that last one
+            while a window is set. */}
         <SingleSelectChipGroup
           label="Date range"
           options={DATE_RANGE_PRESETS.map(({ key }) => key)}
