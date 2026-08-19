@@ -177,7 +177,7 @@ function ExpensesPage() {
     <Page
       variant="list"
       title="Expenses"
-      fullWidth
+      layout="full"
       actions={<CreateDialogAction Dialog={CreateExpenseDialog} />}
     >
       <Stack gap="md">

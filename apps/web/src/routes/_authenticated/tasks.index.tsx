@@ -133,11 +133,11 @@ function TasksPage() {
 
   return (
     // The board's natural width is its fixed column tracks, not the full
-    // viewport — only the list views need the wide, unconstrained container.
+    // viewport — only the list views need the full, unconstrained container.
     <Page
       variant="list"
       title="Tasks"
-      fullWidth={view !== "board"}
+      layout={view !== "board" ? "full" : "contained"}
       // Header-level "New task" so it's reachable from every view (Next/Board
       // have no list toolbar of their own to hang it off).
       actions={<CreateDialogAction Dialog={CreateTaskDialog} />}

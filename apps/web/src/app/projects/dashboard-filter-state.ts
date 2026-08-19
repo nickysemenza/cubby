@@ -5,7 +5,12 @@
  * alias into a `.tsx`/`.ts` file. Only `@cubby/schemas/*` and `date-fns` are
  * allowed as imports here.
  */
-import type { ProjectKind, ProjectStatus } from "@cubby/schemas/project";
+import {
+  type ProjectKind,
+  type ProjectStatus,
+  projectKindValues,
+  projectStatusValues,
+} from "@cubby/schemas/project";
 import { format, startOfYear, subMonths } from "date-fns";
 
 export type Filters = {
@@ -96,8 +101,66 @@ export const defaultFilters: Filters = {
 };
 
 /** An empty selection is the unfiltered status state. */
-export function isDefaultStatusSelection(filters: Filters): boolean {
+function isDefaultStatusSelection(filters: Filters): boolean {
   return filters.statuses.size === 0;
+}
+
+/** True when the URL scope differs from bare `/projects`. */
+export function hasActiveFilters(filters: Filters): boolean {
+  return (
+    !isDefaultStatusSelection(filters) ||
+    filters.kinds.size > 0 ||
+    filters.locations.size > 0 ||
+    filters.dateRange !== null ||
+    filters.completionYear !== null
+  );
+}
+
+/** Number shown in the compact toolbar affordance. Multi-select values count
+ * independently so the number never understates the active scope. */
+export function activeFilterCount(filters: Filters): number {
+  return (
+    filters.statuses.size +
+    filters.kinds.size +
+    filters.locations.size +
+    Number(filters.dateRange !== null) +
+    Number(filters.completionYear !== null)
+  );
+}
+
+type SavedFilter = { id: string; value: unknown };
+
+/** Restore every dashboard-owned saved-view field without letting stale or
+ * foreign table values leak into the typed URL scope. */
+export function filtersFromSavedViewFilters(
+  savedFilters: SavedFilter[],
+): Filters {
+  const value = (id: string) =>
+    savedFilters.find((filter) => filter.id === id)?.value;
+  const arrayValue = (id: string): string[] => {
+    const candidate = value(id);
+    return Array.isArray(candidate)
+      ? candidate.filter((item): item is string => typeof item === "string")
+      : [];
+  };
+  const dateRange = value("dateRange");
+  const completionYear = value("completionYear");
+
+  return {
+    statuses: new Set(
+      arrayValue("status").filter((item): item is ProjectStatus =>
+        projectStatusValues.includes(item as ProjectStatus),
+      ),
+    ),
+    kinds: new Set(
+      arrayValue("kind").filter((item): item is ProjectKind =>
+        projectKindValues.includes(item as ProjectKind),
+      ),
+    ),
+    locations: new Set(arrayValue("locations")),
+    dateRange: typeof dateRange === "string" ? dateRange : null,
+    completionYear: typeof completionYear === "string" ? completionYear : null,
+  };
 }
 
 /** Parse ordinary URL filters. Absent means unrestricted. */

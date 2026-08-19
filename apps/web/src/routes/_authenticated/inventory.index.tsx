@@ -28,7 +28,7 @@ function InventoryPage() {
     <Page
       variant="list"
       title="Inventory"
-      fullWidth
+      layout="full"
       actions={
         <div className="flex flex-wrap gap-2">
           <InventoryActions />

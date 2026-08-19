@@ -10,14 +10,14 @@ const homeActions = actionsForSurface("home-quick");
 
 /**
  * Quick actions for the home page, drawn from the `home-quick` slice of the
- * canonical registry — the household's recurring verbs first, creates after.
+ * canonical registry — exactly the four recurring household verbs.
  */
 export function QuickActionsCard() {
   return (
     <DashboardCard
       icon={Zap}
-      title="Quick actions"
-      description="Jump to common tasks"
+      title="Do now"
+      description="Four recurring household passes."
     >
       <Grid className="grid-cols-2" gap="sm">
         {homeActions.map((action) => (

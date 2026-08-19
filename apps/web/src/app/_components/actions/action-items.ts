@@ -89,11 +89,10 @@ function entityCreate(
  * out of every create surface (dev-level, not a headline create).
  */
 export const actionItems: ActionItem[] = [
-  // `home-quick` leads with the household's recurring verbs — recount, cook,
-  // shop, triage — before any create form. The home card previously rendered
-  // the navbar's create-only slice, which offers eight ways to add a record on
-  // a database that is already populated; the daily job there is acting on
-  // what exists. Order in this array is the order each surface renders.
+  // `home-quick` is deliberately only the four recurring household verbs.
+  // Home is an operate surface, not an alternate create menu; new records
+  // remain available from their lists, the command palette, and the masthead.
+  // Order in this array is the order each surface renders.
   {
     id: "recount",
     name: "Recount",
@@ -138,7 +137,7 @@ export const actionItems: ActionItem[] = [
     "product",
     "add-product",
     Plus,
-    ["navbar-create", "palette-quick", "home-quick"],
+    ["navbar-create", "palette-quick"],
     ["create", "new", "item"],
   ),
   entityCreate(
@@ -167,7 +166,7 @@ export const actionItems: ActionItem[] = [
     search: { create: true },
     icon: entities.task.lucideIcon,
     keywords: ["create", "new", "todo", "house", "chore"],
-    surfaces: ["navbar-create", "palette-quick", "home-quick"],
+    surfaces: ["navbar-create", "palette-quick"],
   },
   {
     id: "add-project",
@@ -187,7 +186,7 @@ export const actionItems: ActionItem[] = [
     search: { create: true },
     icon: entities.expense.lucideIcon,
     keywords: ["create", "new", "expense", "receipt", "spend", "cost"],
-    surfaces: ["navbar-create", "palette-quick", "home-quick"],
+    surfaces: ["navbar-create", "palette-quick"],
   },
   {
     id: "add-meal",
@@ -261,7 +260,7 @@ export const actionItems: ActionItem[] = [
     path: "/problems",
     icon: AlertTriangle,
     keywords: ["issues", "errors", "warnings", "audit"],
-    surfaces: ["palette-quick", "home-quick"],
+    surfaces: ["palette-quick"],
   },
   {
     id: "bulk-edit",

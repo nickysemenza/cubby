@@ -64,7 +64,7 @@ function ProductsPage() {
   const activeView: ProductListView = view ?? "table";
 
   return (
-    <Page variant="list" title="Products" fullWidth>
+    <Page variant="list" title="Products" layout="full">
       <ProductList
         initialCategory={category}
         view={activeView}

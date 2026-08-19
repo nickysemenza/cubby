@@ -39,7 +39,7 @@ function ShoppingListRoute() {
     <Page
       variant="list"
       title="Shopping list"
-      fullWidth
+      layout="full"
       actions={
         <ViewSwitcher
           ariaLabel="Shopping list view"

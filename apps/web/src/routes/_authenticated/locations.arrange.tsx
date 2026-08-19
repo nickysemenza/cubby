@@ -44,7 +44,7 @@ function ArrangePage() {
   const navigate = useNavigate({ from: Route.fullPath });
 
   return (
-    <Page variant="list" title="Arrange" eyebrow="Locations" fullWidth>
+    <Page variant="list" title="Arrange" eyebrow="Locations" layout="full">
       <Suspense fallback={<SimpleLoading text="Loading locations..." />}>
         <ArrangeSurface
           view={view}

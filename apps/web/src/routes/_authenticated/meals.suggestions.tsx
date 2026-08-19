@@ -23,7 +23,7 @@ function MealsSuggestionsRoute() {
   const navigate = useNavigate();
 
   return (
-    <Page variant="list" title="What can I make?" fullWidth>
+    <Page variant="list" title="What can I make?" layout="full">
       <MealSuggestionsPage
         filter={filter ?? "all"}
         onFilterChange={(nextFilter) =>

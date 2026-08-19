@@ -1,11 +1,16 @@
 import type { ProjectStatus } from "@cubby/schemas/project";
 import { projectStatusValues } from "@cubby/schemas/project";
+import { ListFilter } from "lucide-react";
+import { type ReactNode, useId, useState } from "react";
 import { Row, Stack } from "~/components/layout";
+import { Button } from "~/components/ui/button";
+import { NativeSelect } from "~/components/ui/native-select";
+import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import {
+  activeFilterCount,
   DATE_RANGE_PRESETS,
-  defaultFilters,
   type Filters,
-  isDefaultStatusSelection,
+  hasActiveFilters,
 } from "./dashboard-filter-state";
 import { FilterChipGroup, SingleSelectChipGroup } from "./filter-chips";
 import { capitalize, PROJECT_STATUS_LABELS } from "./project-formatting";
@@ -14,14 +19,7 @@ const DATE_PRESET_LABELS = new Map<string, string>(
   DATE_RANGE_PRESETS.map(({ key, label }) => [key, label]),
 );
 
-export function DashboardFilters({
-  filters,
-  onFiltersChange,
-  availableKinds,
-  availableLocations,
-  availableYears,
-  availableCompletionYears,
-}: {
+type DashboardFiltersProps = {
   filters: Filters;
   onFiltersChange: (filters: Filters) => void;
   availableKinds: string[];
@@ -29,16 +27,55 @@ export function DashboardFilters({
   /** Distinct years present in expense/task dates, newest first. */
   availableYears: string[];
   availableCompletionYears: string[];
-}) {
-  // Compares against `defaultFilters` (the live-three statuses, nothing
-  // else), not an empty selection — so the resting first-load state, which
-  // honestly reflects what the server scopes to, shows no affordance.
-  const hasFilters =
-    !isDefaultStatusSelection(filters) ||
-    filters.kinds.size > 0 ||
-    filters.locations.size > 0 ||
-    filters.dateRange !== null ||
-    filters.completionYear !== null;
+  savedViews: ReactNode;
+};
+
+/**
+ * The project scope stays in the URL, but its detailed controls no longer
+ * compete with the dashboard's first decision. The compact trigger shows the
+ * active count; the responsive dialog carries saved views and all fields.
+ */
+export function DashboardFilters(props: DashboardFiltersProps) {
+  const [open, setOpen] = useState(false);
+  const count = activeFilterCount(props.filters);
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => setOpen(true)}
+        aria-label={count > 0 ? `Filters, ${count} active` : "Filter projects"}
+      >
+        <ListFilter />
+        {count > 0 ? `Filters (${count})` : "Filter"}
+      </Button>
+
+      <ResponsiveDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Project filters"
+        description="Narrow projects, work, and spend together."
+        size="lg"
+      >
+        <DashboardFilterControls {...props} />
+      </ResponsiveDialog>
+    </>
+  );
+}
+
+function DashboardFilterControls({
+  filters,
+  onFiltersChange,
+  availableKinds,
+  availableLocations,
+  availableYears,
+  availableCompletionYears,
+  savedViews,
+}: DashboardFiltersProps) {
+  const yearId = useId();
+  const completionYearId = useId();
 
   function toggle(key: "statuses" | "kinds" | "locations", value: string) {
     const next = new Set(filters[key]);
@@ -50,14 +87,14 @@ export function DashboardFilters({
     onFiltersChange({ ...filters, [key]: next });
   }
 
-  const dateOptions = [
-    ...DATE_RANGE_PRESETS.map(({ key }) => key),
-    ...availableYears,
-  ];
-
+  const selectedYear = /^\d{4}$/.test(filters.dateRange ?? "")
+    ? (filters.dateRange ?? "")
+    : "";
   return (
-    <Stack gap="sm">
-      <Row wrap gap="lg">
+    <Stack gap="lg">
+      {savedViews}
+
+      <Stack gap="md">
         <FilterChipGroup
           label="Status"
           options={[...projectStatusValues]}
@@ -78,36 +115,105 @@ export function DashboardFilters({
           selected={filters.locations}
           onToggle={(v) => toggle("locations", v)}
         />
-        {/* Single-select: a union of date ranges isn't meaningful. Narrows
-            expenses (by date), tasks (by due date), and the project set (by
-            interval overlap) — undated projects drop out of that last one
-            while a window is set. */}
         <SingleSelectChipGroup
           label="Date range"
-          options={dateOptions}
+          options={DATE_RANGE_PRESETS.map(({ key }) => key)}
           value={filters.dateRange}
           onChange={(dateRange) => onFiltersChange({ ...filters, dateRange })}
           formatLabel={(v) => DATE_PRESET_LABELS.get(v) ?? v}
           hint="narrows expenses, tasks & projects by date"
         />
-        <SingleSelectChipGroup
-          label="Completed"
-          options={availableCompletionYears}
-          value={filters.completionYear}
-          onChange={(completionYear) =>
-            onFiltersChange({ ...filters, completionYear })
-          }
-        />
-      </Row>
-      {hasFilters && (
-        <button
-          type="button"
-          className="text-muted-foreground text-xs hover:text-foreground"
-          onClick={() => onFiltersChange(defaultFilters)}
-        >
-          Clear filters
-        </button>
-      )}
+        <Stack gap="xs">
+          <label
+            htmlFor={yearId}
+            className="font-mono text-2xs text-muted-foreground uppercase tracking-wider"
+          >
+            Calendar year
+          </label>
+          <NativeSelect
+            id={yearId}
+            value={selectedYear}
+            onChange={(event) =>
+              onFiltersChange({
+                ...filters,
+                dateRange: event.currentTarget.value || null,
+              })
+            }
+          >
+            <option value="">Any year</option>
+            {availableYears.map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </NativeSelect>
+        </Stack>
+        <Stack gap="xs">
+          <label
+            htmlFor={completionYearId}
+            className="font-mono text-2xs text-muted-foreground uppercase tracking-wider"
+          >
+            Completed
+          </label>
+          <NativeSelect
+            id={completionYearId}
+            value={filters.completionYear ?? ""}
+            onChange={(event) =>
+              onFiltersChange({
+                ...filters,
+                completionYear: event.currentTarget.value || null,
+              })
+            }
+          >
+            <option value="">Any completion year</option>
+            {availableCompletionYears.map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </NativeSelect>
+        </Stack>
+      </Stack>
     </Stack>
   );
+}
+
+/** The active URL scope belongs in the working surface, not hidden inside the
+ * dialog that changes it. Absent for bare `/projects`. */
+export function ActiveScopeSummary({
+  filters,
+  onClear,
+}: {
+  filters: Filters;
+  onClear: () => void;
+}) {
+  const scopeSummary = activeScopeSummary(filters);
+  if (scopeSummary.length === 0) return null;
+
+  return (
+    <Row align="center" justify="between" gap="sm" wrap>
+      <p className="text-muted-foreground text-xs">
+        {scopeSummary.join(" · ")}
+      </p>
+      <Button type="button" variant="ghost" size="sm" onClick={onClear}>
+        Clear
+      </Button>
+    </Row>
+  );
+}
+
+function activeScopeSummary(filters: Filters): string[] {
+  if (!hasActiveFilters(filters)) return [];
+
+  return [
+    ...[...filters.statuses].map(
+      (status) => PROJECT_STATUS_LABELS[status] ?? status,
+    ),
+    ...[...filters.kinds].map(capitalize),
+    ...filters.locations,
+    ...(filters.dateRange
+      ? [DATE_PRESET_LABELS.get(filters.dateRange) ?? filters.dateRange]
+      : []),
+    ...(filters.completionYear ? [`Completed ${filters.completionYear}`] : []),
+  ];
 }

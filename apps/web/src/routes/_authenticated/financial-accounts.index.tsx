@@ -32,7 +32,7 @@ export const Route = createFileRoute("/_authenticated/financial-accounts/")({
       headerInToolbar
       title="Accounts"
       entity="financialAccount"
-      fullWidth
+      layout="full"
       actions={<CreateDialogAction Dialog={CreateFinancialAccountDialog} />}
     >
       <FinancialAccountList />

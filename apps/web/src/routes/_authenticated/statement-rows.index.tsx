@@ -48,7 +48,7 @@ export const Route = createFileRoute("/_authenticated/statement-rows/")({
       variant="list"
       headerInToolbar
       title="Statement Rows"
-      fullWidth
+      layout="full"
       compact
       decoration="none"
     >

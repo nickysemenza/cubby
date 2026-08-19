@@ -31,7 +31,7 @@ function MealsIndexRoute() {
     <Page
       variant="list"
       title="Meals"
-      fullWidth
+      layout="full"
       actions={<CreateDialogAction Dialog={CreateMealDialog} />}
     >
       <MealCalendarPage

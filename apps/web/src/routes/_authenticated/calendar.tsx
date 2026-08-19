@@ -45,7 +45,7 @@ function CalendarRoute() {
     <Page
       variant="list"
       title="Calendar"
-      fullWidth
+      layout="full"
       actions={<CalendarSubscribeDialog />}
     >
       <CalendarFilterBar search={search} onSearchChange={onSearchChange} />

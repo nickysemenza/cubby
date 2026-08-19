@@ -31,8 +31,8 @@ import { scaleRecipe } from "~/app/_components/recipe/recipe-scaling";
 import { useRecipeTree } from "~/app/_components/recipe/useRecipeTree";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row } from "~/components/layout";
-import { PageWrapper } from "~/components/layout/page-wrapper";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
+import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
 import {
@@ -151,7 +151,7 @@ function RecipeExportBody({ recipe }: { recipe: RecipeOut }) {
       : "";
 
   return (
-    <PageWrapper>
+    <Page variant="bare">
       <div className="mx-auto max-w-3xl">
         <Row align="center" gap="sm" wrap className="mb-4 print:hidden">
           <ViewSwitcher
@@ -210,6 +210,6 @@ function RecipeExportBody({ recipe }: { recipe: RecipeOut }) {
           </div>
         )}
       </div>
-    </PageWrapper>
+    </Page>
   );
 }

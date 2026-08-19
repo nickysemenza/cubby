@@ -90,7 +90,7 @@ function Home() {
           </p>
         ) : null
       }
-      fullWidth
+      layout="full"
     >
       {/* Status bar — absent only when there is nothing outstanding at all.
           It carries the destructive tone for real defects and a quiet one for
@@ -103,7 +103,7 @@ function Home() {
           signals region now sits below rather than above. On a phone this
           also means the first viewport is work, not net worth. */}
       <Section
-        title="On deck"
+        title="Needs attention"
         description="Open work and what is planned to cook."
       >
         <Grid cols="pair" gap="md">
@@ -111,6 +111,8 @@ function Home() {
           <MealsCard />
         </Grid>
       </Section>
+
+      <QuickActionsCard />
 
       {/* The household's two operating signals — state of what is on hand and
           what has been spent. Mobile puts pantry first because it is the
@@ -129,23 +131,18 @@ function Home() {
         </Grid>
       </Section>
 
-      <Section
-        title="Current position"
-        description="Everything the household has on record."
-      >
-        <EntityCount />
+      {/* Activity is useful context after the immediate operating picture, but
+          it does not compete with today's actions for the first decision. */}
+      <Section title="Recent activity">
+        <RecentActivityFeed limit={6} />
       </Section>
 
-      {/* Named region: this pair was previously an untitled bare grid between
-          two titled sections, which is exactly where the reading order
-          stumbled. Equal columns — the feed used to be twice the width of the
-          actions beside it while carrying less. */}
-      <Section title="Activity">
-        <Grid cols="pair" gap="md">
-          <RecentActivityFeed limit={6} />
-          <QuickActionsCard />
-        </Grid>
-      </Section>
+      <CollapsibleSection
+        title="Browse records"
+        summary="Everything the household has on record"
+      >
+        <EntityCount />
+      </CollapsibleSection>
 
       {/* Insights — the visualization panels folded in from the retired
           /insights page. Exploration, not operation: they are the heaviest
