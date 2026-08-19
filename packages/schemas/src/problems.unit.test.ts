@@ -41,6 +41,7 @@ describe("PROBLEM_CLASS", () => {
     negativeExpectedQuantity: "defect",
     orphanedEntityEmbeddings: "defect",
     orphanedProducts: "defect",
+    partiallyImportedCookbooks: "defect",
     overdueTasks: "defect",
     pastDuePlannedExpenses: "defect",
     productsMissingPrice: "defect",

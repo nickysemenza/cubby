@@ -73,17 +73,22 @@ export function VendorMark({
   const url = logo.url;
 
   return (
-    <img
-      src={transformedImageUrl(url, MARK_PX)}
-      srcSet={transformedSrcSet(url, MARK_PX)}
-      alt=""
-      loading="lazy"
-      onError={() => setFailedUrl(url)}
+    <span
+      aria-hidden
       className={cn(
         shared,
-        "object-contain grayscale transition-[filter] group-hover/row:grayscale-0 max-sm:grayscale-0",
+        "flex items-center justify-center border border-border bg-muted p-px",
       )}
-    />
+    >
+      <img
+        src={transformedImageUrl(url, MARK_PX)}
+        srcSet={transformedSrcSet(url, MARK_PX)}
+        alt=""
+        loading="lazy"
+        onError={() => setFailedUrl(url)}
+        className="size-full object-contain grayscale transition-[filter] group-hover/row:grayscale-0 max-sm:grayscale-0"
+      />
+    </span>
   );
 }
 

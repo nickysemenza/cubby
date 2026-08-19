@@ -1464,6 +1464,19 @@ const DECLARED_SECTIONS = [
     }),
   }),
   section({
+    id: "partially-imported-cookbooks",
+    label: "Partial cookbooks",
+    select: (p) => p.partiallyImportedCookbooks,
+    problemKeys: ["partiallyImportedCookbooks"],
+    entity: "cookbook",
+    renderItem: (cookbook) => ({
+      title: cookbook.name,
+      subtitle: `${cookbook.recipeCount} / ${cookbook.sourceRecipeCount} imported · ${cookbook.missingRecipeCount} missing`,
+      route: entityDetailLink("cookbook", cookbook.id),
+      editLabel: "Open cookbook",
+    }),
+  }),
+  section({
     id: "empty-cooked-meals",
     label: "Empty meals",
     select: (p) => p.emptyCookedMeals,

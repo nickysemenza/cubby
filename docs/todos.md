@@ -42,8 +42,8 @@ These are recorded options, not latent obligations. Their detailed entries name
 the evidence required before promotion.
 
 - UPC duplicate collapsing, aggregate-range materiality, Sentry lazy-init,
-  selective-SSR expansion, selection-control consolidation, budget-aware MCP
-  pagination, and all three additional MCP Apps.
+  selective-SSR expansion, selection-control consolidation, and budget-aware
+  MCP pagination.
 - `PurchaseLine`, `ExpenseProduct`, the service/product advisory, the
   returned-unit price advisory, and repeat-purchase ranking.
 - Product external-id collisions are **already queryable** through
@@ -169,14 +169,6 @@ follow-ups:
   review card) inside the MCP tool handler. **Not** a SQL dedupe in usda-api: the
   list query's `count` and `data` come from different FROM clauses and are never
   reconciled, and that count drives the `/usda` table's pager.
-- **Decided: `NutritionLabel` leads, `NutritionInfoTable` demoted to a disclosure.**
-  The raw nutrient table stays — it's the only surface for non-tier-1 nutrients
-  (B-vitamin variants, fatty-acid breakdowns, amino acids, sugars), and a straight
-  swap to `NutritionLabel` would silently drop all of them. Resolved by leading
-  with `NutritionLabel` and collapsing `NutritionInfoTable` behind a "Full
-  nutrient breakdown" disclosure (`FullNutrientBreakdown`), applied uniformly on
-  USDA food, ingredient, and product detail — closing the 2026-07 audit's "third
-  raw-table instance" note on ingredient detail.
 - [ ] **`parse_scraped_recipe` could return parsed lines**: today it returns raw
   ingredient strings and the import path batch-parses them separately; folding the
   parse into the scrape export would save one boundary crossing on import.
@@ -193,14 +185,6 @@ follow-ups:
   will I have left?") — needs a precise running stock balance, which
   [tenet 1](../README.md#tenets) says inventory will never be. Cost/nutrition per
   *recipe* is the useful half and already exists.
-
-### USDA
-
-- [ ] **Decide whether edge FTS should include brand fields**: the current D1/R2
-  artifact indexes only `description`; the retired SQLite runtime also indexed
-  `short_description`, `brand_name`, and `brand_owner`. Before the next full USDA
-  rebuild, decide whether food-name-focused search is intentional or add those
-  fields to restore brand-search parity.
 
 ---
 
@@ -231,16 +215,6 @@ runtime CDN) are all shipped. Target is iOS Safari only. Remaining:
   Expense at all (a provenance gap, not a counting one). The variance filter
   already excludes that second group; the first is ordinary data entry through
   Expenses → Missing quantities, where the quantity field is editable in place.
-- [ ] **Problems detectors for cookbooks**: partially-imported cookbooks
-  (`sourceRecipeCount > recipeCount` — visible only if you open that book).
-  The meal/recipe ones shipped: `emptyCookedMeals`, `understatedCostMeals`
-  (`costCovered < ingredientCount`, deliberately not `totals IS NULL` — that
-  self-clears and `staleRecipeTotals` already owns it), and
-  `recipesWithoutInstructions` (Book/Notion sources excluded).
-- [ ] **AiSearchBar on inventory is thinner than the plain filters**: it can
-  only set `productName`/`locationName` — the two substring filters already on
-  screen. Either teach it quantity/category/valuation/verified-before/subtree
-  filters or drop it from that surface.
 - [ ] **Placement pass — "where does this live?" for the unlocated backlog**:
   the `unlocated` view converges by marking `stockTracked` false or true, but
   the ledger shows 1,635 products marked false and **zero** marked true — "yes,
@@ -459,28 +433,6 @@ Follow-ups the split itself generated (small, none blocking):
 
   The roster is 113 rows and human-scale; merging a duplicate found by eye is a UI
   operation. Accept the gap.
-- [ ] **Near-white vendor logos need a RENDER fix, not a seeder filter.** A
-  white-on-transparent favicon renders as a blank tile against warm paper once
-  `grayscale(1)` applies at rest. Measured 2026-07-30 (mean channel value of the 32px
-  transformed variant, alpha composited onto white via `magick -alpha remove
-  -background white -format '%[fx:mean]'` — note plain `urllib` is UA-blocked by
-  Cloudflare, and `-alpha remove` is not interchangeable with `-flatten`: `veradek`
-  reads .9876 vs .9907): `veradek` .988, `the-growers-exchange` .965, `walmart` .923,
-  `visual-comfort` .911, `jacquemus` .895, `ebay` .892, `supplyhouse` .879,
-  `ace-hardware` .870, `sherwin-williams` .864, `rubio-monocoat` .859.
-
-  **A seeder-side rejection gate was built and then removed — don't rebuild it.** At
-  `NEAR_WHITE_MAX = 0.9` it demoted **10 real brands** to monograms, including
-  `Masseria Calderisi`, the single largest vendor by spend ($142k). A faint real mark
-  still carries more identity than an initial, and the gate also conflated two
-  opposite operator signals: "this domain is dead, fix the field" and "this domain is
-  fine, the brand's mark is just white" both surfaced as *check the domain*. The
-  problem is that we render a light mark on a light ground — so fix it where it is:
-  give the mark a neutral chip/plate behind it in `vendor-cell.tsx`, or skip
-  `grayscale(1)` at rest below a luminance threshold **computed at render time**. That
-  keeps every logo stored and lets the display adapt, instead of deciding at seed time
-  that a brand has no logo at all.
-
 - **`Vendor.kind` stays removed** — nothing branched on it and it was
   null on 111 of 114 rows. Contractor metadata (license number, COI expiry) would
   bring it back as additive columns plus a discriminator; don't re-add it decoratively.
@@ -907,36 +859,6 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
   territory and deliberately out of scope everywhere else in this codebase.
   Either add a lighter "drop the stale sourceRef/alias" fix action, or
   explicitly document why merge stays out of scope for these two.
-
-### MCP Apps — further candidates
-
-The SEP-1865 pipeline shipped with two apps (`get_shopping_list`,
-`search_usda_foods`) — see [the README](../README.md#mcp-apps-interactive-uis-in-the-conversation).
-Adding another is now three files: `apps/mcp-apps/<id>.html`,
-`apps/mcp-apps/src/<id>.ts`, and an entry in `apps/mcp-apps/src/bundles.ts`
-(the build discovers entry points, and the server maps the manifest) — plus
-`uiResourceUri` on the tool.
-
-The bar stays **chat is the right home AND text is a bad medium**. Candidates
-that clear it, in rough order:
-
-- [ ] **`explain_recipe_costing`** — a nested per-ingredient cost/calorie
-  breakdown that reads terribly as prose. An expandable tree with the
-  diagnostics inline is a genuine win. The most likely next one.
-- [ ] **Merge confirmation** for `find_similar_entities` / `merge_ingredients` —
-  a side-by-side of the two candidates with a single confirm. Deferred because
-  the destructive path deserves more thought than a pretty diff: decide first
-  whether the app should call `merge_ingredients` directly or hand the decision
-  back to the agent the way the USDA picker does.
-- [ ] **`resolve_ingredients` ambiguity** — same picker shape as USDA, but only
-  worth building if the batch resolver's ambiguous-row rate stays annoying in
-  practice.
-
-**Rejected, don't re-litigate**: apps for `list_tasks` (kanban),
-`get_expense_analytics` (charts), `list_problems` (triage), and the inventory
-tables. The web app already does all four better, and `app.openLink()` back into
-it is the correct zero-maintenance answer. An iframe is not the place to
-reimplement `RTable`.
 
 ### Saved filters — user-created views
 

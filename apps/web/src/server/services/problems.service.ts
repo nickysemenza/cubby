@@ -865,6 +865,11 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
           scoped,
           "orphaned-products",
         ),
+      partiallyImportedCookbooks: () =>
+        diagnosticItems<ProblemsFast["partiallyImportedCookbooks"]>(
+          scoped,
+          "partially-imported-cookbooks",
+        ),
       // One grouped scan of the product-linked Expense rows, filtered down to
       // the offenders by a HAVING rather than in JS.
       // One scan of the ~90 usage edges plus the whole-tree date fold. Cheap
@@ -945,6 +950,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
   const legacy = {
     duplicateProductIdentities: r.duplicateProductIdentities,
     orphanedProducts: r.orphanedProducts,
+    partiallyImportedCookbooks: r.partiallyImportedCookbooks,
     toolsUsedOutsideOwnership: r.toolsUsedOutsideOwnership,
     orphanedEntityEmbeddings: r.orphanedEntityEmbeddings,
     entitiesMissingEmbeddings: r.entitiesMissingEmbeddings,

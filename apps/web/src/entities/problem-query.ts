@@ -31,6 +31,7 @@ type ProblemGrain =
 export type DiagnosticKey =
   | "duplicate-product-identities"
   | "orphaned-products"
+  | "partially-imported-cookbooks"
   | "tools-used-outside-ownership"
   | "orphaned-entity-embeddings"
   | "entities-missing-embeddings"

@@ -18,6 +18,7 @@ import {
 import { getDb } from "./database-helpers";
 import { findOrphanedEntityEmbeddings } from "./entity-embedding-cleanup";
 import { upsertCookbookRecipeFromCookbook } from "./import-recipe-convert";
+import { findPartiallyImportedCookbooks } from "./problems";
 import { cookbookRecipe } from "./repo.fixtures";
 
 // EPUB importer suite — actor audits as an epub import, not the UI.
@@ -73,6 +74,61 @@ describe("cookbook repository", () => {
     expect(entry?.sourceRecipeCount).toBe(2);
     // No cover uploaded in this test.
     expect(entry?.coverUrl).toBeNull();
+  });
+
+  it("finds cookbooks with source recipes missing from the live import relation", async () => {
+    const raw = [
+      cookbookRecipe("Pancakes", ["2 cups flour"]),
+      cookbookRecipe("Waffles", ["1 cup flour"]),
+    ];
+    const { entityId: cookbookId, output } = await upsertCookbook(
+      ctx.db,
+      { name: "Partial Book", rawJson: raw, sourceLabel: "partial.epub" },
+      ctx.actor,
+    );
+    const ref = { id: cookbookId, name: "Partial Book" };
+
+    const initially = await findPartiallyImportedCookbooks(ctx.db);
+    expect(initially).toContainEqual({
+      id: output.id,
+      name: "Partial Book",
+      sourceRecipeCount: 2,
+      recipeCount: 0,
+      missingRecipeCount: 2,
+    });
+
+    const first = await upsertCookbookRecipeFromCookbook(
+      raw[0]!,
+      ref,
+      ctx.db,
+      ctx.actor,
+    );
+    const partlyImported = await findPartiallyImportedCookbooks(ctx.db);
+    expect(partlyImported).toContainEqual({
+      id: output.id,
+      name: "Partial Book",
+      sourceRecipeCount: 2,
+      recipeCount: 1,
+      missingRecipeCount: 1,
+    });
+
+    await upsertCookbookRecipeFromCookbook(raw[1]!, ref, ctx.db, ctx.actor);
+    expect(await findPartiallyImportedCookbooks(ctx.db)).not.toContainEqual(
+      expect.objectContaining({ id: output.id }),
+    );
+
+    await getDb(ctx.db)
+      .update(recipe)
+      .set({ deletedAt: new Date() })
+      .where(eq(recipe.id, first.id));
+    const afterSoftDelete = await findPartiallyImportedCookbooks(ctx.db);
+    expect(afterSoftDelete).toContainEqual({
+      id: output.id,
+      name: "Partial Book",
+      sourceRecipeCount: 2,
+      recipeCount: 1,
+      missingRecipeCount: 1,
+    });
   });
 
   it("getCookbookSource returns the stored extraction for selective re-import", async () => {

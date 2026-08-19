@@ -59,6 +59,32 @@ export const derivedProblemQueries = [
     },
   }),
   defineProblem({
+    key: "partiallyImportedCookbooks",
+    problemClass: PROBLEM_CLASS.partiallyImportedCookbooks,
+    executionLane: "fast",
+    continuation: {
+      kind: "none",
+      reason:
+        "Each result compares a cookbook's retained source extraction with its live imported recipes.",
+    },
+    freshness: { kind: "live" },
+    title: "Partially imported cookbooks",
+    description:
+      "Cookbooks whose retained source has more recipes than are currently imported.",
+    emptyMessage: "Every cookbook's retained source is fully imported.",
+    source: {
+      kind: "derived",
+      diagnostic: "partially-imported-cookbooks",
+      grain: "aggregate",
+      inputs: [{ entity: "cookbook", filters: [] }],
+      operations: [
+        { label: "Count retained source recipes" },
+        { label: "Count live imported recipes" },
+        { label: "Keep cookbooks with missing imports" },
+      ],
+    },
+  }),
+  defineProblem({
     key: "toolsUsedOutsideOwnership",
     problemClass: PROBLEM_CLASS.toolsUsedOutsideOwnership,
     executionLane: "fast",

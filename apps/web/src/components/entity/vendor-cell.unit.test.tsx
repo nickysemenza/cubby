@@ -135,6 +135,23 @@ describe("VendorCell", () => {
  * the stored asset slug.
  */
 describe("VendorCell / VendorMark with a resolved logo", () => {
+  it("puts every stored logo on the same neutral, ruled 16px plate", () => {
+    const { container } = render(
+      <VendorMark vendor="eBay" vendorId={SEEDED_ID} logo={EBAY_LOGO} />,
+    );
+
+    const plate = container.querySelector("span[aria-hidden='true']");
+    const logo = container.querySelector("img");
+    expect(plate).toHaveClass("size-4", "border", "border-border", "bg-muted");
+    expect(logo).toHaveClass(
+      "size-full",
+      "object-contain",
+      "grayscale",
+      "group-hover/row:grayscale-0",
+      "max-sm:grayscale-0",
+    );
+  });
+
   it("keeps the logo when a vendor is renamed", () => {
     render(
       <VendorMark
