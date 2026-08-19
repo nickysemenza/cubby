@@ -12,7 +12,7 @@ export const Route = createFileRoute(
 
 function IngredientEquivalencesPage() {
   return (
-    <Page variant="list" title="Recipe-derived equivalences" fullWidth>
+    <Page variant="list" title="Recipe-derived equivalences" layout="full">
       <EquivalencesReport />
     </Page>
   );

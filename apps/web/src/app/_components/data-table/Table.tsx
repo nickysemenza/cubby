@@ -426,7 +426,7 @@ export default function RTable<TItem extends RowData>(
 
   return (
     // max-w-[90rem]: self-cap at the 2xl page width. Most list pages are
-    // already capped by PageWrapper, but fullWidth hosts (locations' tabbed
+    // already capped by Page, but wide hosts (locations' tabbed
     // page, sized for its gallery view) would otherwise stretch the table to
     // the viewport and the width-slack spacer into an absurd gutter.
     <Stack className="max-w-[90rem]">

@@ -10,7 +10,7 @@ export const Route = createFileRoute("/_authenticated/ingredients/")({
 
 function IngredientsPage() {
   return (
-    <Page variant="list" title="Ingredients" fullWidth headerInToolbar>
+    <Page variant="list" title="Ingredients" layout="full" headerInToolbar>
       <IngredientList />
     </Page>
   );

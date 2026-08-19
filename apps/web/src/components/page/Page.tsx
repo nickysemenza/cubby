@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import { ListLoadingSkeleton } from "~/components/feedback/loading-skeletons";
-import { PageWrapper } from "~/components/layout/page-wrapper";
+import { type PageLayout, PageWrapper } from "~/components/layout/page-wrapper";
 import {
   type DetailHeroStat,
   PageHeader,
@@ -85,8 +85,19 @@ interface PageBaseProps {
   title: ReactNode;
   eyebrow?: ReactNode;
   actions?: ReactNode;
-  fullWidth?: boolean;
+  layout?: PageLayout;
   children: ReactNode;
+}
+
+/**
+ * A bounded page body without a page header. Pending states and print-oriented
+ * surfaces still need the same readable-width container, but must not invent
+ * an identity header while the route is unavailable.
+ */
+interface PageBareProps {
+  variant: "bare";
+  children: ReactNode;
+  layout?: PageLayout;
 }
 
 interface PageListProps extends PageBaseProps {
@@ -130,15 +141,23 @@ interface PageDetailProps extends PageBaseProps {
  * (the spec-plate can't render without it), so callers get a TS error instead of
  * the runtime guard in {@link PageHeader}.
  */
-type PageProps = PageListProps | PageDetailProps;
+type PageProps = PageBareProps | PageListProps | PageDetailProps;
 
 /**
- * The single page shell for both list and detail pages: client hydration, the
- * width container, the unified {@link PageHeader} (list header or detail
- * spec-plate), and a Suspense boundary around the page body.
+ * The single page shell for bounded bare, list, and detail surfaces. List and
+ * detail pages add the unified {@link PageHeader} and a Suspense boundary;
+ * `bare` preserves the same width contract without inventing route identity.
  */
 export function Page(props: PageProps) {
-  const { title, eyebrow, actions, fullWidth, children } = props;
+  if (props.variant === "bare") {
+    return <PageWrapper layout={props.layout}>{props.children}</PageWrapper>;
+  }
+
+  return <PageWithHeader {...props} />;
+}
+
+function PageWithHeader(props: PageListProps | PageDetailProps) {
+  const { title, eyebrow, actions, layout, children } = props;
   const variant = props.variant ?? "list";
   // List pages can omit `entity` — derive it from the route so the eyebrow/accent
   // still render. Detail pages always pass it explicitly (TS-required).
@@ -152,11 +171,15 @@ export function Page(props: PageProps) {
   // effect fires (or on pages with no list, or non-list variants).
   const [count, setCount] = useState<number | undefined>(undefined);
   const headerInToolbar = list?.headerInToolbar === true;
+  const loadingLabel =
+    typeof title === "string"
+      ? `Loading ${title.toLocaleLowerCase()}${variant === "detail" ? " details" : " records"}…`
+      : "Loading records…";
   const identity: PageIdentity | null = headerInToolbar
     ? { title, eyebrow, entity, count, actions }
     : null;
   return (
-    <PageWrapper fullWidth={fullWidth}>
+    <PageWrapper layout={layout}>
       <div className={variant === "detail" ? "space-y-2" : undefined}>
         {!headerInToolbar && (
           <PageHeader
@@ -189,7 +212,7 @@ export function Page(props: PageProps) {
             }
           >
             <PageCountContext.Provider value={setCount}>
-              <Suspense fallback={<ListLoadingSkeleton />}>
+              <Suspense fallback={<ListLoadingSkeleton label={loadingLabel} />}>
                 {/* List pages that render several top-level regions (the home
                   dashboard) previously stacked them flush — every region
                   boundary measured 0px, so five separate arguments read as one

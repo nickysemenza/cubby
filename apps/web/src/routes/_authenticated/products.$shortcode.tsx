@@ -61,7 +61,7 @@ function ProductDetailPage() {
 
   useDetailTitle(shortcode, product?.name);
 
-  // ProductDetail renders its own <Page> shell (which owns the PageWrapper).
+  // ProductDetail renders its own <Page> shell (which owns the page container).
   // The loader already threw notFound for an unknown code; this guard only
   // satisfies the nullable output type.
   if (!product) return null;

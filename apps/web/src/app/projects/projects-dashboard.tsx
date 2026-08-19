@@ -4,10 +4,8 @@ import type {
   ProjectFilters,
   ProjectOut,
   ProjectPortfolioAnalyticsOut,
-  ProjectStatus,
   TaskOut,
 } from "@cubby/schemas/project";
-import { projectStatusValues } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { Calendar, DollarSign, Hammer, Wallet } from "lucide-react";
@@ -21,6 +19,7 @@ import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import type { SummaryItem } from "~/app/_components/SummaryCard";
 import { ProjectMark } from "~/app/projects/project-mark";
+import { DashboardSectionLoading } from "~/components/feedback/loading-skeletons";
 import { Grid, Row, Section, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -55,11 +54,12 @@ import { CreateProjectDialog } from "./create-project-dialog";
 import {
   defaultFilters,
   type Filters,
+  filtersFromSavedViewFilters,
   filtersFromSearch,
   filtersToScopeInput,
   filtersToSearch,
 } from "./dashboard-filter-state";
-import { DashboardFilters } from "./dashboard-filters";
+import { ActiveScopeSummary, DashboardFilters } from "./dashboard-filters";
 import { NeedsAttention } from "./needs-attention";
 import {
   ProjectDataExpenseList,
@@ -146,11 +146,11 @@ export function ProjectsDashboard() {
 function DashboardToolbar({
   view,
   onViewChange,
-  savedViews,
+  filterControl,
 }: {
   view: DashboardView;
   onViewChange: (v: DashboardView) => void;
-  savedViews?: ReactNode;
+  filterControl: ReactNode;
 }) {
   return (
     <Row justify="between" align="center" wrap gap="sm">
@@ -161,7 +161,7 @@ function DashboardToolbar({
         onValueChange={onViewChange}
       />
       <Row align="center" gap="sm">
-        {savedViews}
+        {filterControl}
         <CreateDialogAction Dialog={CreateProjectDialog}>
           New Project
         </CreateDialogAction>
@@ -265,16 +265,7 @@ function MainDashboard({
       columnFilters={savedViewFilters}
       sorting={[]}
       onApplyFilters={(viewFilters) => {
-        const status = viewFilters.find((filter) => filter.id === "status");
-        const statuses = Array.isArray(status?.value)
-          ? status.value.filter((value): value is ProjectStatus =>
-              projectStatusValues.includes(value as ProjectStatus),
-            )
-          : [];
-        handleFiltersChange({
-          ...defaultFilters,
-          statuses: new Set(statuses),
-        });
+        handleFiltersChange(filtersFromSavedViewFilters(viewFilters));
       }}
       onApplySort={() => undefined}
     />
@@ -347,18 +338,24 @@ function MainDashboard({
       <DashboardToolbar
         view={view}
         onViewChange={onViewChange}
-        savedViews={savedViews}
+        filterControl={
+          <DashboardFilters
+            filters={filters}
+            onFiltersChange={handleFiltersChange}
+            availableKinds={data?.filterOptions.kinds ?? NO_KINDS}
+            availableLocations={data?.filterOptions.locations ?? NO_LOCATIONS}
+            availableYears={data?.filterOptions.years ?? NO_YEARS}
+            availableCompletionYears={
+              data?.filterOptions.completionYears ?? NO_YEARS
+            }
+            savedViews={savedViews}
+          />
+        }
       />
 
-      <DashboardFilters
+      <ActiveScopeSummary
         filters={filters}
-        onFiltersChange={handleFiltersChange}
-        availableKinds={data?.filterOptions.kinds ?? NO_KINDS}
-        availableLocations={data?.filterOptions.locations ?? NO_LOCATIONS}
-        availableYears={data?.filterOptions.years ?? NO_YEARS}
-        availableCompletionYears={
-          data?.filterOptions.completionYears ?? NO_YEARS
-        }
+        onClear={() => handleFiltersChange(defaultFilters)}
       />
 
       {dashboardQuery.isLoading || !data ? (
@@ -468,13 +465,15 @@ function OverviewView({
 
   return (
     <Stack className="pt-4">
+      <NeedsAttention items={data.attention} />
+
+      <NextWork tasks={data.nextTasks} />
+
       <StatGrid>
         {summaryItems.map((item) => (
           <StatTile key={item.label} item={item} />
         ))}
       </StatGrid>
-
-      <NeedsAttention items={data.attention} />
 
       {/* "Projects", not "Active Projects" — the summary tile above already
           says that; identical text on both would be a strict-mode-locator
@@ -504,8 +503,6 @@ function OverviewView({
           />
         </Suspense>
       </Section>
-
-      <NextWork tasks={data.nextTasks} />
     </Stack>
   );
 }
@@ -929,16 +926,5 @@ function ProjectCard({
 }
 
 function DashboardSkeleton() {
-  return (
-    <Stack>
-      <Skeleton className="h-8 w-48" />
-      <div className="grid gap-4 sm:grid-cols-3">
-        {Array.from({ length: 3 }, (_, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: placeholder cards have no stable identity
-          <Skeleton key={i} className="h-24 rounded-lg" />
-        ))}
-      </div>
-      <Skeleton className="h-64 rounded-lg" />
-    </Stack>
-  );
+  return <DashboardSectionLoading label="Loading project work…" sections={4} />;
 }

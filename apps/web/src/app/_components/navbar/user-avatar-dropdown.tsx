@@ -26,7 +26,7 @@ export const UserAvatarDropdown = () => {
   if (!hydrated || !user) {
     return (
       <div
-        className="size-7 animate-pulse rounded-full bg-muted/60"
+        className="size-10 animate-pulse rounded-full bg-muted/60 md:size-7"
         aria-hidden
       />
     );
@@ -45,7 +45,7 @@ export const UserAvatarDropdown = () => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        className="focus:outline-none"
+        className="flex size-10 items-center justify-center focus:outline-none md:size-7"
         aria-label="Account menu"
       >
         <Avatar size="sm">

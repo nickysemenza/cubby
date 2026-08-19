@@ -1,6 +1,6 @@
-import { Link } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
-import { lazy, type ReactNode, Suspense } from "react";
+import { Link, useLocation } from "@tanstack/react-router";
+import { ChevronLeft, ChevronRight, Search, Wrench } from "lucide-react";
+import { lazy, type ReactNode, Suspense, useState } from "react";
 import { preloadCommandMenu } from "~/app/_components/command-menu-loader";
 import { AppFooter } from "~/app/_components/footer";
 import { MainNav } from "~/app/_components/MainNav";
@@ -8,14 +8,13 @@ import { Button } from "~/components/ui/button";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { cn } from "~/lib/utils";
 import {
-  desktopNav,
-  getSidebarGroupItems,
   homeNavItem,
-  isNavGroup,
   type NavGroup,
   type NavItem,
   navItemLinkProps,
+  primaryNavGroups,
   settingsNavItem,
+  todayNavItems,
   useActiveTo,
 } from "./nav-items";
 
@@ -41,6 +40,11 @@ const RailLeaf = lazy(() =>
     default: module.SidebarRailLeaf,
   })),
 );
+const WorkspaceNavigator = lazy(() =>
+  import("./workspace-navigator").then((module) => ({
+    default: module.WorkspaceNavigator,
+  })),
+);
 
 type AuthenticatedAppShellProps = {
   children: ReactNode;
@@ -63,9 +67,10 @@ export function AuthenticatedAppShell({
     false,
   );
   const expanded = !collapsed;
+  const viewportSurface = useLocation().pathname === "/pantry-view";
 
   return (
-    <div className="min-h-dvh bg-background md:flex">
+    <div className="min-h-dvh bg-background [--app-chrome-bottom:calc(3.5rem+3px+env(safe-area-inset-bottom))] [--app-chrome-top:calc(3rem+3px)] md:flex md:[--app-chrome-bottom:0rem] md:[--app-chrome-top:3rem]">
       <WorkspaceSidebar
         expanded={expanded}
         onToggle={() => setCollapsed((value) => !value)}
@@ -87,8 +92,15 @@ export function AuthenticatedAppShell({
             is the page edge, so main spends no gutter. The 5rem bottom stays
             for the phone's fixed bottom nav, which would otherwise cover the
             last rows. */}
-        <main className="min-w-0 flex-1 pb-20 md:pb-0">{children}</main>
-        <AppFooter />
+        <main
+          className={cn(
+            "min-w-0 flex-1",
+            viewportSurface ? "overflow-hidden" : "pb-20 md:pb-0",
+          )}
+        >
+          {children}
+        </main>
+        {!viewportSurface && <AppFooter />}
       </div>
     </div>
   );
@@ -145,6 +157,8 @@ function WorkspaceSidebar({
   onToggle: () => void;
 }) {
   const activeTo = useActiveTo();
+  const [utilityOpen, setUtilityOpen] = useState(false);
+  const [utilityMounted, setUtilityMounted] = useState(false);
 
   return (
     <aside
@@ -169,7 +183,8 @@ function WorkspaceSidebar({
         aria-label="Cubby"
       >
         <SidebarHome active={activeTo === homeNavItem.to} expanded={expanded} />
-        {desktopNav.filter(isNavGroup).map((group) => (
+        <SidebarToday activeTo={activeTo} expanded={expanded} />
+        {primaryNavGroups.map((group) => (
           <SidebarGroup
             key={group.label}
             group={group}
@@ -179,7 +194,14 @@ function WorkspaceSidebar({
         ))}
       </nav>
       <div className="border-border border-t p-2">
-        <SidebarUtilityLinks expanded={expanded} activeTo={activeTo} />
+        <SidebarUtilityLinks
+          expanded={expanded}
+          activeTo={activeTo}
+          onOpenUtility={() => {
+            setUtilityMounted(true);
+            setUtilityOpen(true);
+          }}
+        />
         <Button
           type="button"
           variant="ghost"
@@ -192,6 +214,16 @@ function WorkspaceSidebar({
           {expanded ? <ChevronLeft /> : <ChevronRight />}
         </Button>
       </div>
+      {utilityMounted && (
+        <Suspense fallback={null}>
+          <WorkspaceNavigator
+            open={utilityOpen}
+            onOpenChange={setUtilityOpen}
+            initialView="utility"
+            activeTo={activeTo}
+          />
+        </Suspense>
+      )}
     </aside>
   );
 }
@@ -199,9 +231,11 @@ function WorkspaceSidebar({
 function SidebarUtilityLinks({
   expanded,
   activeTo,
+  onOpenUtility,
 }: {
   expanded: boolean;
   activeTo: string | undefined;
+  onOpenUtility: () => void;
 }) {
   return (
     <div className="mb-1 border-border border-b pb-1">
@@ -212,6 +246,17 @@ function SidebarUtilityLinks({
             active={activeTo === settingsNavItem.to}
           />
         </Suspense>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={onOpenUtility}
+          className="mb-1 size-10"
+          aria-label="Tools & data"
+          title="Tools & data"
+        >
+          <Wrench />
+        </Button>
         <div className="flex size-10 items-center justify-center">
           <Suspense fallback={<div className="size-7" aria-hidden="true" />}>
             <ShellAccount />
@@ -224,6 +269,16 @@ function SidebarUtilityLinks({
             item={settingsNavItem}
             active={activeTo === settingsNavItem.to}
           />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onOpenUtility}
+            className="mb-1 h-8 w-full justify-start gap-2 px-2 text-muted-foreground"
+          >
+            <Wrench className="size-3.5" />
+            <span className="truncate">Tools & data</span>
+          </Button>
           <div className="flex h-8 items-center gap-2 px-2 text-muted-foreground text-xs">
             <Suspense fallback={<div className="size-7" aria-hidden="true" />}>
               <ShellAccount />
@@ -233,6 +288,34 @@ function SidebarUtilityLinks({
         </div>
       )}
     </div>
+  );
+}
+
+function SidebarToday({
+  activeTo,
+  expanded,
+}: {
+  activeTo: string | undefined;
+  expanded: boolean;
+}) {
+  return (
+    <section className="mb-4 border-border border-y py-2" aria-label="Today">
+      {expanded && <p className="eyebrow hidden px-2 pb-1 lg:block">Today</p>}
+      {todayNavItems.map((item) => (
+        <div key={item.to}>
+          <div className={cn("md:block", expanded && "lg:hidden")}>
+            <Suspense fallback={<SidebarRailLeafFallback item={item} />}>
+              <RailLeaf item={item} active={activeTo === item.to} />
+            </Suspense>
+          </div>
+          {expanded && (
+            <div className="hidden lg:block">
+              <SidebarFullLeaf item={item} active={activeTo === item.to} />
+            </div>
+          )}
+        </div>
+      ))}
+    </section>
   );
 }
 
@@ -268,7 +351,6 @@ function SidebarGroup({
   expanded: boolean;
   activeTo: string | undefined;
 }) {
-  const children = getSidebarGroupItems(group);
   return (
     <>
       <div className={cn("md:block", expanded && "lg:hidden")}>
@@ -277,16 +359,11 @@ function SidebarGroup({
         </Suspense>
       </div>
       {expanded && (
-        <section className="mb-4 hidden lg:block" aria-label={group.label}>
-          <p className="eyebrow px-2 pb-1">{group.label}</p>
-          {children.map((item) => (
-            <SidebarFullLeaf
-              key={item.to}
-              item={item}
-              active={item.to === activeTo}
-            />
-          ))}
-        </section>
+        <div className="hidden lg:block">
+          <Suspense fallback={<SidebarRailGroupFallback group={group} />}>
+            <RailGroupFlyout group={group} activeTo={activeTo} expanded />
+          </Suspense>
+        </div>
       )}
     </>
   );

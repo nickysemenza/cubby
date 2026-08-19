@@ -69,7 +69,7 @@ function LocationsPage() {
       variant="list"
       title="Locations"
       actions={<LocationActions />}
-      fullWidth
+      layout="full"
     >
       <Stack gap="md">
         <ViewSwitcher

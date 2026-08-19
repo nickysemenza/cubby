@@ -714,7 +714,7 @@ function MatrixTable({
       className="table-fixed border-collapse text-left"
       style={{ width: tableWidth }}
     >
-      <thead className="sticky top-[51px] z-30 bg-card shadow-[0_1px_0_var(--foreground)]">
+      <thead className="sticky top-[51px] z-30 bg-card">
         <tr className="border-[var(--foreground)] border-b-[3px]">
           <th
             className={cn(

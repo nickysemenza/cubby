@@ -71,7 +71,7 @@ function PurchasesPage() {
       variant="list"
       headerInToolbar
       title="Purchases"
-      fullWidth
+      layout="full"
       actions={<CreateDialogAction Dialog={CreatePurchaseDialog} />}
     >
       <PurchaseList />

@@ -58,6 +58,9 @@ export type NavGroup = {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   children: NavItem[];
+  /** Presentation tier. The complete manifest stays semantic truth while each
+   * shell chooses how much of it to expose at once. */
+  tier: "primary" | "utility" | "developer";
   /**
    * Optional landing route for the group itself (a section overview page).
    * Most groups here are pure dropdown triggers with no page of their own —
@@ -117,13 +120,14 @@ export function getSidebarGroupItems(group: NavGroup): NavItem[] {
  * authed IA. Dropdowns nest their leaves and own their trigger icon. Active
  * state is derived (see {@link findActiveTo}), so nothing carries match logic.
  *
- * `Dev` is intentionally always present — cubby is a personal tool, so there's
- * no feature flag or DEV gate on the developer group.
+ * `Dev` is intentionally always present in the manifest — cubby is a personal
+ * tool, so utility navigation and Cmd-K retain it without a production gate.
  */
 export const desktopNav: NavNode[] = [
   {
     label: "Cook",
     icon: ChefHat,
+    tier: "primary",
     children: [
       recipes,
       { to: "/cookbooks", label: "Cookbooks", icon: BookOpen },
@@ -151,6 +155,7 @@ export const desktopNav: NavNode[] = [
   {
     label: "Pantry",
     icon: Boxes,
+    tier: "primary",
     children: [
       inventory,
       locations,
@@ -160,6 +165,7 @@ export const desktopNav: NavNode[] = [
   {
     label: "Plan",
     icon: CalendarRange,
+    tier: "primary",
     children: [
       { to: "/calendar", label: "Calendar", icon: CalendarRange },
       { to: "/meals", label: "Meals", icon: Utensils },
@@ -174,6 +180,7 @@ export const desktopNav: NavNode[] = [
   {
     label: "House",
     icon: House,
+    tier: "primary",
     children: [
       { to: "/projects", label: "Projects", icon: entities.project.lucideIcon },
       { to: "/projects/tools", label: "Tool usage", icon: Wrench },
@@ -183,6 +190,7 @@ export const desktopNav: NavNode[] = [
   {
     label: "Finance",
     icon: CreditCard,
+    tier: "primary",
     children: [
       { to: "/expenses", label: "Expenses", icon: entities.expense.lucideIcon },
       {
@@ -212,6 +220,7 @@ export const desktopNav: NavNode[] = [
     // Activity moved to More.)
     label: "Data",
     icon: Database,
+    tier: "utility",
     children: [
       { to: "/products", label: "Products", icon: entities.product.lucideIcon },
       { to: "/usda", label: "USDA", icon: entities["usda-food"].lucideIcon },
@@ -223,6 +232,7 @@ export const desktopNav: NavNode[] = [
   {
     label: "More",
     icon: MoreHorizontal,
+    tier: "utility",
     children: [
       {
         to: "/inventory/session",
@@ -240,6 +250,7 @@ export const desktopNav: NavNode[] = [
   {
     label: "Dev",
     icon: Wrench,
+    tier: "developer",
     children: [
       { to: "/design", label: "Design", icon: Palette },
       { to: "/ai-smoke-test", label: "AI smoke test", icon: Sparkles },
@@ -260,6 +271,57 @@ export const desktopNav: NavNode[] = [
 export const desktopLeaves: NavItem[] = desktopNav.flatMap((node) =>
   isNavGroup(node) ? node.children : [node],
 );
+
+/** Complete signed-in destination universe, including the direct Home leaf. */
+export const completeNavLeaves: NavItem[] = [homeNavItem, ...desktopLeaves];
+
+/** Tiered views derived from the canonical manifest. Never hand-copy leaves
+ * into a second navigation tree: breadcrumbs, Cmd-K and shells must agree. */
+export const primaryNavGroups = desktopNav.filter(
+  (node): node is NavGroup => isNavGroup(node) && node.tier === "primary",
+);
+export const utilityNavGroups = desktopNav.filter(
+  (node): node is NavGroup => isNavGroup(node) && node.tier === "utility",
+);
+export const developerNavGroups = desktopNav.filter(
+  (node): node is NavGroup => isNavGroup(node) && node.tier === "developer",
+);
+
+function leafAt(to: LinkProps["to"]): NavItem {
+  const item = desktopLeaves.find((leaf) => leaf.to === to);
+  if (!item) throw new Error(`Navigation target ${String(to)} is missing`);
+  return item;
+}
+
+/** Four household jobs that earn persistent desktop attention. */
+export const todayNavItems: NavItem[] = [
+  leafAt("/inventory/session"),
+  leafAt("/meals/shopping-list"),
+  leafAt("/projects"),
+  leafAt("/problems"),
+];
+
+/** Secondary phone destinations shown before the deeper taxonomy. */
+export const mobileHouseholdItems: NavItem[] = [
+  homeNavItem,
+  leafAt("/locations"),
+  leafAt("/calendar"),
+  leafAt("/meals"),
+  leafAt("/projects"),
+  leafAt("/expenses"),
+  leafAt("/problems"),
+];
+
+export const workspaceUtilitySections: NavSection[] = [
+  ...utilityNavGroups.map((group) => ({
+    title: group.label,
+    items: getSidebarGroupItems(group),
+  })),
+  ...developerNavGroups.map((group) => ({
+    title: group.label,
+    items: group.children,
+  })),
+];
 
 /** Mobile bottom tabs (primary). `scan`/`search` are mobile-only shortcuts. */
 export const bottomNavItems: NavItem[] = [
@@ -291,9 +353,8 @@ export type NavSection = { title: string; items: NavItem[] };
  * desktop dropdowns can't drift apart.
  */
 export const moreNavSections: NavSection[] = [
-  { title: "Home", items: [homeNavItem] },
-  ...desktopNav
-    .filter(isNavGroup)
+  { title: "Household", items: mobileHouseholdItems },
+  ...primaryNavGroups
     .map((group) => ({
       title: group.label,
       items: group.children.filter((leaf) => !bottomTabTargets.has(leaf.to)),
@@ -333,7 +394,7 @@ export function getEntityNavGroup(entity: Entity): NavGroup | undefined {
 
 /** Every reachable nav target, deduped — the universe active matching resolves over. */
 const allTargets: string[] = uniq(
-  [...desktopLeaves, ...bottomNavItems, ...publicNavItems].map(
+  [...completeNavLeaves, ...bottomNavItems, ...publicNavItems].map(
     (leaf) => leaf.to as string,
   ),
 );

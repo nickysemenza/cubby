@@ -23,9 +23,11 @@ import {
 export function SidebarRailGroup({
   group,
   activeTo,
+  expanded = false,
 }: {
   group: NavGroup;
   activeTo: string | undefined;
+  expanded?: boolean;
 }) {
   const children = getSidebarGroupItems(group);
   const active = children.some((item) => item.to === activeTo);
@@ -41,7 +43,10 @@ export function SidebarRailGroup({
                 <button
                   type="button"
                   className={cn(
-                    "mb-1 flex size-10 items-center justify-center border border-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none",
+                    "mb-1 flex h-10 items-center border border-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none",
+                    expanded
+                      ? "w-full justify-start gap-2 px-2"
+                      : "w-10 justify-center",
                     active && "border-border bg-background text-foreground",
                   )}
                   aria-label={group.label}
@@ -52,10 +57,13 @@ export function SidebarRailGroup({
           }
         >
           <Icon className="size-3.5" />
+          {expanded && <span className="truncate text-xs">{group.label}</span>}
         </TooltipTrigger>
-        <TooltipContent side="right" role="tooltip">
-          {group.label}
-        </TooltipContent>
+        {!expanded && (
+          <TooltipContent side="right" role="tooltip">
+            {group.label}
+          </TooltipContent>
+        )}
       </Tooltip>
       <DropdownMenuContent side="right" align="start" className="w-52">
         <DropdownMenuGroup>

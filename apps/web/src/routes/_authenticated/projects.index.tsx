@@ -88,7 +88,7 @@ export const Route = createFileRoute("/_authenticated/projects/")({
 
 function ProjectsPage() {
   return (
-    <Page variant="list" title="Projects" fullWidth>
+    <Page variant="list" title="Projects" layout="full">
       <ProjectsDashboard />
     </Page>
   );

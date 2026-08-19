@@ -10,17 +10,18 @@ import {
   moreNavSections,
   publicNavItems,
   useActiveTo,
+  workspaceUtilitySections,
 } from "./nav-items";
 
-const importBottomNavMoreSheet = createCachedLoader(() =>
-  import("./bottom-nav-more-sheet").then((m) => ({
-    default: m.BottomNavMoreSheet,
+const importWorkspaceNavigator = createCachedLoader(() =>
+  import("./workspace-navigator").then((m) => ({
+    default: m.WorkspaceNavigator,
   })),
 );
 
-const loadBottomNavMoreSheet = () => importBottomNavMoreSheet();
+const loadWorkspaceNavigator = () => importWorkspaceNavigator();
 
-const BottomNavMoreSheet = React.lazy(loadBottomNavMoreSheet);
+const WorkspaceNavigator = React.lazy(loadWorkspaceNavigator);
 
 type BottomNavItemProps = {
   icon?: React.ComponentType<{ className?: string }>;
@@ -81,14 +82,14 @@ export function BottomNav() {
 
   React.useEffect(() => {
     if (!authed || !window.matchMedia("(max-width: 767px)").matches) return;
-    return scheduleIdlePreload(window, () => void loadBottomNavMoreSheet(), {
+    return scheduleIdlePreload(window, () => void loadWorkspaceNavigator(), {
       timeoutMs: 1_500,
       fallbackMs: 400,
     });
   }, [authed]);
 
-  const isMoreActive = moreNavSections.some((section) =>
-    section.items.some((item) => item.to === activeTo),
+  const isMoreActive = [...moreNavSections, ...workspaceUtilitySections].some(
+    (section) => section.items.some((item) => item.to === activeTo),
   );
 
   return (
@@ -122,8 +123,8 @@ export function BottomNav() {
               label="More"
               active={isMoreActive}
               aria-label="More options"
-              onPointerEnter={() => void loadBottomNavMoreSheet()}
-              onTouchStart={() => void loadBottomNavMoreSheet()}
+              onPointerEnter={() => void loadWorkspaceNavigator()}
+              onTouchStart={() => void loadWorkspaceNavigator()}
               onClick={() => {
                 setMoreMounted(true);
                 setIsOpen(true);
@@ -131,10 +132,11 @@ export function BottomNav() {
             />
             {moreMounted && (
               <React.Suspense fallback={null}>
-                <BottomNavMoreSheet
+                <WorkspaceNavigator
                   activeTo={activeTo}
                   open={isOpen}
                   onOpenChange={setIsOpen}
+                  initialView="household"
                 />
               </React.Suspense>
             )}

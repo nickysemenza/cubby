@@ -83,7 +83,7 @@ export function MealsCard() {
                 key={meal.id}
                 to="/meals/$shortcode"
                 params={{ shortcode: meal.id }}
-                className="flex min-w-0 items-center justify-between gap-2 border-[var(--border)] border-b pb-1 text-sm last:border-b-0 hover:bg-muted/50"
+                className="flex min-h-10 min-w-0 items-center justify-between gap-2 border-[var(--border)] border-b py-1 text-sm last:border-b-0 hover:bg-muted/50 md:min-h-0 md:py-0 md:pb-1"
               >
                 <Row align="center" gap="xs" className="min-w-0">
                   <span className="shrink-0 font-mono text-2xs text-slate uppercase tabular-nums">

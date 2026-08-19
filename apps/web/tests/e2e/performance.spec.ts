@@ -13,8 +13,12 @@ test("authenticated navigation chrome does not wait for idle", async ({
 
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
-  await expect(page.getByRole("region", { name: "Cook" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Pantry" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Cook", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Pantry", exact: true }),
+  ).toBeVisible();
 });
 
 test("a prewarmed Command-K opens without a visible loading state", async ({
@@ -37,7 +41,12 @@ test("intent-preloaded navigation does not flash the route skeleton", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "networkidle" });
-  const locations = page.getByRole("link", { name: "Locations", exact: true });
+  await page.getByRole("button", { name: "Pantry", exact: true }).click();
+  const locations = page.getByRole("menuitem", {
+    name: "Locations",
+    exact: true,
+  });
+  await expect(locations).toBeVisible();
   await locations.hover();
   await page.waitForTimeout(100);
   await locations.click();

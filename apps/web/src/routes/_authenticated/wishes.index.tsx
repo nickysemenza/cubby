@@ -47,7 +47,7 @@ function WishesPage() {
       headerInToolbar
       entity="wish"
       title="Wishlist"
-      fullWidth
+      layout="full"
     >
       <WishList />
     </Page>

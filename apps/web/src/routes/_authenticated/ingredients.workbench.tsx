@@ -26,7 +26,7 @@ export const Route = createFileRoute("/_authenticated/ingredients/workbench")({
 function IngredientWorkbenchPage() {
   const search = Route.useSearch();
   return (
-    <Page variant="list" title="Ingredient Workbench" fullWidth>
+    <Page variant="list" title="Ingredient Workbench" layout="full">
       <EnrichmentWorkbench
         focus={search.focus}
         recipeId={search.recipe}

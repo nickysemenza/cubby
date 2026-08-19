@@ -11,12 +11,13 @@ import {
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Loader2, Maximize2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { NativeSelect } from "~/components/ui/native-select";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 import { useIsometricPantry } from "./use-isometric-pantry";
 
 function CategoryLegend() {
   return (
-    <div className="absolute bottom-4 left-4 border border-[var(--border)] bg-card/90 px-2 py-2 backdrop-blur-sm">
+    <div className="absolute bottom-4 left-4 border border-[var(--border)] bg-card px-2 py-2">
       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
         {productCategoryValues.map((cat) => (
           <div key={cat} className="flex items-center gap-2">
@@ -53,7 +54,9 @@ export function IsometricPantry() {
     handleMouseUp,
     inventory,
     isLoading: queryLoading,
+    openLocation,
     resetView,
+    rooms,
   } = useIsometricPantry();
 
   // Hydration-stable: the server renders this branch with no tree, while the
@@ -95,25 +98,45 @@ export function IsometricPantry() {
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
       />
-      <Link to="/inventory" className="absolute top-4 left-4">
+      <div className="absolute inset-x-4 top-4 flex items-center gap-2">
         <Button
           variant="ghost"
           size="sm"
           className="text-muted-foreground hover:text-foreground"
+          render={<Link to="/inventory" />}
+          nativeButton={false}
         >
           <ArrowLeft className="mr-1 size-4" />
           Back
         </Button>
-      </Link>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="absolute top-4 right-48 text-muted-foreground hover:text-foreground"
-        onClick={resetView}
-      >
-        <Maximize2 className="mr-1 size-4" />
-        Reset View
-      </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground hover:text-foreground"
+          onClick={resetView}
+        >
+          <Maximize2 className="mr-1 size-4" />
+          Reset View
+        </Button>
+        <NativeSelect
+          aria-label="Open pantry location"
+          className="ml-auto min-w-0 max-w-40 bg-card"
+          defaultValue=""
+          onChange={(event) => {
+            const shortcode = event.currentTarget.value;
+            if (shortcode) openLocation(shortcode);
+          }}
+        >
+          <option value="" disabled>
+            Open room…
+          </option>
+          {rooms.map((room) => (
+            <option key={room.locationId} value={room.locationId}>
+              {room.name} · {room.totalItemCount}
+            </option>
+          ))}
+        </NativeSelect>
+      </div>
       <CategoryLegend />
     </div>
   );

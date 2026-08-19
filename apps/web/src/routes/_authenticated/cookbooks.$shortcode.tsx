@@ -144,7 +144,7 @@ function CookbookDetailPage() {
       title={name}
       entity="cookbook"
       heroStats={heroStats}
-      fullWidth
+      layout="full"
       actions={
         <Row align="center" gap="sm">
           {notImported > 0 && (

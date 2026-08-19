@@ -51,7 +51,7 @@ function VendorsPage() {
       variant="list"
       headerInToolbar
       title="Vendors"
-      fullWidth
+      layout="full"
       actions={
         <CreateDialogAction Dialog={CreateVendorDialog}>
           New Vendor

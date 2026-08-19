@@ -10,7 +10,7 @@ export const Route = createFileRoute("/_authenticated/usda/")({
 
 function USDAPage() {
   return (
-    <Page variant="list" headerInToolbar title="USDA Foods" fullWidth>
+    <Page variant="list" headerInToolbar title="USDA Foods" layout="full">
       <USDAFoodList />
     </Page>
   );

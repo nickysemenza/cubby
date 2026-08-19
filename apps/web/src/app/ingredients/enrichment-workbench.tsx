@@ -22,6 +22,10 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import {
+  ViewSwitcher,
+  type ViewSwitcherOption,
+} from "~/components/ui/view-switcher";
 import { useHydrated } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -30,7 +34,6 @@ import {
   ingredientProductMutationInvalidateKeys,
 } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
-import { cn } from "~/lib/utils";
 import {
   type EquivalenceDraft,
   enrichmentWorkbenchQueryInput,
@@ -45,6 +48,12 @@ import {
 import { type Suggestion, WorkbenchRow } from "./workbench-row";
 
 type FilterKey = "all" | "no-product" | "partial" | "no-usda";
+type WorkbenchView = "browse" | "review";
+
+const WORKBENCH_VIEW_OPTIONS: ViewSwitcherOption<WorkbenchView>[] = [
+  { value: "browse", label: "Browse" },
+  { value: "review", label: "Review" },
+];
 
 /**
  * Dense bulk-enrichment table for ingredients with incomplete totals data —
@@ -65,7 +74,7 @@ export function EnrichmentWorkbench({
 }) {
   const api = useTRPC();
   const [filter, setFilter] = useState<FilterKey>("all");
-  const [view, setView] = useState<"browse" | "review">("browse");
+  const [view, setView] = useState<WorkbenchView>("browse");
   // Layered on top of the chips: drop ingredients used only in imported cookbook
   // recipes (the long noise tail) from counts + the visible/review set.
   const [hideCookbookOnly, setHideCookbookOnly] = useState(false);
@@ -423,49 +432,35 @@ export function EnrichmentWorkbench({
             ["no-usda", "No USDA"],
           ] as const
         ).map(([key, label]) => (
-          <button
+          <Button
             type="button"
             key={key}
             onClick={() => setFilter(key)}
-            className={cn(
-              "rounded-md px-2 py-1 text-sm transition-colors",
-              filter === key
-                ? "bg-secondary font-medium"
-                : "text-muted-foreground hover:bg-accent",
-            )}
+            variant={filter === key ? "secondary" : "outline"}
+            size="sm"
+            aria-pressed={filter === key}
           >
             {label} {counts[key]}
-          </button>
+          </Button>
         ))}
         {cookbookOnlyCount > 0 && (
-          <button
+          <Button
             type="button"
             onClick={() => setHideCookbookOnly((v) => !v)}
             aria-pressed={hideCookbookOnly}
-            className={cn(
-              "rounded-md px-2 py-1 text-sm transition-colors",
-              hideCookbookOnly
-                ? "bg-secondary font-medium"
-                : "text-muted-foreground hover:bg-accent",
-            )}
+            variant={hideCookbookOnly ? "secondary" : "outline"}
+            size="sm"
           >
             Hide cookbook-only ({cookbookOnlyCount})
-          </button>
+          </Button>
         )}
-        <Row align="center" gap="xs" className="ml-auto">
-          {(["browse", "review"] as const).map((v) => (
-            <Button
-              key={v}
-              type="button"
-              size="sm"
-              variant={view === v ? "secondary" : "ghost"}
-              className="h-7 px-2 text-xs capitalize"
-              onClick={() => setView(v)}
-            >
-              {v}
-            </Button>
-          ))}
-        </Row>
+        <ViewSwitcher
+          className="ml-auto"
+          ariaLabel="Workbench view"
+          options={WORKBENCH_VIEW_OPTIONS}
+          value={view}
+          onValueChange={setView}
+        />
       </Row>
 
       {view === "review" && (

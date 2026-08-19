@@ -35,7 +35,7 @@ export function HoverableTimestamp({ timestamp }: HoverableTimestampProps) {
   return (
     <TooltipProvider>
       <Tooltip>
-        <TooltipTrigger className="cursor-default">
+        <TooltipTrigger className="inline-flex min-h-10 min-w-10 cursor-default items-center justify-center md:min-h-0 md:min-w-0">
           <span className="font-mono text-2xs">{relativeTime}</span>
         </TooltipTrigger>
         <TooltipContent>

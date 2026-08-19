@@ -142,7 +142,7 @@ function RecipeComparePage() {
     <Page
       variant="list"
       title="Compare Recipes"
-      fullWidth
+      layout="full"
       actions={
         <Link to="/recipes">
           <Button variant="outline">

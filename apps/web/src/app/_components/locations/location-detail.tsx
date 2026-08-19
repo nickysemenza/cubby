@@ -81,8 +81,8 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
       heroMedia={heroMedia}
       heroNo={location.id ?? undefined}
     >
-      {/* Breadcrumb lives inside Page so it sits within the max-width
-          container (was full-width when the route PageWrapper was dropped). */}
+      {/* Breadcrumb lives inside Page so it stays within the max-width page
+          container rather than becoming a full-width route sibling. */}
       <LocationBreadcrumb location={location} linkable />
       <DetailSections
         sections={sections}

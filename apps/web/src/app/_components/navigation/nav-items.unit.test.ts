@@ -2,23 +2,67 @@ import type { Entity } from "@cubby/schemas/entity";
 import { describe, expect, it } from "vitest";
 import { entities } from "~/entities/entities";
 import {
+  completeNavLeaves,
   desktopLeaves,
   desktopNav,
+  developerNavGroups,
   findActiveTo,
   getEntityNavGroup,
   getSidebarGroupItems,
-  homeNavItem,
   isNavGroup,
+  mobileHouseholdItems,
+  primaryNavGroups,
   settingsNavItem,
+  todayNavItems,
+  utilityNavGroups,
 } from "./nav-items";
 
 describe("workspace navigation contract", () => {
   it("contains every desktop destination exactly once", () => {
-    const targets = [homeNavItem, ...desktopLeaves].map((item) => item.to);
+    const targets = completeNavLeaves.map((item) => item.to);
     expect(new Set(targets).size).toBe(targets.length);
     expect(targets.filter((target) => target === settingsNavItem.to)).toEqual([
       "/settings",
     ]);
+  });
+
+  it("derives the intended navigation tiers from the canonical manifest", () => {
+    expect(primaryNavGroups.map((group) => group.label)).toEqual([
+      "Cook",
+      "Pantry",
+      "Plan",
+      "House",
+      "Finance",
+    ]);
+    expect(utilityNavGroups.map((group) => group.label)).toEqual([
+      "Data",
+      "More",
+    ]);
+    expect(developerNavGroups.map((group) => group.label)).toEqual(["Dev"]);
+  });
+
+  it("pins the task-first persistent and phone household choices", () => {
+    expect(todayNavItems.map((item) => item.label)).toEqual([
+      "Recount",
+      "Shopping list",
+      "Projects",
+      "Problems",
+    ]);
+    expect(mobileHouseholdItems.map((item) => item.label)).toEqual([
+      "Home",
+      "Locations",
+      "Calendar",
+      "Meals",
+      "Projects",
+      "Expenses",
+      "Problems",
+    ]);
+  });
+
+  it("keeps utility and developer destinations available to Cmd-K", () => {
+    const routes = new Set(completeNavLeaves.map((item) => item.to));
+    expect(routes).toContain("/background-jobs");
+    expect(routes).toContain("/mcp");
   });
 
   it.each([
