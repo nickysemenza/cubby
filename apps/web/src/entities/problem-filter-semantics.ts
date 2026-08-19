@@ -45,5 +45,27 @@ export function compileProblemFilters(
       `Problem filter ${entity}.${nonSerializable.id} has no canonical URL semantic`,
     );
   }
+  // A range spec expands a closed set of preset keys and returns an empty patch
+  // for anything else. From a URL that leniency is deliberate — an unknown
+  // `?date=` resolves to no bound rather than an error page. From a DECLARATION
+  // it is a silent widening: the constraint vanishes and the Problem reports
+  // every row. `unclassifiedExpenses` declared `cost` as the multiselect
+  // sentinel `FILTER_NONE` where that expander accepts only `"none"`, and
+  // reported 7,450 rows against a true count of zero (#785).
+  const unexpanded = assembly.find(({ id, value }) => {
+    const spec = byColumn.get(id);
+    if (spec?.kind !== "range") return false;
+    const preset = Array.isArray(value) ? value[0] : value;
+    if (preset === undefined) return false;
+    const patch = spec.expand?.(preset);
+    return !patch || Object.keys(patch).length === 0;
+  });
+  if (unexpanded) {
+    throw new Error(
+      `Problem filter ${entity}.${unexpanded.id} declares the range preset ` +
+        `"${String(unexpanded.value)}", which expands to nothing — the filter ` +
+        "would be dropped and the Problem would match every row.",
+    );
+  }
   return buildFiltersFromManifest(specs, (columnId) => values.get(columnId));
 }
