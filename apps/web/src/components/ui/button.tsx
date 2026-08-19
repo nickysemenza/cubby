@@ -34,10 +34,25 @@ const buttonVariants = cva(
         "icon-sm": "size-6 [&_svg:not([class*='size-'])]:size-3",
         "icon-lg": "size-8 [&_svg:not([class*='size-'])]:size-4",
       },
+      /**
+       * Cubby is used on an iOS PWA as well as at a desktop desk. Interactive
+       * controls therefore grow to the 40px phone floor by default while
+       * retaining their compact ledger density at the `md` desktop shell.
+       *
+       * `compact` is only for a composite whose enclosing interactive target
+       * already supplies at least 40×40px (or desktop-only chrome). Document
+       * that enclosing target at the call site; never use this just to fit more
+       * actions into a phone row.
+       */
+      mobileSize: {
+        touch: "max-md:min-h-10 max-md:min-w-10",
+        compact: "",
+      },
     },
     defaultVariants: {
       variant: "default",
       size: "default",
+      mobileSize: "touch",
     },
   },
 );
@@ -46,12 +61,13 @@ function Button({
   className,
   variant = "default",
   size = "default",
+  mobileSize = "touch",
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
   return (
     <ButtonPrimitive
       data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={cn(buttonVariants({ variant, size, mobileSize, className }))}
       {...props}
     />
   );

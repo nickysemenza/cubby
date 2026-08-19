@@ -29,7 +29,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
 
   return (
     <div className="flex w-full items-center justify-between">
-      <Link to="/">
+      <Link to="/" className="flex min-h-10 items-center md:min-h-0">
         <Row align="center" gap="sm">
           <img src={LOGO_SRC} alt="" className="size-6 sm:h-7 sm:w-7" />
           <span className="self-center whitespace-nowrap font-bold font-heading text-foreground text-lg tracking-tight sm:text-xl">

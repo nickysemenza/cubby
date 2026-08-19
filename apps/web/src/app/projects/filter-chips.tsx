@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Row } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 
 /**
  * Shared chip primitives behind the /projects dashboard's toggle-style
@@ -9,7 +9,8 @@ import { Badge } from "~/components/ui/badge";
  * condition), not *removable* chips (an already-applied filter with a
  * dismiss affordance) — don't unify this with `ScopeChip` in
  * `data-table/ScopeChip.tsx`, which is the removable-chip abstraction for a
- * different surface. The only primitive the two share is `~/components/ui/badge`.
+ * different surface. They use the shared Button primitive so their pressed,
+ * focus, and phone touch-target behavior cannot drift from the rest of Cubby.
  */
 
 interface ChipProps {
@@ -20,15 +21,6 @@ interface ChipProps {
   groupLabel: string;
   active: boolean;
   onClick: () => void;
-}
-
-/** The visual half, shared by both chip roles. */
-function ChipBadge({ label, active }: { label: string; active: boolean }) {
-  return (
-    <Badge variant={active ? "default" : "outline"} className="cursor-pointer">
-      {label}
-    </Badge>
-  );
 }
 
 /**
@@ -44,14 +36,16 @@ function ChipBadge({ label, active }: { label: string; active: boolean }) {
  */
 function ToggleChip({ label, groupLabel, active, onClick }: ChipProps) {
   return (
-    <button
+    <Button
       type="button"
       onClick={onClick}
       aria-pressed={active}
       aria-label={`${groupLabel}: ${label}${active ? " (active)" : ""}`}
+      variant={active ? "secondary" : "outline"}
+      size="sm"
     >
-      <ChipBadge label={label} active={active} />
-    </button>
+      {label}
+    </Button>
   );
 }
 
