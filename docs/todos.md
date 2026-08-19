@@ -131,10 +131,6 @@ decision value.
   (`EntityPreviewContent.tsx`) — still no browsable/filterable facet on the
   cookbook list; list has no search/sort/filter (incl. a "partially imported"
   filter from `sourceRecipeCount - recipeCount`).
-- [ ] **Export "Read" format**: the print/export sheet offers prep/nested/matrix/
-  flow (all spec- or diagram-flavored, the last an AI-assembled step flow chart)
-  but no plain recipe-as-a-page format (`RecipeMagazineView` would drop in); no
-  multi-recipe/cookbook export.
 - [ ] **EPUB recipe hero photos**: `recipe-epub` already identifies an in-archive
   hero `ImageRef` (`path` + `mime`), but recipebridge emits `None` and
   `importRecipeSchema` models only public scraper image URLs. Emit the reference,
