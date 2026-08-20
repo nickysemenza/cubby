@@ -39,7 +39,6 @@ import {
   SheetTitle,
 } from "~/components/ui/sheet";
 import { ChoiceSwitcher } from "~/components/ui/view-switcher";
-import { ENTITY_ACCENTS } from "~/entities/entity-accents";
 import { useTRPC } from "~/integrations/trpc/react";
 import { HOUSEHOLD_TIMEZONE, householdLocalDate } from "~/lib/household-date";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
@@ -60,6 +59,7 @@ import {
   CalendarItemPresentation,
   calendarItemTriggerClassName,
 } from "./calendar-item-row";
+import { calendarItemPresentation } from "./calendar-kind-registry";
 import {
   formatCalendarPeriodTitle,
   getCalendarPeriodRange,
@@ -122,24 +122,6 @@ interface UnifiedCalendarProps {
   onDayChange?: (day?: string) => void;
 }
 
-const eventClassName = (item: CalendarItem, today: string) => {
-  if (item.kind === "project") {
-    return "bg-muted py-1 hover:bg-muted dark:bg-muted dark:hover:bg-muted";
-  }
-  // A meal you aren't cooking reads as provisional at a glance, the same way a
-  // not-yet-real expense does directly below. Dashed, not recolored: the fill
-  // still has to say "meal" against tasks and expenses.
-  if (item.kind === "meal" && item.mealKind !== "cooked") {
-    return "border border-dashed border-slate";
-  }
-  if (item.kind === "expense" && item.future) {
-    return item.startDate < today
-      ? "border border-dashed border-destructive bg-destructive/10 hover:bg-destructive/15 dark:bg-destructive/10 dark:hover:bg-destructive/15"
-      : "border border-dashed border-warning bg-warning/10 hover:bg-warning/15 dark:bg-warning/10 dark:hover:bg-warning/15";
-  }
-  return undefined;
-};
-
 const canDropCalendarEvent = (
   update: EventCalendarProposedUpdate<CalendarItem>,
 ) => update.event.data?.interaction === "move";
@@ -148,6 +130,7 @@ const toEvent = (
   item: CalendarItem,
   today: string,
 ): CalendarEvent<CalendarItem> => ({
+  ...calendarItemPresentation(item, today).event,
   id: `${item.kind}:${item.id}`,
   title: item.title,
   start: householdCalendarDate(item.startDate),
@@ -155,19 +138,6 @@ const toEvent = (
   allDay: true,
   readOnly: item.interaction === "read-only",
   draggable: item.interaction === "move",
-  priority:
-    item.kind === "project"
-      ? 100
-      : item.kind === "task" && item.endDateExclusive > item.startDate
-        ? 50
-        : 10,
-  color:
-    item.kind === "expense" && item.future
-      ? item.startDate < today
-        ? "var(--destructive)"
-        : "var(--warning)"
-      : ENTITY_ACCENTS[item.kind],
-  className: eventClassName(item, today),
   data: item,
 });
 

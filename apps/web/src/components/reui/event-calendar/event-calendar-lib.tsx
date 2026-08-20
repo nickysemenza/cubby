@@ -357,8 +357,19 @@ interface EventCalendarWeekLedgerDay<TData = unknown> {
 }
 
 interface EventCalendarWeekLedger<TData = unknown> {
+  /**
+   * Occurrences covering every visible day in the week. These live in a
+   * wrapping shelf rather than consuming a seven-column timeline lane.
+   */
+  compactSpans: EventCalendarSegment<TData>[];
+  /** Spans that still communicate their partial-week dates through alignment. */
   spans: EventCalendarSegment<TData>[];
   days: EventCalendarWeekLedgerDay<TData>[];
+}
+
+/** A full visible week has no date alignment left to communicate. */
+function occupiesFullWeek(segment: EventCalendarSegment): boolean {
+  return segment.colStart === 0 && segment.colSpan === 7;
 }
 
 /**
@@ -383,8 +394,15 @@ function buildWeekLedger<TData>(
       .filter((occurrence) => occurrenceSpansCalendarDays(occurrence, timeZone))
       .map((occurrence) => occurrence.key),
   );
+  const weekBars = (row?.bars ?? []).filter((bar) =>
+    spanningKeys.has(bar.occurrence.key),
+  );
+  // Only fully week-wide bars trade the date grid for a compact, wrapping
+  // shelf. A partial span's alignment is still meaningful planning data, so
+  // it remains in the seven-column timeline below.
+  const compactSpans = weekBars.filter(occupiesFullWeek);
   const spans = repackWeekBars(
-    (row?.bars ?? []).filter((bar) => spanningKeys.has(bar.occurrence.key)),
+    weekBars.filter((bar) => !occupiesFullWeek(bar)),
   );
   const days = Array.from({ length: 7 }, (_, offset) => {
     const day = zonedStartOfDay(
@@ -399,7 +417,7 @@ function buildWeekLedger<TData>(
       : [];
     return { day, segments };
   });
-  return { spans, days };
+  return { compactSpans, spans, days };
 }
 
 interface BuildIndexOptions<TData> {
@@ -517,6 +535,7 @@ export {
   getRangeKey,
   getViewDateRange,
   packWeekRowLanes,
+  occupiesFullWeek,
   stepDate,
   toZoned,
   zonedStartOfDay,

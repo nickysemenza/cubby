@@ -73,4 +73,31 @@ describe("WeekEventCalendar", () => {
     fireEvent.click(screen.getByRole("button", { name: /span/ }));
     expect(onEventClick.mock.calls[0]?.[1].day.getDate()).toBe(5);
   });
+
+  it("puts all full-week spans in the wrapping shelf and keeps partial spans aligned", () => {
+    const { container } = render(
+      <WeekEventCalendar
+        events={[
+          event("ongoing-one", 1, 15),
+          event("ongoing-two", 2, 16),
+          event("partial", 6, 10),
+        ]}
+        date={day(8)}
+        timeZone={zone}
+        renderEvent={({ occurrence }) => occurrence.event.title}
+        onEventsChange={() => undefined}
+      />,
+    );
+
+    const shelf = container.querySelector(
+      '[data-slot="event-calendar-week-compact-spans"]',
+    );
+    const timeline = container.querySelector(
+      '[data-slot="event-calendar-week-timeline-spans"]',
+    );
+    expect(shelf).toHaveTextContent("ongoing-one");
+    expect(shelf).toHaveTextContent("ongoing-two");
+    expect(shelf).not.toHaveTextContent("partial");
+    expect(timeline).toHaveTextContent("partial");
+  });
 });
