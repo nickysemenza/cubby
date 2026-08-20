@@ -272,7 +272,7 @@ function RootComponent() {
     <Provider queryClient={queryClient}>
       <a
         href={`#${mainContentId}`}
-        className="fixed start-2 top-0 z-[100] -translate-y-full border border-foreground bg-card px-3 py-2 font-medium text-foreground text-sm transition-transform focus:top-[calc(env(safe-area-inset-top)+0.5rem)] focus:translate-y-0"
+        className="fixed start-2 top-0 z-[100] -translate-y-full border border-foreground bg-card px-4 py-2 font-medium text-foreground text-sm transition-transform focus:top-[calc(env(safe-area-inset-top)+0.5rem)] focus:translate-y-0"
       >
         Skip to main content
       </a>
