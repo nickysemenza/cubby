@@ -207,6 +207,9 @@ export function SessionCaptureActions({
   );
   const updateProduct = useMutation(api.product.update.mutationOptions());
   const saveScanFollowUp = useActionMutation({
+    entity: "product",
+    operation: "update",
+    intent: "full",
     mutationFn: api.product.update.mutationOptions,
     success: "Product details saved",
     invalidateKeys: productMutationInvalidateKeys,
@@ -782,6 +785,7 @@ function ManualAdd({ locationId }: { locationId: LocationShortcode }) {
     },
   });
   const createInventory = useActionMutation({
+    entity: "inventory",
     mutationFn: api.inventory.create.mutationOptions,
     success: (data) => savedWithBackgroundWork(data.sideEffects, "Added item"),
     invalidateKeys: inventoryMutationInvalidateKeys,

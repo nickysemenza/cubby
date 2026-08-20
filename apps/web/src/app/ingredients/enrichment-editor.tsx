@@ -375,6 +375,7 @@ export function EnrichmentEditor({
   );
 
   const createProduct = useActionMutation({
+    entity: "product",
     mutationFn: api.product.create.mutationOptions,
     success: (d) =>
       savedWithBackgroundWork(d.sideEffects, `Enriched ${d.name}`),
@@ -386,6 +387,9 @@ export function EnrichmentEditor({
     error: (err) => `Failed to create product: ${getErrorMessage(err)}`,
   });
   const updateProduct = useActionMutation({
+    entity: "product",
+    operation: "update",
+    intent: "full",
     mutationFn: api.product.update.mutationOptions,
     success: (d) => savedWithBackgroundWork(d.sideEffects, `Updated ${d.name}`),
     invalidateKeys: [
@@ -396,6 +400,9 @@ export function EnrichmentEditor({
     error: (err) => `Failed to update: ${getErrorMessage(err)}`,
   });
   const updateIngredient = useActionMutation({
+    entity: "ingredient",
+    operation: "update",
+    intent: "full",
     mutationFn: api.ingredient.update.mutationOptions,
     success: `Updated ${row.name}.`,
     invalidateKeys: ingredientAllMutationInvalidateKeys,

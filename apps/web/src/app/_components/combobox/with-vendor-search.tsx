@@ -167,6 +167,7 @@ export function WithVendorShortcodeSearch({
   }, [isTypedSearch, rows, searchHits]);
 
   const createMutation = useActionMutation({
+    entity: "vendor",
     mutationFn: api.vendor.create.mutationOptions,
     success: (vendor) => `Added vendor ${vendor.name}`,
     invalidateKeys: vendorMutationInvalidateKeys,

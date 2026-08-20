@@ -4,6 +4,7 @@ import { entityManifest } from "@cubby/schemas/entity-manifest";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { Clock, ImageIcon, Scale } from "lucide-react";
 import { createElement, useMemo } from "react";
+import type { EditableEntity } from "~/entities/editing";
 import { entities } from "~/entities/entities";
 import { AuditLogList } from "../audit-log/audit-log-list";
 import type { DetailSection } from "../data-table/detail-page";
@@ -26,7 +27,7 @@ interface WithId {
 
 interface UseEntityDetailOptions<TData extends WithId, _TUpdateInput> {
   /** The entity type */
-  entity: Entity;
+  entity: EditableEntity;
   /** The entity data */
   data: TData;
   /** tRPC mutation options for updates */
@@ -71,10 +72,12 @@ export function useEntityDetail<
   unknown
 >): UseEntityDetailReturn<TUpdateInput> {
   const entityConfig = entities[entity];
-  const commonSectionTypes = entityConfig.detail?.commonSections ?? [];
+  const commonSectionTypes = (entityConfig.detail?.commonSections ??
+    []) as readonly ("images" | "unit-mappings" | "history")[];
 
   // Set up edit mode
   const editMode = useEditMode<TUpdateInput>({
+    entity,
     entityId: data.id,
     mutationOptions,
     useRouterRefresh: true,

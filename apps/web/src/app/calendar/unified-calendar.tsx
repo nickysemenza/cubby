@@ -15,7 +15,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
+import { toast } from "sonner";
 import { Row, Stack } from "~/components/layout";
 import {
   type EventCalendarRenderEventProps,
@@ -39,27 +39,21 @@ import {
   SheetTitle,
 } from "~/components/ui/sheet";
 import { ChoiceSwitcher } from "~/components/ui/view-switcher";
-import { ENTITY_ACCENTS } from "~/entities/entity-accents";
+import { useEntityCommands } from "~/entities/editing";
 import { useTRPC } from "~/integrations/trpc/react";
+import { getErrorMessage } from "~/lib/error-utils";
 import { HOUSEHOLD_TIMEZONE, householdLocalDate } from "~/lib/household-date";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
-import {
-  expenseMutationInvalidateKeys,
-  mealMutationInvalidateKeys,
-  taskMutationInvalidateKeys,
-} from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { CalendarAgenda } from "./calendar-agenda";
 import type { CalendarFilters } from "./calendar-filters";
 import { KIND_ICONS } from "./calendar-icons";
-import {
-  type CalendarEditorValues,
-  CalendarItemInspector,
-} from "./calendar-item-inspector";
+import { CalendarItemInspector } from "./calendar-item-inspector";
 import {
   CalendarItemPresentation,
   calendarItemTriggerClassName,
 } from "./calendar-item-row";
+import { calendarItemPresentation } from "./calendar-kind-registry";
 import {
   formatCalendarPeriodTitle,
   getCalendarPeriodRange,
@@ -122,24 +116,6 @@ interface UnifiedCalendarProps {
   onDayChange?: (day?: string) => void;
 }
 
-const eventClassName = (item: CalendarItem, today: string) => {
-  if (item.kind === "project") {
-    return "bg-muted py-1 hover:bg-muted dark:bg-muted dark:hover:bg-muted";
-  }
-  // A meal you aren't cooking reads as provisional at a glance, the same way a
-  // not-yet-real expense does directly below. Dashed, not recolored: the fill
-  // still has to say "meal" against tasks and expenses.
-  if (item.kind === "meal" && item.mealKind !== "cooked") {
-    return "border border-dashed border-slate";
-  }
-  if (item.kind === "expense" && item.future) {
-    return item.startDate < today
-      ? "border border-dashed border-destructive bg-destructive/10 hover:bg-destructive/15 dark:bg-destructive/10 dark:hover:bg-destructive/15"
-      : "border border-dashed border-warning bg-warning/10 hover:bg-warning/15 dark:bg-warning/10 dark:hover:bg-warning/15";
-  }
-  return undefined;
-};
-
 const canDropCalendarEvent = (
   update: EventCalendarProposedUpdate<CalendarItem>,
 ) => update.event.data?.interaction === "move";
@@ -148,6 +124,7 @@ const toEvent = (
   item: CalendarItem,
   today: string,
 ): CalendarEvent<CalendarItem> => ({
+  ...calendarItemPresentation(item, today).event,
   id: `${item.kind}:${item.id}`,
   title: item.title,
   start: householdCalendarDate(item.startDate),
@@ -155,19 +132,6 @@ const toEvent = (
   allDay: true,
   readOnly: item.interaction === "read-only",
   draggable: item.interaction === "move",
-  priority:
-    item.kind === "project"
-      ? 100
-      : item.kind === "task" && item.endDateExclusive > item.startDate
-        ? 50
-        : 10,
-  color:
-    item.kind === "expense" && item.future
-      ? item.startDate < today
-        ? "var(--destructive)"
-        : "var(--warning)"
-      : ENTITY_ACCENTS[item.kind],
-  className: eventClassName(item, today),
   data: item,
 });
 
@@ -265,21 +229,9 @@ export function UnifiedCalendar({
     useState<CalendarEvent<CalendarItem>[]>(sourceEvents);
   useEffect(() => setEvents(sourceEvents), [sourceEvents]);
 
-  const mealUpdate = useUpdateMutation({
-    mutationFn: api.meal.update.mutationOptions,
-    entity: "meal",
-    invalidateKeys: mealMutationInvalidateKeys,
-  });
-  const taskUpdate = useUpdateMutation({
-    mutationFn: api.task.update.mutationOptions,
-    entity: "task",
-    invalidateKeys: taskMutationInvalidateKeys,
-  });
-  const expenseUpdate = useUpdateMutation({
-    mutationFn: api.expense.update.mutationOptions,
-    entity: "expense",
-    invalidateKeys: expenseMutationInvalidateKeys,
-  });
+  const mealCommands = useEntityCommands("meal");
+  const taskCommands = useEntityCommands("task");
+  const expenseCommands = useEntityCommands("expense");
 
   const persistMove = useCallback(
     (update: EventCalendarProposedUpdate<CalendarItem>) => {
@@ -288,16 +240,25 @@ export function UnifiedCalendar({
       const nextStart = formatPlainDate(update.start);
       const nextEndExclusive = formatPlainDate(update.end);
       let request: Promise<unknown>;
+      let label: string;
       if (item.kind === "meal") {
-        request = mealUpdate.mutateAsync({
+        label = "Meal";
+        request = mealCommands.executeOrThrow({
+          entity: "meal",
+          operation: "update",
+          intent: "calendar",
           id: item.id,
           data: { date: nextStart },
         });
       } else if (item.kind === "task") {
+        label = "Task";
         const wasRange =
           item.endDateExclusive !==
           formatPlainDate(addDays(parsePlainDate(item.startDate), 1));
-        request = taskUpdate.mutateAsync({
+        request = taskCommands.executeOrThrow({
+          entity: "task",
+          operation: "update",
+          intent: "schedule",
           id: item.id,
           data: {
             dueDate: nextStart,
@@ -307,58 +268,26 @@ export function UnifiedCalendar({
           },
         });
       } else if (item.kind === "expense" && item.future) {
-        request = expenseUpdate.mutateAsync({
+        label = "Expense";
+        request = expenseCommands.executeOrThrow({
+          entity: "expense",
+          operation: "update",
+          intent: "planned",
           id: item.id,
           data: { date: nextStart },
         });
       } else {
         return false;
       }
-      void request.catch(() => setEvents(sourceEvents));
+      void request
+        .then(() => toast.success(`${label} updated`))
+        .catch((cause: unknown) => {
+          toast.error(getErrorMessage(cause));
+          setEvents(sourceEvents);
+        });
       return true;
     },
-    [mealUpdate, expenseUpdate, sourceEvents, taskUpdate],
-  );
-
-  const persistEdit = useCallback(
-    async (item: CalendarItem, values: CalendarEditorValues) => {
-      if (!values.date) return;
-      if (item.kind === "meal") {
-        await mealUpdate.mutateAsync({
-          id: item.id,
-          data: {
-            name: values.name.trim() || null,
-            date: values.date,
-            mealType: values.mealType,
-            mealKind: values.mealKind,
-          },
-        });
-        return;
-      }
-      if (item.kind === "task") {
-        await taskUpdate.mutateAsync({
-          id: item.id,
-          data: {
-            name: values.name.trim(),
-            status: values.status,
-            dueDate: values.date,
-            dueEndDate: values.endDate,
-          },
-        });
-        return;
-      }
-      if (item.kind === "expense" && item.future) {
-        await expenseUpdate.mutateAsync({
-          id: item.id,
-          data: {
-            name: values.name.trim(),
-            date: values.date,
-            cost: values.cost,
-          },
-        });
-      }
-    },
-    [expenseUpdate, mealUpdate, taskUpdate],
+    [expenseCommands, mealCommands, sourceEvents, taskCommands],
   );
 
   const renderEventRoot = useCallback<
@@ -564,7 +493,7 @@ export function UnifiedCalendar({
         )}
       />
 
-      <CalendarItemInspector handle={editorHandle} onSave={persistEdit} />
+      <CalendarItemInspector handle={editorHandle} />
 
       {createKind ? (
         <Suspense fallback={null}>

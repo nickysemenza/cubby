@@ -43,6 +43,9 @@ export function EditFinancialAccountDialog({
   );
   return (
     <QuickAddDialog
+      entity="financialAccount"
+      operation="update"
+      intent="full"
       open={open}
       onOpenChange={onOpenChange}
       schema={formSchema}

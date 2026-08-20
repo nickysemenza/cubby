@@ -9,7 +9,6 @@ import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { fdcId, upc } from "@cubby/usda-schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
 import { ChevronDown, Plus, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
@@ -26,6 +25,7 @@ import {
   NullableNumericField,
   UnifiedTextField,
 } from "~/app/_components/form-utils";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Collapsible, CollapsibleContent } from "~/components/ui/collapsible";
@@ -33,6 +33,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { useImageState } from "~/hooks/useImageState";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
+import { productMutationInvalidateKeys } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
 import type { ComboboxItem } from "../combobox/combobox-types";
@@ -141,9 +142,12 @@ export function QuickInventoryAdd({
     },
   });
 
-  const productCreateMutation = useMutation(
-    api.product.create.mutationOptions({ onSuccess: invalidateProductLookup }),
-  );
+  const productCreateMutation = useActionMutation({
+    entity: "product",
+    mutationFn: api.product.create.mutationOptions,
+    invalidateKeys: productMutationInvalidateKeys,
+    onSuccess: invalidateProductLookup,
+  });
   const inventoryCreateMutation = useCreateInventoryMutation();
 
   const [isCreating, setIsCreating] = useState(false);

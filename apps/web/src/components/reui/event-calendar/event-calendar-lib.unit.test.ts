@@ -253,4 +253,20 @@ describe("buildWeekLedger", () => {
       continuesAfter: false,
     });
   });
+
+  it("moves every full visible-week span into the compact shelf", () => {
+    const index = buildEventIndex(
+      [event("ongoing", -2, 9), event("partial", 1, 4)],
+      { start, end },
+      { timeZone: "America/Los_Angeles", weekStartsOn: 0 },
+    );
+    const ledger = buildWeekLedger(index, start, "America/Los_Angeles");
+
+    expect(ledger.compactSpans.map((span) => span.occurrence.eventId)).toEqual([
+      "ongoing",
+    ]);
+    expect(ledger.spans.map((span) => span.occurrence.eventId)).toEqual([
+      "partial",
+    ]);
+  });
 });

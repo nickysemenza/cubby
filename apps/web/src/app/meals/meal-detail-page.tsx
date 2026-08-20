@@ -18,6 +18,7 @@ import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { WithRecipeSearch } from "~/app/_components/combobox/with-search-hook";
 import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
+import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { RelationshipExplorer } from "~/app/_components/relationships/relationship-explorer";
 import { relationshipsSectionIcon as RelationshipsIcon } from "~/app/_components/relationships/relationship-tree";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
@@ -73,9 +74,11 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
     // and invalidation still refreshes both.
   } = useQuery(api.meal.getByShortcode.queryOptions({ shortcode: mealId }));
 
-  const updateMeal = useMutation(
-    api.meal.update.mutationOptions({ onSuccess: invalidate }),
-  );
+  const updateMeal = useUpdateMutation({
+    mutationFn: api.meal.update.mutationOptions,
+    entity: "meal",
+    invalidateKeys: mealMutationInvalidateKeys,
+  });
   const addRecipeBase = api.meal.addRecipe.mutationOptions();
   const addRecipe = useMutation({
     mutationKey: addRecipeBase.mutationKey,

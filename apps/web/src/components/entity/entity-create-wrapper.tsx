@@ -1,6 +1,6 @@
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { ReactNode } from "react";
 import { useEntityCreateMode } from "~/app/_components/hooks/useEntityMode";
+import type { EditableEntity } from "~/entities/editing";
 
 interface CreateModeProps<TResult> {
   isPending: boolean;
@@ -11,7 +11,7 @@ interface CreateModeProps<TResult> {
 }
 
 interface EntityCreateWrapperProps<TResult extends { id: string }> {
-  entity: ShortcodeEntity;
+  entity: EditableEntity;
   mutationOptions: object;
   children: (props: CreateModeProps<TResult>) => ReactNode;
 }

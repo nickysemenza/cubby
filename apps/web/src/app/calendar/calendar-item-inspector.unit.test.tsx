@@ -1,12 +1,51 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
 import { unsafeExpenseShortcode } from "@cubby/schemas/identifiers";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
+import { useForm } from "react-hook-form";
 import { describe, expect, it, vi } from "vitest";
 import {
   CalendarInspectorBody,
   EditableCalendarItem,
 } from "./calendar-item-inspector";
+import { calendarItemEditDescriptor } from "./calendar-kind-registry";
+
+const session = vi.hoisted(() => ({ save: vi.fn() }));
+
+vi.mock("~/entities/editing", () => ({
+  useEntityEditSession: ({ record }: { record: Record<string, unknown> }) => {
+    const form = useForm<Record<string, unknown>>({ defaultValues: record });
+    const [issues, setIssues] = useState<
+      Array<{ message: string; source: "server" }>
+    >([]);
+    return {
+      form,
+      values: form.watch(),
+      access: { mode: "editable" as const },
+      isPending: false,
+      issues,
+      set: form.setValue,
+      reset: form.reset,
+      submit: async () => {
+        try {
+          await session.save(form.getValues());
+          return {
+            ok: true as const,
+            entity: "expense",
+            id: String(record.id),
+            changed: true,
+          };
+        } catch (cause) {
+          const next = [
+            { message: (cause as Error).message, source: "server" as const },
+          ];
+          setIssues(next);
+          return { ok: false as const, issues: next };
+        }
+      },
+    };
+  },
+}));
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children?: ReactNode }) => <a href="/">{children}</a>,
@@ -30,12 +69,17 @@ const expense: Extract<CalendarItem, { kind: "expense" }> = {
 
 describe("EditableCalendarItem", () => {
   it("submits one complete atomic update", async () => {
-    const onSave = vi.fn().mockResolvedValue(undefined);
+    session.save.mockResolvedValue(undefined);
     render(
       <EditableCalendarItem
         item={expense}
+        edit={
+          calendarItemEditDescriptor(expense) as Extract<
+            ReturnType<typeof calendarItemEditDescriptor>,
+            { mode: "editable" }
+          >
+        }
         onCancel={() => undefined}
-        onSave={onSave}
       />,
     );
     fireEvent.change(screen.getByLabelText("Name"), {
@@ -43,8 +87,8 @@ describe("EditableCalendarItem", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
-    expect(onSave).toHaveBeenCalledWith(
+    await waitFor(() => expect(session.save).toHaveBeenCalledTimes(1));
+    expect(session.save).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Large freezer tray",
         date: "2026-08-18",
@@ -54,12 +98,17 @@ describe("EditableCalendarItem", () => {
   });
 
   it("retains edited values and shows the inline error when saving fails", async () => {
-    const onSave = vi.fn().mockRejectedValue(new Error("Ledger unavailable"));
+    session.save.mockRejectedValue(new Error("Ledger unavailable"));
     render(
       <EditableCalendarItem
         item={expense}
+        edit={
+          calendarItemEditDescriptor(expense) as Extract<
+            ReturnType<typeof calendarItemEditDescriptor>,
+            { mode: "editable" }
+          >
+        }
         onCancel={() => undefined}
-        onSave={onSave}
       />,
     );
     const name = screen.getByLabelText("Name");
@@ -76,7 +125,6 @@ describe("EditableCalendarItem", () => {
       <CalendarInspectorBody
         item={{ ...expense, interaction: "read-only", future: false }}
         onCancel={() => undefined}
-        onSave={vi.fn()}
       />,
     );
 

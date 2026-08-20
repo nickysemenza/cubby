@@ -26,6 +26,7 @@ import {
   buildWeekLedger,
   getDayKey,
   getRangeKey,
+  occupiesFullWeek,
   toZoned,
   zonedStartOfDay,
 } from "./event-calendar-lib";
@@ -37,6 +38,22 @@ import type {
 import { cn } from "~/lib/utils";
 
 const LANE_HEIGHT = "1.75rem";
+
+function WeekSpanEvent({ segment }: { segment: EventCalendarSegment }) {
+  return (
+    <EventCalendarEvent
+      segment={segment}
+      className="h-full shrink-0"
+      onFocus={(event) =>
+        captureEventCalendarChipFocus(
+          event.currentTarget,
+          segment.occurrence.eventId,
+        )
+      }
+      onBlur={(event) => releaseEventCalendarChipFocus(event.currentTarget)}
+    />
+  );
+}
 
 function EventCalendarWeekView() {
   const instance = useEventCalendar();
@@ -87,25 +104,32 @@ function EventCalendarWeekView() {
     if (startOffset > 6 || endOffset < 0) return null;
     const colStart = Math.max(0, startOffset);
     const colEnd = Math.min(6, endOffset);
+    const segment = {
+      occurrence: drag.occurrence,
+      day: zonedStartOfDay(drag.proposedStart, settings.timeZone),
+      isStart: startOffset >= 0,
+      isEnd: endOffset <= 6,
+      continuesBefore: startOffset < 0,
+      continuesAfter: endOffset > 6,
+      colStart,
+      colSpan: colEnd - colStart + 1,
+      lane: laneCount,
+    } satisfies EventCalendarSegment;
     return {
-      segment: {
-        occurrence: drag.occurrence,
-        day: zonedStartOfDay(drag.proposedStart, settings.timeZone),
-        isStart: startOffset >= 0,
-        isEnd: endOffset <= 6,
-        continuesBefore: startOffset < 0,
-        continuesAfter: endOffset > 6,
-        colStart,
-        colSpan: colEnd - colStart + 1,
-        lane: laneCount,
-      } satisfies EventCalendarSegment,
+      segment,
+      compact: occupiesFullWeek(segment),
       valid: drag.valid,
     };
   }, [drag, laneCount, settings.timeZone, visibleRange.start]);
-  const displayLaneCount = laneCount + (spanGhost ? 1 : 0);
+  const timelineGhost = spanGhost && !spanGhost.compact ? spanGhost : null;
+  const compactGhost = spanGhost?.compact ? spanGhost : null;
+  const displayLaneCount = laneCount + (timelineGhost ? 1 : 0);
   const spansRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    restoreEventCalendarChipFocus(spansRef.current, ledger.spans);
+    restoreEventCalendarChipFocus(spansRef.current, [
+      ...ledger.compactSpans,
+      ...ledger.spans,
+    ]);
   });
 
   return (
@@ -121,56 +145,83 @@ function EventCalendarWeekView() {
       )}`}
       className="min-w-0"
     >
-      {(ledger.spans.length > 0 || spanGhost) && (
+      {(ledger.compactSpans.length > 0 ||
+        ledger.spans.length > 0 ||
+        spanGhost) && (
         <div
           ref={spansRef}
           data-slot="event-calendar-week-spans"
-          className="relative grid grid-cols-7 gap-y-0.5 border-b bg-muted/20 px-1 py-1"
-          style={{
-            gridTemplateRows: `repeat(${displayLaneCount}, ${LANE_HEIGHT})`,
-          }}
+          className="border-b bg-muted/20 px-1 py-1"
         >
-          {ledger.spans.map((segment) => (
+          {(ledger.compactSpans.length > 0 || compactGhost) && (
             <div
-              key={segment.occurrence.key}
-              className="min-w-0"
+              data-slot="event-calendar-week-compact-spans"
+              className="grid gap-0.5"
               style={{
-                gridColumn: `${(segment.colStart ?? 0) + 1} / span ${segment.colSpan ?? 1}`,
-                gridRow: (segment.lane ?? 0) + 1,
+                gridTemplateColumns:
+                  "repeat(auto-fill, minmax(28rem, 1fr))",
               }}
             >
-              <EventCalendarEvent
-                segment={segment}
-                className="h-full shrink-0"
-                onFocus={(event) =>
-                  captureEventCalendarChipFocus(
-                    event.currentTarget,
-                    segment.occurrence.eventId,
-                  )
-                }
-                onBlur={(event) =>
-                  releaseEventCalendarChipFocus(event.currentTarget)
-                }
-              />
+              {ledger.compactSpans.map((segment) => (
+                <div key={segment.occurrence.key} className="h-7 min-w-0">
+                  <WeekSpanEvent segment={segment} />
+                </div>
+              ))}
+              {compactGhost && (
+                <EventCalendarEvent
+                  preview
+                  segment={compactGhost.segment}
+                  className={cn(
+                    "h-7 min-w-0",
+                    EVENT_CALENDAR_GHOST.move,
+                    !compactGhost.valid && EVENT_CALENDAR_GHOST.invalid,
+                  )}
+                />
+              )}
             </div>
-          ))}
-          {spanGhost && (
+          )}
+          {(ledger.spans.length > 0 || timelineGhost) && (
             <div
-              className="min-w-0"
+              data-slot="event-calendar-week-timeline-spans"
+              className={cn(
+                "relative grid grid-cols-7 gap-y-0.5",
+                (ledger.compactSpans.length > 0 || compactGhost) && "mt-0.5",
+              )}
               style={{
-                gridColumn: `${(spanGhost.segment.colStart ?? 0) + 1} / span ${spanGhost.segment.colSpan ?? 1}`,
-                gridRow: displayLaneCount,
+                gridTemplateRows: `repeat(${displayLaneCount}, ${LANE_HEIGHT})`,
               }}
             >
-              <EventCalendarEvent
-                preview
-                segment={spanGhost.segment}
-                className={cn(
-                  "h-full",
-                  EVENT_CALENDAR_GHOST.move,
-                  !spanGhost.valid && EVENT_CALENDAR_GHOST.invalid,
-                )}
-              />
+              {ledger.spans.map((segment) => (
+                <div
+                  key={segment.occurrence.key}
+                  className="min-w-0"
+                  style={{
+                    gridColumn: `${(segment.colStart ?? 0) + 1} / span ${segment.colSpan ?? 1}`,
+                    gridRow: (segment.lane ?? 0) + 1,
+                  }}
+                >
+                  <WeekSpanEvent segment={segment} />
+                </div>
+              ))}
+              {timelineGhost && (
+                <div
+                  className="min-w-0"
+                  style={{
+                    gridColumn: `${(timelineGhost.segment.colStart ?? 0) + 1} / span ${timelineGhost.segment.colSpan ?? 1}`,
+                    gridRow: displayLaneCount,
+                  }}
+                >
+                  <EventCalendarEvent
+                    preview
+                    segment={timelineGhost.segment}
+                    className={cn(
+                      "h-full",
+                      EVENT_CALENDAR_GHOST.move,
+                      !timelineGhost.valid && EVENT_CALENDAR_GHOST.invalid,
+                    )}
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>

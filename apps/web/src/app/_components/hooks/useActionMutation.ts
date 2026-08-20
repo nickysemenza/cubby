@@ -2,6 +2,8 @@ import type { QueryKey, UseMutationOptions } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
+import type { EditableEntity } from "~/entities/editing";
+import { useEntityCommands } from "~/entities/editing";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
   makeBatchStatusFetcher,
@@ -52,6 +54,9 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
   invalidateKeys = [],
   onSuccess,
   error,
+  entity,
+  operation = "create",
+  intent = "capture",
 }: {
   mutationFn: TFn;
   /**
@@ -73,9 +78,14 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
   onSuccess?: (data: DataOf<TFn>) => void;
   /** Error toast — defaults to `getErrorMessage(err)`. */
   error?: string | ((err: unknown) => string);
+  /** Route ordinary CRUD through the entity editing command lifecycle. */
+  entity?: EditableEntity;
+  operation?: "create" | "update" | "delete";
+  intent?: string;
 }) {
   const queryClient = useQueryClient();
   const api = useTRPC();
+  const commands = useEntityCommands(entity ?? "product");
 
   const mutationOptions = mutationFn({
     onSuccess: (data: DataOf<TFn>) => {
@@ -85,14 +95,16 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
           successToastId === undefined ? undefined : { id: successToastId },
         );
       }
-      invalidateTRPCQueries(queryClient, invalidateKeys);
-      // Re-invalidate once any queued background work the action enqueued drains.
-      void watchBatchesAndInvalidate({
-        queryClient,
-        result: data,
-        invalidateKeys,
-        fetchBatchStatus: makeBatchStatusFetcher(queryClient, api),
-      });
+      if (!entity) {
+        invalidateTRPCQueries(queryClient, invalidateKeys);
+        // Re-invalidate once any queued background work the action enqueued drains.
+        void watchBatchesAndInvalidate({
+          queryClient,
+          result: data,
+          invalidateKeys,
+          fetchBatchStatus: makeBatchStatusFetcher(queryClient, api),
+        });
+      }
       onSuccess?.(data);
     },
     onError: (err: unknown) => {
@@ -106,8 +118,37 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
     },
   } as never);
 
+  const registeredOptions = entity
+    ? {
+        ...mutationOptions,
+        mutationFn: async (variables: VariablesOf<TFn>) => {
+          const input = variables as {
+            id?: string;
+            ids?: readonly string[];
+            data?: object;
+          };
+          const execution = await commands.executeOrThrow({
+            entity,
+            operation,
+            intent,
+            ...(operation === "update" ? { id: input.id } : {}),
+            ...(operation === "delete"
+              ? { ids: input.ids ?? (input.id ? [input.id] : []) }
+              : {}),
+            data:
+              operation === "create"
+                ? (variables as object)
+                : operation === "update"
+                  ? (input.data ?? {})
+                  : {},
+          });
+          return execution.result as DataOf<TFn>;
+        },
+      }
+    : mutationOptions;
+
   return useMutation<DataOf<TFn>, Error, VariablesOf<TFn>>(
-    mutationOptions as Parameters<
+    registeredOptions as Parameters<
       typeof useMutation<DataOf<TFn>, Error, VariablesOf<TFn>>
     >[0],
   );

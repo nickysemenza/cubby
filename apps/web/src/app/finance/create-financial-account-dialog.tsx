@@ -60,6 +60,7 @@ export function CreateFinancialAccountDialog({
   );
   return (
     <QuickAddDialog
+      entity="financialAccount"
       open={open}
       onOpenChange={onOpenChange}
       schema={formSchema}

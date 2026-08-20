@@ -105,6 +105,7 @@ export function CreateTaskDialog({
 
   return (
     <QuickAddDialog
+      entity="task"
       open={open}
       onOpenChange={onOpenChange}
       schema={quickAddTaskSchema}

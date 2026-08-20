@@ -1,10 +1,9 @@
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import type { EditableEntity } from "~/entities/editing";
+import { useEntityCommands } from "~/entities/editing";
 import { entities, entityDetailLink } from "~/entities/entities";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
 
 type EntityMutationCallbacks<TResult> = {
   onSuccess?: (result: TResult) => void;
@@ -32,43 +31,40 @@ export function useEntityCreateMode<
   // Canonical public ids are the route keys for every entity created here.
   TResult extends { id: string },
 >(
-  entityKey: ShortcodeEntity,
+  entityKey: EditableEntity,
   mutationOptions: TRPCMutationOptions,
   callbacks?: EntityMutationCallbacks<TResult>,
 ) {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const commands = useEntityCommands(entityKey);
   const [error, setError] = useState<string | undefined>();
 
-  const mutation = useMutation<TResult, unknown, TData>({
-    ...mutationOptions,
-    onSuccess: (result: TResult) => {
-      // Invalidate the list query for this entity type so it refetches with the new item
-      // Narrow with "in" — non-entity groups in queryKeys (e.g. debug) have no list key
-      const entityQueryKeys = queryKeys[entityKey as keyof typeof queryKeys];
-      const listKey =
-        entityQueryKeys && "list" in entityQueryKeys
-          ? entityQueryKeys.list
-          : undefined;
-      if (listKey) {
-        invalidateTRPCQueries(queryClient, [listKey]);
-      }
-
-      callbacks?.onSuccess?.(result);
-      navigate(entityDetailLink(entityKey, result.id));
-    },
-    onError: (error: unknown) => {
-      setError(getErrorMessage(error));
-      callbacks?.onError?.();
-    },
-  });
+  // Kept as a compatibility type anchor while callers migrate; execution,
+  // invalidation, and background-work refresh now belong to entity commands.
+  void mutationOptions;
 
   const handleCreate = (data: TData) => {
-    mutation.mutate(data);
+    void handleCreateAsync(data).catch(() => undefined);
   };
 
   const handleCreateAsync = async (data: TData) => {
-    return await mutation.mutateAsync(data);
+    setError(undefined);
+    try {
+      const execution = await commands.executeOrThrow({
+        entity: entityKey,
+        operation: "create",
+        intent: "full",
+        data: data as object,
+      });
+      const result = execution.result as TResult;
+      callbacks?.onSuccess?.(result);
+      await navigate(entityDetailLink(entityKey, result.id));
+      return result;
+    } catch (cause) {
+      setError(getErrorMessage(cause));
+      callbacks?.onError?.();
+      throw cause;
+    }
   };
 
   const handleCancel = () => {
@@ -77,7 +73,7 @@ export function useEntityCreateMode<
 
   return {
     error,
-    isPending: mutation.isPending,
+    isPending: commands.isPending,
     handleCreate,
     handleCreateAsync,
     handleCancel,

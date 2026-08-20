@@ -111,6 +111,7 @@ export function WithIngredientSearch({
   );
 
   const createMutation = useActionMutation({
+    entity: "ingredient",
     mutationFn: api.ingredient.create.mutationOptions,
     success: (newIngredient) =>
       savedWithBackgroundWork(
@@ -216,6 +217,7 @@ export function WithLocationSearch({
   );
 
   const createMutation = useActionMutation({
+    entity: "location",
     mutationFn: api.location.create.mutationOptions,
     success: (newLocation) =>
       savedWithBackgroundWork(
@@ -305,6 +307,7 @@ export function WithProductSearch({
   );
 
   const createMutation = useActionMutation({
+    entity: "product",
     mutationFn: api.product.create.mutationOptions,
     success: (newProduct) =>
       savedWithBackgroundWork(

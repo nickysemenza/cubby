@@ -56,6 +56,7 @@ export function CreateProjectDialog({
 
   return (
     <QuickAddDialog
+      entity="project"
       open={open}
       onOpenChange={onOpenChange}
       schema={quickAddProjectSchema}

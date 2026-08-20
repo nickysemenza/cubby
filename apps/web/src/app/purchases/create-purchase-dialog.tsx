@@ -62,6 +62,7 @@ export function CreatePurchaseDialog({
 
   return (
     <QuickAddDialog
+      entity="purchase"
       open={open}
       onOpenChange={onOpenChange}
       schema={quickAddPurchaseSchema}

@@ -81,12 +81,16 @@ export function WishFormDialog({
     onSaved?.(nextWish);
   };
   const create = useActionMutation({
+    entity: "wish",
     mutationFn: api.wish.create.mutationOptions,
     success: (created) => `Created “${created.name}”`,
     invalidateKeys: wishMutationInvalidateKeys,
     onSuccess: saved,
   });
   const update = useActionMutation({
+    entity: "wish",
+    operation: "update",
+    intent: "full",
     mutationFn: api.wish.update.mutationOptions,
     success: "Wishlist updated",
     invalidateKeys: wishMutationInvalidateKeys,

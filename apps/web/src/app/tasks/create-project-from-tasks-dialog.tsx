@@ -54,6 +54,8 @@ export function CreateProjectFromTasksDialog({
 
   return (
     <QuickAddDialog
+      entity="project"
+      specialized
       open={open}
       onOpenChange={onOpenChange}
       schema={quickAddSchema}

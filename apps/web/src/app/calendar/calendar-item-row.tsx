@@ -1,31 +1,11 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
-import {
-  MEAL_KIND_LABELS,
-  MEAL_TYPE_LABELS,
-} from "@cubby/schemas/meal-classification";
-import { TRADE_LABELS } from "@cubby/schemas/project";
 import { EntityCover } from "~/components/entity/entity-cover";
 import { Badge } from "~/components/ui/badge";
 import { cn, formatCurrency } from "~/lib/utils";
-import { mealKindBadgeVariant } from "../meals/meal-options";
-import {
-  capitalize,
-  PROJECT_STATUS_LABELS,
-} from "../projects/project-formatting";
-import {
-  TASK_STATUS_LABELS,
-  taskStatusBadgeVariant,
-} from "../tasks/task-options";
-import { itemIcon } from "./calendar-icons";
+import { calendarItemPresentation } from "./calendar-kind-registry";
 import { itemSpanLabel } from "./calendar-span";
 
 type CalendarItemPresentationVariant = "month" | "rich";
-
-function coverImages(item: CalendarItem) {
-  return "coverImageUrl" in item && item.coverImageUrl
-    ? [{ id: `${item.kind}:${item.id}`, url: item.coverImageUrl }]
-    : [];
-}
 
 function CalendarItemPresentation({
   item,
@@ -42,7 +22,8 @@ function CalendarItemPresentation({
 }
 
 function CalendarItemCompact({ item }: { item: CalendarItem }) {
-  const Icon = itemIcon(item);
+  const presentation = calendarItemPresentation(item);
+  const Icon = presentation.icon;
   const span = itemSpanLabel(item);
   return (
     <>
@@ -50,34 +31,19 @@ function CalendarItemCompact({ item }: { item: CalendarItem }) {
       <span className="min-w-0 flex-1 truncate" title={item.title}>
         {item.title}
       </span>
-      {item.kind === "meal" && item.mealKind !== "cooked" && (
+      {presentation.compactBadge && (
         <Badge
-          variant={mealKindBadgeVariant[item.mealKind]}
+          variant={presentation.compactBadge.variant}
           className="h-4 max-w-24 px-1 text-3xs"
-          title={MEAL_KIND_LABELS[item.mealKind]}
+          title={presentation.compactBadge.label}
         >
-          {MEAL_KIND_LABELS[item.mealKind]}
+          {presentation.compactBadge.label}
         </Badge>
       )}
-      {item.kind === "expense" && (
-        <Badge
-          variant={item.future ? "warning" : "outline"}
-          className="h-4 px-1 text-3xs"
-        >
-          {item.future ? "Planned" : "Actual"}
-        </Badge>
-      )}
-      {item.kind === "project" && (
-        <>
-          <Badge variant="outline" className="h-4 px-1 text-3xs">
-            {PROJECT_STATUS_LABELS[item.status]}
-          </Badge>
-          {item.projectKind && (
-            <span className="shrink-0 text-muted-foreground">
-              {capitalize(item.projectKind)}
-            </span>
-          )}
-        </>
+      {item.kind === "project" && item.projectKind && (
+        <span className="shrink-0 text-muted-foreground">
+          {item.projectKind[0]?.toUpperCase() + item.projectKind.slice(1)}
+        </span>
       )}
       {span && (
         <span className="shrink-0 text-muted-foreground tabular-nums">
@@ -94,16 +60,18 @@ function CalendarItemCompact({ item }: { item: CalendarItem }) {
 }
 
 function CalendarItemRich({ item }: { item: CalendarItem }) {
-  const Icon = itemIcon(item);
-  const meta = itemMetadata(item);
-  const productBacked = item.kind === "expense" || item.kind === "task";
+  const presentation = calendarItemPresentation(item);
+  const Icon = presentation.icon;
+  const { cover, metadata } = presentation;
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2 py-1">
       <EntityCover
-        images={coverImages(item)}
-        entity={productBacked ? "product" : item.kind}
+        images={
+          cover ? [{ id: `${item.kind}:${item.id}`, url: cover.url }] : []
+        }
+        entity={cover?.entity ?? presentation.entity}
         size={36}
-        fit={productBacked ? "contain" : "cover"}
+        fit={cover?.fit}
         placeholder="none"
         alt=""
       />
@@ -128,30 +96,16 @@ function CalendarItemRich({ item }: { item: CalendarItem }) {
           )}
         </div>
         <div className="mt-1 flex min-w-0 items-center gap-1 text-2xs text-muted-foreground">
-          {item.kind === "meal" && item.mealKind !== "cooked" ? (
+          {presentation.richBadge && (
             <Badge
-              variant={mealKindBadgeVariant[item.mealKind]}
+              variant={presentation.richBadge.variant}
               className="h-4 max-w-28 px-1 text-3xs"
             >
-              {MEAL_KIND_LABELS[item.mealKind]}
+              {presentation.richBadge.label}
             </Badge>
-          ) : item.kind === "task" ? (
-            <Badge
-              variant={taskStatusBadgeVariant[item.status]}
-              className="h-4 max-w-28 px-1 text-3xs"
-            >
-              {TASK_STATUS_LABELS[item.status]}
-            </Badge>
-          ) : item.kind === "expense" ? (
-            <Badge
-              variant={item.future ? "warning" : "outline"}
-              className="h-4 px-1 text-3xs"
-            >
-              {item.future ? "Planned" : "Actual"}
-            </Badge>
-          ) : null}
-          <span className="min-w-0 truncate" title={meta}>
-            {meta}
+          )}
+          <span className="min-w-0 truncate" title={metadata}>
+            {metadata}
           </span>
           {item.kind === "meal" &&
             (item.calories > 0 || item.nutritionPending) && (
@@ -166,37 +120,8 @@ function CalendarItemRich({ item }: { item: CalendarItem }) {
   );
 }
 
-function itemMetadata(item: CalendarItem): string {
-  if (item.kind === "meal") {
-    const classification = [
-      item.mealType ? MEAL_TYPE_LABELS[item.mealType] : "Unslotted meal",
-      item.mealKind === "cooked" ? "Cooked" : null,
-    ].filter(Boolean);
-    return [...classification, ...item.recipeNames].join(" · ");
-  }
-  if (item.kind === "task") {
-    return [item.projectName, item.subjectProductName, TRADE_LABELS[item.trade]]
-      .filter(Boolean)
-      .join(" · ");
-  }
-  if (item.kind === "expense") {
-    return [
-      item.vendor,
-      item.productName,
-      item.projectName,
-      TRADE_LABELS[item.trade],
-    ]
-      .filter(Boolean)
-      .join(" · ");
-  }
-  return [
-    PROJECT_STATUS_LABELS[item.status],
-    item.projectKind ? capitalize(item.projectKind) : null,
-    itemSpanLabel(item),
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
+const itemMetadata = (item: CalendarItem): string =>
+  calendarItemPresentation(item).metadata;
 
 const calendarItemTriggerClassName = (item: CalendarItem) =>
   cn(

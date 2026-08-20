@@ -61,10 +61,16 @@ export function TasksAgenda({ tasks }: { tasks: TaskOut[] }) {
   const taskById = keyBy(tasks, (t) => t.id);
 
   const setStatus = useActionMutation({
+    entity: "task",
+    operation: "update",
+    intent: "status",
     mutationFn: api.task.update.mutationOptions,
     invalidateKeys: taskMutationInvalidateKeys,
   });
   const remove = useActionMutation({
+    entity: "task",
+    operation: "delete",
+    intent: "delete",
     mutationFn: api.task.delete.mutationOptions,
     invalidateKeys: taskMutationInvalidateKeys,
     onSuccess: () => setPendingDelete(null),
