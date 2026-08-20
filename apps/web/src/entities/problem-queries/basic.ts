@@ -1,5 +1,4 @@
 import { PROBLEM_CLASS } from "@cubby/schemas/problems";
-import { FILTER_NONE } from "~/entities/filters";
 import { defineProblem, type ProblemQuery } from "~/entities/problem-query";
 
 /** Exact entity-grain Problems whose membership is a small reusable assembly. */
@@ -20,7 +19,9 @@ export const basicProblemQueries = [
       filters: [
         { id: "trade", value: ["other"] },
         { id: "lineKind", value: ["principal"] },
-        { id: "cost", value: FILTER_NONE },
+        // `"none"`, not `FILTER_NONE`: `cost` is a range preset whose expander
+        // accepts the literal, where the sentinel is the multiselect spelling.
+        { id: "cost", value: "none" },
       ],
       sort: [{ id: "date", desc: false }],
       columnVisibility: { trade: true, lineKind: true, cost: true },
