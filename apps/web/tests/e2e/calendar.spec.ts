@@ -8,7 +8,7 @@ test("calendar events open an anchored editor, save atomically, and restore focu
   const stamp = Date.now();
   const name = `e2e inline calendar task ${stamp}`;
   const updatedName = `e2e edited calendar task ${stamp}`;
-  await createTask(page, name, { dueDate: "2026-07-14" });
+  await createTask(page, name, { dueDate: "2026-07-16" });
   await page.goto("/calendar?date=2026-07-01");
   await page.waitForLoadState("networkidle");
 

@@ -24,7 +24,7 @@ test("weekly planning becomes a seven-day ruled agenda without overflow", async 
   ).toBe(true);
   await agenda
     .locator('section[data-day="2026-08-18"]')
-    .getByRole("button")
+    .getByRole("button", { name: /^Tue Aug 18\b/ })
     .click();
   await expect(
     page.getByRole("heading", { name: "Tuesday, August 18" }),

@@ -103,7 +103,7 @@ function CalendarInspectorOverlay({
     <PopoverContent
       align="start"
       sideOffset={6}
-      className="w-80 gap-3 p-3"
+      className="w-80 gap-2 p-4"
       aria-label={`Edit ${item.title}`}
     >
       <PopoverHeader className="border-b pb-2">
@@ -256,7 +256,7 @@ function ReadOnlyCalendarItem({ item }: { item: CalendarItem }) {
       <div className="border-y py-2">
         <CalendarItemPresentation item={item} variant="rich" />
       </div>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-xs">
         <dt className="font-mono text-slate uppercase">Dates</dt>
         <dd>
           {item.startDate} – {item.endDateExclusive}
