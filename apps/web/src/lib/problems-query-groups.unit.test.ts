@@ -10,6 +10,7 @@ describe("isUnbatchedTRPCPath", () => {
     expect(isUnbatchedTRPCPath("problems.getFast")).toBe(true);
     expect(isUnbatchedTRPCPath("problems.getCoverage")).toBe(true);
     expect(isUnbatchedTRPCPath("problems.getUpc")).toBe(true);
+    expect(isUnbatchedTRPCPath("problems.getCounts")).toBe(true);
     expect(isUnbatchedTRPCPath("problems.getMaintenanceCounts")).toBe(false);
     expect(isUnbatchedTRPCPath("recipe.list")).toBe(false);
   });

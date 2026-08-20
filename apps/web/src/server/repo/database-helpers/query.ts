@@ -208,9 +208,12 @@ export const buildOrderBy = <T extends PgTable & { id: AnyColumn }>(
 export async function executeListQueryWithCount<T>(
   dataQuery: Promise<T[]>,
   countQuery: Promise<number>,
+  options?: { countOnly?: boolean },
 ): Promise<{ data: T[]; count: number }> {
   return withTrace(TraceNames.db("listQueryWithCount"), async (span) => {
-    const [data, count] = await Promise.all([dataQuery, countQuery]);
+    const [data, count] = options?.countOnly
+      ? [[], await countQuery]
+      : await Promise.all([dataQuery, countQuery]);
     span.setAttributes({
       "db.result_count": data.length,
       "db.total_count": count,
@@ -218,6 +221,14 @@ export async function executeListQueryWithCount<T>(
     return { data, count };
   });
 }
+
+/** Internal list execution hint used by exact count-only consumers. */
+export const isCountOnlyPagination = (pagination: object): boolean =>
+  "countOnly" in pagination && pagination.countOnly === true;
+
+/** Internal hint for consumers that do not render generic table footers. */
+export const skipsListAggregates = (pagination: object): boolean =>
+  "skipListAggregates" in pagination && pagination.skipListAggregates === true;
 
 /**
  * Locks entity records for update and validates they exist and aren't deleted.

@@ -37,6 +37,7 @@ import {
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
+  isCountOnlyPagination,
   notDeleted,
   presenceCondition,
   relations,
@@ -282,7 +283,11 @@ export const taskList = async (
       ...relations.task.withProject,
     }),
     countWhere(db, task, whereClause),
+    { countOnly: isCountOnlyPagination(pagination) },
   );
+  if (isCountOnlyPagination(pagination)) {
+    return { data: [], count };
+  }
 
   const ids = rows.map((r) => r.id);
   const [deps, subtaskCounts] = await Promise.all([

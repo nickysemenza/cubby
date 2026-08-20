@@ -76,6 +76,7 @@ import {
   formatSearchTerm,
   getDb,
   idSetPresence,
+  isCountOnlyPagination,
   lockAndValidateForDelete,
   notDeleted,
   presenceCondition,
@@ -681,6 +682,7 @@ export const recipeList = async (
       },
     }),
     countWhere(db, recipe, whereClause),
+    { countOnly: isCountOnlyPagination(pagination) },
   );
 
   const items = results.map(dbRecipeToListAPI);

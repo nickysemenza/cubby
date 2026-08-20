@@ -34,6 +34,7 @@ import {
   executeListQueryWithCount,
   getDb,
   insertAndReturn,
+  isCountOnlyPagination,
   lockAndValidateForDelete,
   notDeleted,
   relations,
@@ -183,6 +184,7 @@ export const mealList = async (
       ...relations.meal.full,
     }),
     countWhere(db, meal, whereCondition),
+    { countOnly: isCountOnlyPagination(pagination) },
   );
 
   return { data: rows.map(dbMealToAPI), count };

@@ -51,10 +51,12 @@ import {
   eqAny,
   eqAnyRequested,
   getDb,
+  isCountOnlyPagination,
   lockAndValidateForDelete,
   notDeleted,
   parseInventoryAmount,
   relations,
+  skipsListAggregates,
   unwrapDb,
   updateLiveAndReturn,
   withTransaction,
@@ -385,6 +387,27 @@ export const inventoryentryList = async (
     ],
   );
 
+  if (isCountOnlyPagination(pagination)) {
+    const [result] = await getDb(db)
+      .select({ count: count() })
+      .from(inventoryEntry)
+      .innerJoin(
+        product,
+        and(eq(inventoryEntry.productId, product.id), notDeleted(product)),
+      )
+      .innerJoin(
+        location,
+        and(eq(inventoryEntry.locationId, location.id), notDeleted(location)),
+      )
+      .where(whereCondition);
+    return {
+      data: [],
+      count: result?.count ?? 0,
+      // Count-only consumers deliberately do not request table footers.
+      sums: { valuation: 0 },
+    };
+  }
+
   const baseQuery = getDb(db)
     .select({ inventoryEntry })
     .from(inventoryEntry)
@@ -408,7 +431,9 @@ export const inventoryentryList = async (
     getDb(db)
       .select({
         count: count(),
-        valuationSum: sum(inventoryEntry.valuation),
+        valuationSum: skipsListAggregates(pagination)
+          ? sql<number>`0`
+          : sum(inventoryEntry.valuation),
       })
       .from(inventoryEntry)
       .innerJoin(

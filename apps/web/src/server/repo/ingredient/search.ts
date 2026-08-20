@@ -53,6 +53,7 @@ import {
   getDb,
   idSetPresence,
   imageOrder,
+  isCountOnlyPagination,
   notDeleted,
   relations,
 } from "~/server/repo/database-helpers";
@@ -585,7 +586,11 @@ export const ingredientList = async (
       offset: skip,
     }),
     countWhere(db, ingredient, whereClause),
+    { countOnly: isCountOnlyPagination(pagination) },
   );
+  if (isCountOnlyPagination(pagination)) {
+    return { data: [], count: totalCount };
+  }
 
   const pricedProducts = await enrichProductRowsWithPricing(
     db,

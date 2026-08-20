@@ -8,6 +8,7 @@ import {
   buildOrderBy,
   buildPartialUpdateValues,
   eqAnyOrPresence,
+  executeListQueryWithCount,
   formatSearchTerm,
   isTransaction,
   replaceDependencyEdges,
@@ -33,6 +34,28 @@ describe("isTransaction", () => {
 
   it("does not treat the opaque Database handle as a transaction", () => {
     expect(isTransaction(fakeDb)).toBe(false);
+  });
+});
+
+describe("executeListQueryWithCount", () => {
+  it("does not execute the row query in count-only mode", async () => {
+    let rowQueryAwaited = false;
+    const rowQuery = {
+      // biome-ignore lint/suspicious/noThenProperty: Drizzle queries are lazy thenables; the test must model that contract.
+      then: (resolve: (rows: number[]) => unknown) => {
+        rowQueryAwaited = true;
+        return Promise.resolve(resolve([1]));
+      },
+    } as unknown as Promise<number[]>;
+
+    const result = await executeListQueryWithCount(
+      rowQuery,
+      Promise.resolve(7),
+      { countOnly: true },
+    );
+
+    expect(result).toEqual({ data: [], count: 7 });
+    expect(rowQueryAwaited).toBe(false);
   });
 });
 

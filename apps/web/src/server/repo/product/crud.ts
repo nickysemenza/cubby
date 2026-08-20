@@ -85,10 +85,12 @@ import {
   getDb,
   idSetPresence,
   insertAndReturn,
+  isCountOnlyPagination,
   lockAndValidateForDelete,
   notDeleted,
   presenceCondition,
   relations,
+  skipsListAggregates,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
@@ -896,11 +898,21 @@ export const productList = async (
     ],
   );
 
+  if (isCountOnlyPagination(pagination)) {
+    return {
+      data: [],
+      count: await countWhere(db, product, whereClause),
+      // Count-only consumers deliberately do not request table footers.
+      sums: { price: 0, expenseTotal: 0 },
+    };
+  }
+
   // Special list sort keys are correlated subqueries because Drizzle's
   // relational query builder rewrites non-raw column refs to the root alias.
   const orderByArray = productListOrderBy(sorts, groupBy);
 
   const { take, skip } = buildTakeSkip(pagination);
+  const skipAggregates = skipsListAggregates(pagination);
 
   // Execute queries in parallel and transform results. The aggregate query
   // shares whereClause, so the footer's price total covers the FULL filtered
@@ -917,14 +929,16 @@ export const productList = async (
         }),
         countWhere(db, product, whereClause),
       ),
-      getDb(db)
-        .select({
-          priceSum: sql<number>`sum(${sql.raw(
-            effectiveProductPriceSql('"Product"'),
-          )})`,
-        })
-        .from(product)
-        .where(whereClause),
+      skipAggregates
+        ? Promise.resolve([{ priceSum: 0 }])
+        : getDb(db)
+            .select({
+              priceSum: sql<number>`sum(${sql.raw(
+                effectiveProductPriceSql('"Product"'),
+              )})`,
+            })
+            .from(product)
+            .where(whereClause),
       // Net-basis total for the Net basis column's footer, over the FULL filtered
       // set — without it `createCurrencyColumn` falls back to reducing the loaded
       // rows only, which silently under-reports on an infinite-scrolled list.
@@ -935,21 +949,23 @@ export const productList = async (
       // has cost this repo four bugs (see the warning block in repo/purchase.ts).
       // Summing `Expense` directly also reads plainly — this is money, and money
       // lives on `Expense`.
-      getDb(db)
-        .select({ expenseTotalSum: sum(expense.cost) })
-        .from(expense)
-        .where(
-          and(
-            notDeleted(expense),
-            inArray(
-              expense.productId,
-              getDb(db)
-                .select({ id: product.id })
-                .from(product)
-                .where(whereClause),
+      skipAggregates
+        ? Promise.resolve([{ expenseTotalSum: 0 }])
+        : getDb(db)
+            .select({ expenseTotalSum: sum(expense.cost) })
+            .from(expense)
+            .where(
+              and(
+                notDeleted(expense),
+                inArray(
+                  expense.productId,
+                  getDb(db)
+                    .select({ id: product.id })
+                    .from(product)
+                    .where(whereClause),
+                ),
+              ),
             ),
-          ),
-        ),
     ]);
 
   const qualities = await loadProductDataQualities(

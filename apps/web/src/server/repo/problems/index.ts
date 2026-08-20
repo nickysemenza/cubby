@@ -49,6 +49,7 @@ export { findCoverageTotals } from "./detectors-coverage";
 export {
   countEntitiesMissingEmbeddings,
   findEntitiesMissingEmbeddings,
+  findEntitiesMissingEmbeddingsPage,
 } from "./detectors-embedding";
 export {
   findDuplicateFinancialAccountSourceAliases,

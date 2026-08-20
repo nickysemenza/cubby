@@ -78,6 +78,7 @@ import {
   getDb,
   idSetPresence,
   imageOrder,
+  isCountOnlyPagination,
   lockAndValidateForDelete,
   mapImages,
   nextImageSortOrder,
@@ -959,7 +960,11 @@ export const locationList = async (
       offset: skip,
     }),
     countWhere(db, location, whereClause),
+    { countOnly: isCountOnlyPagination(pagination) },
   );
+  if (isCountOnlyPagination(pagination)) {
+    return { data: [], count: totalCount };
+  }
 
   // One batched pricing load for the whole page (never per-row): flatten every
   // live inventory entry's product across the page and price them together, then

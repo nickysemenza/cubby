@@ -48,6 +48,7 @@ import {
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
+  isCountOnlyPagination,
   lockAndValidateForDelete,
   notDeleted,
   unwrapDb,
@@ -349,6 +350,7 @@ export async function listFinancialTransactions(
       .limit(take)
       .offset(skip),
     countWhere(db, financialTransaction, where),
+    { countOnly: isCountOnlyPagination(pagination) },
   );
   return {
     data: rows.map(toOut),

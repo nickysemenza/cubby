@@ -100,6 +100,7 @@ import {
   formatSearchTerm,
   getDb,
   insertAndReturn,
+  isCountOnlyPagination,
   isNotDeleted,
   nextImageSortOrder,
   notDeleted,
@@ -530,6 +531,7 @@ export const imageList = async (
       with: imageEntityRelations,
     }),
     countWhere(db, image, countWhereClause),
+    { countOnly: isCountOnlyPagination(pagination) },
   );
 
   const processedImages = images.map(imageWithRelationsToAPI);

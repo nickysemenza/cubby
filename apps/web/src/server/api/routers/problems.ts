@@ -8,6 +8,7 @@ import {
   dryRunPruneAliasesOut,
   dryRunReparseOut,
   maintenanceCountsSchema,
+  problemsCountSchema,
   problemsCoverageSchema,
   problemsFastSchema,
   problemsTrackerSchema,
@@ -16,6 +17,8 @@ import {
   recipeUsageByProductInput,
   recipeUsageByProductOut,
 } from "@cubby/schemas/problems";
+import { z } from "zod";
+import { expectedProblemKeys } from "~/entities/problem-registry";
 import { streamProgress } from "~/lib/bulk-progress";
 import { recipeUsageCountsByProduct } from "~/server/repo/problems";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
@@ -32,6 +35,8 @@ import {
   findCoverageTotals,
   findFastProblems,
   findMaintenanceCounts,
+  findProblemByType,
+  findProblemCounts,
   findTrackerProblems,
   findUpcProblems,
   pruneAllUnusedAliases,
@@ -39,26 +44,49 @@ import {
 } from "~/server/services/problems.service";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
-// The Problems surfaces (page, navbar badge, homepage card) all load these four
+// The Problems page and embedded full-detail consumers load these five
 // cost-grouped procedures and assemble the combined result client-side — each
 // over an UNBATCHED link so it gets its own Worker invocation / CPU budget. The
 // old monolithic getAllProblems ran every detector in ONE invocation and exceeded
 // the 30s CPU limit; it was removed. The two WASM parse-sweeps that re-parse every
 // recipe line (stale parses, unused aliases) used to be two more groups here but
 // blew the CPU/memory budget on the request path — they're now manual dry-run /
-// fix-all actions in Settings → Maintenance (see below). MCP composes these four
-// the same way (assembleAllProblems).
+// fix-all actions in Settings → Maintenance (see below). MCP composes these five
+// only for an unfiltered request; badge/count-only and single-type consumers use
+// the focused executor routes above.
 
 // Group: DB-only detectors (cheap).
 const getFast = protectedProcedure
   .output(strictOutput(problemsFastSchema))
   .query(async ({ ctx }) => findFastProblems(ctx.db));
 
+const getCounts = protectedProcedure
+  .output(strictOutput(problemsCountSchema))
+  .query(async ({ ctx }) => findProblemCounts(ctx.db, ctx.upcLookupClient));
+
+const problemKeySchema = z.enum(
+  expectedProblemKeys as [
+    (typeof expectedProblemKeys)[number],
+    ...(typeof expectedProblemKeys)[number][],
+  ],
+);
+const problemByTypeSchema = z.object({
+  type: problemKeySchema,
+  items: z.array(z.unknown()),
+  total: z.number().int().nonnegative(),
+});
+const getByType = protectedProcedure
+  .input(z.object({ key: problemKeySchema }))
+  .output(strictOutput(problemByTypeSchema))
+  .query(async ({ ctx, input }) =>
+    findProblemByType(ctx.db, input.key, ctx.upcLookupClient),
+  );
+
 /**
  * Group: sections backed by a saved view.
  *
  * Its own group, not folded into `getFast`, for the same CPU-budget reason the
- * four-way split exists at all: these run the entity list procedures, which do
+ * five-way split exists at all: these run the entity list procedures, which do
  * strictly more work than the single-SELECT detectors they replaced (relation
  * embeds, a count query per section). Sharing an invocation with `getFast`
  * would rebuild exactly the pressure that killed `getAllProblems`.
@@ -81,13 +109,13 @@ const getUpc = protectedProcedure
 
 // Group: household-tracker attention rules (projects/tasks/expenses). Cheap
 // aggregate SQL, but its own group so it runs concurrently with — rather than
-// serialized behind — the fast group's pinned single connection.
+// serialized behind — the fast group's bounded database work.
 const getTracker = protectedProcedure
   .output(strictOutput(problemsTrackerSchema))
   .query(async ({ ctx }) => findTrackerProblems(ctx.db));
 
 // Population denominators for the Problems page's coverage meters. Cheap
-// count(*)s, and page-only — so unlike the four groups above it stays on the
+// count(*)s, and page-only — so unlike the five groups above it stays on the
 // BATCHED link (it is absent from PROBLEMS_HOT_PATH_PROCEDURES on purpose).
 const getCoverageTotals = protectedProcedure
   .output(strictOutput(coverageTotalsSchema))
@@ -95,7 +123,7 @@ const getCoverageTotals = protectedProcedure
 
 // Counts behind the Settings → Maintenance "N affected" dry-run. Focused subset
 // of detectors (no USDA/UPC network); badge/count consumers instead derive
-// counts client-side from the five cost-grouped queries via countProblems.
+// counts use the focused canonical executor route.
 const getMaintenanceCounts = protectedProcedure
   .output(strictOutput(maintenanceCountsSchema))
   .query(async ({ ctx }) => {
@@ -188,6 +216,8 @@ const cleanupOrphanedEmbeddings = protectedProcedure
 
 export const problemsRouter = createTRPCRouter({
   getFast,
+  getCounts,
+  getByType,
   getViews,
   getCoverage,
   getUpc,

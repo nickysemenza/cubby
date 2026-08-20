@@ -37,8 +37,10 @@ import {
   formatSearchTerm,
   getDb,
   idSetPresence,
+  isCountOnlyPagination,
   notDeleted,
   presenceCondition,
+  skipsListAggregates,
 } from "~/server/repo/database-helpers";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { relatedWhereConditions } from "~/server/repo/related-view";
@@ -345,6 +347,14 @@ export const projectList = async (
     filters,
     sorts,
   );
+  if (isCountOnlyPagination(pagination)) {
+    return {
+      data: [],
+      count: await countWhere(db, project, whereClause),
+      // Count-only consumers deliberately do not request table footers.
+      sums: { costEstimate: 0 },
+    };
+  }
   const { take, skip } = buildTakeSkip(pagination);
 
   const [{ data: rows, count }, sums] = await Promise.all([
@@ -357,7 +367,9 @@ export const projectList = async (
       }),
       countWhere(db, project, whereClause),
     ),
-    projectListSums(db, whereClause),
+    skipsListAggregates(pagination)
+      ? Promise.resolve({ costEstimate: 0 })
+      : projectListSums(db, whereClause),
   ]);
 
   const ids = rows.map((r) => r.id);

@@ -35,6 +35,7 @@ import {
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
+  isCountOnlyPagination,
   notDeleted,
   presenceCondition,
   relations,
@@ -452,6 +453,7 @@ export const expenseList = async (
       ...relations.expense.withProject,
     }),
     countWhere(db, expense, whereClause),
+    { countOnly: isCountOnlyPagination(pagination) },
   );
 
   return { data: rows.map(dbExpenseToAPI), count };

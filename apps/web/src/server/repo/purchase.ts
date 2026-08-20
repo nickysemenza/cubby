@@ -105,6 +105,7 @@ import {
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
+  isCountOnlyPagination,
   lockAndValidateForDelete,
   nextImageSortOrder,
   notDeleted,
@@ -643,7 +644,11 @@ export const purchaseList = async (
       .limit(take)
       .offset(skip),
     countWhere(db, purchase, whereClause),
+    { countOnly: isCountOnlyPagination(pagination) },
   );
+  if (isCountOnlyPagination(pagination)) {
+    return { data: [], count };
+  }
   const [financialByPurchase, dataQualities] = await Promise.all([
     loadPurchaseFinancialAggregates(
       db,

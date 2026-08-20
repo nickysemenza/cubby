@@ -18,6 +18,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "~/components/ui/collapsible";
+import { Spinner } from "~/components/ui/spinner";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 import { AutoFixButton, useAutoFixPlan } from "./components/auto-fix-button";
@@ -25,6 +26,7 @@ import { AUTO_FIX_SECTION_IDS } from "./components/auto-fix-registry";
 import { MaintenanceCard } from "./components/maintenance-card";
 import { PROBLEM_SECTIONS } from "./components/problem-sections";
 import { RecipeUsageContext } from "./components/recipe-usage-context";
+import { problemSectionLaneState } from "./problem-lane-state";
 import { useProblemsData } from "./use-problems-data";
 
 /**
@@ -73,10 +75,16 @@ export function ProblemsOverview() {
   // own Worker invocation/CPU budget — see useProblemsData) and merges them back
   // into the AllProblems shape the sections expect. No staleTime: opening the
   // page revalidates whatever the badge's 5-min cache may have left stale.
-  const { problems, isLoading: detectorsLoading, error } = useProblemsData();
+  const {
+    problems,
+    isLoading: detectorsLoading,
+    hasResolvedLane,
+    laneStates,
+    error,
+  } = useProblemsData();
   // Hydration-stable: the server renders this branch with no detector results,
   // while the client's first render already has them. See useHydratedLoading.
-  const isLoading = useHydratedLoading(detectorsLoading);
+  const isLoading = useHydratedLoading(detectorsLoading && !hasResolvedLane);
 
   // Every product shortcode across the product-bearing sections, so we fetch
   // recipe usage once for the whole page rather than per card. Keyed by
@@ -105,7 +113,7 @@ export function ProblemsOverview() {
   );
 
   // Denominators for the coverage meters. Its own cheap batched query — the
-  // meters are page-only, so this stays off the four unbatched hot-path groups.
+  // meters are page-only, so this stays off the five unbatched hot-path groups.
   //
   // Deliberately NOT folded into the `isLoading` gate below, and deliberately
   // left `undefined` rather than defaulted to zeros: the page shouldn't hold the
@@ -120,7 +128,7 @@ export function ProblemsOverview() {
     return <SimpleLoading text="Analyzing data consistency..." />;
   }
 
-  if (error) {
+  if (error && !hasResolvedLane) {
     return (
       <ErrorDisplay
         error={error}
@@ -152,14 +160,35 @@ export function ProblemsOverview() {
         }
       }}
     >
-      {section.node(problems, coverageTotals)}
+      {(() => {
+        const state = problemSectionLaneState(
+          section.problemKeys ?? [],
+          laneStates,
+        );
+        if (state.state === "error") {
+          return (
+            <ErrorDisplay
+              error={state.error}
+              className="rounded-md bg-destructive/10 p-4"
+            />
+          );
+        }
+        if (state.state === "loading") {
+          return <SimpleLoading text={`Checking ${section.label}...`} />;
+        }
+        return section.node(problems, coverageTotals);
+      })()}
     </div>
   );
 
   return (
     <RecipeUsageContext.Provider value={recipeUsage ?? {}}>
       <Stack gap="lg">
-        <ProblemsSummary problems={problems} onJump={scrollToSection} />
+        <ProblemsSummary
+          problems={problems}
+          analyzing={detectorsLoading}
+          onJump={scrollToSection}
+        />
 
         {problems.upcFreshness?.status !== "fresh" &&
           problems.upcFreshness != null && (
@@ -225,9 +254,11 @@ export function ProblemsOverview() {
  */
 function ProblemsSummary({
   problems,
+  analyzing,
   onJump,
 }: {
   problems: AllProblems;
+  analyzing: boolean;
   onJump: (id: string, grouped: boolean) => void;
 }) {
   // `listedItems`, not `items` — only the part of the run that's actually among
@@ -239,11 +270,17 @@ function ProblemsSummary({
       <Card>
         <CardHeader>
           <CardTitle>
-            <CheckCircle className="size-5 text-secondary-foreground" />
-            All Good!
+            {analyzing ? (
+              <Spinner />
+            ) : (
+              <CheckCircle className="size-5 text-secondary-foreground" />
+            )}
+            {analyzing ? "Analyzing data consistency…" : "All Good!"}
           </CardTitle>
           <CardDescription>
-            All data consistency checks passed. No issues found.
+            {analyzing
+              ? "Completed checks will appear below while the remaining lanes run."
+              : "All data consistency checks passed. No issues found."}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -278,6 +315,9 @@ function ProblemsSummary({
               <CardDescription>
                 {listedItems} of them need no decisions from you.
               </CardDescription>
+            )}
+            {analyzing && (
+              <CardDescription>More checks are still running.</CardDescription>
             )}
           </Stack>
           <AutoFixButton problems={problems} />

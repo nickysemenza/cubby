@@ -16,13 +16,12 @@ import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
 import { findOrphanedEntityEmbeddings } from "~/server/repo/entity-embedding";
 import {
-  countEntitiesMissingEmbeddings,
   findDuplicateFinancialAccountSourceAliases,
   findDuplicateFinancialTransactionSourceRefs,
   findDuplicateProductIdentities,
   findDuplicateSpendCandidates,
   findDuplicateVendors,
-  findEntitiesMissingEmbeddings,
+  findEntitiesMissingEmbeddingsPage,
   findIncompleteStatementImports,
   findInvalidFinancialJson,
   findManufacturerSpellingVariants,
@@ -167,12 +166,10 @@ export const diagnosticAdapters = {
         };
       }
       const config = getSemanticEmbeddingConfig();
-      // The repo returns a capped union sample. Its companion count runs over
-      // the complete relation, before this adapter's card/page sample.
-      const [items, count] = await Promise.all([
-        findEntitiesMissingEmbeddings(db, config),
-        countEntitiesMissingEmbeddings(db, config),
-      ]);
+      const { items, count } = await findEntitiesMissingEmbeddingsPage(
+        db,
+        config,
+      );
       return { items, count, status: { state: "healthy" } };
     },
   },
