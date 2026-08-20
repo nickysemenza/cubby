@@ -281,5 +281,3 @@ export function useEntityCommands<E extends EditableEntity>(
     commitField,
   };
 }
-
-export { useEntityMutationPort };

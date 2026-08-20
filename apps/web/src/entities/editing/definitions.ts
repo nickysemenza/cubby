@@ -1,5 +1,3 @@
-import type { Entity } from "@cubby/schemas/entity";
-import { entityManifest } from "@cubby/schemas/entity-manifest";
 import {
   expenseMutationInvalidateKeys,
   financialAccountMutationInvalidateKeys,
@@ -28,11 +26,6 @@ import type {
 } from "./types";
 
 const editable: EntityEditAccess = { mode: "editable" };
-
-const unavailable = (reason: string): EntityEditAccess => ({
-  mode: "unavailable",
-  reason,
-});
 
 const readOnly = (reason: string): EntityEditAccess => ({
   mode: "read-only",
@@ -865,13 +858,3 @@ export const entityEditRegistry = defineEntityEditRegistry({
     },
   ),
 });
-
-/** All standard editable entities declare a lifecycle delete path in the schema manifest. */
-export const editableEntityDeleteAvailability = Object.fromEntries(
-  (Object.keys(entityEditRegistry) as EditableEntity[]).map((entity) => [
-    entity,
-    entityManifest[entity as Entity].lifecycle.delete === null
-      ? unavailable("This entity cannot be deleted.")
-      : editable,
-  ]),
-) as Record<EditableEntity, EntityEditAccess>;

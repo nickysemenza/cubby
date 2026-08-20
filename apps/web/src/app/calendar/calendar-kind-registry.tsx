@@ -273,8 +273,4 @@ function calendarItemEditDescriptor(
   return spec.edit(item as never);
 }
 
-export {
-  calendarItemEditDescriptor,
-  calendarItemPresentation,
-  calendarKindRegistry,
-};
+export { calendarItemEditDescriptor, calendarItemPresentation };

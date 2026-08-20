@@ -425,10 +425,6 @@ export function invalidateTRPCQueries(
   }
 }
 
-export function invalidateAllQueries(queryClient: QueryClient) {
-  void queryClient.invalidateQueries();
-}
-
 export async function cancelTRPCQueries(
   queryClient: QueryClient,
   keys: readonly QueryKey[],

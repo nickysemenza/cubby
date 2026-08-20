@@ -35,7 +35,7 @@ export interface EntityEditSession<E extends EditableEntity> {
  * across referentially-new but structurally-identical request objects, while a
  * record, seed, context, intent, or surface change still resets deliberately.
  */
-export function useStableEntityEditRequest<E extends EditableEntity>(
+function useStableEntityEditRequest<E extends EditableEntity>(
   request: EntityEditRequest<E>,
 ): EntityEditRequest<E> {
   const last = useRef(request);

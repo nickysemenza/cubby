@@ -20,10 +20,10 @@ export type EntityEditOperation = "create" | "update" | "delete";
  * `planned`. It selects defaults, fields, and command construction *within* an
  * operation; it is not the operation itself.
  */
-export type EntityEditIntent = string;
+type EntityEditIntent = string;
 
 /** Where an entity edit is being presented, not a permission level. */
-export type EntityEditSurface =
+type EntityEditSurface =
   | "detail"
   | "create-page"
   | "dialog"
@@ -56,7 +56,7 @@ export interface EntityEditRecord {
  */
 export type EntityEditContext = Readonly<Record<string, unknown>>;
 
-export interface EntityEditFieldInput<R extends EntityEditRecord> {
+interface EntityEditFieldInput<R extends EntityEditRecord> {
   operation: EntityEditOperation;
   intent: EntityEditIntent;
   surface: EntityEditSurface;
@@ -64,7 +64,7 @@ export interface EntityEditFieldInput<R extends EntityEditRecord> {
   context: EntityEditContext;
 }
 
-export interface EntityEditFieldValidationInput<R extends EntityEditRecord, V> {
+interface EntityEditFieldValidationInput<R extends EntityEditRecord, V> {
   value: V;
   /** Normalized values from every selected field. */
   values: Readonly<Record<string, unknown>>;
