@@ -119,20 +119,25 @@ export function AddLabelsPopover({
           </Button>
         }
       />
-      {/* w-96, not w-80: the Add/Children pair takes a fixed ~7rem, and at the
-          narrower width the breadcrumb squeezed names down to "2 drawer packout
-          …" — dropping exactly the "lower"/"upper" suffix it exists to
-          disambiguate. */}
-      <PopoverContent align="start" className="w-96 p-0">
+      {/* Keep the full 24rem desktop width: the Add/Children pair takes a fixed
+          ~7rem, and at narrower widths the breadcrumb can drop exactly the
+          "lower"/"upper" suffix it exists to disambiguate. Phone viewports cap
+          the surface to their gutter and let the ancestry line wrap instead. */}
+      <PopoverContent
+        align="start"
+        aria-label="Add labels"
+        className="w-[calc(100vw-1rem)] p-0 sm:w-96"
+      >
         <div className="flex items-center gap-2 border-b px-2 py-2">
           <Search className="size-4 shrink-0 text-muted-foreground" />
           <input
             ref={inputRef}
             type="text"
+            aria-label="Search locations"
             placeholder="Search locations..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground sm:text-sm"
           />
         </div>
         <div className="max-h-64 overflow-y-auto p-1">
@@ -151,7 +156,7 @@ export function AddLabelsPopover({
                 // No vertical padding: the thumbnail is full-bleed and its
                 // own min-height sets the row height, matching the location
                 // combobox rows.
-                className="flex items-center gap-2 rounded-sm px-2 text-sm"
+                className="flex items-center gap-2 px-2 text-sm"
               >
                 <LocationPickerThumb
                   imageUrl={loc.coverImage?.url}
@@ -160,7 +165,7 @@ export function AddLabelsPopover({
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate">{loc.name}</span>
                   {loc.ancestors.length > 0 && (
-                    <span className="truncate text-muted-foreground text-xs">
+                    <span className="break-words text-muted-foreground text-xs sm:truncate">
                       {loc.ancestors.map((a) => a.name).join(" › ")}
                     </span>
                   )}
@@ -169,7 +174,8 @@ export function AddLabelsPopover({
                   {typeSupportsQrCode(loc.type) && loc.id && (
                     <button
                       type="button"
-                      className="rounded px-1.5 py-0.5 text-primary text-xs hover:bg-muted" /* tight */
+                      aria-label={`Add ${loc.name}`}
+                      className="min-h-11 min-w-11 px-2 text-primary text-xs hover:bg-muted sm:min-h-0 sm:min-w-0 sm:px-1.5 sm:py-0.5" /* tight */
                       onClick={() => handleAddSingle(loc)}
                     >
                       Add
@@ -177,7 +183,8 @@ export function AddLabelsPopover({
                   )}
                   <button
                     type="button"
-                    className="flex items-center gap-1 rounded px-1.5 py-0.5 text-primary text-xs hover:bg-muted" /* tight */
+                    aria-label={`Add children of ${loc.name}`}
+                    className="flex min-h-11 items-center gap-1 px-2 text-primary text-xs hover:bg-muted sm:min-h-0 sm:px-1.5 sm:py-0.5" /* tight */
                     onClick={() => void handleAddChildren(loc)}
                   >
                     <Users className="size-3" />

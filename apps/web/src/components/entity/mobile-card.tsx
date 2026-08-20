@@ -1,6 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, type LucideIcon } from "lucide-react";
-import { Fragment, type HTMLAttributes, type ReactNode } from "react";
+import {
+  Fragment,
+  type HTMLAttributes,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import type { MobileMetaValue } from "~/app/_components/data-table/useMobileListModel";
 import { Row, Stack } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -57,6 +62,18 @@ interface MobileCardProps {
    * at six values these read as noise, so each carries its column's header.
    */
   metaValues?: MobileMetaValue[];
+}
+
+function activateCardFromKeyboard(
+  event: KeyboardEvent<HTMLElement>,
+  onClick: () => void,
+) {
+  // Mobile cards can contain checkboxes and row actions. Only the card's own
+  // focus should activate the row; a nested control's keypress must stay local.
+  if (event.currentTarget !== event.target) return;
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  onClick();
 }
 
 /**
@@ -413,7 +430,11 @@ export function MobileCard({
         onTouchEnd={longPress.cancel}
         onTouchMove={longPress.cancel}
         onContextMenu={onLongPress ? (e) => e.preventDefault() : undefined}
-        onKeyDown={onClick ? (e) => e.key === "Enter" && onClick() : undefined}
+        onKeyDown={
+          onClick
+            ? (event) => activateCardFromKeyboard(event, onClick)
+            : undefined
+        }
         role={onClick ? "button" : undefined}
         tabIndex={onClick ? 0 : undefined}
       />
@@ -435,7 +456,11 @@ export function MobileCard({
       )}
       onClick={onClick}
       onTouchStart={onTouchStart}
-      onKeyDown={onClick ? (e) => e.key === "Enter" && onClick() : undefined}
+      onKeyDown={
+        onClick
+          ? (event) => activateCardFromKeyboard(event, onClick)
+          : undefined
+      }
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
     >

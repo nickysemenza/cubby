@@ -35,7 +35,7 @@ export const ImageThumbnail = ({
   if (images.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="flex aspect-square h-full items-center justify-center rounded-lg bg-muted/30">
+        <div className="flex aspect-square h-full items-center justify-center bg-muted/30">
           {fallbackIcon}
         </div>
       </div>
@@ -46,7 +46,7 @@ export const ImageThumbnail = ({
 
   return (
     <div className="flex h-full items-center justify-center">
-      <div className="thumbnail-ring relative aspect-square h-full overflow-hidden rounded-lg">
+      <div className="thumbnail-ring relative aspect-square h-full overflow-hidden">
         <ImageWithPreview
           src={image.url}
           alt={alt}

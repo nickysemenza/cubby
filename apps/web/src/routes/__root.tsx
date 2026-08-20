@@ -218,6 +218,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const mainContentId = React.useId();
   const authed = useNavAuthed();
   const isWorkspaceRoute = useRouterState({
     select: (state) =>
@@ -269,8 +270,15 @@ function RootComponent() {
 
   return (
     <Provider queryClient={queryClient}>
+      <a
+        href={`#${mainContentId}`}
+        className="fixed start-2 top-0 z-[100] -translate-y-full border border-foreground bg-card px-4 py-2 font-medium text-foreground text-sm transition-transform focus:top-[calc(env(safe-area-inset-top)+0.5rem)] focus:translate-y-0"
+      >
+        Skip to main content
+      </a>
       {authed && isWorkspaceRoute ? (
         <AuthenticatedAppShell
+          mainContentId={mainContentId}
           onSearchClick={openCommandMenu}
           navigationProgress={<NavigationProgress />}
         >
@@ -278,13 +286,17 @@ function RootComponent() {
         </AuthenticatedAppShell>
       ) : (
         <div className="flex min-h-dvh flex-col">
-          <div className="sticky top-0 z-40 border-b-[3px] border-b-foreground bg-card print:hidden">
+          <div className="safe-top sticky top-0 z-40 border-b-[3px] border-b-foreground bg-card print:hidden">
             <div className="mx-auto flex h-12 w-full max-w-7xl items-center px-2 md:px-6">
               <MainNav className="mx-0" onSearchClick={openCommandMenu} />
             </div>
             <NavigationProgress />
           </div>
-          <main className="w-full flex-1 px-2 pt-4 pb-20 md:px-6 md:pb-4">
+          <main
+            id={mainContentId}
+            tabIndex={-1}
+            className="w-full flex-1 px-2 pt-4 pb-20 md:px-6 md:pb-4"
+          >
             {routeContent}
           </main>
           <AppFooter />

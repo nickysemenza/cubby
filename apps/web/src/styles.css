@@ -523,7 +523,7 @@
     /* pointer-events-none: this overlay sits above the thumbnail's tooltip
        trigger; without it, hover never reaches the trigger and the image
        hover-preview silently never opens. */
-    @apply pointer-events-none absolute inset-0 rounded-lg ring-1 ring-inset ring-black/5 transition-all;
+    @apply pointer-events-none absolute inset-0 ring-1 ring-inset ring-foreground/5 transition-shadow;
   }
   .thumbnail-ring:hover::after {
     @apply ring-2 ring-primary/30;

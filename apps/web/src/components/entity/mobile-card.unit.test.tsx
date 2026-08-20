@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { MobileCard } from "./mobile-card";
 
 /**
@@ -55,3 +55,35 @@ describe("MobileCard row variant", () => {
     expect(screen.getAllByRole("term")).toHaveLength(SIX.length);
   });
 });
+
+describe.each(["row", "card"] as const)(
+  "MobileCard %s keyboard activation",
+  (variant) => {
+    it.each(["Enter", " "])("activates with %j", (key) => {
+      const onClick = vi.fn();
+      render(<MobileCard variant={variant} title="Item" onClick={onClick} />);
+
+      fireEvent.keyDown(screen.getByRole("button", { name: "Item" }), { key });
+
+      expect(onClick).toHaveBeenCalledOnce();
+    });
+
+    it("does not treat a nested control's keypress as card activation", () => {
+      const onClick = vi.fn();
+      render(
+        <MobileCard
+          variant={variant}
+          title="Item"
+          onClick={onClick}
+          actions={<button type="button">Edit</button>}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByRole("button", { name: "Edit" }), {
+        key: "Enter",
+      });
+
+      expect(onClick).not.toHaveBeenCalled();
+    });
+  },
+);

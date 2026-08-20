@@ -234,7 +234,7 @@ function SpecRow({
     <>
       {line}
       <div
-        className="mt-1 mb-2 ml-1 rounded-r-md border-l-[3px] bg-muted/40 py-2 pr-2 pl-2"
+        className="mt-1 mb-2 ml-1 border-l-[3px] bg-muted/40 py-2 pr-2 pl-2"
         style={{ borderLeftColor: accentColor }}
       >
         <SpecNode

@@ -30,4 +30,11 @@ test("representative authenticated pages have no serious Axe violations", async 
 
   await createProduct(page, `Axe Product ${Date.now()}`);
   await assertAccessible();
+
+  await page.goto("/labels");
+  await page.getByRole("button", { name: "Add", exact: true }).first().click();
+  await expect(
+    page.getByRole("textbox", { name: "Search locations" }),
+  ).toBeFocused();
+  await assertAccessible();
 });
