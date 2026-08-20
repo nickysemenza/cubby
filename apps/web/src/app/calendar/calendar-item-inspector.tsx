@@ -1,10 +1,7 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
-import type { MealKind, MealType } from "@cubby/schemas/meal-classification";
-import type { TaskStatus } from "@cubby/schemas/project";
 import { Link } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
-import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useState } from "react";
 import {
   FormWrapper,
   NullableNumericField,
@@ -24,28 +21,18 @@ import {
   PopoverTitle,
 } from "~/components/ui/popover";
 import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
+import { useEntityEditSession } from "~/entities/editing";
 import { entityDetailLink } from "~/entities/entities";
 import { useIsMobile } from "~/hooks/useMobile";
-import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrency } from "~/lib/utils";
 import { CalendarItemPresentation, itemMetadata } from "./calendar-item-row";
-
-interface CalendarEditorValues {
-  name: string;
-  date: string | null;
-  endDate: string | null;
-  mealType: MealType | null;
-  mealKind: MealKind;
-  status: TaskStatus;
-  cost: number | null;
-}
+import { calendarItemEditDescriptor } from "./calendar-kind-registry";
 
 interface CalendarItemInspectorProps {
   handle: PopoverHandle<CalendarItem>;
-  onSave: (item: CalendarItem, values: CalendarEditorValues) => Promise<void>;
 }
 
-function CalendarItemInspector({ handle, onSave }: CalendarItemInspectorProps) {
+function CalendarItemInspector({ handle }: CalendarItemInspectorProps) {
   const [open, setOpen] = useState(false);
   return (
     <Popover handle={handle} onOpenChange={setOpen}>
@@ -57,7 +44,6 @@ function CalendarItemInspector({ handle, onSave }: CalendarItemInspectorProps) {
             item={item}
             handle={handle}
             open={open}
-            onSave={onSave}
           />
         ) : null;
       }}
@@ -69,17 +55,13 @@ function CalendarInspectorOverlay({
   item,
   handle,
   open,
-  onSave,
 }: CalendarItemInspectorProps & { item: CalendarItem; open: boolean }) {
   const isMobile = useIsMobile();
   const content = (
     <CalendarInspectorBody
       item={item}
       onCancel={() => handle.close()}
-      onSave={async (values) => {
-        await onSave(item, values);
-        handle.close();
-      }}
+      onSaved={() => handle.close()}
     />
   );
 
@@ -118,106 +100,85 @@ function CalendarInspectorOverlay({
 function CalendarInspectorBody({
   item,
   onCancel,
-  onSave,
+  onSaved,
 }: {
   item: CalendarItem;
   onCancel: () => void;
-  onSave: (values: CalendarEditorValues) => Promise<void>;
+  onSaved?: () => void;
 }) {
-  if (item.kind === "project" || (item.kind === "expense" && !item.future)) {
-    return <ReadOnlyCalendarItem item={item} />;
+  const edit = calendarItemEditDescriptor(item);
+  if (edit.mode === "read-only") {
+    return <ReadOnlyCalendarItem item={item} reason={edit.reason} />;
   }
   return (
-    <EditableCalendarItem item={item} onCancel={onCancel} onSave={onSave} />
+    <EditableCalendarItem
+      item={item}
+      edit={edit}
+      onCancel={onCancel}
+      onSaved={onSaved}
+    />
   );
 }
 
 function EditableCalendarItem({
   item,
+  edit,
   onCancel,
-  onSave,
+  onSaved,
 }: {
-  item: Exclude<CalendarItem, { kind: "project" }>;
+  item: CalendarItem;
+  edit: Extract<
+    ReturnType<typeof calendarItemEditDescriptor>,
+    { mode: "editable" }
+  >;
   onCancel: () => void;
-  onSave: (values: CalendarEditorValues) => Promise<void>;
+  onSaved?: () => void;
 }) {
-  const form = useForm<CalendarEditorValues>({
-    defaultValues: editorDefaults(item),
+  const session = useEntityEditSession({
+    entity: edit.entity,
+    operation: "update",
+    intent: edit.intent,
+    surface: "calendar",
+    record: edit.record,
   });
-  const [isPending, setIsPending] = useState(false);
-  const [error, setError] = useState<string>();
-
-  useEffect(() => {
-    form.reset(editorDefaults(item));
-    setError(undefined);
-  }, [form, item]);
-
-  const submit = async (values: CalendarEditorValues) => {
-    form.clearErrors();
-    setError(undefined);
-    const nameRequired = item.kind !== "meal";
-    if (nameRequired && !values.name.trim()) {
-      form.setError("name", { message: "Name is required" });
-      return;
-    }
-    if (!values.date) {
-      form.setError("date", { message: "Date is required" });
-      return;
-    }
-    if (
-      item.kind === "task" &&
-      values.endDate &&
-      values.endDate < values.date
-    ) {
-      form.setError("endDate", {
-        message: "End date must be on or after the due date",
-      });
-      return;
-    }
-
-    setIsPending(true);
-    try {
-      await onSave(values);
-    } catch (cause) {
-      setError(
-        getErrorMessage(cause) || "The calendar item could not be saved.",
-      );
-    } finally {
-      setIsPending(false);
-    }
-  };
+  const error = session.issues.find((issue) => !issue.field)?.message;
 
   return (
     <FormWrapper
-      form={form}
-      onSubmit={(values) => void submit(values)}
+      form={session.form}
+      onSubmit={() => {
+        void session.submit().then((result) => {
+          if (result.ok) onSaved?.();
+        });
+      }}
       error={error}
-      isPending={isPending}
+      isPending={session.isPending}
       onCancel={onCancel}
       submitButtonText="Save"
     >
       <UnifiedTextField
-        form={form}
+        form={session.form}
         name="name"
         label="Name"
         placeholder={item.kind === "meal" ? "Meal name (optional)" : "Name"}
+        nullable={item.kind === "meal"}
       />
       <PlainDateField
-        form={form}
-        name="date"
+        form={session.form}
+        name={item.kind === "task" ? "dueDate" : "date"}
         label={item.kind === "task" ? "Due date" : "Date"}
       />
       {item.kind === "meal" && (
         <>
           <SelectField
-            form={form}
+            form={session.form}
             name="mealType"
             label="Meal type"
             options={mealTypeOptions}
             nullable
           />
           <SelectField
-            form={form}
+            form={session.form}
             name="mealKind"
             label="Kind"
             options={mealKindOptions}
@@ -226,9 +187,13 @@ function EditableCalendarItem({
       )}
       {item.kind === "task" && (
         <>
-          <PlainDateField form={form} name="endDate" label="Due through" />
+          <PlainDateField
+            form={session.form}
+            name="dueEndDate"
+            label="Due through"
+          />
           <SelectField
-            form={form}
+            form={session.form}
             name="status"
             label="Status"
             options={taskStatusOptions}
@@ -237,7 +202,7 @@ function EditableCalendarItem({
       )}
       {item.kind === "expense" && (
         <NullableNumericField
-          form={form}
+          form={session.form}
           name="cost"
           label="Planned cost"
           placeholder="0.00"
@@ -250,7 +215,13 @@ function EditableCalendarItem({
   );
 }
 
-function ReadOnlyCalendarItem({ item }: { item: CalendarItem }) {
+function ReadOnlyCalendarItem({
+  item,
+  reason,
+}: {
+  item: CalendarItem;
+  reason: string;
+}) {
   return (
     <Stack gap="sm">
       <div className="border-y py-2">
@@ -268,11 +239,7 @@ function ReadOnlyCalendarItem({ item }: { item: CalendarItem }) {
           </>
         )}
       </dl>
-      <p className="text-muted-foreground">
-        {item.kind === "project"
-          ? "Project dates are derived from its work and spending. Edit the full project to change its record."
-          : "Recorded expenses stay read-only in the calendar. Open the full expense to make ledger changes."}
-      </p>
+      <p className="text-muted-foreground">{reason}</p>
       <OpenFullRecord item={item} />
     </Stack>
   );
@@ -293,20 +260,4 @@ function OpenFullRecord({ item }: { item: CalendarItem }) {
   );
 }
 
-function editorDefaults(
-  item: Exclude<CalendarItem, { kind: "project" }>,
-): CalendarEditorValues {
-  return {
-    name: item.kind === "meal" ? (item.name ?? "") : item.title,
-    date:
-      item.kind === "task" ? (item.dueDate ?? item.dueEndDate) : item.startDate,
-    endDate: item.kind === "task" && item.dueDate ? item.dueEndDate : null,
-    mealType: item.kind === "meal" ? item.mealType : null,
-    mealKind: item.kind === "meal" ? item.mealKind : "cooked",
-    status: item.kind === "task" ? item.status : "not_started",
-    cost: item.kind === "expense" ? item.cost : null,
-  };
-}
-
-export type { CalendarEditorValues };
 export { CalendarInspectorBody, CalendarItemInspector, EditableCalendarItem };

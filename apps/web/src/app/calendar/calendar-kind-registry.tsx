@@ -7,6 +7,7 @@ import {
 import { TRADE_LABELS } from "@cubby/schemas/project";
 import type { LucideIcon } from "lucide-react";
 import type { BadgeVariant } from "~/components/ui/badge";
+import type { EditableEntity, EntityEditRecord } from "~/entities/editing";
 import { ENTITY_ACCENTS } from "~/entities/entity-accents";
 import { mealKindBadgeVariant, mealTypeIcon } from "../meals/meal-options";
 import {
@@ -25,6 +26,18 @@ type CalendarBadge = {
   label: string;
   variant: BadgeVariant;
 };
+type CalendarEditDescriptor =
+  | {
+      mode: "editable";
+      entity: EditableEntity;
+      intent: string;
+      record: EntityEditRecord;
+    }
+  | {
+      mode: "read-only";
+      entity: EditableEntity;
+      reason: string;
+    };
 
 // This is intentionally a UI-layer registry. The shared entity manifest stays
 // pure data; calendar layout, badges, and dynamic meal-slot glyphs are React
@@ -39,6 +52,7 @@ type CalendarKindSpec<K extends CalendarItemKind> = {
   metadata: (item: ItemOf<K>) => string;
   compactBadge?: (item: ItemOf<K>) => CalendarBadge | undefined;
   richBadge?: (item: ItemOf<K>) => CalendarBadge | undefined;
+  edit: (item: ItemOf<K>) => CalendarEditDescriptor;
   event: (
     item: ItemOf<K>,
     today: string,
@@ -81,6 +95,18 @@ const calendarKindRegistry: {
             label: MEAL_KIND_LABELS[item.mealKind],
             variant: mealKindBadgeVariant[item.mealKind],
           },
+    edit: (item) => ({
+      mode: "editable",
+      entity: "meal",
+      intent: "calendar",
+      record: {
+        id: item.id,
+        name: item.name,
+        date: item.startDate,
+        mealType: item.mealType,
+        mealKind: item.mealKind,
+      },
+    }),
     event: (item) => ({
       className:
         item.mealKind === "cooked"
@@ -104,6 +130,18 @@ const calendarKindRegistry: {
     richBadge: (item) => ({
       label: TASK_STATUS_LABELS[item.status],
       variant: taskStatusBadgeVariant[item.status],
+    }),
+    edit: (item) => ({
+      mode: "editable",
+      entity: "task",
+      intent: "schedule",
+      record: {
+        id: item.id,
+        name: item.title,
+        status: item.status,
+        dueDate: item.dueDate ?? item.dueEndDate,
+        dueEndDate: item.dueDate ? item.dueEndDate : null,
+      },
     }),
     event: (item) => ({
       color: ENTITY_ACCENTS.task,
@@ -134,6 +172,26 @@ const calendarKindRegistry: {
       label: item.future ? "Planned" : "Actual",
       variant: item.future ? "warning" : "outline",
     }),
+    edit: (item) =>
+      item.future
+        ? {
+            mode: "editable",
+            entity: "expense",
+            intent: "planned",
+            record: {
+              id: item.id,
+              name: item.title,
+              date: item.startDate,
+              cost: item.cost,
+              future: true,
+            },
+          }
+        : {
+            mode: "read-only",
+            entity: "expense",
+            reason:
+              "Recorded expenses stay read-only in the calendar. Open the full expense to make ledger changes.",
+          },
     event: (item, today) => ({
       className: item.future
         ? item.startDate < today
@@ -164,6 +222,12 @@ const calendarKindRegistry: {
     compactBadge: (item) => ({
       label: PROJECT_STATUS_LABELS[item.status],
       variant: "outline",
+    }),
+    edit: () => ({
+      mode: "read-only",
+      entity: "project",
+      reason:
+        "Project dates are derived from its work and spending. Edit the full project to change its record.",
     }),
     event: () => ({
       className:
@@ -202,4 +266,15 @@ function calendarItemPresentation(item: CalendarItem, today = "") {
   };
 }
 
-export { calendarItemPresentation, calendarKindRegistry };
+function calendarItemEditDescriptor(
+  item: CalendarItem,
+): CalendarEditDescriptor {
+  const spec = calendarKindSpec(item);
+  return spec.edit(item as never);
+}
+
+export {
+  calendarItemEditDescriptor,
+  calendarItemPresentation,
+  calendarKindRegistry,
+};
