@@ -44,6 +44,8 @@ export const calendarMealItem = z.object({
   kind: z.literal("meal"),
   id: mealShortcode,
   title: z.string(),
+  /** Persisted optional name, separate from the slot-derived display title. */
+  name: z.string().nullable(),
   ...calendarItemDates,
   interaction: z.literal("move"),
   sortOrder: z.number().int().nullable(),
@@ -52,6 +54,8 @@ export const calendarMealItem = z.object({
   mealType: mealTypeSchema.nullable(),
   mealKind: mealKindSchema,
   recipeNames: z.array(z.string()),
+  /** First displayable cover among the meal's ordered recipes. */
+  coverImageUrl: z.url().nullable(),
   cost: z.number(),
   calories: z.number(),
   nutritionPending: z.boolean(),
@@ -63,9 +67,15 @@ export const calendarTaskItem = z.object({
   title: z.string(),
   ...calendarItemDates,
   interaction: z.literal("move"),
+  /** Raw nullable task boundaries; start/end above are normalized for layout. */
+  dueDate: plainDate.nullable(),
+  dueEndDate: plainDate.nullable(),
   status: taskStatusSchema,
   trade: tradeSchema,
   projectName: z.string().nullable(),
+  subjectProductName: z.string().nullable(),
+  /** Cover for the optional subject Product. */
+  coverImageUrl: z.url().nullable(),
 });
 
 export const calendarExpenseItem = z.object({
@@ -79,6 +89,9 @@ export const calendarExpenseItem = z.object({
   vendor: z.string().nullable(),
   trade: tradeSchema,
   projectName: z.string().nullable(),
+  productName: z.string().nullable(),
+  /** Cover for the linked Product, when this is a product-backed line. */
+  coverImageUrl: z.url().nullable(),
 });
 
 export const calendarProjectItem = z.object({

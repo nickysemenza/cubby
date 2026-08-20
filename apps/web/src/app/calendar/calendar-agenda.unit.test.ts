@@ -16,6 +16,7 @@ const meal = (id: string, startDate: string): CalendarItem => ({
   kind: "meal",
   id: unsafeMealShortcode(id),
   title: id,
+  name: null,
   startDate,
   endDateExclusive: nextDay(startDate),
   interaction: "move",
@@ -23,6 +24,7 @@ const meal = (id: string, startDate: string): CalendarItem => ({
   mealType: null,
   mealKind: "cooked",
   recipeNames: [],
+  coverImageUrl: null,
   cost: 0,
   calories: 0,
   nutritionPending: false,
@@ -39,9 +41,13 @@ const task = (
   startDate,
   endDateExclusive,
   interaction: "move",
+  dueDate: startDate,
+  dueEndDate: null,
   status: "not_started",
   trade: "planning",
   projectName: null,
+  subjectProductName: null,
+  coverImageUrl: null,
 });
 
 /** The month grid's own rule, passed in so the agenda can't disagree with it. */

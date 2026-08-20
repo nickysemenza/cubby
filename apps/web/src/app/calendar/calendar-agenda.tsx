@@ -1,6 +1,6 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
 import { addDays, format, parseISO } from "date-fns";
-import { CalendarItemLink } from "./calendar-item-row";
+import { Fragment } from "react";
 
 /**
  * The phone form of the planning calendar.
@@ -75,6 +75,7 @@ export function CalendarAgenda({
   emptyMessage,
   showAllDays = false,
   onDayClick,
+  renderItem,
 }: {
   items: readonly CalendarItem[];
   includesDay: (item: CalendarItem, day: string) => boolean;
@@ -85,6 +86,7 @@ export function CalendarAgenda({
   /** Render the complete period, including empty ruled days. */
   showAllDays?: boolean;
   onDayClick?: (day: string) => void;
+  renderItem: (item: CalendarItem) => React.ReactNode;
 }) {
   const groups = groupItemsByDay(items, includesDay, range, showAllDays);
 
@@ -125,7 +127,9 @@ export function CalendarAgenda({
               </div>
             ) : (
               group.items.map((item) => (
-                <CalendarItemLink key={`${item.kind}:${item.id}`} item={item} />
+                <Fragment key={`${item.kind}:${item.id}`}>
+                  {renderItem(item)}
+                </Fragment>
               ))
             )}
           </div>

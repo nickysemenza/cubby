@@ -5,11 +5,15 @@ import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
 
 import { cn } from "~/lib/utils"
 
-function Popover({ ...props }: PopoverPrimitive.Root.Props) {
+function Popover<Payload = unknown>({
+  ...props
+}: PopoverPrimitive.Root.Props<Payload>) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />
 }
 
-function PopoverTrigger({ ...props }: PopoverPrimitive.Trigger.Props) {
+function PopoverTrigger<Payload = unknown>({
+  ...props
+}: PopoverPrimitive.Trigger.Props<Payload>) {
   return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />
 }
 
@@ -67,10 +71,17 @@ function PopoverTitle({ className, ...props }: PopoverPrimitive.Title.Props) {
   )
 }
 
+const createPopoverHandle = PopoverPrimitive.createHandle
+type PopoverHandle<Payload> = ReturnType<
+  typeof PopoverPrimitive.createHandle<Payload>
+>
+
 export {
   Popover,
   PopoverContent,
   PopoverHeader,
   PopoverTitle,
   PopoverTrigger,
+  createPopoverHandle,
 }
+export type { PopoverHandle }

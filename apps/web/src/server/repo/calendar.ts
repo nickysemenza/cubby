@@ -27,11 +27,13 @@ import { eqAny, presenceCondition } from "./database-helpers/query";
 import { dbExpenseToAPI } from "./expense/helpers";
 import { chargeCondition } from "./expense/lookup";
 import { getMealsByDateRange } from "./meal";
+import { getProductCoverImageUrlsByProductIds } from "./product";
 import {
   collectDescendantIds,
   loadProjectDateWindows,
   loadProjectTree,
 } from "./project/subtree";
+import { getRecipeCoverImageUrlsByShortcodes } from "./recipe";
 import { resolveAllPresent } from "./shortcode-resolver";
 import { dbTaskToAPI } from "./task/helpers";
 
@@ -260,6 +262,20 @@ export async function getCalendarRange(
       wants("project") ? loadProjectDateWindows(db, tree) : null,
     ]);
 
+  const recipeIds = uniq(
+    meals.flatMap((meal) => meal.recipes.map((value) => value.recipeId)),
+  );
+  const productIds = uniq([
+    ...taskRows.flatMap((row) =>
+      row.subjectProductId ? [row.subjectProductId] : [],
+    ),
+    ...expenseRows.flatMap((row) => (row.productId ? [row.productId] : [])),
+  ]);
+  const [recipeCoverImageUrls, productCoverImageUrls] = await Promise.all([
+    getRecipeCoverImageUrlsByShortcodes(db, recipeIds),
+    getProductCoverImageUrlsByProductIds(db, productIds),
+  ]);
+
   const items: CalendarItem[] = [];
 
   for (const meal of meals) {
@@ -270,6 +286,7 @@ export async function getCalendarRange(
       // of the bare literal "Meal" — this title is what the calendar chip and
       // the iCalendar SUMMARY both render.
       title: meal.name || mealTypeTitle(meal.mealType),
+      name: meal.name,
       startDate: meal.date,
       endDateExclusive: shiftPlainDate(meal.date, 1),
       interaction: "move",
@@ -277,6 +294,10 @@ export async function getCalendarRange(
       mealType: meal.mealType,
       mealKind: meal.mealKind,
       recipeNames: meal.recipes.map((recipe) => recipe.recipe.name),
+      coverImageUrl:
+        meal.recipes
+          .map((recipe) => recipeCoverImageUrls.get(recipe.recipeId))
+          .find((url) => url !== undefined) ?? null,
       cost: meal.totals.costTotal,
       calories: meal.totals.caloriesTotal,
       nutritionPending: meal.totals.pending,
@@ -295,9 +316,15 @@ export async function getCalendarRange(
       startDate,
       endDateExclusive: shiftPlainDate(endDate, 1),
       interaction: "move",
+      dueDate: value.dueDate,
+      dueEndDate: value.dueEndDate,
       status: value.status,
       trade: value.trade,
       projectName: value.projectName,
+      subjectProductName: value.subjectProductName,
+      coverImageUrl: row.subjectProductId
+        ? (productCoverImageUrls.get(row.subjectProductId) ?? null)
+        : null,
     });
   }
 
@@ -316,6 +343,10 @@ export async function getCalendarRange(
       vendor: value.vendor,
       trade: value.trade,
       projectName: value.projectName,
+      productName: value.productName,
+      coverImageUrl: row.productId
+        ? (productCoverImageUrls.get(row.productId) ?? null)
+        : null,
     });
   }
 

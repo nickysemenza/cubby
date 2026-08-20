@@ -1,4 +1,4 @@
-import { ImageWithPreview } from "~/components/ui/image-with-preview";
+import { EntityCover } from "~/components/entity/entity-cover";
 
 interface CardThumbnailProps {
   images: Array<{ id: string; url: string }>;
@@ -18,29 +18,16 @@ export function CardThumbnail({
   params,
   size = 40,
 }: CardThumbnailProps) {
-  if (images.length === 0) return null;
-
-  const image = images[0]!;
-
   return (
-    <div
-      className="relative shrink-0 overflow-hidden rounded"
-      style={{ width: size, height: size }}
-    >
-      <ImageWithPreview
-        src={image.url}
-        alt={alt}
-        to={to}
-        params={params}
-        lazyPreview
-        displayWidth={size}
-        className="absolute inset-0 h-full w-full rounded-none border-0"
-      />
-      {images.length > 1 && (
-        <div className="absolute right-0 bottom-0 flex size-3 items-center justify-center bg-black/70 text-3xs text-white">
-          +{images.length - 1}
-        </div>
-      )}
-    </div>
+    <EntityCover
+      images={images}
+      alt={alt}
+      size={size}
+      to={to}
+      params={params}
+      preview
+      lazyPreview
+      placeholder="none"
+    />
   );
 }
