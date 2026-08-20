@@ -159,7 +159,7 @@ function EventCalendarWeekView() {
               className="grid gap-0.5"
               style={{
                 gridTemplateColumns:
-                  "repeat(auto-fill, minmax(min(28rem, 100%), 1fr))",
+                  "repeat(auto-fill, minmax(28rem, 1fr))",
               }}
             >
               {ledger.compactSpans.map((segment) => (
