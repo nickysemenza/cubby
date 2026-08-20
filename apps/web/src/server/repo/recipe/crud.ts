@@ -32,6 +32,7 @@ import {
   type AnyColumn,
   and,
   arrayOverlaps,
+  asc,
   eq,
   gte,
   inArray,
@@ -84,6 +85,7 @@ import {
   withTransaction,
   withTransactionOn,
 } from "~/server/repo/database-helpers";
+import { displayableImageWhere } from "~/server/repo/image-displayability";
 import {
   countByTarget,
   impact,
@@ -164,6 +166,46 @@ export const getRecipeByID = async (
     ...relations.recipe.full,
   });
   return res === null || res === undefined ? null : dbRecipeToAPI(res);
+};
+
+/**
+ * First displayable Recipe image in explicit display order, loaded once for a
+ * batch of compact cross-entity surfaces such as the planning calendar.
+ * Full Recipe reads still own galleries; this deliberately returns only URLs.
+ */
+export const getRecipeCoverImageUrlsByShortcodes = async (
+  db: Database,
+  ids: RecipeShortcode[],
+): Promise<Map<RecipeShortcode, string>> => {
+  const byId = new Map<RecipeShortcode, string>();
+  if (ids.length === 0) return byId;
+
+  const rows = await getDb(db)
+    .select({ shortcode: recipe.shortcode, url: image.url })
+    .from(recipe)
+    .innerJoin(recipeImage, eq(recipeImage.recipeId, recipe.id))
+    .innerJoin(image, eq(image.id, recipeImage.imageId))
+    .where(
+      and(
+        inArray(recipe.shortcode, ids),
+        notDeleted(recipe),
+        notDeleted(recipeImage),
+        notDeleted(image),
+        displayableImageWhere,
+      ),
+    )
+    .orderBy(
+      recipe.shortcode,
+      asc(recipeImage.sortOrder),
+      asc(recipeImage.createdAt),
+      asc(recipeImage.id),
+    );
+
+  for (const row of rows) {
+    const shortcode = unsafeRecipeShortcode(row.shortcode);
+    if (!byId.has(shortcode)) byId.set(shortcode, row.url);
+  }
+  return byId;
 };
 
 /**

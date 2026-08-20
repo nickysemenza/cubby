@@ -2,8 +2,8 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
 import { locationTypeValues, productCategoryValues } from "@cubby/shared";
 import { ProjectMark } from "~/app/projects/project-mark";
+import { EntityCover } from "~/components/entity/entity-cover";
 import { IconTile } from "~/components/ui/icon-tile";
-import { Image } from "~/components/ui/image";
 import { EntityIcon, entities, entityDetailParams } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 import { pushRecent } from "../command-menu/recents";
@@ -114,15 +114,15 @@ function SearchHitIcon({
 
 const mediaVariants = {
   command: {
-    tile: "size-8 rounded",
+    tile: "size-8",
     icon: "size-4 shrink-0",
-    displayWidth: 64,
+    size: 32,
   },
-  list: { tile: "size-10 rounded", icon: "size-5 shrink-0", displayWidth: 80 },
+  list: { tile: "size-10", icon: "size-5 shrink-0", size: 40 },
   mobile: {
-    tile: "size-11 rounded",
+    tile: "size-11",
     icon: "size-5 shrink-0",
-    displayWidth: 88,
+    size: 44,
   },
 } as const;
 
@@ -137,11 +137,11 @@ export function SearchResultMedia({
   const entity = getSearchResultEntity(item);
   if (item.imageUrl)
     return (
-      <Image
-        src={item.imageUrl}
+      <EntityCover
+        images={[{ id: item.id, url: item.imageUrl }]}
+        entity={entity}
         alt=""
-        displayWidth={media.displayWidth}
-        className={cn("shrink-0 object-cover", media.tile)}
+        size={media.size}
       />
     );
   return (

@@ -10,6 +10,7 @@ import {
 import {
   useEventCalendar,
   useEventCalendarRenderEvent,
+  useEventCalendarRenderEventRoot,
   useEventCalendarSelector,
 } from "~/components/reui/event-calendar/event-calendar";
 import {
@@ -76,6 +77,7 @@ function EventCalendarEvent<TData = unknown>({
 }: EventCalendarEventProps<TData>) {
   const instance = useEventCalendar<TData>();
   const renderEvent = useEventCalendarRenderEvent<TData>();
+  const renderEventRoot = useEventCalendarRenderEventRoot<TData>();
   const { settings } = instance;
   const occurrence = segment.occurrence;
   const event = occurrence.event;
@@ -186,7 +188,12 @@ function EventCalendarEvent<TData = unknown>({
     },
     onClick: (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (wasRecentDrag()) return;
+      if (wasRecentDrag()) {
+        // Detached triggers receive this same click. Preventing default keeps
+        // the release that ends a drag from immediately opening an inspector.
+        e.preventDefault();
+        return;
+      }
       settings.onEventClick?.(occurrence, segment, e);
     },
     className: cn(
@@ -210,7 +217,9 @@ function EventCalendarEvent<TData = unknown>({
 
   const chip = useRender({
     defaultTagName: "button",
-    render,
+    render:
+      render ??
+      (!preview ? renderEventRoot?.({ occurrence, segment }) : undefined),
     props: mergeProps<"button">(defaultProps, props),
   });
 

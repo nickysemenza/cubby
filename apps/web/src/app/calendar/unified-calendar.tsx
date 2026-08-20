@@ -3,13 +3,12 @@ import type {
   CalendarItem,
   CalendarItemKind,
 } from "@cubby/schemas/calendar";
-import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { addDays, format } from "date-fns";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import {
   lazy,
-  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
   Suspense,
   useCallback,
   useEffect,
@@ -17,22 +16,21 @@ import {
   useState,
 } from "react";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
-import { mealKindIcon } from "~/app/meals/meal-options";
 import { Row, Stack } from "~/components/layout";
 import {
   type EventCalendarRenderEventProps,
+  type EventCalendarRenderEventRoot,
   MonthEventCalendar,
   WeekEventCalendar,
 } from "~/components/reui/event-calendar/event-calendar";
 import type {
   CalendarEvent,
   CalendarPeriod,
-  EventCalendarOccurrence,
   EventCalendarProposedUpdate,
-  EventCalendarSegment,
 } from "~/components/reui/event-calendar/event-calendar-types";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
+import { createPopoverHandle, PopoverTrigger } from "~/components/ui/popover";
 import {
   Sheet,
   SheetContent,
@@ -53,15 +51,21 @@ import {
 import { formatCurrency } from "~/lib/utils";
 import { CalendarAgenda } from "./calendar-agenda";
 import type { CalendarFilters } from "./calendar-filters";
-import { itemIcon, KIND_ICONS } from "./calendar-icons";
-import { CalendarItemLink } from "./calendar-item-row";
+import { KIND_ICONS } from "./calendar-icons";
+import {
+  type CalendarEditorValues,
+  CalendarItemInspector,
+} from "./calendar-item-inspector";
+import {
+  CalendarItemPresentation,
+  calendarItemTriggerClassName,
+} from "./calendar-item-row";
 import {
   formatCalendarPeriodTitle,
   getCalendarPeriodRange,
   householdCalendarDate,
   shiftCalendarPeriod,
 } from "./calendar-period";
-import { itemSpanLabel } from "./calendar-span";
 import { EMPTY_DAY_SUMMARY, WeekSummaryGrid } from "./calendar-week-summary";
 
 const CALENDAR_ACTIVATION = {
@@ -167,48 +171,27 @@ const toEvent = (
   data: item,
 });
 
-function CalendarChip({
+function CalendarMonthChip({
   occurrence,
-  segment,
 }: EventCalendarRenderEventProps<CalendarItem>) {
   const item = occurrence.event.data;
   if (!item) return occurrence.event.title;
-  const Icon = itemIcon(item);
-  // Only non-cooked meals get one — see MEAL_KIND_ICONS.
-  const kind = item.kind === "meal" ? item.mealKind : null;
-  const KindIcon = kind ? mealKindIcon(kind) : null;
-  const span = itemSpanLabel(item);
-  // Repeated on EVERY week row of a span, not just the one carrying its start:
-  // a bar is re-drawn per week, so gating on `segment.isStart` would leave five
-  // of a six-week project's rows saying nothing. Dropped on bars too narrow to
-  // hold it — `colSpan` is the merged week-row width from `packWeekRowLanes`.
-  const spanLabel = span && (segment.colSpan ?? 1) >= 3 ? span : null;
+  return <CalendarItemPresentation item={item} variant="month" />;
+}
+
+function CalendarWeekCard({
+  occurrence,
+}: EventCalendarRenderEventProps<CalendarItem>) {
+  const item = occurrence.event.data;
+  if (!item) return occurrence.event.title;
+  const spansDays =
+    item.endDateExclusive !==
+    formatPlainDate(addDays(parsePlainDate(item.startDate), 1));
   return (
-    <>
-      <Icon className="size-3 shrink-0" aria-hidden />
-      <span
-        className="truncate"
-        title={span ? `${item.title} (${span})` : item.title}
-      >
-        {item.title}
-      </span>
-      {spanLabel && (
-        <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">
-          {spanLabel}
-        </span>
-      )}
-      {KindIcon && kind && (
-        <KindIcon
-          className="ml-auto size-3 shrink-0"
-          aria-label={MEAL_KIND_LABELS[kind]}
-        />
-      )}
-      {item.kind === "expense" && item.cost != null && (
-        <span className="ml-auto shrink-0 tabular-nums">
-          {formatCurrency(item.cost, 0)}
-        </span>
-      )}
-    </>
+    <CalendarItemPresentation
+      item={item}
+      variant={spansDays ? "month" : "rich"}
+    />
   );
 }
 
@@ -272,6 +255,7 @@ export function UnifiedCalendar({
     placeholderData: keepPreviousData,
   });
   const items = data?.items ?? NO_ITEMS;
+  const editorHandle = useMemo(() => createPopoverHandle<CalendarItem>(), []);
 
   const sourceEvents = useMemo(
     () => items.map((item) => toEvent(item, today)),
@@ -336,6 +320,72 @@ export function UnifiedCalendar({
     [mealUpdate, expenseUpdate, sourceEvents, taskUpdate],
   );
 
+  const persistEdit = useCallback(
+    async (item: CalendarItem, values: CalendarEditorValues) => {
+      if (!values.date) return;
+      if (item.kind === "meal") {
+        await mealUpdate.mutateAsync({
+          id: item.id,
+          data: {
+            name: values.name.trim() || null,
+            date: values.date,
+            mealType: values.mealType,
+            mealKind: values.mealKind,
+          },
+        });
+        return;
+      }
+      if (item.kind === "task") {
+        await taskUpdate.mutateAsync({
+          id: item.id,
+          data: {
+            name: values.name.trim(),
+            status: values.status,
+            dueDate: values.date,
+            dueEndDate: values.endDate,
+          },
+        });
+        return;
+      }
+      if (item.kind === "expense" && item.future) {
+        await expenseUpdate.mutateAsync({
+          id: item.id,
+          data: {
+            name: values.name.trim(),
+            date: values.date,
+            cost: values.cost,
+          },
+        });
+      }
+    },
+    [expenseUpdate, mealUpdate, taskUpdate],
+  );
+
+  const renderEventRoot = useCallback<
+    EventCalendarRenderEventRoot<CalendarItem>
+  >(
+    ({ occurrence }) => (
+      <PopoverTrigger
+        handle={editorHandle}
+        payload={occurrence.event.data as CalendarItem}
+      />
+    ),
+    [editorHandle],
+  );
+
+  const renderAgendaItem = useCallback(
+    (item: CalendarItem) => (
+      <PopoverTrigger
+        handle={editorHandle}
+        payload={item}
+        className={calendarItemTriggerClassName(item)}
+      >
+        <CalendarItemPresentation item={item} variant="rich" />
+      </PopoverTrigger>
+    ),
+    [editorHandle],
+  );
+
   const [internalDay, setInternalDay] = useState<string>();
   const selectedDay = day ?? internalDay;
   const setSelectedDay = useCallback(
@@ -365,18 +415,10 @@ export function UnifiedCalendar({
     timeZone: HOUSEHOLD_TIMEZONE,
     activation: CALENDAR_ACTIVATION,
     loading: isLoading,
-    renderEvent: CalendarChip,
+    renderEventRoot,
     onEventsChange: setEvents,
     onEventUpdate: persistMove,
     canDropEvent: canDropCalendarEvent,
-    onEventClick: (
-      _occurrence: EventCalendarOccurrence<CalendarItem>,
-      segment: EventCalendarSegment<CalendarItem>,
-      event: ReactMouseEvent,
-    ) => {
-      event.preventDefault();
-      setSelectedDay(formatPlainDate(segment.day));
-    },
     onSlotClick: (slot: { date: Date }) =>
       setSelectedDay(formatPlainDate(slot.date)),
   };
@@ -452,6 +494,7 @@ export function UnifiedCalendar({
             today={today}
             showAllDays={period === "week"}
             onDayClick={setSelectedDay}
+            renderItem={renderAgendaItem}
             emptyMessage={
               <Description>
                 Nothing planned this {period}.{" "}
@@ -475,6 +518,7 @@ export function UnifiedCalendar({
         {period === "month" ? (
           <MonthEventCalendar<CalendarItem>
             {...calendarInteractionProps}
+            renderEvent={CalendarMonthChip}
             className="hidden min-h-[620px] overflow-hidden border md:block"
             onMoreClick={(moreDay) => {
               setSelectedDay(formatPlainDate(moreDay));
@@ -491,6 +535,7 @@ export function UnifiedCalendar({
             />
             <WeekEventCalendar<CalendarItem>
               {...calendarInteractionProps}
+              renderEvent={CalendarWeekCard}
               className="border-0 border-t"
             />
           </div>
@@ -505,7 +550,21 @@ export function UnifiedCalendar({
           if (!open) setSelectedDay(undefined);
         }}
         onCreate={setCreateKind}
+        renderItem={(item) => (
+          <PopoverTrigger
+            handle={editorHandle}
+            payload={item}
+            className={calendarItemTriggerClassName(item)}
+            onClick={() => {
+              requestAnimationFrame(() => setSelectedDay(undefined));
+            }}
+          >
+            <CalendarItemPresentation item={item} variant="rich" />
+          </PopoverTrigger>
+        )}
       />
+
+      <CalendarItemInspector handle={editorHandle} onSave={persistEdit} />
 
       {createKind ? (
         <Suspense fallback={null}>
@@ -526,12 +585,14 @@ function CalendarDaySheet({
   summary,
   onOpenChange,
   onCreate,
+  renderItem,
 }: {
   day?: string;
   items: CalendarItem[];
   summary: CalendarDaySummary;
   onOpenChange: (open: boolean) => void;
   onCreate: (kind: CalendarItemKind) => void;
+  renderItem: (item: CalendarItem) => ReactNode;
 }) {
   return (
     <Sheet open={Boolean(day)} onOpenChange={onOpenChange}>
@@ -592,7 +653,7 @@ function CalendarDaySheet({
 
           <Stack gap="xs">
             {items.map((item) => (
-              <CalendarItemLink key={`${item.kind}:${item.id}`} item={item} />
+              <div key={`${item.kind}:${item.id}`}>{renderItem(item)}</div>
             ))}
           </Stack>
         </Stack>

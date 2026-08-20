@@ -8,10 +8,19 @@ import {
 } from "@cubby/schemas/project";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { productImage, recipeImage } from "~/server/db/schema";
 import { getCalendarRange } from "./calendar";
+import { insertAndReturn } from "./database-helpers";
 import { createExpense } from "./expense";
 import { createMeal } from "./meal";
 import { createProject } from "./project";
+import {
+  createImageFixture,
+  createProductFixture,
+  createRecipeFixture,
+  makeProductInput,
+  makeRecipeInput,
+} from "./repo.fixtures";
 import { createTask } from "./task";
 
 /** A well-formed project shortcode that resolves to no row. */
@@ -31,12 +40,33 @@ describe("calendar repository", () => {
       }),
       ctx.actor,
     );
+    const product = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Cabinet paint tin" }),
+      ctx.actor,
+    );
+    const productCover = await createImageFixture(ctx.db, "cabinet-paint");
+    await insertAndReturn(ctx.db, productImage, {
+      productId: product.entityId,
+      imageId: productCover.id,
+    });
+    const recipe = await createRecipeFixture(
+      ctx.db,
+      makeRecipeInput({ name: "Weeknight tacos" }),
+      ctx.actor,
+    );
+    const recipeCover = await createImageFixture(ctx.db, "weeknight-tacos");
+    await insertAndReturn(ctx.db, recipeImage, {
+      recipeId: recipe.entityId,
+      imageId: recipeCover.id,
+    });
     await createMeal(
       ctx.db,
       mealCreateInput.parse({
         date: "2026-07-10",
         name: "Tacos",
         sortOrder: 2,
+        recipes: [{ recipeId: recipe.id }],
       }),
       ctx.actor,
     );
@@ -46,6 +76,7 @@ describe("calendar repository", () => {
         name: "Paint cabinets",
         trade: "finishes",
         projectId: project.id,
+        subjectProductId: product.id,
         dueDate: "2026-07-10",
         dueEndDate: "2026-07-11",
       }),
@@ -61,6 +92,7 @@ describe("calendar repository", () => {
         cost: 75,
         future: false,
         projectId: project.id,
+        productId: product.id,
       }),
       ctx.actor,
     );
@@ -108,6 +140,23 @@ describe("calendar repository", () => {
     expect(
       result.items.find((item) => item.kind === "expense" && item.future),
     ).toMatchObject({ interaction: "move", cost: 120 });
+    expect(result.items.find((item) => item.kind === "meal")).toMatchObject({
+      name: "Tacos",
+      recipeNames: ["Weeknight tacos"],
+      coverImageUrl: recipeCover.url,
+    });
+    expect(result.items.find((item) => item.kind === "task")).toMatchObject({
+      dueDate: "2026-07-10",
+      dueEndDate: "2026-07-11",
+      subjectProductName: "Cabinet paint tin",
+      coverImageUrl: productCover.url,
+    });
+    expect(
+      result.items.find((item) => item.kind === "expense" && !item.future),
+    ).toMatchObject({
+      productName: "Cabinet paint tin",
+      coverImageUrl: productCover.url,
+    });
     expect(result.days["2026-07-10"]).toMatchObject({
       actualSpend: 75,
       plannedSpend: 120,

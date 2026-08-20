@@ -30,6 +30,7 @@ export {
   getNotionRecipesForDiff,
   getRecipeByID,
   getRecipeByShortcode,
+  getRecipeCoverImageUrlsByShortcodes,
   getRecipesByIDs,
   recipeList,
   updateRecipe,

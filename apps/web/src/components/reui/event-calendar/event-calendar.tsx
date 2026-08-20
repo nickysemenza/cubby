@@ -5,6 +5,7 @@ import { useRender } from "@base-ui/react/use-render";
 import { addDays, type Locale } from "date-fns";
 import {
   createContext,
+  type ReactElement,
   type ReactNode,
   useCallback,
   useContext,
@@ -63,6 +64,15 @@ interface EventCalendarCallbacks<TData> {
   onEventsChange?: (events: CalendarEvent<TData>[]) => void;
   onMoreClick?: (day: Date, segments: EventCalendarOccurrence<TData>[], e: React.MouseEvent) => void | false;
 }
+
+interface EventCalendarRenderEventRootProps<TData> {
+  occurrence: EventCalendarOccurrence<TData>;
+  segment: EventCalendarSegment<TData>;
+}
+
+type EventCalendarRenderEventRoot<TData> = (
+  props: EventCalendarRenderEventRootProps<TData>,
+) => ReactElement;
 
 interface UseEventCalendarStateOptions<TData> extends EventCalendarCallbacks<TData> {
   period: CalendarPeriod;
@@ -231,6 +241,8 @@ interface EventCalendarRootProps<TData = unknown>
     > {
   period: CalendarPeriod;
   renderEvent: (props: EventCalendarRenderEventProps<TData>) => ReactNode;
+  /** Compose the event's one interactive DOM node (for example, as a detached Popover trigger). */
+  renderEventRoot?: EventCalendarRenderEventRoot<TData>;
   onEventsChange: (events: CalendarEvent<TData>[]) => void;
   children: ReactNode;
   slot: "month-event-calendar" | "week-event-calendar";
@@ -249,10 +261,19 @@ type WeekEventCalendarProps<TData = unknown> = Omit<
 const EventCalendarRenderContext = createContext<
   ((props: EventCalendarRenderEventProps<any>) => ReactNode) | null
 >(null);
+const EventCalendarRenderRootContext = createContext<
+  EventCalendarRenderEventRoot<any> | null
+>(null);
 
 function useEventCalendarRenderEvent<TData = unknown>() {
   return useContext(EventCalendarRenderContext) as
     | ((props: EventCalendarRenderEventProps<TData>) => ReactNode)
+    | null;
+}
+
+function useEventCalendarRenderEventRoot<TData = unknown>() {
+  return useContext(EventCalendarRenderRootContext) as
+    | EventCalendarRenderEventRoot<TData>
     | null;
 }
 
@@ -274,6 +295,7 @@ function EventCalendarRoot<TData = unknown>({
   onMoreClick,
   onEventsChange,
   renderEvent,
+  renderEventRoot,
   children,
   ...rest
 }: EventCalendarRootProps<TData>) {
@@ -302,25 +324,27 @@ function EventCalendarRoot<TData = unknown>({
   return (
     <EventCalendarContext.Provider value={instance}>
       <EventCalendarRenderContext.Provider value={renderEvent as any}>
-        <EventCalendarDndProvider>
-          {useRender({
-            defaultTagName: "div",
-            render,
-            props: mergeProps<"div">(
-              {
-                "data-slot": slot,
-                ref: root,
-                className: cn(
-                  "min-w-0 overflow-hidden border text-xs",
-                  period === "month" && "flex min-h-[620px] flex-col",
-                  className,
-                ),
-                children,
-              } as useRender.ComponentProps<"div">,
-              rest as useRender.ComponentProps<"div">,
-            ),
-          })}
-        </EventCalendarDndProvider>
+        <EventCalendarRenderRootContext.Provider value={renderEventRoot as any}>
+          <EventCalendarDndProvider>
+            {useRender({
+              defaultTagName: "div",
+              render,
+              props: mergeProps<"div">(
+                {
+                  "data-slot": slot,
+                  ref: root,
+                  className: cn(
+                    "min-w-0 overflow-hidden border text-xs",
+                    period === "month" && "flex min-h-[620px] flex-col",
+                    className,
+                  ),
+                  children,
+                } as useRender.ComponentProps<"div">,
+                rest as useRender.ComponentProps<"div">,
+              ),
+            })}
+          </EventCalendarDndProvider>
+        </EventCalendarRenderRootContext.Provider>
       </EventCalendarRenderContext.Provider>
     </EventCalendarContext.Provider>
   );
@@ -346,12 +370,17 @@ function WeekEventCalendar<TData = unknown>(
   );
 }
 
-export type { EventCalendarInstance, EventCalendarRenderEventProps };
+export type {
+  EventCalendarInstance,
+  EventCalendarRenderEventProps,
+  EventCalendarRenderEventRoot,
+};
 export {
   MonthEventCalendar,
   useEventCalendar,
   useEventCalendarDay,
   useEventCalendarRenderEvent,
+  useEventCalendarRenderEventRoot,
   useEventCalendarSelector,
   useEventCalendarSettings,
   useEventCalendarWeek,

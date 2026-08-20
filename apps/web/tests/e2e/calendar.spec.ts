@@ -1,4 +1,39 @@
 import { expect, test } from "@playwright/test";
+import { waitForDndMutation } from "./dnd-helpers";
+import { createTask } from "./e2e-helpers";
+
+test("calendar events open an anchored editor, save atomically, and restore focus", async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  const name = `e2e inline calendar task ${stamp}`;
+  const updatedName = `e2e edited calendar task ${stamp}`;
+  await createTask(page, name, { dueDate: "2026-07-14" });
+  await page.goto("/calendar?date=2026-07-01");
+  await page.waitForLoadState("networkidle");
+
+  const event = page.getByRole("button", { name: `${name}, All day` });
+  await event.click();
+  const editor = page.getByRole("dialog", { name });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByLabel("Name")).toHaveValue(name);
+
+  await editor.getByLabel("Name").fill(updatedName);
+  const committed = waitForDndMutation(page, "task.update");
+  await editor.getByRole("button", { name: "Save" }).click();
+  await committed;
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: `${updatedName}, All day` }),
+  ).toBeVisible();
+
+  const updatedEvent = page.getByRole("button", {
+    name: `${updatedName}, All day`,
+  });
+  await updatedEvent.click();
+  await page.keyboard.press("Escape");
+  await expect(updatedEvent).toBeFocused();
+});
 
 test("calendar opens a date drawer and prefills quick creation", async ({
   page,

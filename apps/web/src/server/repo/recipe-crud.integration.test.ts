@@ -19,6 +19,7 @@ import {
   deleteRecipes,
   duplicateRecipe,
   getRecipeByID,
+  getRecipeCoverImageUrlsByShortcodes,
   recipeList,
   updateRecipe,
   upsertCookbookRecipe,
@@ -27,6 +28,7 @@ import {
 } from "./recipe";
 import type { RecipeFilters } from "./recipe/internal-types";
 import {
+  createImageFixture,
   createIngredientFixture as createIngredient,
   createMealFixture as createMeal,
   createProductFixture as createProduct,
@@ -72,6 +74,42 @@ describe("recipe crud repo", () => {
       }),
       ctx.actor,
     );
+
+  it("selects the first live displayable recipe cover", async () => {
+    const illustrated = await createRecipe(
+      ctx.db,
+      makeRecipeInput({ name: "Selective cover" }),
+      ctx.actor,
+    );
+    const document = await createImageFixture(ctx.db, "recipe-manual", {
+      filename: "recipe-manual.pdf",
+      contentType: "application/pdf",
+    });
+    const deleted = await createImageFixture(ctx.db, "deleted-cover", {
+      deletedAt: new Date(),
+    });
+    const cover = await createImageFixture(ctx.db, "live-cover");
+    await insertAndReturn(ctx.db, recipeImage, {
+      recipeId: illustrated.entityId,
+      imageId: document.id,
+      sortOrder: -3,
+    });
+    await insertAndReturn(ctx.db, recipeImage, {
+      recipeId: illustrated.entityId,
+      imageId: deleted.id,
+      sortOrder: -2,
+    });
+    await insertAndReturn(ctx.db, recipeImage, {
+      recipeId: illustrated.entityId,
+      imageId: cover.id,
+      sortOrder: -1,
+    });
+
+    const covers = await getRecipeCoverImageUrlsByShortcodes(ctx.db, [
+      illustrated.id,
+    ]);
+    expect(covers.get(illustrated.id)).toBe(cover.url);
+  });
 
   describe("deleteRecipes", () => {
     it("soft-deletes the recipe and cascades to its sections and ingredients", async () => {
