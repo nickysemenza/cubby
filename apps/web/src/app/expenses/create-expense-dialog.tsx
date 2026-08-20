@@ -117,6 +117,7 @@ export function CreateExpenseDialog({
 
   return (
     <QuickAddDialog
+      entity="expense"
       open={open}
       onOpenChange={onOpenChange}
       schema={quickAddExpenseSchema}

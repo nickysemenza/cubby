@@ -1,4 +1,3 @@
-import { useMutation } from "@tanstack/react-query";
 import pluralize from "pluralize";
 import { useMemo } from "react";
 import { toast } from "sonner";
@@ -7,9 +6,8 @@ import {
   useOperationPreview,
 } from "~/app/_components/impact/operation-impact";
 import type { InventoryDialogItem } from "~/app/_components/inventory/dialog-item";
-import { useInventoryInvalidation } from "~/app/_components/inventory/hooks";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
-import { useTRPC } from "~/integrations/trpc/react";
+import { useEntityCommands } from "~/entities/editing";
 
 interface DeleteInventoryDialogProps {
   open: boolean;
@@ -24,14 +22,7 @@ export function DeleteInventoryDialog({
   items,
   onSuccess,
 }: DeleteInventoryDialogProps) {
-  const api = useTRPC();
-  const invalidateInventory = useInventoryInvalidation();
-
-  const deleteMutation = useMutation(
-    api.inventory.delete.mutationOptions({
-      onSuccess: invalidateInventory,
-    }),
-  );
+  const commands = useEntityCommands("inventory");
 
   // Impact preview — fetched only while the dialog is open, always fresh for
   // the current items. See `useOperationPreview`'s doc comment for the
@@ -53,7 +44,10 @@ export function DeleteInventoryDialog({
     try {
       // One batched delete (the procedure takes an id array) instead of a
       // per-item mutateAsync fan-out.
-      await deleteMutation.mutateAsync({ ids: items.map((item) => item.id) });
+      const result = await commands.remove(items.map((item) => item.id));
+      if (!result.ok) {
+        throw new Error(result.issues[0]?.message ?? "Delete failed");
+      }
 
       toast.success(
         `Successfully deleted ${pluralize("item", items.length, true)}`,
@@ -77,7 +71,7 @@ export function DeleteInventoryDialog({
         `${item.product.name} - ${item.amount.value} ${item.amount.unit}`
       }
       onSubmit={handleDelete}
-      isPending={deleteMutation.isPending}
+      isPending={commands.isPending}
       variant="destructive"
       blocked={preview.data?.canProceed === false}
     >

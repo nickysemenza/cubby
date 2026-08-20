@@ -37,6 +37,7 @@ export function CreateVendorDialog({
 
   return (
     <QuickAddDialog
+      entity="vendor"
       open={open}
       onOpenChange={onOpenChange}
       schema={quickAddVendorSchema}

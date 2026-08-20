@@ -1,7 +1,7 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
+import type { EditableEntity } from "~/entities/editing";
+import { useEntityCommands } from "~/entities/editing";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidateAllQueries, invalidateTRPCQueries } from "~/lib/query-keys";
 
 /**
  * Mutation options from tRPC's .mutationOptions() call.
@@ -12,6 +12,7 @@ import { invalidateAllQueries, invalidateTRPCQueries } from "~/lib/query-keys";
 type TRPCMutationOptions = object;
 
 interface UseEditModeOptions<TResult = unknown> {
+  entity: EditableEntity;
   /** Entity ID — edit mode resets when this changes (e.g., navigating between detail pages). */
   entityId: string;
   mutationOptions: TRPCMutationOptions;
@@ -40,15 +41,22 @@ export interface UseEditModeReturn<TData> {
  * - Error state management
  */
 export function useEditMode<TData, TResult = unknown>({
+  entity,
   entityId,
   mutationOptions,
   onSuccess,
-  useRouterRefresh = true,
-  invalidateKeys,
+  useRouterRefresh: _useRouterRefresh = true,
+  invalidateKeys: _invalidateKeys,
 }: UseEditModeOptions<TResult>): UseEditModeReturn<TData> {
-  const queryClient = useQueryClient();
+  const commands = useEntityCommands(entity);
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | undefined>();
+
+  // Compatibility inputs remain accepted while every detail form moves to an
+  // intent-backed session. Canonical invalidation now comes from the registry.
+  void mutationOptions;
+  void _useRouterRefresh;
+  void _invalidateKeys;
 
   // Reset edit state when navigating between entities of the same type.
   // entityId is intentionally the sole dependency — the effect exists to react to ID changes.
@@ -58,37 +66,37 @@ export function useEditMode<TData, TResult = unknown>({
     setError(undefined);
   }, [entityId]);
 
-  const mutation = useMutation<TResult, unknown, TData>({
-    ...mutationOptions,
-    onSuccess: (result: TResult) => {
-      setIsEditing(false);
+  const handleEdit = useCallback(
+    (data: TData) => {
       setError(undefined);
-      onSuccess?.(result);
-      if (useRouterRefresh) {
-        if (invalidateKeys && invalidateKeys.length > 0) {
-          invalidateTRPCQueries(queryClient, invalidateKeys);
-        } else {
-          // Fall back to invalidating all queries
-          invalidateAllQueries(queryClient);
-        }
-      }
+      const variables = data as {
+        id?: string;
+        data?: object;
+      };
+      void commands
+        .executeOrThrow({
+          entity,
+          operation: "update",
+          intent: "full",
+          id: variables.id ?? entityId,
+          data: variables.data ?? (data as object),
+        })
+        .then(({ result }) => {
+          setIsEditing(false);
+          setError(undefined);
+          onSuccess?.(result as TResult);
+        })
+        .catch((cause: unknown) => {
+          setError(getErrorMessage(cause));
+        });
     },
-    onError: (error: unknown) => {
-      setError(getErrorMessage(error));
-    },
-  });
+    [commands, entity, entityId, onSuccess],
+  );
 
   const startEditing = useCallback(() => {
     setIsEditing(true);
     setError(undefined);
   }, []);
-
-  const handleEdit = useCallback(
-    (data: TData) => {
-      mutation.mutate(data);
-    },
-    [mutation],
-  );
 
   const handleCancel = useCallback(() => {
     setIsEditing(false);
@@ -98,7 +106,7 @@ export function useEditMode<TData, TResult = unknown>({
   return {
     isEditing,
     error,
-    isPending: mutation.isPending,
+    isPending: commands.isPending,
     startEditing,
     handleEdit,
     handleCancel,

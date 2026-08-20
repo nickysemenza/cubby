@@ -37,6 +37,7 @@ export function EnrichIngredientDialog({
   const router = useRouter();
 
   const createProduct = useActionMutation({
+    entity: "product",
     mutationFn: api.product.create.mutationOptions,
     success: (product) =>
       savedWithBackgroundWork(

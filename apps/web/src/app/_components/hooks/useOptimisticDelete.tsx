@@ -11,6 +11,8 @@ import {
 } from "~/app/_components/impact/operation-impact";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { DropdownMenuSeparator } from "~/components/ui/dropdown-menu";
+import type { EditableEntity } from "~/entities/editing";
+import { useEntityCommands } from "~/entities/editing";
 import {
   cancelTRPCQueries,
   invalidateTRPCQueries,
@@ -151,6 +153,14 @@ export function useOptimisticDelete<
   emptyLabel,
 }: UseOptimisticDeleteOptions<TData>): UseOptimisticDeleteReturn<TData> {
   const queryClient = useQueryClient();
+  const registeredDelete =
+    deletable !== undefined &&
+    deletable.entity !== "image" &&
+    deletable.entity !== "cookbook";
+  const commandEntity = (
+    registeredDelete ? deletable.entity : "product"
+  ) as EditableEntity;
+  const commands = useEntityCommands(commandEntity);
   const [deleteTargets, setDeleteTargets] = useState<TData[] | null>(null);
   // Set only while the dialog was opened via the bulk-action toolbar. Lets the
   // dialog resolve `deleteBulkAction.onExecute`'s promise on close/submit so
@@ -164,19 +174,35 @@ export function useOptimisticDelete<
   const deleteMutationOptions = useMemo(() => {
     if (!deletable) return null;
 
-    // Get base mutation options from tRPC
-    const baseMutationOptions = deletable.mutationOptions({
-      onSuccess: () => {
-        toast.success(`${deletable.entityLabel} deleted`);
+    const onSuccess = () => {
+      toast.success(`${deletable.entityLabel} deleted`);
+      if (!registeredDelete) {
         invalidateTRPCQueries(queryClient, deletable.invalidateKeys);
-      },
-      onError: (err) => {
-        toast.error(
-          err.message ||
-            `Failed to delete ${deletable.entityLabel.toLowerCase()}`,
-        );
-      },
-    }) as Record<string, unknown>;
+      }
+    };
+    const onError = (err: { message?: string }) => {
+      toast.error(
+        err.message ||
+          `Failed to delete ${deletable.entityLabel.toLowerCase()}`,
+      );
+    };
+    const baseMutationOptions = registeredDelete
+      ? ({
+          mutationFn: async ({ ids }: { ids: string[] }) =>
+            await commands.executeOrThrow({
+              entity: commandEntity,
+              operation: "delete",
+              intent: "delete",
+              ids,
+              data: {},
+            }),
+          onSuccess,
+          onError,
+        } as Record<string, unknown>)
+      : (deletable.mutationOptions({ onSuccess, onError }) as Record<
+          string,
+          unknown
+        >);
 
     // Extend with optimistic updates
     return {
@@ -228,7 +254,13 @@ export function useOptimisticDelete<
         }
       },
     };
-  }, [deletable, queryClient]);
+  }, [
+    commandEntity,
+    commands.executeOrThrow,
+    deletable,
+    queryClient,
+    registeredDelete,
+  ]);
 
   // Always call useMutation unconditionally (Rules of Hooks).
   // When deletable is not configured, pass a no-op mutation function.

@@ -56,6 +56,7 @@ function CreateProductFromFoodButton({
   const foodName = food.foodInfo.description || "this food";
 
   const createProduct = useActionMutation({
+    entity: "product",
     mutationFn: api.product.create.mutationOptions,
     success: (product) =>
       savedWithBackgroundWork(
@@ -117,6 +118,7 @@ function LinkFoodToIngredientButton({
   };
 
   const createProduct = useActionMutation({
+    entity: "product",
     mutationFn: api.product.create.mutationOptions,
     success: (product) =>
       savedWithBackgroundWork(

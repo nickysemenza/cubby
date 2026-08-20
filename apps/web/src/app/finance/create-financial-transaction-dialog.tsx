@@ -23,6 +23,7 @@ export function CreateFinancialTransactionDialog({
   );
   return (
     <QuickAddDialog
+      entity="financialTransaction"
       open={open}
       onOpenChange={onOpenChange}
       schema={financialTransactionFormSchema}

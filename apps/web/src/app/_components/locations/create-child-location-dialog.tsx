@@ -23,6 +23,7 @@ export const CreateChildLocationDialog: FC<CreateChildLocationDialogProps> = ({
   const api = useTRPC();
 
   const createMutation = useActionMutation({
+    entity: "location",
     mutationFn: api.location.create.mutationOptions,
     success: (newLocation) =>
       savedWithBackgroundWork(

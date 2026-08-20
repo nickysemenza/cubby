@@ -62,6 +62,7 @@ export function CreateMealDialog({
 
   return (
     <QuickAddDialog
+      entity="meal"
       open={open}
       onOpenChange={onOpenChange}
       schema={quickAddMealSchema}

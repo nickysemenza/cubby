@@ -97,6 +97,9 @@ export function ReviewQueue({
   }, [idx, queue, ensureProposals, pass.settled]);
 
   const markNoUsdaMut = useActionMutation({
+    entity: "product",
+    operation: "update",
+    intent: "full",
     mutationFn: api.product.update.mutationOptions,
     success: "Marked: no USDA entry.",
     invalidateKeys: ingredientProductMutationInvalidateKeys,

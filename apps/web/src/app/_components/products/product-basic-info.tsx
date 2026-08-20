@@ -49,6 +49,9 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
 
   // Mutation for inline editing (price, category, etc.)
   const updateProductMutation = useActionMutation({
+    entity: "product",
+    operation: "update",
+    intent: "full",
     mutationFn: api.product.update.mutationOptions,
     // Surface the eager recompute (dependent recipes / inventory valuations).
     success: (data) => savedWithBackgroundWork(data.sideEffects),

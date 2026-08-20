@@ -131,6 +131,7 @@ export function IngredientPreviewTable({
   const [showRaw, setShowRaw] = useState(false);
 
   const createIngredient = useActionMutation({
+    entity: "ingredient",
     mutationFn: api.ingredient.create.mutationOptions,
     success: "Ingredient added.",
     invalidateKeys: [queryKeys.ingredient.getByName],

@@ -4,12 +4,15 @@ import type { QueryKey } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Trash } from "lucide-react";
 import { type ReactElement, useCallback, useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   OperationImpact,
   useOperationPreview,
 } from "~/app/_components/impact/operation-impact";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Button } from "~/components/ui/button";
+import type { EditableEntity } from "~/entities/editing";
+import { useEntityCommands } from "~/entities/editing";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { type MutationOptionsFn, useActionMutation } from "./useActionMutation";
@@ -73,6 +76,13 @@ export function useEntityDelete({
 }: UseEntityDeleteOptions): UseEntityDeleteReturn {
   const navigate = useNavigate();
   const [showDialog, setShowDialog] = useState(false);
+  const registeredDelete = entity !== "image" && entity !== "cookbook";
+  // Image/cookbook have non-standard lifecycle contracts and keep their
+  // specialized path; every standard entity dispatches through the registry.
+  const commandEntity = (
+    registeredDelete ? entity : "product"
+  ) as EditableEntity;
+  const commands = useEntityCommands(commandEntity);
 
   // Impact preview — fetched only while the dialog is open, always fresh for
   // this id. See `useOperationPreview`'s doc comment for the gating rule.
@@ -88,7 +98,7 @@ export function useEntityDelete({
   // the same tRPC `*.delete.mutationOptions` factory shape every call site
   // passes — invalidation, background-batch re-invalidation, and the error
   // toast all now come from `useActionMutation` itself.
-  const deleteMutation = useActionMutation({
+  const legacyDeleteMutation = useActionMutation({
     mutationFn: mutationOptions as unknown as MutationOptionsFn,
     invalidateKeys,
     success: (data) =>
@@ -137,10 +147,33 @@ export function useEntityDelete({
         }
         renderItem={(item) => item.name}
         onSubmit={async () => {
-          await deleteMutation.mutateAsync({ ids: [id] });
+          if (registeredDelete) {
+            const execution = await commands.executeOrThrow({
+              entity: commandEntity,
+              operation: "delete",
+              intent: "delete",
+              ids: [id],
+              data: {},
+            });
+            toast.success(
+              savedWithBackgroundWork(
+                (
+                  execution.result as {
+                    sideEffects?: MutationSideEffects;
+                  }
+                ).sideEffects ?? emptySideEffects,
+                `${entityLabel} deleted`,
+              ),
+            );
+            void navigate({ to: redirectTo });
+          } else {
+            await legacyDeleteMutation.mutateAsync({ ids: [id] });
+          }
           setShowDialog(false);
         }}
-        isPending={deleteMutation.isPending}
+        isPending={
+          registeredDelete ? commands.isPending : legacyDeleteMutation.isPending
+        }
         blocked={preview.data?.canProceed === false}
       >
         <OperationImpact
@@ -159,8 +192,14 @@ export function useEntityDelete({
       name,
       entityLabel,
       description,
-      deleteMutation.isPending,
-      deleteMutation.mutateAsync,
+      registeredDelete,
+      commands.executeOrThrow,
+      commands.isPending,
+      commandEntity,
+      legacyDeleteMutation.isPending,
+      legacyDeleteMutation.mutateAsync,
+      navigate,
+      redirectTo,
       preview.data,
       preview.isLoading,
       preview.isError,
@@ -172,6 +211,8 @@ export function useEntityDelete({
     openDeleteDialog,
     deleteButton,
     deleteDialog,
-    isPending: deleteMutation.isPending,
+    isPending: registeredDelete
+      ? commands.isPending
+      : legacyDeleteMutation.isPending,
   };
 }

@@ -22,6 +22,7 @@ import type { CubbyRow as Row } from "../data-table/table-features";
 
 const mocks = vi.hoisted(() => ({
   previewQueryFn: vi.fn(),
+  commandMutation: vi.fn(),
 }));
 
 vi.mock("~/integrations/trpc/react", () => ({
@@ -36,6 +37,11 @@ vi.mock("~/integrations/trpc/react", () => ({
           queryKey: ["entityIntegrity.previewOperation", input],
           queryFn: () => mocks.previewQueryFn(input),
         }),
+      },
+    },
+    product: {
+      delete: {
+        mutationOptions: () => ({ mutationFn: mocks.commandMutation }),
       },
     },
   }),
@@ -111,6 +117,7 @@ function createWrapper() {
 afterEach(() => {
   for (const client of clients.splice(0)) client.clear();
   mocks.previewQueryFn.mockReset();
+  mocks.commandMutation.mockReset();
 });
 
 // biome-ignore lint/suspicious/noExplicitAny: reading props off a memoized dialog element for assertions
@@ -231,6 +238,7 @@ describe("useOptimisticDelete", () => {
     // merely opens.
     mocks.previewQueryFn.mockResolvedValue(basePreview());
     const mutationFn = vi.fn().mockResolvedValue({});
+    mocks.commandMutation.mockResolvedValue({});
     const { result } = renderHook(
       () =>
         useOptimisticDelete<TestRow>({
@@ -258,10 +266,9 @@ describe("useOptimisticDelete", () => {
       await dialog.props.onSubmit();
     });
 
-    expect(mutationFn).toHaveBeenCalledWith(
-      { ids: ["PRD-2222", "PRD-3333"] },
-      expect.anything(),
-    );
+    expect(mocks.commandMutation).toHaveBeenCalledWith({
+      ids: ["PRD-2222", "PRD-3333"],
+    });
     await waitFor(() => expect(bulkResult).toEqual({ success: true }));
   });
 
