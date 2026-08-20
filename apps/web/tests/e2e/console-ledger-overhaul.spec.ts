@@ -6,6 +6,16 @@ test("workspace shell responds from phone navigation through desktop sidebar", a
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
+  const skipLink = page.getByRole("link", { name: "Skip to main content" });
+  const hiddenSkipLinkBox = await skipLink.boundingBox();
+  expect(hiddenSkipLinkBox).not.toBeNull();
+  if (!hiddenSkipLinkBox) throw new Error("Skip link has no bounding box");
+  expect(hiddenSkipLinkBox.y + hiddenSkipLinkBox.height).toBeLessThanOrEqual(0);
+  await page.keyboard.press("Tab");
+  await expect(skipLink).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("main")).toBeFocused();
+
   const sidebar = page.getByRole("complementary", {
     name: "Workspace navigation",
   });

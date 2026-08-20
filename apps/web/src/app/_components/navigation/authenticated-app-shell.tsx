@@ -48,6 +48,7 @@ const WorkspaceNavigator = lazy(() =>
 
 type AuthenticatedAppShellProps = {
   children: ReactNode;
+  mainContentId: string;
   navigationProgress: ReactNode;
   onSearchClick: () => void;
 };
@@ -59,6 +60,7 @@ type AuthenticatedAppShellProps = {
  */
 export function AuthenticatedAppShell({
   children,
+  mainContentId,
   navigationProgress,
   onSearchClick,
 }: AuthenticatedAppShellProps) {
@@ -70,7 +72,7 @@ export function AuthenticatedAppShell({
   const viewportSurface = useLocation().pathname === "/pantry-view";
 
   return (
-    <div className="min-h-dvh bg-background [--app-chrome-bottom:calc(3.5rem+3px+env(safe-area-inset-bottom))] [--app-chrome-top:calc(3rem+3px)] md:flex md:[--app-chrome-bottom:0rem] md:[--app-chrome-top:3rem]">
+    <div className="min-h-dvh bg-background [--app-chrome-bottom:calc(3.5rem+3px+env(safe-area-inset-bottom))] [--app-chrome-top:calc(3rem+3px+env(safe-area-inset-top))] md:flex md:[--app-chrome-bottom:0rem] md:[--app-chrome-top:3rem]">
       <WorkspaceSidebar
         expanded={expanded}
         onToggle={() => setCollapsed((value) => !value)}
@@ -78,7 +80,7 @@ export function AuthenticatedAppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Phone PWA keeps the familiar masthead; its bottom bar stays mounted
             by the root route and remains the primary phone navigation. */}
-        <div className="sticky top-0 z-40 border-b-[3px] border-b-foreground bg-card md:hidden print:hidden">
+        <div className="safe-top sticky top-0 z-40 border-b-[3px] border-b-foreground bg-card md:hidden print:hidden">
           <div className="flex h-12 w-full items-center px-2">
             <MainNav onSearchClick={onSearchClick} />
           </div>
@@ -93,6 +95,8 @@ export function AuthenticatedAppShell({
             for the phone's fixed bottom nav, which would otherwise cover the
             last rows. */}
         <main
+          id={mainContentId}
+          tabIndex={-1}
           className={cn(
             "min-w-0 flex-1",
             viewportSurface ? "overflow-hidden" : "pb-20 md:pb-0",

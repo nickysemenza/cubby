@@ -134,7 +134,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
   // it — render a slim meta band instead of an empty hero block.
   if (!hasImage) {
     return (
-      <div className="page-header-accent rounded-xl bg-muted/60 px-6 py-4 ring-1 ring-foreground/10">
+      <div className="page-header-accent border border-[var(--border)] bg-muted/60 px-6 py-4">
         {metaInfo}
       </div>
     );
@@ -144,7 +144,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
   // title lives in the page header, so the photo doesn't repeat it as an
   // overlay — the caption names the figure instead.
   return (
-    <figure className="my-0 rounded-lg border border-[var(--border)] bg-card p-2">
+    <figure className="my-0 border border-[var(--border)] bg-card p-2">
       <Image
         src={heroImage.url}
         alt={recipe.name}
