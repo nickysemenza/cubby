@@ -1,5 +1,9 @@
 import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
-import { unsafeInventoryId, unsafeProductId } from "@cubby/schemas/identifiers";
+import {
+  unsafeInventoryId,
+  unsafeProductId,
+  unsafeProjectId,
+} from "@cubby/schemas/identifiers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "~/server/db";
 import {
@@ -216,6 +220,39 @@ describe("runMutationSideEffectsForEntities batching", () => {
       ].sort(),
     );
     expect(dispatchProblemCountsRefreshMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not reject a mutation when the Problem-count refresh cannot enqueue", async () => {
+    const { runMutationSideEffects } = await import("./mutation-side-effects");
+    const enqueueError = new Error("BackgroundJobKind is missing");
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    dispatchBackgroundJobsMock.mockResolvedValue({
+      batchId: "batch-1",
+      jobIds: ["job-1"],
+      batch: fakeBatchRef({ totalJobs: 1 }),
+    });
+    dispatchProblemCountsRefreshMock.mockRejectedValue(enqueueError);
+
+    await expect(
+      runMutationSideEffects(db, {
+        action: "updated",
+        entity: {
+          entityType: "project",
+          entityId: unsafeProjectId("00000000-0000-4000-8000-000000000006"),
+        },
+        source: "project.update",
+      }),
+    ).resolves.toEqual([fakeBatchRef({ totalJobs: 1 })]);
+    expect(consoleError).toHaveBeenCalledWith(
+      "problems.counts.refresh.enqueue.failed",
+      expect.objectContaining({
+        source: "project.update",
+        error: enqueueError,
+      }),
+    );
+    consoleError.mockRestore();
   });
 });
 
