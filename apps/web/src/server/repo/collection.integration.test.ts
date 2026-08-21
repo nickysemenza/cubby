@@ -1,6 +1,6 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { getCollectionMatrix } from "./collection";
+import { getCollectionDetail, getCollectionMatrix } from "./collection";
 import { updateProduct } from "./product";
 import {
   createImageFixture,
@@ -82,12 +82,13 @@ describe("Collection assignment matrix", () => {
       "Matrix Beta",
     ]);
 
-    await createLocationFixture(
+    const productBackedLocation = await createLocationFixture(
       ctx.db,
       makeLocationInput({
         name: "Matrix Product-backed Location",
         type: null,
         productId: direct.id,
+        tags: ["collection:painting"],
       }),
       ctx.actor,
     );
@@ -101,5 +102,18 @@ describe("Collection assignment matrix", () => {
       { pageIndex: 0, pageSize: 500 },
     );
     expect(locations.rows[0]?.imageUrl).toBe(cover.url);
+
+    const detail = await getCollectionDetail(ctx.db, "painting", undefined, {
+      pageIndex: 0,
+      pageSize: 50,
+    });
+    expect(detail?.roots[0]).toMatchObject({
+      id: productBackedLocation.id,
+      imageUrl: cover.url,
+    });
+    expect(detail?.products[0]).toMatchObject({
+      id: direct.id,
+      imageUrl: cover.url,
+    });
   });
 });

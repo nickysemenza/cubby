@@ -26,6 +26,7 @@ export const collectionLocationOut = z.object({
   id: locationShortcode,
   name: z.string(),
   path: z.array(z.string()),
+  imageUrl: z.string().nullable(),
 });
 
 export const collectionProductPlacementOut = z.object({
@@ -38,6 +39,7 @@ export const collectionProductOut = z.object({
   id: productShortcode,
   name: z.string(),
   manufacturer: z.string(),
+  imageUrl: z.string().nullable(),
   direct: z.boolean(),
   inherited: z.boolean(),
   placements: z.array(collectionProductPlacementOut),

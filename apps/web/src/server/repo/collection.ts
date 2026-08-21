@@ -182,42 +182,57 @@ export const getCollectionDetail = async (
     );
   });
   const start = pagination.pageIndex * pagination.pageSize;
+  const roots = graph.locations.filter((item) =>
+    directCollectionMembership(item.tags).has(slug),
+  );
+  const productPage = matchingProducts.slice(
+    start,
+    start + pagination.pageSize,
+  );
+  const [rootCoverImageUrls, productCoverImageUrls] = await Promise.all([
+    getLocationCoverImageUrlsByLocationIds(
+      db,
+      roots.map((item) => item.id),
+    ),
+    getProductCoverImageUrlsByProductIds(
+      db,
+      productPage.map((item) => item.id),
+    ),
+  ]);
 
   return {
     collection: summarizeCollection(graph, slug),
-    roots: graph.locations
-      .filter((item) => directCollectionMembership(item.tags).has(slug))
-      .map((item) => ({
-        id: unsafeLocationShortcode(item.shortcode),
-        name: item.name,
-        path: locationPath(item, graph.locationsById),
-      })),
+    roots: roots.map((item) => ({
+      id: unsafeLocationShortcode(item.shortcode),
+      name: item.name,
+      path: locationPath(item, graph.locationsById),
+      imageUrl: rootCoverImageUrls.get(item.id) ?? null,
+    })),
     totalCount: matchingProducts.length,
-    products: matchingProducts
-      .slice(start, start + pagination.pageSize)
-      .map((item) => {
-        const placements = new Map<string, GraphLocation>();
-        for (const entry of graph.inventory) {
-          if (entry.productId !== item.id) continue;
-          const loc = graph.locationsById.get(entry.locationId);
-          if (loc) placements.set(loc.id, loc);
-        }
-        for (const loc of graph.locations) {
-          if (loc.productId === item.id) placements.set(loc.id, loc);
-        }
-        return {
-          id: unsafeProductShortcode(item.shortcode),
-          name: item.name,
-          manufacturer: item.manufacturer,
-          direct: directCollectionMembership(item.tags).has(slug),
-          inherited: graph.productInherited.get(item.id)?.has(slug) ?? false,
-          placements: [...placements.values()].map((loc) => ({
-            id: unsafeLocationShortcode(loc.shortcode),
-            name: loc.name,
-            path: locationPath(loc, graph.locationsById),
-          })),
-        };
-      }),
+    products: productPage.map((item) => {
+      const placements = new Map<string, GraphLocation>();
+      for (const entry of graph.inventory) {
+        if (entry.productId !== item.id) continue;
+        const loc = graph.locationsById.get(entry.locationId);
+        if (loc) placements.set(loc.id, loc);
+      }
+      for (const loc of graph.locations) {
+        if (loc.productId === item.id) placements.set(loc.id, loc);
+      }
+      return {
+        id: unsafeProductShortcode(item.shortcode),
+        name: item.name,
+        manufacturer: item.manufacturer,
+        imageUrl: productCoverImageUrls.get(item.id) ?? null,
+        direct: directCollectionMembership(item.tags).has(slug),
+        inherited: graph.productInherited.get(item.id)?.has(slug) ?? false,
+        placements: [...placements.values()].map((loc) => ({
+          id: unsafeLocationShortcode(loc.shortcode),
+          name: loc.name,
+          path: locationPath(loc, graph.locationsById),
+        })),
+      };
+    }),
   };
 };
 
