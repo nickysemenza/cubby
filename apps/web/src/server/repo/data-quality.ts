@@ -345,7 +345,13 @@ const purchaseGapRaw = (check: PurchaseDataCheck): string => {
         AND dq_unpriced."cost" IS NULL AND dq_unpriced."deletedAt" IS NULL)`;
     const refundAdjusted = `(${fullyPriced} AND ${deltaCents} < ${-tolerance}
       AND ${refundCents} = ${deltaCents})`;
+    // Mirrors the zero-expense guard in `reconcilePurchase`: a purchase with no
+    // lines is `empty_expenses`, not a mismatch. Without this the `dataGap=`
+    // filter disagreed with the hydrated object it filters.
+    const hasExpenses = `EXISTS (SELECT 1 FROM "Expense" dq_any
+      WHERE dq_any."purchaseId" = "Purchase"."id" AND dq_any."deletedAt" IS NULL)`;
     return `("Purchase"."statedTotal" IS NOT NULL
+      AND ${hasExpenses}
       AND abs(${deltaCents}) > ${tolerance}
       AND NOT ${refundAdjusted}
       AND ${exceptionAbsent})`;
@@ -832,6 +838,7 @@ export const loadPurchaseDataQualities = async (
       reconcilePurchase({
         statedTotal: row.statedTotal,
         expenseTotal,
+        expenseCount: purchaseExpenses.length,
         unpricedExpenseCount: unpriced,
         postedRefundTotal: postedRefundByPurchase.get(row.id) ?? 0,
       }) === "mismatch"

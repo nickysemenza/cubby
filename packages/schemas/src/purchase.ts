@@ -316,6 +316,7 @@ export const RECONCILIATION_TOLERANCE = 0.01;
 export const reconcilePurchase = (p: {
   statedTotal: number | null;
   expenseTotal: number;
+  expenseCount?: number;
   unpricedExpenseCount?: number;
   postedRefundTotal?: number;
   financialReconciliation?: { postedRefundTotal: number };
@@ -325,6 +326,15 @@ export const reconcilePurchase = (p: {
   const deltaInCents =
     Math.round(p.expenseTotal * 100) - Math.round(p.statedTotal * 100);
   if (Math.abs(deltaInCents) <= toleranceInCents) return "match";
+
+  // A purchase with no expense lines at all has nothing to reconcile: the whole
+  // stated total reads as a gap, so `mismatch` fired on every freshly created
+  // Purchase and — being the only `defect`-kind purchase check — made it report
+  // `dataQuality.status: "defect"` before anyone had a chance to book a line.
+  // `empty_expenses` already describes that state, and describes it correctly.
+  // Callers that cannot count expenses omit `expenseCount` and keep the old
+  // behaviour.
+  if (p.expenseCount === 0) return "unknown";
 
   const postedRefundInCents = Math.round(
     (p.postedRefundTotal ?? p.financialReconciliation?.postedRefundTotal ?? 0) *

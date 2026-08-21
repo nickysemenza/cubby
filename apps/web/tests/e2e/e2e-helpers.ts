@@ -97,6 +97,33 @@ function cellEditorInput(page: Page): Locator {
 }
 
 /**
+ * Open a LIST table's inline cell editor, and keep it open.
+ *
+ * In cell-selection mode the editor opens on double-click — but the mode itself
+ * is `!isMobile && !isTransitioning` (`Table.tsx`), and `isTransitioning` is
+ * react-query's `isPlaceholderData`. So while a background refetch is in flight
+ * the table is temporarily in click-to-edit mode, and when the refetch lands the
+ * context flips, the whole tree re-renders, and an editor opened inside that
+ * window is torn down before it can be filled. The failure looks like the editor
+ * never opened at all: `[data-slot="cell-editor-overlay"] input` simply never
+ * appears.
+ *
+ * Retried rather than asserted once, because the tear-down is transient — the
+ * next attempt runs against a settled table. Detail pages don't need this: they
+ * are never in cell-selection mode, so a single click opens the editor and no
+ * refetch can change the gesture out from under it.
+ *
+ * The tear-down is also a real user-facing bug (start editing, a refetch lands,
+ * the editor vanishes); this only stops it from making the suite flaky.
+ */
+export async function openCellEditor(page: Page, trigger: Locator) {
+  await expect(async () => {
+    await trigger.dblclick();
+    await expect(cellEditorInput(page)).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
+}
+
+/**
  * Fill the open inline cell editor and commit with Enter.
  *
  * The caller opens the editor first (clicking "Edit value"). `.fill()` focuses

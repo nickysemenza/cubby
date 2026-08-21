@@ -242,6 +242,48 @@ describe("computed purchase and product data quality", () => {
     expect(purchases.data.map((item) => item.id)).toEqual([seeded.output.id]);
   });
 
+  it("reports a brand-new purchase as empty, not as a paperwork mismatch", async () => {
+    // `seedPurchase` states $25 and books nothing, which is every purchase the
+    // moment it is created. Before the zero-expense guard the whole stated
+    // total read as an unexplained gap, so `paperwork_mismatch` — the only
+    // defect-kind purchase check — fired on creation and made the purchase
+    // report `status: "defect"` with no line yet booked.
+    const seeded = await seedPurchase("Brand New Supply");
+
+    const quality = (
+      await loadPurchaseDataQualities(ctx.db, [seeded.entityId])
+    ).get(seeded.entityId)!;
+    const checks = quality.gaps.map((gap) => gap.check);
+    expect(checks).toContain("empty_expenses");
+    expect(checks).not.toContain("paperwork_mismatch");
+    expect(quality.status).not.toBe("defect");
+
+    // The `dataGap=` filter is a hand-written SQL twin of the in-memory check;
+    // asserting it separately is what keeps the two from drifting apart.
+    expect(
+      (
+        await purchaseList(ctx.db, { dataGap: "paperwork_mismatch" }, [], page)
+      ).data.map((purchase) => purchase.id),
+    ).not.toContain(seeded.output.id);
+
+    // Booking one disagreeing line makes it a real mismatch on both paths.
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({ purchaseId: seeded.output.id, cost: 20 }),
+      ctx.actor,
+    );
+    expect(
+      (await loadPurchaseDataQualities(ctx.db, [seeded.entityId]))
+        .get(seeded.entityId)!
+        .gaps.map((gap) => gap.check),
+    ).toContain("paperwork_mismatch");
+    expect(
+      (
+        await purchaseList(ctx.db, { dataGap: "paperwork_mismatch" }, [], page)
+      ).data.map((purchase) => purchase.id),
+    ).toContain(seeded.output.id);
+  });
+
   it("does not flag a stated-total difference explained by posted refunds", async () => {
     const seeded = await seedPurchase("Refund Quality Supply");
     await createExpense(

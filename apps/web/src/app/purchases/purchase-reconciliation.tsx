@@ -24,7 +24,9 @@ const STATUS_PRESENTATION: Record<
   PurchaseReconciliation,
   { label: string; variant: BadgeVariant }
 > = {
-  unknown: { label: "No stated total", variant: "slate" },
+  // Covers both reconcilePurchase "unknown" cases: no stated total to compare
+  // against, and no Expense lines to compare with.
+  unknown: { label: "Nothing to reconcile", variant: "slate" },
   match: { label: "Reconciles", variant: "positive" },
   refund_adjusted: { label: "Refund-adjusted", variant: "slate" },
   mismatch: { label: "Needs review", variant: "warning" },
@@ -33,6 +35,7 @@ const STATUS_PRESENTATION: Record<
 type ReconciliationPurchase = {
   statedTotal: number | null;
   expenseTotal: number;
+  expenseCount?: number;
   unpricedExpenseCount: number;
   reconciliation?: PurchaseReconciliation;
   postedRefundTotal?: number;

@@ -6,7 +6,9 @@ import {
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { buildTakeSkip } from "@cubby/schemas/pagination";
 import type {
+  FindStatementRowDriftInput,
   RecordStatementRowsInput,
+  StatementRowDriftCandidate,
   StatementRowFilters,
   StatementRowOut,
   StatementRowSelector,
@@ -16,7 +18,7 @@ import {
   statementImportOut,
   statementRowOut,
 } from "@cubby/schemas/statement-row";
-import { and, asc, desc, eq, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   financialAccount,
@@ -340,7 +342,8 @@ const storedRowCount = async (
  * `externalId` so a client cannot mint an identity that disagrees with the one
  * `sourceRefs` matching depends on.
  *
- * Idempotent — re-submitting an export inserts nothing.
+ * Idempotent — re-submitting an export inserts nothing. Pass `dryRun` to learn
+ * what a real call would do without creating the batch or the rows.
  */
 export async function recordStatementRows(
   db: Database,
@@ -364,6 +367,33 @@ export async function recordStatementRows(
     })),
   );
 
+  // Two provider rows that hash identically are indistinguishable, so only the
+  // first can ever be stored. Counted here rather than inferred from the insert
+  // count, which cannot tell this apart from "already recorded".
+  const idCounts = new Map<string, number>();
+  for (const row of rows)
+    idCounts.set(row.externalId, (idCounts.get(row.externalId) ?? 0) + 1);
+  const indistinguishableDuplicates = rows.length - idCounts.size;
+  const rowsOmitted =
+    input.import.rowCountDeclared === null
+      ? null
+      : input.import.rowCountDeclared - rows.length;
+
+  // Advisory only. An un-normalized Copilot or Apple Card export is almost
+  // entirely positive here, and every one of its rows will have hashed to a
+  // fresh identity that can never match. Warning after the write is still
+  // worth it: it surfaces the mistake at 500 rows instead of 15,000 — and a
+  // `dryRun` surfaces it before any of them.
+  const positive = rows.filter((row) => row.providerAmount > 0).length;
+  const signWarning =
+    rows.length >= 20 && positive / rows.length > 0.9
+      ? `${positive} of ${rows.length} rows have a positive providerAmount. ` +
+        "Charges must be submitted negative — if this export signs them " +
+        "positive (Copilot, Apple Card), the rows just recorded carry " +
+        "identities that can never match a transaction. Legitimate if this " +
+        "batch really is income or refunds."
+      : null;
+
   return withTransaction(db, async (tx) => {
     const [existingBatch] = await unwrapDb(tx)
       .select({ id: statementImport.id })
@@ -376,6 +406,48 @@ export async function recordStatementRows(
         ),
       )
       .limit(1);
+
+    // Which of these identities the ledger already holds, and under whose
+    // batch. `ON CONFLICT DO NOTHING` answers neither question — it reports a
+    // count of rows that landed, and the three ways a row can fail to land
+    // have three different remedies.
+    const distinctIds = [...idCounts.keys()];
+    const stored = await unwrapDb(tx)
+      .select({
+        externalId: statementRow.externalId,
+        batchId: statementRow.batchId,
+      })
+      .from(statementRow)
+      .where(
+        and(
+          eq(statementRow.source, source),
+          inArray(statementRow.externalId, distinctIds),
+          notDeleted(statementRow),
+        ),
+      );
+    const alreadyInThisBatch = stored.filter(
+      (row) => row.batchId === existingBatch?.id,
+    ).length;
+    const alreadyInAnotherBatch = stored.length - alreadyInThisBatch;
+    const novel = distinctIds.length - stored.length;
+
+    if (input.dryRun) {
+      return {
+        batchId: existingBatch?.id ?? null,
+        batchCreated: false,
+        dryRun: true,
+        inserted: novel,
+        unchanged: rows.length - novel,
+        alreadyInThisBatch,
+        alreadyInAnotherBatch,
+        indistinguishableDuplicates,
+        rowsOmitted,
+        rowCountStored: existingBatch
+          ? await storedRowCount(tx, existingBatch.id)
+          : 0,
+        signWarning,
+      };
+    }
 
     const batchId =
       existingBatch?.id ??
@@ -411,28 +483,162 @@ export async function recordStatementRows(
       })
       .returning({ id: statementRow.id });
 
-    // Advisory only. An un-normalized Copilot or Apple Card export is almost
-    // entirely positive here, and every one of its rows will have hashed to a
-    // fresh identity that can never match. Warning after the write is still
-    // worth it: it surfaces the mistake at 500 rows instead of 15,000.
-    const positive = rows.filter((row) => row.providerAmount > 0).length;
-    const mostlyPositive = rows.length >= 20 && positive / rows.length > 0.9;
-
     return {
       batchId,
       batchCreated: !existingBatch,
+      dryRun: false,
       inserted: inserted.length,
       unchanged: rows.length - inserted.length,
+      alreadyInThisBatch,
+      alreadyInAnotherBatch,
+      indistinguishableDuplicates,
+      rowsOmitted,
       rowCountStored: before + inserted.length,
-      signWarning: mostlyPositive
-        ? `${positive} of ${rows.length} rows have a positive providerAmount. ` +
-          "Charges must be submitted negative — if this export signs them " +
-          "positive (Copilot, Apple Card), the rows just recorded carry " +
-          "identities that can never match a transaction. Legitimate if this " +
-          "batch really is income or refunds."
-        : null,
+      signWarning,
     };
   });
+}
+
+/**
+ * Find charges recorded twice under two identities.
+ *
+ * The identity hash covers `rawDescription`, so a charge re-exported after its
+ * descriptor firms up — `AMAZON MKTPLACE PMTS` → `AMAZON MKTPL*XD8AR9RG3`,
+ * `THE HOME DEPOT #1092` → `THE HOME DEPOT #1092 800-466-3337 CA` — hashes to
+ * a SECOND identity for money already recorded. 9 of 188 rows in the
+ * 2026-08-19 Monarch export were this shape, found by hand-writing this
+ * self-join.
+ *
+ * Detection, not prevention: the hash is stored externally in
+ * `FinancialTransaction.sourceRefs` with no back-reference, so changing what it
+ * covers would orphan every ref (`statement-row-identity.ts` says so at
+ * length). Reporting, not repair: `(accountDescriptor, statementDate,
+ * providerAmount)` also matches genuine same-day same-amount pairs, so a
+ * candidate is a question. The remedy stays the explicit, per-row
+ * `supersededByExternalId` write.
+ *
+ * Rows already superseded drop out, so the list shrinks as it is worked.
+ */
+export async function findStatementRowDrift(
+  db: Database,
+  input: FindStatementRowDriftInput,
+) {
+  const conditions: SQL[] = [
+    notDeleted(statementRow),
+    // An already-linked predecessor is a settled question. Only the predecessor
+    // carries the link, so a resolved pair leaves one live row in its group and
+    // the `count(*) > 1` gate drops it.
+    sql`${statementRow.supersededByRowId} IS NULL`,
+  ];
+  if (input.source) conditions.push(eq(statementRow.source, input.source));
+  if (input.dateFrom)
+    conditions.push(sql`${statementRow.statementDate} >= ${input.dateFrom}`);
+  if (input.dateTo)
+    conditions.push(sql`${statementRow.statementDate} <= ${input.dateTo}`);
+  if (input.importFingerprint)
+    conditions.push(
+      sql`${statementRow.batchId} = (
+        SELECT si.id FROM "StatementImport" si
+        WHERE si.fingerprint = ${input.importFingerprint}
+          AND si.source = "StatementRow"."source" AND si."deletedAt" IS NULL
+      )`,
+    );
+  const where = and(...conditions)!;
+  // A single export speaks one descriptor vocabulary, so two of its own rows
+  // differing only in description are two real charges. Gated in the HAVING
+  // rather than filtered after, so `limit` counts findings and not noise.
+  const sameBatchGate = input.includeSameBatch
+    ? sql``
+    : sql`AND count(DISTINCT "batchId") > 1`;
+
+  // One extra group so `truncated` reports the cut rather than implying the
+  // sweep came back clean.
+  const probe = input.limit + 1;
+  const { rows } = await unwrapDb(db).execute<{
+    source: string;
+    accountDescriptor: string;
+    statementDate: unknown;
+    providerAmount: unknown;
+    crossBatch: boolean;
+    externalId: string;
+    rawDescription: string;
+    merchant: string | null;
+    providerStatus: string | null;
+    disposition: string;
+    importFingerprint: string;
+    createdAt: unknown;
+  }>(sql`
+    WITH drifted AS (
+      SELECT "source", "accountDescriptor", "statementDate", "providerAmount",
+             min("createdAt") AS "firstSeen",
+             count(DISTINCT "batchId") > 1 AS "crossBatch"
+      FROM "StatementRow"
+      WHERE ${where}
+      GROUP BY "source", "accountDescriptor", "statementDate", "providerAmount"
+      -- No count(DISTINCT "externalId") gate: the partial unique on
+      -- (source, externalId) already makes two live rows two identities.
+      HAVING count(*) > 1 ${sameBatchGate}
+      -- Cross-batch first: those are the drift, and a bounded sweep must not
+      -- spend its limit on coincidences.
+      ORDER BY count(DISTINCT "batchId") > 1 DESC, "firstSeen" DESC
+      LIMIT ${probe}
+    )
+    SELECT "StatementRow"."source",
+           "StatementRow"."accountDescriptor",
+           "StatementRow"."statementDate",
+           "StatementRow"."providerAmount",
+           d."crossBatch",
+           "StatementRow"."externalId",
+           "StatementRow"."rawDescription",
+           "StatementRow"."merchant",
+           "StatementRow"."providerStatus",
+           "StatementRow"."disposition",
+           ${importFingerprint} AS "importFingerprint",
+           "StatementRow"."createdAt"
+    FROM "StatementRow"
+    JOIN drifted d
+      ON d."source" = "StatementRow"."source"
+     AND d."accountDescriptor" = "StatementRow"."accountDescriptor"
+     AND d."statementDate" = "StatementRow"."statementDate"
+     AND d."providerAmount" = "StatementRow"."providerAmount"
+    WHERE ${where}
+    ORDER BY d."firstSeen" DESC, "StatementRow"."createdAt" ASC,
+             "StatementRow"."externalId" ASC
+  `);
+
+  const byGroup = new Map<string, StatementRowDriftCandidate>();
+  for (const row of rows) {
+    const statementDate = asPlainDate(row.statementDate);
+    const providerAmount = Number(row.providerAmount);
+    const key = `${row.source}|${row.accountDescriptor}|${statementDate}|${providerAmount}`;
+    const group = byGroup.get(key) ?? {
+      source: row.source,
+      accountDescriptor: row.accountDescriptor,
+      statementDate,
+      providerAmount,
+      crossBatch: row.crossBatch,
+      rows: [],
+    };
+    group.rows.push({
+      externalId: row.externalId,
+      rawDescription: row.rawDescription,
+      merchant: row.merchant,
+      providerStatus:
+        row.providerStatus === "posted" || row.providerStatus === "pending"
+          ? row.providerStatus
+          : null,
+      disposition: row.disposition === "ignored" ? "ignored" : "open",
+      importFingerprint: row.importFingerprint,
+      createdAt: asDate(row.createdAt),
+    });
+    byGroup.set(key, group);
+  }
+
+  const candidates = [...byGroup.values()];
+  return {
+    candidates: candidates.slice(0, input.limit),
+    truncated: candidates.length > input.limit,
+  };
 }
 
 /**

@@ -165,6 +165,9 @@ export function registerProductTools(server: McpServer) {
     // few hundred network round trips inside one Worker invocation. Every other
     // batch here is DB-bound, which is why this is the one that departs from 50.
     maxItems: 20,
+    // The refreshed image state is the entire product of this call — a compact
+    // list of ids would say nothing about what verification found.
+    defaultResultDetail: "full",
     annotations: WRITE_CLOSED,
     refineItems: rejectDuplicateIds,
     run: async (caller, item) =>

@@ -1864,6 +1864,17 @@ export const statementRow = pgTable(
       table.statementDate,
       table.amount,
     ),
+    // The drift sweep groups on the DESCRIPTOR, not `accountId` — that column
+    // is an agent-written judgment and is null for most of the backlog, so the
+    // index above does not serve the group. Deliberately not partial on
+    // `deletedAt`: `drizzle-kit push` applies index predicates as a no-op, so a
+    // partial index here would exist in the schema file and nowhere else.
+    index("StatementRow_descriptor_date_amount_idx").on(
+      table.source,
+      table.accountDescriptor,
+      table.statementDate,
+      table.providerAmount,
+    ),
     index("StatementRow_rawDescription_gin_idx").using(
       "gin",
       sql`${table.rawDescription} gin_trgm_ops`,

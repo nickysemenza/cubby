@@ -1,5 +1,7 @@
 import {
   deleteStatementRowsInput,
+  findStatementRowDriftInput,
+  findStatementRowDriftOut,
   listStatementImportsInput,
   listStatementRowsInput,
   recordStatementRowsInput,
@@ -13,6 +15,7 @@ import {
 } from "@cubby/schemas/statement-row";
 import {
   deleteStatementRows,
+  findStatementRowDrift,
   getStatementRowSummary,
   listStatementImports,
   listStatementRows,
@@ -47,6 +50,11 @@ const imports = protectedProcedure
   .output(strictOutput(statementImportListOut))
   .query(({ ctx, input }) => listStatementImports(ctx.db, input.source));
 
+const drift = protectedProcedure
+  .input(findStatementRowDriftInput)
+  .output(strictOutput(findStatementRowDriftOut))
+  .query(({ ctx, input }) => findStatementRowDrift(ctx.db, input));
+
 const record = protectedProcedure
   .input(recordStatementRowsInput)
   .output(strictOutput(recordStatementRowsOut))
@@ -72,6 +80,7 @@ export const statementRowRouter = createTRPCRouter({
   list,
   summary,
   imports,
+  drift,
   record,
   update,
   delete: remove,

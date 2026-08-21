@@ -16,6 +16,8 @@ import {
 } from "@cubby/schemas/financial-transaction";
 import {
   deleteStatementRowsInput,
+  findStatementRowDriftInput,
+  findStatementRowDriftOut,
   listStatementImportsInput,
   listStatementRowsInput,
   recordStatementRowsInput,
@@ -130,7 +132,7 @@ export function registerFinancialTools(server: McpServer) {
   registerRouterTool(server, {
     name: "record_statement_rows",
     description:
-      "Record client-parsed provider statement rows verbatim, as the evidence Cubby is reconciled against. NOT an importer: it creates no Financial Account, no Financial Transaction and no Purchase link, and makes no match. Cubby accepts normalized rows only — never a CSV path, upload, or file contents. Pass at most 500 rows per call; the batch is found-or-created by (source, fingerprint), so chunking one export across calls is expected. The server derives each row's stable identity from account/date/amount/description, so re-submitting the same export inserts nothing and returns every row as unchanged. `providerAmount` is the export's own signed figure (Monarch signs charges negative); Cubby's outflow-positive amount is derived from it. Set `dateKind` to whichever date the export carries — providers disagree on posting vs transaction date, and recording which one this export used is the point.",
+      "Record client-parsed provider statement rows verbatim, as the evidence Cubby is reconciled against. NOT an importer: it creates no Financial Account, no Financial Transaction and no Purchase link, and makes no match. Cubby accepts normalized rows only — never a CSV path, upload, or file contents. Pass at most 500 rows per call; the batch is found-or-created by (source, fingerprint), so chunking one export across calls is expected. The server derives each row's stable identity from account/date/amount/description, so re-submitting the same export inserts nothing and returns every row as unchanged. `providerAmount` is the export's own signed figure (Monarch signs charges negative); Cubby's outflow-positive amount is derived from it. Set `dateKind` to whichever date the export carries — providers disagree on posting vs transaction date, and recording which one this export used is the point. Set `dryRun: true` to derive the identities and report what a real call would insert without writing anything — the server owns the hash, so this is the only way to learn whether a chunk was already recorded.",
     inputSchema: recordStatementRowsInput.shape,
     outputSchema: recordStatementRowsOut,
     annotations: WRITE_CLOSED,
@@ -165,6 +167,16 @@ export function registerFinancialTools(server: McpServer) {
     outputSchema: statementImportListOut,
     annotations: READ_ONLY_CLOSED,
     call: (caller, params) => caller.statementRow.imports(params),
+  });
+
+  registerRouterTool(server, {
+    name: "find_statement_row_drift",
+    description:
+      "Find charges recorded TWICE under two identities. A row's identity hash covers its raw description, so a charge re-exported after its descriptor firms up (`AMAZON MKTPLACE PMTS` becoming `AMAZON MKTPL*XD8AR9RG3`) mints a second identity for money already recorded — 9 of 188 rows in one Monarch export. Groups live, unsuperseded rows by (source, accountDescriptor, statementDate, providerAmount) and returns groups holding more than one, oldest row first so rows[0] is the likeliest predecessor. By default only groups spanning TWO exports are reported: one export speaks one descriptor vocabulary, so two of its own rows differing only in description are two real charges (two payroll deposits, two coffees) rather than one charge seen twice — on this ledger that split is exact, 9 real pairs all cross-batch against 240 same-batch coincidences. Pass includeSameBatch to see them anyway. Still advisory: read the descriptions before acting. The remedy is update_statement_rows with `supersededByExternalId` on the predecessor, which stays an explicit per-row judgment. Rows already superseded drop out, so the list shrinks as it is worked.",
+    inputSchema: findStatementRowDriftInput.shape,
+    outputSchema: findStatementRowDriftOut,
+    annotations: READ_ONLY_CLOSED,
+    call: (caller, params) => caller.statementRow.drift(params),
   });
 
   registerRouterTool(server, {
