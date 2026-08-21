@@ -7,6 +7,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { addDays, format } from "date-fns";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import {
+  type CSSProperties,
   lazy,
   type ReactNode,
   Suspense,
@@ -20,6 +21,7 @@ import { Row, Stack } from "~/components/layout";
 import {
   type EventCalendarRenderEventProps,
   type EventCalendarRenderEventRoot,
+  FortnightEventCalendar,
   MonthEventCalendar,
   WeekEventCalendar,
 } from "~/components/reui/event-calendar/event-calendar";
@@ -71,8 +73,21 @@ const NO_ITEMS: CalendarItem[] = [];
 const NO_DAY_SUMMARIES: Record<string, CalendarDaySummary> = {};
 const PERIOD_OPTIONS = [
   { value: "month", label: "Month" },
+  { value: "fortnight", label: "Fortnight" },
   { value: "week", label: "Week" },
 ] as const;
+/**
+ * Fortnight density, built on ONE vertical unit: 1.75rem, the month's bar
+ * height and the system's control height. A crossing bar is one line of text
+ * and takes one unit; a single-day chip carries two lines and takes two. The
+ * row floor is four chip lanes, so a quiet fortnight is not two screens of
+ * empty paper and a busy one still grows.
+ */
+const FORTNIGHT_DENSITY = {
+  "--ec-month-row-min-h": "14rem",
+  "--ec-month-bar-h": "3.5rem",
+  "--ec-month-span-h": "1.75rem",
+} as CSSProperties;
 
 const LazyCalendarCreateDialog = lazy(() =>
   import("./calendar-create-dialog").then(({ CalendarCreateDialog }) => ({
@@ -143,18 +158,34 @@ function CalendarMonthChip({
   return <CalendarItemPresentation item={item} variant="month" />;
 }
 
+const spansDays = (item: CalendarItem) =>
+  item.endDateExclusive !==
+  formatPlainDate(addDays(parsePlainDate(item.startDate), 1));
+
 function CalendarWeekCard({
   occurrence,
 }: EventCalendarRenderEventProps<CalendarItem>) {
   const item = occurrence.event.data;
   if (!item) return occurrence.event.title;
-  const spansDays =
-    item.endDateExclusive !==
-    formatPlainDate(addDays(parsePlainDate(item.startDate), 1));
   return (
     <CalendarItemPresentation
       item={item}
-      variant={spansDays ? "month" : "rich"}
+      variant={spansDays(item) ? "month" : "rich"}
+    />
+  );
+}
+
+// Same rule the week card uses: a bar repeated across a row stays one compact
+// line, and only single-day chips spend the extra height on a second line.
+function CalendarFortnightChip({
+  occurrence,
+}: EventCalendarRenderEventProps<CalendarItem>) {
+  const item = occurrence.event.data;
+  if (!item) return occurrence.event.title;
+  return (
+    <CalendarItemPresentation
+      item={item}
+      variant={spansDays(item) ? "month" : "detail"}
     />
   );
 }
@@ -251,9 +282,7 @@ export function UnifiedCalendar({
         });
       } else if (item.kind === "task") {
         label = "Task";
-        const wasRange =
-          item.endDateExclusive !==
-          formatPlainDate(addDays(parsePlainDate(item.startDate), 1));
+        const wasRange = spansDays(item);
         request = taskCommands.submit({
           operation: "update",
           intent: "schedule",
@@ -335,6 +364,12 @@ export function UnifiedCalendar({
   const selectedSummary = selectedDay
     ? (data?.days[selectedDay] ?? EMPTY_DAY_SUMMARY)
     : EMPTY_DAY_SUMMARY;
+  // Returning false keeps the engine's own "+N more" popover closed: the day
+  // sheet is the one overflow surface on this page.
+  const openDay = (moreDay: Date) => {
+    setSelectedDay(formatPlainDate(moreDay));
+    return false as const;
+  };
   const calendarInteractionProps = {
     events,
     date: anchor,
@@ -349,7 +384,7 @@ export function UnifiedCalendar({
       setSelectedDay(formatPlainDate(slot.date)),
   };
   const periodTitle = formatCalendarPeriodTitle(
-    period === "week" ? activePeriod.start : anchor,
+    period === "month" ? anchor : activePeriod.start,
     period,
     activePeriod.end,
   );
@@ -418,7 +453,7 @@ export function UnifiedCalendar({
             includesDay={itemIncludesDay}
             range={activePeriod}
             today={today}
-            showAllDays={period === "week"}
+            showAllDays={period !== "month"}
             onDayClick={setSelectedDay}
             renderItem={renderAgendaItem}
             emptyMessage={
@@ -446,10 +481,15 @@ export function UnifiedCalendar({
             {...calendarInteractionProps}
             renderEvent={CalendarMonthChip}
             className="hidden min-h-[620px] overflow-hidden border md:block"
-            onMoreClick={(moreDay) => {
-              setSelectedDay(formatPlainDate(moreDay));
-              return false;
-            }}
+            onMoreClick={openDay}
+          />
+        ) : period === "fortnight" ? (
+          <FortnightEventCalendar<CalendarItem>
+            {...calendarInteractionProps}
+            renderEvent={CalendarFortnightChip}
+            className="hidden overflow-hidden border md:block"
+            style={FORTNIGHT_DENSITY}
+            onMoreClick={openDay}
           />
         ) : (
           <div className="hidden overflow-hidden border md:block">

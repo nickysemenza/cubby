@@ -75,6 +75,7 @@ function EventCalendarMonthView({
   });
   const anchorDate = useEventCalendarSelector((state) => state.date);
   const activeRange = useEventCalendarSelector((state) => state.activeRange);
+  const period = useEventCalendarSelector((state) => state.period);
 
   const weeks = useMemo(() => {
     const days: Date[] = [];
@@ -95,7 +96,7 @@ function EventCalendarMonthView({
   ]);
 
   const headerDays = weeks[0] ?? [];
-  const title = settings.i18n.functions.formatTitle("month", {
+  const title = settings.i18n.functions.formatTitle(period, {
     date: toZoned(anchorDate, settings.timeZone),
     activeRange,
     visibleRange,
@@ -140,11 +141,15 @@ function EventCalendarMonthView({
     return () => observer.disconnect();
     // re-observe the first cell after a re-layout (row count or month change)
   }, [autoFit, measureCap, weeks.length, anchorDate]);
-  const resolvedCap = 5;
+  // A fortnight has two rows where a month has six, and its rows grow past
+  // --ec-month-row-min-h, so it can carry far more lanes before rolling the
+  // rest into "+N more". It needs the headroom: household projects run as
+  // multi-week bars that occupy the first lanes of every row.
+  const resolvedCap = period === "fortnight" ? 10 : 5;
 
   const defaultProps = {
     "data-slot": "event-calendar-month-view",
-    "data-view": "month",
+    "data-view": period,
     role: "grid",
     "aria-label": title,
     className: cn(
@@ -211,6 +216,11 @@ function EventCalendarMonthView({
               gridTemplateColumns={gridTemplateColumns}
               cap={resolvedCap}
               autoFit={autoFit}
+              // Six month rows read as one continuous grid, so a hairline is
+              // the right weight between them. Two fortnight rows are two
+              // WEEKS - the boundary the reader plans against - and earns the
+              // ledger's band rule.
+              divider={period === "fortnight" ? "rule" : "hairline"}
               contentRef={rowIndex === 0 ? contentProbeRef : undefined}
             />
           ))}
@@ -245,12 +255,15 @@ function EventCalendarMonthWeek({
   gridTemplateColumns,
   cap,
   autoFit,
+  divider,
   contentRef,
 }: {
   week: Date[];
   gridTemplateColumns: string;
   cap: number;
   autoFit: boolean;
+  /** Weight of the boundary below this row. */
+  divider: "hairline" | "rule";
   /** Set on the first week only: forwarded to its first cell's content area so
    *  the view can measure the per-cell event height for "auto". */
   contentRef?: Ref<HTMLDivElement>;
@@ -288,6 +301,38 @@ function EventCalendarMonthWeek({
   const covers = (b: EventCalendarSegment, dayOffset: number) =>
     (b.colStart ?? 0) <= dayOffset &&
     dayOffset < (b.colStart ?? 0) + (b.colSpan ?? 1);
+  // A bar that crosses days is always ONE line of text; only a chip confined to
+  // a single day can be taller (the fortnight renders those as two lines). So a
+  // lane holding nothing but crossing bars gets --ec-month-span-h, which the
+  // fortnight sets to half its chip height - sizing every lane to the tallest
+  // possible chip left week-long project bars swimming in empty space.
+  const laneHeights = Array.from(
+    { length: visibleBars.reduce((max, b) => Math.max(max, (b.lane ?? 0) + 1), 0) },
+    (_, lane) => {
+      const inLane = visibleBars.filter((b) => (b.lane ?? 0) === lane);
+      return inLane.length > 0 && inLane.every((b) => (b.colSpan ?? 1) > 1)
+        ? "var(--ec-month-span-h, var(--ec-month-bar-h, 1.75rem))"
+        : "var(--ec-month-bar-h, 1.75rem)";
+    },
+  );
+  /**
+   * Bar lanes a column must clear before its own chips: the deepest lane of any
+   * bar passing through THIS cell, so a short multi-day event does not push
+   * down chips in unrelated cells of the same row.
+   */
+  const reservedLanesFor = (col: number) =>
+    visibleBars.reduce(
+      (max, b) => (covers(b, offsets[col]!) ? Math.max(max, (b.lane ?? 0) + 1) : max),
+      0,
+    );
+  /** Height a cell must reserve to clear the first `lanes` bar rows. */
+  const reservedHeight = (lanes: number) =>
+    lanes === 0
+      ? "0px"
+      : // lane height already carries the 2px inter-lane gap; subtract it so
+        // spacer + the column's own gap = the SAME rhythm between the last bar
+        // and the first timed chip
+        `calc(${laneHeights.slice(0, lanes).join(" + ")} - 0.125rem)`;
   // Occurrence keys of the bars hidden in each column (lane >= cap). Threaded to
   // the cell so its "+N more" popover can list the hidden bars WITHOUT re-listing
   // the visible ones (day buckets carry no lane, so the week row - which owns bar
@@ -396,6 +441,7 @@ function EventCalendarMonthWeek({
       data-slot="event-calendar-month-row"
       className={cn(
         "relative grid min-h-0 border-b last:border-b-0",
+        divider === "rule" && "border-b-[3px] border-b-foreground last:border-b-0",
       )}
       style={{ gridTemplateColumns }}
     >
@@ -404,15 +450,8 @@ function EventCalendarMonthWeek({
           key={day.getTime()}
           day={day}
           cap={cap}
-          // Reserve lane space only for bars that pass through THIS cell, so a
-          // short multi-day event does not push down timed events in unrelated
-          // cells of the same row. Reserve down to the deepest covering bar
-          // lane so timed events always sit below every bar in their own cell.
-          reservedLanes={visibleBars.reduce(
-            (max, b) =>
-              covers(b, offsets[col]!) ? Math.max(max, (b.lane ?? 0) + 1) : max,
-            0,
-          )}
+          reservedLanes={reservedLanesFor(col)}
+          reservedHeight={reservedHeight(reservedLanesFor(col))}
           hiddenBarKeys={hiddenBarKeysByCol[col]!}
           isLast={col === week.length - 1}
           autoFit={autoFit}
@@ -431,6 +470,7 @@ function EventCalendarMonthWeek({
           )}
           style={{
             gridTemplateColumns,
+            gridTemplateRows: laneHeights.join(" "),
             gridAutoRows: "var(--ec-month-bar-h, 1.75rem)",
           }}
         >
@@ -448,10 +488,18 @@ function EventCalendarMonthWeek({
                   gridRow: (bar.lane ?? 0) + 1,
                 }}
               >
-                {/* lane height minus the 2px inter-lane gap */}
+                {/* Lane height minus the 2px inter-lane gap - except for a
+                    crossing bar, which is one line of text and keeps the span
+                    height even when it shares a lane with a taller single-day
+                    chip. Stretching it to the lane made a year-long project
+                    read as thick as a meal card. */}
                 <EventCalendarEvent
                   segment={bar}
-                  className="h-[calc(var(--ec-month-bar-h,1.75rem)-0.125rem)]"
+                  className={cn(
+                    (bar.colSpan ?? 1) > 1
+                      ? "h-[calc(var(--ec-month-span-h,var(--ec-month-bar-h,1.75rem))-0.125rem)]"
+                      : "h-[calc(100%-0.125rem)]",
+                  )}
                 />
               </div>
             );
@@ -470,7 +518,9 @@ function EventCalendarMonthWeek({
                 data-kind={dragGhost.kind}
                 data-drop-invalid={!dragGhost.valid || undefined}
                 className={cn(
-                  "h-[calc(var(--ec-month-bar-h,1.75rem)-0.125rem)]",
+                  ghostPos.span > 1
+                    ? "h-[calc(var(--ec-month-span-h,var(--ec-month-bar-h,1.75rem))-0.125rem)]"
+                    : "h-[calc(100%-0.125rem)]",
                   dragGhost.kind === "move"
                     ? // faint drop placeholder only: the cursor-attached
                       // carry clone owns the visual during moves
@@ -524,6 +574,7 @@ function EventCalendarMonthCell({
   day,
   cap,
   reservedLanes,
+  reservedHeight,
   hiddenBarKeys,
   isLast,
   autoFit,
@@ -532,6 +583,8 @@ function EventCalendarMonthCell({
   day: Date;
   cap: number;
   reservedLanes: number;
+  /** CSS height of the bar lanes above this cell's own chips. */
+  reservedHeight: string;
   /** Occurrence keys of the bars hidden in THIS column (lane >= cap), from the
    *  week row. Lets the cell list hidden bars in its overflow popover without
    *  re-listing the bars already visible in the row overlay. */
@@ -550,6 +603,7 @@ function EventCalendarMonthCell({
   const settings = useEventCalendarSettings();
   const drop = useEventCalendarDrop(day, true);
   const { segments, isToday, isOutside } = useEventCalendarDay(day);
+  const period = useEventCalendarSelector((state) => state.period);
 
   const dayStart = zonedStartOfDay(day, settings.timeZone);
   const dayEnd = addDays(toZoned(dayStart, settings.timeZone), 1);
@@ -710,12 +764,7 @@ function EventCalendarMonthCell({
           <div
             aria-hidden
             className="shrink-0"
-            style={{
-              // lane height already carries the 2px inter-lane gap; subtract
-              // it so spacer + the column's own gap-0.5 = the SAME 2px rhythm
-              // between the last bar and the first timed chip
-              height: `calc(${reservedLanes} * var(--ec-month-bar-h, 1.75rem) - 0.125rem)`,
-            }}
+            style={{ height: reservedHeight }}
           />
         )}
         {visibleTimed.flatMap((segment, i) => {
@@ -775,7 +824,7 @@ function EventCalendarMonthCell({
             onClick={(e) => {
               e.stopPropagation();
               settings.onSlotClick?.(
-                { date: day, allDay: true, period: "month" },
+                { date: day, allDay: true, period },
                 e,
               );
             }}
@@ -843,7 +892,7 @@ function EventCalendarMonthCell({
       }}
       onClick={(e) => {
         if (wasRecentDrag() || wasRecentChipPress()) return;
-        settings.onSlotClick?.({ date: day, allDay: true, period: "month" }, e);
+        settings.onSlotClick?.({ date: day, allDay: true, period }, e);
       }}
     >
       {content}

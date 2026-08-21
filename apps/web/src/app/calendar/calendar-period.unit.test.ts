@@ -37,6 +37,19 @@ describe("calendar period", () => {
     expect(formatPlainDate(range.visibleEnd)).toBe("2026-08-09");
   });
 
+  it("snaps a fortnight to the anchor week and spans fourteen days", () => {
+    const range = getCalendarPeriodRange(
+      new TZDate(2026, 7, 20, 12, 0, 0, zone),
+      "fortnight",
+    );
+
+    expect(formatPlainDate(range.activeStart)).toBe("2026-08-16");
+    expect(formatPlainDate(range.activeEnd)).toBe("2026-08-30");
+    // The 2x7 grid queries exactly what it paints - no six-week padding.
+    expect(range.visibleStart).toBe(range.activeStart);
+    expect(range.visibleEnd).toBe(range.activeEnd);
+  });
+
   it("steps by the selected period across a year boundary", () => {
     const anchor = new TZDate(2026, 11, 30, 12, 0, 0, zone);
 
@@ -45,6 +58,12 @@ describe("calendar period", () => {
     );
     expect(formatPlainDate(shiftCalendarPeriod(anchor, "month", 1))).toBe(
       "2027-01-30",
+    );
+    expect(formatPlainDate(shiftCalendarPeriod(anchor, "fortnight", 1))).toBe(
+      "2027-01-13",
+    );
+    expect(formatPlainDate(shiftCalendarPeriod(anchor, "fortnight", -1))).toBe(
+      "2026-12-16",
     );
   });
 
@@ -70,5 +89,22 @@ describe("calendar period", () => {
         new TZDate(2027, 0, 3, 0, 0, 0, zone),
       ),
     ).toBe("Dec 27, 2026–Jan 2, 2027");
+  });
+
+  it("labels a fortnight by its range, not the anchor month", () => {
+    expect(
+      formatCalendarPeriodTitle(
+        new TZDate(2026, 7, 16, 0, 0, 0, zone),
+        "fortnight",
+        new TZDate(2026, 7, 30, 0, 0, 0, zone),
+      ),
+    ).toBe("Aug 16–29, 2026");
+    expect(
+      formatCalendarPeriodTitle(
+        new TZDate(2026, 7, 30, 0, 0, 0, zone),
+        "fortnight",
+        new TZDate(2026, 8, 13, 0, 0, 0, zone),
+      ),
+    ).toBe("Aug 30–Sep 12, 2026");
   });
 });
