@@ -12,7 +12,7 @@ import { calendarItemEditDescriptor } from "./calendar-kind-registry";
 
 const session = vi.hoisted(() => ({ save: vi.fn() }));
 
-vi.mock("~/entities/editing", () => ({
+vi.mock("~/entities/editing/use-entity-edit-session", () => ({
   useEntityEditSession: ({ record }: { record: Record<string, unknown> }) => {
     const form = useForm<Record<string, unknown>>({ defaultValues: record });
     const [issues, setIssues] = useState<

@@ -31,7 +31,7 @@ import { FormFieldGroup } from "../forms/form-field-group";
  * the whole item. That keeps callers' `values.vendor.trim() || null` intact and
  * the server contract (`expenseUpdateData.vendor` is a NAME) untouched; the
  * `id === name` combobox identity is what makes the round trip free. Rendered
- * inside `QuickAddDialog`/`ResponsiveDialog`, hence the dialog-compatible
+ * inside the generic entity dialog/`ResponsiveDialog`, hence the dialog-compatible
  * combobox rather than the standard one.
  */
 export function VendorField<TFieldValues extends FieldValues = FieldValues>({

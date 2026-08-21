@@ -19,12 +19,12 @@ import { ImageThumbnail } from "~/app/_components/table/ImageThumbnail";
 import { usePageCount } from "~/components/page/Page";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
+import { wishCreateRequest } from "~/entities/editing/editor-requests";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrencyRange, rangeMidpoint } from "~/lib/format-range";
 import { wishMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
-import { WishFormDialog } from "./wish-form-dialog";
 import { wishPriceRange } from "./wish-price-range";
 import { buildWishRows, type WishRow, wishSubRows } from "./wish-rows";
 
@@ -307,7 +307,7 @@ export function WishList() {
           infiniteScroll={infiniteScroll}
           refreshControls={refreshControls}
           actions={
-            <CreateDialogAction Dialog={WishFormDialog}>
+            <CreateDialogAction request={wishCreateRequest()}>
               New wish
             </CreateDialogAction>
           }

@@ -18,7 +18,6 @@ import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
-import { useTRPC } from "~/integrations/trpc/react";
 import {
   getAllUnitMappingsFromProduct,
   getIngredientMappings,
@@ -57,7 +56,6 @@ export function selectNutritionProduct(
 }
 
 export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
-  const api = useTRPC();
   const [isEnriching, setIsEnriching] = useState(false);
   const startEnriching = useCallback(() => setIsEnriching(true), []);
 
@@ -67,7 +65,6 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
   >({
     entity: "ingredient",
     data: ingredient,
-    mutationOptions: api.ingredient.update.mutationOptions(),
     getMappings: getIngredientMappings,
   });
 

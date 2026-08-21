@@ -4,13 +4,16 @@ import { entityManifest } from "@cubby/schemas/entity-manifest";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { Clock, ImageIcon, Scale } from "lucide-react";
 import { createElement, useMemo } from "react";
-import type { EditableEntity } from "~/entities/editing";
+import type { EditableEntity } from "~/entities/editing/types";
+import {
+  type EntityDetailController,
+  useEntityDetailController,
+} from "~/entities/editing/use-entity-detail-controller";
 import { entities } from "~/entities/entities";
 import { AuditLogList } from "../audit-log/audit-log-list";
 import type { DetailSection } from "../data-table/detail-page";
 import EntityImageList from "../EntityImageList";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
-import { type UseEditModeReturn, useEditMode } from "./useEditMode";
 
 const isAuditableEntity = (entity: Entity): entity is AuditEntityType =>
   entityManifest[entity].auditable;
@@ -30,21 +33,18 @@ interface UseEntityDetailOptions<TData extends WithId, _TUpdateInput> {
   entity: EditableEntity;
   /** The entity data */
   data: TData;
-  /** tRPC mutation options for updates */
-  mutationOptions: object;
   /** For entities with unit mappings - function to extract mappings (sync or async) */
   getMappings?: (data: TData) => UnitMapping[];
   /** Custom callback on successful update */
   onSuccess?: () => void;
   /** Optional query keys to invalidate after successful update. */
-  invalidateKeys?: readonly (readonly unknown[])[];
 }
 
 interface UseEntityDetailReturn<TUpdateInput> {
   /** Common sections based on entity config (images, unit-mappings, history) */
   commonSections: DetailSection[];
   /** Edit mode state and handlers */
-  editMode: UseEditModeReturn<TUpdateInput>;
+  editMode: EntityDetailController<TUpdateInput>;
   /** Loaded unit mappings (empty array if not applicable) */
   mappings: UnitMapping[];
 }
@@ -53,7 +53,7 @@ interface UseEntityDetailReturn<TUpdateInput> {
  * Hook for managing entity detail pages with common conventions.
  *
  * Handles:
- * - Edit mode state via useEditMode
+ * - Edit mode state via the shared entity detail controller
  * - Async unit mappings loading if getMappings provided
  * - Building common sections based on entity config (images, unit-mappings, history)
  */
@@ -63,10 +63,8 @@ export function useEntityDetail<
 >({
   entity,
   data,
-  mutationOptions,
   getMappings,
   onSuccess,
-  invalidateKeys,
 }: UseEntityDetailOptions<
   TData,
   unknown
@@ -76,13 +74,10 @@ export function useEntityDetail<
     []) as readonly ("images" | "unit-mappings" | "history")[];
 
   // Set up edit mode
-  const editMode = useEditMode<TUpdateInput>({
+  const editMode = useEntityDetailController<TUpdateInput>({
     entity,
     entityId: data.id,
-    mutationOptions,
-    useRouterRefresh: true,
     onSuccess,
-    invalidateKeys,
   });
 
   const mappings = useMemo(

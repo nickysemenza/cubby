@@ -1,4 +1,3 @@
-import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
 import {
   financialTransactionKind,
   financialTransactionStatus,
@@ -67,23 +66,6 @@ export const emptyFinancialTransactionForm: FinancialTransactionFormValues = {
   sourceRefs: [],
   notes: "",
 };
-
-export const financialTransactionToForm = (
-  transaction: FinancialTransactionOut,
-): FinancialTransactionFormValues => ({
-  accountId: transaction.accountId,
-  purchaseId: transaction.purchaseId ?? "",
-  kind: transaction.kind,
-  status: transaction.status,
-  amount: transaction.amount,
-  transactionDate: transaction.transactionDate ?? "",
-  postedDate: transaction.postedDate ?? "",
-  merchant: transaction.merchant ?? "",
-  rawDescription: transaction.rawDescription ?? "",
-  sourceCategory: transaction.sourceCategory ?? "",
-  sourceRefs: transaction.sourceRefs,
-  notes: transaction.notes ?? "",
-});
 
 export const normalizeFinancialTransactionForm = (
   values: FinancialTransactionFormValues,

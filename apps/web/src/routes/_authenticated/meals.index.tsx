@@ -6,12 +6,12 @@ import {
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 // Meal planning calendar (month overview and weekly focus).
 import { MealCalendarPage } from "~/app/meals/calendar-page";
-import { CreateMealDialog } from "~/app/meals/create-meal-dialog";
 import {
   mealCalendarSearchDefaults,
   mealCalendarSearchSchema,
 } from "~/app/meals/meal-search";
 import { Page } from "~/components/page/Page";
+import { mealCaptureRequest } from "~/entities/editing/editor-requests";
 import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/meals/")({
@@ -32,7 +32,7 @@ function MealsIndexRoute() {
       variant="list"
       title="Meals"
       layout="full"
-      actions={<CreateDialogAction Dialog={CreateMealDialog} />}
+      actions={<CreateDialogAction request={mealCaptureRequest()} />}
     >
       <MealCalendarPage
         view={routeView}

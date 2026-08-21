@@ -7,6 +7,8 @@ import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
+import { financialTransactionEditRequest } from "~/entities/editing/editor-requests";
+import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { financialTransactionMutationInvalidateKeys } from "~/lib/query-keys";
@@ -14,7 +16,6 @@ import { formatCurrency } from "~/lib/utils";
 import { DetailSections } from "../_components/data-table/detail-page";
 import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { TableLink } from "../_components/table/TableLink";
-import { EditFinancialTransactionDialog } from "./edit-financial-transaction-dialog";
 export function FinancialTransactionDetail({
   transaction,
 }: {
@@ -190,10 +191,10 @@ export function FinancialTransactionDetail({
           },
         ]}
       />
-      <EditFinancialTransactionDialog
-        transaction={transaction}
+      <EntityEditDialog
         open={editOpen}
         onOpenChange={setEditOpen}
+        request={financialTransactionEditRequest(transaction)}
       />
       {deleteDialog}
     </Page>

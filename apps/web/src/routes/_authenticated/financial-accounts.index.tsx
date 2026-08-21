@@ -5,9 +5,9 @@ import {
   CreateDialogAction,
   createDialogSearchField,
 } from "~/app/_components/forms/create-dialog-action";
-import { CreateFinancialAccountDialog } from "~/app/finance/create-financial-account-dialog";
 import { FinancialAccountList } from "~/app/finance/financial-account-list";
 import { Page } from "~/components/page/Page";
+import { financialAccountCaptureRequest } from "~/entities/editing/editor-requests";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
 import { urlEnumListParam, urlStringParam } from "~/lib/search-params";
@@ -33,7 +33,9 @@ export const Route = createFileRoute("/_authenticated/financial-accounts/")({
       title="Accounts"
       entity="financialAccount"
       layout="full"
-      actions={<CreateDialogAction Dialog={CreateFinancialAccountDialog} />}
+      actions={
+        <CreateDialogAction request={financialAccountCaptureRequest()} />
+      }
     >
       <FinancialAccountList />
     </Page>

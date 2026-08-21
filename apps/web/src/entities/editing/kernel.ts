@@ -1,4 +1,5 @@
 import type { QueryKey } from "@tanstack/react-query";
+import type { EntityEditResultFor } from "./intent-types";
 import { type EntityEditRegistry, getEntityEditDefinition } from "./registry";
 import type {
   EditableEntity,
@@ -14,7 +15,6 @@ import type {
   EntityEditRecord,
   EntityEditRequest,
   EntityEditResult,
-  EntityEditSurfaceRecipe,
   EntityMutationPort,
 } from "./types";
 
@@ -24,7 +24,6 @@ export interface ResolvedEntityEdit<E extends EditableEntity = EditableEntity> {
   definition: EntityEditDefinition<E>;
   operation: EntityEditOperationDefinition<E, EntityEditRecord>;
   intentDefinition: EntityEditIntentDefinition<E, EntityEditRecord>;
-  recipe?: EntityEditSurfaceRecipe;
   intent: string;
   fields: readonly EntityEditField<E, EntityEditRecord, unknown, object>[];
   context: EntityEditContext;
@@ -53,7 +52,6 @@ export function resolveEntityEdit<E extends EditableEntity>(
     };
   }
 
-  const recipe = definition.surfaces[request.surface];
   const intent = request.intent ?? operation.defaultIntent;
   const intentDefinition = operation.intents[intent];
   if (!intentDefinition) {
@@ -84,7 +82,6 @@ export function resolveEntityEdit<E extends EditableEntity>(
     definition,
     operation,
     intentDefinition,
-    recipe,
     intent,
     fields: fields as readonly EntityEditField<
       E,
@@ -182,6 +179,14 @@ export function buildEntityEdit<E extends EditableEntity>(
       }),
     );
   }
+  issues.push(
+    ...(intent.validate?.({
+      values: normalized,
+      record: request.record,
+      context: resolved.context,
+      surface: request.surface,
+    }) ?? []),
+  );
   if (issues.length > 0) return { ok: false, issues };
 
   for (const field of resolved.fields) {
@@ -241,7 +246,7 @@ export async function executeEntityEdit<E extends EditableEntity>(
     entity: definition.entity,
     id: execution.id,
     changed: true,
-    result: execution.result,
+    result: execution.result as EntityEditResultFor<E>,
   };
 }
 

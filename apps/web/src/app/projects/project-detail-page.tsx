@@ -40,10 +40,8 @@ import { ChipsInput } from "~/app/_components/forms/chips-input";
 import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { RelationshipSummaryTable } from "~/app/_components/relationships/relationship-summary-table";
-import { CreateExpenseDialog } from "~/app/expenses/create-expense-dialog";
 import { ProjectMark } from "~/app/projects/project-mark";
 import { TaskBoard } from "~/app/tasks/board/TaskBoard";
-import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Section, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -64,6 +62,12 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
+import {
+  expenseCaptureRequest,
+  projectCaptureRequest,
+  taskCaptureRequest,
+} from "~/entities/editing/editor-requests";
+import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { projectMutationInvalidateKeys } from "~/lib/query-keys";
@@ -71,7 +75,6 @@ import { formatCurrency } from "~/lib/utils";
 import { BudgetStrip } from "./BudgetStrip";
 import type { TradeCostCell } from "./charts/trade-cost-matrix";
 import type { PivotCostKey } from "./charts/trade-cost-pivot";
-import { CreateProjectDialog } from "./create-project-dialog";
 import { ProjectNotes } from "./project-notes";
 import { projectKindOptions } from "./project-options";
 import { ProjectPurchasesTable } from "./project-purchases-table";
@@ -1323,22 +1326,22 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
       />
       {deleteDialog}
 
-      <CreateProjectDialog
+      <EntityEditDialog
         open={isCreatingSubProject}
         onOpenChange={setIsCreatingSubProject}
-        defaultParentProjectId={project.id}
+        request={projectCaptureRequest({ parentProjectId: project.id })}
       />
 
-      <CreateTaskDialog
+      <EntityEditDialog
         open={isCreatingTask}
         onOpenChange={setIsCreatingTask}
-        presetProjectId={project.id}
+        request={taskCaptureRequest({ projectId: project.id })}
       />
 
-      <CreateExpenseDialog
+      <EntityEditDialog
         open={isCreatingExpense}
         onOpenChange={setIsCreatingExpense}
-        presetProjectId={project.id}
+        request={expenseCaptureRequest({ projectId: project.id })}
       />
 
       {/* Spending/task charts scoped to this project PLUS its whole sub-project

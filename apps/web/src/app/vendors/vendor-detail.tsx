@@ -49,8 +49,6 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
   const { commonSections } = useEntityDetail<VendorOut, never>({
     entity: "vendor",
     data: vendor,
-    mutationOptions: api.vendor.update.mutationOptions(),
-    invalidateKeys: vendorMutationInvalidateKeys,
   });
 
   // `deleteVendors` refuses while live purchases point at the vendor

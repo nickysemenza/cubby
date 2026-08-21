@@ -37,8 +37,6 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
   >({
     entity: "inventory",
     data: inventoryitem,
-    mutationOptions: api.inventory.update.mutationOptions(),
-    invalidateKeys: inventoryMutationInvalidateKeys,
   });
 
   const { deleteButton, deleteDialog, isPending } = useEntityDelete({

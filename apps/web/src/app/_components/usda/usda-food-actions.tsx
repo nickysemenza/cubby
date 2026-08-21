@@ -13,16 +13,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { EntityFormDialog } from "~/entities/editing/entity-form-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   ingredientProductMutationInvalidateKeys,
-  productMutationInvalidateKeys,
   queryKeys,
 } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import type { ComboboxItem } from "../combobox/combobox-types";
-import { CreateProductDialog } from "../combobox/create-entity-dialogs";
 import { EntityPicker } from "../combobox/entity-picker";
 import { WithIngredientSearch } from "../combobox/with-search-hook";
 import { useActionMutation } from "../hooks/useActionMutation";
@@ -50,27 +49,8 @@ function CreateProductFromFoodButton({
 }: {
   food: FoodSummaryWithLinkedProducts;
 }) {
-  const api = useTRPC();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const foodName = food.foodInfo.description || "this food";
-
-  const createProduct = useActionMutation({
-    entity: "product",
-    mutationFn: api.product.create.mutationOptions,
-    success: (product) =>
-      savedWithBackgroundWork(
-        product.sideEffects,
-        `Created ${product.name} from ${foodName}`,
-      ),
-    // The new product's fdc_id resolves back onto this food's linkedProducts.
-    invalidateKeys: [...productMutationInvalidateKeys, queryKeys.usda.all],
-    onSuccess: () => {
-      void router.invalidate();
-      setOpen(false);
-    },
-    error: (err) => `Failed to create product: ${getErrorMessage(err)}`,
-  });
 
   return (
     <>
@@ -78,14 +58,17 @@ function CreateProductFromFoodButton({
         <PackagePlus />
         Create product from this food
       </Button>
-      <CreateProductDialog
-        isOpen={open}
+      <EntityFormDialog
+        entity="product"
+        open={open}
         onOpenChange={setOpen}
-        onCancel={() => setOpen(false)}
-        onCreate={(data: ProductCreateInput) => createProduct.mutate(data)}
-        isPending={createProduct.isPending}
-        error={createProduct.error?.message}
-        {...foodProductPrefill(food)}
+        seed={{
+          name: foodProductPrefill(food).initialName,
+          manufacturer: foodProductPrefill(food).initialManufacturer,
+          upc: foodProductPrefill(food).initialUpc,
+          fdcId: foodProductPrefill(food).initialFdcId,
+        }}
+        onSuccess={() => void router.invalidate()}
       />
     </>
   );

@@ -21,14 +21,16 @@ const nameField: EntityEditField<"task", EntityEditRecord, string, object> = {
   id: "name",
   access: () => editable,
   initial: ({ record }) =>
-    (record?.name as string | undefined) ?? "field default",
+    (record as { name?: string } | undefined)?.name ?? "field default",
   normalize: (value) => value.trim(),
   validate: ({ value }) =>
     value
       ? []
       : [{ field: "name", message: "Name is required.", source: "client" }],
   toPatch: ({ value, record }) =>
-    record?.name === value ? undefined : { name: value },
+    (record as { name?: string } | undefined)?.name === value
+      ? undefined
+      : { name: value },
 };
 
 const registry = {
@@ -91,7 +93,6 @@ const registry = {
         },
       },
     },
-    surfaces: { calendar: { submitLabel: "Save" } },
   },
 } as unknown as EntityEditRegistry;
 

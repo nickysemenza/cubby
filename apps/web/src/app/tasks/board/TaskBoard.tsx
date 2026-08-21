@@ -22,9 +22,10 @@ import {
   useCubbyDndSensors,
 } from "~/components/dnd/sensors";
 import { Row } from "~/components/layout";
+import { taskCaptureRequest } from "~/entities/editing/editor-requests";
+import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
-import { CreateTaskDialog } from "../create-task-dialog";
 import { BoardAgenda } from "./BoardAgenda";
 import {
   axisColorChip,
@@ -150,8 +151,7 @@ export function TaskBoard({
   // One hoisted quick-add dialog (not one per column/cell) — the "+" in a
   // column header or an empty cell sets this, which mounts the dialog fresh
   // with that click's preset; closing unmounts it, so the next click always
-  // gets a clean form (CreateTaskDialog's `useForm` only reads its defaults
-  // once, on mount).
+  // gets a clean intent-backed form on the next open.
   const [pendingPreset, setPendingPreset] = useState<TaskCreatePreset | null>(
     null,
   );
@@ -368,14 +368,16 @@ export function TaskBoard({
         </DragOverlay>
       </DndContext>
       {pendingPreset && (
-        <CreateTaskDialog
+        <EntityEditDialog
           open
           onOpenChange={(open) => {
             if (!open) setPendingPreset(null);
           }}
-          presetStatus={pendingPreset.status}
-          presetProjectId={pendingPreset.projectId}
-          presetTrade={pendingPreset.trade}
+          request={taskCaptureRequest({
+            status: pendingPreset.status,
+            projectId: pendingPreset.projectId,
+            trade: pendingPreset.trade,
+          })}
         />
       )}
       <TaskDeleteDialog

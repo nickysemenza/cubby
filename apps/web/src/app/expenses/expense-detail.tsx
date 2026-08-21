@@ -75,8 +75,6 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
   const { commonSections } = useEntityDetail<ExpenseOut, never>({
     entity: "expense",
     data: expense,
-    mutationOptions: api.expense.update.mutationOptions(),
-    invalidateKeys: expenseMutationInvalidateKeys,
   });
 
   // Record-level delete lives on the detail plate, not in a section header —

@@ -7,7 +7,7 @@ import {
 } from "~/app/_components/impact/operation-impact";
 import type { InventoryDialogItem } from "~/app/_components/inventory/dialog-item";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
-import { useEntityCommands } from "~/entities/editing";
+import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 
 interface DeleteInventoryDialogProps {
   open: boolean;

@@ -1,6 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
+import type { EntityDetailController } from "~/entities/editing/use-entity-detail-controller";
 import type { EditModeProps } from "../form-utils";
-import type { UseEditModeReturn } from "../hooks/useEditMode";
 import type { DetailSection } from "./detail-page";
 
 /**
@@ -20,7 +20,7 @@ export function editableDetailSection<TEditData, TEntity>({
   entity,
   children,
 }: Pick<DetailSection, "title" | "icon" | "zone" | "headerAction"> & {
-  editMode: UseEditModeReturn<TEditData>;
+  editMode: EntityDetailController<TEditData>;
   Form: ComponentType<EditModeProps<TEditData, TEntity>>;
   entity: TEntity;
   /** The read-mode info view, rendered when not editing. */
@@ -36,10 +36,10 @@ export function editableDetailSection<TEditData, TEntity>({
       <Form
         mode="edit"
         entity={entity}
-        onEdit={editMode.handleEdit}
+        onEdit={editMode.submit}
         isPending={editMode.isPending}
         error={editMode.error}
-        onCancel={editMode.handleCancel}
+        onCancel={editMode.cancel}
       />
     ) : (
       children

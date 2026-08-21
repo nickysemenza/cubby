@@ -1,4 +1,11 @@
 import {
+  unsafeProductShortcode,
+  unsafeProjectShortcode,
+  unsafeVendorShortcode,
+} from "@cubby/schemas/identifiers";
+import { isEqual } from "es-toolkit";
+import { householdLocalDate } from "~/lib/household-date";
+import {
   expenseMutationInvalidateKeys,
   financialAccountMutationInvalidateKeys,
   financialTransactionMutationInvalidateKeys,
@@ -20,6 +27,7 @@ import type {
   EntityEditAccess,
   EntityEditDefinition,
   EntityEditField,
+  EntityEditIntentDefinition,
   EntityEditIssue,
   EntityEditOperation,
   EntityEditRecord,
@@ -33,13 +41,15 @@ const readOnly = (reason: string): EntityEditAccess => ({
 });
 
 const valueFor = (record: EntityEditRecord | undefined, id: string) =>
-  record?.[id];
+  record && id in record
+    ? (record as EntityEditRecord & Record<string, unknown>)[id]
+    : undefined;
 
 const changed = (
   record: EntityEditRecord | undefined,
   id: string,
   value: unknown,
-) => !record || !Object.is(valueFor(record, id), value);
+) => !record || !isEqual(valueFor(record, id), value);
 
 const noIssues = (): readonly EntityEditIssue[] => [];
 
@@ -112,10 +122,30 @@ const intent = <E extends EditableEntity>(
     record?: EntityEditRecord;
     context: Readonly<Record<string, unknown>>;
   }) => EntityEditAccess = () => editable,
+  validate?: EntityEditIntentDefinition<E, EntityEditRecord>["validate"],
+  options?: {
+    defaults?: EntityEditIntentDefinition<E, EntityEditRecord>["defaults"];
+    acceptsSeed?: boolean;
+    buildData?: (
+      patch: Record<string, unknown>,
+      context: Readonly<Record<string, unknown>>,
+    ) => object;
+  },
 ) => ({
   fields,
   access,
-  build: ({ record, patch }: { record?: EntityEditRecord; patch: object }) => {
+  validate,
+  defaults: options?.defaults,
+  acceptsSeed: options?.acceptsSeed,
+  build: ({
+    record,
+    patch,
+    context,
+  }: {
+    record?: EntityEditRecord;
+    patch: object;
+    context: Readonly<Record<string, unknown>>;
+  }) => {
     const keys = Object.keys(patch);
     if (operation !== "create" && !record) {
       return {
@@ -136,11 +166,29 @@ const intent = <E extends EditableEntity>(
         operation,
         intent: semanticIntent,
         ...(record ? { id: record.id } : {}),
-        data: patch,
+        data: options?.buildData
+          ? options.buildData(patch as Record<string, unknown>, context)
+          : patch,
       },
     };
   },
 });
+
+const createIntent = <E extends EditableEntity>(
+  entity: E,
+  semanticIntent: string,
+  fields: readonly string[],
+  options: NonNullable<Parameters<typeof intent<E>>[6]>,
+) =>
+  intent(
+    entity,
+    "create",
+    semanticIntent,
+    fields,
+    undefined,
+    undefined,
+    options,
+  );
 
 /**
  * Operation declarations are intentionally uniform. The registry adds the
@@ -150,7 +198,9 @@ const intent = <E extends EditableEntity>(
 const operations = <E extends EditableEntity>(
   entity: E,
   options?: {
-    create?: readonly string[];
+    create?:
+      | readonly string[]
+      | Readonly<Record<string, ReturnType<typeof intent<E>>>>;
     update?: Readonly<Record<string, ReturnType<typeof intent<E>>>>;
     delete?: EntityEditAccess;
   },
@@ -158,13 +208,17 @@ const operations = <E extends EditableEntity>(
   ...(options?.create
     ? {
         create: {
-          defaultIntent: options.create[0]!,
-          intents: Object.fromEntries(
-            options.create.map((name) => [
-              name,
-              intent(entity, "create", name, fieldsFor(entity, name)),
-            ]),
-          ),
+          defaultIntent: Array.isArray(options.create)
+            ? options.create[0]!
+            : Object.keys(options.create)[0]!,
+          intents: Array.isArray(options.create)
+            ? Object.fromEntries(
+                options.create.map((name) => [
+                  name,
+                  intent(entity, "create", name, fieldsFor(entity, name)),
+                ]),
+              )
+            : options.create,
         },
       }
     : {}),
@@ -195,25 +249,11 @@ const definition = <E extends EditableEntity>(
   fields: readonly EntityEditField<E, EntityEditRecord, unknown, object>[],
   invalidationKeys: EntityEditDefinition<E>["invalidationKeys"],
   definitionOperations: EntityEditDefinition<E>["operations"],
-  surfaces: EntityEditDefinition<E>["surfaces"],
 ): EntityEditDefinition<E> => ({
   entity,
   fields,
   invalidationKeys,
   operations: definitionOperations,
-  surfaces,
-});
-
-const full = (_fields: readonly string[], submitLabel = "Save changes") => ({
-  submitLabel,
-});
-
-const capture = (_fields: readonly string[], submitLabel = "Create") => ({
-  submitLabel,
-});
-
-const calendarUpdate = (_fields: readonly string[]) => ({
-  submitLabel: "Save",
 });
 
 const standardUpdate = <E extends EditableEntity>(
@@ -229,11 +269,17 @@ const standardUpdate = <E extends EditableEntity>(
 
 const projectFields = [
   trimmedName("project"),
+  nullableText("project", "icon"),
   field("project", "status"),
   field("project", "kind"),
   field("project", "parentProjectId"),
   field("project", "startDate"),
   field("project", "endDate"),
+  field("project", "costEstimate"),
+  field("project", "locations"),
+  nullableText("project", "googleDriveFolderUrl"),
+  nullableText("project", "notionPageUrl"),
+  field("project", "blockedByIds"),
   nullableText("project", "notes"),
 ] as const;
 
@@ -261,18 +307,137 @@ const taskFields = [
   nullableText("task", "notes"),
 ] as const;
 
+const requiredDate =
+  (
+    fieldId: "date" | "dueDate",
+  ): NonNullable<
+    EntityEditIntentDefinition<EditableEntity, EntityEditRecord>["validate"]
+  > =>
+  ({ values }) =>
+    values[fieldId]
+      ? noIssues()
+      : [
+          {
+            field: fieldId,
+            message: "Date is required",
+            source: "client",
+          },
+        ];
+
 const expenseFields = [
   trimmedName("expense"),
+  field("expense", "lineKind"),
   field("expense", "cost"),
   field("expense", "date"),
   field("expense", "future"),
   field("expense", "projectId"),
   field("expense", "productId"),
+  field("expense", "productQuantity"),
   field("expense", "vendor"),
+  field("expense", "orderId"),
   field("expense", "trade"),
   field("expense", "costType"),
+  nullableText("expense", "url"),
   nullableText("expense", "notes"),
 ] as const;
+
+const financialAccountFields = [
+  trimmedName("financialAccount"),
+  field("financialAccount", "kind"),
+  field("financialAccount", "issuer"),
+  field("financialAccount", "network"),
+  field("financialAccount", "institution"),
+  field("financialAccount", "accountType"),
+  field("financialAccount", "provider"),
+  field("financialAccount", "last4"),
+  field("financialAccount", "provisional"),
+  field("financialAccount", "sourceAliases"),
+  nullableText("financialAccount", "notes"),
+] as const;
+
+const normalizeSourceAliases = (value: unknown) =>
+  Array.isArray(value)
+    ? value
+        .filter(
+          (alias): alias is Record<string, unknown> =>
+            Boolean(alias) && typeof alias === "object",
+        )
+        .map((alias) => ({
+          source: String(alias.source ?? "").trim(),
+          alias: String(alias.alias ?? "").trim(),
+          externalAccountId:
+            String(alias.externalAccountId ?? "").trim() || null,
+        }))
+        .filter((alias) => alias.source && alias.alias)
+    : [];
+
+const financialAccountIdentity = (patch: Record<string, unknown>) => {
+  const kind = patch.kind;
+  const last4 = String(patch.last4 ?? "").trim() || null;
+  if (kind === "credit_card") {
+    return {
+      kind,
+      issuer: String(patch.issuer ?? "").trim() || null,
+      network: String(patch.network ?? "").trim() || null,
+      last4,
+    };
+  }
+  if (kind === "bank_account") {
+    return {
+      kind,
+      institution: String(patch.institution ?? "").trim() || null,
+      accountType: patch.accountType ?? "checking",
+      last4,
+    };
+  }
+  if (kind === "stored_value") {
+    return {
+      kind,
+      provider: String(patch.provider ?? "").trim(),
+      last4,
+    };
+  }
+  if (kind === "other") {
+    return {
+      kind,
+      institution: String(patch.institution ?? "").trim() || null,
+      last4,
+    };
+  }
+  return { kind: "cash" };
+};
+
+const normalizedNullableTextPatch = (
+  patch: Record<string, unknown>,
+  key: string,
+) => (key in patch ? { [key]: String(patch[key] ?? "").trim() || null } : {});
+
+const normalizeFinancialTransaction = (patch: Record<string, unknown>) => ({
+  ...patch,
+  ...normalizedNullableTextPatch(patch, "purchaseId"),
+  ...normalizedNullableTextPatch(patch, "transactionDate"),
+  ...normalizedNullableTextPatch(patch, "postedDate"),
+  ...normalizedNullableTextPatch(patch, "merchant"),
+  ...normalizedNullableTextPatch(patch, "rawDescription"),
+  ...normalizedNullableTextPatch(patch, "sourceCategory"),
+  ...normalizedNullableTextPatch(patch, "notes"),
+  ...("sourceRefs" in patch
+    ? {
+        sourceRefs: Array.isArray(patch.sourceRefs)
+          ? patch.sourceRefs
+              .filter(
+                (reference): reference is Record<string, unknown> =>
+                  Boolean(reference) && typeof reference === "object",
+              )
+              .map((reference) => ({
+                source: String(reference.source ?? "").trim(),
+                externalId: String(reference.externalId ?? "").trim(),
+              }))
+              .filter((reference) => reference.source && reference.externalId)
+          : [],
+      }
+    : {}),
+});
 
 /**
  * Semantic capabilities, rather than presentation surfaces, choose editable
@@ -290,8 +455,12 @@ const semanticFields: Partial<
       "manufacturer",
       "model",
       "category",
+      "ingredientId",
+      "upc",
+      "fdc_id",
       "price",
       "stockTracked",
+      "unitMappings",
       "notes",
     ],
     identity: ["name", "aliases", "manufacturer", "model", "category"],
@@ -328,14 +497,27 @@ const semanticFields: Partial<
     calendar: ["date", "name", "mealType", "mealKind"],
   },
   project: {
-    capture: ["name", "status", "kind", "startDate", "endDate"],
+    capture: [
+      "name",
+      "status",
+      "kind",
+      "costEstimate",
+      "parentProjectId",
+      "startDate",
+    ],
     full: [
       "name",
+      "icon",
       "status",
       "kind",
       "parentProjectId",
       "startDate",
       "endDate",
+      "costEstimate",
+      "locations",
+      "googleDriveFolderUrl",
+      "notionPageUrl",
+      "blockedByIds",
       "notes",
     ],
     status: ["status"],
@@ -370,24 +552,33 @@ const semanticFields: Partial<
   expense: {
     capture: [
       "name",
-      "cost",
-      "date",
-      "future",
-      "projectId",
-      "vendor",
-      "trade",
-      "costType",
-    ],
-    full: [
-      "name",
+      "lineKind",
       "cost",
       "date",
       "future",
       "projectId",
       "productId",
+      "productQuantity",
       "vendor",
+      "orderId",
       "trade",
       "costType",
+    ],
+    full: [
+      "name",
+      "lineKind",
+      "lineBasis",
+      "cost",
+      "date",
+      "future",
+      "projectId",
+      "productId",
+      "productQuantity",
+      "vendor",
+      "orderId",
+      "trade",
+      "costType",
+      "url",
       "notes",
     ],
     planned: ["name", "cost", "date"],
@@ -397,23 +588,62 @@ const semanticFields: Partial<
     product: ["productId"],
   },
   vendor: {
-    capture: ["name"],
+    capture: ["name", "website", "notes"],
     full: ["name", "website", "orderUrlTemplate", "notes"],
     identity: ["name"],
   },
   purchase: {
-    capture: ["vendorId", "date", "orderId"],
-    full: ["vendorId", "date", "orderId", "notes"],
+    capture: [
+      "vendorId",
+      "date",
+      "orderId",
+      "displayLabel",
+      "statedTotal",
+      "notes",
+    ],
+    full: [
+      "vendorId",
+      "date",
+      "orderId",
+      "displayLabel",
+      "statedTotal",
+      "notes",
+    ],
     vendor: ["vendorId"],
     identity: ["date", "orderId", "notes"],
   },
   financialAccount: {
-    capture: ["name", "type"],
-    full: ["name", "type", "provisional", "sourceAliases", "notes"],
-    identity: ["name", "type", "provisional", "sourceAliases", "notes"],
+    capture: [
+      "name",
+      "kind",
+      "issuer",
+      "network",
+      "institution",
+      "accountType",
+      "provider",
+      "last4",
+      "provisional",
+      "sourceAliases",
+      "notes",
+    ],
+    full: ["name", "provisional", "sourceAliases", "notes"],
+    identity: ["name", "provisional", "sourceAliases", "notes"],
   },
   financialTransaction: {
-    capture: ["accountId", "kind", "status", "amount", "transactionDate"],
+    capture: [
+      "accountId",
+      "purchaseId",
+      "kind",
+      "status",
+      "amount",
+      "transactionDate",
+      "postedDate",
+      "merchant",
+      "rawDescription",
+      "sourceCategory",
+      "sourceRefs",
+      "notes",
+    ],
     full: [
       "accountId",
       "purchaseId",
@@ -464,8 +694,12 @@ export const entityEditRegistry = defineEntityEditRegistry({
       field("product", "manufacturer", { required: true }),
       field("product", "model"),
       field("product", "category"),
+      field("product", "ingredientId"),
+      field("product", "upc"),
+      field("product", "fdc_id"),
       field("product", "price"),
       field("product", "stockTracked"),
+      field("product", "unitMappings"),
       nullableText("product", "notes"),
     ],
     productMutationInvalidateKeys,
@@ -473,21 +707,6 @@ export const entityEditRegistry = defineEntityEditRegistry({
       create: ["capture", "full"],
       update: standardUpdate("product", ["full", "identity", "price", "stock"]),
     }),
-    {
-      detail: full([
-        "name",
-        "aliases",
-        "manufacturer",
-        "model",
-        "category",
-        "price",
-        "stockTracked",
-        "notes",
-      ]),
-      "create-page": capture(["name", "manufacturer"]),
-      "quick-create": capture(["name", "manufacturer"]),
-      cell: { submitLabel: "Save" },
-    },
   ),
   ingredient: definition(
     "ingredient",
@@ -501,12 +720,6 @@ export const entityEditRegistry = defineEntityEditRegistry({
       create: ["capture", "full"],
       update: standardUpdate("ingredient", ["full", "identity"]),
     }),
-    {
-      detail: full(["name", "aliases", "naKinds"]),
-      "create-page": capture(["name", "aliases"]),
-      "quick-create": capture(["name"]),
-      cell: { submitLabel: "Save" },
-    },
   ),
   inventory: definition(
     "inventory",
@@ -527,16 +740,6 @@ export const entityEditRegistry = defineEntityEditRegistry({
         "placement",
       ]),
     }),
-    {
-      detail: full(["amount", "productId", "locationId", "placement"]),
-      "quick-create": capture([
-        "productId",
-        "locationId",
-        "amount",
-        "placement",
-      ]),
-      cell: { submitLabel: "Save" },
-    },
   ),
   location: definition(
     "location",
@@ -552,12 +755,6 @@ export const entityEditRegistry = defineEntityEditRegistry({
       create: ["capture", "full"],
       update: standardUpdate("location", ["full", "identity", "parent"]),
     }),
-    {
-      detail: full(["name", "aliases", "type", "productId", "parentId"]),
-      "create-page": capture(["name", "type", "parentId"]),
-      "quick-create": capture(["name", "type", "parentId"]),
-      cell: { submitLabel: "Move" },
-    },
   ),
   recipe: definition(
     "recipe",
@@ -573,11 +770,6 @@ export const entityEditRegistry = defineEntityEditRegistry({
       create: ["capture", "full"],
       update: standardUpdate("recipe", ["full", "identity"]),
     }),
-    {
-      detail: full(["name", "cookbookId", "tags", "notes", "sections"]),
-      "create-page": capture(["name"]),
-      "quick-create": capture(["name"]),
-    },
   ),
   meal: definition(
     "meal",
@@ -590,22 +782,53 @@ export const entityEditRegistry = defineEntityEditRegistry({
     ],
     mealMutationInvalidateKeys,
     operations("meal", {
-      create: ["capture", "full"],
+      create: {
+        capture: createIntent("meal", "capture", fieldsFor("meal", "capture"), {
+          defaults: () => ({
+            date: householdLocalDate(),
+            name: null,
+            mealType: null,
+            mealKind: "cooked",
+          }),
+        }),
+        full: createIntent("meal", "full", fieldsFor("meal", "full"), {
+          defaults: {
+            date: null,
+            name: null,
+            mealType: null,
+            mealKind: "cooked",
+            sortOrder: null,
+          },
+        }),
+      },
       update: standardUpdate("meal", ["full", "calendar"]),
     }),
-    {
-      detail: full(["date", "name", "mealType", "mealKind", "sortOrder"]),
-      "quick-create": capture(["date", "name", "mealType", "mealKind"]),
-      calendar: calendarUpdate(["date", "name", "mealType", "mealKind"]),
-      cell: { submitLabel: "Save" },
-    },
   ),
   project: definition(
     "project",
     projectFields,
     projectMutationInvalidateKeys,
     operations("project", {
-      create: ["capture", "full"],
+      create: {
+        capture: createIntent(
+          "project",
+          "capture",
+          fieldsFor("project", "capture"),
+          {
+            defaults: {
+              name: "",
+              status: "planning",
+              kind: null,
+              costEstimate: null,
+              parentProjectId: null,
+              startDate: null,
+            },
+          },
+        ),
+        full: createIntent("project", "full", fieldsFor("project", "full"), {
+          defaults: { status: "planning", kind: null },
+        }),
+      },
       update: standardUpdate("project", [
         "full",
         "status",
@@ -614,69 +837,103 @@ export const entityEditRegistry = defineEntityEditRegistry({
         "parent",
       ]),
     }),
-    {
-      detail: full([
-        "name",
-        "status",
-        "kind",
-        "parentProjectId",
-        "startDate",
-        "endDate",
-        "notes",
-      ]),
-      "quick-create": capture([
-        "name",
-        "status",
-        "kind",
-        "startDate",
-        "endDate",
-      ]),
-      cell: { submitLabel: "Save" },
-    },
   ),
   task: definition(
     "task",
     taskFields,
     taskMutationInvalidateKeys,
     operations("task", {
-      create: ["capture", "full"],
-      update: standardUpdate("task", [
-        "full",
-        "schedule",
-        "status",
-        "project",
-        "subject",
-      ]),
+      create: {
+        capture: createIntent("task", "capture", fieldsFor("task", "capture"), {
+          defaults: {
+            name: "",
+            status: "not_started",
+            projectId: null,
+            subjectProductId: null,
+            trade: null,
+            dueDate: null,
+          },
+          buildData: (patch) => ({
+            ...patch,
+            projectId: patch.projectId
+              ? unsafeProjectShortcode(String(patch.projectId))
+              : null,
+            subjectProductId: patch.subjectProductId
+              ? unsafeProductShortcode(String(patch.subjectProductId))
+              : null,
+            trade: patch.trade ?? "other",
+            dueEndDate: null,
+          }),
+        }),
+        full: createIntent("task", "full", fieldsFor("task", "full"), {
+          defaults: { status: "not_started" },
+        }),
+      },
+      update: {
+        ...standardUpdate("task", ["full", "status", "project", "subject"]),
+        schedule: intent(
+          "task",
+          "update",
+          "schedule",
+          fieldsFor("task", "schedule"),
+          undefined,
+          requiredDate("dueDate"),
+        ),
+      },
     }),
-    {
-      detail: full([
-        "name",
-        "status",
-        "projectId",
-        "subjectProductId",
-        "trade",
-        "dueDate",
-        "dueEndDate",
-        "notes",
-      ]),
-      "quick-create": capture([
-        "name",
-        "status",
-        "projectId",
-        "subjectProductId",
-        "trade",
-        "dueDate",
-      ]),
-      calendar: calendarUpdate(["name", "status", "dueDate", "dueEndDate"]),
-      cell: { submitLabel: "Save" },
-    },
   ),
   expense: definition(
     "expense",
-    expenseFields,
+    [...expenseFields, field("expense", "lineBasis")],
     expenseMutationInvalidateKeys,
     operations("expense", {
-      create: ["capture", "full"],
+      create: {
+        capture: createIntent(
+          "expense",
+          "capture",
+          fieldsFor("expense", "capture"),
+          {
+            defaults: (context) => ({
+              name: "",
+              lineKind: "auto",
+              cost: null,
+              date: householdLocalDate(),
+              future: false,
+              projectId: null,
+              productId: null,
+              productQuantity: null,
+              vendor: "",
+              orderId: "",
+              costType: context.disposition ? "tools" : "materials",
+              trade: "other",
+            }),
+            buildData: (patch) => ({
+              ...patch,
+              lineKind: patch.lineKind === "auto" ? undefined : patch.lineKind,
+              projectId: patch.projectId
+                ? unsafeProjectShortcode(String(patch.projectId))
+                : null,
+              productId: patch.productId ?? null,
+              productQuantity: patch.productId
+                ? (patch.productQuantity ?? null)
+                : null,
+              vendor:
+                typeof patch.vendor === "string"
+                  ? patch.vendor.trim() || null
+                  : null,
+              orderId:
+                typeof patch.orderId === "string"
+                  ? patch.orderId.trim() || null
+                  : null,
+              url: null,
+              notes: null,
+            }),
+          },
+        ),
+        full: createIntent("expense", "full", fieldsFor("expense", "full"), {
+          defaults: { future: false },
+        }),
+      },
       update: {
         ...standardUpdate("expense", [
           "full",
@@ -691,38 +948,13 @@ export const entityEditRegistry = defineEntityEditRegistry({
           "planned",
           fieldsFor("expense", "planned"),
           ({ surface, record }) =>
-            surface === "calendar" && record?.future !== true
+            surface === "calendar" && valueFor(record, "future") !== true
               ? readOnly("Recorded expenses stay read-only in the calendar.")
               : editable,
+          requiredDate("date"),
         ),
       },
     }),
-    {
-      detail: full([
-        "name",
-        "cost",
-        "date",
-        "future",
-        "projectId",
-        "productId",
-        "vendor",
-        "trade",
-        "costType",
-        "notes",
-      ]),
-      "quick-create": capture([
-        "name",
-        "cost",
-        "date",
-        "future",
-        "projectId",
-        "vendor",
-        "trade",
-        "costType",
-      ]),
-      calendar: { submitLabel: "Save" },
-      cell: { submitLabel: "Save" },
-    },
   ),
   vendor: definition(
     "vendor",
@@ -734,52 +966,135 @@ export const entityEditRegistry = defineEntityEditRegistry({
     ],
     vendorMutationInvalidateKeys,
     operations("vendor", {
-      create: ["capture", "full"],
+      create: {
+        capture: createIntent(
+          "vendor",
+          "capture",
+          fieldsFor("vendor", "capture"),
+          { defaults: { name: "", website: null, notes: null } },
+        ),
+        full: createIntent("vendor", "full", fieldsFor("vendor", "full"), {
+          defaults: { name: "", website: null, notes: null },
+        }),
+      },
       update: standardUpdate("vendor", ["full", "identity"]),
     }),
-    {
-      detail: full(["name", "website", "orderUrlTemplate", "notes"]),
-      "quick-create": capture(["name"]),
-      cell: { submitLabel: "Save" },
-    },
   ),
   purchase: definition(
     "purchase",
     [
-      field("purchase", "vendorId"),
-      field("purchase", "date"),
+      field("purchase", "vendorId", { required: true }),
+      field("purchase", "date", { required: true }),
       nullableText("purchase", "orderId"),
+      nullableText("purchase", "displayLabel"),
+      field("purchase", "statedTotal"),
       nullableText("purchase", "notes"),
     ],
     purchaseMutationInvalidateKeys,
     operations("purchase", {
-      create: ["capture", "full"],
+      create: {
+        capture: createIntent(
+          "purchase",
+          "capture",
+          fieldsFor("purchase", "capture"),
+          {
+            defaults: () => ({
+              vendorId: "",
+              orderId: "",
+              displayLabel: "",
+              date: householdLocalDate(),
+              statedTotal: null,
+              notes: "",
+            }),
+            buildData: (patch) => ({
+              ...patch,
+              vendorId: unsafeVendorShortcode(String(patch.vendorId)),
+            }),
+          },
+        ),
+        full: createIntent("purchase", "full", fieldsFor("purchase", "full"), {
+          defaults: { statedTotal: null },
+        }),
+      },
       update: standardUpdate("purchase", ["full", "vendor", "identity"]),
     }),
-    {
-      detail: full(["vendorId", "date", "orderId", "notes"]),
-      "quick-create": capture(["vendorId", "date", "orderId"]),
-      cell: { submitLabel: "Save" },
-    },
   ),
   financialAccount: definition(
     "financialAccount",
-    [
-      trimmedName("financialAccount"),
-      field("financialAccount", "type"),
-      field("financialAccount", "provisional"),
-      field("financialAccount", "sourceAliases"),
-      nullableText("financialAccount", "notes"),
-    ],
+    financialAccountFields,
     financialAccountMutationInvalidateKeys,
     operations("financialAccount", {
-      create: ["capture", "full"],
-      update: standardUpdate("financialAccount", ["full", "identity"]),
+      create: {
+        capture: createIntent(
+          "financialAccount",
+          "capture",
+          fieldsFor("financialAccount", "capture"),
+          {
+            defaults: {
+              name: "",
+              kind: "credit_card",
+              issuer: "",
+              network: "",
+              institution: "",
+              accountType: "checking",
+              provider: "",
+              last4: "",
+              provisional: false,
+              sourceAliases: [],
+              notes: null,
+            },
+            buildData: (patch) => ({
+              name: patch.name,
+              provisional: patch.provisional,
+              identity: financialAccountIdentity(patch),
+              sourceAliases: normalizeSourceAliases(patch.sourceAliases),
+              notes: patch.notes,
+            }),
+          },
+        ),
+        full: createIntent(
+          "financialAccount",
+          "full",
+          fieldsFor("financialAccount", "capture"),
+          {
+            defaults: { provisional: false, sourceAliases: [], notes: null },
+            buildData: (patch) => ({
+              name: patch.name,
+              provisional: patch.provisional,
+              identity: financialAccountIdentity(patch),
+              sourceAliases: normalizeSourceAliases(patch.sourceAliases),
+              notes: patch.notes,
+            }),
+          },
+        ),
+      },
+      update: {
+        full: intent(
+          "financialAccount",
+          "update",
+          "full",
+          fieldsFor("financialAccount", "full"),
+          undefined,
+          undefined,
+          {
+            acceptsSeed: true,
+            buildData: (patch) =>
+              "sourceAliases" in patch
+                ? {
+                    ...patch,
+                    sourceAliases: normalizeSourceAliases(patch.sourceAliases),
+                  }
+                : patch,
+          },
+        ),
+        identity: intent(
+          "financialAccount",
+          "update",
+          "identity",
+          fieldsFor("financialAccount", "identity"),
+        ),
+      },
     }),
-    {
-      detail: full(["name", "type", "provisional", "sourceAliases", "notes"]),
-      "quick-create": capture(["name", "type"]),
-    },
   ),
   financialTransaction: definition(
     "financialTransaction",
@@ -788,7 +1103,18 @@ export const entityEditRegistry = defineEntityEditRegistry({
       field("financialTransaction", "purchaseId"),
       field("financialTransaction", "kind"),
       field("financialTransaction", "status"),
-      field("financialTransaction", "amount"),
+      field("financialTransaction", "amount", {
+        validate: ({ value }) =>
+          typeof value === "number" && Number.isFinite(value) && value !== 0
+            ? noIssues()
+            : [
+                {
+                  field: "amount",
+                  message: "Amount must be a non-zero number.",
+                  source: "client",
+                },
+              ],
+      }),
       field("financialTransaction", "transactionDate"),
       field("financialTransaction", "postedDate", {
         validate: ({ value, values }) =>
@@ -810,33 +1136,60 @@ export const entityEditRegistry = defineEntityEditRegistry({
     ],
     financialTransactionMutationInvalidateKeys,
     operations("financialTransaction", {
-      create: ["capture", "full"],
-      update: standardUpdate("financialTransaction", ["full", "settlement"]),
+      create: {
+        capture: createIntent(
+          "financialTransaction",
+          "capture",
+          fieldsFor("financialTransaction", "capture"),
+          {
+            defaults: {
+              accountId: "",
+              purchaseId: "",
+              kind: "purchase",
+              status: "pending",
+              amount: 0,
+              transactionDate: "",
+              postedDate: "",
+              merchant: "",
+              rawDescription: "",
+              sourceCategory: "",
+              sourceRefs: [],
+              notes: "",
+            },
+            buildData: normalizeFinancialTransaction,
+          },
+        ),
+        full: createIntent(
+          "financialTransaction",
+          "full",
+          fieldsFor("financialTransaction", "full"),
+          {
+            defaults: { sourceRefs: [] },
+            buildData: normalizeFinancialTransaction,
+          },
+        ),
+      },
+      update: {
+        full: intent(
+          "financialTransaction",
+          "update",
+          "full",
+          fieldsFor("financialTransaction", "full"),
+          undefined,
+          undefined,
+          {
+            acceptsSeed: true,
+            buildData: normalizeFinancialTransaction,
+          },
+        ),
+        settlement: intent(
+          "financialTransaction",
+          "update",
+          "settlement",
+          fieldsFor("financialTransaction", "settlement"),
+        ),
+      },
     }),
-    {
-      detail: full([
-        "accountId",
-        "purchaseId",
-        "kind",
-        "status",
-        "amount",
-        "transactionDate",
-        "postedDate",
-        "merchant",
-        "rawDescription",
-        "sourceCategory",
-        "sourceRefs",
-        "notes",
-      ]),
-      "quick-create": capture([
-        "accountId",
-        "kind",
-        "status",
-        "amount",
-        "transactionDate",
-      ]),
-      dialog: { submitLabel: "Save transaction" },
-    },
   ),
   wish: definition(
     "wish",
@@ -848,13 +1201,26 @@ export const entityEditRegistry = defineEntityEditRegistry({
     ],
     wishMutationInvalidateKeys,
     operations("wish", {
-      create: ["capture", "full"],
-      update: standardUpdate("wish", ["full", "identity", "acquisition"]),
+      create: {
+        capture: createIntent("wish", "capture", fieldsFor("wish", "full"), {
+          defaults: { name: "", notes: null, candidateProductIds: [] },
+        }),
+        full: createIntent("wish", "full", fieldsFor("wish", "full"), {
+          defaults: { name: "", notes: null, candidateProductIds: [] },
+        }),
+      },
+      update: {
+        full: intent(
+          "wish",
+          "update",
+          "full",
+          fieldsFor("wish", "full"),
+          undefined,
+          undefined,
+          { acceptsSeed: true },
+        ),
+        ...standardUpdate("wish", ["identity", "acquisition"]),
+      },
     }),
-    {
-      detail: full(["name", "notes", "candidateProductIds", "acquired"]),
-      "quick-create": capture(["name"]),
-      cell: { submitLabel: "Save" },
-    },
   ),
 });

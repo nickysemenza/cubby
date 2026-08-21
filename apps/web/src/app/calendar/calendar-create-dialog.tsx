@@ -1,8 +1,6 @@
 import type { CalendarItemKind } from "@cubby/schemas/calendar";
-import { CreateExpenseDialog } from "~/app/expenses/create-expense-dialog";
-import { CreateMealDialog } from "~/app/meals/create-meal-dialog";
-import { CreateProjectDialog } from "~/app/projects/create-project-dialog";
-import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
+import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
+import { calendarItemCreateRequest } from "./calendar-kind-registry";
 
 interface CalendarCreateDialogProps {
   kind: CalendarItemKind;
@@ -15,27 +13,11 @@ export function CalendarCreateDialog({
   date,
   onOpenChange,
 }: CalendarCreateDialogProps) {
-  if (kind === "meal") {
-    return (
-      <CreateMealDialog open onOpenChange={onOpenChange} presetDate={date} />
-    );
-  }
-  if (kind === "task") {
-    return (
-      <CreateTaskDialog open onOpenChange={onOpenChange} presetDate={date} />
-    );
-  }
-  if (kind === "expense") {
-    return (
-      <CreateExpenseDialog
-        open
-        onOpenChange={onOpenChange}
-        presetDate={date}
-        presetFuture
-      />
-    );
-  }
   return (
-    <CreateProjectDialog open onOpenChange={onOpenChange} presetDate={date} />
+    <EntityEditDialog
+      open
+      onOpenChange={onOpenChange}
+      request={calendarItemCreateRequest(kind, date)}
+    />
   );
 }

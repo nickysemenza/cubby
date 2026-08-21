@@ -39,7 +39,7 @@ import {
   SheetTitle,
 } from "~/components/ui/sheet";
 import { ChoiceSwitcher } from "~/components/ui/view-switcher";
-import { useEntityCommands } from "~/entities/editing";
+import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { HOUSEHOLD_TIMEZONE, householdLocalDate } from "~/lib/household-date";
@@ -243,8 +243,7 @@ export function UnifiedCalendar({
       let label: string;
       if (item.kind === "meal") {
         label = "Meal";
-        request = mealCommands.executeOrThrow({
-          entity: "meal",
+        request = mealCommands.submit({
           operation: "update",
           intent: "calendar",
           id: item.id,
@@ -255,8 +254,7 @@ export function UnifiedCalendar({
         const wasRange =
           item.endDateExclusive !==
           formatPlainDate(addDays(parsePlainDate(item.startDate), 1));
-        request = taskCommands.executeOrThrow({
-          entity: "task",
+        request = taskCommands.submit({
           operation: "update",
           intent: "schedule",
           id: item.id,
@@ -269,8 +267,7 @@ export function UnifiedCalendar({
         });
       } else if (item.kind === "expense" && item.future) {
         label = "Expense";
-        request = expenseCommands.executeOrThrow({
-          entity: "expense",
+        request = expenseCommands.submit({
           operation: "update",
           intent: "planned",
           id: item.id,

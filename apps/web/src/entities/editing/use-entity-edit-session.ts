@@ -1,8 +1,14 @@
 import { isEqual } from "es-toolkit";
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import type { Path, UseFormReturn } from "react-hook-form";
+import type {
+  DefaultValues,
+  Path,
+  PathValue,
+  UseFormReturn,
+} from "react-hook-form";
 import { useForm, useWatch } from "react-hook-form";
 import { entityEditRegistry } from "./definitions";
+import type { EntityEditDraft } from "./intent-types";
 import {
   buildEntityEdit,
   initialEntityEditValues,
@@ -20,12 +26,15 @@ import { useEntityCommands } from "./use-entity-commands";
 
 export interface EntityEditSession<E extends EditableEntity> {
   /** Exposed so specialized form adapters can use RHF's native field helpers. */
-  readonly form: UseFormReturn<Record<string, unknown>>;
-  readonly values: Readonly<Record<string, unknown>>;
+  readonly form: UseFormReturn<EntityEditDraft<E>>;
+  readonly values: Readonly<EntityEditDraft<E>>;
   readonly access: EntityEditAccess | null;
   readonly isPending: boolean;
   readonly issues: readonly EntityEditIssue[];
-  set(field: string, value: unknown): void;
+  set<P extends Path<EntityEditDraft<E>>>(
+    field: P,
+    value: PathValue<EntityEditDraft<E>, P>,
+  ): void;
   reset(): void;
   submit(): Promise<EntityEditResult<E>>;
 }
@@ -63,10 +72,10 @@ export function useEntityEditSession<E extends EditableEntity>(
         : {},
     [stableRequest, resolved],
   );
-  const form = useForm<Record<string, unknown>>({
-    defaultValues: initialValues,
+  const form = useForm<EntityEditDraft<E>>({
+    defaultValues: initialValues as DefaultValues<EntityEditDraft<E>>,
   });
-  const values = useWatch({ control: form.control }) as Record<string, unknown>;
+  const values = useWatch({ control: form.control }) as EntityEditDraft<E>;
 
   useEffect(() => {
     form.reset(initialValues);
@@ -88,7 +97,7 @@ export function useEntityEditSession<E extends EditableEntity>(
       form.clearErrors();
       for (const nextIssue of nextIssues) {
         form.setError(
-          (nextIssue.field ?? "root.server") as Path<Record<string, unknown>>,
+          (nextIssue.field ?? "root.server") as Path<EntityEditDraft<E>>,
           { type: nextIssue.source, message: nextIssue.message },
         );
       }
@@ -96,7 +105,10 @@ export function useEntityEditSession<E extends EditableEntity>(
     [form],
   );
   const set = useCallback(
-    (field: string, value: unknown) => {
+    <P extends Path<EntityEditDraft<E>>>(
+      field: P,
+      value: PathValue<EntityEditDraft<E>, P>,
+    ) => {
       form.setValue(field, value, { shouldDirty: true });
     },
     [form],

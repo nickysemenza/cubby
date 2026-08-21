@@ -5,9 +5,9 @@ import {
   CreateDialogAction,
   createDialogSearchField,
 } from "~/app/_components/forms/create-dialog-action";
-import { CreateVendorDialog } from "~/app/vendors/create-vendor-dialog";
 import { VendorList } from "~/app/vendors/vendorlist";
 import { Page } from "~/components/page/Page";
+import { vendorCaptureRequest } from "~/entities/editing/editor-requests";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
@@ -53,7 +53,7 @@ function VendorsPage() {
       title="Vendors"
       layout="full"
       actions={
-        <CreateDialogAction Dialog={CreateVendorDialog}>
+        <CreateDialogAction request={vendorCaptureRequest()}>
           New Vendor
         </CreateDialogAction>
       }

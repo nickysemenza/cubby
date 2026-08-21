@@ -66,7 +66,7 @@ export type TaskBoardPatch = {
 };
 
 /**
- * Fields a board quick-add can pre-fill on `CreateTaskDialog` — derived from
+ * Fields a board quick-add can seed into the Task capture intent — derived from
  * whichever column (and, when swimlanes are on, lane) the "+" was clicked
  * from, so the created task lands directly in that cell.
  */
