@@ -33,6 +33,8 @@ import {
   productFiltersSchema,
   productFindOrCreateByUPCInput,
   productFindOrCreateByUPCOut,
+  productInventoryEntriesBatchInput,
+  productInventoryEntriesByIdOut,
   productListItemOut,
   productLookupUpcOut,
   productManufacturerOptionsOut,
@@ -99,6 +101,7 @@ import {
   productSearch,
   quickCreateProduct,
 } from "~/server/repo/product";
+import { loadProductInventoryEntries } from "~/server/repo/product/lookup";
 import { loadProductQuantitySummaries } from "~/server/repo/product/quantity-ledger";
 import {
   attachProductComponents,
@@ -403,6 +406,32 @@ const quantitySummaries = protectedProcedure
       summaries[shortcode] = summariesById.get(ids[index]!)!;
     }
     return summaries;
+  });
+
+/**
+ * "Where does each of these live" for a bounded set of products.
+ *
+ * The companion read for a table whose rows only *reference* a product — a
+ * task's subject product, say. Same shortcode-keyed batch shape as
+ * `quantitySummaries`, and for the same reason: the alternative is threading
+ * stock onto a row shape that other producers never load.
+ */
+const inventoryEntriesByIds = protectedProcedure
+  .input(productInventoryEntriesBatchInput)
+  .output(strictOutput(productInventoryEntriesByIdOut))
+  .query(async ({ ctx, input }) => {
+    if (input.ids.length === 0) return {};
+    const ids = await productShortcodes.all(ctx.db, input.ids);
+    const entriesById = await loadProductInventoryEntries(ctx.db, ids);
+    const entries: Record<
+      string,
+      import("@cubby/schemas/product").ProductListInventoryEntryOut[]
+    > = {};
+    for (const [index, shortcode] of input.ids.entries()) {
+      // A product with no live stock has no map entry, not an error.
+      entries[shortcode] = entriesById.get(ids[index]!) ?? [];
+    }
+    return entries;
   });
 
 // Quick create a product with minimal data (just name required)
@@ -973,6 +1002,7 @@ export const productRouter = createTRPCRouter({
   getByShortcodes,
   list,
   summaries,
+  inventoryEntriesByIds,
   quantitySummaries,
   search,
   create,

@@ -16,8 +16,43 @@ const MAX_COLUMN_WIDTH = 1200;
 const LOCKED_START_COLUMN_IDS = ["select", "image"] as const;
 const lockedStartColumnIdSet = new Set<string>(LOCKED_START_COLUMN_IDS);
 
-export function isLockedStartColumnId(id: string) {
+/**
+ * Structural columns that always trail the desktop table.
+ *
+ * The row-actions menu is the one control that must stay findable in the same
+ * place on every table, so it is not the user's to move: it is force-ordered
+ * last, pinned to the `end` region (which also keeps it reachable on a
+ * horizontally scrolled table) and appended AFTER any column the user pinned
+ * there themselves. Left as an ordinary center column it was draggable, and one
+ * drag — or one stale persisted layout — stranded it mid-table for good.
+ */
+const LOCKED_END_COLUMN_IDS = ["actions"] as const;
+const lockedEndColumnIdSet = new Set<string>(LOCKED_END_COLUMN_IDS);
+
+function isLockedStartColumnId(id: string) {
   return lockedStartColumnIdSet.has(id);
+}
+
+function isLockedEndColumnId(id: string) {
+  return lockedEndColumnIdSet.has(id);
+}
+
+/** Either end's structural columns: never dragged, hidden, or re-pinned. */
+export function isLockedColumnId(id: string) {
+  return isLockedStartColumnId(id) || isLockedEndColumnId(id);
+}
+
+/**
+ * Re-sorts an id list so the locked-end columns trail it, preserving the order
+ * of everything else. The drag handlers reject a locked column as the drag
+ * subject, but a drop onto empty space past it still appends after it — this is
+ * what keeps that landing spot from outranking the actions menu.
+ */
+export function withLockedEndLast(ids: readonly string[]) {
+  const locked = ids.filter(isLockedEndColumnId);
+  return locked.length === 0
+    ? [...ids]
+    : [...ids.filter((id) => !isLockedEndColumnId(id)), ...locked];
 }
 
 function columnIdHash(id: string) {
@@ -139,33 +174,37 @@ export function normalizeTableLayout(
   const columnIds = defaults.columnOrder;
   const known = new Set(columnIds);
   const lockedStart = LOCKED_START_COLUMN_IDS.filter((id) => known.has(id));
+  const lockedEnd = LOCKED_END_COLUMN_IDS.filter((id) => known.has(id));
   const requestedOrder = dedupeKnown(
     candidate?.columnOrder ?? [],
     known,
-  ).filter((id) => !isLockedStartColumnId(id));
+  ).filter((id) => !isLockedColumnId(id));
   const requestedSet = new Set(requestedOrder);
   const columnOrder = [
     ...lockedStart,
     ...requestedOrder,
-    ...columnIds.filter(
-      (id) => !isLockedStartColumnId(id) && !requestedSet.has(id),
-    ),
+    ...columnIds.filter((id) => !isLockedColumnId(id) && !requestedSet.has(id)),
+    ...lockedEnd,
   ];
 
   const requestedStart = dedupeKnown(
     candidate?.columnPinning?.start ?? [],
     known,
-  ).filter((id) => !isLockedStartColumnId(id));
+  ).filter((id) => !isLockedColumnId(id));
   const start = [...lockedStart, ...requestedStart];
   const startSet = new Set(start);
-  const end = dedupeKnown(candidate?.columnPinning?.end ?? [], known).filter(
-    (id) => !isLockedStartColumnId(id) && !startSet.has(id),
-  );
+  const end = [
+    ...dedupeKnown(candidate?.columnPinning?.end ?? [], known).filter(
+      (id) => !isLockedColumnId(id) && !startSet.has(id),
+    ),
+    // Appended last so a user-pinned end column can never outrank it.
+    ...lockedEnd,
+  ];
 
   const columnVisibility: ColumnVisibilityState = {};
   for (const id of columnIds) {
     const requested = candidate?.columnVisibility?.[id];
-    columnVisibility[id] = isLockedStartColumnId(id)
+    columnVisibility[id] = isLockedColumnId(id)
       ? true
       : typeof requested === "boolean"
         ? requested
@@ -280,10 +319,10 @@ function normalizeColumnDefinitions<TData extends RowData>(
         ? Math.max(size * 2, minSize ?? MIN_COLUMN_WIDTH)
         : undefined);
     const id = columnIdsFromDefs([definition])[0];
-    const lockedStart = id != null && isLockedStartColumnId(id);
+    const locked = id != null && isLockedColumnId(id);
     return {
       ...definition,
-      ...(lockedStart
+      ...(locked
         ? {
             enablePinning: false,
             enableHiding: false,

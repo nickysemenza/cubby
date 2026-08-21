@@ -57,7 +57,7 @@ function Harness() {
 }
 
 describe("TableHeaderLayout", () => {
-  it("does not render reorder grips for Select or Image", () => {
+  it("does not render reorder grips for the locked structural columns", () => {
     render(<Harness />);
 
     expect(
@@ -66,11 +66,13 @@ describe("TableHeaderLayout", () => {
     expect(
       screen.queryByRole("button", { name: "Reorder image column" }),
     ).not.toBeInTheDocument();
+    // Locked to the trailing edge — the row-actions menu is not the user's to
+    // move, so it gets no grip either.
+    expect(
+      screen.queryByRole("button", { name: "Reorder actions column" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Reorder name column" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Reorder actions column" }),
     ).toBeInTheDocument();
   });
 

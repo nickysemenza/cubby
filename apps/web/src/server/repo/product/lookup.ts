@@ -3,17 +3,24 @@
  * Find products by various identifiers (UPC, name, manufacturer).
  */
 
-import type { ProductTopLevelOut } from "@cubby/schemas/product";
+import type { ProductId } from "@cubby/schemas/identifiers";
+import type {
+  ProductListInventoryEntryOut,
+  ProductTopLevelOut,
+} from "@cubby/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { type FoodLookupParam, foodLookupParam } from "@cubby/usda-schemas";
-import { and, eq, ilike, type SQL, sql } from "drizzle-orm";
+import { and, eq, ilike, inArray, type SQL, sql } from "drizzle-orm";
 import { match } from "ts-pattern";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import type { Database } from "~/server/db";
-import { product } from "~/server/db/schema";
+import { inventoryEntry, product } from "~/server/db/schema";
 import { enrichProductRowsWithDataQuality } from "~/server/repo/data-quality";
 import { getDb, imageOrder, notDeleted } from "~/server/repo/database-helpers";
-import { dbProductToTopLevelAPI } from "./mappers";
+import {
+  dbProductToTopLevelAPI,
+  mapProductListInventoryEntries,
+} from "./mappers";
 import { enrichProductRowsWithPricing } from "./pricing";
 
 /**
@@ -179,4 +186,43 @@ export const findProductByNameFuzzyManufacturer = async (
       notDeleted(product),
     ),
   );
+};
+
+/**
+ * Live stock entries, with their locations, for a bounded set of products.
+ *
+ * One grouped read for the whole batch — the same shape as `taskSubtaskCounts`
+ * and `taskDependencyIds`, and for the same reason: the callers are table pages
+ * resolving a product reference per row, so a per-row read would be N+1.
+ * `InventoryEntry_productId_idx` covers the lookup.
+ *
+ * Rows are mapped through `mapProductListInventoryEntries`, so soft-deleted
+ * locations drop out here exactly as they do on the product list.
+ */
+export const loadProductInventoryEntries = async (
+  db: Database,
+  ids: readonly ProductId[],
+): Promise<Map<ProductId, ProductListInventoryEntryOut[]>> => {
+  const out = new Map<ProductId, ProductListInventoryEntryOut[]>();
+  if (ids.length === 0) return out;
+
+  const rows = await getDb(db).query.inventoryEntry.findMany({
+    where: and(
+      inArray(inventoryEntry.productId, [...ids]),
+      notDeleted(inventoryEntry),
+    ),
+    orderBy: inventoryEntry.createdAt,
+    with: { location: true },
+  });
+
+  const byProduct = new Map<ProductId, typeof rows>();
+  for (const row of rows) {
+    const bucket = byProduct.get(row.productId);
+    if (bucket) bucket.push(row);
+    else byProduct.set(row.productId, [row]);
+  }
+  for (const [productId, entries] of byProduct) {
+    out.set(productId, mapProductListInventoryEntries(entries));
+  }
+  return out;
 };

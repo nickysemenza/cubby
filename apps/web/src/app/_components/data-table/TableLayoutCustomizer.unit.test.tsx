@@ -9,17 +9,20 @@ import type {
 type TestRow = Record<string, unknown>;
 
 function layoutHarness() {
-  let order = ["select", "image", "name", "actions"];
+  let order = ["select", "image", "name", "trade", "actions"];
+  // Mirrors what `normalizeTableLayout` produces: both structural ends pinned.
   const pinning: Record<string, false | "start" | "end"> = {
     select: "start",
     image: "start",
     name: false,
-    actions: false,
+    trade: false,
+    actions: "end",
   };
   const visibility = {
     select: true,
     image: true,
     name: true,
+    trade: true,
     actions: true,
   };
   const table = {
@@ -35,12 +38,13 @@ function layoutHarness() {
       meta: {
         defaultLayout: {
           version: 1,
-          columnOrder: ["select", "image", "name", "actions"],
-          columnPinning: { start: ["select", "image"], end: [] },
+          columnOrder: ["select", "image", "name", "trade", "actions"],
+          columnPinning: { start: ["select", "image"], end: ["actions"] },
           columnVisibility: {
             select: true,
             image: true,
             name: true,
+            trade: true,
             actions: true,
           },
           columnSizing: {},
@@ -69,17 +73,19 @@ function layoutHarness() {
           header:
             id === "name"
               ? "Name"
-              : id === "select"
-                ? "Select"
-                : id === "image"
-                  ? "Image"
-                  : "Actions",
+              : id === "trade"
+                ? "Trade"
+                : id === "select"
+                  ? "Select"
+                  : id === "image"
+                    ? "Image"
+                    : "Actions",
         },
         getIsPinned: () => pinning[id] ?? false,
         pin: (region: false | "start" | "end") => {
           pinning[id] = region;
         },
-        getCanHide: () => id === "name",
+        getCanHide: () => id === "name" || id === "trade",
         getIsVisible: () => visibility[id as keyof typeof visibility],
         toggleVisibility: () => {
           visibility[id as keyof typeof visibility] =
@@ -97,34 +103,39 @@ function layoutHarness() {
 }
 
 describe("TableLayoutCustomizer", () => {
-  it("locks Select and Image while keeping Actions movable and pinnable", () => {
+  it("locks the structural columns at both ends", () => {
     const harness = layoutHarness();
     render(<TableLayoutCustomizer table={harness.table} />);
 
-    expect(
-      screen.queryByRole("button", { name: "Drag Select" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Drag Image" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Move Select later" }),
-    ).not.toBeInTheDocument();
+    for (const locked of ["Select", "Image", "Actions"]) {
+      expect(
+        screen.queryByRole("button", { name: `Drag ${locked}` }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: `Move ${locked} later` }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: `Move ${locked} earlier` }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: `Hide ${locked}` }),
+      ).not.toBeInTheDocument();
+    }
     expect(
       screen.queryByRole("button", { name: "Unpin Image" }),
     ).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Pin Actions to end" }));
+    // The pin controls are what previously let Actions leave the trailing edge.
+    expect(
+      screen.queryByRole("button", { name: "Unpin Actions" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Pin Actions to start" }),
+    ).not.toBeInTheDocument();
     expect(harness.pinning.actions).toBe("end");
+
     expect(
-      screen.queryByRole("button", { name: "Hide Select" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Hide Image" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Hide Actions" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Drag Name" }),
+    ).toBeInTheDocument();
   });
 
   it("offers accessible hide and exact reset commands", () => {
@@ -139,16 +150,18 @@ describe("TableLayoutCustomizer", () => {
       "select",
       "image",
       "name",
+      "trade",
       "actions",
     ]);
     expect(harness.table.setColumnPinning).toHaveBeenCalledWith({
       start: ["select", "image"],
-      end: [],
+      end: ["actions"],
     });
     expect(harness.table.setColumnVisibility).toHaveBeenCalledWith({
       select: true,
       image: true,
       name: true,
+      trade: true,
       actions: true,
     });
     expect(harness.table.setColumnSizing).toHaveBeenCalledWith({});
@@ -157,16 +170,14 @@ describe("TableLayoutCustomizer", () => {
   it("moves a pinned column through the pinning array", () => {
     const harness = layoutHarness();
     harness.pinning.name = "start";
-    harness.pinning.actions = "start";
+    harness.pinning.trade = "start";
     render(<TableLayoutCustomizer table={harness.table} />);
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Move Actions earlier" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Move Trade earlier" }));
 
     expect(harness.table.setColumnPinning).toHaveBeenCalledWith({
-      start: ["select", "image", "actions", "name"],
-      end: [],
+      start: ["select", "image", "trade", "name"],
+      end: ["actions"],
     });
   });
 });

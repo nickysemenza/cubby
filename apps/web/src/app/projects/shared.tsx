@@ -41,6 +41,7 @@ import {
   createPlainDateColumn,
   createProductLinkColumn,
   createProjectLinkColumn,
+  createSubjectProductLinkColumn,
   createTextColumn,
   type FilterConfig,
   type MobileColumnMeta,
@@ -48,6 +49,7 @@ import {
 } from "~/app/_components/data-table/columnHelpers";
 import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import { EditableEntityCell } from "~/app/_components/data-table/editable-entity-cell";
+import { InventoryEntriesCell } from "~/app/_components/data-table/inventory-entries-cell";
 import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
 import RTable from "~/app/_components/data-table/Table";
 import {
@@ -58,14 +60,16 @@ import {
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
-import { useBulkActions } from "~/app/_components/data-table/useBulkActions";
 import { ExternalLinkIcon } from "~/app/_components/ExternalLink";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
-import { ListBulkActionBar } from "~/app/_components/hooks/useListBulkActions";
+import {
+  ListBulkActionBar,
+  useListBulkActions,
+} from "~/app/_components/hooks/useListBulkActions";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useOptimisticDelete } from "~/app/_components/hooks/useOptimisticDelete";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
@@ -358,15 +362,37 @@ export function TaskList({
   const { deleteBulkAction, combinedExtraActions, deleteDialog } =
     useOptimisticDelete<TaskOut>({ deletable: deletableConfig });
 
-  const taskDeleteActions = useMemo(
-    () => (deleteBulkAction ? [deleteBulkAction] : []),
-    [deleteBulkAction],
-  );
-  const taskBulkActions = useTaskBulkActions({
-    extraActions: taskDeleteActions,
+  const taskBulkActions = useTaskBulkActions();
+  // Routed through `useListBulkActions`, not `useBulkActions` directly: that
+  // hook is what prepends "Copy codes" and appends Delete. Calling the
+  // primitive here is what silently cost this table copy-shortcodes while
+  // every other task surface had it.
+  const listBulkActions = useListBulkActions<TaskOut>({
+    entity: "task",
+    bulkActions: taskBulkActions.config,
+    deleteBulkAction,
   });
-  const bulkActionsState = useBulkActions({
-    config: taskBulkActions.config,
+  const bulkActionsState = listBulkActions.state;
+
+  // "Where does the thing this task is about actually live" — a companion read
+  // rather than a field on `TaskOut`, which has six producers that would each
+  // have to emit stock they never loaded. Keyed on the page's distinct subject
+  // products, so it is one grouped query per render, not one per row.
+  const subjectProductIds = useMemo(
+    () => [
+      ...new Set(
+        tasks
+          .map((task) => task.subjectProductId)
+          .filter((id): id is NonNullable<typeof id> => id != null),
+      ),
+    ],
+    [tasks],
+  );
+  const { data: inventoryByProduct } = useQuery({
+    ...api.product.inventoryEntriesByIds.queryOptions({
+      ids: subjectProductIds,
+    }),
+    enabled: subjectProductIds.length > 0,
   });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateTaskMutation changes every render but is functionally stable
@@ -406,6 +432,42 @@ export function TaskList({
             }),
           ]
         : []),
+      createSubjectProductLinkColumn(taskHelper, {
+        className: "w-40",
+        mobile: { slot: "meta", priority: 35, interactive: true },
+        editable: {
+          onSave: async (subjectProductId, task) => {
+            await updateTaskMutation.mutateAsync({
+              id: task.id,
+              data: { subjectProductId },
+            });
+          },
+        },
+      }),
+      // Read-only, unlike the product list's twin: the row's entity is a task,
+      // so there is no inventory entry here to inline-edit or create.
+      taskHelper.display({
+        id: "productLocation",
+        header: "Stored at",
+        meta: {
+          className: "min-w-0 w-40 max-w-56",
+          mobile: { slot: "meta", priority: 36, interactive: true },
+        },
+        cell: ({ row }) => {
+          const productId = row.original.subjectProductId;
+          return (
+            <InventoryEntriesCell
+              entries={
+                (productId ? inventoryByProduct?.[productId] : undefined) ?? []
+              }
+              entity="location"
+              getRelatedEntity={(entry) => entry.location}
+              layout="inline"
+              row={row.original}
+            />
+          );
+        },
+      }),
       taskTradeColumn(
         taskHelper,
         async (trade, task) => {
@@ -431,7 +493,7 @@ export function TaskList({
         extraActions: combinedExtraActions,
       }),
     ],
-    [showProjectColumn, nameEditable, combinedExtraActions],
+    [showProjectColumn, nameEditable, combinedExtraActions, inventoryByProduct],
   );
   const sortedData = useMemo(() => {
     const [activeTasks, done] = partition(tasks, (t) => t.status !== "done");
@@ -491,7 +553,7 @@ export function TaskList({
     bulkActionsState.selectedCount > 0 ? (
       <ListBulkActionBar
         table={table}
-        config={taskBulkActions.config}
+        config={listBulkActions.config}
         state={bulkActionsState}
       />
     ) : null;
@@ -1099,16 +1161,14 @@ export function ExpenseList({
   const { deleteBulkAction, combinedExtraActions, deleteDialog } =
     useOptimisticDelete<ExpenseOut>({ deletable: deletableConfig });
 
-  const expenseDeleteActions = useMemo(
-    () => (deleteBulkAction ? [deleteBulkAction] : []),
-    [deleteBulkAction],
-  );
-  const expenseBulkActions = useExpenseBulkActions({
-    extraActions: expenseDeleteActions,
+  const expenseBulkActions = useExpenseBulkActions();
+  // See TaskList: `useListBulkActions` is what supplies "Copy codes" + Delete.
+  const listBulkActions = useListBulkActions<ExpenseOut>({
+    entity: "expense",
+    bulkActions: expenseBulkActions.config,
+    deleteBulkAction,
   });
-  const bulkActionsState = useBulkActions({
-    config: expenseBulkActions.config,
-  });
+  const bulkActionsState = listBulkActions.state;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateExpenseMutation changes every render but is functionally stable
   const columns = useMemo<CubbyColumnDef<ExpenseOut>[]>(
@@ -1322,7 +1382,7 @@ export function ExpenseList({
     bulkActionsState.selectedCount > 0 ? (
       <ListBulkActionBar
         table={table}
-        config={expenseBulkActions.config}
+        config={listBulkActions.config}
         state={bulkActionsState}
       />
     ) : null;

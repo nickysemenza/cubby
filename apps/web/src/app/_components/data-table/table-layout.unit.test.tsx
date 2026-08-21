@@ -7,6 +7,7 @@ import {
   normalizeTableLayout,
   useCubbyTableLayout,
   useRevealTableColumnsOnce,
+  withLockedEndLast,
 } from "./table-layout";
 
 interface Row {
@@ -96,6 +97,58 @@ describe("normalizeTableLayout", () => {
       },
       columnVisibility: { select: true, image: true },
     });
+  });
+
+  // Regression: `actions` used to be an ordinary draggable center column, so a
+  // single drag — or the stale localStorage layout it persisted — stranded the
+  // row-actions menu mid-table on every later visit.
+  it("drags a persisted mid-table Actions column back to the trailing edge", () => {
+    expect(
+      normalizeTableLayout(
+        {
+          columnOrder: ["actions", "name", "cost"],
+          columnPinning: { start: ["actions"], end: [] },
+          columnVisibility: { actions: false },
+        },
+        defaults,
+      ),
+    ).toMatchObject({
+      columnOrder: ["name", "cost", "actions"],
+      columnPinning: { start: [], end: ["actions"] },
+      columnVisibility: { actions: true },
+    });
+  });
+
+  it("keeps Actions behind a column the user pinned to the end themselves", () => {
+    expect(
+      normalizeTableLayout(
+        { columnPinning: { start: [], end: ["actions", "cost"] } },
+        defaults,
+      ).columnPinning,
+    ).toEqual({ start: [], end: ["cost", "actions"] });
+  });
+
+  it("omits locked-end pinning for a table with no Actions column", () => {
+    expect(
+      normalizeTableLayout(undefined, {
+        version: 1,
+        columnOrder: ["name", "cost"],
+        columnPinning: { start: [], end: [] },
+        columnVisibility: { name: true, cost: true },
+        columnSizing: {},
+      }).columnPinning,
+    ).toEqual({ start: [], end: [] });
+  });
+});
+
+describe("withLockedEndLast", () => {
+  it("moves locked-end ids to the tail and leaves everything else in place", () => {
+    expect(withLockedEndLast(["actions", "cost", "name"])).toEqual([
+      "cost",
+      "name",
+      "actions",
+    ]);
+    expect(withLockedEndLast(["cost", "name"])).toEqual(["cost", "name"]);
   });
 });
 

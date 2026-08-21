@@ -321,6 +321,10 @@ export type ProductPreview = {
   upc?: string;
   thumbUrl?: string;
   usdaFdcId?: number;
+  /** Null when unstocked OR when the entries mix units — render `—`, never a sum. */
+  onHandUnits?: number | null;
+  /** Live stock locations, name only. Collapsed past two. */
+  locationNames?: string[];
 };
 
 export function toProductCard(vm: ProductPreview): ManifestCardProps {
@@ -334,6 +338,20 @@ export function toProductCard(vm: ProductPreview): ManifestCardProps {
     stats.push({
       label: "UPC",
       value: <span className="font-mono text-xs">{vm.upc}</span>,
+    });
+  // "How many, and where" is the question a product hover is usually asking —
+  // and the detail read behind this card already carries both, so showing them
+  // costs nothing. Omitted entirely for a product that isn't stocked, rather
+  // than shown as a zero it never counted.
+  if (vm.onHandUnits != null)
+    stats.push({ label: "On hand", value: vm.onHandUnits });
+  if (vm.locationNames && vm.locationNames.length > 0)
+    stats.push({
+      label: vm.locationNames.length === 1 ? "Location" : "Locations",
+      value:
+        vm.locationNames.length > 2
+          ? `${vm.locationNames.length} locations`
+          : vm.locationNames.join(", "),
     });
   if (stats.length > 0) body.push({ kind: "stats", stats });
 
@@ -378,6 +396,13 @@ export function ProductPreviewContent({ productId }: { productId: string }) {
               upc: data.upc ?? undefined,
               thumbUrl: data.images.find(isDisplayableImageFile)?.url,
               usdaFdcId: data.food?.fdc_id ?? data.fdc_id ?? undefined,
+              onHandUnits: data.onHandUnits,
+              // Stock entries plus the bins that ARE this product — a tote in
+              // service is just as much an answer to "where is it".
+              locationNames: [
+                ...data.inventoryEntry.map((entry) => entry.location.name),
+                ...data.servingAsLocations.map((location) => location.name),
+              ],
             })}
           />
         );
