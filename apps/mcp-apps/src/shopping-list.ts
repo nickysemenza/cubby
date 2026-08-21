@@ -42,7 +42,8 @@ type Item = {
   needValue: number;
   haveValue: number | null;
   /** max(0, need - have) — what you actually put in the cart. */
-  shortfall: number;
+  shortfall: number | null;
+  estimatedCost: number | null;
   status: Status;
   perMeal: Contribution[];
 };
@@ -52,6 +53,14 @@ type ShoppingList = {
   to: string;
   meals: unknown[];
   items: Item[];
+  estimatedTotal: number;
+  pricedItems: number;
+  unexpanded: Array<{ name: string }>;
+  omittedMeals: Array<{
+    name: string | null;
+    date: string;
+    mealKind: string;
+  }>;
 };
 
 /**
@@ -109,6 +118,15 @@ function amount(value: number, unit: string | null): string {
   return unit ? `${num(value)} ${unit}` : num(value);
 }
 
+function money(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
 function renderDetail(app: App, item: Item): HTMLElement {
   const wrap = el("div", "detail");
   for (const c of item.perMeal) {
@@ -163,11 +181,18 @@ function renderItem(app: App, item: Item, index: number): HTMLElement {
     row.append(el("span", "mono sub", `have ${num(item.haveValue)}`));
   }
 
+  if (item.estimatedCost !== null && item.estimatedCost > 0) {
+    row.append(el("span", "mono item-cost", money(item.estimatedCost)));
+  }
+
   row.append(
     el(
       "span",
       "mono figure",
-      amount(isPartial ? item.shortfall : item.needValue, item.basisUnit),
+      amount(
+        isPartial ? (item.shortfall ?? item.needValue) : item.needValue,
+        item.basisUnit,
+      ),
     ),
   );
 
@@ -206,6 +231,42 @@ function render(app: App, list: ShoppingList): Node {
     `${list.from} → ${list.to} · ${plural(list.meals.length, "meal")}`,
   );
 
+  const pricing = el("div", "row summary-row");
+  pricing.append(el("span", "eyebrow eyebrow-ink", "Estimated trip cost"));
+  const coverage = list.items.length;
+  const pricedItems = list.pricedItems ?? 0;
+  const estimatedTotal = list.estimatedTotal ?? 0;
+  const priceText =
+    pricedItems === 0
+      ? "No items priced"
+      : pricedItems === coverage
+        ? `${money(estimatedTotal)} · all ${coverage} priced`
+        : `${money(estimatedTotal)} · priced ${pricedItems} of ${coverage}`;
+  pricing.append(el("span", "summary-value", priceText));
+  body.append(pricing);
+
+  const unexpanded = list.unexpanded ?? [];
+  if (unexpanded.length > 0) {
+    const names = [...new Set(unexpanded.map((item) => item.name))].join(", ");
+    body.append(
+      el(
+        "p",
+        "notice",
+        `${plural(unexpanded.length, "sub-recipe")} could not be expanded${names ? `: ${names}` : ""}. Its ingredients are not included below.`,
+      ),
+    );
+  }
+  const omittedMeals = list.omittedMeals ?? [];
+  if (omittedMeals.length > 0) {
+    body.append(
+      el(
+        "p",
+        "notice",
+        `${plural(omittedMeals.length, "meal")} omitted because no shopping is needed for its meal type.`,
+      ),
+    );
+  }
+
   // Positions in the full list, not per group: they feed the check-off key, and
   // a per-group index would repeat across groups.
   const indexed = list.items.map((item, index) => ({ item, index }));
@@ -237,7 +298,7 @@ function render(app: App, list: ShoppingList): Node {
     body,
     footer(
       el("span", "push"),
-      cubbyLink(app, "Open in cubby", "/meals/shopping-list"),
+      cubbyLink(app, "Open in Cubby", "/meals/shopping-list"),
     ),
   );
   return root;
@@ -246,5 +307,8 @@ function render(app: App, list: ShoppingList): Node {
 void bootstrap<ShoppingList>({
   name: "Cubby Shopping List",
   invalid: "Could not read the shopping list from the tool result.",
+  onResult: () => {
+    checked.clear();
+  },
   render,
 });

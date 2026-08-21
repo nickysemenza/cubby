@@ -88,7 +88,7 @@ export function cubbyLink(
  * block mirrors it), but the JSON text fallback covers a host that forwards
  * only content blocks.
  */
-function toolPayload<T>(result: {
+export function toolPayload<T>(result: {
   structuredContent?: unknown;
   content?: Array<{ type: string; text?: string }>;
 }): T | null {
@@ -111,27 +111,49 @@ function toolPayload<T>(result: {
  * won't parse shows `invalid` instead. `onResult` runs first, for state an app
  * needs to reset between results.
  */
-export async function bootstrap<T>(options: {
+export async function bootstrap<
+  TPayload,
+  TInput extends Record<string, unknown> = Record<string, unknown>,
+>(options: {
   name: string;
   invalid: string;
-  render: (app: App, payload: T) => Node;
-  onResult?: () => void;
+  render: (app: App, payload: TPayload, input: TInput | null) => Node;
+  onResult?: (app: App, payload: TPayload, input: TInput | null) => void;
 }): Promise<void> {
   const app = new App({ name: options.name, version: "1.0.0" });
-  await app.connect();
-  app.setupSizeChangedNotifications();
+  let input: TInput | null = null;
+  let payload: TPayload | null = null;
 
-  app.ontoolresult = (result) => {
-    const payload = toolPayload<T>(result);
+  const mount = () => {
+    if (!payload) return;
     const root = document.getElementById("root");
     if (!root) return;
-    if (!payload) {
+    root.replaceChildren(options.render(app, payload, input));
+  };
+
+  // The host is allowed to deliver one-shot input/result notifications as soon
+  // as initialization completes. Install both handlers before connect so a
+  // fast host cannot race past them.
+  app.ontoolinput = (notification) => {
+    input = notification.arguments as TInput;
+    mount();
+  };
+
+  app.ontoolresult = (result) => {
+    const nextPayload = toolPayload<TPayload>(result);
+    const root = document.getElementById("root");
+    if (!root) return;
+    if (!nextPayload) {
       root.replaceChildren(el("p", "empty", options.invalid));
       return;
     }
-    options.onResult?.();
-    root.replaceChildren(options.render(app, payload));
+    payload = nextPayload;
+    options.onResult?.(app, nextPayload, input);
+    mount();
   };
+
+  await app.connect();
+  app.setupSizeChangedNotifications();
 }
 
 /** Round for display without dragging in a formatting library. */

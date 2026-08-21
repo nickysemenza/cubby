@@ -99,6 +99,11 @@ h2 {
   color: var(--brand-ultramarine);
 }
 
+.badge-neutral {
+  color: var(--brand-shelf);
+  background: var(--brand-cream);
+}
+
 .linked-names {
   font-size: 11px;
   color: var(--brand-ultramarine);
@@ -120,6 +125,46 @@ h2 {
   border-bottom: 1px solid var(--brand-hairline);
 }
 
+.search-block {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--brand-hairline);
+  background: var(--brand-paper-alt);
+}
+
+.searching-for {
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+
+.search-form {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(130px, auto) auto;
+  gap: 6px;
+}
+
+.search-form input,
+.search-form select {
+  min-width: 0;
+  height: 30px;
+  border: 1px solid var(--brand-hairline);
+  border-radius: 0;
+  background: var(--brand-cream);
+  color: var(--brand-foreground);
+  font: inherit;
+  padding: 4px 7px;
+}
+
+.search-form input[aria-invalid="true"] {
+  border-color: var(--destructive);
+}
+
+.form-status {
+  min-height: 16px;
+  margin: 3px 0 0;
+  color: var(--brand-shelf);
+  font-size: 11px;
+}
+
 /* Rows separate by hairline, never by whitespace or a stack of cards. */
 .row {
   display: flex;
@@ -139,6 +184,31 @@ h2 {
 
 .row-checked {
   opacity: 0.45;
+}
+
+.summary-row {
+  background: var(--brand-cream);
+}
+
+.summary-value {
+  margin-left: auto;
+  font-family: var(--brand-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.notice {
+  margin: 8px 10px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--warning);
+  background: var(--brand-paper-alt);
+  color: var(--brand-foreground);
+  font-size: 11px;
+}
+
+.item-cost {
+  flex: none;
+  color: var(--brand-shelf);
+  font-size: 11px;
 }
 
 /* A group heading inside a panel: status dot, label, note, count. */
@@ -214,6 +284,12 @@ h2 {
   transition: border-color 120ms var(--brand-ease-cozy);
 }
 
+.card input[type="radio"] {
+  flex: none;
+  margin: 0;
+  accent-color: var(--brand-ultramarine);
+}
+
 .card:hover {
   border-color: var(--brand-shelf);
 }
@@ -235,6 +311,20 @@ h2 {
   font-weight: 500;
 }
 
+.card-brand {
+  font-size: 11px;
+}
+
+.macro-strip {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  font-size: 11px;
+}
+
+.macro-value {
+  color: var(--brand-foreground);
+}
+
 /* ── Controls ── */
 
 button {
@@ -245,8 +335,8 @@ button {
 
 .btn {
   padding: 4px 10px;
-  border: 1px solid var(--brand-foreground);
-  background: var(--brand-foreground);
+  border: 1px solid var(--brand-ultramarine);
+  background: var(--brand-ultramarine);
   color: var(--brand-cream);
   font-family: var(--brand-font-mono);
   font-size: 11px;
@@ -256,8 +346,8 @@ button {
 }
 
 .btn:hover:not(:disabled) {
-  background: var(--brand-ultramarine);
-  border-color: var(--brand-ultramarine);
+  background: var(--brand-ultramarine-dark);
+  border-color: var(--brand-ultramarine-dark);
 }
 
 .btn:disabled {
@@ -323,8 +413,46 @@ input[type="checkbox"] {
   padding-top: 8px;
 }
 
+.selection-hint {
+  flex: 1;
+  min-width: 0;
+}
+
 .empty {
   padding: 24px 10px;
   text-align: center;
   color: var(--brand-shelf);
+}
+
+@media (max-width: 560px) {
+  body {
+    padding: 8px;
+  }
+
+  .search-form {
+    grid-template-columns: 1fr;
+  }
+
+  .search-form input,
+  .search-form select,
+  .search-form .btn {
+    min-height: 40px;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+    padding: 8px;
+  }
+
+  .row {
+    min-height: 44px;
+  }
+
+  .footer {
+    flex-wrap: wrap;
+  }
+
+  .selection-hint {
+    flex-basis: 100%;
+  }
 }

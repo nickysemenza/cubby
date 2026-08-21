@@ -31,16 +31,30 @@ const APPS = {
   "shopping-list (real)": {
     url: "/app/shopping-list.html",
     fixture: shoppingListReal,
+    input: { from: shoppingListReal.from, to: shoppingListReal.to },
   },
-  "shopping-list": { url: "/app/shopping-list.html", fixture: shoppingList },
+  "shopping-list": {
+    url: "/app/shopping-list.html",
+    fixture: shoppingList,
+    input: { from: shoppingList.from, to: shoppingList.to },
+  },
   "usda-picker (real)": {
     url: "/app/usda-picker.html",
     fixture: usdaPickerReal,
+    input: { query: "granola bar", pageIndex: 0, pageSize: 6 },
   },
-  "usda-picker": { url: "/app/usda-picker.html", fixture: usdaPicker },
+  "usda-picker": {
+    url: "/app/usda-picker.html",
+    fixture: usdaPicker,
+    input: { query: "butter", pageIndex: 0, pageSize: 6 },
+  },
 } as const satisfies Record<
   string,
-  { url: string; fixture: Record<string, unknown> }
+  {
+    url: string;
+    fixture: Record<string, unknown>;
+    input: Record<string, unknown>;
+  }
 >;
 
 type AppName = keyof typeof APPS;
@@ -105,17 +119,20 @@ async function load(name: AppName) {
     const height = (params as { height?: number }).height;
     if (height) frame.style.height = `${height}px`;
   };
-  bridge.oninitialized = () => {
-    log("initialized — pushing tool result");
-    void bridge.sendToolResult({ content: [], structuredContent: app.fixture });
+  bridge.oninitialized = async () => {
+    await bridge.setHostContext({
+      theme: "light",
+      displayMode: "inline",
+      locale: "en-US",
+      timeZone: "America/Los_Angeles",
+    });
+    log("initialized — pushing tool input and result", app.input);
+    await bridge.sendToolInput({ arguments: app.input });
+    await bridge.sendToolResult({
+      content: [],
+      structuredContent: app.fixture,
+    });
   };
-
-  bridge.setHostContext({
-    theme: "light",
-    displayMode: "inline",
-    locale: "en-US",
-    timeZone: "America/Los_Angeles",
-  });
 
   await bridge.connect(new PostMessageTransport(source, source));
   active = bridge;

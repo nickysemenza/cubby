@@ -1,14 +1,9 @@
 /**
  * MCP App for `search_usda_foods`.
  *
- * The friction this removes: the agent lists ten USDA foods and you have to say
- * "the third one, the SR Legacy one". Picking from a grid that actually shows
- * the data type and the macros is strictly better than picking from prose.
- *
- * The app deliberately does NOT perform the attach itself — it doesn't know
- * what the food is being attached to (a product? an ingredient's
- * representative? a recipe line?). It reports the choice and lets the agent,
- * which does know, carry on. That keeps the app dumb and the tool catalog flat.
+ * The app keeps an ambiguous USDA choice visual and reversible: the user can
+ * refine the originating query, compare evidence, select one record, and only
+ * then hand that choice back to the agent. It never attaches the food itself.
  */
 import type { App } from "@modelcontextprotocol/ext-apps";
 import {
@@ -20,12 +15,9 @@ import {
   num,
   openCubby,
   panel,
+  toolPayload,
 } from "./shared";
 
-/**
- * The subset of `usdaFoodMcpListOut` (packages/schemas/src/mcp.ts) this app
- * renders — not the full wire shape. Widen it when the UI needs more.
- */
 type Food = {
   fdc_id: number;
   description: string | null;
@@ -37,36 +29,64 @@ type Food = {
 };
 
 type SearchResult = {
-  meta?: { totalCount?: number };
+  meta?: { totalCount?: number; pageSize?: number };
   items: Food[];
 };
 
-/**
- * Label + richness cue per USDA data type, mirroring `dataTypeLabel` and
- * `DATA_TYPE_PRIORITY` in @cubby/usda-schemas: median nutrient count per food is
- * SR Legacy ~85 > Survey ~65 > Foundation ~30 > Branded ~14. The agent can't
- * convey "this one has real nutrient data and that one is a label scan" in a
- * flat list; a colored chip can.
- */
-const TYPES: Record<string, { label: string; color?: string }> = {
-  sr_legacy_food: { label: "SR Legacy", color: "var(--positive)" },
-  survey_fndds_food: { label: "Survey", color: "var(--positive)" },
-  foundation_food: { label: "Foundation", color: "var(--warning)" },
-  branded_food: { label: "Branded", color: "var(--slate)" },
-  experimental_food: { label: "Experimental" },
-  agricultural_acquisition: { label: "Agricultural" },
-  market_acquisition: { label: "Market" },
-  sample_food: { label: "Sample" },
-  sub_sample_food: { label: "Sub-sample" },
+type SearchInput = {
+  query?: string;
+  dataType?: string;
+  pageIndex?: number;
+  pageSize?: number;
 };
 
-/**
- * USDA `nutrient_nbr` codes for the macros, mirroring `TIER1_NUTRIENTS` in
- * @cubby/usda-schemas. Copied rather than imported: that package's only export
- * is its root index, which pulls zod in, and zod's module-level schema
- * construction doesn't tree-shake out — a large dependency to inline into a
- * sandboxed iframe for four constants that have been stable for decades.
- */
+const TYPES: Record<string, { label: string; explanation: string }> = {
+  sr_legacy_food: {
+    label: "SR Legacy",
+    explanation: "Historical reference data from the final SR release.",
+  },
+  survey_fndds_food: {
+    label: "Survey",
+    explanation: "Food represented as people typically report eating it.",
+  },
+  foundation_food: {
+    label: "Foundation",
+    explanation: "Analytically sampled basic or minimally processed food.",
+  },
+  branded_food: {
+    label: "Branded",
+    explanation: "A specific manufacturer's label-based product record.",
+  },
+  experimental_food: {
+    label: "Experimental",
+    explanation: "A research record rather than an ordinary food choice.",
+  },
+  agricultural_acquisition: {
+    label: "Agricultural",
+    explanation: "An acquisition record from the Foundation sampling chain.",
+  },
+  market_acquisition: {
+    label: "Market",
+    explanation: "A market acquisition record used for sampling provenance.",
+  },
+  sample_food: {
+    label: "Sample",
+    explanation: "A sampling record rather than an ordinary food choice.",
+  },
+  sub_sample_food: {
+    label: "Sub-sample",
+    explanation: "A sampling component rather than an ordinary food choice.",
+  },
+};
+
+const FILTER_TYPES = [
+  ["", "All food types"],
+  ["foundation_food", "Foundation"],
+  ["survey_fndds_food", "Survey / FNDDS"],
+  ["sr_legacy_food", "SR Legacy"],
+  ["branded_food", "Branded"],
+] as const;
+
 const MACROS: Array<[code: string, label: string, unit: string]> = [
   ["208", "kcal", ""],
   ["203", "protein", "g"],
@@ -76,100 +96,243 @@ const MACROS: Array<[code: string, label: string, unit: string]> = [
 
 let selected: Food | null = null;
 
-function typeLabel(dataType: string | null): string {
-  if (!dataType) return "Unknown";
-  return TYPES[dataType]?.label ?? dataType;
+function typeInfo(dataType: string | null) {
+  if (!dataType) {
+    return { label: "Unknown", explanation: "USDA data type not provided." };
+  }
+  return (
+    TYPES[dataType] ?? {
+      label: dataType,
+      explanation: "USDA source classification.",
+    }
+  );
 }
 
-/** `Butter, salted (SR Legacy, FDC 173410)` — what the agent gets told. */
 function describe(food: Food): string {
-  return `${food.description ?? "Untitled"} (${typeLabel(food.data_type)}, FDC ${
-    food.fdc_id
-  })`;
+  return `${food.description ?? "Untitled"} (${typeInfo(food.data_type).label}, FDC ${food.fdc_id})`;
+}
+
+function normalized(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+}
+
+export function matchEvidence(
+  query: string,
+  description: string | null,
+): "Exact name" | "Starts with search" | null {
+  const term = normalized(query);
+  const name = normalized(description ?? "");
+  if (!term || !name) return null;
+  if (name === term) return "Exact name";
+  if (name.startsWith(`${term} `) || name.startsWith(`${term},`)) {
+    return "Starts with search";
+  }
+  return null;
 }
 
 function renderMacros(food: Food): HTMLElement | null {
   const nutrients = food.nutrientsPer100;
   if (!nutrients) return null;
-  // "per 100g" is stated once in the panel header — repeating it on six cards
-  // is noise, and as a flex item it wrapped to its own line.
-  const strip = el("div", "mono detail-line");
-  strip.style.flexWrap = "wrap";
-  strip.style.justifyContent = "flex-start";
-  strip.style.fontSize = "11px";
-
-  let any = false;
+  const strip = el("div", "mono detail-line macro-strip");
+  let count = 0;
   for (const [code, label, unit] of MACROS) {
     const value = nutrients[code];
     if (value === undefined) continue;
-    any = true;
+    count += 1;
     const chip = el("span");
-    const figure = el("span", undefined, `${num(value)}${unit}`);
-    figure.style.color = "var(--brand-foreground)";
-    chip.append(figure, ` ${label}`);
+    chip.append(el("span", "macro-value", `${num(value)}${unit}`), ` ${label}`);
     strip.append(chip);
   }
-  return any ? strip : null;
+  if (count === 0) return null;
+  strip.title = `${count} of ${MACROS.length} key nutrients available per 100g`;
+  return strip;
 }
 
-function renderCard(app: App, food: Food, onPick: () => void): HTMLElement {
-  const card = el("div", "card");
-  if (selected?.fdc_id === food.fdc_id) card.classList.add("card-selected");
+function renderSearchControls(
+  app: App,
+  result: SearchResult,
+  input: SearchInput | null,
+): HTMLElement {
+  const query = input?.query?.trim() ?? "";
+  const wrap = el("div", "search-block");
+  wrap.append(
+    el(
+      "p",
+      "searching-for",
+      query ? `Searching for “${query}”` : "Search USDA foods",
+    ),
+  );
 
-  const head = el("div", "card-head");
+  const form = el("form", "search-form");
+  const field = el("input");
+  field.type = "search";
+  field.name = "query";
+  field.value = query;
+  field.placeholder = "Food name";
+  field.setAttribute("aria-label", "USDA food search");
 
-  const badge = el("span", "badge", typeLabel(food.data_type));
-  const color = food.data_type ? TYPES[food.data_type]?.color : undefined;
-  if (color) {
-    badge.style.borderColor = color;
-    badge.style.color = color;
+  const select = el("select");
+  select.name = "dataType";
+  select.setAttribute("aria-label", "USDA data type");
+  for (const [value, label] of FILTER_TYPES) {
+    const option = el("option", undefined, label);
+    option.value = value;
+    option.selected = value === (input?.dataType ?? "");
+    select.append(option);
   }
 
-  // The FDC id doubles as the deep link — no separate "open" button needed.
-  const fdc = nestedButton("btn-eyebrow", String(food.fdc_id), () =>
-    openCubby(app, `/usda/${food.fdc_id}`),
+  const submit = el("button", "btn", "Search");
+  submit.type = "submit";
+  const status = el("p", "form-status");
+  status.setAttribute("aria-live", "polite");
+  form.append(field, select, submit);
+  wrap.append(form, status);
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const nextQuery = field.value.trim();
+    if (!nextQuery) {
+      field.setAttribute("aria-invalid", "true");
+      status.textContent = "Enter a food name to search.";
+      field.focus();
+      return;
+    }
+
+    field.removeAttribute("aria-invalid");
+    submit.disabled = true;
+    submit.textContent = "Searching…";
+    status.textContent = "Searching USDA FoodData Central…";
+    const nextInput: SearchInput = {
+      query: nextQuery,
+      pageIndex: 0,
+      pageSize: input?.pageSize ?? result.meta?.pageSize ?? 25,
+      ...(select.value ? { dataType: select.value } : {}),
+    };
+
+    void app
+      .callServerTool({ name: "search_usda_foods", arguments: nextInput })
+      .then((toolResult) => {
+        const next = toolPayload<SearchResult>(toolResult);
+        if (toolResult.isError || !next) {
+          throw new Error("USDA search did not return usable results");
+        }
+        selected = null;
+        document
+          .getElementById("root")
+          ?.replaceChildren(render(app, next, nextInput));
+      })
+      .catch(() => {
+        submit.disabled = false;
+        submit.textContent = "Search";
+        status.textContent =
+          "USDA search failed. Your search is still here; try again.";
+      });
+  });
+
+  return wrap;
+}
+
+function renderCard(
+  app: App,
+  food: Food,
+  query: string,
+  onPick: (food: Food) => void,
+): { card: HTMLElement; radio: HTMLInputElement } {
+  const card = el("div", "card");
+  const head = el("div", "card-head");
+  const radio = el("input");
+  radio.type = "radio";
+  radio.name = "usda-match";
+  radio.value = String(food.fdc_id);
+  radio.checked = selected?.fdc_id === food.fdc_id;
+  radio.setAttribute(
+    "aria-label",
+    `Select ${food.description ?? `FDC ${food.fdc_id}`}`,
   );
-  fdc.title = "Open in cubby";
 
-  head.append(badge);
-
-  // "Already linked" outranks every other signal on the card: it means you've
-  // made this call before, and picking anything else silently creates a second
-  // product for one food. It gets a badge next to the data type rather than a
-  // footnote under the macros.
+  const info = typeInfo(food.data_type);
+  const badge = el("span", "badge", info.label);
+  badge.title = info.explanation;
+  const evidence = matchEvidence(query, food.description);
+  head.append(radio, badge);
+  if (evidence) head.append(el("span", "badge badge-neutral", evidence));
   if (food.linkedProducts.length > 0) {
-    const linked = el("span", "badge badge-accent", "linked");
+    const linked = el("span", "badge badge-accent", "Linked");
     linked.title = food.linkedProducts.map((p) => p.name).join(", ");
     head.append(linked);
   }
+  head.append(el("span", "card-title", food.description ?? "Untitled"));
 
-  head.append(el("span", "card-title", food.description ?? "Untitled"), fdc);
+  const fdc = nestedButton("btn-eyebrow", `FDC ${food.fdc_id}`, () =>
+    openCubby(app, `/usda/${food.fdc_id}`),
+  );
+  fdc.title =
+    "Open in Cubby. FDC IDs identify records; a higher number is not better.";
+  head.append(fdc);
   card.append(head);
 
   const brand = [food.brand_name, food.brand_owner].filter(Boolean).join(" · ");
-  if (brand) {
-    const line = el("div", "muted", brand);
-    line.style.fontSize = "11px";
-    card.append(line);
-  }
+  if (brand) card.append(el("div", "muted card-brand", brand));
 
   const macros = renderMacros(food);
   if (macros) card.append(macros);
-
   if (food.linkedProducts.length > 0) {
-    const names = el(
-      "div",
-      "linked-names",
-      food.linkedProducts.map((p) => p.name).join(", "),
+    card.append(
+      el(
+        "div",
+        "linked-names",
+        food.linkedProducts.map((p) => p.name).join(", "),
+      ),
     );
-    card.append(names);
   }
 
-  card.addEventListener("click", () => {
+  const pick = () => onPick(food);
+  radio.addEventListener("change", pick);
+  card.addEventListener("click", (event) => {
+    if ((event.target as HTMLElement).closest("button, input")) return;
+    radio.checked = true;
+    pick();
+  });
+  return { card, radio };
+}
+
+function render(
+  app: App,
+  result: SearchResult,
+  input: SearchInput | null,
+): Node {
+  const root = el("div");
+  const total = result.meta?.totalCount;
+  const shown = result.items.length;
+  const body = panel(
+    "USDA matches",
+    `${total && total > shown ? `${shown} of ${total}` : shown} · per 100g`,
+  );
+  body.append(renderSearchControls(app, result, input));
+
+  const query = input?.query ?? "";
+  const hint = el(
+    "span",
+    "eyebrow selection-hint",
+    selected ? describe(selected) : "Select a match",
+  );
+  const use = el("button", "btn", "Use this");
+  use.disabled = selected === null;
+  const controls: Array<{
+    food: Food;
+    card: HTMLElement;
+    radio: HTMLInputElement;
+  }> = [];
+
+  const applySelection = (food: Food) => {
     selected = food;
-    onPick();
-    // Silent: tells the model which one is highlighted without forcing a turn.
-    // The footer's "Use this" is what drives the agent.
+    for (const control of controls) {
+      const isSelected = control.food.fdc_id === food.fdc_id;
+      control.radio.checked = isSelected;
+      control.card.classList.toggle("card-selected", isSelected);
+    }
+    hint.textContent = describe(food);
+    use.disabled = false;
     void app.updateModelContext({
       content: [{ type: "text", text: `Selected ${describe(food)}.` }],
       structuredContent: {
@@ -178,63 +341,39 @@ function renderCard(app: App, food: Food, onPick: () => void): HTMLElement {
         dataType: food.data_type,
       },
     });
-  });
-
-  return card;
-}
-
-function render(app: App, result: SearchResult): Node {
-  const root = el("div");
-  const total = result.meta?.totalCount;
-  const shown = result.items.length;
-  const body = panel(
-    "USDA matches",
-    `${total && total > shown ? `${shown} of ${total}` : shown} · per 100g`,
-  );
+  };
 
   if (shown === 0) {
-    body.append(el("p", "empty", "No USDA foods matched."));
-    root.append(body);
-    return root;
+    body.append(el("p", "empty", "No USDA foods matched this search."));
+  } else {
+    const grid = el("div", "grid");
+    grid.setAttribute("role", "radiogroup");
+    grid.setAttribute("aria-label", "USDA food matches");
+    for (const food of result.items) {
+      const control = renderCard(app, food, query, applySelection);
+      controls.push({ food, ...control });
+      grid.append(control.card);
+    }
+    body.append(grid);
   }
 
-  const grid = el("div", "grid");
-  const redraw = () => {
-    const root2 = document.getElementById("root");
-    root2?.replaceChildren(render(app, result));
-  };
-  for (const food of result.items) {
-    grid.append(renderCard(app, food, redraw));
-  }
-  body.append(grid);
-
-  // One commit action, not one per card: clicking a card selects (a silent
-  // context update), and this is the single unambiguous "tell the agent".
-  const hint = el(
-    "span",
-    "eyebrow push",
-    selected ? describe(selected) : "Select a match",
-  );
-  hint.style.flex = "1";
-
-  const use = el("button", "btn", "Use this");
-  use.disabled = selected === null;
   use.addEventListener("click", () => {
     if (!selected) return;
+    const choice = selected;
     void app.sendMessage({
       role: "user",
-      content: [{ type: "text", text: `Use ${describe(selected)}.` }],
+      content: [{ type: "text", text: `Use ${describe(choice)}.` }],
     });
   });
 
   root.append(
     body,
-    footer(hint, cubbyLink(app, "Browse in cubby", "/usda"), use),
+    footer(hint, cubbyLink(app, "Browse in Cubby", "/usda"), use),
   );
   return root;
 }
 
-void bootstrap<SearchResult>({
+void bootstrap<SearchResult, SearchInput>({
   name: "Cubby USDA Picker",
   invalid: "Could not read USDA results from the tool result.",
   onResult: () => {

@@ -14,6 +14,7 @@
       "needValue": 1800,
       "haveValue": 0,
       "shortfall": 1800,
+      "estimatedCost": 28.5,
       "status": "missing",
       "perMeal": [
         {
@@ -34,6 +35,7 @@
       "needValue": 220,
       "haveValue": 0,
       "shortfall": 220,
+      "estimatedCost": 8.25,
       "status": "missing",
       "perMeal": [
         {
@@ -54,6 +56,7 @@
       "needValue": 340,
       "haveValue": 113,
       "shortfall": 227,
+      "estimatedCost": 4.5,
       "status": "short",
       "perMeal": [
         {
@@ -83,6 +86,7 @@
       "needValue": 160,
       "haveValue": 85,
       "shortfall": 75,
+      "estimatedCost": 6.75,
       "status": "short",
       "perMeal": [
         {
@@ -103,6 +107,7 @@
       "needValue": 6,
       "haveValue": null,
       "shortfall": 6,
+      "estimatedCost": null,
       "status": "unconvertible",
       "perMeal": [
         {
@@ -123,6 +128,7 @@
       "needValue": 400,
       "haveValue": null,
       "shortfall": 400,
+      "estimatedCost": null,
       "status": "subrecipe",
       "perMeal": [
         {
@@ -143,6 +149,7 @@
       "needValue": 48,
       "haveValue": 1360,
       "shortfall": 0,
+      "estimatedCost": 0,
       "status": "ok",
       "perMeal": [
         {
@@ -172,6 +179,7 @@
       "needValue": 90,
       "haveValue": 740,
       "shortfall": 0,
+      "estimatedCost": 0,
       "status": "ok",
       "perMeal": [
         {
@@ -184,6 +192,20 @@
           "needValue": 90
         }
       ]
+    }
+  ],
+  "estimatedTotal": 48,
+  "pricedItems": 6,
+  "unexpanded": [
+    {
+      "name": "soffritto base"
+    }
+  ],
+  "omittedMeals": [
+    {
+      "name": "Thursday takeout",
+      "date": "2026-08-07",
+      "mealKind": "takeout"
     }
   ]
 }

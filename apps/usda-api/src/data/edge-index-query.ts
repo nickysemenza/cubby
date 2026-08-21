@@ -16,14 +16,13 @@ export function sqlDirection(direction: ListFoodsArgs["direction"]): string {
   return direction === "desc" ? "DESC" : "ASC";
 }
 
-// SQL CASE that maps the `data_type` column to a richness/preference rank
-// (lower = surfaced first), so a name search leads with the most data-complete
-// reference foods (SR Legacy > Survey > Foundation) before sparse branded label
-// data. Only the four food types are spelled out; everything else (the rare,
-// near-empty sampling/research records) falls to the ELSE bucket — so the
-// expression is robust to raw-value spelling quirks in those types. Priorities
-// are bind-safe (integer literals from a trusted constant), data_type is a fixed
-// column name, so this is not a SQL-injection surface.
+// SQL CASE that maps `data_type` to the existing richness preference. Relevance
+// search uses this only after textual fit and description specificity: data
+// types describe different evidence sources, not a universal quality ladder.
+// Only the four food types are spelled out; everything else (the rare,
+// near-empty sampling/research records) falls to the ELSE bucket. Priorities are
+// bind-safe integer literals from a trusted constant, and `column` is fixed by
+// the caller rather than user input.
 export function dataTypePriorityCase(column: string): string {
   const whens = (
     [
