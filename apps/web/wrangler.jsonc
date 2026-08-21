@@ -111,7 +111,7 @@
     ]
   },
   "triggers": {
-    "crons": ["*/15 * * * *"]
+    "crons": ["0 12 * * *"]
   },
   "vars": {
     "NODE_ENV": "production",
