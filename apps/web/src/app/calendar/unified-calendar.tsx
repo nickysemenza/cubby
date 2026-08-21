@@ -39,7 +39,7 @@ import {
   SheetTitle,
 } from "~/components/ui/sheet";
 import { ChoiceSwitcher } from "~/components/ui/view-switcher";
-import { useEntityCommands } from "~/entities/editing";
+import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { HOUSEHOLD_TIMEZONE, householdLocalDate } from "~/lib/household-date";

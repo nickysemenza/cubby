@@ -19,7 +19,7 @@ import { ImageThumbnail } from "~/app/_components/table/ImageThumbnail";
 import { usePageCount } from "~/components/page/Page";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
-import { wishCreateRequest } from "~/entities/editing";
+import { wishCreateRequest } from "~/entities/editing/editor-requests";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrencyRange, rangeMidpoint } from "~/lib/format-range";

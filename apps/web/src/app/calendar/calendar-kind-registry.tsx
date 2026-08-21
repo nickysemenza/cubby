@@ -8,15 +8,17 @@ import { TRADE_LABELS } from "@cubby/schemas/project";
 import type { LucideIcon } from "lucide-react";
 import type { BadgeVariant } from "~/components/ui/badge";
 import {
-  type EditableEntity,
-  type EntityEditDialogRequest,
-  type EntityEditRecord,
   expenseCaptureRequest,
   mealCaptureRequest,
   projectCaptureRequest,
   taskCaptureRequest,
-} from "~/entities/editing";
+} from "~/entities/editing/editor-requests";
+import type { EntityEditDialogRequest } from "~/entities/editing/entity-edit-dialog";
 import type { EntityEditIntent } from "~/entities/editing/intent-types";
+import type {
+  EditableEntity,
+  EntityEditRecord,
+} from "~/entities/editing/types";
 import { ENTITY_ACCENTS } from "~/entities/entity-accents";
 import { mealKindBadgeVariant, mealTypeIcon } from "../meals/meal-options";
 import {

@@ -63,11 +63,11 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import {
-  EntityEditDialog,
   expenseCaptureRequest,
   projectCaptureRequest,
   taskCaptureRequest,
-} from "~/entities/editing";
+} from "~/entities/editing/editor-requests";
+import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { projectMutationInvalidateKeys } from "~/lib/query-keys";

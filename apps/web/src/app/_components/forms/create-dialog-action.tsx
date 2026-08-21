@@ -1,12 +1,15 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { lazy, type ReactNode, Suspense, useState } from "react";
 import { z } from "zod";
 import { Button } from "~/components/ui/button";
-import {
-  EntityEditDialog,
-  type EntityEditDialogRequest,
-} from "~/entities/editing";
+import type { EntityEditDialogRequest } from "~/entities/editing/entity-edit-dialog";
+
+const EntityEditDialog = lazy(() =>
+  import("~/entities/editing/entity-edit-dialog").then((module) => ({
+    default: module.EntityEditDialog,
+  })),
+);
 
 /**
  * The `?create=true` search param this component reads.
@@ -76,7 +79,11 @@ export function CreateDialogAction({
         <Plus />
         {children}
       </Button>
-      <EntityEditDialog open={open} onOpenChange={setOpen} request={request} />
+      {open ? (
+        <Suspense fallback={null}>
+          <EntityEditDialog open onOpenChange={setOpen} request={request} />
+        </Suspense>
+      ) : null}
     </>
   );
 }

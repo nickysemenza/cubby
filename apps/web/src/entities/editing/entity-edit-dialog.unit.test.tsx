@@ -94,7 +94,7 @@ describe("EntityEditDialog", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "submit" }));
+    fireEvent.click(await screen.findByRole("button", { name: "submit" }));
     await waitFor(() => expect(mocks.submit).toHaveBeenCalledTimes(1));
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(mocks.reset).toHaveBeenCalledTimes(1);

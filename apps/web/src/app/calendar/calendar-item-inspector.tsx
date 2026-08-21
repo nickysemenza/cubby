@@ -21,7 +21,7 @@ import {
   PopoverTitle,
 } from "~/components/ui/popover";
 import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
-import { useEntityEditSession } from "~/entities/editing";
+import { useEntityEditSession } from "~/entities/editing/use-entity-edit-session";
 import { entityDetailLink } from "~/entities/entities";
 import { useIsMobile } from "~/hooks/useMobile";
 import { formatCurrency } from "~/lib/utils";

@@ -11,8 +11,8 @@ import {
 } from "~/app/_components/impact/operation-impact";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { DropdownMenuSeparator } from "~/components/ui/dropdown-menu";
-import type { EditableEntity } from "~/entities/editing";
-import { useEntityCommands } from "~/entities/editing";
+import type { EditableEntity } from "~/entities/editing/types";
+import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import {
   cancelTRPCQueries,
   invalidateTRPCQueries,

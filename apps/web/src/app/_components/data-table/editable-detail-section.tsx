@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from "react";
-import type { EntityDetailController } from "~/entities/editing";
+import type { EntityDetailController } from "~/entities/editing/use-entity-detail-controller";
 import type { EditModeProps } from "../form-utils";
 import type { DetailSection } from "./detail-page";
 

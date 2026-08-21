@@ -6,10 +6,8 @@ import { BasicInfo } from "~/components/common/basic-info";
 import { Page } from "~/components/page/Page";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
-import {
-  EntityEditDialog,
-  financialAccountEditRequest,
-} from "~/entities/editing";
+import { financialAccountEditRequest } from "~/entities/editing/editor-requests";
+import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
 import { financialAccountMutationInvalidateKeys } from "~/lib/query-keys";
 import { renderOptionCell } from "../_components/data-table/columnHelpers";

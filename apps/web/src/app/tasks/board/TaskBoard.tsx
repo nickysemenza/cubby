@@ -22,7 +22,8 @@ import {
   useCubbyDndSensors,
 } from "~/components/dnd/sensors";
 import { Row } from "~/components/layout";
-import { EntityEditDialog, taskCaptureRequest } from "~/entities/editing";
+import { taskCaptureRequest } from "~/entities/editing/editor-requests";
+import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
 import { BoardAgenda } from "./BoardAgenda";

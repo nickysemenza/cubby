@@ -3,7 +3,7 @@ import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { useEntityCommands } from "~/entities/editing";
+import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
   buildSearchHitComboboxItem,

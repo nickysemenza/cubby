@@ -7,7 +7,7 @@ import {
 } from "~/app/_components/forms/create-dialog-action";
 import { PurchaseList } from "~/app/purchases/purchaselist";
 import { Page } from "~/components/page/Page";
-import { purchaseCaptureRequest } from "~/entities/editing";
+import { purchaseCaptureRequest } from "~/entities/editing/editor-requests";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
 import { urlShortcodeListParam, urlStringParam } from "~/lib/search-params";

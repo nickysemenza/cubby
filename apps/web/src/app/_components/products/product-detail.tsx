@@ -30,10 +30,10 @@ import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { OptionalStatusText, StatusText } from "~/components/ui/status-text";
 import {
-  EntityEditDialog,
   expenseCaptureRequest,
   taskCaptureRequest,
-} from "~/entities/editing";
+} from "~/entities/editing/editor-requests";
+import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import {
   DocumentViewerList,

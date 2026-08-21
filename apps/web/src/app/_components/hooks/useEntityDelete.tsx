@@ -11,8 +11,8 @@ import {
 } from "~/app/_components/impact/operation-impact";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Button } from "~/components/ui/button";
-import type { EditableEntity } from "~/entities/editing";
-import { useEntityCommands } from "~/entities/editing";
+import type { EditableEntity } from "~/entities/editing/types";
+import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { type MutationOptionsFn, useActionMutation } from "./useActionMutation";

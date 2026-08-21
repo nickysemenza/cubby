@@ -7,7 +7,6 @@ import type {
 } from "@cubby/schemas/identifiers";
 import type { TaskStatus, Trade } from "@cubby/schemas/project";
 import type { WishOut } from "@cubby/schemas/wish";
-import { financialTransactionToForm } from "~/app/finance/financial-transaction-form";
 import type { EditableEntity, EntityEditRequest } from "./types";
 
 type DialogRequest<E extends EditableEntity> = Omit<
@@ -142,9 +141,18 @@ export const financialTransactionEditRequest = (
   intent: "full",
   record: transaction,
   seed: {
-    ...financialTransactionToForm(transaction),
     accountId: transaction.accountId,
     purchaseId: transaction.purchaseId ?? null,
+    kind: transaction.kind,
+    status: transaction.status,
+    amount: transaction.amount,
+    transactionDate: transaction.transactionDate ?? "",
+    postedDate: transaction.postedDate ?? "",
+    merchant: transaction.merchant ?? "",
+    rawDescription: transaction.rawDescription ?? "",
+    sourceCategory: transaction.sourceCategory ?? "",
+    sourceRefs: transaction.sourceRefs,
+    notes: transaction.notes ?? "",
   },
 });
 

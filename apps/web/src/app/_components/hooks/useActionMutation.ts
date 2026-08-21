@@ -3,11 +3,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import type {
-  EditableEntity,
   EntityEditDraft,
   EntityEditIntent,
-} from "~/entities/editing";
-import { useEntityCommands } from "~/entities/editing";
+} from "~/entities/editing/intent-types";
+import type { EditableEntity } from "~/entities/editing/types";
+import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
   makeBatchStatusFetcher,

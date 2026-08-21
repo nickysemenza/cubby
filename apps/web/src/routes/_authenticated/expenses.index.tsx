@@ -20,7 +20,7 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import { expenseCaptureRequest } from "~/entities/editing";
+import { expenseCaptureRequest } from "~/entities/editing/editor-requests";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
 import {

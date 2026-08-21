@@ -35,7 +35,7 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
-import { EntityFormDialog } from "~/entities/editing";
+import { EntityFormDialog } from "~/entities/editing/entity-form-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
 import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
 import { cn, formatCurrency } from "~/lib/utils";

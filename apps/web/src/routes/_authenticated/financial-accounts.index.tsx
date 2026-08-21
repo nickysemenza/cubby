@@ -7,7 +7,7 @@ import {
 } from "~/app/_components/forms/create-dialog-action";
 import { FinancialAccountList } from "~/app/finance/financial-account-list";
 import { Page } from "~/components/page/Page";
-import { financialAccountCaptureRequest } from "~/entities/editing";
+import { financialAccountCaptureRequest } from "~/entities/editing/editor-requests";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
 import { urlEnumListParam, urlStringParam } from "~/lib/search-params";

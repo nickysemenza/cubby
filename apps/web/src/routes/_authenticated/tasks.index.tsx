@@ -18,7 +18,7 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import { taskCaptureRequest } from "~/entities/editing";
+import { taskCaptureRequest } from "~/entities/editing/editor-requests";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import {

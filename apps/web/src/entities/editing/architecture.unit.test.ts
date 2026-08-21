@@ -1,14 +1,25 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const source = (name: string) =>
   readFileSync(new URL(name, import.meta.url), "utf8");
+
+const sourceFiles = (directory: string): string[] =>
+  readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return sourceFiles(path);
+    return /\.[jt]sx?$/u.test(entry.name) && !entry.name.includes(".test.")
+      ? [path]
+      : [];
+  });
 
 describe("entity editing architecture", () => {
   it("keeps transport and semantic policy out of generic UI hosts", () => {
     const uiSources = [
       source("./editor-presentations.tsx"),
       source("./entity-edit-dialog.tsx"),
+      source("./entity-edit-dialog-content.tsx"),
       source("./entity-edit-page.tsx"),
       source("./entity-form-dialog.tsx"),
     ].join("\n");
@@ -39,5 +50,14 @@ describe("entity editing architecture", () => {
     const commands = source("./use-entity-commands.ts");
     expect(commands).not.toMatch(/executeOrThrow|intent\s*=\s*["']legacy/);
     expect(commands).not.toMatch(/readonly raw:|readonly update:/);
+  });
+
+  it("keeps the editing barrel out of client modules", () => {
+    const appRoot = new URL("../../", import.meta.url).pathname;
+    const offenders = sourceFiles(appRoot).filter((path) =>
+      readFileSync(path, "utf8").includes('from "~/entities/editing"'),
+    );
+
+    expect(offenders).toEqual([]);
   });
 });

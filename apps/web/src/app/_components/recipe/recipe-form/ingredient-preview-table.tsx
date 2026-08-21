@@ -19,7 +19,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { EntityFormDialog } from "~/entities/editing";
+import { EntityFormDialog } from "~/entities/editing/entity-form-dialog";
 import { cn } from "~/lib/utils";
 import { EntityInlineLink } from "../../EntityInlineLink";
 import { formatAmounts } from "../../inventory/format-amount";
