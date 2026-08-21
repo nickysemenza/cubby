@@ -1,4 +1,5 @@
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import { unsafeFinancialAccountShortcode } from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
 import { entityEditRegistry } from "./definitions";
 import { buildEntityEdit, resolveEntityEdit } from "./kernel";
@@ -56,6 +57,65 @@ describe("entity edit definitions", () => {
         }
       }
     }
+  });
+
+  it("keeps the full update intent compatible with ordinary inline editors", () => {
+    const inlineFields: readonly [EditableEntity, readonly string[]][] = [
+      ["product", ["ingredientId", "upc", "fdc_id"]],
+      ["expense", ["lineKind", "lineBasis", "productQuantity", "orderId"]],
+      ["project", ["costEstimate"]],
+    ];
+
+    for (const [entity, fields] of inlineFields) {
+      const full = entityEditRegistry[entity].operations.update?.intents.full;
+      expect(full, `${entity} full update intent`).toBeDefined();
+      for (const fieldId of fields) {
+        expect(full?.fields, `${entity} inline field ${fieldId}`).toContain(
+          fieldId,
+        );
+      }
+    }
+  });
+
+  it("keeps finance update payloads minimal when replacement arrays are unchanged", () => {
+    const record = {
+      id: "FTX-TEST",
+      accountId: unsafeFinancialAccountShortcode("FAC-TEST"),
+      purchaseId: null,
+      kind: "purchase" as const,
+      status: "posted" as const,
+      amount: 12,
+      transactionDate: "2026-08-19",
+      postedDate: "2026-08-20",
+      merchant: "Old merchant",
+      rawDescription: null,
+      sourceCategory: null,
+      sourceRefs: [{ source: "statement", externalId: "row-1" }],
+      notes: null,
+    };
+    const request = {
+      entity: "financialTransaction" as const,
+      operation: "update" as const,
+      intent: "full" as const,
+      surface: "dialog" as const,
+      record,
+    };
+    const resolved = resolveEntityEdit(entityEditRegistry, request);
+    if (!("definition" in resolved)) {
+      throw new Error("financial transaction full update must resolve");
+    }
+
+    expect(
+      buildEntityEdit(resolved, request, {
+        ...record,
+        merchant: "New merchant",
+        sourceRefs: [{ source: "statement", externalId: "row-1" }],
+      }),
+    ).toMatchObject({
+      ok: true,
+      changed: true,
+      command: { data: { merchant: "New merchant" } },
+    });
   });
 
   it("declares delete availability wherever the schema declares a lifecycle", () => {

@@ -3,6 +3,7 @@ import {
   unsafeProjectShortcode,
   unsafeVendorShortcode,
 } from "@cubby/schemas/identifiers";
+import { isEqual } from "es-toolkit";
 import { householdLocalDate } from "~/lib/household-date";
 import {
   expenseMutationInvalidateKeys,
@@ -48,7 +49,7 @@ const changed = (
   record: EntityEditRecord | undefined,
   id: string,
   value: unknown,
-) => !record || !Object.is(valueFor(record, id), value);
+) => !record || !isEqual(valueFor(record, id), value);
 
 const noIssues = (): readonly EntityEditIssue[] => [];
 
@@ -400,27 +401,36 @@ const financialAccountIdentity = (patch: Record<string, unknown>) => {
   return { kind: "cash" };
 };
 
+const normalizedNullableTextPatch = (
+  patch: Record<string, unknown>,
+  key: string,
+) => (key in patch ? { [key]: String(patch[key] ?? "").trim() || null } : {});
+
 const normalizeFinancialTransaction = (patch: Record<string, unknown>) => ({
   ...patch,
-  purchaseId: String(patch.purchaseId ?? "").trim() || null,
-  transactionDate: String(patch.transactionDate ?? "").trim() || null,
-  postedDate: String(patch.postedDate ?? "").trim() || null,
-  merchant: String(patch.merchant ?? "").trim() || null,
-  rawDescription: String(patch.rawDescription ?? "").trim() || null,
-  sourceCategory: String(patch.sourceCategory ?? "").trim() || null,
-  notes: String(patch.notes ?? "").trim() || null,
-  sourceRefs: Array.isArray(patch.sourceRefs)
-    ? patch.sourceRefs
-        .filter(
-          (reference): reference is Record<string, unknown> =>
-            Boolean(reference) && typeof reference === "object",
-        )
-        .map((reference) => ({
-          source: String(reference.source ?? "").trim(),
-          externalId: String(reference.externalId ?? "").trim(),
-        }))
-        .filter((reference) => reference.source && reference.externalId)
-    : [],
+  ...normalizedNullableTextPatch(patch, "purchaseId"),
+  ...normalizedNullableTextPatch(patch, "transactionDate"),
+  ...normalizedNullableTextPatch(patch, "postedDate"),
+  ...normalizedNullableTextPatch(patch, "merchant"),
+  ...normalizedNullableTextPatch(patch, "rawDescription"),
+  ...normalizedNullableTextPatch(patch, "sourceCategory"),
+  ...normalizedNullableTextPatch(patch, "notes"),
+  ...("sourceRefs" in patch
+    ? {
+        sourceRefs: Array.isArray(patch.sourceRefs)
+          ? patch.sourceRefs
+              .filter(
+                (reference): reference is Record<string, unknown> =>
+                  Boolean(reference) && typeof reference === "object",
+              )
+              .map((reference) => ({
+                source: String(reference.source ?? "").trim(),
+                externalId: String(reference.externalId ?? "").trim(),
+              }))
+              .filter((reference) => reference.source && reference.externalId)
+          : [],
+      }
+    : {}),
 });
 
 /**
@@ -439,6 +449,9 @@ const semanticFields: Partial<
       "manufacturer",
       "model",
       "category",
+      "ingredientId",
+      "upc",
+      "fdc_id",
       "price",
       "stockTracked",
       "notes",
@@ -492,6 +505,7 @@ const semanticFields: Partial<
       "parentProjectId",
       "startDate",
       "endDate",
+      "costEstimate",
       "notes",
     ],
     status: ["status"],
@@ -540,12 +554,16 @@ const semanticFields: Partial<
     ],
     full: [
       "name",
+      "lineKind",
+      "lineBasis",
       "cost",
       "date",
       "future",
       "projectId",
       "productId",
+      "productQuantity",
       "vendor",
+      "orderId",
       "trade",
       "costType",
       "notes",
@@ -663,6 +681,9 @@ export const entityEditRegistry = defineEntityEditRegistry({
       field("product", "manufacturer", { required: true }),
       field("product", "model"),
       field("product", "category"),
+      field("product", "ingredientId"),
+      field("product", "upc"),
+      field("product", "fdc_id"),
       field("product", "price"),
       field("product", "stockTracked"),
       nullableText("product", "notes"),
@@ -849,7 +870,7 @@ export const entityEditRegistry = defineEntityEditRegistry({
   ),
   expense: definition(
     "expense",
-    expenseFields,
+    [...expenseFields, field("expense", "lineBasis")],
     expenseMutationInvalidateKeys,
     operations("expense", {
       create: {
@@ -1043,10 +1064,13 @@ export const entityEditRegistry = defineEntityEditRegistry({
           undefined,
           {
             acceptsSeed: true,
-            buildData: (patch) => ({
-              ...patch,
-              sourceAliases: normalizeSourceAliases(patch.sourceAliases),
-            }),
+            buildData: (patch) =>
+              "sourceAliases" in patch
+                ? {
+                    ...patch,
+                    sourceAliases: normalizeSourceAliases(patch.sourceAliases),
+                  }
+                : patch,
           },
         ),
         identity: intent(
