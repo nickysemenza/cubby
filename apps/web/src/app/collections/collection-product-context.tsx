@@ -175,6 +175,25 @@ export function ProductPurchasesPopover({
   );
 }
 
+export function ProductTradeBadges({
+  purchases,
+  className,
+}: {
+  purchases: CollectionProductPurchaseOut[];
+  className?: string;
+}) {
+  const trades = [...new Set(purchases.flatMap((purchase) => purchase.trades))];
+  if (trades.length === 0) return null;
+
+  return (
+    <div className={cn("flex flex-wrap gap-1", className)}>
+      {trades.map((trade) => (
+        <TradeBadge key={trade} trade={trade} />
+      ))}
+    </div>
+  );
+}
+
 export function ProductContextLine({
   shortcode,
   placements,
@@ -196,6 +215,7 @@ export function ProductContextLine({
       <CopyableShortcode code={shortcode} />
       <ProductPlacementsPopover placements={placements} />
       <ProductPurchasesPopover purchases={purchases} />
+      <ProductTradeBadges purchases={purchases} />
     </div>
   );
 }

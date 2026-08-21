@@ -10,7 +10,6 @@ import {
   Search,
 } from "lucide-react";
 import { useId } from "react";
-import { TradeBadge } from "~/app/projects/trade-options";
 import { EntityCover } from "~/components/entity/entity-cover";
 import { Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -22,6 +21,7 @@ import {
   CopyableShortcode,
   ProductPlacementsPopover,
   ProductPurchasesPopover,
+  ProductTradeBadges,
 } from "./collection-product-context";
 
 const PAGE_SIZE = 50;
@@ -294,21 +294,10 @@ export function CollectionDetailPage({
                       Purchase history
                     </p>
                     <ProductPurchasesPopover purchases={product.purchases} />
-                    {product.purchases.some(
-                      (purchase) => purchase.trades.length > 0,
-                    ) && (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {[
-                          ...new Set(
-                            product.purchases.flatMap(
-                              (purchase) => purchase.trades,
-                            ),
-                          ),
-                        ].map((trade) => (
-                          <TradeBadge key={trade} trade={trade} />
-                        ))}
-                      </div>
-                    )}
+                    <ProductTradeBadges
+                      purchases={product.purchases}
+                      className="mt-2"
+                    />
                   </div>
                 </article>
               ))}
