@@ -9,10 +9,12 @@
  * canonical relation internally, but count callers never invoke sample.
  */
 
+import type { ProductWithTitleDerivableSize } from "@cubby/schemas/problems";
 import type { ProjectAttentionItem } from "@cubby/schemas/project";
 import type { DiagnosticKey } from "~/entities/problem-query";
 import { env } from "~/env";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+import { proposeSizeFromTitle } from "~/lib/title-unit-size";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
 import {
@@ -34,6 +36,7 @@ import {
   findOrphanedProducts,
   findParentRecipesWithDeletedSubRecipes,
   findPartiallyImportedCookbooks,
+  findProductsWithoutUnitMappings,
   findProductsWithUpcGaps,
   findReferentialLivenessViolations,
   findToolsUsedOutsideOwnership,
@@ -93,6 +96,35 @@ const healthySample = async (
     count: items.length,
     status: { state: "healthy" },
   };
+};
+
+/**
+ * Products whose own title states a pack size they have no conversion for.
+ *
+ * The repo hands back a DB-narrowed shortlist and this applies the real test —
+ * same split as the UPC adapter below, where the repo finds gappy products and
+ * the service builds the proposal. `proposeSizeFromTitle` refuses anything
+ * carrying a pack count, because those read 6-12x too small and always in the
+ * cheaper-looking direction.
+ */
+const runTitleSizeProposals = async (
+  db: Database,
+): Promise<ProductWithTitleDerivableSize[]> => {
+  const candidates = await findProductsWithoutUnitMappings(db);
+  const proposals: ProductWithTitleDerivableSize[] = [];
+  for (const row of candidates) {
+    const proposal = proposeSizeFromTitle(row.name);
+    if (!proposal) continue;
+    proposals.push({
+      id: row.shortcode,
+      name: row.name,
+      manufacturer: row.manufacturer,
+      category: row.category,
+      proposed: proposal.amount,
+      token: proposal.token,
+    });
+  }
+  return proposals;
 };
 
 const healthyCount = (count: number): DiagnosticCountResult => ({
@@ -270,6 +302,11 @@ export const diagnosticAdapters = {
       ) as Promise<DiagnosticSampleResult>,
     count: (db, options) =>
       runUpcProposals(db, options, "count") as Promise<DiagnosticCountResult>,
+  },
+  "title-derivable-unit-size": {
+    sample: (db, _options, limit) =>
+      healthySample(runTitleSizeProposals(db), limit),
+    count: async (db) => healthyCount((await runTitleSizeProposals(db)).length),
   },
   "duplicate-spend-candidates": {
     sample: (db, _options, limit) =>

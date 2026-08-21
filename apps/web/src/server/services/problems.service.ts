@@ -38,6 +38,7 @@ import {
   type ProblemsUpc,
   type ProductWithBetterUpcData,
   type ProductWithIslandedMappings,
+  type ProductWithTitleDerivableSize,
 } from "@cubby/schemas/problems";
 import type { ProjectAttentionItem } from "@cubby/schemas/project";
 import { isMiscProduct, isNonFoodCategory } from "@cubby/shared";
@@ -1199,9 +1200,25 @@ export const findCoverageProblems = async (
     ingredientsPage,
     islandsPage,
   );
+  // Runs through the diagnostic registry rather than inline, so the roster in
+  // `problem-registry` can describe it (a `derived` source names a
+  // DiagnosticKey). Independent of the USDA-enriched pair above: no network, no
+  // enrichment — just the Rust grammar over titles the DB already narrowed. It
+  // shares this lane rather than `fast` because that lane's contract is
+  // explicitly DB-only with no WASM.
+  const titleSized = await diagnosticItems<ProductWithTitleDerivableSize[]>(
+    db,
+    "title-derivable-unit-size",
+  );
   return {
     ...presented,
-    sectionTotals: exactSectionTotals(exact),
+    // `items` is a sample; `count` is the real population, and the section
+    // total must be the latter or the card under-reports a ~1,400-row backlog.
+    productsWithTitleDerivableSize: titleSized.items,
+    sectionTotals: {
+      ...exactSectionTotals(exact),
+      productsWithTitleDerivableSize: titleSized.count,
+    },
     freshness,
   };
 };

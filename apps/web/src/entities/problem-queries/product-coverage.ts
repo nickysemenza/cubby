@@ -51,4 +51,36 @@ export const productCoverageProblemQueries = [
       columnVisibility: { unitMappingQuality: true, price: true },
     },
   }),
+  defineProblem({
+    key: "productsWithTitleDerivableSize",
+    problemClass: PROBLEM_CLASS.productsWithTitleDerivableSize,
+    // Not `fast` despite needing no network: that lane's contract is DB-only
+    // with no WASM, and the size is read by the Rust grammar.
+    executionLane: "coverage",
+    continuation: {
+      kind: "none",
+      reason:
+        "Each result is a proposed conversion read off the title, not a product row a filter could reproduce.",
+    },
+    freshness: { kind: "live" },
+    title: "Sizes stated in the title but not recorded",
+    description:
+      "Products whose own name states a pack size they have no conversion for, so no comparable unit price can be shown. Titles carrying a pack count are excluded — they read 6-12x too small.",
+    emptyMessage:
+      "Every product that states a size in its name has it recorded.",
+    source: {
+      kind: "derived",
+      diagnostic: "title-derivable-unit-size",
+      grain: "proposal",
+      inputs: [{ entity: "product", filters: [] }],
+      operations: [
+        { label: "Shortlist mapping-less products whose name mentions a size" },
+        {
+          label: "Parse the size with the ingredient grammar",
+          detail:
+            "Refuses pack counts, fractions, compatibility text, dimensions, and any title stating two different sizes.",
+        },
+      ],
+    },
+  }),
 ] as const satisfies readonly ProblemQuery[];

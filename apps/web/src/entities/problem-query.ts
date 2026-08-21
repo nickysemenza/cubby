@@ -45,6 +45,7 @@ export type DiagnosticKey =
   | "duplicate-financial-account-source-aliases"
   | "invalid-financial-json"
   | "incomplete-statement-imports"
+  | "title-derivable-unit-size"
   | "project-date-window-drift";
 
 export type EntityProblemSource = {
