@@ -7,6 +7,7 @@ import {
   unsafeTaskShortcode,
   unsafeVendorShortcode,
 } from "@cubby/schemas/identifiers";
+import type { SearchHit } from "@cubby/schemas/search";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import {
@@ -15,10 +16,27 @@ import {
   buildProductComboboxItem,
   buildProjectComboboxItem,
   buildRecipeComboboxItem,
+  buildSearchHitComboboxItem,
   buildTaskComboboxItem,
   buildVendorNameComboboxItem,
   buildVendorShortcodeComboboxItem,
 } from "./combobox-builders";
+
+function locationSearchHit(overrides: Partial<SearchHit> = {}): SearchHit {
+  return {
+    id: "LOC-3ABC",
+    entityType: "location",
+    title: "Workshop drawer",
+    subtitle: "Garage › Main area",
+    typeHint: "drawer",
+    imageUrl: "https://example.com/workshop-drawer.jpg",
+    matchKind: "text",
+    matchField: "title",
+    matchReason: "Text match in title",
+    matchTerms: ["workshop"],
+    ...overrides,
+  } as SearchHit;
+}
 
 describe("entity picker value adapters", () => {
   it("keeps ING, LOC, and RCP assignments shortcode-valued", () => {
@@ -97,6 +115,43 @@ describe("entity picker value adapters", () => {
 
     render(item.icon);
     expect(screen.getByText("🔧")).toHaveAttribute("aria-hidden", "true");
+  });
+});
+
+describe("location search picker imagery", () => {
+  it.each([
+    ["live", "drawer"],
+    ["missing", null],
+    ["retired", "quarter-crate"],
+  ])("uses the full location tile for a %s type hint", (_label, typeHint) => {
+    const item = buildSearchHitComboboxItem(
+      locationSearchHit({ typeHint }),
+      "location",
+    );
+    const { container } = render(item.icon);
+
+    expect(container.firstElementChild).toHaveStyle({
+      width: "52px",
+      minHeight: "52px",
+    });
+    expect(container.querySelector("img")).toHaveAttribute(
+      "src",
+      "https://example.com/workshop-drawer.jpg",
+    );
+  });
+
+  it("keeps the full location tile when no image is available", () => {
+    const item = buildSearchHitComboboxItem(
+      locationSearchHit({ imageUrl: null, typeHint: null }),
+      "location",
+    );
+    const { container } = render(item.icon);
+
+    expect(container.firstElementChild).toHaveStyle({
+      width: "52px",
+      minHeight: "52px",
+    });
+    expect(container.querySelector("svg")).not.toBeNull();
   });
 });
 
