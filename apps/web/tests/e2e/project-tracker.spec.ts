@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
+  editListCell,
   fillCellEditor,
-  openCellEditor,
   openCommandPalette,
 } from "./e2e-helpers";
 
@@ -254,11 +254,11 @@ test.describe("Project tracker", () => {
     const nameCell = page.getByRole("cell").filter({
       has: page.getByRole("link", { name, exact: true }),
     });
-    await openCellEditor(
+    await editListCell(
       page,
       nameCell.getByRole("button", { name: "Edit value" }),
+      editedName,
     );
-    await fillCellEditor(page, editedName);
 
     // Assert the edited value renders (react-query invalidation round trip) —
     // more stable than a full page reload, and still proves the mutation
