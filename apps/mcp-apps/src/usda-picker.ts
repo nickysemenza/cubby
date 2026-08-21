@@ -18,6 +18,10 @@ import {
   toolPayload,
 } from "./shared";
 
+/**
+ * The subset of `usdaFoodMcpListOut` (packages/schemas/src/mcp.ts) this app
+ * renders — not the full wire shape. Widen it when the UI needs more.
+ */
 type Food = {
   fdc_id: number;
   description: string | null;
@@ -87,6 +91,13 @@ const FILTER_TYPES = [
   ["branded_food", "Branded"],
 ] as const;
 
+/**
+ * USDA `nutrient_nbr` codes for the macros, mirroring `TIER1_NUTRIENTS` in
+ * @cubby/usda-schemas. Copied rather than imported: that package's only export
+ * is its root index, which pulls zod in, and zod's module-level schema
+ * construction doesn't tree-shake out — a large dependency to inline into a
+ * sandboxed iframe for four constants that have been stable for decades.
+ */
 const MACROS: Array<[code: string, label: string, unit: string]> = [
   ["208", "kcal", ""],
   ["203", "protein", "g"],
