@@ -155,6 +155,21 @@ const uniqueExternalIdSlots = <T extends z.ZodType>(item: T) =>
       }
       primaries.add(slot);
     }
+    // These payloads REPLACE the identifier set, so a slot whose every entry is
+    // a secondary leaves it with no primary. The partial unique only forbids
+    // two, so nothing downstream would reject it — the slot would just stop
+    // answering, since the next primary upsert's arbiter matches no row.
+    for (const [index, value] of values.entries()) {
+      const entry = value as { source: string; kind: ExternalIdKind };
+      const slot = `${entry.source}\u0000${entry.kind}`;
+      if (primaries.has(slot)) continue;
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "each source/kind slot needs one PRIMARY identifier; at least one entry must omit isPrimary or set it true",
+        path: [index, "isPrimary"],
+      });
+    }
   });
 
 export const externalIdInputs = uniqueExternalIdSlots(externalIdInput);

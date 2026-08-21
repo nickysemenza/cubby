@@ -238,6 +238,53 @@ describe("mergeProducts", () => {
     expect(await liveExternalIds(loser.id)).toHaveLength(0);
   });
 
+  it("leaves a primary in a slot the loser held twice", async () => {
+    // Exactly the shape the `contract` migration created on five real products:
+    // one amazon/asin slot holding a primary AND a secondary. `planSlotCollisions`
+    // takes the first row it sees as the slot's occupant and is isPrimary-unaware,
+    // so without a deterministic order the secondary could win — re-pointing
+    // as-is while the real primary is demoted, leaving the slot with rows but no
+    // primary. The partial unique forbids two, never zero, so nothing complains;
+    // the slot just stops answering the next primary upsert's arbiter.
+    const keeper = await seedProduct("Keeper Two Asins", {
+      model: "TWOASIN-1",
+    });
+    const loser = await seedProduct("Loser Two Asins", { model: "TWOASIN-1" });
+    // SECONDARY inserted first, on purpose. Without an explicit order the
+    // planner hands back heap order, so seeding the primary first would let the
+    // bug pass by luck — which it did until this was flipped.
+    await getDb(ctx.db).insert(productExternalId).values({
+      productId: loser.id,
+      source: "amazon",
+      kind: "asin",
+      externalId: "B0SECOND99",
+      isPrimary: false,
+    });
+    await getDb(ctx.db).insert(productExternalId).values({
+      productId: loser.id,
+      source: "amazon",
+      kind: "asin",
+      externalId: "B0PRIMARY9",
+      isPrimary: true,
+    });
+
+    await mergeProducts(
+      ctx.db,
+      { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
+      TEST_ACTOR,
+    );
+
+    const survivor = (await liveExternalIds(keeper.id))
+      .filter((row) => row.kind === "asin")
+      .map((row) => [row.externalId, row.isPrimary] as const)
+      .sort((a, b) => a[0].localeCompare(b[0]));
+    // Both identifiers survive, and the one that was primary still is.
+    expect(survivor).toEqual([
+      ["B0PRIMARY9", true],
+      ["B0SECOND99", false],
+    ]);
+  });
+
   it("keeps the survivor's cover when a merged-in image is older", async () => {
     // `foldAssociation` re-points without touching `sortOrder`, which defaults
     // to 0 on every row, and the cover is whichever row sorts first under

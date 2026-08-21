@@ -477,6 +477,79 @@ describe("product repository", () => {
       ["B0CCC00003", false],
       ["B0EEE00005", true],
     ]);
+
+    // Primary-then-demote in ONE call, the order the earlier test did not
+    // cover. Entry 1 overwrites the primary row's value in place; resolving
+    // entry 2 from the pre-call snapshot then matched that same physical row
+    // and demoted it, losing the value it was meant to keep.
+    await patch([
+      { source: "amazon", kind: "asin", externalId: "B0FFF00006", url: null },
+      {
+        source: "amazon",
+        kind: "asin",
+        externalId: "B0EEE00005",
+        url: null,
+        isPrimary: false,
+      },
+    ]);
+    expect(await asins()).toEqual([
+      ["B0CCC00003", false],
+      ["B0EEE00005", false],
+      ["B0FFF00006", true],
+    ]);
+  });
+
+  it("replaces the identifier set when a demotion and a new primary arrive together", async () => {
+    // `syncProductExternalIds` ran creates before updates, so inserting the new
+    // primary hit the partial unique while the old primary was still primary —
+    // a plain non-deferrable index, so it threw before the demotion could make
+    // room. Only expressible once a slot could hold more than one row.
+    const created = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Demote And Replace Salt",
+        externalIds: [
+          {
+            source: "amazon",
+            kind: "asin",
+            externalId: "B0OLD00001",
+            url: null,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    await updateProduct(
+      ctx.db,
+      created.entityId,
+      {
+        externalIds: [
+          {
+            id: created.externalIds[0]!.id,
+            source: "amazon",
+            kind: "asin",
+            externalId: "B0OLD00001",
+            url: null,
+            isPrimary: false,
+          },
+          {
+            source: "amazon",
+            kind: "asin",
+            externalId: "B0NEW00002",
+            url: null,
+          },
+        ],
+      },
+      ctx.actor,
+    );
+    expect(
+      (await getProductByID(ctx.db, created.entityId)).externalIds
+        .map((entry) => [entry.externalId, entry.isPrimary] as const)
+        .sort((a, b) => a[0].localeCompare(b[0])),
+    ).toEqual([
+      ["B0NEW00002", true],
+      ["B0OLD00001", false],
+    ]);
   });
 
   it("does not mutate any external-ID slot when a removal precondition fails", async () => {

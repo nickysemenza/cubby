@@ -10,7 +10,7 @@ import {
 } from "@cubby/schemas/external-id";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { isCanonicalPriceMapping } from "~/lib/price-mapping-utils";
 import type { DrizzleTransaction } from "~/server/db";
 import {
@@ -110,6 +110,50 @@ export async function syncProductUnitMappings(
 }
 
 /**
+ * Guarantee every named slot still has a primary.
+ *
+ * The partial unique forbids TWO primaries per slot; nothing forbids ZERO — and
+ * a slot with none is silently broken, because the next primary upsert's
+ * arbiter (`isPrimary AND deletedAt IS NULL`) then matches no row and inserts a
+ * duplicate instead of replacing.
+ *
+ * Every path that writes these rows ends here rather than reasoning about its
+ * own ordering, because each one found a different way to drop the primary:
+ * two removals from one slot, a lone demotion of the row that was primary, a
+ * demote-after-overwrite, and a merge that picked a secondary as the occupant.
+ * A repair keyed on live state is the only thing all four have in common.
+ *
+ * Promotes the OLDEST surviving row — the order the identifiers were learned in.
+ */
+export async function ensureSlotPrimaries(
+  tx: DrizzleTransaction,
+  productId: ProductId,
+  slots: Iterable<{ source: string; kind: string }>,
+): Promise<void> {
+  const seen = new Set<string>();
+  for (const slot of slots) {
+    const source = slot.source.trim().toLowerCase();
+    const key = `${source}\u0000${slot.kind}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const live = await tx.query.productExternalId.findMany({
+      where: and(
+        eq(productExternalId.productId, productId),
+        eq(productExternalId.source, source),
+        eq(productExternalId.kind, slot.kind),
+        notDeleted(productExternalId),
+      ),
+      orderBy: [asc(productExternalId.createdAt), asc(productExternalId.id)],
+    });
+    if (live.length === 0 || live.some((row) => row.isPrimary)) continue;
+    await tx
+      .update(productExternalId)
+      .set({ isPrimary: true })
+      .where(eq(productExternalId.id, live[0]!.id));
+  }
+}
+
+/**
  * True when an incoming external-id write for a (source, kind) slot is
  * identical to the live row already occupying it. Callers use this to skip a
  * pointless soft-delete+insert (or update) that would otherwise mint a
@@ -205,19 +249,10 @@ export async function syncProductExternalIds(
       );
   }
 
-  if (toCreate.length > 0) {
-    await tx.insert(productExternalId).values(
-      toCreate.map((eid) => ({
-        productId,
-        source: eid.source,
-        kind: eid.kind,
-        externalId: eid.externalId,
-        url: storedExternalIdUrl(eid),
-        isPrimary: eid.isPrimary ?? true,
-      })),
-    );
-  }
-
+  // Updates BEFORE creates. An update may DEMOTE the slot's current primary
+  // while a create inserts its replacement, and the partial unique is a plain
+  // non-deferrable index — so inserting first throws on a slot that already has
+  // a primary, before the demotion that would have made room for it.
   for (const raw of toUpdate) {
     const eid = { ...raw, source: raw.source.trim().toLowerCase() };
     await tx
@@ -231,6 +266,24 @@ export async function syncProductExternalIds(
       })
       .where(eq(productExternalId.id, eid.id));
   }
+
+  if (toCreate.length > 0) {
+    await tx.insert(productExternalId).values(
+      toCreate.map((eid) => ({
+        productId,
+        source: eid.source,
+        kind: eid.kind,
+        externalId: eid.externalId,
+        url: storedExternalIdUrl(eid),
+        isPrimary: eid.isPrimary ?? true,
+      })),
+    );
+  }
+
+  await ensureSlotPrimaries(tx, productId, [
+    ...normalized,
+    ...existingExternalIds,
+  ]);
 }
 
 /**

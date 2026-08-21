@@ -107,7 +107,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import type { MergeProductsInput } from "@cubby/schemas/product";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { sumBy, uniq } from "es-toolkit";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -151,6 +151,7 @@ import {
 } from "~/server/repo/merge";
 import { cascadeRemoval } from "~/server/repo/removal";
 import { markProductConversionCoverageInputStale } from "./conversion-coverage";
+import { ensureSlotPrimaries } from "./update-helpers";
 
 export const PRODUCT_MERGE_EDGE_POLICY = {
   "ProductExternalId.productId": {
@@ -690,7 +691,19 @@ export const mergeProducts = async (
         kind: true,
         externalId: true,
         url: true,
+        isPrimary: true,
       },
+      // `planSlotCollisions` takes the FIRST row it sees per slot as the
+      // occupant, and is `isPrimary`-unaware. Without an order that is whatever
+      // the heap returns, so a secondary could win the slot and the real
+      // primary get demoted — or, where the keeper does not hold the slot at
+      // all, the loser's secondary re-points as-is and its primary is demoted,
+      // leaving the slot with no primary and nothing to say so.
+      orderBy: [
+        desc(productExternalId.isPrimary),
+        asc(productExternalId.createdAt),
+        asc(productExternalId.id),
+      ],
     });
     const externalIdPlan = planSlotCollisions({
       keeperRows: externalIdRows.filter((row) => row.productId === keepId),
@@ -751,6 +764,12 @@ export const mergeProducts = async (
         );
       }
     }
+    // Same repair the patch path ends with: a slot the merge touched must not
+    // be left with rows but no primary. Reachable here because the loser's own
+    // primary can be demoted on the way in — and the `contract` migration
+    // created exactly that shape (primary + secondary in one amazon/asin slot)
+    // on the five products this change was written for.
+    await ensureSlotPrimaries(tx, keepId, externalIdRows);
 
     if (inventoryPlan.repoint.length > 0) {
       await tx

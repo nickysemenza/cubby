@@ -139,6 +139,7 @@ import {
 import type { ProductDeepDB } from "./types";
 import {
   assertNoCanonicalPriceMapping,
+  ensureSlotPrimaries,
   externalIdSlotUnchanged,
   syncProductExternalIds,
   syncProductImages,
@@ -1694,16 +1695,26 @@ export const patchProductExternalIds = async (
     for (const entry of input.upsert) {
       const source = entry.source.trim().toLowerCase();
       const isPrimary = entry.isPrimary ?? true;
+      // Read LIVE, not from `beforeIds`. Earlier entries in this same payload
+      // have already written to this slot: a primary upsert overwrites the
+      // primary row's `externalId` in place, so a later `isPrimary: false`
+      // entry naming the OLD value would match that same physical row in the
+      // pre-call snapshot and demote it — silently destroying the identifier it
+      // was trying to preserve, which is the loss this whole change exists to
+      // prevent.
+      const slotRows = await tx.query.productExternalId.findMany({
+        where: and(
+          eq(productExternalId.productId, id),
+          eq(productExternalId.source, source),
+          eq(productExternalId.kind, entry.kind),
+          notDeleted(productExternalId),
+        ),
+      });
       // A secondary is addressed by its VALUE — there is no single occupant to
       // overwrite, and overwriting an arbitrary one would destroy an id.
       const liveSlot = isPrimary
-        ? beforeIds.find((e) => e.source === source && e.kind === entry.kind)
-        : beforeIds.find(
-            (e) =>
-              e.source === source &&
-              e.kind === entry.kind &&
-              e.externalId === entry.externalId,
-          );
+        ? slotRows.find((e) => e.isPrimary)
+        : slotRows.find((e) => e.externalId === entry.externalId);
       // A re-submission of the exact value already live in this slot is a
       // no-op: skip it so it neither bumps `updatedAt` nor (via the
       // conflict-target upsert) touches the row for no real change.
@@ -1766,44 +1777,10 @@ export const patchProductExternalIds = async (
           },
         });
     }
-    // Restore the one-primary-per-slot invariant, once, after every write.
-    //
-    // Deliberately NOT done inside the loops above. Both address rows by VALUE,
-    // so a slot can lose its primary in more than one way — two removals from
-    // one slot, or a lone `isPrimary: false` upsert naming the row that is
-    // currently primary — and promotion logic reading the pre-call `beforeIds`
-    // snapshot got both wrong, because the loops mutate the very rows it
-    // describes. The partial unique only forbids TWO primaries, so a slot with
-    // zero violates nothing and the next primary upsert would find no row for
-    // its arbiter to match.
-    //
-    // Legitimate demote-and-replace (`[{X, isPrimary: false}, {Y}]`) already
-    // leaves a primary, so this pass is a no-op there.
-    const touchedSlots = new Map<string, { source: string; kind: string }>();
-    for (const entry of [...input.upsert, ...input.remove]) {
-      const source = entry.source.trim().toLowerCase();
-      touchedSlots.set(`${source}\u0000${entry.kind}`, {
-        source,
-        kind: entry.kind,
-      });
-    }
-    for (const slot of touchedSlots.values()) {
-      const live = await tx.query.productExternalId.findMany({
-        where: and(
-          eq(productExternalId.productId, id),
-          eq(productExternalId.source, slot.source),
-          eq(productExternalId.kind, slot.kind),
-          notDeleted(productExternalId),
-        ),
-        // Oldest first: the order the identifiers were learned in.
-        orderBy: [asc(productExternalId.createdAt), asc(productExternalId.id)],
-      });
-      if (live.length === 0 || live.some((row) => row.isPrimary)) continue;
-      await tx
-        .update(productExternalId)
-        .set({ isPrimary: true })
-        .where(eq(productExternalId.id, live[0]!.id));
-    }
+    // Restore the one-primary-per-slot invariant after every write. See
+    // `ensureSlotPrimaries` for why this is a repair keyed on live state rather
+    // than promotion logic inside the loops.
+    await ensureSlotPrimaries(tx, id, [...input.upsert, ...input.remove]);
 
     const externalIds = await tx.query.productExternalId.findMany({
       where: and(
