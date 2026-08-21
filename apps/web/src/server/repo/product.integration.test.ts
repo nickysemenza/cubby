@@ -367,6 +367,118 @@ describe("product repository", () => {
     expect(await asins()).toEqual([["B0SECOND01", true]]);
   });
 
+  it("keeps a primary in the slot however the rows are patched", async () => {
+    // The partial unique forbids TWO primaries, so a slot with ZERO violates
+    // nothing — it just silently breaks the next primary upsert, whose
+    // `onConflictDoUpdate` arbiter (`isPrimary AND deletedAt IS NULL`) then has
+    // no row to match. Both ways of getting there are covered here.
+    const created = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Primary Invariant Salt",
+        externalIds: [
+          {
+            source: "amazon",
+            kind: "asin",
+            externalId: "B0AAA00001",
+            url: null,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    const patch = (
+      upsert: Parameters<typeof patchProductExternalIds>[2]["upsert"],
+      remove: Parameters<typeof patchProductExternalIds>[2]["remove"] = [],
+    ) =>
+      patchProductExternalIds(
+        ctx.db,
+        created.entityId,
+        { upsert, remove },
+        ctx.actor,
+      );
+    const asins = async () =>
+      (await getProductByID(ctx.db, created.entityId)).externalIds
+        .filter((entry) => entry.kind === "asin")
+        .map((entry) => [entry.externalId, entry.isPrimary] as const)
+        .sort((a, b) => a[0].localeCompare(b[0]));
+
+    await patch([
+      {
+        source: "amazon",
+        kind: "asin",
+        externalId: "B0BBB00002",
+        url: null,
+        isPrimary: false,
+      },
+      {
+        source: "amazon",
+        kind: "asin",
+        externalId: "B0CCC00003",
+        url: null,
+        isPrimary: false,
+      },
+    ]);
+    expect(await asins()).toEqual([
+      ["B0AAA00001", true],
+      ["B0BBB00002", false],
+      ["B0CCC00003", false],
+    ]);
+
+    // Two removals from ONE slot. Promoting inside the loop read the pre-call
+    // snapshot, so the second iteration saw a stale `isPrimary` for the row it
+    // had just promoted and skipped promoting again — leaving zero primaries.
+    await patch(
+      [],
+      [
+        { source: "amazon", kind: "asin", expectedExternalId: "B0AAA00001" },
+        { source: "amazon", kind: "asin", expectedExternalId: "B0BBB00002" },
+      ],
+    );
+    expect(await asins()).toEqual([["B0CCC00003", true]]);
+
+    // A lone `isPrimary: false` upsert naming the row that is CURRENTLY the
+    // primary. The value resolves to that row (the global unique makes it the
+    // only one), so it was demoted with nothing left standing for the slot.
+    await patch([
+      {
+        source: "amazon",
+        kind: "asin",
+        externalId: "B0CCC00003",
+        url: null,
+        isPrimary: false,
+      },
+    ]);
+    expect(await asins()).toEqual([["B0CCC00003", true]]);
+
+    // Demote-and-replace in one call still does what it says: the pass only
+    // acts on a slot that has no primary left.
+    await patch([
+      {
+        source: "amazon",
+        kind: "asin",
+        externalId: "B0CCC00003",
+        url: null,
+        isPrimary: false,
+      },
+      { source: "amazon", kind: "asin", externalId: "B0DDD00004", url: null },
+    ]);
+    expect(await asins()).toEqual([
+      ["B0CCC00003", false],
+      ["B0DDD00004", true],
+    ]);
+
+    // And the restored primary is a real arbiter row: the next primary upsert
+    // must replace it rather than insert a second one.
+    await patch([
+      { source: "amazon", kind: "asin", externalId: "B0EEE00005", url: null },
+    ]);
+    expect(await asins()).toEqual([
+      ["B0CCC00003", false],
+      ["B0EEE00005", true],
+    ]);
+  });
+
   it("does not mutate any external-ID slot when a removal precondition fails", async () => {
     const created = await createProduct(
       ctx.db,

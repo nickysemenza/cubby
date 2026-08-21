@@ -701,10 +701,11 @@ export const productExternalId = pgTable(
     index("ProductExternalId_productId_idx").on(table.productId),
     // One PRIMARY per slot rather than one row per slot.
     //
-    // ⚠️ `drizzle-kit push` applies index predicates as a no-op, so this index
-    // does not exist unless it was created by hand. Verify with
-    // `SELECT indexdef FROM pg_indexes WHERE indexname LIKE 'ProductExternalId%'`
-    // — a green push proves nothing here.
+    // This replaced `ProductExternalId_product_source_kind_key`, and the swap
+    // had to straddle the deploy: the two code versions infer DIFFERENT arbiter
+    // indexes for the same upsert (`WHERE deletedAt IS NULL` before,
+    // `WHERE isPrimary AND deletedAt IS NULL` after), so both had to exist at
+    // once. Applied by hand for that reason, not because push cannot express it.
     uniqueIndex("ProductExternalId_product_source_kind_primary_key")
       .on(table.productId, table.source, table.kind)
       .where(sql`${table.isPrimary} AND ${table.deletedAt} IS NULL`),

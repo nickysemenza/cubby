@@ -1690,30 +1690,6 @@ export const patchProductExternalIds = async (
             notDeleted(productExternalId),
           ),
         );
-      // Removing the primary must not leave the slot with only secondaries and
-      // nothing standing for it. Oldest first, which is the order they were
-      // learned in.
-      const remaining = beforeIds
-        .filter(
-          (row) =>
-            row.source === source &&
-            row.kind === entry.kind &&
-            row.externalId !== entry.expectedExternalId,
-        )
-        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-      const removedPrimary = beforeIds.some(
-        (row) =>
-          row.source === source &&
-          row.kind === entry.kind &&
-          row.externalId === entry.expectedExternalId &&
-          row.isPrimary,
-      );
-      if (removedPrimary && remaining[0]) {
-        await tx
-          .update(productExternalId)
-          .set({ isPrimary: true })
-          .where(eq(productExternalId.id, remaining[0].id));
-      }
     }
     for (const entry of input.upsert) {
       const source = entry.source.trim().toLowerCase();
@@ -1790,6 +1766,45 @@ export const patchProductExternalIds = async (
           },
         });
     }
+    // Restore the one-primary-per-slot invariant, once, after every write.
+    //
+    // Deliberately NOT done inside the loops above. Both address rows by VALUE,
+    // so a slot can lose its primary in more than one way — two removals from
+    // one slot, or a lone `isPrimary: false` upsert naming the row that is
+    // currently primary — and promotion logic reading the pre-call `beforeIds`
+    // snapshot got both wrong, because the loops mutate the very rows it
+    // describes. The partial unique only forbids TWO primaries, so a slot with
+    // zero violates nothing and the next primary upsert would find no row for
+    // its arbiter to match.
+    //
+    // Legitimate demote-and-replace (`[{X, isPrimary: false}, {Y}]`) already
+    // leaves a primary, so this pass is a no-op there.
+    const touchedSlots = new Map<string, { source: string; kind: string }>();
+    for (const entry of [...input.upsert, ...input.remove]) {
+      const source = entry.source.trim().toLowerCase();
+      touchedSlots.set(`${source}\u0000${entry.kind}`, {
+        source,
+        kind: entry.kind,
+      });
+    }
+    for (const slot of touchedSlots.values()) {
+      const live = await tx.query.productExternalId.findMany({
+        where: and(
+          eq(productExternalId.productId, id),
+          eq(productExternalId.source, slot.source),
+          eq(productExternalId.kind, slot.kind),
+          notDeleted(productExternalId),
+        ),
+        // Oldest first: the order the identifiers were learned in.
+        orderBy: [asc(productExternalId.createdAt), asc(productExternalId.id)],
+      });
+      if (live.length === 0 || live.some((row) => row.isPrimary)) continue;
+      await tx
+        .update(productExternalId)
+        .set({ isPrimary: true })
+        .where(eq(productExternalId.id, live[0]!.id));
+    }
+
     const externalIds = await tx.query.productExternalId.findMany({
       where: and(
         eq(productExternalId.productId, id),
