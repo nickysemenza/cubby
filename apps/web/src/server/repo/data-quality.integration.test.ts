@@ -9,6 +9,7 @@ import {
   financialTransactionAllocation,
   image,
   productExternalId,
+  productImage,
   purchaseImage,
 } from "~/server/db/schema";
 import {
@@ -28,8 +29,12 @@ import {
   reclassifyPurchaseDocument,
 } from "./purchase";
 import {
+  createImageFixture,
+  createInventoryFixture,
+  createLocationFixture,
   createProductFixture,
   makeExpenseInput,
+  makeLocationInput,
   makeProductInput,
 } from "./repo.fixtures";
 import { insertWithShortcode } from "./shortcode-utils";
@@ -240,6 +245,187 @@ describe("computed purchase and product data quality", () => {
       page,
     );
     expect(purchases.data.map((item) => item.id)).toEqual([seeded.output.id]);
+  });
+
+  // `product_image` is the only product check scoped to STOCK rather than to
+  // the shared expense-or-inventory scope, so the scoping is the property worth
+  // locking: an unscoped version would light up every sold-off and historical
+  // product in the catalogue and stop discriminating. The SQL filter and the TS
+  // emitter are separate implementations of that rule, so both are asserted.
+  it("opens product_image only for stocked products, and only for a real photo", async () => {
+    const seeded = await seedPurchase("Image Check Supply");
+    const location = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Image Check Shelf" }),
+      ctx.actor,
+    );
+    const soldOff = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Sold Off No Image",
+        category: "tools",
+        manufacturer: "Acme",
+      }),
+      ctx.actor,
+    );
+    const stocked = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Stocked No Image",
+        category: "tools",
+        manufacturer: "Acme",
+      }),
+      ctx.actor,
+    );
+    for (const item of [soldOff, stocked]) {
+      await createExpense(
+        ctx.db,
+        makeExpenseInput({
+          purchaseId: seeded.output.id,
+          productId: item.id,
+          cost: 25,
+        }),
+        ctx.actor,
+      );
+    }
+
+    const checksFor = async (id: (typeof stocked)["entityId"]) =>
+      (await getProductByID(ctx.db, id)).dataQuality.gaps.map(
+        (gap) => gap.check,
+      );
+
+    // Spend alone is NOT scope for this check, unlike every other product check.
+    expect(await checksFor(soldOff.entityId)).not.toContain("product_image");
+    expect(await checksFor(stocked.entityId)).not.toContain("product_image");
+
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: stocked.id,
+        locationId: location.id,
+        amount: { value: 1, unit: "each" },
+      },
+      ctx.actor,
+    );
+
+    expect(await checksFor(stocked.entityId)).toContain("product_image");
+    expect(await checksFor(soldOff.entityId)).not.toContain("product_image");
+
+    // The SQL filter must agree with the TS emitter above — they are written
+    // twice and can drift silently.
+    const gappy = await productList(
+      ctx.db,
+      { dataGap: "product_image" },
+      [{ orderBy: "name", direction: "asc" }],
+      page,
+    );
+    expect(gappy.data.map((item) => item.id)).toEqual([stocked.id]);
+
+    // A PDF manual is not a photo. Reading presence off ProductImage alone
+    // would close the gap here and leave the product looking enriched.
+    const manual = await createImageFixture(ctx.db, "manual", {
+      contentType: "application/pdf",
+      filename: "manual.pdf",
+    });
+    await insertAndReturn(ctx.db, productImage, {
+      productId: stocked.entityId,
+      imageId: manual.id,
+    });
+    expect(await checksFor(stocked.entityId)).toContain("product_image");
+
+    // A render-failed image does not count either.
+    const broken = await createImageFixture(ctx.db, "broken", {
+      renderStatus: "failed",
+    });
+    await insertAndReturn(ctx.db, productImage, {
+      productId: stocked.entityId,
+      imageId: broken.id,
+    });
+    expect(await checksFor(stocked.entityId)).toContain("product_image");
+
+    const photo = await createImageFixture(ctx.db, "cover");
+    await insertAndReturn(ctx.db, productImage, {
+      productId: stocked.entityId,
+      imageId: photo.id,
+    });
+    expect(await checksFor(stocked.entityId)).not.toContain("product_image");
+
+    const afterPhoto = await productList(
+      ctx.db,
+      { dataGap: "product_image" },
+      [{ orderBy: "name", direction: "asc" }],
+      page,
+    );
+    expect(afterPhoto.data.map((item) => item.id)).toEqual([]);
+  });
+
+  // The whole point of the check is that "no canonical asset exists" becomes
+  // durable, queryable knowledge instead of a sentence in a notes field that
+  // the next enrichment sweep re-researches from scratch.
+  it("admits an unavailable exception on product_image", async () => {
+    const seeded = await seedPurchase("Image Exception Supply");
+    const location = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Image Exception Shelf" }),
+      ctx.actor,
+    );
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Retired Listing",
+        category: "tools",
+        manufacturer: "Acme",
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        purchaseId: seeded.output.id,
+        productId: item.id,
+        cost: 25,
+      }),
+      ctx.actor,
+    );
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: item.id,
+        locationId: location.id,
+        amount: { value: 1, unit: "each" },
+      },
+      ctx.actor,
+    );
+
+    // Rejection first: a successful exception closes the gap, and a closed gap
+    // trips the active-gap guard rather than the reason allowlist.
+    await expect(
+      setDataException(
+        ctx.db,
+        {
+          entityId: item.id,
+          check: "product_image",
+          reason: "not_issued",
+          note: "Wrong reason for this check.",
+        },
+        ctx.actor,
+      ),
+    ).rejects.toThrow();
+
+    const quality = await setDataException(
+      ctx.db,
+      {
+        entityId: item.id,
+        check: "product_image",
+        reason: "unavailable",
+        note: "Discontinued; every listing retired and no canonical asset survives.",
+      },
+      ctx.actor,
+    );
+    expect(quality.gaps.map((gap) => gap.check)).not.toContain("product_image");
+    expect(quality.exceptions).toContainEqual(
+      expect.objectContaining({ check: "product_image", state: "active" }),
+    );
   });
 
   it("reports a brand-new purchase as empty, not as a paperwork mismatch", async () => {

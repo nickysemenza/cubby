@@ -46,6 +46,7 @@ import {
   inventoryEntry,
   product,
   productExternalId,
+  productImage,
   purchase,
   purchaseImage,
   vendor,
@@ -65,6 +66,10 @@ import {
   settlementReferenceAbsentSql,
   settlementReferencePredicate,
 } from "~/server/repo/financial-reconciliation";
+import {
+  displayableImageRawSql,
+  displayableImageWhere,
+} from "~/server/repo/image-displayability";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 const AMAZON_SOURCE = "amazon";
@@ -132,6 +137,14 @@ const EXCEPTION_REASONS: Partial<
   product_manufacturer: ["not_applicable", "unavailable"],
   product_category: ["not_applicable", "insufficient_detail"],
   product_model: ["not_issued", "unavailable"],
+  // `unavailable` is the common one and the reason this check earns its keep:
+  // a discontinued item whose listings are all retired has NO canonical asset,
+  // and substituting a neighbouring generation is worse than no image because
+  // the swap is undetectable later. Before this check existed that finding had
+  // nowhere to live but free-text notes, so every sweep re-researched the same
+  // dead ends. `not_applicable` covers a `misc:` bucket row, which is a
+  // stocked pseudo-product that no single photograph describes.
+  product_image: ["unavailable", "not_applicable"],
 };
 
 const externalIdCollisionKey = (value: {
@@ -174,6 +187,18 @@ const productHasInventory = sql`EXISTS (
 
 const productHasQualityScope = sql`(${productHasExpenses} OR ${productHasInventory})`;
 
+// Must agree with `productIdsWithImages` (product/crud.ts), findProductsWithNoImages
+// (product/analytics.ts) and the problems detector: ProductImage is soft-deletable
+// separately from Image, and a PDF manual is not a photo. Joining ProductImage
+// alone reads `true` for a product whose only attachment is a manual.
+const productHasDisplayableImage = sql`EXISTS (
+  SELECT 1 FROM "ProductImage" dq_pimg
+  JOIN "Image" dq_img ON dq_img."id" = dq_pimg."imageId" AND dq_img."deletedAt" IS NULL
+  WHERE dq_pimg."productId" = ${product.id}
+    AND dq_pimg."deletedAt" IS NULL
+    AND ${sql.raw(displayableImageRawSql("dq_img"))}
+)`;
+
 const productHasAmazonPurchase = sql`EXISTS (
   SELECT 1
   FROM "Expense" dq_ae
@@ -208,21 +233,52 @@ const productHasExternalIdCollision = sql`EXISTS (
     AND dq_mine."deletedAt" IS NULL
 )`;
 
+/**
+ * ⚠️ Exhaustive `switch`, deliberately — this used to be a ternary chain whose
+ * final `else` was the `duplicate_external_id` predicate. A newly added check
+ * therefore fell through to it and compiled clean while producing entirely the
+ * wrong SQL. Keep the `never` guard so the compiler catches the next one.
+ */
 export const productDataGapCondition = (check: ProductDataCheck): SQL => {
-  const missing =
-    check === "product_manufacturer"
-      ? sql`(trim(${product.manufacturer}) = '' OR lower(trim(${product.manufacturer})) = lower(${UNSPECIFIED_MANUFACTURER}))`
-      : check === "product_category"
-        ? sql`${product.category} IS NULL`
-        : check === "product_model"
-          ? sql`${product.category} IN (${sql.join(
-              MODEL_REQUIRED_CATEGORIES.map((category) => sql`${category}`),
-              sql`, `,
-            )}) AND (${product.model} IS NULL OR trim(${product.model}) = '')`
-          : check === "amazon_asin"
-            ? sql`${productHasAmazonPurchase} AND NOT ${productHasAmazonId}`
-            : productHasExternalIdCollision;
-  return sql`${productHasQualityScope} AND ${missing} AND NOT ${activeException(product.dataExceptions, product.updatedAt, check)}`;
+  // Scope is per-check, not global. Everything except the image check is in
+  // scope once a product has spend OR stock; `product_image` is deliberately
+  // narrower — see `productImageScope`.
+  let scope = productHasQualityScope;
+  let missing: SQL;
+  switch (check) {
+    case "product_manufacturer":
+      missing = sql`(trim(${product.manufacturer}) = '' OR lower(trim(${product.manufacturer})) = lower(${UNSPECIFIED_MANUFACTURER}))`;
+      break;
+    case "product_category":
+      missing = sql`${product.category} IS NULL`;
+      break;
+    case "product_model":
+      missing = sql`${product.category} IN (${sql.join(
+        MODEL_REQUIRED_CATEGORIES.map((category) => sql`${category}`),
+        sql`, `,
+      )}) AND (${product.model} IS NULL OR trim(${product.model}) = '')`;
+      break;
+    case "product_image":
+      // STOCKED ONLY. An image earns its keep for something you can walk up to
+      // and fail to recognise on a shelf; for a sold-off or purely historical
+      // product it is decoration. Scoping to inventory also keeps this check
+      // from lighting up a large share of the catalogue on day one, which is
+      // what would have made it noise rather than a worklist.
+      scope = productHasInventory;
+      missing = sql`NOT ${productHasDisplayableImage}`;
+      break;
+    case "amazon_asin":
+      missing = sql`${productHasAmazonPurchase} AND NOT ${productHasAmazonId}`;
+      break;
+    case "duplicate_external_id":
+      missing = productHasExternalIdCollision;
+      break;
+    default: {
+      const unhandled: never = check;
+      throw new Error(`Unhandled product data check: ${String(unhandled)}`);
+    }
+  }
+  return sql`${scope} AND ${missing} AND NOT ${activeException(product.dataExceptions, product.updatedAt, check)}`;
 };
 
 const productMissingDataCondition = (): SQL =>
@@ -264,16 +320,38 @@ const purchaseProductGapRaw = (check: ProductDataCheck): string => {
       WHERE dq_pe."purchaseId" = "Purchase"."id"
         AND dq_pe."deletedAt" IS NULL
         AND dq_pe."productId" IS NOT NULL`;
-  const condition =
-    check === "product_manufacturer"
-      ? `AND (trim(dq_pr."manufacturer") = '' OR lower(trim(dq_pr."manufacturer")) = lower('${UNSPECIFIED_MANUFACTURER}'))`
-      : check === "product_category"
-        ? `AND dq_pr."category" IS NULL`
-        : check === "product_model"
-          ? `AND dq_pr."category" IN (${MODEL_REQUIRED_CATEGORIES.map((category) => `'${category}'`).join(", ")})
-               AND (dq_pr."model" IS NULL OR trim(dq_pr."model") = '')`
-          : check === "amazon_asin"
-            ? `AND EXISTS (
+  // ⚠️ Exhaustive `switch`, deliberately — this was a ternary chain whose final
+  // `else` was the `duplicate_external_id` predicate, so a newly added check
+  // compiled clean and silently rolled up as a duplicate-ID defect. Keep the
+  // `never` guard so the compiler catches the next one.
+  let condition: string;
+  switch (check) {
+    case "product_manufacturer":
+      condition = `AND (trim(dq_pr."manufacturer") = '' OR lower(trim(dq_pr."manufacturer")) = lower('${UNSPECIFIED_MANUFACTURER}'))`;
+      break;
+    case "product_category":
+      condition = `AND dq_pr."category" IS NULL`;
+      break;
+    case "product_model":
+      condition = `AND dq_pr."category" IN (${MODEL_REQUIRED_CATEGORIES.map((category) => `'${category}'`).join(", ")})
+               AND (dq_pr."model" IS NULL OR trim(dq_pr."model") = '')`;
+      break;
+    case "product_image":
+      // Stocked only, mirroring `productDataGapCondition`. A purchase rolls
+      // this up only for a linked product that is still on a shelf.
+      condition = `AND EXISTS (
+                 SELECT 1 FROM "InventoryEntry" dq_pinv
+                 WHERE dq_pinv."productId" = dq_pr."id" AND dq_pinv."deletedAt" IS NULL
+               )
+               AND NOT EXISTS (
+                 SELECT 1 FROM "ProductImage" dq_pimg
+                 JOIN "Image" dq_img ON dq_img."id" = dq_pimg."imageId" AND dq_img."deletedAt" IS NULL
+                 WHERE dq_pimg."productId" = dq_pr."id" AND dq_pimg."deletedAt" IS NULL
+                   AND ${displayableImageRawSql("dq_img")}
+               )`;
+      break;
+    case "amazon_asin":
+      condition = `AND EXISTS (
                  SELECT 1 FROM "Expense" dq_ae
                  JOIN "Purchase" dq_ap ON dq_ap."id" = dq_ae."purchaseId" AND dq_ap."deletedAt" IS NULL
                  JOIN "Vendor" dq_av ON dq_av."id" = dq_ap."vendorId" AND dq_av."deletedAt" IS NULL
@@ -285,8 +363,10 @@ const purchaseProductGapRaw = (check: ProductDataCheck): string => {
                  WHERE dq_asin."productId" = dq_pr."id" AND dq_asin."deletedAt" IS NULL
                    AND dq_asin."source" = 'amazon'
                    AND dq_asin."kind" = 'asin'
-               )`
-            : `AND EXISTS (
+               )`;
+      break;
+    case "duplicate_external_id":
+      condition = `AND EXISTS (
                  SELECT 1 FROM "ProductExternalId" dq_mine
                  JOIN "ProductExternalId" dq_other
                    ON dq_other."source" = dq_mine."source"
@@ -299,6 +379,12 @@ const purchaseProductGapRaw = (check: ProductDataCheck): string => {
                   AND dq_other_product."deletedAt" IS NULL
                  WHERE dq_mine."productId" = dq_pr."id" AND dq_mine."deletedAt" IS NULL
                )`;
+      break;
+    default: {
+      const unhandled: never = check;
+      throw new Error(`Unhandled product data check: ${String(unhandled)}`);
+    }
+  }
   return `${base} ${condition} AND ${exceptionAbsent})`;
 };
 
@@ -460,6 +546,7 @@ export const loadProductDataQualities = async (
     linkedExpenses,
     amazonExpenses,
     productExternalIds,
+    productsWithImages,
   ] = await Promise.all([
     unwrapDb(db)
       .select({
@@ -531,6 +618,23 @@ export const loadProductDataQualities = async (
           notDeleted(productExternalId),
         ),
       ),
+    // Image is soft-deletable independently of ProductImage, and a PDF manual
+    // is not a photo — so this joins through and applies displayableImageWhere
+    // rather than reading presence off ProductImage alone.
+    unwrapDb(db)
+      .selectDistinct({ productId: productImage.productId })
+      .from(productImage)
+      .innerJoin(
+        image,
+        and(eq(image.id, productImage.imageId), notDeleted(image)),
+      )
+      .where(
+        and(
+          inArray(productImage.productId, uniqueIds),
+          notDeleted(productImage),
+          displayableImageWhere,
+        ),
+      ),
   ]);
 
   const externalIdPairs = uniqBy(productExternalIds, externalIdCollisionKey);
@@ -571,6 +675,7 @@ export const loadProductDataQualities = async (
     linkedExpenses.flatMap((row) => (row.productId ? [row.productId] : [])),
   );
   const inventoryLinked = new Set(linkedInventory.map((row) => row.productId));
+  const imageLinked = new Set(productsWithImages.map((row) => row.productId));
   const amazonLinked = new Set(
     amazonExpenses.flatMap((row) => (row.productId ? [row.productId] : [])),
   );
@@ -617,6 +722,14 @@ export const loadProductDataQualities = async (
         (row.model === null || row.model.trim() === "")
       ) {
         add("product_model", "Manufacturer model is not recorded.");
+      }
+      // STOCKED ONLY — deliberately narrower than the surrounding
+      // expense-or-inventory scope, and must stay in step with the
+      // `product_image` branch of `productDataGapCondition`. A photo earns its
+      // keep for something you can walk up to on a shelf and fail to
+      // recognise; for a sold-off product it is decoration.
+      if (inventoryLinked.has(row.id) && !imageLinked.has(row.id)) {
+        add("product_image", "No product image is attached.");
       }
       const externalIds = externalIdsByProduct[row.id] ?? [];
       if (

@@ -1404,6 +1404,9 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
         { value: "product_manufacturer", label: "Manufacturer" },
         { value: "product_category", label: "Category" },
         { value: "product_model", label: "Model" },
+        // Offered, unlike the purchase list's `primary_document`, because this
+        // one is scoped to stocked products and therefore discriminates.
+        { value: "product_image", label: "No image (stocked)" },
         { value: "amazon_asin", label: "Amazon ASIN" },
         { value: "duplicate_external_id", label: "Duplicate external ID" },
       ],
