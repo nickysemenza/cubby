@@ -206,9 +206,12 @@ Expense → Purchase ← Allocation → FinancialTransaction → FinancialAccoun
 
 ## Product promotion rules
 
-Automatically promote an exact, receipt-identified durable or repeatable
-material when the source supplies stable identity and trustworthy cost
-evidence. Do not ask for separate approval for these high-confidence lines. A
+Automatically promote an exact, receipt-identified durable, consumable, or
+repeatable commodity when the source supplies stable identity and trustworthy
+cost evidence. Groceries count: Cubby is a pantry before it is a tool ledger, so
+a named grocery line is a promotion candidate exactly like a SKU'd tool, and
+"it's just food" is not a reason to skip it or to ask whether it belongs. Do not
+ask for separate approval for these high-confidence lines. A
 retailer SKU, ASIN, UPC, maker model, or an exact vendor-issued product name
 plus distinguishing variant, size, finish, or profile is sufficient evidence;
 a fuzzy or generic name is not.
