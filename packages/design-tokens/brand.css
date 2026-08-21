@@ -46,6 +46,12 @@
      ultramarine for "this is the live value". */
   --positive: oklch(0.5 0.1 150); /* positive / money */
   --warning: oklch(0.62 0.13 65); /* matte amber */
+  /* Warning as TEXT. The amber above is tuned to read as amber on a fill or a
+     tint, which costs it contrast: 3.6:1 on paper, under the 4.5:1 floor. This
+     is the same hue and chroma dropped to positive/destructive lightness
+     (5.9:1 on paper, 5.3:1 on a 10% amber tint) — use it whenever the warning
+     voice has to be read rather than seen. */
+  --warning-ink: oklch(0.5 0.13 65);
   --destructive: oklch(0.45 0.18 25); /* matte deep red */
   --slate: oklch(0.5 0.008 80); /* mono micro-labels / eyebrows */
 

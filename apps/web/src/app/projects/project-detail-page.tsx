@@ -10,6 +10,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import {
+  AlertTriangle,
   Clock,
   ExternalLink,
   FileText,
@@ -34,7 +35,10 @@ import {
   type DetailSection,
   DetailSections,
 } from "~/app/_components/data-table/detail-page";
-import { EditableCell } from "~/app/_components/data-table/editable-cell";
+import {
+  EditableCell,
+  useOptimisticDisplayValue,
+} from "~/app/_components/data-table/editable-cell";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { ChipsInput } from "~/app/_components/forms/chips-input";
 import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
@@ -75,6 +79,7 @@ import { formatCurrency } from "~/lib/utils";
 import { BudgetStrip } from "./BudgetStrip";
 import type { TradeCostCell } from "./charts/trade-cost-matrix";
 import type { PivotCostKey } from "./charts/trade-cost-pivot";
+import { projectDateDelta } from "./project-formatting";
 import { ProjectNotes } from "./project-notes";
 import { projectKindOptions } from "./project-options";
 import { ProjectPurchasesTable } from "./project-purchases-table";
@@ -259,34 +264,53 @@ function EditableLocations({
  * saves to the raw override column (`rawOverride`) — editing a derived value
  * and hitting save would silently freeze a computed date into a permanent
  * override, which is the exact bug the effective/override split exists to
- * prevent. A "derived" effective value renders muted; when the override is
- * explicit AND disagrees with what the content would otherwise derive to, the
- * derived bound is surfaced underneath as secondary text so the divergence
- * (a `date_window_drift` attention candidate) stays visible instead of
- * silently shadowed.
+ * prevent. A "derived" effective value renders muted; an explicit override
+ * that disagrees with the derived bound hangs a mono ledger annotation under
+ * the figure — the derived date plus the signed day delta — so the divergence
+ * stays visible instead of silently shadowed.
+ *
+ * Only a NARROWING override (a start after the earliest dated work, or an end
+ * before the latest — the `date_window_drift` attention rule's condition) is
+ * flagged; a wider override is deliberate slack. The flag is an amber icon
+ * beside an INK delta rather than amber text: `--warning` reads 3.6:1 on
+ * paper, under the 4.5:1 floor at this 10px size, so the tone rides the icon
+ * (a graphic, held to 3:1) while legibility rides ink and weight.
  */
 function ProjectDateField({
+  side,
   rawOverride,
   effective,
   derived,
   source,
   onSave,
 }: {
+  side: "start" | "end";
   rawOverride: string | null;
   effective: string | null;
   derived: string | null;
   source: "explicit" | "derived" | "none";
   onSave: (value: string | null) => Promise<void>;
 }) {
-  const drifted =
-    source === "explicit" && derived != null && derived !== effective;
+  // Mirrors the cell's own post-save optimistic value. Editing the override
+  // cannot move `derived` (it rolls up tasks/expenses/children), so pairing
+  // the two keeps the annotation true through the save→refetch window, where
+  // the `effective`/`source` props still describe the pre-save date.
+  const { displayValue: override, setOptimisticValue } =
+    useOptimisticDisplayValue<string>(rawOverride);
+  const delta =
+    derived != null && override != null
+      ? projectDateDelta(side, derived, override)
+      : null;
 
   return (
     <Stack gap="tight">
       <EditableCell
         value={rawOverride}
         config={{ type: "date" }}
-        onSave={onSave}
+        onSave={async (next) => {
+          await onSave(next);
+          setOptimisticValue(next);
+        }}
         // `renderValue`'s arg is the optimistic post-save override, so prefer
         // it when non-null — the new date shows immediately rather than
         // waiting for the refetch that recomputes `effective`. Clearing yields
@@ -303,9 +327,37 @@ function ProjectDateField({
           </span>
         )}
       />
-      {drifted && (
-        <span className="text-2xs text-muted-foreground">
-          derived: {derived}
+      {delta && (
+        <span className="text-2xs">
+          <Row
+            as="span"
+            align="center"
+            justify="end"
+            gap="xs"
+            wrap
+            aria-hidden
+            title={delta.description}
+            className="font-mono text-slate"
+          >
+            <span>derived: {derived}</span>
+            {/* One separator, never two: the flag mark divides the date from
+                the delta when it is there, the middot when it is not. */}
+            {delta.narrows ? (
+              <AlertTriangle className="size-3 shrink-0 text-warning" />
+            ) : (
+              <span>·</span>
+            )}
+            <span
+              className={
+                delta.narrows ? "font-medium text-foreground" : undefined
+              }
+            >
+              {delta.label}
+            </span>
+          </Row>
+          {/* The compact reading is aria-hidden; screen readers get the
+              sentence the hover title carries. */}
+          <span className="sr-only">{delta.description}</span>
         </span>
       )}
     </Stack>
@@ -726,6 +778,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
       label: "Start date",
       value: (
         <ProjectDateField
+          side="start"
           rawOverride={project.startDate}
           effective={project.dates.effectiveStart}
           derived={project.dates.derivedStart}
@@ -743,6 +796,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
       label: "End date",
       value: (
         <ProjectDateField
+          side="end"
           rawOverride={project.endDate}
           effective={project.dates.effectiveEnd}
           derived={project.dates.derivedEnd}
@@ -843,7 +897,11 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
       label: "Last updated",
       // UTC ISO date — deterministic across server/client render (a locale/tz
       // format here would risk a hydration mismatch on this SSR'd page).
-      value: project.updatedAt.toISOString().slice(0, 10),
+      value: (
+        <span className="font-mono">
+          {project.updatedAt.toISOString().slice(0, 10)}
+        </span>
+      ),
     },
   ];
 
