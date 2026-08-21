@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { fillCellEditor, openCommandPalette } from "./e2e-helpers";
+import {
+  fillCellEditor,
+  openCellEditor,
+  openCommandPalette,
+} from "./e2e-helpers";
 
 /**
  * Coverage for the new (DB-backed) project-tracker surfaces: /projects
@@ -250,7 +254,10 @@ test.describe("Project tracker", () => {
     const nameCell = page.getByRole("cell").filter({
       has: page.getByRole("link", { name, exact: true }),
     });
-    await nameCell.getByRole("button", { name: "Edit value" }).dblclick();
+    await openCellEditor(
+      page,
+      nameCell.getByRole("button", { name: "Edit value" }),
+    );
     await fillCellEditor(page, editedName);
 
     // Assert the edited value renders (react-query invalidation round trip) —
