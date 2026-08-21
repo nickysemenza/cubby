@@ -236,6 +236,34 @@ const dbLocationToProductListInventoryShape = (
 });
 
 /**
+ * List-shaped stock rows for one product: live entries in live locations,
+ * paired with a compact location ref.
+ *
+ * Exported because the product list is no longer the only reader — any table
+ * showing "where does this thing live" for a product it merely references goes
+ * through here, so the surfaces cannot disagree about which entries count. The
+ * `isNotDeleted(entry.location)` filter is the load-bearing half: it matches
+ * `dbProductToAPI` and `onHandUnitsSql`, and dropping it is how a detail read
+ * once counted an entry whose LOCATION was soft-deleted while the list did not.
+ */
+export const mapProductListInventoryEntries = (
+  entries: ProductListDB["inventoryEntry"],
+) =>
+  mapRelation(
+    entries.filter((entry) => isNotDeleted(entry.location)),
+    (entry) => ({
+      id: unsafeInventoryShortcode(entry.shortcode),
+      amount: parseInventoryAmount(entry.amount, entry.id),
+      valuation: entry.valuation,
+      verifiedAt: entry.verifiedAt,
+      placement: entry.placement,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+      location: dbLocationToProductListInventoryShape(entry.location),
+    }),
+  );
+
+/**
  * The ledger, live units on the shelf, and the gap between them — the block
  * shared by the list row and the detail response.
  *
@@ -293,18 +321,8 @@ const deriveProductQuantityShape = (
 export const dbProductToListAPI = (
   productData: ProductListDB,
 ): ProductListItem => {
-  const inventoryEntry = mapRelation(
-    productData.inventoryEntry.filter((entry) => isNotDeleted(entry.location)),
-    (entry) => ({
-      id: unsafeInventoryShortcode(entry.shortcode),
-      amount: parseInventoryAmount(entry.amount, entry.id),
-      valuation: entry.valuation,
-      verifiedAt: entry.verifiedAt,
-      placement: entry.placement,
-      createdAt: entry.createdAt,
-      updatedAt: entry.updatedAt,
-      location: dbLocationToProductListInventoryShape(entry.location),
-    }),
+  const inventoryEntry = mapProductListInventoryEntries(
+    productData.inventoryEntry,
   );
   const result = {
     ...dbProductToTopLevelShape(productData),

@@ -222,6 +222,19 @@ export const productQuantitySummaryBatchInput = z.object({
   ids: z.array(productShortcode).max(PRODUCT_QUANTITY_SUMMARY_BATCH_MAX),
 });
 
+/**
+ * "Where does each of these products live" for a bounded set of ids — the
+ * batch companion to `productQuantitySummaryBatchInput`.
+ *
+ * Shortcode-keyed rather than a field on the rows that need it: the callers are
+ * tables whose row entity ISN'T a product (a task's subject product, say), and
+ * threading stock onto those row shapes would make every other producer of them
+ * emit an empty array it never loaded.
+ */
+export const productInventoryEntriesBatchInput = z.object({
+  ids: z.array(productShortcode).max(PRODUCT_QUANTITY_SUMMARY_BATCH_MAX),
+});
+
 export const productApplyUpcInput = z.object({
   id: productShortcode,
   upc,
@@ -910,6 +923,18 @@ export const productListInventoryEntryOut = z.object({
   ...productInventoryFields,
   location: locationListRefOut,
 });
+export type ProductListInventoryEntryOut = z.infer<
+  typeof productListInventoryEntryOut
+>;
+
+/** Public product shortcode → its live stock entries and their locations. */
+export const productInventoryEntriesByIdOut = z.record(
+  z.string(),
+  z.array(productListInventoryEntryOut),
+);
+export type ProductInventoryEntriesByIdOut = z.infer<
+  typeof productInventoryEntriesByIdOut
+>;
 
 // Product list rows stay list-shaped. USDA summaries and recipe usages hydrate
 // through separate/detail paths so list paint is not blocked by ancillary data.

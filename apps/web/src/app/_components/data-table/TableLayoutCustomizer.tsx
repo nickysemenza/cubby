@@ -34,7 +34,7 @@ import type {
   CubbyColumn as Column,
   CubbyTable as Table,
 } from "./table-features";
-import { isLockedStartColumnId } from "./table-layout";
+import { isLockedColumnId, withLockedEndLast } from "./table-layout";
 
 type Region = "start" | "center" | "end";
 
@@ -52,9 +52,9 @@ function SortableColumn<TData extends RowData>({
   table: Table<TData>;
 }) {
   const region = regionFor(column);
-  const lockedStart = isLockedStartColumnId(column.id);
+  const locked = isLockedColumnId(column.id);
   const regionColumns = columns.filter(
-    (item) => regionFor(item) === region && !isLockedStartColumnId(item.id),
+    (item) => regionFor(item) === region && !isLockedColumnId(item.id),
   );
   const index = regionColumns.findIndex((item) => item.id === column.id);
   const {
@@ -67,7 +67,7 @@ function SortableColumn<TData extends RowData>({
   } = useSortable({
     id: column.id,
     data: { region },
-    disabled: lockedStart,
+    disabled: locked,
   });
 
   const move = (delta: -1 | 1) => {
@@ -102,7 +102,7 @@ function SortableColumn<TData extends RowData>({
       )}
       data-column-id={column.id}
     >
-      {lockedStart ? (
+      {locked ? (
         <span aria-hidden className="size-7" />
       ) : (
         <Button
@@ -122,7 +122,7 @@ function SortableColumn<TData extends RowData>({
           <span className="ml-1 text-muted-foreground">Hidden</span>
         )}
       </span>
-      {!lockedStart && (
+      {!locked && (
         <div className="flex items-center">
           <Button
             variant="ghost"
@@ -246,9 +246,9 @@ export default function TableLayoutCustomizer<TData extends RowData>({
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
     const activeColumn = table.getColumn(String(active.id));
-    if (!activeColumn || isLockedStartColumnId(activeColumn.id)) return;
+    if (!activeColumn || isLockedColumnId(activeColumn.id)) return;
     const targetColumn = table.getColumn(String(over.id));
-    if (targetColumn && isLockedStartColumnId(targetColumn.id)) return;
+    if (targetColumn && isLockedColumnId(targetColumn.id)) return;
     const targetRegion = (over.data.current?.region ??
       (targetColumn ? regionFor(targetColumn) : undefined)) as
       | Region
@@ -280,15 +280,9 @@ export default function TableLayoutCustomizer<TData extends RowData>({
       activeColumn.id,
     );
 
-    table.setColumnPinning({
-      start: idsByRegion.start,
-      end: idsByRegion.end,
-    });
-    table.setColumnOrder([
-      ...idsByRegion.start,
-      ...idsByRegion.center,
-      ...idsByRegion.end,
-    ]);
+    const end = withLockedEndLast(idsByRegion.end);
+    table.setColumnPinning({ start: idsByRegion.start, end });
+    table.setColumnOrder([...idsByRegion.start, ...idsByRegion.center, ...end]);
   };
 
   const reset = () => {

@@ -2119,18 +2119,22 @@ export function createProductLinkColumn<T extends ProductRefRow>(
               onSave={(newId) => options.editable!.onSave(newId, row)}
               clipboard={specFromCellData(cellData, row)}
               SearchProvider={WithProductSearch}
-              renderValue={(v) => {
-                if (!v) return <NoneValue />;
-                return (
-                  <TableLink
-                    to="/products/$shortcode"
-                    params={{ shortcode: v.id }}
-                    variant="muted"
-                  >
-                    {v.name}
-                  </TableLink>
-                );
-              }}
+              // The previewing link, not a bare `TableLink`: an editable cell
+              // is where you most want the hovercard, since deciding whether
+              // this is the RIGHT product is the reason you opened the picker.
+              // Safe inside `EditableEntityCell` because its trigger is a
+              // pencil, not the whole cell — the link stays navigable.
+              renderValue={(v) =>
+                v ? (
+                  <EntityInlineLink
+                    entity="product"
+                    data={{ id: v.id, name: v.name }}
+                    truncate
+                  />
+                ) : (
+                  <NoneValue />
+                )
+              }
             />
           );
         }
@@ -2205,18 +2209,22 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
               onSave={(newId) => options.editable!.onSave(newId, row)}
               clipboard={specFromCellData(cellData, row)}
               SearchProvider={WithProductSearch}
-              renderValue={(v) => {
-                if (!v) return <NoneValue />;
-                return (
-                  <TableLink
-                    to="/products/$shortcode"
-                    params={{ shortcode: v.id }}
-                    variant="muted"
-                  >
-                    {v.name}
-                  </TableLink>
-                );
-              }}
+              // The previewing link, not a bare `TableLink`: an editable cell
+              // is where you most want the hovercard, since deciding whether
+              // this is the RIGHT product is the reason you opened the picker.
+              // Safe inside `EditableEntityCell` because its trigger is a
+              // pencil, not the whole cell — the link stays navigable.
+              renderValue={(v) =>
+                v ? (
+                  <EntityInlineLink
+                    entity="product"
+                    data={{ id: v.id, name: v.name }}
+                    truncate
+                  />
+                ) : (
+                  <NoneValue />
+                )
+              }
             />
           );
         }

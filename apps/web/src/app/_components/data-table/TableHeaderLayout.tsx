@@ -20,7 +20,7 @@ import { TableHead, TableRow } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
 import { ColumnResizeHandle } from "./ColumnResizeHandle";
 import type { cubbyTableFeatures, CubbyTable as Table } from "./table-features";
-import { columnWidthValue, isLockedStartColumnId } from "./table-layout";
+import { columnWidthValue, isLockedColumnId } from "./table-layout";
 
 type HeaderStyles = { header: string; sortIcon: string };
 
@@ -50,7 +50,7 @@ function SortableHeader<TData extends RowData>({
   table: Table<TData>;
   styles: HeaderStyles;
 }) {
-  const lockedStart = isLockedStartColumnId(header.column.id);
+  const locked = isLockedColumnId(header.column.id);
   const {
     attributes,
     listeners,
@@ -58,7 +58,7 @@ function SortableHeader<TData extends RowData>({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: header.column.id, disabled: lockedStart });
+  } = useSortable({ id: header.column.id, disabled: locked });
   const sortDirection = header.column.getIsSorted();
   const canSort = header.column.getCanSort();
   const numeric = header.column.columnDef.meta?.numeric ?? false;
@@ -126,7 +126,7 @@ function SortableHeader<TData extends RowData>({
       }}
     >
       <div className={cn("flex items-center gap-1", numeric && "justify-end")}>
-        {!lockedStart && (
+        {!locked && (
           <Button
             variant="ghost"
             size="icon-sm"
@@ -181,7 +181,7 @@ export default function TableHeaderLayout<TData extends RowData>({
     if (!over || active.id === over.id) return;
     const activeId = String(active.id);
     const overId = String(over.id);
-    if (isLockedStartColumnId(activeId) || isLockedStartColumnId(overId)) {
+    if (isLockedColumnId(activeId) || isLockedColumnId(overId)) {
       return;
     }
     if (region(activeId) !== region(overId)) return;
