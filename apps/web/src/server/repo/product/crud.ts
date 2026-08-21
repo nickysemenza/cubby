@@ -85,6 +85,7 @@ import {
   getDb,
   idSetPresence,
   insertAndReturn,
+  type ListReadIntent,
   lockAndValidateForDelete,
   notDeleted,
   presenceCondition,
@@ -419,6 +420,7 @@ export const productList = async (
   sorts: SortParams[],
   pagination: PaginationParams,
   groupBy?: string,
+  readIntent: ListReadIntent = "page",
 ) => {
   const dbClient = getDb(db);
 
@@ -896,35 +898,49 @@ export const productList = async (
     ],
   );
 
+  if (readIntent === "count") {
+    return {
+      data: [],
+      count: await countWhere(db, product, whereClause),
+      // Count-only consumers deliberately do not request table footers.
+      sums: { price: 0, expenseTotal: 0 },
+    };
+  }
+
   // Special list sort keys are correlated subqueries because Drizzle's
   // relational query builder rewrites non-raw column refs to the root alias.
   const orderByArray = productListOrderBy(sorts, groupBy);
 
   const { take, skip } = buildTakeSkip(pagination);
+  const skipAggregates = readIntent === "sample";
 
   // Execute queries in parallel and transform results. The aggregate query
   // shares whereClause, so the footer's price total covers the FULL filtered
   // set (the client only holds a page).
   const [{ data: results, count: totalCount }, aggregates, expenseAggregates] =
     await Promise.all([
-      executeListQueryWithCount(
-        getDb(db).query.product.findMany({
-          where: whereClause,
-          orderBy: orderByArray,
-          limit: take,
-          offset: skip,
-          ...relations.product.list,
-        }),
-        countWhere(db, product, whereClause),
-      ),
-      getDb(db)
-        .select({
-          priceSum: sql<number>`sum(${sql.raw(
-            effectiveProductPriceSql('"Product"'),
-          )})`,
-        })
-        .from(product)
-        .where(whereClause),
+      executeListQueryWithCount({
+        kind: readIntent,
+        rows: () =>
+          getDb(db).query.product.findMany({
+            where: whereClause,
+            orderBy: orderByArray,
+            limit: take,
+            offset: skip,
+            ...relations.product.list,
+          }),
+        count: () => countWhere(db, product, whereClause),
+      }),
+      skipAggregates
+        ? Promise.resolve([{ priceSum: 0 }])
+        : getDb(db)
+            .select({
+              priceSum: sql<number>`sum(${sql.raw(
+                effectiveProductPriceSql('"Product"'),
+              )})`,
+            })
+            .from(product)
+            .where(whereClause),
       // Net-basis total for the Net basis column's footer, over the FULL filtered
       // set — without it `createCurrencyColumn` falls back to reducing the loaded
       // rows only, which silently under-reports on an infinite-scrolled list.
@@ -935,21 +951,23 @@ export const productList = async (
       // has cost this repo four bugs (see the warning block in repo/purchase.ts).
       // Summing `Expense` directly also reads plainly — this is money, and money
       // lives on `Expense`.
-      getDb(db)
-        .select({ expenseTotalSum: sum(expense.cost) })
-        .from(expense)
-        .where(
-          and(
-            notDeleted(expense),
-            inArray(
-              expense.productId,
-              getDb(db)
-                .select({ id: product.id })
-                .from(product)
-                .where(whereClause),
+      skipAggregates
+        ? Promise.resolve([{ expenseTotalSum: 0 }])
+        : getDb(db)
+            .select({ expenseTotalSum: sum(expense.cost) })
+            .from(expense)
+            .where(
+              and(
+                notDeleted(expense),
+                inArray(
+                  expense.productId,
+                  getDb(db)
+                    .select({ id: product.id })
+                    .from(product)
+                    .where(whereClause),
+                ),
+              ),
             ),
-          ),
-        ),
     ]);
 
   const qualities = await loadProductDataQualities(

@@ -1,12 +1,11 @@
 import {
-  countProblems,
   PROBLEM_CLASS,
   type ProblemKey,
   type ProblemsCount,
 } from "@cubby/schemas/problems";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle, Check } from "lucide-react";
-import { useProblemsData } from "~/app/problems/use-problems-data";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import {
@@ -16,6 +15,7 @@ import {
 } from "~/components/ui/tooltip";
 import { useHydrated } from "~/hooks/useHydrated";
 import { useIdle } from "~/hooks/useIdle";
+import { useTRPC } from "~/integrations/trpc/react";
 import { cn } from "~/lib/utils";
 
 const pl = (n: number, sing: string, plur = `${sing}s`) =>
@@ -90,22 +90,21 @@ const PROBLEM_LABELS: Record<
 };
 
 export const ProblemsBadge = () => {
+  const api = useTRPC();
   const hydrated = useHydrated();
   // Defer the detector invocations until the browser is idle — the badge
   // renders on every page, so firing them on each navigation put them on the
   // critical path app-wide. `useIdle` holds the fetch until after first paint.
   const idle = useIdle();
 
-  // Assemble the count from the SAME cost-grouped detector queries the
-  // Problems page uses (shared cache → no second scan, and the page is already
-  // warm when opened). 5-min staleTime keeps this background indicator from
-  // refetching on every navigation. Replaces the old monolithic getAllProblems,
-  // which ran every detector in one Worker invocation (the CPU-limit risk).
-  const { problems, isLoading } = useProblemsData({
+  // Counts use the same canonical Problem executor as the page, but request no
+  // card rows. The background badge therefore stops hydrating every Problem
+  // section across the app merely to display one number.
+  const { data: count, isLoading } = useQuery({
+    ...api.problems.getCounts.queryOptions(),
     staleTime: 5 * 60 * 1000,
     enabled: hydrated && idle,
   });
-  const count = countProblems(problems);
 
   // The query isn't prefetched during SSR, so the server always renders this
   // loading button. Dehydrated data can resolve before hydration, so gate the
@@ -114,7 +113,7 @@ export const ProblemsBadge = () => {
   // `!idle` keeps the spinner up until the deferred fetch starts (a disabled
   // query reports isLoading=false with empty data, which would flash "no
   // problems" prematurely).
-  if (!hydrated || !idle || isLoading) {
+  if (!hydrated || !idle || isLoading || !count) {
     return (
       <Button variant="ghost" size="sm" disabled className="h-8 px-2">
         <Spinner />

@@ -5,7 +5,8 @@
  * callback.  This module is the other half of that seam: it maps every
  * DiagnosticKey to the focused repo/service implementation which owns its
  * SQL, graph traversal, or provider call.  In particular, adapters receive
- * the complete relation and return it before a caller applies a card sample.
+ * an explicit sample or count intent. SQL-heavy adapters may share their
+ * canonical relation internally, but count callers never invoke sample.
  */
 
 import type { ProjectAttentionItem } from "@cubby/schemas/project";
@@ -14,15 +15,19 @@ import { env } from "~/env";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
-import { findOrphanedEntityEmbeddings } from "~/server/repo/entity-embedding";
+import {
+  countOrphanedEntityEmbeddings,
+  findOrphanedEntityEmbeddings,
+} from "~/server/repo/entity-embedding";
 import {
   countEntitiesMissingEmbeddings,
+  countReferentialLivenessViolations,
   findDuplicateFinancialAccountSourceAliases,
   findDuplicateFinancialTransactionSourceRefs,
   findDuplicateProductIdentities,
   findDuplicateSpendCandidates,
   findDuplicateVendors,
-  findEntitiesMissingEmbeddings,
+  findEntitiesMissingEmbeddingsPage,
   findIncompleteStatementImports,
   findInvalidFinancialJson,
   findManufacturerSpellingVariants,
@@ -46,14 +51,19 @@ export type DiagnosticStatus =
   | { state: "stale"; message: string }
   | { state: "unavailable"; message: string };
 
-export type DiagnosticResult = {
-  /** Complete, ordered relation. Callers may sample only after this boundary. */
-  items: readonly unknown[];
-  count: number;
+type DiagnosticMetadata = {
   status: DiagnosticStatus;
   /** Present only for external adapters with a durable freshness contract. */
   freshness?: UpcEnrichmentFreshness;
 };
+
+export type DiagnosticSampleResult = DiagnosticMetadata & {
+  items: readonly unknown[];
+  count: number;
+};
+
+export type DiagnosticCountResult = DiagnosticMetadata & { count: number };
+export type DiagnosticResult = DiagnosticSampleResult | DiagnosticCountResult;
 
 export type DiagnosticRunOptions = {
   upcLookupClient?: UPCLookupClient;
@@ -62,23 +72,40 @@ export type DiagnosticRunOptions = {
 };
 
 type DiagnosticAdapter = {
-  run: (
+  sample: (
     db: Database,
     options: DiagnosticRunOptions,
-  ) => Promise<DiagnosticResult>;
+    limit: number,
+  ) => Promise<DiagnosticSampleResult>;
+  count: (
+    db: Database,
+    options: DiagnosticRunOptions,
+  ) => Promise<DiagnosticCountResult>;
 };
 
-const healthy = async (
+const healthySample = async (
   rows: Promise<readonly unknown[]> | readonly unknown[],
-): Promise<DiagnosticResult> => {
+  limit: number,
+): Promise<DiagnosticSampleResult> => {
   const items = await rows;
-  return { items, count: items.length, status: { state: "healthy" } };
+  return {
+    items: items.slice(0, limit),
+    count: items.length,
+    status: { state: "healthy" },
+  };
 };
+
+const healthyCount = (count: number): DiagnosticCountResult => ({
+  count,
+  status: { state: "healthy" },
+});
 
 const runUpcProposals = async (
   db: Database,
   options: DiagnosticRunOptions,
-): Promise<DiagnosticResult> => {
+  mode: "sample" | "count",
+  limit = Number.POSITIVE_INFINITY,
+): Promise<DiagnosticSampleResult | DiagnosticCountResult> => {
   const candidates = await findProductsWithUpcGaps(db);
   const { lookups, freshness } = await readCachedUpcLookups(
     db,
@@ -88,9 +115,11 @@ const runUpcProposals = async (
         ? options.upcLookupClient.lookupBatch(upcs)
         : Promise.reject(new Error("UPC enrichment client is unavailable.")),
   );
-  const items = candidates.flatMap((candidate) => {
+  const items: unknown[] = [];
+  let count = 0;
+  for (const candidate of candidates) {
     const lookup = lookups.get(candidate.upc);
-    if (!lookup) return [];
+    if (!lookup) continue;
     const proposed = {
       manufacturer:
         isUnspecifiedManufacturer(candidate.manufacturer) &&
@@ -111,18 +140,19 @@ const runUpcProposals = async (
       proposed.price == null &&
       proposed.imageUrl == null
     ) {
-      return [];
+      continue;
     }
-    return [
-      {
+    count += 1;
+    if (mode === "sample" && items.length < limit) {
+      items.push({
         id: candidate.shortcode,
         name: candidate.name,
         manufacturer: candidate.manufacturer,
         upc: candidate.upc,
         proposed,
-      },
-    ];
-  });
+      });
+    }
+  }
   const status: DiagnosticStatus =
     freshness.status === "fresh"
       ? { state: "healthy" }
@@ -135,26 +165,43 @@ const runUpcProposals = async (
             state: "unavailable",
             message: "UPC provider results are currently unavailable.",
           };
-  return { items, count: items.length, status, freshness };
+  return mode === "sample"
+    ? { items, count, status, freshness }
+    : { count, status, freshness };
 };
 
 /** Exhaustive adapter registry: a new DiagnosticKey cannot be silently raw. */
 export const diagnosticAdapters = {
   "duplicate-product-identities": {
-    run: (db) => healthy(findDuplicateProductIdentities(db)),
+    sample: (db, _options, limit) =>
+      healthySample(findDuplicateProductIdentities(db), limit),
+    count: async (db) =>
+      healthyCount((await findDuplicateProductIdentities(db)).length),
   },
-  "orphaned-products": { run: (db) => healthy(findOrphanedProducts(db)) },
+  "orphaned-products": {
+    sample: (db, _options, limit) =>
+      healthySample(findOrphanedProducts(db), limit),
+    count: async (db) => healthyCount((await findOrphanedProducts(db)).length),
+  },
   "partially-imported-cookbooks": {
-    run: (db) => healthy(findPartiallyImportedCookbooks(db)),
+    sample: (db, _options, limit) =>
+      healthySample(findPartiallyImportedCookbooks(db), limit),
+    count: async (db) =>
+      healthyCount((await findPartiallyImportedCookbooks(db)).length),
   },
   "tools-used-outside-ownership": {
-    run: (db) => healthy(findToolsUsedOutsideOwnership(db)),
+    sample: (db, _options, limit) =>
+      healthySample(findToolsUsedOutsideOwnership(db), limit),
+    count: async (db) =>
+      healthyCount((await findToolsUsedOutsideOwnership(db)).length),
   },
   "orphaned-entity-embeddings": {
-    run: (db) => healthy(findOrphanedEntityEmbeddings(db)),
+    sample: (db, _options, limit) =>
+      healthySample(findOrphanedEntityEmbeddings(db), limit),
+    count: async (db) => healthyCount(await countOrphanedEntityEmbeddings(db)),
   },
   "entities-missing-embeddings": {
-    run: async (db) => {
+    sample: async (db, _options, limit) => {
       if (!semanticEmbeddingsConfigured()) {
         return {
           items: [],
@@ -167,53 +214,137 @@ export const diagnosticAdapters = {
         };
       }
       const config = getSemanticEmbeddingConfig();
-      // The repo returns a capped union sample. Its companion count runs over
-      // the complete relation, before this adapter's card/page sample.
-      const [items, count] = await Promise.all([
-        findEntitiesMissingEmbeddings(db, config),
-        countEntitiesMissingEmbeddings(db, config),
-      ]);
+      const { items, count } = await findEntitiesMissingEmbeddingsPage(
+        db,
+        config,
+        { limit },
+      );
       return { items, count, status: { state: "healthy" } };
+    },
+    count: async (db) => {
+      if (!semanticEmbeddingsConfigured()) {
+        return {
+          count: 0,
+          status: {
+            state: "unavailable" as const,
+            message:
+              "Semantic embeddings are not configured for this household.",
+          },
+        };
+      }
+      return healthyCount(
+        await countEntitiesMissingEmbeddings(db, getSemanticEmbeddingConfig()),
+      );
     },
   },
   "stale-parent-recipes": {
-    run: (db) => healthy(findParentRecipesWithDeletedSubRecipes(db)),
+    sample: (db, _options, limit) =>
+      healthySample(findParentRecipesWithDeletedSubRecipes(db), limit),
+    count: async (db) =>
+      healthyCount((await findParentRecipesWithDeletedSubRecipes(db)).length),
   },
   "manufacturer-spelling-variants": {
-    run: (db) => healthy(findManufacturerSpellingVariants(db)),
+    sample: (db, _options, limit) =>
+      healthySample(findManufacturerSpellingVariants(db), limit),
+    count: async (db) =>
+      healthyCount((await findManufacturerSpellingVariants(db)).length),
   },
-  "duplicate-vendors": { run: (db) => healthy(findDuplicateVendors(db)) },
+  "duplicate-vendors": {
+    sample: (db, _options, limit) =>
+      healthySample(findDuplicateVendors(db), limit),
+    count: async (db) => healthyCount((await findDuplicateVendors(db)).length),
+  },
   "referential-liveness-violations": {
-    run: (db) => healthy(findReferentialLivenessViolations(db)),
+    sample: (db, _options, limit) =>
+      healthySample(findReferentialLivenessViolations(db), limit),
+    count: async (db) =>
+      healthyCount(await countReferentialLivenessViolations(db)),
   },
-  "products-with-better-upc-data": { run: runUpcProposals },
+  "products-with-better-upc-data": {
+    sample: (db, options, limit) =>
+      runUpcProposals(
+        db,
+        options,
+        "sample",
+        limit,
+      ) as Promise<DiagnosticSampleResult>,
+    count: (db, options) =>
+      runUpcProposals(db, options, "count") as Promise<DiagnosticCountResult>,
+  },
   "duplicate-spend-candidates": {
-    run: (db) => healthy(findDuplicateSpendCandidates(db)),
+    sample: (db, _options, limit) =>
+      healthySample(findDuplicateSpendCandidates(db), limit),
+    count: async (db) =>
+      healthyCount((await findDuplicateSpendCandidates(db)).length),
   },
   "duplicate-financial-transaction-source-refs": {
-    run: (db) => healthy(findDuplicateFinancialTransactionSourceRefs(db)),
+    sample: (db, _options, limit) =>
+      healthySample(findDuplicateFinancialTransactionSourceRefs(db), limit),
+    count: async (db) =>
+      healthyCount(
+        (await findDuplicateFinancialTransactionSourceRefs(db)).length,
+      ),
   },
   "duplicate-financial-account-source-aliases": {
-    run: (db) => healthy(findDuplicateFinancialAccountSourceAliases(db)),
+    sample: (db, _options, limit) =>
+      healthySample(findDuplicateFinancialAccountSourceAliases(db), limit),
+    count: async (db) =>
+      healthyCount(
+        (await findDuplicateFinancialAccountSourceAliases(db)).length,
+      ),
   },
   "invalid-financial-json": {
-    run: (db) => healthy(findInvalidFinancialJson(db)),
+    sample: (db, _options, limit) =>
+      healthySample(findInvalidFinancialJson(db), limit),
+    count: async (db) =>
+      healthyCount((await findInvalidFinancialJson(db)).length),
   },
   "incomplete-statement-imports": {
-    run: (db) => healthy(findIncompleteStatementImports(db)),
+    sample: (db, _options, limit) =>
+      healthySample(findIncompleteStatementImports(db), limit),
+    count: async (db) =>
+      healthyCount((await findIncompleteStatementImports(db)).length),
   },
   "project-date-window-drift": {
-    run: async (db, options) =>
-      healthy(
+    sample: async (db, options, limit) =>
+      healthySample(
         (options.attentionItems ?? (await computeAttentionItems(db))).filter(
           (item) => item.type === "date_window_drift",
+        ),
+        limit,
+      ),
+    count: async (db, options) =>
+      healthyCount(
+        (options.attentionItems ?? (await computeAttentionItems(db))).reduce(
+          (count, item) => count + Number(item.type === "date_window_drift"),
+          0,
         ),
       ),
   },
 } as const satisfies Record<DiagnosticKey, DiagnosticAdapter>;
 
-export const runDiagnostic = (
+export function runDiagnostic(
+  db: Database,
+  key: DiagnosticKey,
+  options?: DiagnosticRunOptions,
+  intent?: { kind: "sample"; limit: number },
+): Promise<DiagnosticSampleResult>;
+export function runDiagnostic(
+  db: Database,
+  key: DiagnosticKey,
+  options: DiagnosticRunOptions,
+  intent: { kind: "count" },
+): Promise<DiagnosticCountResult>;
+export async function runDiagnostic(
   db: Database,
   key: DiagnosticKey,
   options: DiagnosticRunOptions = {},
-): Promise<DiagnosticResult> => diagnosticAdapters[key].run(db, options);
+  intent: { kind: "sample"; limit: number } | { kind: "count" } = {
+    kind: "sample",
+    limit: 12,
+  },
+): Promise<DiagnosticResult> {
+  return intent.kind === "count"
+    ? diagnosticAdapters[key].count(db, options)
+    : diagnosticAdapters[key].sample(db, options, intent.limit);
+}

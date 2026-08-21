@@ -2,8 +2,14 @@ import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { problemQueryDeclarations } from "~/entities/problem-registry";
 import { viewProblemDeclarations } from "~/entities/view-manifest";
+import {
+  countEntitiesMissingEmbeddings,
+  findEntitiesMissingEmbeddings,
+  findEntitiesMissingEmbeddingsPage,
+} from "../repo/problems";
 import { createProductFixture, makeProductInput } from "../repo/repo.fixtures";
-import { findViewProblems, runProblem } from "./problem-views.service";
+import { getSemanticEmbeddingConfig } from "../semantic/config";
+import { executeProblem, findViewProblems } from "./problem-views.service";
 import { findFastProblems } from "./problems.service";
 
 describe("findViewProblems", () => {
@@ -22,6 +28,13 @@ describe("findViewProblems", () => {
         `view problem "${problem.key}" produced no section`,
       ).toBe(true);
       expect(result.sectionTotals[problem.key]).toBeTypeOf("number");
+      const focused = await executeProblem(ctx.db, problem.key);
+      expect(focused.items, problem.key).toEqual(
+        (result as unknown as Record<string, unknown>)[problem.key],
+      );
+      expect(focused.count, problem.key).toBe(
+        result.sectionTotals[problem.key],
+      );
     }
   });
 
@@ -32,7 +45,9 @@ describe("findViewProblems", () => {
 
     expect(entityProblems).toHaveLength(34);
     for (const problem of entityProblems) {
-      const result = await runProblem(ctx.db, problem.key, { sampleSize: 1 });
+      const result = await executeProblem(ctx.db, problem.key, {
+        sampleSize: 1,
+      });
       expect(result.count, problem.key).toBeGreaterThanOrEqual(0);
       expect(result.data.length, problem.key).toBeLessThanOrEqual(1);
     }
@@ -55,10 +70,10 @@ describe("findViewProblems", () => {
     );
 
     const one = await countTestDbQueries(() =>
-      runProblem(ctx.db, "productsWithNoImages", { sampleSize: 1 }),
+      executeProblem(ctx.db, "productsWithNoImages", { sampleSize: 1 }),
     );
     const page = await countTestDbQueries(() =>
-      runProblem(ctx.db, "productsWithNoImages", { sampleSize: 12 }),
+      executeProblem(ctx.db, "productsWithNoImages", { sampleSize: 12 }),
     );
 
     expect(one.result.count).toBe(12);
@@ -88,6 +103,57 @@ describe("findViewProblems", () => {
     expect(page.queryCount).toBe(one.queryCount);
   });
 
+  it("does not turn embedding coverage into one round trip per entity type", async () => {
+    const config = getSemanticEmbeddingConfig();
+    const measured = await countTestDbQueries(async () => {
+      const [items, count] = await Promise.all([
+        findEntitiesMissingEmbeddings(ctx.db, config),
+        countEntitiesMissingEmbeddings(ctx.db, config),
+      ]);
+      return { items, count };
+    });
+
+    expect(measured.result.count).toBeGreaterThanOrEqual(
+      measured.result.items.length,
+    );
+    // The old implementation issued one sample and one count query for every
+    // searchable entity type. The executor may use one combined statement, or
+    // retain separate combined sample/count statements, but it must stay O(1).
+    expect(measured.queryCount).toBeLessThanOrEqual(2);
+
+    const combined = await countTestDbQueries(() =>
+      findEntitiesMissingEmbeddingsPage(ctx.db, config),
+    );
+    expect(combined.result.count).toBeGreaterThanOrEqual(
+      combined.result.items.length,
+    );
+    expect(combined.queryCount).toBe(1);
+  });
+
+  it("counts an entity Problem without hydrating its card page", async () => {
+    await Promise.all(
+      Array.from({ length: 3 }, (_, index) =>
+        createProductFixture(
+          ctx.db,
+          makeProductInput({ name: `Count-only no-image ${index}` }),
+          ctx.actor,
+        ),
+      ),
+    );
+
+    const countOnly = await countTestDbQueries(() =>
+      executeProblem(ctx.db, "productsWithNoImages", { mode: "count" }),
+    );
+    const sampled = await countTestDbQueries(() =>
+      executeProblem(ctx.db, "productsWithNoImages", { sampleSize: 3 }),
+    );
+
+    expect(countOnly.result.count).toBe(3);
+    expect(countOnly.result.items).toEqual([]);
+    expect(countOnly.result.data).toEqual([]);
+    expect(countOnly.queryCount).toBeLessThan(sampled.queryCount);
+  });
+
   it("dispatches every derived Problem through its typed diagnostic adapter", async () => {
     const derivedProblems = problemQueryDeclarations().filter(
       (problem) => problem.source.kind === "derived",
@@ -95,10 +161,17 @@ describe("findViewProblems", () => {
 
     expect(derivedProblems).toHaveLength(17);
     for (const problem of derivedProblems) {
-      const result = await runProblem(ctx.db, problem.key, { sampleSize: 1 });
+      const result = await executeProblem(ctx.db, problem.key, {
+        sampleSize: 1,
+      });
+      const counted = await executeProblem(ctx.db, problem.key, {
+        mode: "count",
+      });
       expect(result.source.kind, problem.key).toBe("derived");
       expect(result.count, problem.key).toBeGreaterThanOrEqual(0);
       expect(result.items.length, problem.key).toBeLessThanOrEqual(1);
+      expect(counted.count, problem.key).toBe(result.count);
+      expect(counted.items, problem.key).toEqual([]);
       // A provider failure is explicit state, never an empty healthy result.
       expect(["healthy", "stale", "unavailable"]).toContain(
         result.status.state,

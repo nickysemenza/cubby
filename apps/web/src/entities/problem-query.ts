@@ -68,7 +68,12 @@ type DerivedProblemSource = {
 
 export type ProblemSource = EntityProblemSource | DerivedProblemSource;
 
-type ProblemExecutionLane = "fast" | "views" | "coverage" | "upc" | "tracker";
+export type ProblemExecutionLane =
+  | "fast"
+  | "views"
+  | "coverage"
+  | "upc"
+  | "tracker";
 
 type ProblemContinuation =
   | { kind: "entity-list" }

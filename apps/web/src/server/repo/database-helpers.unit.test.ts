@@ -8,6 +8,7 @@ import {
   buildOrderBy,
   buildPartialUpdateValues,
   eqAnyOrPresence,
+  executeListQueryWithCount,
   formatSearchTerm,
   isTransaction,
   replaceDependencyEdges,
@@ -33,6 +34,41 @@ describe("isTransaction", () => {
 
   it("does not treat the opaque Database handle as a transaction", () => {
     expect(isTransaction(fakeDb)).toBe(false);
+  });
+});
+
+describe("executeListQueryWithCount", () => {
+  it("does not construct the row query for a count read", async () => {
+    let rowQueryConstructed = false;
+    const result = await executeListQueryWithCount({
+      kind: "count",
+      rows: async () => {
+        rowQueryConstructed = true;
+        return [1];
+      },
+      count: async () => 7,
+    });
+
+    expect(result).toEqual({ data: [], count: 7 });
+    expect(rowQueryConstructed).toBe(false);
+  });
+
+  it("constructs both lazy queries for a page read", async () => {
+    const constructed: string[] = [];
+    const result = await executeListQueryWithCount({
+      kind: "page",
+      rows: async () => {
+        constructed.push("rows");
+        return [1, 2];
+      },
+      count: async () => {
+        constructed.push("count");
+        return 7;
+      },
+    });
+
+    expect(result).toEqual({ data: [1, 2], count: 7 });
+    expect(constructed).toEqual(expect.arrayContaining(["rows", "count"]));
   });
 });
 

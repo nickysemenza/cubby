@@ -59,6 +59,7 @@ import {
   formatSearchTerm,
   getDb,
   insertAndReturn,
+  type ListReadIntent,
   lockAndValidateForDelete,
   notDeleted,
   updateLiveAndReturn,
@@ -308,12 +309,21 @@ export const vendorList = async (
   filters: VendorFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
 ): Promise<{
   data: VendorOut[];
   count: number;
   sums: { spend: number; purchaseCount: number };
 }> => {
   const whereClause = buildVendorWhereClause(filters);
+  if (readIntent === "count") {
+    return {
+      data: [],
+      count: await countWhere(db, vendor, whereClause),
+      // Count-only consumers deliberately do not request table footers.
+      sums: { spend: 0, purchaseCount: 0 },
+    };
+  }
   const { take, skip } = buildTakeSkip(pagination);
 
   // Footer totals over the WHOLE filtered set, not the loaded page. Summing the
@@ -340,13 +350,15 @@ export const vendorList = async (
       .limit(take)
       .offset(skip),
     countWhere(db, vendor, whereClause),
-    getDb(db)
-      .select({
-        spend: sql<number>`COALESCE(sum(${vendorSpend}), 0)::double precision`,
-        purchaseCount: sql<number>`COALESCE(sum(${vendorPurchaseCount}), 0)::int`,
-      })
-      .from(vendor)
-      .where(whereClause),
+    readIntent === "sample"
+      ? Promise.resolve([{ spend: 0, purchaseCount: 0 }])
+      : getDb(db)
+          .select({
+            spend: sql<number>`COALESCE(sum(${vendorSpend}), 0)::double precision`,
+            purchaseCount: sql<number>`COALESCE(sum(${vendorPurchaseCount}), 0)::int`,
+          })
+          .from(vendor)
+          .where(whereClause),
   ]);
 
   return {

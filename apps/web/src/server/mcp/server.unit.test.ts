@@ -4,6 +4,7 @@ import { previewOperationInputSchema } from "@cubby/schemas/entity-integrity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { FINANCIAL_STATEMENT_IMPORT_MAX_ROWS } from "@cubby/schemas/financial-transaction";
 import { unsafeExpenseShortcode } from "@cubby/schemas/identifiers";
+import { problemsCountSchema } from "@cubby/schemas/mcp";
 import { mcpProductCreateInput } from "@cubby/schemas/product";
 import { productComponentOut } from "@cubby/schemas/product-components";
 import type { ExpenseMatchCandidate } from "@cubby/schemas/project";
@@ -100,6 +101,47 @@ async function callTool(
 }
 
 type Operation = "list" | "get" | "create" | "update" | "delete";
+
+describe("list_problems focused routing", () => {
+  it("uses only the count procedure for countsOnly", async () => {
+    const getCounts = vi.fn(async () => mock(problemsCountSchema));
+    const getByType = vi.fn();
+
+    await callTool(
+      createMcpServer(),
+      "list_problems",
+      { countsOnly: true },
+      {
+        problems: { getCounts, getByType },
+      },
+    );
+
+    expect(getCounts).toHaveBeenCalledOnce();
+    expect(getByType).not.toHaveBeenCalled();
+  });
+
+  it("uses only the owning procedure for a single type", async () => {
+    const getCounts = vi.fn();
+    const getByType = vi.fn(async () => ({
+      type: "orphanedProducts",
+      items: [],
+      total: 0,
+    }));
+
+    await callTool(
+      createMcpServer(),
+      "list_problems",
+      { type: "orphanedProducts" },
+      { problems: { getCounts, getByType } },
+    );
+
+    expect(getByType).toHaveBeenCalledOnce();
+    expect(getByType).toHaveBeenCalledWith({
+      key: "orphanedProducts",
+    });
+    expect(getCounts).not.toHaveBeenCalled();
+  });
+});
 
 /**
  * Tool-name slugs per entity: `[singular, plural, overrides]`. Shared by the

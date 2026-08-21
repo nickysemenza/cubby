@@ -49,6 +49,7 @@ export { findCoverageTotals } from "./detectors-coverage";
 export {
   countEntitiesMissingEmbeddings,
   findEntitiesMissingEmbeddings,
+  findEntitiesMissingEmbeddingsPage,
 } from "./detectors-embedding";
 export {
   findDuplicateFinancialAccountSourceAliases,
@@ -63,7 +64,10 @@ export {
   pruneUnusedAliases,
 } from "./detectors-ingredient";
 // Schema-wide referential-liveness audit
-export { findReferentialLivenessViolations } from "./detectors-integrity";
+export {
+  countReferentialLivenessViolations,
+  findReferentialLivenessViolations,
+} from "./detectors-integrity";
 // Name drift (one name, two spellings) — free-text manufacturer + vendor roster
 export {
   findDuplicateVendors,

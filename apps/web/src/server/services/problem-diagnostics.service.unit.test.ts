@@ -29,7 +29,9 @@ describe("Problem diagnostic adapters", () => {
     );
     expect(
       Object.values(diagnosticAdapters).every(
-        (adapter) => typeof adapter.run === "function",
+        (adapter) =>
+          typeof adapter.sample === "function" &&
+          typeof adapter.count === "function",
       ),
     ).toBe(true);
   });

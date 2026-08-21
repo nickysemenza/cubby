@@ -51,6 +51,7 @@ import {
   eqAny,
   eqAnyRequested,
   getDb,
+  type ListReadIntent,
   lockAndValidateForDelete,
   notDeleted,
   parseInventoryAmount,
@@ -329,6 +330,7 @@ export const inventoryentryList = async (
   filters: InventoryFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
 ) => {
   const { take, skip } = buildTakeSkip(pagination);
   const [locationIds, productIds] = await Promise.all([
@@ -385,6 +387,27 @@ export const inventoryentryList = async (
     ],
   );
 
+  if (readIntent === "count") {
+    const [result] = await getDb(db)
+      .select({ count: count() })
+      .from(inventoryEntry)
+      .innerJoin(
+        product,
+        and(eq(inventoryEntry.productId, product.id), notDeleted(product)),
+      )
+      .innerJoin(
+        location,
+        and(eq(inventoryEntry.locationId, location.id), notDeleted(location)),
+      )
+      .where(whereCondition);
+    return {
+      data: [],
+      count: result?.count ?? 0,
+      // Count-only consumers deliberately do not request table footers.
+      sums: { valuation: 0 },
+    };
+  }
+
   const baseQuery = getDb(db)
     .select({ inventoryEntry })
     .from(inventoryEntry)
@@ -408,7 +431,10 @@ export const inventoryentryList = async (
     getDb(db)
       .select({
         count: count(),
-        valuationSum: sum(inventoryEntry.valuation),
+        valuationSum:
+          readIntent === "sample"
+            ? sql<number>`0`
+            : sum(inventoryEntry.valuation),
       })
       .from(inventoryEntry)
       .innerJoin(

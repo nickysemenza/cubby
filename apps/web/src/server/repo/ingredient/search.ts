@@ -13,6 +13,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import type {
   IngredientFilters,
+  IngredientListItem,
   IngredientMergeCandidateImpact,
 } from "@cubby/schemas/ingredient";
 import { ingredientSortableFields } from "@cubby/schemas/ingredient";
@@ -53,6 +54,7 @@ import {
   getDb,
   idSetPresence,
   imageOrder,
+  type ListReadIntent,
   notDeleted,
   relations,
 } from "~/server/repo/database-helpers";
@@ -425,11 +427,12 @@ export const getIngredientMatches = async (
   return map;
 };
 
-export const ingredientList = async (
+const ingredientListImpl = async (
   db: Database,
   filters: IngredientFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
 ) => {
   const dbClient = getDb(db);
 
@@ -557,6 +560,19 @@ export const ingredientList = async (
 
   const { take, skip } = buildTakeSkip(pagination);
 
+  if (readIntent === "ids") {
+    const rows = await dbClient
+      .select({ id: ingredient.shortcode })
+      .from(ingredient)
+      .where(whereClause)
+      .orderBy(...orderByClause)
+      // One look-ahead row tells the bulk scan whether another page exists,
+      // avoiding a count query it would otherwise discard.
+      .limit(take + 1)
+      .offset(skip);
+    return { data: rows.slice(0, take), hasMore: rows.length > take };
+  }
+
   // Lean list shape: products (mapped) + a jsonb {id,name}[] of the recipes the
   // ingredient appears in (the list reads count = length, and the first ref for
   // the pill). Drops the per-usage Recipe + Section jsonb bodies the full graph
@@ -576,16 +592,21 @@ export const ingredientList = async (
     },
   } as const;
 
-  const { data: results, count: totalCount } = await executeListQueryWithCount(
-    getDb(db).query.ingredient.findMany({
-      where: whereClause,
-      ...leanRelations,
-      orderBy: orderByClause,
-      limit: take,
-      offset: skip,
-    }),
-    countWhere(db, ingredient, whereClause),
-  );
+  const { data: results, count: totalCount } = await executeListQueryWithCount({
+    kind: readIntent,
+    rows: () =>
+      getDb(db).query.ingredient.findMany({
+        where: whereClause,
+        ...leanRelations,
+        orderBy: orderByClause,
+        limit: take,
+        offset: skip,
+      }),
+    count: () => countWhere(db, ingredient, whereClause),
+  });
+  if (readIntent === "count") {
+    return { data: [], count: totalCount };
+  }
 
   const pricedProducts = await enrichProductRowsWithPricing(
     db,
@@ -615,3 +636,27 @@ export const ingredientList = async (
     count: totalCount,
   };
 };
+
+export function ingredientList(
+  db: Database,
+  filters: IngredientFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  readIntent: "ids",
+): Promise<{ data: { id: IngredientShortcode }[]; hasMore: boolean }>;
+export function ingredientList(
+  db: Database,
+  filters: IngredientFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  readIntent?: Exclude<ListReadIntent, "ids">,
+): Promise<{ data: IngredientListItem[]; count: number }>;
+export function ingredientList(
+  db: Database,
+  filters: IngredientFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
+) {
+  return ingredientListImpl(db, filters, sorts, pagination, readIntent);
+}

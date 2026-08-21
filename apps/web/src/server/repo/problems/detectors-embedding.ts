@@ -17,7 +17,7 @@
 import type { EntityMissingEmbedding } from "@cubby/schemas/problems";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import type { SQL } from "drizzle-orm";
-import { and, count, eq, exists, isNull, notExists, sql } from "drizzle-orm";
+import { and, eq, exists, isNull, notExists, sql } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 import type { Database } from "~/server/db";
 import {
@@ -249,54 +249,62 @@ const missingEmbeddingWhere = (
     ),
   );
 
-/**
- * A capped sample of live entities with no embedding row. Runs the ten
- * anti-joins SEQUENTIALLY on purpose — the fast detector group shares one pinned
- * pg connection, which runs a single query at a time (see the note on
- * `traceAllSeq` in problems.service).
- */
+/** A capped sample plus the exact population, in one database round trip. */
+export const findEntitiesMissingEmbeddingsPage = async (
+  db: Database,
+  config: SemanticEmbeddingConfig,
+  options: { limit?: number } = {},
+): Promise<{ items: EntityMissingEmbedding[]; count: number }> => {
+  const limit = options.limit ?? MISSING_EMBEDDING_SAMPLE_LIMIT;
+  const client = getDb(db);
+  const union = sql.join(
+    sourceEntries.map(
+      ([entityType, source], sourceOrder) => sql`
+      SELECT
+        ${entityType}::text AS "entityType",
+        ${source.shortcodeColumn}::text AS "entityId",
+        ${sourceOrder}::int AS "sourceOrder"
+      FROM ${source.table}
+      WHERE ${missingEmbeddingWhere(client, entityType, source, config)}
+    `,
+    ),
+    sql` UNION ALL `,
+  );
+  const result = await client.execute<{
+    entityType: SearchableEntity;
+    entityId: string;
+    totalCount: number;
+  }>(sql`
+    WITH missing AS (${union}), ranked AS (
+      SELECT *, count(*) OVER ()::int AS "totalCount"
+      FROM missing
+    )
+    SELECT "entityType", "entityId", "totalCount"
+    FROM ranked
+    ORDER BY "sourceOrder", "entityId"
+    LIMIT ${limit}
+  `);
+
+  return {
+    items: result.rows.map(({ entityType, entityId }) => ({
+      entityType,
+      entityId,
+    })),
+    count: Number(result.rows[0]?.totalCount ?? 0),
+  };
+};
+
+/** Compatibility sample interface for focused callers. */
 export const findEntitiesMissingEmbeddings = async (
   db: Database,
   config: SemanticEmbeddingConfig,
   options: { limit?: number } = {},
-): Promise<EntityMissingEmbedding[]> => {
-  const limit = options.limit ?? MISSING_EMBEDDING_SAMPLE_LIMIT;
-  const client = getDb(db);
-  const found: EntityMissingEmbedding[] = [];
+): Promise<EntityMissingEmbedding[]> =>
+  (await findEntitiesMissingEmbeddingsPage(db, config, options)).items;
 
-  for (const [entityType, source] of sourceEntries) {
-    if (found.length >= limit) break;
-    const rows = await client
-      .select({ shortcode: source.shortcodeColumn })
-      .from(source.table)
-      .where(missingEmbeddingWhere(client, entityType, source, config))
-      .limit(limit - found.length);
-    for (const row of rows) {
-      found.push({
-        entityType,
-        entityId: String(row.shortcode),
-      });
-    }
-  }
-
-  return found;
-};
-
-/** The true (uncapped) figure behind the sampled section — one COUNT per type. */
+/** Exact count without transferring the full missing population. */
 export const countEntitiesMissingEmbeddings = async (
   db: Database,
   config: SemanticEmbeddingConfig,
-): Promise<number> => {
-  const client = getDb(db);
-  let total = 0;
-
-  for (const [entityType, source] of sourceEntries) {
-    const [row] = await client
-      .select({ n: count() })
-      .from(source.table)
-      .where(missingEmbeddingWhere(client, entityType, source, config));
-    total += row?.n ?? 0;
-  }
-
-  return total;
-};
+): Promise<number> =>
+  (await findEntitiesMissingEmbeddingsPage(db, config, { limit: 1 })).count;

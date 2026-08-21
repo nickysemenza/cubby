@@ -5,11 +5,13 @@ import {
   sumProblemSections,
 } from "@cubby/schemas/problems";
 import { useQueries } from "@tanstack/react-query";
+import type { ProblemExecutionLane } from "~/entities/problem-query";
 import { useTRPC } from "~/integrations/trpc/react";
 import type { ProblemsHotPathProcedure } from "~/lib/problems-query-groups";
+import type { ProblemLaneState } from "./problem-lane-state";
 
 /**
- * Loads the Problems page data as four cost-grouped tRPC queries instead of one
+ * Loads the Problems page data as five cost-grouped tRPC queries instead of one
  * `getAllProblems` scan. Each group is routed through the unbatched link (see
  * root-provider.tsx), so it runs in its own Worker invocation / CPU budget —
  * the combined scan re-parsed every recipe line through WASM and intermittently
@@ -30,11 +32,10 @@ export function useProblemsData(opts?: {
   enabled?: boolean;
 }) {
   const api = useTRPC();
-  // `staleTime` lets the navbar badge reuse this exact cache with a relaxed
-  // 5-min freshness (background indicator) while the page leaves it at the
-  // client default and revalidates on entry — same query keys, one shared scan.
-  // `enabled` lets the homepage card gate the fetch (SSR-idle, then enable on
-  // the client) to avoid a hydration mismatch, like the sibling stat cards.
+  // `staleTime` lets embedded Problems consumers choose their own freshness;
+  // the page revalidates on entry. `enabled` lets the homepage card gate the
+  // fetch (SSR-idle, then enable on the client) to avoid a hydration mismatch,
+  // like the sibling stat cards. The navbar badge now uses getCounts directly.
   const staleTime = opts?.staleTime;
   const enabled = opts?.enabled;
   const problemGroupQueries = {
@@ -81,7 +82,7 @@ export function useProblemsData(opts?: {
       // resolved yet falls through to the derived empties rather than to 42
       // hand-written `?? []` defaults that a new detector would have to be
       // added to. A resolved group overwrites every key it owns, so the four
-      // spreads are exhaustive once all four have loaded.
+      // spreads are exhaustive once all five have loaded.
       const sections: ProblemArrays = {
         ...EMPTY_PROBLEM_ARRAYS,
         ...fastSections,
@@ -91,6 +92,23 @@ export function useProblemsData(opts?: {
         ...trackerSections,
       };
       const results = [fast, views, coverage, upc, tracker];
+      const laneResults = {
+        fast,
+        views,
+        coverage,
+        upc,
+        tracker,
+      } satisfies Record<ProblemExecutionLane, (typeof results)[number]>;
+      const laneStates = Object.fromEntries(
+        Object.entries(laneResults).map(([lane, result]) => [
+          lane,
+          {
+            loaded: result.data != null,
+            isLoading: result.isLoading,
+            error: result.error ?? null,
+          },
+        ]),
+      ) as Record<ProblemExecutionLane, ProblemLaneState>;
       // A view-backed section renders a PAGE, so its `items.length` is the page
       // size. Every count below has to read the declared total instead, or a
       // 212-row backlog reports as 12. Falls back to the shared frozen empty
@@ -118,6 +136,8 @@ export function useProblemsData(opts?: {
         },
         coverageTotal: sumProblemSections(sections, "coverage", sectionTotals),
         isLoading: results.some((r) => r.isLoading),
+        hasResolvedLane: results.some((r) => r.data != null),
+        laneStates,
         error: results.find((r) => r.error)?.error ?? null,
       };
     },

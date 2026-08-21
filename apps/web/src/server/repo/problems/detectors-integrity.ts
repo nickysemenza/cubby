@@ -281,6 +281,18 @@ type CountRow = Record<string, unknown> & {
   count: number;
 };
 
+/** Exact emitted-edge count without running or transferring detail branches. */
+export const countReferentialLivenessViolations = async (
+  db: Database,
+): Promise<number> => {
+  const countQuery = sql.join(
+    buildEdgeAuditSpecs().map((spec) => countBranch(spec)),
+    sql` UNION ALL `,
+  );
+  const result = await getDb(db).execute<CountRow>(countQuery);
+  return result.rows.reduce((total, row) => total + Number(row.count), 0);
+};
+
 /**
  * Every live row whose FK points at a soft-deleted target, across all 49
  * `must-target-live` incoming edges. See the file-level doc comment for the

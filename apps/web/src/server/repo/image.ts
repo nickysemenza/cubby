@@ -101,6 +101,7 @@ import {
   getDb,
   insertAndReturn,
   isNotDeleted,
+  type ListReadIntent,
   nextImageSortOrder,
   notDeleted,
   updateAndReturn,
@@ -480,6 +481,7 @@ export const imageList = async (
   filters: import("@cubby/schemas/image").ImageListFilters,
   sorts: Array<{ orderBy: string; direction: "asc" | "desc" }>,
   pagination: { pageIndex: number; pageSize: number },
+  readIntent: ListReadIntent = "page",
 ) => {
   const dbClient = getDb(db);
   const buildWhere = (outerImage: typeof image) => {
@@ -521,16 +523,18 @@ export const imageList = async (
   const take = pagination.pageSize;
   const skip = pagination.pageIndex * pagination.pageSize;
 
-  const { data: images, count } = await executeListQueryWithCount(
-    dbClient.query.image.findMany({
-      where: whereClause,
-      orderBy: orderByClause,
-      limit: take,
-      offset: skip,
-      with: imageEntityRelations,
-    }),
-    countWhere(db, image, countWhereClause),
-  );
+  const { data: images, count } = await executeListQueryWithCount({
+    kind: readIntent,
+    rows: () =>
+      dbClient.query.image.findMany({
+        where: whereClause,
+        orderBy: orderByClause,
+        limit: take,
+        offset: skip,
+        with: imageEntityRelations,
+      }),
+    count: () => countWhere(db, image, countWhereClause),
+  });
 
   const processedImages = images.map(imageWithRelationsToAPI);
 

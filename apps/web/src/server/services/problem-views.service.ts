@@ -32,7 +32,7 @@ import {
   type ViewProblemDeclaration,
   viewProblemDeclarations,
 } from "~/entities/view-manifest";
-import { type Database, withConnection } from "~/server/db";
+import type { Database } from "~/server/db";
 import { expenseList } from "~/server/repo/expense";
 import { listFinancialTransactions } from "~/server/repo/financial-transaction";
 import { imageList } from "~/server/repo/image";
@@ -56,7 +56,7 @@ import {
   diagnosticAdapters,
   runDiagnostic,
 } from "~/server/services/problem-diagnostics.service";
-import { traceAllSeq } from "~/server/tracing";
+import { traceAllBounded } from "~/server/tracing";
 
 /**
  * The Problems sections that are backed by a saved view rather than a bespoke
@@ -82,42 +82,183 @@ import { traceAllSeq } from "~/server/tracing";
 const SAMPLE_SIZE = 12;
 
 /**
- * A list function's shape, narrowed to what this module uses. Every entity list
- * repo already matches it — that's the seam this reuses rather than extracts.
- *
- * `filters` is `never` on purpose: each repo wants its own `*Filters` type and
- * they have no common supertype, so the registry below casts once at the call
- * site. The cast is safe because the Problem filter compiler is the only
- * server-side translation from a canonical assembly, and the filter guard in
- * `filter-application.integration.test.ts` proves each declared field is
- * actually applied.
+ * Server adapters for the Problem read seam. The declaration registry remains
+ * data-only; these wrappers localize each repo's concrete filter type and the
+ * product/location groupBy parameter instead of erasing thirteen incompatible
+ * functions into one cast.
  */
-type ListRow = Record<string, unknown> & { id: string };
-type ListFn = (
-  db: Database,
-  filters: never,
-  sorts: SortParams[],
-  pagination: { pageIndex: number; pageSize: number },
-) => Promise<{ data: ListRow[]; count: number }>;
+type ListRow = { id: string };
+type EntityReadKind = "sample" | "count";
+type EntityReadAdapter = {
+  read: (
+    db: Database,
+    filters: Record<string, unknown>,
+    sorts: SortParams[],
+    pagination: { pageIndex: number; pageSize: number },
+    kind: EntityReadKind,
+  ) => Promise<{ data: ListRow[]; count: number }>;
+  ids?: (
+    db: Database,
+    filters: Record<string, unknown>,
+    sorts: SortParams[],
+    pagination: { pageIndex: number; pageSize: number },
+  ) => Promise<{ ids: string[]; hasMore: boolean }>;
+};
 
-const LIST_FN = {
-  expense: expenseList,
-  financialTransaction: listFinancialTransactions,
-  image: imageList,
-  ingredient: ingredientList,
-  inventory: inventoryentryList,
-  location: locationList,
-  meal: mealList,
-  product: productList,
-  project: projectList,
-  purchase: purchaseList,
-  recipe: recipeList,
-  task: taskList,
-  vendor: vendorList,
-} as unknown as Partial<Record<Entity, ListFn>>;
+const ENTITY_READERS = {
+  expense: {
+    read: (db, filters, sorts, pagination, kind) =>
+      expenseList(
+        db,
+        filters as Parameters<typeof expenseList>[1],
+        sorts,
+        pagination,
+        kind,
+      ),
+  },
+  financialTransaction: {
+    read: (db, filters, sorts, pagination, kind) =>
+      listFinancialTransactions(
+        db,
+        filters as Parameters<typeof listFinancialTransactions>[1],
+        sorts,
+        pagination,
+        kind,
+      ),
+  },
+  image: {
+    read: (db, filters, sorts, pagination, kind) =>
+      imageList(
+        db,
+        filters as Parameters<typeof imageList>[1],
+        sorts,
+        pagination,
+        kind,
+      ),
+  },
+  ingredient: {
+    read: (db, filters, sorts, pagination, kind) =>
+      ingredientList(
+        db,
+        filters as Parameters<typeof ingredientList>[1],
+        sorts,
+        pagination,
+        kind,
+      ),
+    ids: async (db, filters, sorts, pagination) => {
+      const result = await ingredientList(
+        db,
+        filters as Parameters<typeof ingredientList>[1],
+        sorts,
+        pagination,
+        "ids",
+      );
+      return {
+        ids: result.data.map((row) => row.id),
+        hasMore: result.hasMore,
+      };
+    },
+  },
+  inventory: {
+    read: (db, filters, sorts, pagination, kind) =>
+      inventoryentryList(
+        db,
+        filters as Parameters<typeof inventoryentryList>[1],
+        sorts,
+        pagination,
+        kind,
+      ),
+  },
+  location: {
+    read: (db, filters, sorts, pagination, kind) =>
+      locationList(
+        db,
+        filters as Parameters<typeof locationList>[1],
+        sorts,
+        pagination,
+        undefined,
+        kind,
+      ),
+  },
+  meal: {
+    read: (db, filters, sorts, pagination, kind) =>
+      mealList(
+        db,
+        filters as Parameters<typeof mealList>[1],
+        sorts,
+        pagination,
+        kind,
+      ),
+  },
+  product: {
+    read: (db, filters, sorts, pagination, kind) =>
+      productList(
+        db,
+        filters as Parameters<typeof productList>[1],
+        sorts,
+        pagination,
+        undefined,
+        kind,
+      ),
+  },
+  project: {
+    read: (db, filters, sorts, pagination, kind) =>
+      projectList(
+        db,
+        filters as Parameters<typeof projectList>[1],
+        sorts,
+        pagination,
+        kind,
+      ),
+  },
+  purchase: {
+    read: (db, filters, sorts, pagination, kind) =>
+      purchaseList(
+        db,
+        filters as Parameters<typeof purchaseList>[1],
+        sorts,
+        pagination,
+        kind,
+      ),
+  },
+  recipe: {
+    read: (db, filters, sorts, pagination, kind) =>
+      recipeList(
+        db,
+        filters as Parameters<typeof recipeList>[1],
+        sorts,
+        pagination,
+        kind,
+      ),
+  },
+  task: {
+    read: (db, filters, sorts, pagination, kind) =>
+      taskList(
+        db,
+        filters as Parameters<typeof taskList>[1],
+        sorts,
+        pagination,
+        kind,
+      ),
+  },
+  vendor: {
+    read: (db, filters, sorts, pagination, kind) =>
+      vendorList(
+        db,
+        filters as Parameters<typeof vendorList>[1],
+        sorts,
+        pagination,
+        kind,
+      ),
+  },
+} satisfies Partial<Record<Entity, EntityReadAdapter>>;
+
+type ReaderEntity = keyof typeof ENTITY_READERS;
+const entityReaderFor = (entity: Entity): EntityReadAdapter | undefined =>
+  entity in ENTITY_READERS ? ENTITY_READERS[entity as ReaderEntity] : undefined;
 
 validateCompleteProblemRegistry(problemQueryDeclarations(), {
-  listEntities: new Set(Object.keys(LIST_FN) as Entity[]),
+  listEntities: new Set(Object.keys(ENTITY_READERS) as Entity[]),
   diagnostics: new Set(Object.keys(diagnosticAdapters) as DiagnosticKey[]),
 });
 
@@ -210,15 +351,51 @@ const usesConversionCoverageProjection = (key: ProblemKey): boolean =>
   key === "ingredientsWithPartialCoverage" ||
   key === "productsWithIslandedMappings";
 
+/** The same registered card projection is used by grouped and single-type reads. */
+const presentProblemRows = (
+  key: ProblemKey,
+  rows: ListRow[],
+): readonly unknown[] => {
+  switch (key) {
+    case "neverVerifiedInventory":
+      return rows.map(toNeverVerified);
+    case "unusedIngredientsWithProduct":
+    case "unusedIngredientsWithoutProduct":
+      return rows.map(toUnusedIngredient);
+    case "locationsWithoutAiDescription":
+      return rows.map(toLocationWithoutAiDescription);
+    case "emptyLocations":
+      return rows.map(toEmptyLocation);
+    case "negativeExpectedQuantity":
+      return rows.map(toNegativeExpectedQuantity);
+    case "emptyCookedMeals":
+      return rows.map(toEmptyCookedMeal);
+    case "productsMissingPrice":
+    case "unvaluedBucketProducts":
+      return rows.map(toProductMissingPrice);
+    case "productsWithoutMappings":
+      return rows.map(toProductWithoutMappings);
+    case "staleLocations":
+      return rows.map(toStaleLocation);
+    case "recipesWithoutInstructions":
+      return rows.map(toRecipeWithoutInstructions);
+    case "ingredientsWithoutProduct":
+      return rows.map(toIngredientWithoutProduct);
+    default:
+      return rows;
+  }
+};
+
 /**
  * Run a registered Problem through its one canonical source declaration.
  * Entity membership compiles to the ordinary list path; derived membership is
  * delegated only by typed DiagnosticKey, never a callback in the manifest.
  */
-export const runProblem = async (
+export const executeProblem = async (
   db: Database,
   key: ProblemKey,
   options: {
+    mode?: "sample" | "count";
     pageIndex?: number;
     sampleSize?: number;
     diagnostic?: DiagnosticRunOptions;
@@ -229,17 +406,32 @@ export const runProblem = async (
   const definition = problemQuery(key);
   if (!definition) throw new Error(`No registered Problem declares "${key}"`);
   if (definition.source.kind === "derived") {
-    const diagnostic = await runDiagnostic(
-      db,
-      definition.source.diagnostic,
-      options.diagnostic,
-    );
     const offset =
       (options.pageIndex ?? 0) * (options.sampleSize ?? SAMPLE_SIZE);
-    const items = diagnostic.items.slice(
-      offset,
-      offset + (options.sampleSize ?? SAMPLE_SIZE),
-    );
+    const diagnostic =
+      options.mode === "count"
+        ? await runDiagnostic(
+            db,
+            definition.source.diagnostic,
+            options.diagnostic ?? {},
+            { kind: "count" },
+          )
+        : await runDiagnostic(
+            db,
+            definition.source.diagnostic,
+            options.diagnostic,
+            {
+              kind: "sample",
+              limit: offset + (options.sampleSize ?? SAMPLE_SIZE),
+            },
+          );
+    const items =
+      "items" in diagnostic && Array.isArray(diagnostic.items)
+        ? diagnostic.items.slice(
+            offset,
+            offset + (options.sampleSize ?? SAMPLE_SIZE),
+          )
+        : [];
     return {
       // Derived rows intentionally have no common list row contract. Keeping
       // this empty prevents entity presenters from treating a pair/group as an
@@ -253,31 +445,33 @@ export const runProblem = async (
     };
   }
   const entityDefinition = definition as { source: EntityProblemSource };
-  const list = LIST_FN[entityDefinition.source.entity];
-  if (!list) {
+  const reader = entityReaderFor(entityDefinition.source.entity);
+  if (!reader) {
     throw new Error(
       `No list function registered for entity "${entityDefinition.source.entity}"`,
     );
   }
-  const page = await list(
+  const page = await reader.read(
     db,
     compileProblemFilters(
       entityDefinition.source.entity,
       entityDefinition.source.filters,
-    ) as never,
+    ),
     toSortParams(entityDefinition.source.sort),
     {
       pageIndex: options.pageIndex ?? 0,
       pageSize: options.sampleSize ?? SAMPLE_SIZE,
     },
+    options.mode === "count" ? "count" : "sample",
   );
-  const projection = usesConversionCoverageProjection(key)
-    ? (options.projectionFreshness ??
-      (await getProductConversionCoverageFreshness(db)))
-    : undefined;
+  const projection =
+    options.mode !== "count" && usesConversionCoverageProjection(key)
+      ? (options.projectionFreshness ??
+        (await getProductConversionCoverageFreshness(db)))
+      : undefined;
   return {
     ...page,
-    items: page.data,
+    items: presentProblemRows(key, page.data),
     source: entityDefinition.source,
     status: projection
       ? statusForProjection(projection)
@@ -471,38 +665,34 @@ export const findViewProblems = async (
 ): Promise<ProblemsViewsOut> => {
   const declarations = viewProblemDeclarations();
 
-  // Same discipline as `findFastProblems`: pin every query to ONE connection
-  // and run them sequentially. A pg client takes one query at a time, so
-  // fanning these out would only make N connections contend for the max:5 pool
-  // without overlapping any work. `withConnection` hands back a branded
-  // `Database`, which is exactly what every list fn already takes — so this
-  // needs no repo changes at all.
-  //
-  // NOTE: nothing in here may itself call `withConnection`. The scoped Database
-  // carries no `$client` pool, so a nested acquire would throw. No list fn does
-  // today; this comment is the reason to keep it that way.
-  const results = await withConnection(db, (scoped) =>
-    traceAllSeq(
-      Object.fromEntries(
-        declarations.map((declaration) => [
-          declaration.problem.key,
-          async () => {
-            const list = LIST_FN[declaration.entity];
-            if (!list) {
-              throw new Error(
-                `No list function registered for entity "${declaration.entity}" (view "${declaration.viewId}")`,
-              );
-            }
-            return list(
-              scoped,
-              entityFiltersFor(declaration) as never,
-              toSortParams(declaration.sort),
-              { pageIndex: 0, pageSize: SAMPLE_SIZE },
+  // Remote query latency dominates connection checkout in production. Let four
+  // view tasks overlap against the max:5 request pool, retaining one slot for a
+  // list task's own count or bounded hydration query.
+  const results = await traceAllBounded(
+    Object.fromEntries(
+      declarations.map((declaration) => [
+        declaration.problem.key,
+        async () => {
+          const reader = entityReaderFor(declaration.entity);
+          if (!reader) {
+            throw new Error(
+              `No list function registered for entity "${declaration.entity}" (view "${declaration.viewId}")`,
             );
-          },
-        ]),
-      ),
+          }
+          return reader.read(
+            db,
+            entityFiltersFor(declaration),
+            toSortParams(declaration.sort),
+            {
+              pageIndex: 0,
+              pageSize: SAMPLE_SIZE,
+            },
+            "sample",
+          );
+        },
+      ]),
     ),
+    4,
   );
 
   // The counts are what the badge, `totalProblems`, and the coverage meters
@@ -567,10 +757,15 @@ export const findAllViewProblemIds = async (
   key: ProblemKey,
 ): Promise<string[]> => {
   const definition = entityProblemForKey(key);
-  const list = LIST_FN[definition.source.entity];
-  if (!list) {
+  const reader = entityReaderFor(definition.source.entity);
+  if (!reader) {
     throw new Error(
       `No list function registered for entity "${definition.source.entity}"`,
+    );
+  }
+  if (!reader.ids) {
+    throw new Error(
+      `Entity "${definition.source.entity}" has no identity projection for Problem "${key}"`,
     );
   }
 
@@ -580,17 +775,17 @@ export const findAllViewProblemIds = async (
   const PAGE = 500;
   const ids: string[] = [];
   for (let pageIndex = 0; ; pageIndex++) {
-    const { data, count } = await list(
+    const { ids: pageIds, hasMore } = await reader.ids(
       db,
       compileProblemFilters(
         definition.source.entity,
         definition.source.filters,
-      ) as never,
-      [],
+      ),
+      toSortParams(definition.source.sort),
       { pageIndex, pageSize: PAGE },
     );
-    ids.push(...data.map((row) => row.id));
-    if (data.length === 0 || ids.length >= count) return ids;
+    ids.push(...pageIds);
+    if (!hasMore) return ids;
   }
 };
 
@@ -598,29 +793,25 @@ export const findAllViewProblemIds = async (
  * How many rows a view-backed section selects, without fetching any of them.
  *
  * For callers that only ever render a number — the Settings → Maintenance card
- * — so they don't pay for a page of relation-embedded rows to call `.length` on
- * it. `executeListQueryWithCount` runs the count as its own query, so a
- * `pageSize: 1` page is nearly free.
+ * — so they don't construct or execute relation hydration or table summaries.
  */
 export const countViewProblem = async (
   db: Database,
   key: ProblemKey,
 ): Promise<number> => {
   const definition = entityProblemForKey(key);
-  const list = LIST_FN[definition.source.entity];
-  if (!list) {
+  const reader = entityReaderFor(definition.source.entity);
+  if (!reader) {
     throw new Error(
       `No list function registered for entity "${definition.source.entity}"`,
     );
   }
-  const { count } = await list(
+  const { count } = await reader.read(
     db,
-    compileProblemFilters(
-      definition.source.entity,
-      definition.source.filters,
-    ) as never,
+    compileProblemFilters(definition.source.entity, definition.source.filters),
     [],
-    { pageIndex: 0, pageSize: 1 },
+    { pageIndex: 0, pageSize: SAMPLE_SIZE },
+    "count",
   );
   return count;
 };

@@ -6,10 +6,10 @@ import {
 import {
   allProblemsSchema,
   assembleAllProblems,
-  countProblems,
 } from "@cubby/schemas/problems";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { expectedProblemKeys, problemQuery } from "~/entities/problem-registry";
 import { getCaller, READ_ONLY_CLOSED, registerMcpTool } from "./_shared";
 
 export function registerProblemsTools(server: McpServer) {
@@ -40,6 +40,21 @@ export function registerProblemsTools(server: McpServer) {
     annotations: READ_ONLY_CLOSED,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
+      if (params.countsOnly) {
+        return await caller.problems.getCounts();
+      }
+      if (typeof params.type === "string") {
+        const definition = problemQuery(
+          params.type as (typeof expectedProblemKeys)[number],
+        );
+        if (!definition) {
+          return {
+            error: `Unknown problem type '${params.type}'`,
+            availableTypes: expectedProblemKeys,
+          };
+        }
+        return await caller.problems.getByType({ key: definition.key });
+      }
       const [fast, coverage, upc, tracker, views] = await Promise.all([
         caller.problems.getFast(),
         caller.problems.getCoverage(),
@@ -48,30 +63,6 @@ export function registerProblemsTools(server: McpServer) {
         caller.problems.getViews(),
       ]);
       const all = assembleAllProblems({ fast, coverage, upc, tracker, views });
-      if (params.countsOnly) {
-        // Counts are just array lengths — no need to resolve shortcodes for
-        // a response that skips the rows themselves.
-        return countProblems(all);
-      }
-      if (typeof params.type === "string") {
-        const slice = (all as unknown as Record<string, unknown>)[params.type];
-        if (slice === undefined) {
-          return {
-            error: `Unknown problem type '${params.type}'`,
-            availableTypes: Object.keys(all as Record<string, unknown>),
-          };
-        }
-        if (!Array.isArray(slice)) {
-          throw new Error(`Problem type '${params.type}' is not a list`);
-        }
-        // `total`, not `slice.length`: a view-backed section ships a page, and
-        // an agent has no way to tell a short list from a truncated one.
-        return {
-          type: params.type,
-          items: slice,
-          total: all.sectionTotals[params.type] ?? slice.length,
-        };
-      }
       return all;
     },
   });

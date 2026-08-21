@@ -13,6 +13,7 @@
  */
 
 export {
+  countOrphanedEntityEmbeddings,
   findCommercialEmbeddingRefsForExpenses,
   findEmbeddingRefsForPurchases,
   findEmbeddingRefsForVendors,

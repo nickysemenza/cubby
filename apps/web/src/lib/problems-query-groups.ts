@@ -9,19 +9,22 @@ const PROBLEMS_HOT_PATH_PROCEDURES = [
   "getTracker",
 ] as const;
 
+const PROBLEMS_UNBATCHED_PROCEDURES = [
+  ...PROBLEMS_HOT_PATH_PROCEDURES,
+  "getCounts",
+] as const;
+
 export type ProblemsHotPathProcedure =
   (typeof PROBLEMS_HOT_PATH_PROCEDURES)[number];
 
-function problemsProcedurePath(procedure: ProblemsHotPathProcedure) {
-  return `problems.${procedure}` as const;
-}
-
 const PROBLEMS_UNBATCHED_PATHS = new Set(
-  PROBLEMS_HOT_PATH_PROCEDURES.map(problemsProcedurePath),
+  PROBLEMS_UNBATCHED_PROCEDURES.map(
+    (procedure) => `problems.${procedure}` as const,
+  ),
 );
 
 export function isUnbatchedTRPCPath(path: string) {
   return PROBLEMS_UNBATCHED_PATHS.has(
-    path as ReturnType<typeof problemsProcedurePath>,
+    path as `problems.${(typeof PROBLEMS_UNBATCHED_PROCEDURES)[number]}`,
   );
 }

@@ -37,6 +37,7 @@ import {
   formatSearchTerm,
   getDb,
   idSetPresence,
+  type ListReadIntent,
   notDeleted,
   presenceCondition,
 } from "~/server/repo/database-helpers";
@@ -335,6 +336,7 @@ export const projectList = async (
   filters: ProjectFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
 ): Promise<{
   data: ProjectOut[];
   count: number;
@@ -345,19 +347,31 @@ export const projectList = async (
     filters,
     sorts,
   );
+  if (readIntent === "count") {
+    return {
+      data: [],
+      count: await countWhere(db, project, whereClause),
+      // Count-only consumers deliberately do not request table footers.
+      sums: { costEstimate: 0 },
+    };
+  }
   const { take, skip } = buildTakeSkip(pagination);
 
   const [{ data: rows, count }, sums] = await Promise.all([
-    executeListQueryWithCount(
-      getDb(db).query.project.findMany({
-        where: whereClause,
-        orderBy: orderByArray,
-        limit: take,
-        offset: skip,
-      }),
-      countWhere(db, project, whereClause),
-    ),
-    projectListSums(db, whereClause),
+    executeListQueryWithCount({
+      kind: readIntent,
+      rows: () =>
+        getDb(db).query.project.findMany({
+          where: whereClause,
+          orderBy: orderByArray,
+          limit: take,
+          offset: skip,
+        }),
+      count: () => countWhere(db, project, whereClause),
+    }),
+    readIntent === "sample"
+      ? Promise.resolve({ costEstimate: 0 })
+      : projectListSums(db, whereClause),
   ]);
 
   const ids = rows.map((r) => r.id);

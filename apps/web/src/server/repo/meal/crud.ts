@@ -34,6 +34,7 @@ import {
   executeListQueryWithCount,
   getDb,
   insertAndReturn,
+  type ListReadIntent,
   lockAndValidateForDelete,
   notDeleted,
   relations,
@@ -112,6 +113,7 @@ export const mealList = async (
   filters: MealFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
 ): Promise<{ data: MealOut[]; count: number }> => {
   const dbClient = getDb(db);
   const mealsWithUnderstatedRecipeCost = dbClient
@@ -174,16 +176,18 @@ export const mealList = async (
       : undefined,
   );
 
-  const { data: rows, count } = await executeListQueryWithCount(
-    dbClient.query.meal.findMany({
-      where: whereCondition,
-      orderBy: orderByArray,
-      limit: take,
-      offset: skip,
-      ...relations.meal.full,
-    }),
-    countWhere(db, meal, whereCondition),
-  );
+  const { data: rows, count } = await executeListQueryWithCount({
+    kind: readIntent,
+    rows: () =>
+      dbClient.query.meal.findMany({
+        where: whereCondition,
+        orderBy: orderByArray,
+        limit: take,
+        offset: skip,
+        ...relations.meal.full,
+      }),
+    count: () => countWhere(db, meal, whereCondition),
+  });
 
   return { data: rows.map(dbMealToAPI), count };
 };
