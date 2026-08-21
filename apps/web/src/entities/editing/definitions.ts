@@ -269,12 +269,17 @@ const standardUpdate = <E extends EditableEntity>(
 
 const projectFields = [
   trimmedName("project"),
+  nullableText("project", "icon"),
   field("project", "status"),
   field("project", "kind"),
   field("project", "parentProjectId"),
   field("project", "startDate"),
   field("project", "endDate"),
   field("project", "costEstimate"),
+  field("project", "locations"),
+  nullableText("project", "googleDriveFolderUrl"),
+  nullableText("project", "notionPageUrl"),
+  field("project", "blockedByIds"),
   nullableText("project", "notes"),
 ] as const;
 
@@ -332,6 +337,7 @@ const expenseFields = [
   field("expense", "orderId"),
   field("expense", "trade"),
   field("expense", "costType"),
+  nullableText("expense", "url"),
   nullableText("expense", "notes"),
 ] as const;
 
@@ -454,6 +460,7 @@ const semanticFields: Partial<
       "fdc_id",
       "price",
       "stockTracked",
+      "unitMappings",
       "notes",
     ],
     identity: ["name", "aliases", "manufacturer", "model", "category"],
@@ -500,12 +507,17 @@ const semanticFields: Partial<
     ],
     full: [
       "name",
+      "icon",
       "status",
       "kind",
       "parentProjectId",
       "startDate",
       "endDate",
       "costEstimate",
+      "locations",
+      "googleDriveFolderUrl",
+      "notionPageUrl",
+      "blockedByIds",
       "notes",
     ],
     status: ["status"],
@@ -566,6 +578,7 @@ const semanticFields: Partial<
       "orderId",
       "trade",
       "costType",
+      "url",
       "notes",
     ],
     planned: ["name", "cost", "date"],
@@ -686,6 +699,7 @@ export const entityEditRegistry = defineEntityEditRegistry({
       field("product", "fdc_id"),
       field("product", "price"),
       field("product", "stockTracked"),
+      field("product", "unitMappings"),
       nullableText("product", "notes"),
     ],
     productMutationInvalidateKeys,

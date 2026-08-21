@@ -61,9 +61,22 @@ describe("entity edit definitions", () => {
 
   it("keeps the full update intent compatible with ordinary inline editors", () => {
     const inlineFields: readonly [EditableEntity, readonly string[]][] = [
-      ["product", ["ingredientId", "upc", "fdc_id"]],
-      ["expense", ["lineKind", "lineBasis", "productQuantity", "orderId"]],
-      ["project", ["costEstimate"]],
+      ["product", ["ingredientId", "upc", "fdc_id", "unitMappings"]],
+      [
+        "expense",
+        ["lineKind", "lineBasis", "productQuantity", "orderId", "url"],
+      ],
+      [
+        "project",
+        [
+          "costEstimate",
+          "icon",
+          "locations",
+          "googleDriveFolderUrl",
+          "notionPageUrl",
+          "blockedByIds",
+        ],
+      ],
     ];
 
     for (const [entity, fields] of inlineFields) {
