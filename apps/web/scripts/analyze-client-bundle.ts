@@ -41,8 +41,12 @@ import { gzipSync } from "node:zlib";
 // measures 522.0 KiB on macOS and 523.1 KiB on Linux/Node 24; the route stays
 // split, so the extra 2 KiB records cross-platform variance while retaining
 // the existing chunk-count guard.
+//
+// Raised 525 -> 527 KiB for progressive entity identity images. This branch
+// measures 524.1 KiB on macOS and 525.3 KiB on Linux/Node 24; the shared image
+// primitive adds only a small eager cost, and the 145-chunk guard remains.
 export const CLIENT_BUNDLE_BUDGET = {
-  gzipBytes: 525 * 1024,
+  gzipBytes: 527 * 1024,
   chunks: 145,
 } as const;
 
