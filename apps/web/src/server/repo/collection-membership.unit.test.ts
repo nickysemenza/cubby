@@ -57,7 +57,7 @@ describe("deriveCollectionMembership", () => {
     );
   });
 
-  it("includes product-backed locations and deduplicates multiple placements", () => {
+  it("excludes a product-backed container while including its contents", () => {
     const graph = deriveCollectionMembership({
       products: [product("tote"), product("brush")],
       locations: [
@@ -70,7 +70,7 @@ describe("deriveCollectionMembership", () => {
       ],
     });
 
-    expect(graph.productInherited.get("tote")).toEqual(new Set(["painting"]));
+    expect(graph.productInherited.get("tote")).toBeUndefined();
     expect(graph.productInherited.get("brush")).toEqual(new Set(["painting"]));
   });
 });

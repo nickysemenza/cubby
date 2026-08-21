@@ -183,4 +183,54 @@ describe("Collection assignment matrix", () => {
       ],
     });
   });
+
+  it("does not list a product-backed Location as its own Collection content", async () => {
+    const container = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Painting Tote" }),
+      ctx.actor,
+    );
+    const contents = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Brush Inside Painting Tote" }),
+      ctx.actor,
+    );
+    const studio = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({
+        name: "Painting Studio",
+        type: "area",
+        tags: ["collection:painting"],
+      }),
+      ctx.actor,
+    );
+    const tote = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({
+        name: "Painting Tote",
+        parentId: studio.id,
+        type: null,
+        productId: container.id,
+      }),
+      ctx.actor,
+    );
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: contents.id,
+        locationId: tote.id,
+        amount: { value: 1, unit: "each" },
+      },
+      ctx.actor,
+    );
+
+    const detail = await getCollectionDetail(ctx.db, "painting", undefined, {
+      pageIndex: 0,
+      pageSize: 50,
+    });
+
+    expect(detail?.collection.productCount).toBe(1);
+    expect(detail?.totalCount).toBe(1);
+    expect(detail?.products.map((item) => item.id)).toEqual([contents.id]);
+  });
 });

@@ -66,9 +66,10 @@ export function deriveCollectionMembership({
   };
   for (const entry of inventory)
     addProductLocation(entry.productId, entry.locationId);
-  for (const loc of locations) {
-    if (loc.productId) addProductLocation(loc.productId, loc.id);
-  }
+
+  // `Location.productId` identifies the physical container represented by the
+  // Location; it does not place that Product inside itself. Only inventory
+  // entries inherit Collection membership from a Location subtree.
 
   const collections = [
     ...new Set(
