@@ -17,6 +17,7 @@ export const productDataCheck = z.enum([
   "product_manufacturer",
   "product_category",
   "product_model",
+  "product_image",
   "amazon_asin",
   "duplicate_external_id",
 ]);
@@ -84,6 +85,10 @@ export const dataCheckFacet: Record<DataCheck, DataQualityFacetName> = {
   product_manufacturer: "identity",
   product_category: "identity",
   product_model: "identity",
+  // `provenance`, not `identity`: a product carrying UPC + model + ASIN is
+  // fully identified without a photograph. The image is evidence of the thing,
+  // which is what this facet already collects for `amazon_asin`.
+  product_image: "provenance",
   amazon_asin: "provenance",
   duplicate_external_id: "integrity",
 };
