@@ -36,8 +36,13 @@ import { gzipSync } from "node:zlib";
 // measures 516.5 KiB on macOS; the three new route-definition chunks and the
 // shared collection-tag parser bring this branch to 520.0 KiB. Route bodies
 // remain split, and the 145-chunk ceiling stays unchanged.
+//
+// Raised 523 -> 525 KiB for the image-led Collection locator. The same tree
+// measures 522.0 KiB on macOS and 523.1 KiB on Linux/Node 24; the route stays
+// split, so the extra 2 KiB records cross-platform variance while retaining
+// the existing chunk-count guard.
 export const CLIENT_BUNDLE_BUDGET = {
-  gzipBytes: 523 * 1024,
+  gzipBytes: 525 * 1024,
   chunks: 145,
 } as const;
 
