@@ -370,6 +370,7 @@ const dbPurchaseToAPI = (
   reconciliation: reconcilePurchase({
     statedTotal: row.statedTotal,
     expenseTotal: Number(row.expenseTotal),
+    expenseCount: Number(row.expenseCount),
     unpricedExpenseCount: Number(row.unpricedExpenseCount),
     postedRefundTotal: financial.postedRefundTotal,
   }),
@@ -514,16 +515,23 @@ const reconciliationCondition = (
   const refundAdjusted = sql`${purchaseUnpricedExpenseCount} = 0
     AND ${deltaInCents} < ${-toleranceInCents}
     AND ${refundInCents} = ${deltaInCents}`;
+  // Mirrors the zero-expense guard in `reconcilePurchase`: once the totals fail
+  // to match, a purchase with no lines is `unknown` rather than a mismatch, so
+  // the filter agrees with the verdict the hydrated purchase carries.
+  const comparable = sql`${purchase.statedTotal} IS NOT NULL
+    AND (${gapInCents} <= ${toleranceInCents} OR ${purchaseExpenseCount} > 0)`;
   return or(
-    selected.includes("unknown") ? isNull(purchase.statedTotal) : undefined,
+    selected.includes("unknown")
+      ? or(isNull(purchase.statedTotal), sql`NOT (${comparable})`)
+      : undefined,
     selected.includes("match")
       ? sql`${purchase.statedTotal} IS NOT NULL AND ${gapInCents} <= ${toleranceInCents}`
       : undefined,
     selected.includes("refund_adjusted")
-      ? sql`${purchase.statedTotal} IS NOT NULL AND ${gapInCents} > ${toleranceInCents} AND ${refundAdjusted}`
+      ? sql`${comparable} AND ${gapInCents} > ${toleranceInCents} AND ${refundAdjusted}`
       : undefined,
     selected.includes("mismatch")
-      ? sql`${purchase.statedTotal} IS NOT NULL AND ${gapInCents} > ${toleranceInCents} AND NOT (${refundAdjusted})`
+      ? sql`${comparable} AND ${gapInCents} > ${toleranceInCents} AND NOT (${refundAdjusted})`
       : undefined,
   );
 };

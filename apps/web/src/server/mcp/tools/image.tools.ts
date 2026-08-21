@@ -117,6 +117,10 @@ export function registerImageTools(server: McpServer) {
       "double-attach the files that already landed.",
     itemInput: attachFileItem,
     itemOutput: attachFileResponse,
+    // `full` rather than the compact default: an attach response is seven short
+    // fields, not a hydrated entity, and `reused` exists precisely so a caller
+    // can tell a replay from an upload — summarizing it away would undo that.
+    defaultResultDetail: "full",
     annotations: WRITE_CLOSED,
     // Deliberately NOT rejectDuplicateIds: `entityId` is the target, not the
     // item's own identity, and attaching several files to one product in a

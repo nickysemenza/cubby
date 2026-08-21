@@ -670,15 +670,14 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
       index: 1,
       status: "failed",
     });
-    const firstBatchResult = duplicateBatch.results[0];
-    if (!firstBatchResult?.item) {
+    // The compact default carries the shortcode directly, which is the whole
+    // reason it is the default: a batch caller needs the ids, not the entities.
+    const batchTransactionCode = duplicateBatch.results[0]?.id;
+    if (typeof batchTransactionCode !== "string") {
       throw new Error(
         "Expected the first duplicate-source batch item to succeed",
       );
     }
-    const batchTransactionCode = (
-      firstBatchResult.item as Record<string, unknown>
-    ).id as string;
 
     const deleted = await callTool(
       "delete_financial_transactions",
@@ -1315,7 +1314,12 @@ describe("specialized tools round-trip on shortcodes", () => {
 
     const moved = await callTool(
       "update_tasks",
-      { items: [{ id: taskCode, projectId: projectCode }] },
+      // `resultDetail: "full"` because this asserts on the written entity, not
+      // just on the id the compact default returns.
+      {
+        items: [{ id: taskCode, projectId: projectCode }],
+        resultDetail: "full",
+      },
       caller,
     );
     expectOk(moved);

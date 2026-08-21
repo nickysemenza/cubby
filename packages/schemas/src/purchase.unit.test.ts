@@ -96,6 +96,35 @@ describe("reconcilePurchase", () => {
     );
   });
 
+  it('is "unknown" when the purchase has no expense lines to compare', () => {
+    // A purchase created from paperwork alone reported `mismatch` — and, being
+    // the only defect-kind purchase check, `dataQuality.status: "defect"` —
+    // before anyone had booked a single line. `empty_expenses` covers it.
+    expect(
+      reconcilePurchase({
+        statedTotal: 25,
+        expenseTotal: 0,
+        expenseCount: 0,
+      }),
+    ).toBe("unknown");
+    // One line that disagrees is a genuine mismatch, not an empty purchase.
+    expect(
+      reconcilePurchase({
+        statedTotal: 25,
+        expenseTotal: 20,
+        expenseCount: 1,
+      }),
+    ).toBe("mismatch");
+    // A $0 stated total with no lines still agrees, and says so.
+    expect(
+      reconcilePurchase({ statedTotal: 0, expenseTotal: 0, expenseCount: 0 }),
+    ).toBe("match");
+    // Callers that cannot count lines keep the pre-guard behaviour.
+    expect(reconcilePurchase({ statedTotal: 25, expenseTotal: 0 })).toBe(
+      "mismatch",
+    );
+  });
+
   it("matches an exact agreement and flags a real disagreement", () => {
     expect(reconcilePurchase({ statedTotal: 2516, expenseTotal: 2516 })).toBe(
       "match",
