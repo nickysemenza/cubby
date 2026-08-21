@@ -44,6 +44,7 @@ import {
   expenseAnalyze,
   expenseFacetCounts,
   expenseList,
+  expenseMonthlySummary,
   getExpenseByShortcode,
   matchExpenses,
   moveExpenses,
@@ -2094,6 +2095,9 @@ describe("expense repository — expenseAnalytics", () => {
 
     const filters = { search: "analytics p" };
     const result = await expenseAnalytics(ctx.db, filters);
+    expect(await expenseMonthlySummary(ctx.db, filters)).toEqual(
+      result.monthly,
+    );
 
     // Summary/monthly/project totals retain every dollar, including adjustments.
     expect(result.summary).toEqual({

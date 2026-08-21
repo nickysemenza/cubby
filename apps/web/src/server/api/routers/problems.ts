@@ -20,8 +20,10 @@ import {
 import { z } from "zod";
 import { expectedProblemKeys } from "~/entities/problem-registry";
 import { streamProgress } from "~/lib/bulk-progress";
+import { getProblemCountsCache } from "~/server/cf-env";
 import { recipeUsageCountsByProduct } from "~/server/repo/problems";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
+import { getCachedProblemCounts } from "~/server/services/problem-counts-cache";
 import {
   findAllViewProblemIds,
   findViewProblems,
@@ -36,7 +38,6 @@ import {
   findFastProblems,
   findMaintenanceCounts,
   findProblemByType,
-  findProblemCounts,
   findTrackerProblems,
   findUpcProblems,
   pruneAllUnusedAliases,
@@ -62,7 +63,13 @@ const getFast = protectedProcedure
 
 const getCounts = protectedProcedure
   .output(strictOutput(problemsCountSchema))
-  .query(async ({ ctx }) => findProblemCounts(ctx.db, ctx.upcLookupClient));
+  .query(async ({ ctx }) =>
+    getCachedProblemCounts(
+      ctx.db,
+      ctx.upcLookupClient,
+      getProblemCountsCache(),
+    ),
+  );
 
 const problemKeySchema = z.enum(
   expectedProblemKeys as [

@@ -54,6 +54,7 @@
     "./financial-account": "./src/financial-account.ts",
     "./financial-reconciliation": "./src/financial-reconciliation.ts",
     "./financial-transaction": "./src/financial-transaction.ts",
+    "./filter-options": "./src/filter-options.ts",
     "./statement-row": "./src/statement-row.ts",
     "./wish": "./src/wish.ts"
   },

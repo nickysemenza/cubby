@@ -1,8 +1,5 @@
-import type { InfLocation } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
-import { sumBy } from "es-toolkit";
 import { Wallet } from "lucide-react";
-import { useMemo } from "react";
 import { Row } from "~/components/layout";
 import {
   CardActionLink,
@@ -28,9 +25,8 @@ const BAR_COLORS = [
 
 /**
  * Home-page ledger chart: total pantry value with a bordered bar per top
- * location. Reads each location's persisted `valuation.directValuation`
- * (location.makeTree) instead of fetching every inventory row and summing on
- * the client — see location-valuation.service.
+ * location. The summary procedure reads only persisted direct valuations; tree
+ * structure, inventory relations, products, and images stay off this path.
  */
 export function PantryValueCard() {
   const api = useTRPC();
@@ -40,25 +36,11 @@ export function PantryValueCard() {
   // public home page.
   const isAuthenticated = useHydrated() && !!session.data?.user;
   const { data, isLoading, isError } = useQuery({
-    ...api.location.makeTree.queryOptions(),
+    ...api.location.valuationSummary.queryOptions(),
     enabled: isAuthenticated,
   });
-
-  const { total, bars } = useMemo(() => {
-    // Each location's direct valuation is one bar; walk the tree to collect them.
-    const byLocation: { label: string; value: number }[] = [];
-    const walk = (nodes: InfLocation[] | undefined) => {
-      for (const node of nodes ?? []) {
-        const value = node.valuation?.directValuation ?? 0;
-        if (value > 0) byLocation.push({ label: node.name, value });
-        walk(node.children);
-      }
-    };
-    walk(data);
-    const total = sumBy(byLocation, (b) => b.value);
-    const bars = byLocation.sort((a, b) => b.value - a.value).slice(0, 5);
-    return { total, bars };
-  }, [data]);
+  const total = data?.total ?? 0;
+  const bars = data?.locations ?? [];
 
   const inventoryAction = (
     <CardActionLink to="/inventory">Inventory</CardActionLink>
@@ -123,8 +105,8 @@ export function PantryValueCard() {
       >
         {bars.map((b, i) => (
           <div
-            key={b.label}
-            title={`${b.label}: ${formatCurrency(b.value)}`}
+            key={b.id}
+            title={`${b.name}: ${formatCurrency(b.value)}`}
             className="min-w-0 flex-1 border border-[var(--border)] border-b-0"
             style={{
               height: `${Math.max(8, (b.value / max) * 100)}%`,
@@ -136,11 +118,11 @@ export function PantryValueCard() {
       <Row gap="sm" className="mt-2 px-1">
         {bars.map((b) => (
           <span
-            key={b.label}
-            title={`${b.label}: ${formatCurrency(b.value)}`}
+            key={b.id}
+            title={`${b.name}: ${formatCurrency(b.value)}`}
             className="min-w-0 flex-1 truncate text-center font-mono text-2xs text-muted-foreground uppercase"
           >
-            {b.label}
+            {b.name}
           </span>
         ))}
       </Row>

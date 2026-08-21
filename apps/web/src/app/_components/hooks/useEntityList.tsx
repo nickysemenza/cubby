@@ -6,7 +6,6 @@ import { useSearch } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { entities } from "~/entities/entities";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import {
@@ -26,6 +25,7 @@ import type {
   TableStateReturn,
   useTableState,
 } from "../data-table/useTableState";
+import type { RuntimeFilterOptions } from "./filter-option-types";
 import {
   useEntityListPresentation,
   useEntityListPresentationState,
@@ -144,7 +144,7 @@ export interface UseEntityListOptions<
    * Option lists for manifest specs naming an `optionsKey` (project roster,
    * recipe tags). MUST be referentially stable.
    */
-  filterOptions?: Record<string, FilterableComboboxItem[]>;
+  filterOptions?: RuntimeFilterOptions;
   /** For unit mappings - function to extract mappings from each row (must be synchronous) */
   getMappings?: (item: TRow) => UnitMapping[];
   /** Override table state options (initialSort / initialFilter / …) */

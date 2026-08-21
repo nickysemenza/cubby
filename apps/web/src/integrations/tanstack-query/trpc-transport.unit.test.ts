@@ -55,4 +55,24 @@ describe("createTRPCTransportLink", () => {
     expect(url).toBe(`${TEST_URL}/problems.getFast`);
     expect(init?.method).toBe("POST");
   });
+
+  it("keeps ordinary summaries and cached problem counts in one streamed batch", async () => {
+    const fetchSpy = vi.fn<typeof globalThis.fetch>(async () => {
+      throw FETCH_STOP;
+    });
+    const client = createClientWithFetch(fetchSpy);
+
+    await Promise.allSettled([
+      client.query("task.summary"),
+      client.query("location.valuationSummary"),
+      client.query("problems.getCounts"),
+    ]);
+
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    const [url] = fetchSpy.mock.calls[0]!;
+    expect(url).toContain("task.summary");
+    expect(url).toContain("location.valuationSummary");
+    expect(url).toContain("problems.getCounts");
+    expect(url).toContain("batch=1");
+  });
 });

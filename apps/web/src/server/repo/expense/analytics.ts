@@ -26,6 +26,7 @@ import {
 import type {
   ExpenseAnalyticsOut,
   ExpenseFilters,
+  ExpenseMonthlySummaryOut,
   Trade,
 } from "@cubby/schemas/project";
 import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
@@ -47,6 +48,21 @@ import { buildExpenseWhereClause } from "./lookup";
  * join must not reuse that name.
  */
 const chargeJoin = alias(purchase, "chargeJoin");
+
+/** The monthly slice Home renders, without the other seven analytics queries. */
+export async function expenseMonthlySummary(
+  db: Database,
+  filters: ExpenseFilters,
+): Promise<ExpenseMonthlySummaryOut> {
+  const whereClause = await buildExpenseWhereClause(db, filters);
+  const datedWhereClause = and(whereClause, isNotNull(expense.date));
+  return await getDb(db)
+    .select({ month: MONTH_BUCKET, ...aggregateSelect() })
+    .from(expense)
+    .where(datedWhereClause)
+    .groupBy(MONTH_BUCKET)
+    .orderBy(MONTH_BUCKET);
+}
 
 export async function expenseAnalytics(
   db: Database,

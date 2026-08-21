@@ -1,11 +1,8 @@
 /**
  * `task.summary` — cheap counts for the /tasks summary strip, replacing a
- * full-history fetch. Every count is a plain SQL `count(*)` (via
- * `countWhere`) except `next`/`later`/`blocked`, which reuse
- * `listActionableTasks`'s partitioning (its unblocked/blocked semantics —
- * manual status + task/project dependency graph walk — aren't cheaply
- * expressible as a standalone count query, and correctness matching the
- * Next/Later/Blocked views exactly matters more than shaving a few ms).
+ * full-history fetch. One recursive SQL statement computes all seven figures,
+ * including the same manual/task/project-ancestor blocking semantics as
+ * `listActionableTasks`, without hydrating task rows or why-chain display data.
  *
  * All top-level-only counts (`totalOpen`, `inbox`, `overdue`, `dueThisWeek`)
  * exclude subtasks (`parentTaskId IS NOT NULL`) — a checklist item is
@@ -13,49 +10,92 @@
  * actionable.ts's doc comment), match that convention.
  */
 import type { TaskSummaryOut } from "@cubby/schemas/project";
-import { and, gte, isNull, lt, lte, ne } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
-import { task } from "~/server/db/schema";
-import { countWhere, notDeleted } from "~/server/repo/database-helpers";
-import { listActionableTasks } from "./actionable";
-import { effectiveTaskDueDateSql } from "./helpers";
-
-const topLevelOpen = () =>
-  and(notDeleted(task), ne(task.status, "done"), isNull(task.parentTaskId));
+import { getDb } from "~/server/repo/database-helpers";
 
 export async function getTaskSummary(db: Database): Promise<TaskSummaryOut> {
   const today = householdLocalDate();
   const weekOut = householdDaysFromNow(7);
-
-  const [totalOpen, inbox, overdue, dueThisWeek, actionable] =
-    await Promise.all([
-      countWhere(db, task, topLevelOpen()),
-      countWhere(db, task, and(topLevelOpen(), isNull(task.projectId))),
-      countWhere(
-        db,
-        task,
-        and(topLevelOpen(), lt(effectiveTaskDueDateSql(), today)),
-      ),
-      countWhere(
-        db,
-        task,
-        and(
-          topLevelOpen(),
-          gte(effectiveTaskDueDateSql(), today),
-          lte(effectiveTaskDueDateSql(), weekOut),
-        ),
-      ),
-      listActionableTasks(db),
-    ]);
-
+  const result = await getDb(db).execute<{
+    totalOpen: number;
+    next: number;
+    later: number;
+    inbox: number;
+    overdue: number;
+    dueThisWeek: number;
+    blocked: number;
+  }>(sql`
+    WITH RECURSIVE project_ancestors AS (
+      SELECT p."id" AS "projectId", p."id" AS "ancestorId", 0 AS depth
+      FROM "Project" p
+      WHERE p."deletedAt" IS NULL
+      UNION ALL
+      SELECT pa."projectId", parent."id", pa.depth + 1
+      FROM project_ancestors pa
+      JOIN "Project" current ON current."id" = pa."ancestorId"
+      JOIN "Project" parent
+        ON parent."id" = current."parentProjectId"
+       AND parent."deletedAt" IS NULL
+      WHERE pa.depth < 100
+    ), blocked_tasks AS (
+      SELECT t."id"
+      FROM "Task" t
+      WHERE t."deletedAt" IS NULL AND t."status" = 'blocked'
+      UNION
+      SELECT td."taskId"
+      FROM "TaskDependency" td
+      JOIN "Task" blocker
+        ON blocker."id" = td."blockedByTaskId"
+       AND blocker."deletedAt" IS NULL
+       AND blocker."status" <> 'done'
+      UNION
+      SELECT t."id"
+      FROM "Task" t
+      JOIN project_ancestors pa ON pa."projectId" = t."projectId"
+      JOIN "Project" owner
+        ON owner."id" = pa."ancestorId"
+       AND owner."deletedAt" IS NULL
+       AND owner."status" <> 'done'
+      JOIN "ProjectDependency" pd ON pd."projectId" = owner."id"
+      JOIN "Project" blocker
+        ON blocker."id" = pd."blockedByProjectId"
+       AND blocker."deletedAt" IS NULL
+       AND blocker."status" <> 'done'
+      WHERE t."deletedAt" IS NULL
+    )
+    SELECT
+      COUNT(*)::int AS "totalOpen",
+      COUNT(*) FILTER (
+        WHERE bt."id" IS NULL AND t."status" IN ('not_started', 'in_progress')
+      )::int AS "next",
+      COUNT(*) FILTER (
+        WHERE bt."id" IS NULL AND t."status" = 'later'
+      )::int AS "later",
+      COUNT(*) FILTER (WHERE t."projectId" IS NULL)::int AS "inbox",
+      COUNT(*) FILTER (
+        WHERE COALESCE(t."dueEndDate", t."dueDate") < ${today}
+      )::int AS "overdue",
+      COUNT(*) FILTER (
+        WHERE COALESCE(t."dueEndDate", t."dueDate") >= ${today}
+          AND COALESCE(t."dueEndDate", t."dueDate") <= ${weekOut}
+      )::int AS "dueThisWeek",
+      COUNT(*) FILTER (WHERE bt."id" IS NOT NULL)::int AS "blocked"
+    FROM "Task" t
+    LEFT JOIN blocked_tasks bt ON bt."id" = t."id"
+    WHERE t."deletedAt" IS NULL
+      AND t."status" <> 'done'
+      AND t."parentTaskId" IS NULL
+  `);
+  const row = result.rows[0];
   return {
-    totalOpen,
-    next: actionable.next.length,
-    later: actionable.later.length,
-    inbox,
-    overdue,
-    dueThisWeek,
-    blocked: actionable.blocked.length,
+    totalOpen: Number(row?.totalOpen ?? 0),
+    next: Number(row?.next ?? 0),
+    later: Number(row?.later ?? 0),
+    inbox: Number(row?.inbox ?? 0),
+    overdue: Number(row?.overdue ?? 0),
+    dueThisWeek: Number(row?.dueThisWeek ?? 0),
+    blocked: Number(row?.blocked ?? 0),
   };
 }

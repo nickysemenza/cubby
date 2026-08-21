@@ -18,10 +18,8 @@ import {
   expenseTradeColumn,
   expenseVendorColumn,
 } from "~/app/projects/shared";
-import { VendorMark } from "~/components/entity/vendor-cell";
 import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
-import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseLabel } from "~/lib/purchase-label";
@@ -32,12 +30,12 @@ import {
 } from "../_components/data-table/columnHelpers";
 import { ScopeChip } from "../_components/data-table/ScopeChip";
 import RTable from "../_components/data-table/Table";
+import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilterOptions";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useNameEditable } from "../_components/hooks/useNameEditable";
-import { useProjectOptions } from "../_components/hooks/useProjectOptions";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import {
   ExpenseBulkActionDialogs,
@@ -61,8 +59,6 @@ const expensesRoute = getRouteApi("/_authenticated/expenses/");
 // Stable empty default — see apps/web/CLAUDE.md's `unstable-hook-default` rule:
 // an inline `?? []` would allocate a fresh array every render while the query
 // is loading, destabilizing the `useFilterOptions`/`useMemo` chain below it.
-const NO_VENDOR_OPTIONS: FilterableComboboxItem[] = [];
-
 const EXPENSE_FACET_IDS = [
   "costType",
   "lineKind",
@@ -83,7 +79,7 @@ const FACET_COLUMN_IDS = {
 export function ExpenseList() {
   const api = useTRPC();
   const columnHelper = useMemo(() => createCubbyColumnHelper<ExpenseOut>(), []);
-  const { options: projectOptions } = useProjectOptions();
+  const projectOptions = useDeferredFilterOptions("project");
   // Runtime picklist for the manifest's `vendor` spec (optionsKey: "vendor"),
   // ranked by frequency so the most-used vendors sort to the top (the roster
   // comes from `repo/vendor.ts`'s `vendorOptions`, re-exported on this router).
@@ -93,17 +89,7 @@ export function ExpenseList() {
   // nothing. The label is the name, and the count rides in `hint`, NOT the
   // label: the label is what filter chips and the collapsed multi-select
   // summary interpolate, and what the type-ahead matches on.
-  const vendorOptionsQuery = useQuery(api.expense.vendorOptions.queryOptions());
-  const vendorOptions = useMemo<FilterableComboboxItem[]>(
-    () =>
-      vendorOptionsQuery.data?.map(({ id, name, count, logo }) => ({
-        value: id,
-        label: name,
-        hint: String(count),
-        icon: <VendorMark vendor={name} vendorId={id} logo={logo} />,
-      })) ?? NO_VENDOR_OPTIONS,
-    [vendorOptionsQuery.data],
-  );
+  const vendorOptions = useDeferredFilterOptions("vendor");
   const expenseBulkActions = useExpenseBulkActions();
   const [moveTarget, setMoveTarget] = useState<ExpenseOut | null>(null);
   const [settleTarget, setSettleTarget] = useState<ExpenseOut | null>(null);

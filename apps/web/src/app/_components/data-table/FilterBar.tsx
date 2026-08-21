@@ -1,6 +1,6 @@
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { X } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Button } from "~/components/ui/button";
 import {
   FilterableCombobox,
@@ -61,6 +61,12 @@ export function FilterBar({
   const active = new Set(filters.map((filter) => filter.field));
   const available = fields.filter((field) => !active.has(field.key));
 
+  useEffect(() => {
+    for (const filter of filters) {
+      fieldsByKey.get(filter.field)?.onActivate?.(filter.values);
+    }
+  }, [filters, fieldsByKey]);
+
   const update = (id: string, values: string[]) =>
     onChange(
       filters.map((filter) =>
@@ -98,6 +104,11 @@ export function FilterBar({
                 placeholder={`Filter ${field.label ?? field.key}`}
                 ariaLabel={`Filter ${field.label ?? field.key}`}
                 className="min-w-28 border-0 bg-transparent shadow-none"
+                onOpenChange={(open) => {
+                  if (open) field.onActivate?.(filter.values);
+                }}
+                onSearchChange={field.onSearchChange}
+                isLoading={field.isLoading}
               />
             ) : (
               <FilterableCombobox
@@ -110,6 +121,11 @@ export function FilterBar({
                 ariaLabel={`Filter ${field.label ?? field.key}`}
                 clearable
                 className="min-w-28 border-0 bg-transparent shadow-none"
+                onOpenChange={(open) => {
+                  if (open) field.onActivate?.(filter.values);
+                }}
+                onSearchChange={field.onSearchChange}
+                isLoading={field.isLoading}
               />
             )}
             <Button
@@ -136,6 +152,7 @@ export function FilterBar({
             const key = event.target.value;
             const field = fieldsByKey.get(key);
             if (!field) return;
+            field.onActivate?.();
             onChange([
               ...filters,
               {

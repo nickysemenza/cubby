@@ -1,10 +1,55 @@
 import { mealCreateInput } from "@cubby/schemas/meal";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { createMeal, mealList } from "./meal";
+import {
+  createMeal,
+  getMealsByDateRange,
+  getUpcomingMealSummary,
+  mealList,
+} from "./meal";
 import { createRecipeFixture, makeRecipeInput } from "./repo.fixtures";
 
 const pagination = { pageIndex: 0, pageSize: 50 };
+
+describe("getUpcomingMealSummary", () => {
+  const ctx = withTestDb();
+
+  it("matches the canonical date-range results while returning at most four rows", async () => {
+    for (let day = 1; day <= 6; day += 1) {
+      await createMeal(
+        ctx.db,
+        mealCreateInput.parse({
+          date: `2026-06-0${day}`,
+          name: `summary meal ${day}`,
+        }),
+        ctx.actor,
+      );
+    }
+
+    const canonical = await getMealsByDateRange(
+      ctx.db,
+      "2026-06-01",
+      "2026-06-30",
+    );
+    const compact = await getUpcomingMealSummary(
+      ctx.db,
+      "2026-06-01",
+      "2026-06-30",
+    );
+
+    expect(compact).toHaveLength(4);
+    expect(compact).toEqual(
+      canonical.slice(0, 4).map((meal) => ({
+        id: meal.id,
+        date: meal.date,
+        name: meal.name,
+        mealType: meal.mealType,
+        mealKind: meal.mealKind,
+        totals: meal.totals,
+      })),
+    );
+  });
+});
 
 /**
  * `mealFilterFields` spreads `mealRelatedFilterFields` (the recipe trio) and the

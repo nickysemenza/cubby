@@ -112,6 +112,7 @@ export function FilterableCombobox({
       onValueChange={(newValue) => {
         onValueChange(newValue);
         setInputValue(""); // Clear filter on selection
+        onSearchChange?.("");
       }}
       open={open}
       onOpenChange={(nextOpen) => {
@@ -164,6 +165,7 @@ export function FilterableCombobox({
             onClick={(e: React.MouseEvent) => {
               e.stopPropagation();
               setInputValue("");
+              onSearchChange?.("");
               onValueChange(null);
             }}
             className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
@@ -328,6 +330,9 @@ interface MultiFilterableComboboxProps {
   className?: string;
   disabled?: boolean;
   ariaLabel?: string;
+  onSearchChange?: (query: string) => void;
+  onOpenChange?: (open: boolean) => void;
+  isLoading?: boolean;
 }
 
 /** Dense, searchable any-of picker for manifest-backed table filters. */
@@ -339,16 +344,21 @@ export function MultiFilterableCombobox({
   className,
   disabled,
   ariaLabel,
+  onSearchChange,
+  onOpenChange,
+  isLoading,
 }: MultiFilterableComboboxProps) {
   const [inputValue, setInputValue] = React.useState("");
   const [open, setOpen] = React.useState(false);
   const anchorRef = React.useRef<HTMLDivElement>(null);
 
+  const serverSearch = onSearchChange != null;
   const filteredItems = React.useMemo(() => {
+    if (serverSearch) return items;
     if (!inputValue) return items;
     const lower = inputValue.toLowerCase();
     return items.filter((item) => item.label.toLowerCase().includes(lower));
-  }, [items, inputValue]);
+  }, [items, inputValue, serverSearch]);
 
   const summaryLabel = React.useMemo(() => {
     const first = value[0];
@@ -364,9 +374,13 @@ export function MultiFilterableCombobox({
       onValueChange={(newValue: string[]) => {
         onValueChange(newValue);
         setInputValue("");
+        onSearchChange?.("");
       }}
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        onOpenChange?.(nextOpen);
+      }}
       disabled={disabled}
     >
       <ComboboxPrimitive.InputGroup
@@ -381,9 +395,10 @@ export function MultiFilterableCombobox({
           className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
           placeholder={placeholder}
           value={open ? inputValue : summaryLabel}
-          onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-            setInputValue(event.target.value)
-          }
+          onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+            setInputValue(event.target.value);
+            onSearchChange?.(event.target.value);
+          }}
         />
         {value.length > 0 && (
           <button
@@ -393,6 +408,7 @@ export function MultiFilterableCombobox({
             onClick={(event: React.MouseEvent) => {
               event.stopPropagation();
               setInputValue("");
+              onSearchChange?.("");
               onValueChange([]);
             }}
             className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
@@ -412,7 +428,11 @@ export function MultiFilterableCombobox({
           />
         </ComboboxPrimitive.Trigger>
       </ComboboxPrimitive.InputGroup>
-      <ComboboxPopup items={filteredItems} anchorRef={anchorRef} />
+      <ComboboxPopup
+        items={filteredItems}
+        anchorRef={anchorRef}
+        isLoading={isLoading}
+      />
     </ComboboxPrimitive.Root>
   );
 }

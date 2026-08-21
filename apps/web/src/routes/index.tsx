@@ -33,23 +33,6 @@ export const Route = createFileRoute("/")({
       });
     }
   },
-  // Warm the count-card query during route load so it's already in flight when
-  // EntityCount mounts (most useful on client-side navigation). One call covers
-  // every homepage total (dashboard.counts). Non-blocking `void prefetch` (not
-  // awaited ensure): the SSR tRPC client targets localhost, which is unreachable
-  // on CF Workers — so awaiting here would break prod. EntityCount's own gate +
-  // skeleton covers cold loads.
-  loader: ({ context }) => {
-    const { queryClient, trpc } = context;
-    void queryClient.prefetchQuery(trpc.dashboard.counts.queryOptions());
-    // Problems count is fetched client-side by the badge/card via the five
-    // cost-grouped queries (no monolithic getAllProblems). Not prefetched here:
-    // SSR self-fetch is unauthenticated and we don't want the heavy detectors
-    // running in the SSR invocation.
-    // Warm the location tree — the pantry-value card reads each location's
-    // persisted valuation rollup from it (no inventory fetch).
-    void queryClient.prefetchQuery(trpc.location.makeTree.queryOptions());
-  },
   component: Home,
 });
 

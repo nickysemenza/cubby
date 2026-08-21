@@ -74,11 +74,15 @@ function FeedRow({
 
 export function CalendarSubscribeDialog() {
   const api = useTRPC();
+  const [open, setOpen] = useState(false);
   // Deliberately NOT `session.user.calendarFeedToken`: that copy comes from the
   // signed cookie cache and lags by up to 5 minutes, so a just-created feed
   // still reads as null there — and the empty state's "Create feed" button
   // rotates, which would break a subscription the user had already added.
-  const feed = useQuery(api.calendar.getFeed.queryOptions());
+  const feed = useQuery({
+    ...api.calendar.getFeed.queryOptions(),
+    enabled: open,
+  });
   const [rotated, setRotated] = useState<string | null>(null);
 
   const hadFeed = (feed.data?.token ?? null) !== null;
@@ -98,7 +102,7 @@ export function CalendarSubscribeDialog() {
   const origin = typeof window === "undefined" ? "" : window.location.origin;
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
           <Button variant="outline" size="sm">

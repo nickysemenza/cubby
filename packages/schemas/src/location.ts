@@ -195,6 +195,21 @@ export const locationValuation = z.object({
 });
 export type LocationValuation = z.infer<typeof locationValuation>;
 
+/** Compact persisted-valuation projection for the Home dashboard. */
+export const locationValuationSummaryOut = z.object({
+  total: z.number(),
+  locations: z.array(
+    z.object({
+      id: locationShortcode,
+      name: z.string(),
+      value: z.number(),
+    }),
+  ),
+});
+export type LocationValuationSummaryOut = z.infer<
+  typeof locationValuationSummaryOut
+>;
+
 /**
  * The SKU a location IS, embedded on every location read.
  *

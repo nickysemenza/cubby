@@ -11,6 +11,7 @@ import type {
   MealOut,
   MealRecipeInput,
   MealType,
+  UpcomingMealSummaryOut,
 } from "@cubby/schemas/meal";
 import { mealSortableFields } from "@cubby/schemas/meal";
 import { mealTypeValues } from "@cubby/schemas/meal-classification";
@@ -106,6 +107,32 @@ export const getMealsByDateRange = async (
     ...relations.meal.full,
   });
   return rows.map(dbMealToAPI);
+};
+
+/** Compact, bounded Home projection over the same canonical date ordering. */
+export const getUpcomingMealSummary = async (
+  db: Database,
+  from: string,
+  to: string,
+  limit = 4,
+): Promise<UpcomingMealSummaryOut> => {
+  const rows = await getDb(db).query.meal.findMany({
+    where: and(gte(meal.date, from), lte(meal.date, to), notDeleted(meal)),
+    orderBy: (m, { asc }) => [asc(m.date), asc(m.sortOrder), asc(m.createdAt)],
+    limit,
+    ...relations.meal.full,
+  });
+  return rows.map((row) => {
+    const full = dbMealToAPI(row);
+    return {
+      id: full.id,
+      date: full.date,
+      name: full.name,
+      mealType: full.mealType,
+      mealKind: full.mealKind,
+      totals: full.totals,
+    };
+  });
 };
 
 export const mealList = async (

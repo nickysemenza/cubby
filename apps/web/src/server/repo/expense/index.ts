@@ -33,7 +33,11 @@
  * `helpers.ts` (row→API mapping) is internal.
  */
 
-export { expenseAnalytics, expenseTradeAffinity } from "./analytics";
+export {
+  expenseAnalytics,
+  expenseMonthlySummary,
+  expenseTradeAffinity,
+} from "./analytics";
 export { expenseAnalyze, expenseFacetCounts } from "./analyze";
 export {
   createExpense,

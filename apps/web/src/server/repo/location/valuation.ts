@@ -5,9 +5,15 @@
  * lint: services go through repo functions).
  */
 
-import type { LocationId } from "@cubby/schemas/identifiers";
-import type { LocationValuation } from "@cubby/schemas/location";
-import { eq } from "drizzle-orm";
+import {
+  type LocationId,
+  unsafeLocationShortcode,
+} from "@cubby/schemas/identifiers";
+import type {
+  LocationValuation,
+  LocationValuationSummaryOut,
+} from "@cubby/schemas/location";
+import { and, desc, eq, gt, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
@@ -37,6 +43,33 @@ interface ValuationLocationRow {
    */
   productPrice: number | null;
 }
+
+/** One compact SQL read for Home; no tree or relation hydration. */
+export const getLocationValuationSummary = async (
+  db: Database,
+): Promise<LocationValuationSummaryOut> => {
+  const directValue = sql<number>`COALESCE((${location.valuation}->>'directValuation')::numeric, 0)`;
+  const rows = await getDb(db)
+    .select({
+      id: location.shortcode,
+      name: location.name,
+      value: directValue,
+      total: sql<number>`SUM(${directValue}) OVER ()`,
+    })
+    .from(location)
+    .where(and(notDeleted(location), gt(directValue, 0)))
+    .orderBy(desc(directValue), location.name)
+    .limit(5);
+
+  return {
+    total: Number(rows[0]?.total ?? 0),
+    locations: rows.map((row) => ({
+      id: unsafeLocationShortcode(row.id),
+      name: row.name,
+      value: Number(row.value),
+    })),
+  };
+};
 
 /**
  * Read the inputs for a whole-tree valuation recompute: every non-deleted

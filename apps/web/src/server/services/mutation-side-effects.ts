@@ -25,6 +25,7 @@ import { z } from "zod";
 import {
   dispatchBackgroundJobs,
   dispatchLocationValuationRecompute,
+  dispatchProblemCountsRefresh,
 } from "~/server/background-dispatch";
 import type { Database } from "~/server/db";
 import {
@@ -611,6 +612,12 @@ export async function runMutationSideEffects(
     );
     batches.push(dispatched.batch);
   }
+  const problemCounts = await dispatchProblemCountsRefresh(
+    db,
+    "mutation",
+    parsed.source,
+  );
+  if (problemCounts) batches.push(problemCounts.batch);
   return batches;
 }
 
@@ -673,6 +680,14 @@ export async function runMutationSideEffectsForEntities(
       parsed[0]?.source ?? "mutation.bulk",
     );
     batches.push(dispatched.batch);
+  }
+  if (parsed.length > 0) {
+    const problemCounts = await dispatchProblemCountsRefresh(
+      db,
+      "mutation",
+      parsed[0]?.source ?? "mutation.bulk",
+    );
+    if (problemCounts) batches.push(problemCounts.batch);
   }
   return batches;
 }

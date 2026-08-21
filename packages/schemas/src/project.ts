@@ -1301,6 +1301,9 @@ export const expenseMonthlyAggregate = z.object({
 });
 export type ExpenseMonthlyAggregate = z.infer<typeof expenseMonthlyAggregate>;
 
+export const expenseMonthlySummaryOut = z.array(expenseMonthlyAggregate);
+export type ExpenseMonthlySummaryOut = z.infer<typeof expenseMonthlySummaryOut>;
+
 export const expenseCumulativePoint = z.object({
   month: z.string().describe('"yyyy-MM"'),
   cumulativeNet: z.number(),
