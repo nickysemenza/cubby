@@ -153,6 +153,38 @@ describe("withLockedEndLast", () => {
 });
 
 describe("useCubbyTableLayout", () => {
+  it("fixes the structural image strip to its thumbnail width", () => {
+    localStorage.setItem(
+      "table-layout:v1:products",
+      JSON.stringify({
+        version: 1,
+        columnOrder: ["image", "name"],
+        columnPinning: { start: ["image"], end: [] },
+        columnVisibility: { image: true, name: true },
+        columnSizing: { image: 128 },
+      }),
+    );
+    const imageColumns = helper.columns([
+      helper.display({
+        id: "image",
+        meta: { className: "h-px w-16 overflow-hidden px-0 py-0" },
+      }),
+      helper.accessor("name", { header: "Name" }),
+    ]);
+
+    const { result } = renderHook(() =>
+      useCubbyTableLayout({ key: "products", columns: imageColumns }),
+    );
+
+    expect(result.current.columns[0]).toMatchObject({
+      size: 64,
+      minSize: 64,
+      maxSize: 64,
+      enableResizing: false,
+    });
+    expect(result.current.atoms.columnSizing.get().image).toBe(64);
+  });
+
   it("imports legacy Tailwind widths into v9 numeric column definitions", () => {
     const legacyColumns = helper.columns([
       helper.accessor("name", {

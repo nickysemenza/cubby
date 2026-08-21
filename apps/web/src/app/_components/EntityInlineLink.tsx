@@ -34,6 +34,8 @@ type EntityInlineLinkProps = {
   compact?: boolean;
   /** Truncate the name to the available flex width (no fixed cap). Parent must be min-w-0. */
   truncate?: boolean;
+  /** An adjacent dedicated image/mark already identifies this record. */
+  showIdentityMark?: boolean;
   /**
    * Backend-enriched canonical image. Null explicitly suppresses inline media;
    * undefined derives from an established enriched projection during rollout.
@@ -151,6 +153,7 @@ function PreviewEntityLink({
   id,
   displayImage,
   fallbackMark,
+  showIdentityMark,
   openInNewTab,
   className,
   ...body
@@ -159,6 +162,7 @@ function PreviewEntityLink({
   id: string;
   displayImage: ImageUrlSummary | null;
   fallbackMark: ReactNode;
+  showIdentityMark?: boolean;
   openInNewTab?: boolean;
   className: string;
 }) {
@@ -168,6 +172,7 @@ function PreviewEntityLink({
       id={id}
       displayImage={displayImage}
       fallbackMark={fallbackMark}
+      showIdentityMark={showIdentityMark}
       openInNewTab={openInNewTab}
       className={className}
     >
@@ -177,7 +182,7 @@ function PreviewEntityLink({
 }
 
 export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
-  const { openInNewTab, compact, truncate } = props;
+  const { openInNewTab, compact, truncate, showIdentityMark } = props;
   const displayImage =
     props.displayImage === undefined
       ? displayImageFromData(props.data)
@@ -192,6 +197,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         openInNewTab={openInNewTab}
         className={wrapperClass}
         displayImage={displayImage}
+        showIdentityMark={showIdentityMark}
         fallbackMark={<EntityIcon entity="ingredient" size={12} colored />}
         name={data.name}
         compact={compact}
@@ -205,6 +211,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         openInNewTab={openInNewTab}
         className={wrapperClass}
         displayImage={displayImage}
+        showIdentityMark={showIdentityMark}
         fallbackMark={<EntityIcon entity="recipe" size={12} colored />}
         name={data.name}
         compact={compact}
@@ -218,6 +225,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         openInNewTab={openInNewTab}
         className={wrapperClass}
         displayImage={displayImage}
+        showIdentityMark={showIdentityMark}
         fallbackMark={<EntityIcon entity="cookbook" size={12} colored />}
         name={data.name}
         metadata={data.authors?.length ? data.authors.join(", ") : undefined}
@@ -232,6 +240,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         openInNewTab={openInNewTab}
         className={wrapperClass}
         displayImage={displayImage}
+        showIdentityMark={showIdentityMark}
         fallbackMark={<EntityIcon entity="meal" size={12} colored />}
         name={data.name}
         metadata={data.date ?? undefined}
@@ -246,6 +255,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         openInNewTab={openInNewTab}
         className={wrapperClass}
         displayImage={displayImage}
+        showIdentityMark={showIdentityMark}
         fallbackMark={
           data.type ? (
             <LocationIcon
@@ -276,6 +286,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
           openInNewTab={openInNewTab}
           className={wrapperClass}
           displayImage={displayImage}
+          showIdentityMark={showIdentityMark}
           fallbackMark={<EntityIcon entity="product" size={12} colored />}
           name={displayName}
           metadata={metadata}
@@ -291,6 +302,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         openInNewTab={openInNewTab}
         className={wrapperClass}
         displayImage={displayImage}
+        showIdentityMark={showIdentityMark}
         fallbackMark={<EntityIcon entity="inventory" size={12} colored />}
         name={data.name}
         compact={compact}
@@ -321,6 +333,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
           openInNewTab={openInNewTab}
           className={wrapperClass}
           displayImage={displayImage}
+          showIdentityMark={showIdentityMark}
           fallbackMark={icon}
           name={text}
           compact={compact}
@@ -338,6 +351,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         openInNewTab={openInNewTab}
         className={wrapperClass}
         displayImage={displayImage}
+        showIdentityMark={showIdentityMark}
         fallbackMark={
           <ProjectMarkById projectId={data.id} icon={data.icon} size={12} />
         }
@@ -360,6 +374,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         openInNewTab={openInNewTab}
         className={wrapperClass}
         displayImage={displayImage}
+        showIdentityMark={showIdentityMark}
         fallbackMark={<EntityIcon entity="task" size={12} colored />}
         name={data.name}
         metadata={data.projectName ?? undefined}
@@ -374,6 +389,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         openInNewTab={openInNewTab}
         className={wrapperClass}
         displayImage={displayImage}
+        showIdentityMark={showIdentityMark}
         fallbackMark={<EntityIcon entity="expense" size={12} colored />}
         name={data.name}
         metadata={
@@ -392,6 +408,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         openInNewTab={openInNewTab}
         className={wrapperClass}
         displayImage={displayImage}
+        showIdentityMark={showIdentityMark}
         fallbackMark={<EntityIcon entity="purchase" size={12} colored />}
         name={purchaseLabel(data)}
         // Only when the label is the order id — otherwise the fallback label
@@ -412,6 +429,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         openInNewTab={openInNewTab}
         className={wrapperClass}
         displayImage={displayImage}
+        showIdentityMark={showIdentityMark}
         fallbackMark={<EntityIcon entity="vendor" size={12} colored />}
         name={data.name}
         compact={compact}

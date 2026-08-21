@@ -7,11 +7,17 @@ vi.mock("./EntityPreviewLink", () => ({
   EntityPreviewLink: ({
     children,
     displayImage,
+    showIdentityMark,
   }: {
     children: ReactNode;
     displayImage: { url: string } | null;
+    showIdentityMark?: boolean;
   }) => (
-    <span data-testid="entity-link" data-image={displayImage?.url ?? "none"}>
+    <span
+      data-testid="entity-link"
+      data-image={displayImage?.url ?? "none"}
+      data-show-mark={showIdentityMark === false ? "false" : "true"}
+    >
       {children}
     </span>
   ),
@@ -39,18 +45,19 @@ describe("EntityInlineLink display images", () => {
     );
   });
 
-  it("honors an explicit null when adjacent media already supplies identity", () => {
+  it("suppresses its identity mark when adjacent media already supplies it", () => {
     render(
       <EntityInlineLink
         entity="product"
         data={enrichedProduct}
-        displayImage={null}
+        displayImage={enrichedProduct.images[0]}
+        showIdentityMark={false}
       />,
     );
 
     expect(screen.getByTestId("entity-link")).toHaveAttribute(
-      "data-image",
-      "none",
+      "data-show-mark",
+      "false",
     );
   });
 });

@@ -224,6 +224,7 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
                   entity={target.entity}
                   data={{ id: target.id, name: target.label }}
                   displayImage={target.image ? { url: target.image.url } : null}
+                  showIdentityMark={false}
                   truncate
                 />
               );

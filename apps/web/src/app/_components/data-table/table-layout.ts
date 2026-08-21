@@ -307,18 +307,27 @@ function normalizeColumnDefinitions<TData extends RowData>(
       };
     }
     const className = definition.meta?.className ?? "";
+    const id = columnIdsFromDefs([definition])[0];
     const size = definition.size ?? tailwindWidth(className, "w");
+    // Image is a structural identity strip, not a data column. Keep it exactly
+    // as wide as its declared thumbnail cell so a stale persisted resize cannot
+    // leave an empty gutter between the dedicated image and the record name.
+    const fixedImageSize = id === "image" ? (size ?? 64) : undefined;
+    const normalizedSize = fixedImageSize ?? size;
     const minSize =
+      fixedImageSize ??
       definition.minSize ??
       tailwindWidth(className, "min-w") ??
-      (size != null ? Math.min(size, MIN_COLUMN_WIDTH) : undefined);
+      (normalizedSize != null
+        ? Math.min(normalizedSize, MIN_COLUMN_WIDTH)
+        : undefined);
     const maxSize =
+      fixedImageSize ??
       definition.maxSize ??
       tailwindWidth(className, "max-w") ??
-      (size != null
-        ? Math.max(size * 2, minSize ?? MIN_COLUMN_WIDTH)
+      (normalizedSize != null
+        ? Math.max(normalizedSize * 2, minSize ?? MIN_COLUMN_WIDTH)
         : undefined);
-    const id = columnIdsFromDefs([definition])[0];
     const locked = id != null && isLockedColumnId(id);
     return {
       ...definition,
@@ -329,7 +338,8 @@ function normalizeColumnDefinitions<TData extends RowData>(
             enableCellSelection: false,
           }
         : {}),
-      ...(size != null ? { size } : {}),
+      ...(fixedImageSize != null ? { enableResizing: false } : {}),
+      ...(normalizedSize != null ? { size: normalizedSize } : {}),
       ...(minSize != null ? { minSize } : {}),
       ...(maxSize != null ? { maxSize } : {}),
     };
