@@ -275,6 +275,98 @@ describe("product repository", () => {
     ]);
   });
 
+  it("holds a second identifier in one slot and promotes on removal", async () => {
+    // Amazon lists one item twice, so a product legitimately carries two ASINs.
+    // The slot used to hold exactly one row, which is why merging two such
+    // products destroyed one — and each destroyed id is a live listing that
+    // re-mints the duplicate the next time an order line quotes it.
+    const created = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Two Listings Salt",
+        externalIds: [
+          {
+            source: "amazon",
+            kind: "asin",
+            externalId: "B0PRIMARY1",
+            url: null,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    await patchProductExternalIds(
+      ctx.db,
+      created.entityId,
+      {
+        upsert: [
+          {
+            source: "amazon",
+            kind: "asin",
+            externalId: "B0SECOND01",
+            url: null,
+            isPrimary: false,
+          },
+        ],
+        remove: [],
+      },
+      ctx.actor,
+    );
+    // Sorted in the assertion: the read applies no ORDER BY, so heap order is
+    // whatever the last UPDATE left behind.
+    const asins = async () =>
+      (await getProductByID(ctx.db, created.entityId)).externalIds
+        .filter((entry) => entry.source === "amazon" && entry.kind === "asin")
+        .map((entry) => [entry.externalId, entry.isPrimary] as const)
+        .sort((a, b) => a[0].localeCompare(b[0]));
+    expect(await asins()).toEqual([
+      ["B0PRIMARY1", true],
+      ["B0SECOND01", false],
+    ]);
+
+    // An upsert of the PRIMARY replaces the primary only — it must not
+    // overwrite or destroy the secondary sharing the slot.
+    await patchProductExternalIds(
+      ctx.db,
+      created.entityId,
+      {
+        upsert: [
+          {
+            source: "amazon",
+            kind: "asin",
+            externalId: "B0PRIMARY2",
+            url: null,
+          },
+        ],
+        remove: [],
+      },
+      ctx.actor,
+    );
+    expect(await asins()).toEqual([
+      ["B0PRIMARY2", true],
+      ["B0SECOND01", false],
+    ]);
+
+    // Removing the primary promotes the surviving secondary, so the slot is
+    // never left with only secondaries and nothing standing for it.
+    await patchProductExternalIds(
+      ctx.db,
+      created.entityId,
+      {
+        upsert: [],
+        remove: [
+          {
+            source: "amazon",
+            kind: "asin",
+            expectedExternalId: "B0PRIMARY2",
+          },
+        ],
+      },
+      ctx.actor,
+    );
+    expect(await asins()).toEqual([["B0SECOND01", true]]);
+  });
+
   it("does not mutate any external-ID slot when a removal precondition fails", async () => {
     const created = await createProduct(
       ctx.db,

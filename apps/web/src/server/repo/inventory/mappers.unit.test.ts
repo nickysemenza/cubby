@@ -210,6 +210,9 @@ describe("inventory mappers", () => {
             kind: "legacy_unspecified",
             externalId: "B000000001",
             url: "https://example.com/product",
+            // Rows written before the column existed default to primary — back
+            // then a slot held exactly one row.
+            isPrimary: true,
             createdAt: CREATED_AT,
             updatedAt: UPDATED_AT,
           },

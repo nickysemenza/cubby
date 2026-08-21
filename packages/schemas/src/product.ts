@@ -1206,7 +1206,7 @@ export const mcpProductUpdateInput = z.object({
   externalIds: externalIdValues
     .optional()
     .describe(
-      "Retailer/vendor identifiers. Pass the COMPLETE desired set: it replaces the existing list. One id per (product, source, kind).",
+      "Retailer/vendor identifiers. Pass the COMPLETE desired set: it replaces the existing list. A (source, kind) slot takes one PRIMARY plus any number of secondaries — mark the extras isPrimary: false.",
     ),
   upc: upc.nullable().optional(),
   fdc_id: fdcId.nullable().optional(),
@@ -1332,7 +1332,20 @@ export const productExternalIdCollisionsOut = z.object({
         source: z.string(),
         kind: externalIdKind,
         externalId: z.string(),
-        status: z.enum(["missing", "unique", "collision"]),
+        /**
+         * `unique` means one live owner — but not necessarily the product you
+         * asked about, which is how three duplicate pairs were nearly missed in
+         * one import session. Pass `productId` and the answer splits into
+         * `owned_by_this` and `owned_by_other`; without it the vocabulary is
+         * unchanged.
+         */
+        status: z.enum([
+          "missing",
+          "unique",
+          "owned_by_this",
+          "owned_by_other",
+          "collision",
+        ]),
         products: z.array(z.object({ id: productShortcode, name: z.string() })),
       }),
     )
@@ -1342,6 +1355,13 @@ export const productExternalIdCollisionsOut = z.object({
 export const productExternalIdCollisionInput = z
   .object({
     source: z.union([externalIdSource, z.array(externalIdSource)]).optional(),
+    /**
+     * The product the caller is about to write these identifiers onto.
+     *
+     * Turns "is this id taken?" into "is this id taken by someone ELSE?", which
+     * is the question an enrichment sweep is actually asking.
+     */
+    productId: productShortcode.optional(),
     identifiers: z
       .array(
         z.object({
@@ -1373,6 +1393,12 @@ export const patchProductExternalIdsInput = z
           kind: externalIdKind,
           externalId: z.string().min(1),
           url: z.string().url().nullish(),
+          /**
+           * Omitted means primary — the value that stands for the slot, and the
+           * one an upsert replaces. `false` adds an ADDITIONAL identifier
+           * alongside it, addressed by its own value.
+           */
+          isPrimary: z.boolean().optional(),
         }),
       )
       .default([]),
@@ -1387,15 +1413,39 @@ export const patchProductExternalIdsInput = z
       .default([]),
   })
   .superRefine((value, ctx) => {
-    const slots = new Set<string>();
-    for (const entry of [...value.upsert, ...value.remove]) {
-      const key = `${entry.source.trim().toLowerCase()}\u0000${entry.kind}`;
-      if (slots.has(key))
+    // Scoped to the VALUE, not the slot: a slot holds one primary and any
+    // number of secondaries, so patching two of its rows in one call is
+    // ordinary. What must stay unique is the row each entry addresses — and,
+    // separately, the single primary.
+    const addressed = new Set<string>();
+    const primaries = new Set<string>();
+    const slotOf = (entry: { source: string; kind: string }) =>
+      `${entry.source.trim().toLowerCase()}\u0000${entry.kind}`;
+    for (const entry of value.upsert) {
+      const key = `${slotOf(entry)}\u0000${entry.externalId}`;
+      if (addressed.has(key))
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "Each external-ID slot may be patched only once",
+          message: "Each external ID may be patched only once",
         });
-      slots.add(key);
+      addressed.add(key);
+      if (entry.isPrimary === false) continue;
+      if (primaries.has(slotOf(entry)))
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            "Each external-ID slot may take only one PRIMARY per call; mark the others isPrimary: false",
+        });
+      primaries.add(slotOf(entry));
+    }
+    for (const entry of value.remove) {
+      const key = `${slotOf(entry)}\u0000${entry.expectedExternalId}`;
+      if (addressed.has(key))
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Each external ID may be patched only once",
+        });
+      addressed.add(key);
     }
   });
 
@@ -1420,7 +1470,19 @@ export const productMergeSummaryOut = z.object({
   keepId: productShortcode,
   deletedIds: z.array(productShortcode),
   externalIdsMoved: z.number().int(),
-  externalIdsDiscarded: z.number().int(),
+  /**
+   * Identifiers whose slot the survivor already filled, kept as SECONDARY rows
+   * rather than destroyed. Reported by value, not as a bare count: each one is
+   * a live listing, and knowing it survived is the point.
+   */
+  externalIdsDemoted: z.array(
+    z.object({
+      source: z.string(),
+      kind: externalIdKind,
+      externalId: z.string(),
+    }),
+  ),
+
   inventoryMoved: z.number().int(),
   inventoryMerged: z.number().int(),
   expensesMoved: z.number().int(),

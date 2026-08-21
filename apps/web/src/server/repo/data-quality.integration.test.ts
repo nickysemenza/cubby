@@ -790,5 +790,33 @@ describe("computed purchase and product data quality", () => {
       "unique",
       "missing",
     ]);
+
+    // `unique` only ever meant "exactly one live owner, whoever that is", so it
+    // read as a clean pass even when the id sat on a DIFFERENT product — which
+    // is how three duplicate pairs were nearly missed in one import session.
+    // Naming the product the caller intends to write to splits the answer.
+    const identifiers = [
+      { source: "catalog", kind: "catalog_number", externalId: "SHARED-1" },
+      { source: "catalog", kind: "catalog_number", externalId: "MISSING" },
+    ] as const;
+    const asOwner = await findProductExternalIdCollisions(ctx.db, {
+      productId: amazonProduct.id,
+      identifiers: [...identifiers],
+    });
+    expect(asOwner.results.map((result) => result.status)).toEqual([
+      "owned_by_this",
+      "missing",
+    ]);
+    const asOther = await findProductExternalIdCollisions(ctx.db, {
+      productId: localProduct.id,
+      identifiers: [...identifiers],
+    });
+    expect(asOther.results.map((result) => result.status)).toEqual([
+      "owned_by_other",
+      "missing",
+    ]);
+    expect(asOther.results[0]?.products.map((row) => row.id)).toEqual([
+      amazonProduct.id,
+    ]);
   });
 });

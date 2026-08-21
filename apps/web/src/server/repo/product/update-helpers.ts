@@ -121,15 +121,21 @@ export async function syncProductUnitMappings(
 export function externalIdSlotUnchanged(
   existing: Pick<
     typeof productExternalId.$inferSelect,
-    "source" | "kind" | "externalId" | "url"
+    "source" | "kind" | "externalId" | "url" | "isPrimary"
   >,
-  incoming: Pick<ExternalIdInput, "source" | "kind" | "externalId" | "url">,
+  incoming: Pick<
+    ExternalIdInput,
+    "source" | "kind" | "externalId" | "url" | "isPrimary"
+  >,
 ): boolean {
   return (
     existing.source === incoming.source &&
     existing.kind === incoming.kind &&
     existing.externalId === incoming.externalId &&
-    existing.url === storedExternalIdUrl(incoming)
+    existing.url === storedExternalIdUrl(incoming) &&
+    // Promoting or demoting a row IS a change, and skipping it here would
+    // silently discard the caller's intent.
+    existing.isPrimary === (incoming.isPrimary ?? true)
   );
 }
 
@@ -163,8 +169,13 @@ export async function syncProductExternalIds(
   const unchangedExistingIds = new Set<string>();
   const toCreate = normalized.filter((eid) => {
     if (eid.id !== undefined) return false;
+    // Matched by VALUE within the slot: a slot now holds one primary plus any
+    // number of secondaries, so "the row in this slot" is no longer singular.
     const liveSlot = existingExternalIds.find(
-      (e) => e.source === eid.source && e.kind === eid.kind,
+      (e) =>
+        e.source === eid.source &&
+        e.kind === eid.kind &&
+        e.externalId === eid.externalId,
     );
     if (liveSlot && externalIdSlotUnchanged(liveSlot, eid)) {
       unchangedExistingIds.add(liveSlot.id);
@@ -202,6 +213,7 @@ export async function syncProductExternalIds(
         kind: eid.kind,
         externalId: eid.externalId,
         url: storedExternalIdUrl(eid),
+        isPrimary: eid.isPrimary ?? true,
       })),
     );
   }
@@ -215,6 +227,7 @@ export async function syncProductExternalIds(
         kind: eid.kind,
         externalId: eid.externalId,
         url: storedExternalIdUrl(eid),
+        isPrimary: eid.isPrimary ?? true,
       })
       .where(eq(productExternalId.id, eid.id));
   }

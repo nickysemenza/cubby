@@ -107,7 +107,7 @@ export function registerProductTools(server: McpServer) {
   registerMcpTool(server, {
     name: "find_product_external_id_collisions",
     description:
-      "Find duplicate live Product external identifiers. Use source for a broad audit, or identifiers for ordered exact (source, kind, externalId) results including missing and unique slots.",
+      "Find duplicate live Product external identifiers. Use source for a broad audit, or identifiers for ordered exact (source, kind, externalId) results including missing and unique slots. Pass productId — the product you are about to write these onto — and `unique` splits into `owned_by_this` and `owned_by_other`; without it, `unique` only means the id has ONE live owner, which reads as a clean pass even when that owner is a different product.",
     inputSchema: productExternalIdCollisionInput.shape,
     outputSchema: productExternalIdCollisionsOut,
     annotations: READ_ONLY_CLOSED,
@@ -118,7 +118,7 @@ export function registerProductTools(server: McpServer) {
   registerMcpTool(server, {
     name: "patch_product_external_ids",
     description:
-      "Patch named (source, kind) identifier slots without replacing unrelated Product identifiers. Upserts overwrite only their slot; every removal must include the exact current external ID and all preconditions are checked before anything changes.",
+      "Patch named (source, kind) identifier slots without replacing unrelated Product identifiers. A slot holds ONE primary plus any number of secondaries — Amazon lists one item twice, so a product legitimately carries two ASINs. An upsert replaces the primary; pass isPrimary: false to add an additional identifier alongside it, addressed by its own value. Every removal must include the exact current external ID, all preconditions are checked before anything changes, and removing a primary promotes the oldest surviving secondary so the slot always has a value standing for it.",
     inputSchema: patchProductExternalIdsInput.shape,
     outputSchema: productMcpDetailOut,
     annotations: WRITE_CLOSED,
@@ -174,7 +174,7 @@ export function registerProductTools(server: McpServer) {
   registerMcpTool(server, {
     name: "merge_products",
     description:
-      "Fold duplicate products into one survivor. Moves the merged-away products' stock, ledger lines, identifiers, images, unit mappings, tasks, project uses, and wishlist candidacies onto keepId, then soft-deletes them. Stock in a location the survivor already stocks is SUMMED into the survivor's entry; an identifier slot (source, kind) the survivor already fills keeps the survivor's value and discards the other. Refuses when two entries in one location carry different units — preview with preview_entity_operation first.",
+      "Fold duplicate products into one survivor. Moves the merged-away products' stock, ledger lines, identifiers, images, unit mappings, tasks, project uses, and wishlist candidacies onto keepId, then soft-deletes them. Stock in a location the survivor already stocks is SUMMED into the survivor's entry; an identifier slot (source, kind) the survivor already fills keeps the survivor's value as PRIMARY and carries the other over as a secondary rather than destroying it (returned in mergeSummary.externalIdsDemoted). The survivor's cover image is preserved. Refuses when two entries in one location carry different units — preview with preview_entity_operation first.",
     inputSchema: mergeProductsInput.shape,
     outputSchema: mergeProductsMcpOut,
     annotations: WRITE_DESTRUCTIVE_CLOSED,

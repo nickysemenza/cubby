@@ -574,6 +574,19 @@ export const product = pgTable(
     name: text("name").notNull(),
     aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
     manufacturer: text("manufacturer").notNull(),
+    /**
+     * A product's ONE barcode. Scalar, and therefore lossy: a product routinely
+     * carries more than one (a manufacturer reissues, a retailer relabels, two
+     * listings disagree), and every merge whose survivor already held a
+     * different barcode destroyed the other permanently.
+     *
+     * Superseded by `ProductExternalId` rows under source `gtin`, which hold
+     * any number. This column is retained only until the barcodes are
+     * backfilled onto those rows and every reader is switched over.
+     *
+     * TODO(product-multi-identifier): backfill to `gtin` rows, then drop this
+     * column and `Product_upc_key`.
+     */
     upc: text("upc"),
     // Explicit USDA link by FoodData Central id (the universal PK across all food
     // types). Takes precedence over UPC auto-resolution and can reach
@@ -671,14 +684,33 @@ export const productExternalId = pgTable(
     kind: text("kind").notNull().default("legacy_unspecified"),
     externalId: text("externalId").notNull(), // The actual identifier (ASIN, part number, etc.)
     url: text("url"), // Optional direct link to the product page
+    /**
+     * The value that stands for the slot. One per (productId, source, kind);
+     * secondaries are unlimited.
+     *
+     * A slot used to hold exactly one row, so merging two products that each
+     * carried an ASIN destroyed one of them — and each discarded ASIN is a real
+     * listing, so the next order line quoting it re-mints the duplicate the
+     * merge just removed.
+     */
+    isPrimary: boolean("isPrimary").notNull().default(true),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
   (table) => [
     index("ProductExternalId_productId_idx").on(table.productId),
-    uniqueIndex("ProductExternalId_product_source_kind_key")
+    // One PRIMARY per slot rather than one row per slot.
+    //
+    // ⚠️ `drizzle-kit push` applies index predicates as a no-op, so this index
+    // does not exist unless it was created by hand. Verify with
+    // `SELECT indexdef FROM pg_indexes WHERE indexname LIKE 'ProductExternalId%'`
+    // — a green push proves nothing here.
+    uniqueIndex("ProductExternalId_product_source_kind_primary_key")
       .on(table.productId, table.source, table.kind)
-      .where(sql`${table.deletedAt} IS NULL`),
+      .where(sql`${table.isPrimary} AND ${table.deletedAt} IS NULL`),
+    // Stays GLOBAL and unconditional: this is the constraint that makes
+    // `find_product_external_id_collisions` work at all, by guaranteeing an
+    // identifier has at most one live owner.
     uniqueIndex("ProductExternalId_source_kind_externalId_key")
       .on(table.source, table.kind, table.externalId)
       .where(sql`${table.deletedAt} IS NULL`),

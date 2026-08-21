@@ -98,6 +98,7 @@ import type {
   ImpactItem,
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
+import type { ExternalIdKind } from "@cubby/schemas/external-id";
 import {
   type InventoryId,
   type ProductId,
@@ -106,7 +107,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import type { MergeProductsInput } from "@cubby/schemas/product";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { sumBy, uniq } from "es-toolkit";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -281,8 +282,20 @@ interface ProductMergeSummary {
   keepEntityId: ProductId;
   deletedEntityIds: ProductId[];
   externalIdsMoved: number;
-  /** Loser identifier rows dropped because the keeper already filled the slot. */
-  externalIdsDiscarded: number;
+  /**
+   * Loser identifiers whose slot the keeper already filled, kept as SECONDARY
+   * rows on the survivor rather than destroyed.
+   *
+   * Each one is a real listing — Amazon lists one item twice — so discarding it
+   * meant the next order line quoting it re-minted the duplicate the merge had
+   * just removed. That happened three times in one import session.
+   */
+  externalIdsDemoted: Array<{
+    source: string;
+    kind: ExternalIdKind;
+    externalId: string;
+  }>;
+
   inventoryMoved: number;
   /** Loser stock rows summed into a survivor entry in the same location. */
   inventoryMerged: number;
@@ -697,8 +710,7 @@ export const mergeProducts = async (
         );
       summary.externalIdsMoved = externalIdPlan.repoint.length;
     }
-    const discardedExternalIds: string[] = [];
-    let externalIdsDiscarded = 0;
+    const demotedExternalIds: string[] = [];
     for (const { into, rows } of externalIdPlan.absorb) {
       // Fill-never-overwrite, resolved across the WHOLE group: with two losers
       // on one slot, checking `into.url` per row would let the last one win.
@@ -710,9 +722,16 @@ export const mergeProducts = async (
           .set({ url: filledUrl })
           .where(eq(productExternalId.id, into.id));
       }
+      // A slot holds one PRIMARY, not one row, so a colliding loser moves onto
+      // the survivor as a secondary instead of being destroyed.
+      //
+      // Every row here necessarily carries a DIFFERENT value from `into`: the
+      // global unique on (source, kind, externalId) forbids two live rows
+      // sharing one, so "the keeper already has this exact id" cannot occur and
+      // there is no redundant case to drop.
       await tx
         .update(productExternalId)
-        .set({ deletedAt: now })
+        .set({ productId: keepId, isPrimary: false })
         .where(
           inArray(
             productExternalId.id,
@@ -720,13 +739,18 @@ export const mergeProducts = async (
           ),
         );
       for (const row of rows) {
-        discardedExternalIds.push(
-          `${row.source}/${row.kind}=${row.externalId} (kept ${into.externalId})`,
+        summary.externalIdsDemoted.push({
+          source: row.source,
+          // The column is text and predates the enum, so legacy rows can hold
+          // a value outside it — same cast `mapProductExternalIds` makes.
+          kind: row.kind as ExternalIdKind,
+          externalId: row.externalId,
+        });
+        demotedExternalIds.push(
+          `${row.source}/${row.kind}=${row.externalId} (secondary; ${into.externalId} stays primary)`,
         );
       }
-      externalIdsDiscarded += rows.length;
     }
-    summary.externalIdsDiscarded = externalIdsDiscarded;
 
     if (inventoryPlan.repoint.length > 0) {
       await tx
@@ -779,6 +803,20 @@ export const mergeProducts = async (
     // Four edges, one shape: re-point what fits, soft-delete the duplicate.
     // An absorbed row here carries no data the survivor's row doesn't already
     // have (the pair IS the row), so there is nothing to fold.
+    //
+    // Images are the exception, and it is about ORDER rather than data. The
+    // cover is whichever row sorts first under
+    // `asc(sortOrder), asc(createdAt)`, `sortOrder` defaults to 0 on every
+    // legacy row, and `foldAssociation` re-points without touching it — so a
+    // merged-in image that happened to be created earlier silently became the
+    // survivor's cover. (A barcode scan hijacked a product's cover exactly this
+    // way.) Read the survivor's own rows in their current order first, then
+    // renumber survivor-first once the fold has moved everything across.
+    const survivorImagesBefore = await tx.query.productImage.findMany({
+      where: and(eq(productImage.productId, keepId), notDeleted(productImage)),
+      columns: { id: true },
+      orderBy: [asc(productImage.sortOrder), asc(productImage.createdAt)],
+    });
     summary.imagesMoved = await foldAssociation(tx, {
       column: "productId",
       table: productImage,
@@ -793,6 +831,29 @@ export const mergeProducts = async (
       slotKey: (row) => row.imageId,
       now,
     });
+    if (summary.imagesMoved > 0 && survivorImagesBefore.length > 0) {
+      const survivorFirst = new Set(survivorImagesBefore.map((row) => row.id));
+      const afterFold = await tx.query.productImage.findMany({
+        where: and(
+          eq(productImage.productId, keepId),
+          notDeleted(productImage),
+        ),
+        columns: { id: true },
+        orderBy: [asc(productImage.sortOrder), asc(productImage.createdAt)],
+      });
+      const ordered = [
+        ...survivorImagesBefore.map((row) => row.id),
+        ...afterFold
+          .map((row) => row.id)
+          .filter((id) => !survivorFirst.has(id)),
+      ];
+      for (const [index, id] of ordered.entries()) {
+        await tx
+          .update(productImage)
+          .set({ sortOrder: index })
+          .where(eq(productImage.id, id));
+      }
+    }
     summary.projectUsesMoved = await foldAssociation(tx, {
       column: "productId",
       table: projectToolUsage,
@@ -995,8 +1056,8 @@ export const mergeProducts = async (
         ...(summary.carriedFields.length > 0
           ? { carriedOver: { from: null, to: carried } }
           : {}),
-        ...(discardedExternalIds.length > 0
-          ? { discardedExternalIds: { from: discardedExternalIds, to: null } }
+        ...(demotedExternalIds.length > 0
+          ? { demotedExternalIds: { from: null, to: demotedExternalIds } }
           : {}),
       },
     });
@@ -1033,7 +1094,7 @@ const emptySummary = (
   keepEntityId,
   deletedEntityIds: [],
   externalIdsMoved: 0,
-  externalIdsDiscarded: 0,
+  externalIdsDemoted: [],
   inventoryMoved: 0,
   inventoryMerged: 0,
   expensesMoved: 0,

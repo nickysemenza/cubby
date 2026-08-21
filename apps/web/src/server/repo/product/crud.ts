@@ -1346,6 +1346,7 @@ export const createProduct = async (
             kind: eid.kind,
             externalId: eid.externalId,
             url: storedExternalIdUrl(eid),
+            isPrimary: eid.isPrimary ?? true,
           })),
         );
       }
@@ -1618,6 +1619,8 @@ export const patchProductExternalIds = async (
       kind: ExternalIdKind;
       externalId: string;
       url?: string | null;
+      /** Omitted means primary — the value that stands for the slot. */
+      isPrimary?: boolean;
     }>;
     remove: Array<{
       source: string;
@@ -1644,17 +1647,21 @@ export const patchProductExternalIds = async (
       ),
     });
 
+    // A slot can now hold several rows, so the compare-and-swap addresses one
+    // ROW by its value rather than "whatever occupies the slot".
     for (const entry of input.remove) {
       const source = entry.source.trim().toLowerCase();
-      const current = beforeIds.find(
+      const inSlot = beforeIds.filter(
         (externalId) =>
           externalId.source === source && externalId.kind === entry.kind,
       );
-      if (!current || current.externalId !== entry.expectedExternalId) {
+      if (!inSlot.some((row) => row.externalId === entry.expectedExternalId)) {
         throw createAppError(
           "PRODUCT_EXTERNAL_ID_PRECONDITION_FAILED",
-          current
-            ? `Product external ID ${source}/${entry.kind} is ${current.externalId}, not the expected ${entry.expectedExternalId}.`
+          inSlot.length > 0
+            ? `Product external ID ${source}/${entry.kind} holds ${inSlot
+                .map((row) => row.externalId)
+                .join(", ")}, not the expected ${entry.expectedExternalId}.`
             : `Product has no live external ID in slot ${source}/${entry.kind}.`,
         );
       }
@@ -1670,23 +1677,57 @@ export const patchProductExternalIds = async (
     );
 
     for (const entry of input.remove) {
+      const source = entry.source.trim().toLowerCase();
       await tx
         .update(productExternalId)
         .set({ deletedAt: new Date() })
         .where(
           and(
             eq(productExternalId.productId, id),
-            eq(productExternalId.source, entry.source.trim().toLowerCase()),
+            eq(productExternalId.source, source),
             eq(productExternalId.kind, entry.kind),
+            eq(productExternalId.externalId, entry.expectedExternalId),
             notDeleted(productExternalId),
           ),
         );
+      // Removing the primary must not leave the slot with only secondaries and
+      // nothing standing for it. Oldest first, which is the order they were
+      // learned in.
+      const remaining = beforeIds
+        .filter(
+          (row) =>
+            row.source === source &&
+            row.kind === entry.kind &&
+            row.externalId !== entry.expectedExternalId,
+        )
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+      const removedPrimary = beforeIds.some(
+        (row) =>
+          row.source === source &&
+          row.kind === entry.kind &&
+          row.externalId === entry.expectedExternalId &&
+          row.isPrimary,
+      );
+      if (removedPrimary && remaining[0]) {
+        await tx
+          .update(productExternalId)
+          .set({ isPrimary: true })
+          .where(eq(productExternalId.id, remaining[0].id));
+      }
     }
     for (const entry of input.upsert) {
       const source = entry.source.trim().toLowerCase();
-      const liveSlot = beforeIds.find(
-        (e) => e.source === source && e.kind === entry.kind,
-      );
+      const isPrimary = entry.isPrimary ?? true;
+      // A secondary is addressed by its VALUE — there is no single occupant to
+      // overwrite, and overwriting an arbitrary one would destroy an id.
+      const liveSlot = isPrimary
+        ? beforeIds.find((e) => e.source === source && e.kind === entry.kind)
+        : beforeIds.find(
+            (e) =>
+              e.source === source &&
+              e.kind === entry.kind &&
+              e.externalId === entry.externalId,
+          );
       // A re-submission of the exact value already live in this slot is a
       // no-op: skip it so it neither bumps `updatedAt` nor (via the
       // conflict-target upsert) touches the row for no real change.
@@ -1697,6 +1738,31 @@ export const patchProductExternalIds = async (
       ) {
         continue;
       }
+      if (!isPrimary) {
+        // Secondaries have no per-slot unique to conflict on, so there is
+        // nothing to infer; the global (source, kind, externalId) unique is
+        // already enforced by `assertExternalIdsAvailable` above.
+        if (liveSlot) {
+          await tx
+            .update(productExternalId)
+            .set({
+              url: storedExternalIdUrl({ ...entry, source }),
+              isPrimary: false,
+              updatedAt: new Date(),
+            })
+            .where(eq(productExternalId.id, liveSlot.id));
+        } else {
+          await tx.insert(productExternalId).values({
+            productId: id,
+            source,
+            kind: entry.kind,
+            externalId: entry.externalId,
+            url: storedExternalIdUrl({ ...entry, source }),
+            isPrimary: false,
+          });
+        }
+        continue;
+      }
       await tx
         .insert(productExternalId)
         .values({
@@ -1705,14 +1771,18 @@ export const patchProductExternalIds = async (
           kind: entry.kind,
           externalId: entry.externalId,
           url: storedExternalIdUrl({ ...entry, source }),
+          isPrimary: true,
         })
         .onConflictDoUpdate({
+          // Must match the index predicate exactly: Postgres infers the arbiter
+          // index from this, and `deletedAt IS NULL` alone no longer describes
+          // any unique index on these columns.
           target: [
             productExternalId.productId,
             productExternalId.source,
             productExternalId.kind,
           ],
-          targetWhere: sql`${productExternalId.deletedAt} IS NULL`,
+          targetWhere: sql`${productExternalId.isPrimary} AND ${productExternalId.deletedAt} IS NULL`,
           set: {
             externalId: entry.externalId,
             url: storedExternalIdUrl({ ...entry, source }),
