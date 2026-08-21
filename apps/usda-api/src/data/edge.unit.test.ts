@@ -83,11 +83,8 @@ describe("dataTypePredicate", () => {
 });
 
 describe("dataTypePriorityCase", () => {
-  // Ranking order is load-bearing for the picker: richer reference foods must
-  // out-rank sparse branded label data (median nutrient counts in FDC are
-  // SR Legacy ~85 > Survey ~65 > Foundation ~30 > Branded ~14). Guard the
-  // monotonic order so a future edit to DATA_TYPE_PRIORITY can't silently
-  // invert it.
+  // This remains a late tie-break after textual relevance. Guard its internal
+  // order so a future edit to DATA_TYPE_PRIORITY cannot silently invert it.
   it("orders the four food types SR Legacy < Survey < Foundation < Branded, others last", () => {
     const sql = dataTypePriorityCase("s.data_type");
     const rank = (dt: string) => {
@@ -698,6 +695,22 @@ describe("lookup resolves a barcode to its newest record", () => {
 });
 
 describe("relevance ordering", () => {
+  it("puts textual fit before data type and FDC stability", async () => {
+    const { env, queries } = makeQueryRecordingEnv();
+    await createEdgeUsdaDataSource(env).listFoods({
+      nameFilter: "butter",
+      orderBy: "relevance",
+      direction: "asc",
+      pageIndex: 0,
+      pageSize: 10,
+    });
+
+    const data = queries.find((q) => q.includes("ORDER BY CASE"));
+    expect(data).toMatch(
+      /ORDER BY CASE WHEN i\.description = \?.*rank ASC, LENGTH\(i\.description\) ASC, CASE .*data_type.*i\.fdc_id ASC/s,
+    );
+  });
+
   it("ends with a unique key so paging is deterministic", async () => {
     // Tied rows otherwise come back in SQLite-defined order, which lets the
     // same row appear on two pages of a LIMIT/OFFSET scan, or on neither.
@@ -711,6 +724,6 @@ describe("relevance ordering", () => {
     });
 
     const data = queries.find((q) => q.includes("ORDER BY CASE"));
-    expect(data).toMatch(/rank ASC, i\.fdc_id ASC/);
+    expect(data).toMatch(/i\.fdc_id ASC\s+LIMIT/u);
   });
 });

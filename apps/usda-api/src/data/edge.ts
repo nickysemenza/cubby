@@ -390,13 +390,12 @@ export function createEdgeUsdaDataSource(
         values = dt.values;
       }
 
-      // Relevance ordering only means something with an FTS query. We bucket by
-      // data_type richness FIRST so the complete reference foods lead and the
-      // ~2M branded duplicates don't bury them (the long-standing picker pain).
-      // WITHIN a bucket we then prefer exact/prefix description matches and
-      // shorter descriptions (mimicking USDA FDC) BEFORE bm25 `rank` — because
-      // raw bm25 over-rewards rows that repeat the query tokens (e.g. "VANILLA
-      // BEAN COCONUTMILK, VANILLA BEAN") and sinks the literal short match.
+      // Relevance ordering only means something with an FTS query. Textual fit
+      // leads: literal/whole-word/prefix matches, then bm25 and description
+      // specificity. Data type is a late tie-break because Foundation, Survey,
+      // Branded, and SR Legacy serve different use cases; none is a universal
+      // "best" record. FDC id is only the unique terminal key required for
+      // deterministic LIMIT/OFFSET paging, never a quality or recency signal.
       // These extra `?`s bind AFTER the WHERE values and BEFORE LIMIT/OFFSET, by
       // SQL appearance order. Without a name filter, fall back to alphabetical.
       const orderValues: string[] = [];
@@ -409,7 +408,7 @@ export function createEdgeUsdaDataSource(
           // ranking keys come back in SQLite-defined order, which makes
           // LIMIT/OFFSET paging non-deterministic — the same row can appear on
           // two pages, or on neither.
-          orderClause = `${dataTypePriorityCase(`${tables.foodSearch}.data_type`)} ASC, ${matchQualityCase("i.description")} ASC, LENGTH(i.description) ASC, ${tables.foodSearch}.rank ASC, i.fdc_id ASC`;
+          orderClause = `${matchQualityCase("i.description")} ASC, ${tables.foodSearch}.rank ASC, LENGTH(i.description) ASC, ${dataTypePriorityCase(`${tables.foodSearch}.data_type`)} ASC, i.fdc_id ASC`;
         } else {
           orderClause = "i.description ASC";
         }

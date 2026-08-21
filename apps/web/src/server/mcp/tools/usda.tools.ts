@@ -17,12 +17,12 @@ export function registerUsdaTools(server: McpServer) {
   registerMcpTool(server, {
     name: "search_usda_foods",
     description:
-      "Search USDA FoodData Central by name (full-text). foundation_food & sr_legacy_food are generic whole foods; branded_food is specific products.",
+      "Use this when the user needs to choose among USDA FoodData Central records for Product nutrition mapping. The interactive picker shows the search, source type, macros, and existing Cubby links and lets the user refine before choosing. Do not invoke it when the Cubby Product already has a resolved USDA food or for a general nutrition question that does not require record selection.",
     inputSchema: {
       query: z.string().describe("Food name to search for"),
       dataType: dataTypeEnum
         .optional()
-        .describe("Optional bias toward a USDA data type"),
+        .describe("Optional exact USDA data-type filter"),
       ...mcpPaginationParams,
       pageSize: z
         .number()
@@ -45,12 +45,10 @@ export function registerUsdaTools(server: McpServer) {
           // carrying ~0 nutrients, which USDA FDC itself hides from food search.
           foodsOnly: true,
         },
-        // `relevance` is the ranked path: data-type richness (SR Legacy >
-        // Survey > Foundation > Branded), then exact/prefix description match,
-        // then bm25. Alphabetical ordering — the previous setting — put quoted
-        // branded label scans first, because `"` sorts before letters, so a
-        // search for "butter" led with three copies of one branded product and
-        // no plain butter at all.
+        // `relevance` is the ranked path: exact/whole-word/prefix description
+        // fit, then full-text relevance and specificity. Data type is only a
+        // late tie-break; the app explains the sources instead of treating one
+        // as universally best. FDC id is a stable paging key, not a quality cue.
         sort: { orderBy: "relevance", direction: "asc" },
         pagination: {
           pageIndex: (params.pageIndex as number) ?? 0,

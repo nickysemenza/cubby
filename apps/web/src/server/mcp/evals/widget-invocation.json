@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "category": "direct",
+      "prompt": "Find the right USDA food record for plain Greek yogurt so I can map its nutrition.",
+      "expectedTool": "search_usda_foods",
+      "expectedWidget": "ui://cubby/usda-picker.html"
+    },
+    {
+      "category": "indirect",
+      "prompt": "This grocery Product still needs a nutrition source, and there may be several plausible USDA matches.",
+      "expectedTool": "search_usda_foods",
+      "expectedWidget": "ui://cubby/usda-picker.html"
+    },
+    {
+      "category": "negative",
+      "prompt": "Show me the nutrition already attached to this Cubby Product.",
+      "expectedTool": null,
+      "expectedWidget": null
+    },
+    {
+      "category": "direct",
+      "prompt": "What do I need to buy for the meals planned this week?",
+      "expectedTool": "get_shopping_list",
+      "expectedWidget": "ui://cubby/shopping-list.html"
+    },
+    {
+      "category": "indirect",
+      "prompt": "I'm heading to the store. What are we short on for the dinners on our calendar?",
+      "expectedTool": "get_shopping_list",
+      "expectedWidget": "ui://cubby/shopping-list.html"
+    },
+    {
+      "category": "negative",
+      "prompt": "Add paper towels to my manual shopping list.",
+      "expectedTool": null,
+      "expectedWidget": null
+    }
+  ]
+}

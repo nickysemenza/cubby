@@ -47,14 +47,14 @@ export const MCP_APP_BUNDLES: McpAppBundle[] = [
     uri: SHOPPING_LIST_UI,
     name: "Shopping List",
     description:
-      "Checkable shopping list grouped by availability, with the per-meal breakdown behind each item.",
+      "Checkable meal-plan shopping list grouped by availability, with price coverage, omissions, and per-meal detail.",
     html: bundleFor("shopping-list"),
   },
   {
     uri: USDA_PICKER_UI,
     name: "USDA Food Picker",
     description:
-      "USDA search results as pickable cards, showing data-type richness and macros per 100g.",
+      "Refinable USDA search results with source explanations, match evidence, existing Cubby links, and macros per 100g.",
     html: bundleFor("usda-picker"),
   },
 ];

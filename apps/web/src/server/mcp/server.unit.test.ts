@@ -2945,6 +2945,37 @@ describe("MCP Apps ui:// metadata", () => {
     }
   });
 
+  it("keeps direct, indirect, and negative invocation eval cases aligned", async () => {
+    const fixture = JSON.parse(
+      readFileSync(
+        new URL("./evals/widget-invocation.json", import.meta.url),
+        "utf8",
+      ),
+    ) as {
+      cases: Array<{
+        category: "direct" | "indirect" | "negative";
+        expectedTool: string | null;
+        expectedWidget: string | null;
+      }>;
+    };
+    expect(new Set(fixture.cases.map((item) => item.category))).toEqual(
+      new Set(["direct", "indirect", "negative"]),
+    );
+
+    const { tools } = await listMcpToolCatalog();
+    for (const item of fixture.cases) {
+      if (!item.expectedTool) continue;
+      const tool = tools.find(
+        (candidate) => candidate.name === item.expectedTool,
+      );
+      expect(tool?.description).toMatch(/^Use this when/u);
+      expect(tool?.description).toContain("Do not invoke");
+      expect(
+        (tool?._meta?.ui as { resourceUri?: string } | undefined)?.resourceUri,
+      ).toBe(item.expectedWidget);
+    }
+  });
+
   it("serves each app over resources/read, ready to render", async () => {
     // The end of the chain nothing else covered: `resources/list` proving a
     // pointer resolves says nothing about what `resources/read` actually
