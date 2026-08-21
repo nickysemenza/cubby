@@ -22,6 +22,7 @@
     "check": "biome check && pnpm typecheck",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.sw.json",
     "db:ensure-extensions": "tsx scripts/ensure-db-extensions.ts",
+    "db:migrate-external-id-primary": "tsx scripts/migrate-external-id-primary.ts",
     "db:push": "pnpm run db:ensure-extensions && drizzle-kit push",
     "db:pull": "drizzle-kit pull",
     "db:rebuild": "pnpm run db:push",
