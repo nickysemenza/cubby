@@ -20,94 +20,110 @@ history is the archive. Permanent product constraints live in the
 
 ## Ranked backlog
 
-1. **Ingredient detail editing and recipe-usage repair.** Make the ingredient
+1. **Retire `Product.upc`.** Barcodes are a scalar column, so a product can hold
+   exactly one — every merge whose survivor already had a different barcode
+   destroyed the other, and 127 soft-deleted products still carry one. The
+   multi-valued half shipped (PR #829: `ProductExternalId.isPrimary`, `gtin`
+   source, `upc_a`/`ean_13`/`ean_8`/`gtin_14` kinds); this is the contract half.
+   Backfill 783 live UPCs into primary `gtin` rows, repoint every reader, then
+   drop the column and `Product_upc_key`. Deliberately deferred, not forgotten:
+   the read fan-out is ~65 files (filter manifest and sortable fields lose a
+   scalar to sort and presence-filter on, `search-document` projects `upc` into
+   `keywords` in TWO places, `semantic/text` embeds it, `detectors-product`
+   groups duplicates by it) and it ends in a `DROP COLUMN` that needs its own
+   deploy window. Rebuild search documents and embeddings after the cutover so
+   the stale `upc` keyword stops doing the finding. `UpcLookupCache`,
+   `packages/upc-contract`, and `routers/upc.ts` are the barcode LOOKUP service
+   and are not affected.
+
+2. **Ingredient detail editing and recipe-usage repair.** Make the ingredient
    detail page self-sufficient: edit `naKinds`, manage its product/USDA and
    price/unit-mapping relationships, and reparse an affected recipe line without
    opening the recipe form or ingredient workbench.
 
-2. **Recurring maintenance tasks.** Add simple every-N-weeks/months recurrence;
+3. **Recurring maintenance tasks.** Add simple every-N-weeks/months recurrence;
    completing an instance creates the next one, which naturally enters Needs
    Attention. Cover every completion path with one idempotent transactional rule,
    not a scheduler or RRULE system.
 
-3. **Manual shopping items with durable checks.** Give the shopping list
+4. **Manual shopping items with durable checks.** Give the shopping list
    server-backed item identity so ad-hoc entries such as milk or paper towels and
    checked state persist across date ranges and devices. Keep the list independent
    of inventory writes.
 
-4. **Duplicate a meal or copy last week.** Add the remaining calendar round-trip
+5. **Duplicate a meal or copy last week.** Add the remaining calendar round-trip
    shortcuts for repeating an individual meal or a prior week without rebuilding
    it by hand.
 
-5. **Actionable meal suggestions.** Link missing ingredients to their repair
+6. **Actionable meal suggestions.** Link missing ingredients to their repair
    surface, allow adding shortfalls to the shopping list, and make Suggestions
    reachable from inventory as well as navigation.
 
-6. **EPUB recipe hero photos.** Carry recipebridge's in-archive `ImageRef` through
+7. **EPUB recipe hero photos.** Carry recipebridge's in-archive `ImageRef` through
    import, materialize the bytes into R2, and attach the image to the recipe in the
    same synchronous cookbook-import request.
 
-7. **Recipe nutrition MCP projection.** Add
+8. **Recipe nutrition MCP projection.** Add
    `get_recipe_nutrition(recipeId, servings)` over the existing recipe totals and
    return explicit mapped/unmapped coverage rather than silently presenting a
    partial total as complete.
 
-8. **Ingredient coverage visibility.** Surface nutrition/cost coverage quality on
+9. **Ingredient coverage visibility.** Surface nutrition/cost coverage quality on
    the ingredient list so heavily used ingredients without a usable Product mapping
    are easy to find and repair.
 
-9. **Guided placement pass for unlocated products.** Walk a value- or
+10. **Guided placement pass for unlocated products.** Walk a value- or
    category-bounded worklist one product at a time with three answers: not tracked,
    place here, or skip. Reuse the existing location picker and immediate-write
    inventory flows.
 
-10. **Cookbook metadata editing.** Allow imported cookbook titles and other source
+11. **Cookbook metadata editing.** Allow imported cookbook titles and other source
    metadata to be corrected after import, including malformed OPF titles.
 
-11. **Variance-targeted recount pass.** Seed a recount session from the
+12. **Variance-targeted recount pass.** Seed a recount session from the
     shelf-versus-ledger disagreement worklist so the pass visits the products that
     actually disagree wherever they live.
 
-12. **Project materials and shortfalls.** Add a project-material edge with quantity,
+13. **Project materials and shortfalls.** Add a project-material edge with quantity,
     free-text unit, optional Product resolution, and durable/consumable semantics;
     derive have/need/buy through the availability engine without reservations or
     automatic inventory decrement.
 
-13. **Cookbook identity merge.** Stop same-title collisions and renamed-EPUB forks
+14. **Cookbook identity merge.** Stop same-title collisions and renamed-EPUB forks
     by giving cookbooks durable identity plus a merge/repoint path.
 
-14. **Cookbook browsing.** Add search, sorting, and a browsable/filterable subjects
+15. **Cookbook browsing.** Add search, sorting, and a browsable/filterable subjects
     facet. Partial-import repair stays on the existing Problems worklist.
 
-15. **Recurring meals.** Add a focused recurrence model for meals as its own slice,
+16. **Recurring meals.** Add a focused recurrence model for meals as its own slice,
     separate from templates and nutrition goals.
 
-16. **Meal templates.** Save reusable meal compositions without coupling them to
+17. **Meal templates.** Save reusable meal compositions without coupling them to
     recurrence.
 
-17. **Meal nutrition goals.** Let meal planning compare planned nutrition with
+18. **Meal nutrition goals.** Let meal planning compare planned nutrition with
     explicit household goals using the existing recipe nutrition totals.
 
-18. **Fix Meals table filtering.** Move filtering to the server-backed list path so
+19. **Fix Meals table filtering.** Move filtering to the server-backed list path so
     a paginated client page never presents itself as the complete filtered result.
 
-19. **Fix actions for financial duplicate findings.** Give duplicate transaction
+20. **Fix actions for financial duplicate findings.** Give duplicate transaction
     source-ref and account-alias Problems findings a safe targeted action, without
     widening the general entity-merge system to money entities.
 
-20. **Saved user-created views.** Persist named filter and sort sets using the
+21. **Saved user-created views.** Persist named filter and sort sets using the
     versioned external-state pattern, and render them alongside manifest-defined
     views without creating a second query language.
 
-21. **Server-backed table intelligence.** Extend exact facet counts and honest
+22. **Server-backed table intelligence.** Extend exact facet counts and honest
     aggregate summaries from Expenses to one justified server-paginated surface at
     a time; never analyze a partially loaded client page as the full population.
 
-22. **Return parsed lines from recipe scraping.** Fold ingredient parsing into
+23. **Return parsed lines from recipe scraping.** Fold ingredient parsing into
     `parse_scraped_recipe` so imports do not cross the WASM boundary a second time
     for the same lines.
 
-23. **Consolidate duplicate entity detail reads.** Unify `getByID` and
+24. **Consolidate duplicate entity detail reads.** Unify `getByID` and
     `getByShortcode` cache/read behavior only after preview consumers handle the
     differing missing-entity contracts explicitly.
 
