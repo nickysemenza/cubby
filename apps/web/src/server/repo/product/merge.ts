@@ -23,9 +23,11 @@
  *  | `WishCandidate.productId`     | `(wishId, productId)`          |
  *
  * All six are planned through the shared `planSlotCollisions`; what happens to
- * an *absorbed* row is per-edge and deliberately not shared (see below). The
- * remaining three — `ProductUnitMappings`, `Expense`, `Task.subjectProductId` —
- * are plain re-points.
+ * an *absorbed* row is per-edge and deliberately not shared (see below).
+ * `ProductUnitMappings` is planned through it too, for a different reason — it
+ * has NO unique index, so nothing would have refused a duplicate (see the fourth
+ * rule). The remaining two — `Expense` and `Task.subjectProductId` — are plain
+ * re-points.
  *
  * ### The two rules worth writing down
  *
@@ -90,6 +92,35 @@
  *    A and B are established to be the same part, say the kit holds 5 of it —
  *    the identical argument that makes same-location stock sum rather than
  *    collapse.
+ *
+ * ### The fourth rule: conversion edges dedupe, and the keeper's ratio wins
+ *
+ * `ProductUnitMappings` is the one slotted edge with **no unique index**, so it
+ * is here for meaning rather than for index safety: nothing in the database
+ * would have refused the duplicate, and before this fold a merge simply
+ * accumulated both rows. Merging two olive oils that each stated a density left
+ * the survivor holding `1 ml = 0.9 g` AND `1 ml = 0.92 g` — one product, two
+ * answers, and which one a valuation used came down to row order.
+ *
+ * That failure was invisible from every direction: the write said nothing, the
+ * preview reported a plain re-point, and `detect_unit_mapping_islands` — the
+ * detector that watches this area — fires when a graph splits into 2+ islands,
+ * i.e. on too FEW connections. A redundant edge adds a connection, so a bad
+ * merge made the graph look healthier and the alarm quieter.
+ *
+ * The slot is the unordered unit pair, so `1 ml = 0.92 g` and `1 g = 1.087 ml`
+ * collide. Within a slot:
+ *
+ *  - **Ratios agree** → the loser's row is a true duplicate. Soft-deleted
+ *    silently and counted in `unitMappingsDeduped`; reporting it as data loss
+ *    would be a lie.
+ *  - **Ratios disagree** → the keeper's edge stands and the loser's is
+ *    soft-deleted and named in `unitMappingsDiscarded` + the audit entry. This
+ *    follows the external-id rule ("the keeper is the row the operator chose")
+ *    rather than the inventory/kit rule of refusing outright, because dropping
+ *    a conversion edge destroys no units — the survivor is left with a
+ *    complete, self-consistent graph, which is precisely what keeping both
+ *    denies it.
  */
 
 import type { Amount } from "@cubby/schemas/codec";
@@ -161,10 +192,10 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
       "A merged product's external ids move onto the survivor; one that would collide on a (source, kind) slot the survivor already fills is discarded and named in the audit trail.",
   },
   "ProductUnitMappings.productId": {
-    code: "repoint-to-survivor",
-    effect: "repoint",
+    code: "repoint-or-discard-conflicting-conversion",
+    effect: "move-dedupe",
     description:
-      "A merged product's hand-entered unit conversions are re-pointed onto the survivor.",
+      "A merged product's hand-entered unit conversions move onto the survivor; one stating a unit pair the survivor already states is dropped — silently when the ratio agrees, and named in the audit trail when it disagrees.",
   },
   "InventoryEntry.productId": {
     code: "repoint-or-sum-same-location",
@@ -303,6 +334,27 @@ interface ProductMergeSummary {
   expensesMoved: number;
   imagesMoved: number;
   unitMappingsMoved: number;
+  /**
+   * Loser conversion edges dropped because the survivor already stated the same
+   * pair at the same ratio. A true duplicate — nothing was lost.
+   */
+  unitMappingsDeduped: number;
+  /**
+   * Loser conversion edges dropped because the survivor already answered that
+   * unit pair DIFFERENTLY.
+   *
+   * Keeping both is the actual hazard: two live densities for one product make
+   * every valuation that routes through them depend on row order, and the
+   * island detector can't see it — a redundant edge makes the graph look MORE
+   * connected, so the one signal watching this area gets quieter, not louder.
+   */
+  unitMappingsDiscarded: Array<{
+    from: string;
+    to: string;
+    keptRatio: number | null;
+    discardedRatio: number | null;
+    source: string | null;
+  }>;
   tasksMoved: number;
   /** Locations that ARE a merged-away product, re-pointed onto the survivor. */
   locationsMoved: number;
@@ -362,6 +414,115 @@ const planInventoryFold = (args: {
       .map((row) => ({ row, into })),
   );
   return { ...plan, mismatches };
+};
+
+/** One live `ProductUnitMappings` row: one conversion edge and where it came from. */
+type UnitMappingRow = {
+  id: string;
+  productId: ProductId;
+  a: Amount;
+  b: Amount;
+  source: string | null;
+};
+
+/**
+ * The unordered unit pair — `1 ml = 0.92 g` and `1 g = 1.087 ml` are the same
+ * edge stated in opposite directions, so they share a slot.
+ *
+ * Matching is LITERAL (trimmed + lowercased), not semantic: `ml↔g` and `L↔g`
+ * are a real conflict this key deliberately does not see. Resolving that needs
+ * the conversion kernel, and unit conversion does not belong in a repo
+ * transaction — the same rule that makes a colliding inventory unit refuse the
+ * merge rather than convert. Cross-scale contradictions stay the projection
+ * lane's job; the merge already marks `ProductConversionCoverage` stale, so the
+ * rebuild re-evaluates the merged graph outside this transaction. Do not
+ * "improve" this by importing WASM here.
+ */
+const unitMappingSlot = (row: { a: Amount; b: Amount }) => {
+  const x = row.a.unit.trim().toLowerCase();
+  const y = row.b.unit.trim().toLowerCase();
+  return x <= y ? `${x}\u0000${y}` : `${y}\u0000${x}`;
+};
+
+/**
+ * How much of the edge's OTHER unit sits on one `fromUnit` — so a caller picks
+ * the direction rather than inheriting whichever way the row happened to be
+ * entered.
+ *
+ * `null` for a degenerate row (a zero or non-finite side) or a unit this edge
+ * doesn't mention. A degenerate row can never be shown equal to anything, so it
+ * is treated as conflicting and reported rather than silently deduped away.
+ */
+const ratioPerUnit = (
+  row: { a: Amount; b: Amount },
+  fromUnit: string,
+): number | null => {
+  const target = fromUnit.trim().toLowerCase();
+  const [from, to] =
+    row.a.unit.trim().toLowerCase() === target
+      ? [row.a, row.b]
+      : row.b.unit.trim().toLowerCase() === target
+        ? [row.b, row.a]
+        : [null, null];
+  if (from === null || to === null || from.value === 0) return null;
+  const ratio = to.value / from.value;
+  return Number.isFinite(ratio) ? ratio : null;
+};
+
+/**
+ * The edge's ratio in one canonical direction — per 1 of the lexicographically
+ * earlier unit — so two rows in a slot compare regardless of which way round
+ * each was entered.
+ *
+ * FOR COMPARISON ONLY. It is not the number to report: the canonical direction
+ * is chosen by string order, so `1 ml = 0.92 g` canonicalizes to 1.087 (ml per
+ * gram, since "g" < "ml"). Printing that beside a `from: ml, to: g` label reads
+ * as the reciprocal of what the row says — caught by the integration test that
+ * asserted 0.92 and got 1.087. Report with {@link ratioPerUnit} in the row's own
+ * direction instead.
+ */
+const unitMappingRatio = (row: { a: Amount; b: Amount }): number | null => {
+  const x = row.a.unit.trim().toLowerCase();
+  const y = row.b.unit.trim().toLowerCase();
+  return ratioPerUnit(row, x <= y ? x : y);
+};
+
+/** Two ratios agree to within double-precision noise, compared relatively. */
+const sameRatio = (left: number | null, right: number | null): boolean =>
+  left !== null &&
+  right !== null &&
+  Math.abs(left - right) <= 1e-9 * Math.max(Math.abs(left), Math.abs(right), 1);
+
+/**
+ * The conversion-edge fold, computed without writing so the mutation and
+ * `previewMergeProducts` run one implementation — the same reason
+ * `planInventoryFold` exists.
+ *
+ * Note there is NO unique index on `ProductUnitMappings`, so unlike every other
+ * slotted edge here nothing in the database would have refused the duplicate:
+ * before this fold a merge simply accumulated both edges, and the survivor
+ * quietly held two contradictory answers for one conversion.
+ */
+export const planUnitMappingFold = (args: {
+  keeperRows: UnitMappingRow[];
+  loserRows: UnitMappingRow[];
+}) => {
+  const plan = planSlotCollisions({
+    keeperRows: args.keeperRows,
+    loserRows: args.loserRows,
+    slotKey: unitMappingSlot,
+  });
+  const absorbed = plan.absorb.flatMap(({ into, rows }) =>
+    rows.map((row) => ({
+      row,
+      into,
+      // Same pair AND same ratio is a true duplicate — dropping it loses
+      // nothing and must not be reported as data loss. A different ratio is a
+      // contradiction, and the keeper's edge is the one the operator chose.
+      redundant: sameRatio(unitMappingRatio(row), unitMappingRatio(into)),
+    })),
+  );
+  return { ...plan, absorbed };
 };
 
 /** One live `ProductComponent` row: a kit, one part it contains, how many. */
@@ -724,6 +885,7 @@ export const mergeProducts = async (
       summary.externalIdsMoved = externalIdPlan.repoint.length;
     }
     const demotedExternalIds: string[] = [];
+    const discardedUnitMappings: string[] = [];
     for (const { into, rows } of externalIdPlan.absorb) {
       // Fill-never-overwrite, resolved across the WHOLE group: with two losers
       // on one slot, checking `into.url` per row would let the last one win.
@@ -977,13 +1139,72 @@ export const mergeProducts = async (
     }
     summary.kitLinksSummed = kitLinksSummed;
 
-    summary.unitMappingsMoved = (
-      await repointEdge(tx, "product", "ProductUnitMappings.productId", {
-        from: loserIds,
-        to: keepId,
-        liveOnly: true,
-      })
-    ).length;
+    const unitMappingRows = await tx.query.productUnitMappings.findMany({
+      where: and(
+        inArray(productUnitMappings.productId, [keepId, ...loserIds]),
+        notDeleted(productUnitMappings),
+      ),
+      columns: { id: true, productId: true, a: true, b: true, source: true },
+      // `planSlotCollisions` takes the FIRST row per slot as the occupant, so
+      // without an order that is whatever the heap returns — and which of two
+      // disagreeing densities survives would vary run to run. Oldest-first
+      // makes the keeper's longest-standing edge the one that stands.
+      orderBy: [
+        asc(productUnitMappings.createdAt),
+        asc(productUnitMappings.id),
+      ],
+    });
+    const unitMappingPlan = planUnitMappingFold({
+      keeperRows: unitMappingRows.filter((row) => row.productId === keepId),
+      loserRows: unitMappingRows.filter((row) => row.productId !== keepId),
+    });
+
+    if (unitMappingPlan.repoint.length > 0) {
+      await tx
+        .update(productUnitMappings)
+        .set({ productId: keepId })
+        .where(
+          inArray(
+            productUnitMappings.id,
+            unitMappingPlan.repoint.map((row) => row.id),
+          ),
+        );
+      summary.unitMappingsMoved = unitMappingPlan.repoint.length;
+    }
+    if (unitMappingPlan.absorbed.length > 0) {
+      // Absorbed edges are DROPPED, not moved as secondaries: there is no
+      // `isPrimary` to hide behind here, and a second live row for the same
+      // pair is exactly the defect this fold exists to prevent.
+      await tx
+        .update(productUnitMappings)
+        .set({ deletedAt: now })
+        .where(
+          inArray(
+            productUnitMappings.id,
+            unitMappingPlan.absorbed.map(({ row }) => row.id),
+          ),
+        );
+      for (const { row, into, redundant } of unitMappingPlan.absorbed) {
+        if (redundant) {
+          summary.unitMappingsDeduped += 1;
+          continue;
+        }
+        // BOTH ratios are stated per 1 of the discarded row's own `from` unit,
+        // so the two numbers are directly comparable and agree with the
+        // `from`/`to` labels beside them. Reporting each in its own canonical
+        // direction would print reciprocals of what the rows say.
+        summary.unitMappingsDiscarded.push({
+          from: row.a.unit,
+          to: row.b.unit,
+          keptRatio: ratioPerUnit(into, row.a.unit),
+          discardedRatio: ratioPerUnit(row, row.a.unit),
+          source: row.source,
+        });
+        discardedUnitMappings.push(
+          `${row.a.value} ${row.a.unit} = ${row.b.value} ${row.b.unit} (dropped; ${into.a.value} ${into.a.unit} = ${into.b.value} ${into.b.unit} stays)`,
+        );
+      }
+    }
     summary.tasksMoved = (
       await repointEdge(tx, "product", "Task.subjectProductId", {
         from: loserIds,
@@ -1078,6 +1299,9 @@ export const mergeProducts = async (
         ...(demotedExternalIds.length > 0
           ? { demotedExternalIds: { from: null, to: demotedExternalIds } }
           : {}),
+        ...(discardedUnitMappings.length > 0
+          ? { discardedUnitMappings: { from: null, to: discardedUnitMappings } }
+          : {}),
       },
     });
 
@@ -1119,6 +1343,8 @@ const emptySummary = (
   expensesMoved: 0,
   imagesMoved: 0,
   unitMappingsMoved: 0,
+  unitMappingsDeduped: 0,
+  unitMappingsDiscarded: [],
   tasksMoved: 0,
   locationsMoved: 0,
   projectUsesMoved: 0,
@@ -1175,6 +1401,19 @@ export const previewMergeProducts = async (
   const inventoryPlan = planInventoryFold({
     keeperRows: inventoryRows.filter((row) => row.productId === keepId),
     loserRows: inventoryRows.filter((row) => row.productId !== keepId),
+  });
+
+  const unitMappingRows = (await dbClient.query.productUnitMappings.findMany({
+    where: and(
+      inArray(productUnitMappings.productId, [keepId, ...losers]),
+      notDeleted(productUnitMappings),
+    ),
+    columns: { id: true, productId: true, a: true, b: true, source: true },
+    orderBy: [asc(productUnitMappings.createdAt), asc(productUnitMappings.id)],
+  })) as UnitMappingRow[];
+  const unitMappingPlan = planUnitMappingFold({
+    keeperRows: unitMappingRows.filter((row) => row.productId === keepId),
+    loserRows: unitMappingRows.filter((row) => row.productId !== keepId),
   });
 
   const componentPlan = planProductComponentMerge({
@@ -1283,11 +1522,40 @@ export const previewMergeProducts = async (
       disposition: PRODUCT_MERGE_EDGE_POLICY["ProductUnitMappings.productId"],
       edgeKey: "ProductUnitMappings.productId",
       label: "unit mappings re-pointed",
-      byTargetId: await countByTarget(
-        dbClient,
-        productUnitMappings,
-        productUnitMappings.productId,
-        losers,
+      byTargetId: byProduct(unitMappingPlan.repoint),
+    }),
+    impact({
+      disposition: {
+        code: "drop-duplicate-conversion",
+        effect: "move-dedupe",
+        description:
+          "A conversion the survivor already states at the same ratio is dropped as a true duplicate.",
+      },
+      edgeKey: "ProductUnitMappings.productId",
+      label: "duplicate unit mappings dropped",
+      byTargetId: byProduct(
+        unitMappingPlan.absorbed
+          .filter(({ redundant }) => redundant)
+          .map(({ row }) => row),
+      ),
+    }),
+    // Its own row, and labelled rather than described: `ImpactRow` renders the
+    // label and never `description`, so a contradiction folded into the line
+    // above would be indistinguishable from a harmless duplicate — which is the
+    // whole thing an operator needs to see before confirming.
+    impact({
+      disposition: {
+        code: "discard-conflicting-conversion",
+        effect: "move-dedupe",
+        description:
+          "The survivor already answers this unit pair with a DIFFERENT ratio. Its edge stands; the merged product's is dropped and named in the audit trail.",
+      },
+      edgeKey: "ProductUnitMappings.productId",
+      label: "conflicting unit mappings discarded (survivor's ratio wins)",
+      byTargetId: byProduct(
+        unitMappingPlan.absorbed
+          .filter(({ redundant }) => !redundant)
+          .map(({ row }) => row),
       ),
     }),
     impact({

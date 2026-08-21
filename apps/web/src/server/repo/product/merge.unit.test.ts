@@ -1,6 +1,10 @@
 import { type ProductId, unsafeProductId } from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
-import { findMergeComponentCycle, planProductComponentMerge } from "./merge";
+import {
+  findMergeComponentCycle,
+  planProductComponentMerge,
+  planUnitMappingFold,
+} from "./merge";
 
 /**
  * The kit-graph half of `mergeProducts` is decidable from the edge set alone,
@@ -189,5 +193,128 @@ describe("planProductComponentMerge", () => {
     expect(plan.kit.repoint).toEqual([]);
     expect(plan.kit.dedupe).toEqual([]);
     expect(plan.part.repoint).toEqual([]);
+  });
+});
+
+/**
+ * The conversion-edge fold is pure, and its inputs are awkward to seed through
+ * a real merge (two products each already holding a density), so it is tested
+ * directly — the same reason the kit-graph planner is exported.
+ *
+ * `ProductUnitMappings` carries no unique index, so before this fold nothing
+ * refused the duplicate: a merge simply left the survivor holding two answers
+ * for one conversion, and which one a valuation used came down to row order.
+ */
+const mapping = (
+  id: string,
+  productId: ProductId,
+  a: [number, string],
+  b: [number, string],
+  source: string | null = null,
+) => ({
+  id,
+  productId,
+  a: { value: a[0], unit: a[1] },
+  b: { value: b[0], unit: b[1] },
+  source,
+});
+
+describe("planUnitMappingFold", () => {
+  it("re-points an edge whose unit pair the survivor does not state", () => {
+    const plan = planUnitMappingFold({
+      keeperRows: [mapping("keep", KIT, [1, "ml"], [0.92, "g"])],
+      loserRows: [mapping("lose", OTHER, [1, "whole"], [750, "ml"])],
+    });
+    expect(plan.repoint.map((r) => r.id)).toEqual(["lose"]);
+    expect(plan.absorbed).toEqual([]);
+  });
+
+  it("dedupes an identical edge without reporting it as a discard", () => {
+    const plan = planUnitMappingFold({
+      keeperRows: [mapping("keep", KIT, [1, "ml"], [0.92, "g"])],
+      loserRows: [mapping("lose", OTHER, [1, "ml"], [0.92, "g"])],
+    });
+    expect(plan.repoint).toEqual([]);
+    expect(plan.absorbed).toHaveLength(1);
+    expect(plan.absorbed[0]?.redundant).toBe(true);
+  });
+
+  it("treats the same edge stated in reverse as one slot", () => {
+    // `1 g = 1.087 ml` is `1 ml = 0.92 g` read the other way; an ordered
+    // (a.unit, b.unit) key would miss it and leave the survivor holding both.
+    const plan = planUnitMappingFold({
+      keeperRows: [mapping("keep", KIT, [1, "ml"], [0.92, "g"])],
+      loserRows: [mapping("lose", OTHER, [1, "g"], [1 / 0.92, "ml"])],
+    });
+    expect(plan.repoint).toEqual([]);
+    expect(plan.absorbed[0]?.redundant).toBe(true);
+  });
+
+  it("dedupes the same ratio expressed at a different scale", () => {
+    const plan = planUnitMappingFold({
+      keeperRows: [mapping("keep", KIT, [1, "ml"], [0.92, "g"])],
+      loserRows: [mapping("lose", OTHER, [1000, "ml"], [920, "g"])],
+    });
+    expect(plan.absorbed[0]?.redundant).toBe(true);
+  });
+
+  it("flags a disagreeing ratio as a conflict, the keeper's edge standing", () => {
+    // The olive oils: 0.9 vs 0.92 g/ml. Keeping both is the defect.
+    const plan = planUnitMappingFold({
+      keeperRows: [mapping("keep", KIT, [1, "ml"], [0.92, "g"])],
+      loserRows: [mapping("lose", OTHER, [1, "ml"], [0.9, "g"], "unk")],
+    });
+    expect(plan.repoint).toEqual([]);
+    expect(plan.absorbed).toHaveLength(1);
+    expect(plan.absorbed[0]?.redundant).toBe(false);
+    expect(plan.absorbed[0]?.into.id).toBe("keep");
+    expect(plan.absorbed[0]?.row.id).toBe("lose");
+  });
+
+  it("normalizes unit case and whitespace into one slot", () => {
+    const plan = planUnitMappingFold({
+      keeperRows: [mapping("keep", KIT, [1, "ML"], [0.92, " g "])],
+      loserRows: [mapping("lose", OTHER, [1, "ml"], [0.9, "g"])],
+    });
+    expect(plan.absorbed).toHaveLength(1);
+    expect(plan.absorbed[0]?.redundant).toBe(false);
+  });
+
+  it("never silently dedupes a degenerate zero-valued edge", () => {
+    // Its ratio is undefined, so it cannot be shown equal to anything.
+    // Reporting is the safe direction; dropping it quietly would hide a bad row.
+    const plan = planUnitMappingFold({
+      keeperRows: [mapping("keep", KIT, [1, "ml"], [0.92, "g"])],
+      loserRows: [mapping("lose", OTHER, [0, "ml"], [0, "g"])],
+    });
+    expect(plan.absorbed[0]?.redundant).toBe(false);
+  });
+
+  it("leaves unrelated edges alone", () => {
+    const plan = planUnitMappingFold({
+      keeperRows: [mapping("keep", KIT, [1, "ml"], [0.92, "g"])],
+      loserRows: [
+        mapping("a", OTHER, [1, "each"], [32, "oz"]),
+        mapping("b", OTHER, [1, "cup"], [237, "ml"]),
+      ],
+    });
+    expect(plan.repoint.map((r) => r.id)).toEqual(["a", "b"]);
+    expect(plan.absorbed).toEqual([]);
+  });
+
+  it("folds two losers colliding with each other, not just with the keeper", () => {
+    // No keeper edge for this pair, so the first loser claims the slot and the
+    // second absorbs into it — otherwise the survivor still ends up with both.
+    const plan = planUnitMappingFold({
+      keeperRows: [],
+      loserRows: [
+        mapping("first", OTHER, [1, "ml"], [0.92, "g"]),
+        mapping("second", OTHER, [1, "ml"], [0.9, "g"]),
+      ],
+    });
+    expect(plan.repoint.map((r) => r.id)).toEqual(["first"]);
+    expect(plan.absorbed).toHaveLength(1);
+    expect(plan.absorbed[0]?.row.id).toBe("second");
+    expect(plan.absorbed[0]?.redundant).toBe(false);
   });
 });

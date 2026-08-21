@@ -13,6 +13,7 @@ import {
   product,
   productExternalId,
   productImage,
+  productUnitMappings,
 } from "~/server/db/schema";
 import {
   getDb,
@@ -103,6 +104,16 @@ describe("mergeProducts", () => {
         notDeleted(inventoryEntry),
       ),
       columns: { id: true, locationId: true, amount: true },
+    });
+
+  const liveUnitMappings = (productId: ProductId) =>
+    getDb(ctx.db).query.productUnitMappings.findMany({
+      where: and(
+        eq(productUnitMappings.productId, productId),
+        notDeleted(productUnitMappings),
+      ),
+      columns: { a: true, b: true, source: true },
+      orderBy: [asc(productUnitMappings.createdAt)],
     });
 
   it("soft-deletes the losers and folds their identity into the survivor", async () => {
@@ -731,6 +742,136 @@ describe("mergeProducts", () => {
         columns: { stockTracked: true },
       });
       expect(survivor?.stockTracked).toBe(false);
+    });
+  });
+
+  /**
+   * `ProductUnitMappings` has no unique index, so nothing in the database would
+   * have refused these — the write path is the only place the duplicate can be
+   * stopped, which is exactly why these are integration rather than unit tests.
+   */
+  describe("conversion edges", () => {
+    it("discards a conflicting density and leaves the survivor one answer", async () => {
+      // The two olive oils: same pair, different ratio.
+      const keeper = await seedProduct("Olive Oil, CA", {
+        model: "OO-KEEP",
+        unitMappings: [
+          {
+            a: { value: 1, unit: "ml" },
+            b: { value: 0.92, unit: "g" },
+            source: null,
+          },
+        ],
+      });
+      const loser = await seedProduct("olive oil", {
+        model: "OO-LOSE",
+        unitMappings: [
+          {
+            a: { value: 1, unit: "ml" },
+            b: { value: 0.9, unit: "g" },
+            source: "unk",
+          },
+        ],
+      });
+
+      const preview = await previewMergeProducts(ctx.db, {
+        keepId: keeper.id,
+        mergeIds: [loser.id],
+      });
+      // The point of the preview change: the conflict is visible BEFORE
+      // confirming, not only in the audit trail afterwards.
+      expect(
+        preview.changes.find(
+          (change) => change.code === "discard-conflicting-conversion",
+        )?.total,
+      ).toBe(1);
+
+      const summary = await mergeProducts(
+        ctx.db,
+        { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
+        TEST_ACTOR,
+      );
+
+      expect(summary.unitMappingsDeduped).toBe(0);
+      expect(summary.unitMappingsDiscarded).toHaveLength(1);
+      expect(summary.unitMappingsDiscarded[0]).toMatchObject({
+        from: "ml",
+        to: "g",
+        keptRatio: 0.92,
+        discardedRatio: 0.9,
+        source: "unk",
+      });
+
+      // The survivor holds ONE density. Holding both is the defect.
+      const survivorMappings = await liveUnitMappings(keeper.id);
+      expect(survivorMappings).toHaveLength(1);
+      expect(survivorMappings[0]?.b.value).toBe(0.92);
+    });
+
+    it("dedupes an identical edge silently, not as a discard", async () => {
+      const keeper = await seedProduct("Canola Oil A", {
+        model: "CO-KEEP",
+        unitMappings: [
+          {
+            a: { value: 1, unit: "ml" },
+            b: { value: 0.92, unit: "g" },
+            source: null,
+          },
+        ],
+      });
+      const loser = await seedProduct("Canola Oil B", {
+        model: "CO-LOSE",
+        unitMappings: [
+          {
+            a: { value: 1, unit: "ml" },
+            b: { value: 0.92, unit: "g" },
+            source: null,
+          },
+        ],
+      });
+
+      const summary = await mergeProducts(
+        ctx.db,
+        { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
+        TEST_ACTOR,
+      );
+
+      expect(summary.unitMappingsDeduped).toBe(1);
+      expect(summary.unitMappingsDiscarded).toEqual([]);
+      expect(await liveUnitMappings(keeper.id)).toHaveLength(1);
+    });
+
+    it("moves an edge the survivor does not state", async () => {
+      const keeper = await seedProduct("Bagged Onions, organic", {
+        model: "ON-KEEP",
+        unitMappings: [
+          {
+            a: { value: 1, unit: "ml" },
+            b: { value: 0.92, unit: "g" },
+            source: null,
+          },
+        ],
+      });
+      const loser = await seedProduct("Bagged Onions, 32 oz", {
+        model: "ON-LOSE",
+        unitMappings: [
+          {
+            a: { value: 1, unit: "each" },
+            b: { value: 32, unit: "oz" },
+            source: null,
+          },
+        ],
+      });
+
+      const summary = await mergeProducts(
+        ctx.db,
+        { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
+        TEST_ACTOR,
+      );
+
+      expect(summary.unitMappingsMoved).toBe(1);
+      expect(summary.unitMappingsDiscarded).toEqual([]);
+      expect(await liveUnitMappings(keeper.id)).toHaveLength(2);
     });
   });
 });

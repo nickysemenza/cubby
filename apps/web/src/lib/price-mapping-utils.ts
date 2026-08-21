@@ -87,3 +87,70 @@ export const computeInventoryValuations = (
   if (results.isErr()) return amounts.map(() => null);
   return results.value.map((m) => (m.ok ? toStorableMoney(m.value) : null));
 };
+
+/**
+ * Candidate bases for a comparable unit price, in preference order.
+ *
+ * The kind is NOT probed first. Every basis is offered to the graph in one call
+ * and whichever resolves wins — the graph's actual capability is the honest
+ * test, and a category guess would get a 32 oz bag of onions wrong: it is
+ * bought by the `each` and still wants `$/oz`. Weight leads for exactly that
+ * reason, `each` trails as the fallback for something genuinely countable.
+ */
+const PER_UNIT_BASES = ["oz", "fl oz", "each"] as const;
+const GRAM_BASIS = "g";
+
+export type PerUnitPrices = {
+  /** The most natural basis this product's graph can actually reach. */
+  natural: { unit: string; price: number } | null;
+  /**
+   * Price per gram, whenever the graph reaches mass. Direct for a weight
+   * product; for a volume one it resolves only through a density edge — and its
+   * absence is itself the signal that recording a density is worth doing.
+   */
+  perGram: number | null;
+};
+
+/**
+ * The comparable unit price — what `$2.73 for 32 oz` is actually worth per
+ * ounce, so an organic bag and a conventional one can be read side by side.
+ *
+ * Price is not a parameter for the same reason it isn't in
+ * {@link computeInventoryValuation}: `1 each = $price` is already synthesized
+ * into the graph, so asking for "1 oz in money" is the whole computation.
+ *
+ * Values are returned RAW, deliberately unrounded. `toStorableMoney`'s 2-decimal
+ * truncation is right for a valuation column and wrong here — onions at
+ * $0.0031/g would truncate to $0.00 and read as free. Rounding is the display
+ * layer's job, at a precision it picks per magnitude.
+ */
+export const computePerUnitPrices = (
+  mappings: readonly UnitMapping[],
+): PerUnitPrices => {
+  if (mappings.length === 0) return { natural: null, perGram: null };
+  const probes: Amount[] = [
+    ...PER_UNIT_BASES.map((unit) => ({ value: 1, unit })),
+    { value: 1, unit: GRAM_BASIS },
+  ];
+  const results = convertAmountsToPrice(probes, mappings);
+  if (results.isErr()) return { natural: null, perGram: null };
+
+  // Non-finite is reachable from a real graph — a $0 product synthesizes
+  // `1 each = $0`, whose reverse edge is 1/0 — so it must read as "no price",
+  // never as a rendered Infinity.
+  const priceAt = (index: number): number | null => {
+    const measure = results.value[index];
+    if (!measure?.ok || !Number.isFinite(measure.value)) return null;
+    return measure.value;
+  };
+
+  let natural: PerUnitPrices["natural"] = null;
+  for (const [index, unit] of PER_UNIT_BASES.entries()) {
+    const price = priceAt(index);
+    if (price !== null) {
+      natural = { unit, price };
+      break;
+    }
+  }
+  return { natural, perGram: priceAt(PER_UNIT_BASES.length) };
+};

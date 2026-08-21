@@ -14,6 +14,7 @@ import type { BaseKind } from "~/lib/conversion-coverage";
 import { wasm } from "~/lib/wasm";
 import { ConversionCapabilities } from "./ConversionCapabilities";
 import { ServingAliasField } from "./serving-alias-field";
+import { UnitPriceLine } from "./unit-price-line";
 import { UnitMappingsTable } from "./unitmappingstable";
 
 // d3-force is heavy and only matters when the graph is actually expanded, so
@@ -89,6 +90,8 @@ export function UnitCoveragePanel({
 
   return (
     <Stack gap="sm">
+      <UnitPriceLine mappings={mappings} />
+
       {showCoverage && (
         <ConversionCapabilities
           mappings={mappings}
