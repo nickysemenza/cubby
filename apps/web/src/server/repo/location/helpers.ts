@@ -23,7 +23,7 @@ import {
   mapImages,
   mapRelation,
   parseInventoryAmount,
-  type RowWithOptionalAliases,
+  type RowWithOptionalAliasesAndTags,
 } from "~/server/repo/database-helpers";
 import { requireLoadedProductPricing } from "~/server/repo/inventory/mappers";
 import { parseLocationType } from "~/server/repo/location/parse-type";
@@ -41,7 +41,7 @@ import type {
  * Handles shortcode branding, type parsing, and image extraction.
  */
 export const dbLocationToAPI = (
-  locationData: RowWithOptionalAliases<typeof location.$inferSelect> & {
+  locationData: RowWithOptionalAliasesAndTags<typeof location.$inferSelect> & {
     product?: LocationIdentityProductRow | null;
     images?: Array<{
       image: MappableImageRecord;
@@ -55,6 +55,7 @@ export const dbLocationToAPI = (
     aiDescription: locationData.aiDescription ?? null,
     name: locationData.name,
     aliases: locationData.aliases ?? [],
+    tags: locationData.tags ?? [],
     type: parseLocationType(locationData.type, {
       id: locationData.id,
       name: locationData.name,
@@ -67,7 +68,7 @@ export const dbLocationToAPI = (
 };
 
 const dbLocationToListRefShape = (
-  locationData: RowWithOptionalAliases<typeof location.$inferSelect>,
+  locationData: RowWithOptionalAliasesAndTags<typeof location.$inferSelect>,
 ): LocationListRefOut => ({
   id: unsafeLocationShortcode(locationData.shortcode),
   name: locationData.name,
@@ -135,6 +136,7 @@ export const buildLocationWithChildren = (
   return {
     name: x.name,
     aliases: x.aliases ?? [],
+    tags: x.tags ?? [],
     id: unsafeLocationShortcode(x.shortcode),
     lastBulkInventory: x.lastBulkInventory,
     aiDescription: x.aiDescription ?? null,

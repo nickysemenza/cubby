@@ -252,6 +252,7 @@ const createLocationTx = async (
     const newLocation = await insertWithShortcode(tx, "location", {
       name: data.name,
       aliases: data.aliases,
+      tags: data.tags ?? [],
       // Form factor is a fact about the SKU, so a linked location stores no
       // type of its own.
       type: productId ? null : (data.type ?? null),
@@ -402,6 +403,7 @@ export const updateLocation = async (
     const updateValues = buildPartialUpdateValues({
       name: data.name,
       aliases: data.aliases,
+      tags: data.tags,
       // Linking a product clears the now-redundant type; the two are
       // alternatives, never companions.
       type: productId ? null : data.type,
@@ -453,6 +455,7 @@ export const updateLocation = async (
       const changes = computeChanges(before, updated, [
         "name",
         "aliases",
+        "tags",
         "type",
         "parentId",
       ]);

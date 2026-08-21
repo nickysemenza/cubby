@@ -23,6 +23,15 @@ export type RowWithOptionalAliases<T extends { aliases: string[] }> = Omit<
   dataExceptions?: T extends { dataExceptions: infer E } ? E : never;
 };
 
+/** Location-row compatibility shape while legacy fixtures omit the new tags column. */
+export type RowWithOptionalAliasesAndTags<
+  T extends { aliases: string[]; tags: string[] },
+> = Omit<T, "aliases" | "tags" | "dataExceptions"> & {
+  aliases?: string[];
+  tags?: string[];
+  dataExceptions?: T extends { dataExceptions: infer E } ? E : never;
+};
+
 export type MappableImageRecord = {
   id: string;
   url: string;

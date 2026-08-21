@@ -27,6 +27,7 @@ import type {
   product,
   productUnitMappings,
 } from "~/server/db/schema";
+import type { RowWithOptionalAliasesAndTags } from "~/server/repo/database-helpers";
 import {
   isNotDeleted,
   type MappableImageRecord,
@@ -224,7 +225,7 @@ const dbProductIngredientToShape = (
 });
 
 const dbLocationToProductListInventoryShape = (
-  locationData: RowWithOptionalAliases<typeof location.$inferSelect>,
+  locationData: RowWithOptionalAliasesAndTags<typeof location.$inferSelect>,
 ) => ({
   id: unsafeLocationShortcode(locationData.shortcode),
   name: locationData.name,

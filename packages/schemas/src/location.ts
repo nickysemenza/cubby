@@ -261,6 +261,10 @@ export const locationOutFields = {
     .array(z.string())
     .default([])
     .describe("Alternate names for this location (searched + embedded)"),
+  tags: z
+    .array(z.string())
+    .optional()
+    .describe("Namespaced Collection tags assigned directly to this location"),
   /**
    * Null when `product` is set: form factor is a fact about the SKU, so a
    * linked location does not restate it. Read the two together — the product
@@ -482,6 +486,10 @@ const locationCreateShape = {
     .describe(
       "Alternate names for this location — searched alongside the name. Replaces the existing list when provided.",
     ),
+  tags: z
+    .array(z.string())
+    .optional()
+    .describe("Tags assigned directly to this location"),
   /**
    * Omit when `productId` is set — the SKU carries the form factor and a
    * linked location stores no type of its own.

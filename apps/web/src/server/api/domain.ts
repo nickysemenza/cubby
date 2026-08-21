@@ -3,6 +3,7 @@ import { aiRouter } from "./routers/ai";
 import { auditLogRouter } from "./routers/audit-log";
 import { backgroundJobsRouter } from "./routers/background-jobs";
 import { calendarRouter } from "./routers/calendar";
+import { collectionRouter } from "./routers/collection";
 import { dashboardRouter } from "./routers/dashboard";
 import { dataQualityRouter } from "./routers/data-quality";
 import { entityIntegrityRouter } from "./routers/entity-integrity";
@@ -37,6 +38,7 @@ export const domainRouterRecord = {
   ai: aiRouter,
   backgroundJobs: backgroundJobsRouter,
   calendar: calendarRouter,
+  collection: collectionRouter,
   dashboard: dashboardRouter,
   dataQuality: dataQualityRouter,
   recipe: recipeRouter,

@@ -4,6 +4,7 @@ import type {
   ProductWithFoodOut,
 } from "@cubby/schemas/product";
 import { isNonFoodCategory } from "@cubby/shared";
+import { isCollectionTag } from "@cubby/shared/collection-tag";
 import {
   Apple,
   Boxes,
@@ -241,7 +242,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     // Custom section: Fits With — the other products sharing a tag. Sidebar
     // zone and tags-only: on an untagged product it would be a permanently
     // empty panel, and most of the catalog is untagged food.
-    ...(product.tags.length > 0
+    ...(product.tags.some((tag) => !isCollectionTag(tag))
       ? [
           {
             title: "Fits With",

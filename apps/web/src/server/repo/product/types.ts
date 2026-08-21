@@ -14,6 +14,7 @@ import type {
 import type {
   MappableImageRecord,
   RowWithOptionalAliases,
+  RowWithOptionalAliasesAndTags,
 } from "~/server/repo/database-helpers";
 import type { LocationIdentityProductRow } from "~/server/repo/location/internal-types";
 import type { MappableProductExternalId } from "./external-id-types";
@@ -21,7 +22,9 @@ import type { ProductPricing } from "./pricing";
 import type { QuantityLedger } from "./quantity-ledger";
 
 type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect>;
-type LocationSelect = RowWithOptionalAliases<typeof location.$inferSelect>;
+type LocationSelect = RowWithOptionalAliasesAndTags<
+  typeof location.$inferSelect
+>;
 
 /**
  * Type for deeply nested product query results.

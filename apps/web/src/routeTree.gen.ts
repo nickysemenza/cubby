@@ -36,6 +36,9 @@ import { Route as DocsSectionRouteImport } from './routes/docs.$section'
 import { Route as OauthConsentRouteImport } from './routes/oauth.consent'
 import { Route as AuthenticatedAccountAccountViewRouteImport } from './routes/_authenticated/account.$accountView'
 import { Route as AuthenticatedAccountConnectedAppsRouteImport } from './routes/_authenticated/account.connected-apps'
+import { Route as AuthenticatedCollectionsIndexRouteImport } from './routes/_authenticated/collections.index'
+import { Route as AuthenticatedCollectionsCollectionRouteImport } from './routes/_authenticated/collections.$collection'
+import { Route as AuthenticatedCollectionsAssignmentsRouteImport } from './routes/_authenticated/collections.assignments'
 import { Route as AuthenticatedCookbooksIndexRouteImport } from './routes/_authenticated/cookbooks.index'
 import { Route as AuthenticatedCookbooksShortcodeRouteImport } from './routes/_authenticated/cookbooks.$shortcode'
 import { Route as AuthenticatedExpensesIndexRouteImport } from './routes/_authenticated/expenses.index'
@@ -239,6 +242,24 @@ const AuthenticatedAccountConnectedAppsRoute =
   AuthenticatedAccountConnectedAppsRouteImport.update({
     id: '/account/connected-apps',
     path: '/account/connected-apps',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedCollectionsIndexRoute =
+  AuthenticatedCollectionsIndexRouteImport.update({
+    id: '/collections/',
+    path: '/collections/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedCollectionsCollectionRoute =
+  AuthenticatedCollectionsCollectionRouteImport.update({
+    id: '/collections/$collection',
+    path: '/collections/$collection',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedCollectionsAssignmentsRoute =
+  AuthenticatedCollectionsAssignmentsRouteImport.update({
+    id: '/collections/assignments',
+    path: '/collections/assignments',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedCookbooksIndexRoute =
@@ -637,6 +658,8 @@ export interface FileRoutesByFullPath {
   '/docs/': typeof DocsIndexRoute
   '/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
   '/account/connected-apps': typeof AuthenticatedAccountConnectedAppsRoute
+  '/collections/$collection': typeof AuthenticatedCollectionsCollectionRoute
+  '/collections/assignments': typeof AuthenticatedCollectionsAssignmentsRoute
   '/cookbooks/$shortcode': typeof AuthenticatedCookbooksShortcodeRoute
   '/expenses/$shortcode': typeof AuthenticatedExpensesShortcodeRoute
   '/financial-accounts/$shortcode': typeof AuthenticatedFinancialAccountsShortcodeRoute
@@ -675,6 +698,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
+  '/collections/': typeof AuthenticatedCollectionsIndexRoute
   '/cookbooks/': typeof AuthenticatedCookbooksIndexRoute
   '/expenses/': typeof AuthenticatedExpensesIndexRoute
   '/financial-accounts/': typeof AuthenticatedFinancialAccountsIndexRoute
@@ -727,6 +751,8 @@ export interface FileRoutesByTo {
   '/docs': typeof DocsIndexRoute
   '/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
   '/account/connected-apps': typeof AuthenticatedAccountConnectedAppsRoute
+  '/collections/$collection': typeof AuthenticatedCollectionsCollectionRoute
+  '/collections/assignments': typeof AuthenticatedCollectionsAssignmentsRoute
   '/cookbooks/$shortcode': typeof AuthenticatedCookbooksShortcodeRoute
   '/expenses/$shortcode': typeof AuthenticatedExpensesShortcodeRoute
   '/financial-accounts/$shortcode': typeof AuthenticatedFinancialAccountsShortcodeRoute
@@ -765,6 +791,7 @@ export interface FileRoutesByTo {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
+  '/collections': typeof AuthenticatedCollectionsIndexRoute
   '/cookbooks': typeof AuthenticatedCookbooksIndexRoute
   '/expenses': typeof AuthenticatedExpensesIndexRoute
   '/financial-accounts': typeof AuthenticatedFinancialAccountsIndexRoute
@@ -820,6 +847,8 @@ export interface FileRoutesById {
   '/docs/': typeof DocsIndexRoute
   '/_authenticated/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
   '/_authenticated/account/connected-apps': typeof AuthenticatedAccountConnectedAppsRoute
+  '/_authenticated/collections/$collection': typeof AuthenticatedCollectionsCollectionRoute
+  '/_authenticated/collections/assignments': typeof AuthenticatedCollectionsAssignmentsRoute
   '/_authenticated/cookbooks/$shortcode': typeof AuthenticatedCookbooksShortcodeRoute
   '/_authenticated/expenses/$shortcode': typeof AuthenticatedExpensesShortcodeRoute
   '/_authenticated/financial-accounts/$shortcode': typeof AuthenticatedFinancialAccountsShortcodeRoute
@@ -858,6 +887,7 @@ export interface FileRoutesById {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
+  '/_authenticated/collections/': typeof AuthenticatedCollectionsIndexRoute
   '/_authenticated/cookbooks/': typeof AuthenticatedCookbooksIndexRoute
   '/_authenticated/expenses/': typeof AuthenticatedExpensesIndexRoute
   '/_authenticated/financial-accounts/': typeof AuthenticatedFinancialAccountsIndexRoute
@@ -913,6 +943,8 @@ export interface FileRouteTypes {
     | '/docs/'
     | '/account/$accountView'
     | '/account/connected-apps'
+    | '/collections/$collection'
+    | '/collections/assignments'
     | '/cookbooks/$shortcode'
     | '/expenses/$shortcode'
     | '/financial-accounts/$shortcode'
@@ -951,6 +983,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/debug/timing'
     | '/api/trpc/$'
+    | '/collections/'
     | '/cookbooks/'
     | '/expenses/'
     | '/financial-accounts/'
@@ -1003,6 +1036,8 @@ export interface FileRouteTypes {
     | '/docs'
     | '/account/$accountView'
     | '/account/connected-apps'
+    | '/collections/$collection'
+    | '/collections/assignments'
     | '/cookbooks/$shortcode'
     | '/expenses/$shortcode'
     | '/financial-accounts/$shortcode'
@@ -1041,6 +1076,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/debug/timing'
     | '/api/trpc/$'
+    | '/collections'
     | '/cookbooks'
     | '/expenses'
     | '/financial-accounts'
@@ -1095,6 +1131,8 @@ export interface FileRouteTypes {
     | '/docs/'
     | '/_authenticated/account/$accountView'
     | '/_authenticated/account/connected-apps'
+    | '/_authenticated/collections/$collection'
+    | '/_authenticated/collections/assignments'
     | '/_authenticated/cookbooks/$shortcode'
     | '/_authenticated/expenses/$shortcode'
     | '/_authenticated/financial-accounts/$shortcode'
@@ -1133,6 +1171,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/debug/timing'
     | '/api/trpc/$'
+    | '/_authenticated/collections/'
     | '/_authenticated/cookbooks/'
     | '/_authenticated/expenses/'
     | '/_authenticated/financial-accounts/'
@@ -1365,6 +1404,27 @@ declare module '@tanstack/react-router' {
       path: '/account/connected-apps'
       fullPath: '/account/connected-apps'
       preLoaderRoute: typeof AuthenticatedAccountConnectedAppsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/collections/': {
+      id: '/_authenticated/collections/'
+      path: '/collections'
+      fullPath: '/collections/'
+      preLoaderRoute: typeof AuthenticatedCollectionsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/collections/$collection': {
+      id: '/_authenticated/collections/$collection'
+      path: '/collections/$collection'
+      fullPath: '/collections/$collection'
+      preLoaderRoute: typeof AuthenticatedCollectionsCollectionRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/collections/assignments': {
+      id: '/_authenticated/collections/assignments'
+      path: '/collections/assignments'
+      fullPath: '/collections/assignments'
+      preLoaderRoute: typeof AuthenticatedCollectionsAssignmentsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/cookbooks/': {
@@ -1828,6 +1888,8 @@ interface AuthenticatedRouteChildren {
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedAccountAccountViewRoute: typeof AuthenticatedAccountAccountViewRoute
   AuthenticatedAccountConnectedAppsRoute: typeof AuthenticatedAccountConnectedAppsRoute
+  AuthenticatedCollectionsCollectionRoute: typeof AuthenticatedCollectionsCollectionRoute
+  AuthenticatedCollectionsAssignmentsRoute: typeof AuthenticatedCollectionsAssignmentsRoute
   AuthenticatedCookbooksShortcodeRoute: typeof AuthenticatedCookbooksShortcodeRoute
   AuthenticatedExpensesShortcodeRoute: typeof AuthenticatedExpensesShortcodeRoute
   AuthenticatedFinancialAccountsShortcodeRoute: typeof AuthenticatedFinancialAccountsShortcodeRoute
@@ -1863,6 +1925,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedUsdaIdRoute: typeof AuthenticatedUsdaIdRoute
   AuthenticatedVendorsShortcodeRoute: typeof AuthenticatedVendorsShortcodeRoute
   AuthenticatedWishesShortcodeRoute: typeof AuthenticatedWishesShortcodeRoute
+  AuthenticatedCollectionsIndexRoute: typeof AuthenticatedCollectionsIndexRoute
   AuthenticatedCookbooksIndexRoute: typeof AuthenticatedCookbooksIndexRoute
   AuthenticatedExpensesIndexRoute: typeof AuthenticatedExpensesIndexRoute
   AuthenticatedFinancialAccountsIndexRoute: typeof AuthenticatedFinancialAccountsIndexRoute
@@ -1905,6 +1968,10 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAccountAccountViewRoute: AuthenticatedAccountAccountViewRoute,
   AuthenticatedAccountConnectedAppsRoute:
     AuthenticatedAccountConnectedAppsRoute,
+  AuthenticatedCollectionsCollectionRoute:
+    AuthenticatedCollectionsCollectionRoute,
+  AuthenticatedCollectionsAssignmentsRoute:
+    AuthenticatedCollectionsAssignmentsRoute,
   AuthenticatedCookbooksShortcodeRoute: AuthenticatedCookbooksShortcodeRoute,
   AuthenticatedExpensesShortcodeRoute: AuthenticatedExpensesShortcodeRoute,
   AuthenticatedFinancialAccountsShortcodeRoute:
@@ -1945,6 +2012,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedUsdaIdRoute: AuthenticatedUsdaIdRoute,
   AuthenticatedVendorsShortcodeRoute: AuthenticatedVendorsShortcodeRoute,
   AuthenticatedWishesShortcodeRoute: AuthenticatedWishesShortcodeRoute,
+  AuthenticatedCollectionsIndexRoute: AuthenticatedCollectionsIndexRoute,
   AuthenticatedCookbooksIndexRoute: AuthenticatedCookbooksIndexRoute,
   AuthenticatedExpensesIndexRoute: AuthenticatedExpensesIndexRoute,
   AuthenticatedFinancialAccountsIndexRoute:

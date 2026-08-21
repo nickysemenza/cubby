@@ -4,6 +4,10 @@ Cubby records a household's products, inventory, spending, and project history.
 
 ## Language
 
+**Collection**:
+A named, tag-backed grouping of Products and Location subtrees that are useful to browse together. A Collection is not a physical Location Area, a project Trade, or a Product compatibility tag.
+_Avoid_: work area, trade, category
+
 **Product movement**:
 A dated acquisition, exit, discard, or uncertain change involving a Product, derived from a product-linked Expense or explicit Purchase provenance.
 _Avoid_: Product purchase, sale event

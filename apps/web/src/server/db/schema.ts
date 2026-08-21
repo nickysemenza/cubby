@@ -808,6 +808,7 @@ export const location = pgTable(
     shortcode: shortcodeColumn(),
     name: text("name").notNull(),
     aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
+    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
     ...baseTimestamps(),
     ...softDeletedAt(),
     lastBulkInventory: timestamp("lastBulkInventory", { mode: "date" }),
@@ -838,6 +839,7 @@ export const location = pgTable(
       .on(sql`lower(${table.name})`)
       .where(sql`${table.deletedAt} IS NULL`),
     index("Location_name_idx").on(table.name),
+    index("Location_tags_idx").using("gin", table.tags),
     index("Location_type_idx").on(table.type),
     index("Location_productId_idx").on(table.productId),
     index("Location_parentId_idx").on(table.parentId),

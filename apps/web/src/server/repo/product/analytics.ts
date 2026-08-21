@@ -11,6 +11,7 @@ import type {
 import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
 import type { LocationAncestorOut } from "@cubby/schemas/location";
 import type { ProductCategory } from "@cubby/schemas/product";
+import { isCollectionTag } from "@cubby/shared/collection-tag";
 import { and, arrayOverlaps, eq, isNull, ne, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
@@ -123,7 +124,7 @@ export const getProductTagOptions = async (
       count: sql<number>`count(*)::int`,
     })
     .from(sql`${product}, unnest(${product.tags}) AS tag`)
-    .where(notDeleted(product))
+    .where(and(notDeleted(product), sql`tag NOT LIKE 'collection:%'`))
     .groupBy(sql`tag`)
     .orderBy(sql`count(*) DESC, tag ASC`);
 
@@ -207,7 +208,7 @@ export const getProductsSharingTags = async (
     .where(and(eq(product.id, id), notDeleted(product)))
     .limit(1);
 
-  const tags = source[0]?.tags ?? [];
+  const tags = (source[0]?.tags ?? []).filter((tag) => !isCollectionTag(tag));
   if (tags.length === 0) return [];
 
   return await getDb(db)
@@ -299,7 +300,7 @@ export const getTagSiblingStorage = async (
     .where(and(eq(product.id, id), notDeleted(product)))
     .limit(1);
 
-  const tags = source[0]?.tags ?? [];
+  const tags = (source[0]?.tags ?? []).filter((tag) => !isCollectionTag(tag));
   if (tags.length === 0) return [];
 
   // One row per (product, entry) for every product sharing a tag, the source

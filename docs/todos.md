@@ -131,6 +131,10 @@ history is the archive. Permanent product constraints live in the
 
 ## Triggered
 
+- **Persisted Collections and operational dashboard** — Promote when Collection
+  tags need metadata, rename-safe empty identity, Trade links, or combined
+  Project/Task/Expense views; migrate `collection:*` tags into durable records
+  rather than layering on a parallel mapping.
 - **Portion solver** — Promote if agent-side amount iteration remains painful after
   the recipe nutrition MCP projection ships; solve component weights against macro
   constraints in one call.
