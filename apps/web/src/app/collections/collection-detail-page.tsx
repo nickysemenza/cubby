@@ -7,6 +7,14 @@ import { Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
 import { useTRPC } from "~/integrations/trpc/react";
 
 export function CollectionDetailPage({
@@ -91,25 +99,23 @@ export function CollectionDetailPage({
             aria-label="Search products"
           />
         </div>
-        <div className="overflow-x-auto border-border border-t">
-          <table className="w-full text-left text-xs">
-            <thead className="border-border border-b font-mono text-2xs text-muted-foreground uppercase tracking-wider">
-              <tr>
-                <th className="px-2 py-2">Product</th>
-                <th className="px-2 py-2">Membership</th>
-                <th className="px-2 py-2">Current placements</th>
-              </tr>
-            </thead>
-            <tbody>
+        <div className="border-border border-t">
+          <Table className="table-auto">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Product</TableHead>
+                <TableHead>Membership</TableHead>
+                <TableHead>Current placements</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {data.products.map((product) => (
-                <tr
-                  key={product.id}
-                  className="border-border border-b align-top"
-                >
-                  <td className="px-2 py-2">
+                <TableRow key={product.id} className="align-top">
+                  <TableCell>
                     <Link
                       to="/products/$shortcode"
                       params={{ shortcode: product.id }}
+                      title={product.name}
                       className="font-medium hover:underline"
                     >
                       {product.name}
@@ -117,8 +123,8 @@ export function CollectionDetailPage({
                     <div className="text-muted-foreground">
                       {product.manufacturer}
                     </div>
-                  </td>
-                  <td className="px-2 py-2">
+                  </TableCell>
+                  <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {product.direct && (
                         <Badge variant="outline">Direct</Badge>
@@ -127,8 +133,8 @@ export function CollectionDetailPage({
                         <Badge variant="secondary">From location</Badge>
                       )}
                     </div>
-                  </td>
-                  <td className="px-2 py-2">
+                  </TableCell>
+                  <TableCell>
                     {product.placements.length ? (
                       <div className="space-y-1">
                         {product.placements.map((placement) => (
@@ -145,11 +151,11 @@ export function CollectionDetailPage({
                     ) : (
                       <span className="text-muted-foreground">Unplaced</span>
                     )}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
           {data.products.length === 0 && (
             <p className="py-8 text-center text-muted-foreground">
               No products match this search.

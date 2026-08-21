@@ -152,4 +152,13 @@ describe("CrossTabTable", () => {
     const cell = screen.getAllByRole("cell")[0] as HTMLElement;
     expect(cell.className).toBe("p-0");
   });
+
+  it("uses dense matrix chrome when compact density is requested", () => {
+    renderTable({ density: "compact" });
+
+    expect(
+      screen.getByRole("rowheader", { name: "flour" }).className,
+    ).toContain("text-xs");
+    expect(screen.getAllByRole("cell")[0]?.className).toContain("text-2xs");
+  });
 });

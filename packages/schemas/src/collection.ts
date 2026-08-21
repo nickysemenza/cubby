@@ -72,22 +72,44 @@ export const collectionCellState = z.enum([
 ]);
 export type CollectionCellState = z.infer<typeof collectionCellState>;
 
+export const collectionMatrixSort = z.enum([
+  "name-asc",
+  "name-desc",
+  "secondary-asc",
+  "secondary-desc",
+]);
+export type CollectionMatrixSort = z.infer<typeof collectionMatrixSort>;
+
+export const collectionMatrixMembership = z.enum([
+  "member",
+  "direct",
+  "inherited",
+  "unassigned",
+]);
+export type CollectionMatrixMembership = z.infer<
+  typeof collectionMatrixMembership
+>;
+
 export const collectionMatrixInput = z.object({
   subject: z.enum(["product", "location"]),
   search: z.string().trim().optional(),
+  sort: collectionMatrixSort.default("name-asc"),
+  collection: collectionSlug.optional(),
+  membership: collectionMatrixMembership.optional(),
   pagination: z
     .object({
       pageIndex: z.number().int().nonnegative().default(0),
-      pageSize: z.number().int().min(1).max(100).default(25),
+      pageSize: z.number().int().min(1).max(500).default(500),
     })
     .optional()
-    .default({ pageIndex: 0, pageSize: 25 }),
+    .default({ pageIndex: 0, pageSize: 500 }),
 });
 
 export const collectionMatrixRowOut = z.object({
   id: z.string(),
   name: z.string(),
   secondary: z.string().nullable(),
+  imageUrl: z.string().nullable(),
   states: z.record(collectionSlug, collectionCellState),
 });
 

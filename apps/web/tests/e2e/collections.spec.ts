@@ -27,17 +27,27 @@ test("assigns a Product in the matrix and shows it in the Collection locator", a
   const firstId = await createProduct(firstProduct);
   await createProduct(matrixProduct);
 
-  await page.goto("/collections");
-  await page.waitForLoadState("networkidle");
+  await page.goto(
+    `/collections/assignments?q=${encodeURIComponent(firstProduct)}`,
+  );
   await page.getByRole("button", { name: "New Collection" }).click();
-  await page.getByLabel("Collection name").fill(collectionName);
-  await page.getByLabel("Shortcode").fill(firstId);
-  await page.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(page).toHaveURL(`/collections/${slug}`, { timeout: 15_000 });
-  await expect(page.getByRole("link", { name: firstProduct })).toBeVisible();
+  await page.getByLabel("Name", { exact: true }).fill(collectionName);
+  await page.getByLabel("First product").selectOption(firstId);
+  await page.getByRole("button", { name: "Create Collection" }).click();
+  await expect(
+    page.getByRole("button", {
+      name: new RegExp(
+        `Remove direct ${collectionName} assignment for ${firstProduct}`,
+      ),
+    }),
+  ).toBeVisible({ timeout: 15_000 });
 
   await page.goto(
     `/collections/assignments?q=${encodeURIComponent(matrixProduct)}`,
+  );
+  await expect(page.getByRole("link", { name: matrixProduct })).toHaveAttribute(
+    "href",
+    /\/products\/PRD-/,
   );
   const assignment = page.getByRole("button", {
     name: new RegExp(

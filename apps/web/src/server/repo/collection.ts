@@ -1,12 +1,17 @@
 import type {
+  CollectionCellState,
   CollectionDetailOut,
+  CollectionMatrixMembership,
   CollectionMatrixOut,
+  CollectionMatrixSort,
   CollectionSlug,
   CollectionSummaryOut,
   CollectionTagSetInput,
 } from "@cubby/schemas/collection";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
+  type LocationId,
+  type ProductId,
   unsafeLocationShortcode,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
@@ -16,8 +21,14 @@ import type { Database } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { updateLocation } from "~/server/repo/location";
-import { updateProduct } from "~/server/repo/product";
+import {
+  getLocationCoverImageUrlsByLocationIds,
+  updateLocation,
+} from "~/server/repo/location";
+import {
+  getProductCoverImageUrlsByProductIds,
+  updateProduct,
+} from "~/server/repo/product";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import {
   deriveCollectionMembership,
@@ -25,7 +36,7 @@ import {
 } from "./collection-membership";
 
 interface GraphLocation {
-  id: string;
+  id: LocationId;
   shortcode: string;
   name: string;
   parentId: string | null;
@@ -34,7 +45,7 @@ interface GraphLocation {
 }
 
 interface GraphProduct {
-  id: string;
+  id: ProductId;
   shortcode: string;
   name: string;
   manufacturer: string;
@@ -56,7 +67,7 @@ const locationPath = (
   locationsById: ReadonlyMap<string, GraphLocation>,
 ): string[] => {
   const names: string[] = [loc.name];
-  const seen = new Set([loc.id]);
+  const seen = new Set<string>([loc.id]);
   let parentId = loc.parentId;
   while (parentId && !seen.has(parentId) && names.length < 12) {
     seen.add(parentId);
@@ -214,19 +225,81 @@ export const getCollectionMatrix = async (
   db: Database,
   subject: "product" | "location",
   search: string | undefined,
+  sort: CollectionMatrixSort,
+  selectedCollection: CollectionSlug | undefined,
+  membership: CollectionMatrixMembership | undefined,
   pagination: { pageIndex: number; pageSize: number },
 ): Promise<CollectionMatrixOut> => {
   const graph = await loadCollectionGraph(db);
   const normalizedSearch = search?.toLocaleLowerCase();
-  const source = (
-    subject === "product" ? graph.products : graph.locations
-  ).filter(
-    (item) =>
-      !normalizedSearch ||
-      item.name.toLocaleLowerCase().includes(normalizedSearch),
-  );
+  const secondaryFor = (item: GraphProduct | GraphLocation) =>
+    subject === "product"
+      ? (item as GraphProduct).manufacturer
+      : locationPath(item as GraphLocation, graph.locationsById).join(" / ");
+  const stateFor = (
+    item: GraphProduct | GraphLocation,
+    slug: CollectionSlug,
+  ): CollectionCellState => {
+    const direct = directCollectionMembership(item.tags).has(slug);
+    const inherited =
+      (subject === "product"
+        ? graph.productInherited.get(item.id)
+        : graph.locationInherited.get(item.id)
+      )?.has(slug) ?? false;
+    return direct
+      ? inherited
+        ? "both"
+        : "direct"
+      : inherited
+        ? "inherited"
+        : "empty";
+  };
+  const matchesMembership = (state: CollectionCellState) => {
+    if (!membership) return true;
+    if (membership === "member") return state !== "empty";
+    if (membership === "direct") return state === "direct" || state === "both";
+    if (membership === "inherited")
+      return state === "inherited" || state === "both";
+    return state === "empty";
+  };
+  const compareText = (left: string, right: string) =>
+    left.localeCompare(right, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
+  const source = (subject === "product" ? graph.products : graph.locations)
+    .filter((item) => {
+      const secondary = secondaryFor(item);
+      const matchesSearch =
+        !normalizedSearch ||
+        item.name.toLocaleLowerCase().includes(normalizedSearch) ||
+        secondary.toLocaleLowerCase().includes(normalizedSearch);
+      const state = selectedCollection
+        ? stateFor(item, selectedCollection)
+        : "empty";
+      return matchesSearch && (!selectedCollection || matchesMembership(state));
+    })
+    .sort((left, right) => {
+      const [leftValue, rightValue] = sort.startsWith("secondary")
+        ? [secondaryFor(left), secondaryFor(right)]
+        : [left.name, right.name];
+      const compared = compareText(leftValue, rightValue);
+      const directed = sort.endsWith("desc") ? -compared : compared;
+      return directed || compareText(left.name, right.name);
+    });
   const start = pagination.pageIndex * pagination.pageSize;
-  const rows = source.slice(start, start + pagination.pageSize).map((item) => {
+  const page = source.slice(start, start + pagination.pageSize);
+  const coverImageUrls: ReadonlyMap<string, string> =
+    subject === "product"
+      ? await getProductCoverImageUrlsByProductIds(
+          db,
+          page.map((item) => item.id as ProductId),
+        )
+      : await getLocationCoverImageUrlsByLocationIds(
+          db,
+          page.map((item) => item.id as LocationId),
+        );
+  const rows = page.map((item) => {
     const direct = directCollectionMembership(item.tags);
     const inherited =
       subject === "product"
@@ -238,12 +311,8 @@ export const getCollectionMatrix = async (
           ? unsafeProductShortcode(item.shortcode)
           : unsafeLocationShortcode(item.shortcode),
       name: item.name,
-      secondary:
-        subject === "product"
-          ? (item as GraphProduct).manufacturer
-          : locationPath(item as GraphLocation, graph.locationsById).join(
-              " / ",
-            ),
+      secondary: secondaryFor(item),
+      imageUrl: coverImageUrls.get(item.id) ?? null,
       states: Object.fromEntries(
         graph.collections.map((slug) => [
           slug,

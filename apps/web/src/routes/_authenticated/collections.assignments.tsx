@@ -1,4 +1,9 @@
 import {
+  collectionMatrixMembership,
+  collectionMatrixSort,
+  collectionSlug,
+} from "@cubby/schemas/collection";
+import {
   createFileRoute,
   stripSearchParams,
   useNavigate,
@@ -13,13 +18,29 @@ const searchSchema = z.object({
   subject: z.enum(["product", "location"]).optional().catch(undefined),
   q: urlStringParam,
   page: z.coerce.number().int().positive().optional().catch(undefined),
+  rows: z.coerce
+    .number()
+    .int()
+    .refine((value) => value === 100 || value === 250 || value === 500)
+    .optional()
+    .catch(undefined),
+  sort: collectionMatrixSort.optional().catch(undefined),
+  collection: collectionSlug.optional().catch(undefined),
+  membership: collectionMatrixMembership.optional().catch(undefined),
 });
 
 export const Route = createFileRoute("/_authenticated/collections/assignments")(
   {
     validateSearch: searchSchema,
     search: {
-      middlewares: [stripSearchParams({ subject: "product", page: 1 })],
+      middlewares: [
+        stripSearchParams({
+          subject: "product",
+          page: 1,
+          rows: 500,
+          sort: "name-asc",
+        }),
+      ],
     },
     component: AssignmentsRoute,
     head: () => ({ meta: [{ title: pageTitle("Collection assignments") }] }),
@@ -35,6 +56,10 @@ function AssignmentsRoute() {
         subject={search.subject ?? "product"}
         search={search.q}
         page={search.page ?? 1}
+        pageSize={search.rows ?? 500}
+        sort={search.sort ?? "name-asc"}
+        collection={search.collection}
+        membership={search.membership}
         onSearchChange={(next) =>
           navigate({
             search: (previous) => ({ ...previous, ...next }),

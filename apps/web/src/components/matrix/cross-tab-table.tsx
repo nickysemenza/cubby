@@ -4,6 +4,7 @@ import { type CrossTabColumn, groupColumnRuns } from "./group-columns";
 import {
   bodyRule,
   cellMono,
+  cellMonoDense,
   EMPTY_MARK,
   emptyCell,
   footRule,
@@ -110,6 +111,8 @@ export interface CrossTabTableProps<R, C> {
   bareCells?: boolean;
   /** Which surface the sticky panes sit on. Must match the actual background. */
   surface?: "card" | "background";
+  /** Compact ledger rows for maintenance matrices with hundreds of subjects. */
+  density?: "default" | "compact";
   /** Sticky header offset, e.g. `"top-[51px]"` to sit under the app nav. */
   stickyHeaderTop?: string;
   caption?: ReactNode;
@@ -134,6 +137,7 @@ export function CrossTabTable<R, C>({
   rowHover = false,
   bareCells = false,
   surface = "card",
+  density = "default",
   stickyHeaderTop,
   caption,
   className,
@@ -142,6 +146,7 @@ export function CrossTabTable<R, C>({
   const surfaceBg = surface === "card" ? "bg-card" : "bg-background";
   const runs = renderGroupHeader ? groupColumnRuns(columns) : [];
   const pinnedColumns = pinned ?? [];
+  const valueCell = density === "compact" ? cellMonoDense : cellMono;
   const tableWidth = layout
     ? layout.rowHeader +
       columns.length * layout.column +
@@ -196,13 +201,22 @@ export function CrossTabTable<R, C>({
             </tr>
           )}
           <tr className={headRule}>
-            <th className={cn(sticky, "z-20 px-2 py-2 font-medium")}>
+            <th
+              className={cn(
+                sticky,
+                "z-20 px-2 font-medium",
+                density === "compact" ? "py-1" : "py-2",
+              )}
+            >
               {cornerLabel}
             </th>
             {columns.map((column) => (
               <th
                 key={column.key}
-                className="px-2 py-2 text-right align-bottom font-medium"
+                className={cn(
+                  "px-2 text-right align-bottom font-medium",
+                  density === "compact" ? "py-1" : "py-2",
+                )}
               >
                 {renderColumnHeader(column)}
               </th>
@@ -211,7 +225,8 @@ export function CrossTabTable<R, C>({
               <th
                 key={p.key}
                 className={cn(
-                  "px-2 py-2 text-right font-medium",
+                  "px-2 text-right font-medium",
+                  density === "compact" ? "py-1" : "py-2",
                   p.stickyRight && ["sticky z-20", p.stickyRight, surfaceBg],
                   p.className,
                 )}
@@ -237,7 +252,8 @@ export function CrossTabTable<R, C>({
                 scope="row"
                 className={cn(
                   sticky,
-                  "px-2 py-2 text-left font-medium text-sm",
+                  "px-2 text-left font-medium",
+                  density === "compact" ? "py-1 text-xs" : "py-2 text-sm",
                   rowHover && "group-hover/row:bg-muted",
                 )}
               >
@@ -256,7 +272,7 @@ export function CrossTabTable<R, C>({
                       bareCells
                         ? "p-0"
                         : cn(
-                            cellMono,
+                            valueCell,
                             content == null && emptyCell,
                             cellClassName?.(row, column),
                           )
@@ -273,7 +289,7 @@ export function CrossTabTable<R, C>({
                     // Under `bareCells` the caller's own child carries the
                     // padding, here too — a pinned cell that kept its padding
                     // would leave the trailing button un-clickable at its edges.
-                    bareCells ? "p-0" : cn(cellMono, p.className),
+                    bareCells ? "p-0" : cn(valueCell, p.className),
                     p.stickyRight && ["sticky z-10", p.stickyRight, surfaceBg],
                     p.stickyRight && rowHover && "group-hover/row:bg-muted",
                   )}
@@ -293,7 +309,11 @@ export function CrossTabTable<R, C>({
               >
                 <th
                   scope="row"
-                  className={cn(sticky, "px-2 py-2 text-left font-medium")}
+                  className={cn(
+                    sticky,
+                    "px-2 text-left font-medium",
+                    density === "compact" ? "py-1" : "py-2",
+                  )}
                   title={f.labelTitle}
                 >
                   {f.label}
@@ -301,7 +321,7 @@ export function CrossTabTable<R, C>({
                 {columns.map((column, index) => (
                   <td
                     key={column.key}
-                    className={cn(cellMono, f.cellClassName)}
+                    className={cn(valueCell, f.cellClassName)}
                   >
                     {f.cell(column.key, index)}
                   </td>
@@ -310,7 +330,7 @@ export function CrossTabTable<R, C>({
                   <td
                     key={p.key}
                     className={cn(
-                      cellMono,
+                      valueCell,
                       f.cellClassName,
                       p.stickyRight && [
                         "sticky z-10",

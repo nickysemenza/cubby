@@ -48,7 +48,15 @@ const matrix = protectedProcedure
   .input(collectionMatrixInput)
   .output(strictOutput(collectionMatrixOut))
   .query(({ ctx, input }) =>
-    getCollectionMatrix(ctx.db, input.subject, input.search, input.pagination),
+    getCollectionMatrix(
+      ctx.db,
+      input.subject,
+      input.search,
+      input.sort,
+      input.collection,
+      input.membership,
+      input.pagination,
+    ),
   );
 
 const setTag = async (
