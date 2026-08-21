@@ -4,6 +4,8 @@ import type {
   CollectionMatrixMembership,
   CollectionMatrixOut,
   CollectionMatrixSort,
+  CollectionProductPlacementOut,
+  CollectionProductPurchaseOut,
   CollectionSlug,
   CollectionSummaryOut,
   CollectionTagSetInput,
@@ -14,11 +16,21 @@ import {
   type ProductId,
   unsafeLocationShortcode,
   unsafeProductShortcode,
+  unsafePurchaseShortcode,
 } from "@cubby/schemas/identifiers";
+import type { Trade } from "@cubby/schemas/project";
 import { setCollectionTag } from "@cubby/shared/collection-tag";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import type { Database } from "~/server/db";
-import { inventoryEntry, location, product } from "~/server/db/schema";
+import {
+  expense,
+  inventoryEntry,
+  location,
+  product,
+  purchase,
+  purchaseProduct,
+  vendor,
+} from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
@@ -77,6 +89,134 @@ const locationPath = (
     parentId = parent.parentId;
   }
   return names;
+};
+
+const placementsByProductId = (
+  graph: CollectionGraph,
+): Map<string, CollectionProductPlacementOut[]> => {
+  const locations = new Map<string, Map<string, GraphLocation>>();
+  const add = (productId: string, loc: GraphLocation) => {
+    const productLocations = locations.get(productId) ?? new Map();
+    productLocations.set(loc.id, loc);
+    locations.set(productId, productLocations);
+  };
+  for (const entry of graph.inventory) {
+    const loc = graph.locationsById.get(entry.locationId);
+    if (loc) add(entry.productId, loc);
+  }
+  for (const loc of graph.locations) {
+    if (loc.productId) add(loc.productId, loc);
+  }
+  return new Map(
+    [...locations].map(([productId, productLocations]) => [
+      productId,
+      [...productLocations.values()]
+        .sort((left, right) => left.name.localeCompare(right.name))
+        .map((loc) => ({
+          id: unsafeLocationShortcode(loc.shortcode),
+          name: loc.name,
+          path: locationPath(loc, graph.locationsById),
+        })),
+    ]),
+  );
+};
+
+const loadPurchasesByProductId = async (
+  db: Database,
+  productIds: ProductId[],
+): Promise<Map<string, CollectionProductPurchaseOut[]>> => {
+  if (productIds.length === 0) return new Map();
+  const client = getDb(db);
+  const purchaseColumns = {
+    purchaseId: purchase.id,
+    purchaseCode: purchase.shortcode,
+    orderId: purchase.orderId,
+    displayLabel: purchase.displayLabel,
+    date: purchase.date,
+    vendorName: vendor.name,
+  };
+  const liveVendor = and(eq(vendor.id, purchase.vendorId), notDeleted(vendor));
+  const [itemizedRows, linkedRows] = await Promise.all([
+    client
+      .selectDistinct({ productId: expense.productId, ...purchaseColumns })
+      .from(expense)
+      .innerJoin(
+        purchase,
+        and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
+      )
+      .leftJoin(vendor, liveVendor)
+      .where(
+        and(
+          notDeleted(expense),
+          eq(expense.future, false),
+          inArray(expense.productId, productIds),
+        ),
+      ),
+    client
+      .select({ productId: purchaseProduct.productId, ...purchaseColumns })
+      .from(purchaseProduct)
+      .innerJoin(
+        purchase,
+        and(eq(purchase.id, purchaseProduct.purchaseId), notDeleted(purchase)),
+      )
+      .leftJoin(vendor, liveVendor)
+      .where(
+        and(
+          notDeleted(purchaseProduct),
+          inArray(purchaseProduct.productId, productIds),
+        ),
+      ),
+  ]);
+  const purchaseIds = [
+    ...new Set([...itemizedRows, ...linkedRows].map((row) => row.purchaseId)),
+  ];
+  const tradeRows =
+    purchaseIds.length === 0
+      ? []
+      : await client
+          .select({ purchaseId: expense.purchaseId, trade: expense.trade })
+          .from(expense)
+          .where(
+            and(
+              notDeleted(expense),
+              eq(expense.future, false),
+              inArray(expense.purchaseId, purchaseIds),
+            ),
+          );
+  const tradesByPurchaseId = new Map<string, Set<Trade>>();
+  for (const row of tradeRows) {
+    if (!row.purchaseId) continue;
+    const trades = tradesByPurchaseId.get(row.purchaseId) ?? new Set<Trade>();
+    trades.add(row.trade);
+    tradesByPurchaseId.set(row.purchaseId, trades);
+  }
+  const byProductId = new Map<
+    string,
+    Map<string, CollectionProductPurchaseOut>
+  >();
+  for (const row of [...itemizedRows, ...linkedRows]) {
+    if (!row.productId) continue;
+    const purchases = byProductId.get(row.productId) ?? new Map();
+    purchases.set(row.purchaseId, {
+      id: unsafePurchaseShortcode(row.purchaseCode),
+      orderId: row.orderId,
+      displayLabel: row.displayLabel,
+      date: row.date,
+      vendorName: row.vendorName,
+      trades: [...(tradesByPurchaseId.get(row.purchaseId) ?? [])].sort(),
+    });
+    byProductId.set(row.productId, purchases);
+  }
+  return new Map(
+    [...byProductId].map(([productId, purchases]) => [
+      productId,
+      [...purchases.values()].sort(
+        (left, right) =>
+          right.date.localeCompare(left.date) ||
+          left.id.localeCompare(right.id),
+      ),
+    ]),
+  );
 };
 
 const loadCollectionGraph = async (db: Database): Promise<CollectionGraph> => {
@@ -189,16 +329,22 @@ export const getCollectionDetail = async (
     start,
     start + pagination.pageSize,
   );
-  const [rootCoverImageUrls, productCoverImageUrls] = await Promise.all([
-    getLocationCoverImageUrlsByLocationIds(
-      db,
-      roots.map((item) => item.id),
-    ),
-    getProductCoverImageUrlsByProductIds(
-      db,
-      productPage.map((item) => item.id),
-    ),
-  ]);
+  const placements = placementsByProductId(graph);
+  const [rootCoverImageUrls, productCoverImageUrls, purchases] =
+    await Promise.all([
+      getLocationCoverImageUrlsByLocationIds(
+        db,
+        roots.map((item) => item.id),
+      ),
+      getProductCoverImageUrlsByProductIds(
+        db,
+        productPage.map((item) => item.id),
+      ),
+      loadPurchasesByProductId(
+        db,
+        productPage.map((item) => item.id),
+      ),
+    ]);
 
   return {
     collection: summarizeCollection(graph, slug),
@@ -209,30 +355,16 @@ export const getCollectionDetail = async (
       imageUrl: rootCoverImageUrls.get(item.id) ?? null,
     })),
     totalCount: matchingProducts.length,
-    products: productPage.map((item) => {
-      const placements = new Map<string, GraphLocation>();
-      for (const entry of graph.inventory) {
-        if (entry.productId !== item.id) continue;
-        const loc = graph.locationsById.get(entry.locationId);
-        if (loc) placements.set(loc.id, loc);
-      }
-      for (const loc of graph.locations) {
-        if (loc.productId === item.id) placements.set(loc.id, loc);
-      }
-      return {
-        id: unsafeProductShortcode(item.shortcode),
-        name: item.name,
-        manufacturer: item.manufacturer,
-        imageUrl: productCoverImageUrls.get(item.id) ?? null,
-        direct: directCollectionMembership(item.tags).has(slug),
-        inherited: graph.productInherited.get(item.id)?.has(slug) ?? false,
-        placements: [...placements.values()].map((loc) => ({
-          id: unsafeLocationShortcode(loc.shortcode),
-          name: loc.name,
-          path: locationPath(loc, graph.locationsById),
-        })),
-      };
-    }),
+    products: productPage.map((item) => ({
+      id: unsafeProductShortcode(item.shortcode),
+      name: item.name,
+      manufacturer: item.manufacturer,
+      imageUrl: productCoverImageUrls.get(item.id) ?? null,
+      direct: directCollectionMembership(item.tags).has(slug),
+      inherited: graph.productInherited.get(item.id)?.has(slug) ?? false,
+      placements: placements.get(item.id) ?? [],
+      purchases: purchases.get(item.id) ?? [],
+    })),
   };
 };
 
@@ -304,16 +436,19 @@ export const getCollectionMatrix = async (
     });
   const start = pagination.pageIndex * pagination.pageSize;
   const page = source.slice(start, start + pagination.pageSize);
-  const coverImageUrls: ReadonlyMap<string, string> =
+  const productIds =
+    subject === "product" ? page.map((item) => item.id as ProductId) : [];
+  const [resolvedCoverImageUrls, purchases] = await Promise.all([
     subject === "product"
-      ? await getProductCoverImageUrlsByProductIds(
-          db,
-          page.map((item) => item.id as ProductId),
-        )
-      : await getLocationCoverImageUrlsByLocationIds(
+      ? getProductCoverImageUrlsByProductIds(db, productIds)
+      : getLocationCoverImageUrlsByLocationIds(
           db,
           page.map((item) => item.id as LocationId),
-        );
+        ),
+    loadPurchasesByProductId(db, productIds),
+  ]);
+  const coverImageUrls: ReadonlyMap<string, string> = resolvedCoverImageUrls;
+  const placements = placementsByProductId(graph);
   const rows = page.map((item) => {
     const direct = directCollectionMembership(item.tags);
     const inherited =
@@ -328,6 +463,8 @@ export const getCollectionMatrix = async (
       name: item.name,
       secondary: secondaryFor(item),
       imageUrl: coverImageUrls.get(item.id) ?? null,
+      placements: subject === "product" ? (placements.get(item.id) ?? []) : [],
+      purchases: subject === "product" ? (purchases.get(item.id) ?? []) : [],
       states: Object.fromEntries(
         graph.collections.map((slug) => [
           slug,

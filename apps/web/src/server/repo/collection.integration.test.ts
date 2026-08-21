@@ -1,11 +1,14 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { getCollectionDetail, getCollectionMatrix } from "./collection";
+import { createExpense } from "./expense";
 import { updateProduct } from "./product";
 import {
   createImageFixture,
+  createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  makeExpenseInput,
   makeLocationInput,
   makeProductInput,
 } from "./repo.fixtures";
@@ -38,6 +41,42 @@ describe("Collection assignment matrix", () => {
       { pendingImageIds: [cover.id] },
       ctx.actor,
     );
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Matrix Shelf", type: "shelf" }),
+      ctx.actor,
+    );
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: direct.id,
+        locationId: shelf.id,
+        amount: { value: 1, unit: "each" },
+      },
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Matrix paint tool",
+        productId: direct.id,
+        vendor: "Matrix Supply",
+        orderId: "MATRIX-42",
+        trade: "finishes",
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Matrix hardware",
+        productId: direct.id,
+        vendor: "Matrix Supply",
+        orderId: "MATRIX-42",
+        trade: "metalworking",
+      }),
+      ctx.actor,
+    );
 
     const directOnly = await getCollectionMatrix(
       ctx.db,
@@ -54,6 +93,20 @@ describe("Collection assignment matrix", () => {
       name: "Matrix Alpha",
       secondary: "Acme",
       imageUrl: cover.url,
+      placements: [
+        {
+          id: shelf.id,
+          name: "Matrix Shelf",
+          path: ["Home", "Matrix Shelf"],
+        },
+      ],
+      purchases: [
+        {
+          orderId: "MATRIX-42",
+          vendorName: "Matrix Supply",
+          trades: ["finishes", "metalworking"],
+        },
+      ],
       states: { painting: "direct" },
     });
 
@@ -101,7 +154,11 @@ describe("Collection assignment matrix", () => {
       undefined,
       { pageIndex: 0, pageSize: 500 },
     );
-    expect(locations.rows[0]?.imageUrl).toBe(cover.url);
+    expect(locations.rows[0]).toMatchObject({
+      imageUrl: cover.url,
+      placements: [],
+      purchases: [],
+    });
 
     const detail = await getCollectionDetail(ctx.db, "painting", undefined, {
       pageIndex: 0,
@@ -114,6 +171,16 @@ describe("Collection assignment matrix", () => {
     expect(detail?.products[0]).toMatchObject({
       id: direct.id,
       imageUrl: cover.url,
+      placements: expect.arrayContaining([
+        expect.objectContaining({ id: shelf.id }),
+        expect.objectContaining({ id: productBackedLocation.id }),
+      ]),
+      purchases: [
+        expect.objectContaining({
+          orderId: "MATRIX-42",
+          trades: ["finishes", "metalworking"],
+        }),
+      ],
     });
   });
 });

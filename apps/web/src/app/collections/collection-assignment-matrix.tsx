@@ -35,6 +35,10 @@ import { type RouterOutputs, useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
+import {
+  CopyableShortcode,
+  ProductContextLine,
+} from "./collection-product-context";
 
 const SETTLE_MS = 400;
 const PAGE_SIZE_OPTIONS = [100, 250, 500] as const;
@@ -476,7 +480,7 @@ export function CollectionAssignmentMatrix({
             cornerLabel={subject === "product" ? "Product" : "Location"}
             columns={columns}
             rows={rows}
-            layout={{ rowHeader: 320, column: 96, pinned: 0 }}
+            layout={{ rowHeader: 420, column: 96, pinned: 0 }}
             surface="background"
             density="compact"
             bareCells
@@ -489,12 +493,12 @@ export function CollectionAssignmentMatrix({
               </span>
             )}
             renderRowHeader={(row) => (
-              <div className="flex min-w-0 items-center gap-2">
+              <div className="flex min-w-0 items-center gap-2 py-1">
                 <Image
                   src={row.data.imageUrl ?? ""}
                   alt={`${row.data.name} cover`}
-                  displayWidth={28}
-                  className="size-7 shrink-0 border border-border bg-card object-cover"
+                  displayWidth={32}
+                  className="size-8 shrink-0 border border-border bg-card object-cover"
                   fallback={
                     <EntityIcon
                       entity={subject}
@@ -518,6 +522,16 @@ export function CollectionAssignmentMatrix({
                       {row.data.secondary}
                     </div>
                   )}
+                  {subject === "product" ? (
+                    <ProductContextLine
+                      shortcode={row.data.id}
+                      placements={row.data.placements}
+                      purchases={row.data.purchases}
+                      className="mt-1"
+                    />
+                  ) : (
+                    <CopyableShortcode code={row.data.id} className="mt-1" />
+                  )}
                 </div>
               </div>
             )}
@@ -538,7 +552,7 @@ export function CollectionAssignmentMatrix({
                   title={`${row.data.name}: ${formatCollectionLabel(column.data)} — ${state}`}
                   onClick={() => schedule(row.data, column.data)}
                   className={cn(
-                    "group/cell relative grid h-9 w-full place-items-center border-border border-l focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-ring",
+                    "group/cell relative grid h-12 w-full place-items-center border-border border-l focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-ring",
                     assigned
                       ? "bg-primary/10 text-primary"
                       : "hover:bg-muted/40",

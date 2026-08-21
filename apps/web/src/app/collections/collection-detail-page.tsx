@@ -10,6 +10,7 @@ import {
   Search,
 } from "lucide-react";
 import { useId } from "react";
+import { TradeBadge } from "~/app/projects/trade-options";
 import { EntityCover } from "~/components/entity/entity-cover";
 import { Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -17,6 +18,11 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useTRPC } from "~/integrations/trpc/react";
+import {
+  CopyableShortcode,
+  ProductPlacementsPopover,
+  ProductPurchasesPopover,
+} from "./collection-product-context";
 
 const PAGE_SIZE = 50;
 
@@ -145,9 +151,12 @@ export function CollectionDetailPage({
                     >
                       {parentPath || "Top-level location"}
                     </p>
-                    <p className="mt-1 flex items-center gap-1 font-mono text-2xs text-muted-foreground uppercase tracking-wider">
-                      <MapPin className="size-3" aria-hidden /> Tagged root
-                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <CopyableShortcode code={root.id} />
+                      <span className="flex items-center gap-1 font-mono text-2xs text-muted-foreground uppercase tracking-wider">
+                        <MapPin className="size-3" aria-hidden /> Tagged root
+                      </span>
+                    </div>
                   </div>
                 </article>
               );
@@ -196,7 +205,7 @@ export function CollectionDetailPage({
             {data.products.map((product) => (
               <article
                 key={product.id}
-                className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-x-2 gap-y-2 border-border border-b p-2 transition-colors last:border-b-0 hover:bg-muted/30 md:grid-cols-[3.5rem_minmax(12rem,0.85fr)_minmax(15rem,1.15fr)] md:items-center"
+                className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-x-2 gap-y-2 border-border border-b p-2 transition-colors last:border-b-0 hover:bg-muted/30 lg:grid-cols-[3.5rem_minmax(12rem,0.85fr)_minmax(14rem,1.15fr)_minmax(10rem,0.8fr)] lg:items-center"
               >
                 <EntityCover
                   images={
@@ -226,7 +235,8 @@ export function CollectionDetailPage({
                       {product.manufacturer}
                     </p>
                   )}
-                  <div className="mt-1 flex flex-wrap gap-1">
+                  <div className="mt-1 flex flex-wrap items-center gap-1">
+                    <CopyableShortcode code={product.id} />
                     {product.direct && <Badge variant="outline">Direct</Badge>}
                     {product.inherited && (
                       <Badge variant="secondary">From location</Badge>
@@ -234,13 +244,13 @@ export function CollectionDetailPage({
                   </div>
                 </div>
 
-                <div className="col-start-2 min-w-0 md:col-start-auto">
+                <div className="col-start-2 min-w-0 lg:col-start-auto">
                   <p className="mb-1 font-mono text-2xs text-muted-foreground uppercase tracking-wider">
                     Current placements
                   </p>
                   {product.placements.length ? (
-                    <div className="flex flex-wrap gap-x-2 gap-y-1">
-                      {product.placements.map((placement) => (
+                    <div className="flex flex-col items-start gap-1">
+                      {product.placements.slice(0, 2).map((placement) => (
                         <Link
                           key={placement.id}
                           to="/locations/$shortcode"
@@ -257,11 +267,38 @@ export function CollectionDetailPage({
                           </span>
                         </Link>
                       ))}
+                      {product.placements.length > 2 && (
+                        <ProductPlacementsPopover
+                          placements={product.placements}
+                        />
+                      )}
                     </div>
                   ) : (
                     <p className="text-muted-foreground text-xs">
                       Not currently placed
                     </p>
+                  )}
+                </div>
+
+                <div className="col-start-2 min-w-0 lg:col-start-auto">
+                  <p className="mb-1 font-mono text-2xs text-muted-foreground uppercase tracking-wider">
+                    Purchase provenance
+                  </p>
+                  <ProductPurchasesPopover purchases={product.purchases} />
+                  {product.purchases.some(
+                    (purchase) => purchase.trades.length > 0,
+                  ) && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {[
+                        ...new Set(
+                          product.purchases.flatMap(
+                            (purchase) => purchase.trades,
+                          ),
+                        ),
+                      ].map((trade) => (
+                        <TradeBadge key={trade} trade={trade} />
+                      ))}
+                    </div>
                   )}
                 </div>
               </article>

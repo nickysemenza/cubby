@@ -1,6 +1,12 @@
 import { collectionSlugPattern } from "@cubby/shared/collection-tag";
 import { z } from "zod";
-import { locationShortcode, productShortcode } from "./identifiers";
+import { plainDate } from "./base-entity";
+import {
+  locationShortcode,
+  productShortcode,
+  purchaseShortcode,
+} from "./identifiers";
+import { tradeSchema } from "./project";
 
 export const collectionSlug = z
   .string()
@@ -34,6 +40,21 @@ export const collectionProductPlacementOut = z.object({
   name: z.string(),
   path: z.array(z.string()),
 });
+export type CollectionProductPlacementOut = z.infer<
+  typeof collectionProductPlacementOut
+>;
+
+export const collectionProductPurchaseOut = z.object({
+  id: purchaseShortcode,
+  orderId: z.string().nullable(),
+  displayLabel: z.string().nullable(),
+  date: plainDate,
+  vendorName: z.string().nullable(),
+  trades: z.array(tradeSchema),
+});
+export type CollectionProductPurchaseOut = z.infer<
+  typeof collectionProductPurchaseOut
+>;
 
 export const collectionProductOut = z.object({
   id: productShortcode,
@@ -43,6 +64,7 @@ export const collectionProductOut = z.object({
   direct: z.boolean(),
   inherited: z.boolean(),
   placements: z.array(collectionProductPlacementOut),
+  purchases: z.array(collectionProductPurchaseOut),
 });
 export type CollectionProductOut = z.infer<typeof collectionProductOut>;
 
@@ -112,6 +134,8 @@ export const collectionMatrixRowOut = z.object({
   name: z.string(),
   secondary: z.string().nullable(),
   imageUrl: z.string().nullable(),
+  placements: z.array(collectionProductPlacementOut),
+  purchases: z.array(collectionProductPurchaseOut),
   states: z.record(collectionSlug, collectionCellState),
 });
 
