@@ -35,7 +35,7 @@ import {
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
-  isCountOnlyPagination,
+  type ListReadIntent,
   notDeleted,
   presenceCondition,
   relations,
@@ -431,6 +431,7 @@ export const expenseList = async (
   filters: ExpenseFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
 ): Promise<{ data: ExpenseOut[]; count: number }> => {
   const whereClause = await buildExpenseWhereClause(db, filters);
 
@@ -444,17 +445,18 @@ export const expenseList = async (
   );
   const { take, skip } = buildTakeSkip(pagination);
 
-  const { data: rows, count } = await executeListQueryWithCount(
-    getDb(db).query.expense.findMany({
-      where: whereClause,
-      orderBy: orderByArray,
-      limit: take,
-      offset: skip,
-      ...relations.expense.withProject,
-    }),
-    countWhere(db, expense, whereClause),
-    { countOnly: isCountOnlyPagination(pagination) },
-  );
+  const { data: rows, count } = await executeListQueryWithCount({
+    kind: readIntent,
+    rows: () =>
+      getDb(db).query.expense.findMany({
+        where: whereClause,
+        orderBy: orderByArray,
+        limit: take,
+        offset: skip,
+        ...relations.expense.withProject,
+      }),
+    count: () => countWhere(db, expense, whereClause),
+  });
 
   return { data: rows.map(dbExpenseToAPI), count };
 };

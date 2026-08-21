@@ -51,12 +51,11 @@ import {
   eqAny,
   eqAnyRequested,
   getDb,
-  isCountOnlyPagination,
+  type ListReadIntent,
   lockAndValidateForDelete,
   notDeleted,
   parseInventoryAmount,
   relations,
-  skipsListAggregates,
   unwrapDb,
   updateLiveAndReturn,
   withTransaction,
@@ -331,6 +330,7 @@ export const inventoryentryList = async (
   filters: InventoryFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
 ) => {
   const { take, skip } = buildTakeSkip(pagination);
   const [locationIds, productIds] = await Promise.all([
@@ -387,7 +387,7 @@ export const inventoryentryList = async (
     ],
   );
 
-  if (isCountOnlyPagination(pagination)) {
+  if (readIntent === "count") {
     const [result] = await getDb(db)
       .select({ count: count() })
       .from(inventoryEntry)
@@ -431,9 +431,10 @@ export const inventoryentryList = async (
     getDb(db)
       .select({
         count: count(),
-        valuationSum: skipsListAggregates(pagination)
-          ? sql<number>`0`
-          : sum(inventoryEntry.valuation),
+        valuationSum:
+          readIntent === "sample"
+            ? sql<number>`0`
+            : sum(inventoryEntry.valuation),
       })
       .from(inventoryEntry)
       .innerJoin(

@@ -48,7 +48,7 @@ import {
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
-  isCountOnlyPagination,
+  type ListReadIntent,
   lockAndValidateForDelete,
   notDeleted,
   unwrapDb,
@@ -322,36 +322,38 @@ export async function listFinancialTransactions(
   filters: FinancialTransactionFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
 ) {
   const where = await whereFor(db, filters);
   const { take, skip } = buildTakeSkip(pagination);
-  const { data: rows, count } = await executeListQueryWithCount(
-    getDb(db)
-      .select(columns)
-      .from(financialTransaction)
-      .where(where)
-      .orderBy(
-        ...buildOrderBy(
-          financialTransaction,
-          sorts,
-          [...financialTransactionSortableFields],
-          {
-            resolve: (sort) =>
-              sort.orderBy === "merchant"
-                ? [
-                    (sort.direction === "asc" ? asc : desc)(
-                      financialTransaction.merchant,
-                    ),
-                  ]
-                : null,
-          },
-        ),
-      )
-      .limit(take)
-      .offset(skip),
-    countWhere(db, financialTransaction, where),
-    { countOnly: isCountOnlyPagination(pagination) },
-  );
+  const { data: rows, count } = await executeListQueryWithCount({
+    kind: readIntent,
+    rows: () =>
+      getDb(db)
+        .select(columns)
+        .from(financialTransaction)
+        .where(where)
+        .orderBy(
+          ...buildOrderBy(
+            financialTransaction,
+            sorts,
+            [...financialTransactionSortableFields],
+            {
+              resolve: (sort) =>
+                sort.orderBy === "merchant"
+                  ? [
+                      (sort.direction === "asc" ? asc : desc)(
+                        financialTransaction.merchant,
+                      ),
+                    ]
+                  : null,
+            },
+          ),
+        )
+        .limit(take)
+        .offset(skip),
+    count: () => countWhere(db, financialTransaction, where),
+  });
   return {
     data: rows.map(toOut),
     count,

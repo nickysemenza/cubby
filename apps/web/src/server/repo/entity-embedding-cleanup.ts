@@ -482,16 +482,37 @@ const liveIdSources = {
  * parameters, on the single pinned connection `findFastProblems` shares across
  * all its detectors, on every Problems fetch.
  */
-export async function findOrphanedEntityEmbeddings(
-  db: Database,
-): Promise<OrphanedEntityEmbedding[]> {
-  const live = sql.join(
+const liveEntityIdsQuery = () =>
+  sql.join(
     searchableEntities.map((entityType) => {
       const source = liveIdSources[entityType];
       return sql`SELECT ${entityType}::text AS "entityType", ${source.idColumn}::text AS "entityId" FROM ${source.table} WHERE ${source.deletedAtColumn} IS NULL`;
     }),
     sql` UNION ALL `,
   );
+
+export async function countOrphanedEntityEmbeddings(
+  db: Database,
+): Promise<number> {
+  const [row] = await getDb(db)
+    .execute<{ count: number }>(sql`
+    WITH live AS (${liveEntityIdsQuery()})
+    SELECT count(*)::int AS count
+    FROM "EntityEmbedding" ee
+    LEFT JOIN live
+      ON live."entityType" = ee."entityType"
+     AND live."entityId" = ee."entityId"::text
+    WHERE ee."deletedAt" IS NULL
+      AND live."entityId" IS NULL
+  `)
+    .then((result) => result.rows);
+  return Number(row?.count ?? 0);
+}
+
+export async function findOrphanedEntityEmbeddings(
+  db: Database,
+): Promise<OrphanedEntityEmbedding[]> {
+  const live = liveEntityIdsQuery();
 
   // `createdAt` is typed as the string it actually is. A raw `execute` returns
   // timestamps unparsed, so the previous `Date` here was an assertion the

@@ -28,6 +28,13 @@ describe("findViewProblems", () => {
         `view problem "${problem.key}" produced no section`,
       ).toBe(true);
       expect(result.sectionTotals[problem.key]).toBeTypeOf("number");
+      const focused = await executeProblem(ctx.db, problem.key);
+      expect(focused.items, problem.key).toEqual(
+        (result as unknown as Record<string, unknown>)[problem.key],
+      );
+      expect(focused.count, problem.key).toBe(
+        result.sectionTotals[problem.key],
+      );
     }
   });
 
@@ -157,9 +164,14 @@ describe("findViewProblems", () => {
       const result = await executeProblem(ctx.db, problem.key, {
         sampleSize: 1,
       });
+      const counted = await executeProblem(ctx.db, problem.key, {
+        mode: "count",
+      });
       expect(result.source.kind, problem.key).toBe("derived");
       expect(result.count, problem.key).toBeGreaterThanOrEqual(0);
       expect(result.items.length, problem.key).toBeLessThanOrEqual(1);
+      expect(counted.count, problem.key).toBe(result.count);
+      expect(counted.items, problem.key).toEqual([]);
       // A provider failure is explicit state, never an empty healthy result.
       expect(["healthy", "stale", "unavailable"]).toContain(
         result.status.state,

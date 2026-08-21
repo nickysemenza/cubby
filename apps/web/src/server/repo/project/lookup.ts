@@ -37,10 +37,9 @@ import {
   formatSearchTerm,
   getDb,
   idSetPresence,
-  isCountOnlyPagination,
+  type ListReadIntent,
   notDeleted,
   presenceCondition,
-  skipsListAggregates,
 } from "~/server/repo/database-helpers";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { relatedWhereConditions } from "~/server/repo/related-view";
@@ -337,6 +336,7 @@ export const projectList = async (
   filters: ProjectFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
 ): Promise<{
   data: ProjectOut[];
   count: number;
@@ -347,7 +347,7 @@ export const projectList = async (
     filters,
     sorts,
   );
-  if (isCountOnlyPagination(pagination)) {
+  if (readIntent === "count") {
     return {
       data: [],
       count: await countWhere(db, project, whereClause),
@@ -358,16 +358,18 @@ export const projectList = async (
   const { take, skip } = buildTakeSkip(pagination);
 
   const [{ data: rows, count }, sums] = await Promise.all([
-    executeListQueryWithCount(
-      getDb(db).query.project.findMany({
-        where: whereClause,
-        orderBy: orderByArray,
-        limit: take,
-        offset: skip,
-      }),
-      countWhere(db, project, whereClause),
-    ),
-    skipsListAggregates(pagination)
+    executeListQueryWithCount({
+      kind: readIntent,
+      rows: () =>
+        getDb(db).query.project.findMany({
+          where: whereClause,
+          orderBy: orderByArray,
+          limit: take,
+          offset: skip,
+        }),
+      count: () => countWhere(db, project, whereClause),
+    }),
+    readIntent === "sample"
       ? Promise.resolve({ costEstimate: 0 })
       : projectListSums(db, whereClause),
   ]);

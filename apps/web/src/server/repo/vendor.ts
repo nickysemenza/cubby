@@ -59,10 +59,9 @@ import {
   formatSearchTerm,
   getDb,
   insertAndReturn,
-  isCountOnlyPagination,
+  type ListReadIntent,
   lockAndValidateForDelete,
   notDeleted,
-  skipsListAggregates,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
@@ -310,13 +309,14 @@ export const vendorList = async (
   filters: VendorFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
 ): Promise<{
   data: VendorOut[];
   count: number;
   sums: { spend: number; purchaseCount: number };
 }> => {
   const whereClause = buildVendorWhereClause(filters);
-  if (isCountOnlyPagination(pagination)) {
+  if (readIntent === "count") {
     return {
       data: [],
       count: await countWhere(db, vendor, whereClause),
@@ -350,7 +350,7 @@ export const vendorList = async (
       .limit(take)
       .offset(skip),
     countWhere(db, vendor, whereClause),
-    skipsListAggregates(pagination)
+    readIntent === "sample"
       ? Promise.resolve([{ spend: 0, purchaseCount: 0 }])
       : getDb(db)
           .select({

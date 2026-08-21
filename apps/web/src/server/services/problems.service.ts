@@ -97,7 +97,10 @@ import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
-import { runDiagnostic } from "~/server/services/problem-diagnostics.service";
+import {
+  type DiagnosticSampleResult,
+  runDiagnostic,
+} from "~/server/services/problem-diagnostics.service";
 import {
   countViewProblem,
   executeProblem,
@@ -530,7 +533,18 @@ type ExactProblemPage = Awaited<ReturnType<typeof executeProblem>>;
 const diagnosticItems = async <T extends readonly unknown[]>(
   db: Database,
   diagnostic: Parameters<typeof runDiagnostic>[1],
-): Promise<T> => (await runDiagnostic(db, diagnostic)).items as T;
+): Promise<Omit<DiagnosticSampleResult, "items"> & { items: T }> => {
+  const result = await runDiagnostic(
+    db,
+    diagnostic,
+    {},
+    {
+      kind: "sample",
+      limit: 12,
+    },
+  );
+  return { ...result, items: result.items as T };
+};
 
 /** Run exact entity Problems with a caller-selected request-local bound. */
 const runExactProblemPages = async (
@@ -851,24 +865,58 @@ const presentFastExactRows = <T>(
     }
   }) as T[];
 
+const presentSingleFastProblem = async (
+  db: Database,
+  key: (typeof FAST_ENTITY_PROBLEM_KEYS)[number],
+  page: ExactProblemPage,
+): Promise<unknown[]> => {
+  if (key === "vendorsWithoutLogos") {
+    return presentFastExactRows(key, page, {
+      vendorExpenseCounts: await loadVendorLogoPresenterCounts(
+        db,
+        page.data.map((row) => row.id),
+      ),
+    });
+  }
+  if (key === "soldButStillStocked") {
+    return presentFastExactRows(key, page, {
+      soldTotals: await loadSoldButStockedPresenterTotals(
+        db,
+        page.data.map((row) => row.id),
+      ),
+    });
+  }
+  if (key === "financialTransactionAllocationDefects") {
+    return presentFastExactRows(key, page, {
+      allocationDefects: await loadAllocationDefectPresenters(
+        db,
+        page.data.map((row) => row.id),
+      ),
+    });
+  }
+  return presentFastExactRows(key, page);
+};
+
+const FAST_ENTITY_PROBLEM_KEYS = [
+  "duplicateInventory",
+  "soldButStillStocked",
+  "unlinkedExitExpenses",
+  "purchaselessExitExpenses",
+  "productsWithNoImages",
+  "unreferencedImages",
+  "understatedCostMeals",
+  "unknownParkedItems",
+  "inventoryWithoutPricePath",
+  "vendorsWithoutLogos",
+  "purchasesNotReconciling",
+  "purchaseFinancialSettlementMismatches",
+  "financialTransactionAllocationDefects",
+] as const satisfies readonly ProblemKey[];
+
 // DB-only detectors — cheap (no WASM, no network). Bounded tracing keeps a
 // named span per detector for observability while overlapping remote I/O.
 export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
-  const exactKeys = [
-    "duplicateInventory",
-    "soldButStillStocked",
-    "unlinkedExitExpenses",
-    "purchaselessExitExpenses",
-    "productsWithNoImages",
-    "unreferencedImages",
-    "understatedCostMeals",
-    "unknownParkedItems",
-    "inventoryWithoutPricePath",
-    "vendorsWithoutLogos",
-    "purchasesNotReconciling",
-    "purchaseFinancialSettlementMismatches",
-    "financialTransactionAllocationDefects",
-  ] as const satisfies readonly ProblemKey[];
+  const exactKeys = FAST_ENTITY_PROBLEM_KEYS;
 
   // Production traces show remote query waits in the 30–180ms range while a
   // checkout costs ~20ms. Run the derived and entity-backed branches together,
@@ -973,24 +1021,28 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     runExactProblemPages(db, exactKeys, { concurrency: 2 }),
   ]);
   const legacy = {
-    duplicateProductIdentities: r.duplicateProductIdentities,
-    orphanedProducts: r.orphanedProducts,
-    partiallyImportedCookbooks: r.partiallyImportedCookbooks,
-    toolsUsedOutsideOwnership: r.toolsUsedOutsideOwnership,
-    orphanedEntityEmbeddings: r.orphanedEntityEmbeddings,
-    entitiesMissingEmbeddings: r.entitiesMissingEmbeddings,
-    staleParentRecipes: r.staleParentRecipes,
-    manufacturerSpellingVariants: r.manufacturerSpellingVariants,
-    duplicateVendors: r.duplicateVendors,
-    duplicateSpendCandidates: r.duplicateSpendCandidates,
+    duplicateProductIdentities: r.duplicateProductIdentities.items,
+    orphanedProducts: r.orphanedProducts.items,
+    partiallyImportedCookbooks: r.partiallyImportedCookbooks.items,
+    toolsUsedOutsideOwnership: r.toolsUsedOutsideOwnership.items,
+    orphanedEntityEmbeddings: r.orphanedEntityEmbeddings.items,
+    entitiesMissingEmbeddings: r.entitiesMissingEmbeddings.items,
+    staleParentRecipes: r.staleParentRecipes.items,
+    manufacturerSpellingVariants: r.manufacturerSpellingVariants.items,
+    duplicateVendors: r.duplicateVendors.items,
+    duplicateSpendCandidates: r.duplicateSpendCandidates.items,
     duplicateFinancialTransactionSourceRefs:
-      r.duplicateFinancialTransactionSourceRefs,
+      r.duplicateFinancialTransactionSourceRefs.items,
     duplicateFinancialAccountSourceAliases:
-      r.duplicateFinancialAccountSourceAliases,
-    invalidFinancialJson: r.invalidFinancialJson,
-    incompleteStatementImports: r.incompleteStatementImports,
-    referentialLivenessViolations: r.referentialLivenessViolations,
+      r.duplicateFinancialAccountSourceAliases.items,
+    invalidFinancialJson: r.invalidFinancialJson.items,
+    incompleteStatementImports: r.incompleteStatementImports.items,
+    referentialLivenessViolations: r.referentialLivenessViolations.items,
   } satisfies Partial<Omit<ProblemsFast, "sectionTotals">>;
+
+  const derivedTotals = Object.fromEntries(
+    Object.entries(r).map(([key, result]) => [key, result.count]),
+  );
 
   const page = (key: (typeof exactKeys)[number]): ExactProblemPage => {
     const result = exact[key];
@@ -1071,7 +1123,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       page("financialTransactionAllocationDefects"),
       hydration,
     ),
-    sectionTotals: exactSectionTotals(exact),
+    sectionTotals: { ...derivedTotals, ...exactSectionTotals(exact) },
   };
 };
 
@@ -1160,6 +1212,7 @@ const findProductsWithBetterUpcData = async (
   upcLookupClient: UPCLookupClient,
 ): Promise<{
   products: ProductWithBetterUpcData[];
+  count: number;
   freshness: NonNullable<
     Awaited<ReturnType<typeof runDiagnostic>>["freshness"]
   >;
@@ -1172,6 +1225,7 @@ const findProductsWithBetterUpcData = async (
   }
   return {
     products: result.items as ProductWithBetterUpcData[],
+    count: result.count,
     freshness: result.freshness,
   };
 };
@@ -1182,116 +1236,135 @@ const findProductsWithBetterUpcData = async (
 // drift), promoted to first-class Problems so the navbar badge / homepage
 // banner / MCP see them.
 // The detection itself stays in the repo (computeAttentionItems); this only
-// splits the flat item list into the per-rule slices, keyed by the shared
-// TRACKER_PROBLEM_KEY_BY_TYPE map so the two can't drift.
+// splits the flat item list into the per-rule slices.
+const TRACKER_PROBLEM_KEYS = [
+  "overdueTasks",
+  "stalledProjects",
+  "projectsMissingBudget",
+  "pastDuePlannedExpenses",
+  "unclassifiedExpenses",
+  "blockedWorkProjects",
+  "projectsWithDateDrift",
+] as const satisfies readonly ProblemKey[];
+
+type TrackerEntityProblemKey = Exclude<
+  (typeof TRACKER_PROBLEM_KEYS)[number],
+  "projectsWithDateDrift"
+>;
+
+const presentTrackerProblem = (
+  key: TrackerEntityProblemKey,
+  page: ExactProblemPage,
+): ProjectAttentionItem[] =>
+  page.data.map((row) => {
+    const r = row as Record<string, unknown>;
+    const id = String(r.id);
+    const name = String(r.name ?? "Untitled");
+    const isTask = key === "overdueTasks";
+    const isExpense =
+      key === "pastDuePlannedExpenses" || key === "unclassifiedExpenses";
+    const type =
+      key === "overdueTasks"
+        ? "overdue_task"
+        : key === "stalledProjects"
+          ? "stalled_project"
+          : key === "projectsMissingBudget"
+            ? "missing_budget"
+            : key === "pastDuePlannedExpenses"
+              ? "past_due_planned_expense"
+              : key === "unclassifiedExpenses"
+                ? "unclassified_expense"
+                : "blocked_work";
+    const entityType = isTask ? "task" : isExpense ? "expense" : "project";
+    const date = isTask
+      ? ((r.dueEndDate ?? r.dueDate ?? null) as string | null)
+      : isExpense
+        ? ((r.date ?? null) as string | null)
+        : key === "stalledProjects"
+          ? r.updatedAt instanceof Date
+            ? r.updatedAt.toISOString().slice(0, 10)
+            : null
+          : null;
+    const amount =
+      key === "projectsMissingBudget"
+        ? Number(
+            (
+              r.rollup as
+                | {
+                    subtree?: {
+                      actualSpent?: number;
+                      committedSpent?: number;
+                    };
+                  }
+                | undefined
+            )?.subtree?.actualSpent ?? 0,
+          ) +
+          Number(
+            (r.rollup as { subtree?: { committedSpent?: number } } | undefined)
+              ?.subtree?.committedSpent ?? 0,
+          )
+        : null;
+    return {
+      key: `${type}:${id}`,
+      type,
+      severity:
+        key === "overdueTasks"
+          ? "critical"
+          : key === "stalledProjects" || key === "pastDuePlannedExpenses"
+            ? "warning"
+            : "info",
+      description:
+        key === "overdueTasks"
+          ? `"${name}" is overdue and still open`
+          : key === "stalledProjects"
+            ? `"${name}" has had no recent project activity`
+            : key === "projectsMissingBudget"
+              ? `"${name}" has spend but no budget estimate`
+              : key === "pastDuePlannedExpenses"
+                ? `"${name}" is a past-due planned expense`
+                : key === "unclassifiedExpenses"
+                  ? `"${name}" has no trade or cost recorded`
+                  : `"${name}" has blocked work and no next action`,
+      entityType,
+      entityId: id,
+      date,
+      amount,
+      href: `/${entityType === "task" ? "tasks" : entityType === "expense" ? "expenses" : "projects"}/${id}`,
+    };
+  });
+
 export const findTrackerProblems = async (
   db: Database,
 ): Promise<ProblemsTracker> => {
-  const exactKeys = [
-    "overdueTasks",
-    "stalledProjects",
-    "projectsMissingBudget",
-    "pastDuePlannedExpenses",
-    "unclassifiedExpenses",
-    "blockedWorkProjects",
-    "projectsWithDateDrift",
-  ] as const satisfies readonly ProblemKey[];
+  const exactKeys = TRACKER_PROBLEM_KEYS;
   const exact = await runExactProblemPages(db, exactKeys);
   const page = (key: (typeof exactKeys)[number]): ExactProblemPage => {
     const result = exact[key];
     if (!result) throw new Error(`Missing canonical Problem result "${key}"`);
     return result;
   };
-  const rows = (key: (typeof exactKeys)[number]) => page(key).data;
-  const attention = (
-    key: Exclude<(typeof exactKeys)[number], "projectsWithDateDrift">,
-  ): ProjectAttentionItem[] =>
-    rows(key).map((row) => {
-      const r = row as Record<string, unknown>;
-      const id = String(r.id);
-      const name = String(r.name ?? "Untitled");
-      const isTask = key === "overdueTasks";
-      const isExpense =
-        key === "pastDuePlannedExpenses" || key === "unclassifiedExpenses";
-      const type =
-        key === "overdueTasks"
-          ? "overdue_task"
-          : key === "stalledProjects"
-            ? "stalled_project"
-            : key === "projectsMissingBudget"
-              ? "missing_budget"
-              : key === "pastDuePlannedExpenses"
-                ? "past_due_planned_expense"
-                : key === "unclassifiedExpenses"
-                  ? "unclassified_expense"
-                  : "blocked_work";
-      const entityType = isTask ? "task" : isExpense ? "expense" : "project";
-      const date = isTask
-        ? ((r.dueEndDate ?? r.dueDate ?? null) as string | null)
-        : isExpense
-          ? ((r.date ?? null) as string | null)
-          : key === "stalledProjects"
-            ? r.updatedAt instanceof Date
-              ? r.updatedAt.toISOString().slice(0, 10)
-              : null
-            : null;
-      const amount =
-        key === "projectsMissingBudget"
-          ? Number(
-              (
-                r.rollup as
-                  | {
-                      subtree?: {
-                        actualSpent?: number;
-                        committedSpent?: number;
-                      };
-                    }
-                  | undefined
-              )?.subtree?.actualSpent ?? 0,
-            ) +
-            Number(
-              (
-                r.rollup as
-                  | { subtree?: { committedSpent?: number } }
-                  | undefined
-              )?.subtree?.committedSpent ?? 0,
-            )
-          : null;
-      return {
-        key: `${type}:${id}`,
-        type,
-        severity:
-          key === "overdueTasks"
-            ? "critical"
-            : key === "stalledProjects" || key === "pastDuePlannedExpenses"
-              ? "warning"
-              : "info",
-        description:
-          key === "overdueTasks"
-            ? `"${name}" is overdue and still open`
-            : key === "stalledProjects"
-              ? `"${name}" has had no recent project activity`
-              : key === "projectsMissingBudget"
-                ? `"${name}" has spend but no budget estimate`
-                : key === "pastDuePlannedExpenses"
-                  ? `"${name}" is a past-due planned expense`
-                  : key === "unclassifiedExpenses"
-                    ? `"${name}" has no trade or cost recorded`
-                    : `"${name}" has blocked work and no next action`,
-        entityType,
-        entityId: id,
-        date,
-        amount,
-        href: `/${entityType === "task" ? "tasks" : entityType === "expense" ? "expenses" : "projects"}/${id}`,
-      };
-    });
   return {
-    overdueTasks: attention("overdueTasks"),
-    stalledProjects: attention("stalledProjects"),
-    projectsMissingBudget: attention("projectsMissingBudget"),
-    pastDuePlannedExpenses: attention("pastDuePlannedExpenses"),
-    unclassifiedExpenses: attention("unclassifiedExpenses"),
-    blockedWorkProjects: attention("blockedWorkProjects"),
+    overdueTasks: presentTrackerProblem("overdueTasks", page("overdueTasks")),
+    stalledProjects: presentTrackerProblem(
+      "stalledProjects",
+      page("stalledProjects"),
+    ),
+    projectsMissingBudget: presentTrackerProblem(
+      "projectsMissingBudget",
+      page("projectsMissingBudget"),
+    ),
+    pastDuePlannedExpenses: presentTrackerProblem(
+      "pastDuePlannedExpenses",
+      page("pastDuePlannedExpenses"),
+    ),
+    unclassifiedExpenses: presentTrackerProblem(
+      "unclassifiedExpenses",
+      page("unclassifiedExpenses"),
+    ),
+    blockedWorkProjects: presentTrackerProblem(
+      "blockedWorkProjects",
+      page("blockedWorkProjects"),
+    ),
     // This remains derived because one project may produce two date-window
     // rows.  Its typed adapter computes the complete relation before sampling.
     projectsWithDateDrift: page("projectsWithDateDrift")
@@ -1306,13 +1379,16 @@ export const findUpcProblems = async (
   db: Database,
   upcLookupClient: UPCLookupClient,
 ): Promise<ProblemsUpc> => {
-  const { products: productsWithBetterUpcData, freshness } =
-    await findProductsWithBetterUpcData(db, upcLookupClient);
+  const {
+    products: productsWithBetterUpcData,
+    count,
+    freshness,
+  } = await findProductsWithBetterUpcData(db, upcLookupClient);
   return {
     productsWithBetterUpcData,
     // Proposal membership is materialized by UPC and can be counted exactly.
     sectionTotals: {
-      productsWithBetterUpcData: productsWithBetterUpcData.length,
+      productsWithBetterUpcData: count,
     },
     freshness,
   };
@@ -1320,9 +1396,9 @@ export const findUpcProblems = async (
 
 /**
  * Count every registered Problem through the same executor that supplies its
- * sample. Entity-backed Problems request a zero-row page, so list predicates
- * and exact totals stay canonical without paying card hydration/serialization;
- * derived Problems reuse their typed diagnostic adapters.
+ * sample. Entity-backed Problems select the explicit count intent, so list
+ * predicates and exact totals stay canonical without constructing card SQL;
+ * derived Problems use their dedicated count adapters.
  */
 export const findProblemCounts = async (
   db: Database,
@@ -1368,10 +1444,52 @@ export const findProblemByType = async (
   db: Database,
   key: ProblemKey,
   upcLookupClient: UPCLookupClient,
+  usdaClient: USDAClient,
 ): Promise<{ type: ProblemKey; items: unknown[]; total: number }> => {
   const result = await executeProblem(db, key, {
     diagnostic: { upcLookupClient },
   });
+  if ((FAST_ENTITY_PROBLEM_KEYS as readonly ProblemKey[]).includes(key)) {
+    return {
+      type: key,
+      items: await presentSingleFastProblem(
+        db,
+        key as (typeof FAST_ENTITY_PROBLEM_KEYS)[number],
+        result,
+      ),
+      total: result.count,
+    };
+  }
+  if (
+    key === "ingredientsWithPartialCoverage" ||
+    key === "productsWithIslandedMappings"
+  ) {
+    const empty = { ...result, data: [], items: [] };
+    const presented = await presentCoverageExactRows(
+      db,
+      usdaClient,
+      key === "ingredientsWithPartialCoverage" ? result : empty,
+      key === "productsWithIslandedMappings" ? result : empty,
+    );
+    return {
+      type: key,
+      items:
+        key === "ingredientsWithPartialCoverage"
+          ? presented.ingredientsWithPartialCoverage
+          : presented.productsWithIslandedMappings,
+      total: result.count,
+    };
+  }
+  if (
+    key !== "projectsWithDateDrift" &&
+    (TRACKER_PROBLEM_KEYS as readonly ProblemKey[]).includes(key)
+  ) {
+    return {
+      type: key,
+      items: presentTrackerProblem(key as TrackerEntityProblemKey, result),
+      total: result.count,
+    };
+  }
   return { type: key, items: [...result.items], total: result.count };
 };
 

@@ -76,7 +76,7 @@ import {
   formatSearchTerm,
   getDb,
   idSetPresence,
-  isCountOnlyPagination,
+  type ListReadIntent,
   lockAndValidateForDelete,
   notDeleted,
   presenceCondition,
@@ -421,6 +421,7 @@ export const recipeList = async (
   filters: RecipeFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
 ) => {
   const dbClient = getDb(db);
   const cookbookIds = await resolveFilterIds(
@@ -663,27 +664,28 @@ export const recipeList = async (
   // `mealCount` is a scalar extra so the "Meals" column doesn't need a second
   // round trip; same live-join semantics as `recipeIdsInLiveMeals` above (see
   // liveMealCountForRecipeSql's doc comment).
-  const { data: results, count: totalCount } = await executeListQueryWithCount(
-    dbClient.query.recipe.findMany({
-      where: whereClause,
-      orderBy: orderByClause,
-      limit: take,
-      offset: skip,
-      with: {
-        images: recipeListCoverImageRelation,
-      },
-      extras: {
-        mealCount: sql<number>`${sql.raw(
-          liveMealCountForRecipeSql('"recipe"."id"'),
-        )}`.as("mealCount"),
-        sectionCount: sql<number>`${sql.raw(
-          liveSectionCountForRecipeSql('"recipe"."id"'),
-        )}`.as("sectionCount"),
-      },
-    }),
-    countWhere(db, recipe, whereClause),
-    { countOnly: isCountOnlyPagination(pagination) },
-  );
+  const { data: results, count: totalCount } = await executeListQueryWithCount({
+    kind: readIntent,
+    rows: () =>
+      dbClient.query.recipe.findMany({
+        where: whereClause,
+        orderBy: orderByClause,
+        limit: take,
+        offset: skip,
+        with: {
+          images: recipeListCoverImageRelation,
+        },
+        extras: {
+          mealCount: sql<number>`${sql.raw(
+            liveMealCountForRecipeSql('"recipe"."id"'),
+          )}`.as("mealCount"),
+          sectionCount: sql<number>`${sql.raw(
+            liveSectionCountForRecipeSql('"recipe"."id"'),
+          )}`.as("sectionCount"),
+        },
+      }),
+    count: () => countWhere(db, recipe, whereClause),
+  });
 
   const items = results.map(dbRecipeToListAPI);
   return { data: items, count: totalCount };

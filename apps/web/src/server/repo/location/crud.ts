@@ -78,7 +78,7 @@ import {
   getDb,
   idSetPresence,
   imageOrder,
-  isCountOnlyPagination,
+  type ListReadIntent,
   lockAndValidateForDelete,
   mapImages,
   nextImageSortOrder,
@@ -782,6 +782,7 @@ export const locationList = async (
   sorts: SortParams[],
   pagination: PaginationParams,
   groupBy?: string,
+  readIntent: ListReadIntent = "page",
 ) => {
   const parentCodes = filters.parentId ? [filters.parentId].flat() : [];
   const parentIds = await resolveAllPresent(db, "location", parentCodes);
@@ -951,18 +952,19 @@ export const locationList = async (
 
   const { take, skip } = buildTakeSkip(pagination);
 
-  const { data: results, count: totalCount } = await executeListQueryWithCount(
-    getDb(db).query.location.findMany({
-      where: whereClause,
-      ...relations.location.list,
-      orderBy: orderByClause,
-      limit: take,
-      offset: skip,
-    }),
-    countWhere(db, location, whereClause),
-    { countOnly: isCountOnlyPagination(pagination) },
-  );
-  if (isCountOnlyPagination(pagination)) {
+  const { data: results, count: totalCount } = await executeListQueryWithCount({
+    kind: readIntent,
+    rows: () =>
+      getDb(db).query.location.findMany({
+        where: whereClause,
+        ...relations.location.list,
+        orderBy: orderByClause,
+        limit: take,
+        offset: skip,
+      }),
+    count: () => countWhere(db, location, whereClause),
+  });
+  if (readIntent === "count") {
     return { data: [], count: totalCount };
   }
 

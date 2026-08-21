@@ -1,6 +1,6 @@
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { and, eq } from "drizzle-orm";
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { compileProblemFilters } from "~/entities/problem-filter-semantics";
 import { viewProblemDeclarations } from "~/entities/view-manifest";
@@ -106,12 +106,19 @@ describe("unused ingredients (saved-view backed)", () => {
     // The destructive header actions receive a Problem key, never the sampled
     // card IDs. Their server path re-runs this exact registered query so an
     // item beyond a card page cannot be silently skipped.
-    await expect(
+    const withProductIds = await countTestDbQueries(() =>
       findAllViewProblemIds(ctx.db, "unusedIngredientsWithProduct"),
-    ).resolves.toEqual(withProduct.map((row) => row.id));
-    await expect(
+    );
+    const withoutProductIds = await countTestDbQueries(() =>
       findAllViewProblemIds(ctx.db, "unusedIngredientsWithoutProduct"),
-    ).resolves.toEqual(withoutProduct.map((row) => row.id));
+    );
+    expect(withProductIds.result).toEqual(withProduct.map((row) => row.id));
+    expect(withoutProductIds.result).toEqual(
+      withoutProduct.map((row) => row.id),
+    );
+    // Identity projection + one-row lookahead; no card hydration or count SQL.
+    expect(withProductIds.queryCount).toBe(1);
+    expect(withoutProductIds.queryCount).toBe(1);
   });
 });
 

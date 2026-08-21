@@ -205,15 +205,43 @@ export const buildOrderBy = <T extends PgTable & { id: AnyColumn }>(
  * Note: If you need to transform results before returning, pass the transformation
  * as part of the data query promise chain, or manually destructure and transform.
  */
+export type ListReadIntent = "page" | "sample" | "count" | "ids";
+
+type ListQueryPlan<T> = {
+  kind: ListReadIntent;
+  /** Lazy so a count read never constructs hydration SQL or starts side work. */
+  rows: () => Promise<T[]>;
+  count: () => Promise<number>;
+};
+
+export function executeListQueryWithCount<T>(
+  plan: ListQueryPlan<T>,
+): Promise<{ data: T[]; count: number }>;
+/** Compatibility overload for ordinary page readers while they adopt plans. */
+export function executeListQueryWithCount<T>(
+  rows: Promise<T[]>,
+  count: Promise<number>,
+): Promise<{ data: T[]; count: number }>;
 export async function executeListQueryWithCount<T>(
-  dataQuery: Promise<T[]>,
-  countQuery: Promise<number>,
-  options?: { countOnly?: boolean },
+  planOrRows: ListQueryPlan<T> | Promise<T[]>,
+  legacyCount?: Promise<number>,
 ): Promise<{ data: T[]; count: number }> {
   return withTrace(TraceNames.db("listQueryWithCount"), async (span) => {
-    const [data, count] = options?.countOnly
-      ? [[], await countQuery]
-      : await Promise.all([dataQuery, countQuery]);
+    const plan: ListQueryPlan<T> =
+      "kind" in planOrRows
+        ? planOrRows
+        : {
+            kind: "page",
+            rows: () => planOrRows,
+            count: () => {
+              if (!legacyCount) throw new Error("Missing list count query");
+              return legacyCount;
+            },
+          };
+    const [data, count] =
+      plan.kind === "count"
+        ? [[], await plan.count()]
+        : await Promise.all([plan.rows(), plan.count()]);
     span.setAttributes({
       "db.result_count": data.length,
       "db.total_count": count,
@@ -221,14 +249,6 @@ export async function executeListQueryWithCount<T>(
     return { data, count };
   });
 }
-
-/** Internal list execution hint used by exact count-only consumers. */
-export const isCountOnlyPagination = (pagination: object): boolean =>
-  "countOnly" in pagination && pagination.countOnly === true;
-
-/** Internal hint for consumers that do not render generic table footers. */
-export const skipsListAggregates = (pagination: object): boolean =>
-  "skipListAggregates" in pagination && pagination.skipListAggregates === true;
 
 /**
  * Locks entity records for update and validates they exist and aren't deleted.

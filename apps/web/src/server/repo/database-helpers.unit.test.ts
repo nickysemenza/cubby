@@ -38,24 +38,37 @@ describe("isTransaction", () => {
 });
 
 describe("executeListQueryWithCount", () => {
-  it("does not execute the row query in count-only mode", async () => {
-    let rowQueryAwaited = false;
-    const rowQuery = {
-      // biome-ignore lint/suspicious/noThenProperty: Drizzle queries are lazy thenables; the test must model that contract.
-      then: (resolve: (rows: number[]) => unknown) => {
-        rowQueryAwaited = true;
-        return Promise.resolve(resolve([1]));
+  it("does not construct the row query for a count read", async () => {
+    let rowQueryConstructed = false;
+    const result = await executeListQueryWithCount({
+      kind: "count",
+      rows: async () => {
+        rowQueryConstructed = true;
+        return [1];
       },
-    } as unknown as Promise<number[]>;
-
-    const result = await executeListQueryWithCount(
-      rowQuery,
-      Promise.resolve(7),
-      { countOnly: true },
-    );
+      count: async () => 7,
+    });
 
     expect(result).toEqual({ data: [], count: 7 });
-    expect(rowQueryAwaited).toBe(false);
+    expect(rowQueryConstructed).toBe(false);
+  });
+
+  it("constructs both lazy queries for a page read", async () => {
+    const constructed: string[] = [];
+    const result = await executeListQueryWithCount({
+      kind: "page",
+      rows: async () => {
+        constructed.push("rows");
+        return [1, 2];
+      },
+      count: async () => {
+        constructed.push("count");
+        return 7;
+      },
+    });
+
+    expect(result).toEqual({ data: [1, 2], count: 7 });
+    expect(constructed).toEqual(expect.arrayContaining(["rows", "count"]));
   });
 });
 

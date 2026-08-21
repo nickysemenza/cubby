@@ -37,7 +37,7 @@ import {
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
-  isCountOnlyPagination,
+  type ListReadIntent,
   notDeleted,
   presenceCondition,
   relations,
@@ -151,6 +151,7 @@ export const taskList = async (
   filters: TaskFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
 ): Promise<{ data: TaskOut[]; count: number }> => {
   const dbClient = getDb(db);
   const projectCondition = await buildTaskProjectCondition(
@@ -274,18 +275,19 @@ export const taskList = async (
   });
   const { take, skip } = buildTakeSkip(pagination);
 
-  const { data: rows, count } = await executeListQueryWithCount(
-    dbClient.query.task.findMany({
-      where: whereClause,
-      orderBy: orderByArray,
-      limit: take,
-      offset: skip,
-      ...relations.task.withProject,
-    }),
-    countWhere(db, task, whereClause),
-    { countOnly: isCountOnlyPagination(pagination) },
-  );
-  if (isCountOnlyPagination(pagination)) {
+  const { data: rows, count } = await executeListQueryWithCount({
+    kind: readIntent,
+    rows: () =>
+      dbClient.query.task.findMany({
+        where: whereClause,
+        orderBy: orderByArray,
+        limit: take,
+        offset: skip,
+        ...relations.task.withProject,
+      }),
+    count: () => countWhere(db, task, whereClause),
+  });
+  if (readIntent === "count") {
     return { data: [], count };
   }
 

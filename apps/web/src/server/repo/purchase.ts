@@ -105,7 +105,7 @@ import {
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
-  isCountOnlyPagination,
+  type ListReadIntent,
   lockAndValidateForDelete,
   nextImageSortOrder,
   notDeleted,
@@ -610,6 +610,7 @@ export const purchaseList = async (
   filters: PurchaseFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
 ): Promise<{ data: PurchaseOut[]; count: number }> => {
   // An unknown code resolves to nothing and so matches nothing, which is what a
   // filter naming a missing vendor should do — not throw. `vendorUuids` alone
@@ -631,22 +632,23 @@ export const purchaseList = async (
   const whereClause = buildPurchaseWhereClause(filters, vendorCondition);
   const { take, skip } = buildTakeSkip(pagination);
 
-  const { data: rows, count } = await executeListQueryWithCount(
-    getDb(db)
-      .select(purchaseColumns)
-      .from(purchase)
-      .where(whereClause)
-      .orderBy(
-        ...buildOrderBy(purchase, sorts, [...purchaseSortableFields], {
-          resolve: resolvePurchaseSort,
-        }),
-      )
-      .limit(take)
-      .offset(skip),
-    countWhere(db, purchase, whereClause),
-    { countOnly: isCountOnlyPagination(pagination) },
-  );
-  if (isCountOnlyPagination(pagination)) {
+  const { data: rows, count } = await executeListQueryWithCount({
+    kind: readIntent,
+    rows: () =>
+      getDb(db)
+        .select(purchaseColumns)
+        .from(purchase)
+        .where(whereClause)
+        .orderBy(
+          ...buildOrderBy(purchase, sorts, [...purchaseSortableFields], {
+            resolve: resolvePurchaseSort,
+          }),
+        )
+        .limit(take)
+        .offset(skip),
+    count: () => countWhere(db, purchase, whereClause),
+  });
+  if (readIntent === "count") {
     return { data: [], count };
   }
   const [financialByPurchase, dataQualities] = await Promise.all([

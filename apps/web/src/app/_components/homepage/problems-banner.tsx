@@ -1,17 +1,17 @@
-import { countProblems } from "@cubby/schemas/problems";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useProblemsData } from "~/app/problems/use-problems-data";
 import { useHydrated } from "~/hooks/useHydrated";
 import { useIdle } from "~/hooks/useIdle";
+import { useTRPC } from "~/integrations/trpc/react";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
 
 /**
  * Data-problems bar, shown only when something is outstanding. Ports the
- * deferred-fetch gate from the retired ProblemsStatCard: the 5 cost-grouped
- * detectors aren't needed for the page to be interactive, so `useIdle` keeps
- * them off the first-paint critical path (combined with the auth+hydration
- * gate, which also keeps SSR markup stable).
+ * deferred-fetch gate from the retired ProblemsStatCard. It shares the
+ * navbar's five-minute count query instead of fetching five groups of card
+ * samples merely to render two numbers; `useIdle` keeps even that exact count
+ * off the first-paint critical path.
  *
  * `total` is already defect-only — `PROBLEM_CLASS` keeps coverage rows out of
  * it precisely because a count that can never reach zero makes a permanent red
@@ -21,16 +21,21 @@ import { cn } from "~/lib/utils";
  * wrong" and "this hasn't been filed yet".
  */
 export function ProblemsBanner() {
+  const api = useTRPC();
   const session = authClient.useSession();
   const enabled = useHydrated() && !!session.data?.user;
   const idle = useIdle();
-  const { problems, isLoading } = useProblemsData({
+  const { data: counts, isLoading } = useQuery({
+    ...api.problems.getCounts.queryOptions(),
     staleTime: 5 * 60 * 1000,
     enabled: enabled && idle,
   });
-  const { total: defects, coverageTotal } = countProblems(problems);
+  const defects = counts?.total ?? 0;
+  const coverageTotal = counts?.coverageTotal ?? 0;
 
-  if (isLoading || (defects === 0 && coverageTotal === 0)) return null;
+  if (!counts || isLoading || (defects === 0 && coverageTotal === 0)) {
+    return null;
+  }
 
   return (
     <Link

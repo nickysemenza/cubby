@@ -85,12 +85,11 @@ import {
   getDb,
   idSetPresence,
   insertAndReturn,
-  isCountOnlyPagination,
+  type ListReadIntent,
   lockAndValidateForDelete,
   notDeleted,
   presenceCondition,
   relations,
-  skipsListAggregates,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
@@ -421,6 +420,7 @@ export const productList = async (
   sorts: SortParams[],
   pagination: PaginationParams,
   groupBy?: string,
+  readIntent: ListReadIntent = "page",
 ) => {
   const dbClient = getDb(db);
 
@@ -898,7 +898,7 @@ export const productList = async (
     ],
   );
 
-  if (isCountOnlyPagination(pagination)) {
+  if (readIntent === "count") {
     return {
       data: [],
       count: await countWhere(db, product, whereClause),
@@ -912,23 +912,25 @@ export const productList = async (
   const orderByArray = productListOrderBy(sorts, groupBy);
 
   const { take, skip } = buildTakeSkip(pagination);
-  const skipAggregates = skipsListAggregates(pagination);
+  const skipAggregates = readIntent === "sample";
 
   // Execute queries in parallel and transform results. The aggregate query
   // shares whereClause, so the footer's price total covers the FULL filtered
   // set (the client only holds a page).
   const [{ data: results, count: totalCount }, aggregates, expenseAggregates] =
     await Promise.all([
-      executeListQueryWithCount(
-        getDb(db).query.product.findMany({
-          where: whereClause,
-          orderBy: orderByArray,
-          limit: take,
-          offset: skip,
-          ...relations.product.list,
-        }),
-        countWhere(db, product, whereClause),
-      ),
+      executeListQueryWithCount({
+        kind: readIntent,
+        rows: () =>
+          getDb(db).query.product.findMany({
+            where: whereClause,
+            orderBy: orderByArray,
+            limit: take,
+            offset: skip,
+            ...relations.product.list,
+          }),
+        count: () => countWhere(db, product, whereClause),
+      }),
       skipAggregates
         ? Promise.resolve([{ priceSum: 0 }])
         : getDb(db)

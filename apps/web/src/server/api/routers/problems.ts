@@ -79,7 +79,7 @@ const getByType = protectedProcedure
   .input(z.object({ key: problemKeySchema }))
   .output(strictOutput(problemByTypeSchema))
   .query(async ({ ctx, input }) =>
-    findProblemByType(ctx.db, input.key, ctx.upcLookupClient),
+    findProblemByType(ctx.db, input.key, ctx.upcLookupClient, ctx.usdaClient),
   );
 
 /**
