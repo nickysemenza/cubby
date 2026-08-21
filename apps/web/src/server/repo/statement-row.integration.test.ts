@@ -1,7 +1,10 @@
 import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import { unsafeFinancialAccountShortcode } from "@cubby/schemas/identifiers";
-import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
+import {
+  findStatementRowDriftInput,
+  recordStatementRowsInput,
+} from "@cubby/schemas/statement-row";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -14,7 +17,9 @@ import {
 } from "./financial-transaction";
 import {
   deleteStatementRows,
+  findStatementRowDrift,
   getStatementRowSummary,
+  listStatementImports,
   listStatementRows,
   recordStatementRows,
   updateStatementRows,
@@ -48,12 +53,14 @@ const record = (
   actor: Parameters<typeof recordStatementRows>[2],
   rows: Record<string, unknown>[],
   importOverrides: Record<string, unknown> = {},
+  dryRun = false,
 ) =>
   recordStatementRows(
     db,
     recordStatementRowsInput.parse({
       import: importInput(importOverrides),
       rows,
+      dryRun,
     }),
     actor,
   );
@@ -106,6 +113,210 @@ describe("statement row ledger", () => {
       disposition: "open",
     });
     expect(charge?.externalId).toMatch(/^v1:[0-9a-f]{64}$/);
+  });
+
+  it("splits unchanged into the three states it used to conflate", async () => {
+    // `rows.length - inserted.length` could not tell "recorded by this batch"
+    // from "recorded by another export" from "the payload holds it twice" —
+    // three states with three different remedies, reported as one number.
+    const other = rowInput({
+      statementDate: "2026-05-09",
+      providerAmount: -11.11,
+      rawDescription: "OTHER BATCH ROW",
+    });
+    await record(ctx.db, ctx.actor, [other], {
+      fingerprint: "fp-breakdown-other",
+      rowCountDeclared: 1,
+    });
+
+    const result = await record(
+      ctx.db,
+      ctx.actor,
+      // One novel row, one duplicated verbatim inside this payload, and one
+      // already recorded under a different batch.
+      [rowInput(), rowInput(), other],
+      { fingerprint: "fp-breakdown", rowCountDeclared: 4 },
+    );
+    expect(result).toMatchObject({
+      dryRun: false,
+      inserted: 1,
+      unchanged: 2,
+      alreadyInThisBatch: 0,
+      alreadyInAnotherBatch: 1,
+      indistinguishableDuplicates: 1,
+      // Declared 4, submitted 3 — the export had a row this payload left out.
+      // A prior ingest dropped 19 zero-amount rows with nothing recording it,
+      // so they re-presented as "new" on every later export.
+      rowsOmitted: 1,
+    });
+
+    const again = await record(ctx.db, ctx.actor, [rowInput()], {
+      fingerprint: "fp-breakdown",
+      rowCountDeclared: 1,
+    });
+    expect(again).toMatchObject({
+      inserted: 0,
+      unchanged: 1,
+      alreadyInThisBatch: 1,
+      alreadyInAnotherBatch: 0,
+      indistinguishableDuplicates: 0,
+      rowsOmitted: 0,
+    });
+  });
+
+  it("reports what a dryRun would insert and writes nothing", async () => {
+    const rows = [
+      rowInput({
+        statementDate: "2026-05-11",
+        providerAmount: -77.77,
+        rawDescription: "DRY RUN ROW ONE",
+      }),
+      rowInput({
+        statementDate: "2026-05-12",
+        providerAmount: -88.88,
+        rawDescription: "DRY RUN ROW TWO",
+      }),
+    ];
+    const preview = await record(
+      ctx.db,
+      ctx.actor,
+      rows,
+      { fingerprint: "fp-dry", rowCountDeclared: 2 },
+      true,
+    );
+    expect(preview).toMatchObject({
+      batchId: null,
+      batchCreated: false,
+      dryRun: true,
+      inserted: 2,
+      unchanged: 0,
+      rowCountStored: 0,
+    });
+    // No batch, no rows: the preview must be free of side effects, or it is
+    // just an ingest that lies about what it did.
+    expect((await listStatementImports(ctx.db)).data).toHaveLength(0);
+    expect((await listStatementRows(ctx.db, {})).count).toBe(0);
+
+    const written = await record(ctx.db, ctx.actor, rows, {
+      fingerprint: "fp-dry",
+      rowCountDeclared: 2,
+    });
+    expect(written).toMatchObject({ dryRun: false, inserted: 2 });
+
+    // The whole point: a second dryRun of an already-ingested chunk reports it
+    // as stored, which is what previously required reproducing the server's
+    // hash offline to learn.
+    const replay = await record(
+      ctx.db,
+      ctx.actor,
+      rows,
+      { fingerprint: "fp-dry", rowCountDeclared: 2 },
+      true,
+    );
+    expect(replay).toMatchObject({
+      dryRun: true,
+      inserted: 0,
+      unchanged: 2,
+      alreadyInThisBatch: 2,
+      rowCountStored: 2,
+    });
+  });
+
+  it("finds a charge re-recorded under a firmed-up descriptor", async () => {
+    const shared = { statementDate: "2026-05-20", providerAmount: -63.42 };
+    await record(
+      ctx.db,
+      ctx.actor,
+      [
+        rowInput({ ...shared, rawDescription: "AMAZON MKTPLACE PMTS" }),
+        // Same day, same card, DIFFERENT amount — not drift, and the sweep
+        // must not report it.
+        rowInput({
+          statementDate: "2026-05-20",
+          providerAmount: -9.99,
+          rawDescription: "UNRELATED SAME DAY CHARGE",
+        }),
+        // Same day, same card, same amount, different description — but from
+        // ONE export, so these are two real charges (two payroll deposits, two
+        // coffees), not one charge seen twice.
+        rowInput({
+          statementDate: "2026-05-21",
+          providerAmount: -4.5,
+          rawDescription: "BLUE BOTTLE COFFEE 1",
+        }),
+        rowInput({
+          statementDate: "2026-05-21",
+          providerAmount: -4.5,
+          rawDescription: "BLUE BOTTLE COFFEE 2",
+        }),
+      ],
+      { fingerprint: "fp-drift-first", rowCountDeclared: 4 },
+    );
+    // The later export firms the descriptor up, so the identity hash — which
+    // covers rawDescription — mints a SECOND row for money already recorded.
+    await record(
+      ctx.db,
+      ctx.actor,
+      [rowInput({ ...shared, rawDescription: "AMAZON MKTPL*XD8AR9RG3" })],
+      { fingerprint: "fp-drift-second", rowCountDeclared: 1 },
+    );
+
+    const found = await findStatementRowDrift(
+      ctx.db,
+      findStatementRowDriftInput.parse({}),
+    );
+    expect(found.truncated).toBe(false);
+    // The same-batch coffee pair is excluded by default — on the production
+    // ledger that class is 240 groups against 0 real findings.
+    expect(found.candidates).toHaveLength(1);
+    const [candidate] = found.candidates;
+    expect(candidate).toMatchObject({
+      source: "monarch",
+      statementDate: "2026-05-20",
+      providerAmount: -63.42,
+      crossBatch: true,
+    });
+
+    const withSameBatch = await findStatementRowDrift(
+      ctx.db,
+      findStatementRowDriftInput.parse({ includeSameBatch: true }),
+    );
+    expect(withSameBatch.candidates).toHaveLength(2);
+    // Cross-batch first, so a bounded sweep spends its limit on drift.
+    expect(withSameBatch.candidates.map((row) => row.crossBatch)).toEqual([
+      true,
+      false,
+    ]);
+    // Oldest first, so rows[0] is the likeliest predecessor.
+    expect(candidate?.rows.map((row) => row.rawDescription)).toEqual([
+      "AMAZON MKTPLACE PMTS",
+      "AMAZON MKTPL*XD8AR9RG3",
+    ]);
+    expect(candidate?.rows.map((row) => row.importFingerprint)).toEqual([
+      "fp-drift-first",
+      "fp-drift-second",
+    ]);
+
+    // Linking the predecessor settles the question, and the worklist shrinks.
+    await updateStatementRows(
+      ctx.db,
+      {
+        selector: {
+          source: "monarch",
+          externalIds: [candidate!.rows[0]!.externalId],
+        },
+        data: { supersededByExternalId: candidate!.rows[1]!.externalId },
+      },
+      ctx.actor,
+    );
+    expect(
+      (
+        await findStatementRowDrift(
+          ctx.db,
+          findStatementRowDriftInput.parse({}),
+        )
+      ).candidates,
+    ).toHaveLength(0);
   });
 
   it("derives match state from sourceRefs, without storing it", async () => {

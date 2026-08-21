@@ -189,15 +189,58 @@ export type StatementRowInput = z.infer<typeof statementRowInput>;
 export const recordStatementRowsInput = z.strictObject({
   import: statementImportInput,
   rows: z.array(statementRowInput).min(1).max(STATEMENT_ROW_RECORD_MAX_ROWS),
+  /**
+   * Derive every identity and report what a real call would do, then write
+   * nothing — no batch, no rows.
+   *
+   * The server owns the hash, so before this the only way to learn whether a
+   * chunk was already recorded was to reproduce `statementRowExternalId`
+   * offline and query for the results. Ask the server instead.
+   */
+  dryRun: z.boolean().default(false),
 });
 export type RecordStatementRowsInput = z.infer<typeof recordStatementRowsInput>;
 
 export const recordStatementRowsOut = z.object({
-  batchId: z.string(),
+  /** Null under `dryRun` — no batch is created, so there is no id to name. */
+  batchId: z.string().nullable(),
   batchCreated: z.boolean(),
+  /** Echoes the request, so a caller cannot mistake a preview for a write. */
+  dryRun: z.boolean(),
   inserted: z.number().int(),
-  /** Already present under the same `(source, externalId)` — re-ingest is a no-op. */
+  /**
+   * Already present under the same `(source, externalId)` — re-ingest is a
+   * no-op. The sum of the three fields below.
+   *
+   * Was `rows.length - inserted.length`, a subtraction that could not tell
+   * "recorded by this very batch" from "recorded by a different export" from
+   * "the payload contains the row twice" — three states with three different
+   * remedies, reported as one number.
+   */
   unchanged: z.number().int(),
+  /** Recorded by an earlier submission of THIS batch's fingerprint. */
+  alreadyInThisBatch: z.number().int(),
+  /**
+   * Recorded by a DIFFERENT batch. Normal when exports overlap in date range;
+   * the row keeps its original batch.
+   */
+  alreadyInAnotherBatch: z.number().int(),
+  /**
+   * Present more than once inside this payload. Two provider rows that hash
+   * identically are indistinguishable, so only the first can ever be stored —
+   * `financial-statement-preview` calls the same state
+   * `indistinguishable_duplicate`. A real same-amount-same-day pair (two $4.50
+   * coffees) lands here and needs a distinguishing `rawDescription`.
+   */
+  indistinguishableDuplicates: z.number().int(),
+  /**
+   * `rowCountDeclared - rows.length`, when the caller declared a count.
+   *
+   * Non-zero means the export had rows this payload left out. A prior ingest
+   * silently dropped 19 zero-amount rows, and because nothing recorded the
+   * exclusion they re-presented as "new" on every later export.
+   */
+  rowsOmitted: z.number().int().nullable(),
   rowCountStored: z.number().int(),
   /**
    * Set when the batch looks un-normalized — the signature of a Copilot or
@@ -266,6 +309,81 @@ export const updateStatementRowsInput = z.strictObject({
   data: statementRowUpdateData,
 });
 export type UpdateStatementRowsInput = z.infer<typeof updateStatementRowsInput>;
+
+/**
+ * Two live rows that are the same charge under two identities.
+ *
+ * The hash covers `rawDescription`, so a charge re-exported after its
+ * descriptor firms up (`AMAZON MKTPLACE PMTS` → `AMAZON MKTPL*XD8AR9RG3`)
+ * mints a SECOND identity for money already recorded. 9 of 188 rows in the
+ * 2026-08-19 Monarch export were this. The hash cannot be fixed — it is stored
+ * externally in `FinancialTransaction.sourceRefs` with no back-reference — so
+ * drift is detected rather than prevented.
+ *
+ * Reported, never acted on: the remedy links one row to the other with
+ * `supersededByExternalId`, and which row superseded which is a judgment.
+ * Same-amount-same-day coincidences are real (two $4.50 coffees), so a
+ * candidate is a question, not a finding.
+ */
+export const statementRowDriftCandidate = z.object({
+  source: z.string(),
+  accountDescriptor: z.string(),
+  statementDate: plainDate,
+  providerAmount: z.number(),
+  /**
+   * The rows came from different exports — the signature of descriptor drift,
+   * since one export speaks one descriptor vocabulary. On the full 33,681-row
+   * ledger this separates the two findings exactly: all 9 known drift pairs are
+   * cross-batch, and all 240 same-batch groups are genuine same-day same-amount
+   * coincidences (two payroll deposits, a repeated coffee).
+   */
+  crossBatch: z.boolean(),
+  /** Oldest first, so `rows[0]` is the likeliest predecessor. */
+  rows: z.array(
+    z.object({
+      externalId: z.string(),
+      rawDescription: z.string(),
+      merchant: z.string().nullable(),
+      providerStatus: statementRowProviderStatus.nullable(),
+      disposition: statementRowDisposition,
+      importFingerprint: z.string(),
+      createdAt: z.date(),
+    }),
+  ),
+});
+export type StatementRowDriftCandidate = z.infer<
+  typeof statementRowDriftCandidate
+>;
+
+export const findStatementRowDriftInput = z.object({
+  source: z.string().optional(),
+  dateFrom: plainDate.optional(),
+  dateTo: plainDate.optional(),
+  /** Fingerprint of one export, to scope the sweep to a chunk just ingested. */
+  importFingerprint: z.string().optional(),
+  /**
+   * Also report groups whose rows all came from ONE export.
+   *
+   * Off by default: a single export speaks one descriptor vocabulary, so two of
+   * its rows differing only in description are two real charges, not one charge
+   * seen twice. On the production ledger that is 240 groups of noise against 0
+   * real findings — enough to bury the drift the sweep exists to surface.
+   */
+  includeSameBatch: z.boolean().default(false),
+  limit: z.number().int().min(1).max(200).default(50),
+});
+export type FindStatementRowDriftInput = z.infer<
+  typeof findStatementRowDriftInput
+>;
+
+export const findStatementRowDriftOut = z.object({
+  candidates: z.array(statementRowDriftCandidate),
+  /**
+   * True when `limit` cut the list. A bounded sweep that says nothing about
+   * what it dropped reads as "no more drift", which is the opposite of true.
+   */
+  truncated: z.boolean(),
+});
 
 export const deleteStatementRowsInput = z.strictObject({
   selector: statementRowSelector,
