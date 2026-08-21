@@ -738,3 +738,43 @@ describe("EditableCell rich display trigger", () => {
     expect(editButton.contains(link)).toBe(false);
   });
 });
+
+describe("EditableCell across a cell-selection mode flip", () => {
+  // RTable's cell-selection mode used to be gated on react-query's
+  // `isPlaceholderData`, so the edit gesture flipped mid-fetch. That coupling is
+  // gone (see `cellSelectionEnabled` in Table.tsx), but the flip is still
+  // reachable — a table can be remounted into a different mode — and an open
+  // editor must ride it out. Edit state is local to the cell and the overlay is
+  // portaled to <body>, so nothing here may key or remount on the context.
+  it("keeps an open editor and its typed draft when the mode flips", async () => {
+    const cell = (
+      <EditableCell
+        value="original"
+        onSave={vi.fn()}
+        config={{ type: "text" }}
+        renderValue={(value) => <span>{value}</span>}
+      />
+    );
+    const { rerender } = render(
+      <CellSelectionContext.Provider value={false}>
+        {cell}
+      </CellSelectionContext.Provider>,
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toBeInTheDocument();
+    });
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "half-typed" },
+    });
+
+    rerender(
+      <CellSelectionContext.Provider value={true}>
+        {cell}
+      </CellSelectionContext.Provider>,
+    );
+
+    expect(screen.getByRole("textbox")).toHaveValue("half-typed");
+  });
+});

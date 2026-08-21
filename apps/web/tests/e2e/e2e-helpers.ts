@@ -97,29 +97,52 @@ function cellEditorInput(page: Page): Locator {
 }
 
 /**
- * Open a LIST table's inline cell editor, and keep it open.
+ * Edit a LIST table's inline cell: open the editor and commit `value`, as ONE
+ * retried unit.
  *
- * In cell-selection mode the editor opens on double-click — but the mode itself
- * is `!isMobile && !isTransitioning` (`Table.tsx`), and `isTransitioning` is
- * react-query's `isPlaceholderData`. So while a background refetch is in flight
- * the table is temporarily in click-to-edit mode, and when the refetch lands the
- * context flips, the whole tree re-renders, and an editor opened inside that
- * window is torn down before it can be filled. The failure looks like the editor
- * never opened at all: `[data-slot="cell-editor-overlay"] input` simply never
- * appears.
+ * Two separate races sit between "double-click the trigger" and "type into the
+ * editor", and both look identical from the outside — the overlay is simply not
+ * there:
  *
- * Retried rather than asserted once, because the tear-down is transient — the
- * next attempt runs against a settled table. Detail pages don't need this: they
- * are never in cell-selection mode, so a single click opens the editor and no
- * refetch can change the gesture out from under it.
+ * 1. The double-click is swallowed. While a list table swaps query keys
+ *    (filter/sort/page-size change, or the table state settling right after
+ *    mount) it shows the previous rows behind an `inert` body — RTable's
+ *    "placeholder rows for a query being replaced are not interactive" curtain.
+ *    A real click inside an `inert` subtree fires NO event, and
+ *    `elementFromPoint` there returns `<body>` rather than the button, so
+ *    Playwright (1.62 has no `inert` awareness anywhere in its actionability
+ *    checks) sees an intercepted hit target and retries — but its hit-target
+ *    check and its event dispatch are not atomic. If the curtain drops between
+ *    the two, the clicks land in the void and the call reports success.
+ * 2. The editor opens and then goes away before it can be filled. Observed in
+ *    CI on the project rename: `openCellEditor` saw the overlay, and the very
+ *    next assertion found no overlay for a full 15s, with the row and its "Edit
+ *    value" trigger still mounted. Not yet reproduced in a real browser — an
+ *    open editor survives a same-key refetch, a full `invalidateQueries()`, and
+ *    a forced column-definition rebuild — so the trigger for it is still open.
  *
- * The tear-down is also a real user-facing bug (start editing, a refetch lands,
- * the editor vanishes); this only stops it from making the suite flaky.
+ * Opening and filling as one retried unit covers both: whatever removed the
+ * editor, the next attempt reopens it against a settled table. Retrying is safe
+ * because nothing is written until the closing `press("Enter")` — an attempt
+ * that dies earlier leaves no partial edit, and a repeated identical value is a
+ * no-op commit.
+ *
+ * Detail pages need none of this: they are never in cell-selection mode and have
+ * no transition curtain, so a single click opens the editor — they call
+ * `fillCellEditor` directly.
  */
-export async function openCellEditor(page: Page, trigger: Locator) {
+export async function editListCell(
+  page: Page,
+  trigger: Locator,
+  value: string,
+) {
   await expect(async () => {
     await trigger.dblclick();
-    await expect(cellEditorInput(page)).toBeVisible({ timeout: 2_000 });
+    const input = cellEditorInput(page);
+    await expect(input).toBeVisible({ timeout: 2_000 });
+    await expect(input).toBeEnabled({ timeout: 2_000 });
+    await input.fill(value);
+    await input.press("Enter");
   }).toPass({ timeout: 30_000 });
 }
 

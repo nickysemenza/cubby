@@ -191,7 +191,20 @@ export default function RTable<TItem extends RowData>(
   });
 
   // Desktop tables get spreadsheet-style cell selection; mobile does not.
-  const cellSelectionEnabled = !isMobile && !isTransitioning;
+  //
+  // Deliberately NOT gated on `isTransitioning`. This flag is the interaction
+  // MODEL — which gesture opens an editor (double-click vs click), and whether
+  // a cell click suppresses the row's onClick — and a gesture that changes
+  // under the user's hands mid-fetch is a bug, not a safety measure. The
+  // range ENGINE is what must pause while placeholder rows stand in for a
+  // query that's being replaced, and it is gated separately
+  // (`useCellSelection({ enabled: !isMobile && !isTransitioning })` in
+  // useDataTableController) — that is the part #560 needed. Gating the mode
+  // too also flipped every editable cell back to the legacy per-element
+  // clipboard registration for the length of each transition, which is exactly
+  // the path `cell-edit-trigger` documents as unsafe once the range engine
+  // owns copy/paste.
+  const cellSelectionEnabled = !isMobile;
 
   // Embedded tables drop chrome that would carry no information: a toolbar
   // holding only the View menu + page-size control, and a pager for a list that
