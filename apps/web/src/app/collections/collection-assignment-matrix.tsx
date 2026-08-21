@@ -14,7 +14,7 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 50;
 const SETTLE_MS = 400;
 type MatrixRow = RouterOutputs["collection"]["matrix"]["rows"][number];
 
@@ -131,9 +131,12 @@ export function CollectionAssignmentMatrix({
     1,
     Math.ceil((matrix.data?.totalCount ?? 0) / PAGE_SIZE),
   );
+  const totalCount = matrix.data?.totalCount ?? 0;
+  const rangeStart = totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(page * PAGE_SIZE, totalCount);
 
   return (
-    <Stack gap="md" className="pb-24">
+    <Stack gap="sm" className="pb-24">
       <Tabs
         value={subject}
         onValueChange={(value) =>
@@ -149,7 +152,7 @@ export function CollectionAssignmentMatrix({
         </TabsList>
       </Tabs>
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center gap-2 border-border border-y py-2">
         <Input
           className="w-full md:w-72"
           value={search ?? ""}
@@ -159,13 +162,17 @@ export function CollectionAssignmentMatrix({
           placeholder={`Search ${subject === "product" ? "products" : "locations"}`}
           aria-label={`Search ${subject}`}
         />
-        <div className="flex gap-4 font-mono text-2xs text-muted-foreground">
-          <span>
-            <span className="mr-1 inline-block size-2 border border-primary bg-primary" />{" "}
+        <span className="ml-auto font-mono text-2xs text-muted-foreground tabular-nums">
+          {rangeStart.toLocaleString()}–{rangeEnd.toLocaleString()} of{" "}
+          {totalCount.toLocaleString()}
+        </span>
+        <div className="flex items-center gap-4 font-mono text-2xs text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <span className="inline-block size-3 border border-primary bg-primary" />
             direct
           </span>
-          <span>
-            <span className="mr-1 inline-block size-2 border border-foreground/50 border-dashed" />{" "}
+          <span className="flex items-center gap-1">
+            <MapPin className="size-3" />
             inherited
           </span>
         </div>
@@ -191,19 +198,24 @@ export function CollectionAssignmentMatrix({
           <p className="border-border border-y py-8 text-center text-muted-foreground">
             Create a Collection before managing assignments.
           </p>
+        ) : rows.length === 0 ? (
+          <p className="border-border border-y py-8 text-center text-muted-foreground">
+            No {subject === "product" ? "products" : "locations"} match this
+            search.
+          </p>
         ) : (
           <CrossTabTable
             cornerLabel={subject === "product" ? "Product" : "Location"}
             columns={columns}
             rows={rows}
-            layout={{ rowHeader: 240, column: 88, pinned: 0 }}
+            layout={{ rowHeader: 280, column: 112, pinned: 0 }}
             surface="background"
-            stickyHeaderTop="top-[51px]"
             bareCells
             rowHover
             caption="Collection assignment matrix"
+            className="min-w-full"
             renderColumnHeader={(column) => (
-              <span className="inline-block max-w-20 break-words text-right font-mono text-2xs uppercase tracking-wider">
+              <span className="block break-words text-center font-mono text-2xs uppercase tracking-wider">
                 {formatCollectionLabel(column.data)}
               </span>
             )}
@@ -231,19 +243,29 @@ export function CollectionAssignmentMatrix({
                   type="button"
                   aria-pressed={assigned}
                   aria-label={`${assigned ? "Remove" : "Add"} direct ${formatCollectionLabel(column.data)} assignment for ${row.data.name}${inherited ? "; inherited membership remains" : ""}`}
+                  title={`${row.data.name}: ${formatCollectionLabel(column.data)} — ${state}`}
                   onClick={() => schedule(row.data, column.data)}
                   className={cn(
-                    "relative grid min-h-10 w-full place-items-center border-border border-l focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-ring",
+                    "group/cell relative grid min-h-10 w-full place-items-center border-border border-l focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-ring",
                     assigned
                       ? "bg-primary/10 text-primary"
                       : "hover:bg-muted/40",
                   )}
                 >
-                  {assigned && <Check className="size-4" />}
+                  <span
+                    className={cn(
+                      "grid size-5 place-items-center border bg-background transition-colors",
+                      assigned
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border group-hover/cell:border-primary",
+                    )}
+                  >
+                    {assigned && <Check className="size-3.5" />}
+                  </span>
                   {inherited && (
                     <MapPin
                       className={cn(
-                        "absolute right-1 bottom-1 size-2.5",
+                        "absolute right-2 bottom-1 size-3",
                         assigned ? "text-primary/70" : "text-muted-foreground",
                       )}
                     />
@@ -266,7 +288,7 @@ export function CollectionAssignmentMatrix({
           <ChevronLeft />
         </Button>
         <span className="font-mono text-2xs">
-          {page} / {pageCount}
+          Page {page} / {pageCount}
         </span>
         <Button
           variant="outline"
