@@ -68,21 +68,25 @@ export function buildSearchHitComboboxItem<TId extends string>(
 ): ComboboxItem<TId> {
   const locationKind =
     entity === "location" ? locationType.safeParse(hit.typeHint).data : null;
-  const fallback = locationKind ? (
-    <LocationPickerThumb imageUrl={hit.imageUrl} type={locationKind} />
-  ) : entity === "vendor" ? (
-    <VendorMark
-      vendor={hit.title}
-      vendorId={unsafeVendorShortcode(hit.id)}
-      logo={hit.imageUrl ? { url: hit.imageUrl } : null}
-    />
-  ) : (
-    <SearchPickerIcon
-      entity={entity}
-      imageUrl={hit.imageUrl}
-      typeHint={hit.typeHint}
-    />
-  );
+  const fallback =
+    entity === "location" ? (
+      <LocationPickerThumb
+        imageUrl={hit.imageUrl}
+        type={locationKind ?? null}
+      />
+    ) : entity === "vendor" ? (
+      <VendorMark
+        vendor={hit.title}
+        vendorId={unsafeVendorShortcode(hit.id)}
+        logo={hit.imageUrl ? { url: hit.imageUrl } : null}
+      />
+    ) : (
+      <SearchPickerIcon
+        entity={entity}
+        imageUrl={hit.imageUrl}
+        typeHint={hit.typeHint}
+      />
+    );
 
   return {
     // The server applies the entityTypes scope; narrowing it here preserves the
