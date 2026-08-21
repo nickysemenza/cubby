@@ -16,7 +16,11 @@ import {
   purchaseDataCheck,
   type SetDataExceptionInput,
 } from "@cubby/schemas/data-quality";
-import type { ProductId, PurchaseId } from "@cubby/schemas/identifiers";
+import type {
+  ProductId,
+  ProductShortcode,
+  PurchaseId,
+} from "@cubby/schemas/identifiers";
 import {
   ENTITY_NOT_FOUND_REASON,
   unsafeProductId,
@@ -1097,7 +1101,7 @@ export const findProductExternalIdCollisions = async (
   input?: {
     source?: string | string[];
     /** Public shortcode of the product the caller intends to write these onto. */
-    productId?: string;
+    productId?: ProductShortcode;
     identifiers?: Array<{ source: string; kind: string; externalId: string }>;
   },
 ) => {
