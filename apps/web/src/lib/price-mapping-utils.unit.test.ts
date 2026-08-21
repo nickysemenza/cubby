@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeInventoryValuation,
   computeInventoryValuations,
+  computePerUnitPrices,
   isCanonicalPriceMapping,
   isMoneyUnit,
   truncateToTwoDecimals,
@@ -255,5 +256,84 @@ describe("computeInventoryValuations", () => {
 
   it("empty input is an empty batch", () => {
     expect(computeInventoryValuations([], graphFor(10))).toEqual([]);
+  });
+});
+
+/**
+ * The comparable unit price — what "$2.73 each" plus "1 each = 32 oz" is worth
+ * per ounce, so an organic bag and a conventional one can be read side by side.
+ *
+ * Same graph construction as valuation above, for the same reason: the price
+ * edge is synthesized by `getAllUnitMappingsFromProduct`, so asking the graph
+ * for "1 oz in money" IS the whole computation. No new arithmetic exists here.
+ */
+const BAG_OF_32_OZ = {
+  a: { value: 1, unit: "each" },
+  b: { value: 32, unit: "oz" },
+};
+const BOTTLE_750_ML = {
+  a: { value: 1, unit: "each" },
+  b: { value: 750, unit: "ml" },
+};
+const OLIVE_OIL_DENSITY = {
+  a: { value: 1, unit: "ml" },
+  b: { value: 0.92, unit: "g" },
+};
+
+describe("computePerUnitPrices", () => {
+  it("prices a bagged good per ounce and per gram", () => {
+    // PRD-QQ9D: Bagged Yellow Onions, 32 OZ at $2.73 a bag.
+    const prices = computePerUnitPrices(graphFor(2.73, [BAG_OF_32_OZ]));
+    expect(prices.natural?.unit).toBe("oz");
+    expect(prices.natural?.price).toBeCloseTo(2.73 / 32, 6);
+    // A shade over three tenths of a cent per gram — which the 2-decimal
+    // truncation valuation uses would have flattened to $0.00.
+    expect(prices.perGram).toBeCloseTo(2.73 / (32 * 28.349523125), 6);
+  });
+
+  it("prefers a weight basis over each when the graph offers both", () => {
+    // The bag IS bought by the each, and $/each is still the less useful answer.
+    expect(
+      computePerUnitPrices(graphFor(2.73, [BAG_OF_32_OZ])).natural?.unit,
+    ).not.toBe("each");
+  });
+
+  it("falls back to each for something with no measure at all", () => {
+    expect(computePerUnitPrices(graphFor(178.29)).natural).toEqual({
+      unit: "each",
+      price: 178.29,
+    });
+    expect(computePerUnitPrices(graphFor(178.29)).perGram).toBeNull();
+  });
+
+  it("reaches grams for a volume product only through a density", () => {
+    expect(
+      computePerUnitPrices(graphFor(15.29, [BOTTLE_750_ML])).perGram,
+    ).toBeNull();
+    expect(
+      computePerUnitPrices(graphFor(15.29, [BOTTLE_750_ML, OLIVE_OIL_DENSITY]))
+        .perGram,
+    ).toBeCloseTo(15.29 / (750 * 0.92), 6);
+  });
+
+  it("returns nothing when there is no price to route to", () => {
+    expect(computePerUnitPrices(graphFor(null, [BAG_OF_32_OZ]))).toEqual({
+      natural: null,
+      perGram: null,
+    });
+  });
+
+  it("reads a genuinely free product as $0, never as Infinity", () => {
+    // `1 each = $0` synthesizes a reverse edge of 1/0; a rendered Infinity
+    // would be worse than a blank.
+    const prices = computePerUnitPrices(graphFor(0));
+    expect(prices.natural?.price).toBe(0);
+    expect(prices.perGram === null || Number.isFinite(prices.perGram)).toBe(
+      true,
+    );
+  });
+
+  it("short-circuits an empty graph without calling WASM", () => {
+    expect(computePerUnitPrices([])).toEqual({ natural: null, perGram: null });
   });
 });

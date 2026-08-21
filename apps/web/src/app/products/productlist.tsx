@@ -17,6 +17,7 @@ import {
   useHydratedProductFood,
   useProductFoodSummaries,
 } from "~/app/_components/products/product-food-summaries";
+import { UnitPriceLine } from "~/app/_components/units/unit-price-line";
 import { Row, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
@@ -567,6 +568,29 @@ export function ProductList({
             />
           );
         },
+      }),
+      // Comparable unit price — what the price works out to per ounce (or per
+      // fl oz / each, whichever this product's conversion graph can reach).
+      // A 32 oz bag at $2.73 reads $0.085/oz, which is the number that makes
+      // an organic bag and a conventional one comparable at a glance.
+      //
+      // Deliberately a DISPLAY column, not an accessor: the value is derived
+      // client-side from the loaded page, so a sortable header would order only
+      // the rows in front of you and read as a catalog-wide sort. Making it
+      // truly sortable needs a persisted projection — the shape
+      // `ProductConversionCoverage` already uses. Display-only also keeps it
+      // clear of the `row._valuesCache` trap, since an accessor's value is
+      // cached against `data` alone and would go stale when a mapping changes.
+      columnHelper.display({
+        id: "unitPrice",
+        header: "Unit price",
+        meta: { numeric: true, className: "w-24" },
+        cell: (info) => (
+          <UnitPriceLine
+            mappings={getProductListMappings(info.row.original)}
+            compact
+          />
+        ),
       }),
       // Net cost basis — SUM(cost) over this product's live expenses, so an
       // exit (a sale booked as a negative row) telescopes against its

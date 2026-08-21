@@ -440,6 +440,7 @@ export const RecipeIngredientList: React.FC<{
             title=""
             compact
             showCoverage
+            showUnitPrice
           />
         );
       },
