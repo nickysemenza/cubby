@@ -51,24 +51,48 @@ const COMPATIBILITY_MARKER =
   /\b(?:fits|compatible\s+with|replacement\s+for)\b/i;
 
 /**
- * Candidate size tokens. This regex only LOCATES text — it never interprets it.
- * `wasm.parse_amount` owns the grammar (the `ingredient` crate), and a TS regex
- * that tried to parse the amount itself would drift from it.
+ * The size units, as one alternation shared with the SQL prefilter.
  *
- * `fl oz` leads the alternation so it wins over bare `oz` on "12 fl oz".
+ * ⚠️ SINGLE SOURCE ON PURPOSE. `findProductsWithoutUnitMappings` narrows
+ * candidates in Postgres before any of them reach this module, and that
+ * predicate must stay a strict SUPERSET of what is matched here — a title this
+ * would accept but the SQL misses is silently dropped and never proposed.
+ * Keeping two hand-written lists did exactly that: the SQL listed only singular
+ * spellings, so `"Bag of Sugar, 5 pounds"` failed its `\M` word-end anchor on
+ * the trailing "s" and never arrived, while this regex accepted it happily.
+ *
+ * Written in the intersection of JS and Postgres ARE syntax (`|`, `?`, `[. ]`)
+ * so one string can drive both engines. Do not add JS-only constructs.
+ *
+ * `fl oz` leads so it wins over bare `oz` on "12 fl oz". British spellings
+ * (`litres`, `millilitres`) are absent for the same reason `qt`/`pt` are — see
+ * {@link SIZED_KINDS}: the grammar does not know them, so matching them could
+ * only make a second, real size token in the same title look ambiguous.
  */
-const SIZE_TOKEN =
-  /(?<![\d/.])\b(\d+(?:\.\d+)?)\s*(fl\.?\s*oz|oz|ounces?|lbs?|pounds?|kilograms?|kg|grams?|milliliters?|millilitres?|ml|liters?|litres?|gallons?|gal|quarts?)\b(?![/\d])/gi;
+export const SIZE_UNIT_ALTERNATION =
+  "fl[. ]?oz|oz|ounces?|lbs?|pounds?|kilograms?|kg|grams?|milliliters?|ml|liters?|gallons?|gal|quarts?";
+
+const SIZE_TOKEN = new RegExp(
+  `(?<![\\d/.])\\b(\\d+(?:\\.\\d+)?)\\s*(${SIZE_UNIT_ALTERNATION})\\b(?![/\\d])`,
+  "gi",
+);
 
 /**
  * Bare single-letter units, which only count when written lowercase with the
  * number attached or spaced — `500 g`, `5g`, `2 l`.
  *
- * Kept out of {@link SIZE_TOKEN} because case-insensitive `g` matches the "10G"
- * in "Monoprice Cat6 … 550Mhz, 10G, UTP", proposing 10 grams for an ethernet
- * cable. Real title, found by running this over the catalog.
+ * Kept out of {@link SIZE_UNIT_ALTERNATION} because case-insensitive `g`
+ * matches the "10G" in "Monoprice Cat6 … 550Mhz, 10G, UTP", proposing 10 grams
+ * for an ethernet cable. Real title, found by running this over the catalog.
+ *
+ * Also exported for the SQL prefilter, which must admit these too or bare-gram
+ * titles never arrive.
  */
-const BARE_UNIT_TOKEN = /(?<![\d/.])\b(\d+(?:\.\d+)?)\s*([gl])\b(?![/\d])/g;
+export const BARE_SIZE_UNITS = "[gl]";
+const BARE_UNIT_TOKEN = new RegExp(
+  `(?<![\\d/.])\\b(\\d+(?:\\.\\d+)?)\\s*(${BARE_SIZE_UNITS})\\b(?![/\\d])`,
+  "g",
+);
 
 /**
  * The kinds a pack size can honestly be. Rejects `12 in. Pry Bar`.

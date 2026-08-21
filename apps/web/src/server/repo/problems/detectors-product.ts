@@ -38,6 +38,7 @@ import {
 import { uniq } from "es-toolkit";
 import { householdLocalDate } from "~/lib/household-date";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+import { BARE_SIZE_UNITS, SIZE_UNIT_ALTERNATION } from "~/lib/title-unit-size";
 import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { Database, DrizzleClient } from "~/server/db";
@@ -813,10 +814,18 @@ export const findProductsWithoutUnitMappings = async (
     .where(
       and(
         notDeleted(product),
-        // Deliberately looser than the TS matcher: no fraction, pack or
-        // compatibility exclusion and no unit-kind check. All of those are the
-        // refinement's job.
-        sql`${product.name} ~* '[0-9][ ]?(fl[ .]?oz|oz|ounce|lb|pound|kilogram|kg|gram|g|milliliter|millilitre|ml|liter|litre|l|gallon|gal|quart|qt|pint|pt)\\M'`,
+        // Built from the SAME alternation the parser uses, so the two cannot
+        // drift. A hand-copied list here listed only singular spellings, and
+        // Postgres's `\M` word-end anchor then rejected "5 pounds" on the
+        // trailing "s" — those rows never reached the parser that would have
+        // accepted them.
+        //
+        // Still deliberately looser than the parser in every OTHER respect: no
+        // fraction, pack or compatibility exclusion and no unit-kind check.
+        // All of those are the refinement's job.
+        sql.raw(
+          `"Product"."name" ~* '[0-9][ ]?(${SIZE_UNIT_ALTERNATION}|${BARE_SIZE_UNITS})\\M'`,
+        ),
         notExists(
           dbClient
             .select({ id: sql`1` })

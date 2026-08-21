@@ -47,6 +47,7 @@ describe("PROBLEM_CLASS", () => {
     productsMissingPrice: "defect",
     productsWithBetterUpcData: "defect",
     productsWithIslandedMappings: "defect",
+    productsWithTitleDerivableSize: "coverage",
     productsWithoutMappings: "defect",
     projectsMissingBudget: "defect",
     projectsWithDateDrift: "defect",

@@ -62,24 +62,37 @@ describe("findProductsWithoutUnitMappings", () => {
     expect(proposeSizeFromTitle(packName)).toBeNull();
   });
 
-  it("shortlists everything the parser accepts", async () => {
-    // The superset property, checked over whatever the DB actually holds: a row
-    // the parser would accept must never be missing from the shortlist.
-    const shortlisted = new Set(await names());
+  it("shortlists everything the parser accepts, including PLURAL units", async () => {
+    // The superset property. Regression: the SQL used to carry its own
+    // hand-written unit list with only SINGULAR spellings, and Postgres's `\M`
+    // word-end anchor then rejected "5 pounds" on the trailing "s" — the parser
+    // accepted those titles but they never arrived. Both sides now build from
+    // one exported alternation, and this checks the property rather than the
+    // spelling, so a future edit to either can't quietly reintroduce it.
     const accepted = [
       "Superset Check Flour, 44 oz",
       "Superset Check Syrup, 12 fl oz",
       "Superset Check Spice, 500 g",
       "Superset Check Paint, 1 quart",
+      // The plurals the old SQL dropped:
+      "Superset Check Sugar, 5 pounds",
+      "Superset Check Cheese, 8 ounces",
+      "Superset Check Juice, 3 liters",
+      "Superset Check Oil, 2 gallons",
+      "Superset Check Bulk, 750 grams",
+      "Superset Check Thinner, 4 quarts",
+      "Superset Check Rice, 3 lbs",
     ];
     for (const [index, name] of accepted.entries()) {
       await seed(name, { model: `TS-SUP-${index}` });
     }
-    const after = new Set(await names());
+
+    const shortlisted = new Set(await names());
     for (const name of accepted) {
+      // Guard the guard: if the parser stops accepting one of these the case
+      // would pass vacuously and stop testing the superset at all.
       expect(proposeSizeFromTitle(name)).not.toBeNull();
-      expect(after.has(name)).toBe(true);
+      expect(shortlisted.has(name)).toBe(true);
     }
-    expect(shortlisted.size).toBeLessThan(after.size);
   });
 });
