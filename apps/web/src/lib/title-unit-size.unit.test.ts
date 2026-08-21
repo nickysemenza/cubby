@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { proposeSizeFromTitle } from "./title-unit-size";
+import { proposeSizeFromTitle, sizeUnitAlternation } from "./title-unit-size";
 
 /**
  * Runs against the real `parse_amount` grammar, not a stub — the whole design
@@ -131,8 +131,13 @@ describe("proposeSizeFromTitle", () => {
     });
 
     it("refuses a fraction rather than reading its denominator", () => {
-      // "1/2 Pint" must not become 2 pints — 4x the real size.
+      // "1/2 Pint" must not become 2 pints — 4x the real size. (`pint` is no
+      // longer even in the vocabulary, so this one now stops one step earlier;
+      // the second case keeps the fraction guard itself covered with a unit the
+      // grammar DOES know, where reading the denominator would mean 2 oz for a
+      // half-ounce tube.)
       expect(proposeSizeFromTitle("Dap DryDex Spackling, 1/2 Pint")).toBeNull();
+      expect(proposeSizeFromTitle("Gorilla Super Glue Gel, 1/2 oz")).toBeNull();
     });
 
     it("refuses a size that describes what the product FITS", () => {
@@ -141,10 +146,69 @@ describe("proposeSizeFromTitle", () => {
       ).toBeNull();
     });
 
+    /**
+     * Found by the dry run when the vocabulary moved from a hand-written list
+     * to the grammar's own: the grammar is a RECIPE grammar, so widening to all
+     * of it admitted cooking measures that mean something else on a package.
+     * None of these were reachable before, and all are live catalog titles.
+     */
+    describe("units that mean something else in a product title", () => {
+      it("does not read a part number's trailing q as quarts", () => {
+        // 13,155 quarts of router bit. The 10G ethernet bug's twin, and the
+        // reason single-letter units are never admitted casually.
+        expect(
+          proposeSizeFromTitle(
+            "Yonico Cove Router Bits Edge Forming 1/2-Inch Radius 1/4-Inch Shank 13155q",
+          ),
+        ).toBeNull();
+      });
+
+      it.each([
+        // A cavity count, not a volume.
+        "Amazon Basics Nonstick Muffin Pan, Set of 2, 12 Cups, Gray",
+        // What it treats, not what it contains.
+        "FryAway Cooking Oil Solidifier Powder (Solidifies 20 Cups)",
+        // A vessel's capacity is not a quantity you bought.
+        "Breville Sous Chef 16 Cup Food Processor",
+        "Brita 10 Cup Everyday Water Pitcher with Filter, White",
+      ])("refuses cups in %s", (title) => {
+        expect(proposeSizeFromTitle(title)).toBeNull();
+      });
+    });
+
+    describe("a range of sizes is not a size", () => {
+      it.each([
+        // The quarts belong to the container the lid fits.
+        "Rubbermaid Commercial 6-8 Quart Lid (Yellow)",
+        // The litres belong to the backpack the cover fits.
+        "Joy Walker Backpack Rain Cover, 40-55L",
+        // The gallons belong to the vacuum, not the filter.
+        "Genuine General Debris Pleated Shop Vacuum Filter Replacement for Most 5-16 Gal. RIDGID Wet Dry Vacs",
+      ])("refuses %s", (title) => {
+        expect(proposeSizeFromTitle(title)).toBeNull();
+      });
+
+      it("does not mistake an em-dash for a range", () => {
+        // The first cut of the range guard accepted any dash and lost this
+        // one-gallon plant to the "12949 — 1 gal" it read as a span.
+        expect(
+          proposeSizeFromTitle(
+            "Salvia leucantha 'Santa Barbara' PP#12949 — 1 gal",
+          )?.amount,
+        ).toEqual({ value: 1, unit: "gallon" });
+      });
+    });
+
     it("refuses units the grammar cannot round-trip", () => {
       // `parse_amount("1 qt")` returns `1 whole`, kind `other:whole` — the unit
-      // is silently discarded. Proposing "1 each = 1 whole" for a quart of
+      // is silently discarded, and proposing "1 each = 1 whole" for a quart of
       // sealer would be worse than proposing nothing. Same for `pt`.
+      //
+      // These are refused by the VOCABULARY now rather than by the kind gate:
+      // `size_unit_aliases()` drops any spelling `Unit::from_str` cannot place
+      // in a weight or volume, so `qt` and `pt` never become candidates. The
+      // outcome is what it always was; what changed is that no list on this
+      // side has to know about them.
       expect(proposeSizeFromTitle("511 Porous Plus Sealer, 1 qt")).toBeNull();
       expect(
         proposeSizeFromTitle("Straus Organic Vanilla Ice Cream, 1 pt"),
@@ -170,6 +234,89 @@ describe("proposeSizeFromTitle", () => {
         proposeSizeFromTitle("Whole Catch Wild Key West Shrimp 16/20, 12 oz")
           ?.amount,
       ).toEqual({ value: 12, unit: "oz" });
+    });
+  });
+
+  /**
+   * The vocabulary is not written here — `wasm.size_unit_aliases()` filters
+   * candidate spellings through `Unit::from_str` + `kind()` and hands back what
+   * survives. These pin the properties this module depends on, so a change on
+   * the Rust side that would quietly narrow the matcher fails here instead of
+   * in production, where a narrowed vocabulary just looks like titles nobody
+   * proposed a size for.
+   */
+  describe("vocabulary derived from the grammar", () => {
+    // The reviewer's bug on PR #842, from the other side: the SQL prefilter
+    // listed singular spellings only. Both halves now come from one call, so
+    // the plural forms exist because `strip_plural` says they do.
+    it.each([
+      ["Bag of Sugar, 5 pounds", 5, "lb"],
+      ["Block Cheese, 8 ounces", 8, "oz"],
+      ["Apple Juice, 3 liters", 3, "l"],
+      ["Paint Thinner, 2 gallons", 2, "gallon"],
+      ["Bulk Rice, 3 lbs", 3, "lb"],
+      ["Spice Jar, 750 grams", 750, "g"],
+      ["Mineral Spirits, 4 quarts", 4, "quart"],
+    ])("reads the plural spelling in %s", (title, value, unit) => {
+      expect(proposeSizeFromTitle(title)?.amount).toEqual({ value, unit });
+    });
+
+    it("hands Postgres an alternation it can run verbatim", () => {
+      // Interpolated into `sql.raw` by `findProductsWithoutUnitMappings`, so a
+      // metacharacter arriving from the WASM side would be a broken predicate
+      // at best. Aliases are `[a-z ]` — assert that rather than trust it.
+      const alternation = sizeUnitAlternation();
+      expect(alternation).not.toBe("");
+      for (const alias of alternation.split("|")) {
+        expect(alias).toMatch(/^[a-z ]+$/);
+      }
+    });
+
+    it("orders the alternation longest-first", () => {
+      // Order IS semantics in an alternation: with "oz" first, "12 fl oz"
+      // matches the bare ounce and the proposal comes out a weight. Rust sorts
+      // it; this is the assertion that the sorted order survives the crossing.
+      const aliases = sizeUnitAlternation().split("|");
+      expect(aliases.indexOf("fl oz")).toBeLessThan(aliases.indexOf("oz"));
+      expect(aliases.indexOf("ounces")).toBeLessThan(aliases.indexOf("ounce"));
+    });
+
+    it("pins every recipe-measure exclusion to a real alias", () => {
+      // The exclusions are the one hand-written thing left, so they are checked
+      // against the derived vocabulary: an entry that no longer names a real
+      // alias is a silent no-op, and the next person reads it as protection
+      // that isn't there.
+      const aliases = new Set(sizeUnitAlternation().split("|"));
+      for (const stem of [
+        "c",
+        "cup",
+        "q",
+        "tsp",
+        "teaspoon",
+        "tbsp",
+        "tablespoon",
+      ]) {
+        expect(aliases.has(stem), stem).toBe(true);
+      }
+    });
+
+    it("keeps the SQL alternation a superset of what the matcher accepts", () => {
+      // The structural guarantee: SQL matches the whole vocabulary
+      // case-insensitively, the matcher only ever narrows it. Proven against
+      // real Postgres in detectors-title-size.integration.test.ts; checked here
+      // on the shape, so a change is caught without a database.
+      const alternation = sizeUnitAlternation();
+      const sqlLike = new RegExp(`[0-9][ ]?(?:${alternation})\\b`, "i");
+      for (const title of [
+        "Bagged Yellow Onions, 32 OZ",
+        "Bag of Sugar, 5 pounds",
+        "Bulk Spice, 500 g",
+        "Sparkling Water, 12 fl oz",
+        "Paint Sample, 1 quart",
+      ]) {
+        expect(proposeSizeFromTitle(title), title).not.toBeNull();
+        expect(sqlLike.test(title), title).toBe(true);
+      }
     });
   });
 

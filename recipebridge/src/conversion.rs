@@ -384,6 +384,81 @@ pub fn scale_amount(amount: WAmount, factor: f64) -> WAmount {
     amount.scale(factor)
 }
 
+/// Candidate spellings for a weight/volume unit. NOT the authority — every one
+/// is filtered through the grammar in `size_unit_aliases` below, so a spelling
+/// upstream does not know is dropped rather than exported. That is the point:
+/// this list may be over-generous, it cannot be wrong.
+#[rustfmt::skip]
+const SIZE_ALIAS_CANDIDATES: &[&str] = &[
+    // weight
+    "g", "gram", "kg", "kilogram", "oz", "ounce", "lb", "pound",
+    // volume
+    "l", "liter", "ml", "milliliter", "fl oz", "fluid oz",
+    "cup", "c", "quart", "q", "gallon", "gal", "tsp", "teaspoon", "tbsp", "tablespoon",
+    // Spellings Cubby product titles actually contain that upstream may or may
+    // not know. Listed so their status is DECIDED HERE rather than asserted in a
+    // downstream comment: at the pinned rev every one of these exits, because
+    // `UNIT_MAPPINGS` has no entry and `from_str` falls through to `Other`. If
+    // upstream learns one, it starts reaching callers with no change here.
+    "qt", "pt", "pint", "litre", "millilitre",
+];
+
+/// Every spelling the grammar accepts for a WEIGHT or VOLUME unit, longest
+/// first.
+///
+/// Consumers that must recognize a unit OUTSIDE Rust need this. Cubby locates
+/// pack sizes inside product titles ("Bagged Yellow Onions, 32 OZ") with a
+/// regex in TS and a matching `~*` prefilter in Postgres, and neither engine
+/// can call this grammar — so some list has to cross the boundary. This makes
+/// that list DERIVED rather than transcribed, for the same reason
+/// `scale_amount` above exists: a second copy in TS is the layering violation
+/// CLAUDE.md forbids. The transcribed version had already drifted, most
+/// recently a SQL prefilter carrying singular-only spellings that silently
+/// dropped every "5 pounds" title.
+///
+/// Two properties callers rely on:
+///
+/// - **Filtered, not asserted.** An alias survives only if `Unit::from_str`
+///   resolves it to a unit whose `kind()` is Weight or Volume. `qt`, `pt`,
+///   `pint`, `litre` and `millilitre` all exit here, so no caller needs a
+///   hand-kept exclusion list explaining that the grammar reads "1 qt" as
+///   `1 whole`.
+/// - **Plurals derived, not guessed.** Upstream's `strip_plural` runs before
+///   lookup, so each alias's `+"s"` form is emitted only when it round-trips to
+///   the same unit — never by appending `s?` downstream and hoping.
+///
+/// Longest-first ordering lets a caller `join("|")` straight into an
+/// alternation and get longest-match ("fl oz" beating "oz") without knowing to
+/// sort; ties break alphabetically so the output is stable across builds.
+#[wasm_bindgen]
+pub fn size_unit_aliases() -> Vec<String> {
+    let sized = |s: &str| {
+        Unit::from_str(s)
+            .is_ok_and(|u| matches!(u.kind(), MeasureKind::Weight | MeasureKind::Volume))
+    };
+    // A plural is emitted only when it resolves to the SAME unit, which makes
+    // this a fact about `strip_plural` rather than English guesswork.
+    let same_unit = |a: &str, b: &str| match (Unit::from_str(a), Unit::from_str(b)) {
+        (Ok(x), Ok(y)) => x.normalize() == y.normalize(),
+        _ => false,
+    };
+
+    let mut out: Vec<String> = Vec::new();
+    for alias in SIZE_ALIAS_CANDIDATES {
+        if !sized(alias) {
+            continue;
+        }
+        out.push((*alias).to_string());
+        let plural = format!("{alias}s");
+        if sized(&plural) && same_unit(alias, &plural) {
+            out.push(plural);
+        }
+    }
+    out.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
+    out.dedup();
+    out
+}
+
 // Golden tests — drift tripwires for the ingredient crate's unit-conversion
 // surface (pinned by exact git rev). `detect_unit_mapping_islands` and
 // `is_valid_unit` take native types and run
@@ -395,6 +470,139 @@ pub fn scale_amount(amount: WAmount, factor: f64) -> WAmount {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The exported vocabulary must not miss a unit the grammar knows — a gap
+    /// here is invisible downstream, where it just looks like a product title
+    /// nobody proposed a size for.
+    ///
+    /// The `match` is exhaustive ON PURPOSE: a new `Unit` variant upstream
+    /// fails to COMPILE here, which is the only tripwire that fires before the
+    /// gap ships. The second assertion then checks the split against
+    /// `Unit::kind()` itself, so the roster below cannot claim a partition the
+    /// grammar disagrees with.
+    #[test]
+    fn size_unit_aliases_cover_every_weight_and_volume_unit() {
+        let canonical = |u: &Unit| -> Option<String> {
+            match u {
+                Unit::Gram
+                | Unit::Kilogram
+                | Unit::Ounce
+                | Unit::Pound
+                | Unit::Milliliter
+                | Unit::Liter
+                | Unit::Teaspoon
+                | Unit::Tablespoon
+                | Unit::Cup
+                | Unit::Quart
+                | Unit::Gallon
+                | Unit::FluidOunce => Some(u.to_str().into_owned()),
+                Unit::Cent
+                | Unit::Dollar
+                | Unit::KCal
+                | Unit::Second
+                | Unit::Minute
+                | Unit::Hour
+                | Unit::Day
+                | Unit::Fahrenheit
+                | Unit::Celsius
+                | Unit::Inch
+                | Unit::Whole
+                | Unit::Other(_) => None,
+            }
+        };
+
+        let all = [
+            Unit::Gram,
+            Unit::Kilogram,
+            Unit::Ounce,
+            Unit::Pound,
+            Unit::Milliliter,
+            Unit::Liter,
+            Unit::Teaspoon,
+            Unit::Tablespoon,
+            Unit::Cup,
+            Unit::Quart,
+            Unit::Gallon,
+            Unit::FluidOunce,
+            Unit::Cent,
+            Unit::Dollar,
+            Unit::KCal,
+            Unit::Second,
+            Unit::Minute,
+            Unit::Hour,
+            Unit::Day,
+            Unit::Fahrenheit,
+            Unit::Celsius,
+            Unit::Inch,
+            Unit::Whole,
+        ];
+
+        let aliases = size_unit_aliases();
+        for unit in &all {
+            let is_size = matches!(unit.kind(), MeasureKind::Weight | MeasureKind::Volume);
+            assert_eq!(
+                canonical(unit).is_some(),
+                is_size,
+                "roster disagrees with Unit::kind() for {unit}"
+            );
+            if let Some(spelling) = canonical(unit) {
+                assert!(
+                    aliases.contains(&spelling),
+                    "exported vocabulary is missing {spelling}"
+                );
+            }
+        }
+    }
+
+    /// The filter is what lets callers drop their hand-kept exclusion lists, so
+    /// it is pinned in both directions. The absent five are the ones Cubby
+    /// product titles really contain: at the pinned rev the grammar reads
+    /// "1 qt" as `1 whole`, and a caller that located it anyway would propose
+    /// "1 each = 1 whole" for a quart of sealer.
+    #[test]
+    fn size_unit_aliases_drop_spellings_the_grammar_lacks() {
+        let aliases = size_unit_aliases();
+        for absent in ["qt", "pt", "pint", "litre", "millilitre"] {
+            assert!(
+                !aliases.contains(&absent.to_string()),
+                "{absent} is not a known weight/volume unit but was exported"
+            );
+        }
+        // Plurals are derived from `strip_plural`, not appended by the caller.
+        for present in [
+            "oz", "ounce", "ounces", "lb", "lbs", "pound", "pounds", "g", "grams", "kg", "ml",
+            "liters", "gallons", "quarts", "fl oz",
+        ] {
+            assert!(
+                aliases.contains(&present.to_string()),
+                "expected {present} in the exported vocabulary"
+            );
+        }
+    }
+
+    /// Callers `join("|")` this straight into a regex alternation, where order
+    /// IS semantics: with "oz" first, "12 fl oz" matches the bare ounce and the
+    /// proposal comes out as a weight instead of a volume.
+    #[test]
+    fn size_unit_aliases_are_ordered_longest_first() {
+        let aliases = size_unit_aliases();
+        let position = |needle: &str| {
+            aliases
+                .iter()
+                .position(|alias| alias == needle)
+                .unwrap_or_else(|| panic!("{needle} missing"))
+        };
+        assert!(position("fl oz") < position("oz"));
+        assert!(position("ounces") < position("ounce"));
+        for pair in aliases.windows(2) {
+            assert!(
+                pair[0].len() >= pair[1].len(),
+                "{:?} sorts before the longer {:?}",
+                pair[0],
+                pair[1]
+            );
+        }
+    }
     use ingredient::unit::{
         Measure, MeasureKind, convert_measure_with_graph_explained, make_graph,
     };

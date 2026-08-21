@@ -38,7 +38,7 @@ import {
 import { uniq } from "es-toolkit";
 import { householdLocalDate } from "~/lib/household-date";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
-import { BARE_SIZE_UNITS, SIZE_UNIT_ALTERNATION } from "~/lib/title-unit-size";
+import { sizeUnitAlternation } from "~/lib/title-unit-size";
 import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { Database, DrizzleClient } from "~/server/db";
@@ -814,18 +814,18 @@ export const findProductsWithoutUnitMappings = async (
     .where(
       and(
         notDeleted(product),
-        // Built from the SAME alternation the parser uses, so the two cannot
-        // drift. A hand-copied list here listed only singular spellings, and
+        // The unit spellings come from the GRAMMAR (`wasm.size_unit_aliases()`,
+        // via `sizeUnitAlternation`), not from a list kept here. When they were
+        // hand-copied this predicate carried singular spellings only, and
         // Postgres's `\M` word-end anchor then rejected "5 pounds" on the
-        // trailing "s" — those rows never reached the parser that would have
-        // accepted them.
+        // trailing "s" — rows the parser would have accepted never reached it.
         //
-        // Still deliberately looser than the parser in every OTHER respect: no
-        // fraction, pack or compatibility exclusion and no unit-kind check.
-        // All of those are the refinement's job.
-        sql.raw(
-          `"Product"."name" ~* '[0-9][ ]?(${SIZE_UNIT_ALTERNATION}|${BARE_SIZE_UNITS})\\M'`,
-        ),
+        // Matching the parser's vocabulary exactly is what keeps this a
+        // superset: `~*` is case-insensitive here, while the parser narrows
+        // single-letter units to lowercase. Looser than the parser in every
+        // other respect too — no fraction, pack or compatibility exclusion and
+        // no unit-kind check. All of those are the refinement's job.
+        sql.raw(`"Product"."name" ~* '[0-9][ ]?(${sizeUnitAlternation()})\\M'`),
         notExists(
           dbClient
             .select({ id: sql`1` })

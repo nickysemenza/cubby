@@ -26,6 +26,21 @@ import { wasm } from "~/lib/wasm";
  * Greenies and La Croix are the same shape with inverted meaning, so anything
  * carrying a pack marker is refused outright rather than guessed at. Silence is
  * cheap here (the row just keeps no mapping); a confident wrong number is not.
+ *
+ * ## Where the unit vocabulary comes from
+ *
+ * Not from here. Every spelling this module matches is handed over by
+ * `wasm.size_unit_aliases()`, which filters candidates through the grammar's
+ * own `Unit::from_str` + `kind()`. This file contributes the *shape* of a size
+ * token (a number, then a unit, not inside a fraction) and nothing about which
+ * units exist — per the layering rule in docs/agents/domain-rules.md, "Cubby
+ * domain compute belongs in recipebridge/WASM; TypeScript assembles inputs and
+ * reshapes outputs instead of recreating it."
+ *
+ * A transcribed copy is not a style problem, it drifts: the SQL prefilter that
+ * shares this vocabulary once listed singular spellings only, and Postgres's
+ * `\M` word-end anchor then rejected every "5 pounds" title — accepted here,
+ * never delivered there.
  */
 export type TitleSizeProposal = {
   /** The proposed right-hand side of `1 each = <amount>`. */
@@ -51,70 +66,146 @@ const COMPATIBILITY_MARKER =
   /\b(?:fits|compatible\s+with|replacement\s+for)\b/i;
 
 /**
- * The size units, as one alternation shared with the SQL prefilter.
+ * Units the grammar knows that a PRODUCT TITLE does not use to state a package
+ * size. Excluded by stem, so the plurals the grammar derives go with them.
  *
- * ⚠️ SINGLE SOURCE ON PURPOSE. `findProductsWithoutUnitMappings` narrows
- * candidates in Postgres before any of them reach this module, and that
- * predicate must stay a strict SUPERSET of what is matched here — a title this
- * would accept but the SQL misses is silently dropped and never proposed.
- * Keeping two hand-written lists did exactly that: the SQL listed only singular
- * spellings, so `"Bag of Sugar, 5 pounds"` failed its `\M` word-end anchor on
- * the trailing "s" and never arrived, while this regex accepted it happily.
+ * This is the one place where the vocabulary is narrowed by hand, and each
+ * entry is here because a real catalog title made it wrong — not because the
+ * unit is doubtful. The grammar is a RECIPE grammar, and its cooking measures
+ * mean something else on a package:
  *
- * Written in the intersection of JS and Postgres ARE syntax (`|`, `?`, `[. ]`)
- * so one string can drive both engines. Do not add JS-only constructs.
+ * - `q` read the part number in "Yonico Cove Router Bits … 1/4-Inch Shank
+ *   13155q" as **13,155 quarts**. Same shape as the 10G ethernet cable below,
+ *   and the reason single letters can never be admitted casually.
+ * - `cup` is a CAVITY on "Amazon Basics Nonstick Muffin Pan, Set of 2, 12
+ *   Cups" and a THROUGHPUT on "FryAway Cooking Oil Solidifier (Solidifies 20
+ *   Cups)"; on "Breville Sous Chef 16 Cup Food Processor" and "Brita 10 Cup
+ *   Everyday Water Pitcher" it is the vessel's capacity, which is not a
+ *   quantity of anything you bought.
+ * - `tsp`/`tbsp` produced nothing either way across the whole catalog; they are
+ *   excluded with the rest so the rule is "recipe measures don't size retail
+ *   packages" rather than a per-unit judgement call.
  *
- * `fl oz` leads so it wins over bare `oz` on "12 fl oz". British spellings
- * (`litres`, `millilitres`) are absent for the same reason `qt`/`pt` are — see
- * {@link SIZED_KINDS}: the grammar does not know them, so matching them could
- * only make a second, real size token in the same title look ambiguous.
+ * The stems are asserted against the exported vocabulary in the unit tests, so
+ * an entry that stops corresponding to a real alias fails rather than sitting
+ * here forever as a no-op.
  */
-export const SIZE_UNIT_ALTERNATION =
-  "fl[. ]?oz|oz|ounces?|lbs?|pounds?|kilograms?|kg|grams?|milliliters?|ml|liters?|gallons?|gal|quarts?";
+const RECIPE_MEASURE_STEMS = new Set([
+  "c",
+  "cup",
+  "q",
+  "tsp",
+  "teaspoon",
+  "tbsp",
+  "tablespoon",
+]);
 
-const SIZE_TOKEN = new RegExp(
-  `(?<![\\d/.])\\b(\\d+(?:\\.\\d+)?)\\s*(${SIZE_UNIT_ALTERNATION})\\b(?![/\\d])`,
-  "gi",
-);
-
-/**
- * Bare single-letter units, which only count when written lowercase with the
- * number attached or spaced — `500 g`, `5g`, `2 l`.
- *
- * Kept out of {@link SIZE_UNIT_ALTERNATION} because case-insensitive `g`
- * matches the "10G" in "Monoprice Cat6 … 550Mhz, 10G, UTP", proposing 10 grams
- * for an ethernet cable. Real title, found by running this over the catalog.
- *
- * Also exported for the SQL prefilter, which must admit these too or bare-gram
- * titles never arrive.
- */
-export const BARE_SIZE_UNITS = "[gl]";
-const BARE_UNIT_TOKEN = new RegExp(
-  `(?<![\\d/.])\\b(\\d+(?:\\.\\d+)?)\\s*(${BARE_SIZE_UNITS})\\b(?![/\\d])`,
-  "g",
-);
+const stemOf = (alias: string) => alias.replace(/s$/, "");
 
 /**
- * The kinds a pack size can honestly be. Rejects `12 in. Pry Bar`.
+ * A single-letter unit, or the plural the grammar derives from one.
  *
- * ⚠️ This gate is not belt-and-braces, it catches a live failure. The grammar
- * does NOT know the abbreviations `qt` and `pt`: `parse_amount("1 qt")` returns
- * `1 whole` with kind `other:whole`, silently discarding the unit. Without this
- * check a quart of sealer would be proposed as "1 each = 1 whole". Those two
- * abbreviations are therefore left out of {@link SIZE_TOKEN} entirely — a
- * locator match that can never round-trip is only a way to make a second, real
- * size token look ambiguous.
+ * These and only these match case-SENSITIVELY: `g` read case-insensitively
+ * turns the "10G" in "Monoprice Cat6 … 550Mhz, 10G, UTP" into ten grams. Real
+ * title, found by running this over the catalog.
  *
- * `pint` is a related quirk: it parses, but as kind `other:pint` rather than
- * `volume`, so pint-sized titles are skipped too. Deliberately not worked
- * around here — widening this set to chase `other:*` would re-admit
- * `other:whole`, which is the exact bug above. If the grammar learns these
- * units, add them back to `SIZE_TOKEN` and they will flow through.
+ * The rule is a fact about the alias's own shape rather than a list of letters,
+ * so a single-letter unit the grammar learns later lands in the case-sensitive
+ * group on its own — there is no second place to remember to update.
  */
-const SIZED_KINDS = new Set(["weight", "volume"]);
+const isBareAlias = (alias: string) => stemOf(alias).length === 1;
+
+/** Aliases are `[a-z ]` only, but never interpolate unescaped into a regex. */
+const escapeForRegex = (alias: string) =>
+  alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * `\M` (Postgres) and `\b` (JS) both need the alternation ordered longest-first
+ * so "fl oz" wins over "oz"; `size_unit_aliases()` already returns it that way,
+ * and `filter` preserves that order.
+ */
+const alternationOf = (aliases: readonly string[]) =>
+  aliases.map(escapeForRegex).join("|");
+
+const sizeToken = (aliases: readonly string[], flags: string) =>
+  new RegExp(
+    `(?<![\\d/.])\\b(\\d+(?:\\.\\d+)?)\\s*(${alternationOf(aliases)})\\b(?![/\\d])`,
+    flags,
+  );
+
+/**
+ * Built once from the grammar's vocabulary. Lazy rather than top-level so the
+ * WASM module is touched on first use, matching how the other detectors reach
+ * it, and memoized because the alias list cannot change within a process.
+ */
+let vocabulary: {
+  worded: RegExp;
+  bare: RegExp;
+  range: RegExp;
+  /** Regex source shared with the SQL prefilter — see {@link sizeUnitAlternation}. */
+  alternation: string;
+} | null = null;
+
+const getVocabulary = () => {
+  if (vocabulary) return vocabulary;
+  const aliases = [...wasm.size_unit_aliases()];
+  // The SQL prefilter takes the WHOLE vocabulary; only the matcher narrows it.
+  // That ordering is what keeps the prefilter a superset for free.
+  const alternation = alternationOf(aliases);
+  const matched = aliases.filter(
+    (alias) => !RECIPE_MEASURE_STEMS.has(stemOf(alias)),
+  );
+  vocabulary = {
+    worded: sizeToken(
+      matched.filter((alias) => !isBareAlias(alias)),
+      "gi",
+    ),
+    bare: sizeToken(matched.filter(isBareAlias), "g"),
+    // A span, not a size: the gallons in "HEPA Filter for Most 5-16 Gal. RIDGID
+    // Wet Dry Vacs" belong to the vacuum, and "Rubbermaid Commercial 6-8 Quart
+    // Lid" otherwise proposes 8 quarts for a lid. "Fits 26-30oz Jars" only
+    // escaped this class because it happened to say "Fits".
+    //
+    // Two deliberate narrowings, both because the wider version misfired on
+    // real titles: the separator is a plain HYPHEN only (an em-dash is
+    // punctuation — "Salvia … PP#12949 — 1 gal" is a one-gallon plant, not a
+    // range), and the units are the MATCHED vocabulary, not the full one (with
+    // `c` included, the part number in "Dewalt DPG82-11C" reads as a range).
+    range: new RegExp(
+      `\\d+\\s*-\\s*\\d+\\s*(?:${alternationOf(matched)})\\b`,
+      "i",
+    ),
+    alternation,
+  };
+  return vocabulary;
+};
+
+/**
+ * The unit alternation as regex source, for the Postgres prefilter in
+ * `findProductsWithoutUnitMappings`.
+ *
+ * That predicate must stay a strict SUPERSET of what {@link
+ * proposeSizeFromTitle} matches, or a title this module would accept is
+ * silently dropped before it ever arrives. It is a superset BY CONSTRUCTION
+ * here: both come from the same `size_unit_aliases()` call, and the SQL uses
+ * the whole list case-insensitively while the matcher above only ever narrows
+ * it (the bare-alias case rule). There is no second list to keep in step.
+ */
+export const sizeUnitAlternation = () => getVocabulary().alternation;
 
 const normalize = (value: string) =>
   value.trim().toLowerCase().replace(/\s+/g, " ");
+
+/**
+ * The kinds a pack size can honestly be.
+ *
+ * The vocabulary is already filtered to weight and volume upstream, so this no
+ * longer has to catch `qt` parsing as `1 whole` — that spelling never reaches
+ * here now. It stays as the final word because it is the grammar's OWN verdict
+ * on the parsed amount rather than on the spelling, and this is a boundary
+ * where being wrong misstates money.
+ */
+const SIZED_KINDS = new Set(["weight", "volume"]);
 
 /**
  * `null` whenever the title does not unambiguously state one pack size.
@@ -128,12 +219,11 @@ export const proposeSizeFromTitle = (
 ): TitleSizeProposal | null => {
   if (PACK_MARKER.test(name) || COMPATIBILITY_MARKER.test(name)) return null;
 
+  const { worded, bare, range } = getVocabulary();
+  if (range.test(name)) return null;
   // `matchAll` builds a fresh iterator each call, so the module-level /g regexes
   // never carry `lastIndex` between products.
-  const matches = [
-    ...name.matchAll(SIZE_TOKEN),
-    ...name.matchAll(BARE_UNIT_TOKEN),
-  ];
+  const matches = [...name.matchAll(worded), ...name.matchAll(bare)];
   if (matches.length === 0) return null;
 
   // More than one DISTINCT size is the tell that we cannot say which one is
