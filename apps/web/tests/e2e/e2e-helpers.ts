@@ -99,25 +99,33 @@ function cellEditorInput(page: Page): Locator {
 /**
  * Open a LIST table's inline cell editor, and keep it open.
  *
- * In cell-selection mode the editor opens on double-click — but the mode itself
- * is `!isMobile && !isTransitioning` (`Table.tsx`), and `isTransitioning` is
- * react-query's `isPlaceholderData`. So while a background refetch is in flight
- * the table is temporarily in click-to-edit mode, and when the refetch lands the
- * context flips, the whole tree re-renders, and an editor opened inside that
- * window is torn down before it can be filled. The failure looks like the editor
- * never opened at all: `[data-slot="cell-editor-overlay"] input` simply never
- * appears.
+ * The double-click is swallowed, not undone. While a list table swaps query
+ * keys (filter/sort/page-size change, or the table state settling right after
+ * mount) it shows the previous rows behind an `inert` body — RTable's
+ * "placeholder rows for a query that's being replaced are not interactive"
+ * curtain. A real click inside an `inert` subtree fires NO event at all, and
+ * `elementFromPoint` there returns `<body>` rather than the button, so
+ * Playwright (1.62 has no `inert` awareness anywhere in its actionability
+ * checks) sees an intercepted hit target and retries — but its hit-target
+ * check and its event dispatch are not atomic. If the curtain drops between
+ * the two, the clicks land in the void and the call reports success. The
+ * failure then looks like the editor never opened: `cellEditorInput` simply
+ * never appears.
  *
- * Retried rather than asserted once, because the tear-down is transient — the
- * next attempt runs against a settled table. Detail pages don't need this: they
- * are never in cell-selection mode, so a single click opens the editor and no
- * refetch can change the gesture out from under it.
+ * So: settle on the table's own `aria-busy` first (deterministic in the common
+ * case), and still retry, because only a retry closes the dispatch race.
+ * Detail pages need neither — they are never in cell-selection mode and have
+ * no transition curtain, so a single click opens the editor.
  *
- * The tear-down is also a real user-facing bug (start editing, a refetch lands,
- * the editor vanishes); this only stops it from making the suite flaky.
+ * NOT a workaround for an editor being torn down mid-edit: an open editor
+ * survives a background refetch. Its overlay is portaled to <body> (outside
+ * the inert body), its state is local to the cell, and `isPlaceholderData` is
+ * never even true for a same-key refetch or invalidation.
  */
 export async function openCellEditor(page: Page, trigger: Locator) {
+  const hostTable = trigger.locator("xpath=ancestor::table[1]");
   await expect(async () => {
+    await expect(hostTable).toHaveAttribute("aria-busy", "false");
     await trigger.dblclick();
     await expect(cellEditorInput(page)).toBeVisible({ timeout: 2_000 });
   }).toPass({ timeout: 30_000 });
