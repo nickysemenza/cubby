@@ -15,6 +15,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { NoneValue } from "~/components/ui/none-value";
+import { EntityEditDialog, wishEditRequest } from "~/entities/editing";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -42,7 +43,6 @@ import {
 } from "../_components/products/product-image-summaries";
 import { ImageThumbnail } from "../_components/table/ImageThumbnail";
 import { TableLink } from "../_components/table/TableLink";
-import { WishFormDialog } from "./wish-form-dialog";
 import { wishPriceRange } from "./wish-price-range";
 
 /**
@@ -71,8 +71,6 @@ export function WishDetail({ wish }: { wish: WishOut }) {
   const { commonSections } = useEntityDetail<WishOut, never>({
     entity: "wish",
     data: wish,
-    mutationOptions: api.wish.update.mutationOptions(),
-    invalidateKeys: wishMutationInvalidateKeys,
   });
 
   const { deleteButton, deleteDialog } = useEntityDelete({
@@ -250,7 +248,11 @@ export function WishDetail({ wish }: { wish: WishOut }) {
     >
       <DetailSections sections={sections} rawData={wish} />
       {deleteDialog}
-      <WishFormDialog open={editing} onOpenChange={setEditing} wish={wish} />
+      <EntityEditDialog
+        open={editing}
+        onOpenChange={setEditing}
+        request={wishEditRequest(wish)}
+      />
     </Page>
   );
 }

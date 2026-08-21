@@ -32,11 +32,11 @@ import { costTypeOptions } from "./expense-options";
 // projectId stays a plain string here (not the branded schema) — it's the raw
 // value out of the `SelectField` dropdown; the ProjectShortcode brand is
 // applied at the tRPC-call boundary in onSubmit via `unsafeProjectShortcode`,
-// same convention as `create-expense-dialog.tsx`. `cost` is nullable +
+// same convention as the Expense capture intent. `cost` is nullable +
 // refined (not a plain `z.number()`) so a cleared input reads as `null` (not
 // `undefined`) for `NullableNumericField` while still being rejected as
 // required — same idiom as the costType/trade refines below and in
-// `create-expense-dialog.tsx`.
+// the generic Expense editor.
 const settleExpenseSchema = z.object({
   cost: z
     .number()

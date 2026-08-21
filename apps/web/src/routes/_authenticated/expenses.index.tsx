@@ -7,7 +7,6 @@ import { lazy, Suspense } from "react";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
-import { CreateExpenseDialog } from "~/app/expenses/create-expense-dialog";
 import {
   expenseAnalyzeConfigFromSearch,
   expenseAnalyzeSearchFields,
@@ -21,6 +20,7 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
+import { expenseCaptureRequest } from "~/entities/editing";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
 import {
@@ -178,7 +178,7 @@ function ExpensesPage() {
       variant="list"
       title="Expenses"
       layout="full"
-      actions={<CreateDialogAction Dialog={CreateExpenseDialog} />}
+      actions={<CreateDialogAction request={expenseCaptureRequest()} />}
     >
       <Stack gap="md">
         <ViewSwitcher

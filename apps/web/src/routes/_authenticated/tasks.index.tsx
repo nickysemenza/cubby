@@ -8,7 +8,6 @@ import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import { TasksBoardView } from "~/app/tasks/board/TasksBoardView";
-import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
 import { NextTasks } from "~/app/tasks/next-tasks";
 import { TasksStatsStrip } from "~/app/tasks/TasksStatsStrip";
 import { TaskList } from "~/app/tasks/tasklist";
@@ -19,6 +18,7 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
+import { taskCaptureRequest } from "~/entities/editing";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import {
@@ -140,7 +140,7 @@ function TasksPage() {
       layout={view !== "board" ? "full" : "contained"}
       // Header-level "New task" so it's reachable from every view (Next/Board
       // have no list toolbar of their own to hang it off).
-      actions={<CreateDialogAction Dialog={CreateTaskDialog} />}
+      actions={<CreateDialogAction request={taskCaptureRequest()} />}
     >
       <Stack gap="md">
         <TasksStatsStrip />

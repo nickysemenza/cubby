@@ -5,9 +5,9 @@ import {
   CreateDialogAction,
   createDialogSearchField,
 } from "~/app/_components/forms/create-dialog-action";
-import { CreatePurchaseDialog } from "~/app/purchases/create-purchase-dialog";
 import { PurchaseList } from "~/app/purchases/purchaselist";
 import { Page } from "~/components/page/Page";
+import { purchaseCaptureRequest } from "~/entities/editing";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
 import { urlShortcodeListParam, urlStringParam } from "~/lib/search-params";
@@ -72,7 +72,7 @@ function PurchasesPage() {
       headerInToolbar
       title="Purchases"
       layout="full"
-      actions={<CreateDialogAction Dialog={CreatePurchaseDialog} />}
+      actions={<CreateDialogAction request={purchaseCaptureRequest()} />}
     >
       <PurchaseList />
     </Page>

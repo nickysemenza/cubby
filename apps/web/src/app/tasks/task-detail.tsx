@@ -31,6 +31,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { Input } from "~/components/ui/input";
 import { NoneValue } from "~/components/ui/none-value";
+import { EntityEditDialog, taskCaptureRequest } from "~/entities/editing";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { patchListItem } from "~/lib/optimistic-list";
@@ -49,7 +50,6 @@ import { EditableEntityCell } from "../_components/data-table/editable-entity-ce
 import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
-import { CreateTaskDialog } from "./create-task-dialog";
 import {
   TASK_STATUS_LABELS,
   taskStatusBadgeVariant,
@@ -259,8 +259,6 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
   const { commonSections } = useEntityDetail<TaskOut, never>({
     entity: "task",
     data: task,
-    mutationOptions: api.task.update.mutationOptions(),
-    invalidateKeys: taskMutationInvalidateKeys,
   });
 
   // `deleteTasks` also soft-deletes live subtasks and hard-deletes this task's
@@ -661,14 +659,15 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
       }
     >
       <DetailSections sections={sections} rawData={task} />
-      <CreateTaskDialog
+      <EntityEditDialog
         open={followUpOpen}
         onOpenChange={setFollowUpOpen}
-        presetName={task.name}
-        presetProjectId={task.projectId}
-        presetTrade={task.trade}
-        presetSubjectProductId={task.subjectProductId}
-        presetSubjectProductName={task.subjectProductName}
+        request={taskCaptureRequest({
+          name: task.name,
+          projectId: task.projectId,
+          trade: task.trade,
+          subjectProductId: task.subjectProductId,
+        })}
       />
       {deleteDialog}
     </Page>

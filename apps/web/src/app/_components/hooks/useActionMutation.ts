@@ -2,7 +2,11 @@ import type { QueryKey, UseMutationOptions } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
-import type { EditableEntity } from "~/entities/editing";
+import type {
+  EditableEntity,
+  EntityEditDraft,
+  EntityEditIntent,
+} from "~/entities/editing";
 import { useEntityCommands } from "~/entities/editing";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
@@ -127,20 +131,34 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
             ids?: readonly string[];
             data?: object;
           };
-          const execution = await commands.executeOrThrow({
-            entity,
-            operation,
+          if (operation === "delete") {
+            const result = await commands.remove(
+              input.ids ?? (input.id ? [input.id] : []),
+            );
+            if (!result.ok) {
+              throw new Error(result.issues[0]?.message ?? "Delete failed");
+            }
+            return result.result as DataOf<TFn>;
+          }
+          if (operation === "update") {
+            if (!input.id) throw new Error("Update requires an id.");
+            const result = await commands.commitFields({
+              record: { id: input.id },
+              values: (input.data ?? {}) as Partial<
+                EntityEditDraft<EditableEntity>
+              >,
+              intent: intent as EntityEditIntent<EditableEntity, "update">,
+              surface: "detail",
+            });
+            if (!result.ok) {
+              throw new Error(result.issues[0]?.message ?? "Update failed");
+            }
+            return result.result as DataOf<TFn>;
+          }
+          const execution = await commands.submit({
+            operation: "create",
             intent,
-            ...(operation === "update" ? { id: input.id } : {}),
-            ...(operation === "delete"
-              ? { ids: input.ids ?? (input.id ? [input.id] : []) }
-              : {}),
-            data:
-              operation === "create"
-                ? (variables as object)
-                : operation === "update"
-                  ? (input.data ?? {})
-                  : {},
+            data: variables as object,
           });
           return execution.result as DataOf<TFn>;
         },

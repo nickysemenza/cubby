@@ -1,29 +1,28 @@
 import type { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
 import type { FC } from "react";
 import type { z } from "zod";
-import { useEntityCreateMode } from "~/app/_components/hooks/useEntityMode";
 import { useInventoryInvalidation } from "~/app/_components/inventory/hooks";
 import { InventoryForm } from "~/app/_components/inventory/inventory-form";
-import { useTRPC } from "~/integrations/trpc/react";
+import { useEntityCreateController } from "~/entities/editing";
 
 const CreateInventoryItem: FC = () => {
-  const api = useTRPC();
   const invalidateInventory = useInventoryInvalidation();
 
-  const { error, isPending, handleCreate, handleCancel } = useEntityCreateMode<
+  const { error, isPending, submit, cancel } = useEntityCreateController<
+    "inventory",
     z.infer<typeof inventoryCreatePayloadData>,
     { id: string }
-  >("inventory", api.inventory.create.mutationOptions(), {
+  >("inventory", {
     onSuccess: invalidateInventory,
   });
 
   return (
     <InventoryForm
       mode="create"
-      onCreate={handleCreate}
+      onCreate={submit}
       isPending={isPending}
       error={error}
-      onCancel={handleCancel}
+      onCancel={cancel}
     />
   );
 };

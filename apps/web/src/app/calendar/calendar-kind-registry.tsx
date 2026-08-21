@@ -7,7 +7,16 @@ import {
 import { TRADE_LABELS } from "@cubby/schemas/project";
 import type { LucideIcon } from "lucide-react";
 import type { BadgeVariant } from "~/components/ui/badge";
-import type { EditableEntity, EntityEditRecord } from "~/entities/editing";
+import {
+  type EditableEntity,
+  type EntityEditDialogRequest,
+  type EntityEditRecord,
+  expenseCaptureRequest,
+  mealCaptureRequest,
+  projectCaptureRequest,
+  taskCaptureRequest,
+} from "~/entities/editing";
+import type { EntityEditIntent } from "~/entities/editing/intent-types";
 import { ENTITY_ACCENTS } from "~/entities/entity-accents";
 import { mealKindBadgeVariant, mealTypeIcon } from "../meals/meal-options";
 import {
@@ -30,7 +39,7 @@ type CalendarEditDescriptor =
   | {
       mode: "editable";
       entity: EditableEntity;
-      intent: string;
+      intent: EntityEditIntent<"meal" | "task" | "expense", "update">;
       record: EntityEditRecord;
     }
   | {
@@ -45,6 +54,7 @@ type CalendarEditDescriptor =
 // compile-time registry decision rather than an accidental generic card.
 type CalendarKindSpec<K extends CalendarItemKind> = {
   entity: Entity;
+  create: (date?: string) => EntityEditDialogRequest;
   icon: (item: ItemOf<K>) => LucideIcon;
   cover: (
     item: ItemOf<K>,
@@ -68,6 +78,7 @@ const calendarKindRegistry: {
 } = {
   meal: {
     entity: "meal",
+    create: (date) => mealCaptureRequest({ date }),
     icon: (item) => mealTypeIcon(item.mealType),
     cover: (item) =>
       item.coverImageUrl
@@ -118,6 +129,7 @@ const calendarKindRegistry: {
   },
   task: {
     entity: "task",
+    create: (date) => taskCaptureRequest({ date }),
     icon: () => KIND_ICONS.task,
     cover: (item) =>
       item.coverImageUrl
@@ -150,6 +162,7 @@ const calendarKindRegistry: {
   },
   expense: {
     entity: "expense",
+    create: (date) => expenseCaptureRequest({ date, future: true }),
     icon: () => KIND_ICONS.expense,
     cover: (item) =>
       item.coverImageUrl
@@ -209,6 +222,7 @@ const calendarKindRegistry: {
   },
   project: {
     entity: "project",
+    create: (date) => projectCaptureRequest({ date }),
     icon: () => KIND_ICONS.project,
     cover: () => undefined,
     metadata: (item) =>
@@ -273,4 +287,12 @@ function calendarItemEditDescriptor(
   return spec.edit(item as never);
 }
 
-export { calendarItemEditDescriptor, calendarItemPresentation };
+function calendarItemCreateRequest(kind: CalendarItemKind, date?: string) {
+  return calendarKindRegistry[kind].create(date);
+}
+
+export {
+  calendarItemCreateRequest,
+  calendarItemEditDescriptor,
+  calendarItemPresentation,
+};

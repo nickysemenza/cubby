@@ -23,15 +23,17 @@ import {
   Wrench,
 } from "lucide-react";
 import { type FC, useCallback, useState } from "react";
-import { CreateExpenseDialog } from "~/app/expenses/create-expense-dialog";
-import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
 import { Row, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { OptionalStatusText, StatusText } from "~/components/ui/status-text";
-import { useTRPC } from "~/integrations/trpc/react";
+import {
+  EntityEditDialog,
+  expenseCaptureRequest,
+  taskCaptureRequest,
+} from "~/entities/editing";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import {
   DocumentViewerList,
@@ -65,15 +67,12 @@ interface ProductDetailProps {
 }
 
 export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
-  const api = useTRPC();
-
   const { commonSections, editMode, mappings } = useEntityDetail<
     ProductWithFoodOut,
     { id: string; data: Partial<ProductCreateInput> }
   >({
     entity: "product",
     data: product,
-    mutationOptions: api.product.update.mutationOptions(),
     getMappings: getAllUnitMappingsFromProduct,
   });
 
@@ -459,22 +458,23 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         onOpenChange={setAddToInventoryOpen}
         product={product}
       />
-      <CreateExpenseDialog
+      <EntityEditDialog
         open={recordSaleOpen}
         onOpenChange={setRecordSaleOpen}
-        presetProductId={product.id}
-        intent="disposition"
+        request={expenseCaptureRequest({
+          productId: product.id,
+          disposition: true,
+        })}
       />
       <ProductDiscardDialog
         open={discardOpen}
         onOpenChange={setDiscardOpen}
         product={product}
       />
-      <CreateTaskDialog
+      <EntityEditDialog
         open={createTaskOpen}
         onOpenChange={setCreateTaskOpen}
-        presetSubjectProductId={product.id}
-        presetSubjectProductName={product.name}
+        request={taskCaptureRequest({ subjectProductId: product.id })}
       />
     </Page>
   );

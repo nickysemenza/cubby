@@ -1,7 +1,6 @@
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { toast } from "sonner";
-import { useTRPC } from "~/integrations/trpc/react";
-import { useEntityCreateMode } from "../hooks/useEntityMode";
+import { useEntityCreateController } from "~/entities/editing";
 import { RecipeForm } from "./recipe-form";
 
 interface NewRecipeFormProps {
@@ -18,12 +17,11 @@ export default function NewRecipeForm({
   initialName,
   autoScrape,
 }: NewRecipeFormProps = {}) {
-  const api = useTRPC();
-
-  const { error, isPending, handleCreate } = useEntityCreateMode<
+  const { error, isPending, submit } = useEntityCreateController<
+    "recipe",
     RecipeCreateInput,
     { id: string }
-  >("recipe", api.recipe.create.mutationOptions(), {
+  >("recipe", {
     onSuccess: () => {
       toast.success("Recipe added to your book.");
     },
@@ -35,7 +33,7 @@ export default function NewRecipeForm({
   return (
     <RecipeForm
       mode="create"
-      onCreate={handleCreate}
+      onCreate={submit}
       isPending={isPending}
       error={error}
       initialName={initialName}

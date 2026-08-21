@@ -188,14 +188,13 @@ export function useOptimisticDelete<
     };
     const baseMutationOptions = registeredDelete
       ? ({
-          mutationFn: async ({ ids }: { ids: string[] }) =>
-            await commands.executeOrThrow({
-              entity: commandEntity,
-              operation: "delete",
-              intent: "delete",
-              ids,
-              data: {},
-            }),
+          mutationFn: async ({ ids }: { ids: string[] }) => {
+            const result = await commands.remove(ids);
+            if (!result.ok) {
+              throw new Error(result.issues[0]?.message ?? "Delete failed");
+            }
+            return result;
+          },
           onSuccess,
           onError,
         } as Record<string, unknown>)
@@ -254,13 +253,7 @@ export function useOptimisticDelete<
         }
       },
     };
-  }, [
-    commandEntity,
-    commands.executeOrThrow,
-    deletable,
-    queryClient,
-    registeredDelete,
-  ]);
+  }, [commands.remove, deletable, queryClient, registeredDelete]);
 
   // Always call useMutation unconditionally (Rules of Hooks).
   // When deletable is not configured, pass a no-op mutation function.

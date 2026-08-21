@@ -35,6 +35,7 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
+import { EntityFormDialog } from "~/entities/editing";
 import { useTRPC } from "~/integrations/trpc/react";
 import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
 import { cn, formatCurrency } from "~/lib/utils";
@@ -51,7 +52,6 @@ import {
   formatPricingCountsSummary,
   type InventoryItem,
 } from "./calculate-inventory-valuation";
-import { CreateChildLocationDialog } from "./create-child-location-dialog";
 import { LocationChildrenTable } from "./location-children-table";
 import { locationContentsVisibility } from "./location-contents-state";
 import { LocationInventoryBreakdown } from "./location-inventory-breakdown";
@@ -488,10 +488,11 @@ export function LocationContents({ location }: { location: InfLocation }) {
         </>
       )}
 
-      <CreateChildLocationDialog
+      <EntityFormDialog
+        entity="location"
         open={createChildOpen}
         onOpenChange={setCreateChildOpen}
-        parentLocation={location}
+        seed={{ parentLocation: location }}
         onSuccess={handleChildCreated}
       />
     </Stack>

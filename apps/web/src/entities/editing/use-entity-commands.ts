@@ -9,6 +9,11 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
 import { getEntityContract } from "../entity-contracts";
 import { entityEditRegistry } from "./definitions";
+import type {
+  EntityEditDraft,
+  EntityEditIntent,
+  EntityEditResultFor,
+} from "./intent-types";
 import {
   buildEntityEdit,
   initialEntityEditValues,
@@ -97,23 +102,29 @@ export interface EntityCommands<E extends EditableEntity> {
   readonly issues: readonly EntityEditIssue[];
   /** Execute a semantic command already built by an entity definition. */
   commit(build: EntityEditBuildResult<E>): Promise<EntityEditResult<E>>;
-  /** Same lifecycle as `raw`, but preserves mutation rejection for legacy callers. */
-  executeOrThrow(
-    command: EntityEditCommand<E>,
+  /** Submit a complete payload from a rich form adapter. Semantic field forms
+   * should prefer `commit`; this interface exists for Recipe/Inventory/media-rich forms. */
+  submit(
+    command: Omit<EntityEditCommand<E>, "entity">,
   ): Promise<{ id: string; result: unknown }>;
-  /** Compatibility escape hatch while older forms migrate to semantic fields. */
-  raw(command: EntityEditCommand<E>): Promise<EntityEditResult<E>>;
-  update(input: {
-    id: string;
-    data: object;
-    intent?: string;
+  create(input: {
+    values: Readonly<Partial<EntityEditDraft<E>>>;
+    intent: EntityEditIntent<E, "create">;
+    context?: Readonly<Record<string, unknown>>;
+    surface?: "create-page" | "dialog" | "quick-create";
   }): Promise<EntityEditResult<E>>;
-  remove(ids: readonly string[], intent?: string): Promise<EntityEditResult<E>>;
+  remove(ids: readonly string[]): Promise<EntityEditResult<E>>;
+  commitFields(input: {
+    record: EntityEditRecord;
+    values: Readonly<Partial<EntityEditDraft<E>>>;
+    intent?: EntityEditIntent<E, "update">;
+    surface?: "cell" | "detail" | "preview" | "calendar";
+  }): Promise<EntityEditResult<E>>;
   commitField(input: {
     record: EntityEditRecord;
-    field: string;
-    value: unknown;
-    intent?: string;
+    field: Extract<keyof EntityEditDraft<E>, string>;
+    value: EntityEditDraft<E>[Extract<keyof EntityEditDraft<E>, string>];
+    intent?: EntityEditIntent<E, "update">;
     surface?: "cell" | "detail" | "preview" | "calendar";
   }): Promise<EntityEditResult<E>>;
 }
@@ -134,7 +145,7 @@ export function useEntityCommands<E extends EditableEntity>(
       await port.execute(command),
   });
 
-  const executeOrThrow = useCallback(
+  const executeCommand = useCallback(
     async (command: EntityEditCommand<E>) => {
       const execution = await mutation.mutateAsync(command);
       await port.invalidate(definition.invalidationKeys);
@@ -147,17 +158,23 @@ export function useEntityCommands<E extends EditableEntity>(
     [definition.invalidationKeys, mutation, port],
   );
 
-  const raw = useCallback(
+  const submit = useCallback(
+    async (command: Omit<EntityEditCommand<E>, "entity">) =>
+      await executeCommand({ ...command, entity }),
+    [entity, executeCommand],
+  );
+
+  const executeResult = useCallback(
     async (command: EntityEditCommand<E>): Promise<EntityEditResult<E>> => {
       setIssues([]);
       try {
-        const execution = await executeOrThrow(command);
+        const execution = await executeCommand(command);
         return {
           ok: true,
           entity,
           id: execution.id,
           changed: true,
-          result: execution.result,
+          result: execution.result as EntityEditResultFor<E>,
         };
       } catch (error) {
         const nextIssues = [
@@ -167,7 +184,7 @@ export function useEntityCommands<E extends EditableEntity>(
         return { ok: false, issues: nextIssues };
       }
     },
-    [entity, executeOrThrow],
+    [entity, executeCommand],
   );
 
   const commit = useCallback(
@@ -185,99 +202,134 @@ export function useEntityCommands<E extends EditableEntity>(
           changed: false,
         };
       }
-      return await raw(build.command);
+      return await executeResult(build.command);
     },
-    [entity, raw],
-  );
-
-  const update = useCallback(
-    async ({
-      id,
-      data,
-      intent = "legacy",
-    }: {
-      id: string;
-      data: object;
-      intent?: string;
-    }) =>
-      await raw({
-        entity,
-        operation: "update",
-        intent,
-        id,
-        data,
-      }),
-    [entity, raw],
+    [entity, executeResult],
   );
 
   const remove = useCallback(
-    async (ids: readonly string[], intent = "legacy") =>
-      await raw({
+    async (ids: readonly string[]) =>
+      await executeResult({
         entity,
         operation: "delete",
-        intent,
+        intent: "delete",
         ids,
         data: {},
       }),
-    [entity, raw],
+    [entity, executeResult],
   );
 
-  const commitField = useCallback(
+  const create = useCallback(
     async ({
-      record,
-      field: fieldId,
-      value,
+      values,
       intent,
-      surface = "cell",
+      context,
+      surface = "dialog",
     }: {
-      record: EntityEditRecord;
-      field: string;
-      value: unknown;
-      intent?: string;
-      surface?: "cell" | "detail" | "preview" | "calendar";
+      values: Readonly<Partial<EntityEditDraft<E>>>;
+      intent: EntityEditIntent<E, "create">;
+      context?: Readonly<Record<string, unknown>>;
+      surface?: "create-page" | "dialog" | "quick-create";
     }): Promise<EntityEditResult<E>> => {
-      const request: EntityEditRequest<E> = {
+      const request = {
         entity,
-        operation: "update",
+        operation: "create",
         intent,
         surface,
-        record,
-      };
+        context,
+      } as EntityEditRequest<E>;
       const resolved = resolveEntityEdit(entityEditRegistry, request);
       if (!isResolvedEntityEdit(resolved)) {
         setIssues(resolved.issues);
         return { ok: false, issues: resolved.issues };
       }
-      const selected = resolved.fields.find(({ id }) => id === fieldId);
-      if (!selected) {
+      return await commit(
+        buildEntityEdit(resolved, request, {
+          ...initialEntityEditValues(resolved, request),
+          ...values,
+        }),
+      );
+    },
+    [commit, entity],
+  );
+
+  const commitFields = useCallback(
+    async ({
+      record,
+      values,
+      intent,
+      surface = "cell",
+    }: {
+      record: EntityEditRecord;
+      values: Readonly<Partial<EntityEditDraft<E>>>;
+      intent?: EntityEditIntent<E, "update">;
+      surface?: "cell" | "detail" | "preview" | "calendar";
+    }): Promise<EntityEditResult<E>> => {
+      const request = {
+        entity,
+        operation: "update",
+        intent,
+        surface,
+        record,
+      } as EntityEditRequest<E>;
+      const resolved = resolveEntityEdit(entityEditRegistry, request);
+      if (!isResolvedEntityEdit(resolved)) {
+        setIssues(resolved.issues);
+        return { ok: false, issues: resolved.issues };
+      }
+      const requestedFields = Object.keys(values);
+      const selected = resolved.fields.filter(({ id }) => id in values);
+      const missing = requestedFields.filter(
+        (fieldId) => !selected.some(({ id }) => id === fieldId),
+      );
+      if (missing.length > 0) {
         const nextIssues = [
           {
-            field: fieldId,
-            message: `${entity}'s ${surface} surface does not expose ${fieldId}.`,
+            field: missing[0],
+            message: `${entity}'s ${resolved.intent} intent does not expose ${missing.join(", ")}.`,
             source: "client" as const,
           },
         ];
         setIssues(nextIssues);
         return { ok: false, issues: nextIssues };
       }
-      const fieldResolved = { ...resolved, fields: [selected] };
-      const values = {
-        ...initialEntityEditValues(fieldResolved, request),
-        [fieldId]: value,
+      const fieldsResolved = { ...resolved, fields: selected };
+      const nextValues = {
+        ...initialEntityEditValues(fieldsResolved, request),
+        ...values,
       };
-      return await commit(buildEntityEdit(fieldResolved, request, values));
+      return await commit(buildEntityEdit(fieldsResolved, request, nextValues));
     },
     [commit, entity],
+  );
+
+  const commitField = useCallback(
+    async <K extends Extract<keyof EntityEditDraft<E>, string>>({
+      field,
+      value,
+      ...input
+    }: {
+      record: EntityEditRecord;
+      field: K;
+      value: EntityEditDraft<E>[K];
+      intent?: EntityEditIntent<E, "update">;
+      surface?: "cell" | "detail" | "preview" | "calendar";
+    }) =>
+      await commitFields({
+        ...input,
+        values: { [field]: value } as unknown as Partial<EntityEditDraft<E>>,
+      }),
+    [commitFields],
   );
 
   return {
     isPending: mutation.isPending,
     issues,
     commit,
-    executeOrThrow,
-    raw,
-    update,
+    submit,
+    create,
     remove,
+    commitFields,
     commitField,
   };
 }

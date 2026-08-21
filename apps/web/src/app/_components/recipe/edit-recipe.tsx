@@ -1,8 +1,6 @@
 import type { RecipeOut, RecipeUpdateInput } from "@cubby/schemas/recipe";
 import { toast } from "sonner";
-import { useTRPC } from "~/integrations/trpc/react";
-import { recipeAllMutationInvalidateKeys } from "~/lib/query-keys";
-import { useEditMode } from "../hooks/useEditMode";
+import { useEntityDetailController } from "~/entities/editing";
 import { RecipeForm } from "./recipe-form";
 
 interface EditRecipeFormProps {
@@ -14,25 +12,21 @@ export default function EditRecipeForm({
   recipe,
   onCancel,
 }: EditRecipeFormProps) {
-  const api = useTRPC();
-
-  const { error, isPending, handleEdit } = useEditMode<RecipeUpdateInput>({
-    entity: "recipe",
-    entityId: recipe.id,
-    mutationOptions: api.recipe.update.mutationOptions(),
-    onSuccess: () => {
-      toast.success("Recipe saved.");
-      onCancel();
-    },
-    // Only invalidate recipe queries to avoid triggering problematic ingredient queries
-    invalidateKeys: recipeAllMutationInvalidateKeys,
-  });
+  const { error, isPending, submit } =
+    useEntityDetailController<RecipeUpdateInput>({
+      entity: "recipe",
+      entityId: recipe.id,
+      onSuccess: () => {
+        toast.success("Recipe saved.");
+        onCancel();
+      },
+    });
 
   return (
     <RecipeForm
       mode="edit"
       entity={recipe}
-      onEdit={handleEdit}
+      onEdit={submit}
       isPending={isPending}
       error={error}
       onCancel={onCancel}

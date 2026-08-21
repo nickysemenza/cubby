@@ -10,16 +10,8 @@ import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { lazy, Suspense } from "react";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
 import { useTRPC } from "~/integrations/trpc/react";
-import { getErrorMessage } from "~/lib/error-utils";
-import {
-  ingredientMutationInvalidateKeys,
-  locationMutationInvalidateKeys,
-  productMutationInvalidateKeys,
-} from "~/lib/query-keys";
-import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import {
   buildIngredientComboboxItem,
   buildLocationComboboxItem,
@@ -39,19 +31,9 @@ import {
   useEntitySearchWithDialog,
 } from "./entity-search-hooks";
 
-const CreateIngredientDialog = lazy(() =>
-  import("./create-entity-dialogs").then((module) => ({
-    default: module.CreateIngredientDialog,
-  })),
-);
-const CreateLocationDialog = lazy(() =>
-  import("./create-entity-dialogs").then((module) => ({
-    default: module.CreateLocationDialog,
-  })),
-);
-const CreateProductDialog = lazy(() =>
-  import("./create-entity-dialogs").then((module) => ({
-    default: module.CreateProductDialog,
+const EntityFormDialog = lazy(() =>
+  import("~/entities/editing/entity-form-dialog").then((module) => ({
+    default: module.EntityFormDialog,
   })),
 );
 
@@ -78,7 +60,6 @@ export function WithIngredientSearch({
     setIsDialogOpen,
     pendingName,
     openDialog,
-    closeDialog,
     resolveWithEntity,
   } = useEntitySearchWithDialog<IngredientShortcode>();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
@@ -110,32 +91,22 @@ export function WithIngredientSearch({
     ),
   );
 
-  const createMutation = useActionMutation({
-    entity: "ingredient",
-    mutationFn: api.ingredient.create.mutationOptions,
-    success: (newIngredient) =>
-      savedWithBackgroundWork(
-        newIngredient.sideEffects,
-        `Added ${newIngredient.name} to your pantry`,
-      ),
-    invalidateKeys: ingredientMutationInvalidateKeys,
-    onSuccess: (newIngredient) =>
-      resolveWithEntity(buildIngredientComboboxItem(newIngredient)),
-    error: (err) => `Failed to create ingredient: ${getErrorMessage(err)}`,
-  });
-
   return (
     <>
       {isDialogOpen && (
         <Suspense fallback={null}>
-          <CreateIngredientDialog
-            isOpen
+          <EntityFormDialog
+            entity="ingredient"
+            open
             onOpenChange={setIsDialogOpen}
-            onCancel={closeDialog}
-            onCreate={(data) => createMutation.mutate(data)}
-            isPending={createMutation.isPending}
-            error={createMutation.error?.message}
-            initialName={pendingName}
+            seed={{ name: pendingName }}
+            onSuccess={(result) =>
+              resolveWithEntity(
+                buildIngredientComboboxItem(
+                  result as Parameters<typeof buildIngredientComboboxItem>[0],
+                ),
+              )
+            }
           />
         </Suspense>
       )}
@@ -176,7 +147,6 @@ export function WithLocationSearch({
     setIsDialogOpen,
     pendingName,
     openDialog,
-    closeDialog,
     resolveWithEntity,
   } = useEntitySearchWithDialog<LocationShortcode>();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
@@ -216,32 +186,24 @@ export function WithLocationSearch({
     ),
   );
 
-  const createMutation = useActionMutation({
-    entity: "location",
-    mutationFn: api.location.create.mutationOptions,
-    success: (newLocation) =>
-      savedWithBackgroundWork(
-        newLocation.sideEffects,
-        `Made a place for ${newLocation.name}`,
-      ),
-    invalidateKeys: locationMutationInvalidateKeys,
-    onSuccess: (newLocation) =>
-      resolveWithEntity(buildLocationComboboxItemFromDetail(newLocation)),
-    error: (err) => `Failed to create location: ${getErrorMessage(err)}`,
-  });
-
   return (
     <>
       {isDialogOpen && (
         <Suspense fallback={null}>
-          <CreateLocationDialog
-            isOpen
+          <EntityFormDialog
+            entity="location"
+            open
             onOpenChange={setIsDialogOpen}
-            onCancel={closeDialog}
-            onCreate={async (data) => createMutation.mutateAsync(data)}
-            isPending={createMutation.isPending}
-            error={createMutation.error?.message}
-            initialName={pendingName}
+            seed={{ name: pendingName }}
+            onSuccess={(result) =>
+              resolveWithEntity(
+                buildLocationComboboxItemFromDetail(
+                  result as Parameters<
+                    typeof buildLocationComboboxItemFromDetail
+                  >[0],
+                ),
+              )
+            }
           />
         </Suspense>
       )}
@@ -280,7 +242,6 @@ export function WithProductSearch({
     setIsDialogOpen,
     pendingName,
     openDialog,
-    closeDialog,
     resolveWithEntity,
   } = useEntitySearchWithDialog<ProductShortcode>();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
@@ -306,20 +267,6 @@ export function WithProductSearch({
     ),
   );
 
-  const createMutation = useActionMutation({
-    entity: "product",
-    mutationFn: api.product.create.mutationOptions,
-    success: (newProduct) =>
-      savedWithBackgroundWork(
-        newProduct.sideEffects,
-        `Added ${newProduct.name} to your shelves`,
-      ),
-    invalidateKeys: productMutationInvalidateKeys,
-    onSuccess: (newProduct) =>
-      resolveWithEntity(buildProductComboboxItem(newProduct)),
-    error: (err) => `Failed to create product: ${getErrorMessage(err)}`,
-  });
-
   // A pasted/typed UPC skips the name-only dialog and resolves via the UPC
   // lookup cascade instead; non-UPC input still opens the create dialog.
   const onCreateNew = useUpcAwareCreate(openDialog);
@@ -328,14 +275,18 @@ export function WithProductSearch({
     <>
       {isDialogOpen && (
         <Suspense fallback={null}>
-          <CreateProductDialog
-            isOpen
+          <EntityFormDialog
+            entity="product"
+            open
             onOpenChange={setIsDialogOpen}
-            onCancel={closeDialog}
-            onCreate={(data) => createMutation.mutate(data)}
-            isPending={createMutation.isPending}
-            error={createMutation.error?.message}
-            initialName={pendingName}
+            seed={{ name: pendingName }}
+            onSuccess={(result) =>
+              resolveWithEntity(
+                buildProductComboboxItem(
+                  result as Parameters<typeof buildProductComboboxItem>[0],
+                ),
+              )
+            }
           />
         </Suspense>
       )}

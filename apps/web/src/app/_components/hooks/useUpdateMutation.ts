@@ -3,7 +3,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import type { EditableEntity } from "~/entities/editing";
+import type { EditableEntity, EntityEditDraft } from "~/entities/editing";
 import { useEntityCommands } from "~/entities/editing";
 import { entities } from "~/entities/entities";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -38,7 +38,7 @@ export function useUpdateMutation<TFn extends MutationOptionsFn>({
   const commandEntity = (registered ? entity : "product") as EditableEntity;
   const commands = useEntityCommands(commandEntity);
 
-  const legacyMutation = useActionMutation({
+  const externalMutation = useActionMutation({
     mutationFn,
     invalidateKeys,
     // Collapse repeated "{Entity} updated" toasts (rapid inline edits, range
@@ -57,34 +57,16 @@ export function useUpdateMutation<TFn extends MutationOptionsFn>({
   const registryMutation = useMutation<DataOf<TFn>, Error, VariablesOf<TFn>>({
     mutationFn: async (variables) => {
       const input = variables as { id: string; data: object };
-      const entries = Object.entries(input.data);
-      if (entries.length === 1) {
-        const [field, value] = entries[0]!;
-        const fieldResult = await commands.commitField({
-          record: { id: input.id },
-          field,
-          value,
-          intent: "full",
-          surface: "cell",
-        });
-        if (fieldResult.ok) {
-          return fieldResult.result as DataOf<TFn>;
-        }
-        const unknownField = fieldResult.issues.some((issue) =>
-          issue.message.includes("does not expose"),
-        );
-        if (!unknownField) {
-          throw new Error(fieldResult.issues[0]?.message ?? "Update failed");
-        }
-      }
-      const execution = await commands.executeOrThrow({
-        entity: commandEntity,
-        operation: "update",
-        intent: "legacy",
-        id: input.id,
-        data: input.data,
+      const result = await commands.commitFields({
+        record: { id: input.id },
+        values: input.data as Partial<EntityEditDraft<typeof commandEntity>>,
+        intent: "full",
+        surface: "cell",
       });
-      return execution.result as DataOf<TFn>;
+      if (!result.ok) {
+        throw new Error(result.issues[0]?.message ?? "Update failed");
+      }
+      return result.result as DataOf<TFn>;
     },
     onSuccess: (data) => {
       toast.success(
@@ -104,5 +86,5 @@ export function useUpdateMutation<TFn extends MutationOptionsFn>({
     },
   });
 
-  return registered ? registryMutation : legacyMutation;
+  return registered ? registryMutation : externalMutation;
 }

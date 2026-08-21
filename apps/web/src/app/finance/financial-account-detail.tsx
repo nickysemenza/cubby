@@ -6,12 +6,15 @@ import { BasicInfo } from "~/components/common/basic-info";
 import { Page } from "~/components/page/Page";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
+import {
+  EntityEditDialog,
+  financialAccountEditRequest,
+} from "~/entities/editing";
 import { useTRPC } from "~/integrations/trpc/react";
 import { financialAccountMutationInvalidateKeys } from "~/lib/query-keys";
 import { renderOptionCell } from "../_components/data-table/columnHelpers";
 import { DetailSections } from "../_components/data-table/detail-page";
 import { useEntityDelete } from "../_components/hooks/useEntityDelete";
-import { EditFinancialAccountDialog } from "./edit-financial-account-dialog";
 import {
   accountIdentityKindOptions,
   provisionalOptions,
@@ -118,10 +121,10 @@ export function FinancialAccountDetail({
           },
         ]}
       />
-      <EditFinancialAccountDialog
-        account={account}
+      <EntityEditDialog
         open={editOpen}
         onOpenChange={setEditOpen}
+        request={financialAccountEditRequest(account)}
       />
       {deleteDialog}
     </Page>

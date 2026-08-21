@@ -2,10 +2,9 @@ import type { VendorShortcode } from "@cubby/schemas/identifiers";
 import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { toast } from "sonner";
+import { useEntityCommands } from "~/entities/editing";
 import { useTRPC } from "~/integrations/trpc/react";
-import { getErrorMessage } from "~/lib/error-utils";
-import { vendorMutationInvalidateKeys } from "~/lib/query-keys";
 import {
   buildSearchHitComboboxItem,
   buildVendorNameComboboxItem,
@@ -150,7 +149,6 @@ export function WithVendorShortcodeSearch({
   children,
 }: WithEntitySearchProps<VendorShortcode>) {
   const {
-    api,
     rows,
     searchHits,
     isTypedSearch,
@@ -166,23 +164,25 @@ export function WithVendorShortcodeSearch({
     );
   }, [isTypedSearch, rows, searchHits]);
 
-  const createMutation = useActionMutation({
-    entity: "vendor",
-    mutationFn: api.vendor.create.mutationOptions,
-    success: (vendor) => `Added vendor ${vendor.name}`,
-    invalidateKeys: vendorMutationInvalidateKeys,
-    error: (error) => `Failed to create vendor: ${getErrorMessage(error)}`,
-  });
+  const commands = useEntityCommands("vendor");
   const onCreateNew = useCallback(
     async (name: string): Promise<ComboboxItem<VendorShortcode>> => {
-      const vendor = await createMutation.mutateAsync({
-        name: name.trim(),
-        website: null,
-        notes: null,
+      const result = await commands.create({
+        intent: "capture",
+        values: { name: name.trim() },
+        surface: "quick-create",
       });
-      return buildVendorShortcodeComboboxItem(vendor);
+      if (!result.ok || !result.result) {
+        const message = result.ok
+          ? "Vendor creation returned no record."
+          : (result.issues[0]?.message ?? "Failed to create vendor.");
+        toast.error(message);
+        throw new Error(message);
+      }
+      toast.success(`Added vendor ${result.result.name}`);
+      return buildVendorShortcodeComboboxItem(result.result as never);
     },
-    [createMutation],
+    [commands],
   );
 
   return (

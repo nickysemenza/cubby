@@ -1,7 +1,6 @@
 import { uniq } from "es-toolkit";
 import { AlertCircle, AlertTriangle, Eye, EyeOff, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -20,10 +19,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { useTRPC } from "~/integrations/trpc/react";
-import { queryKeys } from "~/lib/query-keys";
+import { EntityFormDialog } from "~/entities/editing";
 import { cn } from "~/lib/utils";
-import { CreateIngredientDialog } from "../../combobox/create-entity-dialogs";
 import { EntityInlineLink } from "../../EntityInlineLink";
 import { formatAmounts } from "../../inventory/format-amount";
 import { DecompositionView } from "../decomposition-view";
@@ -100,8 +97,6 @@ interface IngredientPreviewTableProps {
 export function IngredientPreviewTable({
   ingredientLines,
 }: IngredientPreviewTableProps) {
-  const api = useTRPC();
-
   const {
     parsedIngredients,
     ingredientMatchMap,
@@ -130,14 +125,6 @@ export function IngredientPreviewTable({
   // Whether the optional "Raw" carve column is shown (off by default).
   const [showRaw, setShowRaw] = useState(false);
 
-  const createIngredient = useActionMutation({
-    entity: "ingredient",
-    mutationFn: api.ingredient.create.mutationOptions,
-    success: "Ingredient added.",
-    invalidateKeys: [queryKeys.ingredient.getByName],
-    onSuccess: () => setCreateDialogOpen(false),
-  });
-
   const handleCreateIngredient = (name: string) => {
     setSelectedIngredientName(name);
     setCreateDialogOpen(true);
@@ -149,14 +136,11 @@ export function IngredientPreviewTable({
 
   return (
     <>
-      <CreateIngredientDialog
-        isOpen={createDialogOpen}
+      <EntityFormDialog
+        entity="ingredient"
+        open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
-        onCancel={() => setCreateDialogOpen(false)}
-        onCreate={(data) => createIngredient.mutate(data)}
-        isPending={createIngredient.isPending}
-        error={createIngredient.error?.message}
-        initialName={selectedIngredientName}
+        seed={{ name: selectedIngredientName }}
       />
 
       {/* "Raw" shows the grammar's carve of each source line. Off by default so

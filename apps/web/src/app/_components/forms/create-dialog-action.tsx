@@ -1,13 +1,12 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { type ComponentType, type ReactNode, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { z } from "zod";
 import { Button } from "~/components/ui/button";
-
-type CreateDialog = ComponentType<{
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}>;
+import {
+  EntityEditDialog,
+  type EntityEditDialogRequest,
+} from "~/entities/editing";
 
 /**
  * The `?create=true` search param this component reads.
@@ -33,10 +32,10 @@ export const createDialogSearchField = {
  * Cleared with `replace` on close so a refresh or back-nav can't reopen it.
  */
 export function CreateDialogAction({
-  Dialog,
+  request,
   children = "New",
 }: {
-  Dialog: CreateDialog;
+  request: EntityEditDialogRequest;
   children?: ReactNode;
 }) {
   // Both hooks are route-agnostic on purpose: this button renders on a dozen
@@ -77,7 +76,7 @@ export function CreateDialogAction({
         <Plus />
         {children}
       </Button>
-      <Dialog open={open} onOpenChange={setOpen} />
+      <EntityEditDialog open={open} onOpenChange={setOpen} request={request} />
     </>
   );
 }

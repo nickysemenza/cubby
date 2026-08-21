@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { NewEntityPage } from "~/components/entity/new-entity-page";
 import { Page } from "~/components/page/Page";
+import { EntityEditPage } from "~/entities/editing";
 import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/locations/new")({
@@ -11,7 +11,7 @@ export const Route = createFileRoute("/_authenticated/locations/new")({
 function NewLocationPage() {
   return (
     <Page variant="list" title="New location" compact>
-      <NewEntityPage entity="location" />
+      <EntityEditPage entity="location" />
     </Page>
   );
 }

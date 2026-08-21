@@ -2,7 +2,6 @@ import type { InfLocation, LocationUpdateInput } from "@cubby/schemas/location";
 import { Eye, Info, Package } from "lucide-react";
 import type { FC } from "react";
 import { Page } from "~/components/page/Page";
-import { useTRPC } from "~/integrations/trpc/react";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
@@ -21,7 +20,6 @@ interface LocationDetailProps {
 }
 
 export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
-  const api = useTRPC();
   const heroMedia = (
     <LocationVisual location={location} variant="hero" interactive />
   );
@@ -32,7 +30,6 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
   >({
     entity: "location",
     data: location,
-    mutationOptions: api.location.update.mutationOptions(),
   });
 
   const sections: DetailSection[] = [

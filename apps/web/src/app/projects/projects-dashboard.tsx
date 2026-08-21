@@ -45,12 +45,12 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
+import { projectCaptureRequest } from "~/entities/editing";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { type RouterOutputs, useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import type { ProjectRowsRenderer } from "~/lib/list-view-normalization";
 import { formatCurrency } from "~/lib/utils";
-import { CreateProjectDialog } from "./create-project-dialog";
 import {
   defaultFilters,
   type Filters,
@@ -162,7 +162,7 @@ function DashboardToolbar({
       />
       <Row align="center" gap="sm">
         {filterControl}
-        <CreateDialogAction Dialog={CreateProjectDialog}>
+        <CreateDialogAction request={projectCaptureRequest()}>
           New Project
         </CreateDialogAction>
       </Row>

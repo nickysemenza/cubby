@@ -148,13 +148,13 @@ export function useEntityDelete({
         renderItem={(item) => item.name}
         onSubmit={async () => {
           if (registeredDelete) {
-            const execution = await commands.executeOrThrow({
-              entity: commandEntity,
-              operation: "delete",
-              intent: "delete",
-              ids: [id],
-              data: {},
-            });
+            const execution = await commands.remove([id]);
+            if (!execution.ok) {
+              throw new Error(
+                execution.issues[0]?.message ??
+                  `Failed to delete ${entityLabel}`,
+              );
+            }
             toast.success(
               savedWithBackgroundWork(
                 (
@@ -193,9 +193,8 @@ export function useEntityDelete({
       entityLabel,
       description,
       registeredDelete,
-      commands.executeOrThrow,
+      commands.remove,
       commands.isPending,
-      commandEntity,
       legacyDeleteMutation.isPending,
       legacyDeleteMutation.mutateAsync,
       navigate,
