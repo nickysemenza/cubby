@@ -135,6 +135,7 @@ const entry = (source: string) => ({
   entityType: "product" as const,
   entityId: "PRD-2CRC",
   entityName: "Track Saw Rail",
+  displayImage: null,
   action: "update" as const,
   changes: { tags: { from: [], to: ["fs-rail"] } },
   userId: "user-1",

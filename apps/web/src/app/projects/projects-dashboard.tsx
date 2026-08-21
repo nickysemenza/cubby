@@ -529,6 +529,7 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
             {task.projectName && task.projectId && (
               <span className="min-w-0 max-w-40 text-muted-foreground text-xs">
                 <EntityInlineLink
+                  displayImage={undefined}
                   entity="project"
                   data={{ id: task.projectId, name: task.projectName }}
                   truncate

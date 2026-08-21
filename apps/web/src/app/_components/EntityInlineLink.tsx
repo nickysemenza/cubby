@@ -1,3 +1,4 @@
+import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { LocationType } from "@cubby/schemas/location";
 import type { ProductCategory } from "@cubby/schemas/product";
 import type {
@@ -33,6 +34,11 @@ type EntityInlineLinkProps = {
   compact?: boolean;
   /** Truncate the name to the available flex width (no fixed cap). Parent must be min-w-0. */
   truncate?: boolean;
+  /**
+   * Backend-enriched canonical image. Null explicitly suppresses inline media;
+   * undefined derives from an established enriched projection during rollout.
+   */
+  displayImage: ImageUrlSummary | null | undefined;
 } & (
   | { entity: "ingredient"; data: MinimalEntityData }
   | {
@@ -105,7 +111,6 @@ const linkClass =
   "group inline-flex max-w-full items-baseline gap-2 align-baseline text-foreground transition-colors hover:text-primary";
 
 interface EntityLinkBodyProps {
-  icon: ReactNode;
   name: string;
   metadata?: string;
   compact?: boolean;
@@ -114,7 +119,6 @@ interface EntityLinkBodyProps {
 }
 
 function EntityLinkBody({
-  icon,
   name,
   metadata,
   compact,
@@ -123,7 +127,6 @@ function EntityLinkBody({
 }: EntityLinkBodyProps) {
   return (
     <>
-      <span className="shrink-0 self-center">{icon}</span>
       <span
         className={cn(
           "min-w-0 font-medium underline decoration-border/70 decoration-dotted underline-offset-2 group-hover:decoration-primary group-hover:decoration-solid",
@@ -146,12 +149,16 @@ function EntityLinkBody({
 function PreviewEntityLink({
   entity,
   id,
+  displayImage,
+  fallbackMark,
   openInNewTab,
   className,
   ...body
 }: EntityLinkBodyProps & {
   entity: HoverPreviewEntity;
   id: string;
+  displayImage: ImageUrlSummary | null;
+  fallbackMark: ReactNode;
   openInNewTab?: boolean;
   className: string;
 }) {
@@ -159,6 +166,8 @@ function PreviewEntityLink({
     <EntityPreviewLink
       entity={entity}
       id={id}
+      displayImage={displayImage}
+      fallbackMark={fallbackMark}
       openInNewTab={openInNewTab}
       className={className}
     >
@@ -169,6 +178,10 @@ function PreviewEntityLink({
 
 export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
   const { openInNewTab, compact, truncate } = props;
+  const displayImage =
+    props.displayImage === undefined
+      ? displayImageFromData(props.data)
+      : props.displayImage;
   const wrapperClass = cn(linkClass, truncate && "min-w-0");
 
   return match(props)
@@ -178,7 +191,8 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
-        icon={<EntityIcon entity="ingredient" size={12} colored />}
+        displayImage={displayImage}
+        fallbackMark={<EntityIcon entity="ingredient" size={12} colored />}
         name={data.name}
         compact={compact}
         truncate={truncate}
@@ -190,7 +204,8 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
-        icon={<EntityIcon entity="recipe" size={12} colored />}
+        displayImage={displayImage}
+        fallbackMark={<EntityIcon entity="recipe" size={12} colored />}
         name={data.name}
         compact={compact}
         truncate={truncate}
@@ -202,7 +217,8 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
-        icon={<EntityIcon entity="cookbook" size={12} colored />}
+        displayImage={displayImage}
+        fallbackMark={<EntityIcon entity="cookbook" size={12} colored />}
         name={data.name}
         metadata={data.authors?.length ? data.authors.join(", ") : undefined}
         compact={compact}
@@ -215,7 +231,8 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
-        icon={<EntityIcon entity="meal" size={12} colored />}
+        displayImage={displayImage}
+        fallbackMark={<EntityIcon entity="meal" size={12} colored />}
         name={data.name}
         metadata={data.date ?? undefined}
         compact={compact}
@@ -228,7 +245,8 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
-        icon={
+        displayImage={displayImage}
+        fallbackMark={
           data.type ? (
             <LocationIcon
               type={data.type}
@@ -257,7 +275,8 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
           id={data.id}
           openInNewTab={openInNewTab}
           className={wrapperClass}
-          icon={<EntityIcon entity="product" size={12} colored />}
+          displayImage={displayImage}
+          fallbackMark={<EntityIcon entity="product" size={12} colored />}
           name={displayName}
           metadata={metadata}
           compact={compact}
@@ -271,7 +290,8 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
-        icon={<EntityIcon entity="inventory" size={12} colored />}
+        displayImage={displayImage}
+        fallbackMark={<EntityIcon entity="inventory" size={12} colored />}
         name={data.name}
         compact={compact}
         truncate={truncate}
@@ -300,7 +320,8 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
           id={usdaRouteId(data.fdc_id)}
           openInNewTab={openInNewTab}
           className={wrapperClass}
-          icon={icon}
+          displayImage={displayImage}
+          fallbackMark={icon}
           name={text}
           compact={compact}
           truncate={truncate}
@@ -316,7 +337,8 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
-        icon={
+        displayImage={displayImage}
+        fallbackMark={
           <ProjectMarkById projectId={data.id} icon={data.icon} size={12} />
         }
         name={data.name}
@@ -337,7 +359,8 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
-        icon={<EntityIcon entity="task" size={12} colored />}
+        displayImage={displayImage}
+        fallbackMark={<EntityIcon entity="task" size={12} colored />}
         name={data.name}
         metadata={data.projectName ?? undefined}
         compact={compact}
@@ -350,7 +373,8 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
-        icon={<EntityIcon entity="expense" size={12} colored />}
+        displayImage={displayImage}
+        fallbackMark={<EntityIcon entity="expense" size={12} colored />}
         name={data.name}
         metadata={
           data.cost != null
@@ -367,7 +391,8 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
-        icon={<EntityIcon entity="purchase" size={12} colored />}
+        displayImage={displayImage}
+        fallbackMark={<EntityIcon entity="purchase" size={12} colored />}
         name={purchaseLabel(data)}
         // Only when the label is the order id — otherwise the fallback label
         // already leads with the vendor and this would print it twice.
@@ -386,7 +411,8 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
-        icon={<EntityIcon entity="vendor" size={12} colored />}
+        displayImage={displayImage}
+        fallbackMark={<EntityIcon entity="vendor" size={12} colored />}
         name={data.name}
         compact={compact}
         truncate={truncate}
@@ -394,3 +420,37 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
     ))
     .exhaustive();
 };
+
+/** Normalize established enriched projections while DTOs converge on one field. */
+function displayImageFromData(data: unknown): ImageUrlSummary | null {
+  if (!data || typeof data !== "object") return null;
+  const value = data as Record<string, unknown>;
+  const direct = [
+    value.displayImage,
+    value.coverImage,
+    value.logo,
+    value.vendorLogo,
+  ];
+  for (const candidate of direct) {
+    if (
+      candidate &&
+      typeof candidate === "object" &&
+      "url" in candidate &&
+      typeof candidate.url === "string"
+    ) {
+      return { url: candidate.url };
+    }
+  }
+  for (const key of ["coverImageUrl", "coverUrl", "imageUrl"] as const) {
+    if (typeof value[key] === "string") return { url: value[key] };
+  }
+  const images = value.images;
+  if (Array.isArray(images)) {
+    const first = images.find(
+      (image) =>
+        image && typeof image === "object" && typeof image.url === "string",
+    );
+    if (first) return { url: first.url as string };
+  }
+  return null;
+}

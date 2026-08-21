@@ -82,6 +82,7 @@ function DuplicateNameHint({
       <Row gap="xs" wrap>
         {matches.map((m) => (
           <EntityInlineLink
+            displayImage={undefined}
             key={m.id}
             entity="ingredient"
             data={{ name: m.name, id: m.id }}

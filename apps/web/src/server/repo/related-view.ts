@@ -1,4 +1,4 @@
-import type { Entity } from "@cubby/schemas/entity";
+import { type Entity, entityRefKey } from "@cubby/schemas/entity";
 import type {
   RelatedBranchInput,
   RelatedBranchOutput,
@@ -20,6 +20,7 @@ import { and, or, type SQL, type SQLWrapper, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
+import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 
 interface SqlRelatedView {
   sourceTable: string;
@@ -293,6 +294,7 @@ const SQL_RELATED_VIEWS = {
 
 type RawRow = {
   sourceId: string;
+  targetEntityId: string;
   id: string;
   label: string;
   totalCount: number | string;
@@ -308,11 +310,11 @@ const rowsOf = (result: unknown): RawRow[] => {
   return [];
 };
 
-async function loadOne(
+async function loadOneRows(
   db: Database,
   relationKey: RelatedViewKey,
   sourceIds: string[],
-): Promise<RelatedPreviewGroup[]> {
+): Promise<RawRow[]> {
   const view = SQL_RELATED_VIEWS[relationKey];
   const ids = sql.join(
     sourceIds.map((id) => sql`${id}`),
@@ -322,6 +324,7 @@ async function loadOne(
     WITH related AS (
       SELECT DISTINCT
         s."shortcode" AS "sourceId",
+        t."id"::text AS "targetEntityId",
         t."shortcode" AS "id",
         ${sql.raw(view.label)}::text AS "label",
         ${sql.raw(view.sort)} AS "sortValue"
@@ -337,28 +340,12 @@ async function loadOne(
         ) AS rn
       FROM related
     )
-    SELECT "sourceId", "id", "label", "totalCount"
+    SELECT "sourceId", "targetEntityId", "id", "label", "totalCount"
     FROM ranked
     WHERE rn <= 3
     ORDER BY "sourceId", rn
   `;
-  const rows = rowsOf(await getDb(db).execute(query));
-  const grouped = new Map<string, RelatedPreviewGroup>();
-  for (const row of rows) {
-    const group = grouped.get(row.sourceId) ?? {
-      sourceId: row.sourceId,
-      relationKey,
-      totalCount: Number(row.totalCount),
-      items: [],
-    };
-    group.items.push({
-      entity: view.targetEntity,
-      id: row.id,
-      label: row.label,
-    });
-    grouped.set(row.sourceId, group);
-  }
-  return [...grouped.values()];
+  return rowsOf(await getDb(db).execute(query));
 }
 
 export async function loadRelatedPreviews(
@@ -374,13 +361,44 @@ export async function loadRelatedPreviews(
     allowed.has(key),
   );
   if (input.sourceIds.length === 0 || relationKeys.length === 0) return [];
-  return (
-    await Promise.all(
-      relationKeys.map((key) =>
-        loadOne(db, key as RelatedViewKey, uniq(input.sourceIds)),
-      ),
-    )
-  ).flat();
+  const loaded = await Promise.all(
+    relationKeys.map(async (key) => ({
+      relationKey: key as RelatedViewKey,
+      rows: await loadOneRows(db, key as RelatedViewKey, uniq(input.sourceIds)),
+    })),
+  );
+  const displayImages = await resolveEntityDisplayImages(
+    db,
+    loaded.flatMap(({ relationKey, rows }) => {
+      const targetEntity = SQL_RELATED_VIEWS[relationKey].targetEntity;
+      return rows.map((row) => ({
+        entityType: targetEntity,
+        entityId: row.targetEntityId,
+      }));
+    }),
+  );
+  return loaded.flatMap(({ relationKey, rows }) => {
+    const targetEntity = SQL_RELATED_VIEWS[relationKey].targetEntity;
+    const grouped = new Map<string, RelatedPreviewGroup>();
+    for (const row of rows) {
+      const group = grouped.get(row.sourceId) ?? {
+        sourceId: row.sourceId,
+        relationKey,
+        totalCount: Number(row.totalCount),
+        items: [],
+      };
+      group.items.push({
+        entity: targetEntity,
+        id: row.id,
+        label: row.label,
+        displayImage:
+          displayImages.get(entityRefKey(targetEntity, row.targetEntityId)) ??
+          null,
+      });
+      grouped.set(row.sourceId, group);
+    }
+    return [...grouped.values()];
+  });
 }
 
 /**
@@ -396,6 +414,7 @@ export async function loadRelatedBranch(
   const query = sql`
     WITH related AS (
       SELECT DISTINCT
+        t."id"::text AS "targetEntityId",
         t."shortcode" AS "id",
         ${sql.raw(view.label)}::text AS "label",
         ${sql.raw(view.sort)} AS "sortValue"
@@ -406,12 +425,19 @@ export async function loadRelatedBranch(
       SELECT *, count(*) OVER ()::int AS "totalCount"
       FROM related
     )
-    SELECT "id", "label", "sortValue", "totalCount"
+    SELECT "targetEntityId", "id", "label", "sortValue", "totalCount"
     FROM ranked
     ORDER BY "sortValue" ${sql.raw(view.sortDirection)}, "label", "id"
     LIMIT ${input.limit} OFFSET ${input.offset}
   `;
   const rows = rowsOf(await getDb(db).execute(query)) as BranchRawRow[];
+  const displayImages = await resolveEntityDisplayImages(
+    db,
+    rows.map((row) => ({
+      entityType: view.targetEntity,
+      entityId: row.targetEntityId,
+    })),
+  );
   const totalCount = rows.length ? Number(rows[0]?.totalCount) : 0;
   const consumed = input.offset + rows.length;
   return {
@@ -422,6 +448,10 @@ export async function loadRelatedBranch(
       entity: view.targetEntity,
       id: row.id,
       label: row.label,
+      displayImage:
+        displayImages.get(
+          entityRefKey(view.targetEntity, row.targetEntityId),
+        ) ?? null,
     })),
     nextOffset: consumed < totalCount ? consumed : null,
   };

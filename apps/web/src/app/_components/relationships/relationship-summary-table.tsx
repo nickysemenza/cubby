@@ -223,6 +223,7 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
                 <EntityInlineLink
                   entity={target.entity}
                   data={{ id: target.id, name: target.label }}
+                  displayImage={target.image ? { url: target.image.url } : null}
                   truncate
                 />
               );

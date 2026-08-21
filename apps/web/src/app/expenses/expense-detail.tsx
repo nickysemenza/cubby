@@ -418,6 +418,7 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
             // carries — so both EntityInlineLink id slots read from it.
             v && expense.projectId ? (
               <EntityInlineLink
+                displayImage={undefined}
                 entity="project"
                 data={{
                   id: expense.projectId,
@@ -474,6 +475,7 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
                 renderValue={(v) =>
                   v && expense.productId && v.id === expense.productId ? (
                     <EntityInlineLink
+                      displayImage={undefined}
                       entity="product"
                       data={{
                         id: expense.productId,

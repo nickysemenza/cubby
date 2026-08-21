@@ -182,6 +182,7 @@ function MovementLine({
     <div className="grid gap-2 border-[var(--border)] border-t px-4 py-2 md:grid-cols-[minmax(14rem,1fr)_8rem_10rem_minmax(12rem,1fr)] md:items-center">
       <Stack gap="tight" className="min-w-0">
         <EntityInlineLink
+          displayImage={undefined}
           entity="product"
           data={{
             id: movement.productId,
@@ -192,6 +193,7 @@ function MovementLine({
         />
         {movement.expenseId ? (
           <EntityInlineLink
+            displayImage={undefined}
             entity="expense"
             data={{
               id: movement.expenseId,
@@ -225,6 +227,7 @@ function MovementLine({
           <Row align="center" gap="xs">
             <Description size="xs">Charged to</Description>
             <EntityInlineLink
+              displayImage={undefined}
               entity="project"
               data={movement.chargedTo}
               compact
@@ -265,6 +268,7 @@ function EventGroup({
           </span>
           {group.purchase ? (
             <EntityInlineLink
+              displayImage={undefined}
               entity="purchase"
               data={{
                 id: group.purchase.id,
@@ -279,7 +283,11 @@ function EventGroup({
           )}
         </Stack>
         {group.purchase?.vendor && (
-          <EntityInlineLink entity="vendor" data={group.purchase.vendor} />
+          <EntityInlineLink
+            displayImage={undefined}
+            entity="vendor"
+            data={group.purchase.vendor}
+          />
         )}
       </Row>
       {group.movements.map((movement) => (
@@ -407,12 +415,18 @@ function LifecyclesView({
                 gap="tight"
                 className="sticky left-0 z-10 min-w-0 border-[var(--border)] border-r bg-background p-2"
               >
-                <EntityInlineLink entity="product" data={product} truncate />
+                <EntityInlineLink
+                  displayImage={undefined}
+                  entity="product"
+                  data={product}
+                  truncate
+                />
                 {product.usedOnProjects.length > 0 && (
                   <Row align="center" wrap gap="xs">
                     <Description size="xs">Used on</Description>
                     {product.usedOnProjects.slice(0, 2).map((project) => (
                       <EntityInlineLink
+                        displayImage={undefined}
                         key={project.id}
                         entity="project"
                         data={project}

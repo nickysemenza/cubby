@@ -22,6 +22,7 @@ function ImageAssociationLink({
   const link = match(association)
     .with({ entityType: "product" }, ({ entityId, entityName }) => (
       <EntityInlineLink
+        displayImage={undefined}
         entity="product"
         data={{ id: entityId, name: entityName }}
         compact={compact}
@@ -29,6 +30,7 @@ function ImageAssociationLink({
     ))
     .with({ entityType: "location" }, ({ entityId, entityName }) => (
       <EntityInlineLink
+        displayImage={undefined}
         entity="location"
         data={{ id: entityId, name: entityName }}
         compact={compact}
@@ -36,6 +38,7 @@ function ImageAssociationLink({
     ))
     .with({ entityType: "recipe" }, ({ entityId, entityName }) => (
       <EntityInlineLink
+        displayImage={undefined}
         entity="recipe"
         data={{ id: entityId, name: entityName }}
         compact={compact}
@@ -43,6 +46,7 @@ function ImageAssociationLink({
     ))
     .with({ entityType: "cookbook" }, ({ entityId, entityName }) => (
       <EntityInlineLink
+        displayImage={undefined}
         entity="cookbook"
         data={{ id: entityId, name: entityName }}
         compact={compact}
@@ -50,6 +54,7 @@ function ImageAssociationLink({
     ))
     .with({ entityType: "project" }, ({ entityId, entityName }) => (
       <EntityInlineLink
+        displayImage={undefined}
         entity="project"
         data={{ id: entityId, name: entityName }}
         compact={compact}
@@ -57,6 +62,7 @@ function ImageAssociationLink({
     ))
     .with({ entityType: "purchase" }, ({ entityId, entityName }) => (
       <EntityInlineLink
+        displayImage={undefined}
         entity="purchase"
         data={{ id: entityId, orderId: entityName }}
         compact={compact}
@@ -64,6 +70,7 @@ function ImageAssociationLink({
     ))
     .with({ entityType: "vendor" }, ({ entityId, entityName }) => (
       <EntityInlineLink
+        displayImage={undefined}
         entity="vendor"
         data={{ id: entityId, name: entityName }}
         compact={compact}

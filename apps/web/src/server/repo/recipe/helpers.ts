@@ -411,7 +411,7 @@ export const dbRecipeToAPI = (recipeData: RecipeDeepDB): RecipeOut => {
  */
 export const dbRecipeToAPIGraph = (
   recipeData: RecipeGraphDB,
-): RecipeGraphOut => {
+): Omit<RecipeGraphOut, "displayImage"> => {
   const baseRecipe = dbRecipeToAPIShallow(recipeData);
   return {
     ...baseRecipe,

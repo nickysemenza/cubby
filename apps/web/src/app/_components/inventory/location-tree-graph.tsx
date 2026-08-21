@@ -163,6 +163,7 @@ function TidyTree({ data }: TidyTreeProps) {
                     className={`flex ${!isRoot && hasChildren ? "justify-end" : "justify-start"}`}
                   >
                     <EntityInlineLink
+                      displayImage={undefined}
                       entity="location"
                       data={{
                         name: node.data.name,

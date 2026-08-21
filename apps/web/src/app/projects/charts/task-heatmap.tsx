@@ -83,6 +83,7 @@ export function TaskHeatmap({ tasks }: { tasks: TaskOut[] }) {
           {task.projectId && task.projectName && (
             <span className="ml-auto min-w-0 max-w-32 text-muted-foreground">
               <EntityInlineLink
+                displayImage={undefined}
                 entity="project"
                 data={{ id: task.projectId, name: task.projectName }}
                 truncate

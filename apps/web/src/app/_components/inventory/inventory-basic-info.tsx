@@ -31,7 +31,11 @@ export const InventoryBasicInfo: FC<InventoryBasicInfoProps> = ({
     {
       label: "Location",
       value: (
-        <EntityInlineLink entity="location" data={inventoryitem.location} />
+        <EntityInlineLink
+          displayImage={undefined}
+          entity="location"
+          data={inventoryitem.location}
+        />
       ),
       filterAction: (
         <EntityFilterLink
@@ -43,7 +47,13 @@ export const InventoryBasicInfo: FC<InventoryBasicInfoProps> = ({
     },
     {
       label: "Product",
-      value: <EntityInlineLink entity="product" data={inventoryitem.product} />,
+      value: (
+        <EntityInlineLink
+          displayImage={undefined}
+          entity="product"
+          data={inventoryitem.product}
+        />
+      ),
       filterAction: (
         <EntityFilterLink
           to="/inventory"

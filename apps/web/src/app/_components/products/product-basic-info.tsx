@@ -190,6 +190,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
       label: "Ingredient",
       value: product.ingredient ? (
         <EntityInlineLink
+          displayImage={undefined}
           entity="ingredient"
           data={{
             name: product.ingredient.name,
@@ -208,7 +209,11 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     {
       label: "USDA Food",
       value: product.food ? (
-        <EntityInlineLink entity="usda-food" data={product.food} />
+        <EntityInlineLink
+          displayImage={undefined}
+          entity="usda-food"
+          data={product.food}
+        />
       ) : undefined,
     },
     ...(product.externalIds && product.externalIds.length > 0

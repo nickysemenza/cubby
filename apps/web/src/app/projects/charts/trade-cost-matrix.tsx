@@ -58,6 +58,7 @@ function CellPreview({ expenses }: { expenses: ExpenseOut[] }) {
               <span className="text-muted-foreground">
                 {" · "}
                 <EntityInlineLink
+                  displayImage={undefined}
                   entity="project"
                   data={{ id: p.projectId, name: p.projectName }}
                   compact

@@ -104,6 +104,7 @@ const recipe = (
     servings: null,
     notes: null,
     images: [],
+    displayImage: null,
     sections: [{ id: `${id}-s`, name: null, instructions: [], ingredients }],
   }) as unknown as RecipeOut;
 

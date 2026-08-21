@@ -4,6 +4,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
+import { entityRefKey } from "@cubby/schemas/entity";
 import type {
   ImpactItem,
   OperationDisposition,
@@ -86,6 +87,7 @@ import {
   withTransaction,
   withTransactionOn,
 } from "~/server/repo/database-helpers";
+import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import {
   countByTarget,
@@ -210,10 +212,10 @@ export const getRecipeCoverImageUrlsByShortcodes = async (
 };
 
 /**
- * Get many recipes by ID in one query. Returns the full ingredient graph (incl.
- * the `ingredient.recipe` discriminator) but omits images — used by client-side
- * cost rollup to resolve sub-recipes (recipe-as-ingredient). Missing/deleted ids
- * are simply absent from the result.
+ * Get many recipes by ID. Returns the full ingredient graph (including the
+ * `ingredient.recipe` discriminator) plus a compact resolved cover, without
+ * loading image collections. Used by client-side cost rollup to resolve
+ * sub-recipes (recipe-as-ingredient). Missing/deleted ids are simply absent.
  */
 export const getRecipesByIDs = async (
   db: Database,
@@ -228,7 +230,14 @@ export const getRecipesByIDs = async (
       ...relations.recipe.list,
     });
     span.setAttribute("db.result_count", rows.length);
-    return rows.map(dbRecipeToAPIGraph);
+    const displayImages = await resolveEntityDisplayImages(
+      db,
+      rows.map((row) => ({ entityType: "recipe", entityId: row.id })),
+    );
+    return rows.map((row) => ({
+      ...dbRecipeToAPIGraph(row),
+      displayImage: displayImages.get(entityRefKey("recipe", row.id)) ?? null,
+    }));
   });
 };
 

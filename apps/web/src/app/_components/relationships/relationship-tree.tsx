@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { relatedViewRegistry } from "@cubby/schemas/related-view";
 import { ChevronRight, Network, RotateCcw } from "lucide-react";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
+import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
 import { Button } from "~/components/ui/button";
 import type { EntityDetailRoute } from "~/entities/entities";
 import { entities, entityDetailParams } from "~/entities/entities";
@@ -17,6 +18,7 @@ export interface RelationshipEntity {
   /** Public shortcode for normal entities; image keeps its UUID route id. */
   id: string;
   label: string;
+  displayImage: { url: string } | null;
   /** Compact typed facts, already formatted by the API when appropriate. */
   facts?: readonly string[];
   /** An ancestor repeat is informative but cannot be expanded again. */
@@ -105,7 +107,6 @@ function EntityRow({
   onToggle: () => void;
   children?: ReactNode;
 }) {
-  const Icon = entities[item.entity].lucideIcon;
   return (
     <div>
       <div
@@ -135,7 +136,11 @@ function EntityRow({
         ) : (
           <span className="size-4 shrink-0" />
         )}
-        <Icon className="size-3 shrink-0 text-slate" aria-hidden />
+        <EntityIdentityMark
+          entity={item.entity}
+          displayImage={item.displayImage}
+          size="row"
+        />
         <TableLink
           to={entities[item.entity].routes.detail as EntityDetailRoute}
           params={routeParams(item)}

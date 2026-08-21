@@ -173,6 +173,7 @@ function RecipeImportCardImpl({
             <Badge variant={badge.variant}>{badge.label}</Badge>
             {existingId && (
               <EntityInlineLink
+                displayImage={undefined}
                 entity="recipe"
                 data={{
                   id: existingId,

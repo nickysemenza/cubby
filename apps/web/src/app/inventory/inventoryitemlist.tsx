@@ -191,7 +191,12 @@ export function InventoryItemList() {
           return (
             <div className="flex items-center gap-2">
               <Stack gap="xs" className="min-w-0 flex-1">
-                <EntityInlineLink entity="product" data={product} compact />
+                <EntityInlineLink
+                  displayImage={undefined}
+                  entity="product"
+                  data={product}
+                  compact
+                />
                 {upc && (
                   <div className="text-muted-foreground text-xs">
                     <TableLink

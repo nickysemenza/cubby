@@ -191,7 +191,12 @@ function ExpectedQuantityCell({
 function ProductFoodCell({ product }: { product: ProductListItem }) {
   const food = useHydratedProductFood(product);
   return food ? (
-    <EntityInlineLink entity="usda-food" data={food} compact />
+    <EntityInlineLink
+      displayImage={undefined}
+      entity="usda-food"
+      data={food}
+      compact
+    />
   ) : (
     <NoneValue />
   );

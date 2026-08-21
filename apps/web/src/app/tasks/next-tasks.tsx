@@ -48,6 +48,7 @@ function ChainNodeLink({
   return match(node.type)
     .with("task", () => (
       <EntityInlineLink
+        displayImage={undefined}
         entity="task"
         data={{ id: node.id, name: node.name }}
         compact
@@ -55,6 +56,7 @@ function ChainNodeLink({
     ))
     .with("project", () => (
       <EntityInlineLink
+        displayImage={undefined}
         entity="project"
         data={{ id: node.id, name: node.name }}
         compact
@@ -108,6 +110,7 @@ function TaskRows({ rows }: { rows: ActionableTaskOut[] }) {
             <TableCell>
               <Row align="center" gap="xs" className="min-w-0">
                 <EntityInlineLink
+                  displayImage={undefined}
                   entity="task"
                   data={{ id: t.id, name: t.name }}
                   truncate
@@ -127,6 +130,7 @@ function TaskRows({ rows }: { rows: ActionableTaskOut[] }) {
             <TableCell>
               {t.projectId && t.projectName && t.projectId ? (
                 <EntityInlineLink
+                  displayImage={undefined}
                   entity="project"
                   data={{
                     id: t.projectId,
@@ -218,6 +222,7 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
               <Stack key={bt.task.id} gap="xs">
                 <Row gap="sm" align="center">
                   <EntityInlineLink
+                    displayImage={undefined}
                     entity="task"
                     data={{
                       id: bt.task.id,

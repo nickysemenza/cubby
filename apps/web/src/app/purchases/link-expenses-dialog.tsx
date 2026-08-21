@@ -170,6 +170,7 @@ export function LinkExpensesDialog({
           const row = info.row.original;
           return row.projectId && row.projectName ? (
             <EntityInlineLink
+              displayImage={undefined}
               entity="project"
               data={{ id: row.projectId, name: row.projectName }}
               truncate

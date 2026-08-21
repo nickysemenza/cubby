@@ -88,7 +88,12 @@ export function InventoryEntriesCell<
           {tryFormatAmount(entry.amount)}
         </span>
         <span className="text-muted-foreground/50">@</span>
-        <EntityInlineLink entity={entity} data={related as never} compact />
+        <EntityInlineLink
+          displayImage={undefined}
+          entity={entity}
+          data={related as never}
+          compact
+        />
       </span>
     );
   };
@@ -177,7 +182,12 @@ export function InventoryEntriesCell<
                 </span>
                 <span className="text-muted-foreground/50">@</span>
                 {linkData ? (
-                  <EntityInlineLink entity="location" data={linkData} compact />
+                  <EntityInlineLink
+                    displayImage={undefined}
+                    entity="location"
+                    data={linkData}
+                    compact
+                  />
                 ) : (
                   <span className="truncate">{v.name}</span>
                 )}

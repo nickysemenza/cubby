@@ -153,6 +153,7 @@ export function EquivalencesReport() {
                       className="border-b align-top"
                     >
                       <EntityInlineLink
+                        displayImage={undefined}
                         entity="ingredient"
                         data={{
                           id: c.ingredientId,
@@ -196,6 +197,7 @@ export function EquivalencesReport() {
                           className="flex flex-wrap items-baseline gap-x-2 text-muted-foreground"
                         >
                           <EntityInlineLink
+                            displayImage={undefined}
                             entity="recipe"
                             data={{
                               id: ex.recipeId,

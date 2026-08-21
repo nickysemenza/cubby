@@ -221,6 +221,7 @@ export function IngredientMergeDialog({
               {aliases.length > 0 ? (
                 aliases.map((a) => (
                   <EntityInlineLink
+                    displayImage={undefined}
                     key={a.id}
                     entity="ingredient"
                     data={{ name: a.name, id: a.id }}

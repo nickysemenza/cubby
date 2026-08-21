@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Entity } from "./entity";
 import { entitySchema } from "./entity";
 import type { RelationshipPathStep } from "./entity-integrity";
+import { imageUrlSummary } from "./image-summary";
 import {
   expenseShortcode,
   financialTransactionShortcode,
@@ -559,6 +560,7 @@ export const relatedPreviewItem = z.object({
   entity: entitySchema,
   id: z.string(),
   label: z.string(),
+  displayImage: imageUrlSummary.nullable(),
 });
 export type RelatedPreviewItem = z.infer<typeof relatedPreviewItem>;
 

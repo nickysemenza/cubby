@@ -1,5 +1,6 @@
 import type { SubRecipeBlockReason } from "@cubby/schemas/availability";
 import type { RecipeShortcode } from "@cubby/schemas/identifiers";
+import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type {
   RecipeGraphOut,
   RecipeOut,
@@ -12,6 +13,11 @@ import {
 } from "./recipe-scaling-pct";
 
 type RecipeTreeRecipe = RecipeOut | RecipeGraphOut;
+
+export const recipeTreeDisplayImage = (
+  recipe: RecipeTreeRecipe,
+): ImageUrlSummary | null =>
+  "displayImage" in recipe ? recipe.displayImage : (recipe.images[0] ?? null);
 
 // A recipe expanded into its full sub-recipe tree for the prep-sheet and
 // nested-spec views. The wasm-bound display formatting (buildDisplayQuantities)
@@ -133,7 +139,7 @@ export type YieldPorts = {
 export const buildRecipeTree = (
   root: RecipeOut,
   costingById: Map<string, RecipeCosting>,
-  recipeMap: Record<string, RecipeGraphOut>,
+  recipeMap: Record<string, RecipeTreeRecipe>,
   ports: YieldPorts,
 ): RecipeTreeNode => {
   const buildNode = (

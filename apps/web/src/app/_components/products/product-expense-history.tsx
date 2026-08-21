@@ -316,6 +316,7 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
             <EmptyDescription>
               This product is a component of{" "}
               <EntityInlineLink
+                displayImage={undefined}
                 entity="product"
                 data={{
                   id: primaryKit.parentProductId,
@@ -408,6 +409,7 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
               >
                 {entry.projectId && entry.projectName ? (
                   <EntityInlineLink
+                    displayImage={undefined}
                     entity="project"
                     data={{ id: entry.projectId, name: entry.projectName }}
                     compact

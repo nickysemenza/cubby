@@ -22,6 +22,7 @@ import {
   firstExpansionRowIds,
   type RecipeTreeNode,
   type RecipeTreeRow,
+  recipeTreeDisplayImage,
 } from "./recipe-tree";
 import {
   entityRefForRow,
@@ -195,6 +196,11 @@ function SpecRow({
         )}
         {ref ? (
           <EntityPreviewLink
+            displayImage={
+              row.kind === "subrecipe"
+                ? recipeTreeDisplayImage(row.child.recipe)
+                : null
+            }
             entity={ref.entity}
             id={ref.id}
             className={dottedEntityLink}
@@ -285,6 +291,7 @@ function SpecNode({
       {!isRoot && (
         <div className="eyebrow mb-1 flex flex-wrap items-center gap-x-2">
           <EntityPreviewLink
+            displayImage={recipeTreeDisplayImage(node.recipe)}
             entity="recipe"
             id={node.recipe.id}
             className={cn(dottedEntityLink, "font-semibold")}

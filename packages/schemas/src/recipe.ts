@@ -16,6 +16,7 @@ import {
   recipeShortcode,
 } from "./identifiers";
 import { imageOut } from "./image";
+import { imageUrlSummary } from "./image-summary";
 import {
   createItemsResponseSchema,
   createPaginatedResponseSchema,
@@ -154,6 +155,7 @@ export type RecipeSectionOut = z.infer<typeof recipeSectionOut>;
 export const recipeGraphOut = z.object({
   ...recipeTopLevelFields,
   sections: z.array(recipeSectionOut),
+  displayImage: imageUrlSummary.nullable(),
   // Precomputed cost/calorie rollup (null until first computed). Populated by
   // recipe.list; getByID may leave it null (the detail page computes its own).
   totals: recipeTotals.nullish(),
@@ -176,8 +178,8 @@ export const recipeWithSideEffectsOut = z.object({
   sideEffects: mutationSideEffectsSchema,
 });
 
-// Full recipe graph without media. Used by costing/sub-recipe closure fetches
-// that need sections but deliberately do not load images.
+// Full recipe graph without image collections. A compact resolved cover keeps
+// nested record links image-aware without loading the media relation.
 export const recipeGraphListOut = z.array(recipeGraphOut);
 
 // Summary shape for `recipe.list`: scalar fields + persisted totals, no section

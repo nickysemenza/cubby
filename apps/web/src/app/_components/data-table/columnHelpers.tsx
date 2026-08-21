@@ -1266,6 +1266,7 @@ export function createSingleEntityInlineLinkColumn<
                 if (item && v.id === currentId) {
                   return (
                     <EntityInlineLink
+                      displayImage={undefined}
                       entity={entity}
                       data={item as never}
                       truncate
@@ -1280,7 +1281,12 @@ export function createSingleEntityInlineLinkColumn<
 
         if (!item) return <NoneValue />;
         return (
-          <EntityInlineLink entity={entity} data={item as never} truncate />
+          <EntityInlineLink
+            displayImage={undefined}
+            entity={entity}
+            data={item as never}
+            truncate
+          />
         );
       },
     },
@@ -2032,7 +2038,12 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
 
         if (!id || !name) return <NoneValue />;
         return (
-          <EntityInlineLink entity="project" data={{ id, name }} truncate />
+          <EntityInlineLink
+            displayImage={undefined}
+            entity="project"
+            data={{ id, name }}
+            truncate
+          />
         );
       },
     },
@@ -2127,6 +2138,7 @@ export function createProductLinkColumn<T extends ProductRefRow>(
               renderValue={(v) =>
                 v ? (
                   <EntityInlineLink
+                    displayImage={undefined}
                     entity="product"
                     data={{ id: v.id, name: v.name }}
                     truncate
@@ -2141,7 +2153,12 @@ export function createProductLinkColumn<T extends ProductRefRow>(
 
         if (!id || !name) return <NoneValue />;
         return (
-          <EntityInlineLink entity="product" data={{ id, name }} truncate />
+          <EntityInlineLink
+            displayImage={undefined}
+            entity="product"
+            data={{ id, name }}
+            truncate
+          />
         );
       },
     },
@@ -2217,6 +2234,7 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
               renderValue={(v) =>
                 v ? (
                   <EntityInlineLink
+                    displayImage={undefined}
                     entity="product"
                     data={{ id: v.id, name: v.name }}
                     truncate
@@ -2231,7 +2249,12 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
 
         if (!id || !name) return <NoneValue />;
         return (
-          <EntityInlineLink entity="product" data={{ id, name }} truncate />
+          <EntityInlineLink
+            displayImage={undefined}
+            entity="product"
+            data={{ id, name }}
+            truncate
+          />
         );
       },
     },
@@ -2287,6 +2310,7 @@ export function createParentLinkColumn<
         if (!id || !name) return <NoneValue />;
         return (
           <EntityInlineLink
+            displayImage={undefined}
             entity={entity}
             data={{ id, name } as never}
             truncate

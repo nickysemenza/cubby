@@ -6,7 +6,9 @@ import { describe, expect, it } from "vitest";
 import { auditLog, product } from "~/server/db/schema";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { insertAndReturn, withTransaction } from "./database-helpers";
+import { updateProduct } from "./product";
 import {
+  createImageFixture,
   createInventoryFixture as createInventoryEntry,
   createLocationFixture as createLocation,
   createProductFixture as createProduct,
@@ -166,17 +168,29 @@ describe("getAuditLog — entityName", () => {
     });
 
   it("resolves the display name of an entity that has one", async () => {
-    const row = await insertWithShortcode(ctx.db, "product", {
-      name: "Festool Track Saw Rail",
-      manufacturer: "Festool",
-    });
-    await auditRowFor("product", row.id);
+    const cover = await createImageFixture(ctx.db, "audit-product-cover");
+    const row = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Festool Track Saw Rail",
+        manufacturer: "Festool",
+      }),
+      ctx.actor,
+    );
+    await updateProduct(
+      ctx.db,
+      row.entityId,
+      { pendingImageIds: [cover.id] },
+      ctx.actor,
+    );
+    await auditRowFor("product", row.entityId);
 
     const { entries } = await getAuditLog(ctx.db, {
       limit: 50,
       entityType: "product",
     });
     expect(entries[0]?.entityName).toBe("Festool Track Saw Rail");
+    expect(entries[0]?.displayImage).toEqual({ url: cover.url });
   });
 
   it("still names a row that was soft-deleted after the entry was written", async () => {

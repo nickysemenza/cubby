@@ -113,7 +113,7 @@ describe("VendorCell", () => {
 
   it("keeps the vendor name reachable when the mark carries the cell", () => {
     // `compactOnMobile` hides the name below `sm`, where the only other element
-    // is a decorative `alt=""` image. Hiding it with `display: none` would leave
+    // is a decorative image with empty alternative text. Hiding the name would leave
     // the cell with no accessible name at all, so it must stay in the tree.
     render(
       <VendorCell

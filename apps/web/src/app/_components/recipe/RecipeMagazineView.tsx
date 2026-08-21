@@ -264,6 +264,7 @@ function IngredientLedger({
                   >
                     {ref ? (
                       <EntityPreviewLink
+                        displayImage={null}
                         entity={ref.entity}
                         id={ref.id}
                         className={dottedEntityLink}

@@ -266,6 +266,7 @@ export function AuditLogEntryComponent({
                   entityType={entry.entityType}
                   entityId={entry.entityId}
                   name={entry.entityName}
+                  displayImage={entry.displayImage}
                   compact
                 />
               ) : (
@@ -343,6 +344,7 @@ export function AuditLogEntryComponent({
                     entityType={entry.entityType}
                     entityId={entry.entityId}
                     name={entry.entityName}
+                    displayImage={entry.displayImage}
                     compact
                   />
                 ) : (

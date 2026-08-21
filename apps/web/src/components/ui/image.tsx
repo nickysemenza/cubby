@@ -18,6 +18,12 @@ export type ImageProps = Omit<
    */
   fallback?: ReactNode;
   /**
+   * Optional content shown in the reserved image box until decoding finishes.
+   * The default remains the quiet paper tint; identity marks supply their
+   * semantic entity icon so an image never creates a blank intermediate state.
+   */
+  loadingFallback?: ReactNode;
+  /**
    * Display width in CSS pixels. When set, R2 images are served through
    * Cloudflare Image Transformations at this width (plus a 2x srcSet for
    * retina) instead of the full-size original. No-op for non-bucket URLs.
@@ -48,6 +54,7 @@ export function Image({
   className,
   style,
   fallback,
+  loadingFallback,
   displayWidth,
   ...props
 }: ImageProps) {
@@ -117,10 +124,15 @@ export function Image({
     <>
       {isLoading && (
         <div
-          className={cn("bg-muted/25", className)}
+          className={cn(
+            "flex items-center justify-center bg-muted/25",
+            className,
+          )}
           style={style}
           aria-hidden
-        />
+        >
+          {loadingFallback}
+        </div>
       )}
       <img
         ref={handleRef}

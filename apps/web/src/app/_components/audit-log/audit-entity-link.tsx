@@ -1,6 +1,8 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
+import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { Link } from "@tanstack/react-router";
-import { EntityIcon, entities, entityDetailParams } from "~/entities/entities";
+import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 
 /**
@@ -21,11 +23,13 @@ export function AuditEntityLink({
   entityType,
   entityId,
   name,
+  displayImage,
   compact,
 }: {
   entityType: AuditEntityType;
   entityId: string;
   name?: string | null;
+  displayImage: ImageUrlSummary | null;
   compact?: boolean;
 }) {
   const entity = entities[entityType];
@@ -46,7 +50,7 @@ export function AuditEntityLink({
       )}
       title={name ? `${name} · ${entityId}` : `${entity.label} ${entityId}`}
     >
-      <EntityIcon entity={entityType} colored className="size-4 shrink-0" />
+      <EntityIdentityMark entity={entityType} displayImage={displayImage} />
       {name ? (
         <>
           <span className={cn(compact && "truncate")}>{name}</span>
