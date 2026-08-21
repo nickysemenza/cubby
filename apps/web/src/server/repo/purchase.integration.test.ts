@@ -1914,7 +1914,10 @@ describe("purchase repository — deletion cascades", () => {
     );
     expect(charge.expenseCount).toBe(0);
     expect(charge.expenseTotal).toBe(0);
-    expect(reconcilePurchase(charge)).toBe("mismatch");
+    // Not "mismatch": with every line gone there is nothing left to compare the
+    // paperwork against, and `empty_expenses` is the accurate description of
+    // that state. See the zero-expense guard in `reconcilePurchase`.
+    expect(reconcilePurchase(charge)).toBe("unknown");
   });
 });
 

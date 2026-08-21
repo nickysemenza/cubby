@@ -927,7 +927,19 @@ function batchMutationOut(item: z.ZodType) {
         z.object({
           index: z.number().int().nonnegative(),
           status: z.literal("succeeded"),
-          item,
+          /**
+           * The whole entity. Present only under `resultDetail: "full"` —
+           * the default is compact, so a 50-item write does not spend the
+           * caller's context on 50 hydrated entities.
+           */
+          item: item.optional(),
+          /**
+           * Compact identity: the shortcode the item created or updated, or
+           * for an attachment the id of the stored file.
+           */
+          id: z.string().optional(),
+          /** The attachment target, when the item attached to something. */
+          entityId: z.string().optional(),
         }),
         z.object({
           index: z.number().int().nonnegative(),
@@ -939,6 +951,41 @@ function batchMutationOut(item: z.ZodType) {
   });
 }
 
+/**
+ * How much of each succeeded item a batch tool echoes back.
+ *
+ * Built per tool because the default is per tool: a write batch defaults to
+ * `summary`, but a batch whose entire product IS the returned entity — reading
+ * back per-image verification state, say — defaults to `full`.
+ */
+const batchResultDetailParam = (fallback: BatchResultDetail) =>
+  z
+    .enum(["summary", "full"])
+    .default(fallback)
+    .describe(
+      `How much of each result to return. 'summary' gives {index, status, id}; 'full' gives the whole entity, which costs roughly 2-3k characters per item. This tool defaults to '${fallback}'.`,
+    );
+
+/**
+ * Project a succeeded item down to its identity.
+ *
+ * Entities expose `id` (a shortcode); `attach_file` exposes `imageId` plus the
+ * `entityId` it attached to. Both collapse to the same shape so the compact
+ * result is uniform across every batch tool.
+ */
+function summarizeBatchItem(item: unknown): {
+  id?: string;
+  entityId?: string;
+} {
+  if (typeof item !== "object" || item === null) return {};
+  const row = item as Record<string, unknown>;
+  const id = row.id ?? row.imageId;
+  return {
+    ...(typeof id === "string" ? { id } : {}),
+    ...(typeof row.entityId === "string" ? { entityId: row.entityId } : {}),
+  };
+}
+
 function schemaFromShape(input: ZodSchemaLike): z.ZodType {
   return input instanceof z.ZodType ? input : z.object(input);
 }
@@ -946,8 +993,16 @@ function schemaFromShape(input: ZodSchemaLike): z.ZodType {
 /** The default cap on a batch tool's `items[]`. */
 const DEFAULT_BATCH_MAX_ITEMS = 50;
 
+type BatchResultDetail = "summary" | "full";
+
 type BatchResult =
-  | { index: number; status: "succeeded"; item: unknown }
+  | {
+      index: number;
+      status: "succeeded";
+      item?: unknown;
+      id?: string;
+      entityId?: string;
+    }
   | { index: number; status: "failed"; error: string };
 
 /**
@@ -961,6 +1016,13 @@ type BatchResult =
  *
  * A wholly-failed batch is still `isError: false` — the per-item errors are the
  * payload, and flagging the envelope would hide them behind a bare string.
+ *
+ * Results are COMPACT by default: `{index, status, id}`. The singular tools
+ * return a fully hydrated entity — `dataQuality` alone lists every gap twice,
+ * once nested in `facets[]` and once flat, each with a prose sentence — and at
+ * 50 items that envelope is tens of thousands of characters the caller has to
+ * hold to learn 50 shortcodes. A 21-item `create_purchases` measured 58,603.
+ * Pass `resultDetail: "full"` when the response is genuinely being read.
  */
 export function registerBatchTool<TItem extends z.ZodType>(
   server: McpServer,
@@ -970,6 +1032,11 @@ export function registerBatchTool<TItem extends z.ZodType>(
     itemInput: TItem;
     itemOutput: z.ZodType;
     maxItems?: number;
+    /**
+     * What `resultDetail` falls back to. `"summary"` everywhere except the few
+     * batches whose returned entity IS the point of calling them.
+     */
+    defaultResultDetail?: BatchResultDetail;
     annotations: ToolAnnotations;
     /** Cross-item input rules — e.g. rejecting two items that target one entity. */
     refineItems?: (
@@ -984,11 +1051,15 @@ export function registerBatchTool<TItem extends z.ZodType>(
     .min(1)
     .max(config.maxItems ?? DEFAULT_BATCH_MAX_ITEMS);
   const refineItems = config.refineItems;
+  const defaultDetail = config.defaultResultDetail ?? "summary";
+  const resultDetail = batchResultDetailParam(defaultDetail);
+  // strictObject: an undeclared key is rejected, so `resultDetail` has to be
+  // part of the shape rather than read opportunistically off params.
   const inputSchema = refineItems
     ? z
-        .strictObject({ items })
+        .strictObject({ items, resultDetail })
         .superRefine((input, ctx) => refineItems(input.items, ctx))
-    : z.strictObject({ items });
+    : z.strictObject({ items, resultDetail });
 
   registerMcpTool(server, {
     name: config.name,
@@ -998,15 +1069,20 @@ export function registerBatchTool<TItem extends z.ZodType>(
     annotations: config.annotations,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
+      const detail =
+        (params.resultDetail as BatchResultDetail) ?? defaultDetail;
       const results: BatchResult[] = [];
       for (const [index, item] of (
         params.items as Array<z.output<TItem>>
       ).entries()) {
         try {
+          const produced = await config.run(caller, item);
           results.push({
             index,
             status: "succeeded",
-            item: await config.run(caller, item),
+            ...(detail === "full"
+              ? { item: produced }
+              : summarizeBatchItem(produced)),
           });
         } catch (error) {
           results.push({

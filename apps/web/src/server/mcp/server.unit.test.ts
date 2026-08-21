@@ -457,17 +457,62 @@ describe("registerEntityCrudToolset", () => {
     expect(partial.structuredContent).toMatchObject({
       summary: { requested: 3, succeeded: 2, failed: 1 },
       results: [
-        { index: 0, status: "succeeded", item: { id: "v-one", name: "one" } },
+        { index: 0, status: "succeeded", id: "v-one" },
         { index: 1, status: "failed", error: "CONFLICT: already exists" },
-        {
-          index: 2,
-          status: "succeeded",
-          item: { id: "v-three", name: "three" },
-        },
+        { index: 2, status: "succeeded", id: "v-three" },
       ],
     });
     // The item AFTER the failure still ran — a failure is not a stop condition.
     expect(create).toHaveBeenCalledTimes(3);
+  });
+
+  it("returns compact results by default and whole entities on request", async () => {
+    // A 21-item create_purchases returned 58,603 characters, because every
+    // succeeded item echoed the full singular output. The caller of a 50-item
+    // write almost always wants the 50 shortcodes, so that is the default now
+    // and the hydrated entity is the opt-in.
+    const server = new McpServer({ name: "t", version: "1.0.0" });
+    registerEntityCrudToolset(server, {
+      entity: "vendor",
+      createInput: { name: z.string() },
+      updateShape: { name: z.string().optional() },
+      filterFields: {},
+      mcpListOut: z.object({ items: z.array(z.object({ id: z.string() })) }),
+      out: z.object({ id: z.string(), name: z.string() }),
+      sort: { orderBy: "name" },
+      slim: (value) => value as Record<string, unknown>,
+      descriptions: {
+        list: "list",
+        get: "get",
+        create: "create",
+        update: "update",
+        delete: "delete",
+      },
+    });
+
+    const create = vi.fn(async (input: { name: string }) => ({
+      id: `v-${input.name}`,
+      name: input.name,
+    }));
+    const compact = await callTool(
+      server,
+      "create_vendors",
+      { items: [{ name: "one" }] },
+      { vendor: { create } },
+    );
+    expect(
+      (compact.structuredContent as { results: unknown[] }).results,
+    ).toEqual([{ index: 0, status: "succeeded", id: "v-one" }]);
+
+    const full = await callTool(
+      server,
+      "create_vendors",
+      { items: [{ name: "one" }], resultDetail: "full" },
+      { vendor: { create } },
+    );
+    expect((full.structuredContent as { results: unknown[] }).results).toEqual([
+      { index: 0, status: "succeeded", item: { id: "v-one", name: "one" } },
+    ]);
   });
 
   it("renames batch tools through names.batchCreate/batchUpdate", async () => {
@@ -1107,6 +1152,23 @@ describe("listMcpToolCatalog", () => {
         });
       }
     }
+  });
+
+  it("keeps resultDetail compact except where the entity is the point", async () => {
+    // The default flip is only safe because it is per tool: a write batch hands
+    // back ids, but `verify_products_images` exists to report what verification
+    // found, and a list of ids would report nothing.
+    const { tools } = await listMcpToolCatalog();
+    const defaultOf = (name: string) => {
+      const schema = tools.find((tool) => tool.name === name)?.inputSchema as
+        | { properties?: Record<string, { default?: unknown }> }
+        | undefined;
+      return schema?.properties?.resultDetail?.default;
+    };
+    expect(defaultOf("create_purchases")).toBe("summary");
+    expect(defaultOf("update_products")).toBe("summary");
+    expect(defaultOf("attach_files")).toBe("full");
+    expect(defaultOf("verify_products_images")).toBe("full");
   });
 
   it("gives every create/update entity a plural batch counterpart", async () => {
@@ -2518,10 +2580,11 @@ describe("household tracker synthesis + bulk tools", () => {
       succeeded: 1,
       failed: 1,
     });
-    expect(structured.results[0]).toMatchObject({
+    // Compact by default: the shortcode, not the hydrated task.
+    expect(structured.results[0]).toEqual({
       index: 0,
       status: "succeeded",
-      item: { id: TASK_A },
+      id: TASK_A,
     });
     expect(structured.results[1]).toMatchObject({
       index: 1,
