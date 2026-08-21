@@ -1,4 +1,4 @@
-import { addDays } from "date-fns";
+import { addDays, differenceInCalendarDays } from "date-fns";
 import { describe, expect, it } from "vitest";
 import {
   buildEventIndex,
@@ -7,6 +7,7 @@ import {
   getViewDateRange,
   packWeekRowLanes,
   stepDate,
+  toZoned,
 } from "./event-calendar-lib";
 import type {
   CalendarEvent,
@@ -169,6 +170,42 @@ describe("weekly calendar ranges", () => {
     expect(activeRange.end.getTime() - activeRange.start.getTime()).toBe(
       167 * 60 * 60_000,
     );
+  });
+
+  it("week-aligns a fortnight to fourteen local days across spring-forward", () => {
+    const { activeRange, visibleRange } = getViewDateRange(
+      "fortnight",
+      new Date("2026-03-11T19:00:00.000Z"),
+      options,
+    );
+
+    expect(getDayKey(activeRange.start, options.timeZone)).toBe("2026-03-08");
+    expect(getDayKey(activeRange.end, options.timeZone)).toBe("2026-03-22");
+    // Active === visible, so the fortnight grid has no outside days at all.
+    expect(activeRange).toEqual(visibleRange);
+    // Days, not hours: this fortnight loses an hour to DST, so a fixed
+    // millisecond span would be wrong here in a way the week test's is not.
+    expect(
+      differenceInCalendarDays(
+        toZoned(activeRange.end, options.timeZone),
+        toZoned(activeRange.start, options.timeZone),
+      ),
+    ).toBe(14);
+  });
+
+  it("steps a fortnight by fourteen local days", () => {
+    expect(
+      getDayKey(
+        stepDate("fortnight", new Date("2026-10-29T19:00:00.000Z"), 1, options),
+        options.timeZone,
+      ),
+    ).toBe("2026-11-12");
+    expect(
+      getDayKey(
+        stepDate("fortnight", new Date("2026-01-07T20:00:00.000Z"), -1, options),
+        options.timeZone,
+      ),
+    ).toBe("2025-12-24");
   });
 
   it("steps by one local week across year and fall-back boundaries", () => {

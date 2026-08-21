@@ -151,6 +151,52 @@ test("weekly planning is URL-backed and navigates by exact weeks", async ({
   expect(pageErrors).toEqual([]);
 });
 
+test("the fortnight grid spans two week-aligned rows and steps 14 days", async ({
+  page,
+}) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  // A Thursday anchor: the grid has to snap back to its Sunday, not start here.
+  await page.goto("/calendar?date=2026-08-20&period=fortnight&kinds=meal,task");
+  await page.waitForLoadState("networkidle");
+
+  await expect(
+    page.getByRole("button", { name: "Fortnight", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByRole("heading", { name: "Aug 16–29, 2026" }),
+  ).toBeVisible();
+  await expect(
+    page.locator('[data-slot="event-calendar-month-cell"]'),
+  ).toHaveCount(14);
+  // Active === visible for a fortnight, so no day is dimmed as an outside day.
+  await expect(
+    page.locator('[data-slot="event-calendar-month-cell"][data-outside]'),
+  ).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Next fortnight" }).click();
+  await expect(page).toHaveURL(/date=2026-09-03/);
+  await expect(
+    page.getByRole("heading", { name: "Aug 30–Sep 12, 2026" }),
+  ).toBeVisible();
+
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  await expect(
+    page.getByRole("button", { name: "Fortnight", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.locator('[data-slot="event-calendar-month-cell"]'),
+  ).toHaveCount(14);
+
+  await page.getByRole("button", { name: "Month", exact: true }).click();
+  await expect(page).not.toHaveURL(/period=/);
+  await expect(
+    page.locator('[data-slot="event-calendar-month-cell"]'),
+  ).toHaveCount(42);
+  expect(pageErrors).toEqual([]);
+});
+
 test("the Meals calendar preserves its legacy anchor in Week mode", async ({
   page,
 }) => {

@@ -54,9 +54,11 @@ function getViewDateRange(
   const { timeZone, weekStartsOn, fixedWeeks } = opts;
   const zoned = toZoned(date, timeZone);
 
-  if (period === "week") {
+  if (period === "week" || period === "fortnight") {
     const start = startOfWeek(zoned, { weekStartsOn });
-    const end = addWeeks(start, 1);
+    const end = addWeeks(start, period === "fortnight" ? 2 : 1);
+    // Active === visible: every day in a week/fortnight belongs to the period,
+    // so no cell is `outside` and `fixedWeeks` never applies.
     return {
       activeRange: { start, end },
       visibleRange: { start, end },
@@ -89,6 +91,7 @@ function stepDate(
 ): Date {
   const zoned = toZoned(date, opts.timeZone);
   if (period === "week") return addWeeks(zoned, direction);
+  if (period === "fortnight") return addWeeks(zoned, direction * 2);
   const stepped = addMonths(zoned, direction);
   // addMonths clamps the day down into a shorter month and never restores
   // it, so next-then-prev from the 31st would leave the anchor on the 28th.

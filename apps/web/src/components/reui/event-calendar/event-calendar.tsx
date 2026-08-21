@@ -245,7 +245,10 @@ interface EventCalendarRootProps<TData = unknown>
   renderEventRoot?: EventCalendarRenderEventRoot<TData>;
   onEventsChange: (events: CalendarEvent<TData>[]) => void;
   children: ReactNode;
-  slot: "month-event-calendar" | "week-event-calendar";
+  slot:
+    | "month-event-calendar"
+    | "week-event-calendar"
+    | "fortnight-event-calendar";
 }
 
 type MonthEventCalendarProps<TData = unknown> = Omit<
@@ -336,6 +339,9 @@ function EventCalendarRoot<TData = unknown>({
                   className: cn(
                     "min-w-0 overflow-hidden border text-xs",
                     period === "month" && "flex min-h-[620px] flex-col",
+                    // Same column layout, no 620px floor: two tall rows set
+                    // their own height through --ec-month-row-min-h.
+                    period === "fortnight" && "flex flex-col",
                     className,
                   ),
                   children,
@@ -360,6 +366,21 @@ function MonthEventCalendar<TData = unknown>(
   );
 }
 
+/** The month grid over a 14-day, week-aligned range: two rows of seven. */
+function FortnightEventCalendar<TData = unknown>(
+  props: MonthEventCalendarProps<TData>,
+) {
+  return (
+    <EventCalendarRoot
+      {...props}
+      period="fortnight"
+      slot="fortnight-event-calendar"
+    >
+      <EventCalendarMonthView />
+    </EventCalendarRoot>
+  );
+}
+
 function WeekEventCalendar<TData = unknown>(
   props: WeekEventCalendarProps<TData>,
 ) {
@@ -376,6 +397,7 @@ export type {
   EventCalendarRenderEventRoot,
 };
 export {
+  FortnightEventCalendar,
   MonthEventCalendar,
   useEventCalendar,
   useEventCalendarDay,

@@ -24,16 +24,21 @@ function householdCalendarDate(plainDate: string) {
   );
 }
 
+/** Weeks a period covers when it is week-aligned; month is not. */
+const WEEK_ALIGNED_SPAN: Partial<Record<CalendarPeriod, number>> = {
+  week: 1,
+  fortnight: 2,
+};
+
 function getCalendarPeriodRange(anchor: Date, period: CalendarPeriod) {
-  const activeStart =
-    period === "week"
-      ? startOfWeek(anchor, { weekStartsOn: 0 })
-      : startOfMonth(anchor);
-  const activeEnd =
-    period === "week"
-      ? addWeeks(activeStart, 1)
-      : addDays(endOfMonth(anchor), 1);
-  if (period === "week") {
+  const weeks = WEEK_ALIGNED_SPAN[period];
+  const activeStart = weeks
+    ? startOfWeek(anchor, { weekStartsOn: 0 })
+    : startOfMonth(anchor);
+  const activeEnd = weeks
+    ? addWeeks(activeStart, weeks)
+    : addDays(endOfMonth(anchor), 1);
+  if (weeks) {
     return {
       activeStart,
       activeEnd,
@@ -51,8 +56,9 @@ function shiftCalendarPeriod(
   period: CalendarPeriod,
   direction: -1 | 1,
 ) {
-  return period === "week"
-    ? addWeeks(anchor, direction)
+  const weeks = WEEK_ALIGNED_SPAN[period];
+  return weeks
+    ? addWeeks(anchor, direction * weeks)
     : addMonths(anchor, direction);
 }
 
@@ -62,6 +68,8 @@ function formatCalendarPeriodTitle(
   activeEnd: Date,
 ) {
   if (period === "month") return format(anchor, "MMMM yyyy");
+  // Week and fortnight share the compact range label; `anchor` is the period's
+  // first day for both, so the branches below need no period of their own.
   const end = addDays(activeEnd, -1);
   if (isSameMonth(anchor, end)) {
     return `${format(anchor, "MMM d")}–${format(end, "d, yyyy")}`;

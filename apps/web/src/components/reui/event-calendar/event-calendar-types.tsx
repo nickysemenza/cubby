@@ -1,5 +1,5 @@
 type EventCalendarEventId = string;
-type CalendarPeriod = "month" | "week";
+type CalendarPeriod = "month" | "week" | "fortnight";
 
 interface EventCalendarDateRange {
   /** Inclusive instant. */

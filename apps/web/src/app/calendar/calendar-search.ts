@@ -8,7 +8,7 @@ const dateParam = z
   .catch(undefined);
 
 export const calendarPeriodParam = z
-  .enum(["month", "week"])
+  .enum(["month", "fortnight", "week"])
   .optional()
   .catch(undefined);
 
