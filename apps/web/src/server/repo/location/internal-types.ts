@@ -8,9 +8,12 @@ import type { inventoryEntry, location, product } from "~/server/db/schema";
 import type {
   MappableImageRecord,
   RowWithOptionalAliases,
+  RowWithOptionalAliasesAndTags,
 } from "~/server/repo/database-helpers";
 
-type LocationSelect = RowWithOptionalAliases<typeof location.$inferSelect>;
+type LocationSelect = RowWithOptionalAliasesAndTags<
+  typeof location.$inferSelect
+>;
 type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect>;
 
 /**

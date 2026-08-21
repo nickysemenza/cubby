@@ -9,6 +9,11 @@ import {
   type LocationUpdateInput,
   locationType,
 } from "@cubby/schemas/location";
+import {
+  collectionSlugsFromTags,
+  collectionTagFromSlug,
+  normalizeCollectionSlug,
+} from "@cubby/shared/collection-tag";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { FC } from "react";
 import { useForm } from "react-hook-form";
@@ -50,6 +55,7 @@ import { TypeFieldWithAI } from "./type-field-with-ai";
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   aliases: z.array(z.string()),
+  collections: z.array(z.string()),
   type: locationType.nullable(),
   product: ComboboxItem.nullable(),
   parent: optionalLocationField,
@@ -97,6 +103,7 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
     defaultValues: {
       name: location ? location.name : (initialName ?? ""),
       aliases: location ? location.aliases : [],
+      collections: collectionSlugsFromTags(location?.tags ?? []),
       type: location ? location.type : "room",
       product: location?.product
         ? { id: location.product.id, name: location.product.name }
@@ -117,6 +124,10 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
 
   const handleSubmit = async (values: LocationFormValues) => {
     const aliases = filterAliases(values.aliases);
+    const tags = filterAliases(values.collections)
+      .map(normalizeCollectionSlug)
+      .filter(Boolean)
+      .map(collectionTagFromSlug);
 
     if (mode === "create") {
       // For creation, pass all fields including pending image IDs
@@ -124,6 +135,7 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
       const createData: LocationCreateInput = {
         name: values.name,
         aliases,
+        tags,
         type: productId ? null : values.type,
         productId,
         parentId: getOptionalLocationId(values.parent) ?? null,
@@ -136,8 +148,8 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
       const productId = getOptionalProductShortcode(values.product) ?? null;
       const updates: LocationUpdateInput["data"] = buildUpdateObject(
         location,
-        { ...values, aliases, type: productId ? null : values.type },
-        ["name", "aliases", "type"],
+        { ...values, aliases, tags, type: productId ? null : values.type },
+        ["name", "aliases", "tags", "type"],
       );
 
       // Identity swap: linking a product clears the now-redundant type, and
@@ -237,6 +249,14 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
       <AliasesField<LocationFormValues>
         form={form}
         placeholder="e.g. Deep freezer"
+      />
+
+      <AliasesField<LocationFormValues>
+        form={form}
+        name="collections"
+        title="Collections"
+        addButtonText="Add Collection"
+        placeholder="e.g. painting"
       />
 
       {/* Show image upload in both create and edit modes */}

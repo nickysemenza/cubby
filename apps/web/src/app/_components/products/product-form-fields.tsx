@@ -306,13 +306,22 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
           consumables that fit it ("grinder-4.5in"); `category` says which side
           each product is, so the tag carries no direction of its own. */}
       {!compact && (
-        <AliasesField<TFieldValues>
-          form={form}
-          name="tags"
-          title="Tags"
-          addButtonText="Add Tag"
-          placeholder="e.g. grinder-4.5in, M18"
-        />
+        <>
+          <AliasesField<TFieldValues>
+            form={form}
+            name="collections"
+            title="Collections"
+            addButtonText="Add Collection"
+            placeholder="e.g. painting"
+          />
+          <AliasesField<TFieldValues>
+            form={form}
+            name="tags"
+            title="Compatibility tags"
+            addButtonText="Add Tag"
+            placeholder="e.g. grinder-4.5in, M18"
+          />
+        </>
       )}
 
       {!isMisc && (

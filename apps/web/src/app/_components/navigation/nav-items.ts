@@ -159,6 +159,7 @@ export const desktopNav: NavNode[] = [
     children: [
       inventory,
       locations,
+      { to: "/collections", label: "Collections", icon: Palette },
       { to: "/pantry-view", label: "Pantry view", icon: Package },
     ],
   },

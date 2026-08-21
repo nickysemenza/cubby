@@ -11,6 +11,12 @@ import {
   unitMappingInput,
 } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import {
+  collectionSlugsFromTags,
+  collectionTagFromSlug,
+  isCollectionTag,
+  normalizeCollectionSlug,
+} from "@cubby/shared/collection-tag";
 import { fdcId, upc } from "@cubby/usda-schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type FC, useMemo } from "react";
@@ -47,6 +53,7 @@ const productFormSchema = z
     name: z.string().min(1, "Name is required"),
     aliases: z.array(z.string()),
     tags: z.array(z.string()),
+    collections: z.array(z.string()),
     manufacturer: z.string().min(1, "Manufacturer is required"),
     model: z.string().nullable(),
     notes: z.string().nullable(),
@@ -229,7 +236,8 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
     defaultValues: {
       name: product ? product.name : (initialName ?? ""),
       aliases: product?.aliases ?? [],
-      tags: product?.tags ?? [],
+      tags: (product?.tags ?? []).filter((tag) => !isCollectionTag(tag)),
+      collections: collectionSlugsFromTags(product?.tags ?? []),
       manufacturer: product
         ? product.manufacturer
         : (initialManufacturer ?? UNSPECIFIED_MANUFACTURER),
@@ -251,7 +259,13 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
   const handleSubmit = (values: ProductFormValues) => {
     const aliases = filterAliases(values.aliases);
     // Same blank-stripping as aliases — an empty row in the editor is not a tag.
-    const tags = filterAliases(values.tags);
+    const tags = [
+      ...filterAliases(values.tags),
+      ...filterAliases(values.collections)
+        .map(normalizeCollectionSlug)
+        .filter(Boolean)
+        .map(collectionTagFromSlug),
+    ];
 
     if (mode === "create") {
       // For creation, pass all fields

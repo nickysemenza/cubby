@@ -252,6 +252,7 @@ const createLocationTx = async (
     const newLocation = await insertWithShortcode(tx, "location", {
       name: data.name,
       aliases: data.aliases,
+      tags: data.tags ?? [],
       // Form factor is a fact about the SKU, so a linked location stores no
       // type of its own.
       type: productId ? null : (data.type ?? null),
@@ -402,6 +403,7 @@ export const updateLocation = async (
     const updateValues = buildPartialUpdateValues({
       name: data.name,
       aliases: data.aliases,
+      tags: data.tags,
       // Linking a product clears the now-redundant type; the two are
       // alternatives, never companions.
       type: productId ? null : data.type,
@@ -453,6 +455,7 @@ export const updateLocation = async (
       const changes = computeChanges(before, updated, [
         "name",
         "aliases",
+        "tags",
         "type",
         "parentId",
       ]);
@@ -1041,6 +1044,41 @@ const loadIdentityProductCoverImages = async (
   for (const row of rows) {
     const cover = mapImages(row.images).find(isDisplayableImageFile);
     if (cover) byId.set(row.id, cover);
+  }
+  return byId;
+};
+
+/**
+ * One displayable cover URL for each requested Location. An own Location photo
+ * wins; a product-backed Location falls back to the cover of the Product it
+ * represents. This is the compact-list counterpart to `LocationVisual`'s
+ * richer client-side resolver and keeps list callers from duplicating the two
+ * batched image reads.
+ */
+export const getLocationCoverImageUrlsByLocationIds = async (
+  db: Database,
+  ids: LocationId[],
+): Promise<Map<LocationId, string>> => {
+  const byId = new Map<LocationId, string>();
+  if (ids.length === 0) return byId;
+
+  const rows = await getDb(db)
+    .select({ id: location.id, productId: location.productId })
+    .from(location)
+    .where(and(inArray(location.id, ids), notDeleted(location)));
+  const productIds = rows.flatMap((row) =>
+    row.productId ? [row.productId] : [],
+  );
+  const [ownCovers, identityProductCovers] = await Promise.all([
+    loadLocationCoverImages(db, ids),
+    loadIdentityProductCoverImages(db, productIds),
+  ]);
+
+  for (const row of rows) {
+    const cover =
+      ownCovers.get(row.id) ??
+      (row.productId ? identityProductCovers.get(row.productId) : undefined);
+    if (cover) byId.set(row.id, cover.url);
   }
   return byId;
 };

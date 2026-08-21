@@ -1,6 +1,7 @@
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import type { ProductTagSiblingsOut } from "@cubby/schemas/product";
 import { formatCategoryLabel } from "@cubby/shared";
+import { isCollectionTag } from "@cubby/shared/collection-tag";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { keyBy } from "es-toolkit";
@@ -55,7 +56,8 @@ export function ProductTagSiblings({
   // sibling matched via `arrayOverlaps` can share more than one tag, so it
   // legitimately appears under each — the Domino shows up under both
   // `festool-ct` and `domino-tenons`.
-  const groups = product.tags
+  const compatibilityTags = product.tags.filter((tag) => !isCollectionTag(tag));
+  const groups = compatibilityTags
     .map((tag) => ({
       tag,
       siblings: (data?.siblings ?? NO_SIBLINGS).filter((s) =>
@@ -69,7 +71,8 @@ export function ProductTagSiblings({
     return (
       <p className="text-muted-foreground text-sm">
         No other products share{" "}
-        {product.tags.length > 0 ? "these tags" : "a tag"} yet.
+        {compatibilityTags.length > 0 ? "these tags" : "a compatibility tag"}{" "}
+        yet.
       </p>
     );
   }

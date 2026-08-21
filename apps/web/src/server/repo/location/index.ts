@@ -27,6 +27,7 @@ export {
   ensureGlobalUnknownLocation,
   findLocationsNeedingAiDescription,
   getLocationById,
+  getLocationCoverImageUrlsByLocationIds,
   isGlobalUnknownLocation,
   locationList,
   locationOptions,

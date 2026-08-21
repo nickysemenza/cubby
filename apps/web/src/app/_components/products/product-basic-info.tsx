@@ -1,5 +1,9 @@
 import type { ImageOut } from "@cubby/schemas/image";
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
+import {
+  collectionSlugFromTag,
+  formatCollectionLabel,
+} from "@cubby/shared/collection-tag";
 import { Link } from "@tanstack/react-router";
 import type { FC } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
@@ -242,18 +246,32 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
             label: "Tags",
             value: (
               <Row gap="xs" wrap justify="end">
-                {product.tags.map((tag) => (
-                  <EntityFilterLink
-                    key={tag}
-                    to="/products"
-                    search={{ view: "table", tags: tag }}
-                    label={`Show all products tagged ${tag}`}
-                    variant="value"
-                    className="no-underline"
-                  >
-                    <Badge variant="outline">{tag}</Badge>
-                  </EntityFilterLink>
-                ))}
+                {product.tags.map((tag) => {
+                  const collection = collectionSlugFromTag(tag);
+                  return collection ? (
+                    <Link
+                      key={tag}
+                      to="/collections/$collection"
+                      params={{ collection }}
+                      aria-label={`Open ${formatCollectionLabel(collection)} Collection`}
+                    >
+                      <Badge variant="secondary">
+                        {formatCollectionLabel(collection)}
+                      </Badge>
+                    </Link>
+                  ) : (
+                    <EntityFilterLink
+                      key={tag}
+                      to="/products"
+                      search={{ view: "table", tags: tag }}
+                      label={`Show all products tagged ${tag}`}
+                      variant="value"
+                      className="no-underline"
+                    >
+                      <Badge variant="outline">{tag}</Badge>
+                    </EntityFilterLink>
+                  );
+                })}
               </Row>
             ),
           },
