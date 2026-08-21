@@ -187,7 +187,7 @@ export function ProblemAssembly({
         )}
         {queries.some((query) => query.freshness.kind === "projection") &&
           projectionFreshness?.state !== "fresh" && (
-            <span className="border border-warning/40 bg-warning/10 px-2 py-1 text-warning-foreground text-xs">
+            <span className="border border-warning/40 bg-warning/10 px-2 py-1 text-warning-ink text-xs">
               {projectionFreshness?.state === "unavailable"
                 ? "Projection unavailable"
                 : "Projection stale"}

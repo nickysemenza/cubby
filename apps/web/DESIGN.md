@@ -13,6 +13,7 @@ colors:
   aubergine: "#7a3f63"
   positive: "oklch(0.5 0.1 150)"
   warning: "oklch(0.62 0.13 65)"
+  warning-ink: "oklch(0.5 0.13 65)"
   destructive: "oklch(0.45 0.18 25)"
   slate: "oklch(0.5 0.008 80)"
 typography:
@@ -181,7 +182,11 @@ The palette is ink and warm paper first, with Live Ultramarine reserved for inte
 ### Semantic
 
 - **Positive** (`oklch(0.5 0.1 150)`): Success, availability, and positive money states.
-- **Warning** (`oklch(0.62 0.13 65)`): One consistent amber warning voice.
+- **Warning** (`oklch(0.62 0.13 65)`): One consistent amber warning voice, tuned
+  for fills, tints, borders, and marks.
+- **Warning Ink** (`oklch(0.5 0.13 65)`): The same amber at reading lightness —
+  the warning above is 3.6:1 on paper, so anything the amber voice has to *say*
+  (not just mark) uses this instead. One step down the warning ramp; no new hue.
 - **Destructive** (`oklch(0.45 0.18 25)`): Errors and destructive actions, generally as text, border, or a restrained tint rather than a saturated block.
 
 ### Named Rules

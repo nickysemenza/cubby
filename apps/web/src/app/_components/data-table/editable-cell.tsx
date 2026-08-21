@@ -378,6 +378,11 @@ function EditableInputCellInternal<T>({
     if (autoOpen) edit.open();
   }, [autoOpen, edit.open]);
 
+  // Money and numbers are measurements, same as dates: mono + tabular, which is
+  // what `meta.numeric` already gives the equivalent table COLUMN. Free text
+  // keeps the prose face.
+  const measured = config.type === "currency" || config.type === "number";
+
   return (
     <>
       <EditableDisplay
@@ -386,7 +391,13 @@ function EditableInputCellInternal<T>({
         onStartEdit={edit.open}
         clipboard={edit.clipboard}
       >
-        {renderValue(displayValue)}
+        {measured ? (
+          <span className="font-mono tabular-nums">
+            {renderValue(displayValue)}
+          </span>
+        ) : (
+          renderValue(displayValue)
+        )}
       </EditableDisplay>
       {edit.isEditing && (
         <CellEditorOverlay
@@ -748,7 +759,11 @@ function EditableDateCellInternal({
         onStartEdit={edit.open}
         clipboard={edit.clipboard}
       >
-        {renderValue(displayValue)}
+        {/* Dates are measurements: mono, matching the editor's own mono input
+            and the `meta.mono` that date COLUMNS already carry. Without it a
+            detail-page date renders in Inter while the same value renders mono
+            in every table. */}
+        <span className="font-mono">{renderValue(displayValue)}</span>
       </EditableDisplay>
       {edit.isEditing && (
         <CellEditorOverlay
