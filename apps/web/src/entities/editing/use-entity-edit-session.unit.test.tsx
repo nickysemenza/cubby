@@ -16,12 +16,12 @@ import { useEntityEditSession } from "./use-entity-edit-session";
 const request = (name = "saved") => ({
   entity: "task" as const,
   operation: "update" as const,
-  intent: "schedule",
+  intent: "schedule" as const,
   surface: "calendar" as const,
   record: {
     id: "TSK-SESSION",
     name,
-    status: "not_started",
+    status: "not_started" as const,
     dueDate: "2026-08-20",
     dueEndDate: null,
   },

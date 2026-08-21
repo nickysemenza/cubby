@@ -95,6 +95,28 @@ describe("entity edit definitions", () => {
       ),
     ).toMatchObject({ ok: false, issues: [{ field: "dueEndDate" }] });
 
+    expect(
+      buildEntityEdit(
+        task,
+        {
+          entity: "task",
+          operation: "update",
+          intent: "schedule",
+          surface: "calendar",
+          record: { id: "TSK-TEST" },
+        },
+        {
+          name: "Laundry",
+          status: "not_started",
+          dueDate: null,
+          dueEndDate: null,
+        },
+      ),
+    ).toMatchObject({
+      ok: false,
+      issues: [{ field: "dueDate", message: "Date is required" }],
+    });
+
     const actualExpense = resolveEntityEdit(entityEditRegistry, {
       entity: "expense",
       operation: "update",
@@ -118,5 +140,32 @@ describe("entity edit definitions", () => {
         { name: "Receipt", cost: 12, date: "2026-08-20" },
       ),
     ).toMatchObject({ ok: false, issues: [{ source: "client" }] });
+
+    const plannedExpense = resolveEntityEdit(entityEditRegistry, {
+      entity: "expense",
+      operation: "update",
+      intent: "planned",
+      surface: "calendar",
+      record: { id: "EXP-PLANNED", future: true },
+    });
+    if (!("definition" in plannedExpense)) {
+      throw new Error("planned expense must resolve");
+    }
+    expect(
+      buildEntityEdit(
+        plannedExpense,
+        {
+          entity: "expense",
+          operation: "update",
+          intent: "planned",
+          surface: "calendar",
+          record: { id: "EXP-PLANNED", future: true },
+        },
+        { name: "Upcoming", cost: null, date: null },
+      ),
+    ).toMatchObject({
+      ok: false,
+      issues: [{ field: "date", message: "Date is required" }],
+    });
   });
 });
