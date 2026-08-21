@@ -21,6 +21,44 @@ type MatrixRow = RouterOutputs["collection"]["matrix"]["rows"][number];
 const directlyAssigned = (state: CollectionCellState): boolean =>
   state === "direct" || state === "both";
 
+function MatrixPager({
+  page,
+  pageCount,
+  placement,
+  onPageChange,
+}: {
+  page: number;
+  pageCount: number;
+  placement: "top" | "bottom";
+  onPageChange: (page: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        size="icon-sm"
+        aria-label={`Previous page, ${placement} controls`}
+        disabled={page <= 1}
+        onClick={() => onPageChange(page - 1)}
+      >
+        <ChevronLeft />
+      </Button>
+      <span className="font-mono text-2xs tabular-nums">
+        Page {page} / {pageCount}
+      </span>
+      <Button
+        variant="outline"
+        size="icon-sm"
+        aria-label={`Next page, ${placement} controls`}
+        disabled={page >= pageCount}
+        onClick={() => onPageChange(page + 1)}
+      >
+        <ChevronRight />
+      </Button>
+    </div>
+  );
+}
+
 export function CollectionAssignmentMatrix({
   subject,
   search,
@@ -138,6 +176,7 @@ export function CollectionAssignmentMatrix({
   return (
     <Stack gap="sm" className="pb-24">
       <Tabs
+        className="hidden md:block"
         value={subject}
         onValueChange={(value) =>
           onSearchChange({
@@ -152,7 +191,7 @@ export function CollectionAssignmentMatrix({
         </TabsList>
       </Tabs>
 
-      <div className="flex flex-wrap items-center gap-2 border-border border-y py-2">
+      <div className="hidden flex-wrap items-center gap-2 border-border border-y py-2 md:flex">
         <Input
           className="w-full md:w-72"
           value={search ?? ""}
@@ -166,6 +205,12 @@ export function CollectionAssignmentMatrix({
           {rangeStart.toLocaleString()}–{rangeEnd.toLocaleString()} of{" "}
           {totalCount.toLocaleString()}
         </span>
+        <MatrixPager
+          page={page}
+          pageCount={pageCount}
+          placement="top"
+          onPageChange={(nextPage) => onSearchChange({ page: nextPage })}
+        />
         <div className="flex items-center gap-4 font-mono text-2xs text-muted-foreground">
           <span className="flex items-center gap-1">
             <span className="inline-block size-3 border border-primary bg-primary" />
@@ -278,27 +323,12 @@ export function CollectionAssignmentMatrix({
       </div>
 
       <div className="hidden items-center justify-end gap-2 md:flex">
-        <Button
-          variant="outline"
-          size="icon-sm"
-          aria-label="Previous page"
-          disabled={page <= 1}
-          onClick={() => onSearchChange({ page: page - 1 })}
-        >
-          <ChevronLeft />
-        </Button>
-        <span className="font-mono text-2xs">
-          Page {page} / {pageCount}
-        </span>
-        <Button
-          variant="outline"
-          size="icon-sm"
-          aria-label="Next page"
-          disabled={page >= pageCount}
-          onClick={() => onSearchChange({ page: page + 1 })}
-        >
-          <ChevronRight />
-        </Button>
+        <MatrixPager
+          page={page}
+          pageCount={pageCount}
+          placement="bottom"
+          onPageChange={(nextPage) => onSearchChange({ page: nextPage })}
+        />
       </div>
     </Stack>
   );
