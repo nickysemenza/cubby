@@ -10,7 +10,7 @@ import { auth as betterAuth } from "~/lib/auth";
 import { getErrorMessage } from "~/lib/error-utils";
 import { getBindingFetcher } from "~/server/cf-env";
 import { NotionClient } from "~/server/clients/notion";
-import { UPCLookupClient } from "~/server/clients/upc-lookup";
+import { createUpcLookupClient } from "~/server/clients/upc-lookup";
 import { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { db } from "~/server/db";
@@ -43,11 +43,7 @@ export const buildCrudServices = (
     env.USDA_API_URL,
     opts?.usdaFetcher ?? getBindingFetcher("USDA_API"),
   );
-  const upcLookupClient = new UPCLookupClient(
-    env.UPC_LOOKUP_API_URL,
-    env.UPC_LOOKUP_API_KEY,
-    { fetcher: getBindingFetcher("UPC_LOOKUP") },
-  );
+  const upcLookupClient = createUpcLookupClient();
   const usdaService = new USDAService(
     usdaClient,
     async (lookup) => {

@@ -14,9 +14,9 @@ import { SavedViewsMenu } from "~/app/_components/data-table/DataTableViews";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
+import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
-import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import type { SummaryItem } from "~/app/_components/SummaryCard";
 import { ProjectMark } from "~/app/projects/project-mark";
 import { DashboardSectionLoading } from "~/components/feedback/loading-skeletons";
@@ -758,7 +758,7 @@ function ServerProjectGallery({
 }) {
   const api = useTRPC();
   const helper = useMemo(() => createCubbyColumnHelper<ProjectOut>(), []);
-  const { options: projectOptions } = useProjectOptions();
+  const projectOptions = useDeferredFilterOptions("project");
   const filterOptions = useFilterOptions({
     project: projectOptions,
     projectLocations: locations.map((value) => ({ value, label: value })),

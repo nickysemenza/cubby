@@ -242,12 +242,14 @@ export function ProductProjectUses({ productId }: { productId: string }) {
       />
       {deleteDialog}
 
-      <ProjectUsesDialog
-        productId={productId}
-        open={editing}
-        onOpenChange={setEditing}
-        selectedIds={data.projects.map((project) => project.projectId)}
-      />
+      {editing && (
+        <ProjectUsesDialog
+          productId={productId}
+          open
+          onOpenChange={setEditing}
+          selectedIds={data.projects.map((project) => project.projectId)}
+        />
+      )}
     </Stack>
   );
 }

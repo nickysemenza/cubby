@@ -1,5 +1,8 @@
 import { useMemo } from "react";
-import type { FilterableComboboxItem } from "~/components/ui/combobox";
+import {
+  filterOptionItems,
+  type RuntimeFilterOptions,
+} from "./filter-option-types";
 
 /**
  * Stabilizes the `filterOptions` map every list page feeds `useEntityList`
@@ -23,18 +26,20 @@ import type { FilterableComboboxItem } from "~/components/ui/combobox";
  * its value, so it can't change while every field below stays put.
  */
 export function useFilterOptions(
-  map: Record<string, FilterableComboboxItem[]>,
-): Record<string, FilterableComboboxItem[]> {
+  map: RuntimeFilterOptions,
+): RuntimeFilterOptions {
   const key = JSON.stringify(
-    Object.entries(map).map(([optionsKey, items]) => [
+    Object.entries(map).map(([optionsKey, source]) => [
       optionsKey,
-      items.map((item) => [
+      filterOptionItems(source).map((item) => [
         item.value,
         item.label,
+        item.detail,
         item.hint,
         item.color,
         item.meta,
       ]),
+      Array.isArray(source) ? false : source.isLoading,
     ]),
   );
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional - using the serialized key for deep comparison, mirrors useStandardColumns' `stableFilters`

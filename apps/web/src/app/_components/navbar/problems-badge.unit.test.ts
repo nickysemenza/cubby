@@ -7,7 +7,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@tanstack/react-query", () => ({ useQuery: mocks.useQuery }));
 vi.mock("~/hooks/useHydrated", () => ({ useHydrated: () => true }));
-vi.mock("~/hooks/useIdle", () => ({ useIdle: () => true }));
+vi.mock("~/lib/auth-client", () => ({
+  authClient: { useSession: () => ({ data: { user: { id: "test" } } }) },
+}));
 vi.mock("~/integrations/trpc/react", () => ({
   useTRPC: () => ({
     problems: {

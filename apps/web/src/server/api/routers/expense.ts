@@ -25,6 +25,7 @@ import {
   expenseFiltersSchema,
   expenseMatchInput,
   expenseMatchOut,
+  expenseMonthlySummaryOut,
   expenseOut,
   expenseSortableFields,
   expenseTradeAffinityOut,
@@ -41,6 +42,7 @@ import {
   expenseAnalyze,
   expenseFacetCounts,
   expenseList,
+  expenseMonthlySummary,
   expenseTradeAffinity,
   getExpenseByID,
   getExpenseByShortcode,
@@ -197,6 +199,11 @@ const analytics = protectedProcedure
   .input(expenseFiltersSchema)
   .output(strictOutput(expenseAnalyticsOut))
   .query(({ ctx, input }) => expenseAnalytics(ctx.db, input));
+
+const monthlySummary = protectedProcedure
+  .input(expenseFiltersSchema)
+  .output(strictOutput(expenseMonthlySummaryOut))
+  .query(({ ctx, input }) => expenseMonthlySummary(ctx.db, input));
 
 /**
  * Complete server-side aggregate grid for the Expenses Analyze section. Unlike
@@ -356,6 +363,7 @@ export const expenseRouter = createTRPCRouter({
   deleteWithPurchaseEffects,
   chartData,
   analytics,
+  monthlySummary,
   analyze,
   facetCounts,
   tradeAffinity,

@@ -3,7 +3,7 @@ import type {
   BackgroundBatchSource,
   BackgroundJobKind,
 } from "@cubby/schemas/background-jobs";
-import { getBackgroundQueue } from "~/server/cf-env";
+import { getBackgroundQueue, getProblemCountsCache } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import {
   addBackgroundJobsToBatch,
@@ -153,3 +153,29 @@ export const dispatchLocationValuationRecompute = (
       },
     ],
   });
+
+/**
+ * Queue one canonical Problem-count refresh. Plain Node dev/tests have no KV
+ * binding, so they retain the live-read fallback without making every mutation
+ * synchronously run all detectors through the queue's inline adapter.
+ */
+export const dispatchProblemCountsRefresh = async (
+  db: Database,
+  source: BackgroundBatchSource,
+  reason: string,
+  requestedAt = new Date().toISOString(),
+): Promise<DispatchBackgroundJobsResult | null> => {
+  if (!getProblemCountsCache()) return null;
+  return await dispatchBackgroundJobs(db, {
+    kind: "problems.counts.refresh",
+    source,
+    metadata: { source: reason, requestedAt },
+    jobs: [
+      {
+        kind: "problems.counts.refresh",
+        dedupeKey: `problems.counts.refresh:${requestedAt}`,
+        payload: { requestedAt },
+      },
+    ],
+  });
+};

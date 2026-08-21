@@ -23,6 +23,7 @@ export {
   getMealByID,
   getMealByShortcode,
   getMealsByDateRange,
+  getUpcomingMealSummary,
   mealList,
   removeMealRecipeWithEntityId,
   updateMeal,

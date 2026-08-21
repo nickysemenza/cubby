@@ -11,7 +11,6 @@ const PROBLEMS_HOT_PATH_PROCEDURES = [
 
 const PROBLEMS_UNBATCHED_PROCEDURES = [
   ...PROBLEMS_HOT_PATH_PROCEDURES,
-  "getCounts",
 ] as const;
 
 export type ProblemsHotPathProcedure =

@@ -5,6 +5,8 @@ import {
   unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
 import { match } from "ts-pattern";
+import { getProblemCountsCache } from "~/server/cf-env";
+import { createUpcLookupClient } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
 import {
   failOrRetryBackgroundJob,
@@ -34,6 +36,7 @@ import {
 } from "./services/ai-enrichment/location-vision";
 import { retryUsdaMatch } from "./services/ai-enrichment/usda-match";
 import { LocationValuationService } from "./services/location-valuation.service";
+import { refreshCachedProblemCounts } from "./services/problem-counts-cache";
 
 export async function processBackgroundQueueMessage(
   db: Database,
@@ -177,6 +180,16 @@ async function runBackgroundJobPayload(
     .with({ kind: "location-valuation.recompute" }, async () => {
       await new LocationValuationService(db).recompute();
       return "succeeded" as const;
+    })
+    .with({ kind: "problems.counts.refresh" }, async (p) => {
+      const cache = getProblemCountsCache();
+      if (!cache) return "skipped" as const;
+      return await refreshCachedProblemCounts(
+        db,
+        createUpcLookupClient(),
+        cache,
+        p.payload.requestedAt,
+      );
     })
     .with({ kind: "usda-match.retry" }, async (p) => {
       // Real failures propagate (no catch here) — failOrRetryBackgroundJob is

@@ -1,6 +1,6 @@
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import { useCallback, useMemo } from "react";
-import type { FilterableComboboxItem } from "~/components/ui/combobox";
+import type { RuntimeFilterOptions } from "~/app/_components/hooks/filter-option-types";
 import {
   type FilterSpec,
   manifestFilterFields,
@@ -14,7 +14,7 @@ import { useFilterBarDraft } from "./useFilterBarDraft";
 interface ManifestFilterBarProps {
   specs: readonly FilterSpec[];
   /** Runtime picklists keyed by each spec's `optionsKey`. */
-  filterOptions?: Record<string, FilterableComboboxItem[]>;
+  filterOptions?: RuntimeFilterOptions;
   /** Current route search params. */
   search: Record<string, unknown>;
   onSearchChange: (params: Record<string, string | undefined>) => void;

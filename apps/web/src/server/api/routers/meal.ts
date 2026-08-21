@@ -25,6 +25,7 @@ import {
   mealUpdateRecipeInput,
   type ShoppingListContribution,
   shoppingListOut,
+  upcomingMealSummaryOut,
 } from "@cubby/schemas/meal";
 import { contributesToShoppingList } from "@cubby/schemas/meal-classification";
 import { sumBy } from "es-toolkit";
@@ -36,6 +37,7 @@ import {
   getMealByID,
   getMealByShortcode,
   getMealsByDateRange,
+  getUpcomingMealSummary,
   mealList,
   removeMealRecipeWithEntityId,
   updateMeal,
@@ -116,6 +118,13 @@ const getByDateRange = protectedProcedure
   .input(mealDateRange)
   .output(strictOutput(mealListOut))
   .query(({ ctx, input }) => getMealsByDateRange(ctx.db, input.from, input.to));
+
+const upcomingSummary = protectedProcedure
+  .input(mealDateRange)
+  .output(strictOutput(upcomingMealSummaryOut))
+  .query(({ ctx, input }) =>
+    getUpcomingMealSummary(ctx.db, input.from, input.to),
+  );
 
 const addRecipe = protectedProcedure
   .input(mealAddRecipeInput)
@@ -292,6 +301,7 @@ export const mealRouter = createTRPCRouter({
   update,
   delete: deleteItem,
   getByDateRange,
+  upcomingSummary,
   getShoppingList,
   addRecipe,
   updateRecipe,

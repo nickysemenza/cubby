@@ -70,14 +70,14 @@ export function RecordedSpendCard() {
   }, [hydrated]);
   const { months, filters } = spendWindow;
   const query = useQuery({
-    ...api.expense.analytics.queryOptions(filters),
+    ...api.expense.monthlySummary.queryOptions(filters),
     enabled: isAuthenticated,
     staleTime: 60 * 1000,
   });
 
   const monthly = useMemo(
-    () => fillRecordedSpendMonths(query.data?.monthly ?? [], months),
-    [months, query.data?.monthly],
+    () => fillRecordedSpendMonths(query.data ?? [], months),
+    [months, query.data],
   );
   const currentMonth = monthly.at(-1)?.net ?? 0;
 
@@ -97,7 +97,7 @@ export function RecordedSpendCard() {
         <p className="text-muted-foreground text-sm">
           Spend is unavailable right now.
         </p>
-      ) : query.data?.monthly.length === 0 ? (
+      ) : query.data?.length === 0 ? (
         <p className="text-muted-foreground text-sm">
           No recorded expenses in this period.
         </p>

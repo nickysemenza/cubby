@@ -9,6 +9,7 @@ import {
 
 const dispatchBackgroundJobsMock = vi.hoisted(() => vi.fn());
 const dispatchLocationValuationRecomputeMock = vi.hoisted(() => vi.fn());
+const dispatchProblemCountsRefreshMock = vi.hoisted(() => vi.fn());
 const findInventoryEmbeddingRefsForProductsMock = vi.hoisted(() => vi.fn());
 const findInventoryEmbeddingRefsForLocationsMock = vi.hoisted(() => vi.fn());
 const findRecipeEmbeddingRefsForIngredientsMock = vi.hoisted(() => vi.fn());
@@ -26,6 +27,7 @@ const refreshSearchDocumentsMock = vi.hoisted(() => vi.fn());
 vi.mock("~/server/background-dispatch", () => ({
   dispatchBackgroundJobs: dispatchBackgroundJobsMock,
   dispatchLocationValuationRecompute: dispatchLocationValuationRecomputeMock,
+  dispatchProblemCountsRefresh: dispatchProblemCountsRefreshMock,
 }));
 
 vi.mock("~/server/repo/entity-embedding", () => ({
@@ -81,11 +83,13 @@ describe("runMutationSideEffectsForEntities batching", () => {
     findCommercialEmbeddingRefsForExpensesMock.mockResolvedValue([]);
     refreshSearchDocumentMock.mockResolvedValue({ status: "upserted" });
     refreshSearchDocumentsMock.mockResolvedValue([]);
+    dispatchProblemCountsRefreshMock.mockResolvedValue(null);
   });
 
   afterEach(() => {
     dispatchBackgroundJobsMock.mockReset();
     dispatchLocationValuationRecomputeMock.mockReset();
+    dispatchProblemCountsRefreshMock.mockReset();
     findInventoryEmbeddingRefsForProductsMock.mockReset();
     findInventoryEmbeddingRefsForLocationsMock.mockReset();
     findRecipeEmbeddingRefsForIngredientsMock.mockReset();
@@ -155,6 +159,7 @@ describe("runMutationSideEffectsForEntities batching", () => {
         .map((id) => `entity-embedding.refresh:inventory:${id}`)
         .sort(),
     );
+    expect(dispatchProblemCountsRefreshMock).toHaveBeenCalledTimes(1);
   });
 
   it("dedupes embedding refs collected across different handlers in the same wave", async () => {
@@ -210,6 +215,7 @@ describe("runMutationSideEffectsForEntities batching", () => {
         `entity-embedding.refresh:inventory:${inventoryId}`,
       ].sort(),
     );
+    expect(dispatchProblemCountsRefreshMock).toHaveBeenCalledTimes(1);
   });
 });
 

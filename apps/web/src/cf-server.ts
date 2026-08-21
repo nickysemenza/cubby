@@ -212,6 +212,28 @@ const handler = {
       },
     );
   },
+
+  async scheduled(_controller: { scheduledTime: number }, env: Env) {
+    setCfEnv(env);
+    await withTrace(
+      "cf.scheduled.problem-counts",
+      async () => {
+        await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
+          const [{ db }, { dispatchProblemCountsRefresh }] = await Promise.all([
+            import("./server/db"),
+            import("./server/background-dispatch"),
+          ]);
+          await dispatchProblemCountsRefresh(
+            db,
+            "maintenance",
+            "cron.problem-counts",
+            new Date(_controller.scheduledTime).toISOString(),
+          );
+        });
+      },
+      { "cubby.workload": "scheduled" },
+    );
+  },
 };
 
 export default Sentry.withSentry(

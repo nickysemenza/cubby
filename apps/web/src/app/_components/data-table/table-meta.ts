@@ -9,6 +9,10 @@ export interface FilterConfig {
   options?: FilterableComboboxItem[];
   /** Client-side facet hints are opt-in because most Cubby tables are server-backed. */
   facetCount?: boolean;
+  /** Deferred/server-backed option roster activation and search controls. */
+  onActivate?: (selectedIds?: readonly string[]) => void;
+  onSearchChange?: (query: string) => void;
+  isLoading?: boolean;
 }
 
 export type MobileSlot =

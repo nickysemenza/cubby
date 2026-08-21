@@ -35,6 +35,45 @@ function renderBar(filters: Filter[]) {
 }
 
 describe("FilterBar", () => {
+  it("keeps deferred option queries dormant until a filter is activated", () => {
+    const onActivate = vi.fn();
+    const deferredFields: FilterBarField[] = [
+      {
+        key: "project",
+        label: "Project",
+        type: "multiselect",
+        options: [],
+        onActivate,
+      },
+    ];
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <FilterBar filters={[]} fields={deferredFields} onChange={onChange} />,
+    );
+
+    expect(onActivate).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole("combobox", { name: "Add filter" }), {
+      target: { value: "project" },
+    });
+    expect(onActivate).toHaveBeenCalledWith();
+
+    rerender(
+      <FilterBar
+        filters={[
+          {
+            id: "filter-project",
+            field: "project",
+            operator: "is_any_of",
+            values: ["PRJ-ONE"],
+          },
+        ]}
+        fields={deferredFields}
+        onChange={onChange}
+      />,
+    );
+    expect(onActivate).toHaveBeenLastCalledWith(["PRJ-ONE"]);
+  });
+
   it("adds searchable select fields and preserves facet hints", async () => {
     const { onChange, rerender } = renderBar([]);
 

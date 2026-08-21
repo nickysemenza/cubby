@@ -57,5 +57,6 @@ export { buildLocationTree, getLocationInventoryBreakdown } from "./tree";
 // Valuation rollup persistence
 export {
   getLocationValuationInputs,
+  getLocationValuationSummary,
   writeLocationValuations,
 } from "./valuation";
