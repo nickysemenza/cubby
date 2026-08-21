@@ -1,11 +1,12 @@
 import type { AiAnalysisEntityType } from "@cubby/schemas/ai";
 import type { AuditEntityType } from "@cubby/schemas/audit";
-import type {
-  BackgroundBatchProcessor,
-  BackgroundBatchSource,
-  BackgroundBatchStatus,
-  BackgroundJobKind,
-  BackgroundJobStatus,
+import {
+  type BackgroundBatchProcessor,
+  type BackgroundBatchSource,
+  type BackgroundBatchStatus,
+  type BackgroundJobKind,
+  type BackgroundJobStatus,
+  backgroundJobKinds,
 } from "@cubby/schemas/background-jobs";
 import type { Amount } from "@cubby/schemas/codec";
 import type { DataException } from "@cubby/schemas/data-quality";
@@ -170,13 +171,10 @@ export const imageStorageStatusEnum = pgEnum("ImageStorageStatus", [
   "metadata_mismatch",
 ]);
 
-export const backgroundJobKindEnum = pgEnum("BackgroundJobKind", [
-  "recipe-totals.recompute",
-  "entity-embedding.refresh",
-  "location-ai.description.refresh",
-  "location-ai.inventory.refresh",
-  "location-valuation.recompute",
-]);
+export const backgroundJobKindEnum = pgEnum(
+  "BackgroundJobKind",
+  backgroundJobKinds,
+);
 
 export const backgroundBatchStatusEnum = pgEnum("BackgroundBatchStatus", [
   "queued",

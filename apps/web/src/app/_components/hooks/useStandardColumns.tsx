@@ -2,7 +2,6 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
-import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { entities } from "~/entities/entities";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { getSortableFields } from "~/entities/sortable-fields";
@@ -22,6 +21,7 @@ import type {
   CubbyColumnDef as ColumnDef,
   CubbyColumnHelper as ColumnHelper,
 } from "../data-table/table-features";
+import type { RuntimeFilterOptions } from "./filter-option-types";
 
 /** Filter definition for use in useEntityList options */
 interface FilterDef {
@@ -64,7 +64,7 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
    * can't be static module data. MUST be referentially stable (useMemo at the
    * page) or the columns memo churns every render.
    */
-  filterOptions?: Record<string, FilterableComboboxItem[]>;
+  filterOptions?: RuntimeFilterOptions;
   /** Whether row selection is enabled */
   enableRowSelection: boolean;
   /** Combined extra actions renderer for row actions */

@@ -15,13 +15,9 @@ import { useHydrated } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 import { authClient } from "~/lib/auth-client";
 
-/** A glance, not the calendar — the rest lives one click away on /meals. */
-const MAX_ROWS = 4;
-
 /**
  * Home-page meals tile: what's planned between today and a week out, read from
- * the same `meal.getByDateRange` query the calendar uses (date-only bounds, so
- * the range matches whole days).
+ * a bounded projection over the calendar's canonical date ordering.
  *
  * The date window is client-local, so the query is hydration-gated alongside
  * auth (see useHydrated): SSR and the first client render agree, then the real
@@ -38,11 +34,11 @@ export function MealsCard() {
   const to = format(addDays(today, 6), "yyyy-MM-dd");
 
   const { data, isLoading } = useQuery({
-    ...api.meal.getByDateRange.queryOptions({ from, to }),
+    ...api.meal.upcomingSummary.queryOptions({ from, to }),
     enabled: isAuthenticated,
   });
 
-  const meals = (data ?? []).slice(0, MAX_ROWS);
+  const meals = data ?? [];
 
   return (
     <DashboardCard

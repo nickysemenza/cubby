@@ -78,6 +78,35 @@ describe("background job persistence", () => {
     expect(detail?.jobs[0]?.lastError).toBe("boom");
   });
 
+  it("persists a retryable problem-count refresh in the same queue lifecycle", async () => {
+    const { batchId, jobIds } = await createBackgroundBatchWithJobs(ctx.db, {
+      kind: "problems.counts.refresh",
+      source: "mutation",
+      jobs: [
+        {
+          kind: "problems.counts.refresh",
+          dedupeKey: `test:problem-counts:${crypto.randomUUID()}`,
+          payload: { requestedAt: "2026-08-20T18:00:00.000Z" },
+          maxAttempts: 2,
+        },
+      ],
+    });
+    const jobId = jobIds[0]!;
+
+    await markBackgroundJobRunning(ctx.db, jobId);
+    await expect(
+      failOrRetryBackgroundJob(ctx.db, jobId, new Error("KV unavailable")),
+    ).resolves.toBe("retry");
+    const detail = await getBackgroundBatchDetail(ctx.db, batchId);
+    expect(detail?.status).toBe("queued");
+    expect(detail?.jobs[0]).toMatchObject({
+      kind: "problems.counts.refresh",
+      status: "queued",
+      attempts: 1,
+      lastError: "KV unavailable",
+    });
+  });
+
   it("treats location AI refresh with no images as skipped work", async () => {
     const location = await createLocation(
       ctx.db,

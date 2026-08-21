@@ -60,6 +60,7 @@ import {
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useBulkActions } from "~/app/_components/data-table/useBulkActions";
 import { ExternalLinkIcon } from "~/app/_components/ExternalLink";
+import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
@@ -67,7 +68,6 @@ import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { ListBulkActionBar } from "~/app/_components/hooks/useListBulkActions";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useOptimisticDelete } from "~/app/_components/hooks/useOptimisticDelete";
-import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { TableLink } from "~/app/_components/table/TableLink";
@@ -1404,11 +1404,8 @@ export function ProjectTable({
     () => createCubbyColumnHelper<ProjectTreeRow>(),
     [],
   );
-  const { options: projectOptions } = useProjectOptions();
-  const projectIds = useMemo(
-    () => projectOptions.map((project) => project.value),
-    [projectOptions],
-  );
+  const projectOptions = useDeferredFilterOptions("project");
+  const [projectIds, setProjectIds] = useState<string[]>([]);
   const { data: projectImages } = useQuery({
     ...api.image.imagesByProjectIds.queryOptions({ projectIds }),
     staleTime: 5 * 60 * 1000,
@@ -1621,6 +1618,18 @@ export function ProjectTable({
     tableStateOptions,
     tree: isTree ? PROJECT_TREE_CONFIG : undefined,
   });
+
+  // Hydrate covers for the loaded page/tree only. The previous project-options
+  // roster pulled every project id before the table had rendered one row.
+  useEffect(() => {
+    const next = data.map((project) => project.id).sort();
+    setProjectIds((current) =>
+      current.length === next.length &&
+      current.every((id, index) => id === next[index])
+        ? current
+        : next,
+    );
+  }, [data]);
 
   // Auto-expand the whole tree while a name search is active, so a match
   // nested under an ALSO-matching ancestor is actually visible; collapse back

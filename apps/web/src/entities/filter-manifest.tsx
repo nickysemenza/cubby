@@ -37,6 +37,11 @@ import {
   barFieldFromConfig,
   type FilterBarField,
 } from "~/app/_components/data-table/filter-bar-core";
+import {
+  deferredFilterOptionSource,
+  filterOptionItems,
+  type RuntimeFilterOptions,
+} from "~/app/_components/hooks/filter-option-types";
 import { locationTypeOptionsWithTheme } from "~/app/_components/locations/location-icons";
 import { productCategoryOptionsWithTheme } from "~/app/_components/products/product-category-icons";
 import {
@@ -2277,7 +2282,7 @@ export const getEntityFilters = (entity: Entity): readonly FilterSpec[] => {
 export function manifestFilterConfig(
   entity: Entity,
   columnId: string,
-  runtimeOptions?: Record<string, FilterableComboboxItem[]>,
+  runtimeOptions?: RuntimeFilterOptions,
 ): FilterConfig | undefined {
   const spec = getEntityFilters(entity).find((s) => s.columnId === columnId);
   if (!spec) return undefined;
@@ -2295,12 +2300,12 @@ export function manifestFilterConfig(
 /** A spec's rendered options: runtime roster or static list, sentinels first. */
 function resolveSpecOptions(
   spec: FilterSpec,
-  runtimeOptions?: Record<string, FilterableComboboxItem[]>,
+  runtimeOptions?: RuntimeFilterOptions,
 ): FilterableComboboxItem[] {
   // A runtime picklist (project roster, tag universe) can't be static module
   // data, so the caller injects it by key.
   const resolved = spec.optionsKey
-    ? (runtimeOptions?.[spec.optionsKey] ?? [])
+    ? filterOptionItems(runtimeOptions?.[spec.optionsKey])
     : (spec.options ?? []);
   // Sentinels come first so they're reachable without scrolling a long roster.
   return spec.nullable
@@ -2310,12 +2315,18 @@ function resolveSpecOptions(
 
 function specFilterConfig(
   spec: FilterSpec,
-  runtimeOptions?: Record<string, FilterableComboboxItem[]>,
+  runtimeOptions?: RuntimeFilterOptions,
 ): FilterConfig {
+  const deferred = spec.optionsKey
+    ? deferredFilterOptionSource(runtimeOptions?.[spec.optionsKey])
+    : undefined;
   return {
     placeholder: spec.placeholder,
     filterType: filterTypeForKind(spec.kind),
     options: resolveSpecOptions(spec, runtimeOptions),
+    onActivate: deferred?.onActivate,
+    onSearchChange: deferred?.onSearchChange,
+    isLoading: deferred?.isLoading,
   };
 }
 
@@ -2332,7 +2343,7 @@ function specFilterConfig(
  */
 export function manifestFilterFields(
   specs: readonly FilterSpec[],
-  runtimeOptions?: Record<string, FilterableComboboxItem[]>,
+  runtimeOptions?: RuntimeFilterOptions,
 ): FilterBarField[] {
   return specs
     .filter((spec) => !spec.urlOnly)

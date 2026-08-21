@@ -4,7 +4,6 @@ import {
   locationCoverImage,
 } from "@cubby/schemas/location";
 import { getLocationTypeColor } from "@cubby/shared";
-import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -14,7 +13,6 @@ import {
 } from "~/app/_components/actions/action-verb-ui";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { usePageCount } from "~/components/page/Page";
-import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { useTRPC } from "~/integrations/trpc/react";
 import { locationMutationInvalidateKeys } from "~/lib/query-keys";
 import {
@@ -29,6 +27,7 @@ import {
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import type { GroupConfig } from "../_components/data-table/useGroupedList";
+import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilterOptions";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
@@ -58,22 +57,9 @@ export function LocationList() {
   // Runtime picklist for the `product` spec (optionsKey: "locationProducts") —
   // scoped to products some location IS, not the whole catalog, so the
   // dropdown lists the dozen vessel SKUs rather than thousands of groceries.
-  const identityProductsQuery = useQuery(
-    api.location.list.queryOptions({
-      filters: { productPresenceFilter: "has" },
-      // `.min(1)` — an empty sort is a 400, and this dropdown would just be
-      // silently empty.
-      sort: [{ orderBy: "name", direction: "asc" }],
-      pagination: { pageIndex: 0, pageSize: 500 },
-    }),
+  const locationProductOptions = useDeferredFilterOptions(
+    "locationIdentityProduct",
   );
-  const locationProductOptions = useMemo<FilterableComboboxItem[]>(() => {
-    const byId = new Map<string, string>();
-    for (const row of identityProductsQuery.data?.items ?? []) {
-      if (row.product) byId.set(row.product.id, row.product.name);
-    }
-    return [...byId].map(([value, label]) => ({ value, label }));
-  }, [identityProductsQuery.data]);
   const filterOptions = useFilterOptions({
     parentLocation: parentLocationOptions,
     locationProducts: locationProductOptions,

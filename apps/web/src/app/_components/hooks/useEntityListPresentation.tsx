@@ -6,7 +6,6 @@ import type { QueryKey } from "@tanstack/react-query";
 import { useStore } from "@tanstack/react-store";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef } from "react";
-import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { entities } from "~/entities/entities";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
@@ -23,6 +22,7 @@ import {
   type TableStateReturn,
   useTableState,
 } from "../data-table/useTableState";
+import type { RuntimeFilterOptions } from "./filter-option-types";
 import type { BaseListRow } from "./useEntityList";
 import { useListBulkActions } from "./useListBulkActions";
 import { useOptimisticDelete } from "./useOptimisticDelete";
@@ -151,7 +151,7 @@ export function useEntityListPresentation<TData extends BaseListRow>({
   data: readonly { id: string }[];
   columns: AnyColumnDef<TData>[];
   filters?: FilterInput[];
-  filterOptions?: Record<string, FilterableComboboxItem[]>;
+  filterOptions?: RuntimeFilterOptions;
   initialColumnVisibility?: Record<string, boolean>;
   transientColumnVisibility?: Record<string, boolean>;
   revealColumns?: { key: string; visibility: Record<string, boolean> };

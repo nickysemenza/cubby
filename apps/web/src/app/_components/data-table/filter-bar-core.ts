@@ -10,6 +10,9 @@ export type FilterFieldConfig = {
   type: "text" | "select" | "multiselect";
   options?: FilterOption[];
   placeholder?: string;
+  onActivate?: (selectedIds?: readonly string[]) => void;
+  onSearchChange?: (query: string) => void;
+  isLoading?: boolean;
 };
 
 export type Filter = {
@@ -125,5 +128,8 @@ export function barFieldFromConfig(
       ...option,
       hint: optionHints?.[option.value] ?? option.hint,
     })),
+    onActivate: config.onActivate,
+    onSearchChange: config.onSearchChange,
+    isLoading: config.isLoading,
   };
 }

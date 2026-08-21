@@ -1,17 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useHydrated } from "~/hooks/useHydrated";
-import { useIdle } from "~/hooks/useIdle";
 import { useTRPC } from "~/integrations/trpc/react";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
 
 /**
  * Data-problems bar, shown only when something is outstanding. Ports the
- * deferred-fetch gate from the retired ProblemsStatCard. It shares the
- * navbar's five-minute count query instead of fetching five groups of card
- * samples merely to render two numbers; `useIdle` keeps even that exact count
- * off the first-paint critical path.
+ * shares the navbar's five-minute KV-backed count query instead of fetching
+ * five groups of card samples merely to render two numbers. The cheap snapshot
+ * joins Home's other compact reads on the authenticated hydration boundary.
  *
  * `total` is already defect-only — `PROBLEM_CLASS` keeps coverage rows out of
  * it precisely because a count that can never reach zero makes a permanent red
@@ -24,11 +22,10 @@ export function ProblemsBanner() {
   const api = useTRPC();
   const session = authClient.useSession();
   const enabled = useHydrated() && !!session.data?.user;
-  const idle = useIdle();
   const { data: counts, isLoading } = useQuery({
     ...api.problems.getCounts.queryOptions(),
     staleTime: 5 * 60 * 1000,
-    enabled: enabled && idle,
+    enabled,
   });
   const defects = counts?.total ?? 0;
   const coverageTotal = counts?.coverageTotal ?? 0;

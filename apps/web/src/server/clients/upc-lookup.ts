@@ -6,6 +6,8 @@ import {
   type UPCLookupResponse,
 } from "@cubby/upc-contract";
 import { chunk } from "es-toolkit";
+import { env } from "~/env";
+import { getBindingFetcher } from "~/server/cf-env";
 import { injectTraceContext, TraceNames, withTrace } from "~/server/tracing";
 
 const DEFAULT_TIMEOUT_MS = 5000;
@@ -225,6 +227,12 @@ export class UPCLookupClient {
     });
   }
 }
+
+/** Production service-binding adapter with the public HTTP fallback for Node. */
+export const createUpcLookupClient = (): UPCLookupClient =>
+  new UPCLookupClient(env.UPC_LOOKUP_API_URL, env.UPC_LOOKUP_API_KEY, {
+    fetcher: getBindingFetcher("UPC_LOOKUP"),
+  });
 
 /** A multi-chunk lookup failed partially; completed chunks remain usable. */
 export class PartialUpcBatchLookupError extends Error {

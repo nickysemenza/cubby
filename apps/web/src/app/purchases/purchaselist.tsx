@@ -1,15 +1,13 @@
 import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/purchase";
-import { useQuery } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
 import { FileText } from "lucide-react";
 import { useMemo } from "react";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
-import { VendorCell, VendorMark } from "~/components/entity/vendor-cell";
+import { VendorCell } from "~/components/entity/vendor-cell";
 import { Grid, Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
-import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
 import { StatTile } from "~/components/ui/stat-tile";
 import { entities, entityDetailParams } from "~/entities/entities";
@@ -25,11 +23,11 @@ import {
   renderOptionCell,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
+import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilterOptions";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
-import { useProjectOptions } from "../_components/hooks/useProjectOptions";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { TableLink } from "../_components/table/TableLink";
 import { FinancialSettlementBadge } from "./financial-settlement";
@@ -38,8 +36,6 @@ import { ReconciliationBadge } from "./purchase-reconciliation";
 // Stable empty default — an inline `?? []` would allocate a fresh array every
 // render while the options query is loading, destabilizing the memo chain below
 // (see apps/web/CLAUDE.md's `unstable-hook-default` rule).
-const NO_VENDOR_OPTIONS: FilterableComboboxItem[] = [];
-
 /**
  * The purchases table — one row per vendor transaction.
  *
@@ -61,18 +57,8 @@ export function PurchaseList() {
   // count rides in `hint`, never the label (the label is what filter chips and
   // the collapsed multi-select summary interpolate, and what the type-ahead
   // matches on), and each option keeps the vendor's brand mark.
-  const vendorOptionsQuery = useQuery(api.vendor.options.queryOptions());
-  const { options: projectOptions } = useProjectOptions();
-  const vendorOptions = useMemo<FilterableComboboxItem[]>(
-    () =>
-      vendorOptionsQuery.data?.map(({ id, name, count, logo }) => ({
-        value: id,
-        label: name,
-        hint: String(count),
-        icon: <VendorMark vendor={name} vendorId={id} logo={logo} />,
-      })) ?? NO_VENDOR_OPTIONS,
-    [vendorOptionsQuery.data],
-  );
+  const vendorOptions = useDeferredFilterOptions("vendor");
+  const projectOptions = useDeferredFilterOptions("project");
 
   const filterOptions = useFilterOptions({
     vendor: vendorOptions,

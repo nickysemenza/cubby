@@ -1,7 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, Clock } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { DashboardCard } from "~/components/layout/dashboard-card";
 import { Button } from "~/components/ui/button";
+import { Skeleton } from "~/components/ui/skeleton";
 import { AuditLogList } from "../audit-log/audit-log-list";
 
 interface RecentActivityFeedProps {
@@ -14,26 +16,56 @@ interface RecentActivityFeedProps {
  * Shows the latest actions with a link to full activity history.
  */
 export function RecentActivityFeed({ limit = 5 }: RecentActivityFeedProps) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setEnabled(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        setEnabled(true);
+        observer.disconnect();
+      },
+      { rootMargin: "500px" },
+    );
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <DashboardCard
-      icon={Clock}
-      title="Recent activity"
-      action={
-        // `render` keeps this one element — a <button> inside an <a> is
-        // invalid HTML and produced two tab stops for one destination.
-        <Button
-          render={<Link to="/activity" />}
-          nativeButton={false}
-          variant="ghost"
-          size="sm"
-          className="h-11 gap-1 text-xs sm:h-7"
-        >
-          View all
-          <ArrowRight className="size-3" />
-        </Button>
-      }
-    >
-      <AuditLogList limit={limit} showEntityLink variant="ledger" />
-    </DashboardCard>
+    <div ref={hostRef}>
+      <DashboardCard
+        icon={Clock}
+        title="Recent activity"
+        action={
+          // `render` keeps this one element — a <button> inside an <a> is
+          // invalid HTML and produced two tab stops for one destination.
+          <Button
+            render={<Link to="/activity" />}
+            nativeButton={false}
+            variant="ghost"
+            size="sm"
+            className="h-11 gap-1 text-xs sm:h-7"
+          >
+            View all
+            <ArrowRight className="size-3" />
+          </Button>
+        }
+      >
+        {enabled ? (
+          <AuditLogList limit={limit} showEntityLink variant="ledger" />
+        ) : (
+          <div className="space-y-2" data-testid="activity-placeholder">
+            <Skeleton className="h-5 w-full" />
+            <Skeleton className="h-5 w-3/4" />
+          </div>
+        )}
+      </DashboardCard>
+    </div>
   );
 }

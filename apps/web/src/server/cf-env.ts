@@ -8,6 +8,11 @@
 import type { BackgroundQueueProducer } from "./background-queue-types";
 import type { TelemetryQueueProducer } from "./telemetry-queue-types";
 
+export interface ProblemCountsCacheAdapter {
+  get(key: string): Promise<string | null>;
+  put(key: string, value: string): Promise<void>;
+}
+
 let cfEnv: Env | undefined;
 
 export const setCfEnv = (env: Env): void => {
@@ -28,6 +33,12 @@ export const getBackgroundQueue = (): BackgroundQueueProducer | undefined => {
 export const getTelemetryQueue = (): TelemetryQueueProducer | undefined => {
   return cfEnv?.TELEMETRY_QUEUE as TelemetryQueueProducer | undefined;
 };
+
+/** KV-backed derived Problem-count snapshot, absent in plain Node dev/tests. */
+export const getProblemCountsCache = ():
+  | ProblemCountsCacheAdapter
+  | undefined =>
+  cfEnv?.PROBLEM_COUNTS_KV as ProblemCountsCacheAdapter | undefined;
 
 // Cubby's Cloudflare account + AI Gateway identifiers. Single source of truth
 // for the gateway binding (below) and the gateway-REST base URL built in

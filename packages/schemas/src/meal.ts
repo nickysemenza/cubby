@@ -232,6 +232,19 @@ export const mealMcpListOut = createPaginatedResponseSchema(mealMcpOut);
 
 export const mealListOut = z.array(mealOut);
 
+/** The display-ready subset used by Home's seven-day meal glance. */
+export const upcomingMealSummaryOut = z.array(
+  z.object({
+    id: mealShortcode,
+    date: mealDate,
+    name: z.string().nullable(),
+    mealType: mealTypeSchema.nullable(),
+    mealKind: mealKindSchema,
+    totals: mealTotals,
+  }),
+);
+export type UpcomingMealSummaryOut = z.infer<typeof upcomingMealSummaryOut>;
+
 /** Which meal/recipe contributed how much of an item's total need. */
 export const shoppingListContribution = z.object({
   mealId: mealShortcode,

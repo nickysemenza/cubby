@@ -7,6 +7,7 @@ import { dashboardRouter } from "./routers/dashboard";
 import { dataQualityRouter } from "./routers/data-quality";
 import { entityIntegrityRouter } from "./routers/entity-integrity";
 import { expenseRouter } from "./routers/expense";
+import { filterOptionsRouter } from "./routers/filter-options";
 import { financialAccountRouter } from "./routers/financial-account";
 import { financialTransactionRouter } from "./routers/financial-transaction";
 import { imageRouter } from "./routers/image";
@@ -50,6 +51,7 @@ export const domainRouterRecord = {
   expense: expenseRouter,
   financialAccount: financialAccountRouter,
   financialTransaction: financialTransactionRouter,
+  filterOptions: filterOptionsRouter,
   vendor: vendorRouter,
   wish: wishRouter,
   purchase: purchaseRouter,

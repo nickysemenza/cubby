@@ -60,13 +60,13 @@ import { EditableCell } from "../_components/data-table/editable-cell";
 import RTable from "../_components/data-table/Table";
 import type { GroupConfig } from "../_components/data-table/useGroupedList";
 import { EntityInlineLink } from "../_components/EntityInlineLink";
+import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilterOptions";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useNameEditable } from "../_components/hooks/useNameEditable";
 import { useProductTagOptions } from "../_components/hooks/useProductTagOptions";
-import { useProjectOptions } from "../_components/hooks/useProjectOptions";
 import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { useCreateInventoryMutation } from "../_components/inventory/hooks";
@@ -211,48 +211,14 @@ export function ProductList({
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("product");
   // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
   const { options: tagOptions } = useProductTagOptions();
-  const { options: projectOptions } = useProjectOptions();
-  // `location.options`, not `.list` or `.search`: this is a 500-row picklist
-  // that renders name + breadcrumb only. `.list` would drag every row's
-  // inventory entries, product embeds, and a pricing pass along with it, and
-  // `.search` would add a cover-image load plus ~400 bytes of ImageOut per row
-  // for thumbnails this surface never draws.
-  const locationOptionsQuery = useQuery(
-    api.location.options.queryOptions({
-      filters: { inventoryPresenceFilter: "has" },
-      sort: { orderBy: "name", direction: "asc" },
-      pagination: { pageIndex: 0, pageSize: 500 },
-    }),
-  );
-  const ingredientOptionsQuery = useQuery(
-    api.ingredient.list.queryOptions({
-      filters: { productPresenceFilter: "has" },
-      sort: { orderBy: "name", direction: "asc" },
-      pagination: { pageIndex: 0, pageSize: 500 },
-    }),
-  );
+  const projectOptions = useDeferredFilterOptions("project");
+  const locationOptions = useDeferredFilterOptions("locationWithInventory");
+  const ingredientOptions = useDeferredFilterOptions("ingredientWithProduct");
   const manufacturerOptionsQuery = useQuery(
     api.product.manufacturerOptions.queryOptions(),
   );
   const externalIdSourceOptionsQuery = useQuery(
     api.product.externalIdSourceOptions.queryOptions(),
-  );
-  const locationOptions = useMemo<FilterableComboboxItem[]>(
-    () =>
-      locationOptionsQuery.data?.items.map(({ id, name, ancestors }) => ({
-        value: id,
-        label: name,
-        detail: ancestors.map((a) => a.name).join(" › ") || undefined,
-      })) ?? NO_FILTER_OPTIONS,
-    [locationOptionsQuery.data],
-  );
-  const ingredientOptions = useMemo<FilterableComboboxItem[]>(
-    () =>
-      ingredientOptionsQuery.data?.items.map(({ id, name }) => ({
-        value: id,
-        label: name,
-      })) ?? NO_FILTER_OPTIONS,
-    [ingredientOptionsQuery.data],
   );
   const manufacturerOptions = useMemo<FilterableComboboxItem[]>(
     () =>

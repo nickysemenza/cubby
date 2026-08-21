@@ -5,7 +5,6 @@ import type {
   TaskFilters,
   TaskOut,
 } from "@cubby/schemas/project";
-import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import {
   createParentLinkColumn,
@@ -14,12 +13,12 @@ import {
 } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
-import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import {
   ExpenseBulkActionDialogs,
@@ -62,22 +61,8 @@ export function ProjectDataTaskList({
 }) {
   const api = useTRPC();
   const helper = useMemo(() => createCubbyColumnHelper<TaskOut>(), []);
-  const { options: projectOptions } = useProjectOptions();
-  const parentOptionsQuery = useQuery(
-    api.task.list.queryOptions({
-      filters: {},
-      sort: { orderBy: "name", direction: "asc" },
-      pagination: { pageIndex: 0, pageSize: 500 },
-    }),
-  );
-  const parentOptions = useMemo(
-    () =>
-      parentOptionsQuery.data?.items.map(({ id, name }) => ({
-        value: id,
-        label: name,
-      })) ?? [],
-    [parentOptionsQuery.data],
-  );
+  const projectOptions = useDeferredFilterOptions("project");
+  const parentOptions = useDeferredFilterOptions("task");
   const filterOptions = useFilterOptions({
     project: projectOptions,
     parentTask: parentOptions,
@@ -175,7 +160,7 @@ export function ProjectDataExpenseList({
 }) {
   const api = useTRPC();
   const helper = useMemo(() => createCubbyColumnHelper<ExpenseOut>(), []);
-  const { options: projectOptions } = useProjectOptions();
+  const projectOptions = useDeferredFilterOptions("project");
   const filterOptions = useFilterOptions({ project: projectOptions });
   const update = useUpdateMutation({
     mutationFn: api.expense.update.mutationOptions,

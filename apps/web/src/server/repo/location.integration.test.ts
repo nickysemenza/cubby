@@ -27,6 +27,7 @@ import {
   findOrCreateLocationByName,
   getLocationById,
   getLocationInventoryBreakdown,
+  getLocationValuationSummary,
   locationList,
   locationOptions,
   locationSearch,
@@ -112,6 +113,65 @@ describe("findOrCreateLocationByName", () => {
       .from(location)
       .where(eq(location.name, name));
     expect(countRow!.count).toEqual(1);
+  });
+});
+
+describe("getLocationValuationSummary", () => {
+  const ctx = withTestDb();
+
+  it("matches persisted direct valuation totals without tree hydration", async () => {
+    const first = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Summary Alpha" }),
+      ctx.actor,
+    );
+    const second = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Summary Beta" }),
+      ctx.actor,
+    );
+    const values = [
+      [first.id, 12],
+      [second.id, 30],
+    ] as const;
+    for (const [shortcode, directValuation] of values) {
+      await getDb(ctx.db)
+        .update(location)
+        .set({
+          valuation: {
+            directValuation,
+            totalValuation: directValuation,
+            directItemCount: 1,
+            totalItemCount: 1,
+            direct: {
+              priced: directValuation,
+              missingPricing: 0,
+              miscNoPrice: 0,
+            },
+            total: {
+              priced: directValuation,
+              missingPricing: 0,
+              miscNoPrice: 0,
+            },
+          },
+        })
+        .where(
+          eq(
+            location.id,
+            unsafeLocationId(
+              (await resolveLiveShortcode(ctx.db, shortcode, "location"))!,
+            ),
+          ),
+        );
+    }
+
+    expect(await getLocationValuationSummary(ctx.db)).toEqual({
+      total: 42,
+      locations: [
+        { id: second.id, name: "Summary Beta", value: 30 },
+        { id: first.id, name: "Summary Alpha", value: 12 },
+      ],
+    });
   });
 });
 

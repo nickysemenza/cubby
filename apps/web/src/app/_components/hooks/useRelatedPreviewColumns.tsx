@@ -6,7 +6,6 @@ import type {
 } from "@cubby/schemas/related-view";
 import { useQuery } from "@tanstack/react-query";
 import { type RefObject, useMemo, useRef } from "react";
-import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { getSortableFields } from "~/entities/sortable-fields";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -15,6 +14,7 @@ import type {
   CubbyColumnDef as ColumnDef,
   CubbyColumnHelper as ColumnHelper,
 } from "../data-table/table-features";
+import type { RuntimeFilterOptions } from "./filter-option-types";
 
 export interface RelatedPreviewState {
   byCell: Map<string, RelatedPreviewGroup>;
@@ -36,7 +36,7 @@ export function useRelatedPreviewColumnDefs<TData extends { id: string }>({
   entity: Entity;
   relatedViews: readonly RelatedViewDefinition[];
   columnHelper: ColumnHelper<TData>;
-  filterOptions?: Record<string, FilterableComboboxItem[]>;
+  filterOptions?: RuntimeFilterOptions;
   supportsServerSorting: boolean;
   relatedStateRef: RefObject<RelatedPreviewState>;
 }): ColumnDef<TData>[] {
@@ -137,7 +137,7 @@ export function useRelatedPreviewColumns<TData extends { id: string }>({
   visibleRelationKeys: RelatedViewKey[];
   relatedViews: readonly RelatedViewDefinition[];
   columnHelper: ColumnHelper<TData>;
-  filterOptions?: Record<string, FilterableComboboxItem[]>;
+  filterOptions?: RuntimeFilterOptions;
   supportsServerSorting: boolean;
 }): {
   // biome-ignore lint/suspicious/noExplicitAny: relation display columns are heterogeneous by design.

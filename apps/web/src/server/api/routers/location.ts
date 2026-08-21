@@ -28,6 +28,7 @@ import {
   locationSortableFields,
   locationsWithParentNameOut,
   locationUpdateData,
+  locationValuationSummaryOut,
   recomputeLocationValuationsOut,
 } from "@cubby/schemas/location";
 import { uniq } from "es-toolkit";
@@ -43,6 +44,7 @@ import {
   getLocationByShortcode,
   getLocationInventoryBreakdown,
   getLocationsByShortcodes,
+  getLocationValuationSummary,
   locationList,
   locationOptions,
   locationParentOptions,
@@ -228,6 +230,10 @@ const makeTree = protectedProcedure
   .output(strictOutput(infLocationListOut))
   .query(async ({ ctx }) => await buildLocationTree(ctx.db));
 
+const valuationSummary = protectedProcedure
+  .output(strictOutput(locationValuationSummaryOut))
+  .query(({ ctx }) => getLocationValuationSummary(ctx.db));
+
 /**
  * The descendant forest under one location — every level, in one query. Powers
  * the location detail page's Contents tree table, where `getByShortcode`'s
@@ -358,6 +364,7 @@ export const locationRouter = createTRPCRouter({
   getByShortcode,
   getByShortcodes,
   makeTree,
+  valuationSummary,
   subtree,
   inventoryBreakdown,
   parentOptions,

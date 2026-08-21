@@ -14,7 +14,6 @@ import {
 import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
-import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
 import { taskMutationInvalidateKeys } from "~/lib/query-keys";
@@ -25,12 +24,12 @@ import {
 } from "../_components/data-table/columnHelpers";
 import { ScopeChip } from "../_components/data-table/ScopeChip";
 import RTable from "../_components/data-table/Table";
+import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilterOptions";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useNameEditable } from "../_components/hooks/useNameEditable";
-import { useProjectOptions } from "../_components/hooks/useProjectOptions";
 import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import {
@@ -52,8 +51,6 @@ const subtaskCountSuffix = (row: TaskOut): ReactNode =>
   ) : undefined;
 
 const tasksRoute = getRouteApi("/_authenticated/tasks/");
-const NO_PRODUCT_OPTIONS: FilterableComboboxItem[] = [];
-
 interface TaskListProps {
   /** Actions to display in the table toolbar (e.g., the "New Task" button). */
   actions?: ReactNode;
@@ -68,23 +65,8 @@ interface TaskListProps {
 export function TaskList({ actions, initialSearch }: TaskListProps) {
   const api = useTRPC();
   const columnHelper = useMemo(() => createCubbyColumnHelper<TaskOut>(), []);
-  const { options: projectOptions } = useProjectOptions();
-  const productOptionsQuery = useQuery(
-    api.product.list.queryOptions({
-      filters: {},
-      sort: { orderBy: "name", direction: "asc" },
-      pagination: { pageIndex: 0, pageSize: 500 },
-    }),
-  );
-  const productOptions = useMemo<FilterableComboboxItem[]>(
-    () =>
-      productOptionsQuery.data?.items.map(({ id, name, manufacturer }) => ({
-        value: id,
-        label: name,
-        hint: manufacturer,
-      })) ?? NO_PRODUCT_OPTIONS,
-    [productOptionsQuery.data],
-  );
+  const projectOptions = useDeferredFilterOptions("project");
+  const productOptions = useDeferredFilterOptions("product");
   const [createProjectTaskIds, setCreateProjectTaskIds] = useState<
     TaskShortcode[] | null
   >(null);
@@ -109,21 +91,7 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
   });
 
   // Runtime picklist for the manifest's `project` spec (optionsKey: "project").
-  const parentOptionsQuery = useQuery(
-    api.task.list.queryOptions({
-      filters: {},
-      sort: { orderBy: "name", direction: "asc" },
-      pagination: { pageIndex: 0, pageSize: 500 },
-    }),
-  );
-  const parentOptions = useMemo<FilterableComboboxItem[]>(
-    () =>
-      parentOptionsQuery.data?.items.map(({ id, name }) => ({
-        value: id,
-        label: name,
-      })) ?? [],
-    [parentOptionsQuery.data],
-  );
+  const parentOptions = useDeferredFilterOptions("task");
   const projectFilterOptions = useFilterOptions({
     project: projectOptions,
     taskProducts: productOptions,
