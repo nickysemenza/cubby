@@ -4,7 +4,7 @@ import {
   unsafeProductId,
 } from "@cubby/schemas/identifiers";
 import type { ProductCreateInput } from "@cubby/schemas/product";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import {
@@ -12,8 +12,13 @@ import {
   inventoryEntry,
   product,
   productExternalId,
+  productImage,
 } from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import {
+  getDb,
+  insertAndReturn,
+  notDeleted,
+} from "~/server/repo/database-helpers";
 import { createInventoryEntry } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
 import {
@@ -26,6 +31,7 @@ import {
   listProductComponents,
 } from "~/server/repo/product-components";
 import {
+  createImageFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
@@ -81,7 +87,13 @@ describe("mergeProducts", () => {
         eq(productExternalId.productId, productId),
         notDeleted(productExternalId),
       ),
-      columns: { source: true, kind: true, externalId: true, url: true },
+      columns: {
+        source: true,
+        kind: true,
+        externalId: true,
+        url: true,
+        isPrimary: true,
+      },
     });
 
   const liveEntries = (productId: ProductId) =>
@@ -150,7 +162,7 @@ describe("mergeProducts", () => {
     );
   });
 
-  it("keeps the survivor's value when both fill the same external-id slot", async () => {
+  it("demotes rather than destroys a colliding external-id slot", async () => {
     const keeper = await seedProduct("Keeper Grinder", {
       model: "GRINDER-1",
       externalIds: [
@@ -190,13 +202,27 @@ describe("mergeProducts", () => {
     );
 
     expect(summary.externalIdsMoved).toBe(1);
-    expect(summary.externalIdsDiscarded).toBe(1);
+    // Kept, not discarded. Each identifier is a live retailer listing, so
+    // destroying one meant the next order line quoting it re-minted the
+    // duplicate the merge had just removed.
+    expect(summary.externalIdsDemoted).toEqual([
+      {
+        source: "homedepot",
+        kind: "retailer_sku",
+        externalId: "HD-LOSER",
+      },
+    ]);
+    // No same-value case exists to count: the global unique on
+    // (source, kind, externalId) forbids two live rows sharing an identifier,
+    // so a slot collision is always two DIFFERENT values.
 
     const survivorIds = await liveExternalIds(keeper.id);
     const bySlot = new Map(
-      survivorIds.map((row) => [`${row.source}/${row.kind}`, row]),
+      survivorIds
+        .filter((row) => row.isPrimary)
+        .map((row) => [`${row.source}/${row.kind}`, row]),
     );
-    // The keeper's SKU stands; the loser's is gone rather than silently winning.
+    // The keeper's SKU stays PRIMARY — the survivor's value still wins the slot.
     expect(bySlot.get("homedepot/retailer_sku")?.externalId).toBe("HD-KEEPER");
     // ...but the url the keeper's row lacked is carried over
     // (fill-never-overwrite).
@@ -204,8 +230,103 @@ describe("mergeProducts", () => {
       "https://example.test/loser",
     );
     expect(bySlot.get("amazon/asin")?.externalId).toBe("B00LOSER01");
+    // The loser's SKU is on the survivor as a SECONDARY, still resolvable.
+    expect(
+      survivorIds.filter((row) => !row.isPrimary).map((row) => row.externalId),
+    ).toEqual(["HD-LOSER"]);
     // Nothing is left pointing at the merged-away product.
     expect(await liveExternalIds(loser.id)).toHaveLength(0);
+  });
+
+  it("leaves a primary in a slot the loser held twice", async () => {
+    // Exactly the shape the `contract` migration created on five real products:
+    // one amazon/asin slot holding a primary AND a secondary. `planSlotCollisions`
+    // takes the first row it sees as the slot's occupant and is isPrimary-unaware,
+    // so without a deterministic order the secondary could win — re-pointing
+    // as-is while the real primary is demoted, leaving the slot with rows but no
+    // primary. The partial unique forbids two, never zero, so nothing complains;
+    // the slot just stops answering the next primary upsert's arbiter.
+    const keeper = await seedProduct("Keeper Two Asins", {
+      model: "TWOASIN-1",
+    });
+    const loser = await seedProduct("Loser Two Asins", { model: "TWOASIN-1" });
+    // SECONDARY inserted first, on purpose. Without an explicit order the
+    // planner hands back heap order, so seeding the primary first would let the
+    // bug pass by luck — which it did until this was flipped.
+    await getDb(ctx.db).insert(productExternalId).values({
+      productId: loser.id,
+      source: "amazon",
+      kind: "asin",
+      externalId: "B0SECOND99",
+      isPrimary: false,
+    });
+    await getDb(ctx.db).insert(productExternalId).values({
+      productId: loser.id,
+      source: "amazon",
+      kind: "asin",
+      externalId: "B0PRIMARY9",
+      isPrimary: true,
+    });
+
+    await mergeProducts(
+      ctx.db,
+      { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
+      TEST_ACTOR,
+    );
+
+    const survivor = (await liveExternalIds(keeper.id))
+      .filter((row) => row.kind === "asin")
+      .map((row) => [row.externalId, row.isPrimary] as const)
+      .sort((a, b) => a[0].localeCompare(b[0]));
+    // Both identifiers survive, and the one that was primary still is.
+    expect(survivor).toEqual([
+      ["B0PRIMARY9", true],
+      ["B0SECOND99", false],
+    ]);
+  });
+
+  it("keeps the survivor's cover when a merged-in image is older", async () => {
+    // `foldAssociation` re-points without touching `sortOrder`, which defaults
+    // to 0 on every row, and the cover is whichever row sorts first under
+    // `asc(sortOrder), asc(createdAt)`. So a merged-in image created earlier
+    // silently became the survivor's cover — a barcode scan hijacked a
+    // product's cover exactly this way.
+    const keeper = await seedProduct("Keeper Cover", { model: "COVER-1" });
+    const loser = await seedProduct("Loser Cover", { model: "COVER-1" });
+    const loserImage = await createImageFixture(ctx.db, "loser-barcode-scan");
+    const keeperImage = await createImageFixture(ctx.db, "keeper-real-photo");
+    // The loser's row is OLDER, which is what made it win the tie-break.
+    await insertAndReturn(ctx.db, productImage, {
+      productId: loser.id,
+      imageId: loserImage.id,
+      createdAt: new Date("2020-01-01T00:00:00Z"),
+    });
+    await insertAndReturn(ctx.db, productImage, {
+      productId: keeper.id,
+      imageId: keeperImage.id,
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+    });
+
+    await mergeProducts(
+      ctx.db,
+      { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
+      TEST_ACTOR,
+    );
+
+    const ordered = await getDb(ctx.db).query.productImage.findMany({
+      where: and(
+        eq(productImage.productId, keeper.id),
+        notDeleted(productImage),
+      ),
+      columns: { imageId: true },
+      orderBy: [asc(productImage.sortOrder), asc(productImage.createdAt)],
+    });
+    // The survivor's own image is still first, so its cover is unchanged; the
+    // merged-in one follows rather than being lost.
+    expect(ordered.map((row) => row.imageId)).toEqual([
+      keeperImage.id,
+      loserImage.id,
+    ]);
   });
 
   it("sums stock in a shared location instead of losing a row", async () => {

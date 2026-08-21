@@ -275,6 +275,283 @@ describe("product repository", () => {
     ]);
   });
 
+  it("holds a second identifier in one slot and promotes on removal", async () => {
+    // Amazon lists one item twice, so a product legitimately carries two ASINs.
+    // The slot used to hold exactly one row, which is why merging two such
+    // products destroyed one — and each destroyed id is a live listing that
+    // re-mints the duplicate the next time an order line quotes it.
+    const created = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Two Listings Salt",
+        externalIds: [
+          {
+            source: "amazon",
+            kind: "asin",
+            externalId: "B0PRIMARY1",
+            url: null,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    await patchProductExternalIds(
+      ctx.db,
+      created.entityId,
+      {
+        upsert: [
+          {
+            source: "amazon",
+            kind: "asin",
+            externalId: "B0SECOND01",
+            url: null,
+            isPrimary: false,
+          },
+        ],
+        remove: [],
+      },
+      ctx.actor,
+    );
+    // Sorted in the assertion: the read applies no ORDER BY, so heap order is
+    // whatever the last UPDATE left behind.
+    const asins = async () =>
+      (await getProductByID(ctx.db, created.entityId)).externalIds
+        .filter((entry) => entry.source === "amazon" && entry.kind === "asin")
+        .map((entry) => [entry.externalId, entry.isPrimary] as const)
+        .sort((a, b) => a[0].localeCompare(b[0]));
+    expect(await asins()).toEqual([
+      ["B0PRIMARY1", true],
+      ["B0SECOND01", false],
+    ]);
+
+    // An upsert of the PRIMARY replaces the primary only — it must not
+    // overwrite or destroy the secondary sharing the slot.
+    await patchProductExternalIds(
+      ctx.db,
+      created.entityId,
+      {
+        upsert: [
+          {
+            source: "amazon",
+            kind: "asin",
+            externalId: "B0PRIMARY2",
+            url: null,
+          },
+        ],
+        remove: [],
+      },
+      ctx.actor,
+    );
+    expect(await asins()).toEqual([
+      ["B0PRIMARY2", true],
+      ["B0SECOND01", false],
+    ]);
+
+    // Removing the primary promotes the surviving secondary, so the slot is
+    // never left with only secondaries and nothing standing for it.
+    await patchProductExternalIds(
+      ctx.db,
+      created.entityId,
+      {
+        upsert: [],
+        remove: [
+          {
+            source: "amazon",
+            kind: "asin",
+            expectedExternalId: "B0PRIMARY2",
+          },
+        ],
+      },
+      ctx.actor,
+    );
+    expect(await asins()).toEqual([["B0SECOND01", true]]);
+  });
+
+  it("keeps a primary in the slot however the rows are patched", async () => {
+    // The partial unique forbids TWO primaries, so a slot with ZERO violates
+    // nothing — it just silently breaks the next primary upsert, whose
+    // `onConflictDoUpdate` arbiter (`isPrimary AND deletedAt IS NULL`) then has
+    // no row to match. Both ways of getting there are covered here.
+    const created = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Primary Invariant Salt",
+        externalIds: [
+          {
+            source: "amazon",
+            kind: "asin",
+            externalId: "B0AAA00001",
+            url: null,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    const patch = (
+      upsert: Parameters<typeof patchProductExternalIds>[2]["upsert"],
+      remove: Parameters<typeof patchProductExternalIds>[2]["remove"] = [],
+    ) =>
+      patchProductExternalIds(
+        ctx.db,
+        created.entityId,
+        { upsert, remove },
+        ctx.actor,
+      );
+    const asins = async () =>
+      (await getProductByID(ctx.db, created.entityId)).externalIds
+        .filter((entry) => entry.kind === "asin")
+        .map((entry) => [entry.externalId, entry.isPrimary] as const)
+        .sort((a, b) => a[0].localeCompare(b[0]));
+
+    await patch([
+      {
+        source: "amazon",
+        kind: "asin",
+        externalId: "B0BBB00002",
+        url: null,
+        isPrimary: false,
+      },
+      {
+        source: "amazon",
+        kind: "asin",
+        externalId: "B0CCC00003",
+        url: null,
+        isPrimary: false,
+      },
+    ]);
+    expect(await asins()).toEqual([
+      ["B0AAA00001", true],
+      ["B0BBB00002", false],
+      ["B0CCC00003", false],
+    ]);
+
+    // Two removals from ONE slot. Promoting inside the loop read the pre-call
+    // snapshot, so the second iteration saw a stale `isPrimary` for the row it
+    // had just promoted and skipped promoting again — leaving zero primaries.
+    await patch(
+      [],
+      [
+        { source: "amazon", kind: "asin", expectedExternalId: "B0AAA00001" },
+        { source: "amazon", kind: "asin", expectedExternalId: "B0BBB00002" },
+      ],
+    );
+    expect(await asins()).toEqual([["B0CCC00003", true]]);
+
+    // A lone `isPrimary: false` upsert naming the row that is CURRENTLY the
+    // primary. The value resolves to that row (the global unique makes it the
+    // only one), so it was demoted with nothing left standing for the slot.
+    await patch([
+      {
+        source: "amazon",
+        kind: "asin",
+        externalId: "B0CCC00003",
+        url: null,
+        isPrimary: false,
+      },
+    ]);
+    expect(await asins()).toEqual([["B0CCC00003", true]]);
+
+    // Demote-and-replace in one call still does what it says: the pass only
+    // acts on a slot that has no primary left.
+    await patch([
+      {
+        source: "amazon",
+        kind: "asin",
+        externalId: "B0CCC00003",
+        url: null,
+        isPrimary: false,
+      },
+      { source: "amazon", kind: "asin", externalId: "B0DDD00004", url: null },
+    ]);
+    expect(await asins()).toEqual([
+      ["B0CCC00003", false],
+      ["B0DDD00004", true],
+    ]);
+
+    // And the restored primary is a real arbiter row: the next primary upsert
+    // must replace it rather than insert a second one.
+    await patch([
+      { source: "amazon", kind: "asin", externalId: "B0EEE00005", url: null },
+    ]);
+    expect(await asins()).toEqual([
+      ["B0CCC00003", false],
+      ["B0EEE00005", true],
+    ]);
+
+    // Primary-then-demote in ONE call, the order the earlier test did not
+    // cover. Entry 1 overwrites the primary row's value in place; resolving
+    // entry 2 from the pre-call snapshot then matched that same physical row
+    // and demoted it, losing the value it was meant to keep.
+    await patch([
+      { source: "amazon", kind: "asin", externalId: "B0FFF00006", url: null },
+      {
+        source: "amazon",
+        kind: "asin",
+        externalId: "B0EEE00005",
+        url: null,
+        isPrimary: false,
+      },
+    ]);
+    expect(await asins()).toEqual([
+      ["B0CCC00003", false],
+      ["B0EEE00005", false],
+      ["B0FFF00006", true],
+    ]);
+  });
+
+  it("replaces the identifier set when a demotion and a new primary arrive together", async () => {
+    // `syncProductExternalIds` ran creates before updates, so inserting the new
+    // primary hit the partial unique while the old primary was still primary —
+    // a plain non-deferrable index, so it threw before the demotion could make
+    // room. Only expressible once a slot could hold more than one row.
+    const created = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Demote And Replace Salt",
+        externalIds: [
+          {
+            source: "amazon",
+            kind: "asin",
+            externalId: "B0OLD00001",
+            url: null,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    await updateProduct(
+      ctx.db,
+      created.entityId,
+      {
+        externalIds: [
+          {
+            id: created.externalIds[0]!.id,
+            source: "amazon",
+            kind: "asin",
+            externalId: "B0OLD00001",
+            url: null,
+            isPrimary: false,
+          },
+          {
+            source: "amazon",
+            kind: "asin",
+            externalId: "B0NEW00002",
+            url: null,
+          },
+        ],
+      },
+      ctx.actor,
+    );
+    expect(
+      (await getProductByID(ctx.db, created.entityId)).externalIds
+        .map((entry) => [entry.externalId, entry.isPrimary] as const)
+        .sort((a, b) => a[0].localeCompare(b[0])),
+    ).toEqual([
+      ["B0NEW00002", true],
+      ["B0OLD00001", false],
+    ]);
+  });
+
   it("does not mutate any external-ID slot when a removal precondition fails", async () => {
     const created = await createProduct(
       ctx.db,

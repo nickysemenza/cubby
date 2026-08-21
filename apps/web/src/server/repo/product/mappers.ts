@@ -70,6 +70,9 @@ export const mapProductExternalIds = (
         kind,
         externalId: externalId.externalId,
         url: canonicalExternalIdUrl({ ...externalId, kind }),
+        // Rows written before the column existed default to primary, which is
+        // what they were: back then a slot held exactly one row.
+        isPrimary: externalId.isPrimary ?? true,
         createdAt: externalId.createdAt,
         updatedAt: externalId.updatedAt,
       };

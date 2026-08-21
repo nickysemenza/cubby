@@ -16,7 +16,11 @@ import {
   purchaseDataCheck,
   type SetDataExceptionInput,
 } from "@cubby/schemas/data-quality";
-import type { ProductId, PurchaseId } from "@cubby/schemas/identifiers";
+import type {
+  ProductId,
+  ProductShortcode,
+  PurchaseId,
+} from "@cubby/schemas/identifiers";
 import {
   ENTITY_NOT_FOUND_REASON,
   unsafeProductId,
@@ -1096,6 +1100,8 @@ export const findProductExternalIdCollisions = async (
   db: Database,
   input?: {
     source?: string | string[];
+    /** Public shortcode of the product the caller intends to write these onto. */
+    productId?: ProductShortcode;
     identifiers?: Array<{ source: string; kind: string; externalId: string }>;
   },
 ) => {
@@ -1159,13 +1165,21 @@ export const findProductExternalIdCollisions = async (
     items,
     results: (identifiers ?? []).map((identifier) => {
       const matches = grouped[externalIdCollisionKey(identifier)] ?? [];
+      // Without `productId`, `unique` can only mean "exactly one live owner,
+      // whoever that is" — which reads as a clean pass even when the id sits on
+      // a DIFFERENT product. With it, say which.
+      const sole = matches.length === 1 ? matches[0] : undefined;
       return {
         ...identifier,
         status:
           matches.length === 0
             ? ("missing" as const)
-            : matches.length === 1
-              ? ("unique" as const)
+            : sole
+              ? input?.productId === undefined
+                ? ("unique" as const)
+                : sole.productShortcode === input.productId
+                  ? ("owned_by_this" as const)
+                  : ("owned_by_other" as const)
               : ("collision" as const),
         products: matches.map((row) => ({
           id: unsafeProductShortcode(row.productShortcode),
